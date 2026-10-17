@@ -1,0 +1,27 @@
+# Runs the bot. Ollama is expected on the host (Apple GPU); see README.
+# On a Linux server, start the bundled Ollama instead:  docker compose --profile ollama up -d
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      # Keys are mounted read-only; .env points KALSHI_PRIVATE_KEY_PATH at /secrets/<file>.
+    volumes:
+      - ./data:/data
+      - ./secrets:/secrets:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+
+volumes:
+  ollama:
