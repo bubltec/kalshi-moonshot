@@ -24,6 +24,13 @@ def test_good_longshot_qualifies():
     assert strategy.reject_reason(market(), settings(), NOW) is None
 
 
+def test_sports_category_is_skipped():
+    s = settings()
+    assert strategy.reject_reason(market(category="Sports"), s, NOW) == "category skipped"
+    assert strategy.reject_reason(market(category="sports"), s, NOW) == "category skipped"
+    assert strategy.reject_reason(market(category="Politics"), s, NOW) is None
+
+
 def test_no_bid_is_rejected_because_it_cannot_be_exited():
     m = market(yes_bid_dollars="0.0000")
     assert strategy.reject_reason(m, settings(), NOW) == "no bid (cannot exit)"

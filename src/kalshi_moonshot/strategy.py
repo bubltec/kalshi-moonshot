@@ -36,6 +36,10 @@ class LongShot:
     volume: float
     close_time: str
     hours_to_close: float
+    subtitle: str = ""  # what YES means, e.g. the candidate's name in a multi-outcome event
+    lane: str = "moonshot"
+    series: str = ""
+    trend: float | None = None  # ask change over the lookback window (steady lane)
 
 
 def _f(m: dict[str, Any], key: str) -> float:
@@ -55,6 +59,10 @@ def _hours_until(iso: str, now: datetime) -> float | None:
 
 def reject_reason(m: dict[str, Any], s: Settings, now: datetime) -> str | None:
     """None if the market qualifies as a tradable long shot, else why not."""
+    skipped = {c.casefold() for c in s.skip_categories}
+    category = (m.get("category") or "").casefold()
+    if category and category in skipped:
+        return "category skipped"
     if m.get("market_type", "binary") != "binary":
         return "not binary"
     if m.get("status") not in {"active", "open"}:
@@ -95,11 +103,113 @@ def long_shots(markets: list[dict[str, Any]], s: Settings, now: datetime | None 
                 volume=_f(m, "volume_fp"),
                 close_time=m.get("close_time", ""),
                 hours_to_close=_hours_until(m["close_time"], now) or 0.0,
+                subtitle=m.get("yes_sub_title", "") or "",
+                series=_series(m),
             )
         )
     # Most traded first: those have the tightest, least stale prices.
     out.sort(key=lambda x: x.volume, reverse=True)
     return out
+
+
+def _series(m: dict[str, Any]) -> str:
+    return m.get("series_ticker") or str(m.get("event_ticker", "")).split("-")[0]
+
+
+def gross_return(ask: float) -> float:
+    """Profit as a fraction of cost if the contract pays $1 (before fees)."""
+    return (1.0 - ask) / ask if ask > 0 else 0.0
+
+
+def net_return(ask: float) -> float:
+    """Profit as a fraction of cost if the contract pays $1, after the entry fee."""
+    cost = ask + fee_per_contract(ask)
+    return (1.0 - cost) / cost if cost > 0 else 0.0
+
+
+# ---------------------------------------------------------------- steady lane
+
+def steady_reject_reason(m: dict[str, Any], s: Settings, now: datetime) -> str | None:
+    """Cheap pre-filter for the steady lane. The price trend is checked afterwards."""
+    skipped = {c.casefold() for c in s.skip_categories}
+    category = (m.get("category") or "").casefold()
+    if category and category in skipped:
+        return "category skipped"
+    if m.get("market_type", "binary") != "binary":
+        return "not binary"
+    if m.get("status") not in {"active", "open"}:
+        return "not active"
+    ask, bid = _f(m, "yes_ask_dollars"), _f(m, "yes_bid_dollars")
+    if not (s.steady_min_price <= ask <= s.steady_max_price):
+        return "ask outside steady range"
+    if bid <= 0.0:
+        return "no bid (cannot exit)"
+    if ask - bid > s.steady_max_spread:
+        return "spread too wide"
+    if _f(m, "volume_fp") < s.steady_min_volume:
+        return "volume too low"
+    hours = _hours_until(m.get("close_time", ""), now)
+    if hours is None:
+        return "no close time"
+    if hours < s.steady_min_hours_to_close:
+        return "closes too soon"
+    if hours > s.steady_max_hours_to_close:
+        return "closes too far out"
+    return None
+
+
+def steady_candidates(
+    markets: list[dict[str, Any]], s: Settings, now: datetime | None = None
+) -> list[LongShot]:
+    now = now or datetime.now(UTC)
+    out: list[LongShot] = []
+    for m in markets:
+        if steady_reject_reason(m, s, now) is not None:
+            continue
+        out.append(
+            LongShot(
+                ticker=m["ticker"],
+                title=m.get("title", ""),
+                rules=m.get("rules_primary", ""),
+                bid=_f(m, "yes_bid_dollars"),
+                ask=_f(m, "yes_ask_dollars"),
+                volume=_f(m, "volume_fp"),
+                close_time=m.get("close_time", ""),
+                hours_to_close=_hours_until(m["close_time"], now) or 0.0,
+                subtitle=m.get("yes_sub_title", "") or "",
+                lane="steady",
+                series=_series(m),
+            )
+        )
+    out.sort(key=lambda x: x.volume, reverse=True)
+    return out
+
+
+@dataclass(frozen=True)
+class Trend:
+    change: float  # last ask minus first ask in the window
+    last_step: float  # last ask minus the one before it
+    points: int
+
+
+def ask_trend(candles: list[dict[str, Any]]) -> Trend | None:
+    """Ask-price trend from Kalshi candlesticks. None when there is too little history."""
+    asks: list[float] = []
+    for c in candles:
+        try:
+            v = float((c.get("yes_ask") or {}).get("close_dollars") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if v > 0.0:
+            asks.append(v)
+    if len(asks) < 4:
+        return None
+    return Trend(change=asks[-1] - asks[0], last_step=asks[-1] - asks[-2], points=len(asks))
+
+
+def trend_ok(t: Trend, s: Settings) -> bool:
+    """Rising across the window and not rolling over right now."""
+    return t.change >= s.steady_min_trend and t.last_step >= 0.0
 
 
 def edge(model_p: float, ask: float) -> float:

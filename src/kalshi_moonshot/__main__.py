@@ -9,6 +9,7 @@ import time
 from . import config, report, runner
 from .kalshi import KalshiClient, KalshiError
 from .llm import Ollama
+from .search import NewsSearch
 from .store import Store
 
 log = logging.getLogger("moonshot")
@@ -22,7 +23,10 @@ def _print_scan(results: list[runner.Outcome]) -> None:
     for r in results:
         p = f"{r.model_p:.3f}" if r.model_p is not None else "  -  "
         e = f"{r.edge:+.3f}" if r.edge is not None else "  -  "
-        print(f"{r.action:4} ask={r.ask:.2f} model={p} edge={e}  {r.ticker}\n     {r.title[:90]} | {r.note[:110]}")
+        print(
+            f"{r.action:4} {r.lane[:4]:4} ask={r.ask:.2f} model={p} edge={e}  {r.ticker}\n"
+            f"     {r.title[:90]} | {r.note[:110]}"
+        )
 
 
 def cmd_scan(s: config.Settings) -> int:
@@ -30,20 +34,50 @@ def cmd_scan(s: config.Settings) -> int:
     if not est.ping():
         print(f"Ollama is not reachable at {s.ollama_url}. Start it, or run `doctor`.")
         return 1
-    results = runner.scan(s, _client(s), est, Store(s.db_path))
+    searcher = NewsSearch(s.search_results) if s.search_enabled else None
+    results = runner.scan(s, _client(s), est, Store(s.db_path), searcher)
     _print_scan(results)
     print(f"\n{len(results)} evaluated, mode={s.mode}, env={s.env}")
     return 0
 
 
+def _knobs(s: config.Settings) -> tuple:
+    return (
+        s.env, s.mode, s.real_money, s.min_price, s.max_price, s.min_volume, s.max_spread,
+        s.min_hours_to_close, s.min_edge, s.scan_pages, s.shortlist, s.scan_interval_minutes,
+        s.model, tuple(sorted(s.skip_categories)),
+        s.steady_enabled, s.steady_min_price, s.steady_max_price, s.steady_min_trend,
+        s.steady_max_hours_to_close, s.steady_min_edge, s.steady_usd_per_trade,
+        s.search_enabled, s.search_results,
+    )
+
+
 def cmd_run(s: config.Settings) -> int:
     store, client = Store(s.db_path), _client(s)
     est = Ollama(s.ollama_url, s.model)
+    searcher = NewsSearch(s.search_results)  # one instance so its cache survives between scans
     log.info("loop start: env=%s mode=%s real_money=%s", s.env, s.mode, s.real_money)
+    log.info("edits to .env apply on the next scan; no rebuild")
     while True:
         try:
+            fresh = config.reload()
+            if fresh.base_url != s.base_url or fresh.key_id != s.key_id or fresh.private_key_path != s.private_key_path:
+                client._http.close()
+                client = _client(fresh)
+            if fresh.ollama_url != s.ollama_url or fresh.model != s.model:
+                est._http.close()
+                est = Ollama(fresh.ollama_url, fresh.model)
+            if fresh.data_dir != s.data_dir:
+                store = Store(fresh.db_path)
+            if _knobs(fresh) != _knobs(s):
+                log.info(
+                    "settings reloaded: env=%s mode=%s max_price=%s min_edge=%s interval=%sm",
+                    fresh.env, fresh.mode, fresh.max_price, fresh.min_edge, fresh.scan_interval_minutes,
+                )
+            s = fresh
+            searcher.results = s.search_results
             if est.ping():
-                _print_scan(runner.scan(s, client, est, store))
+                _print_scan(runner.scan(s, client, est, store, searcher if s.search_enabled else None))
             else:
                 log.warning("Ollama not reachable at %s; skipping this pass", s.ollama_url)
             log.info("resolved %d settled markets", runner.resolve(client, store))
@@ -58,11 +92,19 @@ def cmd_resolve(s: config.Settings) -> int:
 
 
 def cmd_report(s: config.Settings) -> int:
-    summary = report.summarize(Store(s.db_path).settled_decisions())
-    for k, v in summary.items():
-        print(f"{k:28} {v:.4f}" if isinstance(v, float) else f"{k:28} {v}")
-    if summary["settled"] < 30:
-        print("\nFewer than 30 settled decisions: too early to say whether there is an edge.")
+    rows = Store(s.db_path).settled_decisions()
+
+    def show(title: str, summary: dict) -> None:
+        print(f"== {title} (each market counted once)")
+        for k, v in summary.items():
+            print(f"{k:28} {v:.4f}" if isinstance(v, float) else f"{k:28} {v}")
+        if summary["settled"] < 30:
+            print("Fewer than 30 settled markets: too early to say whether there is an edge.")
+        print()
+
+    show("all lanes", report.summarize(rows))
+    for lane, summary in report.by_lane(rows).items():
+        show(lane, summary)
     return 0
 
 

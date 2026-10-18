@@ -97,6 +97,54 @@ class KalshiClient:
             if not cursor:
                 return
 
+    def event_markets(
+        self,
+        pages: int = 10,
+        page_size: int = 100,
+        skip_categories: frozenset[str] = frozenset(),
+    ) -> Iterator[dict[str, Any]]:
+        """Markets nested under open events, skipping whole categories such as Sports.
+
+        The plain /markets feed is dominated by same-day sports strikes, so a short
+        scan never reaches politics, entertainment, or science.
+        """
+        skip = {c.casefold() for c in skip_categories}
+        cursor = ""
+        for _ in range(pages):
+            params: dict[str, Any] = {
+                "status": "open",
+                "limit": page_size,
+                "with_nested_markets": "true",
+            }
+            if cursor:
+                params["cursor"] = cursor
+            body = self._request("GET", "/events", params=params)
+            for event in body.get("events", []):
+                category = (event.get("category") or "").strip()
+                if category.casefold() in skip:
+                    continue
+                for market in event.get("markets") or []:
+                    if not market.get("ticker"):
+                        continue
+                    market["category"] = category
+                    market.setdefault("series_ticker", event.get("series_ticker", ""))
+                    if not market.get("title"):
+                        market["title"] = event.get("title", "")
+                    yield market
+            cursor = body.get("cursor") or ""
+            if not cursor:
+                return
+
+    def candlesticks(self, series: str, ticker: str, hours: int = 6) -> list[dict[str, Any]]:
+        """Hourly ask/bid history. Kalshi's own previous_* price fields are mostly zero."""
+        now = int(time.time())
+        body = self._request(
+            "GET",
+            f"/series/{series}/markets/{ticker}/candlesticks",
+            params={"start_ts": now - hours * 3600, "end_ts": now, "period_interval": 60},
+        )
+        return body.get("candlesticks", [])
+
     def market(self, ticker: str) -> dict[str, Any]:
         return self._request("GET", f"/markets/{ticker}")["market"]
 

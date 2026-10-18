@@ -7,10 +7,11 @@ services:
     env_file: .env
     environment:
       DATA_DIR: /data
-      # Keys are mounted read-only; .env points KALSHI_PRIVATE_KEY_PATH at /secrets/<file>.
+      # Keys are mounted read-only. .env may use ./.secrets/kalshi.key (WORKDIR is /app).
     volumes:
       - ./data:/data
-      - ./secrets:/secrets:ro
+      - ./.secrets:/app/.secrets:ro
+      - ./.env:/app/.env:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

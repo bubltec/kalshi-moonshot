@@ -20,6 +20,13 @@ def _i(name: str, default: int) -> int:
     return int(raw) if raw else default
 
 
+def _csv(name: str, default: str) -> frozenset[str]:
+    raw = os.environ.get(name)
+    if raw is None:
+        raw = default
+    return frozenset(part.strip() for part in raw.split(",") if part.strip())
+
+
 def _b(name: str, default: bool) -> bool:
     raw = os.environ.get(name, "").strip().lower()
     if not raw:
@@ -52,9 +59,28 @@ class Settings:
     min_hours_to_close: float
     max_hours_to_close: float
     min_edge: float  # model probability must beat ask + fee by this much
-    scan_pages: int  # pages of 200 markets per scan
+    scan_pages: int  # pages of markets, or of events when categories are skipped
     shortlist: int  # markets sent to the model per scan
     scan_interval_minutes: int
+    skip_categories: frozenset[str]  # Kalshi event categories, e.g. Sports
+
+    # --- steady lane: likely outcomes whose price is trending up, 30-50% gross return ---
+    steady_enabled: bool
+    steady_min_price: float  # 0.66 nets about +48% after the fee
+    steady_max_price: float  # 0.75 nets about +31% after the fee
+    steady_max_spread: float
+    steady_min_volume: float
+    steady_min_hours_to_close: float
+    steady_max_hours_to_close: float  # short horizon so it turns over several times a day
+    steady_lookback_hours: int  # window the ask must have risen across
+    steady_min_trend: float  # dollars the ask must have gained over the window
+    steady_min_edge: float
+    steady_usd_per_trade: float  # small by design
+    steady_shortlist: int
+
+    # --- external context (news headlines) fed to the model ---
+    search_enabled: bool
+    search_results: int
 
     # --- local model (Ollama) ---
     ollama_url: str
@@ -75,6 +101,33 @@ class Settings:
     @property
     def kill_file(self) -> Path:
         return self.data_dir / "KILL"
+
+
+def apply_env_file(path: Path) -> bool:
+    """Overlay KEY=VALUE lines from a file onto the process environment.
+
+    Returns False when the file is absent. Blank lines and # comments are skipped.
+    """
+    if not path.is_file():
+        return False
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        if key:
+            os.environ[key] = value
+    return True
+
+
+def reload(path: Path | None = None) -> Settings:
+    """Re-read the env file, then the settings. Used each scan so .env edits apply."""
+    apply_env_file(path or Path(os.environ.get("ENV_FILE", ".env")))
+    return load()
 
 
 def load() -> Settings:
@@ -106,6 +159,21 @@ def load() -> Settings:
         scan_pages=_i("SCAN_PAGES", 5),
         shortlist=_i("SHORTLIST", 15),
         scan_interval_minutes=_i("SCAN_INTERVAL_MINUTES", 30),
+        skip_categories=_csv("SKIP_CATEGORIES", "Sports"),
+        steady_enabled=_b("STEADY_ENABLED", True),
+        steady_min_price=_f("STEADY_MIN_PRICE", 0.66),
+        steady_max_price=_f("STEADY_MAX_PRICE", 0.75),
+        steady_max_spread=_f("STEADY_MAX_SPREAD", 0.03),
+        steady_min_volume=_f("STEADY_MIN_VOLUME", 200.0),
+        steady_min_hours_to_close=_f("STEADY_MIN_HOURS_TO_CLOSE", 1.0),
+        steady_max_hours_to_close=_f("STEADY_MAX_HOURS_TO_CLOSE", 72.0),
+        steady_lookback_hours=_i("STEADY_LOOKBACK_HOURS", 6),
+        steady_min_trend=_f("STEADY_MIN_TREND", 0.02),
+        steady_min_edge=_f("STEADY_MIN_EDGE", 0.05),
+        steady_usd_per_trade=_f("STEADY_USD_PER_TRADE", 2.0),
+        steady_shortlist=_i("STEADY_SHORTLIST", 10),
+        search_enabled=_b("SEARCH_ENABLED", True),
+        search_results=_i("SEARCH_RESULTS", 5),
         ollama_url=os.environ.get("OLLAMA_URL", "http://host.docker.internal:11434").rstrip("/"),
         model=os.environ.get("MODEL", "qwen3:8b"),
     )

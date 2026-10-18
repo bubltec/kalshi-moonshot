@@ -2,6 +2,9 @@
 
 Brier score: mean squared error of a probability against what happened (lower is better).
 If the model's Brier is not clearly below the market's, there is no edge to trade.
+
+The bot re-scores the same market every scan, so each market is counted once, at the first
+time the model rated it. Without that, a few markets look like dozens of independent results.
 """
 
 from __future__ import annotations
@@ -15,9 +18,32 @@ def brier(pairs: list[tuple[float, int]]) -> float:
     return sum((p - y) ** 2 for p, y in pairs) / len(pairs) if pairs else float("nan")
 
 
+def _get(r: Any, key: str, default: Any = None) -> Any:
+    try:
+        return r[key]
+    except (KeyError, IndexError):
+        return default
+
+
+def first_per_market(rows: list[Any]) -> list[Any]:
+    """Earliest rated decision per ticker. Rows without a ticker are all kept."""
+    seen: set[str] = set()
+    out = []
+    for r in rows:
+        if r["model_p"] is None:
+            continue
+        ticker = _get(r, "ticker")
+        if ticker is not None:
+            if ticker in seen:
+                continue
+            seen.add(ticker)
+        out.append(r)
+    return out
+
+
 def summarize(rows: list[Any]) -> dict[str, Any]:
     """rows: settled decisions with model_p, ask, outcome, action."""
-    rated = [r for r in rows if r["model_p"] is not None]
+    rated = first_per_market(rows)
     y = lambda r: 1 if r["outcome"] == "yes" else 0
     model = brier([(r["model_p"], y(r)) for r in rated])
     market = brier([(r["ask"], y(r)) for r in rated])
@@ -35,3 +61,11 @@ def summarize(rows: list[Any]) -> dict[str, Any]:
         "bet_pnl_per_contract_set": pnl,
         "bet_return_pct": (pnl / cost * 100.0) if cost else float("nan"),
     }
+
+
+def by_lane(rows: list[Any]) -> dict[str, dict[str, Any]]:
+    """Separate scorecards, because a steady-lane win rate and a moonshot one mean different things."""
+    lanes: dict[str, list[Any]] = {}
+    for r in rows:
+        lanes.setdefault(_get(r, "lane") or "moonshot", []).append(r)
+    return {lane: summarize(group) for lane, group in sorted(lanes.items())}
