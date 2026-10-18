@@ -69,6 +69,9 @@ mkdir -p .secrets              # put your Kalshi private key here as kalshi.key
 # The bot calls the Ollama server on every estimate, so it must be running, not just installed.
 brew install ollama
 brew services start ollama      # runs in the background and restarts at login
+# Keep the Mac awake while ollama is running (otherwise Docker and the bot sleep too).
+# Installed as a login LaunchAgent: ~/.local/bin/ollama-awake.sh
+# Check: pmset -g assertions | grep caffeinate
 ollama pull qwen3:8b            # downloads the weights once; fits in 16 GB
 curl -s localhost:11434/api/tags   # should list qwen3:8b; an empty list means the pull did not finish
 
@@ -117,8 +120,20 @@ Without Docker: `uv venv --python 3.12 && uv pip install -e '.[dev]' && python -
 
 ## Runs only while this machine is on
 
-Docker on a laptop stops when it sleeps. The same compose file moves unchanged to a small VPS or
-an always-on Mac mini (use `docker compose --profile ollama up -d` on Linux).
+Docker on a laptop stops when it sleeps, which also stops the bot. The same compose file
+moves unchanged to a small VPS or an always-on Mac mini (use
+`docker compose --profile ollama up -d` on Linux).
+
+On this Mac, a LaunchAgent keeps the machine from idle-sleeping while the `ollama` process
+is running (`~/.local/bin/ollama-awake.sh`, loaded from
+`~/Library/LaunchAgents/com.user.ollama-awake.plist`). It starts at login and picks up a
+new Ollama pid after a restart. Check it with `pmset -g assertions | grep caffeinate`.
+
+- The screen can still turn off. That is fine.
+- On battery, system sleep is not blocked. Plug in.
+- Closing the lid can still sleep a MacBook. Test before leaving it overnight.
+- To undo: `launchctl bootout gui/$(id -u)/com.user.ollama-awake` then delete the plist
+  and the script above.
 
 ## Tests
 
