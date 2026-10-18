@@ -4,6 +4,7 @@ services:
   bot:
     build: .
     restart: unless-stopped
+    stop_grace_period: 60s  # lets the current job finish; anything cut off resumes on start
     env_file: .env
     environment:
       DATA_DIR: /data

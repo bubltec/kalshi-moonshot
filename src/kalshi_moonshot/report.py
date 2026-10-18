@@ -63,6 +63,14 @@ def summarize(rows: list[Any]) -> dict[str, Any]:
     }
 
 
+def by_category(rows: list[Any]) -> dict[str, dict[str, Any]]:
+    """Scorecard per Kalshi category, so one bad category does not hide a good one."""
+    groups: dict[str, list[Any]] = {}
+    for r in rows:
+        groups.setdefault(_get(r, "category") or "unknown", []).append(r)
+    return {cat: summarize(group) for cat, group in sorted(groups.items())}
+
+
 def by_lane(rows: list[Any]) -> dict[str, dict[str, Any]]:
     """Separate scorecards, because a steady-lane win rate and a moonshot one mean different things."""
     lanes: dict[str, list[Any]] = {}

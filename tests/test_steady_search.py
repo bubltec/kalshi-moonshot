@@ -160,6 +160,28 @@ def test_report_splits_by_lane():
     assert lanes["moonshot"]["bet_wins"] == 0
 
 
+def test_report_splits_by_category_and_labels_old_rows_unknown():
+    rows = [
+        {**drow("A", 0.65, 0.05, "no", "bet"), "category": "Sports"},
+        {**drow("B", 0.05, 0.05, "no", "pass"), "category": "Politics"},
+        drow("C", 0.10, 0.05, "no", "pass"),
+    ]
+    cats = report.by_category(rows)
+    assert set(cats) == {"Sports", "Politics", "unknown"}
+    assert cats["Sports"]["bets"] == 1
+
+
+def test_prompt_tells_the_model_how_to_treat_totals_and_margins():
+    p = llm.build_prompt("Over 84.5 points scored?", "rules", "2026-10-20")
+    assert "typical distribution" in p
+
+
+def test_category_flows_from_market_to_candidate():
+    s = settings(skip_categories=frozenset())
+    shots = strategy.steady_candidates([market(category="Politics")], s, NOW)
+    assert shots and shots[0].category == "Politics"
+
+
 # ---- migration ----
 
 def test_old_database_gets_new_columns(tmp_path):
@@ -177,7 +199,39 @@ def test_old_database_gets_new_columns(tmp_path):
     db.commit()
     db.close()
     store = Store(path)
-    row = store.db.execute("SELECT lane, context FROM decisions").fetchone()
-    assert row["lane"] == "moonshot" and row["context"] is None
-    store.add_decision(ticker="NEW", action="bet", mode="observe", lane="steady", context="x")
-    assert store.db.execute("SELECT lane FROM decisions WHERE ticker='NEW'").fetchone()["lane"] == "steady"
+    row = store.db.execute("SELECT lane, context, category FROM decisions").fetchone()
+    assert row["lane"] == "moonshot" and row["context"] is None and row["category"] is None
+    store.add_decision(
+        ticker="NEW", action="bet", mode="observe", lane="steady", context="x", category="Politics"
+    )
+    new = store.db.execute("SELECT lane, category FROM decisions WHERE ticker='NEW'").fetchone()
+    assert new["lane"] == "steady" and new["category"] == "Politics"
+
+
+# ---- live-number filter ----
+def test_number_threshold_markets_are_skipped_in_both_lanes():
+    s = settings(skip_numeric=True)
+    cheap = {"yes_ask_dollars": "0.05", "yes_bid_dollars": "0.04"}
+    for extra in (
+        {"strike_type": "greater", "floor_strike": 81999.99},
+        {"strike_type": "less", "cap_strike": 38.4},
+        {"strike_type": "between", "floor_strike": 31200, "cap_strike": 31299.99},
+        {"strike_type": "greater_or_equal", "floor_strike": 35},
+        {"floor_strike": 5.5},
+    ):
+        assert strategy.reject_reason(market(**cheap, **extra), s, NOW) == strategy.NUMERIC_REASON
+        assert strategy.steady_reject_reason(market(**extra), s, NOW) == strategy.NUMERIC_REASON
+
+
+def test_team_and_date_markets_are_not_numeric():
+    s = settings(skip_numeric=True)
+    assert not strategy.is_numeric_threshold(market(strike_type="structured"))
+    assert not strategy.is_numeric_threshold(market(strike_type="custom", custom_strike={"Date": "Nov 1"}))
+    assert not strategy.is_numeric_threshold(market())
+    assert strategy.steady_reject_reason(market(strike_type="structured"), s, NOW) is None
+
+
+def test_numeric_filter_can_be_turned_off():
+    s = settings(skip_numeric=False)
+    m = market(strike_type="greater", floor_strike=4.3)
+    assert strategy.steady_reject_reason(m, s, NOW) is None

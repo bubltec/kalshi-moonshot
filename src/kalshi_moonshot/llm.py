@@ -16,6 +16,10 @@ HEAD = """You estimate probabilities of future events. Be calibrated and skeptic
 specific, unlikely-sounding events do not happen, and your first instinct is usually too high.
 Use base rates. If the question depends on information you cannot know (live scores, today's
 news), say so by staying close to a sensible base rate rather than guessing.
+For totals and margins (points, goals, runs, "over X", "wins by more than X"), reason from the
+typical distribution for that sport or league: the average and the spread. Judge how far the
+threshold is from typical. A threshold far beyond typical is rare, so do not assume a
+high-scoring game.
 
 Event: {title}
 {outcome}Resolution rules: {rules}

@@ -62,7 +62,11 @@ class Settings:
     scan_pages: int  # pages of markets, or of events when categories are skipped
     shortlist: int  # markets sent to the model per scan
     scan_interval_minutes: int
+    max_rps: float  # Kalshi requests per second the bot paces itself to
+    job_max_attempts: int  # tries per queued job before it is parked as dead
     skip_categories: frozenset[str]  # Kalshi event categories, e.g. Sports
+    exclude_versions: frozenset[str]  # strategy versions left out of report and similar-case search
+    skip_numeric: bool  # skip markets that hinge on a live number the model cannot see
 
     # --- steady lane: likely outcomes whose price is trending up, 30-50% gross return ---
     steady_enabled: bool
@@ -160,6 +164,10 @@ def load() -> Settings:
         shortlist=_i("SHORTLIST", 15),
         scan_interval_minutes=_i("SCAN_INTERVAL_MINUTES", 30),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),
+        skip_numeric=_b("SKIP_NUMERIC", True),
+        max_rps=max(0.5, _f("KALSHI_MAX_RPS", 8.0)),
+        job_max_attempts=max(1, _i("JOB_MAX_ATTEMPTS", 3)),
+        exclude_versions=_csv("EXCLUDE_VERSIONS", "v1"),
         steady_enabled=_b("STEADY_ENABLED", True),
         steady_min_price=_f("STEADY_MIN_PRICE", 0.66),
         steady_max_price=_f("STEADY_MAX_PRICE", 0.75),

@@ -7,10 +7,19 @@ retrieve similar past cases. Prices are not stored in that index.
 from __future__ import annotations
 
 import re
+import shutil
 import sqlite3
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
+
+# Bump this whenever filters, prompt, or model logic change enough that old decisions
+# should not be scored together with new ones. Every new decision is tagged with it.
+#   v1  everything logged before versions existed (included live-number markets and sports totals)
+#   v2  skips live-number markets (SKIP_NUMERIC)
+STRATEGY_VERSION = "v2"
+LEGACY_VERSION = "v1"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS decisions (
@@ -27,7 +36,9 @@ CREATE TABLE IF NOT EXISTS decisions (
   outcome TEXT,                  -- 'yes' / 'no' once settled
   settled_ts REAL,
   lane TEXT DEFAULT 'moonshot',  -- 'moonshot' or 'steady'
-  context TEXT                   -- news headlines the model was shown
+  context TEXT,                  -- news headlines the model was shown
+  category TEXT,                 -- Kalshi event category
+  version TEXT                   -- strategy version that produced this decision
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_ticker ON decisions(ticker);
 
@@ -44,6 +55,25 @@ CREATE TABLE IF NOT EXISTS orders (
   order_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_orders_ts ON orders(ts);
+
+CREATE TABLE IF NOT EXISTS jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,            -- scan | evaluate | resolve
+  payload TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending',  -- pending | running | done | dead | expired
+  run_at REAL NOT NULL,          -- not before this time
+  created_ts REAL NOT NULL,
+  started_ts REAL,
+  finished_ts REAL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  expires_ts REAL,               -- a pending job past this is dropped, not run late
+  stage TEXT,                    -- 'placing' marks the moment an order may have gone out
+  dedupe_key TEXT,
+  last_error TEXT,
+  result TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(status, run_at);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS rag_fts USING fts5(
   decision_id UNINDEXED,
@@ -64,7 +94,9 @@ _RAG_STOP = frozenset({
 
 
 class Store:
-    def __init__(self, path: Path | str):
+    def __init__(self, path: Path | str, exclude_versions: Iterable[str] = ()):
+        self.path = Path(path)
+        self.exclude_versions = frozenset(exclude_versions)
         self.db = sqlite3.connect(str(path))
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
@@ -74,14 +106,69 @@ class Store:
     def _migrate(self) -> None:
         """Add columns to a database created before they existed."""
         have = {r["name"] for r in self.db.execute("PRAGMA table_info(decisions)")}
-        for name, ddl in (("lane", "TEXT DEFAULT 'moonshot'"), ("context", "TEXT")):
+        for name, ddl in (
+            ("lane", "TEXT DEFAULT 'moonshot'"),
+            ("context", "TEXT"),
+            ("category", "TEXT"),
+            ("version", "TEXT"),
+        ):
             if name not in have:
                 self.db.execute(f"ALTER TABLE decisions ADD COLUMN {name} {ddl}")
+                if name == "version":
+                    # Every row that exists before versions did was made by the old logic.
+                    self.db.execute("UPDATE decisions SET version=?", (LEGACY_VERSION,))
         self.db.commit()
+
+    def _excluded_sql(self) -> tuple[str, list[str]]:
+        if not self.exclude_versions:
+            return "", []
+        marks = ",".join("?" for _ in self.exclude_versions)
+        return f" AND COALESCE(version,'{LEGACY_VERSION}') NOT IN ({marks})", sorted(self.exclude_versions)
+
+    def version_counts(self) -> list[sqlite3.Row]:
+        """Per version: decisions logged and how many of those have settled."""
+        return self.db.execute(
+            f"""SELECT COALESCE(version,'{LEGACY_VERSION}') AS version, COUNT(*) AS decisions,
+                       SUM(outcome IN ('yes','no')) AS settled
+                FROM decisions GROUP BY 1 ORDER BY 1"""
+        ).fetchall()
+
+    def prune(self, versions: Iterable[str], dry_run: bool = True) -> dict[str, int]:
+        """Delete decisions of the given versions, except tickers we have orders on.
+
+        Orders are never touched, and a ticker with an order keeps its decisions: the open
+        position check reads settled decisions, so deleting them would re-open a settled position.
+        Makes a copy of the database file first when actually deleting.
+        """
+        versions = sorted(set(versions))
+        if not versions:
+            return {"matched": 0, "kept_for_orders": 0, "deleted": 0}
+        marks = ",".join("?" for _ in versions)
+        where = (
+            f"COALESCE(version,'{LEGACY_VERSION}') IN ({marks})"
+            " AND ticker NOT IN (SELECT ticker FROM orders)"
+        )
+        matched = self.db.execute(
+            f"SELECT COUNT(*) FROM decisions WHERE COALESCE(version,'{LEGACY_VERSION}') IN ({marks})",
+            versions,
+        ).fetchone()[0]
+        deletable = self.db.execute(f"SELECT COUNT(*) FROM decisions WHERE {where}", versions).fetchone()[0]
+        out = {"matched": matched, "kept_for_orders": matched - deletable, "deleted": 0}
+        if dry_run or not deletable:
+            return out
+        backup = self.path.with_name(f"{self.path.name}.bak-{int(time.time())}")
+        shutil.copy2(self.path, backup)
+        self.db.execute(f"DELETE FROM decisions WHERE {where}", versions)
+        self.db.commit()
+        self.rebuild_rag()
+        out["deleted"] = deletable
+        out["backup"] = str(backup)  # type: ignore[assignment]
+        return out
 
     # ---- decisions ----
     def add_decision(self, **d: Any) -> int:
         d.setdefault("ts", time.time())
+        d.setdefault("version", STRATEGY_VERSION)
         cols = ",".join(d)
         marks = ",".join("?" for _ in d)
         cur = self.db.execute(f"INSERT INTO decisions ({cols}) VALUES ({marks})", list(d.values()))
@@ -102,9 +189,11 @@ class Store:
         self.db.commit()
         self.rebuild_rag()
 
-    def settled_decisions(self) -> list[sqlite3.Row]:
+    def settled_decisions(self, include_excluded: bool = False) -> list[sqlite3.Row]:
+        """Settled decisions, minus excluded versions unless asked for everything."""
+        extra, args = ("", []) if include_excluded else self._excluded_sql()
         return self.db.execute(
-            "SELECT * FROM decisions WHERE outcome IN ('yes','no') ORDER BY ts"
+            f"SELECT * FROM decisions WHERE outcome IN ('yes','no'){extra} ORDER BY ts", args
         ).fetchall()
 
     def recent_decisions(self, limit: int = 20) -> list[sqlite3.Row]:

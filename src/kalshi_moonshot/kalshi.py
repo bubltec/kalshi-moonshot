@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import random
+import threading
 import time
 import uuid
 from collections.abc import Iterator
@@ -17,6 +19,22 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 class KalshiError(RuntimeError):
     pass
+
+
+class KalshiRateLimited(KalshiError):
+    """Still 429 after every retry. retry_after is how long to wait before trying again."""
+
+    def __init__(self, message: str, retry_after: float = 30.0):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+RETRIES = 5  # tries per request
+MAX_BACKOFF = 30.0  # seconds
+
+
+# 200 pages x 200 = 40,000 markets. A 1-72h window held 28,186 on 2026-10-18 (about 35s to fetch).
+MARKET_PAGES = 200
 
 
 def load_private_key(path: str):
@@ -50,34 +68,79 @@ def signed_headers(private_key, key_id: str, method: str, url: str, ts_ms: int |
 
 
 class KalshiClient:
-    def __init__(self, base_url: str, key_id: str = "", private_key_path: str = ""):
+    def __init__(
+        self, base_url: str, key_id: str = "", private_key_path: str = "", max_rps: float = 8.0
+    ):
         self.base_url = base_url.rstrip("/")
         self.key_id = key_id
         self._key = load_private_key(private_key_path) if private_key_path else None
         self._http = httpx.Client(timeout=20.0)
+        self._gap = 1.0 / max(0.5, max_rps)  # minimum seconds between requests
+        self._next_slot = 0.0
+        self._lock = threading.Lock()
 
     @property
     def authed(self) -> bool:
         return bool(self._key and self.key_id)
 
+    def _pace(self, extra: float = 0.0) -> None:
+        """Space requests out so a long paging run does not hit the rate limit at all.
+
+        extra pushes every later request back too, which is how a 429 slows the whole client
+        down instead of just the one call that got it.
+        """
+        with self._lock:
+            now = time.monotonic()
+            slot = max(now, self._next_slot) + extra
+            self._next_slot = slot + self._gap
+        delay = slot - now
+        if delay > 0:
+            time.sleep(delay)
+
+    @staticmethod
+    def _backoff(attempt: int, retry_after: float | None) -> float:
+        base = retry_after if retry_after is not None else min(MAX_BACKOFF, 0.5 * (2**attempt))
+        return min(MAX_BACKOFF, base) * (1 + random.random() * 0.25)  # jitter
+
+    @staticmethod
+    def _retry_after(resp: httpx.Response) -> float | None:
+        try:
+            return max(0.0, float(resp.headers.get("Retry-After", "")))
+        except ValueError:
+            return None
+
     def _request(self, method: str, path: str, *, params=None, json=None, auth=False) -> Any:
+        """One call, paced. Retries 429 always (the request was refused, so it is safe).
+
+        Server errors and timeouts are retried for reads only. A timed-out order may have been
+        accepted, so POST is never re-sent after one; the caller decides what to do.
+        """
         url = self.base_url + path
-        headers: dict[str, str] = {}
-        if auth:
-            if not self.authed:
-                raise KalshiError("this call needs KALSHI_KEY_ID and KALSHI_PRIVATE_KEY_PATH")
-            headers = signed_headers(self._key, self.key_id, method, url)
-        for attempt in range(4):
-            resp = self._http.request(method, url, params=params, json=json, headers=headers)
-            if resp.status_code == 429:  # token bucket empty; back off and retry
-                time.sleep(0.5 * (2**attempt))
-                if auth:
-                    headers = signed_headers(self._key, self.key_id, method, url)
+        safe = method.upper() == "GET"
+        if auth and not self.authed:
+            raise KalshiError("this call needs KALSHI_KEY_ID and KALSHI_PRIVATE_KEY_PATH")
+        last_wait = 0.0
+        for attempt in range(RETRIES):
+            headers = signed_headers(self._key, self.key_id, method, url) if auth else {}
+            self._pace()
+            try:
+                resp = self._http.request(method, url, params=params, json=json, headers=headers)
+            except httpx.TransportError as exc:  # timeout, connection reset, DNS
+                if not safe or attempt == RETRIES - 1:
+                    raise KalshiError(f"{method} {path}: {type(exc).__name__}: {exc}") from exc
+                time.sleep(self._backoff(attempt, None))
+                continue
+            if resp.status_code == 429:
+                last_wait = self._backoff(attempt, self._retry_after(resp))
+                self._pace(extra=last_wait)  # slows every caller, then this one waits its turn
+                continue
+            if resp.status_code >= 500 and safe and attempt < RETRIES - 1:
+                time.sleep(self._backoff(attempt, None))
                 continue
             if resp.status_code >= 400:
                 raise KalshiError(f"{method} {path} -> {resp.status_code}: {resp.text[:300]}")
             return resp.json()
-        raise KalshiError(f"{method} {path}: rate limited")
+        raise KalshiRateLimited(f"{method} {path}: rate limited", retry_after=max(30.0, last_wait))
 
     # ---- public market data ----
     def open_markets(self, pages: int = 5, page_size: int = 200) -> Iterator[dict[str, Any]]:
@@ -97,43 +160,54 @@ class KalshiClient:
             if not cursor:
                 return
 
-    def event_markets(
-        self,
-        pages: int = 10,
-        page_size: int = 100,
-        skip_categories: frozenset[str] = frozenset(),
+    def markets_closing(
+        self, min_ts: float, max_ts: float, pages: int = MARKET_PAGES, page_size: int = 200
     ) -> Iterator[dict[str, Any]]:
-        """Markets nested under open events, skipping whole categories such as Sports.
+        """Open markets whose close time falls in [min_ts, max_ts] (unix seconds).
 
-        The plain /markets feed is dominated by same-day sports strikes, so a short
-        scan never reaches politics, entertainment, or science.
+        Neither the plain market list nor the event list is ordered by close time, so a
+        short scan of either can miss every market that closes inside a short window.
+        Asking Kalshi for the window directly does not.
         """
-        skip = {c.casefold() for c in skip_categories}
         cursor = ""
         for _ in range(pages):
             params: dict[str, Any] = {
                 "status": "open",
+                "mve_filter": "exclude",
                 "limit": page_size,
-                "with_nested_markets": "true",
+                "min_close_ts": int(min_ts),
+                "max_close_ts": int(max_ts),
             }
             if cursor:
                 params["cursor"] = cursor
-            body = self._request("GET", "/events", params=params)
-            for event in body.get("events", []):
-                category = (event.get("category") or "").strip()
-                if category.casefold() in skip:
-                    continue
-                for market in event.get("markets") or []:
-                    if not market.get("ticker"):
-                        continue
-                    market["category"] = category
-                    market.setdefault("series_ticker", event.get("series_ticker", ""))
-                    if not market.get("title"):
-                        market["title"] = event.get("title", "")
-                    yield market
+            body = self._request("GET", "/markets", params=params)
+            yield from body.get("markets", [])
             cursor = body.get("cursor") or ""
             if not cursor:
                 return
+
+    def event_info(self, ttl: float = 3600.0, pages: int = 60) -> dict[str, tuple[str, str]]:
+        """event_ticker -> (category, series_ticker). Cached; events change slowly."""
+        cached = getattr(self, "_event_info", None)
+        if cached and time.time() - cached[0] < ttl:
+            return cached[1]
+        info: dict[str, tuple[str, str]] = {}
+        cursor = ""
+        for _ in range(pages):
+            params: dict[str, Any] = {"status": "open", "limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            body = self._request("GET", "/events", params=params)
+            for e in body.get("events", []):
+                info[e["event_ticker"]] = (
+                    (e.get("category") or "").strip(),
+                    e.get("series_ticker", ""),
+                )
+            cursor = body.get("cursor") or ""
+            if not cursor:
+                break
+        self._event_info = (time.time(), info)
+        return info
 
     def candlesticks(self, series: str, ticker: str, hours: int = 6) -> list[dict[str, Any]]:
         """Hourly ask/bid history. Kalshi's own previous_* price fields are mostly zero."""
@@ -158,12 +232,18 @@ class KalshiClient:
     def positions(self) -> dict[str, Any]:
         return self._request("GET", "/portfolio/positions", auth=True)
 
-    def buy_yes_ioc(self, ticker: str, count: int, price_dollars: float) -> dict[str, Any]:
+    def buy_yes_ioc(
+        self, ticker: str, count: int, price_dollars: float, client_order_id: str | None = None
+    ) -> dict[str, Any]:
         """Buy YES, immediate-or-cancel: whatever does not fill right now is dropped,
-        so no resting order is ever left on the book."""
+        so no resting order is ever left on the book.
+
+        Pass a stable client_order_id when the caller may retry after a crash, so Kalshi sees
+        the same order twice instead of two orders.
+        """
         body = {
             "ticker": ticker,
-            "client_order_id": str(uuid.uuid4()),
+            "client_order_id": client_order_id or str(uuid.uuid4()),
             "side": "bid",
             "count": f"{count:.2f}",
             "price": f"{price_dollars:.4f}",

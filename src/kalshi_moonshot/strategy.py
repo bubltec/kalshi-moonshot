@@ -40,6 +40,7 @@ class LongShot:
     lane: str = "moonshot"
     series: str = ""
     trend: float | None = None  # ask change over the lookback window (steady lane)
+    category: str = ""  # Kalshi event category, e.g. Sports, Politics
 
 
 def _f(m: dict[str, Any], key: str) -> float:
@@ -57,12 +58,30 @@ def _hours_until(iso: str, now: datetime) -> float | None:
     return (t - now).total_seconds() / 3600.0
 
 
+NUMERIC_STRIKES = frozenset({"greater", "greater_or_equal", "less", "less_or_equal", "between"})
+NUMERIC_REASON = "number threshold (model cannot see the live value)"
+
+
+def is_numeric_threshold(m: dict[str, Any]) -> bool:
+    """True for markets that resolve on a number: a price, a total, a count, an average.
+
+    Kalshi marks them with strike_type greater/less/between and a floor or cap strike. The
+    model has no way to know the current value, so its probability there is a guess. Team-win
+    markets (structured) and date-based events (custom) are not numeric.
+    """
+    if m.get("strike_type") in NUMERIC_STRIKES:
+        return True
+    return m.get("floor_strike") is not None or m.get("cap_strike") is not None
+
+
 def reject_reason(m: dict[str, Any], s: Settings, now: datetime) -> str | None:
     """None if the market qualifies as a tradable long shot, else why not."""
     skipped = {c.casefold() for c in s.skip_categories}
     category = (m.get("category") or "").casefold()
     if category and category in skipped:
         return "category skipped"
+    if s.skip_numeric and is_numeric_threshold(m):
+        return NUMERIC_REASON
     if m.get("market_type", "binary") != "binary":
         return "not binary"
     if m.get("status") not in {"active", "open"}:
@@ -105,6 +124,7 @@ def long_shots(markets: list[dict[str, Any]], s: Settings, now: datetime | None 
                 hours_to_close=_hours_until(m["close_time"], now) or 0.0,
                 subtitle=m.get("yes_sub_title", "") or "",
                 series=_series(m),
+                category=m.get("category", "") or "",
             )
         )
     # Most traded first: those have the tightest, least stale prices.
@@ -135,6 +155,8 @@ def steady_reject_reason(m: dict[str, Any], s: Settings, now: datetime) -> str |
     category = (m.get("category") or "").casefold()
     if category and category in skipped:
         return "category skipped"
+    if s.skip_numeric and is_numeric_threshold(m):
+        return NUMERIC_REASON
     if m.get("market_type", "binary") != "binary":
         return "not binary"
     if m.get("status") not in {"active", "open"}:
@@ -179,6 +201,7 @@ def steady_candidates(
                 subtitle=m.get("yes_sub_title", "") or "",
                 lane="steady",
                 series=_series(m),
+                category=m.get("category", "") or "",
             )
         )
     out.sort(key=lambda x: x.volume, reverse=True)
