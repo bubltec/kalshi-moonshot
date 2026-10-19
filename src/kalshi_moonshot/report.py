@@ -25,6 +25,10 @@ def _get(r: Any, key: str, default: Any = None) -> Any:
         return default
 
 
+def _yes(r: Any) -> int:
+    return 1 if r["outcome"] == "yes" else 0
+
+
 def first_per_market(rows: list[Any]) -> list[Any]:
     """Earliest rated decision per ticker. Rows without a ticker are all kept."""
     seen: set[str] = set()
@@ -44,12 +48,19 @@ def first_per_market(rows: list[Any]) -> list[Any]:
 def summarize(rows: list[Any]) -> dict[str, Any]:
     """rows: settled decisions with model_p, ask, outcome, action."""
     rated = first_per_market(rows)
-    y = lambda r: 1 if r["outcome"] == "yes" else 0
-    model = brier([(r["model_p"], y(r)) for r in rated])
-    market = brier([(r["ask"], y(r)) for r in rated])
+    model = brier([(r["model_p"], _yes(r)) for r in rated])
+    market = brier([(r["ask"], _yes(r)) for r in rated])
     bets = [r for r in rated if r["action"] == "bet"]
-    # One contract per bet, paid ask + fee, receives $1 on yes.
-    pnl = sum(y(r) - r["ask"] - fee_per_contract(r["ask"]) for r in bets)
+    held = [r for r in bets if _get(r, "exit_price") is None]
+    stopped = [r for r in bets if _get(r, "exit_price") is not None]
+
+    def pnl_one(r: Any) -> float:
+        entry = r["ask"] + fee_per_contract(r["ask"])
+        if _get(r, "exit_price") is not None:
+            return float(r["exit_price"]) - fee_per_contract(float(r["exit_price"])) - entry
+        return _yes(r) - entry
+
+    pnl = sum(pnl_one(r) for r in bets)
     cost = sum(r["ask"] + fee_per_contract(r["ask"]) for r in bets)
     return {
         "settled": len(rated),
@@ -57,7 +68,8 @@ def summarize(rows: list[Any]) -> dict[str, Any]:
         "market_brier": market,
         "model_beats_market": bool(rated) and model < market,
         "bets": len(bets),
-        "bet_wins": sum(y(r) for r in bets),
+        "bet_wins": sum(_yes(r) for r in held),
+        "stop_losses": len(stopped),
         "bet_pnl_per_contract_set": pnl,
         "bet_return_pct": (pnl / cost * 100.0) if cost else float("nan"),
     }

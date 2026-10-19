@@ -37,6 +37,8 @@ class FakeClient:
         self.market_error: Exception | None = None
         self.buy_error: Exception | None = None
         self.bought: list[tuple] = []
+        self.sold: list[tuple] = []
+        self.bid = "0.04"
 
     def event_info(self):
         return {"EV": ("Politics", "KXP")}
@@ -48,13 +50,25 @@ class FakeClient:
     def market(self, ticker):
         if self.market_error:
             raise self.market_error
-        return mk(ticker, ask=self.fresh_ask)
+        m = mk(ticker, ask=self.fresh_ask)
+        m["yes_bid_dollars"] = self.bid
+        return m
+
+    def candlesticks(self, series, ticker, hours=6):
+        return []
+
+    def orderbook(self, ticker):
+        return {"orderbook_fp": {"no_dollars": [["0.9500", "100.00"]]}}
 
     def buy_yes_ioc(self, ticker, count, price, client_order_id=None):
         if self.buy_error:
             raise self.buy_error
         self.bought.append((ticker, count, client_order_id))
         return {"fill_count": count, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "o1"}
+
+    def sell_yes_ioc(self, ticker, count, price, client_order_id=None):
+        self.sold.append((ticker, count, price))
+        return {"fill_count": count, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s1"}
 
 
 class FakeEst:

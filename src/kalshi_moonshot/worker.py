@@ -4,6 +4,8 @@ scan      fetch the markets in the window, shortlist both lanes, queue one `eval
           and make sure the next scan is scheduled (so a crash never ends the loop)
 evaluate  re-read the market's current price, ask the model, log the decision, maybe order
 resolve   record the outcome of markets that settled
+stop_loss sell (or paper-sell) open bets that are under 1h from close and down 30%
+review    once an hour, tighten a setting when the scorecard makes that clear
 
 Stop it at any time. Finished work stays finished; running work is picked up again on start.
 """
@@ -18,12 +20,15 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 
 from . import runner
+from .commodities import CommodityPricer
 from .config import Settings
+from .estimators import build_estimators
 from .jobs import PLACING, Job, Jobs
 from .kalshi import KalshiClient, KalshiRateLimited
+from .lanes import lane_specs, spec_for, tiered, tiered_lanes
 from .search import NewsSearch
 from .store import Store
-from .strategy import LongShot, reject_reason, steady_reject_reason
+from .strategy import LongShot, ask_trend, falling_reason, lane_reject_reason
 
 log = logging.getLogger("moonshot")
 
@@ -38,13 +43,18 @@ def _price(m: dict, key: str) -> float:
 def knobs(s: Settings) -> tuple:
     """Settings whose change is worth a log line."""
     return (
-        s.env, s.mode, s.real_money, s.min_price, s.max_price, s.min_volume, s.max_spread,
+        s.env, s.mode, s.real_money, s.min_order_usd, s.min_price, s.max_price, s.min_volume, s.max_spread,
         s.min_hours_to_close, s.min_edge, s.scan_pages, s.shortlist, s.scan_interval_minutes,
         s.model, tuple(sorted(s.skip_categories)), s.skip_numeric, tuple(sorted(s.exclude_versions)),
-        s.max_rps, s.job_max_attempts,
+        s.max_rps, s.page_size, s.job_max_attempts, s.moonshot_max_drop,
+        s.stop_loss_enabled, s.stop_loss_hours, s.stop_loss_drop,
         s.steady_enabled, s.steady_min_price, s.steady_max_price, s.steady_min_trend,
+        s.steady_max_lag,
+        s.review_enabled, tuple(sorted(s.rag_skip_lanes)),
         s.steady_max_hours_to_close, s.steady_min_edge, s.steady_usd_per_trade,
         s.search_enabled, s.search_results,
+        s.commodities_enabled, s.commodity_min_edge, s.commodity_min_price, s.commodity_max_price,
+        s.commodity_vol_mult, s.commodity_max_basis,
     )
 
 
@@ -60,10 +70,12 @@ class Worker:
         client_factory: Callable[[Settings], KalshiClient] | None = None,
         est_factory: Callable[[Settings], object] | None = None,
         reload: Callable[[], Settings] | None = None,
+        quant: CommodityPricer | None = None,
     ):
         self.s, self.client, self.est, self.store, self.searcher = s, client, est, store, searcher
         self.jobs = Jobs(store)
         self._client_factory, self._est_factory, self._reload = client_factory, est_factory, reload
+        self.quant = quant
         self.stopping = False
         self._last_cleanup = 0.0
 
@@ -79,6 +91,8 @@ class Worker:
                 "Check your Kalshi portfolio, then see `jobs`.", parked,
             )
         self.jobs.run_now("scan")
+        self.jobs.ensure("review", time.time(), max_attempts=self.s.job_max_attempts)
+        self._ensure_tiered()
 
     def stop(self) -> None:
         self.stopping = True
@@ -121,6 +135,7 @@ class Worker:
             and (
                 fresh.base_url != s.base_url or fresh.key_id != s.key_id
                 or fresh.private_key_path != s.private_key_path or fresh.max_rps != s.max_rps
+                or fresh.page_size != s.page_size
             )
         ):
             self.client._http.close()
@@ -145,9 +160,15 @@ class Worker:
 
     # ---- running a job ----
     def run_job(self, job: Job) -> None:
-        handlers = {"scan": self.do_scan, "evaluate": self.do_evaluate, "resolve": self.do_resolve}
+        handlers = {
+            "scan": self.do_scan, "evaluate": self.do_evaluate,
+            "resolve": self.do_resolve, "stop_loss": self.do_stop_loss,
+            "review": self.do_review,
+        }
         try:
             handler = handlers.get(job.kind)
+            if handler is None and job.kind.startswith(("lane_scope:", "lane_review:")):
+                handler = self.do_lane_scope if job.kind.startswith("lane_scope:") else self.do_lane_review
             if handler is None:
                 raise ValueError(f"unknown job kind {job.kind!r}")
             self.jobs.complete(job.id, handler(job) or "")
@@ -168,17 +189,23 @@ class Worker:
         # Scheduled first, so even a scan that crashes or is killed leaves the next one waiting.
         self.jobs.ensure("scan", time.time() + every, max_attempts=s.job_max_attempts)
         markets = runner.candidate_markets(s, self.client, partial_ok=job.last_attempt)
-        moon, steady = runner.shortlist(s, self.client, markets)
-        log.info(runner.describe_scan(s, len(markets), len(moon), len(steady), self.searcher))
+        lanes = runner.shortlists(s, self.client, markets, self.estimators())
+        shots = [shot for picked in lanes.values() for shot in picked]
+        log.info(runner.describe_scan(
+            s, len(markets), {k: len(v) for k, v in lanes.items()}, self.searcher,
+        ))
         queued = 0
-        for shot in moon + steady:
+        for shot in shots:
             made = self.jobs.enqueue(
                 "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.ticker}",
                 expires_in=every, max_attempts=s.job_max_attempts,
+                priority=spec_for(s, shot.lane).priority,
             )
             queued += 1 if made else 0
         self.jobs.enqueue("resolve", dedupe_key="resolve", max_attempts=s.job_max_attempts)
-        return f"{len(markets)} markets, queued {queued} of {len(moon) + len(steady)} evaluations"
+        self._schedule_stop_loss()
+        self._ensure_tiered()
+        return f"{len(markets)} markets, queued {queued} of {len(shots)} evaluations"
 
     def do_evaluate(self, job: Job) -> str:
         s = self.s
@@ -189,9 +216,19 @@ class Worker:
         if shot.series:
             m.setdefault("series_ticker", shot.series)
         now = datetime.now(UTC)
-        why_not = (
-            steady_reject_reason(m, s, now) if shot.lane == "steady" else reject_reason(m, s, now)
-        )
+        spec = spec_for(s, shot.lane)
+        m.setdefault("event_ticker", shot.event_ticker)
+        why_not = lane_reject_reason(m, spec, s, now)
+        if not why_not and spec.trend == "not_falling":
+            try:
+                candles = self.client.candlesticks(shot.series, shot.ticker, spec.lookback_hours)
+            except Exception:
+                candles = []
+            why_not = falling_reason(ask_trend(candles), spec.max_drop)
+        if not why_not and shot.mutually_exclusive:
+            others = self.store.bet_tickers_in_event(shot.event_ticker) - {shot.ticker}
+            if others:
+                why_not = f"other side already taken ({min(others)})"
         if why_not:
             log.info("skip %s: no longer qualifies (%s)", shot.ticker, why_not)
             return f"skipped: {why_not}"
@@ -200,14 +237,105 @@ class Worker:
         order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
         out = runner.evaluate(
             s, self.client, self.est, self.store, shot, self.searcher,
+            quant=self.quant, estimators=self.estimators(),
             raise_model_errors=not job.last_attempt,
             order_key=order_key,
             before_order=lambda: self.jobs.checkpoint(job.id, PLACING),
         )
         print(runner.format_outcome(out), flush=True)
+        if out.action == "bet":
+            self._schedule_stop_loss()
         return f"{out.action} {out.ticker}"
+
+    # ---- two-level lanes: a slow scoping pass feeds a fast reviewing pass ----
+    def _ensure_tiered(self) -> None:
+        """Keep one scope and one review job alive per two-level lane (also picks up a lane
+        turned on by a settings change)."""
+        for spec in tiered_lanes(self.s):
+            now = time.time()
+            self.jobs.ensure(
+                f"lane_scope:{spec.name}", now, max_attempts=self.s.job_max_attempts,
+                priority=spec.priority,
+            )
+            self.jobs.ensure(
+                f"lane_review:{spec.name}", now + 15, max_attempts=self.s.job_max_attempts,
+                priority=spec.priority,
+            )
+
+    def _tiered_spec(self, job: Job):
+        spec = lane_specs(self.s).get(job.kind.partition(":")[2])
+        return spec if spec is not None and spec.enabled and tiered(spec) else None
+
+    def do_lane_scope(self, job: Job) -> str:
+        spec = self._tiered_spec(job)
+        if spec is None:
+            return "lane off or not two-level; not rescheduled"
+        self.jobs.ensure(
+            job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
+            max_attempts=self.s.job_max_attempts, priority=spec.priority,
+        )
+        n = runner.scope_lane(self.s, self.client, self.store, spec)
+        self.jobs.run_now(f"lane_review:{spec.name}", priority=spec.priority)
+        log.info("scope %s: watching %d event(s)", spec.name, n)
+        return f"{n} events watched"
+
+    def do_lane_review(self, job: Job) -> str:
+        spec = self._tiered_spec(job)
+        if spec is None:
+            return "lane off or not two-level; not rescheduled"
+        every = (spec.review_minutes or 2.0) * 60
+        self.jobs.ensure(
+            job.kind, time.time() + every, max_attempts=self.s.job_max_attempts,
+            priority=spec.priority,
+        )
+        shots = runner.review_lane(self.s, self.client, self.store, spec, self.estimators())
+        queued = 0
+        for shot in shots:
+            made = self.jobs.enqueue(
+                "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.ticker}",
+                expires_in=max(60.0, 2 * every), max_attempts=self.s.job_max_attempts,
+                priority=spec.priority,
+            )
+            queued += 1 if made else 0
+        return f"{len(self.store.watch(spec.name))} watched, queued {queued} of {len(shots)}"
+
+    def estimators(self) -> dict:
+        return build_estimators(self.est, self.store, self.searcher, self.quant)
 
     def do_resolve(self, job: Job) -> str:
         n = runner.resolve(self.client, self.store)
         log.info("resolved %d settled markets", n)
         return f"{n} resolved"
+
+    def do_stop_loss(self, job: Job) -> str:
+        notes = runner.stop_loss_pass(
+            self.s, self.client, self.store,
+            before_order=lambda: self.jobs.checkpoint(job.id, PLACING),
+        )
+        for line in notes:
+            log.info("%s", line)
+        self._schedule_stop_loss()
+        return f"{len(notes)} stop-loss action(s)"
+
+    def do_review(self, job: Job) -> str:
+        from .review import run_review
+
+        if not self.s.review_enabled:
+            self._schedule_review()
+            return "review off"
+        notes = run_review(self.s, self.store)
+        for line in notes:
+            log.info("%s", line)
+        self.refresh()
+        self._schedule_review()
+        return notes[0] if notes else "no change"
+
+    def _schedule_review(self) -> None:
+        every = self.s.review_interval_minutes * 60
+        self.jobs.ensure("review", time.time() + every, max_attempts=self.s.job_max_attempts)
+
+    def _schedule_stop_loss(self) -> None:
+        nxt = runner.next_stop_loss_at(self.s, self.store)
+        if nxt is None:
+            return
+        self.jobs.ensure("stop_loss", nxt, max_attempts=self.s.job_max_attempts)

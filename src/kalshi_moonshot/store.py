@@ -6,7 +6,7 @@ retrieve similar past cases. Prices are not stored in that index.
 
 from __future__ import annotations
 
-import re
+import json
 import shutil
 import sqlite3
 import time
@@ -14,11 +14,21 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from .calibration import Calibrator
+from .rag import Rag
+
 # Bump this whenever filters, prompt, or model logic change enough that old decisions
 # should not be scored together with new ones. Every new decision is tagged with it.
 #   v1  everything logged before versions existed (included live-number markets and sports totals)
-#   v2  skips live-number markets (SKIP_NUMERIC)
-STRATEGY_VERSION = "v2"
+#   v2  skips live-number markets (SKIP_NUMERIC); still allowed both sides of one game and falling asks
+#   v3  at most one side of a mutually exclusive event; moonshot skips a falling ask;
+#       stop-loss sells (or paper-sells) when under 1h left and down 30%
+#   v4  news is last 3 days, newest first with age; prompt treats only fresh facts as leverage
+#   v5  steady takes a rising favorite unless the model is more than STEADY_MAX_LAG under the ask
+#   v6  lanes are data (lanes.py); the estimate is weighed against our settled record before the
+#       bet rule (calibration.py); the similar-case index is structured with base rates (rag.py);
+#       commodity ladder lane added
+STRATEGY_VERSION = "v6"
 LEGACY_VERSION = "v1"
 
 SCHEMA = """
@@ -38,7 +48,12 @@ CREATE TABLE IF NOT EXISTS decisions (
   lane TEXT DEFAULT 'moonshot',  -- 'moonshot' or 'steady'
   context TEXT,                  -- news headlines the model was shown
   category TEXT,                 -- Kalshi event category
-  version TEXT                   -- strategy version that produced this decision
+  version TEXT,                  -- strategy version that produced this decision
+  event_ticker TEXT,             -- Kalshi event; used to block a second side of a mutex event
+  exit_price REAL,               -- bid we sold (or would have sold) at; null = held to settlement
+  exit_ts REAL,
+  exit_reason TEXT,
+  cal_p REAL                     -- probability after blending the estimate with our record
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_ticker ON decisions(ticker);
 
@@ -52,13 +67,14 @@ CREATE TABLE IF NOT EXISTS orders (
   fill_count REAL NOT NULL,
   cost_usd REAL NOT NULL,        -- what actually filled, incl. fee
   fee_usd REAL NOT NULL,
-  order_id TEXT
+  order_id TEXT,
+  side TEXT DEFAULT 'buy'        -- 'buy' or 'sell'
 );
 CREATE INDEX IF NOT EXISTS idx_orders_ts ON orders(ts);
 
 CREATE TABLE IF NOT EXISTS jobs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind TEXT NOT NULL,            -- scan | evaluate | resolve
+  kind TEXT NOT NULL,            -- scan | evaluate | resolve | stop_loss
   payload TEXT NOT NULL DEFAULT '{}',
   status TEXT NOT NULL DEFAULT 'pending',  -- pending | running | done | dead | expired
   run_at REAL NOT NULL,          -- not before this time
@@ -71,27 +87,19 @@ CREATE TABLE IF NOT EXISTS jobs (
   stage TEXT,                    -- 'placing' marks the moment an order may have gone out
   dedupe_key TEXT,
   last_error TEXT,
-  result TEXT
+  result TEXT,
+  priority INTEGER NOT NULL DEFAULT 0  -- higher runs first; fast lanes jump the queue
+);
+
+CREATE TABLE IF NOT EXISTS watchlist (
+  lane TEXT NOT NULL,
+  event_ticker TEXT NOT NULL,
+  payload TEXT NOT NULL DEFAULT '{}',  -- close time, category, series from the scoping pass
+  scoped_ts REAL NOT NULL,
+  PRIMARY KEY (lane, event_ticker)
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(status, run_at);
-
-CREATE VIRTUAL TABLE IF NOT EXISTS rag_fts USING fts5(
-  decision_id UNINDEXED,
-  title,
-  body,
-  outcome
-);
 """
-
-# Tokens that match almost every market and would pull unrelated settled cases.
-_RAG_STOP = frozenset({
-    "will", "the", "over", "under", "more", "than", "before", "after", "wins", "game",
-    "full", "points", "scored", "any", "this", "that", "with", "from", "have", "been",
-    "was", "were", "and", "for", "not", "yes", "its", "who", "what", "when", "where",
-    "how", "about", "into", "your", "their", "there", "which", "would", "could", "should",
-    "then", "by", "of", "to", "in", "on", "at", "or", "a", "an", "be", "it", "is", "are",
-})
-
 
 class Store:
     def __init__(self, path: Path | str, exclude_versions: Iterable[str] = ()):
@@ -100,8 +108,12 @@ class Store:
         self.db = sqlite3.connect(str(path))
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        self.db.execute("DROP TABLE IF EXISTS rag_fts")  # replaced by rag_cases
         self._migrate()
-        self.rebuild_rag()
+        self.generation = 0  # bumped whenever settled data changes; caches key on it
+        self.rag = Rag(self)
+        self.calibrator = Calibrator(self)
+        self.rag.rebuild()
 
     def _migrate(self) -> None:
         """Add columns to a database created before they existed."""
@@ -111,12 +123,23 @@ class Store:
             ("context", "TEXT"),
             ("category", "TEXT"),
             ("version", "TEXT"),
+            ("event_ticker", "TEXT"),
+            ("exit_price", "REAL"),
+            ("exit_ts", "REAL"),
+            ("exit_reason", "TEXT"),
+            ("cal_p", "REAL"),
         ):
             if name not in have:
                 self.db.execute(f"ALTER TABLE decisions ADD COLUMN {name} {ddl}")
                 if name == "version":
                     # Every row that exists before versions did was made by the old logic.
                     self.db.execute("UPDATE decisions SET version=?", (LEGACY_VERSION,))
+        job_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(jobs)")}
+        if "priority" not in job_cols:
+            self.db.execute("ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
+        order_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(orders)")}
+        if "side" not in order_cols:
+            self.db.execute("ALTER TABLE orders ADD COLUMN side TEXT DEFAULT 'buy'")
         self.db.commit()
 
     def _excluded_sql(self) -> tuple[str, list[str]]:
@@ -132,6 +155,49 @@ class Store:
                        SUM(outcome IN ('yes','no')) AS settled
                 FROM decisions GROUP BY 1 ORDER BY 1"""
         ).fetchall()
+
+    def uncategorized_series(self) -> dict[str, int]:
+        """Series of decisions with no category, with how many decisions each has."""
+        rows = self.db.execute(
+            """SELECT ticker FROM decisions WHERE category IS NULL OR category = ''"""
+        ).fetchall()
+        out: dict[str, int] = {}
+        for r in rows:
+            series = r["ticker"].split("-")[0]
+            out[series] = out.get(series, 0) + 1
+        return out
+
+    def backfill_categories(self, categories: dict[str, str], dry_run: bool = True) -> dict[str, Any]:
+        """Fill in the category of old decisions from a series -> category map.
+
+        Only rows with an empty category are touched, and only their category column. Makes a
+        copy of the database file first when actually writing. Rebuilds the similar-case index
+        and invalidates calibration caches, since both use the category.
+        """
+        pending = self.uncategorized_series()
+        fill = {s: c for s, c in categories.items() if c and s in pending}
+        out: dict[str, Any] = {
+            "rows": sum(pending.values()),
+            "fillable": sum(pending[s] for s in fill),
+            "unresolved": sorted(set(pending) - set(fill)),
+            "updated": 0,
+        }
+        if dry_run or not fill:
+            return out
+        backup = self.path.with_name(f"{self.path.name}.bak-{int(time.time())}")
+        shutil.copy2(self.path, backup)
+        for series, category in fill.items():
+            cur = self.db.execute(
+                """UPDATE decisions SET category=?
+                   WHERE (category IS NULL OR category='') AND (ticker=? OR ticker LIKE ?)""",
+                (category, series, series + "-%"),
+            )
+            out["updated"] += cur.rowcount
+        self.db.commit()
+        self.generation += 1
+        self.rebuild_rag()
+        out["backup"] = str(backup)
+        return out
 
     def prune(self, versions: Iterable[str], dry_run: bool = True) -> dict[str, int]:
         """Delete decisions of the given versions, except tickers we have orders on.
@@ -160,9 +226,10 @@ class Store:
         shutil.copy2(self.path, backup)
         self.db.execute(f"DELETE FROM decisions WHERE {where}", versions)
         self.db.commit()
+        self.generation += 1
         self.rebuild_rag()
         out["deleted"] = deletable
-        out["backup"] = str(backup)  # type: ignore[assignment]
+        out["backup"] = str(backup)
         return out
 
     # ---- decisions ----
@@ -174,6 +241,35 @@ class Store:
         cur = self.db.execute(f"INSERT INTO decisions ({cols}) VALUES ({marks})", list(d.values()))
         self.db.commit()
         return int(cur.lastrowid or 0)
+
+    def decided_since(self, ticker: str, since_ts: float) -> bool:
+        row = self.db.execute(
+            "SELECT 1 FROM decisions WHERE ticker=? AND ts>=? LIMIT 1", (ticker, since_ts)
+        ).fetchone()
+        return row is not None
+
+    # ---- watchlist: what the slow scoping pass hands to the fast review pass ----
+    def set_watch(self, lane: str, events: dict[str, dict[str, Any]]) -> None:
+        """Replace a lane's watchlist."""
+        now = time.time()
+        self.db.execute("DELETE FROM watchlist WHERE lane=?", (lane,))
+        self.db.executemany(
+            "INSERT INTO watchlist (lane, event_ticker, payload, scoped_ts) VALUES (?,?,?,?)",
+            [(lane, ev, json.dumps(info), now) for ev, info in events.items()],
+        )
+        self.db.commit()
+
+    def watch(self, lane: str) -> dict[str, dict[str, Any]]:
+        rows = self.db.execute(
+            "SELECT event_ticker, payload FROM watchlist WHERE lane=?", (lane,)
+        ).fetchall()
+        return {r["event_ticker"]: json.loads(r["payload"] or "{}") for r in rows}
+
+    def unwatch(self, lane: str, event_ticker: str) -> None:
+        self.db.execute(
+            "DELETE FROM watchlist WHERE lane=? AND event_ticker=?", (lane, event_ticker)
+        )
+        self.db.commit()
 
     def unresolved_tickers(self) -> list[str]:
         rows = self.db.execute(
@@ -187,7 +283,8 @@ class Store:
             (outcome, time.time(), ticker),
         )
         self.db.commit()
-        self.rebuild_rag()
+        self.generation += 1
+        self.rag.index_settled([ticker])
 
     def settled_decisions(self, include_excluded: bool = False) -> list[sqlite3.Row]:
         """Settled decisions, minus excluded versions unless asked for everything."""
@@ -195,6 +292,17 @@ class Store:
         return self.db.execute(
             f"SELECT * FROM decisions WHERE outcome IN ('yes','no'){extra} ORDER BY ts", args
         ).fetchall()
+
+    def bet_tickers_in_event(self, event_ticker: str) -> set[str]:
+        """Unresolved paper or real bets in this event. Empty when event_ticker is blank."""
+        if not event_ticker:
+            return set()
+        rows = self.db.execute(
+            """SELECT DISTINCT ticker FROM decisions
+               WHERE event_ticker=? AND action='bet' AND outcome IS NULL""",
+            (event_ticker,),
+        ).fetchall()
+        return {r["ticker"] for r in rows}
 
     def recent_decisions(self, limit: int = 20) -> list[sqlite3.Row]:
         return self.db.execute(
@@ -211,70 +319,103 @@ class Store:
 
     def spent_since(self, since_ts: float, env: str) -> float:
         row = self.db.execute(
-            "SELECT COALESCE(SUM(cost_usd),0) AS s FROM orders WHERE ts>=? AND env=?",
+            """SELECT COALESCE(SUM(cost_usd),0) AS s FROM orders
+               WHERE ts>=? AND env=? AND COALESCE(side,'buy')='buy'""",
             (since_ts, env),
         ).fetchone()
         return float(row["s"])
 
+    def net_contracts(self, ticker: str, env: str) -> float:
+        row = self.db.execute(
+            """SELECT COALESCE(SUM(CASE WHEN COALESCE(side,'buy')='buy' THEN fill_count
+                                        ELSE -fill_count END), 0) AS n
+               FROM orders WHERE ticker=? AND env=?""",
+            (ticker, env),
+        ).fetchone()
+        return float(row["n"])
+
+    def mark_exited(self, ticker: str, price: float, reason: str) -> None:
+        self.db.execute(
+            """UPDATE decisions SET exit_price=?, exit_ts=?, exit_reason=?
+               WHERE ticker=? AND action='bet' AND outcome IS NULL AND exit_ts IS NULL""",
+            (price, time.time(), reason[:300], ticker),
+        )
+        self.db.commit()
+
+    def open_bets(self) -> list[sqlite3.Row]:
+        """Unresolved bets not yet stopped out. One row per ticker (the first bet)."""
+        return self.db.execute(
+            """SELECT d.* FROM decisions d
+               JOIN (
+                 SELECT ticker, MIN(id) AS id FROM decisions
+                 WHERE action='bet' AND outcome IS NULL AND exit_ts IS NULL
+                 GROUP BY ticker
+               ) first ON d.id = first.id
+               ORDER BY d.ts"""
+        ).fetchall()
+
+    def open_positions(self, env: str) -> list[sqlite3.Row]:
+        """Real open buys, with the bet decision logged at the first fill.
+
+        A later re-score of the same ticker is left out. That row is a new estimate,
+        not the one that placed the order.
+        """
+        return self.db.execute(
+            """SELECT p.ticker, p.contracts, p.cost_usd, p.price, p.filled_ts,
+                      d.title, d.ask, d.model_p, d.edge, d.context
+               FROM (
+                 SELECT ticker,
+                        SUM(CASE WHEN COALESCE(side,'buy')='buy' THEN fill_count
+                                 ELSE -fill_count END) AS contracts,
+                        SUM(CASE WHEN COALESCE(side,'buy')='buy' THEN cost_usd
+                                 ELSE 0 END) AS cost_usd,
+                        MIN(CASE WHEN COALESCE(side,'buy')='buy' THEN price END) AS price,
+                        MIN(CASE WHEN COALESCE(side,'buy')='buy' THEN ts END) AS filled_ts
+                 FROM orders WHERE env=?
+                 GROUP BY ticker
+                 HAVING contracts > 0
+               ) p
+               LEFT JOIN decisions d ON d.id = (
+                 SELECT id FROM decisions
+                 WHERE ticker=p.ticker AND action='bet' AND ts <= p.filled_ts + 5
+                 ORDER BY ts DESC LIMIT 1
+               )
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM decisions x
+                 WHERE x.ticker=p.ticker AND x.outcome IN ('yes','no')
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM decisions x
+                 WHERE x.ticker=p.ticker AND x.exit_ts IS NOT NULL
+               )
+               ORDER BY p.filled_ts""",
+            (env,),
+        ).fetchall()
+
     def open_position_tickers(self, env: str) -> set[str]:
-        """Tickers we hold: filled buys whose market has not settled yet."""
+        """Tickers we still hold: net bought contracts, market not settled, not stopped out."""
         rows = self.db.execute(
-            """SELECT DISTINCT o.ticker FROM orders o
-               WHERE o.env=? AND o.fill_count>0
+            """SELECT o.ticker FROM orders o
+               WHERE o.env=?
+               GROUP BY o.ticker
+               HAVING SUM(CASE WHEN COALESCE(o.side,'buy')='buy' THEN o.fill_count
+                               ELSE -o.fill_count END) > 0
                  AND NOT EXISTS (SELECT 1 FROM decisions d
-                                 WHERE d.ticker=o.ticker AND d.outcome IN ('yes','no'))""",
+                                 WHERE d.ticker=o.ticker AND d.outcome IN ('yes','no'))
+                 AND NOT EXISTS (SELECT 1 FROM decisions d
+                                 WHERE d.ticker=o.ticker AND d.exit_ts IS NOT NULL)""",
             (env,),
         ).fetchall()
         return {r["ticker"] for r in rows}
 
-    # ---- local retrieval of settled decisions (no prices) ----
+    # ---- local retrieval of settled decisions (no prices); see rag.py ----
     def rebuild_rag(self) -> int:
-        """Rebuild the search index from settled decisions that have a model probability."""
-        self.db.execute("DELETE FROM rag_fts")
-        n = 0
-        for row in self.settled_decisions():
-            if row["model_p"] is None:
-                continue
-            prior = f"prior estimate {row['model_p']:.2f}, resolved {row['outcome']}."
-            note = (row["reason"] or "").replace(str(row["ask"]), "")
-            self.db.execute(
-                "INSERT INTO rag_fts (decision_id, title, body, outcome) VALUES (?,?,?,?)",
-                (row["id"], row["title"] or "", f"{prior} {note}"[:400], row["outcome"]),
-            )
-            n += 1
-        self.db.commit()
-        return n
+        """Rebuild the whole index. Needed when excluded versions or skipped lanes change."""
+        return self.rag.rebuild()
 
     def similar_text(self, title: str, rules: str = "", limit: int = 4) -> str:
         """Nearest settled cases for a new question. Empty when nothing useful matches."""
-        query = _rag_query(f"{title} {rules}")
-        if not query:
-            return ""
-        try:
-            rows = self.db.execute(
-                """SELECT title, outcome, body FROM rag_fts
-                   WHERE rag_fts MATCH ? ORDER BY bm25(rag_fts) LIMIT ?""",
-                (query, limit),
-            ).fetchall()
-        except sqlite3.OperationalError:
-            return ""
-        lines = []
-        seen: set[str] = set()
-        for row in rows:
-            key = f"{row['title']}|{row['outcome']}"
-            if key in seen:
-                continue
-            seen.add(key)
-            lines.append(f"- {row['title'][:140]} -> {row['outcome']}. {row['body'][:180]}")
-        return "\n".join(lines)
-
-
-def _rag_query(text: str) -> str:
-    words = []
-    for word in re.findall(r"[A-Za-z][A-Za-z0-9]{2,}", text.lower()):
-        if word in _RAG_STOP or word in words:
-            continue
-        words.append(word)
-        if len(words) == 8:
-            break
-    return " OR ".join(words)
+        return "\n".join(
+            f"- {c.title[:140]} -> {c.outcome}. {c.body[:180]}"
+            for c in self.rag.cases(f"{title} {rules}", limit=limit)
+        )

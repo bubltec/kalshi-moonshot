@@ -89,6 +89,19 @@ def test_ensure_keeps_exactly_one_pending_job(tmp_path):
     assert j.ensure("scan", time.time() + 100) is None
 
 
+def test_ensure_pulls_a_pending_job_forward_but_never_delays_it(tmp_path):
+    j = make(tmp_path)
+    later = time.time() + 600
+    sooner = time.time() + 30
+    j.ensure("stop_loss", later)
+    j.ensure("stop_loss", sooner)
+    row = j.db.execute("SELECT run_at FROM jobs WHERE kind='stop_loss'").fetchone()
+    assert abs(row["run_at"] - sooner) < 1
+    j.ensure("stop_loss", later)
+    row = j.db.execute("SELECT run_at FROM jobs WHERE kind='stop_loss'").fetchone()
+    assert abs(row["run_at"] - sooner) < 1
+
+
 def test_retry_dead_requeues_ordinary_failures(tmp_path):
     j = make(tmp_path)
     j.enqueue("scan", max_attempts=1)

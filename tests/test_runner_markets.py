@@ -38,7 +38,7 @@ def test_window_covers_both_lanes():
     s = settings(
         min_hours_to_close=2.0, max_hours_to_close=24.0,
         steady_enabled=True, steady_min_hours_to_close=1.0, steady_max_hours_to_close=72.0,
-        skip_categories=frozenset(),
+        skip_categories=frozenset(), commodities_enabled=False,
     )
     c = FakeClient()
     list(runner.candidate_markets(s, c))
@@ -46,7 +46,15 @@ def test_window_covers_both_lanes():
     assert abs((hi - lo) / 3600 - 71.0) < 0.01  # 1h .. 72h
     s2 = settings(
         min_hours_to_close=2.0, max_hours_to_close=24.0, steady_enabled=False,
-        skip_categories=frozenset(),
+        skip_categories=frozenset(), commodities_enabled=False,
     )
     list(runner.candidate_markets(s2, c))
+    assert abs((c.window[1] - c.window[0]) / 3600 - 22.0) < 0.01
+    # the commodity lane has its own two-level loop, so it does not widen the all-markets window
+    s3 = settings(
+        min_hours_to_close=2.0, max_hours_to_close=24.0, steady_enabled=False,
+        skip_categories=frozenset(), commodities_enabled=True, commodity_min_hours_to_close=1.0,
+        commodity_max_hours_to_close=48.0,
+    )
+    list(runner.candidate_markets(s3, c))
     assert abs((c.window[1] - c.window[0]) / 3600 - 22.0) < 0.01

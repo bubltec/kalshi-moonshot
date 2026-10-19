@@ -1,0 +1,44 @@
+# Which Kalshi commodity series the ladder estimator can price, and the free futures symbol it
+# checks them against. Add a series here instead of editing code. A copy in DATA_DIR overrides this
+# one. `suffixes` are the period codes that follow the prefix (D daily, H hourly, W weekly, "" none).
+# Monthly and annual series are left out on purpose: realized volatility is a poor guide that far out.
+
+[[instrument]]
+prefix = "KXGOLD"
+symbol = "GC=F"
+suffixes = ["D", "H", "W"]
+
+[[instrument]]
+prefix = "KXSILVER"
+symbol = "SI=F"
+suffixes = ["D", "H", "W"]
+
+[[instrument]]
+prefix = "KXWTI"
+symbol = "CL=F"
+suffixes = ["", "H", "W"]
+
+[[instrument]]
+prefix = "KXBRENT"
+symbol = "BZ=F"
+suffixes = ["D", "W"]
+
+[[instrument]]
+prefix = "KXNATGAS"
+symbol = "NG=F"
+suffixes = ["D", "W"]
+
+[[instrument]]
+prefix = "KXCOPPER"
+symbol = "HG=F"
+suffixes = ["D", "W"]
+
+[[instrument]]
+prefix = "KXPLATINUM"
+symbol = "PL=F"
+suffixes = ["H"]
+
+[[instrument]]
+prefix = "KXPALLADIUM"
+symbol = "PA=F"
+suffixes = ["H"]

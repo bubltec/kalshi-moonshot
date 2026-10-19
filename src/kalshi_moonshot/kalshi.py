@@ -33,7 +33,16 @@ RETRIES = 5  # tries per request
 MAX_BACKOFF = 30.0  # seconds
 
 
-# 200 pages x 200 = 40,000 markets. A 1-72h window held 28,186 on 2026-10-18 (about 35s to fetch).
+def _event_tuple(e: dict[str, Any]) -> tuple[str, str, bool]:
+    return (
+        (e.get("category") or "").strip(),
+        e.get("series_ticker", "") or "",
+        bool(e.get("mutually_exclusive")),
+    )
+
+
+# Page cap, not page size. Size comes from KALSHI_PAGE_SIZE (default 1000).
+# A 1-72h window held 28,186 markets on 2026-10-18.
 MARKET_PAGES = 200
 
 
@@ -69,10 +78,12 @@ def signed_headers(private_key, key_id: str, method: str, url: str, ts_ms: int |
 
 class KalshiClient:
     def __init__(
-        self, base_url: str, key_id: str = "", private_key_path: str = "", max_rps: float = 8.0
+        self, base_url: str, key_id: str = "", private_key_path: str = "",
+        max_rps: float = 8.0, page_size: int = 1000,
     ):
         self.base_url = base_url.rstrip("/")
         self.key_id = key_id
+        self.page_size = min(1000, max(1, page_size))
         self._key = load_private_key(private_key_path) if private_key_path else None
         self._http = httpx.Client(timeout=20.0)
         self._gap = 1.0 / max(0.5, max_rps)  # minimum seconds between requests
@@ -143,8 +154,9 @@ class KalshiClient:
         raise KalshiRateLimited(f"{method} {path}: rate limited", retry_after=max(30.0, last_wait))
 
     # ---- public market data ----
-    def open_markets(self, pages: int = 5, page_size: int = 200) -> Iterator[dict[str, Any]]:
+    def open_markets(self, pages: int = 5, page_size: int | None = None) -> Iterator[dict[str, Any]]:
         """Open single-market (non-combo) markets, newest cursor pages first."""
+        page_size = page_size or self.page_size
         cursor = ""
         for _ in range(pages):
             params: dict[str, Any] = {
@@ -161,7 +173,7 @@ class KalshiClient:
                 return
 
     def markets_closing(
-        self, min_ts: float, max_ts: float, pages: int = MARKET_PAGES, page_size: int = 200
+        self, min_ts: float, max_ts: float, pages: int = MARKET_PAGES, page_size: int | None = None
     ) -> Iterator[dict[str, Any]]:
         """Open markets whose close time falls in [min_ts, max_ts] (unix seconds).
 
@@ -169,6 +181,7 @@ class KalshiClient:
         short scan of either can miss every market that closes inside a short window.
         Asking Kalshi for the window directly does not.
         """
+        page_size = page_size or self.page_size
         cursor = ""
         for _ in range(pages):
             params: dict[str, Any] = {
@@ -186,26 +199,78 @@ class KalshiClient:
             if not cursor:
                 return
 
-    def event_info(self, ttl: float = 3600.0, pages: int = 60) -> dict[str, tuple[str, str]]:
-        """event_ticker -> (category, series_ticker). Cached; events change slowly."""
+    def event_markets(self, event_ticker: str) -> list[dict[str, Any]]:
+        """Every open market in one event (e.g. a whole strike ladder)."""
+        out: list[dict[str, Any]] = []
+        cursor = ""
+        for _ in range(5):
+            params: dict[str, Any] = {"event_ticker": event_ticker, "limit": 1000}
+            if cursor:
+                params["cursor"] = cursor
+            body = self._request("GET", "/markets", params=params)
+            out.extend(m for m in body.get("markets", []) if m.get("status") in {"active", "open"})
+            cursor = body.get("cursor") or ""
+            if not cursor:
+                break
+        return out
+
+    def series_markets(self, series: str) -> list[dict[str, Any]]:
+        """Every open market in one series (a handful of requests, not a full-exchange scan)."""
+        out: list[dict[str, Any]] = []
+        cursor = ""
+        for _ in range(5):
+            params: dict[str, Any] = {"series_ticker": series, "status": "open", "limit": 1000}
+            if cursor:
+                params["cursor"] = cursor
+            body = self._request("GET", "/markets", params=params)
+            out.extend(body.get("markets", []))
+            cursor = body.get("cursor") or ""
+            if not cursor:
+                break
+        return out
+
+    def series(self, ticker: str) -> dict[str, Any]:
+        return self._request("GET", f"/series/{ticker}").get("series") or {}
+
+    def event(self, ticker: str) -> dict[str, Any]:
+        return self._request("GET", f"/events/{ticker}").get("event") or {}
+
+    def event_info(self, ttl: float = 3600.0, pages: int = 60) -> dict[str, tuple[str, str, bool]]:
+        """event_ticker -> (category, series_ticker, mutually_exclusive). Cached."""
         cached = getattr(self, "_event_info", None)
         if cached and time.time() - cached[0] < ttl:
             return cached[1]
-        info: dict[str, tuple[str, str]] = {}
+        info: dict[str, tuple[str, str, bool]] = {}
         cursor = ""
         for _ in range(pages):
-            params: dict[str, Any] = {"status": "open", "limit": 200}
+            params: dict[str, Any] = {"status": "open", "limit": min(self.page_size, 200)}
             if cursor:
                 params["cursor"] = cursor
             body = self._request("GET", "/events", params=params)
             for e in body.get("events", []):
-                info[e["event_ticker"]] = (
-                    (e.get("category") or "").strip(),
-                    e.get("series_ticker", ""),
-                )
+                info[e["event_ticker"]] = _event_tuple(e)
             cursor = body.get("cursor") or ""
             if not cursor:
                 break
+        self._event_info = (time.time(), info)
+        return info
+
+    def fill_event_info(self, tickers: list[str]) -> dict[str, tuple[str, str, bool]]:
+        """Like event_info, plus a one-off fetch for any ticker the cache missed.
+
+        The events list is not ordered by close time, so the cache can miss a game that is
+        about to settle. Looking up just the shortlist is cheap and is how we learn whether
+        two markets are mutually exclusive.
+        """
+        info = dict(self.event_info())
+        missing = [t for t in dict.fromkeys(tickers) if t and t not in info]
+        for ticker in missing:
+            try:
+                e = self.event(ticker)
+            except KalshiError:
+                continue
+            if e.get("event_ticker") or ticker:
+                info[e.get("event_ticker") or ticker] = _event_tuple(e)
         self._event_info = (time.time(), info)
         return info
 
@@ -249,5 +314,23 @@ class KalshiClient:
             "price": f"{price_dollars:.4f}",
             "time_in_force": "immediate_or_cancel",
             "self_trade_prevention_type": "taker_at_cross",
+        }
+        return self._request("POST", "/portfolio/events/orders", json=body, auth=True)
+
+    def sell_yes_ioc(
+        self, ticker: str, count: int, price_dollars: float, client_order_id: str | None = None
+    ) -> dict[str, Any]:
+        """Sell YES, immediate-or-cancel. reduce_only so this cannot open a short if we
+        already flattened the position. Same book as buy_yes_ioc: ask = sell YES.
+        """
+        body = {
+            "ticker": ticker,
+            "client_order_id": client_order_id or str(uuid.uuid4()),
+            "side": "ask",
+            "count": f"{count:.2f}",
+            "price": f"{price_dollars:.4f}",
+            "time_in_force": "immediate_or_cancel",
+            "self_trade_prevention_type": "taker_at_cross",
+            "reduce_only": True,
         }
         return self._request("POST", "/portfolio/events/orders", json=body, auth=True)

@@ -1,7 +1,9 @@
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from kalshi_moonshot import config, llm, report, risk, search, strategy
+import pytest
+
+from kalshi_moonshot import config, llm, report, risk, runner, search, strategy
 from kalshi_moonshot.store import Store
 
 NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
@@ -79,31 +81,43 @@ def test_lane_cap_can_tighten_but_never_loosen(tmp_path, monkeypatch):
 # ---- news search ----
 
 FEED = """<rss><channel>
+<item><title>Old Nixon profile - Times</title>
+<pubDate>Fri, 02 Oct 2026 14:00:00 GMT</pubDate></item>
 <item><title>Nixon leads new Florida poll &lt;b&gt;by 4&lt;/b&gt; - Tampa Bay Times</title>
 <pubDate>Fri, 16 Oct 2026 14:00:00 GMT</pubDate></item>
 <item><title>Kalshi odds put Nixon at 9% - Some Blog</title><pubDate>Fri, 16 Oct 2026 10:00:00 GMT</pubDate></item>
 <item><title>Best betting sites for the governor race</title></item>
 <item><title>Turnout surges in Florida early voting - AP</title><pubDate>Thu, 15 Oct 2026 10:00:00 GMT</pubDate></item>
 </channel></rss>"""
+FEED_NOW = datetime(2026, 10, 18, 12, 0, tzinfo=UTC)
 
 
 def test_feed_parsing_strips_html_and_drops_odds_headlines():
-    lines = search.parse_feed(FEED, limit=5)
-    assert len(lines) == 2
-    assert "Nixon leads new Florida poll by 4" in lines[0]
+    lines = search.parse_feed(FEED, limit=5, now=FEED_NOW)
+    assert len(lines) == 3
+    assert "Nixon leads new Florida poll by 4" in lines[0]  # newest first
+    assert "2d ago" in lines[0]
+    assert "Turnout surges" in lines[1]
     assert "<b>" not in lines[0]
     assert all("odds" not in x.lower() and "betting" not in x.lower() for x in lines)
 
 
 def test_feed_respects_limit_and_survives_garbage():
-    assert len(search.parse_feed(FEED, limit=1)) == 1
+    assert len(search.parse_feed(FEED, limit=1, now=FEED_NOW)) == 1
     assert search.parse_feed("not xml at all", limit=5) == []
 
 
 def test_query_leads_with_the_subject():
     q = search.build_query("Who will win the Florida Democratic primary?", "Angie Nixon")
     assert q.startswith("Angie Nixon")
-    assert q.endswith("when:14d")
+    assert q.endswith("when:3d")
+
+
+def test_query_uses_the_quoted_word_not_the_full_will_say_sentence():
+    q = search.build_query('Will Trump say "Antifa" before Oct 19, 2026?')
+    assert q.startswith("Antifa")
+    assert "Trump" in q
+    assert "Will" not in q and "when:3d" in q
 
 
 def test_search_failure_returns_empty_and_never_raises(monkeypatch):
@@ -125,6 +139,7 @@ def test_prompt_includes_context_subject_and_hides_price():
     )
     assert "Angie Nixon" in p
     assert "External context for optimal odds" in p
+    assert "last day or two" in p and "already known" in p
     assert "ignore" in p and "instructions" in p
     assert "- Nixon leads poll" in p and "- old case -> no" in p
     assert "ask" not in p.lower().replace("task", "")
@@ -235,3 +250,116 @@ def test_numeric_filter_can_be_turned_off():
     s = settings(skip_numeric=False)
     m = market(strike_type="greater", floor_strike=4.3)
     assert strategy.steady_reject_reason(m, s, NOW) is None
+
+
+def shot(**over):
+    base = {
+        "ticker": "A", "title": "t", "rules": "r", "bid": 0.04, "ask": 0.20, "volume": 100.0,
+        "close_time": "x", "hours_to_close": 10.0, "event_ticker": "GAME", "mutually_exclusive": True,
+    }
+    return strategy.LongShot(**{**base, **over})
+
+
+def test_one_per_mutex_event_keeps_the_cheapest_side():
+    cheap = shot(ticker="FEN", ask=0.10, volume=50)
+    longshot = shot(ticker="PTK", ask=0.20, volume=200)
+    other = shot(ticker="SOLO", event_ticker="OTHER", mutually_exclusive=False, ask=0.05)
+    got = {x.ticker for x in strategy.one_per_mutex_event([cheap, longshot, other])}
+    assert got == {"FEN", "SOLO"}  # cheapest side of GAME, plus the independent market
+
+
+def test_a_one_contract_ask_is_under_a_quarter_and_a_deeper_book_is_not():
+    thin = {"orderbook_fp": {"no_dollars": [["0.9700", "1.00"]]}}
+    deep = {"orderbook_fp": {"no_dollars": [["0.9700", "10.00"], ["0.5000", "100.00"]]}}
+    assert strategy.yes_ask_notional(thin, 0.03) == pytest.approx(0.03)
+    assert strategy.yes_ask_notional(deep, 0.03) == pytest.approx(0.30)
+
+
+def test_steady_takes_a_close_model_and_vetoes_a_long_shot_read():
+    assert strategy.steady_model_ok(0.55, 0.66, 0.15)
+    assert strategy.steady_model_ok(0.78, 0.67, 0.15)
+    assert not strategy.steady_model_ok(0.25, 0.70, 0.15)
+
+
+def test_falling_ask_is_a_crash_not_noise():
+    crash = strategy.ask_trend([candle(a) for a in (0.80, 0.60, 0.30, 0.10)])
+    assert strategy.falling_reason(crash, 0.02) == strategy.FALLING_REASON
+    last_hour = strategy.ask_trend([candle(a) for a in (0.20, 0.20, 0.20, 0.10)])
+    assert strategy.falling_reason(last_hour, 0.02)
+    flat = strategy.ask_trend([candle(a) for a in (0.20, 0.19, 0.20, 0.20)])
+    assert strategy.falling_reason(flat, 0.02) is None
+    assert strategy.falling_reason(None, 0.02) is None
+
+
+def test_stop_loss_needs_both_little_time_and_a_30_percent_drop():
+    assert strategy.stop_loss_hit(0.20, 0.10, hours_left=0.5, hours=1.0, drop=0.30)
+    assert strategy.stop_loss_hit(0.20, 0.10, hours_left=2.0, hours=1.0, drop=0.30) is None
+    assert strategy.stop_loss_hit(0.20, 0.18, hours_left=0.5, hours=1.0, drop=0.30) is None
+    assert strategy.stop_loss_hit(0.20, 0.00, hours_left=0.5, hours=1.0, drop=0.30) is None
+
+
+def test_evaluate_does_not_bet_the_other_side_of_a_mutex_event(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    store = Store(s.db_path)
+    store.add_decision(ticker="PTK", action="bet", mode="observe", event_ticker="GAME")
+
+    class Est:
+        def estimate(self, *a, **k):
+            return 0.50, "because"
+
+    class Client:
+        pass
+
+    fen = shot(ticker="FEN", ask=0.10, bid=0.09, lane="moonshot")
+    out = runner.evaluate(s, Client(), Est(), store, fen)
+    assert out.action == "pass" and "other side already taken" in out.note
+
+
+def test_paper_stop_loss_exits_and_trade_stop_loss_sells(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    close = (datetime.now(UTC) + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    class Client:
+        def __init__(self):
+            self.sold = []
+
+        def market(self, ticker):
+            return {"ticker": ticker, "yes_bid_dollars": "0.10", "close_time": close, "status": "active"}
+
+        def sell_yes_ioc(self, ticker, count, price, client_order_id=None):
+            self.sold.append((ticker, count, price))
+            return {"fill_count": count, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
+
+    client = Client()
+    obs = settings(mode="observe", stop_loss_enabled=True, stop_loss_hours=1.0, stop_loss_drop=0.30)
+    store = Store(tmp_path / "obs.db")
+    store.add_decision(ticker="PTK", title="Petkim", ask=0.20, action="bet", mode="observe",
+                       close_time=close)
+    notes = runner.stop_loss_pass(obs, client, store)
+    assert notes and "paper-sold" in notes[0]
+    assert store.open_bets() == []
+    assert client.sold == []
+
+    tr = settings(mode="trade", env="demo", allow_real_money=False, stop_loss_enabled=True,
+                  stop_loss_hours=1.0, stop_loss_drop=0.30)
+    live = Store(tmp_path / "tr.db")
+    live.add_decision(ticker="PTK", title="Petkim", ask=0.20, action="bet", mode="trade",
+                      close_time=close)
+    live.add_order(ticker="PTK", env="demo", count=2, price=0.20, fill_count=2,
+                   cost_usd=0.40, fee_usd=0.01, side="buy")
+    notes = runner.stop_loss_pass(tr, client, live)
+    assert client.sold == [("PTK", 2, 0.10)]
+    assert live.net_contracts("PTK", "demo") == 0
+    assert live.open_bets() == []
+
+
+def test_report_uses_the_stop_loss_price_not_settlement():
+    rows = [{
+        **drow("A", 0.35, 0.20, "yes", "bet"),
+        "exit_price": 0.10,
+    }]
+    s = report.summarize(rows)
+    assert s["bets"] == 1 and s["bet_wins"] == 0 and s["stop_losses"] == 1
+    # bought at 0.20 + fee, sold at 0.10 - fee: a loss, even though it later hit yes
+    assert s["bet_pnl_per_contract_set"] < 0

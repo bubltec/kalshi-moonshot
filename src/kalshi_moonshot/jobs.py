@@ -53,6 +53,7 @@ class Jobs:
         expires_in: float | None = None,
         dedupe_key: str | None = None,
         max_attempts: int = 3,
+        priority: int = 0,
     ) -> int | None:
         """Add a job. Returns None when an unfinished job with the same dedupe_key exists."""
         now = time.time()
@@ -64,24 +65,32 @@ class Jobs:
             if dup:
                 return None
         cur = self.db.execute(
-            """INSERT INTO jobs (kind, payload, run_at, created_ts, expires_ts, dedupe_key, max_attempts)
-               VALUES (?,?,?,?,?,?,?)""",
+            """INSERT INTO jobs (kind, payload, run_at, created_ts, expires_ts, dedupe_key, max_attempts, priority)
+               VALUES (?,?,?,?,?,?,?,?)""",
             (
                 kind, json.dumps(payload or {}), now if run_at is None else run_at, now,
-                None if expires_in is None else now + expires_in, dedupe_key, max_attempts,
+                None if expires_in is None else now + expires_in, dedupe_key, max_attempts, priority,
             ),
         )
         self.db.commit()
         return int(cur.lastrowid or 0)
 
     def ensure(self, kind: str, run_at: float, **kw: Any) -> int | None:
-        """Make sure one pending job of this kind exists. Used to keep recurring work alive."""
-        have = self.db.execute(
-            "SELECT 1 FROM jobs WHERE kind=? AND status='pending'", (kind,)
-        ).fetchone()
-        return None if have else self.enqueue(kind, run_at=run_at, **kw)
+        """Make sure one pending job of this kind exists. Used to keep recurring work alive.
 
-    def run_now(self, kind: str) -> None:
+        If one is already waiting, it is pulled forward when `run_at` is sooner, never delayed.
+        """
+        row = self.db.execute(
+            "SELECT id, run_at FROM jobs WHERE kind=? AND status='pending'", (kind,)
+        ).fetchone()
+        if row:
+            if row["run_at"] > run_at:
+                self.db.execute("UPDATE jobs SET run_at=? WHERE id=?", (run_at, row["id"]))
+                self.db.commit()
+            return None
+        return self.enqueue(kind, run_at=run_at, **kw)
+
+    def run_now(self, kind: str, priority: int = 0) -> None:
         """Pull every pending job of this kind forward to now (or add one)."""
         now = time.time()
         cur = self.db.execute(
@@ -89,7 +98,7 @@ class Jobs:
         )
         self.db.commit()
         if not cur.rowcount:
-            self.enqueue(kind, run_at=now)
+            self.enqueue(kind, run_at=now, priority=priority)
 
     # ---- consuming ----
     def claim(self, now: float | None = None) -> Job | None:
@@ -101,7 +110,7 @@ class Jobs:
             (now, now),
         )
         row = self.db.execute(
-            "SELECT * FROM jobs WHERE status='pending' AND run_at<=? ORDER BY run_at, id LIMIT 1",
+            "SELECT * FROM jobs WHERE status='pending' AND run_at<=? ORDER BY priority DESC, run_at, id LIMIT 1",
             (now,),
         ).fetchone()
         if row is None:

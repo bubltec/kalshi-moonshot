@@ -67,3 +67,10 @@ def test_yesterdays_spend_does_not_count(s, store):
 def test_no_duplicate_position(s, store):
     order(store, "A", 2.0)
     assert not risk.check(s, store, "A", 2.0).ok
+
+
+def test_mutex_event_blocks_the_other_side(s, store):
+    store.add_decision(ticker="PTK", action="bet", mode="trade", event_ticker="GAME")
+    v = risk.check(s, store, "FEN", 1.0, event_ticker="GAME", mutually_exclusive=True)
+    assert not v.ok and "another side" in v.reason
+    assert risk.check(s, store, "UNRELATED", 1.0, event_ticker="OTHER", mutually_exclusive=True).ok

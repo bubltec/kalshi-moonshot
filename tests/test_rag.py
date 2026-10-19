@@ -50,11 +50,13 @@ def test_rows_from_before_versions_become_v1(tmp_path):
                "ticker TEXT NOT NULL, title TEXT, bid REAL, ask REAL, model_p REAL, edge REAL, "
                "action TEXT NOT NULL, reason TEXT, mode TEXT NOT NULL, close_time TEXT, outcome TEXT, settled_ts REAL)")
     db.execute("INSERT INTO decisions (ts,ticker,action,mode) VALUES (1,'OLD','pass','observe')")
-    db.commit(); db.close()
+    db.commit()
+    db.close()
     store = Store(path)
     assert store.version_counts()[0]["version"] == "v1"
     store.add_decision(ticker="NEW", action="pass", mode="observe")
-    assert {r["version"] for r in store.version_counts()} == {"v1", "v2"}
+    from kalshi_moonshot.store import STRATEGY_VERSION
+    assert {r["version"] for r in store.version_counts()} == {"v1", STRATEGY_VERSION}
 
 
 def test_excluded_versions_are_left_out_of_settled_and_rag(tmp_path):

@@ -1,0 +1,15 @@
+# Nothing here should reach the build daemon. Secrets and the database are mounted at run time.
+.env
+.env.*
+!.env.example
+.secrets
+secrets
+data
+.git
+.venv
+.pytest_cache
+.ruff_cache
+.mypy_cache
+**/__pycache__
+**/*.egg-info
+tests

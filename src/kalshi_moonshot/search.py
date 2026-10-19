@@ -1,10 +1,11 @@
 """External context: recent news headlines about a market's subject. No API key needed.
 
-Source is Google News RSS. Two rules keep it from hurting the estimate:
+Source is Google News RSS. Rules that keep it useful as leverage, not as noise:
   * Headlines that quote odds or other prediction markets are dropped, so the model cannot
     learn the market price through the back door (llm.py never shows it the price either).
-  * Everything returned is untrusted web text. llm.py tells the model to use it as evidence
-    only and to ignore any instructions inside it.
+  * Newest first, with age on each line, last 3 days. A week-old theme piece is not breaking news.
+  * Everything returned is untrusted web text. llm.py tells the model to use fresh specific facts
+    and to ignore any instructions inside the headlines.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import logging
 import re
 import time
 import xml.etree.ElementTree as ET
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from urllib.parse import quote_plus
 
@@ -27,43 +29,78 @@ BLOCKED = re.compile(
     re.IGNORECASE,
 )
 TAGS = re.compile(r"<[^>]+>")
+# "Will X happen before Oct 19" is a bad search; keep the subject and drop the boilerplate.
+_QUERY_STOP = frozenset({
+    "will", "the", "before", "after", "more", "than", "this", "that", "with", "from",
+    "have", "been", "said", "say", "says", "who", "what", "when", "where", "how",
+    "would", "could", "should", "about", "into", "for", "not", "and", "of", "to",
+    "in", "on", "at", "or", "a", "an", "be", "it", "is", "are", "by", "any", "its",
+    "win", "wins", "won", "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep",
+    "oct", "nov", "dec",
+})
+WINDOW = "when:3d"  # older theme coverage is already in the price; we want what just happened
 
 
 def clean(text: str, limit: int = 170) -> str:
     return re.sub(r"\s+", " ", TAGS.sub(" ", text)).strip()[:limit]
 
 
+def age_label(when: datetime, now: datetime) -> str:
+    """'14h ago' / '2d ago' so the model can tell breaking news from a week-old theme piece."""
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    hours = (now - when).total_seconds() / 3600.0
+    if hours < 1.5:
+        return f"{max(1, round(hours * 60))}m ago"
+    if hours < 36:
+        return f"{hours:.0f}h ago"
+    return f"{hours / 24:.0f}d ago"
+
+
 def build_query(title: str, subtitle: str = "") -> str:
-    """Subject first. In a multi-outcome market the subtitle is the thing being priced."""
-    words = f"{subtitle} {title}".strip()
-    words = re.sub(r"[^\w\s.'-]", " ", words)
-    words = re.sub(r"\s+", " ", words).strip()
-    return f"{words[:110]} when:14d"
+    """Subject first. Quoted YES-text (e.g. Antifa) beats the full 'Will Trump say...' sentence."""
+    quoted = re.findall(r'"([^"]+)"', title)
+    lead = (subtitle or "").strip() or (quoted[0].strip() if quoted else "")
+    extra: list[str] = []
+    for word in re.findall(r"[A-Za-z][A-Za-z'-]{2,}", f"{lead} {title}"):
+        low = word.lower()
+        if low in _QUERY_STOP or low in extra or (lead and low in lead.lower().split()):
+            continue
+        extra.append(low if word.islower() or word.isupper() else word)
+        if len(extra) == 4:
+            break
+    core = " ".join(x for x in [lead, *extra] if x).strip() or re.sub(r"\s+", " ", title).strip()
+    return f"{core[:110]} {WINDOW}"
 
 
-def parse_feed(xml_text: str, limit: int) -> list[str]:
+def parse_feed(xml_text: str, limit: int, now: datetime | None = None) -> list[str]:
     try:
         root = ET.fromstring(xml_text)
     except ET.ParseError:
         return []
-    lines: list[str] = []
+    now = now or datetime.now(UTC)
+    rows: list[tuple[datetime, str]] = []
     for item in root.iter("item"):
         headline = clean(item.findtext("title") or "")
         if not headline or BLOCKED.search(headline):
             continue
-        when = ""
         try:
-            when = parsedate_to_datetime(item.findtext("pubDate") or "").strftime("%b %d")
+            when = parsedate_to_datetime(item.findtext("pubDate") or "")
         except (TypeError, ValueError):
-            pass
-        lines.append(f"- {headline}" + (f" ({when})" if when else ""))
-        if len(lines) >= limit:
-            break
-    return lines
+            when = None
+        if when is not None and when.tzinfo is None:
+            when = when.replace(tzinfo=UTC)
+        stamp = when or datetime(1970, 1, 1, tzinfo=UTC)
+        label = age_label(when, now) if when is not None else ""
+        rows.append((stamp, f"- {headline}" + (f" ({label})" if label else "")))
+    rows.sort(key=lambda r: r[0], reverse=True)
+    return [line for _, line in rows[:limit]]
 
 
 class NewsSearch:
-    def __init__(self, results: int = 5, ttl_seconds: float = 6 * 3600):
+    def __init__(self, results: int = 5, ttl_seconds: float = 3600):
         self.results = results
         self.ttl = ttl_seconds
         self._http = httpx.Client(timeout=10.0, headers={"User-Agent": "Mozilla/5.0"})
