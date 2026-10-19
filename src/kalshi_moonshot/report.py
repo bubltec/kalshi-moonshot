@@ -26,7 +26,8 @@ def _get(r: Any, key: str, default: Any = None) -> Any:
 
 
 def _yes(r: Any) -> int:
-    return 1 if r["outcome"] == "yes" else 0
+    """1 when the contract we held paid: the market resolved to the side we bought."""
+    return 1 if r["outcome"] == (_get(r, "side") or "yes") else 0
 
 
 def first_per_market(rows: list[Any]) -> list[Any]:

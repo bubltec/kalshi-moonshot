@@ -1,22 +1,27 @@
-# Which Kalshi commodity series the ladder estimator can price, and the free futures symbol it
-# checks them against. Add a series here instead of editing code. A copy in DATA_DIR overrides this
-# one. `suffixes` are the period codes that follow the prefix (D daily, H hourly, W weekly, "" none).
-# Monthly and annual series are left out on purpose: realized volatility is a poor guide that far out.
+# Which Kalshi series the ladder estimator can price, and the free price feed it reads for each.
+# Add a series here instead of editing code. A copy in DATA_DIR overrides this one.
+# `suffixes` are the period codes after the prefix (D daily, H hourly, W weekly, 15M fifteen-minute,
+# "" none). Monthly and annual series are left out on purpose: realized volatility is a poor guide
+# that far out.
+#
+# Feeds (Yahoo Finance, no key): crypto trades 24/7 and the price is real-time. Futures are about
+# 10 minutes old, so the pricer widens its uncertainty by the feed's age; a real-time commodity
+# source would tighten near-expiry prices a lot.
 
 [[instrument]]
 prefix = "KXGOLD"
 symbol = "GC=F"
-suffixes = ["D", "H", "W"]
+suffixes = ["D", "H", "W", "15M"]
 
 [[instrument]]
 prefix = "KXSILVER"
 symbol = "SI=F"
-suffixes = ["D", "H", "W"]
+suffixes = ["D", "H", "W", "15M"]
 
 [[instrument]]
 prefix = "KXWTI"
 symbol = "CL=F"
-suffixes = ["", "H", "W"]
+suffixes = ["", "H", "W", "15M"]
 
 [[instrument]]
 prefix = "KXBRENT"
@@ -26,19 +31,44 @@ suffixes = ["D", "W"]
 [[instrument]]
 prefix = "KXNATGAS"
 symbol = "NG=F"
-suffixes = ["D", "W"]
+suffixes = ["D", "W", "15M"]
 
 [[instrument]]
 prefix = "KXCOPPER"
 symbol = "HG=F"
-suffixes = ["D", "W"]
+suffixes = ["D", "W", "15M"]
 
 [[instrument]]
 prefix = "KXPLATINUM"
 symbol = "PL=F"
-suffixes = ["H"]
+suffixes = ["H", "15M"]
 
 [[instrument]]
 prefix = "KXPALLADIUM"
 symbol = "PA=F"
-suffixes = ["H"]
+suffixes = ["H", "15M"]
+
+[[instrument]]
+prefix = "KXBTC"
+symbol = "BTC-USD"
+suffixes = ["", "D", "15M"]
+
+[[instrument]]
+prefix = "KXETH"
+symbol = "ETH-USD"
+suffixes = ["", "D", "15M"]
+
+[[instrument]]
+prefix = "KXSOL"
+symbol = "SOL-USD"
+suffixes = ["", "D", "15M"]
+
+[[instrument]]
+prefix = "KXXRP"
+symbol = "XRP-USD"
+suffixes = ["", "D", "15M"]
+
+[[instrument]]
+prefix = "KXDOGE"
+symbol = "DOGE-USD"
+suffixes = ["", "D", "15M"]

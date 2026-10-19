@@ -6,6 +6,7 @@ Nothing here talks to the network, so it is all unit tested.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -45,6 +46,7 @@ class LongShot:
     category: str = ""  # Kalshi event category, e.g. Sports, Politics
     event_ticker: str = ""
     mutually_exclusive: bool = False  # at most one YES in this event can occur
+    side: str = "yes"  # contract bought; for "no", ask/bid are NO prices (1 - yes_bid / 1 - yes_ask)
 
 
 def _f(m: dict[str, Any], key: str) -> float:
@@ -115,6 +117,27 @@ def lane_reject_reason(m: dict[str, Any], spec: LaneSpec, s: Settings, now: date
     return None
 
 
+def flip(m: dict[str, Any]) -> dict[str, Any]:
+    """The same market seen from the NO side: NO ask is 1 - YES bid, NO bid is 1 - YES ask.
+
+    A missing quote stays missing (0), so the usual 'no bid' and price-range checks still apply.
+    """
+    ask, bid = _f(m, "yes_ask_dollars"), _f(m, "yes_bid_dollars")
+    out = dict(m)
+    out["yes_ask_dollars"] = f"{1.0 - bid:.4f}" if bid > 0.0 else "0"
+    out["yes_bid_dollars"] = f"{1.0 - ask:.4f}" if 0.0 < ask < 1.0 else "0"
+    return out
+
+
+def side_view(m: dict[str, Any], side: str) -> dict[str, Any]:
+    return m if side == "yes" else flip(m)
+
+
+def side_prob(p_yes: float, side: str) -> float:
+    """Chance the contract we hold pays, given the chance YES does."""
+    return p_yes if side == "yes" else 1.0 - p_yes
+
+
 def lane_candidates(
     markets: list[dict[str, Any]], spec: LaneSpec, s: Settings, now: datetime | None = None
 ) -> list[LongShot]:
@@ -125,8 +148,8 @@ def lane_candidates(
             ticker=m["ticker"],
             title=m.get("title", ""),
             rules=m.get("rules_primary", ""),
-            bid=_f(m, "yes_bid_dollars"),
-            ask=_f(m, "yes_ask_dollars"),
+            bid=_f(view, "yes_bid_dollars"),
+            ask=_f(view, "yes_ask_dollars"),
             volume=_f(m, "volume_fp"),
             close_time=m.get("close_time", ""),
             hours_to_close=_hours_until(m["close_time"], now) or 0.0,
@@ -136,9 +159,12 @@ def lane_candidates(
             category=m.get("category", "") or "",
             event_ticker=m.get("event_ticker", "") or "",
             mutually_exclusive=bool(m.get("mutually_exclusive")),
+            side=side,
         )
         for m in markets
-        if lane_reject_reason(m, spec, s, now) is None
+        for side in spec.sides
+        for view in (side_view(m, side),)
+        if lane_reject_reason(view, spec, s, now) is None
     ]
     out.sort(key=lambda x: x.volume, reverse=True)
     return out
@@ -197,12 +223,19 @@ class Trend:
     points: int
 
 
-def ask_trend(candles: list[dict[str, Any]]) -> Trend | None:
-    """Ask-price trend from Kalshi candlesticks. None when there is too little history."""
+def ask_trend(candles: list[dict[str, Any]], side: str = "yes") -> Trend | None:
+    """Ask-price trend of the contract we would buy. None when there is too little history.
+
+    A NO ask is 1 - the YES bid, so for NO the candle's YES bid is flipped.
+    """
     asks: list[float] = []
     for c in candles:
         try:
-            v = float((c.get("yes_ask") or {}).get("close_dollars") or 0.0)
+            if side == "yes":
+                v = float((c.get("yes_ask") or {}).get("close_dollars") or 0.0)
+            else:
+                bid = float((c.get("yes_bid") or {}).get("close_dollars") or 0.0)
+                v = 1.0 - bid if bid > 0.0 else 0.0
         except (TypeError, ValueError):
             continue
         if v > 0.0:
@@ -287,6 +320,27 @@ def edge(model_p: float, ask: float) -> float:
     return model_p - ask - fee_per_contract(ask)
 
 
+def side_ask_notional(book: dict[str, Any], limit: float, side: str = "yes") -> float:
+    """Dollars of the given contract for sale at or under limit (its own price).
+
+    Kalshi's book lists bids only. A NO bid at 0.97 is a YES ask at 0.03, and a YES bid at 0.97
+    is a NO ask at 0.03.
+    """
+    if side == "yes":
+        return yes_ask_notional(book, limit)
+    raw = book.get("orderbook_fp") or book
+    total = 0.0
+    for row in raw.get("yes_dollars") or []:
+        try:
+            yes_px, qty = float(row[0]), float(row[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        no_px = 1.0 - yes_px
+        if 0 < no_px <= limit + 1e-9:
+            total += no_px * qty
+    return total
+
+
 def yes_ask_notional(book: dict[str, Any], limit: float) -> float:
     """Dollars of YES for sale at or under limit.
 
@@ -313,3 +367,60 @@ def contracts_for_budget(budget_usd: float, ask: float) -> int:
     while n > 0 and ask * n + order_fee(ask, n) > budget_usd:
         n -= 1
     return max(n, 0)
+
+
+# ---------------------------------------------------------------- guaranteed-profit scan
+
+_LADDER = re.compile(r"-T-?\d+(\.\d+)?$")
+
+
+@dataclass(frozen=True)
+class Arb:
+    event_ticker: str
+    low: str  # buy YES on this (lower strike) ...
+    high: str  # ... and NO on this (higher strike)
+    cost: float  # both legs, with fees
+    floor_payout: float  # what the pair pays in the worst case
+    net: float  # worst-case profit per contract pair
+    size: float  # contracts both sides can support (smaller lifetime volume; a rough cap)
+
+
+def ladder_arbs(markets: list[dict[str, Any]]) -> list[Arb]:
+    """Guaranteed-profit pairs inside a strike ladder, after fees.
+
+    For one quantity at strikes K1 < K2, 'above K1' is true whenever 'above K2' is. Buying YES on
+    K1 and NO on K2 pays $1 if the price ends below K1 or above K2, and $2 in between, so at
+    least $1 always. It is free money when YES(K1)'s ask plus NO(K2)'s ask (1 - YES(K2)'s bid)
+    plus both fees is under $1, i.e. when the lower strike's ask sits below the higher strike's bid.
+
+    Only tickers ending in -T<number> within one event count: that suffix is Kalshi's ladder on a
+    single quantity. Spread, team and bracket markets do not nest, and treating them as if they do
+    produces phantom arbitrage.
+    """
+    import itertools
+
+    by_event: dict[str, list[dict[str, Any]]] = {}
+    for m in markets:
+        if (
+            m.get("strike_type") in {"greater", "greater_or_equal"}
+            and m.get("floor_strike") is not None
+            and _LADDER.search(m.get("ticker", ""))
+        ):
+            by_event.setdefault(m.get("event_ticker", ""), []).append(m)
+    out: list[Arb] = []
+    for event, group in by_event.items():
+        group.sort(key=lambda m: float(m["floor_strike"]))
+        for lo, hi in itertools.combinations(group, 2):
+            if float(lo["floor_strike"]) == float(hi["floor_strike"]):
+                continue
+            ask, bid = _f(lo, "yes_ask_dollars"), _f(hi, "yes_bid_dollars")
+            if ask <= 0.0 or bid <= 0.0:
+                continue
+            cost = ask + fee_per_contract(ask) + (1.0 - bid) + fee_per_contract(1.0 - bid)
+            if cost < 1.0:
+                out.append(Arb(
+                    event, lo["ticker"], hi["ticker"], cost, 1.0, 1.0 - cost,
+                    min(_f(lo, "volume_fp"), _f(hi, "volume_fp")),
+                ))
+    out.sort(key=lambda a: a.net, reverse=True)
+    return out

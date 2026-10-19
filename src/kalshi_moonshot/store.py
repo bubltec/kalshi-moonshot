@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS decisions (
   exit_price REAL,               -- bid we sold (or would have sold) at; null = held to settlement
   exit_ts REAL,
   exit_reason TEXT,
-  cal_p REAL                     -- probability after blending the estimate with our record
+  cal_p REAL,                    -- probability after blending the estimate with our record
+  side TEXT DEFAULT 'yes'        -- contract bought; for 'no', ask/bid/model_p are NO-side numbers
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_ticker ON decisions(ticker);
 
@@ -68,7 +69,8 @@ CREATE TABLE IF NOT EXISTS orders (
   cost_usd REAL NOT NULL,        -- what actually filled, incl. fee
   fee_usd REAL NOT NULL,
   order_id TEXT,
-  side TEXT DEFAULT 'buy'        -- 'buy' or 'sell'
+  side TEXT DEFAULT 'buy',       -- 'buy' or 'sell'
+  contract TEXT DEFAULT 'yes'    -- which contract: 'yes' or 'no'
 );
 CREATE INDEX IF NOT EXISTS idx_orders_ts ON orders(ts);
 
@@ -128,6 +130,7 @@ class Store:
             ("exit_ts", "REAL"),
             ("exit_reason", "TEXT"),
             ("cal_p", "REAL"),
+            ("side", "TEXT DEFAULT 'yes'"),
         ):
             if name not in have:
                 self.db.execute(f"ALTER TABLE decisions ADD COLUMN {name} {ddl}")
@@ -140,6 +143,8 @@ class Store:
         order_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(orders)")}
         if "side" not in order_cols:
             self.db.execute("ALTER TABLE orders ADD COLUMN side TEXT DEFAULT 'buy'")
+        if "contract" not in order_cols:
+            self.db.execute("ALTER TABLE orders ADD COLUMN contract TEXT DEFAULT 'yes'")
         self.db.commit()
 
     def _excluded_sql(self) -> tuple[str, list[str]]:

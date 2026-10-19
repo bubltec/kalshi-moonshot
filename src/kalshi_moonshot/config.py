@@ -32,6 +32,15 @@ def _csv(name: str, default: str) -> frozenset[str]:
     return frozenset(part.strip() for part in raw.split(",") if part.strip())
 
 
+def _sides(name: str) -> tuple[str, ...]:
+    """yes, no or both (the default). A long shot is a long shot whichever contract carries it."""
+    raw = os.environ.get(name, "yes,no")
+    sides = tuple(x for x in ("yes", "no") if x in {p.strip().lower() for p in raw.split(",")})
+    if not sides:
+        raise ValueError(f"{name} must name yes, no or both")
+    return sides
+
+
 def _b(name: str, default: bool) -> bool:
     raw = os.environ.get(name, "").strip().lower()
     if not raw:
@@ -81,6 +90,7 @@ class Settings:
     stop_loss_check_minutes: int  # how often to re-check open bets in that window
 
     # --- steady lane: likely outcomes whose price is trending up, 30-50% gross return ---
+    moonshot_sides: tuple[str, ...]  # contracts the moonshot lane may buy: yes, no or both
     steady_enabled: bool
     steady_min_price: float  # 0.66 nets about +48% after the fee
     steady_max_price: float  # 0.75 nets about +31% after the fee
@@ -91,6 +101,7 @@ class Settings:
     steady_lookback_hours: int  # window the ask must have risen across
     steady_min_trend: float  # dollars the ask must have gained over the window
     steady_min_edge: float
+    steady_sides: tuple[str, ...]
     steady_max_lag: float  # how far under the ask the model may sit and still take the favorite
     steady_usd_per_trade: float  # small by design
     steady_shortlist: int
@@ -112,6 +123,10 @@ class Settings:
     commodity_review_minutes: float  # fast pass: re-price only the watched ladders
     commodity_cooldown_minutes: float  # do not re-log a market this soon after its last decision
     commodity_watch_max: int  # events kept on the watchlist, soonest close first
+    commodity_tail_floor: float  # never claim a probability closer than this to 0 or 1 (model risk)
+    commodity_basis_unc: float  # width (ln units) added when the center comes from remembered basis
+    commodity_basis_age_hours: float  # how long a remembered feed-to-ladder basis stays usable
+    commodity_max_stale_minutes: float  # refuse a feed whose last price is older than this
 
     # --- external context (news headlines) fed to the model ---
     search_enabled: bool
@@ -246,7 +261,9 @@ def load() -> Settings:
         page_size=min(1000, max(1, _i("KALSHI_PAGE_SIZE", 1000))),
         job_max_attempts=max(1, _i("JOB_MAX_ATTEMPTS", 3)),
         exclude_versions=_csv("EXCLUDE_VERSIONS", "v1"),
+        moonshot_sides=_sides("MOONSHOT_SIDES"),
         steady_enabled=_b("STEADY_ENABLED", True),
+        steady_sides=_sides("STEADY_SIDES"),
         steady_min_price=_f("STEADY_MIN_PRICE", 0.66),
         steady_max_price=_f("STEADY_MAX_PRICE", 0.75),
         steady_max_spread=_f("STEADY_MAX_SPREAD", 0.03),
@@ -260,21 +277,25 @@ def load() -> Settings:
         steady_usd_per_trade=_f("STEADY_USD_PER_TRADE", 2.0),
         steady_shortlist=_i("STEADY_SHORTLIST", 10),
         commodities_enabled=_b("COMMODITIES_ENABLED", True),
-        commodity_min_price=_f("COMMODITY_MIN_PRICE", 0.02),
-        commodity_max_price=_f("COMMODITY_MAX_PRICE", 0.50),
-        commodity_min_edge=_f("COMMODITY_MIN_EDGE", 0.08),
-        commodity_max_spread=_f("COMMODITY_MAX_SPREAD", 0.06),
-        commodity_min_volume=_f("COMMODITY_MIN_VOLUME", 20.0),
-        commodity_min_hours_to_close=_f("COMMODITY_MIN_HOURS_TO_CLOSE", 1.0),
-        commodity_max_hours_to_close=_f("COMMODITY_MAX_HOURS_TO_CLOSE", 72.0),
-        commodity_vol_mult=_f("COMMODITY_VOL_MULT", 1.0),
+        commodity_min_price=_f("COMMODITY_MIN_PRICE", 0.70),
+        commodity_max_price=_f("COMMODITY_MAX_PRICE", 0.98),
+        commodity_min_edge=_f("COMMODITY_MIN_EDGE", 0.015),
+        commodity_max_spread=_f("COMMODITY_MAX_SPREAD", 0.04),
+        commodity_min_volume=_f("COMMODITY_MIN_VOLUME", 5.0),
+        commodity_min_hours_to_close=_f("COMMODITY_MIN_HOURS_TO_CLOSE", 0.03),
+        commodity_max_hours_to_close=_f("COMMODITY_MAX_HOURS_TO_CLOSE", 24.0),
+        commodity_vol_mult=_f("COMMODITY_VOL_MULT", 1.25),
         commodity_max_basis=_f("COMMODITY_MAX_BASIS", 0.04),
         commodity_usd_per_trade=_f("COMMODITY_USD_PER_TRADE", 2.0),
         commodity_shortlist=_i("COMMODITY_SHORTLIST", 10),
-        commodity_scope_minutes=max(1.0, _f("COMMODITY_SCOPE_MINUTES", 30.0)),
+        commodity_scope_minutes=max(1.0, _f("COMMODITY_SCOPE_MINUTES", 10.0)),
         commodity_review_minutes=max(0.5, _f("COMMODITY_REVIEW_MINUTES", 2.0)),
         commodity_cooldown_minutes=max(0.0, _f("COMMODITY_COOLDOWN_MINUTES", 15.0)),
         commodity_watch_max=max(1, _i("COMMODITY_WATCH_MAX", 40)),
+        commodity_tail_floor=min(0.2, max(0.0, _f("COMMODITY_TAIL_FLOOR", 0.005))),
+        commodity_basis_unc=max(0.0, _f("COMMODITY_BASIS_UNC", 0.0015)),
+        commodity_basis_age_hours=max(0.1, _f("COMMODITY_BASIS_AGE_HOURS", 6.0)),
+        commodity_max_stale_minutes=max(1.0, _f("COMMODITY_MAX_STALE_MINUTES", 20.0)),
         search_enabled=_b("SEARCH_ENABLED", True),
         search_results=_i("SEARCH_RESULTS", 5),
         review_enabled=_b("REVIEW_ENABLED", True),

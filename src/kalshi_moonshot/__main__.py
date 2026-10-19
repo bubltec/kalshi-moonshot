@@ -232,6 +232,25 @@ def cmd_backfill(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_arbs(s: config.Settings, args: argparse.Namespace) -> int:
+    """Scan open strike ladders for guaranteed-profit pairs (read-only; nothing is ever ordered)."""
+    from .strategy import ladder_arbs
+
+    client = _client(s)
+    markets = list(client.open_markets(pages=80))
+    found = ladder_arbs(markets)
+    ladders = len({m["event_ticker"] for m in markets if m.get("ticker", "").rsplit("-", 1)[-1][:1] == "T"})
+    print(f"{len(markets)} open markets, {ladders} strike ladders, {len(found)} guaranteed-profit pair(s) after fees")
+    for a in found[: args.top]:
+        print(
+            f"  +{a.net:.3f}/pair  buy YES {a.low}  +  buy NO {a.high}  "
+            f"(cost {a.cost:.3f}, pays at least 1.00, depth ~{a.size:.0f})"
+        )
+    if found:
+        print("Both legs must fill. Orders here are immediate-or-cancel, so one leg can fill alone: check the books first.")
+    return 0
+
+
 def cmd_balance(s: config.Settings, args: argparse.Namespace) -> int:
     print(_client(s).balance())
     return 0
@@ -274,7 +293,7 @@ COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
     "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
-    "lanes": cmd_lanes, "backfill": cmd_backfill,
+    "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs,
 }
 
 
@@ -285,6 +304,8 @@ def build_parser() -> argparse.ArgumentParser:
         p = sub.add_parser(name, help=(COMMANDS[name].__doc__ or "").strip().splitlines()[0] if COMMANDS[name].__doc__ else None)
         if name == "report":
             p.add_argument("--all-versions", action="store_true", help="include excluded versions")
+        if name == "arbs":
+            p.add_argument("--top", type=int, default=10, help="how many to list")
         if name in {"prune", "backfill"}:
             p.add_argument("--yes", action="store_true", help="actually delete (a backup is made first)")
         if name == "jobs":

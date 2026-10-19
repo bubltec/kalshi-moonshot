@@ -17,7 +17,7 @@ from .config import Settings
 from .lanes import LADDER, LLM, LaneSpec
 from .search import NewsSearch
 from .store import Store
-from .strategy import LongShot, edge
+from .strategy import LongShot, edge, side_prob
 
 
 @dataclass(frozen=True)
@@ -85,21 +85,23 @@ class LadderEstimator:
         by_event: dict[str, list[dict]] = {}
         for m in markets:
             by_event.setdefault(m.get("event_ticker", ""), []).append(m)
+        # Richest ladders first: a fitted ladder teaches the pricer the feed-to-ladder basis, which
+        # the thin near-expiry ladders of the same instrument then reuse.
+        wanted = {shot.event_ticker for shot in shots}
         priced: dict[str, dict[str, tuple[float, str]]] = {}
+        for event in sorted(wanted, key=lambda ev: -len(by_event.get(ev, []))):
+            try:
+                priced[event] = self.pricer.price_markets(by_event.get(event, []), s, now)
+            except CommodityError:
+                priced[event] = {}
         keep: list[tuple[float, LongShot]] = []
         for shot in shots:
-            if shot.event_ticker not in priced:
-                try:
-                    priced[shot.event_ticker] = self.pricer.price_markets(
-                        by_event.get(shot.event_ticker, []), s, now
-                    )
-                except CommodityError:
-                    priced[shot.event_ticker] = {}
             hit = priced[shot.event_ticker].get(shot.ticker)
             if hit is None:
                 continue
-            e = edge(hit[0], shot.ask)
-            if wants_bet(spec, hit[0], shot.ask, e):
+            p_side = side_prob(hit[0], shot.side)
+            e = edge(p_side, shot.ask)
+            if wants_bet(spec, p_side, shot.ask, e):
                 keep.append((e, shot))
         keep.sort(key=lambda x: x[0], reverse=True)
         return [shot for _, shot in keep]

@@ -68,24 +68,32 @@ def _parse_instruments(text: str) -> tuple[Instrument, ...]:
 
 
 @lru_cache(maxsize=4)
-def _patterns(instruments: tuple[Instrument, ...]) -> tuple[tuple[re.Pattern[str], str], ...]:
+def _patterns(
+    instruments: tuple[Instrument, ...],
+) -> tuple[tuple[re.Pattern[str], Instrument], ...]:
     return tuple(
-        (re.compile(rf"^{re.escape(i.prefix)}({'|'.join(map(re.escape, i.suffixes))})$"), i.symbol)
+        (re.compile(rf"^{re.escape(i.prefix)}({'|'.join(map(re.escape, i.suffixes))})$"), i)
         for i in instruments
     )
 
 
-def symbol_for(series: str, instruments: tuple[Instrument, ...] | None = None) -> str | None:
-    """Feed symbol for a Kalshi series, or None when the series is not a supported commodity."""
-    for pattern, symbol in _patterns(instruments or load_instruments()):
+def instrument_for(
+    series: str, instruments: tuple[Instrument, ...] | None = None
+) -> Instrument | None:
+    for pattern, inst in _patterns(instruments or load_instruments()):
         if pattern.match(series or ""):
-            return symbol
+            return inst
     return None
+
+
+def symbol_for(series: str, instruments: tuple[Instrument, ...] | None = None) -> str | None:
+    """Feed symbol for a Kalshi series, or None when the series is not a supported instrument."""
+    inst = instrument_for(series, instruments)
+    return inst.symbol if inst else None
 
 
 BAR_SECONDS = 300  # feed bar size
 SESSION_GAP = 15 * 60  # bigger gap between bars = market closed, not a price move
-STALE_SECONDS = 20 * 60  # a last bar older than this means the market is shut or the feed is down
 OPEN_FRACTION = 23 / 24  # share of a day futures trade, used for short horizons
 
 
@@ -270,44 +278,73 @@ class Pricing:
     center: float
     spot: float
     basis: float  # ln(center / spot)
-    sigma: float  # the width we price with (realized volatility, scaled)
-    sigma_market: float  # the width the ladder implies
+    sigma: float  # total width we price with: realized volatility plus feed-age and basis uncertainty
+    sigma_market: float | None  # the width the ladder implies (None when the ladder was too thin)
     points: int
     r2: float
+    age_s: float  # how old the feed's last price is
+    remembered: bool  # center came from a remembered basis, not from this event's ladder
 
     def note(self, p: float, hours: float) -> str:
+        how = "remembered basis" if self.remembered else f"{self.points}-strike ladder fit"
+        ladder = "n/a" if self.sigma_market is None else f"{self.sigma_market:.2%}"
         return (
-            f"spot {self.spot:.4g}, ladder center {self.center:.4g} (basis {self.basis:+.2%}), "
-            f"{hours:.1f}h left, width realized {self.sigma:.2%} vs ladder {self.sigma_market:.2%} "
-            f"({self.points} strikes, r2 {self.r2:.2f}) -> P(yes) {p:.3f}"
+            f"spot {self.spot:.6g} ({self.age_s:.0f}s old), center {self.center:.6g} via {how} "
+            f"(basis {self.basis:+.2%}), {hours:.2f}h left, width {self.sigma:.2%} vs ladder "
+            f"{ladder} -> P(yes) {p:.3f}"
         )
+
+
+# family prefix -> (ln(center / spot), when seen, series it came from)
+BasisMemory = dict[str, tuple[float, float, str]]
 
 
 def price_event(
-    markets: list[dict[str, Any]], symbol: str, feed: Feed, s: Settings,
-    now: datetime | None = None, hours: float | None = None,
+    markets: list[dict[str, Any]], inst: Instrument, feed: Feed, s: Settings,
+    now: datetime | None = None, hours: float | None = None, memory: BasisMemory | None = None,
 ) -> Pricing:
-    """Center from the ladder, width from realized volatility. Raises CommodityError if unusable."""
+    """Where the price is centered and how wide it can still move. Raises CommodityError.
+
+    Center: a probit fit over the event's own liquid strikes when there are enough. Near expiry
+    the ladder is mostly decided strikes and cannot be fitted, so the basis (ln of ladder center
+    over feed price) seen on a recent fit of the same instrument is reused, with extra width for
+    not knowing it exactly. Width: realized volatility over the time left plus the age of the
+    feed's last price, because a stale price means an unseen move.
+    """
     now = now or datetime.now(UTC)
-    series = feed.series(symbol)
-    age = now.timestamp() - series.last_ts
-    if age > STALE_SECONDS:
-        raise CommodityError(f"{symbol} feed is {age / 60:.0f} min old (market closed?)")
+    memory = memory if memory is not None else {}
+    series_t = markets[0].get("series_ticker", "") if markets else ""
+    feed_series = feed.series(inst.symbol)
+    age = max(0.0, now.timestamp() - feed_series.last_ts)
+    if age > s.commodity_max_stale_minutes * 60:
+        raise CommodityError(f"{inst.symbol} feed is {age / 60:.0f} min old (market closed?)")
+    spot = feed_series.last
     fit = fit_ladder(markets)
-    if fit is None:
-        raise CommodityError("ladder too thin to locate the center")
-    if fit.r2 < 0.9:
-        raise CommodityError(f"ladder does not fit a lognormal (r2 {fit.r2:.2f})")
-    basis = math.log(fit.center / series.last)
-    if abs(basis) > s.commodity_max_basis:
-        raise CommodityError(
-            f"ladder center {fit.center:.4g} is {basis:+.1%} from {symbol} spot {series.last:.4g}; "
-            "different contract than the feed"
-        )
+    remembered = False
+    unc = 0.0003
+    if fit is not None and fit.r2 >= 0.9:
+        center, points, r2, sigma_mkt = fit.center, fit.points, fit.r2, fit.sigma
+        basis = math.log(center / spot)
+        if abs(basis) > s.commodity_max_basis:
+            raise CommodityError(
+                f"ladder center {center:.6g} is {basis:+.1%} from {inst.symbol} spot {spot:.6g}; "
+                "different contract than the feed"
+            )
+        memory[inst.prefix] = (basis, now.timestamp(), series_t)
+    else:
+        seen = memory.get(inst.prefix)
+        if seen is None or now.timestamp() - seen[1] > s.commodity_basis_age_hours * 3600:
+            raise CommodityError("ladder too thin to locate the center and no recent basis for it")
+        basis = seen[0]
+        center = spot * math.exp(basis)
+        points, r2, sigma_mkt, remembered = 0, 0.0, None, True
+        unc = s.commodity_basis_unc * (1.0 if seen[2] == series_t else 1.7)
     if hours is None:
         hours = _hours_to_close(markets, now)
-    sigma = realized_sigma(series, hours) * s.commodity_vol_mult
-    return Pricing(fit.center, series.last, basis, sigma, fit.sigma, fit.points, fit.r2)
+    # A feed that is `age` seconds old has an unseen move of about that much extra time.
+    sigma = realized_sigma(feed_series, max(hours, 0.0) + age / 3600.0) * s.commodity_vol_mult
+    total = math.sqrt(sigma * sigma + unc * unc)
+    return Pricing(center, spot, basis, total, sigma_mkt, points, r2, age, remembered)
 
 
 def _hours_to_close(markets: list[dict[str, Any]], now: datetime) -> float:
@@ -321,10 +358,11 @@ def _hours_to_close(markets: list[dict[str, Any]], now: datetime) -> float:
 
 
 class CommodityPricer:
-    """Rates commodity markets. Holds only the price feed, so one instance serves every client."""
+    """Rates priced-instrument markets. Holds the price feed and the remembered basis."""
 
     def __init__(self, feed: Feed | None = None):
         self.feed: Feed = feed or YahooFeed()
+        self.memory: BasisMemory = {}
 
     def price_markets(
         self, markets: list[dict[str, Any]], s: Settings, now: datetime | None = None
@@ -334,16 +372,18 @@ class CommodityPricer:
         if not markets:
             raise CommodityError("no markets")
         series = markets[0].get("series_ticker") or str(markets[0].get("event_ticker", "")).split("-")[0]
-        symbol = symbol_for(series, load_instruments(s.data_dir))
-        if symbol is None:
-            raise CommodityError(f"{series} is not a supported commodity series")
+        inst = instrument_for(series, load_instruments(s.data_dir))
+        if inst is None:
+            raise CommodityError(f"{series} is not a supported instrument series")
         hours = _hours_to_close(markets, now)
-        pricing = price_event(markets, symbol, self.feed, s, now, hours)
+        pricing = price_event(markets, inst, self.feed, s, now, hours, self.memory)
+        floor = s.commodity_tail_floor
         out: dict[str, tuple[float, str]] = {}
         for m in markets:
             p = market_prob(m, pricing.center, pricing.sigma)
             if p is not None:
-                out[m["ticker"]] = (min(max(p, 0.001), 0.999), pricing.note(p, hours))
+                p = min(max(p, floor), 1.0 - floor)
+                out[m["ticker"]] = (p, pricing.note(p, hours))
         return out
 
     def estimate(self, client: Any, shot: Any, s: Settings) -> tuple[float, str]:

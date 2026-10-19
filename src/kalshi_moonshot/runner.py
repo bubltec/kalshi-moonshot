@@ -31,13 +31,15 @@ from .strategy import (
     contracts_for_budget,
     edge,
     falling_reason,
+    flip,
     lane_candidates,
     lane_reject_reason,
     one_per_mutex_event,
     order_fee,
     rising,
+    side_ask_notional,
+    side_prob,
     stop_loss_hit,
-    yes_ask_notional,
 )
 
 log = logging.getLogger("moonshot")
@@ -134,7 +136,7 @@ def lane_shots(
                 candles: list | None = client.candlesticks(shot.series, shot.ticker, spec.lookback_hours)
             except KalshiError:
                 candles = None
-            t = ask_trend(candles or [])
+            t = ask_trend(candles or [], shot.side)
             if spec.trend == "rising":
                 if t is None or not rising(t, spec.min_trend):
                     continue
@@ -358,7 +360,7 @@ def evaluate(
             shot.ticker, shot.title, shot.ask, None, None, "pass", f"model error: {exc}", shot.lane
         )
 
-    p, why = got.p, got.why
+    p, why = side_prob(got.p, shot.side), got.why  # chance the contract we would buy pays
     cal: Calibration = store.calibrator.adjust(shot.lane, shot.category, shot.ask, p, spec.trust)
     e = edge(cal.p, shot.ask)
     bet = wants_bet(spec, cal.p, shot.ask, e)
@@ -375,7 +377,7 @@ def evaluate(
     action = "bet" if bet else "pass"
     _log(
         store, s, shot, model_p=p, edge=e, action=action, reason=note[:300],
-        context=got.context[:1500], cal_p=cal.p,
+        context=got.context[:1500], cal_p=cal.p, side=shot.side,
     )
     return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
 
@@ -391,7 +393,7 @@ def place(
     if cost + 1e-9 < s.min_order_usd:
         return f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum"
     try:
-        offered = yes_ask_notional(client.orderbook(shot.ticker), shot.ask)
+        offered = side_ask_notional(client.orderbook(shot.ticker), shot.ask, shot.side)
     except KalshiError as exc:
         return f"skipped: could not read the book ({exc})"
     if offered + 1e-9 < s.min_order_usd:
@@ -408,7 +410,8 @@ def place(
     if before_order:
         before_order()
     try:
-        resp = client.buy_yes_ioc(shot.ticker, count, shot.ask, client_order_id=order_key)
+        buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
+        resp = buy(shot.ticker, count, shot.ask, client_order_id=order_key)
     except KalshiRateLimited:
         raise  # refused outright, so nothing was bought; the queue retries it later
     except KalshiError as exc:
@@ -419,8 +422,9 @@ def place(
     store.add_order(
         ticker=shot.ticker, env=s.env, count=count, price=shot.ask, fill_count=filled,
         cost_usd=avg * filled + fee, fee_usd=fee, order_id=resp.get("order_id", ""),
+        contract=shot.side,
     )
-    return f"bought {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}"
+    return f"bought {shot.side.upper()} {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}"
 
 
 def _hours_left(close_time: str, now: datetime | None = None) -> float | None:
@@ -458,9 +462,11 @@ def stop_loss_pass(
             continue
         if m.get("result") in {"yes", "no"}:
             continue
+        side = row["side"] or "yes"
+        quoted = flip(m) if side == "no" else m
         bid = 0.0
         with contextlib.suppress(TypeError, ValueError):
-            bid = float(m.get("yes_bid_dollars") or 0.0)
+            bid = float(quoted.get("yes_bid_dollars") or 0.0)
         entry = float(row["ask"] or 0.0)
         why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, s.stop_loss_drop)
         if not why:
@@ -478,7 +484,8 @@ def stop_loss_pass(
         if before_order:
             before_order()
         try:
-            resp = client.sell_yes_ioc(row["ticker"], count, bid)
+            sell = client.sell_yes_ioc if side == "yes" else client.sell_no_ioc
+            resp = sell(row["ticker"], count, bid)
         except KalshiRateLimited:
             raise
         except KalshiError as exc:
@@ -490,7 +497,7 @@ def stop_loss_pass(
         store.add_order(
             ticker=row["ticker"], env=s.env, count=count, price=bid, fill_count=filled,
             cost_usd=-(avg * filled - fee), fee_usd=fee, order_id=resp.get("order_id", ""),
-            side="sell",
+            side="sell", contract=side,
         )
         if store.net_contracts(row["ticker"], s.env) <= 0:
             store.mark_exited(row["ticker"], avg if filled else bid, why)

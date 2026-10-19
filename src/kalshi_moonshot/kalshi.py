@@ -46,6 +46,14 @@ def _event_tuple(e: dict[str, Any]) -> tuple[str, str, bool]:
 MARKET_PAGES = 200
 
 
+def _as_no(resp: dict[str, Any]) -> dict[str, Any]:
+    """Express a YES-book fill price as the NO price (1 - price). Other fields are unchanged."""
+    out = dict(resp)
+    if out.get("average_fill_price") not in (None, "", 0, "0"):
+        out["average_fill_price"] = 1.0 - float(out["average_fill_price"])
+    return out
+
+
 def load_private_key(path: str):
     with open(path, "rb") as f:
         return serialization.load_pem_private_key(f.read(), password=None)
@@ -316,6 +324,42 @@ class KalshiClient:
             "self_trade_prevention_type": "taker_at_cross",
         }
         return self._request("POST", "/portfolio/events/orders", json=body, auth=True)
+
+    def buy_no_ioc(
+        self, ticker: str, count: int, no_price: float, client_order_id: str | None = None
+    ) -> dict[str, Any]:
+        """Buy NO at no_price, immediate-or-cancel.
+
+        Kalshi's order endpoint quotes the YES book only: `ask` sells YES, which its docs call
+        economically the same as buying NO at 1 - price. The response's fill price is a YES
+        price, so it is flipped back to the NO price the caller asked in.
+        """
+        body = {
+            "ticker": ticker,
+            "client_order_id": client_order_id or str(uuid.uuid4()),
+            "side": "ask",
+            "count": f"{count:.2f}",
+            "price": f"{1.0 - no_price:.4f}",
+            "time_in_force": "immediate_or_cancel",
+            "self_trade_prevention_type": "taker_at_cross",
+        }
+        return _as_no(self._request("POST", "/portfolio/events/orders", json=body, auth=True))
+
+    def sell_no_ioc(
+        self, ticker: str, count: int, no_price: float, client_order_id: str | None = None
+    ) -> dict[str, Any]:
+        """Sell NO we hold: buy YES back at 1 - no_price, reduce_only so it cannot open a YES."""
+        body = {
+            "ticker": ticker,
+            "client_order_id": client_order_id or str(uuid.uuid4()),
+            "side": "bid",
+            "count": f"{count:.2f}",
+            "price": f"{1.0 - no_price:.4f}",
+            "time_in_force": "immediate_or_cancel",
+            "self_trade_prevention_type": "taker_at_cross",
+            "reduce_only": True,
+        }
+        return _as_no(self._request("POST", "/portfolio/events/orders", json=body, auth=True))
 
     def sell_yes_ioc(
         self, ticker: str, count: int, price_dollars: float, client_order_id: str | None = None

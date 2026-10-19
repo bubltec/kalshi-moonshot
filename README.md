@@ -54,20 +54,43 @@ needs_instrument = true
 
 A typo is an error, not a silent default. Edits apply on the next scan.
 
+**Odds, not labels.** A long shot is a price and a payout, whichever contract carries it: a 6-cent NO on a heavy
+favorite pays the same 94 cents as a 6-cent YES. The moonshot and steady lanes therefore consider both
+contracts (`MOONSHOT_SIDES`, `STEADY_SIDES`, default `yes,no`). Every number is kept in the contract's own terms:
+entry price, chance it pays, edge, trend, stop-loss, and the report's win/loss.
+
+**Guaranteed profit.** `arbs` looks for strike ladders where buying YES on a lower strike and NO on a higher one
+costs under $1 after fees, which pays at least $1 whatever happens. On 2026-10-19 it found none across about
+500 ladders and 60,000 markets. It is report-only: both legs must fill, and the orders here are
+immediate-or-cancel, so one leg can fill alone. Sets that merely look exclusive (team spreads, partial outcome
+lists) are not guaranteed and are deliberately not counted.
+
 **The record has a vote.** After an estimator answers, `calibration.py` blends it with what our own settled
 markets say: `p = w * estimate + (1 - w) * band hit rate`. `w` starts at the lane's `trust` and slides to the
 estimator's measured skill (1 - model Brier / market Brier) as markets settle; the band rate starts at the ask
 and moves only as outcomes arrive. With no record, the estimate passes through. `model_p` in the log stays the
 raw estimate so `report` still scores the model honestly; `cal_p` is what the bet rule used.
 
-**Commodities lane (`ladder`).** Kalshi's Commodities category is mostly threshold ladders ("gold above K at
-5pm"). The lane takes the ladder's center from a probit fit over its liquid strikes (so the futures basis cannot
-create fake edge), and the width from realized 5-minute volatility of the front-month future (Yahoo Finance, no
-key). It skips an event when the ladder center is more than `COMMODITY_MAX_BASIS` (4%) from the feed, the ladder
-does not fit a lognormal, or the feed is stale. The edge is where the ladder's implied width disagrees with how
-the price has actually been moving. First live look (2026-10-19): realized width ran 5-35% above the ladder's, the
-best candidate edge was +0.07 against the 0.08 bar, so nothing would have been bet. Judge it by `report` after it
-has settled markets; it is observe-only until `MODE=trade`.
+**Commodities and crypto lane (`ladder`): steady, not a moonshot.** Kalshi's gold, silver, oil, gas, copper and
+crypto markets are price-threshold ladders and 15-minute "up in the next 15 mins?" contracts. This lane buys the
+side that is already close to decided, at 70-98 cents, for a small return that repeats. It can buy YES or NO
+(`sides`), and it runs hourly, daily, weekly and 15-minute series (`instruments.toml`).
+
+- **Center and width.** The price's center comes from a probit fit over the event's liquid strikes. Near expiry a
+  ladder is mostly decided strikes and cannot be fitted, so the feed-to-ladder basis seen on a recent fit of the
+  same instrument is reused with extra width. The width is realized volatility over the time left, plus the
+  *age of the feed's last price* (a stale price hides a move), plus the basis uncertainty.
+- **Model risk.** No probability is claimed closer than `COMMODITY_TAIL_FLOOR` (0.5%) to 0 or 1, and volatility is
+  scaled by `COMMODITY_VOL_MULT` (1.25) for fat tails.
+- **Feeds.** Crypto is real-time (Yahoo). Yahoo's commodity futures are about 10 minutes old, which the width
+  accounts for, but a real-time commodity source would tighten near-expiry prices a lot. Kalshi settles its
+  15-minute commodity contracts on Pyth prices; Pyth's free endpoints returned 401/404 when tried.
+- **What to expect.** A decided strike usually sells at 95-98 cents, so the margin is 1-4 cents against a loss of
+  the whole stake on a miss. That only pays at a very high hit rate, which is why the record decides: `report`
+  scores the lane by side, and calibration shrinks the estimate toward the observed hit rate as markets settle.
+  Run it in `observe` until the hit rate per price band is clearly above the price.
+- **NO orders.** Buying NO is sent as a sell-YES order at `1 - price`, and exiting as a `reduce_only` buy-YES, per
+  Kalshi's order docs. That path is covered by tests but has not been exercised against the live exchange.
 
 **Two levels.** A lane with `review_minutes` set runs two loops instead of riding the 30-minute all-markets scan:
 
@@ -78,7 +101,7 @@ has settled markets; it is observe-only until `MODE=trade`.
   unchanged view every pass.
 
 Jobs carry a `priority`, so the fast lane's work runs ahead of a backlog of slow model calls. The commodity lane
-uses this by default: scope every 30 min, review every 2 min (a live pass over 15 events took about 3-4 s).
+uses this by default: scope every 10 min (new 15-minute markets keep appearing), review every 2 min.
 Any lane can opt in from `strategies.toml` by setting `review_minutes` plus `series` (or `needs_instrument`).
 
 ## Lane notes
@@ -162,6 +185,7 @@ Edit `.env`. No rebuild is needed; rebuild only when the code changes.
 | See the job queue (pending, done, dead, with errors) | `docker compose exec bot python -m kalshi_moonshot jobs` |
 | Requeue dead jobs (never ones that were mid-order) | `docker compose exec bot python -m kalshi_moonshot jobs retry` |
 | Fill in the category of old decisions from Kalshi (dry run; add `--yes` to write, backup first) | `docker compose exec bot python -m kalshi_moonshot backfill` |
+| Scan open strike ladders for guaranteed-profit pairs (read-only) | `docker compose exec bot python -m kalshi_moonshot arbs` |
 | Show what deleting excluded versions would remove (dry run) | `docker compose exec bot python -m kalshi_moonshot prune` |
 | Delete them (makes a backup copy of the database first) | `docker compose exec bot python -m kalshi_moonshot prune --yes` |
 

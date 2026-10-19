@@ -55,6 +55,7 @@ class LaneSpec:
     watch_max: int = 40
     priority: int = 0  # queue priority of this lane's jobs; higher runs first
     trust: float = 1.0  # prior weight on the estimator before our record has any say (0 to 1)
+    sides: tuple[str, ...] = ("yes",)  # contracts the lane may buy: "yes", "no" or both
     enabled: bool = True
 
 
@@ -71,6 +72,7 @@ def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
             (s.min_hours_to_close, s.max_hours_to_close), s.max_spread, s.min_volume,
             min_edge=s.min_edge, shortlist=s.shortlist, trend="not_falling", one_per="mutex",
             lookback_hours=s.steady_lookback_hours, max_drop=s.moonshot_max_drop,
+            sides=s.moonshot_sides,
         ),
         "steady": LaneSpec(
             "steady", LLM, "steady", (s.steady_min_price, s.steady_max_price),
@@ -78,6 +80,7 @@ def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
             s.steady_min_volume, max_lag=s.steady_max_lag, usd_per_trade=s.steady_usd_per_trade,
             shortlist=s.steady_shortlist, trend="rising", one_per="mutex", enabled=s.steady_enabled,
             lookback_hours=s.steady_lookback_hours, min_trend=s.steady_min_trend,
+            sides=s.steady_sides,
         ),
         "commodity": LaneSpec(
             "commodity", LADDER, "commodity", (s.commodity_min_price, s.commodity_max_price),
@@ -85,6 +88,7 @@ def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
             s.commodity_max_spread, s.commodity_min_volume, min_edge=s.commodity_min_edge,
             usd_per_trade=s.commodity_usd_per_trade, shortlist=s.commodity_shortlist,
             numeric="allow", one_per="event", needs_instrument=True, enabled=s.commodities_enabled,
+            sides=("yes", "no"),
             scope_minutes=s.commodity_scope_minutes, review_minutes=s.commodity_review_minutes,
             cooldown_minutes=s.commodity_cooldown_minutes, watch_max=s.commodity_watch_max,
             priority=10,
@@ -102,8 +106,11 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours"):
         if key in row:
             row[key] = _pair(row[key])
-    if "series" in row:
-        row["series"] = tuple(row["series"])
+    for key in ("series", "sides"):
+        if key in row:
+            row[key] = tuple(row[key])
+    if bad := set(row.get("sides", ())) - {"yes", "no"}:
+        raise ValueError(f"lane {name!r}: sides must be \"yes\" and/or \"no\", got {sorted(bad)}")
     if base is None:
         missing = {"estimator", "price", "hours"} - set(row)
         if missing:

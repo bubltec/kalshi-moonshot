@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .report import brier, first_per_market
+from .report import _yes, brier, first_per_market
 
 if TYPE_CHECKING:
     from .store import Store
@@ -45,10 +45,6 @@ class Calibration:
             f"record-adjusted {p_model:.2f} -> {self.p:.2f} (weight on estimate {self.weight:.2f}, "
             f"skill {skill} over {self.n} settled; band hit rate {self.band_p:.2f} from {self.band_n})"
         )
-
-
-def _yes(r) -> int:
-    return 1 if r["outcome"] == "yes" else 0
 
 
 def _bucket(ask: float) -> int:

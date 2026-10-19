@@ -28,7 +28,7 @@ from .kalshi import KalshiClient, KalshiRateLimited
 from .lanes import lane_specs, spec_for, tiered, tiered_lanes
 from .search import NewsSearch
 from .store import Store
-from .strategy import LongShot, ask_trend, falling_reason, lane_reject_reason
+from .strategy import LongShot, ask_trend, falling_reason, lane_reject_reason, side_view
 
 log = logging.getLogger("moonshot")
 
@@ -218,13 +218,13 @@ class Worker:
         now = datetime.now(UTC)
         spec = spec_for(s, shot.lane)
         m.setdefault("event_ticker", shot.event_ticker)
-        why_not = lane_reject_reason(m, spec, s, now)
+        why_not = lane_reject_reason(side_view(m, shot.side), spec, s, now)
         if not why_not and spec.trend == "not_falling":
             try:
                 candles = self.client.candlesticks(shot.series, shot.ticker, spec.lookback_hours)
             except Exception:
                 candles = []
-            why_not = falling_reason(ask_trend(candles), spec.max_drop)
+            why_not = falling_reason(ask_trend(candles, shot.side), spec.max_drop)
         if not why_not and shot.mutually_exclusive:
             others = self.store.bet_tickers_in_event(shot.event_ticker) - {shot.ticker}
             if others:
@@ -232,7 +232,8 @@ class Worker:
         if why_not:
             log.info("skip %s: no longer qualifies (%s)", shot.ticker, why_not)
             return f"skipped: {why_not}"
-        shot = replace(shot, bid=_price(m, "yes_bid_dollars"), ask=_price(m, "yes_ask_dollars"))
+        view = side_view(m, shot.side)
+        shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"))
         # Same job, same order id: if the process dies after sending, a rerun cannot buy twice.
         order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
         out = runner.evaluate(

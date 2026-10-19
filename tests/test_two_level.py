@@ -1,5 +1,5 @@
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 
@@ -9,14 +9,18 @@ from kalshi_moonshot.estimators import build_estimators
 from kalshi_moonshot.jobs import Jobs
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.worker import Worker
-from tests.test_commodities import FakeFeed, feed_series, tail_event
+from tests.test_commodities import FakeFeed, decided_event, feed_series
 
 
 def settings(tmp_path, **over):
     s = config.load()
     base = {
         "data_dir": tmp_path, "mode": "observe", "env": "demo", "skip_categories": frozenset(),
-        "commodities_enabled": True, "commodity_min_edge": 0.08, "commodity_min_volume": 0.0,
+        "commodities_enabled": True, "commodity_min_edge": 0.03, "commodity_min_volume": 0.0,
+        "commodity_min_price": 0.70, "commodity_max_price": 0.97, "commodity_max_spread": 0.04,
+        "commodity_tail_floor": 0.01, "commodity_vol_mult": 1.25, "commodity_max_stale_minutes": 20.0,
+        "commodity_min_hours_to_close": 0.03, "commodity_max_hours_to_close": 24.0,
+        "commodity_max_basis": 0.04, "commodity_basis_unc": 0.0015, "commodity_basis_age_hours": 6.0,
         "commodity_review_minutes": 2.0, "commodity_scope_minutes": 30.0,
         "commodity_cooldown_minutes": 15.0, "steady_enabled": False, "min_order_usd": 0.0,
     }
@@ -48,20 +52,13 @@ class Client:
         return []
 
 
-def live_event(hours=6):
-    close = (datetime.now(UTC) + timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ms = tail_event()
-    for m in ms:
-        m["close_time"] = close
-    return ms
+def live_event(hours=0.5):
+    return decided_event(datetime.now(UTC))
 
 
 def live_quant():
-    series = feed_series(price=4000, per_bar=0.0018)
-    shift = time.time() - 60 - series.last_ts
-    return cm.CommodityPricer(FakeFeed(cm.Series(
-        series.last, series.last_ts + shift, series.closes, [t + shift for t in series.times]
-    )))
+    now = datetime.now(UTC)
+    return cm.CommodityPricer(FakeFeed(feed_series(price=4000, per_bar=0.0005, age_s=30, now=now)))
 
 
 def test_commodity_is_two_level_and_leaves_the_main_scan(tmp_path):
