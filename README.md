@@ -5,8 +5,6 @@ model for its own probability, and only bets when that estimate beats the market
 margin after fees. Every decision is logged so the model can be scored against real outcomes
 before any money is at risk.
 
-Replaces the old Kraken desktop app (`../kraken-portfolio`, left untouched).
-
 ## The idea in one paragraph
 
 A 5-cent contract that wins pays 20x. Long shots are overpriced on average, so buying them
