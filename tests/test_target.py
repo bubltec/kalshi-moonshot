@@ -47,3 +47,13 @@ def test_no_side_uses_the_cheapest_yes_ask(store):
 def test_bets_without_candles_are_counted_not_scored(store):
     bet(store, "KXBTC15M-1", "yes")
     assert target.compare(store, 2.0) == ([], 1)
+
+
+def test_a_lane_filter_keeps_only_that_lane(store):
+    bet(store, "KXBTC15M-1", "no")
+    bet(store, "KXETH15M-1", "no")
+    store.db.execute("UPDATE decisions SET lane='late_ticket' WHERE ticker='KXETH15M-1'")
+    for t in ("KXBTC15M-1", "KXETH15M-1"):
+        candle(store, t, 1200, 0.65)
+    assert [r.ticker for r in target.compare(store, 2.0, lane="late_ticket")[0]] == ["KXETH15M-1"]
+    assert len(target.compare(store, 2.0)[0]) == 2

@@ -43,6 +43,8 @@ class LaneSpec:
     fixed_stake: float = 0.0  # dollars per bet, ignoring Kelly (0 = size by the odds and the balance)
     always: bool = False  # bet whenever the filters pass, with no minimum edge from a model
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
+    min_chance: float = 0.0  # bet only when the estimator's chance that the contract pays is in [min_chance, max_chance]
+    max_chance: float = 1.0  # (the estimate before calibration; for a ladder lane this is a distance to the strike)
     min_return: float = 0.0  # a win must pay at least this much on the stake, after the fee
     max_bet_pct: float = 0.02  # one bet, share of equity (see sizing.py)
     max_exposure_pct: float = 0.25  # all open bets in the lane, share of equity
@@ -194,6 +196,10 @@ def spec_for(s: Settings, name: str) -> LaneSpec:
     if name not in lanes:
         raise KeyError(f"unknown lane {name!r} (known: {', '.join(sorted(lanes))})")
     return lanes[name]
+
+
+def chance_ok(spec: LaneSpec, p: float) -> bool:
+    return spec.min_chance - 1e-9 <= p <= spec.max_chance + 1e-9
 
 
 def wants_bet(spec: LaneSpec, p: float, ask: float, edge: float) -> bool:

@@ -23,7 +23,7 @@ from .commodities import CommodityPricer, load_instruments
 from .config import Settings
 from .estimators import Estimate, Estimator, build_estimators
 from .kalshi import MARKET_PAGES, KalshiClient, KalshiError, KalshiRateLimited
-from .lanes import LADDER, LaneSpec, main_lanes, spec_for, tiered_lanes, wants_bet
+from .lanes import LADDER, LaneSpec, chance_ok, main_lanes, spec_for, tiered_lanes, wants_bet
 from .search import NewsSearch
 from .sizing import Sizing, size_bet
 from .store import Store
@@ -380,6 +380,9 @@ def evaluate(
     e = edge(cal.p, shot.ask)
     bet = wants_bet(spec, cal.p, shot.ask, e)
     note = why if cal.n == 0 else f"{why} | {cal.note(p)}"
+    if bet and not chance_ok(spec, p):
+        bet = False
+        note = f"chance {p:.0%} outside the lane's {spec.min_chance:.0%}-{spec.max_chance:.0%}. {note}"
     if bet and shot.mutually_exclusive:
         others = store.bet_tickers_in_event(shot.event_ticker) - {shot.ticker}
         if others:

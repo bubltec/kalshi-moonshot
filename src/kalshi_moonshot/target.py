@@ -32,10 +32,10 @@ def _actual(r) -> float:
     return (float(r["contracts"]) if r["outcome"] == (r["side"] or "yes") else 0.0) - r["stake_usd"]
 
 
-def compare(store: Store, mult: float, suffix: str = "15M", live: bool | None = None) -> tuple[list[Outcome], int]:
+def compare(store: Store, mult: float, suffix: str = "15M", live: bool | None = None, lane: str | None = None) -> tuple[list[Outcome], int]:
     """Returns the scored bets and how many finished bets had no minute candles to test against."""
     rows = store.db.execute(
-        """SELECT ticker, side, mode, contracts, stake_usd, ask, outcome, exit_price, exit_ts, ts
+        """SELECT ticker, lane, side, mode, contracts, stake_usd, ask, outcome, exit_price, exit_ts, ts
            FROM decisions
            WHERE action='bet' AND stake_usd IS NOT NULL AND contracts > 0 AND ask > 0
              AND (COALESCE(outcome,'') IN ('yes','no') OR exit_ts IS NOT NULL)"""
@@ -44,6 +44,8 @@ def compare(store: Store, mult: float, suffix: str = "15M", live: bool | None = 
     missing = 0
     for r in rows:
         if not r["ticker"].split("-")[0].endswith(suffix) or (live is not None and (r["mode"] == "trade") != live):
+            continue
+        if lane is not None and (r["lane"] or "moonshot") != lane:
             continue
         side = r["side"] or "yes"
         entry = float(r["ask"])

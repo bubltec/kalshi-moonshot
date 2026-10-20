@@ -366,7 +366,7 @@ on 18 of your hand-placed 15-minute trades (2026-10-20) gave -10.7% as played, -
 a sell at 2x helped there, but with 18 trades that is noise until the bot's own bets build up a record.
 
 ```bash
-docker compose exec bot python -m kalshi_moonshot target                 # --mult 2 to pick one
+docker compose exec bot python -m kalshi_moonshot target                 # --mult 2 to pick one, --lane late_ticket for one lane
 ```
 
 ## Testing a buy/sell idea: `evidence`

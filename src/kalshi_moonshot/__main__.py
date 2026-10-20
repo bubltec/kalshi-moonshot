@@ -579,7 +579,7 @@ def cmd_target(s: config.Settings, args: argparse.Namespace) -> int:
     shown = False
     for text in args.mult.split(","):
         mult = float(text)
-        rows, missing = target.compare(store, mult, args.suffix)
+        rows, missing = target.compare(store, mult, args.suffix, lane=args.lane)
         if not rows:
             print(f"{mult:g}x: no finished *{args.suffix} bets with minute candles yet ({missing} without)")
             continue
@@ -663,6 +663,7 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "target":
             p.add_argument("--mult", default="1.5,2,3", help="comma list of sell multiples of the price paid")
             p.add_argument("--suffix", default="15M")
+            p.add_argument("--lane", help="only this lane, e.g. late_ticket (default: every lane)")
         if name == "evidence":
             p.add_argument("--rule", help="comma list of rule names to run (default: all)")
             p.add_argument("--series", help="comma list, e.g. KXBTC15M,KXGOLD15M")

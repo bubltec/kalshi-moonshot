@@ -22,6 +22,7 @@ min_volume = 5
 shortlist = 12
 one_per = "event"
 needs_instrument = true
+numeric = "allow"               # price-threshold markets are the point of this lane
 series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXGOLD15M",
           "KXSILVER15M", "KXWTI15M", "KXCOPPER15M", "KXNATGAS15M", "KXPLATINUM15M", "KXPALLADIUM15M"]
 timed_suffix = "15M"
@@ -54,3 +55,37 @@ min_trend = 0.02
 one_per = "mutex"
 sides = ["yes", "no"]
 max_exposure_pct = 0.30
+
+
+# Late tickets: the cheap side of a 15-minute window in its last 2-3 minutes, only when the feed is within a
+# quarter of an expected move of the strike (the estimator's chance that the side pays is 40-50%; the distance is
+# scaled by each instrument's own volatility, so gold dollars and silver cents count alike). A fixed $1.
+# Backtest (2026-10-20, about 600 windows): 87 such tickets paid 25.4 cents and won 27.6% (+3% after fees), the
+# only bucket near break-even and too few to trust, so this runs on paper to build the record. It never trades
+# live unless it is named in LIVE_LANES. Watch it with  python -m kalshi_moonshot mytrades --source bot  or  daily --lane late_ticket
+
+[lane.late_ticket]
+estimator = "ladder"
+label = "late ticket"
+always = true
+fixed_stake = 1.0
+sides = ["yes", "no"]
+price = [0.05, 0.40]
+min_chance = 0.40               # the estimator's chance this side pays, i.e. within ~0.25 sigma of the strike
+max_chance = 0.50
+hours = [0.01, 0.26]            # any 15-minute window; the entry window below picks the last 3.5 minutes
+max_spread = 0.04
+min_volume = 5
+shortlist = 12
+one_per = "event"
+needs_instrument = true
+numeric = "allow"               # price-threshold markets are the point of this lane
+series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXGOLD15M",
+          "KXSILVER15M", "KXWTI15M", "KXCOPPER15M", "KXNATGAS15M", "KXPLATINUM15M", "KXPALLADIUM15M"]
+timed_suffix = "15M"
+timed_minutes = 15
+entry_elapsed = [11.5, 13.5]    # minutes after the window opens (3.5 to 1.5 minutes left)
+scope_minutes = 3
+review_minutes = 1
+priority = 10
+max_exposure_pct = 0.10

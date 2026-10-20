@@ -80,7 +80,7 @@ class LadderEstimator:
 
     def screen(self, shots, markets, spec, s, now):
         """Price each event's ladder once; keep markets whose edge clears the lane's bar."""
-        from .lanes import wants_bet
+        from .lanes import chance_ok, wants_bet
 
         by_event: dict[str, list[dict]] = {}
         for m in markets:
@@ -101,7 +101,7 @@ class LadderEstimator:
                 continue
             p_side = side_prob(hit[0], shot.side)
             e = edge(p_side, shot.ask)
-            if wants_bet(spec, p_side, shot.ask, e):
+            if wants_bet(spec, p_side, shot.ask, e) and chance_ok(spec, p_side):
                 keep.append((e, shot))
         keep.sort(key=lambda x: x[0], reverse=True)
         return [shot for _, shot in keep]
