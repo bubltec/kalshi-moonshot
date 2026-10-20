@@ -19,6 +19,7 @@ Everything except YahooFeed is pure and unit tested.
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 import time
@@ -35,6 +36,7 @@ import httpx
 
 from .config import Settings
 
+log = logging.getLogger("moonshot")
 _N = NormalDist()
 
 
@@ -43,6 +45,8 @@ class Instrument:
     prefix: str
     symbol: str
     suffixes: tuple[str, ...]
+    realtime: bool = False  # the feed's price is current, so spot can anchor a market with no ladder
+    proxy: bool = False  # feed tracks the asset with an offset (a gold token): measure it from ladders
 
 
 @lru_cache(maxsize=1)
@@ -62,7 +66,9 @@ def load_instruments(data_dir: Path | None = None) -> tuple[Instrument, ...]:
 def _parse_instruments(text: str) -> tuple[Instrument, ...]:
     raw = tomllib.loads(text)
     return tuple(
-        Instrument(row["prefix"], row["symbol"], tuple(row.get("suffixes", [""])))
+        Instrument(
+            row["prefix"], row["symbol"], tuple(row.get("suffixes", [""])), bool(row.get("realtime", False)), bool(row.get("proxy", False)),
+        )
         for row in raw.get("instrument", [])
     )
 
@@ -94,6 +100,7 @@ def symbol_for(series: str, instruments: tuple[Instrument, ...] | None = None) -
 
 BAR_SECONDS = 300  # feed bar size
 SESSION_GAP = 15 * 60  # bigger gap between bars = market closed, not a price move
+REALTIME_STALE_SECONDS = 120.0  # a real-time feed this old has dropped; do not trade on it
 OPEN_FRACTION = 23 / 24  # share of a day futures trade, used for short horizons
 
 
@@ -283,10 +290,19 @@ class Pricing:
     points: int
     r2: float
     age_s: float  # how old the feed's last price is
-    remembered: bool  # center came from a remembered basis, not from this event's ladder
+    anchor: str  # "ladder", "remembered" or "spot": where the center came from
+
+    @property
+    def remembered(self) -> bool:
+        return self.anchor != "ladder"
 
     def note(self, p: float, hours: float) -> str:
-        how = "remembered basis" if self.remembered else f"{self.points}-strike ladder fit"
+        how = {
+            "ladder": f"{self.points}-strike ladder fit",
+            "remembered": "remembered basis",
+            "spot": "spot (real-time feed)",
+            "window": f"offset learned from {self.points} settled windows",
+        }[self.anchor]
         ladder = "n/a" if self.sigma_market is None else f"{self.sigma_market:.2%}"
         return (
             f"spot {self.spot:.6g} ({self.age_s:.0f}s old), center {self.center:.6g} via {how} "
@@ -295,33 +311,96 @@ class Pricing:
         )
 
 
-# family prefix -> (ln(center / spot), when seen, series it came from)
-BasisMemory = dict[str, tuple[float, float, str]]
+WINDOW_POINTS = 6  # boundaries needed before a learned offset is trusted
+WINDOW_MAX_AGE = 3 * 3600.0
+WINDOW_REFRESH = 600.0
+WINDOW_MINUTES = 15
+
+
+@dataclass(frozen=True)
+class WindowBasis:
+    basis: float  # median of ln(Kalshi reference / feed price) at recent 15-minute boundaries
+    sd: float  # robust spread of those offsets
+    n: int
+    ts: float
+
+
+def window_basis(
+    refs: dict[int, float], minutes: dict[int, float], now_ts: float
+) -> WindowBasis | None:
+    """Offset between Kalshi's reference and a feed, measured at 15-minute boundaries.
+
+    refs maps a boundary (unix seconds) to the reference Kalshi published for it: a window's
+    strike is the reference at its open and its settlement value is the reference at its close, so
+    every boundary is known exactly. minutes maps each 1-minute candle's open time to its close.
+    The reference at T is matched with the candle that closes at T (opened at T - 60 s).
+    """
+    import statistics
+
+    offsets = [
+        math.log(ref / minutes[t - 60]) for t, ref in refs.items()
+        if ref > 0 and minutes.get(t - 60, 0.0) > 0
+    ]
+    if len(offsets) < WINDOW_POINTS:
+        return None
+    med = statistics.median(offsets)
+    mad = statistics.median(abs(o - med) for o in offsets)
+    return WindowBasis(med, 1.4826 * mad, len(offsets), now_ts)
+
+
+def boundary_refs(markets: list[dict[str, Any]]) -> dict[int, float]:
+    refs: dict[int, float] = {}
+    for m in markets:
+        try:
+            close = int(datetime.fromisoformat(m["close_time"]).timestamp())
+        except (KeyError, ValueError, TypeError):
+            continue
+        if m.get("floor_strike") is not None:
+            refs[close - WINDOW_MINUTES * 60] = float(m["floor_strike"])
+        try:
+            if m.get("expiration_value") not in (None, ""):
+                refs[close] = float(m["expiration_value"])
+        except (TypeError, ValueError):
+            pass
+    return refs
+
+
+# series -> (ln(center / spot), when seen, feed age in hours when seen). Keyed by series because one prefix can settle on different references
+# (a daily settlement price vs a 15-minute index): a basis only transfers within the same series.
+BasisMemory = dict[str, tuple[float, float, float]]
 
 
 def price_event(
     markets: list[dict[str, Any]], inst: Instrument, feed: Feed, s: Settings,
     now: datetime | None = None, hours: float | None = None, memory: BasisMemory | None = None,
+    windows: dict[str, WindowBasis] | None = None,
 ) -> Pricing:
     """Where the price is centered and how wide it can still move. Raises CommodityError.
 
-    Center: a probit fit over the event's own liquid strikes when there are enough. Near expiry
-    the ladder is mostly decided strikes and cannot be fitted, so the basis (ln of ladder center
-    over feed price) seen on a recent fit of the same instrument is reused, with extra width for
-    not knowing it exactly. Width: realized volatility over the time left plus the age of the
-    feed's last price, because a stale price means an unseen move.
+    Center, in order of preference:
+      ladder    a probit fit over this event's own liquid strikes
+      spot      a real-time feed of the asset itself (crypto): the feed price, with a few basis
+                points of width. This is what prices a 15-minute "up or down" market, which has no ladder.
+      remembered  the basis (ln of ladder center over feed price) from a recent fit of the same
+                  series, for feeds that are delayed or only track the asset (the gold token);
+                  a real-time proxy may also borrow it from the same family
+    Width: realized volatility over the time left plus the age of the feed's last price (a stale
+    price hides a move), plus the uncertainty of the center.
     """
     now = now or datetime.now(UTC)
     memory = memory if memory is not None else {}
     series_t = markets[0].get("series_ticker", "") if markets else ""
     feed_series = feed.series(inst.symbol)
     age = max(0.0, now.timestamp() - feed_series.last_ts)
-    if age > s.commodity_max_stale_minutes * 60:
-        raise CommodityError(f"{inst.symbol} feed is {age / 60:.0f} min old (market closed?)")
+    limit_s = REALTIME_STALE_SECONDS if inst.realtime else s.commodity_max_stale_minutes * 60
+    if age > limit_s:
+        raise CommodityError(f"{inst.symbol} feed is {age / 60:.1f} min old (market closed?)")
     spot = feed_series.last
     fit = fit_ladder(markets)
-    remembered = False
+    anchor = "ladder"
     unc = 0.0003
+    sigma_mkt: float | None = None
+    points, r2 = 0, 0.0
     if fit is not None and fit.r2 >= 0.9:
         center, points, r2, sigma_mkt = fit.center, fit.points, fit.r2, fit.sigma
         basis = math.log(center / spot)
@@ -330,21 +409,40 @@ def price_event(
                 f"ladder center {center:.6g} is {basis:+.1%} from {inst.symbol} spot {spot:.6g}; "
                 "different contract than the feed"
             )
-        memory[inst.prefix] = (basis, now.timestamp(), series_t)
+        memory[series_t] = (basis, now.timestamp(), age / 3600.0)
     else:
-        seen = memory.get(inst.prefix)
-        if seen is None or now.timestamp() - seen[1] > s.commodity_basis_age_hours * 3600:
+        limit = s.commodity_basis_age_hours * 3600
+        learned = (windows or {}).get(series_t)
+        seen, mult = None, 1.0
+        if not (inst.realtime and not inst.proxy):  # a direct real-time price needs no offset
+            seen = memory.get(series_t)
+        if learned is not None and now.timestamp() - learned.ts <= WINDOW_MAX_AGE:
+            # A 15-minute series: its offset from the feed was measured at the last boundaries.
+            anchor, basis, points = "window", learned.basis, learned.n
+            center = spot * math.exp(basis)
+            unc = max(learned.sd, s.commodity_window_unc_floor)
+        elif seen is not None and now.timestamp() - seen[1] <= limit:
+            anchor, basis = "remembered", seen[0]
+            center = spot * math.exp(basis)
+            base = s.commodity_basis_unc
+            if inst.realtime:
+                base = s.commodity_proxy_unc if inst.proxy else s.commodity_realtime_unc
+            unc = base * mult
+            if seen[2] > 0.0:
+                # Measured against a feed already `seen[2]` hours old, so it also holds that much
+                # unseen move. Count it as width, not as basis.
+                unc = math.sqrt(unc * unc + realized_sigma(feed_series, seen[2]) ** 2)
+        elif inst.realtime and not inst.proxy:
+            anchor, basis, center = "spot", 0.0, spot
+            unc = s.commodity_realtime_unc
+        else:
             raise CommodityError("ladder too thin to locate the center and no recent basis for it")
-        basis = seen[0]
-        center = spot * math.exp(basis)
-        points, r2, sigma_mkt, remembered = 0, 0.0, None, True
-        unc = s.commodity_basis_unc * (1.0 if seen[2] == series_t else 1.7)
     if hours is None:
         hours = _hours_to_close(markets, now)
     # A feed that is `age` seconds old has an unseen move of about that much extra time.
     sigma = realized_sigma(feed_series, max(hours, 0.0) + age / 3600.0) * s.commodity_vol_mult
     total = math.sqrt(sigma * sigma + unc * unc)
-    return Pricing(center, spot, basis, total, sigma_mkt, points, r2, age, remembered)
+    return Pricing(center, spot, basis, total, sigma_mkt, points, r2, age, anchor)
 
 
 def _hours_to_close(markets: list[dict[str, Any]], now: datetime) -> float:
@@ -361,8 +459,14 @@ class CommodityPricer:
     """Rates priced-instrument markets. Holds the price feed and the remembered basis."""
 
     def __init__(self, feed: Feed | None = None):
-        self.feed: Feed = feed or YahooFeed()
+        if feed is None:
+            from .krakenfeed import RoutingFeed
+
+            feed = RoutingFeed.for_instruments()
+        self.feed: Feed = feed
         self.memory: BasisMemory = {}
+        self.windows: dict[str, WindowBasis] = {}
+        self._tried: dict[str, float] = {}  # series -> when learn_windows last looked
 
     def price_markets(
         self, markets: list[dict[str, Any]], s: Settings, now: datetime | None = None
@@ -376,7 +480,7 @@ class CommodityPricer:
         if inst is None:
             raise CommodityError(f"{series} is not a supported instrument series")
         hours = _hours_to_close(markets, now)
-        pricing = price_event(markets, inst, self.feed, s, now, hours, self.memory)
+        pricing = price_event(markets, inst, self.feed, s, now, hours, self.memory, self.windows)
         floor = s.commodity_tail_floor
         out: dict[str, tuple[float, str]] = {}
         for m in markets:
@@ -385,6 +489,34 @@ class CommodityPricer:
                 p = min(max(p, floor), 1.0 - floor)
                 out[m["ticker"]] = (p, pricing.note(p, hours))
         return out
+
+    def learn_windows(self, client: Any, s: Settings, now: datetime | None = None) -> int:
+        """Measure each 15-minute series' feed offset from its recent settled windows.
+
+        Returns how many series were (re)learned. A failure for one series leaves its old value.
+        """
+        now_ts = (now or datetime.now(UTC)).timestamp()
+        minutes_of = getattr(self.feed, "minute_closes", None)
+        if minutes_of is None:
+            return 0
+        learned = 0
+        for inst in load_instruments(s.data_dir):
+            if f"{WINDOW_MINUTES}M" not in inst.suffixes:
+                continue
+            series = f"{inst.prefix}{WINDOW_MINUTES}M"
+            if now_ts - self._tried.get(series, 0.0) < WINDOW_REFRESH:
+                continue  # looked recently, whether or not it learned anything
+            self._tried[series] = now_ts
+            try:
+                refs = boundary_refs(client.settled_markets(series))
+                wb = window_basis(refs, minutes_of(inst.symbol), now_ts)
+            except Exception as exc:
+                log.warning("window offset for %s: %s", series, exc)
+                continue
+            if wb is not None:
+                self.windows[series] = wb
+                learned += 1
+        return learned
 
     def estimate(self, client: Any, shot: Any, s: Settings) -> tuple[float, str]:
         """Fresh P(yes) for a shortlisted market, re-reading its whole ladder."""

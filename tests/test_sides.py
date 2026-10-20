@@ -212,3 +212,38 @@ def test_only_real_ladders_count_not_spreads_or_brackets():
     spread = [ladder_market(2, 0.02, 0.04, event="KXTEAM", series_t=False),
               ladder_market(3, 0.60, 0.62, event="KXTEAM", series_t=False)]
     assert ladder_arbs(spread) == []  # opposite-team spreads do not nest
+
+
+# ---- the stop-loss and 15-minute windows ----
+def fifteen_bet(store, ticker, side="yes", ask=0.80):
+    close = (datetime.now(UTC) + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    store.add_decision(ticker=ticker, title="t", bid=ask - 0.02, ask=ask, model_p=0.95, edge=0.05, action="bet",
+                       mode="observe", close_time=close, lane="commodity", side=side)
+
+
+def test_the_stop_loss_can_leave_15_minute_windows_to_settle(tmp_path):
+    s_on = settings(tmp_path, stop_loss_fast=True)
+    s_off = settings(tmp_path, stop_loss_fast=False)
+    store = Store(s_on.db_path)
+    fifteen_bet(store, "KXGOLD15M-X-15")
+    fifteen_bet(store, "KXGOLDH-Y-T4000")
+
+    class C:
+        def market(self, ticker):
+            return {"yes_bid_dollars": "0.3000", "yes_ask_dollars": "0.3200"}  # down 62% from 0.80
+
+    on = runner.stop_loss_pass(s_on, C(), store)
+    assert sum("paper-sold" in n for n in on) == 2  # both are stopped out today
+    store = Store(tmp_path / "off.db")
+    fifteen_bet(store, "KXGOLD15M-X-15")
+    fifteen_bet(store, "KXGOLDH-Y-T4000")
+    off = runner.stop_loss_pass(s_off, C(), store)
+    assert [n for n in off if "KXGOLD15M" in n] == []  # the 15-minute window rides to settlement
+    assert any("KXGOLDH" in n and "paper-sold" in n for n in off)  # an hourly market still gets its stop
+
+
+def test_the_default_keeps_todays_stop_loss_behavior(monkeypatch):
+    monkeypatch.delenv("STOP_LOSS_15M", raising=False)
+    assert config.load().stop_loss_fast is True
+    monkeypatch.setenv("STOP_LOSS_15M", "false")
+    assert config.load().stop_loss_fast is False

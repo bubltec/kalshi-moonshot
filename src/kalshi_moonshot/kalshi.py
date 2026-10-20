@@ -98,6 +98,12 @@ class KalshiClient:
         self._next_slot = 0.0
         self._lock = threading.Lock()
 
+    def ws_headers(self, url: str) -> dict[str, str]:
+        """Signed headers for opening an authenticated WebSocket (a read-only data stream)."""
+        if not self.authed:
+            raise KalshiError("the WebSocket needs KALSHI_KEY_ID and KALSHI_PRIVATE_KEY_PATH")
+        return signed_headers(self._key, self.key_id, "GET", url)
+
     @property
     def authed(self) -> bool:
         return bool(self._key and self.key_id)
@@ -237,6 +243,11 @@ class KalshiClient:
                 break
         return out
 
+    def settled_markets(self, series: str, limit: int = 40) -> list[dict[str, Any]]:
+        """The most recent settled markets of a series (each carries its settlement value)."""
+        params = {"series_ticker": series, "status": "settled", "limit": limit}
+        return self._request("GET", "/markets", params=params).get("markets", [])
+
     def series(self, ticker: str) -> dict[str, Any]:
         return self._request("GET", f"/series/{ticker}").get("series") or {}
 
@@ -301,6 +312,23 @@ class KalshiClient:
     # ---- account (signed) ----
     def balance(self) -> dict[str, Any]:
         return self._request("GET", "/portfolio/balance", auth=True)
+
+    def portfolio_rows(self, path: str, key: str, min_ts: int | None = None, pages: int = 60) -> list[dict[str, Any]]:
+        """Every row of a paged portfolio list (fills, settlements, orders), newest first."""
+        out: list[dict[str, Any]] = []
+        cursor = ""
+        for _ in range(pages):
+            params: dict[str, Any] = {"limit": 200}
+            if min_ts is not None:
+                params["min_ts"] = int(min_ts)
+            if cursor:
+                params["cursor"] = cursor
+            body = self._request("GET", path, params=params, auth=True)
+            out.extend(body.get(key, []))
+            cursor = body.get("cursor") or ""
+            if not cursor:
+                break
+        return out
 
     def positions(self) -> dict[str, Any]:
         return self._request("GET", "/portfolio/positions", auth=True)

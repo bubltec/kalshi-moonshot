@@ -103,6 +103,19 @@ def lane_reject_reason(m: dict[str, Any], spec: LaneSpec, s: Settings, now: date
     # Many cheap contracts have an ask but no bid and no trades. Nothing can be sold into that.
     if bid <= 0.0:
         return "no bid (cannot exit)"
+    if spec.min_age_minutes and not (spec.timed_suffix and series.endswith(spec.timed_suffix)):
+        # Right after a market opens its book is thin and its quotes jump around. Wait it out.
+        # (15-minute windows have their own entry window, which already waits.)
+        opened = m.get("open_time")
+        if opened:
+            try:
+                age = (now - datetime.fromisoformat(opened)).total_seconds() / 60.0
+            except (TypeError, ValueError):
+                age = None
+            if age is not None and age < spec.min_age_minutes:
+                return f"market opened {age:.0f} min ago (waits {spec.min_age_minutes:g})"
+    if spec.min_return and net_return(ask) < spec.min_return:
+        return f"pays under {spec.min_return:.0%} if it wins"
     if ask - bid > spec.max_spread:
         return "spread too wide"
     if _f(m, "volume_fp") < spec.min_volume:
@@ -110,6 +123,12 @@ def lane_reject_reason(m: dict[str, Any], spec: LaneSpec, s: Settings, now: date
     hours = _hours_until(m.get("close_time", ""), now)
     if hours is None:
         return "no close time"
+    if spec.timed_suffix and series.endswith(spec.timed_suffix):
+        # A fixed-length window opens exactly timed_minutes before it closes, so how far in we are
+        # is known. Bet only inside the lane's entry window.
+        elapsed = spec.timed_minutes - hours * 60.0
+        if not spec.entry_elapsed[0] <= elapsed <= spec.entry_elapsed[1]:
+            return f"outside the entry window ({elapsed:.1f} min into a {spec.timed_minutes:g}-min window)"
     if hours < spec.hours[0]:
         return "closes too soon"
     if hours > spec.hours[1]:

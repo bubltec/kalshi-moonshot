@@ -52,6 +52,19 @@ needs_instrument = true
 
 A typo is an error, not a silent default. Edits apply on the next scan.
 
+**Stakes follow the balance.** Nothing is a flat dollar amount. `sizing.py` stakes a fraction (`KELLY_FRACTION`,
+default 25%) of full Kelly, `(chance - cost) / (1 - cost)` of equity, so a bigger edge or a better payout earns a
+bigger bet and a smaller balance earns a smaller one. Two caps per lane keep the shape you described, many cheap
+moonshot tickets next to steadier bets: one bet is at most 1% of equity in moonshot (3% in steady and commodity),
+and all of a lane's open bets together at most 15% in moonshot (40% in the others). Equity is cash plus open
+bets, so stakes compound as the balance grows. `MAX_USD_PER_TRADE` and `MAX_USD_PER_DAY` stay as hard ceilings.
+
+Without credentials, or in `observe`, the balance is a paper one: `PAPER_BANKROLL_USD` (default $100) plus what the
+paper bets have returned, less what is still riding. A paper bet's size is stored on its decision, a market is
+staked once, and results compound the same way a real balance would. With keys and `MODE=trade` it uses Kalshi's
+available balance and portfolio value instead. `bankroll` shows the balance, open exposure per lane and each
+lane's dollars staked and returned. A 5-cent moonshot at 1% of $100 buys about 18 contracts: $1 at risk, $17 back.
+
 **Odds, not labels.** A long shot is a price and a payout, whichever contract carries it: a 6-cent NO on a heavy
 favorite pays the same 94 cents as a 6-cent YES. The moonshot and steady lanes therefore consider both
 contracts (`MOONSHOT_SIDES`, `STEADY_SIDES`, default `yes,no`). Every number is kept in the contract's own terms:
@@ -80,9 +93,35 @@ side that is already close to decided, at 70-98 cents, for a small return that r
   *age of the feed's last price* (a stale price hides a move), plus the basis uncertainty.
 - **Model risk.** No probability is claimed closer than `COMMODITY_TAIL_FLOOR` (0.5%) to 0 or 1, and volatility is
   scaled by `COMMODITY_VOL_MULT` (1.25) for fat tails.
-- **Feeds.** Crypto is real-time (Yahoo). Yahoo's commodity futures are about 10 minutes old, which the width
-  accounts for, but a real-time commodity source would tighten near-expiry prices a lot. Kalshi settles its
-  15-minute commodity contracts on Pyth prices; Pyth's free endpoints returned 401/404 when tried.
+- **Feeds.** All free, keyless and real-time. Crypto comes from Kraken's public WebSocket v2 ticker
+  (`krakenfeed.py`, the stream kraken-portfolio uses). Gold, silver, WTI, Brent, copper, natural gas, platinum
+  and palladium come from Hyperliquid's "xyz" perpetuals (`hlfeed.py`): deep, around-the-clock markets with a
+  live mid every few seconds. Both give 5-minute history for volatility and 1-minute candles for the offset
+  below. A feed that goes quiet for two minutes is refused outright. Yahoo futures (10 minutes old) remain
+  only as a fallback for series with no real-time feed, and their 15-minute series are not priced.
+- **The offset to Kalshi's reference, measured.** A Kalshi 15-minute market publishes its exact reference
+  twice: the strike is the reference at the window's open, and the settlement value is the reference at its
+  close, which is the next window's strike. So every 15-minute boundary has a known reference. For each
+  15-minute series the bot matches those boundaries to the feed's 1-minute candles and takes the median
+  offset (refreshed every 10 minutes at scoping). Measured on 2026-10-19: gold -0.01% (spread 0.02%), silver
+  -0.03% (0.01%), WTI +0.02% (0.02%), natural gas +0.03% (0.03%), crypto within 0.03%, and copper a steady
+  +1.28% (0.01%), because Kalshi's copper reference differs from Hyperliquid's. All are smaller than a typical
+  5-minute move (~0.1%), so a 15-minute market can be priced from the live feed. A series with too few settled
+  windows is not guessed at.
+- **Day trades only.** The lane takes markets closing within `COMMODITY_MAX_HOURS_TO_CLOSE` (default 2) hours:
+  15-minute and hourly markets, and a daily one only in its last two hours. It does not hold positions
+  overnight or for tomorrow's close.
+- **Wait for the book.** A market is not bet until it has been open `COMMODITY_MIN_AGE_MINUTES` (default 20),
+  and only when its bid-ask spread is at most `COMMODITY_MAX_SPREAD` (default 2 cents). Right after a market
+  opens its book is thin and its quotes jump. 15-minute windows are exempt from the age rule because their
+  entry window already waits (8.5-12 minutes in).
+- **Stop-loss on 15-minute windows.** A 15-minute position always has under an hour left, so the stop-loss (sell
+  when the bid is down 30%) applies from the moment it is bought. On history, 15-minute favorites bought 9-12 minutes
+  in returned about -0.8% held to settlement and -3.8% with that stop. `STOP_LOSS_15M=false` leaves them to settle;
+  hourly and daily markets keep their stop either way.
+- **Minimum return.** A win must pay at least `COMMODITY_MIN_RETURN` (10%) on the stake after the fee, which
+  caps the entry at about 90 cents. A 96-cent entry makes about 4% if it wins and loses everything if it
+  misses, so it is not taken however likely it looks.
 - **What to expect.** A decided strike usually sells at 95-98 cents, so the margin is 1-4 cents against a loss of
   the whole stake on a miss. That only pays at a very high hit rate, which is why the record decides: `report`
   scores the lane by side, and calibration shrinks the estimate toward the observed hit rate as markets settle.
@@ -178,6 +217,8 @@ Edit `.env`. No rebuild is needed; rebuild only when the code changes.
 | See the scorecards (all lanes, each lane, each category), minus excluded versions | `docker compose exec bot python -m kalshi_moonshot report` |
 | List open real buys with the model probability, edge, and headlines from the fill | `docker compose exec bot python -m kalshi_moonshot show-buys` |
 | Same, but include every version | `docker compose exec bot python -m kalshi_moonshot report --all-versions` |
+| See whether 15-minute markets were mispriced, from the paper log of every window | `docker compose exec bot python -m kalshi_moonshot shadow` |
+| Show the balance, open exposure per lane, and dollars staked and returned | `docker compose exec bot python -m kalshi_moonshot bankroll` |
 | Show each lane's parameters and how the record is weighing it | `docker compose exec bot python -m kalshi_moonshot lanes` |
 | Run the hourly review now (tighten a setting only when the scorecard is clear) | `docker compose exec bot python -m kalshi_moonshot review` |
 | See the job queue (pending, done, dead, with errors) | `docker compose exec bot python -m kalshi_moonshot jobs` |
@@ -202,6 +243,25 @@ Without Docker: `make install && python -m kalshi_moonshot doctor` (Python 3.12 
 `make check` runs ruff, mypy and pytest, the same as CI. Dependencies are locked in `uv.lock`; the Docker image
 installs `requirements.lock` with hashes (`uv export --no-dev --no-emit-project -o requirements.lock` to refresh).
 
+## Going live one lane at a time
+
+`MODE=trade` alone means every lane trades. To trade only some, name them:
+
+```bash
+MODE=trade
+LIVE_LANES=commodity      # commodity also covers crypto (BTC, ETH, SOL, XRP, DOGE) and gold
+```
+
+The other lanes keep paper-trading on the paper balance: still sized, logged and scored, never sent. A lane that
+is live is sized from your Kalshi balance; a paper lane never touches it. `LIVE_LANES=none` trades nothing.
+`python -m kalshi_moonshot lanes` shows `LIVE` or `paper` beside each lane, and the bot logs the live lanes when
+it starts. Stop-loss follows the same rule: a paper lane's stop is only recorded.
+
+15-minute windows have their own switch: with `MODE=trade` and the commodity lane live, they still
+paper-trade unless `COMMODITY_15M_LIVE=true`. Hourly and daily markets in the lane trade for real; the 15-minute
+ones are sized, logged and scored on the paper balance until you flip it. `lanes` shows `(15m: paper)` or
+`(15m: LIVE)`.
+
 ## Going from observing to trading
 
 1. Run `observe` for a few weeks. `report` needs 30+ settled decisions to mean anything.
@@ -224,6 +284,141 @@ new Ollama pid after a restart. Check it with `pmset -g assertions | grep caffei
 - Closing the lid can still sleep a MacBook. Test before leaving it overnight.
 - To undo: `launchctl bootout gui/$(id -u)/com.user.ollama-awake` then delete the plist
   and the script above.
+
+## How the 15-minute contracts move, from Kalshi's own history
+
+Kalshi keeps 1-minute candles (bid, ask, last price, volume, open interest) for every market, settled ones
+included. `history` downloads them for each 15-minute series' recent settled windows into the database (safe to
+re-run; it only fetches windows it lacks) and `profile` reports, from about four days and 2,400 windows:
+
+- the **path** through a window: how far from a toss-up the contract is at each minute, how much is already
+  decided (a side at 90%+) and the spread, which is about 1 cent throughout, so getting in costs little;
+- **when a window is effectively over**: by minute 10, 39% are at 90%+ and 53% have a side at 85%+ that goes on
+  to win; by minute 13, 75%;
+- **favorites** priced 70-90% at a given minute: how often they still lose (18% at minute 10, against an average
+  price of 80 cents, so priced about fairly) and how far their price swings against a holder first (median 9
+  cents; the worst tenth lose almost everything);
+- the same **by hour of the day** (New York time): reversals, how much the contract moves, spread and volume.
+  Each hour has only about 25-50 favorites per four days, so differences between hours are noisy until more
+  days are stored.
+
+The bot also keeps this up to date on its own: a low-priority `history` job (it only runs when no trading job is
+waiting, and one run takes roughly 15 seconds) fetches newly settled windows hourly, 30 at a time, coming back in two minutes while a
+backlog remains, and drops anything older than 30 days (`HISTORY_ENABLED`, `HISTORY_INTERVAL_MINUTES`,
+`HISTORY_BATCH`, `HISTORY_KEEP_DAYS`). The first runs catch up on the last couple of days.
+
+```bash
+docker compose exec bot python -m kalshi_moonshot history     # download now (resumable; add --windows 400 for more)
+docker compose exec bot python -m kalshi_moonshot profile     # pooled; --series KXBTC15M,KXGOLD15M to narrow
+docker compose exec bot python -m kalshi_moonshot daily       # profit and loss of the bets actually taken, per day
+```
+
+## Lead-lag: does the quote trail the price it follows?
+
+Minute candles cannot show whether a Kalshi quote reacts to a move in the underlying instantly or a few seconds
+late. So the bot records a **tape** (`data/tape.db`, kept 3 days, read-only): every change of each open
+15-minute market's quote from Kalshi's authenticated WebSocket, next to the price it follows. For crypto that is
+the settlement index itself, which Kalshi streams (BRTI for bitcoin, `ETHUSD_RTI`, ...) about once a second with its
+trailing 60-second average, the quantity those markets compare. For commodities, which settle elsewhere, it is the
+Hyperliquid price. After a few hours:
+
+```bash
+docker compose exec bot python -m kalshi_moonshot leadlag     # --series KXBTC15M,KXGOLD15M to narrow
+```
+
+It reports, per series, the lag at which the quote follows the feed (a positive peak means the quote trails),
+how far the quote keeps drifting after a sharp feed move, and a trade test (buy the side the move favors after a
+2-second reaction time, sell back after 5 to 60 seconds, fees and spread included) beside a control of the same
+trade at random moments. Only a gap between the two is an edge. A first nine-minute sample: crypto quotes follow
+the index within about a second, and a round trip costs 7 to 8 cents per contract in fees and spread, so an edge
+would have to beat that. `TAPE_ENABLED` and `TAPE_KEEP_DAYS` control it.
+
+## Your own wins and losses: `sync` and `mytrades`
+
+The bot only knew its own orders. `sync` pulls everything Kalshi holds for the account (fills and settlements,
+read-only) into the local database, so trades made by hand in the app, cash-outs included, sit next to the bot's.
+It is safe to re-run: rows are keyed by Kalshi's ids and each run asks only for what is new. The bot also does it
+every 15 minutes as a low-priority job (`ACCOUNT_SYNC_ENABLED`, `ACCOUNT_SYNC_MINUTES`). A first sync looks up each market's open and close time,
+a few dozen per run, so the full history fills in over a couple of runs.
+
+`mytrades` rebuilds each trade from the raw fills (buy, then either a sale or settlement; closing fills match the
+oldest opening ones first; profit after every fee) and labels it `bot`, `manual` or `mixed` by whether the order ids
+are ones the bot placed. A trade whose fills disagree with Kalshi's settlement (usually a position opened before
+the history window) is left out rather than guessed.
+
+```bash
+docker compose exec bot python -m kalshi_moonshot sync --full            # first time: everything Kalshi has
+docker compose exec bot python -m kalshi_moonshot mytrades               # --source manual|bot|mixed|all, --series-suffix 15M, --days 30
+```
+
+It prints totals, results by series, cash-outs against held-to-settlement, 15-minute results by entry minute and by
+entry price, and the multiples you sold at. A first read (Aug-Oct 2026, 15-minute markets bought by hand, 31
+trades): every cash-out won (median 3.9x, held about 7 minutes), every loss was a trade held to settlement, and
+the total was about break-even (-1.9%). Treat it as a prompt, not a result: 31 trades is far too few to separate
+skill from luck, and you only see the cash-outs you chose to make.
+
+### Paper test of a resting sell: `target`
+
+`target` re-scores the bot's own finished 15-minute bets (paper and live) as if a sell had been resting at 1.5x, 2x
+or 3x the price paid, using the stored minute candles' best bid. It places nothing and changes nothing; it prints
+what the bets made as played, what they would have made with the sell, and how many would have sold. The same test
+on 18 of your hand-placed 15-minute trades (2026-10-20) gave -10.7% as played, -1.5% with a 2x sell, -9.5% with 3x:
+a sell at 2x helped there, but with 18 trades that is noise until the bot's own bets build up a record.
+
+```bash
+docker compose exec bot python -m kalshi_moonshot target                 # --mult 2 to pick one
+```
+
+## Testing a buy/sell idea: `evidence`
+
+Write the idea as a rule and get the same report every time. `src/kalshi_moonshot/rules.toml` ships five
+(follow or fade a price slope, sell when it turns, a 2x/3x resting sell on the cheap side, buy a dip); copy it to
+`data/rules.toml` to change them. A rule says which contract to buy (YES, NO or either), the price band, the
+minutes of the window, a trigger (`slope`, `dip` or `always`) and an exit (`hold`, `slope_turn`, `trail`,
+`target`, `stop`, `time`). Any list inside `entry` or `exit` is a grid and every combination is tried.
+
+```bash
+docker compose exec bot python -m kalshi_moonshot evidence                      # all rules
+docker compose exec bot python -m kalshi_moonshot evidence --rule follow_the_slope --series KXBTC15M
+```
+
+The report tunes on the earliest 60% of windows and judges on the later 40%, beside a baseline that trades the same
+side, band, minutes and exit with no trigger (so you see what the signal adds, not what trading costs), gives a 90%
+interval for the held-out return by resampling whole 15-minute boundaries, and says how many settings were tried.
+Verdicts: SUPPORTED (positive on both and the held-out interval is above zero), PROMISING (positive but the interval
+includes zero), NOT PROFITABLE (beats its baseline but loses after costs), NOT SUPPORTED. On the 2,532 stored windows
+today every rule is NOT PROFITABLE or NOT SUPPORTED: following a 5-minute slope of 4 cents a minute or more is the
+closest (about +4% held out, interval -0.4% to +8%), and it is worth rerunning as the history grows.
+
+## Checking an idea against history
+
+`python scripts/replay_15m.py` replays recent settled 15-minute windows: at the 10-minute mark it asks what the
+data-driven model would have done, using only what was knowable then (earlier windows' offsets, the prior three
+hours of volatility), and prints the return of each rule after fees plus the model's calibration against the
+market's. It places no orders. Run it before moving any rule from paper to live. Result on 2026-10-19 (704
+windows, about 20 hours): buying favorites at 70-90 cents blindly returned -2.6%; buying cheap underdogs lost
+15-30% (the model overstates tails); the model-and-market-agree favorites (edge of 1.5 cents or more at 70-90
+cents) returned +7.5% on only 18 bets, far too few to trust.
+
+**Cheap-side bets with an early sell** (buy whichever side costs 12-30 cents, sell at 2x or 3x). On 2,400
+settled windows, split by time (find patterns in the first 60%, check them on the later 40%), with sells simulated
+as resting orders that fill when a minute's best bid reaches the target: 40% of entries reach 2x and 23% reach 3x,
+yet the return after fees was -21% (2x) and -15% (3x) on the later data. Round-trip fees alone are about 13% of
+the stake at 2x, and selling at a multiple caps the upside of the contracts that would have gone to $1. The hour's
+trend (steady climb or slide against a spike) did not help consistently, except that buying right after a spike
+was worse in both periods (about -27% to -32%). Nothing tested reached a third of entries winning at settlement
+(`strategies.example.toml` lane `fifteen` keeps score on paper). An edge would have to come from information the
+price lacks, such as the live feed moving before the Kalshi quote does.
+
+**Slope monitoring** (enter when a contract's price is climbing or falling at some rate, exit when the slope turns
+or after a trailing drop). 54 rules (slope window 2, 3 or 5 minutes; minimum slope 1, 2 or 4 cents a minute;
+follow the move or fade it; three exits) on 2,532 windows, tuned on the earliest 60% and checked on the later
+40% (`scripts/slope_study.py`): none was profitable on the tuning windows, 2 of 54 were positive held out
+(+0.6%, +3.3%, about what chance gives), and the median held-out return was -8.3%. Two things in it are real:
+following the slope beats fading it (-5.8% against -10.6% on average) and beats random entries (-6.4%), and
+holding to settlement beats slope-based or trailing exits (-5.4% against -9.5% and -9.8%). So the slope has some
+information, about enough to cancel the cost of trading but not to profit from it. More windows arrive every
+day, so rerun it as the history grows.
 
 ## Tests
 

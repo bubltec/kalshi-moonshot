@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from kalshi_moonshot import commodities as cm
-from kalshi_moonshot import config, runner
+from kalshi_moonshot import config, lanes, runner
 from kalshi_moonshot.estimators import build_estimators
 from kalshi_moonshot.lanes import spec_for
 from kalshi_moonshot.store import Store
@@ -20,7 +20,7 @@ def settings(tmp_path, **over):
         "data_dir": tmp_path, "mode": "observe", "env": "demo", "skip_categories": frozenset(),
         "commodities_enabled": True, "commodity_min_edge": 0.03, "commodity_max_basis": 0.04,
         "commodity_vol_mult": 1.25, "commodity_min_volume": 0.0, "commodity_min_price": 0.70,
-        "commodity_max_price": 0.97, "commodity_max_spread": 0.04, "commodity_tail_floor": 0.01,
+        "commodity_max_price": 0.97, "commodity_min_return": 0.10, "commodity_max_spread": 0.04, "commodity_tail_floor": 0.01,
         "commodity_basis_unc": 0.0015, "commodity_basis_age_hours": 6.0,
         "commodity_max_stale_minutes": 20.0, "commodity_min_hours_to_close": 0.03,
         "commodity_max_hours_to_close": 24.0, "max_usd_per_trade": 5.0,
@@ -66,12 +66,17 @@ class FakeFeed:
         return self._series
 
 
-def test_symbol_mapping_covers_short_series_and_crypto_only():
-    assert cm.symbol_for("KXGOLDD") == "GC=F"
-    assert cm.symbol_for("KXGOLD15M") == "GC=F"
-    assert cm.symbol_for("KXWTIH") == "CL=F"
-    assert cm.symbol_for("KXBTC15M") == "BTC-USD"
-    assert cm.symbol_for("KXETHD") == "ETH-USD"
+def test_symbol_mapping_covers_short_series_commodities_and_crypto_only():
+    assert cm.symbol_for("KXGOLDD") == "hl:xyz:GOLD"
+    assert cm.symbol_for("KXGOLD15M") == "hl:xyz:GOLD"
+    assert cm.symbol_for("KXSILVER15M") == "hl:xyz:SILVER"
+    assert cm.symbol_for("KXWTI15M") == "hl:xyz:CL"
+    assert cm.symbol_for("KXWTI") == "hl:xyz:CL"  # daily WTI has no suffix
+    assert cm.symbol_for("KXCOPPER15M") == "hl:xyz:COPPER"
+    assert cm.symbol_for("KXNATGAS15M") == "hl:xyz:NATGAS"
+    assert cm.symbol_for("KXBRENT15M") is None  # Kalshi has no 15-minute Brent
+    assert cm.symbol_for("KXBTC15M") == "kraken:BTC/USD"
+    assert cm.symbol_for("KXETHD") == "kraken:ETH/USD"
     assert cm.symbol_for("KXGOLDMON") is None  # monthly: too long for realized vol
     assert cm.symbol_for("KXBTCMAXD") is None
     assert cm.symbol_for("KXNBAGAME") is None
@@ -159,7 +164,7 @@ def test_a_thin_ladder_reuses_the_remembered_basis_with_extra_width(tmp_path):
     assert thin.sigma > good.sigma  # not knowing the basis exactly costs width
     with pytest.raises(cm.CommodityError, match="no recent basis"):
         cm.price_event(ladder(strikes=[3990, 4000]), GOLD, feed, s, NOW, memory={})
-    old = {"KXGOLD": (-0.005, NOW.timestamp() - 7 * 3600, "KXGOLDD")}
+    old = {"KXGOLDD": (-0.005, NOW.timestamp() - 7 * 3600, 0.0)}
     with pytest.raises(cm.CommodityError, match="no recent basis"):
         cm.price_event(ladder(strikes=[3990, 4000]), GOLD, feed, s, NOW, memory=old)
 
@@ -191,18 +196,18 @@ def test_lane_buys_the_decided_side_whichever_it_is(tmp_path):
     for m in markets:  # make the decided strikes cheap enough to leave an edge
         k = m["floor_strike"]
         if k == 3970:
-            m["yes_bid_dollars"], m["yes_ask_dollars"] = "0.9000", "0.9300"
+            m["yes_bid_dollars"], m["yes_ask_dollars"] = "0.8500", "0.8700"
         if k == 4030:
-            m["yes_bid_dollars"], m["yes_ask_dollars"] = "0.0500", "0.0800"
+            m["yes_bid_dollars"], m["yes_ask_dollars"] = "0.1200", "0.1500"
     spec = spec_for(s, "commodity")
     assert spec.sides == ("yes", "no")
     cands = runner.lane_candidates(markets, spec, s, NOW)
     by = {(x.ticker, x.side): x for x in cands}
     yes = by[("KXGOLDD-26OCT19-T3970", "yes")]
     no = by[("KXGOLDD-26OCT19-T4030", "no")]
-    assert yes.ask == pytest.approx(0.93) and yes.bid == pytest.approx(0.90)
-    assert no.ask == pytest.approx(0.95)  # pay 1 - YES bid
-    assert no.bid == pytest.approx(0.92)  # could sell back at 1 - YES ask
+    assert yes.ask == pytest.approx(0.87) and yes.bid == pytest.approx(0.85)
+    assert no.ask == pytest.approx(0.88)  # pay 1 - YES bid
+    assert no.bid == pytest.approx(0.85)  # could sell back at 1 - YES ask
     shots = side_shots(s, markets, pricer())
     assert len(shots) == 1  # one side per event: the better edge
 
@@ -213,6 +218,27 @@ def test_a_longshot_is_not_a_candidate_for_this_lane(tmp_path):
     cands = runner.lane_candidates(ladder(), spec, s, NOW)
     assert all(0.70 <= x.ask <= 0.97 for x in cands)
     assert all(x.ask >= 0.70 for x in cands if x.side == "no")
+
+
+def test_a_win_must_pay_at_least_ten_percent_after_the_fee(tmp_path):
+    """A 96-cent entry makes about 4% if it wins: not worth risking the whole stake."""
+    from kalshi_moonshot import strategy
+
+    s = settings(tmp_path, commodity_min_return=0.10, commodity_max_price=0.98)
+    spec = spec_for(s, "commodity")
+    assert spec.min_return == 0.10
+    base = ladder()[3]
+    def reason(ask, bid):
+        m = dict(base, yes_ask_dollars=f"{ask:.4f}", yes_bid_dollars=f"{bid:.4f}", volume_fp="500")
+        return strategy.lane_reject_reason(m, spec, s, NOW)
+    assert reason(0.88, 0.87) is None  # +12.7% if it wins
+    assert reason(0.90, 0.89) is None  # +10.3%
+    assert "under 10%" in reason(0.92, 0.91)  # +8.1%
+    assert "under 10%" in reason(0.96, 0.95)  # +3.9%
+    off = settings(tmp_path, commodity_min_return=0.0)
+    assert strategy.lane_reject_reason(
+        dict(base, yes_ask_dollars="0.9600", yes_bid_dollars="0.9500"), spec_for(off, "commodity"), off, NOW
+    ) is None
 
 
 class FakeClient:
@@ -242,14 +268,14 @@ class FakeClient:
         return {"fill_count": count, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "n"}
 
 
-def decided_event(now):
-    markets = ladder(now=now, hours=0.5)
+def decided_event(now, hours=0.5):
+    markets = ladder(now=now, hours=hours)
     for m in markets:
         k = m["floor_strike"]
         if k == 3970:
-            m["yes_bid_dollars"], m["yes_ask_dollars"] = "0.9000", "0.9300"
+            m["yes_bid_dollars"], m["yes_ask_dollars"] = "0.8500", "0.8700"
         if k == 4030:
-            m["yes_bid_dollars"], m["yes_ask_dollars"] = "0.0500", "0.0800"
+            m["yes_bid_dollars"], m["yes_ask_dollars"] = "0.1200", "0.1500"
     return markets
 
 
@@ -300,7 +326,7 @@ def test_trade_mode_buys_no_with_the_no_order_and_records_the_contract(tmp_path)
     )
     runner.evaluate(s, client, None, store, shot, None, quant=live_pricer())
     assert client.bought == [] and len(client.bought_no) == 1
-    assert client.bought_no[0][2] == pytest.approx(0.95)
+    assert client.bought_no[0][2] == pytest.approx(0.88)
     order = store.db.execute("SELECT contract, side FROM orders").fetchone()
     assert (order["contract"], order["side"]) == ("no", "buy")
 
@@ -323,3 +349,224 @@ def test_commodity_decisions_do_not_enter_the_rag_index(tmp_path):
 
 def test_longshot_dataclass_default_side_is_yes():
     assert LongShot("T", "t", "", 0.1, 0.2, 1.0, "", 1.0).side == "yes"
+
+
+def test_a_basis_learned_from_an_old_feed_costs_extra_width(tmp_path):
+    """A 10-minute-old feed makes the measured basis include an unseen move; reuse must not hide it."""
+    s = settings(tmp_path)
+    feed = FakeFeed(feed_series(price=4020))
+    fresh = {"KXGOLDD": (-0.005, NOW.timestamp(), 0.0)}
+    delayed = {"KXGOLDD": (-0.005, NOW.timestamp(), 600 / 3600)}
+    thin = ladder(strikes=[3990, 4000])
+    a = cm.price_event(thin, GOLD, feed, s, NOW, memory=fresh)
+    b = cm.price_event(thin, GOLD, feed, s, NOW, memory=delayed)
+    assert a.remembered and b.remembered and b.sigma > a.sigma
+
+
+BTC = cm.Instrument("KXBTC", "BTC-USD", ("", "D", "15M"), realtime=True)
+
+
+def up_down(strike, series="KXBTC15M", minutes=3.0, bid=0.05, ask=0.06, now=NOW):
+    """A 15-minute 'price up?' market: one contract, strike = the price at the start of the window."""
+    close = (now + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return [{
+        "ticker": f"{series}-26OCT191115-15", "event_ticker": f"{series}-26OCT191115",
+        "series_ticker": series, "strike_type": "greater_or_equal", "floor_strike": float(strike),
+        "cap_strike": None, "yes_bid_dollars": f"{bid:.4f}", "yes_ask_dollars": f"{ask:.4f}",
+        "volume_fp": "5000", "market_type": "binary", "status": "active", "close_time": close,
+        "category": "Crypto",
+    }]
+
+
+def test_a_15_minute_crypto_market_is_priced_from_the_real_time_price(tmp_path):
+    s = settings(tmp_path)
+    feed = FakeFeed(feed_series(price=82000.0, per_bar=0.0004, age_s=8))
+    below = cm.price_event(up_down(strike=83000), BTC, feed, s, NOW, memory={})  # 1.2% above the price
+    assert below.anchor == "spot" and below.basis == 0.0
+    p_up = cm.market_prob(up_down(strike=83000)[0], below.center, below.sigma)
+    assert p_up < 0.02  # three minutes cannot cover a 1.2% climb
+    p_down = cm.market_prob(up_down(strike=81000)[0], below.center, below.sigma)
+    assert p_down > 0.98  # and the price is already well above this start level
+
+
+def test_a_futures_basis_never_carries_across_series(tmp_path):
+    """Daily WTI settles on a different price than the hourly or 15-minute contracts."""
+    s = settings(tmp_path)
+    wti = cm.Instrument("KXWTI", "CL=F", ("", "H", "W"))
+    feed = FakeFeed(feed_series(price=4000.0))
+    memory = {"KXWTI": (-0.029, NOW.timestamp(), 0.0)}  # learned on the daily ladder
+    thin = ladder(strikes=[3990, 4000], series="KXWTIH")
+    with pytest.raises(cm.CommodityError, match="no recent basis"):
+        cm.price_event(thin, wti, feed, s, NOW, memory=memory)
+
+
+def test_crypto_is_anchored_to_the_real_time_price_not_to_a_ladder_offset(tmp_path):
+    s = settings(tmp_path)
+    feed = FakeFeed(feed_series(price=82000.0, per_bar=0.0004, age_s=8))
+    memory: dict = {}
+    full = ladder(center=82500.0, sigma=0.01, strikes=range(81000, 84001, 250), series="KXBTCD")
+    cm.price_event(full, BTC, feed, s, NOW, memory=memory)
+    assert "KXBTCD" in memory and "family:KXBTC" not in memory  # only proxies share an offset
+    thin = cm.price_event(up_down(82010, series="KXBTC15M"), BTC, feed, s, NOW, memory=memory)
+    assert thin.anchor == "spot" and thin.basis == 0.0  # the ladder's 0.6% opinion is not borrowed
+
+
+SILVER = cm.Instrument("KXSILVER", "hl:xyz:SILVER", ("D", "H", "W", "15M"), realtime=True, proxy=True)
+
+
+def settled_window(strike, expiration, close, series="KXSILVER15M"):
+    return {"ticker": f"{series}-X", "close_time": close.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "floor_strike": strike, "expiration_value": expiration, "strike_type": "greater_or_equal"}
+
+
+def boundary_world(offset=-0.0003, noise=0.0, n=10, now=NOW, price=57.0):
+    """n settled 15-minute windows whose reference sits `offset` (ln) from the feed's candle close."""
+    closes_at = {}
+    markets = []
+    t0 = int(now.timestamp()) // 900 * 900 - n * 900
+    px = price
+    for i in range(n):
+        o, c = t0 + i * 900, t0 + (i + 1) * 900
+        closes_at[o - 60], closes_at[c - 60] = px, px * 1.0004
+        ref_o = px * math.exp(offset + (noise if i % 2 else -noise))
+        ref_c = px * 1.0004 * math.exp(offset + (noise if i % 2 else -noise))
+        markets.append(settled_window(round(ref_o, 4), str(round(ref_c, 4)), datetime.fromtimestamp(c, UTC)))
+        px *= 1.0004
+    return markets, closes_at
+
+
+def test_the_offset_to_kalshis_reference_is_read_off_settled_windows():
+    markets, minutes = boundary_world(offset=-0.0003, n=10)
+    refs = cm.boundary_refs(markets)
+    assert len(refs) >= 10
+    wb = cm.window_basis(refs, minutes, NOW.timestamp())
+    assert wb is not None and wb.basis == pytest.approx(-0.0003, abs=2e-5) and wb.sd < 1e-4
+
+
+def test_too_few_windows_teach_nothing():
+    markets, minutes = boundary_world(n=2)
+    assert cm.window_basis(cm.boundary_refs(markets), minutes, NOW.timestamp()) is None
+
+
+def test_a_constant_large_offset_is_learned_like_any_other():
+    """Copper's Kalshi reference sits 1.28% from the feed, and steadily so."""
+    markets, minutes = boundary_world(offset=0.0128, n=10, price=6.5)
+    wb = cm.window_basis(cm.boundary_refs(markets), minutes, NOW.timestamp())
+    assert wb.basis == pytest.approx(0.0128, abs=2e-5)
+
+
+class WindowFeed(FakeFeed):
+    def __init__(self, series, minutes):
+        super().__init__(series)
+        self.minutes = minutes
+
+    def minute_closes(self, symbol, hours=4.0):
+        return self.minutes
+
+
+class SettledClient:
+    def __init__(self, markets):
+        self.markets = markets
+        self.calls = 0
+
+    def settled_markets(self, series, limit=40):
+        self.calls += 1
+        return self.markets if series == "KXSILVER15M" else []
+
+
+def test_the_pricer_learns_each_15_minute_series_and_refreshes_it_sparingly(tmp_path):
+    s = settings(tmp_path)
+    markets, minutes = boundary_world(offset=-0.0003)
+    pricer = cm.CommodityPricer(WindowFeed(feed_series(price=57.0, age_s=3), minutes))
+    client = SettledClient(markets)
+    assert pricer.learn_windows(client, s, NOW) == 1
+    assert "KXSILVER15M" in pricer.windows and pricer.windows["KXSILVER15M"].n >= 6
+    calls = client.calls
+    assert pricer.learn_windows(client, s, NOW + timedelta(minutes=2)) == 0  # fresh enough
+    assert client.calls == calls
+
+
+def test_a_15_minute_market_is_centered_on_the_feed_plus_its_learned_offset(tmp_path):
+    s = settings(tmp_path)
+    feed = FakeFeed(feed_series(price=57.0, per_bar=0.0004, age_s=3))
+    windows = {"KXSILVER15M": cm.WindowBasis(-0.0003, 0.00012, 12, NOW.timestamp())}
+    p = cm.price_event(up_down(57.0, series="KXSILVER15M", minutes=5.0), SILVER, feed, s, NOW,
+                       memory={}, windows=windows)
+    assert p.anchor == "window" and p.points == 12
+    assert p.center == pytest.approx(feed.series("x").last * math.exp(-0.0003))
+    assert p.sigma > 0 and "settled windows" in p.note(0.5, 0.1)
+
+
+def test_without_a_learned_offset_a_proxy_15_minute_series_is_not_guessed(tmp_path):
+    s = settings(tmp_path)
+    feed = FakeFeed(feed_series(price=57.0, age_s=3))
+    with pytest.raises(cm.CommodityError, match="no recent basis"):
+        cm.price_event(up_down(57.0, series="KXSILVER15M", minutes=5.0), SILVER, feed, s, NOW,
+                       memory={}, windows={})
+
+
+def test_a_stale_learned_offset_is_dropped(tmp_path):
+    s = settings(tmp_path)
+    feed = FakeFeed(feed_series(price=57.0, age_s=3))
+    old = {"KXSILVER15M": cm.WindowBasis(-0.0003, 0.0001, 12, NOW.timestamp() - 4 * 3600)}
+    with pytest.raises(cm.CommodityError):
+        cm.price_event(up_down(57.0, series="KXSILVER15M", minutes=5.0), SILVER, feed, s, NOW,
+                       memory={}, windows=old)
+
+
+def test_scoping_refreshes_the_offsets_before_it_lists_windows(tmp_path):
+    now = datetime.now(UTC)
+    s = settings(tmp_path)
+    markets, minutes = boundary_world(now=now)
+    quant = cm.CommodityPricer(WindowFeed(feed_series(price=57.0, age_s=3, now=now), minutes))
+
+    class Client(SettledClient):
+        def event_info(self):
+            return {}
+
+        def series_markets(self, series):
+            return []
+
+    store = Store(s.db_path)
+    runner.scope_lane(s, Client(markets), store, lanes.spec_for(s, "commodity"), now, quant=quant)
+    assert "KXSILVER15M" in quant.windows
+
+
+def test_the_cooldown_shrinks_as_a_short_market_nears_its_close(tmp_path):
+    """Six minutes left: the 15-minute cooldown becomes about a minute, so late moves are seen."""
+    import time
+
+    from kalshi_moonshot import lanes
+    from kalshi_moonshot.estimators import build_estimators
+
+    now = datetime.now(UTC)
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    spec = lanes.spec_for(s, "commodity")
+    markets = decided_event(now, hours=0.1)
+    client = FakeClient(markets)
+    store.set_watch("commodity", {"KXGOLDD-26OCT19": {
+        "close": markets[0]["close_time"], "category": "Commodities", "series": "KXGOLDD"}})
+    est = build_estimators(None, None, None, cm.CommodityPricer(FakeFeed(feed_series(now=now, age_s=30))))
+    first = runner.review_lane(s, client, store, spec, est)
+    assert len(first) == 1
+    ticker = first[0].ticker
+
+    def decide(seconds_ago):
+        store.db.execute("DELETE FROM decisions")
+        store.add_decision(ticker=ticker, title="t", bid=0.1, ask=0.9, model_p=0.99, edge=0.05,
+                           action="pass", mode="observe", ts=time.time() - seconds_ago)
+
+    decide(30)
+    assert runner.review_lane(s, client, store, spec, est) == []  # inside ~72s: still cooling
+    decide(120)
+    assert [x.ticker for x in runner.review_lane(s, client, store, spec, est)] == [ticker]
+
+
+def test_a_real_time_feed_that_has_gone_quiet_is_refused_not_widened(tmp_path):
+    s = settings(tmp_path)
+    quiet = FakeFeed(feed_series(price=82000.0, per_bar=0.0004, age_s=300))  # five minutes, crypto
+    with pytest.raises(cm.CommodityError, match="old"):
+        cm.price_event(up_down(82010), BTC, quiet, s, NOW, memory={})
+    futures = FakeFeed(feed_series(price=4000.0, age_s=600))  # ten minutes is normal for futures
+    assert cm.price_event(ladder(), GOLD, futures, s, NOW).age_s == 600

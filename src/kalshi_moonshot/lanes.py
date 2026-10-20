@@ -39,7 +39,13 @@ class LaneSpec:
     min_volume: float
     min_edge: float | None = None  # bet when the calibrated edge reaches this ...
     max_lag: float | None = None  # ... or, when set, when the estimate is no more than this under the ask
-    usd_per_trade: float | None = None  # tighter than the global cap; None = global cap
+    usd_per_trade: float | None = None  # optional dollar ceiling per bet; None/0 = sized by balance
+    fixed_stake: float = 0.0  # dollars per bet, ignoring Kelly (0 = size by the odds and the balance)
+    always: bool = False  # bet whenever the filters pass, with no minimum edge from a model
+    min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
+    min_return: float = 0.0  # a win must pay at least this much on the stake, after the fee
+    max_bet_pct: float = 0.02  # one bet, share of equity (see sizing.py)
+    max_exposure_pct: float = 0.25  # all open bets in the lane, share of equity
     shortlist: int = 10
     numeric: str = "skip"  # "skip" | "allow" markets that resolve on a live number
     trend: str = "none"  # "none" | "rising" (needs history) | "not_falling" (no history is fine)
@@ -56,6 +62,10 @@ class LaneSpec:
     priority: int = 0  # queue priority of this lane's jobs; higher runs first
     trust: float = 1.0  # prior weight on the estimator before our record has any say (0 to 1)
     sides: tuple[str, ...] = ("yes",)  # contracts the lane may buy: "yes", "no" or both
+    timed_suffix: str = ""  # series ending in this are fixed-length windows with an entry window
+    timed_minutes: float = 15.0  # length of such a window
+    entry_elapsed: tuple[float, float] = (0.0, 1e9)  # bet only this many minutes after it opens
+    shadow_suffix: str = ""  # series ending in this are only measured (see shadow.py), never bet
     enabled: bool = True
 
 
@@ -71,14 +81,16 @@ def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
             "moonshot", LLM, "long-shot", (s.min_price, s.max_price),
             (s.min_hours_to_close, s.max_hours_to_close), s.max_spread, s.min_volume,
             min_edge=s.min_edge, shortlist=s.shortlist, trend="not_falling", one_per="mutex",
+            max_bet_pct=s.moonshot_bet_pct, max_exposure_pct=s.moonshot_exposure_pct,
             lookback_hours=s.steady_lookback_hours, max_drop=s.moonshot_max_drop,
             sides=s.moonshot_sides,
         ),
         "steady": LaneSpec(
             "steady", LLM, "steady", (s.steady_min_price, s.steady_max_price),
             (s.steady_min_hours_to_close, s.steady_max_hours_to_close), s.steady_max_spread,
-            s.steady_min_volume, max_lag=s.steady_max_lag, usd_per_trade=s.steady_usd_per_trade,
+            s.steady_min_volume, max_lag=s.steady_max_lag, usd_per_trade=s.steady_usd_per_trade or None,
             shortlist=s.steady_shortlist, trend="rising", one_per="mutex", enabled=s.steady_enabled,
+            max_bet_pct=s.steady_bet_pct, max_exposure_pct=s.steady_exposure_pct,
             lookback_hours=s.steady_lookback_hours, min_trend=s.steady_min_trend,
             sides=s.steady_sides,
         ),
@@ -86,12 +98,14 @@ def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
             "commodity", LADDER, "commodity", (s.commodity_min_price, s.commodity_max_price),
             (s.commodity_min_hours_to_close, s.commodity_max_hours_to_close),
             s.commodity_max_spread, s.commodity_min_volume, min_edge=s.commodity_min_edge,
-            usd_per_trade=s.commodity_usd_per_trade, shortlist=s.commodity_shortlist,
+            usd_per_trade=s.commodity_usd_per_trade or None, shortlist=s.commodity_shortlist,
             numeric="allow", one_per="event", needs_instrument=True, enabled=s.commodities_enabled,
             sides=("yes", "no"),
             scope_minutes=s.commodity_scope_minutes, review_minutes=s.commodity_review_minutes,
             cooldown_minutes=s.commodity_cooldown_minutes, watch_max=s.commodity_watch_max,
-            priority=10,
+            priority=10, min_return=s.commodity_min_return, min_age_minutes=s.commodity_min_age_minutes, shadow_suffix="15M", timed_suffix="15M",
+            entry_elapsed=(s.commodity_fast_from_min, s.commodity_fast_to_min),
+            max_bet_pct=s.commodity_bet_pct, max_exposure_pct=s.commodity_exposure_pct,
         ),
     }
     return lanes
@@ -103,7 +117,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     if unknown:
         raise ValueError(f"lane {name!r}: unknown field(s) {sorted(unknown)}")
     row = dict(row)
-    for key in ("price", "hours"):
+    for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
     for key in ("series", "sides"):
@@ -156,6 +170,11 @@ def enabled_lanes(s: Settings) -> list[LaneSpec]:
     return [lane for lane in lane_specs(s).values() if lane.enabled]
 
 
+def unknown_live_lanes(s: Settings) -> list[str]:
+    """Names in LIVE_LANES that are not lanes. A typo there silently trades nothing, so it is reported."""
+    return sorted((s.live_lanes or frozenset()) - set(lane_specs(s)))
+
+
 def tiered(spec: LaneSpec) -> bool:
     """True for a two-level lane: scoped slowly into a watchlist, reviewed quickly from it."""
     return spec.review_minutes is not None
@@ -179,6 +198,8 @@ def spec_for(s: Settings, name: str) -> LaneSpec:
 
 def wants_bet(spec: LaneSpec, p: float, ask: float, edge: float) -> bool:
     """The lane's bet rule, from its parameters. An edge bar and a lag bar can both be set."""
+    if spec.always:
+        return True
     if spec.max_lag is not None and ask - p > spec.max_lag + 1e-9:
         return False
     if spec.min_edge is not None and edge < spec.min_edge:

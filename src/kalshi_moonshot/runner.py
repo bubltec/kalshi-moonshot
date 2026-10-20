@@ -15,20 +15,21 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from typing import NamedTuple
 
-from . import risk
+from . import risk, shadow
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
 from .estimators import Estimate, Estimator, build_estimators
 from .kalshi import MARKET_PAGES, KalshiClient, KalshiError, KalshiRateLimited
-from .lanes import LaneSpec, main_lanes, spec_for, tiered_lanes, wants_bet
+from .lanes import LADDER, LaneSpec, main_lanes, spec_for, tiered_lanes, wants_bet
 from .search import NewsSearch
+from .sizing import Sizing, size_bet
 from .store import Store
 from .strategy import (
     LongShot,
     ask_trend,
-    contracts_for_budget,
     edge,
     falling_reason,
     flip,
@@ -190,7 +191,8 @@ def lane_series(spec: LaneSpec, s: Settings) -> list[str]:
 
 
 def scope_lane(
-    s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, now: datetime | None = None
+    s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, now: datetime | None = None,
+    quant: CommodityPricer | None = None,
 ) -> int:
     """Level 1, slow: find the events worth watching and save them as the lane's watchlist.
 
@@ -199,7 +201,12 @@ def scope_lane(
     volume, which move too fast to scope on. Returns the number of events watched.
     """
     now = now or datetime.now(UTC)
-    relaxed = replace(spec, price=(0.0, 1.0), max_spread=1.0, min_volume=0.0)
+    if quant is not None and spec.timed_suffix:
+        quant.learn_windows(client, s, now)  # keep each 15-minute series' feed offset fresh
+    relaxed = replace(
+        spec, price=(0.0, 1.0), max_spread=1.0, min_volume=0.0, min_return=0.0,
+        entry_elapsed=(0.0, 1e9),  # a window not yet in its entry range must still be watched
+    )
     try:
         info = client.event_info()
     except KalshiError:
@@ -254,11 +261,19 @@ def review_lane(
             m["category"] = info.get("category", "")
             m.setdefault("series_ticker", info.get("series", ""))
         markets.extend(rows)
+    if spec.shadow_suffix:
+        ladder = (estimators or {}).get(LADDER)
+        shadow.snapshot(store, s, markets, spec.shadow_suffix, getattr(ladder, "pricer", None), now)
     wide = replace(spec, shortlist=spec.shortlist * 3)
     shots = lane_shots(s, client, markets, wide, estimators, now)
     if spec.cooldown_minutes:
-        since = now.timestamp() - spec.cooldown_minutes * 60
-        shots = [x for x in shots if not store.decided_since(x.ticker, since)]
+        # A short market must be re-read as it nears the close: its outcome is only decided late.
+        # So the cooldown is at most a fifth of the time left.
+        def cooling(x: LongShot) -> bool:
+            minutes = min(spec.cooldown_minutes, max(0.5, x.hours_to_close * 60.0 / 5.0))
+            return store.decided_since(x.ticker, now.timestamp() - minutes * 60)
+
+        shots = [x for x in shots if not cooling(x)]
     return shots[: spec.shortlist]
 
 
@@ -306,7 +321,7 @@ def scan(
     markets = candidate_markets(s, client)
     lanes = shortlists(s, client, markets, estimators)
     for spec in tiered_lanes(s):  # one-off scan: do both levels back to back
-        scope_lane(s, client, store, spec)
+        scope_lane(s, client, store, spec, quant=quant)
         lanes[spec.name] = review_lane(s, client, store, spec, estimators)
     log.info(describe_scan(s, len(markets), {k: len(v) for k, v in lanes.items()}, searcher))
     return [
@@ -317,7 +332,7 @@ def scan(
 
 def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
     store.add_decision(
-        ticker=shot.ticker, title=shot.title, bid=shot.bid, ask=shot.ask, mode=s.mode,
+        ticker=shot.ticker, title=shot.title, bid=shot.bid, ask=shot.ask, mode="trade" if s.is_live(shot.lane, shot.series) else "observe",
         close_time=shot.close_time, lane=shot.lane, category=shot.category,
         event_ticker=shot.event_ticker, **fields,
     )
@@ -370,34 +385,61 @@ def evaluate(
         if others:
             bet = False
             note = f"other side already taken ({min(others)}). {note}"
-    if bet and s.mode == "trade":
-        note = place(s, client, store, shot, note, order_key=order_key, before_order=before_order)
-        if note.startswith("skipped:"):
+    sized = Sizing(0, 0.0, "")
+    if bet:
+        balance = store.bankroll.read(client, s, live=s.is_live(shot.lane, shot.series))
+        sized = size_bet(
+            spec, s, cal.p, shot.ask, balance.available, balance.equity,
+            balance.open_by_lane.get(shot.lane, 0.0),
+        )
+        if store.holds_sized_bet(shot.ticker) and not s.is_live(shot.lane, shot.series):
+            sized = Sizing(0, 0.0, "already holding this market (paper)")
+        elif not sized.ok:
             bet = False
+            note = f"not sized: {sized.why}. {note}"
+        else:
+            note = f"{sized.why}. {note}"
+    if bet and s.is_live(shot.lane, shot.series):
+        placed = place(
+            s, client, store, shot, note, sized.contracts,
+            order_key=order_key, before_order=before_order,
+        )
+        note = placed.note
+        if placed.filled > 0:
+            # Record what actually filled, not what was asked for: a partial fill is a smaller bet.
+            sized = Sizing(int(placed.filled), placed.cost, sized.why)
+        else:
+            bet = False  # blocked, refused, failed or unfilled: there is no position to track
     action = "bet" if bet else "pass"
+    held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
     _log(
         store, s, shot, model_p=p, edge=e, action=action, reason=note[:300],
-        context=got.context[:1500], cal_p=cal.p, side=shot.side,
+        context=got.context[:1500], cal_p=cal.p, side=shot.side, **held,
     )
     return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
 
 
+class Placed(NamedTuple):
+    note: str
+    filled: float = 0.0  # contracts that actually filled
+    cost: float = 0.0  # dollars spent on them, fee included
+
+
 def place(
-    s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str,
+    s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: int,
     order_key: str | None = None, before_order: Callable[[], None] | None = None,
-) -> str:
-    lane_cap = spec_for(s, shot.lane).usd_per_trade
-    cap = s.max_usd_per_trade if lane_cap is None else min(s.max_usd_per_trade, lane_cap)
-    count = contracts_for_budget(cap, shot.ask)
+) -> Placed:
+    """Send the order for `count` contracts (sized by sizing.py) if the book and risk gate agree."""
     cost = shot.ask * count + order_fee(shot.ask, count)
+    cap = cost  # already sized under every ceiling; the gate re-checks the global ones
     if cost + 1e-9 < s.min_order_usd:
-        return f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum"
+        return Placed(f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum")
     try:
         offered = side_ask_notional(client.orderbook(shot.ticker), shot.ask, shot.side)
     except KalshiError as exc:
-        return f"skipped: could not read the book ({exc})"
+        return Placed(f"skipped: could not read the book ({exc})")
     if offered + 1e-9 < s.min_order_usd:
-        return (
+        return Placed(
             f"skipped: ${offered:.2f} offered at {shot.ask:.2f}, "
             f"under the ${s.min_order_usd:.2f} minimum"
         )
@@ -406,7 +448,7 @@ def place(
         event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive,
     )
     if not verdict.ok:
-        return f"blocked by risk: {verdict.reason}"
+        return Placed(f"blocked by risk: {verdict.reason}")
     if before_order:
         before_order()
     try:
@@ -415,7 +457,7 @@ def place(
     except KalshiRateLimited:
         raise  # refused outright, so nothing was bought; the queue retries it later
     except KalshiError as exc:
-        return f"order failed: {exc}"
+        return Placed(f"order failed: {exc}")
     filled = float(resp.get("fill_count") or 0.0)
     avg = float(resp.get("average_fill_price") or shot.ask)
     fee = float(resp.get("average_fee_paid") or 0.0) * filled
@@ -424,7 +466,10 @@ def place(
         cost_usd=avg * filled + fee, fee_usd=fee, order_id=resp.get("order_id", ""),
         contract=shot.side,
     )
-    return f"bought {shot.side.upper()} {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}"
+    spent = avg * filled + fee
+    return Placed(
+        f"bought {shot.side.upper()} {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}", filled, spent
+    )
 
 
 def _hours_left(close_time: str, now: datetime | None = None) -> float | None:
@@ -452,6 +497,8 @@ def stop_loss_pass(
     now = now or datetime.now(UTC)
     notes: list[str] = []
     for row in store.open_bets():
+        if row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast:
+            continue  # a 15-minute window is held to settlement (STOP_LOSS_15M=false)
         hours = _hours_left(row["close_time"], now)
         if hours is None:
             continue
@@ -471,7 +518,7 @@ def stop_loss_pass(
         why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, s.stop_loss_drop)
         if not why:
             continue
-        if s.mode != "trade":
+        if not s.is_live(row["lane"] or "moonshot", row["ticker"].split("-")[0]):
             store.mark_exited(row["ticker"], bid, why)
             notes.append(f"paper-sold {row['ticker']} @ {bid:.2f}. {why}")
             continue
@@ -514,6 +561,8 @@ def next_stop_loss_at(s: Settings, store: Store, now: float | None = None) -> fl
     now = time.time() if now is None else now
     soonest: float | None = None
     for row in store.open_bets():
+        if row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast:
+            continue
         hours = _hours_left(row["close_time"])
         if hours is None:
             continue

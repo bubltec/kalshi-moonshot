@@ -41,6 +41,20 @@ def _sides(name: str) -> tuple[str, ...]:
     return sides
 
 
+def _live_lanes() -> frozenset[str] | None:
+    """LIVE_LANES=commodity,steady names the lanes allowed to trade; "none" allows no lane.
+
+    Unset (or empty) keeps the original meaning of MODE=trade: every lane trades. Naming lanes
+    makes every other lane keep paper-trading while the named ones go live.
+    """
+    raw = os.environ.get("LIVE_LANES", "").strip().lower()
+    if not raw:
+        return None
+    if raw == "none":
+        return frozenset()
+    return frozenset(p.strip() for p in raw.split(",") if p.strip())
+
+
 def _b(name: str, default: bool) -> bool:
     raw = os.environ.get(name, "").strip().lower()
     if not raw:
@@ -54,6 +68,8 @@ class Settings:
     env: str  # "demo" or "prod"
     mode: str  # "observe" logs decisions only; "trade" may place orders
     allow_real_money: bool  # must be true AND env=prod for real orders
+    live_lanes: frozenset[str] | None  # lanes that may place orders in trade mode; None = all of them
+    fast_live: bool  # whether 15-minute windows may place real orders (else they paper-trade)
     data_dir: Path
 
     # --- Kalshi credentials (only needed for balance/trading) ---
@@ -77,6 +93,14 @@ class Settings:
     scan_pages: int  # pages of markets, or of events when categories are skipped
     shortlist: int  # markets sent to the model per scan
     scan_interval_minutes: int
+    history_enabled: bool  # keep downloading Kalshi's candles for settled 15-minute windows
+    history_interval_minutes: int
+    history_batch: int  # windows fetched per run, so one run never holds the queue for long
+    history_keep_days: int
+    account_sync_enabled: bool  # keep a local copy of your fills and settlements (read-only)
+    account_sync_minutes: int  # how often
+    tape_enabled: bool  # record contract quotes next to the price they follow (lead-lag study)
+    tape_keep_days: float
     max_rps: float  # Kalshi requests per second the bot paces itself to
     page_size: int  # markets and events per Kalshi page (max 1000)
     job_max_attempts: int  # tries per queued job before it is parked as dead
@@ -87,10 +111,19 @@ class Settings:
     stop_loss_enabled: bool
     stop_loss_hours: float  # only sell when this close to settlement
     stop_loss_drop: float  # fraction of entry lost, e.g. 0.30 = 30%
+    stop_loss_fast: bool  # whether the stop-loss also covers 15-minute windows (history says holding is better)
     stop_loss_check_minutes: int  # how often to re-check open bets in that window
 
     # --- steady lane: likely outcomes whose price is trending up, 30-50% gross return ---
     moonshot_sides: tuple[str, ...]  # contracts the moonshot lane may buy: yes, no or both
+    kelly_fraction: float  # share of full Kelly to stake; small = slow, steady growth
+    paper_bankroll_usd: float  # starting paper balance when not trading with credentials
+    moonshot_bet_pct: float  # one bet, share of equity
+    moonshot_exposure_pct: float  # all open bets in the lane, share of equity
+    steady_bet_pct: float
+    steady_exposure_pct: float
+    commodity_bet_pct: float
+    commodity_exposure_pct: float
     steady_enabled: bool
     steady_min_price: float  # 0.66 nets about +48% after the fee
     steady_max_price: float  # 0.75 nets about +31% after the fee
@@ -110,8 +143,10 @@ class Settings:
     commodities_enabled: bool
     commodity_min_price: float
     commodity_max_price: float
+    commodity_min_return: float  # profit as a share of cost if the bet wins, after the fee
     commodity_min_edge: float  # model probability must beat ask + fee by this much
     commodity_max_spread: float
+    commodity_min_age_minutes: float  # a market must have been open this long before the lane bets
     commodity_min_volume: float
     commodity_min_hours_to_close: float
     commodity_max_hours_to_close: float
@@ -123,8 +158,13 @@ class Settings:
     commodity_review_minutes: float  # fast pass: re-price only the watched ladders
     commodity_cooldown_minutes: float  # do not re-log a market this soon after its last decision
     commodity_watch_max: int  # events kept on the watchlist, soonest close first
+    commodity_fast_from_min: float  # 15-minute markets: earliest to bet, minutes after the window opens
+    commodity_fast_to_min: float  # ... and the latest
     commodity_tail_floor: float  # never claim a probability closer than this to 0 or 1 (model risk)
     commodity_basis_unc: float  # width (ln units) added when the center comes from remembered basis
+    commodity_realtime_unc: float  # width added when a real-time feed price alone anchors the center
+    commodity_window_unc_floor: float  # smallest width allowed for a learned 15-minute offset
+    commodity_proxy_unc: float  # width added when a real-time proxy (gold token) uses a measured offset
     commodity_basis_age_hours: float  # how long a remembered feed-to-ladder basis stays usable
     commodity_max_stale_minutes: float  # refuse a feed whose last price is older than this
 
@@ -144,6 +184,16 @@ class Settings:
     @property
     def base_url(self) -> str:
         return PROD_BASE if self.env == "prod" else DEMO_BASE
+
+    def is_live(self, lane: str, series: str = "") -> bool:
+        """Whether this lane places real orders: trade mode, and the lane is allowed to.
+
+        15-minute windows (series ending in 15M) additionally need COMMODITY_15M_LIVE, so a new
+        short-horizon method can be paper-traded while the lane's slower markets trade for real.
+        """
+        if series.endswith("15M") and not self.fast_live:
+            return False
+        return self.mode == "trade" and (self.live_lanes is None or lane in self.live_lanes)
 
     @property
     def real_money(self) -> bool:
@@ -233,6 +283,8 @@ def load() -> Settings:
         env=env,
         mode=mode,
         allow_real_money=_b("ALLOW_REAL_MONEY", False),
+        live_lanes=_live_lanes(),
+        fast_live=_b("COMMODITY_15M_LIVE", False),
         data_dir=data_dir,
         key_id=os.environ.get("KALSHI_KEY_ID", "").strip(),
         private_key_path=os.environ.get("KALSHI_PRIVATE_KEY_PATH", "").strip(),
@@ -250,18 +302,35 @@ def load() -> Settings:
         scan_pages=_i("SCAN_PAGES", 5),
         shortlist=_i("SHORTLIST", 15),
         scan_interval_minutes=_i("SCAN_INTERVAL_MINUTES", 30),
+        history_enabled=_b("HISTORY_ENABLED", True),
+        history_interval_minutes=max(5, _i("HISTORY_INTERVAL_MINUTES", 60)),
+        history_batch=max(5, _i("HISTORY_BATCH", 30)),
+        history_keep_days=max(1, _i("HISTORY_KEEP_DAYS", 30)),
+        account_sync_enabled=_b("ACCOUNT_SYNC_ENABLED", True),
+        account_sync_minutes=max(5, _i("ACCOUNT_SYNC_MINUTES", 15)),
+        tape_enabled=_b("TAPE_ENABLED", True),
+        tape_keep_days=max(0.5, _f("TAPE_KEEP_DAYS", 3.0)),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),
         skip_numeric=_b("SKIP_NUMERIC", True),
         moonshot_max_drop=_f("MOONSHOT_MAX_DROP", 0.02),
         stop_loss_enabled=_b("STOP_LOSS_ENABLED", True),
         stop_loss_hours=_f("STOP_LOSS_HOURS", 1.0),
         stop_loss_drop=_f("STOP_LOSS_DROP", 0.30),
+        stop_loss_fast=_b("STOP_LOSS_15M", True),
         stop_loss_check_minutes=max(1, _i("STOP_LOSS_CHECK_MINUTES", 5)),
         max_rps=max(0.5, _f("KALSHI_MAX_RPS", 8.0)),
         page_size=min(1000, max(1, _i("KALSHI_PAGE_SIZE", 1000))),
         job_max_attempts=max(1, _i("JOB_MAX_ATTEMPTS", 3)),
         exclude_versions=_csv("EXCLUDE_VERSIONS", "v1"),
         moonshot_sides=_sides("MOONSHOT_SIDES"),
+        kelly_fraction=min(1.0, max(0.0, _f("KELLY_FRACTION", 0.25))),
+        paper_bankroll_usd=max(1.0, _f("PAPER_BANKROLL_USD", 100.0)),
+        moonshot_bet_pct=_f("MOONSHOT_BET_PCT", 0.01),
+        moonshot_exposure_pct=_f("MOONSHOT_EXPOSURE_PCT", 0.15),
+        steady_bet_pct=_f("STEADY_BET_PCT", 0.03),
+        steady_exposure_pct=_f("STEADY_EXPOSURE_PCT", 0.40),
+        commodity_bet_pct=_f("COMMODITY_BET_PCT", 0.03),
+        commodity_exposure_pct=_f("COMMODITY_EXPOSURE_PCT", 0.40),
         steady_enabled=_b("STEADY_ENABLED", True),
         steady_sides=_sides("STEADY_SIDES"),
         steady_min_price=_f("STEADY_MIN_PRICE", 0.66),
@@ -274,26 +343,33 @@ def load() -> Settings:
         steady_min_trend=_f("STEADY_MIN_TREND", 0.02),
         steady_min_edge=_f("STEADY_MIN_EDGE", 0.05),
         steady_max_lag=_f("STEADY_MAX_LAG", 0.15),
-        steady_usd_per_trade=_f("STEADY_USD_PER_TRADE", 2.0),
+        steady_usd_per_trade=_f("STEADY_USD_PER_TRADE", 0.0),
         steady_shortlist=_i("STEADY_SHORTLIST", 10),
         commodities_enabled=_b("COMMODITIES_ENABLED", True),
         commodity_min_price=_f("COMMODITY_MIN_PRICE", 0.70),
         commodity_max_price=_f("COMMODITY_MAX_PRICE", 0.98),
+        commodity_min_return=_f("COMMODITY_MIN_RETURN", 0.10),
         commodity_min_edge=_f("COMMODITY_MIN_EDGE", 0.015),
-        commodity_max_spread=_f("COMMODITY_MAX_SPREAD", 0.04),
+        commodity_min_age_minutes=max(0.0, _f("COMMODITY_MIN_AGE_MINUTES", 20.0)),
+        commodity_max_spread=_f("COMMODITY_MAX_SPREAD", 0.02),
         commodity_min_volume=_f("COMMODITY_MIN_VOLUME", 5.0),
         commodity_min_hours_to_close=_f("COMMODITY_MIN_HOURS_TO_CLOSE", 0.03),
-        commodity_max_hours_to_close=_f("COMMODITY_MAX_HOURS_TO_CLOSE", 24.0),
+        commodity_max_hours_to_close=_f("COMMODITY_MAX_HOURS_TO_CLOSE", 2.0),
         commodity_vol_mult=_f("COMMODITY_VOL_MULT", 1.25),
         commodity_max_basis=_f("COMMODITY_MAX_BASIS", 0.04),
-        commodity_usd_per_trade=_f("COMMODITY_USD_PER_TRADE", 2.0),
+        commodity_usd_per_trade=_f("COMMODITY_USD_PER_TRADE", 0.0),
         commodity_shortlist=_i("COMMODITY_SHORTLIST", 10),
-        commodity_scope_minutes=max(1.0, _f("COMMODITY_SCOPE_MINUTES", 10.0)),
-        commodity_review_minutes=max(0.5, _f("COMMODITY_REVIEW_MINUTES", 2.0)),
+        commodity_scope_minutes=max(1.0, _f("COMMODITY_SCOPE_MINUTES", 3.0)),
+        commodity_review_minutes=max(0.5, _f("COMMODITY_REVIEW_MINUTES", 1.0)),
         commodity_cooldown_minutes=max(0.0, _f("COMMODITY_COOLDOWN_MINUTES", 15.0)),
         commodity_watch_max=max(1, _i("COMMODITY_WATCH_MAX", 40)),
+        commodity_fast_from_min=max(0.0, _f("COMMODITY_15M_FROM_MIN", 8.5)),
+        commodity_fast_to_min=max(0.0, _f("COMMODITY_15M_TO_MIN", 12.0)),
         commodity_tail_floor=min(0.2, max(0.0, _f("COMMODITY_TAIL_FLOOR", 0.005))),
         commodity_basis_unc=max(0.0, _f("COMMODITY_BASIS_UNC", 0.0015)),
+        commodity_realtime_unc=max(0.0, _f("COMMODITY_REALTIME_UNC", 0.0004)),
+        commodity_proxy_unc=max(0.0, _f("COMMODITY_PROXY_UNC", 0.0010)),
+        commodity_window_unc_floor=max(0.0, _f("COMMODITY_WINDOW_UNC_FLOOR", 0.00015)),
         commodity_basis_age_hours=max(0.1, _f("COMMODITY_BASIS_AGE_HOURS", 6.0)),
         commodity_max_stale_minutes=max(1.0, _f("COMMODITY_MAX_STALE_MINUTES", 20.0)),
         search_enabled=_b("SEARCH_ENABLED", True),

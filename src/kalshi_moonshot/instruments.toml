@@ -4,71 +4,101 @@
 # "" none). Monthly and annual series are left out on purpose: realized volatility is a poor guide
 # that far out.
 #
-# Feeds (Yahoo Finance, no key): crypto trades 24/7 and the price is real-time. Futures are about
-# 10 minutes old, so the pricer widens its uncertainty by the feed's age; a real-time commodity
-# source would tighten near-expiry prices a lot.
+# Feeds, all free and keyless, all real-time:
+#   kraken:PAIR   Kraken's WebSocket v2 ticker. Crypto spot.
+#   hl:xyz:COIN   Hyperliquid's "xyz" builder market: deep gold, silver, oil, gas, copper, platinum and
+#                 palladium perpetuals, trading around the clock.
+# `realtime` marks a feed that is current to a few seconds (a dead one is refused outright). `proxy`
+# marks a feed that tracks the asset with an offset from what Kalshi settles on. For a proxy the
+# pricer measures that offset instead of assuming it: from the event's own ladder where there is one,
+# and for 15-minute series from the last settled windows, whose strikes and settlement values are
+# Kalshi's exact reference at every 15-minute boundary.
+#
+# Anything else is a Yahoo Finance symbol: futures are about 10 minutes old, so the pricer widens
+# its uncertainty by the feed's age and 15-minute series are not listed.
 
 [[instrument]]
 prefix = "KXGOLD"
-symbol = "GC=F"
+symbol = "hl:xyz:GOLD"
 suffixes = ["D", "H", "W", "15M"]
+realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXSILVER"
-symbol = "SI=F"
+symbol = "hl:xyz:SILVER"
 suffixes = ["D", "H", "W", "15M"]
+realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXWTI"
-symbol = "CL=F"
+symbol = "hl:xyz:CL"
 suffixes = ["", "H", "W", "15M"]
+realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXBRENT"
-symbol = "BZ=F"
+symbol = "hl:xyz:BRENTOIL"
 suffixes = ["D", "W"]
+realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXNATGAS"
-symbol = "NG=F"
+symbol = "hl:xyz:NATGAS"
 suffixes = ["D", "W", "15M"]
+realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXCOPPER"
-symbol = "HG=F"
+symbol = "hl:xyz:COPPER"
 suffixes = ["D", "W", "15M"]
+realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXPLATINUM"
-symbol = "PL=F"
+symbol = "hl:xyz:PLATINUM"
 suffixes = ["H", "15M"]
+realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXPALLADIUM"
-symbol = "PA=F"
+symbol = "hl:xyz:PALLADIUM"
 suffixes = ["H", "15M"]
+realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXBTC"
-symbol = "BTC-USD"
+symbol = "kraken:BTC/USD"
 suffixes = ["", "D", "15M"]
+realtime = true
 
 [[instrument]]
 prefix = "KXETH"
-symbol = "ETH-USD"
+symbol = "kraken:ETH/USD"
 suffixes = ["", "D", "15M"]
+realtime = true
 
 [[instrument]]
 prefix = "KXSOL"
-symbol = "SOL-USD"
+symbol = "kraken:SOL/USD"
 suffixes = ["", "D", "15M"]
+realtime = true
 
 [[instrument]]
 prefix = "KXXRP"
-symbol = "XRP-USD"
+symbol = "kraken:XRP/USD"
 suffixes = ["", "D", "15M"]
+realtime = true
 
 [[instrument]]
 prefix = "KXDOGE"
-symbol = "DOGE-USD"
+symbol = "kraken:DOGE/USD"
 suffixes = ["", "D", "15M"]
+realtime = true

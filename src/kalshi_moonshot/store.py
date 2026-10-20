@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS decisions (
   exit_ts REAL,
   exit_reason TEXT,
   cal_p REAL,                    -- probability after blending the estimate with our record
-  side TEXT DEFAULT 'yes'        -- contract bought; for 'no', ask/bid/model_p are NO-side numbers
+  side TEXT DEFAULT 'yes',       -- contract bought; for 'no', ask/bid/model_p are NO-side numbers
+  contracts INTEGER,             -- paper or real size sized by sizing.py (first bet per market only)
+  stake_usd REAL                 -- cost incl. fee of those contracts
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_ticker ON decisions(ticker);
 
@@ -93,6 +95,71 @@ CREATE TABLE IF NOT EXISTS jobs (
   priority INTEGER NOT NULL DEFAULT 0  -- higher runs first; fast lanes jump the queue
 );
 
+CREATE TABLE IF NOT EXISTS shadow (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  ticker TEXT NOT NULL,
+  series TEXT NOT NULL,
+  minutes_left REAL NOT NULL,
+  yes_bid REAL, yes_ask REAL,
+  model_p REAL,                  -- our chance of YES at that moment (null if unpriceable)
+  strike REAL,
+  note TEXT,
+  outcome TEXT,                  -- 'yes' / 'no' once settled
+  settled_ts REAL
+);
+CREATE INDEX IF NOT EXISTS idx_shadow_ticker ON shadow(ticker, ts);
+
+CREATE TABLE IF NOT EXISTS fills (
+  fill_id TEXT PRIMARY KEY,
+  ts REAL NOT NULL,
+  ticker TEXT NOT NULL,
+  book_side TEXT NOT NULL,       -- 'bid' = bought YES at yes_price; 'ask' = sold YES (= bought NO at no_price)
+  count REAL NOT NULL,
+  yes_price REAL NOT NULL,
+  no_price REAL,
+  fee REAL,
+  taker INTEGER,
+  order_id TEXT,
+  action TEXT, side TEXT         -- Kalshi's own labels, kept for reference
+);
+CREATE INDEX IF NOT EXISTS idx_fills_ticker ON fills(ticker, ts);
+
+CREATE TABLE IF NOT EXISTS settlements (
+  ticker TEXT NOT NULL,
+  settled_ts REAL NOT NULL,
+  result TEXT,                   -- 'yes' / 'no'
+  yes_count REAL, no_count REAL, -- what you held when it settled
+  yes_cost REAL, no_cost REAL,
+  fee REAL,
+  PRIMARY KEY (ticker, settled_ts)
+);
+
+CREATE TABLE IF NOT EXISTS market_info (
+  ticker TEXT PRIMARY KEY,
+  series TEXT, open_ts REAL, close_ts REAL, result TEXT, strike REAL
+);
+
+CREATE TABLE IF NOT EXISTS windows (
+  ticker TEXT PRIMARY KEY,
+  series TEXT NOT NULL,
+  close_ts INTEGER NOT NULL,
+  strike REAL,
+  result TEXT,                   -- 'yes' / 'no'
+  fetched_ts REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS candles (
+  ticker TEXT NOT NULL,
+  end_ts INTEGER NOT NULL,       -- the minute this candle closes
+  bid_c REAL, ask_c REAL,        -- YES bid / ask at the close of the minute
+  bid_lo REAL, ask_hi REAL,
+  last_c REAL,                   -- last traded YES price in the minute
+  volume REAL, oi REAL,
+  bid_hi REAL, ask_lo REAL,      -- the minute's best bid and cheapest ask: what a resting order could catch
+  PRIMARY KEY (ticker, end_ts)
+);
+
 CREATE TABLE IF NOT EXISTS watchlist (
   lane TEXT NOT NULL,
   event_ticker TEXT NOT NULL,
@@ -115,6 +182,9 @@ class Store:
         self.generation = 0  # bumped whenever settled data changes; caches key on it
         self.rag = Rag(self)
         self.calibrator = Calibrator(self)
+        from .bankroll import Bankroll  # local: bankroll imports this module
+
+        self.bankroll = Bankroll(self)
         self.rag.rebuild()
 
     def _migrate(self) -> None:
@@ -131,12 +201,18 @@ class Store:
             ("exit_reason", "TEXT"),
             ("cal_p", "REAL"),
             ("side", "TEXT DEFAULT 'yes'"),
+            ("contracts", "INTEGER"),
+            ("stake_usd", "REAL"),
         ):
             if name not in have:
                 self.db.execute(f"ALTER TABLE decisions ADD COLUMN {name} {ddl}")
                 if name == "version":
                     # Every row that exists before versions did was made by the old logic.
                     self.db.execute("UPDATE decisions SET version=?", (LEGACY_VERSION,))
+        candle_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(candles)")}
+        for col in ("bid_hi", "ask_lo"):
+            if col not in candle_cols:
+                self.db.execute(f"ALTER TABLE candles ADD COLUMN {col} REAL")
         job_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(jobs)")}
         if "priority" not in job_cols:
             self.db.execute("ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
@@ -247,6 +323,31 @@ class Store:
         self.db.commit()
         return int(cur.lastrowid or 0)
 
+    def paper_bets(self, open_only: bool, live: bool = False) -> list[sqlite3.Row]:
+        """Sized bets (one per market, the first). open_only: still riding; else: finished.
+
+        live=False: paper bets, those made while their lane was not placing orders.
+        live=True: bets that were sent as real orders.
+        """
+        done = "(COALESCE(outcome,'') IN ('yes','no') OR exit_ts IS NOT NULL)"
+        return self.db.execute(
+            f"""SELECT id, ticker, lane, side, outcome, contracts, stake_usd, exit_price
+                FROM decisions
+                WHERE action='bet' AND stake_usd IS NOT NULL AND contracts > 0
+                  AND (mode = 'trade') = ?
+                  AND {'NOT ' + done if open_only else done}""",
+            (1 if live else 0,),
+        ).fetchall()
+
+    def holds_sized_bet(self, ticker: str) -> bool:
+        """A sized bet on this market is already open (so a re-score must not stake it again)."""
+        row = self.db.execute(
+            """SELECT 1 FROM decisions WHERE ticker=? AND action='bet' AND stake_usd IS NOT NULL
+               AND outcome IS NULL AND exit_ts IS NULL LIMIT 1""",
+            (ticker,),
+        ).fetchone()
+        return row is not None
+
     def decided_since(self, ticker: str, since_ts: float) -> bool:
         row = self.db.execute(
             "SELECT 1 FROM decisions WHERE ticker=? AND ts>=? LIMIT 1", (ticker, since_ts)
@@ -278,13 +379,35 @@ class Store:
 
     def unresolved_tickers(self) -> list[str]:
         rows = self.db.execute(
-            "SELECT DISTINCT ticker FROM decisions WHERE outcome IS NULL"
+            """SELECT ticker FROM decisions WHERE outcome IS NULL
+               UNION SELECT ticker FROM shadow WHERE outcome IS NULL"""
         ).fetchall()
         return [r["ticker"] for r in rows]
+
+    # ---- shadow log: prices of markets we only watch, to measure them against outcomes ----
+    def add_shadow(self, **row: Any) -> None:
+        row.setdefault("ts", time.time())
+        cols = ",".join(row)
+        marks = ",".join("?" for _ in row)
+        self.db.execute(f"INSERT INTO shadow ({cols}) VALUES ({marks})", list(row.values()))
+        self.db.commit()
+
+    def shadowed_since(self, ticker: str, since_ts: float) -> bool:
+        return self.db.execute(
+            "SELECT 1 FROM shadow WHERE ticker=? AND ts>=? LIMIT 1", (ticker, since_ts)
+        ).fetchone() is not None
+
+    def shadow_rows(self, settled_only: bool = True) -> list[sqlite3.Row]:
+        where = "WHERE outcome IN ('yes','no')" if settled_only else ""
+        return self.db.execute(f"SELECT * FROM shadow {where} ORDER BY ts").fetchall()
 
     def set_outcome(self, ticker: str, outcome: str) -> None:
         self.db.execute(
             "UPDATE decisions SET outcome=?, settled_ts=? WHERE ticker=? AND outcome IS NULL",
+            (outcome, time.time(), ticker),
+        )
+        self.db.execute(
+            "UPDATE shadow SET outcome=?, settled_ts=? WHERE ticker=? AND outcome IS NULL",
             (outcome, time.time(), ticker),
         )
         self.db.commit()

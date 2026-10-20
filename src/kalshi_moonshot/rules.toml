@@ -1,0 +1,52 @@
+# Ideas to test against the stored 15-minute history:  python -m kalshi_moonshot evidence
+# Copy this to data/rules.toml to change it. Any list inside `entry` or `exit` is a grid: every combination is
+# tried, and the report says how many, because the best of many looks good by chance.
+#
+#   side     "yes", "no" or "either"
+#   price    ask band of the contract bought, in dollars
+#   minutes  [first, last] minute of the window to enter in (the window is 15 minutes)
+#   entry    slope: window (minutes), min (dollars per minute), direction "follow" or "fade"
+#            dip:   drop (dollars below the window's high so far)
+#            always: no trigger (this is what the baseline uses)
+#   exit     hold (to settlement) | slope_turn (ticks) | trail (drop) | target (multiple or cents) |
+#            stop (drop) | time (minute)
+
+[rule.follow_the_slope]
+about = "Buy the side whose price is climbing, hold to the end."
+side = "either"
+price = [0.15, 0.85]
+minutes = [3, 10]
+entry = { kind = "slope", direction = "follow", window = [2, 3, 5], min = [0.01, 0.02, 0.04] }
+exit = { kind = "hold" }
+
+[rule.fade_the_slope]
+about = "Buy the side whose price is falling (expecting a rebound), hold to the end."
+side = "either"
+price = [0.15, 0.85]
+minutes = [3, 10]
+entry = { kind = "slope", direction = "fade", window = [2, 3, 5], min = [0.01, 0.02, 0.04] }
+exit = { kind = "hold" }
+
+[rule.follow_then_sell_the_turn]
+about = "Buy a climbing side and sell as soon as it ticks down."
+side = "either"
+price = [0.15, 0.85]
+minutes = [3, 10]
+entry = { kind = "slope", direction = "follow", window = [3, 5], min = [0.02, 0.04] }
+exit = { kind = "slope_turn", ticks = [1, 2] }
+
+[rule.cheap_side_take_profit]
+about = "Buy whichever side costs 12-30 cents and sell at 2x or 3x (a resting order)."
+side = "either"
+price = [0.12, 0.30]
+minutes = [2, 11]
+entry = { kind = "always" }
+exit = { kind = "target", multiple = [2.0, 3.0] }
+
+[rule.buy_the_dip]
+about = "Buy a side that has dropped from its high in this window."
+side = "either"
+price = [0.15, 0.85]
+minutes = [3, 10]
+entry = { kind = "dip", drop = [0.05, 0.10, 0.15] }
+exit = { kind = "hold" }

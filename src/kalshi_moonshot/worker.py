@@ -18,6 +18,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from typing import Any
 
 from . import runner
 from .commodities import CommodityPricer
@@ -31,6 +32,7 @@ from .store import Store
 from .strategy import LongShot, ask_trend, falling_reason, lane_reject_reason, side_view
 
 log = logging.getLogger("moonshot")
+HISTORY_PRIORITY = -10  # runs only when no trading job is waiting (a running job is never interrupted)
 
 
 def _price(m: dict, key: str) -> float:
@@ -43,7 +45,7 @@ def _price(m: dict, key: str) -> float:
 def knobs(s: Settings) -> tuple:
     """Settings whose change is worth a log line."""
     return (
-        s.env, s.mode, s.real_money, s.min_order_usd, s.min_price, s.max_price, s.min_volume, s.max_spread,
+        s.env, s.mode, tuple(sorted(s.live_lanes or ())), s.fast_live, s.real_money, s.min_order_usd, s.min_price, s.max_price, s.min_volume, s.max_spread,
         s.min_hours_to_close, s.min_edge, s.scan_pages, s.shortlist, s.scan_interval_minutes,
         s.model, tuple(sorted(s.skip_categories)), s.skip_numeric, tuple(sorted(s.exclude_versions)),
         s.max_rps, s.page_size, s.job_max_attempts, s.moonshot_max_drop,
@@ -76,6 +78,7 @@ class Worker:
         self.jobs = Jobs(store)
         self._client_factory, self._est_factory, self._reload = client_factory, est_factory, reload
         self.quant = quant
+        self.recorder: Any = None
         self.stopping = False
         self._last_cleanup = 0.0
 
@@ -92,10 +95,35 @@ class Worker:
             )
         self.jobs.run_now("scan")
         self.jobs.ensure("review", time.time(), max_attempts=self.s.job_max_attempts)
+        if self.s.account_sync_enabled and getattr(self.client, "authed", False):
+            self.jobs.ensure(
+                "account_sync", time.time() + 90, max_attempts=self.s.job_max_attempts, priority=HISTORY_PRIORITY
+            )
+        if self.s.history_enabled:
+            self.jobs.ensure(
+                "history", time.time() + 300, max_attempts=self.s.job_max_attempts, priority=HISTORY_PRIORITY
+            )
         self._ensure_tiered()
+        self._start_tape()
+
+    def _start_tape(self) -> None:
+        """Record quotes next to the feed price they follow (read-only; see tape.py)."""
+        if not self.s.tape_enabled or not getattr(self.client, "authed", False) or self.recorder is not None:
+            return
+        from .tape import TapeRecorder
+
+        try:
+            self.recorder = TapeRecorder(self.client, self.s, getattr(self.quant, "feed", None))
+            self.recorder.start()
+            log.info("tape recorder on: data/tape.db (kept %.0f days)", self.s.tape_keep_days)
+        except Exception:
+            log.exception("could not start the tape recorder; continuing without it")
+            self.recorder = None
 
     def stop(self) -> None:
         self.stopping = True
+        if self.recorder is not None:
+            self.recorder.stop()
 
     def run_forever(self) -> None:
         self.start()
@@ -163,7 +191,7 @@ class Worker:
         handlers = {
             "scan": self.do_scan, "evaluate": self.do_evaluate,
             "resolve": self.do_resolve, "stop_loss": self.do_stop_loss,
-            "review": self.do_review,
+            "review": self.do_review, "history": self.do_history, "account_sync": self.do_account_sync,
         }
         try:
             handler = handlers.get(job.kind)
@@ -275,7 +303,7 @@ class Worker:
             job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
             max_attempts=self.s.job_max_attempts, priority=spec.priority,
         )
-        n = runner.scope_lane(self.s, self.client, self.store, spec)
+        n = runner.scope_lane(self.s, self.client, self.store, spec, quant=self.quant)
         self.jobs.run_now(f"lane_review:{spec.name}", priority=spec.priority)
         log.info("scope %s: watching %d event(s)", spec.name, n)
         return f"{n} events watched"
@@ -317,6 +345,39 @@ class Worker:
             log.info("%s", line)
         self._schedule_stop_loss()
         return f"{len(notes)} stop-loss action(s)"
+
+    def do_account_sync(self, job: Job) -> str:
+        """Keep a local copy of your fills and settlements, for analysis. Read-only, low priority."""
+        from . import account
+
+        if not self.s.account_sync_enabled:
+            return "account sync off"
+        got = account.sync(self.client, self.store)
+        wait = 120 if got["markets_left"] else self.s.account_sync_minutes * 60  # a first sync looks markets up a few at a time
+        self.jobs.ensure(
+            "account_sync", time.time() + wait, max_attempts=self.s.job_max_attempts, priority=HISTORY_PRIORITY
+        )
+        return f"{got['fills']} fills, {got['settlements']} settlements, {got['markets']} markets looked up"
+
+    def do_history(self, job: Job) -> str:
+        """Download candles for newly settled 15-minute windows. Low priority: trading jobs go first."""
+        from . import history
+        from .commodities import load_instruments
+
+        s = self.s
+        if not s.history_enabled:
+            return "history off"
+        series = [f"{i.prefix}15M" for i in load_instruments(s.data_dir) if "15M" in i.suffixes]
+        added = history.ingest(
+            self.client, self.store, series, windows=200, max_new=s.history_batch, refresh=True
+        )
+        pruned = history.prune(self.store, s.history_keep_days)
+        # A full batch means more is waiting (the first run has days to catch up on): come back soon.
+        wait = 120 if added >= s.history_batch else s.history_interval_minutes * 60
+        self.jobs.ensure(
+            "history", time.time() + wait, max_attempts=s.job_max_attempts, priority=HISTORY_PRIORITY
+        )
+        return f"{added} windows added, {pruned} old removed"
 
     def do_review(self, job: Job) -> str:
         from .review import run_review

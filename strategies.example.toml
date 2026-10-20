@@ -1,0 +1,56 @@
+# A lane that buys 15-minute "Up"/"Down" contracts at long-shot prices for a fixed stake, like the
+# positions in the Kalshi app: about $2 each at 12-30 cents, paying 3x to 8x.
+#
+# To use it, copy this file to  data/strategies.toml  (after rebuilding: an older build rejects the
+# new fields). It starts as paper only: 15-minute windows place real orders only when
+# COMMODITY_15M_LIVE=true AND the lane is named in LIVE_LANES. Watch it with
+#   python -m kalshi_moonshot daily --paper --lane fifteen
+#
+# History says this style loses on average (buying 12-30 cent Up contracts returned -5% to -30%
+# depending on the minute, with a break-even near the first and last minutes). The paper results are
+# the real test, so it keeps score instead of trusting the idea.
+
+[lane.fifteen]
+estimator = "ladder"            # prices each window from the live feed; only used to log our chance
+always = true                   # bet whenever the filters pass: no minimum edge
+fixed_stake = 2.0               # dollars per bet
+sides = ["yes", "no"]           # "Up" is YES, "Down" is NO
+price = [0.12, 0.30]            # what one contract costs
+hours = [0.03, 0.25]            # 15-minute windows only
+max_spread = 0.03
+min_volume = 5
+shortlist = 12
+one_per = "event"
+needs_instrument = true
+series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXGOLD15M",
+          "KXSILVER15M", "KXWTI15M", "KXCOPPER15M", "KXNATGAS15M", "KXPLATINUM15M", "KXPALLADIUM15M"]
+timed_suffix = "15M"
+timed_minutes = 15
+entry_elapsed = [1, 12]         # minutes after the window opens
+scope_minutes = 3
+review_minutes = 1
+priority = 10
+max_exposure_pct = 0.30         # all open bets in this lane, share of equity
+
+
+# A control for the steady lane: the same markets, price band and rising-price rule, but every one that passes
+# the filters is bought for a flat $2, with no model gate. Run beside `steady`, it shows whether the model's
+# yes/no adds anything. Paper only: it is never named in LIVE_LANES. Compare with
+#   python -m kalshi_moonshot report      (lane rows)   and   python -m kalshi_moonshot daily --lane steady_raw
+
+[lane.steady_raw]
+estimator = "llm"               # still asked, so its estimate is logged and scored; it just no longer decides
+label = "steady"
+always = true
+fixed_stake = 2.0
+price = [0.66, 0.75]
+hours = [1, 72]
+max_spread = 0.03
+min_volume = 200
+shortlist = 10
+trend = "rising"
+lookback_hours = 6
+min_trend = 0.02
+one_per = "mutex"
+sides = ["yes", "no"]
+max_exposure_pct = 0.30

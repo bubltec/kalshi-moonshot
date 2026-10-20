@@ -67,8 +67,8 @@ def test_editing_the_file_applies_without_a_restart(tmp_path):
 
 
 def test_instruments_are_data_and_overridable(tmp_path):
-    assert symbol_for("KXWTI") == "CL=F"  # daily WTI has no suffix
-    assert symbol_for("KXGOLDD") == "GC=F"
+    assert symbol_for("KXWTI") == "hl:xyz:CL"  # daily WTI has no suffix
+    assert symbol_for("KXGOLDD") == "hl:xyz:GOLD"
     assert symbol_for("KXGOLDMON") is None
     (tmp_path / "instruments.toml").write_text(
         '[[instrument]]\nprefix = "KXCORN"\nsymbol = "ZC=F"\nsuffixes = ["W"]\n'

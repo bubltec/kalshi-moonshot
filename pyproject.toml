@@ -7,6 +7,7 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
   "httpx>=0.27,<1",
   "cryptography>=43,<50",
+  "websockets>=13,<16",
 ]
 
 [project.optional-dependencies]
@@ -28,7 +29,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-kalshi_moonshot = ["instruments.toml", "py.typed"]
+kalshi_moonshot = ["instruments.toml", "rules.toml", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
