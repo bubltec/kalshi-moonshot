@@ -79,6 +79,7 @@ class Worker:
         self._client_factory, self._est_factory, self._reload = client_factory, est_factory, reload
         self.quant = quant
         self.recorder: Any = None
+        self.watcher: Any = None
         self.stopping = False
         self._last_cleanup = 0.0
 
@@ -99,6 +100,10 @@ class Worker:
             self.jobs.ensure(
                 "account_sync", time.time() + 90, max_attempts=self.s.job_max_attempts, priority=HISTORY_PRIORITY
             )
+        if self.s.patterns_hours > 0 and self.s.account_sync_enabled:
+            self.jobs.ensure(
+                "patterns", time.time() + 600, max_attempts=self.s.job_max_attempts, priority=HISTORY_PRIORITY
+            )
         if self.s.history_enabled:
             self.jobs.ensure(
                 "history", time.time() + 300, max_attempts=self.s.job_max_attempts, priority=HISTORY_PRIORITY
@@ -116,12 +121,28 @@ class Worker:
             self.recorder = TapeRecorder(self.client, self.s, getattr(self.quant, "feed", None))
             self.recorder.start()
             log.info("tape recorder on: data/tape.db (kept %.0f days)", self.s.tape_keep_days)
+            self._start_watcher()
         except Exception:
             log.exception("could not start the tape recorder; continuing without it")
             self.recorder = None
 
+    def _start_watcher(self) -> None:
+        """Sell on the live socket when a lane's take-profit level is hit (only if some lane asks for one)."""
+        from . import watcher
+
+        if self.recorder is None or self.watcher is not None or not watcher.wanted(self.s):
+            return
+        db_path = self.s.db_path
+        w = watcher.ProfitWatcher(lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions))
+        self.recorder.listeners.append(w.on_event)
+        w.start()
+        self.watcher = w
+        log.info("take-profit watcher on: selling from the live socket when a lane's level is hit")
+
     def stop(self) -> None:
         self.stopping = True
+        if self.watcher is not None:
+            self.watcher.stop()
         if self.recorder is not None:
             self.recorder.stop()
 
@@ -147,6 +168,7 @@ class Worker:
         if time.time() - self._last_cleanup > 3600:
             self._last_cleanup = time.time()
             self.jobs.cleanup()
+            self.store.prune_screened()
 
     # ---- settings hot-reload ----
     def refresh(self) -> None:
@@ -191,7 +213,7 @@ class Worker:
         handlers = {
             "scan": self.do_scan, "evaluate": self.do_evaluate,
             "resolve": self.do_resolve, "stop_loss": self.do_stop_loss,
-            "review": self.do_review, "history": self.do_history, "account_sync": self.do_account_sync,
+            "review": self.do_review, "history": self.do_history, "account_sync": self.do_account_sync, "patterns": self.do_patterns,
         }
         try:
             handler = handlers.get(job.kind)
@@ -358,6 +380,20 @@ class Worker:
             "account_sync", time.time() + wait, max_attempts=self.s.job_max_attempts, priority=HISTORY_PRIORITY
         )
         return f"{got['fills']} fills, {got['settlements']} settlements, {got['markets']} markets looked up"
+
+    def do_patterns(self, job: Job) -> str:
+        """Rewrite data/patterns.md: what your larger wins and losses have in common. Read-only, low priority."""
+        from . import patterns
+
+        if self.s.patterns_hours <= 0:
+            return "patterns off"
+        report = patterns.analyze(self.store)
+        (self.s.data_dir / "patterns.md").write_text(patterns.render(report))
+        self.jobs.ensure(
+            "patterns", time.time() + self.s.patterns_hours * 3600, max_attempts=self.s.job_max_attempts,
+            priority=HISTORY_PRIORITY,
+        )
+        return "patterns written" if report else "not enough trades yet"
 
     def do_history(self, job: Job) -> str:
         """Download candles for newly settled 15-minute windows. Low priority: trading jobs go first."""

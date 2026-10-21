@@ -95,6 +95,19 @@ CREATE TABLE IF NOT EXISTS jobs (
   priority INTEGER NOT NULL DEFAULT 0  -- higher runs first; fast lanes jump the queue
 );
 
+CREATE TABLE IF NOT EXISTS screen_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  lane TEXT NOT NULL,
+  ticker TEXT NOT NULL,
+  side TEXT NOT NULL,
+  ask REAL,
+  model_p REAL,                  -- our chance that this contract pays (null if the ladder could not be priced)
+  edge REAL,
+  reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_screen_log ON screen_log(ticker, ts);
+
 CREATE TABLE IF NOT EXISTS shadow (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -348,6 +361,31 @@ class Store:
         ).fetchone()
         return row is not None
 
+    # ---- screened-out candidates: markets that passed the lane's filter but never got a decision ----
+    def log_screened(self, lane: str, rows: list[dict[str, Any]], now: float | None = None, gap: float = 300.0) -> int:
+        """Record why candidates were dropped by the estimator's screen. One row per ticker and side per `gap` seconds."""
+        now = time.time() if now is None else now
+        n = 0
+        for r in rows:
+            seen = self.db.execute(
+                "SELECT 1 FROM screen_log WHERE lane=? AND ticker=? AND side=? AND ts>=? LIMIT 1",
+                (lane, r["ticker"], r["side"], now - gap),
+            ).fetchone()
+            if seen:
+                continue
+            self.db.execute(
+                "INSERT INTO screen_log (ts, lane, ticker, side, ask, model_p, edge, reason) VALUES (?,?,?,?,?,?,?,?)",
+                (now, lane, r["ticker"], r["side"], r.get("ask"), r.get("p"), r.get("edge"), r.get("reason")),
+            )
+            n += 1
+        self.db.commit()
+        return n
+
+    def prune_screened(self, days: float = 3.0, now: float | None = None) -> None:
+        now = time.time() if now is None else now
+        self.db.execute("DELETE FROM screen_log WHERE ts<?", (now - days * 86400,))
+        self.db.commit()
+
     def decided_since(self, ticker: str, since_ts: float) -> bool:
         row = self.db.execute(
             "SELECT 1 FROM decisions WHERE ticker=? AND ts>=? LIMIT 1", (ticker, since_ts)
@@ -444,14 +482,6 @@ class Store:
         marks = ",".join("?" for _ in o)
         self.db.execute(f"INSERT INTO orders ({cols}) VALUES ({marks})", list(o.values()))
         self.db.commit()
-
-    def spent_since(self, since_ts: float, env: str) -> float:
-        row = self.db.execute(
-            """SELECT COALESCE(SUM(cost_usd),0) AS s FROM orders
-               WHERE ts>=? AND env=? AND COALESCE(side,'buy')='buy'""",
-            (since_ts, env),
-        ).fetchone()
-        return float(row["s"])
 
     def net_contracts(self, ticker: str, env: str) -> float:
         row = self.db.execute(

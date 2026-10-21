@@ -70,6 +70,7 @@ class LLMEstimator:
 class LadderEstimator:
     def __init__(self, pricer: CommodityPricer):
         self.pricer = pricer
+        self.dropped: list[dict[str, Any]] = []  # the last screen's rejects, with why (read by the review pass)
 
     def estimate(self, client: Any, s: Settings, shot: LongShot) -> Estimate:
         try:
@@ -95,14 +96,21 @@ class LadderEstimator:
             except CommodityError:
                 priced[event] = {}
         keep: list[tuple[float, LongShot]] = []
+        self.dropped = []
         for shot in shots:
             hit = priced[shot.event_ticker].get(shot.ticker)
             if hit is None:
+                self.dropped.append({"ticker": shot.ticker, "side": shot.side, "ask": shot.ask,
+                                     "reason": "could not price this ladder (no feed or too few strikes)"})
                 continue
             p_side = side_prob(hit[0], shot.side)
             e = edge(p_side, shot.ask)
             if wants_bet(spec, p_side, shot.ask, e) and chance_ok(spec, p_side):
                 keep.append((e, shot))
+            else:
+                bar = f"needs {spec.min_edge:+.1%}" if spec.min_edge is not None else "outside the lane's chance band"
+                self.dropped.append({"ticker": shot.ticker, "side": shot.side, "ask": shot.ask, "p": p_side, "edge": e,
+                                     "reason": f"our chance {p_side:.0%} vs ask {shot.ask:.2f}: edge {e:+.1%}, {bar}. {hit[1][:120]}"})
         keep.sort(key=lambda x: x[0], reverse=True)
         return [shot for _, shot in keep]
 

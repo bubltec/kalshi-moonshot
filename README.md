@@ -57,7 +57,7 @@ default 25%) of full Kelly, `(chance - cost) / (1 - cost)` of equity, so a bigge
 bigger bet and a smaller balance earns a smaller one. Two caps per lane keep the shape you described, many cheap
 moonshot tickets next to steadier bets: one bet is at most 1% of equity in moonshot (3% in steady and commodity),
 and all of a lane's open bets together at most 15% in moonshot (40% in the others). Equity is cash plus open
-bets, so stakes compound as the balance grows. `MAX_USD_PER_TRADE` and `MAX_USD_PER_DAY` stay as hard ceilings.
+bets, so stakes compound as the balance grows. `MAX_USD_PER_TRADE` stays a hard ceiling, and `MAX_LOSS_PER_DAY` stops new buys once the day's realized losses (New York time, your hand trades included) reach it.
 
 Without credentials, or in `observe`, the balance is a paper one: `PAPER_BANKROLL_USD` (default $100) plus what the
 paper bets have returned, less what is still riding. A paper bet's size is stored on its decision, a market is
@@ -141,6 +141,21 @@ Jobs carry a `priority`, so the fast lane's work runs ahead of a backlog of slow
 uses this by default: scope every 10 min (new 15-minute markets keep appearing), review every 2 min.
 Any lane can opt in from `strategies.toml` by setting `review_minutes` plus `series` (or `needs_instrument`).
 
+## Watching for profit, live
+
+A 15-minute contract can move 20 cents in half a minute, so the bot also watches open bets on Kalshi's live socket
+(`watcher.py`). A lane opts in with any of `take_profit_x` (sell when the bid reaches that multiple of the price paid),
+`take_profit_at` (sell at an absolute bid), `trail_activate` + `trail_drop` (a peak-crash exit: once the bid has been that fraction above the price paid, sell when it falls that many dollars from its peak) or `spike_cents` + `spike_seconds` (sell, while in profit, when the bid has jumped
+that much within that time). Each quote that arrives is checked; on a hit the bot re-reads the market, confirms the bid is
+still above the price paid, and sells through the same exit code as the stop-loss: a paper sale for a paper lane, an
+immediate-or-cancel reduce-only order for a live one. No default lane sets these, so nothing live changes until you add them
+to a lane in `data/strategies.toml`; `late_ticket` (paper) uses `take_profit_x = 3` and a 10-cent spike. A change to these
+fields needs a restart, because the watcher starts with the bot. A backstop pass also checks take-profit bets once a minute.
+
+`late_ticket_trail` (paper) runs beside `late_ticket` with only a peak-crash exit (up 10%, then a 4-cent fall from the peak), to compare it with the 3x/spike exit on the same kind of bet. The peak is tracked by the live watcher only, so it starts again from the price paid if the bot restarts.
+
+What the history says about it: on 3 days of quote ticks, a peak-crash exit (up 10%, then a 2-10 cent fall) returned -7% to -8% on favorites against -3.7% for holding, and -17% to -19% on cheap tickets against -3.8%, so the live commodity lane is left without one. A spike exit beat holding on cheap tickets by about 10 points on minute data but still lost money.
+
 ## Lane notes
 
 - **moonshot**: cheap contracts (`MIN_PRICE`-`MAX_PRICE`) with a small chance of a large payout.
@@ -177,7 +192,7 @@ bot retrieves similar settled questions and shows the model the title, its old p
 - `MODE=observe` (default) never places orders.
 - `KALSHI_ENV=demo` (default) is Kalshi's play-money environment.
 - Real orders need **both** `KALSHI_ENV=prod` and `ALLOW_REAL_MONEY=true`.
-- Per-trade cap, per-day cap, max open positions, no duplicate positions.
+- Per-trade cap, a daily loss limit (`MAX_LOSS_PER_DAY`: realized losses only, wins offset them, spending does not count), max open positions, no duplicate positions.
 - A buy is skipped when less than `MIN_ORDER_USD` (default $0.25) is offered at that price, so a one-contract fill of a few cents does not go through.
 - Orders are immediate-or-cancel: nothing is ever left resting on the book.
 - `python -m kalshi_moonshot kill` (or `touch data/KILL`) stops all orders at once.
@@ -224,6 +239,9 @@ Edit `.env`. No rebuild is needed; rebuild only when the code changes.
 | See the job queue (pending, done, dead, with errors) | `docker compose exec bot python -m kalshi_moonshot jobs` |
 | Requeue dead jobs (never ones that were mid-order) | `docker compose exec bot python -m kalshi_moonshot jobs retry` |
 | Fill in the category of old decisions from Kalshi (dry run; add `--yes` to write, backup first) | `docker compose exec bot python -m kalshi_moonshot backfill` |
+| See why a market that passed a lane's filter never got a decision (our chance, the edge, the bar it missed) | `docker compose exec bot python -m kalshi_moonshot screened --ticker KXBTCD` |
+| See what your larger wins and losses have in common (the bot also rewrites `data/patterns.md` every 6 hours) | `docker compose exec bot python -m kalshi_moonshot patterns` |
+| Replay finished bets as if each had waited for a slightly better price (read-only, needs the tape) | `docker compose exec bot python -m kalshi_moonshot patience` |
 | Scan open strike ladders for guaranteed-profit pairs (read-only) | `docker compose exec bot python -m kalshi_moonshot arbs` |
 | Show what deleting excluded versions would remove (dry run) | `docker compose exec bot python -m kalshi_moonshot prune` |
 | Delete them (makes a backup copy of the database first) | `docker compose exec bot python -m kalshi_moonshot prune --yes` |

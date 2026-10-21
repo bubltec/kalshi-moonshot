@@ -78,7 +78,7 @@ class Settings:
 
     # --- risk caps (every order passes through risk.py) ---
     max_usd_per_trade: float
-    max_usd_per_day: float
+    max_loss_per_day: float  # stop buying for the day once realized losses reach this (not a spending cap)
     max_open_positions: int
     min_order_usd: float  # skip a buy when less than this is offered at our price
 
@@ -99,6 +99,7 @@ class Settings:
     history_keep_days: int
     account_sync_enabled: bool  # keep a local copy of your fills and settlements (read-only)
     account_sync_minutes: int  # how often
+    patterns_hours: float  # how often to rewrite data/patterns.md from your trades (0 = off)
     tape_enabled: bool  # record contract quotes next to the price they follow (lead-lag study)
     tape_keep_days: float
     max_rps: float  # Kalshi requests per second the bot paces itself to
@@ -289,7 +290,7 @@ def load() -> Settings:
         key_id=os.environ.get("KALSHI_KEY_ID", "").strip(),
         private_key_path=os.environ.get("KALSHI_PRIVATE_KEY_PATH", "").strip(),
         max_usd_per_trade=_f("MAX_USD_PER_TRADE", 5.0),
-        max_usd_per_day=_f("MAX_USD_PER_DAY", 20.0),
+        max_loss_per_day=_f("MAX_LOSS_PER_DAY", _f("MAX_USD_PER_DAY", 20.0)),  # the old name still works, now as a loss limit
         max_open_positions=_i("MAX_OPEN_POSITIONS", 8),
         min_order_usd=_f("MIN_ORDER_USD", 0.25),
         min_price=_f("MIN_PRICE", 0.02),
@@ -308,6 +309,7 @@ def load() -> Settings:
         history_keep_days=max(1, _i("HISTORY_KEEP_DAYS", 30)),
         account_sync_enabled=_b("ACCOUNT_SYNC_ENABLED", True),
         account_sync_minutes=max(5, _i("ACCOUNT_SYNC_MINUTES", 15)),
+        patterns_hours=_f("PATTERNS_HOURS", 6.0),
         tape_enabled=_b("TAPE_ENABLED", True),
         tape_keep_days=max(0.5, _f("TAPE_KEEP_DAYS", 3.0)),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),

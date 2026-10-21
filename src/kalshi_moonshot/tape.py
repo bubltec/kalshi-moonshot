@@ -102,9 +102,18 @@ class TapeRecorder:
     def __init__(self, client: KalshiClient, s: Settings, feed: Any = None):
         self.client, self.s, self.feed = client, s, feed
         self.tape = Tape(s.data_dir / "tape.db")
-        self.stream = KalshiStream(client, self.tape.add)
+        self.listeners: list[Any] = []  # called with every event after it is stored (must be fast and never raise)
+        self.stream = KalshiStream(client, self._on_event)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+
+    def _on_event(self, e: dict[str, Any]) -> None:
+        self.tape.add(e)
+        for fn in self.listeners:
+            try:
+                fn(e)
+            except Exception:
+                log.exception("tape listener failed")
 
     def _series(self) -> list[str]:
         return [f"{i.prefix}15M" for i in load_instruments(self.s.data_dir) if "15M" in i.suffixes]

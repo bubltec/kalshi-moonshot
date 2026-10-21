@@ -89,3 +89,39 @@ scope_minutes = 3
 review_minutes = 1
 priority = 10
 max_exposure_pct = 0.10
+take_profit_x = 3.0             # sell when the bid reaches 3x the price paid, watched live on the socket
+spike_cents = 0.10              # ...or when the bid jumps 10 cents within spike_seconds while in profit
+spike_seconds = 30
+
+
+# The same late-ticket entries with a peak-crash exit: once the bid has been 10% above the price paid, sell when it falls
+# 4 cents from its peak, watched live on the socket. It runs beside late_ticket (3x or a spike) so the two exits are compared
+# on the same kind of bet. Backtests on quote ticks say holding beat this, so it is an experiment. Paper only.
+
+[lane.late_ticket_trail]
+estimator = "ladder"
+label = "late ticket"
+always = true
+fixed_stake = 1.0
+sides = ["yes", "no"]
+price = [0.05, 0.40]
+min_chance = 0.40
+max_chance = 0.50
+hours = [0.01, 0.26]
+max_spread = 0.04
+min_volume = 5
+shortlist = 12
+one_per = "event"
+needs_instrument = true
+numeric = "allow"
+series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXGOLD15M",
+          "KXSILVER15M", "KXWTI15M", "KXCOPPER15M", "KXNATGAS15M", "KXPLATINUM15M", "KXPALLADIUM15M"]
+timed_suffix = "15M"
+timed_minutes = 15
+entry_elapsed = [11.5, 13.5]
+scope_minutes = 3
+review_minutes = 1
+priority = 10
+max_exposure_pct = 0.10
+trail_activate = 0.10
+trail_drop = 0.04

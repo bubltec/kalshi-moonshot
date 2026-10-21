@@ -157,6 +157,11 @@ def build_trips(store: Store) -> list[Trip]:
     return trips
 
 
+def realized_since(store: Store, since_ts: float) -> float:
+    """Profit and loss after fees of every trade that finished at or after `since_ts`, bot and hand alike."""
+    return sum(t.pnl for t in build_trips(store) if t.closed_ts is not None and t.closed_ts >= since_ts)
+
+
 # ---------------------------------------------------------------- views over finished trips
 
 

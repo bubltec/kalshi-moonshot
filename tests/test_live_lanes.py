@@ -11,7 +11,7 @@ def settings(tmp_path, **over):
     s = config.load()
     base = {"data_dir": tmp_path, "mode": "trade", "env": "demo", "min_order_usd": 0.0,
             "paper_bankroll_usd": 100.0, "skip_categories": frozenset(), "commodities_enabled": True,
-            "max_usd_per_trade": 5.0, "max_usd_per_day": 100.0, "max_open_positions": 20}
+            "max_usd_per_trade": 5.0, "max_loss_per_day": 100.0, "max_open_positions": 20}
     return type(s)(**{**s.__dict__, **base, **over})
 
 

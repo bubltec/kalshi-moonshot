@@ -50,13 +50,40 @@ def test_kill_file_blocks(s, store):
     assert not risk.check(s, store, "A", 1.0).ok
 
 
-def test_per_trade_and_daily_caps(s, store):
+def test_per_trade_cap(s, store):
     assert not risk.check(s, store, "A", s.max_usd_per_trade + 1).ok
-    for i in range(4):
-        order(store, f"T{i}", 5.0)
-    v = risk.check(s, store, "NEW", 5.0)
-    assert not v.ok and "daily cap" in v.reason
 
+
+def lose(store, ticker, dollars, when):
+    """A bought-and-lost trade of exactly `dollars`, settled at `when`."""
+    store.db.execute("INSERT INTO fills VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                     (f"f-{ticker}", when - 600, ticker, "bid", 10.0, dollars / 10, 1 - dollars / 10, 0.0, 1, "o", "buy", "yes"))
+    store.db.execute("INSERT INTO settlements VALUES (?,?,?,?,?,?,?,?)", (ticker, when, "no", 10.0, 0.0, dollars, 0.0, 0.0))
+    store.db.commit()
+
+
+def test_spending_is_not_limited_only_losses(s, store):
+    for i in range(6):
+        order(store, f"T{i}", 5.0)  # $30 spent today, more than the limit; no loss yet
+    assert risk.check(s, store, "NEW", 5.0).ok
+
+
+def test_the_daily_loss_limit_blocks_until_the_next_day(s, store):
+    now = time.time()
+    lose(store, "L1", s.max_loss_per_day, now - 60)
+    v = risk.check(s, store, "NEW", 1.0, now=now)
+    assert not v.ok and "daily loss limit" in v.reason
+    assert risk.check(s, store, "NEW", 1.0, now=now + 86_400).ok  # a new day starts clean
+
+
+def test_wins_offset_losses_toward_the_limit(s, store):
+    now = time.time()
+    lose(store, "L1", s.max_loss_per_day, now - 60)
+    store.db.execute("INSERT INTO fills VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                     ("w1", now - 300, "W1", "bid", 10.0, 0.20, 0.80, 0.0, 1, "o", "buy", "yes"))
+    store.db.execute("INSERT INTO settlements VALUES (?,?,?,?,?,?,?,?)", ("W1", now - 30, "yes", 10.0, 0.0, 2.0, 0.0, 0.0))
+    store.db.commit()
+    assert risk.check(s, store, "NEW", 1.0, now=now).ok  # -limit + 8 dollars is under the limit
 
 def test_yesterdays_spend_does_not_count(s, store):
     store.add_order(ticker="OLD", env="demo", count=1, price=0.05, fill_count=1.0,

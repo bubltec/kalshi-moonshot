@@ -45,6 +45,12 @@ class LaneSpec:
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
     min_chance: float = 0.0  # bet only when the estimator's chance that the contract pays is in [min_chance, max_chance]
     max_chance: float = 1.0  # (the estimate before calibration; for a ladder lane this is a distance to the strike)
+    take_profit_x: float = 0.0  # sell when the bid reaches this multiple of the price paid (0 = off); watched live on the socket
+    take_profit_at: float = 0.0  # sell when the bid reaches this price (0 = off)
+    trail_activate: float = 0.0  # peak-crash exit: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
+    trail_drop: float = 0.0  # ... sell when it falls this many dollars from its peak (0 = off; watched live on the socket only)
+    spike_cents: float = 0.0  # sell, while in profit, when the bid has risen this much (dollars) within spike_seconds (0 = off)
+    spike_seconds: float = 30.0
     min_return: float = 0.0  # a win must pay at least this much on the stake, after the fee
     max_bet_pct: float = 0.02  # one bet, share of equity (see sizing.py)
     max_exposure_pct: float = 0.25  # all open bets in the lane, share of equity
@@ -196,6 +202,10 @@ def spec_for(s: Settings, name: str) -> LaneSpec:
     if name not in lanes:
         raise KeyError(f"unknown lane {name!r} (known: {', '.join(sorted(lanes))})")
     return lanes[name]
+
+
+def takes_profit(spec: LaneSpec) -> bool:
+    return spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.trail_drop > 0 or spec.spike_cents > 0
 
 
 def chance_ok(spec: LaneSpec, p: float) -> bool:

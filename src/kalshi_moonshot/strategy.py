@@ -299,6 +299,40 @@ def stop_loss_hit(entry: float, bid: float, hours_left: float, hours: float, dro
     return f"stop-loss: {hours_left:.1f}h left, down {lost:.0%} ({entry:.2f} -> {bid:.2f})"
 
 
+def take_profit_hit(entry: float, bid: float, x: float = 0.0, at: float = 0.0) -> str | None:
+    """Why to sell for a profit now, or None. `x` is a multiple of the price paid, `at` an absolute bid."""
+    if entry <= 0 or bid <= 0:
+        return None
+    if x > 0 and entry * x < 1.0 and bid >= entry * x - 1e-9:
+        return f"take-profit: bid {bid:.2f} is {bid / entry:.1f}x the {entry:.2f} paid"
+    if at > 0 and entry < at and bid >= at - 1e-9:
+        return f"take-profit: bid {bid:.2f} reached {at:.2f} (paid {entry:.2f})"
+    return None
+
+
+def trail_hit(entry: float, peak: float, bid: float, activate: float, drop: float) -> str | None:
+    """Peak-crash exit: the bid has been `activate` (a fraction) above what we paid, and has now fallen `drop` from its peak."""
+    if drop <= 0 or entry <= 0 or bid <= 0:
+        return None
+    if peak >= entry * (1 + activate) - 1e-9 and peak > entry and bid <= peak - drop + 1e-9:
+        return f"peak-crash: bid {bid:.2f} is {peak - bid:.2f} off its {peak:.2f} peak (paid {entry:.2f})"
+    return None
+
+
+def spike_hit(history: list[tuple[float, float]], now: float, entry: float, cents: float, seconds: float) -> str | None:
+    """A sharp rise: the latest bid is `cents` above the lowest bid of the last `seconds`, and above what we paid.
+
+    history is (time, bid) pairs, oldest first, the last being the latest.
+    """
+    if cents <= 0 or len(history) < 2:
+        return None
+    bid = history[-1][1]
+    recent = [b for t, b in history if now - t <= seconds]
+    if bid > entry and len(recent) >= 2 and bid - min(recent) >= cents - 1e-9:
+        return f"spike: bid {bid:.2f} is up {bid - min(recent):.2f} in {seconds:.0f}s (paid {entry:.2f})"
+    return None
+
+
 def falling_reason(t: Trend | None, min_drop: float) -> str | None:
     """Moonshot filter: a crashing ask is a live favorite going against us, not a long shot.
 

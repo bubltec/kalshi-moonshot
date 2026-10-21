@@ -15,7 +15,7 @@ def settings(tmp_path, **over):
         "min_volume": 100.0, "max_spread": 0.03, "min_hours_to_close": 2.0, "max_hours_to_close": 24.0,
         "min_edge": 0.05, "shortlist": 5, "steady_enabled": False, "skip_categories": frozenset(),
         "skip_numeric": True, "scan_interval_minutes": 30, "job_max_attempts": 3,
-        "max_usd_per_trade": 1.0, "max_usd_per_day": 10.0, "max_open_positions": 5,
+        "max_usd_per_trade": 1.0, "max_loss_per_day": 10.0, "max_open_positions": 5,
     }
     return type(s)(**{**s.__dict__, **base, **over})
 

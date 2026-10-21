@@ -7,6 +7,7 @@ import logging
 import signal
 import sys
 from datetime import UTC, datetime
+from typing import Any
 
 from . import config, lanes, report, runner
 from .commodities import CommodityPricer
@@ -571,6 +572,54 @@ def cmd_mytrades(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_patterns(s: config.Settings, args: argparse.Namespace) -> int:
+    """What your larger wins and larger losses have in common (read-only; the bot also writes data/patterns.md)."""
+    from . import patterns
+
+    store = Store(s.db_path, s.exclude_versions)
+    print(patterns.render(patterns.analyze(store, args.source), args.source))
+    return 0
+
+
+def cmd_patience(s: config.Settings, args: argparse.Namespace) -> int:
+    """Replay finished bets as if each had waited for a slightly better price (needs the tape; places nothing)."""
+    from . import patience
+
+    tape = s.data_dir / "tape.db"
+    if not tape.is_file():
+        print("no tape recorded yet (TAPE_ENABLED, kept for TAPE_KEEP_DAYS days).")
+        return 0
+    store = Store(s.db_path, s.exclude_versions)
+    print(patience.render(patience.load(store, tape, args.lane, args.min_price)))
+    return 0
+
+
+def cmd_screened(s: config.Settings, args: argparse.Namespace) -> int:
+    """Why a market that passed a lane's filter never got a decision: our chance, the edge and the bar it missed."""
+    import time
+
+    store = Store(s.db_path, s.exclude_versions)
+    since = time.time() - args.hours * 3600
+    rows = store.db.execute(
+        """SELECT ts, lane, ticker, side, ask, model_p, edge, reason FROM screen_log
+           WHERE ts>=? AND ticker LIKE ? AND (? IS NULL OR lane=?) ORDER BY ts DESC""",
+        (since, args.ticker + "%", args.lane, args.lane),
+    ).fetchall()
+    latest: dict[tuple[str, str], Any] = {}
+    for r in rows:
+        latest.setdefault((r["ticker"], r["side"]), r)  # newest first, so this is the most recent view
+    if not latest:
+        print(f"nothing screened out in the last {args.hours:g}h for {args.ticker or 'any market'}"
+              " (markets that fail the lane's price, spread or age filters never reach the screen).")
+        return 0
+    print(f"{len(latest)} candidates the lane's filter let through but the screen dropped (latest view of each):\n")
+    for r in list(latest.values())[: args.limit]:
+        age = (time.time() - r["ts"]) / 60
+        p = "  - " if r["model_p"] is None else f"{r['model_p']:.0%}"
+        print(f"{r['ticker']:34} {r['side'].upper():3} ask {r['ask']:.2f}  ours {p:>4}  {age:4.0f}m ago  {r['reason']}")
+    return 0
+
+
 def cmd_target(s: config.Settings, args: argparse.Namespace) -> int:
     """Paper test: the bot's finished 15-minute bets re-scored with a resting sell at 1.5x / 2x / 3x. Places nothing."""
     from . import target
@@ -640,7 +689,7 @@ COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
     "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
-    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
+    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
 
 
@@ -660,6 +709,16 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--days", type=int, default=14)
             p.add_argument("--top", type=int, default=12, help="market types to list")
             p.add_argument("--tz", default="America/New_York")
+        if name == "patience":
+            p.add_argument("--lane", default="commodity")
+            p.add_argument("--min-price", type=float, default=0.60, help="only bets priced at least this")
+        if name == "patterns":
+            p.add_argument("--source", choices=["manual", "bot", "mixed", "all"], default="manual")
+        if name == "screened":
+            p.add_argument("--ticker", default="", help="ticker prefix, e.g. KXBTCD")
+            p.add_argument("--lane")
+            p.add_argument("--hours", type=float, default=3.0)
+            p.add_argument("--limit", type=int, default=30)
         if name == "target":
             p.add_argument("--mult", default="1.5,2,3", help="comma list of sell multiples of the price paid")
             p.add_argument("--suffix", default="15M")

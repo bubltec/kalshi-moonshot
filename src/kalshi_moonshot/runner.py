@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -23,7 +24,17 @@ from .commodities import CommodityPricer, load_instruments
 from .config import Settings
 from .estimators import Estimate, Estimator, build_estimators
 from .kalshi import MARKET_PAGES, KalshiClient, KalshiError, KalshiRateLimited
-from .lanes import LADDER, LaneSpec, chance_ok, main_lanes, spec_for, tiered_lanes, wants_bet
+from .lanes import (
+    LADDER,
+    LaneSpec,
+    chance_ok,
+    lane_specs,
+    main_lanes,
+    spec_for,
+    takes_profit,
+    tiered_lanes,
+    wants_bet,
+)
 from .search import NewsSearch
 from .sizing import Sizing, size_bet
 from .store import Store
@@ -41,6 +52,7 @@ from .strategy import (
     side_ask_notional,
     side_prob,
     stop_loss_hit,
+    take_profit_hit,
 )
 
 log = logging.getLogger("moonshot")
@@ -266,6 +278,9 @@ def review_lane(
         shadow.snapshot(store, s, markets, spec.shadow_suffix, getattr(ladder, "pricer", None), now)
     wide = replace(spec, shortlist=spec.shortlist * 3)
     shots = lane_shots(s, client, markets, wide, estimators, now)
+    dropped = getattr((estimators or {}).get(spec.estimator), "dropped", None)
+    if dropped:
+        store.log_screened(spec.name, dropped, now.timestamp())
     if spec.cooldown_minutes:
         # A short market must be re-read as it nears the close: its outcome is only decided late.
         # So the cooldown is at most a fifth of the time left.
@@ -486,6 +501,48 @@ def _hours_left(close_time: str, now: datetime | None = None) -> float | None:
     return (close - now).total_seconds() / 3600.0
 
 
+_EXIT_LOCK = threading.Lock()  # one exit at a time, so the periodic pass and the live watcher never sell the same bet twice
+
+
+def exit_position(
+    s: Settings, client: KalshiClient, store: Store, row, bid: float, why: str,
+    before_order: Callable[[], None] | None = None,
+) -> str:
+    """Sell (or paper-sell) one open bet at `bid`. Safe to call from any thread."""
+    with _EXIT_LOCK:
+        if row["ticker"] not in {r["ticker"] for r in store.open_bets()}:
+            return f"{row['ticker']}: already exited"
+        side = row["side"] or "yes"
+        if not s.is_live(row["lane"] or "moonshot", row["ticker"].split("-")[0]):
+            store.mark_exited(row["ticker"], bid, why)
+            return f"paper-sold {row['ticker']} @ {bid:.2f}. {why}"
+        count = int(store.net_contracts(row["ticker"], s.env))
+        if count <= 0:
+            store.mark_exited(row["ticker"], bid, why)
+            return f"paper-sold {row['ticker']} @ {bid:.2f} (no live fill). {why}"
+        if before_order:
+            before_order()
+        try:
+            sell = client.sell_yes_ioc if side == "yes" else client.sell_no_ioc
+            resp = sell(row["ticker"], count, bid)
+        except KalshiRateLimited:
+            raise
+        except KalshiError as exc:
+            return f"exit {row['ticker']}: sell failed ({exc})"
+        filled = float(resp.get("fill_count") or 0.0)
+        avg = float(resp.get("average_fill_price") or bid)
+        fee = float(resp.get("average_fee_paid") or 0.0) * filled
+        store.add_order(
+            ticker=row["ticker"], env=s.env, count=count, price=bid, fill_count=filled,
+            cost_usd=-(avg * filled - fee), fee_usd=fee, order_id=resp.get("order_id", ""),
+            side="sell", contract=side,
+        )
+        if store.net_contracts(row["ticker"], s.env) <= 0:
+            store.mark_exited(row["ticker"], avg if filled else bid, why)
+            return f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
+        return f"partial exit {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
+
+
 def stop_loss_pass(
     s: Settings,
     client: KalshiClient,
@@ -494,14 +551,19 @@ def stop_loss_pass(
     now: datetime | None = None,
     before_order: Callable[[], None] | None = None,
 ) -> list[str]:
-    """Check every open bet. Sell (or paper-sell) those that hit the stop. Returns log lines."""
-    if not s.stop_loss_enabled:
-        return []
+    """Check every open bet. Sell (or paper-sell) those that hit the stop or a take-profit level. Returns log lines.
+
+    Take-profit is also watched live on the socket (watcher.py); this pass is the slower backstop for it.
+    """
+    specs = lane_specs(s)
     now = now or datetime.now(UTC)
     notes: list[str] = []
     for row in store.open_bets():
-        if row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast:
-            continue  # a 15-minute window is held to settlement (STOP_LOSS_15M=false)
+        spec = specs.get(row["lane"] or "moonshot")
+        profit_on = spec is not None and takes_profit(spec)
+        stop_on = s.stop_loss_enabled and not (row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast)
+        if not (stop_on or profit_on):
+            continue  # a 15-minute window is held to settlement (STOP_LOSS_15M=false) unless it takes profit
         hours = _hours_left(row["close_time"], now)
         if hours is None:
             continue
@@ -518,53 +580,29 @@ def stop_loss_pass(
         with contextlib.suppress(TypeError, ValueError):
             bid = float(quoted.get("yes_bid_dollars") or 0.0)
         entry = float(row["ask"] or 0.0)
-        why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, s.stop_loss_drop)
+        why = None
+        if profit_on and spec is not None:
+            why = take_profit_hit(entry, bid, spec.take_profit_x, spec.take_profit_at)
+        if not why and stop_on:
+            why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, s.stop_loss_drop)
         if not why:
             continue
-        if not s.is_live(row["lane"] or "moonshot", row["ticker"].split("-")[0]):
-            store.mark_exited(row["ticker"], bid, why)
-            notes.append(f"paper-sold {row['ticker']} @ {bid:.2f}. {why}")
-            continue
-        held = store.net_contracts(row["ticker"], s.env)
-        count = int(held)
-        if count <= 0:
-            store.mark_exited(row["ticker"], bid, why)
-            notes.append(f"paper-sold {row['ticker']} @ {bid:.2f} (no live fill). {why}")
-            continue
-        if before_order:
-            before_order()
-        try:
-            sell = client.sell_yes_ioc if side == "yes" else client.sell_no_ioc
-            resp = sell(row["ticker"], count, bid)
-        except KalshiRateLimited:
-            raise
-        except KalshiError as exc:
-            notes.append(f"stop {row['ticker']}: sell failed ({exc})")
-            continue
-        filled = float(resp.get("fill_count") or 0.0)
-        avg = float(resp.get("average_fill_price") or bid)
-        fee = float(resp.get("average_fee_paid") or 0.0) * filled
-        store.add_order(
-            ticker=row["ticker"], env=s.env, count=count, price=bid, fill_count=filled,
-            cost_usd=-(avg * filled - fee), fee_usd=fee, order_id=resp.get("order_id", ""),
-            side="sell", contract=side,
-        )
-        if store.net_contracts(row["ticker"], s.env) <= 0:
-            store.mark_exited(row["ticker"], avg if filled else bid, why)
-            notes.append(f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}")
-        else:
-            notes.append(f"partial stop {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}")
+        notes.append(exit_position(s, client, store, row, bid, why, before_order))
     return notes
 
 
 def next_stop_loss_at(s: Settings, store: Store, now: float | None = None) -> float | None:
     """When to check again. None if nothing is open."""
-    if not s.stop_loss_enabled:
-        return None
     now = time.time() if now is None else now
     soonest: float | None = None
+    fast = False
+    specs = lane_specs(s)
     for row in store.open_bets():
-        if row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast:
+        spec = specs.get(row["lane"] or "moonshot")
+        if spec is not None and takes_profit(spec) and _hours_left(row["close_time"]) is not None:
+            soonest, fast = now, True  # a take-profit bet is checked every minute (the live watcher is faster)
+            continue
+        if not s.stop_loss_enabled or (row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast):
             continue
         hours = _hours_left(row["close_time"])
         if hours is None:
@@ -575,7 +613,7 @@ def next_stop_loss_at(s: Settings, store: Store, now: float | None = None) -> fl
     if soonest is None:
         return None
     if soonest <= now:
-        return now + s.stop_loss_check_minutes * 60
+        return now + (60.0 if fast else s.stop_loss_check_minutes * 60)
     return soonest
 
 
