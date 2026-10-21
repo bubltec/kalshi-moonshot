@@ -182,7 +182,7 @@ class ProfitWatcher:
                 t.below_since = None  # the dip has already healed; keep riding
                 self._back_off(ticker, lane)
                 return
-            line = runner.exit_position(s, self.client, store, row, bid, why + " [live]")
+            line = runner.exit_position(s, self.client, store, row, bid, why + " [socket]")
             log.info("watcher: %s", line)
             self.sold.append(line)
         except KalshiError as exc:
