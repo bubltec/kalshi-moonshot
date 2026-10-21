@@ -74,7 +74,7 @@ def test_symbol_mapping_covers_short_series_commodities_and_crypto_only():
     assert cm.symbol_for("KXWTI") == "hl:xyz:CL"  # daily WTI has no suffix
     assert cm.symbol_for("KXCOPPER15M") == "hl:xyz:COPPER"
     assert cm.symbol_for("KXNATGAS15M") == "hl:xyz:NATGAS"
-    assert cm.symbol_for("KXBRENT15M") is None  # Kalshi has no 15-minute Brent
+    assert cm.symbol_for("KXBRENT15M") == "hl:xyz:BRENTOIL"  # listed by Kalshi, paper only (live = false)
     assert cm.symbol_for("KXBTC15M") == "kraken:BTC/USD"
     assert cm.symbol_for("KXETHD") == "kraken:ETH/USD"
     assert cm.symbol_for("KXGOLDMON") is None  # monthly: too long for realized vol

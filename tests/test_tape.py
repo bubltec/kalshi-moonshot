@@ -74,7 +74,7 @@ def test_the_recorder_follows_the_open_15_minute_markets(tmp_path):
 
     rec = TapeRecorder(Client(), s, None)  # type: ignore[arg-type]
     n = rec.refresh_tickers()
-    assert n == 12 and all(t.endswith("-26OCT192030-30") for t in rec.stream._tickers)
+    assert n == 20 and all(t.endswith("-26OCT192030-30") for t in rec.stream._tickers)
     assert "hl:xyz:GOLD" in rec._commodity_symbols() and not any("BTC" in x for x in rec._commodity_symbols())
 
 

@@ -194,7 +194,16 @@ class Settings:
         """
         if series.endswith("15M") and not self.fast_live:
             return False
+        if series and not self._series_may_trade_live(series):
+            return False
         return self.mode == "trade" and (self.live_lanes is None or lane in self.live_lanes)
+
+    def _series_may_trade_live(self, series: str) -> bool:
+        """False for a series whose instrument is marked `live = false` in instruments.toml (new markets start on paper)."""
+        from .commodities import instrument_for, load_instruments
+
+        inst = instrument_for(series, load_instruments(self.data_dir))
+        return inst is None or inst.live
 
     @property
     def real_money(self) -> bool:

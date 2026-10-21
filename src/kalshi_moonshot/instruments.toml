@@ -102,3 +102,71 @@ prefix = "KXDOGE"
 symbol = "kraken:DOGE/USD"
 suffixes = ["", "D", "15M"]
 realtime = true
+
+# --- New markets. Currencies are live; indices and Brent stay paper only (`live = false`): a live lane prices and logs them but never sends an order for them until
+# you flip the switch here. Currencies use Hyperliquid's EUR/GBP/JPY perpetuals, or Kraken's spot FX where there is no perp.
+# Indices use the S&P 500 and Nasdaq-100 perps (Kalshi's index markets run in US trading hours); Brent adds its 15-minute series.
+
+[[instrument]]
+prefix = "KXEURUSD"
+symbol = "hl:xyz:EUR"
+suffixes = ["15M"]
+realtime = true
+proxy = true
+live = true
+
+[[instrument]]
+prefix = "KXGBPUSD"
+symbol = "hl:xyz:GBP"
+suffixes = ["15M"]
+realtime = true
+proxy = true
+live = true
+
+[[instrument]]
+prefix = "KXUSDJPY"
+symbol = "hl:xyz:JPY"
+suffixes = ["15M"]
+realtime = true
+proxy = true
+live = true
+
+[[instrument]]
+prefix = "KXAUDUSD"
+symbol = "kraken:AUD/USD"
+suffixes = ["15M"]
+realtime = true
+proxy = true
+live = true
+
+[[instrument]]
+prefix = "KXUSDCAD"
+symbol = "kraken:USD/CAD"
+suffixes = ["15M"]
+realtime = true
+proxy = true
+live = true
+
+[[instrument]]
+prefix = "KXINX"
+symbol = "hl:xyz:SP500"
+suffixes = ["15M"]
+realtime = true
+proxy = true
+live = false
+
+[[instrument]]
+prefix = "KXNDQ"
+symbol = "hl:xyz:XYZ100"
+suffixes = ["15M"]
+realtime = true
+proxy = true
+live = false
+
+[[instrument]]
+prefix = "KXBRENT"
+symbol = "hl:xyz:BRENTOIL"
+suffixes = ["15M"]
+realtime = true
+proxy = true
+live = false

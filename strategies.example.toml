@@ -40,6 +40,7 @@ max_exposure_pct = 0.30         # all open bets in this lane, share of equity
 #   python -m kalshi_moonshot report      (lane rows)   and   python -m kalshi_moonshot daily --lane steady_raw
 
 [lane.steady_raw]
+shares_markets = true         # takes the same markets as steady, so the two can be compared
 estimator = "llm"               # still asked, so its estimate is logged and scored; it just no longer decides
 label = "steady"
 always = true
@@ -81,10 +82,11 @@ one_per = "event"
 needs_instrument = true
 numeric = "allow"               # price-threshold markets are the point of this lane
 series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXGOLD15M",
-          "KXSILVER15M", "KXWTI15M", "KXCOPPER15M", "KXNATGAS15M", "KXPLATINUM15M", "KXPALLADIUM15M"]
+          "KXSILVER15M", "KXWTI15M", "KXCOPPER15M", "KXNATGAS15M", "KXPLATINUM15M", "KXPALLADIUM15M",
+          "KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M", "KXAUDUSD15M", "KXUSDCAD15M", "KXINX15M", "KXNDQ15M", "KXBRENT15M"]
 timed_suffix = "15M"
 timed_minutes = 15
-entry_elapsed = [11.5, 13.5]    # minutes after the window opens (3.5 to 1.5 minutes left)
+entry_elapsed = [4, 13.5]       # minutes after the window opens: not in the first 4, when a window has no information and the book is thin
 scope_minutes = 3
 review_minutes = 1
 priority = 10
@@ -115,13 +117,49 @@ one_per = "event"
 needs_instrument = true
 numeric = "allow"
 series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXGOLD15M",
-          "KXSILVER15M", "KXWTI15M", "KXCOPPER15M", "KXNATGAS15M", "KXPLATINUM15M", "KXPALLADIUM15M"]
+          "KXSILVER15M", "KXWTI15M", "KXCOPPER15M", "KXNATGAS15M", "KXPLATINUM15M", "KXPALLADIUM15M",
+          "KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M", "KXAUDUSD15M", "KXUSDCAD15M", "KXINX15M", "KXNDQ15M", "KXBRENT15M"]
 timed_suffix = "15M"
 timed_minutes = 15
-entry_elapsed = [11.5, 13.5]
+entry_elapsed = [4, 13.5]
 scope_minutes = 3
 review_minutes = 1
 priority = 10
 max_exposure_pct = 0.10
+trail_activate = 0.10
+trail_drop = 0.04
+
+
+# Currency tickets: the cheap side of the five FX 15-minute markets, near the strike, flat $1 each, entered from minute 4.
+# Sells on a spike (a 10-cent jump in 30 s while at least 10% up) or a peak-crash (up 10%, then 4 cents off a held peak for
+# 10 s). It is live only when LIVE_LANES in .env names it; until then it paper-trades.
+
+[lane.fx_ticket]
+estimator = "ladder"
+label = "currency ticket"
+always = true
+fixed_stake = 1.0
+sides = ["yes", "no"]
+price = [0.05, 0.40]
+min_chance = 0.30               # currency history: the 30-50% chance bands are the ones that held up (see scripts/late_ticket_study.py)
+max_chance = 0.50
+hours = [0.01, 0.26]
+max_spread = 0.04
+min_volume = 5
+shortlist = 12
+one_per = "event"
+needs_instrument = true
+numeric = "allow"
+series = ["KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M", "KXAUDUSD15M", "KXUSDCAD15M"]
+timed_suffix = "15M"
+timed_minutes = 15
+entry_elapsed = [4, 13.5]
+scope_minutes = 3
+review_minutes = 1
+priority = 10
+max_exposure_pct = 0.10
+spike_cents = 0.10
+spike_seconds = 30
+spike_min_gain = 0.10
 trail_activate = 0.10
 trail_drop = 0.04

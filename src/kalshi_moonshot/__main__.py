@@ -581,6 +581,24 @@ def cmd_patterns(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bymin(s: config.Settings, args: argparse.Namespace) -> int:
+    """15-minute results of a lane (or all lanes) by how far into the window each bet was placed."""
+    from . import journal
+
+    store = Store(s.db_path, s.exclude_versions)
+    items = [t for t in journal.trades(store) if args.lane in (None, "all") or t.lane == args.lane]
+    rows = journal.by_entry_minute(items)
+    if not rows:
+        print("no finished 15-minute bets for that lane yet.")
+        return 0
+    print(f"{args.lane or 'all lanes'}: 15-minute bets by minute of entry\n")
+    print(f"{'':14} {'bets':>5} {'won':>5} {'staked':>8} {'P&L':>8} {'ROI':>7}")
+    for band, n, won, staked, pnl in rows:
+        print(f"{band:14} {n:>5} {won / n:>5.0%} {staked:>8.2f} {pnl:>+8.2f} {pnl / staked:>+7.1%}")
+    print("\nSmall groups swing wildly: read it as a log until each band has 30+ bets.")
+    return 0
+
+
 def cmd_patience(s: config.Settings, args: argparse.Namespace) -> int:
     """Replay finished bets as if each had waited for a slightly better price (needs the tape; places nothing)."""
     from . import patience
@@ -689,7 +707,7 @@ COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
     "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
-    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
+    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
 
 
@@ -709,6 +727,8 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--days", type=int, default=14)
             p.add_argument("--top", type=int, default=12, help="market types to list")
             p.add_argument("--tz", default="America/New_York")
+        if name == "bymin":
+            p.add_argument("--lane", help="a lane name, or leave out for all")
         if name == "patience":
             p.add_argument("--lane", default="commodity")
             p.add_argument("--min-price", type=float, default=0.60, help="only bets priced at least this")

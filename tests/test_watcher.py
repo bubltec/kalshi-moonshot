@@ -57,7 +57,7 @@ def quote(bid, ask, ts=1000.0):
 
 def test_the_watcher_follows_only_bets_whose_lane_takes_profit(setup):
     w, *_ = make(setup, 0.9)
-    assert set(w.targets) == {"KXBTC15M-1"} and lanes.takes_profit(lanes.lane_specs(setup[0])["late_ticket"])
+    assert set(w.targets) == {("KXBTC15M-1", "late_ticket")} and lanes.takes_profit(lanes.lane_specs(setup[0])["late_ticket"])
 
 
 def test_a_quote_at_the_level_queues_a_sale_and_a_low_one_does_not(setup):
@@ -65,13 +65,13 @@ def test_a_quote_at_the_level_queues_a_sale_and_a_low_one_does_not(setup):
     w.on_event(quote(0.60, 0.62))
     assert w._jobs.empty()
     w.on_event(quote(0.90, 0.92, ts=1001.0))
-    assert w._jobs.get_nowait()[0] == "KXBTC15M-1"
+    assert w._jobs.get_nowait()[:2] == ("KXBTC15M-1", "late_ticket")
 
 
 def test_the_sale_rereads_the_market_and_marks_the_paper_exit(setup):
     w, _s, store = make(setup, 0.90)
-    w._inflight.add("KXBTC15M-1")
-    w._sell("KXBTC15M-1", "take-profit test")
+    w._inflight.add(("KXBTC15M-1", "late_ticket"))
+    w._sell("KXBTC15M-1", "late_ticket", "take-profit test")
     assert store.open_bets() == []
     row = store.db.execute("SELECT exit_price FROM decisions WHERE ticker='KXBTC15M-1'").fetchone()
     assert row["exit_price"] == pytest.approx(0.90) and not w._inflight
@@ -79,7 +79,7 @@ def test_the_sale_rereads_the_market_and_marks_the_paper_exit(setup):
 
 def test_no_sale_if_the_market_no_longer_shows_a_profit(setup):
     w, _s, store = make(setup, 0.28)  # below the 0.30 paid by the time we look
-    w._sell("KXBTC15M-1", "stale socket quote")
+    w._sell("KXBTC15M-1", "late_ticket", "stale socket quote")
     assert len(store.open_bets()) == 1
 
 
@@ -98,13 +98,71 @@ def test_peak_crash_needs_the_gain_first_then_the_fall():
     assert trail_hit(0.30, 0.36, 0.31, 0.10, 0.0) is None  # off
 
 
-def test_the_watcher_tracks_the_peak_and_sells_on_the_crash(setup):
+def trail_watcher(setup):
     s, _store = setup
     (s.data_dir / "strategies.toml").write_text(
-        "[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.4]\nhours=[0.0,1.0]\ntrail_activate=0.10\ntrail_drop=0.05\n")
+        "[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.4]\nhours=[0.0,1.0]\n"
+        "trail_activate=0.10\ntrail_drop=0.05\ntrail_confirm_seconds=10\ntrail_hold_seconds=3\n")
     w = watcher.ProfitWatcher(lambda: s, FakeClient(0.33), lambda: Store(s.db_path))
     w.refresh()
-    w.on_event(quote(0.40, 0.42, ts=1000.0))  # up 33%: the peak, no sale
-    assert w._jobs.empty() and w.targets["KXBTC15M-1"].peak == pytest.approx(0.40)
-    w.on_event(quote(0.34, 0.36, ts=1001.0))  # 6c off the peak
-    assert w._jobs.get_nowait()[0] == "KXBTC15M-1"
+    return w
+
+
+def test_a_held_dip_from_the_peak_sells(setup):
+    w = trail_watcher(setup)
+    for ts, bid in ((0.0, 0.40), (5.0, 0.41), (10.0, 0.34)):  # entry 0.30; the 0.41 peak held 5s; then down 7c
+        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
+    w.check_timers(1015.0)  # only 5s down: ride on
+    assert w._jobs.empty()
+    w.on_event(quote(0.35, 0.37, ts=1016.0))  # still below the line (0.36)
+    w.check_timers(1021.0)  # 11s down
+    assert w._jobs.get_nowait()[:2] == ("KXBTC15M-1", "late_ticket")
+
+
+def test_a_dip_that_heals_quickly_is_ignored(setup):
+    w = trail_watcher(setup)
+    for ts, bid in ((0.0, 0.40), (5.0, 0.41), (10.0, 0.34), (12.0, 0.40)):  # dips for 2 seconds only
+        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
+    w.check_timers(1040.0)
+    assert w._jobs.empty()
+
+
+def test_one_thin_tick_does_not_set_the_peak(setup):
+    w = trail_watcher(setup)
+    for ts, bid in ((0.0, 0.40), (5.0, 0.60), (6.0, 0.42)):  # 0.60 lasted one second: not a peak
+        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
+    assert w.targets[("KXBTC15M-1", "late_ticket")].peak == pytest.approx(0.40)
+    w.on_event(quote(0.38, 0.40, ts=1020.0))  # 0.42 held 14s: now it is
+    assert w.targets[("KXBTC15M-1", "late_ticket")].peak == pytest.approx(0.42)
+
+
+def test_no_sale_while_the_trail_has_not_armed(setup):
+    w = trail_watcher(setup)
+    for ts, bid in ((0.0, 0.31), (5.0, 0.32), (10.0, 0.25)):  # never 10% above the 0.30 paid
+        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
+    w.check_timers(1060.0)
+    assert w._jobs.empty()
+
+def test_a_spike_must_also_clear_the_minimum_gain():
+    hist = [(100.0, 0.28), (110.0, 0.30), (120.0, 0.40)]
+    assert spike_hit(hist, 120.0, 0.39, 0.10, 30.0, 0.0) is not None  # up 1c on 39c: the old behavior sold this
+    assert spike_hit(hist, 120.0, 0.39, 0.10, 30.0, 0.10) is None  # needs 43c or more
+    assert spike_hit([(100.0, 0.20), (120.0, 0.34)], 120.0, 0.30, 0.10, 30.0, 0.10) is not None  # up 13%
+
+
+def test_a_declined_sale_is_not_rechecked_every_second(setup):
+    import time
+
+    w = trail_watcher(setup)  # entry 0.30
+    for ts, bid in ((0.0, 0.40), (5.0, 0.41), (10.0, 0.34)):
+        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
+    w.check_timers(1021.0)
+    assert w._jobs.get_nowait()[:2] == ("KXBTC15M-1", "late_ticket")
+    w._inflight.clear()
+    w.client = FakeClient(0.29)  # the market is now under the price paid: the sale is declined
+    w._sell("KXBTC15M-1", "late_ticket", "peak-crash test")
+    assert w.targets[("KXBTC15M-1", "late_ticket")].retry_after > time.time()
+    w.check_timers(time.time() + 5)  # inside the back-off: no new sale is queued
+    assert w._jobs.empty()
+    w.check_timers(time.time() + 30)  # after it: the dip is still there, so it is looked at again
+    assert not w._jobs.empty()

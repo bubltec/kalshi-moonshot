@@ -352,12 +352,15 @@ class Store:
             (1 if live else 0,),
         ).fetchall()
 
-    def holds_sized_bet(self, ticker: str) -> bool:
-        """A sized bet on this market is already open (so a re-score must not stake it again)."""
+    def holds_sized_bet(self, ticker: str, lane: str | None = None) -> bool:
+        """A sized bet on this market is already open (so a re-score must not stake it again).
+
+        With `lane`, only that lane's bet counts: two lanes (an A/B pair, say) can each hold the same market.
+        """
         row = self.db.execute(
             """SELECT 1 FROM decisions WHERE ticker=? AND action='bet' AND stake_usd IS NOT NULL
-               AND outcome IS NULL AND exit_ts IS NULL LIMIT 1""",
-            (ticker,),
+               AND outcome IS NULL AND exit_ts IS NULL AND (? IS NULL OR COALESCE(lane,'moonshot')=?) LIMIT 1""",
+            (ticker, lane, lane),
         ).fetchone()
         return row is not None
 
@@ -492,22 +495,23 @@ class Store:
         ).fetchone()
         return float(row["n"])
 
-    def mark_exited(self, ticker: str, price: float, reason: str) -> None:
+    def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None) -> None:
         self.db.execute(
             """UPDATE decisions SET exit_price=?, exit_ts=?, exit_reason=?
-               WHERE ticker=? AND action='bet' AND outcome IS NULL AND exit_ts IS NULL""",
-            (price, time.time(), reason[:300], ticker),
+               WHERE ticker=? AND action='bet' AND outcome IS NULL AND exit_ts IS NULL
+                 AND (? IS NULL OR COALESCE(lane,'moonshot')=?)""",
+            (price, time.time(), reason[:300], ticker, lane, lane),
         )
         self.db.commit()
 
     def open_bets(self) -> list[sqlite3.Row]:
-        """Unresolved bets not yet stopped out. One row per ticker (the first bet)."""
+        """Unresolved bets not yet stopped out. One row per ticker and lane (that lane's first bet)."""
         return self.db.execute(
             """SELECT d.* FROM decisions d
                JOIN (
-                 SELECT ticker, MIN(id) AS id FROM decisions
+                 SELECT ticker, COALESCE(lane,'moonshot') AS lane, MIN(id) AS id FROM decisions
                  WHERE action='bet' AND outcome IS NULL AND exit_ts IS NULL
-                 GROUP BY ticker
+                 GROUP BY ticker, COALESCE(lane,'moonshot')
                ) first ON d.id = first.id
                ORDER BY d.ts"""
         ).fetchall()

@@ -21,7 +21,9 @@ VOLM = 1.25
 FEEDS = {"KXGOLD15M": "hl:GOLD", "KXSILVER15M": "hl:SILVER", "KXWTI15M": "hl:CL", "KXCOPPER15M": "hl:COPPER",
          "KXNATGAS15M": "hl:NATGAS", "KXPLATINUM15M": "hl:PLATINUM", "KXPALLADIUM15M": "hl:PALLADIUM",
          "KXBTC15M": "kr:BTC/USD", "KXETH15M": "kr:ETH/USD", "KXSOL15M": "kr:SOL/USD", "KXXRP15M": "kr:XRP/USD",
-         "KXDOGE15M": "kr:DOGE/USD"}
+         "KXDOGE15M": "kr:DOGE/USD", "KXEURUSD15M": "hl:EUR", "KXGBPUSD15M": "hl:GBP", "KXUSDJPY15M": "hl:JPY",
+         "KXAUDUSD15M": "kr:AUD/USD", "KXUSDCAD15M": "kr:USD/CAD"}
+ONLY = set(__import__("os").environ.get("SERIES", "").split(",")) - {""}
 
 
 def hl_minutes(coin):
@@ -43,6 +45,8 @@ db = sqlite3.connect(sys.argv[1] if len(sys.argv) > 1 else "moonshot.db")
 db.row_factory = sqlite3.Row
 rows = []
 for series, feed in FEEDS.items():
+    if ONLY and series not in ONLY:
+        continue
     mins = hl_minutes(feed[3:]) if feed.startswith("hl:") else kr_minutes(feed[3:])
     wins = db.execute("select ticker, close_ts, strike, result from windows where series=? and result in ('yes','no') and strike is not null",
                       (series,)).fetchall()
@@ -66,6 +70,8 @@ for series, feed in FEEDS.items():
                 continue
             rets = [math.log(b / a) for a, b in zip(cl, cl[1:]) if a > 0 and b > 0]
             s1 = math.sqrt(sum(r * r for r in rets) / len(rets))
+            if s1 <= 0:  # a flat feed (no recent moves) gives no volatility to measure against
+                continue
             sigma = max(s1 * math.sqrt(left) * VOLM, 1e-6)
             ln_ratio = math.log(px * math.exp(wb.basis) / w["strike"])
             prev = mins.get(at - 180)

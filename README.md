@@ -145,7 +145,7 @@ Any lane can opt in from `strategies.toml` by setting `review_minutes` plus `ser
 
 A 15-minute contract can move 20 cents in half a minute, so the bot also watches open bets on Kalshi's live socket
 (`watcher.py`). A lane opts in with any of `take_profit_x` (sell when the bid reaches that multiple of the price paid),
-`take_profit_at` (sell at an absolute bid), `trail_activate` + `trail_drop` (a peak-crash exit: once the bid has been that fraction above the price paid, sell when it falls that many dollars from its peak) or `spike_cents` + `spike_seconds` (sell, while in profit, when the bid has jumped
+`take_profit_at` (sell at an absolute bid), `trail_activate` + `trail_drop` (a peak-crash exit: once the bid has been that fraction above the price paid, sell when it has stayed that many dollars below its peak for `trail_confirm_seconds`, default 10; a bid counts toward the peak only after it has held `trail_hold_seconds`, default 3, so a one-tick spike is not a peak and a dip of a second or two is ignored) or `spike_cents` + `spike_seconds` (sell, while in profit, when the bid has jumped
 that much within that time). Each quote that arrives is checked; on a hit the bot re-reads the market, confirms the bid is
 still above the price paid, and sells through the same exit code as the stop-loss: a paper sale for a paper lane, an
 immediate-or-cancel reduce-only order for a live one. No default lane sets these, so nothing live changes until you add them
@@ -155,6 +155,22 @@ fields needs a restart, because the watcher starts with the bot. A backstop pass
 `late_ticket_trail` (paper) runs beside `late_ticket` with only a peak-crash exit (up 10%, then a 4-cent fall from the peak), to compare it with the 3x/spike exit on the same kind of bet. The peak is tracked by the live watcher only, so it starts again from the price paid if the bot restarts.
 
 What the history says about it: on 3 days of quote ticks, a peak-crash exit (up 10%, then a 2-10 cent fall) returned -7% to -8% on favorites against -3.7% for holding, and -17% to -19% on cheap tickets against -3.8%, so the live commodity lane is left without one. A spike exit beat holding on cheap tickets by about 10 points on minute data but still lost money.
+
+Two paper lanes can compare exits on the same markets: bookkeeping (open bets, exits, "already holding") is per lane, so
+`late_ticket` and `late_ticket_trail` may both hold one market and each exits on its own rule. A main-scan lane with
+`shares_markets = true` (like `steady_raw`, the no-model control for `steady`) is offered the markets another lane took
+instead of the leftovers, which is what lets a control be compared with the lane it shadows.
+
+## Currencies, indices and other new markets
+
+Kalshi lists 15-minute markets beyond crypto and commodities: EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, the S&P 500 and
+Nasdaq-100, Brent and more. The five currency pairs are `live = true` in `instruments.toml` (the indices and Brent are `live = false`, which means a live lane prices
+and logs them and paper-trades them, but never sends an order for them until you change that line). The `fx_ticket` lane buys flat-$1 cheap
+tickets in the five pairs only, sells on a spike or a held peak-crash, and goes live only when `LIVE_LANES` in `.env` names it. Currencies read Hyperliquid's EUR,
+GBP and JPY perpetuals (Kraken's spot FX for AUD and CAD); the indices read the S&P 500 and Nasdaq-100 perps. The offset between
+each feed and Kalshi's reference is learned from settled windows, like gold. Run `history` and `profile --series KXEURUSD15M`
+to see how a new market behaves before trusting it, and flip `live` only on a series with a record. Not yet covered:
+Dow (no feed), interest rates (no feed), and the extra crypto series (ADA, BCH, BNB, HYPE, NEAR, TON, ZEC).
 
 ## Lane notes
 
@@ -242,6 +258,7 @@ Edit `.env`. No rebuild is needed; rebuild only when the code changes.
 | See why a market that passed a lane's filter never got a decision (our chance, the edge, the bar it missed) | `docker compose exec bot python -m kalshi_moonshot screened --ticker KXBTCD` |
 | See what your larger wins and losses have in common (the bot also rewrites `data/patterns.md` every 6 hours) | `docker compose exec bot python -m kalshi_moonshot patterns` |
 | Replay finished bets as if each had waited for a slightly better price (read-only, needs the tape) | `docker compose exec bot python -m kalshi_moonshot patience` |
+| See a lane's 15-minute results by how far into the window each bet was placed | `docker compose exec bot python -m kalshi_moonshot bymin --lane late_ticket` |
 | Scan open strike ladders for guaranteed-profit pairs (read-only) | `docker compose exec bot python -m kalshi_moonshot arbs` |
 | Show what deleting excluded versions would remove (dry run) | `docker compose exec bot python -m kalshi_moonshot prune` |
 | Delete them (makes a backup copy of the database first) | `docker compose exec bot python -m kalshi_moonshot prune --yes` |

@@ -35,6 +35,8 @@ class Trade:
     returned: float
     closed_ts: float  # when it finished: market close, or the stop-loss exit
     stopped: bool = False
+    opened_ts: float = 0.0  # when the bet was placed
+    close_ts: float = 0.0  # when its market closes (to place the bet inside a 15-minute window)
 
     @property
     def pnl(self) -> float:
@@ -57,6 +59,13 @@ def _closed_ts(row: Any) -> float:
     return min(listed, float(seen)) if seen else listed
 
 
+def _listed_close(row: Any) -> float:
+    try:
+        return datetime.fromisoformat(row["close_time"]).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def trades(store: Store) -> list[Trade]:
     """Finished sized bets, oldest first. Open bets are not trades yet."""
     rows = store.db.execute(
@@ -76,6 +85,7 @@ def trades(store: Store) -> list[Trade]:
         out.append(Trade(
             r["ticker"], r["lane"] or "moonshot", r["ticker"].split("-")[0], r["side"] or "yes",
             r["mode"] == "trade", float(r["stake_usd"]), returned, _closed_ts(r), stopped,
+            float(r["ts"]), _listed_close(r),
         ))
     out.sort(key=lambda t: t.closed_ts)
     return out
@@ -170,3 +180,20 @@ def select(items: list[Trade], *, lane: str | None = None, live: bool | None = N
         and (live is None or t.live == live)
         and (suffix is None or t.series.endswith(suffix))
     ]
+
+
+ENTRY_BANDS = ((0, 3), (3, 6), (6, 9), (9, 12), (12, 15))
+
+
+def by_entry_minute(items: list[Trade], window: float = 15.0) -> list[tuple[str, int, int, float, float]]:
+    """15-minute bets grouped by how far into the window they were placed: (band, bets, won, staked, profit)."""
+    out = []
+    for lo, hi in ENTRY_BANDS:
+        g = [
+            t for t in items
+            if t.series.endswith("15M") and t.close_ts and t.opened_ts
+            and lo <= window - (t.close_ts - t.opened_ts) / 60.0 < hi
+        ]
+        if g:
+            out.append((f"minutes {lo}-{hi}", len(g), sum(1 for t in g if t.won), sum(t.stake for t in g), sum(t.pnl for t in g)))
+    return out

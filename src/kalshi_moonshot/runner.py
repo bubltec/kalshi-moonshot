@@ -182,8 +182,12 @@ def shortlists(
     taken: set[str] = set()
     taken_events: set[str] = set()
     for spec in main_lanes(s) if lanes is None else lanes:
+        shots = lane_shots(s, client, markets, spec, estimators, now)
+        if spec.shares_markets:  # a control lane sees the same markets as the lane it is compared with
+            out[spec.name] = shots
+            continue
         picked = [
-            x for x in lane_shots(s, client, markets, spec, estimators, now)
+            x for x in shots
             if x.ticker not in taken
             and not (x.mutually_exclusive and x.event_ticker in taken_events)
         ]
@@ -410,7 +414,7 @@ def evaluate(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
             balance.open_by_lane.get(shot.lane, 0.0),
         )
-        if store.holds_sized_bet(shot.ticker) and not s.is_live(shot.lane, shot.series):
+        if store.holds_sized_bet(shot.ticker, shot.lane) and not s.is_live(shot.lane, shot.series):
             sized = Sizing(0, 0.0, "already holding this market (paper)")
         elif not sized.ok:
             bet = False
@@ -510,15 +514,16 @@ def exit_position(
 ) -> str:
     """Sell (or paper-sell) one open bet at `bid`. Safe to call from any thread."""
     with _EXIT_LOCK:
-        if row["ticker"] not in {r["ticker"] for r in store.open_bets()}:
+        lane = row["lane"] or "moonshot"
+        if (row["ticker"], lane) not in {(r["ticker"], r["lane"] or "moonshot") for r in store.open_bets()}:
             return f"{row['ticker']}: already exited"
         side = row["side"] or "yes"
-        if not s.is_live(row["lane"] or "moonshot", row["ticker"].split("-")[0]):
-            store.mark_exited(row["ticker"], bid, why)
+        if not s.is_live(lane, row["ticker"].split("-")[0]):
+            store.mark_exited(row["ticker"], bid, why, lane)
             return f"paper-sold {row['ticker']} @ {bid:.2f}. {why}"
         count = int(store.net_contracts(row["ticker"], s.env))
         if count <= 0:
-            store.mark_exited(row["ticker"], bid, why)
+            store.mark_exited(row["ticker"], bid, why, lane)
             return f"paper-sold {row['ticker']} @ {bid:.2f} (no live fill). {why}"
         if before_order:
             before_order()
@@ -538,7 +543,7 @@ def exit_position(
             side="sell", contract=side,
         )
         if store.net_contracts(row["ticker"], s.env) <= 0:
-            store.mark_exited(row["ticker"], avg if filled else bid, why)
+            store.mark_exited(row["ticker"], avg if filled else bid, why, lane)
             return f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
         return f"partial exit {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
 

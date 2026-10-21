@@ -319,8 +319,10 @@ def trail_hit(entry: float, peak: float, bid: float, activate: float, drop: floa
     return None
 
 
-def spike_hit(history: list[tuple[float, float]], now: float, entry: float, cents: float, seconds: float) -> str | None:
-    """A sharp rise: the latest bid is `cents` above the lowest bid of the last `seconds`, and above what we paid.
+def spike_hit(
+    history: list[tuple[float, float]], now: float, entry: float, cents: float, seconds: float, min_gain: float = 0.0
+) -> str | None:
+    """A sharp rise: the latest bid is `cents` above the lowest bid of the last `seconds`, and at least `min_gain` above what we paid.
 
     history is (time, bid) pairs, oldest first, the last being the latest.
     """
@@ -328,7 +330,7 @@ def spike_hit(history: list[tuple[float, float]], now: float, entry: float, cent
         return None
     bid = history[-1][1]
     recent = [b for t, b in history if now - t <= seconds]
-    if bid > entry and len(recent) >= 2 and bid - min(recent) >= cents - 1e-9:
+    if bid > entry * (1 + min_gain) - 1e-9 and bid > entry and len(recent) >= 2 and bid - min(recent) >= cents - 1e-9:
         return f"spike: bid {bid:.2f} is up {bid - min(recent):.2f} in {seconds:.0f}s (paid {entry:.2f})"
     return None
 

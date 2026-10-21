@@ -43,14 +43,18 @@ class LaneSpec:
     fixed_stake: float = 0.0  # dollars per bet, ignoring Kelly (0 = size by the odds and the balance)
     always: bool = False  # bet whenever the filters pass, with no minimum edge from a model
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
+    shares_markets: bool = False  # main-scan lane that also takes markets another lane took (for A/B controls); never consumes them
     min_chance: float = 0.0  # bet only when the estimator's chance that the contract pays is in [min_chance, max_chance]
     max_chance: float = 1.0  # (the estimate before calibration; for a ladder lane this is a distance to the strike)
     take_profit_x: float = 0.0  # sell when the bid reaches this multiple of the price paid (0 = off); watched live on the socket
     take_profit_at: float = 0.0  # sell when the bid reaches this price (0 = off)
     trail_activate: float = 0.0  # peak-crash exit: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
     trail_drop: float = 0.0  # ... sell when it falls this many dollars from its peak (0 = off; watched live on the socket only)
+    trail_confirm_seconds: float = 10.0  # ... and has stayed that far down this long (a dip of a second or two is noise)
+    trail_hold_seconds: float = 3.0  # a bid counts toward the peak only once it has held this long (one thin-book tick is not a peak)
     spike_cents: float = 0.0  # sell, while in profit, when the bid has risen this much (dollars) within spike_seconds (0 = off)
     spike_seconds: float = 30.0
+    spike_min_gain: float = 0.10  # a spike sells only when the bid is also this fraction above the price paid (0.10 = up 10%)
     min_return: float = 0.0  # a win must pay at least this much on the stake, after the fee
     max_bet_pct: float = 0.02  # one bet, share of equity (see sizing.py)
     max_exposure_pct: float = 0.25  # all open bets in the lane, share of equity

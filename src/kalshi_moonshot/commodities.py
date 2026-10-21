@@ -47,6 +47,7 @@ class Instrument:
     suffixes: tuple[str, ...]
     realtime: bool = False  # the feed's price is current, so spot can anchor a market with no ladder
     proxy: bool = False  # feed tracks the asset with an offset (a gold token): measure it from ladders
+    live: bool = True  # False = paper only: a lane that is live still only paper-trades this series
 
 
 @lru_cache(maxsize=1)
@@ -68,6 +69,7 @@ def _parse_instruments(text: str) -> tuple[Instrument, ...]:
     return tuple(
         Instrument(
             row["prefix"], row["symbol"], tuple(row.get("suffixes", [""])), bool(row.get("realtime", False)), bool(row.get("proxy", False)),
+            bool(row.get("live", True)),
         )
         for row in raw.get("instrument", [])
     )
