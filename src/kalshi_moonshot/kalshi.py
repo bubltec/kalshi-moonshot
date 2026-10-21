@@ -313,6 +313,22 @@ class KalshiClient:
     def balance(self) -> dict[str, Any]:
         return self._request("GET", "/portfolio/balance", auth=True)
 
+    def shard_transfer(
+        self, usd: float, source: str = "event_contract", source_shard: int = 2,
+        destination: str = "event_contract", destination_shard: int = 0, transfer_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Move cash within your own account between exchange shards (POST /portfolio/intra_exchange_instance_transfer).
+
+        Kalshi keeps a cash balance per exchange shard, and an API order can only spend the balance on its market's shard.
+        Amounts are in centicents (1/10000 of a dollar). The transfer is accepted now and processed asynchronously.
+        """
+        body = {
+            "source": source, "destination": destination, "amount": round(usd * 10_000),
+            "source_exchange_shard": source_shard, "destination_exchange_shard": destination_shard,
+            "client_transfer_id": transfer_id or str(uuid.uuid4()),
+        }
+        return self._request("POST", "/portfolio/intra_exchange_instance_transfer", json=body, auth=True)
+
     def portfolio_rows(self, path: str, key: str, min_ts: int | None = None, pages: int = 60) -> list[dict[str, Any]]:
         """Every row of a paged portfolio list (fills, settlements, orders), newest first."""
         out: list[dict[str, Any]] = []

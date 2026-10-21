@@ -661,6 +661,32 @@ def cmd_target(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_shardmove(s: config.Settings, args: argparse.Namespace) -> int:
+    """Move cash between your own exchange shards, e.g. exchange 2 -> 0 so currency orders can be funded. Dry run unless --yes."""
+    def parse(text: str) -> tuple[str, int]:
+        kind, _, shard = text.partition(":")
+        kind = {"event": "event_contract", "margined": "margined", "event_contract": "event_contract"}.get(kind, "")
+        if not kind or not shard.isdigit():
+            raise SystemExit(f"{text!r}: use event:SHARD or margined:SHARD, for example event:2")
+        return kind, int(shard)
+
+    src, src_shard = parse(args.source)
+    dst, dst_shard = parse(args.dest)
+    if not 0 < args.usd <= args.max_usd:
+        raise SystemExit(f"amount must be more than $0 and at most ${args.max_usd:g} (raise it with --max-usd)")
+    if (src, src_shard) == (dst, dst_shard):
+        raise SystemExit("source and destination are the same")
+    client = _client(s)
+    print(f"balances now: {client.balance().get('balance_breakdown')}")
+    print(f"plan: move ${args.usd:.2f} from {src} shard {src_shard} to {dst} shard {dst_shard} (your own account)")
+    if not args.yes:
+        print("dry run: nothing moved. Add --yes to send it.")
+        return 0
+    print(f"sent: {client.shard_transfer(args.usd, src, src_shard, dst, dst_shard)}")
+    print("It is processed asynchronously: run `balance` in a few seconds to see it land.")
+    return 0
+
+
 def cmd_balance(s: config.Settings, args: argparse.Namespace) -> int:
     print(_client(s).balance())
     return 0
@@ -705,7 +731,7 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
-    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "kill": cmd_kill,
+    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
     "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
@@ -727,6 +753,12 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--days", type=int, default=14)
             p.add_argument("--top", type=int, default=12, help="market types to list")
             p.add_argument("--tz", default="America/New_York")
+        if name == "shardmove":
+            p.add_argument("--from", dest="source", default="event:2", help="event:SHARD or margined:SHARD (margined is Perpetuals)")
+            p.add_argument("--to", dest="dest", default="event:0")
+            p.add_argument("--usd", type=float, required=True)
+            p.add_argument("--max-usd", type=float, default=50.0, help="refuse bigger amounts than this")
+            p.add_argument("--yes", action="store_true", help="actually send it; without this it only prints the plan")
         if name == "bymin":
             p.add_argument("--lane", help="a lane name, or leave out for all")
         if name == "patience":

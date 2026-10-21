@@ -441,6 +441,35 @@ def evaluate(
     return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
 
 
+# Kalshi keeps a separate balance for each exchange_index a market trades on. A market whose index holds no cash refuses
+# every order with insufficient_balance, however much cash the account has elsewhere. Remember it, so the bot says why once
+# and then stops asking instead of failing every minute.
+_EXCHANGE_OF: dict[str, int] = {}  # series -> exchange_index
+_UNFUNDED: dict[int, float] = {}  # exchange_index -> do not try again before this time
+UNFUNDED_PAUSE = 600.0
+
+
+def _explain_unfunded(client: KalshiClient, shot: LongShot, cost: float) -> str | None:
+    """If a refused order was a balance problem on the market's own exchange, say so and pause orders there."""
+    try:
+        idx = client.market(shot.ticker).get("exchange_index")
+        rows = client.balance().get("balance_breakdown") or []
+    except KalshiError:
+        return None
+    if idx is None:
+        return None
+    by_index = {int(r.get("exchange_index", -1)): float(r.get("balance") or 0.0) for r in rows}
+    here = by_index.get(int(idx), 0.0)
+    if here + 1e-9 >= cost:
+        return None
+    _EXCHANGE_OF[shot.series] = int(idx)
+    _UNFUNDED[int(idx)] = time.time() + UNFUNDED_PAUSE
+    elsewhere = ", ".join(f"exchange {i}: ${b:.2f}" for i, b in sorted(by_index.items()) if b > 0) or "none"
+    return (f"skipped: {shot.series} trades on Kalshi exchange {idx}, which holds ${here:.2f} of your cash "
+            f"(cash is on {elsewhere}). Move funds there in the Kalshi app; orders for it are paused for "
+            f"{UNFUNDED_PAUSE / 60:.0f} minutes")
+
+
 class Placed(NamedTuple):
     note: str
     filled: float = 0.0  # contracts that actually filled
@@ -471,6 +500,9 @@ def place(
     )
     if not verdict.ok:
         return Placed(f"blocked by risk: {verdict.reason}")
+    known = _EXCHANGE_OF.get(shot.series)
+    if known is not None and _UNFUNDED.get(known, 0.0) > time.time():
+        return Placed(f"skipped: exchange {known} (where {shot.series} trades) has no cash; move funds there in the Kalshi app")
     if before_order:
         before_order()
     try:
@@ -479,6 +511,10 @@ def place(
     except KalshiRateLimited:
         raise  # refused outright, so nothing was bought; the queue retries it later
     except KalshiError as exc:
+        if "insufficient_balance" in str(exc):
+            why_not = _explain_unfunded(client, shot, cost)
+            if why_not:
+                return Placed(why_not)
         return Placed(f"order failed: {exc}")
     filled = float(resp.get("fill_count") or 0.0)
     avg = float(resp.get("average_fill_price") or shot.ask)

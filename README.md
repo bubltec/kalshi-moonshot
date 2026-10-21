@@ -172,6 +172,11 @@ each feed and Kalshi's reference is learned from settled windows, like gold. Run
 to see how a new market behaves before trusting it, and flip `live` only on a series with a record. Not yet covered:
 Dow (no feed), interest rates (no feed), and the extra crypto series (ADA, BCH, BNB, HYPE, NEAR, TON, ZEC).
 
+Kalshi keeps a separate cash balance per exchange shard: crypto and commodities are on shard 2, most other categories (currencies
+included) on shard 0, and an API order can spend only the cash on its own market's shard. The website moves the money for you;
+the API does not. `shardmove` calls Kalshi's intra-exchange transfer for you (dry run by default, `--yes` to send, capped by
+`--max-usd`). When a refused order is a balance problem on the market's own shard, the bot says so and pauses orders there.
+
 ## Lane notes
 
 - **moonshot**: cheap contracts (`MIN_PRICE`-`MAX_PRICE`) with a small chance of a large payout.
@@ -259,6 +264,7 @@ Edit `.env`. No rebuild is needed; rebuild only when the code changes.
 | See what your larger wins and losses have in common (the bot also rewrites `data/patterns.md` every 6 hours) | `docker compose exec bot python -m kalshi_moonshot patterns` |
 | Replay finished bets as if each had waited for a slightly better price (read-only, needs the tape) | `docker compose exec bot python -m kalshi_moonshot patience` |
 | See a lane's 15-minute results by how far into the window each bet was placed | `docker compose exec bot python -m kalshi_moonshot bymin --lane late_ticket` |
+| Move cash between your own exchange shards, e.g. 2 -> 0 so currency orders can be funded (dry run unless `--yes`) | `docker compose exec bot python -m kalshi_moonshot shardmove --usd 15` |
 | Scan open strike ladders for guaranteed-profit pairs (read-only) | `docker compose exec bot python -m kalshi_moonshot arbs` |
 | Show what deleting excluded versions would remove (dry run) | `docker compose exec bot python -m kalshi_moonshot prune` |
 | Delete them (makes a backup copy of the database first) | `docker compose exec bot python -m kalshi_moonshot prune --yes` |
