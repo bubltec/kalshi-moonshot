@@ -135,9 +135,32 @@ class Worker:
         db_path = self.s.db_path
         w = watcher.ProfitWatcher(lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions))
         self.recorder.listeners.append(w.on_event)
+        self.recorder.extra_tickers = self._held_for_watching  # hourly and daily positions are streamed too
         w.start()
         self.watcher = w
         log.info("take-profit watcher on: selling from the live socket when a lane's level is hit")
+
+    def _held_for_watching(self) -> set[str]:
+        """Tickers of open bets whose lane has a take-profit or peak-crash rule: the socket should stream them."""
+        from . import lanes
+
+        specs = lanes.lane_specs(self.s)
+        out = set()
+        for row in self.store.open_bets():
+            spec = specs.get(row["lane"] or "moonshot")
+            if spec is not None and lanes.takes_profit(spec):
+                out.add(row["ticker"])
+        return out
+
+    def _watch_new_position(self, ticker: str) -> None:
+        """A bet was just placed: follow it on the socket now and register it with the watcher, instead of at the next refresh."""
+        if self.watcher is None or self.recorder is None:
+            return
+        try:
+            self.recorder.follow({ticker})
+            self.watcher.refresh()
+        except Exception:
+            log.exception("could not register %s with the watcher", ticker)
 
     def stop(self) -> None:
         self.stopping = True
@@ -247,7 +270,7 @@ class Worker:
         queued = 0
         for shot in shots:
             made = self.jobs.enqueue(
-                "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.ticker}",
+                "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
                 expires_in=every, max_attempts=s.job_max_attempts,
                 priority=spec_for(s, shot.lane).priority,
             )
@@ -296,6 +319,7 @@ class Worker:
         print(runner.format_outcome(out), flush=True)
         if out.action == "bet":
             self._schedule_stop_loss()
+            self._watch_new_position(out.ticker)
         return f"{out.action} {out.ticker}"
 
     # ---- two-level lanes: a slow scoping pass feeds a fast reviewing pass ----
@@ -343,7 +367,7 @@ class Worker:
         queued = 0
         for shot in shots:
             made = self.jobs.enqueue(
-                "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.ticker}",
+                "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
                 expires_in=max(60.0, 2 * every), max_attempts=self.s.job_max_attempts,
                 priority=spec.priority,
             )

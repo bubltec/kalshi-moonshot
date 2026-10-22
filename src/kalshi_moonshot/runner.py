@@ -18,7 +18,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import NamedTuple
 
-from . import risk, shadow
+from . import gate, risk, shadow
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
@@ -399,6 +399,11 @@ def evaluate(
     e = edge(cal.p, shot.ask)
     bet = wants_bet(spec, cal.p, shot.ask, e)
     note = why if cal.n == 0 else f"{why} | {cal.note(p)}"
+    if bet and spec.gate_from:
+        open_, gate_note = gate.check(store, spec, shot.close_time)
+        if not open_:
+            bet = False
+            note = f"{gate_note}. {note}"
     if bet and not chance_ok(spec, p):
         bet = False
         note = f"chance {p:.0%} outside the lane's {spec.min_chance:.0%}-{spec.max_chance:.0%}. {note}"
@@ -470,6 +475,56 @@ def _explain_unfunded(client: KalshiClient, shot: LongShot, cost: float) -> str 
             f"{UNFUNDED_PAUSE / 60:.0f} minutes")
 
 
+def _day_start(now: float) -> float:
+    from .risk import start_of_day
+
+    return start_of_day(now)
+
+
+def _top_up(s: Settings, client: KalshiClient, store: Store, shot: LongShot, cost: float) -> str | None:
+    """Make sure the exchange this order trades on holds enough cash, moving some in from another exchange if it does not.
+
+    Returns None when the order may go ahead, or the reason it should be skipped. Opt-in (SHARD_TOPUP_TARGET_USD > 0),
+    never takes the source below SHARD_TOPUP_KEEP_USD, and never moves more than SHARD_TOPUP_MAX_USD_PER_DAY in a day.
+    """
+    if s.shard_topup_target <= 0:
+        return None
+    try:
+        idx = _EXCHANGE_OF.get(shot.series)
+        if idx is None:
+            raw = client.market(shot.ticker).get("exchange_index")
+            if raw is None:
+                return None
+            idx = _EXCHANGE_OF[shot.series] = int(raw)
+        cash = client.shard_balances()
+        here = cash.get(idx, 0.0)
+        if here + 1e-9 >= cost:
+            _UNFUNDED.pop(idx, None)
+            return None
+        want = max(cost - here, s.shard_topup_target - here)
+        sources = {i: c - s.shard_topup_keep for i, c in cash.items() if i != idx and c - s.shard_topup_keep > 0}
+        if not sources:
+            return f"skipped: exchange {idx} holds ${here:.2f}, and no other exchange has cash above the ${s.shard_topup_keep:.0f} floor to move in"
+        src = max(sources, key=lambda i: sources[i])
+        room = s.shard_topup_max_per_day - store.shard_moved_since(_day_start(time.time()))
+        amount = round(min(want, sources[src], room), 2)
+        if amount + 1e-9 < cost - here:
+            return f"skipped: exchange {idx} needs ${cost - here:.2f} more but the top-up limit allows ${max(amount, 0):.2f} (daily cap ${s.shard_topup_max_per_day:.0f})"
+        resp = client.shard_transfer(amount, "event_contract", src, "event_contract", idx)
+        store.add_shard_move(src, idx, amount, f"top up for {shot.ticker}", str(resp.get("transfer_id", "")))
+        log.info("moved $%.2f from exchange %d to exchange %d for %s", amount, src, idx, shot.ticker)
+        for _ in range(8):  # the transfer is asynchronous: wait for it to land
+            time.sleep(1.0)
+            if client.shard_balances().get(idx, 0.0) + 1e-9 >= cost:
+                _UNFUNDED.pop(idx, None)
+                return None
+        return f"skipped: moved ${amount:.2f} to exchange {idx} but it has not landed yet; the next review retries"
+    except KalshiRateLimited:
+        raise
+    except KalshiError as exc:
+        return f"skipped: could not top up exchange cash ({exc})"
+
+
 class Placed(NamedTuple):
     note: str
     filled: float = 0.0  # contracts that actually filled
@@ -500,6 +555,9 @@ def place(
     )
     if not verdict.ok:
         return Placed(f"blocked by risk: {verdict.reason}")
+    topped = _top_up(s, client, store, shot, cost)
+    if topped:
+        return Placed(topped)
     known = _EXCHANGE_OF.get(shot.series)
     if known is not None and _UNFUNDED.get(known, 0.0) > time.time():
         return Placed(f"skipped: exchange {known} (where {shot.series} trades) has no cash; move funds there in the Kalshi app")
@@ -602,7 +660,11 @@ def stop_loss_pass(
     for row in store.open_bets():
         spec = specs.get(row["lane"] or "moonshot")
         profit_on = spec is not None and takes_profit(spec)
-        stop_on = s.stop_loss_enabled and not (row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast)
+        stop_on = (
+            s.stop_loss_enabled
+            and (spec is None or spec.stop_loss)
+            and not (row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast)
+        )
         if not (stop_on or profit_on):
             continue  # a 15-minute window is held to settlement (STOP_LOSS_15M=false) unless it takes profit
         hours = _hours_left(row["close_time"], now)
@@ -643,7 +705,11 @@ def next_stop_loss_at(s: Settings, store: Store, now: float | None = None) -> fl
         if spec is not None and takes_profit(spec) and _hours_left(row["close_time"]) is not None:
             soonest, fast = now, True  # a take-profit bet is checked every minute (the live watcher is faster)
             continue
-        if not s.stop_loss_enabled or (row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast):
+        if (
+            not s.stop_loss_enabled
+            or (spec is not None and not spec.stop_loss)
+            or (row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast)
+        ):
             continue
         hours = _hours_left(row["close_time"])
         if hours is None:

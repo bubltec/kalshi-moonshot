@@ -95,6 +95,16 @@ CREATE TABLE IF NOT EXISTS jobs (
   priority INTEGER NOT NULL DEFAULT 0  -- higher runs first; fast lanes jump the queue
 );
 
+CREATE TABLE IF NOT EXISTS shard_moves (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  src_shard INTEGER NOT NULL,
+  dst_shard INTEGER NOT NULL,
+  usd REAL NOT NULL,
+  reason TEXT,
+  transfer_id TEXT
+);
+
 CREATE TABLE IF NOT EXISTS screen_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -364,6 +374,16 @@ class Store:
         ).fetchone()
         return row is not None
 
+    # ---- cash the bot moved between your exchanges (see runner._top_up) ----
+    def add_shard_move(self, src: int, dst: int, usd: float, reason: str, transfer_id: str = "") -> None:
+        self.db.execute("INSERT INTO shard_moves (ts, src_shard, dst_shard, usd, reason, transfer_id) VALUES (?,?,?,?,?,?)",
+                        (time.time(), src, dst, usd, reason[:200], transfer_id))
+        self.db.commit()
+
+    def shard_moved_since(self, since_ts: float) -> float:
+        row = self.db.execute("SELECT COALESCE(SUM(usd),0) FROM shard_moves WHERE ts>=?", (since_ts,)).fetchone()
+        return float(row[0])
+
     # ---- screened-out candidates: markets that passed the lane's filter but never got a decision ----
     def log_screened(self, lane: str, rows: list[dict[str, Any]], now: float | None = None, gap: float = 300.0) -> int:
         """Record why candidates were dropped by the estimator's screen. One row per ticker and side per `gap` seconds."""
@@ -555,7 +575,11 @@ class Store:
         ).fetchall()
 
     def open_position_tickers(self, env: str) -> set[str]:
-        """Tickers we still hold: net bought contracts, market not settled, not stopped out."""
+        """Tickers we still hold, from the orders themselves: more bought than sold, and the market not settled.
+
+        A bet marked as exited does not matter here: if the orders still show contracts held (a second bet bought after the
+        first exit), the ticker is held, so no lane buys it twice.
+        """
         rows = self.db.execute(
             """SELECT o.ticker FROM orders o
                WHERE o.env=?
@@ -563,9 +587,7 @@ class Store:
                HAVING SUM(CASE WHEN COALESCE(o.side,'buy')='buy' THEN o.fill_count
                                ELSE -o.fill_count END) > 0
                  AND NOT EXISTS (SELECT 1 FROM decisions d
-                                 WHERE d.ticker=o.ticker AND d.outcome IN ('yes','no'))
-                 AND NOT EXISTS (SELECT 1 FROM decisions d
-                                 WHERE d.ticker=o.ticker AND d.exit_ts IS NOT NULL)""",
+                                 WHERE d.ticker=o.ticker AND d.outcome IN ('yes','no'))""",
             (env,),
         ).fetchall()
         return {r["ticker"] for r in rows}

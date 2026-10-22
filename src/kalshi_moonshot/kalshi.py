@@ -313,6 +313,11 @@ class KalshiClient:
     def balance(self) -> dict[str, Any]:
         return self._request("GET", "/portfolio/balance", auth=True)
 
+    def shard_balances(self) -> dict[int, float]:
+        """Cash per exchange shard, in dollars."""
+        rows = self.balance().get("balance_breakdown") or []
+        return {int(r.get("exchange_index", -1)): float(r.get("balance") or 0.0) for r in rows}
+
     def shard_transfer(
         self, usd: float, source: str = "event_contract", source_shard: int = 2,
         destination: str = "event_contract", destination_shard: int = 0, transfer_id: str | None = None,

@@ -99,6 +99,7 @@ spike_seconds = 30
 # The same late-ticket entries with a peak-crash exit: once the bid has been 10% above the price paid, sell when it falls
 # 4 cents from its peak, watched live on the socket. It runs beside late_ticket (3x or a spike) so the two exits are compared
 # on the same kind of bet. Backtests on quote ticks say holding beat this, so it is an experiment. Paper only.
+stop_loss = false
 
 [lane.late_ticket_trail]
 estimator = "ladder"
@@ -133,6 +134,7 @@ trail_drop = 0.04
 # Currency tickets: the cheap side of the five FX 15-minute markets, near the strike, flat $1 each, entered from minute 4.
 # Sells on a spike (a 10-cent jump in 30 s while at least 10% up) or a peak-crash (up 10%, then 4 cents off a held peak for
 # 10 s). It is live only when LIVE_LANES in .env names it; until then it paper-trades.
+stop_loss = false
 
 [lane.fx_ticket]
 estimator = "ladder"
@@ -153,13 +155,107 @@ numeric = "allow"
 series = ["KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M", "KXAUDUSD15M", "KXUSDCAD15M"]
 timed_suffix = "15M"
 timed_minutes = 15
-entry_elapsed = [4, 13.5]
+entry_elapsed = [1, 14]          # the whole window: the learned gate decides which minutes may trade
 scope_minutes = 3
 review_minutes = 1
 priority = 10
 max_exposure_pct = 0.10
-spike_cents = 0.10
-spike_seconds = 30
-spike_min_gain = 0.10
 trail_activate = 0.10
 trail_drop = 0.04
+stop_loss = false
+gate_from = ["late_ticket", "late_ticket_trail", "fx_ticket"]   # the lanes whose finished bets decide which minutes may trade
+gate_min_n = 30
+gate_z = 1.0
+
+
+# Last-minute lottery tickets (paper experiment): the 0.2-5 cent side of a commodity 15-minute market in its last minute, held to
+# settlement, a flat 50 cents. Winners are rare (about 1%) and pay 20x-100x. Backtest on 3 days of ticks: buying every such ticket
+# returned about -30% on gold/silver/oil, so this paper lane exists to collect a record and to test whether a trend toward the
+# strike separates the winners. Never live unless it is named in LIVE_LANES.
+
+[lane.last_minute]
+estimator = "ladder"
+label = "last-minute ticket"
+always = true
+fixed_stake = 0.5
+sides = ["yes", "no"]
+price = [0.002, 0.05]
+hours = [0.003, 0.26]           # any 15-minute window; entry_elapsed below picks the last minute
+max_spread = 0.03
+min_volume = 0
+shortlist = 20
+one_per = "event"
+needs_instrument = true
+numeric = "allow"
+series = ["KXGOLD15M", "KXSILVER15M", "KXWTI15M", "KXCOPPER15M", "KXNATGAS15M", "KXPLATINUM15M", "KXPALLADIUM15M"]
+timed_suffix = "15M"
+timed_minutes = 15
+entry_elapsed = [14, 14.9]
+scope_minutes = 3
+review_minutes = 0.5
+priority = 10
+max_exposure_pct = 0.05
+stop_loss = false
+
+
+# Currency favorites (paper experiment): the side priced 70-80 cents in minutes 8-10 of a currency 15-minute window, held to
+# settlement, a flat $2. It copies a public "lock" counter that showed 17 straight wins on GBP/USD overnight. A plain version of that
+# rule won 12 of 13 overnight but only 65-68% on the two days before, which loses at these prices, so this lane records forward
+# results (see `daily --lane fx_favorite`, `bymin`) before any real money is considered. Never live unless named in LIVE_LANES.
+
+[lane.fx_favorite]
+estimator = "ladder"
+label = "currency favorite"
+always = true
+fixed_stake = 2.0
+sides = ["yes", "no"]
+price = [0.70, 0.80]
+hours = [0.03, 0.26]
+max_spread = 0.03
+min_volume = 0
+shortlist = 12
+one_per = "event"
+needs_instrument = true
+numeric = "allow"
+series = ["KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M", "KXAUDUSD15M", "KXUSDCAD15M"]
+timed_suffix = "15M"
+timed_minutes = 15
+entry_elapsed = [8, 10.5]
+scope_minutes = 3
+review_minutes = 1
+priority = 10
+max_exposure_pct = 0.10
+stop_loss = false
+
+
+# Your pattern, as a paper lane: buy a currency side priced about 30 cents mid-window, ride it up, sell on a held dip from the peak.
+# It does not have to reach the target to profit. Entry is the same as the reset fx_ticket, so what this records is what fx_ticket's
+# learned gate judges. Never live unless named in LIVE_LANES.
+
+[lane.fx_trail30]
+estimator = "ladder"
+label = "currency 30c trail"
+always = true
+fixed_stake = 1.0
+sides = ["yes", "no"]
+price = [0.25, 0.35]
+hours = [0.03, 0.26]
+max_spread = 0.04
+min_volume = 0
+shortlist = 12
+one_per = "event"
+needs_instrument = true
+numeric = "allow"
+series = ["KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M", "KXAUDUSD15M", "KXUSDCAD15M"]
+timed_suffix = "15M"
+timed_minutes = 15
+entry_elapsed = [4, 12]
+scope_minutes = 3
+review_minutes = 1
+priority = 10
+max_exposure_pct = 0.10
+stop_loss = false
+trail_activate = 0.10
+trail_drop = 0.04
+trail_confirm_seconds = 10
+trail_fast_drop = 0.12

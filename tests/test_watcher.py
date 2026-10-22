@@ -159,10 +159,17 @@ def test_a_declined_sale_is_not_rechecked_every_second(setup):
     w.check_timers(1021.0)
     assert w._jobs.get_nowait()[:2] == ("KXBTC15M-1", "late_ticket")
     w._inflight.clear()
-    w.client = FakeClient(0.29)  # the market is now under the price paid: the sale is declined
-    w._sell("KXBTC15M-1", "late_ticket", "peak-crash test")
+    w.client = FakeClient(0.40)  # the dip has already healed by the time we look: the sale is declined
+    w._sell("KXBTC15M-1", "late_ticket", "peak-crash: bid 0.34 is 0.07 off its 0.41 peak")
     assert w.targets[("KXBTC15M-1", "late_ticket")].retry_after > time.time()
     w.check_timers(time.time() + 5)  # inside the back-off: no new sale is queued
     assert w._jobs.empty()
     w.check_timers(time.time() + 30)  # after it: the dip is still there, so it is looked at again
     assert not w._jobs.empty()
+
+
+def test_a_spike_that_faded_before_the_sale_is_not_sold(setup):
+    w, _s, store = make(setup, 0.31)  # entry 0.30; fresh bid 0.31 is under the 10% minimum gain (0.33)
+    w._inflight.add(("KXBTC15M-1", "late_ticket"))
+    w._sell("KXBTC15M-1", "late_ticket", "spike: bid 0.40 is up 0.12 in 30s (paid 0.30)")
+    assert len(store.open_bets()) == 1

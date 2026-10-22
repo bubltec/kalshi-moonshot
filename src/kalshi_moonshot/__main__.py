@@ -581,6 +581,28 @@ def cmd_patterns(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_gate(s: config.Settings, args: argparse.Namespace) -> int:
+    """Show the learned entry gate: which minutes of a 15-minute window the record says a lane may enter."""
+    from . import gate
+
+    spec = lanes.spec_for(s, args.lane)
+    sources = tuple(spec.gate_from) or tuple(args.sources.split(",")) if (spec.gate_from or args.sources) else ()
+    if not sources:
+        print(f"lane {args.lane} has no gate_from; pass --sources late_ticket,late_ticket_trail to preview one.")
+        return 0
+    store = Store(s.db_path, s.exclude_versions)
+    cells = gate.table(store, sources, since=gate.since_ts(spec.gate_since))
+    print(f"{args.lane}: entry bands from the finished bets of {', '.join(sources)}{f' since {spec.gate_since}' if spec.gate_since else ''}\n"
+          f"(open needs {spec.gate_min_n} bets and mean return minus {spec.gate_z:g} standard errors above zero)\n")
+    print(f"{'band':14} {'bets':>5} {'won':>5} {'mean ROI':>9} {'lower':>8}  gate")
+    for band, c in cells.items():
+        ok, _ = gate.decide(c, spec.gate_min_n, spec.gate_z)
+        won = f"{c.wins / c.n:.0%}" if c.n else "-"
+        lower = "-" if c.n < 2 else f"{c.lower(spec.gate_z):+.0%}"
+        print(f"minutes {band[0]}-{band[1]:<4} {c.n:>5} {won:>5} {c.mean_roi:>+9.0%} {lower:>8}  {'OPEN' if ok else 'closed'}")
+    return 0
+
+
 def cmd_bymin(s: config.Settings, args: argparse.Namespace) -> int:
     """15-minute results of a lane (or all lanes) by how far into the window each bet was placed."""
     from . import journal
@@ -733,7 +755,7 @@ COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
     "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
-    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
+    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
 
 
@@ -759,6 +781,9 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--usd", type=float, required=True)
             p.add_argument("--max-usd", type=float, default=50.0, help="refuse bigger amounts than this")
             p.add_argument("--yes", action="store_true", help="actually send it; without this it only prints the plan")
+        if name == "gate":
+            p.add_argument("--lane", required=True)
+            p.add_argument("--sources", default="", help="lanes to preview the gate from, if the lane has no gate_from")
         if name == "bymin":
             p.add_argument("--lane", help="a lane name, or leave out for all")
         if name == "patience":

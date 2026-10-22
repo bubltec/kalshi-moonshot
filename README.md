@@ -175,7 +175,18 @@ Dow (no feed), interest rates (no feed), and the extra crypto series (ADA, BCH, 
 Kalshi keeps a separate cash balance per exchange shard: crypto and commodities are on shard 2, most other categories (currencies
 included) on shard 0, and an API order can spend only the cash on its own market's shard. The website moves the money for you;
 the API does not. `shardmove` calls Kalshi's intra-exchange transfer for you (dry run by default, `--yes` to send, capped by
-`--max-usd`). When a refused order is a balance problem on the market's own shard, the bot says so and pauses orders there.
+`--max-usd`). Set `SHARD_TOPUP_TARGET_USD` (off at 0) and the bot does it for you before a live order: if the market's exchange holds less than the order needs, it moves
+cash in from your richest other exchange, up to the target, never leaving the source under `SHARD_TOPUP_KEEP_USD` and never moving more than
+`SHARD_TOPUP_MAX_USD_PER_DAY` a day; each move is logged and stored in `shard_moves`. When a refused order is a balance problem on the market's own shard, the bot says so and pauses orders there.
+
+A lane can turn its own stop-loss off with `stop_loss = false`. The $1 ticket lanes do (their loss is already capped at the stake, and on a
+5-9 cent ticket the 2-cent spread alone looks like a 30% drop and sells it within seconds). A market is "held" if the orders show contracts
+bought and not sold, whatever happened to an earlier bet on it, so two live lanes cannot buy the same market twice.
+
+**The entry window is learned, not fixed.** A lane with `gate_from` (the live `fx_ticket`) may enter a minute band of the 15-minute window only when
+the finished bets of the lanes it names (the paper lanes explore the whole window) show at least `gate_min_n` bets there and a mean return, less `gate_z`
+standard errors, above zero (`gate.py`). `gate_since = "YYYY-MM-DD"` resets it: only bets from that date on count. A band with too little evidence stays closed and the paper lanes keep entering it until it has some. Run
+`gate --lane fx_ticket` to see each band's bets, return and whether it is open. Nothing about the minutes is hardcoded in the live lane.
 
 ## Lane notes
 

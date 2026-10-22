@@ -99,6 +99,9 @@ class Settings:
     history_keep_days: int
     account_sync_enabled: bool  # keep a local copy of your fills and settlements (read-only)
     account_sync_minutes: int  # how often
+    shard_topup_target: float  # keep this many dollars on the exchange a live order trades on, moving cash in from another one (0 = off)
+    shard_topup_keep: float  # never leave the source exchange below this many dollars
+    shard_topup_max_per_day: float  # most dollars the bot may move between exchanges per day (New York time)
     patterns_hours: float  # how often to rewrite data/patterns.md from your trades (0 = off)
     tape_enabled: bool  # record contract quotes next to the price they follow (lead-lag study)
     tape_keep_days: float
@@ -319,6 +322,9 @@ def load() -> Settings:
         account_sync_enabled=_b("ACCOUNT_SYNC_ENABLED", True),
         account_sync_minutes=max(5, _i("ACCOUNT_SYNC_MINUTES", 15)),
         patterns_hours=_f("PATTERNS_HOURS", 6.0),
+        shard_topup_target=_f("SHARD_TOPUP_TARGET_USD", 0.0),
+        shard_topup_keep=_f("SHARD_TOPUP_KEEP_USD", 25.0),
+        shard_topup_max_per_day=_f("SHARD_TOPUP_MAX_USD_PER_DAY", 50.0),
         tape_enabled=_b("TAPE_ENABLED", True),
         tape_keep_days=max(0.5, _f("TAPE_KEEP_DAYS", 3.0)),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),

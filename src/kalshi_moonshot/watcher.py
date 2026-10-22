@@ -50,6 +50,7 @@ class Target:
     trail_activate: float = 0.0
     trail_drop: float = 0.0
     trail_confirm: float = 10.0
+    trail_fast: float = 0.0
     trail_hold: float = 3.0
     peak: float = 0.0  # highest bid that held for trail_hold seconds
     last_bid: float = 0.0
@@ -94,9 +95,11 @@ class ProfitWatcher:
                 list(t.history), now, t.entry, t.spike_cents, t.spike_seconds, t.spike_min_gain
             )
             key = (t.ticker, t.lane)
-            if why and key not in self._inflight:
+            fast = self._fast_crash(t, bid)
+            reason = fast or why
+            if reason and key not in self._inflight:
                 self._inflight.add(key)
-                self._jobs.put((t.ticker, t.lane, why))
+                self._jobs.put((t.ticker, t.lane, reason))
 
     def _track_peak(self, t: Target, bid: float, now: float) -> None:
         """Update the sustained peak and how long the bid has been down from it. Quotes arrive only on a change, so the
@@ -105,6 +108,14 @@ class ProfitWatcher:
             t.peak = max(t.peak, t.last_bid)
         t.last_bid, t.last_ts = bid, now
         t.below_since = self._since(t, bid, now)
+
+    def _fast_crash(self, t: Target, bid: float) -> str | None:
+        """A gap down: the position was armed (up trail_activate on a held peak) and the bid is now trail_fast below that peak."""
+        if t.trail_fast <= 0 or t.trail_drop <= 0 or bid <= 0 or time.time() < t.retry_after:
+            return None
+        if t.peak >= t.entry * (1 + t.trail_activate) - 1e-9 and t.peak > t.entry and bid <= t.peak - t.trail_fast + 1e-9:
+            return f"peak-crash: bid {bid:.2f} is {t.peak - bid:.2f} off its {t.peak:.2f} peak (paid {t.entry:.2f}), fast exit"
+        return None
 
     def _since(self, t: Target, bid: float, now: float) -> float | None:
         if t.trail_drop > 0 and trail_hit(t.entry, t.peak, bid, t.trail_activate, t.trail_drop):
@@ -122,6 +133,11 @@ class ProfitWatcher:
                 t.peak = max(t.peak, t.last_bid)
             t.below_since = self._since(t, t.last_bid, now)
             key = (t.ticker, t.lane)
+            fast = self._fast_crash(t, t.last_bid)
+            if fast and key not in self._inflight:
+                self._inflight.add(key)
+                self._jobs.put((t.ticker, t.lane, fast))
+                continue
             if t.below_since is not None and now - t.below_since >= t.trail_confirm and key not in self._inflight and now >= t.retry_after:
                 why = trail_hit(t.entry, t.peak, t.last_bid, t.trail_activate, t.trail_drop)
                 if why:
@@ -144,7 +160,7 @@ class ProfitWatcher:
                 old = self.targets.get((ticker, lane))
             fresh[(ticker, lane)] = old or Target(
                 ticker, lane, row["side"] or "yes", float(row["ask"] or 0.0), spec.take_profit_x, spec.take_profit_at,
-                spec.spike_cents, spec.spike_seconds, spec.spike_min_gain, spec.trail_activate, spec.trail_drop, spec.trail_confirm_seconds, spec.trail_hold_seconds,
+                spec.spike_cents, spec.spike_seconds, spec.spike_min_gain, spec.trail_activate, spec.trail_drop, spec.trail_confirm_seconds, spec.trail_fast_drop, spec.trail_hold_seconds,
                 float(row["ask"] or 0.0),
             )
         with self._lock:
@@ -173,12 +189,18 @@ class ProfitWatcher:
             with contextlib.suppress(TypeError, ValueError):
                 bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = float(row["ask"] or 0.0)
-            if bid <= entry:  # the socket said profit; the market no longer does. Do not sell for a loss here.
+            if bid <= entry and not why.startswith("peak-crash"):  # a profit-take never sells for a loss; a peak-crash does (it was up, and is collapsing)
                 self._back_off(ticker, lane)
+                return
+            if bid <= 0:
                 return
             with self._lock:
                 t = self.targets.get((ticker, lane))
-            if t is not None and t.trail_drop > 0 and why.startswith("peak-crash") and bid > t.peak - t.trail_drop + 0.01:
+            if t is not None and why.startswith("spike") and bid < entry * (1 + t.spike_min_gain) - 1e-9:
+                self._back_off(ticker, lane)  # the spike has faded below the minimum gain by the time we looked: keep holding
+                return
+            heal = (t.peak - t.trail_fast) if (t is not None and "fast exit" in why) else (t.peak - t.trail_drop if t is not None else 0.0)
+            if t is not None and t.trail_drop > 0 and why.startswith("peak-crash") and bid > heal + 0.01:
                 t.below_since = None  # the dip has already healed; keep riding
                 self._back_off(ticker, lane)
                 return

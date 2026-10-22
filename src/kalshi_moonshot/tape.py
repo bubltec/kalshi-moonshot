@@ -102,6 +102,7 @@ class TapeRecorder:
     def __init__(self, client: KalshiClient, s: Settings, feed: Any = None):
         self.client, self.s, self.feed = client, s, feed
         self.tape = Tape(s.data_dir / "tape.db")
+        self.extra_tickers: Any = None  # a callable returning more tickers to stream (positions we hold in any market)
         self.listeners: list[Any] = []  # called with every event after it is stored (must be fast and never raise)
         self.stream = KalshiStream(client, self._on_event)
         self._stop = threading.Event()
@@ -133,8 +134,19 @@ class TapeRecorder:
                 tickers.update(m["ticker"] for m in self.client.series_markets(ser) if m.get("status") in {"active", "open"})
             except KalshiError as exc:
                 log.debug("tape: could not list %s (%s)", ser, exc)
+        if self.extra_tickers is not None:
+            try:
+                tickers |= set(self.extra_tickers())
+            except Exception as exc:
+                log.debug("tape: extra tickers failed (%s)", exc)
         self.stream.set_tickers(tickers)
         return len(tickers)
+
+    def follow(self, tickers: set[str]) -> None:
+        """Start streaming these tickers now, without waiting for the next refresh (a position was just opened)."""
+        current = set(self.stream._tickers)
+        if not tickers <= current:
+            self.stream.set_tickers(current | set(tickers))
 
     def sample_feed(self) -> None:
         hl = getattr(self.feed, "hyperliquid", None)

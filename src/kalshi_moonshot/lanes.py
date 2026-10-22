@@ -43,13 +43,19 @@ class LaneSpec:
     fixed_stake: float = 0.0  # dollars per bet, ignoring Kelly (0 = size by the odds and the balance)
     always: bool = False  # bet whenever the filters pass, with no minimum edge from a model
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
+    gate_from: tuple[str, ...] = ()  # lanes whose finished bets decide which minutes of a 15-minute window this lane may enter (see gate.py)
+    gate_since: str = ""  # a date (YYYY-MM-DD, New York time): only bets placed on or after it count toward the gate (a reset)
+    gate_min_n: int = 30  # finished bets a minute band needs before it can open
+    gate_z: float = 1.0  # standard errors subtracted from a band's mean return before it must beat zero
     shares_markets: bool = False  # main-scan lane that also takes markets another lane took (for A/B controls); never consumes them
     min_chance: float = 0.0  # bet only when the estimator's chance that the contract pays is in [min_chance, max_chance]
     max_chance: float = 1.0  # (the estimate before calibration; for a ladder lane this is a distance to the strike)
+    stop_loss: bool = True  # False = no stop-loss for this lane (a $1 ticket's loss is already capped; its spread alone can look like a 30% drop)
     take_profit_x: float = 0.0  # sell when the bid reaches this multiple of the price paid (0 = off); watched live on the socket
     take_profit_at: float = 0.0  # sell when the bid reaches this price (0 = off)
     trail_activate: float = 0.0  # peak-crash exit: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
     trail_drop: float = 0.0  # ... sell when it falls this many dollars from its peak (0 = off; watched live on the socket only)
+    trail_fast_drop: float = 0.0  # ... but sell at once, with no wait, when the bid is this far (dollars) below the peak: a gap down is not noise (0 = off)
     trail_confirm_seconds: float = 10.0  # ... and has stayed that far down this long (a dip of a second or two is noise)
     trail_hold_seconds: float = 3.0  # a bid counts toward the peak only once it has held this long (one thin-book tick is not a peak)
     spike_cents: float = 0.0  # sell, while in profit, when the bid has risen this much (dollars) within spike_seconds (0 = off)
@@ -132,7 +138,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides"):
+    for key in ("series", "sides", "gate_from"):
         if key in row:
             row[key] = tuple(row[key])
     if bad := set(row.get("sides", ())) - {"yes", "no"}:
