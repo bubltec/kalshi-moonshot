@@ -120,7 +120,7 @@ def test_stop_loss_exits_a_no_position_by_its_own_price(tmp_path):
     client = StopClient(yes_bid="0.8000", yes_ask="0.8500")
     notes = runner.stop_loss_pass(s, client, store)
     assert client.sold_yes == [] and len(client.sold_no) == 1
-    assert client.sold_no[0][2] == pytest.approx(0.15)  # NO bid = 1 - YES ask
+    assert client.sold_no[0][2] == pytest.approx(0.10)  # NO bid = 1 - YES ask = 0.15, a stop-loss order is limited 5c under it
     assert any("sold" in n for n in notes)
 
 

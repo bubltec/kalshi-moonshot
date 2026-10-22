@@ -1,4 +1,4 @@
-"""SQLite: one file. Every decision is logged so the model can be scored later.
+"""The bot's database (Postgres in production, SQLite for tests; see db.py). Every decision is logged so the model can be scored later.
 
 Settled decisions are also indexed in a local full-text table. The next estimate can
 retrieve similar past cases. Prices are not stored in that index.
@@ -9,11 +9,13 @@ from __future__ import annotations
 import json
 import shutil
 import sqlite3
+import threading
 import time
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from . import db
 from .calibration import Calibrator
 from .rag import Rag
 
@@ -172,6 +174,16 @@ CREATE TABLE IF NOT EXISTS windows (
   fetched_ts REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS grid_obs (
+  ticker TEXT NOT NULL, series TEXT NOT NULL, side TEXT NOT NULL,
+  mband INTEGER NOT NULL, pband INTEGER NOT NULL,
+  roi REAL NOT NULL, close_ts INTEGER NOT NULL, alpha TEXT, beta TEXT, edge TEXT,
+  PRIMARY KEY (ticker, side, mband, pband)
+);
+CREATE INDEX IF NOT EXISTS idx_grid_obs ON grid_obs(series, mband, pband);
+CREATE TABLE IF NOT EXISTS grid_done (ticker TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS grid_meta (k TEXT PRIMARY KEY, v TEXT);
+
 CREATE TABLE IF NOT EXISTS candles (
   ticker TEXT NOT NULL,
   end_ts INTEGER NOT NULL,       -- the minute this candle closes
@@ -193,22 +205,33 @@ CREATE TABLE IF NOT EXISTS watchlist (
 CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(status, run_at);
 """
 
+_PREP_LOCK = threading.Lock()
+_PREPARED: set[tuple[str, str]] = set()  # Postgres schemas already created and indexed in this process (a Store is built often)
+
+
 class Store:
     def __init__(self, path: Path | str, exclude_versions: Iterable[str] = ()):
         self.path = Path(path)
         self.exclude_versions = frozenset(exclude_versions)
-        self.db = sqlite3.connect(str(path))
-        self.db.row_factory = sqlite3.Row
-        self.db.executescript(SCHEMA)
-        self.db.execute("DROP TABLE IF EXISTS rag_fts")  # replaced by rag_cases
-        self._migrate()
+        self.db = db.connect(path, "main")
+        key = (db.database_url(), db.schema_for(path, "main"))
+        with _PREP_LOCK:  # two threads starting at once must not both create the tables
+            first = not db.is_pg(self.db) or key not in _PREPARED
+            if first and db.is_pg(self.db):
+                _PREPARED.add(key)
+        if first:
+            self.db.executescript(SCHEMA)
+            if not db.is_pg(self.db):
+                self.db.execute("DROP TABLE IF EXISTS rag_fts")  # replaced by rag_cases
+            self._migrate()
         self.generation = 0  # bumped whenever settled data changes; caches key on it
-        self.rag = Rag(self)
+        self.rag = Rag(self, create=first)
         self.calibrator = Calibrator(self)
         from .bankroll import Bankroll  # local: bankroll imports this module
 
         self.bankroll = Bankroll(self)
-        self.rag.rebuild()
+        if first:
+            self.rag.rebuild()
 
     def _migrate(self) -> None:
         """Add columns to a database created before they existed."""
@@ -236,6 +259,8 @@ class Store:
         for col in ("bid_hi", "ask_lo"):
             if col not in candle_cols:
                 self.db.execute(f"ALTER TABLE candles ADD COLUMN {col} REAL")
+        if "edge" not in {r["name"] for r in self.db.execute("PRAGMA table_info(grid_obs)")}:
+            self.db.execute("ALTER TABLE grid_obs ADD COLUMN edge TEXT")  # the replays are rebuilt by grid.update (its version changed)
         job_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(jobs)")}
         if "priority" not in job_cols:
             self.db.execute("ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
@@ -246,17 +271,31 @@ class Store:
             self.db.execute("ALTER TABLE orders ADD COLUMN contract TEXT DEFAULT 'yes'")
         self.db.commit()
 
+    def _snapshot(self) -> Path:
+        """A copy made just before a deliberate change to the decisions: the whole file for SQLite, a portable copy of the table for Postgres."""
+        dest = self.path.with_name(f"{self.path.name}.bak-{int(time.time())}")
+        if not db.is_pg(self.db):
+            shutil.copy2(self.path, dest)
+            return dest
+        cols = [r["name"] for r in self.db.execute("PRAGMA table_info(decisions)")]
+        out = sqlite3.connect(dest)
+        out.execute(f"CREATE TABLE decisions ({', '.join(cols)})")
+        out.executemany(f"INSERT INTO decisions VALUES ({','.join('?' * len(cols))})", [tuple(r) for r in self.db.execute("SELECT * FROM decisions")])
+        out.commit()
+        out.close()
+        return dest
+
     def _excluded_sql(self) -> tuple[str, list[str]]:
         if not self.exclude_versions:
             return "", []
         marks = ",".join("?" for _ in self.exclude_versions)
         return f" AND COALESCE(version,'{LEGACY_VERSION}') NOT IN ({marks})", sorted(self.exclude_versions)
 
-    def version_counts(self) -> list[sqlite3.Row]:
+    def version_counts(self) -> list[db.Row]:
         """Per version: decisions logged and how many of those have settled."""
         return self.db.execute(
             f"""SELECT COALESCE(version,'{LEGACY_VERSION}') AS version, COUNT(*) AS decisions,
-                       SUM(outcome IN ('yes','no')) AS settled
+                       SUM(CASE WHEN outcome IN ('yes','no') THEN 1 ELSE 0 END) AS settled
                 FROM decisions GROUP BY 1 ORDER BY 1"""
         ).fetchall()
 
@@ -288,8 +327,7 @@ class Store:
         }
         if dry_run or not fill:
             return out
-        backup = self.path.with_name(f"{self.path.name}.bak-{int(time.time())}")
-        shutil.copy2(self.path, backup)
+        backup = self._snapshot()
         for series, category in fill.items():
             cur = self.db.execute(
                 """UPDATE decisions SET category=?
@@ -326,8 +364,7 @@ class Store:
         out = {"matched": matched, "kept_for_orders": matched - deletable, "deleted": 0}
         if dry_run or not deletable:
             return out
-        backup = self.path.with_name(f"{self.path.name}.bak-{int(time.time())}")
-        shutil.copy2(self.path, backup)
+        backup = self._snapshot()
         self.db.execute(f"DELETE FROM decisions WHERE {where}", versions)
         self.db.commit()
         self.generation += 1
@@ -346,7 +383,7 @@ class Store:
         self.db.commit()
         return int(cur.lastrowid or 0)
 
-    def paper_bets(self, open_only: bool, live: bool = False) -> list[sqlite3.Row]:
+    def paper_bets(self, open_only: bool, live: bool = False) -> list[db.Row]:
         """Sized bets (one per market, the first). open_only: still riding; else: finished.
 
         live=False: paper bets, those made while their lane was not placing orders.
@@ -357,7 +394,7 @@ class Store:
             f"""SELECT id, ticker, lane, side, outcome, contracts, stake_usd, exit_price
                 FROM decisions
                 WHERE action='bet' AND stake_usd IS NOT NULL AND contracts > 0
-                  AND (mode = 'trade') = ?
+                  AND (CASE WHEN mode = 'trade' THEN 1 ELSE 0 END) = ?
                   AND {'NOT ' + done if open_only else done}""",
             (1 if live else 0,),
         ).fetchall()
@@ -458,7 +495,7 @@ class Store:
             "SELECT 1 FROM shadow WHERE ticker=? AND ts>=? LIMIT 1", (ticker, since_ts)
         ).fetchone() is not None
 
-    def shadow_rows(self, settled_only: bool = True) -> list[sqlite3.Row]:
+    def shadow_rows(self, settled_only: bool = True) -> list[db.Row]:
         where = "WHERE outcome IN ('yes','no')" if settled_only else ""
         return self.db.execute(f"SELECT * FROM shadow {where} ORDER BY ts").fetchall()
 
@@ -475,7 +512,7 @@ class Store:
         self.generation += 1
         self.rag.index_settled([ticker])
 
-    def settled_decisions(self, include_excluded: bool = False) -> list[sqlite3.Row]:
+    def settled_decisions(self, include_excluded: bool = False) -> list[db.Row]:
         """Settled decisions, minus excluded versions unless asked for everything."""
         extra, args = ("", []) if include_excluded else self._excluded_sql()
         return self.db.execute(
@@ -493,7 +530,7 @@ class Store:
         ).fetchall()
         return {r["ticker"] for r in rows}
 
-    def recent_decisions(self, limit: int = 20) -> list[sqlite3.Row]:
+    def recent_decisions(self, limit: int = 20) -> list[db.Row]:
         return self.db.execute(
             "SELECT * FROM decisions ORDER BY ts DESC LIMIT ?", (limit,)
         ).fetchall()
@@ -515,6 +552,11 @@ class Store:
         ).fetchone()
         return float(row["n"])
 
+    def net_cost(self, ticker: str, env: str) -> float:
+        """Dollars the bot's own orders have put into this ticker (buys cost, sales return), fees included in the order cost."""
+        row = self.db.execute("SELECT COALESCE(SUM(cost_usd + CASE WHEN COALESCE(side,'buy')='buy' THEN COALESCE(fee_usd, 0) ELSE 0 END), 0) AS c FROM orders WHERE ticker=? AND env=?", (ticker, env)).fetchone()
+        return float(row["c"])
+
     def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None) -> None:
         self.db.execute(
             """UPDATE decisions SET exit_price=?, exit_ts=?, exit_reason=?
@@ -524,7 +566,7 @@ class Store:
         )
         self.db.commit()
 
-    def open_bets(self) -> list[sqlite3.Row]:
+    def open_bets(self) -> list[db.Row]:
         """Unresolved bets not yet stopped out. One row per ticker and lane (that lane's first bet)."""
         return self.db.execute(
             """SELECT d.* FROM decisions d
@@ -532,11 +574,11 @@ class Store:
                  SELECT ticker, COALESCE(lane,'moonshot') AS lane, MIN(id) AS id FROM decisions
                  WHERE action='bet' AND outcome IS NULL AND exit_ts IS NULL
                  GROUP BY ticker, COALESCE(lane,'moonshot')
-               ) first ON d.id = first.id
+               ) fst ON d.id = fst.id
                ORDER BY d.ts"""
         ).fetchall()
 
-    def open_positions(self, env: str) -> list[sqlite3.Row]:
+    def open_positions(self, env: str) -> list[db.Row]:
         """Real open buys, with the bet decision logged at the first fill.
 
         A later re-score of the same ticker is left out. That row is a new estimate,
@@ -555,7 +597,8 @@ class Store:
                         MIN(CASE WHEN COALESCE(side,'buy')='buy' THEN ts END) AS filled_ts
                  FROM orders WHERE env=?
                  GROUP BY ticker
-                 HAVING contracts > 0
+                 HAVING SUM(CASE WHEN COALESCE(side,'buy')='buy' THEN fill_count
+                                 ELSE -fill_count END) > 0
                ) p
                LEFT JOIN decisions d ON d.id = (
                  SELECT id FROM decisions

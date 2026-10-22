@@ -199,6 +199,7 @@ def test_category_flows_from_market_to_candidate():
 
 # ---- migration ----
 
+@pytest.mark.sqlite_only
 def test_old_database_gets_new_columns(tmp_path):
     path = tmp_path / "old.db"
     db = sqlite3.connect(path)
@@ -349,7 +350,7 @@ def test_paper_stop_loss_exits_and_trade_stop_loss_sells(tmp_path, monkeypatch):
     live.add_order(ticker="PTK", env="demo", count=2, price=0.20, fill_count=2,
                    cost_usd=0.40, fee_usd=0.01, side="buy")
     notes = runner.stop_loss_pass(tr, client, live)
-    assert client.sold == [("PTK", 2, 0.10)]
+    assert client.sold == [("PTK", 2, 0.05)]  # the bid was 0.10; a stop-loss order is limited 5c under it so it still fills
     assert live.net_contracts("PTK", "demo") == 0
     assert live.open_bets() == []
 

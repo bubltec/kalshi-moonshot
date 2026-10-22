@@ -8,6 +8,7 @@ dependencies = [
   "httpx>=0.27,<1",
   "cryptography>=43,<50",
   "websockets>=13,<16",
+  "psycopg[binary]>=3.2,<4",
 ]
 
 [project.optional-dependencies]

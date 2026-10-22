@@ -10,10 +10,10 @@ it filled won against the ones it missed.
 from __future__ import annotations
 
 import bisect
-import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import db as database
 from .store import Store
 from .strategy import fee_per_contract
 
@@ -41,7 +41,7 @@ class Result:
 
 
 def load(store: Store, tape: Path | str, lane: str = "commodity", min_price: float = 0.60, suffix: str = "15M") -> list[Bet]:
-    db = sqlite3.connect(str(tape))
+    db = database.connect(tape, "tape", shared=True)
     rows = store.db.execute(
         """SELECT ts, ticker, side, ask, outcome FROM decisions
            WHERE action='bet' AND lane=? AND ask>=? AND outcome IN ('yes','no') ORDER BY ts""",

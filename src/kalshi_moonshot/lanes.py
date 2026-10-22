@@ -26,6 +26,7 @@ from .config import Settings
 
 LLM = "llm"
 LADDER = "ladder"
+MARKET = "market"
 
 
 @dataclass(frozen=True)
@@ -45,8 +46,13 @@ class LaneSpec:
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
     gate_from: tuple[str, ...] = ()  # lanes whose finished bets decide which minutes of a 15-minute window this lane may enter (see gate.py)
     gate_since: str = ""  # a date (YYYY-MM-DD, New York time): only bets placed on or after it count toward the gate (a reset)
+    gate_by: str = "band"  # "band": one record per minute band; "series": each market (series) keeps its own record, shrunk toward the lane's pooled band
+    gate_pool: float = 30.0  # with gate_by="series": how many pooled bets' worth of prior a market's own record is blended with
     gate_min_n: int = 30  # finished bets a minute band needs before it can open
     gate_z: float = 1.0  # standard errors subtracted from a band's mean return before it must beat zero
+    grid: bool = False  # buy only where the learned grid (grid.py) has a cell that pays; the lane's own exit settings manage the position
+    grid_min_n: int = 30  # finished replays a cell needs before it can decide
+    grid_z: float = 3.0  # standard errors a cell's mean must clear zero by (strict on purpose: of ~300 cells, some clear 2 by luck alone)
     shares_markets: bool = False  # main-scan lane that also takes markets another lane took (for A/B controls); never consumes them
     min_chance: float = 0.0  # bet only when the estimator's chance that the contract pays is in [min_chance, max_chance]
     max_chance: float = 1.0  # (the estimate before calibration; for a ladder lane this is a distance to the strike)

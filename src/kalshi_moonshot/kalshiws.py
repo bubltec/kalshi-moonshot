@@ -57,7 +57,16 @@ def parse_message(msg: dict[str, Any], received: float | None = None) -> dict[st
         if not body.get("market_ticker") or bid is None or ask is None:
             return None
         return {"kind": "quote", "ts": now, "ticker": body["market_ticker"], "bid": bid, "ask": ask,
-                "last": _f(body.get("price_dollars")), "sts": msg.get("sending_ts_ms")}
+                "last": _f(body.get("price_dollars")), "sts": msg.get("sending_ts_ms"),
+                "bid_size": _f(body.get("yes_bid_size_fp")), "ask_size": _f(body.get("yes_ask_size_fp"))}
+    if kind == "trade":
+        count, price = _f(body.get("count_fp")), _f(body.get("yes_price_dollars"))
+        if not body.get("market_ticker") or not count or price is None:
+            return None
+        side = body.get("taker_outcome_side") or body.get("taker_side")  # the outcome the taker bought: "yes" or "no"
+        if side not in {"yes", "no"}:
+            return None
+        return {"kind": "trade", "ts": now, "ticker": body["market_ticker"], "price": price, "count": count, "taker": side}
     if kind == "cfbenchmarks_value":
         try:
             frame = json.loads(body.get("data") or "{}")
@@ -131,7 +140,7 @@ class KalshiStream:
                         "channels": ["cfbenchmarks_value"], "index_ids": self.indices}}))
                     if tickers:
                         await ws.send(json.dumps({"id": 2, "cmd": "subscribe", "params": {
-                            "channels": ["ticker"], "market_tickers": tickers}}))
+                            "channels": ["ticker", "trade"], "market_tickers": tickers}}))
                     self.connected_at, backoff = time.time(), 1.0
                     async for raw in ws:
                         self.handle(raw)

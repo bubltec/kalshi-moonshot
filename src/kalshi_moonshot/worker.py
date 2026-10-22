@@ -110,6 +110,9 @@ class Worker:
             )
         self._ensure_tiered()
         self._start_tape()
+        from . import backup
+
+        backup.start_nightly(lambda: self.s)
 
     def _start_tape(self) -> None:
         """Record quotes next to the feed price they follow (read-only; see tape.py)."""
@@ -120,7 +123,7 @@ class Worker:
         try:
             self.recorder = TapeRecorder(self.client, self.s, getattr(self.quant, "feed", None))
             self.recorder.start()
-            log.info("tape recorder on: data/tape.db (kept %.0f days)", self.s.tape_keep_days)
+            log.info("tape recorder on: %s (kept %.0f days)", self.s.tape_path, self.s.tape_keep_days)
             self._start_watcher()
         except Exception:
             log.exception("could not start the tape recorder; continuing without it")
@@ -133,12 +136,37 @@ class Worker:
         if self.recorder is None or self.watcher is not None or not watcher.wanted(self.s):
             return
         db_path = self.s.db_path
-        w = watcher.ProfitWatcher(lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions))
+        w = watcher.ProfitWatcher(
+            lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions), hold_value=self._hold_value
+        )
         self.recorder.listeners.append(w.on_event)
-        self.recorder.extra_tickers = self._held_for_watching  # hourly and daily positions are streamed too
+        self.recorder.extra_tickers = lambda: self._held_for_watching() | w.manual_tickers()  # hourly, daily and hand-placed positions are streamed too
         w.start()
         self.watcher = w
         log.info("take-profit watcher on: selling from the live socket when a lane's level is hit")
+
+    def _hold_value(self, row, store: Store) -> float | None:
+        """What the model says a position is worth if held to settlement: its calibrated chance of paying (ladder lanes only)."""
+        from datetime import UTC, datetime
+
+        from . import lanes
+        from .strategy import LongShot, side_prob
+
+        spec = lanes.lane_specs(self.s).get(row["lane"] or "moonshot")
+        if spec is None or spec.estimator != lanes.LADDER or self.quant is None:
+            return None
+        side = row["side"] or "yes"
+        try:
+            hours = max(0.0, (datetime.fromisoformat(row["close_time"]) - datetime.now(UTC)).total_seconds() / 3600.0)
+        except (TypeError, ValueError):
+            return None
+        ask = float(row["ask"] or 0.0)
+        shot = LongShot(
+            ticker=row["ticker"], title="", rules="", bid=0.0, ask=ask, volume=0.0, close_time=row["close_time"],
+            hours_to_close=hours, series=row["ticker"].split("-")[0], event_ticker=row["event_ticker"] or "", side=side,
+        )
+        p_yes, _ = self.quant.estimate(self.client, shot, self.s)
+        return store.calibrator.adjust(spec.name, row["category"] or "", ask, side_prob(p_yes, side), spec.trust).p
 
     def _held_for_watching(self) -> set[str]:
         """Tickers of open bets whose lane has a take-profit or peak-crash rule: the socket should stream them."""
@@ -148,7 +176,9 @@ class Worker:
         out = set()
         for row in self.store.open_bets():
             spec = specs.get(row["lane"] or "moonshot")
-            if spec is not None and lanes.takes_profit(spec):
+            stop_on = spec is not None and self.s.stop_loss_enabled and spec.stop_loss and not (
+                row["ticker"].split("-")[0].endswith("15M") and not self.s.stop_loss_fast)
+            if spec is not None and (lanes.takes_profit(spec) or stop_on):
                 out.add(row["ticker"])
         return out
 

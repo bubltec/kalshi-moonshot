@@ -19,9 +19,9 @@ from __future__ import annotations
 import bisect
 import math
 import random
-import sqlite3
 import statistics
 from dataclasses import dataclass
+from typing import Any
 
 from .commodities import instrument_for, load_instruments
 from .kalshiws import index_for_series
@@ -54,7 +54,7 @@ def _ffill(times: list[float], values: list[float], grid: list[float]) -> list[f
     return out
 
 
-def build_tracks(db: sqlite3.Connection, series: str, data_dir=None, min_points: int = 60) -> list[Track]:
+def build_tracks(db: Any, series: str, data_dir=None, min_points: int = 60) -> list[Track]:
     """One Track per market of the series that has quotes and a feed over the same stretch."""
     index = index_for_series(series)
     if index:

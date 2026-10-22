@@ -2,6 +2,7 @@
 
 llm     asks the local model, giving it similar settled cases, their base rate, and fresh headlines
 ladder  prices a commodity threshold from the strike ladder and a live feed (commodities.py)
+market  has no opinion: it returns the market's own price, so a lane using it records what buying a price band earns
 
 A lane names its estimator in its spec; runner.py looks it up here and knows nothing else about it.
 """
@@ -14,7 +15,7 @@ from typing import Any, Protocol
 
 from .commodities import CommodityError, CommodityPricer
 from .config import Settings
-from .lanes import LADDER, LLM, LaneSpec
+from .lanes import LADDER, LLM, MARKET, LaneSpec
 from .search import NewsSearch
 from .store import Store
 from .strategy import LongShot, edge, side_prob
@@ -65,6 +66,17 @@ class LLMEstimator:
         except Exception as exc:
             raise EstimateFailed(exc, context) from exc
         return Estimate(p, why, context)
+
+
+class MarketEstimator:
+    """No model: the chance is the price asked, so edge is zero and an `always` lane decides on its filters alone."""
+
+    def screen(self, shots, markets, spec, s, now):
+        return shots
+
+    def estimate(self, client: Any, s: Settings, shot: LongShot) -> Estimate:
+        p_yes = shot.ask if shot.side == "yes" else 1.0 - shot.ask
+        return Estimate(p_yes, f"no model: priced at the {shot.ask:.2f} asked", "")
 
 
 class LadderEstimator:
@@ -118,7 +130,7 @@ class LadderEstimator:
 def build_estimators(
     model: Any, store: Store, searcher: NewsSearch | None, quant: CommodityPricer | None
 ) -> dict[str, Estimator]:
-    out: dict[str, Estimator] = {LLM: LLMEstimator(model, store, searcher)}
+    out: dict[str, Estimator] = {LLM: LLMEstimator(model, store, searcher), MARKET: MarketEstimator()}
     if quant is not None:
         out[LADDER] = LadderEstimator(quant)
     return out

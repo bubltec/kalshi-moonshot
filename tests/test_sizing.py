@@ -189,3 +189,14 @@ def test_the_lane_never_trades_for_real_unless_both_switches_are_on(tmp_path):
     on = settings(tmp_path, mode="trade", live_lanes=frozenset({"fifteen"}), fast_live=True)
     assert on.is_live("fifteen", "KXBTC15M")
     assert not on.is_live("commodity", "KXBTC15M")  # naming one lane does not turn on another
+
+
+def test_paper_sizing_does_not_shrink_with_paper_losses(tmp_path):
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    for i in range(3):  # three losing long shots
+        runner.evaluate(s, None, Est(0.30), store, shot(f"KXL-{i}", ask=0.10))
+        store.set_outcome(f"KXL-{i}", "no")
+    assert bankroll.paper_balance(store, s).equity < 100.0  # the record shows the loss
+    bal = store.bankroll.read(None, s)
+    assert bal.equity == pytest.approx(100.0) and bal.available == pytest.approx(100.0)  # but sizing is not starved

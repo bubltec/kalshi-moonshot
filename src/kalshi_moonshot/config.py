@@ -104,6 +104,17 @@ class Settings:
     shard_topup_max_per_day: float  # most dollars the bot may move between exchanges per day (New York time)
     patterns_hours: float  # how often to rewrite data/patterns.md from your trades (0 = off)
     tape_enabled: bool  # record contract quotes next to the price they follow (lead-lag study)
+    tape_extra_series: tuple[str, ...]  # more series (sports, esports...) whose open markets the tape follows, quotes and trade flow
+    manual_exit: bool  # sell positions you opened by hand, from the socket, to take a profit (see manual.py); off unless asked for
+    manual_exit_skip: tuple[str, ...]  # ticker prefixes the manual exit leaves alone (positions you mean to hold)
+    manual_exit_activate: float  # arm once the bid is this fraction over the price paid
+    manual_exit_drop: float  # sell when the bid is this many dollars under a peak that held a few seconds
+    manual_exit_fast: float  # ... or at once when it falls this far
+    manual_exit_min_profit: float  # never sell for less than this fraction over the price paid, after the sell fee
+    manual_exit_stop_confirm: float  # seconds the bid must stay past the stop line before a hand-placed position is sold
+    manual_exit_stop: float  # stop-loss on hand-placed positions: sell at this fraction under the price paid (0 = none); same hours rules as the bot's
+    tape_dir: Path  # where tape.db lives: a Docker-managed volume in compose, so SQLite's locking is not shared across the Mac/VM boundary
+    backup_keep_days: int  # nightly consistent copies of the databases kept in DATA_DIR/backups
     tape_keep_days: float
     max_rps: float  # Kalshi requests per second the bot paces itself to
     page_size: int  # markets and events per Kalshi page (max 1000)
@@ -217,6 +228,10 @@ class Settings:
         return self.data_dir / "moonshot.db"
 
     @property
+    def tape_path(self) -> Path:
+        return self.tape_dir / "tape.db"
+
+    @property
     def kill_file(self) -> Path:
         return self.data_dir / "KILL"
 
@@ -326,7 +341,18 @@ def load() -> Settings:
         shard_topup_keep=_f("SHARD_TOPUP_KEEP_USD", 25.0),
         shard_topup_max_per_day=_f("SHARD_TOPUP_MAX_USD_PER_DAY", 50.0),
         tape_enabled=_b("TAPE_ENABLED", True),
+        tape_dir=Path(os.environ.get("TAPE_DIR") or data_dir).expanduser(),
+        backup_keep_days=max(1, _i("BACKUP_KEEP_DAYS", 7)),
         tape_keep_days=max(0.5, _f("TAPE_KEEP_DAYS", 3.0)),
+        tape_extra_series=tuple(x.strip() for x in os.environ.get("TAPE_EXTRA_SERIES", "").split(",") if x.strip()),
+        manual_exit=_b("MANUAL_EXIT", False),
+        manual_exit_skip=tuple(x.strip() for x in os.environ.get("MANUAL_EXIT_SKIP", "").split(",") if x.strip()),
+        manual_exit_activate=_f("MANUAL_EXIT_ACTIVATE", 0.10),
+        manual_exit_drop=_f("MANUAL_EXIT_DROP", 0.04),
+        manual_exit_fast=_f("MANUAL_EXIT_FAST", 0.12),
+        manual_exit_min_profit=_f("MANUAL_EXIT_MIN_PROFIT", 0.05),
+        manual_exit_stop=_f("MANUAL_EXIT_STOP_LOSS", 0.30),
+        manual_exit_stop_confirm=_f("MANUAL_EXIT_STOP_CONFIRM", 20.0),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),
         skip_numeric=_b("SKIP_NUMERIC", True),
         moonshot_max_drop=_f("MOONSHOT_MAX_DROP", 0.02),

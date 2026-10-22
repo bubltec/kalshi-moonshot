@@ -1,6 +1,6 @@
 import pytest
 
-from kalshi_moonshot import config, lanes, runner, watcher
+from kalshi_moonshot import config, lanes, watcher
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import spike_hit, take_profit_hit
 
@@ -83,10 +83,12 @@ def test_no_sale_if_the_market_no_longer_shows_a_profit(setup):
     assert len(store.open_bets()) == 1
 
 
-def test_the_default_lanes_do_not_start_a_watcher(tmp_path, monkeypatch):
+def test_the_watcher_starts_only_for_a_take_profit_or_a_stop_loss(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    assert not watcher.wanted(config.load())
-    assert runner.next_stop_loss_at(config.load(), Store(config.load().db_path)) is None
+    monkeypatch.setenv("STOP_LOSS_ENABLED", "false")
+    assert not watcher.wanted(config.load())  # no default lane takes profit, and the stop-loss is off
+    monkeypatch.setenv("STOP_LOSS_ENABLED", "true")
+    assert watcher.wanted(config.load())  # the stop-loss runs on the socket now
 
 
 def test_peak_crash_needs_the_gain_first_then_the_fall():
@@ -173,3 +175,61 @@ def test_a_spike_that_faded_before_the_sale_is_not_sold(setup):
     w._inflight.add(("KXBTC15M-1", "late_ticket"))
     w._sell("KXBTC15M-1", "late_ticket", "spike: bid 0.40 is up 0.12 in 30s (paid 0.30)")
     assert len(store.open_bets()) == 1
+
+
+def stop_watcher(setup, bid=0.80):
+    s, store = setup
+    (s.data_dir / "strategies.toml").write_text("[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.9]\nhours=[0.0,1.0]\n")
+    import time as _time
+
+    soon = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime(_time.time() + 600))  # a 15-minute window ending in ten minutes
+    store.db.execute("UPDATE decisions SET ask=0.80, close_time=?", (soon,))
+    store.db.commit()
+    w = watcher.ProfitWatcher(lambda: s, FakeClient(bid), lambda: Store(s.db_path))
+    w.refresh()
+    return w
+
+
+def test_the_stop_loss_fires_on_the_first_socket_tick_under_the_line(setup):
+    w = stop_watcher(setup)
+    t = w.targets[("KXBTC15M-1", "late_ticket")]
+    assert t.stop_drop == pytest.approx(0.30)
+    import time as _time
+
+    now = _time.time()
+    w.on_event(quote(0.70, 0.72, ts=now))  # 12% under the 0.80 paid: no stop
+    assert w._jobs.empty()
+    w.on_event(quote(0.55, 0.57, ts=now + 1))  # 31% under: the stop
+    assert "stop-loss" in w._jobs.get_nowait()[2]
+
+
+def test_the_stop_sale_goes_through_below_cost(setup):
+    w = stop_watcher(setup, bid=0.40)
+    w._inflight.add(("KXBTC15M-1", "late_ticket"))
+    w._sell("KXBTC15M-1", "late_ticket", "stop-loss: bid 0.40 is 50% under the 0.80 paid (socket)")
+    assert Store(setup[0].db_path).open_bets() == []
+
+
+def test_an_hourly_market_is_only_stopped_in_its_last_hour(setup):
+    s, store = setup
+    (s.data_dir / "strategies.toml").write_text("[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.9]\nhours=[0.0,1.0]\n")
+    store.db.execute("UPDATE decisions SET ask=0.80, close_time='2099-01-01T00:00:00Z'")  # decades away: outside the last hour
+    store.db.commit()
+    w = watcher.ProfitWatcher(lambda: s, FakeClient(0.5), lambda: Store(s.db_path))
+    w.refresh()
+    w.on_event(quote(0.40, 0.42, ts=1000.0))
+    assert w._jobs.empty()
+
+
+def test_a_bid_that_holds_counts_as_a_peak_even_when_quotes_keep_arriving(tmp_path, monkeypatch):
+    from kalshi_moonshot import watcher as w_mod
+
+    t = w_mod.Target("KXBTC15M-1", "late_ticket", "yes", 0.30, 0.0, 0.0, 0.0, 30.0, 0.10, 0.10, 0.04, 10.0, 0.12, 3.0, 0.30)
+    w = w_mod.ProfitWatcher(lambda: None, None, lambda: None)
+    for ts, bid in ((1000.0, 0.30), (1001.0, 0.50), (1002.0, 0.50), (1003.0, 0.50), (1004.0, 0.50), (1005.0, 0.50), (1006.0, 0.45)):
+        w._track_peak(t, bid, ts)  # a quote every second, the bid unchanged at 0.50 for five of them
+    assert t.peak == 0.50
+    t2 = w_mod.Target("KXBTC15M-2", "late_ticket", "yes", 0.30, 0.0, 0.0, 0.0, 30.0, 0.10, 0.10, 0.04, 10.0, 0.12, 3.0, 0.30)
+    for ts, bid in ((1000.0, 0.30), (1001.0, 0.50), (1002.0, 0.40), (1003.0, 0.50), (1004.0, 0.30)):
+        w._track_peak(t2, bid, ts)  # flickering every second: no bid stands 3 s, so no peak
+    assert t2.peak == 0.30

@@ -6,6 +6,7 @@ import argparse
 import logging
 import signal
 import sys
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -418,16 +419,15 @@ def cmd_profile(s: config.Settings, args: argparse.Namespace) -> int:
 
 def cmd_leadlag(s: config.Settings, args: argparse.Namespace) -> int:
     """Does the Kalshi quote trail its underlying? Reads the tape the bot records (needs a few hours)."""
-    import sqlite3
-
+    from . import db as database
     from . import leadlag
     from .commodities import load_instruments
 
-    path = s.data_dir / "tape.db"
-    if not path.is_file():
+    path = s.tape_path
+    if not database.tape_exists(path):
         print("no tape yet: the bot records it while running (TAPE_ENABLED=true). Check back in a few hours.")
         return 0
-    db = sqlite3.connect(str(path))
+    db = database.connect(path, "tape", shared=True)
     n_q = db.execute("SELECT COUNT(*) FROM quotes").fetchone()[0]
     span = db.execute("SELECT MIN(ts), MAX(ts) FROM quotes").fetchone()
     hours = ((span[1] - span[0]) / 3600) if span[0] else 0.0
@@ -581,6 +581,45 @@ def cmd_patterns(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def watch_line(e: dict) -> str:
+    """One printed line for a socket event: a quote with its sizes, or a trade with the side the taker bought."""
+    stamp = time.strftime("%H:%M:%S", time.localtime(e["ts"]))
+    if e["kind"] == "quote":
+        size = lambda v: "-" if v is None else f"{v:,.0f}"  # noqa: E731
+        last = "" if e.get("last") is None else f"  last {e['last']:.2f}"
+        return f"{stamp}  {e['ticker'][-22:]:22} bid {e['bid']:.2f} x {size(e.get('bid_size')):>7}   ask {e['ask']:.2f} x {size(e.get('ask_size')):>7}{last}"
+    return f"{stamp}  {e['ticker'][-22:]:22} TRADE {e['count']:>8,.1f} contracts at {e['price']:.2f}, taker bought {e['taker'].upper()}"
+
+
+def cmd_watch(s: config.Settings, args: argparse.Namespace) -> int:
+    """Print a market's live bid, ask, sizes and trades from Kalshi's socket until you press ctrl-c (read-only)."""
+    import asyncio
+    import contextlib
+    import json
+
+    import websockets
+
+    from .kalshiws import WS_URL, parse_message
+
+    client = _client(s)
+    tickers = [t.strip() for t in args.tickers.split(",") if t.strip()]
+    for t in tickers:
+        m = client.market(t)
+        print(f"{t}: {m.get('title', '')} | status {m.get('status')} | closes {m.get('close_time')}")
+
+    async def run() -> None:
+        async with websockets.connect(WS_URL, additional_headers=client.ws_headers(WS_URL), open_timeout=15, ping_interval=20) as ws:
+            await ws.send(json.dumps({"id": 1, "cmd": "subscribe", "params": {"channels": ["ticker", "trade"], "market_tickers": tickers}}))
+            async for raw in ws:
+                e = parse_message(json.loads(raw))
+                if e is not None and e["kind"] in {"quote", "trade"} and (not args.quotes_only or e["kind"] == "quote"):
+                    print(watch_line(e), flush=True)
+
+    with contextlib.suppress(KeyboardInterrupt):
+        asyncio.run(run())
+    return 0
+
+
 def cmd_gate(s: config.Settings, args: argparse.Namespace) -> int:
     """Show the learned entry gate: which minutes of a 15-minute window the record says a lane may enter."""
     from . import gate
@@ -600,6 +639,20 @@ def cmd_gate(s: config.Settings, args: argparse.Namespace) -> int:
         won = f"{c.wins / c.n:.0%}" if c.n else "-"
         lower = "-" if c.n < 2 else f"{c.lower(spec.gate_z):+.0%}"
         print(f"minutes {band[0]}-{band[1]:<4} {c.n:>5} {won:>5} {c.mean_roi:>+9.0%} {lower:>8}  {'OPEN' if ok else 'closed'}")
+    if args.by_series or spec.gate_by == "series":
+        since = gate.since_ts(spec.gate_since)
+        by = gate.series_table(store, sources, since=since)
+        print(f"\nEach market's own record, blended toward the lane's pool (pool strength {spec.gate_pool:g} bets):")
+        print(f"{'market':14} {'band':10} {'own bets':>8} {'own ROI':>8} {'pool ROI':>9} {'blended':>8} {'lower':>7}  gate")
+        for series in sorted({k[0] for k in by}):
+            for band, pooled in cells.items():
+                own = by.get((series, band))
+                if own is None and pooled.n == 0:
+                    continue
+                ok, _ = gate.decide_series(own, pooled, series, spec.gate_min_n, spec.gate_z, spec.gate_pool)
+                mean, se, n = gate.shrink(own, pooled, spec.gate_pool)
+                print(f"{series:14} {band[0]:>2}-{band[1]:<2} min {n:>8} {(own.mean_roi if own else 0):>+8.0%} {pooled.mean_roi:>+9.0%} "
+                      f"{mean:>+8.0%} {mean - spec.gate_z * se:>+7.0%}  {'OPEN' if ok else 'closed'}")
     return 0
 
 
@@ -623,10 +676,11 @@ def cmd_bymin(s: config.Settings, args: argparse.Namespace) -> int:
 
 def cmd_patience(s: config.Settings, args: argparse.Namespace) -> int:
     """Replay finished bets as if each had waited for a slightly better price (needs the tape; places nothing)."""
+    from . import db as database
     from . import patience
 
-    tape = s.data_dir / "tape.db"
-    if not tape.is_file():
+    tape = s.tape_path
+    if not database.tape_exists(tape):
         print("no tape recorded yet (TAPE_ENABLED, kept for TAPE_KEEP_DAYS days).")
         return 0
     store = Store(s.db_path, s.exclude_versions)
@@ -714,6 +768,85 @@ def cmd_balance(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_manual(s: config.Settings, args: argparse.Namespace) -> int:
+    """List the hand-placed positions the manual exit would watch, with where each stands (read-only)."""
+    from . import manual
+    from .strategy import fee_per_contract, flip
+
+    client = _client(s)
+    store = Store(s.db_path, s.exclude_versions)
+    state = "ON" if s.manual_exit else "off (set MANUAL_EXIT=true in .env)"
+    print(f"manual exit {state}: arms at +{s.manual_exit_activate:.0%}, sells {s.manual_exit_drop:.2f} off a held peak or {s.manual_exit_fast:.2f} at once; "
+          f"profit-takes only above +{s.manual_exit_min_profit:.0%}; stop-loss {s.manual_exit_stop:.0%}. Skipping: {', '.join(s.manual_exit_skip) or 'nothing'}")
+    rows = manual.ManualPositions(client).positions(s, store, fresh=True)
+    if not rows:
+        print("no hand-placed open positions")
+        return 0
+    print(f"\n{'ticker':40} {'side':4} {'count':>8} {'paid':>6} {'bid':>6} {'gain':>7}")
+    for p in rows:
+        try:
+            m = client.market(p.ticker)
+            q = flip(m) if p.side == "no" else m
+            bid = float(q.get("yes_bid_dollars") or 0.0)
+        except Exception:
+            bid = 0.0
+        gain = (bid - fee_per_contract(bid)) / p.entry - 1 if p.entry and bid else 0.0
+        print(f"{p.ticker[:40]:40} {p.side:4} {p.count:8.2f} {p.entry:6.2f} {bid:6.2f} {gain:+7.0%}")
+    return 0
+
+
+def cmd_grid(s: config.Settings, args: argparse.Namespace) -> int:
+    """What the learned grid knows: entry results by minute, price, last-hour trend and whole-market trend (read-only)."""
+    from . import gate, grid
+
+    store = Store(s.db_path, s.exclude_versions)
+    series = tuple(x for x in args.series.split(",") if x)
+    added = grid.update(store, s.tape_path, series)
+    n = store.db.execute(f"SELECT COUNT(*), COUNT(DISTINCT ticker) FROM grid_obs WHERE series IN ({','.join('?' * len(series))})", series).fetchone()
+    table = grid.cells(store, series)
+    base = [c for k, c in table.items() if k[2] is None and k[3] is None and k[4] is None]
+    allroi = sum(c.mean * c.n for c in base) / max(1, sum(c.n for c in base))
+    print(f"{series}: {n[1]} windows replayed ({added} new), {n[0]} entries; average ROI of entering anywhere with the live exit: {allroi:+.1%}\n")
+    print("ROI by minute (rows) and ask price (columns), with replays; '.' = fewer than 5")
+    print(f"{'minutes':8}" + "".join(f"{lo:.1f}-{hi:.1f}".rjust(12) for lo, hi in grid.PBANDS))
+    for mb, (lo, hi) in enumerate(gate.BANDS):
+        row = f"{lo:>3}-{hi:<4}"
+        for pb in range(len(grid.PBANDS)):
+            c = table.get((mb, pb, None, None, None))
+            row += (f"{c.mean:+.0%}({c.n})" if c and c.n >= 5 else ".").rjust(12)
+        print(row)
+    ranked = sorted(((c.lower(args.z), k, c) for k, c in table.items() if c.n >= args.min_n), key=lambda x: -x[0])
+    print(f"\ncells with at least {args.min_n} replays: {len(ranked)}; clearing zero by {args.z:g} standard errors: {sum(1 for r in ranked if r[0] > 0)}")
+    for lcb, (mb, pb, e, a, b), c in ranked[:10]:
+        split = "".join(f", {n} {v}" for n, v in (("price", e), ("hour", a), ("market", b)) if v)
+        print(f"  minutes {gate.BANDS[mb][0]}-{gate.BANDS[mb][1]}, ask {grid.PBANDS[pb][0]:.2f}-{grid.PBANDS[pb][1]:.2f}{split}: {c.mean:+.1%} over {c.n} (lower bound {lcb:+.1%})")
+    return 0
+
+
+def cmd_backup(s: config.Settings, args: argparse.Namespace) -> int:
+    """Make consistent copies of the databases now in DATA_DIR/backups (safe while the bot runs)."""
+    from . import backup
+
+    wrote = backup.run_once(s, force=True)
+    print("wrote: " + (", ".join(wrote) or "nothing (no database yet)") + f"   folder: {s.data_dir / 'backups'}")
+    return 0
+
+
+def cmd_flat(s: config.Settings, args: argparse.Namespace) -> int:
+    """Exit 0 when no real position is open (nothing to leave unwatched by a restart), else 1. Used by safe_rebuild.sh."""
+    from datetime import UTC, datetime
+
+    from . import manual
+
+    store = Store(s.db_path, s.exclude_versions)
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    bets = [r for r in store.open_bets() if r["mode"] == "trade" and (r["close_time"] or "") > now]
+    hand = manual.ManualPositions(_client(s)).positions(s, store, fresh=True)
+    n = len(bets) + len(hand)
+    print(f"open real positions: {n} ({len(bets)} the bot's, {len(hand)} hand-placed)")
+    return 1 if n else 0
+
+
 def cmd_kill(s: config.Settings, args: argparse.Namespace) -> int:
     s.kill_file.write_text("stop\n")
     print(f"kill switch on ({s.kill_file}). No orders will be placed until `unkill`.")
@@ -753,9 +886,9 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
-    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "shardmove": cmd_shardmove, "kill": cmd_kill,
+    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "flat": cmd_flat, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
-    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
+    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
 
 
@@ -781,9 +914,17 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--usd", type=float, required=True)
             p.add_argument("--max-usd", type=float, default=50.0, help="refuse bigger amounts than this")
             p.add_argument("--yes", action="store_true", help="actually send it; without this it only prints the plan")
+        if name == "watch":
+            p.add_argument("tickers", help="one or more market tickers, comma separated")
+            p.add_argument("--quotes-only", action="store_true", help="hide the individual trades")
         if name == "gate":
             p.add_argument("--lane", required=True)
             p.add_argument("--sources", default="", help="lanes to preview the gate from, if the lane has no gate_from")
+            p.add_argument("--by-series", action="store_true", help="also show each market's own record, blended toward the lane pool")
+        if name == "grid":
+            p.add_argument("--series", default="KXBTC15M,KXGOLD15M", help="comma list of 15-minute series to pool")
+            p.add_argument("--min-n", type=int, default=30, help="replays a cell needs before it is ranked")
+            p.add_argument("-z", type=float, default=3.0, help="standard errors a cell must clear zero by")
         if name == "bymin":
             p.add_argument("--lane", help="a lane name, or leave out for all")
         if name == "patience":

@@ -14,14 +14,23 @@ The class is small on purpose: a vector backend can replace `cases()` without to
 from __future__ import annotations
 
 import re
-import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from . import db
 from .config import read_tuning
 
 if TYPE_CHECKING:
     from .store import Store
+
+SCHEMA_PG = """
+CREATE TABLE IF NOT EXISTS rag_cases (
+  title TEXT, body TEXT, ticker TEXT, series TEXT, category TEXT, lane TEXT, outcome TEXT,
+  tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(body, ''))) STORED
+);
+CREATE INDEX IF NOT EXISTS idx_rag_tsv ON rag_cases USING GIN (tsv);
+CREATE INDEX IF NOT EXISTS idx_rag_series ON rag_cases(series);
+"""
 
 SCHEMA = """
 CREATE VIRTUAL TABLE IF NOT EXISTS rag_cases USING fts5(
@@ -79,16 +88,18 @@ def query_for(text: str, limit: int = 8) -> str:
 
 
 class Rag:
-    def __init__(self, store: Store):
+    def __init__(self, store: Store, create: bool = True):
         self.store = store
         self.db = store.db
-        self.db.executescript(SCHEMA)
+        self.pg = db.is_pg(self.db)
+        if create:
+            self.db.executescript(SCHEMA_PG if self.pg else SCHEMA)
 
     # ---- indexing ----
     def _skipped_lanes(self) -> set[str]:
         return {str(x) for x in (read_tuning(self.store.path.parent).get("rag_skip_lanes") or [])}
 
-    def _row(self, r: sqlite3.Row) -> tuple:
+    def _row(self, r: db.Row) -> tuple:
         prior = f"prior estimate {r['model_p']:.2f}, resolved {r['outcome']}."
         note = (r["reason"] or "").replace(str(r["ask"]), "")
         return (
@@ -96,7 +107,7 @@ class Rag:
             r["category"] or "", r["lane"] or "moonshot", r["outcome"],
         )
 
-    def _eligible(self, rows: list[sqlite3.Row]) -> list[sqlite3.Row]:
+    def _eligible(self, rows: list[db.Row]) -> list[db.Row]:
         from .report import first_per_market  # local: report imports strategy
 
         skip = self._skipped_lanes()
@@ -141,13 +152,22 @@ class Rag:
         scopes = ([("AND series = ?", [series])] if series else []) + [("", [])]
         for clause, args in scopes:
             try:
-                rows = self.db.execute(
-                    f"""SELECT title, outcome, body FROM rag_cases
-                        WHERE rag_cases MATCH ? {clause} AND ticker != ?
-                        ORDER BY bm25(rag_cases) LIMIT ?""",
-                    [query, *args, ticker, limit],
-                ).fetchall()
-            except sqlite3.OperationalError:
+                if self.pg:
+                    tsq = query.replace(" OR ", " | ")
+                    rows = self.db.execute(
+                        f"""SELECT title, outcome, body FROM rag_cases
+                            WHERE tsv @@ to_tsquery('english', ?) {clause} AND ticker != ?
+                            ORDER BY ts_rank(tsv, to_tsquery('english', ?)) DESC LIMIT ?""",
+                        [tsq, *args, ticker, tsq, limit],
+                    ).fetchall()
+                else:
+                    rows = self.db.execute(
+                        f"""SELECT title, outcome, body FROM rag_cases
+                            WHERE rag_cases MATCH ? {clause} AND ticker != ?
+                            ORDER BY bm25(rag_cases) LIMIT ?""",
+                        [query, *args, ticker, limit],
+                    ).fetchall()
+            except Exception:  # a query the engine cannot parse is no match, not a crash
                 return found
             for r in rows:
                 key = f"{r['title']}|{r['outcome']}"
@@ -166,7 +186,7 @@ class Rag:
             if not val:
                 continue
             row = self.db.execute(
-                f"SELECT COUNT(*) AS n, SUM(outcome='yes') AS y FROM rag_cases WHERE {col}=?", (val,)
+                f"SELECT COUNT(*) AS n, SUM(CASE WHEN outcome='yes' THEN 1 ELSE 0 END) AS y FROM rag_cases WHERE {col}=?", (val,)
             ).fetchone()
             if row["n"] >= MIN_BASE_RATE_N:
                 return BaseRate(scope, int(row["y"] or 0), int(row["n"]))

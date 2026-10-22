@@ -74,7 +74,7 @@ def sync(client: KalshiClient, store: Store, full: bool = False, market_budget: 
     db.commit()
     looked = 0
     missing = [r[0] for r in db.execute(
-        """SELECT DISTINCT ticker FROM (SELECT ticker FROM fills UNION SELECT ticker FROM settlements)
+        """SELECT DISTINCT ticker FROM (SELECT ticker FROM fills UNION SELECT ticker FROM settlements) seen
            WHERE ticker NOT IN (SELECT ticker FROM market_info)""")]
     for ticker in missing[:market_budget]:
         try:

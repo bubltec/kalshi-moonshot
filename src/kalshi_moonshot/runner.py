@@ -357,6 +357,23 @@ def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
     )
 
 
+def _grid_says(s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, shot: LongShot) -> tuple[bool, str]:
+    """Ask the learned grid (grid.py) whether the conditions right now are ones that have paid: minute, price, last hour, whole market."""
+    from . import grid
+
+    tape = s.tape_path
+    series = tuple(spec.series) or (shot.series,)
+    grid.refresh_soon(lambda: Store(s.db_path, s.exclude_versions), tape, series)
+    elapsed = spec.timed_minutes - shot.hours_to_close * 60.0
+    try:
+        strike = float(client.market(shot.ticker).get("floor_strike"))
+    except (TypeError, ValueError, KalshiError):
+        strike = None
+    edge, alpha, beta = grid.live_features(tape, shot.series, shot.side, time.time(), strike, shot.hours_to_close * 60.0, shot.ask)
+    go, why = grid.pick(store, spec, series, elapsed, shot.ask, edge, alpha, beta, gate.since_ts(spec.gate_since))
+    return go, f"{why} [price {edge or '?'}, hour {alpha or '?'}, market {beta or '?'}]"
+
+
 def evaluate(
     s: Settings, client: KalshiClient, est, store: Store, shot: LongShot,
     searcher: NewsSearch | None = None,
@@ -400,10 +417,14 @@ def evaluate(
     bet = wants_bet(spec, cal.p, shot.ask, e)
     note = why if cal.n == 0 else f"{why} | {cal.note(p)}"
     if bet and spec.gate_from:
-        open_, gate_note = gate.check(store, spec, shot.close_time)
+        open_, gate_note = gate.check(store, spec, shot.close_time, series=shot.series)
         if not open_:
             bet = False
             note = f"{gate_note}. {note}"
+    if bet and spec.grid:
+        go, gnote = _grid_says(s, client, store, spec, shot)
+        note = f"{gnote}. {note}"
+        bet = go
     if bet and not chance_ok(spec, p):
         bet = False
         note = f"chance {p:.0%} outside the lane's {spec.min_chance:.0%}-{spec.max_chance:.0%}. {note}"
@@ -602,11 +623,18 @@ def _hours_left(close_time: str, now: datetime | None = None) -> float | None:
 _EXIT_LOCK = threading.Lock()  # one exit at a time, so the periodic pass and the live watcher never sell the same bet twice
 
 
+EXIT_SLIP = 0.02  # an exit order is limited this far under the bid we saw: it is immediate-or-cancel, so it still fills at the best bid
+
+
 def exit_position(
     s: Settings, client: KalshiClient, store: Store, row, bid: float, why: str,
-    before_order: Callable[[], None] | None = None,
+    before_order: Callable[[], None] | None = None, slip: float = EXIT_SLIP,
 ) -> str:
-    """Sell (or paper-sell) one open bet at `bid`. Safe to call from any thread."""
+    """Sell (or paper-sell) one open bet near `bid`. Safe to call from any thread.
+
+    The price we saw may be a moment old by the time the order lands, and an immediate-or-cancel order at a stale bid fills nothing.
+    So the order is limited `slip` below it: it still fills at the best bid on the book, and only a move bigger than the slip stops it.
+    """
     with _EXIT_LOCK:
         lane = row["lane"] or "moonshot"
         if (row["ticker"], lane) not in {(r["ticker"], r["lane"] or "moonshot") for r in store.open_bets()}:
@@ -623,7 +651,7 @@ def exit_position(
             before_order()
         try:
             sell = client.sell_yes_ioc if side == "yes" else client.sell_no_ioc
-            resp = sell(row["ticker"], count, bid)
+            resp = sell(row["ticker"], count, max(0.01, round(bid - slip, 2)))
         except KalshiRateLimited:
             raise
         except KalshiError as exc:
@@ -690,7 +718,7 @@ def stop_loss_pass(
             why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, s.stop_loss_drop)
         if not why:
             continue
-        notes.append(exit_position(s, client, store, row, bid, why, before_order))
+        notes.append(exit_position(s, client, store, row, bid, why, before_order, slip=EXIT_SLIP + (0.03 if why.startswith("stop-loss") else 0.0)))
     return notes
 
 

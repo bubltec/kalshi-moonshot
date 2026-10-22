@@ -1,7 +1,6 @@
-import sqlite3
-
 import pytest
 
+from kalshi_moonshot import db as database
 from kalshi_moonshot import patience
 from kalshi_moonshot.store import Store
 
@@ -35,7 +34,7 @@ def test_load_reads_quotes_after_the_decision(tmp_path):
     store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, outcome, side, lane) VALUES (?,?,?,?,?,?,?,?)",
                      (1000.0, "KXBTC15M-1", "bet", "trade", 0.80, "yes", "yes", "commodity"))
     store.db.commit()
-    tape = sqlite3.connect(tmp_path / "tape.db")
+    tape = database.connect(tmp_path / "tape.db", "tape", shared=True)
     tape.executescript("CREATE TABLE quotes (ts REAL, ticker TEXT, bid REAL, ask REAL, last REAL, sts INTEGER);")
     tape.executemany("INSERT INTO quotes VALUES (?,?,?,?,?,?)", [
         (999.0, "KXBTC15M-1", 0.78, 0.80, None, None), (1004.0, "KXBTC15M-1", 0.76, 0.78, None, None)])

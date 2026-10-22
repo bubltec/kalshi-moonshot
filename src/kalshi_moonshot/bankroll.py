@@ -70,6 +70,10 @@ class Bankroll:
 
     def read(self, client: Any, s: Settings, live: bool = True) -> Balance:
         paper = paper_balance(self.store, s)
+        if paper.equity < s.paper_bankroll_usd:
+            # Paper trading exists to collect results. Sizing off a bankroll that paper losses have eaten would starve every paper lane
+            # (a $1 fixed stake cannot fit under 10% of $4), so paper stakes are sized as if the starting stake were intact.
+            paper = Balance(max(0.0, s.paper_bankroll_usd - sum(paper.open_by_lane.values())), s.paper_bankroll_usd, "paper", paper.open_by_lane)
         if not live or s.mode != "trade" or not getattr(client, "authed", False):
             return paper
         if self._cached and time.time() - self._cached[0] < self.TTL:

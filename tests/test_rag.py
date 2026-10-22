@@ -1,3 +1,5 @@
+import pytest
+
 from kalshi_moonshot.store import Store
 
 
@@ -42,6 +44,7 @@ def test_new_decisions_get_the_current_version(tmp_path):
     assert store.settled_decisions()[0]["version"] == STRATEGY_VERSION
 
 
+@pytest.mark.sqlite_only
 def test_rows_from_before_versions_become_v1(tmp_path):
     import sqlite3
     path = tmp_path / "old.db"

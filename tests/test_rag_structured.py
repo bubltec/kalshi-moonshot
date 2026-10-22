@@ -1,3 +1,5 @@
+import pytest
+
 from kalshi_moonshot.store import Store
 
 
@@ -64,6 +66,7 @@ def test_commodity_lane_never_enters_the_index(tmp_path):
     assert store.db.execute("SELECT COUNT(*) FROM rag_cases").fetchone()[0] == 0
 
 
+@pytest.mark.sqlite_only
 def test_old_index_table_is_dropped_on_open(tmp_path):
     path = tmp_path / "m.db"
     Store(path)

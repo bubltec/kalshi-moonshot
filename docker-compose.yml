@@ -6,15 +6,43 @@ services:
     restart: unless-stopped
     stop_grace_period: 60s  # lets the current job finish; anything cut off resumes on start
     env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       DATA_DIR: /data
+      TAPE_DIR: /tape  # only used by a SQLite run; with Postgres the tape is a schema in the database
+      DATABASE_URL: postgresql://moonshot:${POSTGRES_PASSWORD:-moonshot}@db:5432/moonshot
+      DB_SCHEMA_MAIN: moonshot
+      DB_SCHEMA_TAPE: tape
       # Keys are mounted read-only. .env may use ./.secrets/kalshi.key (WORKDIR is /app).
     volumes:
       - ./data:/data
+      - tape:/tape
       - ./.secrets:/app/.secrets:ro
       - ./.env:/app/.env:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  db:
+    image: postgres:15-alpine  # the same major version as the pg_dump in the bot image
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_USER: moonshot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-moonshot}
+      POSTGRES_DB: moonshot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"  # this Mac only, for psql or a database browser; not exposed to the network
+    shm_size: 256mb
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "synchronous_commit=on", "-c", "max_connections=60"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moonshot -d moonshot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   ollama:
     profiles: ["ollama"]
@@ -27,3 +55,5 @@ services:
 
 volumes:
   ollama:
+  tape:
+  pgdata:

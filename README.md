@@ -161,6 +161,44 @@ Two paper lanes can compare exits on the same markets: bookkeeping (open bets, e
 `shares_markets = true` (like `steady_raw`, the no-model control for `steady`) is offered the markets another lane took
 instead of the leftovers, which is what lets a control be compared with the lane it shadows.
 
+## The database: Postgres
+
+Everything the bot records lives in Postgres (the `db` service in `docker-compose.yml`): the bot's own tables in the `moonshot` schema, and the tape
+(quotes, index and feed ticks, trade flow) in the `tape` schema. `db.py` is the one place that talks to it, so the rest of the code is unchanged; the
+same layer also runs on a SQLite file (what the tests use, and a quick local run with `DATABASE_URL` unset).
+
+- **Use it from the Mac:** `psql postgresql://moonshot:moonshot@127.0.0.1:5433/moonshot` (this Mac only; set `POSTGRES_PASSWORD` in `.env` to change the
+  password). Or any database browser. Query freely: Postgres has no file to damage.
+- **Backups:** `python -m kalshi_moonshot backup` (also nightly, in the bot) writes `pg_dump` files to `data/backups/` (`moonshot-DATE.dump`, `tape-DATE.dump`).
+  Restore with `pg_restore -d moonshot --clean --schema=moonshot file.dump`.
+- **Studies** read the database directly (`DATABASE_URL`), or the SQLite copies of an old backup, whichever you point them at.
+- **Moving from SQLite:** `scripts/cutover_postgres.sh` does it once, when no position is open, and leaves the SQLite files as the rollback.
+- **Tests:** `pytest` runs on SQLite; `KM_TEST_DATABASE_URL=postgresql://... pytest` runs the same suite on Postgres, each test in a schema of its own.
+
+## Learned entry: when to buy, from the record
+
+`python -m kalshi_moonshot grid` shows what the bot has learned about entering BTC and gold 15-minute windows. `grid.py` replays every recorded
+window for every entry that was on offer (the first time the side's ask sat in each price band inside each three-minute part of the window),
+managed with the bot's live peak-crash exit, and keeps the result in `grid_obs`. Each replay also carries the instrument's last-hour move
+(alpha), the whole market's (beta) and how far the ask is from the fair value its distance to the strike implies (price). The `learned_entry`
+lane (paper) buys only where the most specific cell with 30+ replays has a mean that clears zero by 3 standard errors, so with little data it
+passes on purpose. Studies read a copy: `ls -t data/backups/tape-*.db | head -1`.
+
+**Why the tape is in a volume.** The tape is written all day. A database file written by the container and touched from the Mac side was once
+corrupted (recovered with SQLite's `.recover`). Keep `data/moonshot.db` and the backups readable from the Mac, but run queries against the live
+databases with `docker compose exec bot ...`, and read the tape only through a backup copy.
+
+## Exits for positions you opened by hand
+
+Your own cash-outs have been your best trades (every one a win), but only when you were watching. With `MANUAL_EXIT=true` the watcher also
+follows every open position on the account that the bot did not open, in any market, and applies the peak-crash exit to it from the live
+socket: once the bid is `MANUAL_EXIT_ACTIVATE` (10%) over what you paid, it sells when the bid falls `MANUAL_EXIT_DROP` ($0.04) off a peak
+that held a few seconds, or `MANUAL_EXIT_FAST` ($0.12) at once. It only ever takes a profit: it never sells for less than `MANUAL_EXIT_MIN_PROFIT` (5%)
+over what the position cost, after the fee. `MANUAL_EXIT_STOP_LOSS` (30%) adds the bot's own stop-loss: a 15-minute market only if `STOP_LOSS_15M` is on,
+any other market only in its last `STOP_LOSS_HOURS`; where the bot can price the market it holds a dip the model still rates better than even. `MANUAL_EXIT_SKIP` lists ticker prefixes to leave alone (positions meant to be held). Real orders also need
+`MODE=trade` (and `ALLOW_REAL_MONEY=true` on prod); otherwise it only logs what it would have sold. Rebuild with `scripts/safe_rebuild.sh` instead of `docker compose up -d --build`: it waits until no position is open, because a restart leaves the watcher blind for 20-30 seconds. `python -m kalshi_moonshot manual` lists
+what it would watch and where each position stands. Sales appear in your account history like any other, so `mytrades` picks them up.
+
 ## Currencies, indices and other new markets
 
 Kalshi lists 15-minute markets beyond crypto and commodities: EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, the S&P 500 and
@@ -185,7 +223,7 @@ bought and not sold, whatever happened to an earlier bet on it, so two live lane
 
 **The entry window is learned, not fixed.** A lane with `gate_from` (the live `fx_ticket`) may enter a minute band of the 15-minute window only when
 the finished bets of the lanes it names (the paper lanes explore the whole window) show at least `gate_min_n` bets there and a mean return, less `gate_z`
-standard errors, above zero (`gate.py`). `gate_since = "YYYY-MM-DD"` resets it: only bets from that date on count. A band with too little evidence stays closed and the paper lanes keep entering it until it has some. Run
+standard errors, above zero (`gate.py`). `gate_since = "YYYY-MM-DD"` resets it: only bets from that date on count. `gate_by = "series"` gives each market its own record, blended toward the lane's pooled result (`gate_pool` pseudo-bets of prior): a market with few bets borrows the pool's verdict and one with its own bad record is closed; `gate --lane X --by-series` shows both. A band with too little evidence stays closed and the paper lanes keep entering it until it has some. Run
 `gate --lane fx_ticket` to see each band's bets, return and whether it is open. Nothing about the minutes is hardcoded in the live lane.
 
 ## Lane notes
@@ -276,6 +314,7 @@ Edit `.env`. No rebuild is needed; rebuild only when the code changes.
 | Replay finished bets as if each had waited for a slightly better price (read-only, needs the tape) | `docker compose exec bot python -m kalshi_moonshot patience` |
 | See a lane's 15-minute results by how far into the window each bet was placed | `docker compose exec bot python -m kalshi_moonshot bymin --lane late_ticket` |
 | Move cash between your own exchange shards, e.g. 2 -> 0 so currency orders can be funded (dry run unless `--yes`) | `docker compose exec bot python -m kalshi_moonshot shardmove --usd 15` |
+| Watch a market's live bid, ask, sizes and trades from Kalshi's socket until ctrl-c (read-only) | `docker compose exec bot python -m kalshi_moonshot watch KXINXU-26OCT22H1300-T7669.9999` |
 | Scan open strike ladders for guaranteed-profit pairs (read-only) | `docker compose exec bot python -m kalshi_moonshot arbs` |
 | Show what deleting excluded versions would remove (dry run) | `docker compose exec bot python -m kalshi_moonshot prune` |
 | Delete them (makes a backup copy of the database first) | `docker compose exec bot python -m kalshi_moonshot prune --yes` |
@@ -368,7 +407,7 @@ docker compose exec bot python -m kalshi_moonshot daily       # profit and loss 
 ## Lead-lag: does the quote trail the price it follows?
 
 Minute candles cannot show whether a Kalshi quote reacts to a move in the underlying instantly or a few seconds
-late. So the bot records a **tape** (`data/tape.db`, kept 3 days, read-only): every change of each open
+late. So the bot records a **tape** (`tape.db` in the Docker `tape` volume, kept 3 days, read-only; nightly consistent copies go to `data/backups/`, and `python -m kalshi_moonshot backup` makes one now): every change of each open
 15-minute market's quote from Kalshi's authenticated WebSocket, next to the price it follows. For crypto that is
 the settlement index itself, which Kalshi streams (BRTI for bitcoin, `ETHUSD_RTI`, ...) about once a second with its
 trailing 60-second average, the quantity those markets compare. For commodities, which settle elsewhere, it is the

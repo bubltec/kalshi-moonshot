@@ -74,3 +74,72 @@ def test_a_profit_take_still_refuses_to_sell_below_cost(setup):
     w.refresh()
     w._sell("KXBTC15M-1", "late_ticket", "take-profit: bid 0.90 is 3.0x the 0.30 paid")
     assert len(Store(s.db_path).open_bets()) == 1
+
+
+def test_exit_orders_are_limited_under_the_bid_and_a_fast_exit_slips_more(setup):
+    import time
+
+    s, store = setup
+    s2 = type(s)(**{**s.__dict__, "mode": "trade", "env": "demo", "live_lanes": None, "fast_live": True})
+    sold = []
+
+    class Live(FakeClient):
+        def sell_yes_ioc(self, ticker, count, price, client_order_id=None):
+            sold.append(price)
+            return {"fill_count": count, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
+
+    store.add_order(ticker="KXBTC15M-1", env="demo", count=3, price=0.30, fill_count=3, cost_usd=0.9, fee_usd=0.0, side="buy")
+    (s.data_dir / "strategies.toml").write_text(
+        "[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.4]\nhours=[0.0,1.0]\ntrail_activate=0.10\ntrail_drop=0.04\ntrail_fast_drop=0.12\n")
+    w = watcher.ProfitWatcher(lambda: s2, Live(0.60), lambda: Store(s.db_path))
+    w.refresh()
+    t = w.targets[("KXBTC15M-1", "late_ticket")]
+    t.peak, t.last_bid, t.last_ts = 0.80, 0.55, time.time()  # the socket's latest bid (0.55) is lower than REST's (0.60)
+    w._sell("KXBTC15M-1", "late_ticket", "peak-crash: bid 0.55 is 0.25 off its 0.80 peak (paid 0.30), fast exit")
+    assert sold == [pytest.approx(0.51)]  # min(REST 0.60, socket 0.55) = 0.55, less 2c base slip and 2c more for a fast exit
+
+
+def test_a_cash_out_is_withheld_when_holding_is_worth_more_than_the_bid(setup):
+    s, store = setup
+    store.db.execute("UPDATE decisions SET ask=0.80")
+    store.db.commit()
+    (s.data_dir / "strategies.toml").write_text(
+        "[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.9]\nhours=[0.0,1.0]\ntrail_activate=0.10\ntrail_drop=0.04\n")
+    why = "peak-crash: bid 0.93 is 0.05 off its 0.98 peak (paid 0.80) for 11s"
+    for held, sold in ((0.99, False), (0.50, True)):
+        store.db.execute("UPDATE decisions SET exit_ts=NULL, exit_price=NULL")
+        store.db.commit()
+        w = watcher.ProfitWatcher(lambda: s, FakeClient(0.93), lambda: Store(s.db_path), hold_value=lambda row, st, h=held: h)
+        w.refresh()
+        w.targets[("KXBTC15M-1", "late_ticket")].peak = 0.98  # a held peak, so the dip has not healed
+        w._sell("KXBTC15M-1", "late_ticket", why)
+        assert (Store(s.db_path).open_bets() == []) is sold, held
+
+
+def test_an_unknown_hold_value_does_not_block_the_exit(setup):
+    s, store = setup
+    store.db.execute("UPDATE decisions SET ask=0.80")
+    store.db.commit()
+    (s.data_dir / "strategies.toml").write_text(
+        "[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.9]\nhours=[0.0,1.0]\ntrail_activate=0.10\ntrail_drop=0.04\n")
+    w = watcher.ProfitWatcher(lambda: s, FakeClient(0.93), lambda: Store(s.db_path), hold_value=lambda row, st: None)
+    w.refresh()
+    w.targets[("KXBTC15M-1", "late_ticket")].peak = 0.98
+    w._sell("KXBTC15M-1", "late_ticket", "peak-crash: bid 0.93 is 0.05 off its 0.98 peak (paid 0.80) for 11s")
+    assert Store(s.db_path).open_bets() == []
+
+
+def test_a_stop_loss_is_withheld_when_holding_is_worth_more_than_the_bid(setup):
+    s, store = setup
+    store.db.execute("UPDATE decisions SET ask=0.80")
+    store.db.commit()
+    (s.data_dir / "strategies.toml").write_text(
+        "[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.9]\nhours=[0.0,1.0]\n")
+    why = "stop-loss: bid 0.50 is 38% under the 0.80 paid (socket)"
+    for held, sold in ((0.85, False), (0.30, True), (0.49, True)):  # at or under even odds we are on the losing side: sell
+        store.db.execute("UPDATE decisions SET exit_ts=NULL, exit_price=NULL")
+        store.db.commit()
+        w = watcher.ProfitWatcher(lambda: s, FakeClient(0.50), lambda: Store(s.db_path), hold_value=lambda row, st, h=held: h)
+        w.refresh()
+        w._sell("KXBTC15M-1", "late_ticket", why)
+        assert (Store(s.db_path).open_bets() == []) is sold, held
