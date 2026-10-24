@@ -1,0 +1,11 @@
+{
+  "app": ".venv/bin/python app.py",
+  "context": {
+    "account": "288892511071",
+    "region": "us-east-1",
+    "archive_days_hot": 14,
+    "backup_expire_days": 400,
+    "athena_scan_limit_gb": 10,
+    "@aws-cdk/core:checkSecretUsage": true
+  }
+}
