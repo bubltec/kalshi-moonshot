@@ -36,6 +36,7 @@ TABLES: dict[str, list[tuple[str, str]]] = {
     "flow_1s": [("ts", "bigint"), ("ticker", "string"), ("yes_vol", "double"), ("no_vol", "double"), ("n", "int"), ("vwap", "double")],
     "index_ticks": [("ts", "double"), ("index_id", "string"), ("value", "double"), ("avg60", "double"), ("quarter_avg", "double"), ("src_ms", "bigint")],
     "feed_ticks": [("ts", "double"), ("symbol", "string"), ("px", "double")],
+    "fut_1s": [("ts", "bigint"), ("symbol", "string"), ("px", "double"), ("buy_usd", "double"), ("sell_usd", "double"), ("buy_n", "int"), ("sell_n", "int")],
 }
 GRACE = timedelta(hours=1)  # a day is archived once it ended this long ago, so late rows of the last minutes are in
 CHUNK_SECONDS = 3600  # rows are read an hour at a time: bounded memory, short queries

@@ -1,7 +1,6 @@
 import aws_cdk as cdk
-from aws_cdk.assertions import Match, Template
-
 from archive_stack import ArchiveStack
+from aws_cdk.assertions import Match, Template
 
 
 def template(**context):
@@ -41,7 +40,7 @@ def test_athena_has_a_scan_limit_and_tables_with_computed_day_partitions():
     t = template(athena_scan_limit_gb=5)
     t.has_resource_properties("AWS::Athena::WorkGroup", {"WorkGroupConfiguration": Match.object_like({"BytesScannedCutoffPerQuery": 5 * 1024**3, "EnforceWorkGroupConfiguration": True})})
     tables = t.find_resources("AWS::Glue::Table")
-    assert len(tables) == 4
+    assert len(tables) == 5
     for res in tables.values():
         params = res["Properties"]["TableInput"]["Parameters"]
         assert params["projection.enabled"] == "true" and params["projection.day.range"].endswith(",NOW")

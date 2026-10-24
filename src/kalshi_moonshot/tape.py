@@ -20,6 +20,7 @@ from typing import Any
 from . import archive, db
 from .commodities import instrument_for, load_instruments
 from .config import Settings
+from .futflow import FuturesFlow
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import KalshiStream, index_for_series
 from .store import Store
@@ -43,6 +44,13 @@ CREATE TABLE IF NOT EXISTS flow_1s (
 CREATE INDEX IF NOT EXISTS idx_flow ON flow_1s(ticker, ts);
 CREATE TABLE IF NOT EXISTS feed_ticks (ts REAL NOT NULL, symbol TEXT NOT NULL, px REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_feed_ticks ON feed_ticks(symbol, ts);
+CREATE TABLE IF NOT EXISTS fut_1s (
+  ts INTEGER NOT NULL, symbol TEXT NOT NULL,
+  px REAL NOT NULL,                                -- last trade price in this second (a perpetual future, not spot)
+  buy_usd REAL NOT NULL, sell_usd REAL NOT NULL,   -- dollars bought and sold by takers (aggressors) during this second
+  buy_n INTEGER NOT NULL, sell_n INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fut_1s ON fut_1s(symbol, ts);
 """
 
 FLUSH_EVERY = 5.0
@@ -67,6 +75,7 @@ class Tape:
         self._index: list[tuple] = []
         self._feed: list[tuple] = []
         self._flow: dict[tuple[int, str], list[float]] = {}  # (second, ticker) -> [yes_vol, no_vol, n, price*count]
+        self._fut: dict[tuple[int, str], list[float]] = {}  # (second, coin) -> [last px, buy usd, sell usd, buy n, sell n]
         self._last_quote: dict[str, tuple] = {}
         self._last_feed: dict[str, tuple[float, float]] = {}
 
@@ -90,6 +99,14 @@ class Tape:
                 self._index.append((e["ts"], e["index_id"], e["value"], e.get("avg60"), e.get("quarter_avg"),
                                     e.get("src_ms")))
 
+    def add_fut(self, coin: str, ts: float, px: float, size: float, bought: bool) -> None:
+        """One live perpetual-futures trade: folded into its second's row (see futflow.py)."""
+        with self._lock:
+            row = self._fut.setdefault((int(ts), coin), [px, 0.0, 0.0, 0.0, 0.0])
+            row[0] = px
+            row[1 if bought else 2] += px * size
+            row[3 if bought else 4] += 1
+
     def add_feed(self, symbol: str, px: float, ts: float) -> None:
         with self._lock:
             prev = self._last_feed.get(symbol)
@@ -98,11 +115,16 @@ class Tape:
             self._last_feed[symbol] = (px, ts)
             self._feed.append((ts, symbol, px))
 
-    def flush(self) -> int:
+    def flush(self, now: float | None = None) -> int:
+        cutoff = int((now if now is not None else time.time()) - 2)  # a second still being filled stays in memory, so each (second, coin) is one row
         with self._lock:
             q, i, f, fl = self._quotes, self._index, self._feed, self._flow
             self._quotes, self._index, self._feed, self._flow = [], [], [], {}
-        if not (q or i or f or fl):
+            done = {k: v for k, v in self._fut.items() if k[0] <= cutoff}
+            for k in done:
+                del self._fut[k]
+        ft = [(sec, coin, v[0], v[1], v[2], int(v[3]), int(v[4])) for (sec, coin), v in done.items()]
+        if not (q or i or f or fl or ft):
             return 0
         try:
             self.db.executemany("INSERT INTO quotes (ts, ticker, bid, ask, last, sts, bid_size, ask_size) VALUES (?,?,?,?,?,?,?,?)", q)
@@ -112,6 +134,7 @@ class Tape:
             )
             self.db.executemany("INSERT INTO index_ticks VALUES (?,?,?,?,?,?)", i)
             self.db.executemany("INSERT INTO feed_ticks VALUES (?,?,?)", f)
+            self.db.executemany("INSERT INTO fut_1s VALUES (?,?,?,?,?,?,?)", ft)
             self.db.commit()
         except Exception:
             self.db.rollback()
@@ -119,16 +142,22 @@ class Tape:
                 self._quotes = q + self._quotes
                 self._index = i + self._index
                 self._feed = f + self._feed
+                for sec, coin, px, bu, su, bn, sn in ft:  # put the futures seconds back, merging with any trades that arrived since
+                    mine = self._fut.setdefault((sec, coin), [px, 0.0, 0.0, 0.0, 0.0])
+                    mine[1] += bu
+                    mine[2] += su
+                    mine[3] += bn
+                    mine[4] += sn
                 for key, v in fl.items():
                     mine = self._flow.setdefault(key, [0.0, 0.0, 0.0, 0.0])
                     for k in range(4):
                         mine[k] += v[k]
             raise
-        return len(q) + len(i) + len(f) + len(fl)
+        return len(q) + len(i) + len(f) + len(fl) + len(ft)
 
     def prune(self, keep_days: float, now: float | None = None) -> None:
         cutoff = (now if now is not None else time.time()) - keep_days * 86400
-        for table in ("quotes", "index_ticks", "feed_ticks", "flow_1s"):
+        for table in ("quotes", "index_ticks", "feed_ticks", "flow_1s", "fut_1s"):
             self.db.execute(f"DELETE FROM {table} WHERE ts < ?", (cutoff,))
         self.db.commit()
 
@@ -142,6 +171,7 @@ class TapeRecorder:
         self.extra_tickers: Any = None  # a callable returning more tickers to stream (positions we hold in any market)
         self.listeners: list[Any] = []  # called with every event after it is stored (must be fast and never raise)
         self.stream = KalshiStream(client, self._on_event)
+        self.futflow = FuturesFlow(s.fut_flow_coins, self.tape.add_fut) if s.fut_flow_enabled and s.fut_flow_coins else None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -229,12 +259,16 @@ class TapeRecorder:
         if self._thread and self._thread.is_alive():
             return
         self.stream.start()
+        if self.futflow is not None:
+            self.futflow.start()
         self._thread = threading.Thread(target=self._run, name="tape", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         self._stop.set()
         self.stream.close()
+        if self.futflow is not None:
+            self.futflow.close()
 
     def _run(self) -> None:
         last_refresh = last_flush = last_prune = 0.0

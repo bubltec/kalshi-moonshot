@@ -1080,7 +1080,7 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--apply", action="store_true", help="upload for real (needs ARCHIVE_BUCKET and AWS keys in .env)")
             p.add_argument("--delete-local", action="store_true", help="with --apply: also delete archived, verified days older than the hot window from the local tape")
             p.add_argument("--hot-days", type=int, default=None, help="days of tape to keep locally (default ARCHIVE_HOT_DAYS)")
-            p.add_argument("--table", action="append", choices=["quotes", "flow_1s", "index_ticks", "feed_ticks"], help="only this table (repeatable)")
+            p.add_argument("--table", action="append", choices=["quotes", "flow_1s", "index_ticks", "feed_ticks", "fut_1s"], help="only this table (repeatable)")
             p.add_argument("--day", help="fetch: the UTC day, YYYY-MM-DD")
             p.add_argument("--out", default="archive-fetch", help="fetch: folder to download into")
         if name == "versions":

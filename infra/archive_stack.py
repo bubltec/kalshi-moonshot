@@ -1,7 +1,7 @@
 """The archive stack: one private bucket for old tape data and database backups, an IAM user the archiver runs as, and Athena over the Parquet files.
 
 Layout inside the bucket (the archiver in ../src/kalshi_moonshot writes exactly this):
-    tape/<table>/day=YYYY-MM-DD/part-0.parquet     one file per table per day (quotes, flow_1s, index_ticks, feed_ticks)
+    tape/<table>/day=YYYY-MM-DD/part-0.parquet     one file per table per day (quotes, flow_1s, index_ticks, feed_ticks, fut_1s)
     backups/<name>-YYYYMMDD.dump                    the nightly pg_dump files
     athena-results/                                 Athena query output, deleted after a week
 
@@ -9,7 +9,12 @@ The archiver user can write and read but never delete; removing data from the bu
 """
 from __future__ import annotations
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, aws_athena as athena, aws_budgets as budgets, aws_glue as glue, aws_iam as iam, aws_s3 as s3
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
+from aws_cdk import aws_athena as athena
+from aws_cdk import aws_budgets as budgets
+from aws_cdk import aws_glue as glue
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 # Columns of the tape tables as they are written to Parquet (see ../src/kalshi_moonshot/tape.py). `day` is the partition, not a column in the file.
@@ -18,6 +23,7 @@ TAPE_TABLES: dict[str, list[tuple[str, str]]] = {
     "flow_1s": [("ts", "bigint"), ("ticker", "string"), ("yes_vol", "double"), ("no_vol", "double"), ("n", "int"), ("vwap", "double")],
     "index_ticks": [("ts", "double"), ("index_id", "string"), ("value", "double"), ("avg60", "double"), ("quarter_avg", "double"), ("src_ms", "bigint")],
     "feed_ticks": [("ts", "double"), ("symbol", "string"), ("px", "double")],
+    "fut_1s": [("ts", "bigint"), ("symbol", "string"), ("px", "double"), ("buy_usd", "double"), ("sell_usd", "double"), ("buy_n", "int"), ("sell_n", "int")],
 }
 PARQUET_IN = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
 PARQUET_OUT = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"

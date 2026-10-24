@@ -104,6 +104,8 @@ class Settings:
     shard_topup_max_per_day: float  # most dollars the bot may move between exchanges per day (New York time)
     patterns_hours: float  # how often to rewrite data/patterns.md from your trades (0 = off)
     tape_enabled: bool  # record contract quotes next to the price they follow (lead-lag study)
+    fut_flow_enabled: bool  # record Hyperliquid perpetual-futures trade flow per second on the tape (futflow.py)
+    fut_flow_coins: tuple[str, ...]
     tape_extra_series: tuple[str, ...]  # more series (sports, esports...) whose open markets the tape follows, quotes and trade flow
     manual_exit: bool  # sell positions you opened by hand, from the socket, to take a profit (see manual.py); off unless asked for
     manual_exit_skip: tuple[str, ...]  # ticker prefixes the manual exit leaves alone (positions you mean to hold)
@@ -358,6 +360,8 @@ def load() -> Settings:
         archive_region=os.environ.get("ARCHIVE_REGION", "us-east-1").strip() or "us-east-1",
         archive_hot_days=max(2, _i("ARCHIVE_HOT_DAYS", 14)),
         archive_delete_local=_b("ARCHIVE_DELETE_LOCAL", False),
+        fut_flow_enabled=_b("FUT_FLOW_ENABLED", True),
+        fut_flow_coins=tuple(x.strip().upper() for x in os.environ.get("FUT_FLOW_COINS", "BTC,ETH,SOL,XRP,DOGE").split(",") if x.strip()),
         tape_extra_series=tuple(x.strip() for x in os.environ.get("TAPE_EXTRA_SERIES", "").split(",") if x.strip()),
         manual_exit=_b("MANUAL_EXIT", False),
         manual_exit_skip=tuple(x.strip() for x in os.environ.get("MANUAL_EXIT_SKIP", "").split(",") if x.strip()),
