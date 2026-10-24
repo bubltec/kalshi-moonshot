@@ -189,7 +189,27 @@ class TapeRecorder:
         if not tickers <= current:
             self.stream.set_tickers(current | set(tickers))
 
+    def _crypto_symbols(self) -> list[str]:
+        """Kraken spot symbols behind the crypto 15-minute markets. Kalshi settles on the BRTI-style index; Kraken's own trades are a faster look at the same price."""
+        out = []
+        for ser in self._series():
+            inst = instrument_for(ser, load_instruments(self.s.data_dir))
+            if inst and inst.symbol.startswith("kraken:") and index_for_series(ser) is not None:
+                out.append(inst.symbol)
+        return sorted(set(out))
+
+    def sample_kraken(self) -> None:
+        """Store Kraken's latest price for each crypto symbol beside the index ticks, to test whether a faster exchange price leads the quote."""
+        kr = getattr(self.feed, "kraken", None)
+        if kr is None:
+            return
+        for sym in self._crypto_symbols():
+            got = kr.latest(sym)
+            if got is not None:
+                self.tape.add_feed(sym, got[0], got[1])
+
     def sample_feed(self) -> None:
+        self.sample_kraken()
         hl = getattr(self.feed, "hyperliquid", None)
         if hl is None:
             return

@@ -112,6 +112,9 @@ class Settings:
     manual_exit_fast: float  # ... or at once when it falls this far
     manual_exit_min_profit: float  # never sell for less than this fraction over the price paid, after the sell fee
     manual_exit_stop_confirm: float  # seconds the bid must stay past the stop line before a hand-placed position is sold
+    manual_exit_unstable_gain: float  # sell a hand-placed position that is up this fraction while the bid is swinging (0 = off)
+    manual_exit_unstable_range: float  # ... the bid's high-low in dollars over manual_exit_unstable_seconds
+    manual_exit_unstable_seconds: float
     manual_exit_stop: float  # stop-loss on hand-placed positions: sell at this fraction under the price paid (0 = none); same hours rules as the bot's
     tape_dir: Path  # where tape.db lives: a Docker-managed volume in compose, so SQLite's locking is not shared across the Mac/VM boundary
     backup_keep_days: int  # nightly consistent copies of the databases kept in DATA_DIR/backups
@@ -125,7 +128,10 @@ class Settings:
     moonshot_max_drop: float  # skip a long shot whose ask fell this much (live collapse)
     stop_loss_enabled: bool
     stop_loss_hours: float  # only sell when this close to settlement
-    stop_loss_drop: float  # fraction of entry lost, e.g. 0.30 = 30%
+    crash_giveback: float  # the crash exit sells once this share of the gain (peak over the price paid) is given back; 0 = the fixed trail_drop / manual_exit_drop
+    crash_spot_sigma: float  # a crash exit holds while spot is still on the winning side of the strike by more than this many sigma (0 = off)
+    crash_progress: float  # the crash exit arms once the bid has covered this share of the way from the price paid to $1.00 (0.40 = 40%); 0 = the lane's trail_activate gain instead
+    stop_loss_drop: float  # fraction of entry lost before the stop sells, e.g. 0.50 = 50%
     stop_loss_fast: bool  # whether the stop-loss also covers 15-minute windows (history says holding is better)
     stop_loss_check_minutes: int  # how often to re-check open bets in that window
 
@@ -351,6 +357,9 @@ def load() -> Settings:
         manual_exit_drop=_f("MANUAL_EXIT_DROP", 0.04),
         manual_exit_fast=_f("MANUAL_EXIT_FAST", 0.12),
         manual_exit_min_profit=_f("MANUAL_EXIT_MIN_PROFIT", 0.05),
+        manual_exit_unstable_gain=_f("MANUAL_EXIT_UNSTABLE_GAIN", 0.0),
+        manual_exit_unstable_range=_f("MANUAL_EXIT_UNSTABLE_RANGE", 0.06),
+        manual_exit_unstable_seconds=_f("MANUAL_EXIT_UNSTABLE_SECONDS", 20.0),
         manual_exit_stop=_f("MANUAL_EXIT_STOP_LOSS", 0.30),
         manual_exit_stop_confirm=_f("MANUAL_EXIT_STOP_CONFIRM", 20.0),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),
@@ -358,7 +367,10 @@ def load() -> Settings:
         moonshot_max_drop=_f("MOONSHOT_MAX_DROP", 0.02),
         stop_loss_enabled=_b("STOP_LOSS_ENABLED", True),
         stop_loss_hours=_f("STOP_LOSS_HOURS", 1.0),
-        stop_loss_drop=_f("STOP_LOSS_DROP", 0.30),
+        crash_giveback=_f("CRASH_GIVEBACK", 0.90),
+        crash_spot_sigma=_f("CRASH_SPOT_SIGMA", 0.5),
+        crash_progress=_f("CRASH_PROGRESS", 0.40),
+        stop_loss_drop=_f("STOP_LOSS_DROP", 0.50),
         stop_loss_fast=_b("STOP_LOSS_15M", True),
         stop_loss_check_minutes=max(1, _i("STOP_LOSS_CHECK_MINUTES", 5)),
         max_rps=max(0.5, _f("KALSHI_MAX_RPS", 8.0)),
@@ -372,8 +384,9 @@ def load() -> Settings:
         moonshot_exposure_pct=_f("MOONSHOT_EXPOSURE_PCT", 0.15),
         steady_bet_pct=_f("STEADY_BET_PCT", 0.03),
         steady_exposure_pct=_f("STEADY_EXPOSURE_PCT", 0.40),
-        commodity_bet_pct=_f("COMMODITY_BET_PCT", 0.03),
-        commodity_exposure_pct=_f("COMMODITY_EXPOSURE_PCT", 0.40),
+        # The commodity lane's own settings are in data/strategies.toml [lane.commodity]; these are only the built-in fallbacks under it.
+        commodity_bet_pct=0.03,
+        commodity_exposure_pct=0.40,
         steady_enabled=_b("STEADY_ENABLED", True),
         steady_sides=_sides("STEADY_SIDES"),
         steady_min_price=_f("STEADY_MIN_PRICE", 0.66),
@@ -388,26 +401,26 @@ def load() -> Settings:
         steady_max_lag=_f("STEADY_MAX_LAG", 0.15),
         steady_usd_per_trade=_f("STEADY_USD_PER_TRADE", 0.0),
         steady_shortlist=_i("STEADY_SHORTLIST", 10),
-        commodities_enabled=_b("COMMODITIES_ENABLED", True),
-        commodity_min_price=_f("COMMODITY_MIN_PRICE", 0.70),
-        commodity_max_price=_f("COMMODITY_MAX_PRICE", 0.98),
-        commodity_min_return=_f("COMMODITY_MIN_RETURN", 0.10),
-        commodity_min_edge=_f("COMMODITY_MIN_EDGE", 0.015),
-        commodity_min_age_minutes=max(0.0, _f("COMMODITY_MIN_AGE_MINUTES", 20.0)),
-        commodity_max_spread=_f("COMMODITY_MAX_SPREAD", 0.02),
-        commodity_min_volume=_f("COMMODITY_MIN_VOLUME", 5.0),
-        commodity_min_hours_to_close=_f("COMMODITY_MIN_HOURS_TO_CLOSE", 0.03),
-        commodity_max_hours_to_close=_f("COMMODITY_MAX_HOURS_TO_CLOSE", 2.0),
+        commodities_enabled=True,
+        commodity_min_price=0.70,
+        commodity_max_price=0.98,
+        commodity_min_return=0.10,
+        commodity_min_edge=0.015,
+        commodity_min_age_minutes=20.0,
+        commodity_max_spread=0.02,
+        commodity_min_volume=5.0,
+        commodity_min_hours_to_close=0.03,
+        commodity_max_hours_to_close=2.0,
         commodity_vol_mult=_f("COMMODITY_VOL_MULT", 1.25),
         commodity_max_basis=_f("COMMODITY_MAX_BASIS", 0.04),
-        commodity_usd_per_trade=_f("COMMODITY_USD_PER_TRADE", 0.0),
-        commodity_shortlist=_i("COMMODITY_SHORTLIST", 10),
-        commodity_scope_minutes=max(1.0, _f("COMMODITY_SCOPE_MINUTES", 3.0)),
-        commodity_review_minutes=max(0.5, _f("COMMODITY_REVIEW_MINUTES", 1.0)),
-        commodity_cooldown_minutes=max(0.0, _f("COMMODITY_COOLDOWN_MINUTES", 15.0)),
-        commodity_watch_max=max(1, _i("COMMODITY_WATCH_MAX", 40)),
-        commodity_fast_from_min=max(0.0, _f("COMMODITY_15M_FROM_MIN", 8.5)),
-        commodity_fast_to_min=max(0.0, _f("COMMODITY_15M_TO_MIN", 12.0)),
+        commodity_usd_per_trade=0.0,
+        commodity_shortlist=10,
+        commodity_scope_minutes=3.0,
+        commodity_review_minutes=1.0,
+        commodity_cooldown_minutes=15.0,
+        commodity_watch_max=40,
+        commodity_fast_from_min=8.5,
+        commodity_fast_to_min=12.0,
         commodity_tail_floor=min(0.2, max(0.0, _f("COMMODITY_TAIL_FLOOR", 0.005))),
         commodity_basis_unc=max(0.0, _f("COMMODITY_BASIS_UNC", 0.0015)),
         commodity_realtime_unc=max(0.0, _f("COMMODITY_REALTIME_UNC", 0.0004)),

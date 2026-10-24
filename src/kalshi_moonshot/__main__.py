@@ -776,7 +776,9 @@ def cmd_manual(s: config.Settings, args: argparse.Namespace) -> int:
     client = _client(s)
     store = Store(s.db_path, s.exclude_versions)
     state = "ON" if s.manual_exit else "off (set MANUAL_EXIT=true in .env)"
-    print(f"manual exit {state}: arms at +{s.manual_exit_activate:.0%}, sells {s.manual_exit_drop:.2f} off a held peak or {s.manual_exit_fast:.2f} at once; "
+    arms = (f"{s.crash_progress:.0%} of the way to $1.00" if s.crash_progress > 0 else f"+{s.manual_exit_activate:.0%}")
+    drop = (f"{s.crash_giveback:.0%} of the gain given back" if s.crash_giveback > 0 else f"{s.manual_exit_drop:.2f} off a held peak")
+    print(f"manual exit {state}: arms at {arms}, sells when {drop} or {s.manual_exit_fast:.2f} at once; "
           f"profit-takes only above +{s.manual_exit_min_profit:.0%}; stop-loss {s.manual_exit_stop:.0%}. Skipping: {', '.join(s.manual_exit_skip) or 'nothing'}")
     rows = manual.ManualPositions(client).positions(s, store, fresh=True)
     if not rows:
@@ -801,9 +803,9 @@ def cmd_grid(s: config.Settings, args: argparse.Namespace) -> int:
 
     store = Store(s.db_path, s.exclude_versions)
     series = tuple(x for x in args.series.split(",") if x)
-    added = grid.update(store, s.tape_path, series)
-    n = store.db.execute(f"SELECT COUNT(*), COUNT(DISTINCT ticker) FROM grid_obs WHERE series IN ({','.join('?' * len(series))})", series).fetchone()
-    table = grid.cells(store, series)
+    added = grid.update(store, s.tape_path, series, rule=args.rule)
+    n = store.db.execute(f"SELECT COUNT(*), COUNT(DISTINCT ticker) FROM grid_obs WHERE rule = ? AND series IN ({','.join('?' * len(series))})", (args.rule, *series)).fetchone()
+    table = grid.cells(store, series, rule=args.rule)
     base = [c for k, c in table.items() if k[2] is None and k[3] is None and k[4] is None]
     allroi = sum(c.mean * c.n for c in base) / max(1, sum(c.n for c in base))
     print(f"{series}: {n[1]} windows replayed ({added} new), {n[0]} entries; average ROI of entering anywhere with the live exit: {allroi:+.1%}\n")
@@ -847,6 +849,104 @@ def cmd_flat(s: config.Settings, args: argparse.Namespace) -> int:
     return 1 if n else 0
 
 
+def cmd_scale(s: config.Settings, args: argparse.Namespace) -> int:
+    """Each lane's record against the bar for a bigger stake, and what the stake is now (read-only)."""
+    from . import journal, scale
+    from .gate import since_ts
+
+    store = Store(s.db_path, s.exclude_versions)
+    specs = lanes.lane_specs(s)
+    by_lane: dict[str, int] = {}
+    for t in journal.trades(store):
+        by_lane[t.lane] = by_lane.get(t.lane, 0) + 1
+    print(f"{'lane':20}{'scaling':8}{'bets':>6}{'mean':>8}{'lower':>8}{'need n':>8}{'stake':>16}  why")
+    for name in sorted(by_lane, key=lambda k: -by_lane[k]):
+        spec = specs.get(name)
+        if spec is None:
+            continue
+        names = tuple(spec.scale_from) or (name,)
+        rec = scale.record(store, names, since_ts(spec.scale_since), scale.current_versions(s, names), spec.scale_old_weight)
+        equity = store.bankroll.read(None, s, live=False).equity
+        base = spec.fixed_stake or equity * spec.max_bet_pct
+        mult, why = scale.multiplier(rec, spec, equity, base)
+        on = "on" if spec.scale else "off"
+        shown = f"${base * mult:.2f} (x{mult:.2f})" if spec.scale else f"${base:.2f} fixed"
+        lo = rec.lower(spec.scale_z)
+        print(f"{name:20}{on:8}{rec.n:6}{rec.mean:+8.1%}{(f'{lo:+.1%}' if rec.n > 1 else '-'):>8}{spec.scale_min_n:8}{shown:>16}  {why.split('; ', 1)[-1] if rec.n >= spec.scale_min_n else why.split(': ', 1)[-1]}")
+    print("\nA lane's stake grows only when `scaling` is on and its lower bound is above zero with enough bets. Turn it on per lane with `scale = true` in strategies.toml.")
+    return 0
+
+
+def cmd_versions(s: config.Settings, args: argparse.Namespace) -> int:
+    """Each lane's versions: when each began, what changed, and how it has done. A change to what a lane does is a new version."""
+    import json as _json
+
+    from . import journal, scale
+
+    store = Store(s.db_path, s.exclude_versions)
+    specs = lanes.lane_specs(s)
+    by: dict[tuple[str, str | None], list[float]] = {}
+    for t in journal.trades(store):
+        if t.stake > 0:
+            by.setdefault((t.lane, t.ver), []).append(t.pnl / t.stake)
+    for name in sorted(specs, key=lambda n: -sum(len(v) for (ln, _), v in by.items() if ln == n)):
+        if args.lane and name != args.lane:
+            continue
+        spec = specs[name]
+        cur_ver = lanes.version_of(spec, s)
+        cur_set = lanes.settings_of(spec, s)
+        rows = list(store.lane_versions(name))
+        if not rows and not any(ln == name for ln, _ in by):
+            continue
+        print(f"\n{name}{'' if spec.enabled else '  (off)'}  current version {cur_ver}")
+        prev: dict[str, str] | None = None
+        listed = [("before versions were recorded", None, None, None)] + [
+            (datetime.fromtimestamp(r["first_ts"], UTC).strftime("%m-%d %H:%M UTC"), r["ver"], _json.loads(r["settings"]), r["first_ts"]) for r in rows]
+        for label, ver, st, _ts in listed:
+            v = by.get((name, ver), [])
+            roi = f"{sum(v) / len(v):+.1%}" if v else "-"
+            weight = "(unknown settings)" if ver is None else ("current, weight 1" if ver == cur_ver else f"weight {min(spec.scale_old_weight, scale.similarity(st, cur_set)):.2f}")
+            print(f"  {ver or '-':9}{label:32}{len(v):5} bets  {roi:>7}   {weight}")
+            if st is not None and prev is not None:
+                changed = [f"{k}: {prev.get(k, '-')} -> {st.get(k, '-')}" for k in sorted(set(st) | set(prev)) if st.get(k) != prev.get(k)]
+                if changed:
+                    print("           changed: " + "; ".join(changed[:6]) + (f"; +{len(changed) - 6} more" if len(changed) > 6 else ""))
+            if st is not None:
+                prev = st
+        if rows and rows[-1]["ver"] != cur_ver:
+            print(f"  {cur_ver:9}{'(set in the file now; no bet yet)':32}")
+    return 0
+
+
+def cmd_knn(s: config.Settings, args: argparse.Namespace) -> int:
+    """The nearest-neighbour entry model: bring its history up to date, and (--validate) test it on windows it has not seen."""
+    from . import knn
+
+    store = Store(s.db_path, s.exclude_versions)
+    series = tuple(x for x in args.series.split(",") if x)
+    if not knn.ensure_schema(store):
+        print("pgvector is not available in this database")
+        return 1
+    added = knn.update(store, s.tape_path, series, args.rule, limit=args.limit)
+    n = store.db.execute(f"SELECT COUNT(*), COUNT(DISTINCT ticker) FROM entry_vec WHERE rule=? AND series IN ({','.join('?' * len(series))})", (args.rule, *series)).fetchone()
+    print(f"{n[1]} windows, {n[0]:,} sampled entries stored for rule '{args.rule}' ({added} windows added this run)")
+    if args.validate:
+        out = knn.validate(store, series, args.rule, k=args.k, z=args.z, min_n=args.min_n, sample=args.sample, ask_range=(args.lo, args.hi))
+        if "error" in out:
+            print(out["error"])
+            return 1
+        print(f"\nfit on windows closing before {datetime.fromtimestamp(out['cut'], UTC):%m-%d %H:%M} UTC, tested on {out['test_entries']:,} entries from later windows")
+        print(f"{'':36}{'entries':>9}{'avg return':>12}{'(± across windows)':>20}")
+        for label, key in (("all test entries", "all"), ("the model says BUY", "buy"), ("top fifth by predicted return", "top_fifth"), ("bottom fifth by predicted return", "bottom_fifth"),
+                           ("veto the worst fifth, take the rest", "drop_worst_fifth"), ("veto the worst two fifths, take the rest", "drop_worst_two_fifths")):
+            c, m_, se = out[key]
+            print(f"{label:36}{c:9}{m_:+12.1%}{('±%.1f%%' % (se * 100)) if se == se else '-':>20}")
+        print("\npredicted vs realized, in fifths from lowest to highest predicted return:")
+        for pred, real in out["by_fifth"]:
+            print(f"  predicted {pred:+7.1%}   realized {real:+7.1%}")
+    return 0
+
+
 def cmd_kill(s: config.Settings, args: argparse.Namespace) -> int:
     s.kill_file.write_text("stop\n")
     print(f"kill switch on ({s.kill_file}). No orders will be placed until `unkill`.")
@@ -886,7 +986,7 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
-    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "flat": cmd_flat, "shardmove": cmd_shardmove, "kill": cmd_kill,
+    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "flat": cmd_flat, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
     "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
@@ -921,8 +1021,22 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--lane", required=True)
             p.add_argument("--sources", default="", help="lanes to preview the gate from, if the lane has no gate_from")
             p.add_argument("--by-series", action="store_true", help="also show each market's own record, blended toward the lane pool")
+        if name == "knn":
+            p.add_argument("--series", default="KXGOLD15M,KXSILVER15M,KXWTI15M,KXNATGAS15M,KXCOPPER15M,KXPLATINUM15M,KXPALLADIUM15M,KXBTC15M,KXETH15M,KXSOL15M,KXXRP15M,KXDOGE15M")
+            p.add_argument("--rule", default="trail", choices=["trail", "hold"])
+            p.add_argument("--validate", action="store_true", help="test on windows the model has not seen")
+            p.add_argument("--limit", type=int, default=None, help="add at most this many windows this run")
+            p.add_argument("--k", type=int, default=200)
+            p.add_argument("-z", type=float, default=3.0)
+            p.add_argument("--min-n", type=float, default=25.0)
+            p.add_argument("--sample", type=int, default=3000, help="test entries to score")
+            p.add_argument("--lo", type=float, default=0.0, help="test only entries with an ask at least this")
+            p.add_argument("--hi", type=float, default=1.0, help="... and at most this")
+        if name == "versions":
+            p.add_argument("--lane", help="one lane")
         if name == "grid":
             p.add_argument("--series", default="KXBTC15M,KXGOLD15M", help="comma list of 15-minute series to pool")
+            p.add_argument("--rule", default="trail", choices=["trail", "hold"], help="replay each entry with the live exit (trail) or held to settlement (hold)")
             p.add_argument("--min-n", type=int, default=30, help="replays a cell needs before it is ranked")
             p.add_argument("-z", type=float, default=3.0, help="standard errors a cell must clear zero by")
         if name == "bymin":

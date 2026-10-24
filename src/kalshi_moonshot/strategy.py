@@ -311,7 +311,9 @@ def take_profit_hit(entry: float, bid: float, x: float = 0.0, at: float = 0.0) -
 
 
 def trail_hit(entry: float, peak: float, bid: float, activate: float, drop: float) -> str | None:
-    """Peak-crash exit: the bid has been `activate` (a fraction) above what we paid, and has now fallen `drop` from its peak."""
+    """Peak-crash exit: the bid has been `activate` (a fraction) above what we paid, and has now fallen `drop` from its peak.
+
+    """
     if drop <= 0 or entry <= 0 or bid <= 0:
         return None
     if peak >= entry * (1 + activate) - 1e-9 and peak > entry and bid <= peak - drop + 1e-9:

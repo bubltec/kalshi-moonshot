@@ -156,11 +156,13 @@ def test_the_entry_window_does_not_touch_other_series(tmp_path):
     assert strategy.lane_reject_reason(daily, spec, s, now) is None  # hourly/daily are not windowed
 
 
-def test_the_window_can_be_moved_from_the_environment(monkeypatch):
+def test_the_retired_environment_settings_no_longer_move_the_lane(monkeypatch):
     monkeypatch.setenv("COMMODITY_15M_FROM_MIN", "3")
     monkeypatch.setenv("COMMODITY_15M_TO_MIN", "6.5")
-    s = config.load()
-    assert lanes.spec_for(s, "commodity").entry_elapsed == (3.0, 6.5)
+    monkeypatch.setenv("COMMODITY_MAX_SPREAD", "0.5")
+    monkeypatch.setenv("COMMODITY_BET_PCT", "0.9")
+    spec = lanes.spec_for(config.load(), "commodity")
+    assert spec.entry_elapsed == (8.5, 12.0) and spec.max_spread == 0.02 and spec.max_bet_pct == 0.03  # the built-in fallbacks; strategies.toml is where it is set
 
 
 def test_a_strategies_file_can_set_the_window(tmp_path):

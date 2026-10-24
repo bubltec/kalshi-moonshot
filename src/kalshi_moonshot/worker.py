@@ -80,6 +80,7 @@ class Worker:
         self.quant = quant
         self.recorder: Any = None
         self.watcher: Any = None
+        self.entry_watcher: Any = None
         self.stopping = False
         self._last_cleanup = 0.0
 
@@ -125,6 +126,7 @@ class Worker:
             self.recorder.start()
             log.info("tape recorder on: %s (kept %.0f days)", self.s.tape_path, self.s.tape_keep_days)
             self._start_watcher()
+            self._start_entry_watcher()
         except Exception:
             log.exception("could not start the tape recorder; continuing without it")
             self.recorder = None
@@ -137,13 +139,44 @@ class Worker:
             return
         db_path = self.s.db_path
         w = watcher.ProfitWatcher(
-            lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions), hold_value=self._hold_value
+            lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions), hold_value=self._hold_value, spot_side=self._spot_side
         )
         self.recorder.listeners.append(w.on_event)
+        w.follow = self.recorder.follow
         self.recorder.extra_tickers = lambda: self._held_for_watching() | w.manual_tickers()  # hourly, daily and hand-placed positions are streamed too
         w.start()
         self.watcher = w
         log.info("take-profit watcher on: selling from the live socket when a lane's level is hit")
+
+    def _start_entry_watcher(self) -> None:
+        """Re-review a watched event the moment a streamed quote enters a lane's price band (only lanes with entry_socket = true)."""
+        from . import entrywatch
+
+        if self.recorder is None or self.entry_watcher is not None or not entrywatch.wanted(self.s):
+            return
+        db_path = self.s.db_path
+        w = entrywatch.EntryWatcher(
+            lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions),
+            lambda store: build_estimators(self.est, store, self.searcher, self.quant),
+        )
+        self.recorder.listeners.append(w.on_event)
+        w.start()
+        self.entry_watcher = w
+        log.info("entry watcher on: reviewing a watched event as soon as its socket quote enters the lane's price band")
+
+    def _spot_side(self, ticker: str, side: str) -> float | None:
+        """The chance, from the live spot price against the strike alone (no calibration), that this side pays. None when the market cannot be priced that way."""
+        from .strategy import LongShot, side_prob
+
+        if self.quant is None:
+            return None
+        series = ticker.split("-")[0]
+        shot = LongShot(
+            ticker=ticker, title="", rules="", bid=0.0, ask=0.0, volume=0.0, close_time="", hours_to_close=0.1,
+            series=series, event_ticker=ticker.rsplit("-", 1)[0], side=side,
+        )
+        p_yes, _ = self.quant.estimate(self.client, shot, self.s)
+        return side_prob(p_yes, side)
 
     def _hold_value(self, row, store: Store) -> float | None:
         """What the model says a position is worth if held to settlement: its calibrated chance of paying (ladder lanes only)."""
@@ -196,6 +229,8 @@ class Worker:
         self.stopping = True
         if self.watcher is not None:
             self.watcher.stop()
+        if self.entry_watcher is not None:
+            self.entry_watcher.stop()
         if self.recorder is not None:
             self.recorder.stop()
 

@@ -43,7 +43,7 @@ def kelly_share(p: float, ask: float) -> float:
 
 def size_bet(
     spec: LaneSpec, s: Settings, p: float, ask: float,
-    available: float, equity: float, lane_exposure: float,
+    available: float, equity: float, lane_exposure: float, scale: float = 1.0,
 ) -> Sizing:
     """Contracts to buy now. contracts == 0 comes with the reason it was not sized."""
     full = kelly_share(p, ask)
@@ -53,14 +53,18 @@ def size_bet(
     if spec.usd_per_trade:
         ceilings.append(spec.usd_per_trade)
     # A fixed-stake lane bets the same dollars every time; the odds do not scale it.
-    wanted = spec.fixed_stake or min(equity * s.kelly_fraction * full, equity * spec.max_bet_pct)
-    stake = min(wanted, equity * spec.max_exposure_pct - lane_exposure, available, *ceilings)
+    # `scale` (scale.py) grows both the stake and the lane's cap together once the lane's own record has earned it; the hard ceilings stay.
+    wanted = scale * (spec.fixed_stake or min(equity * s.kelly_fraction * full, equity * spec.max_bet_pct))
+    cap = equity * spec.max_exposure_pct * scale
+    stake = min(wanted, cap - lane_exposure, available, *ceilings)
     if stake <= 0.0:
-        room = equity * spec.max_exposure_pct - lane_exposure
+        room = cap - lane_exposure
         return Sizing(0, 0.0, "no room left" if room <= 0 else "no cash available")
     count = contracts_for_budget(stake, ask)
     if count <= 0:
         return Sizing(0, 0.0, f"${stake:.2f} stake is under the cost of one contract")
     cost = ask * count + order_fee(ask, count)
     how = "fixed stake" if spec.fixed_stake else f"{full:.0%} Kelly, {s.kelly_fraction:.0%} of it"
+    if scale > 1.0:
+        how += f", x{scale:.2f} on the lane's record"
     return Sizing(count, cost, f"stake ${cost:.2f} ({how})")

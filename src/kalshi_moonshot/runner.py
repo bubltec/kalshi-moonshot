@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from typing import NamedTuple
 
 from . import gate, risk, shadow
+from . import scale as scale_mod
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
@@ -30,9 +31,12 @@ from .lanes import (
     chance_ok,
     lane_specs,
     main_lanes,
+    settings_of,
     spec_for,
+    stop_drop_for,
     takes_profit,
     tiered_lanes,
+    version_of,
     wants_bet,
 )
 from .search import NewsSearch
@@ -255,9 +259,10 @@ def scope_lane(
 
 def review_lane(
     s: Settings, client: KalshiClient, store: Store, spec: LaneSpec,
-    estimators: dict[str, Estimator] | None, now: datetime | None = None,
+    estimators: dict[str, Estimator] | None, now: datetime | None = None, only: set[str] | None = None,
 ) -> list[LongShot]:
     """Level 2, fast: re-read only the watched events and return markets worth evaluating now.
+    `only` limits the pass to those events (the socket entry watcher reviews just the one that moved).
 
     Markets decided on within the lane's cooldown are dropped, so a two-minute loop does not
     log the same unchanged view thirty times an hour.
@@ -265,6 +270,8 @@ def review_lane(
     now = now or datetime.now(UTC)
     markets: list[dict] = []
     for event, info in sorted(store.watch(spec.name).items(), key=lambda kv: kv[1].get("close", "")):
+        if only is not None and event not in only:
+            continue
         close = _hours_left(info.get("close", ""), now)
         if close is not None and close <= 0:
             store.unwatch(spec.name, event)
@@ -349,12 +356,44 @@ def scan(
     ]
 
 
+_NOTED: set[tuple[str, str, str]] = set()  # lane versions already recorded in this process
+
+
+def _lane_version(store: Store, s: Settings, lane: str) -> str | None:
+    """The version of the lane's logic in force now; the first use of a new one is recorded with its settings."""
+    spec = lane_specs(s).get(lane)
+    if spec is None:
+        return None
+    ver = version_of(spec, s)
+    key = (str(store.path), lane, ver)
+    if key not in _NOTED:
+        store.note_lane_version(lane, ver, settings_of(spec, s))
+        _NOTED.add(key)
+    return ver
+
+
 def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
+    fields.setdefault("lane_ver", _lane_version(store, s, shot.lane))
     store.add_decision(
         ticker=shot.ticker, title=shot.title, bid=shot.bid, ask=shot.ask, mode="trade" if s.is_live(shot.lane, shot.series) else "observe",
         close_time=shot.close_time, lane=shot.lane, category=shot.category,
         event_ticker=shot.event_ticker, **fields,
     )
+
+
+def _knn_says(s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, shot: LongShot) -> tuple[bool, str]:
+    """Ask the nearest-neighbour model (knn.py) whether entries like this one have paid."""
+    from . import knn
+
+    try:
+        strike = float(client.market(shot.ticker).get("floor_strike"))
+    except (TypeError, ValueError, KalshiError):
+        strike = None
+    try:
+        close = datetime.fromisoformat(shot.close_time).timestamp()
+    except (TypeError, ValueError):
+        return False, "knn: no close time"
+    return knn.says(store, spec, s.tape_path, shot.ticker, shot.series, shot.side, time.time(), close, strike, shot.ask, gate.since_ts(spec.gate_since))
 
 
 def _grid_says(s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, shot: LongShot) -> tuple[bool, str]:
@@ -363,7 +402,7 @@ def _grid_says(s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, 
 
     tape = s.tape_path
     series = tuple(spec.series) or (shot.series,)
-    grid.refresh_soon(lambda: Store(s.db_path, s.exclude_versions), tape, series)
+    grid.refresh_soon(lambda: Store(s.db_path, s.exclude_versions), tape, series, spec.grid_rule)
     elapsed = spec.timed_minutes - shot.hours_to_close * 60.0
     try:
         strike = float(client.market(shot.ticker).get("floor_strike"))
@@ -421,7 +460,11 @@ def evaluate(
         if not open_:
             bet = False
             note = f"{gate_note}. {note}"
-    if bet and spec.grid:
+    if bet and spec.knn:
+        go, knote = _knn_says(s, client, store, spec, shot)
+        note = f"{knote}. {note}"
+        bet = go
+    elif bet and spec.grid:
         go, gnote = _grid_says(s, client, store, spec, shot)
         note = f"{gnote}. {note}"
         bet = go
@@ -433,13 +476,19 @@ def evaluate(
         if others:
             bet = False
             note = f"other side already taken ({min(others)}). {note}"
+    if bet and spec.reentry_cooldown_seconds and (left := store.exited_within(shot.ticker, shot.lane, spec.reentry_cooldown_seconds)) > 0:
+        bet = False
+        note = f"cooling down: this lane sold {shot.ticker} {spec.reentry_cooldown_seconds - left:.0f}s ago and waits {spec.reentry_cooldown_seconds:.0f}s before buying it again. {note}"
     sized = Sizing(0, 0.0, "")
     if bet:
         balance = store.bankroll.read(client, s, live=s.is_live(shot.lane, shot.series))
+        grown = scale_mod.for_lane(store, spec, balance.equity, s=s)
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
-            balance.open_by_lane.get(shot.lane, 0.0),
+            balance.open_by_lane.get(shot.lane, 0.0), grown.mult,
         )
+        if grown.note:
+            note = f"{grown.note}. {note}"
         if store.holds_sized_bet(shot.ticker, shot.lane) and not s.is_live(shot.lane, shot.series):
             sized = Sizing(0, 0.0, "already holding this market (paper)")
         elif not sized.ok:
@@ -715,7 +764,7 @@ def stop_loss_pass(
         if profit_on and spec is not None:
             why = take_profit_hit(entry, bid, spec.take_profit_x, spec.take_profit_at)
         if not why and stop_on:
-            why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, s.stop_loss_drop)
+            why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, stop_drop_for(spec, s))
         if not why:
             continue
         notes.append(exit_position(s, client, store, row, bid, why, before_order, slip=EXIT_SLIP + (0.03 if why.startswith("stop-loss") else 0.0)))

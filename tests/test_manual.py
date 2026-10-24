@@ -135,10 +135,11 @@ def test_a_stop_loss_sells_a_hand_placed_position_below_cost_when_the_model_agre
     assert len(c.sold) == 1
 
 
-def test_a_stop_loss_holds_a_dip_the_model_still_likes(s):
+def test_a_stop_loss_on_a_hand_placed_position_sells_whatever_the_model_thinks(s):
+    # a model value for a collapsed contract has been wrong (37c against a 17c bid, on a contract that expired worthless), so no opinion holds a stop
     c, w = stop_watcher(s, 0.25, held=0.80)
     w._sell("KXWTI-26OCT2214-T98.99", "manual", "stop-loss: bid 0.25 is 38% under the 0.40 paid (socket)")
-    assert c.sold == []
+    assert len(c.sold) == 1
 
 
 def test_an_impossible_minimum_profit_warns_and_never_sells(s, monkeypatch, caplog):
@@ -202,13 +203,11 @@ def test_a_recovery_resets_the_stop_clock(s, monkeypatch):
     assert w._jobs.empty()
 
 
-def test_a_cheap_ticket_below_even_odds_is_held_when_the_model_values_it_above_the_bid(s):
-    c, w = stop_watcher(s, 0.28, held=0.38)  # paid 0.40... a 0.38 hold value beats a 0.28 bid
-    w._sell("KXWTI-26OCT2214-T98.99", "manual", "stop-loss: bid 0.28 is 30% under the 0.40 mark (socket)")
-    assert c.sold == []
-    c, w = stop_watcher(s, 0.28, held=0.20)  # worth less than the bid: sell
-    w._sell("KXWTI-26OCT2214-T98.99", "manual", "stop-loss: bid 0.28 is 30% under the 0.40 mark (socket)")
-    assert len(c.sold) == 1
+def test_a_cheap_ticket_is_stopped_whatever_the_model_values_it_at(s):
+    for held in (0.38, 0.20, None):
+        c, w = stop_watcher(s, 0.28, held=held)
+        w._sell("KXWTI-26OCT2214-T98.99", "manual", "stop-loss: bid 0.28 is 30% under the 0.40 mark (socket)")
+        assert len(c.sold) == 1, held
 
 
 def test_a_paper_bet_on_the_same_market_does_not_hide_a_hand_placed_position(s):

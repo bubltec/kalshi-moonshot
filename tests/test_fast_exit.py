@@ -129,17 +129,17 @@ def test_an_unknown_hold_value_does_not_block_the_exit(setup):
     assert Store(s.db_path).open_bets() == []
 
 
-def test_a_stop_loss_is_withheld_when_holding_is_worth_more_than_the_bid(setup):
+def test_a_stop_loss_is_hard_by_default_and_only_a_lane_that_asks_lets_the_model_hold_it(setup):
     s, store = setup
     store.db.execute("UPDATE decisions SET ask=0.80")
     store.db.commit()
-    (s.data_dir / "strategies.toml").write_text(
-        "[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.9]\nhours=[0.0,1.0]\n")
     why = "stop-loss: bid 0.50 is 38% under the 0.80 paid (socket)"
-    for held, sold in ((0.85, False), (0.30, True), (0.49, True)):  # at or under even odds we are on the losing side: sell
+    for guard, held, sold in (("", 0.85, True), ("", 0.30, True), ("stop_guard=true\n", 0.85, False), ("stop_guard=true\n", 0.30, True), ("stop_guard=true\n", 0.49, True)):
+        (s.data_dir / "strategies.toml").write_text(
+            "[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.9]\nhours=[0.0,1.0]\n" + guard)  # a hard stop sells whatever the model thinks
         store.db.execute("UPDATE decisions SET exit_ts=NULL, exit_price=NULL")
         store.db.commit()
         w = watcher.ProfitWatcher(lambda: s, FakeClient(0.50), lambda: Store(s.db_path), hold_value=lambda row, st, h=held: h)
         w.refresh()
         w._sell("KXBTC15M-1", "late_ticket", why)
-        assert (Store(s.db_path).open_bets() == []) is sold, held
+        assert (Store(s.db_path).open_bets() == []) is sold, (guard, held)

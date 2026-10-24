@@ -113,3 +113,39 @@ def test_a_backup_is_whole_and_old_ones_are_pruned(tmp_path):
         (tmp_path / "backups" / f"a-{d}.db").write_bytes(b"x")
     backup.prune(tmp_path / "backups", "a", 2)
     assert sorted(p.name for p in (tmp_path / "backups").glob("a-*.db")) == ["a-20261022.db", "a-20261023.db"]
+
+
+def test_a_hold_replay_keeps_the_entry_to_settlement_while_a_trail_replay_sells_the_run_up():
+    close = 10_000.0
+    start = close - 900
+    bids = [0.39] * 5 + [0.50] * 5 + [0.60] * 10 + [0.52] * 15 + [0.30] * 30  # runs up to 0.60 and sells at 0.52 under the trail rule, then ends NO
+    rows = ticks(start + 240, bids)
+    trail = {(mb, pb): roi for mb, pb, roi, _t, _a in grid.replay(rows, close, "yes", "no", "trail")}
+    hold = {(mb, pb): roi for mb, pb, roi, _t, _a in grid.replay(rows, close, "yes", "no", "hold")}
+    assert trail[(1, 3)] > 0.1  # the run-up was sold
+    assert hold[(1, 3)] == pytest.approx(-1.0)  # held to the settlement, which lost
+
+
+def test_records_for_different_exit_rules_are_kept_apart(tmp_path):
+    store = Store(tmp_path / "m.db")
+    spec = SimpleNamespace(grid_min_n=30, grid_z=3.0, grid_rule="hold")
+    series = ("KXBTC15M",)
+    fill(store, [0.5 if i % 2 else 0.4 for i in range(60)])  # a steady winner under the default (trail) rule
+    assert grid.pick(store, spec, series, 7.0, 0.55, "fair", "with", "flat")[0] is False  # nothing recorded under "hold"
+    spec.grid_rule = "trail"
+    assert grid.pick(store, spec, series, 7.0, 0.55, "fair", "with", "flat")[0] is True
+
+
+def test_an_old_learner_table_without_the_exit_rule_is_replaced(tmp_path):
+    from kalshi_moonshot import db as database
+
+    path = tmp_path / "old.db"
+    con = database.connect(path, "main")
+    con.execute("CREATE TABLE grid_obs (ticker TEXT NOT NULL, series TEXT NOT NULL, side TEXT NOT NULL, mband INTEGER NOT NULL, pband INTEGER NOT NULL, "
+                "roi REAL NOT NULL, close_ts INTEGER NOT NULL, alpha TEXT, beta TEXT, edge TEXT, PRIMARY KEY (ticker, side, mband, pband))")
+    con.execute("CREATE TABLE grid_done (ticker TEXT PRIMARY KEY)")
+    con.commit()
+    store = Store(path)
+    cols = {r["name"] for r in store.db.execute("PRAGMA table_info(grid_obs)")}
+    assert "rule" in cols
+    assert "rule" in {r["name"] for r in store.db.execute("PRAGMA table_info(grid_done)")}

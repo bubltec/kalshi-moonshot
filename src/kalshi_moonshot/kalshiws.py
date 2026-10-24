@@ -1,7 +1,8 @@
 """Kalshi's authenticated WebSocket: live contract quotes and the settlement indexes themselves.
 
-Two channels on one connection:
+Three channels on one connection:
 
+  fill                every fill on the account, the bot's and yours from the app (the watcher enrolls a hand-placed buy from it)
   ticker              every change of a market's bid / ask / last price, as it happens
   cfbenchmarks_value  the CF Benchmarks indexes Kalshi settles its crypto markets on (BRTI for bitcoin,
                       ETHUSD_RTI, ...), about once a second, each with its trailing 60-second average,
@@ -67,6 +68,13 @@ def parse_message(msg: dict[str, Any], received: float | None = None) -> dict[st
         if side not in {"yes", "no"}:
             return None
         return {"kind": "trade", "ts": now, "ticker": body["market_ticker"], "price": price, "count": count, "taker": side}
+    if kind == "fill":  # a fill on this account, from the bot or from the app (private channel: needs the signed connection)
+        count, price = _f(body.get("count_fp")), _f(body.get("yes_price_dollars"))
+        side = body.get("purchased_side") or body.get("side")
+        if not body.get("market_ticker") or not count or side not in {"yes", "no"}:
+            return None
+        return {"kind": "fill", "ts": now, "ticker": body["market_ticker"], "side": side, "action": body.get("action") or "",
+                "count": count, "price": price, "taker": bool(body.get("is_taker"))}
     if kind == "cfbenchmarks_value":
         try:
             frame = json.loads(body.get("data") or "{}")
@@ -138,6 +146,7 @@ class KalshiStream:
                         tickers = sorted(self._tickers)
                     await ws.send(json.dumps({"id": 1, "cmd": "subscribe", "params": {
                         "channels": ["cfbenchmarks_value"], "index_ids": self.indices}}))
+                    await ws.send(json.dumps({"id": 3, "cmd": "subscribe", "params": {"channels": ["fill"]}}))  # every fill on the account, no ticker list
                     if tickers:
                         await ws.send(json.dumps({"id": 2, "cmd": "subscribe", "params": {
                             "channels": ["ticker", "trade"], "market_tickers": tickers}}))

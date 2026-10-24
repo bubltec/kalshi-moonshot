@@ -63,6 +63,11 @@ class KrakenFeed:
     def minute_closes(self, symbol: str, hours: float = 4.0) -> dict[int, float]:
         return _kraken_minutes(self, symbol, hours)
 
+    def latest(self, symbol: str) -> tuple[float, float] | None:
+        """(price, Kraken's own timestamp) of the last tick, or None. No network, no waiting."""
+        with self._lock:
+            return self._ticks.get(symbol.removeprefix(PREFIX))
+
     # ---- background connection ----
     def start(self) -> None:
         with self._lock:

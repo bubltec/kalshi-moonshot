@@ -16,6 +16,8 @@ The file is read by lane_specs(), so editing it applies on the next scan.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import tomllib
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
@@ -27,6 +29,7 @@ from .config import Settings
 LLM = "llm"
 LADDER = "ladder"
 MARKET = "market"
+SHAPE = "llm_shape"  # the language model reads the shapes of similar past 15-minute windows (shape.py)
 
 
 @dataclass(frozen=True)
@@ -51,15 +54,40 @@ class LaneSpec:
     gate_min_n: int = 30  # finished bets a minute band needs before it can open
     gate_z: float = 1.0  # standard errors subtracted from a band's mean return before it must beat zero
     grid: bool = False  # buy only where the learned grid (grid.py) has a cell that pays; the lane's own exit settings manage the position
+    knn: bool = False  # decide by the nearest-neighbour model of past entries (knn.py) instead of hard buckets
+    knn_k: int = 300  # how many nearest past entries the estimate uses
+    knn_min_n: float = 25.0  # comparable windows (after weighting) needed before it may buy
+    knn_z: float = 3.0  # standard errors the estimate's mean must clear zero by
+    knn_rule: str = "trail"  # the exit the past entries are scored under: "trail" (the live crash exit) or "hold"
+    grid_rule: str = "trail"  # how the grid replays each entry: "trail" (the live peak-crash exit) or "hold" (to settlement, for a lane with no exit)
     grid_min_n: int = 30  # finished replays a cell needs before it can decide
     grid_z: float = 3.0  # standard errors a cell's mean must clear zero by (strict on purpose: of ~300 cells, some clear 2 by luck alone)
+    scale: bool = False  # stake and exposure cap grow with the lane's own record (scale.py); the base stake until the record clears the bar
+    scale_from: tuple[str, ...] = ()  # lanes whose finished bets count as the record (default: this lane)
+    scale_since: str = ""  # only count bets opened on or after this New York date (YYYY-MM-DD)
+    scale_min_n: int = 40  # finished bets needed before the stake can grow
+    scale_z: float = 2.0  # standard errors the average return must clear zero by (one test per lane, not a search)
+    scale_kelly: float = 0.25  # share of the Kelly stake the lower bound justifies
+    scale_old_weight: float = 0.5  # how much the previous version's bets count, per version back (a new version is usually an improvement, so its record starts partly from the old one's, and fades from it as its own builds)
+    scale_max_mult: float = 3.0  # most the stake and exposure cap may grow to, as a multiple of the base
     shares_markets: bool = False  # main-scan lane that also takes markets another lane took (for A/B controls); never consumes them
     min_chance: float = 0.0  # bet only when the estimator's chance that the contract pays is in [min_chance, max_chance]
     max_chance: float = 1.0  # (the estimate before calibration; for a ladder lane this is a distance to the strike)
+    unstable_gain: float = 0.0  # sell when the position is up at least this fraction (after fees) AND the bid is swinging (see unstable_range); 0 = off
+    unstable_range: float = 0.0  # ... the bid's high-low over unstable_seconds, in dollars
+    unstable_seconds: float = 20.0
+    hover_dip: float = 0.0  # sell at the first profit (after fees) once the bid has dipped to this price or lower since entry, i.e. hovered near the strike; 0 = off
+    reentry_cooldown_seconds: float = 0.0  # after this lane sells a market, wait this long before it may buy that market again (0 = no wait)
+    stop_loss_at: float = 0.0  # this lane's own stop, as a fraction under the price paid (0 = the global STOP_LOSS_DROP)
+    stop_confirm_seconds: float = 0.0  # the bid must stay past the stop line this long before the stop sells (0 = at once)
+    stop_guard: bool = False  # True = the model's opinion may hold the stop back; the default is a hard stop that sells whatever the model thinks it is worth
     stop_loss: bool = True  # False = no stop-loss for this lane (a $1 ticket's loss is already capped; its spread alone can look like a 30% drop)
     take_profit_x: float = 0.0  # sell when the bid reaches this multiple of the price paid (0 = off); watched live on the socket
     take_profit_at: float = 0.0  # sell when the bid reaches this price (0 = off)
-    trail_activate: float = 0.0  # peak-crash exit: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
+    trail_activate: float = 0.0  # peak-crash exit, when trail_progress is 0: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
+    trail_progress: float | None = None  # arm the crash exit once the bid has covered this share of the way from the price paid to $1.00; None = the global CRASH_PROGRESS, 0 = use trail_activate (a gain on the price paid) instead
+    trail_spot_sigma: float | None = None  # the crash exit waits while spot is still this many sigma on the winning side of the strike; None = the global CRASH_SPOT_SIGMA, 0 = off
+    trail_giveback: float | None = None  # the crash exit sells once this share of the gain (peak over price paid) is gone; None = the global CRASH_GIVEBACK, 0 = the fixed trail_drop instead
     trail_drop: float = 0.0  # ... sell when it falls this many dollars from its peak (0 = off; watched live on the socket only)
     trail_fast_drop: float = 0.0  # ... but sell at once, with no wait, when the bid is this far (dollars) below the peak: a gap down is not noise (0 = off)
     trail_confirm_seconds: float = 10.0  # ... and has stayed that far down this long (a dip of a second or two is noise)
@@ -82,6 +110,8 @@ class LaneSpec:
     scope_minutes: float | None = None  # with review_minutes: slow pass that builds the watchlist
     review_minutes: float | None = None  # fast pass over the watchlist; None = the main scan only
     cooldown_minutes: float = 0.0  # skip a market decided on this recently
+    entry_socket: bool = False  # two-level lanes: also re-review a watched event the moment a streamed quote puts a side in the price band (entrywatch.py)
+    entry_min_gap_seconds: float = 2.0  # ... but not the same event more often than this
     watch_max: int = 40
     priority: int = 0  # queue priority of this lane's jobs; higher runs first
     trust: float = 1.0  # prior weight on the estimator before our record has any say (0 to 1)
@@ -144,7 +174,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "gate_from"):
+    for key in ("series", "sides", "gate_from", "scale_from"):
         if key in row:
             row[key] = tuple(row[key])
     if bad := set(row.get("sides", ())) - {"yes", "no"}:
@@ -160,17 +190,34 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
+def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:
+    """A lane's settings with `inherit = "other_lane"` resolved: the other lane's settings from strategies.toml, then this lane's own on top.
+    Lets a paper twin say only how it differs. The chain may be several lanes long; a loop is an error."""
+    row = dict(rows[name])
+    parent = row.pop("inherit", None)
+    if parent is None:
+        return row
+    if parent in _seen or parent == name:
+        raise ValueError(f"lane {name!r}: inherit loops back through {' -> '.join((*_seen, name, parent))}")
+    if parent not in rows:
+        raise ValueError(f"lane {name!r}: inherit = {parent!r}, which is not a lane in strategies.toml")
+    return {**_inherited(rows, parent, (*_seen, name)), **row}
+
+
 def lane_specs_from(s: Settings, strategies_toml: str | None) -> dict[str, LaneSpec]:
     lanes = builtin_lanes(s)
     if strategies_toml:
-        for name, row in (tomllib.loads(strategies_toml).get("lane") or {}).items():
-            lanes[name] = _overlay(lanes.get(name), name, row)
+        rows = tomllib.loads(strategies_toml).get("lane") or {}
+        for name in rows:
+            lanes[name] = _overlay(lanes.get(name), name, _inherited(rows, name))
     for spec in lanes.values():
         if tiered(spec) and not (spec.series or spec.needs_instrument):
             raise ValueError(
                 f"lane {spec.name!r}: review_minutes needs `series` or `needs_instrument`, "
                 "because a fast pass can only fetch what it can name"
             )
+        if spec.entry_socket and not tiered(spec):
+            raise ValueError(f"lane {spec.name!r}: entry_socket needs review_minutes, because it re-runs that lane's review")
     return lanes
 
 
@@ -220,8 +267,41 @@ def spec_for(s: Settings, name: str) -> LaneSpec:
     return lanes[name]
 
 
+def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
+    """How far under the price paid this lane's stop sits."""
+    return spec.stop_loss_at if spec is not None and spec.stop_loss_at else s.stop_loss_drop
+
+
+# Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
+_NOT_LOGIC = frozenset({
+    "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
+    "entry_socket", "entry_min_gap_seconds",
+    "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
+})
+
+
+def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
+    """Everything that decides what this lane buys, how much, and how it gets out, including the global rules that reach it."""
+    out = {f.name: repr(getattr(spec, f.name)) for f in fields(spec) if f.name not in _NOT_LOGIC}
+    out["effective_stop"] = repr(stop_drop_for(spec, s) if spec.stop_loss else None)
+    out["crash_spot_sigma"] = repr(spec.trail_spot_sigma if spec.trail_spot_sigma is not None else s.crash_spot_sigma)
+    out["crash_giveback"] = repr(spec.trail_giveback if spec.trail_giveback is not None else s.crash_giveback)
+    progress = spec.trail_progress if spec.trail_progress is not None else s.crash_progress
+    out["crash_progress"] = repr(progress)
+    if spec.trail_drop > 0 and progress > 0:
+        out["trail_activate"] = repr(0.1)  # arming follows the progress rule, so a declared trail_activate is unused; held at the value every lane carried so existing versions stay continuous
+    out["stops_on_15m"] = repr(s.stop_loss_fast)
+    out["kelly_fraction"] = repr(None if spec.fixed_stake else s.kelly_fraction)
+    return out
+
+
+def version_of(spec: LaneSpec, s: Any) -> str:
+    """A short fingerprint of the lane's logic. Any change to it is a new version of the lane."""
+    return hashlib.sha1(json.dumps(settings_of(spec, s), sort_keys=True).encode()).hexdigest()[:8]
+
+
 def takes_profit(spec: LaneSpec) -> bool:
-    return spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.trail_drop > 0 or spec.spike_cents > 0
+    return spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0
 
 
 def chance_ok(spec: LaneSpec, p: float) -> bool:

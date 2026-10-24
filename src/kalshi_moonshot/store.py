@@ -97,6 +97,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   priority INTEGER NOT NULL DEFAULT 0  -- higher runs first; fast lanes jump the queue
 );
 
+CREATE TABLE IF NOT EXISTS lane_versions (
+  lane TEXT NOT NULL, ver TEXT NOT NULL, first_ts REAL NOT NULL, settings TEXT NOT NULL,
+  PRIMARY KEY (lane, ver)
+);
+
 CREATE TABLE IF NOT EXISTS shard_moves (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -176,12 +181,12 @@ CREATE TABLE IF NOT EXISTS windows (
 
 CREATE TABLE IF NOT EXISTS grid_obs (
   ticker TEXT NOT NULL, series TEXT NOT NULL, side TEXT NOT NULL,
-  mband INTEGER NOT NULL, pband INTEGER NOT NULL,
+  mband INTEGER NOT NULL, pband INTEGER NOT NULL, rule TEXT NOT NULL DEFAULT 'trail',
   roi REAL NOT NULL, close_ts INTEGER NOT NULL, alpha TEXT, beta TEXT, edge TEXT,
-  PRIMARY KEY (ticker, side, mband, pband)
+  PRIMARY KEY (ticker, side, mband, pband, rule)
 );
-CREATE INDEX IF NOT EXISTS idx_grid_obs ON grid_obs(series, mband, pband);
-CREATE TABLE IF NOT EXISTS grid_done (ticker TEXT PRIMARY KEY);
+CREATE INDEX IF NOT EXISTS idx_grid_obs ON grid_obs(series, rule, mband, pband);
+CREATE TABLE IF NOT EXISTS grid_done (ticker TEXT NOT NULL, rule TEXT NOT NULL DEFAULT 'trail', PRIMARY KEY (ticker, rule));
 CREATE TABLE IF NOT EXISTS grid_meta (k TEXT PRIMARY KEY, v TEXT);
 
 CREATE TABLE IF NOT EXISTS candles (
@@ -220,6 +225,7 @@ class Store:
             if first and db.is_pg(self.db):
                 _PREPARED.add(key)
         if first:
+            self._drop_old_grid()
             self.db.executescript(SCHEMA)
             if not db.is_pg(self.db):
                 self.db.execute("DROP TABLE IF EXISTS rag_fts")  # replaced by rag_cases
@@ -232,6 +238,14 @@ class Store:
         self.bankroll = Bankroll(self)
         if first:
             self.rag.rebuild()
+
+    def _drop_old_grid(self) -> None:
+        """The learner's tables gained the exit rule in their key. They are a cache of replays of the tape (grid.update rebuilds them), so an old shape is dropped."""
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(grid_obs)")}
+        if cols and "rule" not in cols:
+            self.db.execute("DROP TABLE grid_obs")
+            self.db.execute("DROP TABLE IF EXISTS grid_done")
+            self.db.commit()
 
     def _migrate(self) -> None:
         """Add columns to a database created before they existed."""
@@ -249,6 +263,7 @@ class Store:
             ("side", "TEXT DEFAULT 'yes'"),
             ("contracts", "INTEGER"),
             ("stake_usd", "REAL"),
+            ("lane_ver", "TEXT"),
         ):
             if name not in have:
                 self.db.execute(f"ALTER TABLE decisions ADD COLUMN {name} {ddl}")
@@ -259,8 +274,6 @@ class Store:
         for col in ("bid_hi", "ask_lo"):
             if col not in candle_cols:
                 self.db.execute(f"ALTER TABLE candles ADD COLUMN {col} REAL")
-        if "edge" not in {r["name"] for r in self.db.execute("PRAGMA table_info(grid_obs)")}:
-            self.db.execute("ALTER TABLE grid_obs ADD COLUMN edge TEXT")  # the replays are rebuilt by grid.update (its version changed)
         job_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(jobs)")}
         if "priority" not in job_cols:
             self.db.execute("ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
@@ -556,6 +569,25 @@ class Store:
         """Dollars the bot's own orders have put into this ticker (buys cost, sales return), fees included in the order cost."""
         row = self.db.execute("SELECT COALESCE(SUM(cost_usd + CASE WHEN COALESCE(side,'buy')='buy' THEN COALESCE(fee_usd, 0) ELSE 0 END), 0) AS c FROM orders WHERE ticker=? AND env=?", (ticker, env)).fetchone()
         return float(row["c"])
+
+    def note_lane_version(self, lane: str, ver: str, settings: dict[str, str]) -> None:
+        """Record the first time a version of a lane is used, with its settings, so the changes between versions can be read back."""
+        self.db.execute("INSERT OR IGNORE INTO lane_versions (lane, ver, first_ts, settings) VALUES (?,?,?,?)", (lane, ver, time.time(), json.dumps(settings)))
+        self.db.commit()
+
+    def lane_versions(self, lane: str) -> list[db.Row]:
+        return self.db.execute("SELECT ver, first_ts, settings FROM lane_versions WHERE lane=? ORDER BY first_ts", (lane,)).fetchall()
+
+    def exited_within(self, ticker: str, lane: str, seconds: float, now: float | None = None) -> float:
+        """Seconds still to wait if this lane sold this market less than `seconds` ago, else 0."""
+        now = time.time() if now is None else now
+        row = self.db.execute(
+            """SELECT MAX(exit_ts) AS t FROM decisions
+               WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL""",
+            (ticker, lane),
+        ).fetchone()
+        last = row["t"] if row and row["t"] is not None else None
+        return max(0.0, last + seconds - now) if last is not None else 0.0
 
     def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None) -> None:
         self.db.execute(

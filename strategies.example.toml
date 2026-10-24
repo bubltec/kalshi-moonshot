@@ -30,6 +30,7 @@ timed_minutes = 15
 entry_elapsed = [1, 12]         # minutes after the window opens
 scope_minutes = 3
 review_minutes = 1
+# entry_socket = true           # also review a watched event the moment a streamed quote enters the price band (needs the tape recorder; the polled review stays as the fallback)
 priority = 10
 max_exposure_pct = 0.30         # all open bets in this lane, share of equity
 

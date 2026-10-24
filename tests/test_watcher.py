@@ -193,13 +193,13 @@ def stop_watcher(setup, bid=0.80):
 def test_the_stop_loss_fires_on_the_first_socket_tick_under_the_line(setup):
     w = stop_watcher(setup)
     t = w.targets[("KXBTC15M-1", "late_ticket")]
-    assert t.stop_drop == pytest.approx(0.30)
+    assert t.stop_drop == pytest.approx(0.50)
     import time as _time
 
     now = _time.time()
-    w.on_event(quote(0.70, 0.72, ts=now))  # 12% under the 0.80 paid: no stop
+    w.on_event(quote(0.55, 0.57, ts=now))  # 31% under the 0.80 paid: no stop at the 50% default
     assert w._jobs.empty()
-    w.on_event(quote(0.55, 0.57, ts=now + 1))  # 31% under: the stop
+    w.on_event(quote(0.39, 0.41, ts=now + 1))  # 51% under: the stop
     assert "stop-loss" in w._jobs.get_nowait()[2]
 
 

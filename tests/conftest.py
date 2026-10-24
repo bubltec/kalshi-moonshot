@@ -18,6 +18,14 @@ def _isolated_data_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_crash_minimum(monkeypatch):
+    """The older exit tests use cheap prices and a plain gain to arm; the progress, give-back and spot rules have their own tests."""
+    monkeypatch.setenv("CRASH_PROGRESS", "0")
+    monkeypatch.setenv("CRASH_GIVEBACK", "0")
+    monkeypatch.setenv("CRASH_SPOT_SIGMA", "0")
+
+
+@pytest.fixture(autouse=True)
 def _database(request, tmp_path, monkeypatch):
     """Run the suite on SQLite (the default) or on Postgres: KM_TEST_DATABASE_URL=postgresql://... pytest.
 

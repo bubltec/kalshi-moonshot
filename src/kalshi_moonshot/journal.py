@@ -37,6 +37,7 @@ class Trade:
     stopped: bool = False
     opened_ts: float = 0.0  # when the bet was placed
     close_ts: float = 0.0  # when its market closes (to place the bet inside a 15-minute window)
+    ver: str | None = None  # the version of its lane's logic that made the bet (None = before versions were recorded)
 
     @property
     def pnl(self) -> float:
@@ -70,7 +71,7 @@ def trades(store: Store) -> list[Trade]:
     """Finished sized bets, oldest first. Open bets are not trades yet."""
     rows = store.db.execute(
         """SELECT ticker, lane, side, mode, contracts, stake_usd, outcome, exit_price, exit_ts,
-                  close_time, settled_ts, ts
+                  close_time, settled_ts, ts, lane_ver
            FROM decisions
            WHERE action='bet' AND stake_usd IS NOT NULL AND contracts > 0
              AND (COALESCE(outcome,'') IN ('yes','no') OR exit_ts IS NOT NULL)"""
@@ -85,7 +86,7 @@ def trades(store: Store) -> list[Trade]:
         out.append(Trade(
             r["ticker"], r["lane"] or "moonshot", r["ticker"].split("-")[0], r["side"] or "yes",
             r["mode"] == "trade", float(r["stake_usd"]), returned, _closed_ts(r), stopped,
-            float(r["ts"]), _listed_close(r),
+            float(r["ts"]), _listed_close(r), r["lane_ver"],
         ))
     out.sort(key=lambda t: t.closed_ts)
     return out

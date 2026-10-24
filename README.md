@@ -50,6 +50,18 @@ series = ["KXGOLDD", "KXSILVERD"]
 needs_instrument = true
 ```
 
+A lane can start from another lane in the same file with `inherit` and list only what differs, which is how the paper
+twins of `fx_favorite` stay identical except for the one thing each tests:
+
+```toml
+[lane.metals_hover]
+inherit = "metals"
+hover_dip = 0.50
+```
+
+Changing the parent changes every lane that inherits from it. A missing parent or a loop is an error. A lane's version
+(`python -m kalshi_moonshot versions`) follows its effective settings, so reorganizing the file or its comments never starts a new one.
+
 A typo is an error, not a silent default. Edits apply on the next scan.
 
 **Stakes follow the balance.** Nothing is a flat dollar amount. `sizing.py` stakes a fraction (`KELLY_FRACTION`,
@@ -137,6 +149,13 @@ side that is already close to decided, at 70-98 cents, for a small return that r
   ones, and queues an evaluation for any market with an edge. A per-lane cooldown stops it re-logging the same
   unchanged view every pass.
 
+**Socket entries.** A two-level lane can also set `entry_socket = true`. The tape recorder's live socket then watches the
+lane's watchlist, and the moment a quote puts a side the lane may buy inside its price band (and inside its `entry_elapsed`
+window) it runs the lane's usual review on that one event and queues the same `evaluate` jobs (`entrywatch.py`). It adds no
+new way to place an order: filters, cooldown, sizing, risk limits and paper-versus-live are the polled review's. The polled
+review keeps running as the fallback. `entry_min_gap_seconds` (default 2) limits how often one event is re-reviewed. Only
+markets the recorder streams (the `15M` series and open positions) are covered.
+
 Jobs carry a `priority`, so the fast lane's work runs ahead of a backlog of slow model calls. The commodity lane
 uses this by default: scope every 10 min (new 15-minute markets keep appearing), review every 2 min.
 Any lane can opt in from `strategies.toml` by setting `review_minutes` plus `series` (or `needs_instrument`).
@@ -175,6 +194,50 @@ same layer also runs on a SQLite file (what the tests use, and a quick local run
 - **Moving from SQLite:** `scripts/cutover_postgres.sh` does it once, when no position is open, and leaves the SQLite files as the rollback.
 - **Tests:** `pytest` runs on SQLite; `KM_TEST_DATABASE_URL=postgresql://... pytest` runs the same suite on Postgres, each test in a schema of its own.
 
+## Sell when up and unstable (opt-in)
+
+The crash exit only watches once a position has held 10% over what you paid, so one that climbs a few percent and swings back is never protected. A lane
+can ask for a second trigger: `unstable_gain` (the fraction it must be up, after fees), `unstable_range` (the bid's high-low in dollars) and `unstable_seconds`
+(the window). When the position is that far up and the bid has swung that much inside the window, it sells. Hand-placed positions use `MANUAL_EXIT_UNSTABLE_GAIN`,
+`_RANGE` and `_SECONDS`. It is off everywhere by default, and on recorded history it did no better than holding with just the 50% stop, so it is being tested forward:
+`fx_favorite_unstable` (paper, with the trigger) runs beside `fx_favorite_ctrl` (paper, an exact copy of the live `fx_favorite`), and `python -m kalshi_moonshot versions`
+and `daily --lane` compare them as bets accumulate.
+
+## Versions: a lane's past counts only as far as it still describes it
+
+Every change to what a lane does (its prices, filters, stake, stop, crash exit, cooldown, or the global rules that reach it) is a new **version** of the
+lane, found automatically: `lanes.version_of` fingerprints the settings, each bet is tagged with the version that made it, and the first use of a new one is
+stored with its settings (`lane_versions`). See them with `python -m kalshi_moonshot versions` (when each began, what changed, how it did).
+
+New logic is usually an improvement, but old results do not describe it. So a version's record is weighted: its own bets count 1, and an older version's
+bets count by how **similar its settings are** to the current ones (each version is a vector of settings; `exp(-0.3 * the sum of the differences)`, capped
+by `scale_old_weight`, 0.5). A nudged number keeps most of the old record, a rewrite keeps little, and bets from before versions were recorded count half
+again. The evidence the stake scaling reads is the weighted mean and spread over an *effective* number of bets, so the old fades as the new builds.
+
+## Stakes that follow the evidence
+
+A fixed stake treats a lane with a proven record and one with none the same, and a hand-set limit either blocks bets that would have paid or lets
+losing ones through. With `scale = true` on a lane (`scale.py`), it bets its base stake until its own finished bets (paper and live together)
+show a return that is positive beyond doubt: at least `scale_min_n` bets (40) and an average return more than `scale_z` standard errors above zero (2).
+Then the stake grows to a quarter of the Kelly stake that the *lower bound* alone justifies, and the lane's exposure cap grows by the same factor, up to
+`scale_max_mult` (3x the base). A lane below the bar keeps its base stake (growth only). The hard ceilings (`MAX_USD_PER_TRADE`, `MAX_OPEN_POSITIONS`,
+the daily loss limit, the cash on the market's exchange) still apply on top. Every bet's note says what the record was. See where every lane stands with
+`python -m kalshi_moonshot scale`. It is on for the paper lanes `mid_trail`, `fx_trail30` and `learned_entry`; add `scale = true` to a live lane to
+let it earn more room the same way.
+
+## Nearest-neighbour entries (pgvector)
+
+`knn.py` replaces the learner's hard buckets with a smooth model. Every sampled entry on every recorded window (one every 30 s on each side) is stored as
+a point: the minute in the window, the ask, the spread, how the ask moved over the last 90 s and 4 min, the instrument's last-hour move and the whole
+market's as they bear on the side bought, and how far the ask sits from fair value. They are scaled to comparable sizes and kept in Postgres as a `pgvector`
+column with an HNSW index (the `db` service is Postgres 18 plus the extension, built in `Dockerfile.db`; the bot image carries the matching `pg_dump` 18 for the nightly backup). To judge an entry
+about to be made, the model finds the 300 nearest past entries, weights them by closeness, groups them by window and side (entries 30 s apart in one window
+are not independent), and takes the mean return with a standard error from the spread *between windows*. It buys when the mean less 3 standard errors is above
+zero with enough comparable windows. A lane switches it on with `knn = true` (`learned_entry` does). It is paper unless `LIVE_LANES` names the lane.
+
+`python -m kalshi_moonshot knn --validate` brings the history up to date and tests the model honestly: it fits on the earliest 60% of windows and scores
+entries from later ones (with a gap), comparing the return of what it would buy with all entries and with its own predictions fifth by fifth.
+
 ## Learned entry: when to buy, from the record
 
 `python -m kalshi_moonshot grid` shows what the bot has learned about entering BTC and gold 15-minute windows. `grid.py` replays every recorded
@@ -194,9 +257,8 @@ Your own cash-outs have been your best trades (every one a win), but only when y
 follows every open position on the account that the bot did not open, in any market, and applies the peak-crash exit to it from the live
 socket: once the bid is `MANUAL_EXIT_ACTIVATE` (10%) over what you paid, it sells when the bid falls `MANUAL_EXIT_DROP` ($0.04) off a peak
 that held a few seconds, or `MANUAL_EXIT_FAST` ($0.12) at once. It only ever takes a profit: it never sells for less than `MANUAL_EXIT_MIN_PROFIT` (5%)
-over what the position cost, after the fee. `MANUAL_EXIT_STOP_LOSS` (30%) adds the bot's own stop-loss: a 15-minute market only if `STOP_LOSS_15M` is on,
-any other market only in its last `STOP_LOSS_HOURS`; where the bot can price the market it holds a dip the model still rates better than even. `MANUAL_EXIT_SKIP` lists ticker prefixes to leave alone (positions meant to be held). Real orders also need
-`MODE=trade` (and `ALLOW_REAL_MONEY=true` on prod); otherwise it only logs what it would have sold. Rebuild with `scripts/safe_rebuild.sh` instead of `docker compose up -d --build`: it waits until no position is open, because a restart leaves the watcher blind for 20-30 seconds. `python -m kalshi_moonshot manual` lists
+over what the position cost, after the fee. `MANUAL_EXIT_STOP_LOSS` (50%) adds a stop-loss: a 15-minute market only if `STOP_LOSS_15M` is on, any other market only in its last `STOP_LOSS_HOURS`. A stop is a hard rule: it sells whatever any model thinks the position is worth (a model's value for a collapsed contract was once 37c against a 17c bid on one that expired worthless); only the crash exit that protects a profit still asks the model. `MANUAL_EXIT_SKIP` lists ticker prefixes to leave alone (positions meant to be held). Real orders also need
+`MODE=trade` (and `ALLOW_REAL_MONEY=true` on prod); otherwise it only logs what it would have sold. Rebuild with `scripts/safe_rebuild.sh` instead of `docker compose up -d --build`: it waits until no position is open, because a restart leaves the watcher blind for 20-30 seconds. A buy you make in the app is enrolled within seconds: the socket's `fill` channel reports every fill on the account, and after `FILL_SETTLE` (3 s, so the bot's own bets are on the books first) the market is streamed and the positions are re-read, instead of waiting for the 10-second position poll. `python -m kalshi_moonshot manual` lists
 what it would watch and where each position stands. Sales appear in your account history like any other, so `mytrades` picks them up.
 
 ## Currencies, indices and other new markets

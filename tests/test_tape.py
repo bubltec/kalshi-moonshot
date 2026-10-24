@@ -140,3 +140,21 @@ def test_build_tracks_aligns_quotes_and_the_index(tmp_path):
     assert len({len(tracks[0].bid), len(tracks[0].ask), len(tracks[0].feed)}) == 1
     assert leadlag.build_tracks(db, "KXETH15M", tmp_path) == []
 
+
+
+def test_the_recorder_stores_kraken_prices_for_the_crypto_markets_only(tmp_path):
+    s = config.load()
+    s = type(s)(**{**s.__dict__, "data_dir": tmp_path})
+
+    class Kraken:
+        def latest(self, symbol):
+            return (80000.0, 100.0) if symbol == "kraken:BTC/USD" else None  # the others have not ticked yet
+
+    class Feed:
+        kraken = Kraken()
+
+    rec = TapeRecorder(object(), s, Feed())  # type: ignore[arg-type]
+    assert "kraken:BTC/USD" in rec._crypto_symbols() and not any("PAXG" in x or "XAUT" in x for x in rec._crypto_symbols())
+    rec.sample_kraken()
+    rec.tape.flush()
+    assert rec.tape.db.execute("SELECT symbol, px FROM feed_ticks").fetchall()[0][:] == ("kraken:BTC/USD", 80000.0)

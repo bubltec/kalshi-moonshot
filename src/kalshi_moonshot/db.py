@@ -202,7 +202,7 @@ class PgConn:
 
         conn = psycopg.connect(self.dsn, cursor_factory=psycopg.ClientCursor, row_factory=_row_factory, autocommit=True, connect_timeout=10)
         conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.schema}"')
-        conn.execute(f'SET search_path TO "{self.schema}"')
+        conn.execute(f'SET search_path TO "{self.schema}", public')  # public holds extensions such as pgvector
         conn.adapters.register_loader("numeric", FloatNumeric)
         conn.autocommit = False
         self.conn = conn

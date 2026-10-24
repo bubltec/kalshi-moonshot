@@ -62,6 +62,11 @@ class ManualPositions:
         self._cache: list[Position] = []
         self._lock = threading.Lock()
 
+    def invalidate(self) -> None:
+        """The next read goes to the exchange (a fill just arrived on the socket)."""
+        with self._lock:
+            self._at = 0.0
+
     def positions(self, s: Settings, store: Store, fresh: bool = False) -> list[Position]:
         with self._lock:
             if not fresh and time.time() - self._at < POLL_EVERY:

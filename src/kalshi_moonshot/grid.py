@@ -42,16 +42,21 @@ ACT, DROP, FAST, CONFIRM, HOLD = 0.10, 0.04, 0.12, 10.0, 3.0
 HOUR = 3600.0
 FLAT = 0.5  # a move under this many typical hourly moves is "flat"
 EDGE = 0.08  # a side priced this far under (over) its fair value is "cheap" ("dear")
-GRID_VERSION = 2  # bump when the replay changes: the stored replays are then rebuilt from the tape
+GRID_VERSION = 4  # bump when the replay changes: the stored replays are then rebuilt from the tape
 UPDATE_EVERY = 600.0
 
 # where each 15-minute series' price comes from on the tape: ("index", id) in index_ticks or ("feed", symbol) in feed_ticks
 SOURCES: dict[str, tuple[str, str]] = {
+    "KXEURUSD15M": ("feed", "hl:xyz:EUR"), "KXGBPUSD15M": ("feed", "hl:xyz:GBP"), "KXUSDJPY15M": ("feed", "hl:xyz:JPY"),
     "KXBTC15M": ("index", "BRTI"), "KXETH15M": ("index", "ETHUSD_RTI"), "KXSOL15M": ("index", "SOLUSD_RTI"),
+    "KXXRP15M": ("index", "XRPUSD_RTI"), "KXDOGE15M": ("index", "DOGEUSD_RTI"),
     "KXGOLD15M": ("feed", "hl:xyz:GOLD"), "KXSILVER15M": ("feed", "hl:xyz:SILVER"), "KXWTI15M": ("feed", "hl:xyz:CL"),
     "KXNATGAS15M": ("feed", "hl:xyz:NATGAS"), "KXCOPPER15M": ("feed", "hl:xyz:COPPER"),
     "KXPLATINUM15M": ("feed", "hl:xyz:PLATINUM"), "KXPALLADIUM15M": ("feed", "hl:xyz:PALLADIUM"),
 }
+
+# the whole market, for beta: commodities and crypto (the currency pairs have a feed for their own alpha and price, but one US dollar move would swamp the basket)
+BASKET = tuple(s for s in SOURCES if not any(c in s for c in ("EUR", "GBP", "JPY")))
 
 
 @dataclass(frozen=True)
@@ -125,20 +130,25 @@ class Features:
             self._cache[key] = math.log(now / then) / sig if (now and then and sig) else None
         return self._cache[key]
 
-    def edge(self, series: str, ts: float, strike: float | None, left_minutes: float, ask: float, side: str) -> str | None:
-        """cheap / fair / dear: the side's ask against the fair value a random walk gives from the spot, the strike and the time left."""
+    def gap(self, series: str, ts: float, strike: float | None, left_minutes: float, ask: float, side: str) -> float | None:
+        """Fair value of the side (a random walk from the spot to the strike over the time left) minus its ask, in dollars; positive = cheap."""
         src, sig = SOURCES.get(series), self._scale(series, 900.0)
         spot = _px_at(self.tape, src, ts) if src else None
         if not (spot and strike and sig and strike > 0):
             return None
         sd = sig * math.sqrt(max(left_minutes, 0.25) / 15.0)
         p_yes = 0.5 * (1.0 + math.erf(math.log(spot / strike) / (sd * math.sqrt(2.0))))
-        fair = p_yes if side == "yes" else 1.0 - p_yes
-        gap = fair - ask
+        return (p_yes if side == "yes" else 1.0 - p_yes) - ask
+
+    def edge(self, series: str, ts: float, strike: float | None, left_minutes: float, ask: float, side: str) -> str | None:
+        """cheap / fair / dear: the side's ask against the fair value a random walk gives from the spot, the strike and the time left."""
+        gap = self.gap(series, ts, strike, left_minutes, ask, side)
+        if gap is None:
+            return None
         return "cheap" if gap >= EDGE else "dear" if gap <= -EDGE else "fair"
 
     def beta(self, ts: float) -> float | None:
-        moves = [m for s in SOURCES if (m := self.alpha(s, ts)) is not None]
+        moves = [m for s in BASKET if (m := self.alpha(s, ts)) is not None]
         return sum(moves) / len(moves) if len(moves) >= 3 else None
 
 
@@ -180,8 +190,10 @@ def trail_exit(path: list[tuple[float, float, float]], entry: float) -> float | 
     return None
 
 
-def replay(rows: list[tuple[float, float, float]], close: float, side: str, result: str) -> list[tuple[int, int, float, float, float]]:
-    """One window, one side: (minute band, price band, roi, entry ts, entry ask) for the first entry in each cell."""
+def replay(rows: list[tuple[float, float, float]], close: float, side: str, result: str, rule: str = "trail") -> list[tuple[int, int, float, float, float]]:
+    """One window, one side: (minute band, price band, roi, entry ts, entry ask) for the first entry in each cell.
+
+    rule "trail" manages each entry with the live peak-crash exit; "hold" keeps it to settlement (what a lane with no exit rules does)."""
     start = close - 900.0
     path = [(t, b if side == "yes" else 1.0 - a, a if side == "yes" else 1.0 - b) for t, b, a in rows if start <= t < close - END_MARGIN]
     out: list[tuple[int, int, float, float, float]] = []
@@ -191,14 +203,14 @@ def replay(rows: list[tuple[float, float, float]], close: float, side: str, resu
         if mb is None or pb is None or (mb, pb) in seen or ask <= 0:
             continue
         seen.add((mb, pb))
-        sold = trail_exit(path[i + 1:], ask)
+        sold = trail_exit(path[i + 1:], ask) if rule == "trail" else None
         roi = _roi_exit(ask, sold) if sold is not None else (1.0 if result == side else 0.0) / (ask + fee(ask)) - 1.0
         out.append((mb, pb, roi, t, ask))
     return out
 
 
-def update(store: Any, tape_path: Path, series: tuple[str, ...], now: float | None = None) -> int:
-    """Replay every settled window not yet replayed. Returns the number of windows added."""
+def update(store: Any, tape_path: Path, series: tuple[str, ...], now: float | None = None, rule: str = "trail") -> int:
+    """Replay every settled window not yet replayed under this exit rule. Returns the number of windows added."""
     now = now or time.time()
     tape = _open_tape(tape_path)
     if tape is None:
@@ -212,9 +224,9 @@ def update(store: Any, tape_path: Path, series: tuple[str, ...], now: float | No
         store.db.commit()
     marks = ",".join("?" * len(series))
     todo = store.db.execute(
-        f"SELECT w.ticker, w.series, w.close_ts, w.result, w.strike FROM windows w LEFT JOIN grid_done d ON d.ticker=w.ticker "
+        f"SELECT w.ticker, w.series, w.close_ts, w.result, w.strike FROM windows w LEFT JOIN grid_done d ON d.ticker=w.ticker AND d.rule=? "
         f"WHERE d.ticker IS NULL AND w.result IN ('yes','no') AND w.series IN ({marks}) AND w.close_ts < ? ORDER BY w.close_ts",
-        (*series, now - 1200.0),
+        (rule, *series, now - 1200.0),
     ).fetchall()
     added = 0
     for w in todo:
@@ -222,36 +234,35 @@ def update(store: Any, tape_path: Path, series: tuple[str, ...], now: float | No
         close = float(w["close_ts"])
         if rows and rows[0][0] <= close - 900.0 + 120.0:  # the tape saw the window from near its open
             for side in ("yes", "no"):
-                for mb, pb, roi, ts, ask in replay([(r[0], r[1], r[2]) for r in rows], close, side, w["result"]):
+                for mb, pb, roi, ts, ask in replay([(r[0], r[1], r[2]) for r in rows], close, side, w["result"], rule):
                     a, b = feats.alpha(w["series"], ts), feats.beta(ts)
                     e = feats.edge(w["series"], ts, w["strike"], (close - ts) / 60.0, ask, side)
                     store.db.execute(
-                        "INSERT OR REPLACE INTO grid_obs (ticker, series, side, mband, pband, roi, close_ts, alpha, beta, edge) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                        (w["ticker"], w["series"], side, mb, pb, roi, int(close),
+                        "INSERT OR REPLACE INTO grid_obs (ticker, series, side, mband, pband, rule, roi, close_ts, alpha, beta, edge) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        (w["ticker"], w["series"], side, mb, pb, rule, roi, int(close),
                          None if a is None else bucket(a, side), None if b is None else bucket(b, side), e),
                     )
             added += 1
-        store.db.execute("INSERT OR IGNORE INTO grid_done (ticker) VALUES (?)", (w["ticker"],))
+        store.db.execute("INSERT OR IGNORE INTO grid_done (ticker, rule) VALUES (?, ?)", (w["ticker"], rule))
     store.db.commit()
     tape.close()
     return added
 
 
 _lock = threading.Lock()
-_last = 0.0
+_last: dict[tuple, float] = {}
 
 
-def refresh_soon(store_factory: Any, tape_path: Path, series: tuple[str, ...]) -> None:
-    """Bring the record up to date in the background, at most every UPDATE_EVERY seconds."""
-    global _last
+def refresh_soon(store_factory: Any, tape_path: Path, series: tuple[str, ...], rule: str = "trail") -> None:
+    """Bring the record up to date in the background, at most every UPDATE_EVERY seconds for each series and exit rule."""
     with _lock:
-        if time.time() - _last < UPDATE_EVERY:
+        if time.time() - _last.get((series, rule), 0.0) < UPDATE_EVERY:
             return
-        _last = time.time()
+        _last[(series, rule)] = time.time()
 
     def work() -> None:
         try:
-            n = update(store_factory(), tape_path, series)
+            n = update(store_factory(), tape_path, series, rule=rule)
             if n:
                 log.info("grid: replayed %d more windows", n)
         except Exception:
@@ -274,7 +285,7 @@ LEVELS = ((1, 1, 1), (1, 1, 0), (0, 1, 1), (1, 0, 0), (0, 1, 0), (0, 0, 0))
 LABELS = {(1, 1, 1): "price+hour+market", (1, 1, 0): "price+hour", (0, 1, 1): "hour+market", (1, 0, 0): "price", (0, 1, 0): "hour", (0, 0, 0): "base"}
 
 
-def cells(store: Any, series: tuple[str, ...], since: float = 0.0) -> dict[tuple, Cell]:
+def cells(store: Any, series: tuple[str, ...], since: float = 0.0, rule: str = "trail") -> dict[tuple, Cell]:
     """Cells keyed (mband, pband, edge, alpha, beta), with None where a level does not split on that feature."""
     marks = ",".join("?" * len(series))
     out: dict[tuple, Cell] = {}
@@ -283,8 +294,8 @@ def cells(store: Any, series: tuple[str, ...], since: float = 0.0) -> dict[tuple
         extra = "".join(f", {c}" for c in cols)
         need = "".join(f" AND {c} IS NOT NULL" for c in cols)
         sql = (f"SELECT mband, pband{extra}, COUNT(*) n, AVG(roi) m, SUM(roi*roi) sq FROM grid_obs "
-               f"WHERE series IN ({marks}) AND close_ts >= ?{need} GROUP BY mband, pband{extra}")
-        for r in store.db.execute(sql, (*series, since)):
+               f"WHERE series IN ({marks}) AND close_ts >= ? AND rule = ?{need} GROUP BY mband, pband{extra}")
+        for r in store.db.execute(sql, (*series, since, rule)):
             out[(r["mband"], r["pband"], r["edge"] if use_e else None, r["alpha"] if use_a else None, r["beta"] if use_b else None)] = _cell(r["n"], r["m"], r["sq"])
     return out
 
@@ -309,7 +320,7 @@ def pick(store: Any, spec: Any, series: tuple[str, ...], elapsed: float, ask: fl
     if mb is None or pb is None:
         return False, f"grid: minute {elapsed:.1f} or price {ask:.2f} is outside the grid"
     where = f"minutes {gate.BANDS[mb][0]}-{gate.BANDS[mb][1]}, ask {PBANDS[pb][0]:.2f}-{PBANDS[pb][1]:.2f}"
-    table = cells(store, series, since)
+    table = cells(store, series, since, getattr(spec, "grid_rule", "trail"))
     found = best_cell(table, mb, pb, edge, alpha, beta, spec.grid_min_n)
     if found is None:
         have = table.get((mb, pb, None, None, None), Cell(0, 0, 0)).n
