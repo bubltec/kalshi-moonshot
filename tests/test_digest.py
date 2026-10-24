@@ -5,8 +5,8 @@ from kalshi_moonshot.store import Store
 from kalshi_moonshot.tape import Tape
 
 
-def bet(store, ticker, lane, ask, side, outcome, mode="observe", stake=5.0, exit_price=None, reason=None, model_p=0.6):
-    store.add_decision(ticker=ticker, title="t", bid=ask - 0.01, ask=ask, model_p=model_p, edge=0.05, action="bet", mode=mode, lane=lane,
+def bet(store, ticker, lane, ask, side, outcome, mode="observe", stake=5.0, exit_price=None, reason=None, model_p=0.6, ver="v1"):
+    store.add_decision(lane_ver=ver, ticker=ticker, title="t", bid=ask - 0.01, ask=ask, model_p=model_p, edge=0.05, action="bet", mode=mode, lane=lane,
                        side=side, stake_usd=stake, contracts=stake / ask)
     if exit_price is not None:
         store.mark_exited(ticker, exit_price, reason or "peak-crash: bid fell", lane)
@@ -63,3 +63,12 @@ def test_the_report_without_a_notes_file_says_none_were_recorded(tmp_path, monke
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "empty"))
     (tmp_path / "empty").mkdir()
     assert "nothing recorded as open" in "\n".join(digest.notes(config.load()))
+
+
+def test_a_live_lane_is_split_by_version_so_old_settings_do_not_hide_in_the_new_ones(tmp_path):
+    store = Store(tmp_path / "m.db", frozenset())
+    bet(store, "C1", "crypto_favorite", 0.80, "yes", "no", mode="trade", ver="aaaa1111")
+    bet(store, "C2", "crypto_favorite", 0.80, "yes", "no", mode="trade", ver="aaaa1111")
+    bet(store, "C3", "crypto_favorite", 0.45, "yes", "yes", mode="trade", ver="bbbb2222")
+    lines = [line for line in digest.lane_table(store, time.time() - 3600) if line.startswith("crypto_favorite")]
+    assert len(lines) == 2 and any("aaaa1111" in line and line.split()[3] == "2" for line in lines) and any("bbbb2222" in line for line in lines)

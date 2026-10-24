@@ -49,17 +49,27 @@ def _kind(reason: str | None) -> str:
     return "other exit"
 
 
-def lane_table(store: Any, since: float) -> list[str]:
-    rows = store.db.execute("SELECT lane, mode, ask, side, outcome, exit_price, exit_reason, stake_usd FROM decisions WHERE action = 'bet' AND ts >= ?", (since,)).fetchall()
-    by: dict[tuple[str, str], list] = defaultdict(list)
+def lane_table(store: Any, since: float, s: Settings | None = None) -> list[str]:
+    """One row per lane; a live lane is split by lane version (the newest first), because a lane that was tuned during the period is several different bets."""
+    rows = store.db.execute("SELECT lane, mode, ask, side, outcome, exit_price, exit_reason, stake_usd, lane_ver FROM decisions WHERE action = 'bet' AND ts >= ?", (since,)).fetchall()
+    current = {}
+    if s is not None:
+        current = {name: lanes.version_of(spec, s) for name, spec in lanes.lane_specs(s).items()}
+    by: dict[tuple[str, str, str], list] = defaultdict(list)
     for r in rows:
-        by[(r["lane"] or "moonshot", "LIVE" if r["mode"] == "trade" else "paper")].append(r)
-    out = [f"{'lane':24}{'mode':6}{'bets':>5}{'settled':>8}{'as traded':>11}{'if held':>9}{'exits cost':>11}{'win%':>6}{'staked $':>10}{'P&L $':>9}"]
-    for (lane, mode), rs in sorted(by.items(), key=lambda kv: (kv[0][1] != "LIVE", kv[0][0])):
+        live = r["mode"] == "trade"
+        by[(r["lane"] or "moonshot", "LIVE" if live else "paper", (r["lane_ver"] or "?") if live else "")].append(r)
+    out = [f"{'lane':24}{'mode':6}{'version':>10}{'bets':>5}{'settled':>8}{'as traded':>11}{'if held':>9}{'exits cost':>11}{'win%':>6}{'staked $':>10}{'P&L $':>9}"]
+
+    def first(rs: list) -> float:
+        return min(float(r["ts"]) for r in rs) if rs and "ts" in rs[0].keys() else 0.0
+
+    for (lane, mode, ver), rs in sorted(by.items(), key=lambda kv: (kv[0][1] != "LIVE", kv[0][0], kv[0][2])):
+        tag = (ver + (" (now)" if current.get(lane) == ver else "")) if ver else ""
         got = [(r, _roi(r)) for r in rs]
         done = [(r, x) for r, x in got if x]
         if not done:
-            out.append(f"{lane:24}{mode:6}{len(rs):>5}{0:>8}")
+            out.append(f"{lane:24}{mode:6}{tag:>10}{len(rs):>5}{0:>8}")
             continue
         n = len(done)
         traded = sum(x[0] for _, x in done) / n
@@ -67,7 +77,7 @@ def lane_table(store: Any, since: float) -> list[str]:
         wins = sum(_won(r) for r, _ in done) / n
         staked = sum((r["stake_usd"] or 0.0) for r, _ in done)
         pnl = sum((r["stake_usd"] or 0.0) * x[0] for r, x in done)
-        out.append(f"{lane:24}{mode:6}{len(rs):>5}{n:>8}{_pct(traded):>11}{_pct(held):>9}{_pct(traded - held):>11}{wins:>6.0%}{staked:>10.2f}{pnl:>+9.2f}")
+        out.append(f"{lane:24}{mode:6}{tag:>10}{len(rs):>5}{n:>8}{_pct(traded):>11}{_pct(held):>9}{_pct(traded - held):>11}{wins:>6.0%}{staked:>10.2f}{pnl:>+9.2f}")
     return out
 
 
@@ -156,7 +166,7 @@ def report(s: Settings, store: Any, tape_db: Any, days: float = 7, now: float | 
     since = now - days * 86400
     start = datetime.fromtimestamp(since, UTC).strftime("%Y-%m-%d %H:%M")
     out = [f"REVIEW DATA: the last {days} day(s), {start} UTC to now. env={s.env} mode={s.mode}; live lanes: {', '.join(sorted(s.live_lanes or [])) or 'none'}", ""]
-    out += ["== EACH LANE'S BETS (settled ones; 'as traded' includes stops and sells, 'if held' rides every bet to settlement; exits cost = traded minus held)", *lane_table(store, since)]
+    out += ["== EACH LANE'S BETS (settled ones; 'as traded' includes stops and sells, 'if held' rides every bet to settlement; exits cost = traded minus held)", *lane_table(store, since, s)]
     out += ["", "== WHAT THE EXITS DID", *exit_table(store, since)]
     out += ["", "== CALIBRATION (all time, each lane scored on its own first rating of each market)", *calibration_table(store, s)]
     out += ["", "== DATA AND INFRASTRUCTURE", *health(s, store, tape_db, now), *market_gaps(store, since, now)]
