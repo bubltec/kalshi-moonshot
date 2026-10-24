@@ -61,3 +61,15 @@ def test_trust_sets_the_starting_weight(tmp_path, trust):
     settle(store, "A", 0.05, 0.3, "no")
     cal = store.calibrator.adjust("moonshot", "", 0.05, 0.3, trust=trust)
     assert cal.weight == pytest.approx((1 * max(cal.skill or 0, 0) + 20 * trust) / 21, abs=0.2)
+
+
+def test_two_lanes_rating_the_same_markets_each_get_their_own_record(tmp_path):
+    store = Store(tmp_path / "m.db")
+    for i in range(25):
+        for lane, p in (("older", 0.5), ("newer", 0.9)):  # both lanes rate every market; only the earlier one used to be counted
+            store.add_decision(ticker=f"M{i}", title="t", bid=0.5, ask=0.5, model_p=p, edge=0.0, action="pass", mode="observe", lane=lane, category="")
+        store.set_outcome(f"M{i}", "no")
+    assert store.calibrator.adjust("older", "", 0.5, 0.5).n == 25
+    newer = store.calibrator.adjust("newer", "", 0.5, 0.9)
+    assert newer.n == 25 and newer.skill is not None and newer.skill < 0  # scored against its own answers, found worse than the market
+    assert newer.weight < 0.5

@@ -1,6 +1,6 @@
 """Let our own record set how much to believe an estimate, instead of a fixed rule.
 
-Two measurements, both from settled markets (first rating per market, same as `report`):
+Two measurements, both from settled markets (each lane's first rating of each market):
 
   skill   1 - (model Brier / market Brier) for the lane. Zero or less means the estimator has not
           beaten simply believing the ask, so its weight goes to zero as evidence builds.
@@ -61,9 +61,12 @@ class Calibrator:
         gen = self.store.generation
         if self._cache and self._cache[0] == gen:
             return self._cache[1]
-        lanes: dict[str, list] = {}
-        for r in first_per_market(self.store.settled_decisions()):
-            lanes.setdefault(r["lane"] or "moonshot", []).append(r)
+        by_lane: dict[str, list] = {}
+        for r in self.store.settled_decisions():
+            by_lane.setdefault(r["lane"] or "moonshot", []).append(r)
+        # One rating per market *per lane*: a lane's record is its own first look at each market, whatever other lanes rated it before.
+        # (Counting a market only for the first lane to rate it left newer lanes, which share markets with older ones, with no record at all.)
+        lanes = {lane: first_per_market(rows) for lane, rows in by_lane.items()}
         self._cache = (gen, lanes)
         return lanes
 
