@@ -8,9 +8,13 @@ similar settled cases, and recent news headlines (external context).
 from __future__ import annotations
 
 import json
+import logging
 import re
+import time
 
 import httpx
+
+log = logging.getLogger("moonshot")
 
 HEAD = """You estimate probabilities of future events. Be calibrated and skeptical: most
 specific, unlikely-sounding events do not happen, and your first instinct is usually too high.
@@ -100,22 +104,30 @@ class Ollama:
         context: str = "",
         subtitle: str = "",
     ) -> tuple[float, str]:
+        return self.ask(build_prompt(title, rules, close_time, similar, context, subtitle))
+
+    def ask(self, prompt: str, max_tokens: int | None = None, tag: str = "") -> tuple[float, str]:
+        """Send one prompt that ends by asking for the JSON probability reply; returns (probability, rationale).
+        max_tokens caps the written answer; tag, when given, logs the prompt and answer token counts and the time taken."""
+        options: dict[str, float | int] = {"temperature": 0.2}
+        if max_tokens:
+            options["num_predict"] = max_tokens
         body = {
             "model": self.model,
             "stream": False,
             "think": False,
             "format": "json",
-            "options": {"temperature": 0.2},
-            "messages": [
-                {
-                    "role": "user",
-                    "content": build_prompt(title, rules, close_time, similar, context, subtitle),
-                }
-            ],
+            "keep_alive": "30m",  # stay loaded between asks: reloading the model after the default 5 idle minutes costs about 10 s
+            "options": options,
+            "messages": [{"role": "user", "content": prompt}],
         }
+        started = time.time()
         resp = self._http.post(f"{self.url}/api/chat", json=body)
         resp.raise_for_status()
-        return parse_estimate(resp.json()["message"]["content"])
+        data = resp.json()
+        if tag:
+            log.info("llm %s: %s prompt tokens, %s answer tokens, %.1fs", tag, data.get("prompt_eval_count"), data.get("eval_count"), time.time() - started)
+        return parse_estimate(data["message"]["content"])
 
     def ping(self) -> bool:
         try:
