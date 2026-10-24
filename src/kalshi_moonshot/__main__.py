@@ -877,6 +877,19 @@ def cmd_archive(s: config.Settings, args: argparse.Namespace) -> int:
     return 1 if report.failed else 0
 
 
+def cmd_digest(s: config.Settings, args: argparse.Namespace) -> int:
+    """The review's numbers in one read-only report: each lane's record, what the exits did, calibration, data and infrastructure health."""
+    from . import digest
+    from .tape import Tape
+
+    store = Store(s.db_path, s.exclude_versions)
+    tape_db = Tape(s.tape_path).db
+    for days in args.days:
+        print("\n".join(digest.report(s, store, tape_db, days)))
+        print()
+    return 0
+
+
 def cmd_flat(s: config.Settings, args: argparse.Namespace) -> int:
     """Exit 0 when no real position is open (nothing to leave unwatched by a restart), else 1. Used by safe_rebuild.sh."""
     from datetime import UTC, datetime
@@ -1029,7 +1042,7 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
-    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "flat": cmd_flat, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
+    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "flat": cmd_flat, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
     "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
@@ -1083,6 +1096,8 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--table", action="append", choices=["quotes", "flow_1s", "index_ticks", "feed_ticks", "fut_1s"], help="only this table (repeatable)")
             p.add_argument("--day", help="fetch: the UTC day, YYYY-MM-DD")
             p.add_argument("--out", default="archive-fetch", help="fetch: folder to download into")
+        if name == "digest":
+            p.add_argument("--days", type=float, nargs="+", default=[1.0, 7.0], help="look-back windows in days, one report each (default: the last day and the last week)")
         if name == "versions":
             p.add_argument("--lane", help="one lane")
         if name == "grid":
