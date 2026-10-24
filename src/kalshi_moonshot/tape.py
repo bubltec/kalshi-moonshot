@@ -17,11 +17,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import db
+from . import archive, db
 from .commodities import instrument_for, load_instruments
 from .config import Settings
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import KalshiStream, index_for_series
+from .store import Store
 
 log = logging.getLogger("moonshot")
 
@@ -248,7 +249,10 @@ class TapeRecorder:
                     self.tape.flush()
                     last_flush = now
                 if now - last_prune >= PRUNE_EVERY:
-                    self.tape.prune(self.s.tape_keep_days)
+                    if archive.enabled(self.s):  # old rows leave only after they are verified in the bucket (and only if ARCHIVE_DELETE_LOCAL is on)
+                        archive.prune_local(self.s, Store(self.s.db_path, self.s.exclude_versions), self.tape.db)
+                    else:
+                        self.tape.prune(self.s.tape_keep_days)
                     last_prune = now
             except Exception as exc:
                 log.warning("tape: %s", exc)

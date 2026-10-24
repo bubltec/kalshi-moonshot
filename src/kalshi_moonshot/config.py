@@ -119,6 +119,10 @@ class Settings:
     tape_dir: Path  # where tape.db lives: a Docker-managed volume in compose, so SQLite's locking is not shared across the Mac/VM boundary
     backup_keep_days: int  # nightly consistent copies of the databases kept in DATA_DIR/backups
     tape_keep_days: float
+    archive_bucket: str  # S3 bucket that old tape days and backups are shipped to ('' = no archive; see archive.py)
+    archive_region: str
+    archive_hot_days: int  # tape days kept in the local database; older ones, once archived and verified, may be deleted locally
+    archive_delete_local: bool  # off: the archive only uploads. On: archived days older than archive_hot_days are deleted from the local tape
     max_rps: float  # Kalshi requests per second the bot paces itself to
     page_size: int  # markets and events per Kalshi page (max 1000)
     job_max_attempts: int  # tries per queued job before it is parked as dead
@@ -350,6 +354,10 @@ def load() -> Settings:
         tape_dir=Path(os.environ.get("TAPE_DIR") or data_dir).expanduser(),
         backup_keep_days=max(1, _i("BACKUP_KEEP_DAYS", 7)),
         tape_keep_days=max(0.5, _f("TAPE_KEEP_DAYS", 3.0)),
+        archive_bucket=os.environ.get("ARCHIVE_BUCKET", "").strip(),
+        archive_region=os.environ.get("ARCHIVE_REGION", "us-east-1").strip() or "us-east-1",
+        archive_hot_days=max(2, _i("ARCHIVE_HOT_DAYS", 14)),
+        archive_delete_local=_b("ARCHIVE_DELETE_LOCAL", False),
         tape_extra_series=tuple(x.strip() for x in os.environ.get("TAPE_EXTRA_SERIES", "").split(",") if x.strip()),
         manual_exit=_b("MANUAL_EXIT", False),
         manual_exit_skip=tuple(x.strip() for x in os.environ.get("MANUAL_EXIT_SKIP", "").split(",") if x.strip()),

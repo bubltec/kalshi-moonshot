@@ -9,6 +9,8 @@ dependencies = [
   "cryptography>=43,<50",
   "websockets>=13,<16",
   "psycopg[binary]>=3.2,<4",
+  "boto3>=1.35,<2",
+  "pyarrow>=17,<23",
 ]
 
 [project.optional-dependencies]
@@ -66,3 +68,7 @@ check_untyped_defs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "botocore.*", "pyarrow", "pyarrow.*"]
+ignore_missing_imports = true

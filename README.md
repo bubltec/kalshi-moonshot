@@ -194,6 +194,46 @@ same layer also runs on a SQLite file (what the tests use, and a quick local run
 - **Moving from SQLite:** `scripts/cutover_postgres.sh` does it once, when no position is open, and leaves the SQLite files as the rollback.
 - **Tests:** `pytest` runs on SQLite; `KM_TEST_DATABASE_URL=postgresql://... pytest` runs the same suite on Postgres, each test in a schema of its own.
 
+## The archive: old tape data in S3, managed with CDK
+
+The tape (every quote, trade and spot tick) is by far the biggest thing in the database, about 270 MB a day. The plan is to keep the recent
+days local and ship older days to a private S3 bucket as one Parquet file per table per day, keeping the small derived data (candles, results,
+decisions, vectors) local. The infrastructure is code in `infra/` (Python CDK), so it is reviewed, diffed and rebuilt like the rest of the project:
+
+```
+cd infra
+uv venv .venv && uv pip install -p .venv -r requirements.txt     # once
+.venv/bin/python -m pytest -q                                    # the stack's own tests, no AWS needed
+cdk synth                                                        # builds the template, no AWS login needed
+aws sso login --profile <profile>
+cdk diff   --profile <profile>                                   # what would change
+cdk deploy --profile <profile>
+```
+
+What it creates (`infra/archive_stack.py`): a private, encrypted, versioned bucket that the stack can never delete (data is kept even if the stack is
+destroyed); lifecycle rules that move tape files to Intelligent-Tiering and backups to Glacier Instant Retrieval after 30 days and expire them after
+400; an IAM user for the archiver that can write and read but has no delete permission anywhere; a Glue database with the four tape tables and an
+Athena workgroup, capped at 10 GB scanned per query, so years of ticks can be queried with SQL without restoring anything. Account and region are in
+`infra/cdk.json`; `-c alert_email=you@example.com` adds an AWS Budgets email alert at 80% of `-c budget_usd` (default 10).
+
+Using it (`src/kalshi_moonshot/archive.py`): it does nothing until `ARCHIVE_BUCKET` is set in `.env`.
+
+```
+python -m kalshi_moonshot archive                       # dry run: which days are not archived yet, their rows, and a sample's size as Parquet
+python -m kalshi_moonshot archive --apply               # upload them (each file carries a SHA-256 that S3 checks; the size and checksum are read back)
+python -m kalshi_moonshot archive --apply --delete-local   # also delete verified days older than ARCHIVE_HOT_DAYS from the local tape
+python -m kalshi_moonshot archive status                # what is in the bucket, by table
+python -m kalshi_moonshot archive fetch --day 2026-11-03 --out ./day   # download one day's Parquet files (for DuckDB or pandas)
+```
+
+A background job repeats the upload every six hours and copies the nightly `pg_dump` files to `backups/`. It deletes local rows only when
+`ARCHIVE_DELETE_LOCAL=true`, only for days older than `ARCHIVE_HOT_DAYS`, and only if `archive_manifest` records that exact day as uploaded and verified
+and the local row count is no larger than the exported one. With the archive on, the tape's old blind clean-up (`TAPE_KEEP_DAYS`) is replaced by this rule, so
+nothing leaves the database before it is safe in the bucket; until deleting is switched on, the tape simply keeps growing (about 270 MB a day).
+
+The access key for the archiver user is created by hand, so no secret passes through CloudFormation:
+`aws iam create-access-key --user-name kalshi-moonshot-archive-writer --profile <profile>`, then put the two values in `.env`.
+
 ## Sell when up and unstable (opt-in)
 
 The crash exit only watches once a position has held 10% over what you paid, so one that climbs a few percent and swings back is never protected. A lane

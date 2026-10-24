@@ -834,6 +834,49 @@ def cmd_backup(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_archive(s: config.Settings, args: argparse.Namespace) -> int:
+    """Old tape days to S3: a dry run by default; --apply uploads, --apply --delete-local also deletes verified days locally. `status` and `fetch` read it back."""
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from . import archive
+    from .tape import Tape
+
+    store = Store(s.db_path, s.exclude_versions)
+    if args.action == "status":
+        rows = archive.status(store)
+        print(f"bucket: {s.archive_bucket or '(ARCHIVE_BUCKET is not set: the archive is off)'}   hot days kept locally: {s.archive_hot_days}   "
+              f"delete local: {'ON' if s.archive_delete_local else 'off'}")
+        if not rows:
+            print("nothing archived yet")
+        for r in rows:
+            print(f"{r['tbl']:12} {r['days']:>4} days {r['first_day']}..{r['last_day']}  {int(r['rows_n']):>12,} rows  {r['bytes_n'] / 1e6:>9.1f} MB  {int(r['deleted_days'])} deleted locally")
+        return 0
+    if not s.archive_bucket and args.action == "fetch":
+        print("ARCHIVE_BUCKET is not set")
+        return 1
+    if args.action == "fetch":
+        if not args.day:
+            print("--day YYYY-MM-DD is required")
+            return 1
+        files = archive.fetch_day(s, archive.client_for(s), args.day, Path(args.out), args.table or None)
+        print("\n".join(str(f) for f in files))
+        return 0
+    if args.apply and not s.archive_bucket:
+        print("ARCHIVE_BUCKET is not set in .env: nothing to upload to (a dry run does not need it)")
+        return 1
+    tape_db = Tape(s.tape_path).db
+    client = archive.client_for(s) if args.apply else None
+    report = archive.run(s, store, tape_db, client, apply=args.apply, delete_local=args.apply and args.delete_local,
+                         tables=args.table or None, hot_days=args.hot_days, now=datetime.now(UTC))
+    print("\n".join(report.lines) or "nothing to do")
+    if not args.apply:
+        print("\ndry run: nothing was uploaded or deleted. Add --apply to upload, and --delete-local to remove verified days from the local tape.")
+    else:
+        print(f"\nuploaded {report.uploaded}, deleted {report.deleted_days} local days, {report.failed} failed")
+    return 1 if report.failed else 0
+
+
 def cmd_flat(s: config.Settings, args: argparse.Namespace) -> int:
     """Exit 0 when no real position is open (nothing to leave unwatched by a restart), else 1. Used by safe_rebuild.sh."""
     from datetime import UTC, datetime
@@ -986,7 +1029,7 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
-    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "flat": cmd_flat, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
+    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "flat": cmd_flat, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
     "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
@@ -1032,6 +1075,14 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--sample", type=int, default=3000, help="test entries to score")
             p.add_argument("--lo", type=float, default=0.0, help="test only entries with an ask at least this")
             p.add_argument("--hi", type=float, default=1.0, help="... and at most this")
+        if name == "archive":
+            p.add_argument("action", nargs="?", default="run", choices=["run", "status", "fetch"], help="run (default, a dry run unless --apply), status, or fetch a day")
+            p.add_argument("--apply", action="store_true", help="upload for real (needs ARCHIVE_BUCKET and AWS keys in .env)")
+            p.add_argument("--delete-local", action="store_true", help="with --apply: also delete archived, verified days older than the hot window from the local tape")
+            p.add_argument("--hot-days", type=int, default=None, help="days of tape to keep locally (default ARCHIVE_HOT_DAYS)")
+            p.add_argument("--table", action="append", choices=["quotes", "flow_1s", "index_ticks", "feed_ticks"], help="only this table (repeatable)")
+            p.add_argument("--day", help="fetch: the UTC day, YYYY-MM-DD")
+            p.add_argument("--out", default="archive-fetch", help="fetch: folder to download into")
         if name == "versions":
             p.add_argument("--lane", help="one lane")
         if name == "grid":

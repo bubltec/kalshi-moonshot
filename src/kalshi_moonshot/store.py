@@ -102,6 +102,12 @@ CREATE TABLE IF NOT EXISTS lane_versions (
   PRIMARY KEY (lane, ver)
 );
 
+CREATE TABLE IF NOT EXISTS archive_manifest (
+  tbl TEXT NOT NULL, day TEXT NOT NULL, rows_n INTEGER NOT NULL, bytes_n INTEGER NOT NULL, sha256 TEXT NOT NULL, s3_key TEXT NOT NULL,
+  uploaded_ts REAL NOT NULL, deleted_ts REAL,
+  PRIMARY KEY (tbl, day)
+);
+
 CREATE TABLE IF NOT EXISTS shard_moves (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,

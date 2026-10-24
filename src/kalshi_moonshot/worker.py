@@ -114,6 +114,12 @@ class Worker:
         from . import backup
 
         backup.start_nightly(lambda: self.s)
+        from . import archive
+        from .tape import Tape
+
+        archive.start_nightly(
+            lambda: self.s, lambda: Store(self.s.db_path, self.s.exclude_versions), lambda: Tape(self.s.tape_path).db
+        )  # idle until ARCHIVE_BUCKET is set
 
     def _start_tape(self) -> None:
         """Record quotes next to the feed price they follow (read-only; see tape.py)."""
