@@ -117,6 +117,10 @@ class Settings:
     manual_exit_unstable_gain: float  # sell a hand-placed position that is up this fraction while the bid is swinging (0 = off)
     manual_exit_unstable_range: float  # ... the bid's high-low in dollars over manual_exit_unstable_seconds
     manual_exit_unstable_seconds: float
+    manual_cheap_max: float  # a hand-placed buy at or under this price is a "moonshot": let it ride, no stop, sell only for a profit (see watcher._cheap_rules)
+    manual_cheap_take_x: float  # ... sell at once when the bid is this many times the price paid
+    manual_cheap_arm_x: float  # ... otherwise protect a profit once the bid has been this many times the price paid
+    manual_cheap_giveback: float  # ... then sell when this share of the gain (peak over price paid) is given back, never under the price paid
     manual_exit_stop: float  # stop-loss on hand-placed positions: sell at this fraction under the price paid (0 = none); same hours rules as the bot's
     tape_dir: Path  # where tape.db lives: a Docker-managed volume in compose, so SQLite's locking is not shared across the Mac/VM boundary
     backup_keep_days: int  # nightly consistent copies of the databases kept in DATA_DIR/backups
@@ -372,6 +376,10 @@ def load() -> Settings:
         manual_exit_unstable_gain=_f("MANUAL_EXIT_UNSTABLE_GAIN", 0.0),
         manual_exit_unstable_range=_f("MANUAL_EXIT_UNSTABLE_RANGE", 0.06),
         manual_exit_unstable_seconds=_f("MANUAL_EXIT_UNSTABLE_SECONDS", 20.0),
+        manual_cheap_max=_f("MANUAL_CHEAP_MAX", 0.25),
+        manual_cheap_take_x=_f("MANUAL_CHEAP_TAKE_X", 3.0),
+        manual_cheap_arm_x=_f("MANUAL_CHEAP_ARM_X", 1.5),
+        manual_cheap_giveback=_f("MANUAL_CHEAP_GIVEBACK", 0.5),
         manual_exit_stop=_f("MANUAL_EXIT_STOP_LOSS", 0.30),
         manual_exit_stop_confirm=_f("MANUAL_EXIT_STOP_CONFIRM", 20.0),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),

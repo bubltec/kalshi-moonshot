@@ -61,9 +61,6 @@ def lane_table(store: Any, since: float, s: Settings | None = None) -> list[str]
         by[(r["lane"] or "moonshot", "LIVE" if live else "paper", (r["lane_ver"] or "?") if live else "")].append(r)
     out = [f"{'lane':24}{'mode':6}{'version':>10}{'bets':>5}{'settled':>8}{'as traded':>11}{'if held':>9}{'exits cost':>11}{'win%':>6}{'staked $':>10}{'P&L $':>9}"]
 
-    def first(rs: list) -> float:
-        return min(float(r["ts"]) for r in rs) if rs and "ts" in rs[0].keys() else 0.0
-
     for (lane, mode, ver), rs in sorted(by.items(), key=lambda kv: (kv[0][1] != "LIVE", kv[0][0], kv[0][2])):
         tag = (ver + (" (now)" if current.get(lane) == ver else "")) if ver else ""
         got = [(r, _roi(r)) for r in rs]

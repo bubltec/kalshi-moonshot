@@ -354,7 +354,22 @@ class ProfitWatcher:
             old.unstable_gain = s.manual_exit_unstable_gain
             old.unstable_range = s.manual_exit_unstable_range
             old.unstable_seconds = s.manual_exit_unstable_seconds
+            self._cheap_rules(s, old)
             fresh[key] = old
+
+    @staticmethod
+    def _cheap_rules(s: Settings, t: Target) -> None:
+        """A hand-placed buy of a cheap contract (MANUAL_CHEAP_MAX or under: a moonshot) is let ride. It has no stop and is never sold under the price paid; it sells at once at
+        MANUAL_CHEAP_TAKE_X times the price paid, and otherwise only to protect a profit: once the bid has been MANUAL_CHEAP_ARM_X times the price paid, when it gives back
+        MANUAL_CHEAP_GIVEBACK of the gain. Dearer positions keep the general hand-placed rules. Applied on every refresh, so adding to a position follows the new average price."""
+        if 0 < t.entry <= s.manual_cheap_max:
+            t.x = s.manual_cheap_take_x
+            t.trail_progress = 0.0  # arm on a multiple of the price paid, not on progress toward $1.00 (a 10c buy would otherwise wait for 46c)
+            t.trail_activate = s.manual_cheap_arm_x - 1.0
+            t.trail_giveback = s.manual_cheap_giveback
+        else:
+            t.x = 0.0
+            t.trail_activate = s.manual_exit_activate
 
     def _arm_stop(self, s: Settings, t: Target) -> None:
         """The bot's own stop-loss rules for a hand-placed position: a 15-minute market only when stop_loss_fast is on, any other
