@@ -1,0 +1,13 @@
+# Postgres 18 on Alpine plus the pgvector extension, built from source. Used by the `db` service in docker-compose.yml.
+# The 18 image keeps its data under /var/lib/postgresql/18/docker, so the volume is mounted at /var/lib/postgresql (see docker-compose.yml).
+# The package mirror is set explicitly because some networks cannot resolve Alpine's default CDN.
+FROM postgres:18-alpine
+ARG PGVECTOR_VERSION=v0.8.7
+ARG ALPINE_MIRROR=https://mirrors.edge.kernel.org/alpine
+RUN V=$(cut -d. -f1,2 /etc/alpine-release) \
+    && printf '%s\n' "${ALPINE_MIRROR}/v${V}/main" "${ALPINE_MIRROR}/v${V}/community" > /etc/apk/repositories \
+    && apk add --no-cache --virtual .build-deps git build-base clang21 llvm21-dev \
+    && git clone --depth 1 --branch ${PGVECTOR_VERSION} https://github.com/pgvector/pgvector.git /tmp/pgvector \
+    && cd /tmp/pgvector && make && make install \
+    && cd / && rm -rf /tmp/pgvector \
+    && apk del .build-deps

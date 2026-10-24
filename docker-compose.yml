@@ -25,7 +25,10 @@ services:
       - "host.docker.internal:host-gateway"
 
   db:
-    image: postgres:15-alpine  # the same major version as the pg_dump in the bot image
+    build:
+      context: .
+      dockerfile: Dockerfile.db  # Postgres 18 on Alpine, with the pgvector extension added
+    image: kalshi-moonshot-db  # the same major version as the pg_dump in the bot image (18)
     restart: unless-stopped
     stop_grace_period: 60s
     environment:
@@ -33,7 +36,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-moonshot}
       POSTGRES_DB: moonshot
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata18:/var/lib/postgresql  # the 18 image keeps its data in a versioned folder under here
     ports:
       - "127.0.0.1:5433:5432"  # this Mac only, for psql or a database browser; not exposed to the network
     shm_size: 256mb
@@ -56,4 +59,5 @@ services:
 volumes:
   ollama:
   tape:
-  pgdata:
+  pgdata18:
+  pgdata:  # the Postgres 15 data directory from before the upgrade; unused now, kept as the rollback until you delete it
