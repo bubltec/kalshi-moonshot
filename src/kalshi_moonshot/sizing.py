@@ -24,7 +24,7 @@ from .strategy import contracts_for_budget, fee_per_contract, order_fee
 
 @dataclass(frozen=True)
 class Sizing:
-    contracts: int
+    contracts: float
     cost_usd: float  # price plus fee for all contracts
     why: str
 
@@ -43,7 +43,7 @@ def kelly_share(p: float, ask: float) -> float:
 
 def size_bet(
     spec: LaneSpec, s: Settings, p: float, ask: float,
-    available: float, equity: float, lane_exposure: float, scale: float = 1.0,
+    available: float, equity: float, lane_exposure: float, scale: float = 1.0, fractional: bool | None = None,
 ) -> Sizing:
     """Contracts to buy now. contracts == 0 comes with the reason it was not sized."""
     full = kelly_share(p, ask)
@@ -60,8 +60,8 @@ def size_bet(
     if stake <= 0.0:
         room = cap - lane_exposure
         return Sizing(0, 0.0, "no room left" if room <= 0 else "no cash available")
-    count = contracts_for_budget(stake, ask)
-    if count <= 0:
+    count = contracts_for_budget(stake, ask, s.fractional_stake if fractional is None else fractional)
+    if count < 1:  # fractions only refine a bet of at least one contract
         return Sizing(0, 0.0, f"${stake:.2f} stake is under the cost of one contract")
     cost = ask * count + order_fee(ask, count)
     how = "fixed stake" if spec.fixed_stake else f"{full:.0%} Kelly, {s.kelly_fraction:.0%} of it"

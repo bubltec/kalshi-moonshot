@@ -131,6 +131,7 @@ class Settings:
     stop_model_seconds: float  # a stop on a 15-minute market first asks the model whether to hold, waiting at most this long (0 = never ask); a lane opts in with stop_model = true, hand-placed buys with MANUAL_EXIT_STOP_MODEL
     stop_model_recheck_seconds: float  # the model's first "hold" on a stop is soft: the stop looks again after this long, with the price then, and holds on for longer only if the model still says hold
     manual_stop_model: bool  # a hand-placed buy's stop asks the model before selling (same wait; no answer in time = sell)
+    fractional_stake: bool  # size a bet to the dollar stake in contracts to the hundredth (a $2 stake buys $2 worth), not the whole contracts that fit under it; falls back to whole contracts if Kalshi refuses a fractional order
     manual_exit_stop: float  # stop-loss on hand-placed positions: sell at this fraction under the price paid (0 = none); same hours rules as the bot's
     tape_dir: Path  # where tape.db lives: a Docker-managed volume in compose, so SQLite's locking is not shared across the Mac/VM boundary
     backup_keep_days: int  # nightly consistent copies of the databases kept in DATA_DIR/backups
@@ -400,6 +401,7 @@ def load() -> Settings:
         stop_model_seconds=max(0.0, _f("STOP_MODEL_SECONDS", 8.0)),
         stop_model_recheck_seconds=max(1.0, _f("STOP_MODEL_RECHECK_SECONDS", 15.0)),
         manual_stop_model=_b("MANUAL_EXIT_STOP_MODEL", False),
+        fractional_stake=_b("FRACTIONAL_STAKE", True),
         manual_exit_stop=_f("MANUAL_EXIT_STOP_LOSS", 0.30),
         manual_exit_stop_confirm=_f("MANUAL_EXIT_STOP_CONFIRM", 20.0),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),

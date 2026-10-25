@@ -25,7 +25,7 @@ def fee_per_contract(price: float) -> float:
     return FEE_RATE * price * (1.0 - price)
 
 
-def order_fee(price: float, count: int) -> float:
+def order_fee(price: float, count: float) -> float:
     return math.ceil(FEE_RATE * count * price * (1.0 - price) * 100.0 - 1e-9) / 100.0
 
 
@@ -416,10 +416,15 @@ def yes_ask_notional(book: dict[str, Any], limit: float) -> float:
     return total
 
 
-def contracts_for_budget(budget_usd: float, ask: float) -> int:
-    """How many contracts fit in the budget, counting the fee."""
+def contracts_for_budget(budget_usd: float, ask: float, fractional: bool = False) -> float:
+    """How many contracts fit in the budget, counting the fee. Whole contracts, or with `fractional` to the hundredth, so the whole budget is spent."""
     if ask <= 0:
         return 0
+    if fractional:
+        n = math.floor(budget_usd / (ask + fee_per_contract(ask)) * 100.0 + 1e-9) / 100.0
+        while n > 0 and ask * n + order_fee(ask, n) > budget_usd + 1e-9:
+            n = round(n - 0.01, 2)
+        return max(n, 0.0)
     n = int(budget_usd / (ask + fee_per_contract(ask)))
     while n > 0 and ask * n + order_fee(ask, n) > budget_usd:
         n -= 1

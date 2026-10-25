@@ -491,7 +491,7 @@ def evaluate(
         grown = scale_mod.for_lane(store, spec, balance.equity, s=s)
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
-            balance.open_by_lane.get(shot.lane, 0.0), grown.mult,
+            balance.open_by_lane.get(shot.lane, 0.0), grown.mult, fractional=s.fractional_stake and not _NO_FRACTION,
         )
         if grown.note:
             note = f"{grown.note}. {note}"
@@ -607,8 +607,11 @@ class Placed(NamedTuple):
     cost: float = 0.0  # dollars spent on them, fee included
 
 
+_NO_FRACTION: set[str] = set()  # filled once Kalshi has refused a fractional order that the whole-contract retry then got through: stop asking for fractions
+
+
 def place(
-    s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: int,
+    s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float,
     order_key: str | None = None, before_order: Callable[[], None] | None = None,
 ) -> Placed:
     """Send the order for `count` contracts (sized by sizing.py) if the book and risk gate agree."""
@@ -639,11 +642,22 @@ def place(
         return Placed(f"skipped: exchange {known} (where {shot.series} trades) has no cash; move funds there in the Kalshi app")
     if before_order:
         before_order()
+    buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
     try:
-        buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
-        resp = buy(shot.ticker, count, shot.ask, client_order_id=order_key)
+        try:
+            resp = buy(shot.ticker, count, shot.ask, client_order_id=order_key)
+        except KalshiRateLimited:
+            raise  # refused outright, so nothing was bought; the queue retries it later
+        except KalshiError as exc:
+            if count == int(count) or int(count) < 1 or "insufficient_balance" in str(exc):
+                raise
+            # A fractional order was refused: ask for the whole contracts that fit, and stop asking for fractions if that goes through.
+            log.warning("fractional order for %s refused (%s); retrying %d whole contracts", shot.ticker, exc, int(count))
+            count = int(count)
+            resp = buy(shot.ticker, count, shot.ask, client_order_id=order_key)
+            _NO_FRACTION.add("refused")
     except KalshiRateLimited:
-        raise  # refused outright, so nothing was bought; the queue retries it later
+        raise
     except KalshiError as exc:
         if "insufficient_balance" in str(exc):
             why_not = _explain_unfunded(client, shot, cost)
@@ -709,7 +723,7 @@ def exit_position(
             store.mark_exited(row["ticker"], bid, why, lane)
             _ask_flip(s, store, row, lane, why)
             return f"paper-sold {row['ticker']} @ {bid:.2f}. {why}"
-        count = int(store.net_contracts(row["ticker"], s.env))
+        count = round(store.net_contracts(row["ticker"], s.env), 2)
         if count <= 0:
             store.mark_exited(row["ticker"], bid, why, lane)
             return f"paper-sold {row['ticker']} @ {bid:.2f} (no live fill). {why}"
@@ -730,7 +744,7 @@ def exit_position(
             cost_usd=-(avg * filled - fee), fee_usd=fee, order_id=resp.get("order_id", ""),
             side="sell", contract=side,
         )
-        if store.net_contracts(row["ticker"], s.env) <= 0:
+        if store.net_contracts(row["ticker"], s.env) < 0.005:
             store.mark_exited(row["ticker"], avg if filled else bid, why, lane)
             _ask_flip(s, store, row, lane, why)
             return f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"

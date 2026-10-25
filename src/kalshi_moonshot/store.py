@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS decisions (
   exit_reason TEXT,
   cal_p REAL,                    -- probability after blending the estimate with our record
   side TEXT DEFAULT 'yes',       -- contract bought; for 'no', ask/bid/model_p are NO-side numbers
-  contracts INTEGER,             -- paper or real size sized by sizing.py (first bet per market only)
+  contracts REAL,                -- paper or real size sized by sizing.py (first bet per market only)
   stake_usd REAL                 -- cost incl. fee of those contracts
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_ticker ON decisions(ticker);
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS orders (
   ts REAL NOT NULL,
   ticker TEXT NOT NULL,
   env TEXT NOT NULL,
-  count INTEGER NOT NULL,
+  count REAL NOT NULL,
   price REAL NOT NULL,
   fill_count REAL NOT NULL,
   cost_usd REAL NOT NULL,        -- what actually filled, incl. fee
@@ -265,8 +265,19 @@ class Store:
             self.db.execute("DROP TABLE IF EXISTS grid_done")
             self.db.commit()
 
+    def _widen_counts(self) -> None:
+        """Contract counts used to be whole numbers (BIGINT on Postgres); a fractional stake needs them to hold hundredths. SQLite stores either as it comes."""
+        if not db.is_pg(self.db):
+            return
+        for table, col in (("decisions", "contracts"), ("orders", "count")):
+            got = self.db.execute("SELECT data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?", (table, col)).fetchone()
+            if got and got[0] == "bigint":
+                self.db.execute(f"ALTER TABLE {table} ALTER COLUMN {col} TYPE DOUBLE PRECISION")
+                self.db.commit()
+
     def _migrate(self) -> None:
         """Add columns to a database created before they existed."""
+        self._widen_counts()
         have = {r["name"] for r in self.db.execute("PRAGMA table_info(decisions)")}
         for name, ddl in (
             ("lane", "TEXT DEFAULT 'moonshot'"),
@@ -279,7 +290,7 @@ class Store:
             ("exit_reason", "TEXT"),
             ("cal_p", "REAL"),
             ("side", "TEXT DEFAULT 'yes'"),
-            ("contracts", "INTEGER"),
+            ("contracts", "REAL"),
             ("stake_usd", "REAL"),
             ("lane_ver", "TEXT"),
         ):

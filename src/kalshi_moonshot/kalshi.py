@@ -395,7 +395,7 @@ class KalshiClient:
         return self._request("GET", "/portfolio/positions", auth=True)
 
     def buy_yes_ioc(
-        self, ticker: str, count: int, price_dollars: float, client_order_id: str | None = None
+        self, ticker: str, count: float, price_dollars: float, client_order_id: str | None = None
     ) -> dict[str, Any]:
         """Buy YES, immediate-or-cancel: whatever does not fill right now is dropped,
         so no resting order is ever left on the book.
@@ -415,7 +415,7 @@ class KalshiClient:
         return self._request("POST", "/portfolio/events/orders", json=body, auth=True)
 
     def buy_no_ioc(
-        self, ticker: str, count: int, no_price: float, client_order_id: str | None = None
+        self, ticker: str, count: float, no_price: float, client_order_id: str | None = None
     ) -> dict[str, Any]:
         """Buy NO at no_price, immediate-or-cancel.
 
@@ -435,7 +435,7 @@ class KalshiClient:
         return _as_no(self._request("POST", "/portfolio/events/orders", json=body, auth=True))
 
     def sell_no_ioc(
-        self, ticker: str, count: int, no_price: float, client_order_id: str | None = None
+        self, ticker: str, count: float, no_price: float, client_order_id: str | None = None
     ) -> dict[str, Any]:
         """Sell NO we hold: buy YES back at 1 - no_price, reduce_only so it cannot open a YES."""
         body = {
@@ -451,7 +451,7 @@ class KalshiClient:
         return _as_no(self._request("POST", "/portfolio/events/orders", json=body, auth=True))
 
     def sell_yes_ioc(
-        self, ticker: str, count: int, price_dollars: float, client_order_id: str | None = None
+        self, ticker: str, count: float, price_dollars: float, client_order_id: str | None = None
     ) -> dict[str, Any]:
         """Sell YES, immediate-or-cancel. reduce_only so this cannot open a short if we
         already flattened the position. Same book as buy_yes_ioc: ask = sell YES.
