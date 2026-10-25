@@ -25,6 +25,7 @@ from .commodities import CommodityPricer, load_instruments
 from .config import Settings
 from .estimators import Estimate, Estimator, build_estimators
 from .kalshi import MARKET_PAGES, KalshiClient, KalshiError, KalshiRateLimited
+from .marketdata import shared_for
 from .lanes import (
     LADDER,
     LaneSpec,
@@ -748,7 +749,9 @@ def stop_loss_pass(
         if hours is None:
             continue
         try:
-            m = client.market(row["ticker"])
+            # A paper bet may be read from the shared market cache; a real one always asks Kalshi, because a sale is priced from what it reads.
+            with shared_for(client, 0.0 if row["mode"] == "trade" else s.discovery_eval_age, s.discovery_enabled):
+                m = client.market(row["ticker"])
         except KalshiError as exc:
             notes.append(f"stop {row['ticker']}: market lookup failed ({exc})")
             continue

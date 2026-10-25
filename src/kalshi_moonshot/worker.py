@@ -12,7 +12,6 @@ Stop it at any time. Finished work stays finished; running work is picked up aga
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import time
 import uuid
@@ -27,7 +26,7 @@ from .config import Settings
 from .estimators import build_estimators
 from .jobs import PLACING, Job, Jobs
 from .kalshi import KalshiClient, KalshiRateLimited
-from .marketdata import Discovery
+from .marketdata import Discovery, shared_for
 from .lanes import lane_specs, spec_for, tiered, tiered_lanes
 from .search import NewsSearch
 from .store import Store
@@ -247,9 +246,7 @@ class Worker:
 
     def _shared(self, max_age: float) -> Any:
         """Reads of listings and markets inside this block may come from the shared cache (a no-op when discovery is off or the client has no cache)."""
-        if max_age > 0 and self.s.discovery_enabled and hasattr(self.client, "shared"):
-            return self.client.shared(max_age)
-        return contextlib.nullcontext()
+        return shared_for(self.client, max_age, self.s.discovery_enabled)
 
     def stop(self) -> None:
         self.stopping = True

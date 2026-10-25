@@ -11,6 +11,7 @@ Rows are handed out as copies: callers add fields to them and must not change wh
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 import time
@@ -20,6 +21,13 @@ from typing import Any
 log = logging.getLogger("moonshot")
 
 QUOTE_STALE = 600.0  # a derived row older than this is never used on the strength of a fresh quote alone
+
+
+def shared_for(client: Any, max_age: float, enabled: bool = True) -> Any:
+    """`client.shared(max_age)` when the client has a cache, discovery is on and max_age is positive; otherwise a block that changes nothing."""
+    if enabled and max_age > 0 and hasattr(client, "shared"):
+        return client.shared(max_age)
+    return contextlib.nullcontext()
 
 
 class MarketCache:
@@ -146,8 +154,12 @@ class Discovery:
         """List every wanted series once. Returns how many succeeded."""
         s = self.get_settings()
         client = self.get_client()
+        wanted = sorted(self.wanted(s))
+        # Spread the requests over the cycle instead of firing them back to back: a burst of listings would hold the whole request budget for seconds and every other
+        # caller (a live lane's order, a stop) would queue behind it.
+        gap = float(getattr(s, "discovery_seconds", 45.0)) * 0.8 / max(1, len(wanted))
         done = 0
-        for series in sorted(self.wanted(s)):
+        for series in wanted:
             if self._stop.is_set():
                 break
             try:
@@ -155,6 +167,7 @@ class Discovery:
                 done += 1
             except Exception as exc:
                 log.debug("discovery: could not list %s (%s)", series, exc)
+            self._stop.wait(gap)
         self.last_cycle, self.last_count = time.time(), done
         return done
 
