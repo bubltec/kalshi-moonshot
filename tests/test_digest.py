@@ -72,3 +72,25 @@ def test_a_live_lane_is_split_by_version_so_old_settings_do_not_hide_in_the_new_
     bet(store, "C3", "crypto_favorite", 0.45, "yes", "yes", mode="trade", ver="bbbb2222")
     lines = [line for line in digest.lane_table(store, time.time() - 3600) if line.startswith("crypto_favorite")]
     assert len(lines) == 2 and any("aaaa1111" in line and line.split()[3] == "2" for line in lines) and any("bbbb2222" in line for line in lines)
+
+
+def test_the_queue_report_shows_busy_time_waits_and_expired_live_evaluations(tmp_path, monkeypatch):
+    monkeypatch.setenv("LIVE_LANES", "fx_favorite")
+    store = Store(tmp_path / "m.db", frozenset())
+    now = time.time()
+
+    def job(kind, status, start, run_at, prio, key=None):
+        store.db.execute(
+            "INSERT INTO jobs (kind, payload, status, run_at, created_ts, started_ts, finished_ts, attempts, max_attempts, priority, dedupe_key) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (kind, "{}", status, run_at, run_at, start, None if start is None else start + 2.0, 1, 3, prio, key),
+        )
+
+    job("lane_review:fx_favorite", "done", now - 100, now - 110, 20)   # waited 10 s
+    job("lane_review:mid_trail", "done", now - 100, now - 190, 10)     # waited 90 s
+    job("lane_scope:mid_trail", "done", now - 300, now - 310, 10)
+    job("evaluate", "expired", None, now - 50, 20, "x:fx_favorite:KXEURUSD15M-A")
+    job("evaluate", "done", now - 40, now - 45, 20, "x:fx_favorite:KXEURUSD15M-B")
+    store.db.commit()
+    text = "\n".join(digest.queue_health(config.load(), store, now))
+    assert "live lanes (priority > 10) 10s" in text and "paper lanes 90s" in text
+    assert "fx_favorite: 2 evaluations in 24 h, 1 expired unprocessed" in text and "lane_review" in text.split("\n")[0]

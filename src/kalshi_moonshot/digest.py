@@ -143,6 +143,28 @@ def health(s: Settings, store: Any, tape_db: Any, now: float) -> list[str]:
     return out
 
 
+def queue_health(s: Settings, store: Any, now: float) -> list[str]:
+    """The bot has one worker that runs one job at a time. If it is saturated, a live lane's review waits and its evaluations expire unprocessed (a narrow price band is then missed)."""
+    rows = store.db.execute("SELECT kind, status, started_ts, finished_ts, run_at, created_ts, priority, dedupe_key FROM jobs WHERE created_ts >= ?", (now - 3600,)).fetchall()
+    busy: dict[str, float] = defaultdict(float)
+    waits: dict[str, list[float]] = {"live lanes (priority > 10)": [], "paper lanes": []}
+    for r in rows:
+        kind = r["kind"].split(":")[0]
+        if r["started_ts"] and r["finished_ts"]:
+            busy[kind] += float(r["finished_ts"]) - float(r["started_ts"])
+        if kind == "lane_review" and r["started_ts"]:
+            waits["live lanes (priority > 10)" if (r["priority"] or 0) > 10 else "paper lanes"].append(float(r["started_ts"]) - float(r["run_at"] or r["created_ts"]))
+    total = sum(busy.values())
+    out = [f"worker busy {total / 36:.0f}% of the last hour: " + ", ".join(f"{k} {v / 60:.0f} min" for k, v in sorted(busy.items(), key=lambda kv: -kv[1]))]
+    out.append("average wait of a lane review after it was due: " + "; ".join(f"{k} {sum(v) / len(v):.0f}s (longest {max(v):.0f}s)" for k, v in waits.items() if v))
+    live = [n for n in sorted(s.live_lanes or []) if n]
+    ev = store.db.execute("SELECT status, dedupe_key FROM jobs WHERE kind = 'evaluate' AND created_ts >= ?", (now - 86400,)).fetchall()
+    for lane in live:
+        mine = [e for e in ev if lane in (e["dedupe_key"] or "")]
+        out.append(f"  {lane}: {len(mine)} evaluations in 24 h, {sum(e['status'] == 'expired' for e in mine)} expired unprocessed")
+    return out
+
+
 def market_gaps(store: Any, since: float, now: float) -> list[str]:
     """Settled BTC 15-minute windows per UTC day against the 96 a day Kalshi normally lists: a short day means Kalshi had a gap, or our history did."""
     rows = store.db.execute("SELECT close_ts FROM windows WHERE series = 'KXBTC15M' AND close_ts >= ?", (since,)).fetchall()
@@ -167,6 +189,7 @@ def report(s: Settings, store: Any, tape_db: Any, days: float = 7, now: float | 
     out += ["", "== WHAT THE EXITS DID", *exit_table(store, since)]
     out += ["", "== CALIBRATION (all time, each lane scored on its own first rating of each market)", *calibration_table(store, s)]
     out += ["", "== DATA AND INFRASTRUCTURE", *health(s, store, tape_db, now), *market_gaps(store, since, now)]
+    out += ["", "== JOB QUEUE (saturation makes live lanes miss entries)", *queue_health(s, store, now)]
     out += ["", "== OPEN ITEMS NOTED BETWEEN REVIEWS", *notes(s)]
     recent = datetime.fromtimestamp(now, UTC) - timedelta(days=days)
     out += ["", f"(report built {datetime.fromtimestamp(now, UTC):%Y-%m-%d %H:%M} UTC; period starts {recent:%Y-%m-%d})"]
