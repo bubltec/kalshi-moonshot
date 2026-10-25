@@ -155,7 +155,7 @@ class Worker:
             return
         db_path = self.s.db_path
         w = watcher.ProfitWatcher(
-            lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions), hold_value=self._hold_value, spot_side=self._spot_side
+            lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions), hold_value=self._hold_value, spot_side=self._spot_side, stop_model=self._stop_model
         )
         self.recorder.listeners.append(w.on_event)
         w.follow = self.recorder.follow
@@ -193,6 +193,18 @@ class Worker:
         )
         p_yes, _ = self.quant.estimate(self.client, shot, self.s)
         return side_prob(p_yes, side)
+
+    def _stop_model(self, ticker: str, side: str, bid: float, close_time: str) -> float | None:
+        """The model's chance that `side` of this 15-minute window pays, asked at the moment a stop wants to sell (estimators.LLMShapeEstimator.hold_chance)."""
+        from . import lanes
+        from .strategy import LongShot
+
+        shape = self.estimators().get(lanes.SHAPE)
+        if shape is None or not hasattr(shape, "hold_chance"):
+            return None
+        shot = LongShot(ticker=ticker, title=str(self.client.market(ticker).get("title", "")), rules="", bid=bid, ask=min(0.99, bid + 0.02), volume=0.0,
+                        close_time=close_time, hours_to_close=0.0, series=ticker.split("-")[0], side=side)
+        return shape.hold_chance(self.s, shot, self.s.stop_model_seconds)
 
     def _hold_value(self, row, store: Store) -> float | None:
         """What the model says a position is worth if held to settlement: its calibrated chance of paying (ladder lanes only)."""

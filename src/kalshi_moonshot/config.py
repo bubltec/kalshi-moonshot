@@ -128,6 +128,8 @@ class Settings:
     estimate_share_seconds: float  # one lane's estimate of a market (model or ladder price) is reused by every other lane asking within this many seconds; 0 = each lane asks for itself
     flip_after_stop: bool  # after a stop-loss sells a position, ask the model whether the OTHER side is worth buying (paper lane stop_flip; never trades)
     flip_wait_seconds: float  # how long to wait for the model's answer before giving up on a flip
+    stop_model_seconds: float  # a stop on a 15-minute market first asks the model whether to hold, waiting at most this long (0 = never ask); a lane opts in with stop_model = true, hand-placed buys with MANUAL_EXIT_STOP_MODEL
+    manual_stop_model: bool  # a hand-placed buy's stop asks the model before selling (same wait; no answer in time = sell)
     manual_exit_stop: float  # stop-loss on hand-placed positions: sell at this fraction under the price paid (0 = none); same hours rules as the bot's
     tape_dir: Path  # where tape.db lives: a Docker-managed volume in compose, so SQLite's locking is not shared across the Mac/VM boundary
     backup_keep_days: int  # nightly consistent copies of the databases kept in DATA_DIR/backups
@@ -394,6 +396,8 @@ def load() -> Settings:
         estimate_share_seconds=max(0.0, _f("ESTIMATE_SHARE_SECONDS", 60.0)),
         flip_after_stop=_b("FLIP_AFTER_STOP", True),
         flip_wait_seconds=max(30.0, _f("FLIP_WAIT_SECONDS", 240.0)),
+        stop_model_seconds=max(0.0, _f("STOP_MODEL_SECONDS", 8.0)),
+        manual_stop_model=_b("MANUAL_EXIT_STOP_MODEL", False),
         manual_exit_stop=_f("MANUAL_EXIT_STOP_LOSS", 0.30),
         manual_exit_stop_confirm=_f("MANUAL_EXIT_STOP_CONFIRM", 20.0),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),

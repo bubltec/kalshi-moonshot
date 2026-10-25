@@ -81,6 +81,7 @@ class LaneSpec:
     stop_loss_at: float = 0.0  # this lane's own stop, as a fraction under the price paid (0 = the global STOP_LOSS_DROP)
     stop_confirm_seconds: float = 0.0  # the bid must stay past the stop line this long before the stop sells (0 = at once)
     stop_guard: bool = False  # True = the model's opinion may hold the stop back; the default is a hard stop that sells whatever the model thinks it is worth
+    stop_model: bool = False  # a 15-minute lane's stop first asks the model about the window's shape and holds only when it values the position above the sale (STOP_MODEL_SECONDS wait; no answer = sell)
     stop_loss: bool = True  # False = no stop-loss for this lane (a $1 ticket's loss is already capped; its spread alone can look like a 30% drop)
     take_profit_x: float = 0.0  # sell when the bid reaches this multiple of the price paid (0 = off); watched live on the socket
     take_profit_at: float = 0.0  # sell when the bid reaches this price (0 = off)

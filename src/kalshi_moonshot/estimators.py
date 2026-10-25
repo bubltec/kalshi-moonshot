@@ -181,6 +181,22 @@ class LLMShapeEstimator:
         bid, ask = (shot.bid, shot.ask) if shot.side == "yes" else (1.0 - shot.ask, 1.0 - shot.bid)
         return shape.build_prompt(shot.title, minute, bid, ask, current, neighbors, pool), done
 
+    def hold_chance(self, s: Settings, shot: LongShot, timeout: float = 8.0) -> float | None:
+        """The model's chance that the side in `shot` pays, asked now and waited for up to `timeout` seconds; None when it cannot say in time (a stop then sells)."""
+        try:
+            built = self._prompt(shot, s, time.time())
+        except Exception:
+            return None
+        if built is None:
+            return None
+        fut: Future = self._exec.submit(self.model.ask, built[0], 80, shot.ticker.split("-")[0])
+        try:
+            p, _ = fut.result(timeout=timeout)
+        except Exception:
+            fut.cancel()
+            return None
+        return side_prob(p, shot.side)
+
     # -- the estimator interface --
     def screen(self, shots, markets, spec, s, now):
         now_ts = now.timestamp()
