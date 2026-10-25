@@ -116,6 +116,7 @@ class ProfitWatcher:
         spot_side: Callable[[str, str], float | None] | None = None,
     ):
         self.spot_side = spot_side  # (ticker, side) -> the chance, from spot against the strike alone, that this side pays; None if unknown
+        self._soft_holds: dict[tuple[str, str], float] = {}  # (ticker, lane) -> when the model first said hold on a stop (not yet confirmed)
         self.stop_model = stop_model  # (ticker, side, bid, close time) -> the model's chance this side pays, from the window's shape; None = cannot say in time
         self.hold_value = hold_value  # (open bet, store) -> the model's calibrated chance this position pays, or None if unknown
         self.get_settings = get_settings
@@ -411,20 +412,30 @@ class ProfitWatcher:
             held = self.stop_model(ticker, side, bid, close_time)
         except Exception:
             held = None
-        if held is None or (entry > 0.5 and held <= 0.5):
+        key = (ticker, lane)
+        if held is None or (entry > 0.5 and held <= 0.5) or held <= bid - fee_per_contract(bid) + HOLD_MARGIN:
+            self._soft_holds.pop(key, None)
             return False
-        if held > bid - fee_per_contract(bid) + HOLD_MARGIN:
-            log.info("watcher: stop on %s held: the model values it at %.2f against a bid of %.2f", ticker, held, bid)
+        # The first "hold" is soft: it only buys a short wait, after which the stop fires again and the model is asked again with the price then. Only a second
+        # "hold" in a row (asked at least the recheck wait later) is firm and lets the stop rest for the usual back-off.
+        now, recheck = time.time(), s.stop_model_recheck_seconds
+        first = self._soft_holds.get(key)
+        if first is None or now - first > 4 * recheck:
+            self._soft_holds[key] = now
+            log.info("watcher: stop on %s softly held: the model values it at %.2f against a bid of %.2f; asking again in %.0fs", ticker, held, bid, recheck)
+            self._back_off(ticker, lane, recheck)
+        else:
+            self._soft_holds[key] = now
+            log.info("watcher: stop on %s held: the model still values it at %.2f against a bid of %.2f", ticker, held, bid)
             self._back_off(ticker, lane)
-            return True
-        return False
+        return True
 
-    def _back_off(self, ticker: str, lane: str) -> None:
+    def _back_off(self, ticker: str, lane: str, seconds: float = RETRY_AFTER) -> None:
         """A declined sale is not re-checked for RETRY_AFTER seconds, so a position sitting under its price costs no API calls."""
         with self._lock:
             t = self.targets.get((ticker, lane))
         if t is not None:
-            t.retry_after = time.time() + RETRY_AFTER
+            t.retry_after = time.time() + seconds
 
     def _spot_holds(self, t: Target | None, ticker: str, side: str, why: str) -> bool:
         """A crash exit protects a profit from a collapse. While spot is still comfortably on the winning side of the strike (more than

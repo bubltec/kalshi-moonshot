@@ -71,3 +71,20 @@ def test_hold_chance_returns_the_chance_the_side_pays_and_none_when_the_model_is
         est._prompt = lambda shot, s, now: ("prompt", 5)
         got = est.hold_chance(s, shot, timeout=0.2)
         assert (got is None) if want is None else abs(got - want) < 1e-9
+
+
+def test_the_first_hold_is_soft_and_only_a_second_hold_in_a_row_is_firm(tmp_path, monkeypatch):
+    s, w, _ = make(tmp_path, monkeypatch, 0.60, STOP_MODEL_RECHECK_SECONDS="15")
+    waits = []
+    w._back_off = lambda ticker, lane, seconds=None: waits.append(seconds)
+    args = (s, "KXBTC15M-A-00", "x", "yes", 0.45, 0.30, "")
+    assert w._model_holds_stop(*args) and waits == [15.0]  # soft: look again soon
+    assert w._model_holds_stop(*args) and waits == [15.0, None]  # confirmed: the usual rest
+
+
+def test_a_sell_answer_after_a_soft_hold_sells_and_forgets_the_hold(tmp_path, monkeypatch):
+    s, w, _ = make(tmp_path, monkeypatch, 0.60)
+    args = (s, "KXBTC15M-A-00", "x", "yes", 0.45, 0.30, "")
+    assert w._model_holds_stop(*args)
+    w.stop_model = lambda *a: 0.20  # the price has moved on and the model changes its mind
+    assert not w._model_holds_stop(*args) and not w._soft_holds
