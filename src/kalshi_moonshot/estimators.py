@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -51,6 +52,42 @@ class Estimator(Protocol):
     def screen(
         self, shots: list[LongShot], markets: list[dict], spec: LaneSpec, s: Settings, now: datetime
     ) -> list[LongShot]: ...
+
+
+class EstimateShare:
+    """One estimate per (estimator, market), reused by every lane that asks within `ttl` seconds.
+
+    An estimate is the chance the market resolves YES. It does not depend on which lane asks, so a hundred lanes watching one market need one model call or one ladder
+    pricing, not a hundred. The market-price estimator is never shared (its answer is the lane's own asked price), failures are never kept, and the order a live lane
+    places still reads the real market afterwards, so a shared estimate never stands in for a price.
+    """
+
+    UNSHARED = frozenset({"market"})
+
+    def __init__(self, clock: Callable[[], float] = time.time):
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._got: dict[tuple[str, str], tuple[float, Estimate]] = {}
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, name: str, shot: LongShot, ttl: float, compute: Callable[[], Estimate]) -> Estimate:
+        if ttl <= 0 or name in self.UNSHARED:
+            return compute()
+        key = (name, shot.ticker)
+        with self._lock:
+            hit = self._got.get(key)
+            if hit and self._clock() - hit[0] <= ttl:
+                self.hits += 1
+                return hit[1]
+            self.misses += 1
+        got = compute()
+        with self._lock:
+            self._got[key] = (self._clock(), got)
+            if len(self._got) > 2000:  # drop what has aged out; a few thousand markets at most are ever live
+                cutoff = self._clock() - ttl
+                self._got = {k: v for k, v in self._got.items() if v[0] >= cutoff}
+        return got
 
 
 class LLMEstimator:

@@ -125,6 +125,7 @@ class Settings:
     discovery_seconds: float  # how often that thread lists each series again
     discovery_max_age: float  # a lane's scope and review accept cached listings this young (the live quote stream keeps their prices current)
     discovery_eval_age: float  # a PAPER lane's evaluation accepts a cached market this young; a live lane's evaluation always asks Kalshi
+    estimate_share_seconds: float  # one lane's estimate of a market (model or ladder price) is reused by every other lane asking within this many seconds; 0 = each lane asks for itself
     manual_exit_stop: float  # stop-loss on hand-placed positions: sell at this fraction under the price paid (0 = none); same hours rules as the bot's
     tape_dir: Path  # where tape.db lives: a Docker-managed volume in compose, so SQLite's locking is not shared across the Mac/VM boundary
     backup_keep_days: int  # nightly consistent copies of the databases kept in DATA_DIR/backups
@@ -388,6 +389,7 @@ def load() -> Settings:
         discovery_seconds=max(5.0, _f("DISCOVERY_SECONDS", 45.0)),
         discovery_max_age=max(0.0, _f("DISCOVERY_MAX_AGE", 60.0)),
         discovery_eval_age=max(0.0, _f("DISCOVERY_EVAL_AGE", 10.0)),
+        estimate_share_seconds=max(0.0, _f("ESTIMATE_SHARE_SECONDS", 60.0)),
         manual_exit_stop=_f("MANUAL_EXIT_STOP_LOSS", 0.30),
         manual_exit_stop_confirm=_f("MANUAL_EXIT_STOP_CONFIRM", 20.0),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),

@@ -25,7 +25,7 @@ from typing import Any
 from . import runner
 from .commodities import CommodityPricer
 from .config import Settings
-from .estimators import build_estimators
+from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
 from .kalshi import KalshiClient, KalshiRateLimited
 from .marketdata import Discovery, shared_for
@@ -90,6 +90,7 @@ class Worker:
         self.discovery: Any = None
         self.stopping = False
         self._last_cleanup = 0.0
+        self.share = EstimateShare()  # one estimate per market, reused by every lane that asks soon after
         self._split = False  # True once run_forever has started the maintenance thread: the main loop then leaves those jobs to it
 
     # ---- lifecycle ----
@@ -434,7 +435,7 @@ class Worker:
         order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
         out = runner.evaluate(
             s, self.client, self.est, self.store, shot, self.searcher,
-            quant=self.quant, estimators=self.estimators(),
+            quant=self.quant, estimators=self.estimators(), share=self.share,
             raise_model_errors=not job.last_attempt,
             order_key=order_key,
             before_order=lambda: self.jobs.checkpoint(job.id, PLACING),

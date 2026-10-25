@@ -23,7 +23,7 @@ from . import scale as scale_mod
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
-from .estimators import Estimate, Estimator, build_estimators
+from .estimators import Estimate, EstimateShare, Estimator, build_estimators
 from .kalshi import MARKET_PAGES, KalshiClient, KalshiError, KalshiRateLimited
 from .marketdata import shared_for
 from .lanes import (
@@ -423,6 +423,7 @@ def evaluate(
     raise_model_errors: bool = False,
     order_key: str | None = None,
     before_order: Callable[[], None] | None = None,
+    share: EstimateShare | None = None,
 ) -> Outcome:
     """Rate one market, log the decision, and place an order if allowed.
 
@@ -432,6 +433,7 @@ def evaluate(
     raise_model_errors: let an estimator failure propagate (so a queued job can retry it) instead
     of logging a "model error" pass. order_key makes the order id stable across retries.
     before_order runs just before an order is sent, so the caller can mark that moment.
+    share: reuse another lane's recent estimate of this market instead of asking again (estimators.EstimateShare).
     """
     spec = spec_for(s, shot.lane)
     estimators = estimators or build_estimators(est, store, searcher, quant)
@@ -439,7 +441,10 @@ def evaluate(
         estimator = estimators.get(spec.estimator)
         if estimator is None:
             raise RuntimeError(f"no {spec.estimator!r} estimator available for lane {spec.name}")
-        got: Estimate = estimator.estimate(client, s, shot)
+        if share is not None:
+            got: Estimate = share.get(spec.estimator, shot, s.estimate_share_seconds, lambda: estimator.estimate(client, s, shot))
+        else:
+            got = estimator.estimate(client, s, shot)
     except Exception as exc:  # model down, bad JSON, timeout: skip, never trade blind
         if raise_model_errors:
             raise
