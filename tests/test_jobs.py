@@ -108,3 +108,17 @@ def test_retry_dead_requeues_ordinary_failures(tmp_path):
     j.fail(j.claim(), "x")
     assert j.retry_dead() == (1, 0)
     assert j.claim().attempts == 1
+
+
+def test_claim_can_be_limited_to_some_kinds_or_exclude_others(tmp_path):
+    from kalshi_moonshot.store import Store
+
+    j = Jobs(Store(tmp_path / "m.db"))
+    j.enqueue("history", {}, run_at=1.0)
+    j.enqueue("evaluate", {}, run_at=2.0)
+    j.enqueue("resolve", {}, run_at=3.0)
+    assert j.claim(10.0, exclude={"history", "resolve"}).kind == "evaluate"
+    assert j.claim(10.0, exclude={"history", "resolve"}) is None  # only maintenance is left, and it is excluded
+    assert j.claim(10.0, kinds={"resolve", "history"}).kind == "history"  # the oldest of the kinds asked for
+    assert j.claim(10.0, kinds={"resolve"}).kind == "resolve"
+    assert j.claim(10.0) is None

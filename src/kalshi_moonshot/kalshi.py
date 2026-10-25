@@ -116,6 +116,16 @@ class KalshiClient:
     def _age(self) -> float:
         return float(getattr(self._tl, "max_age", 0.0))
 
+    @contextmanager
+    def background(self) -> Iterator[None]:
+        """Inside this block this thread's requests are throttled to a third of the budget, so a long maintenance job (history, resolving) cannot crowd out a live order."""
+        prev = getattr(self._tl, "bg", False)
+        self._tl.bg = True
+        try:
+            yield
+        finally:
+            self._tl.bg = prev
+
     def ws_headers(self, url: str) -> dict[str, str]:
         """Signed headers for opening an authenticated WebSocket (a read-only data stream)."""
         if not self.authed:
@@ -165,6 +175,8 @@ class KalshiClient:
         last_wait = 0.0
         for attempt in range(RETRIES):
             headers = signed_headers(self._key, self.key_id, method, url) if auth else {}
+            if getattr(self._tl, "bg", False):
+                time.sleep(2 * self._gap)  # outside the pacing lock: the slots it leaves free go to the threads that are not in the background
             self._pace()
             try:
                 resp = self._http.request(method, url, params=params, json=json, headers=headers)

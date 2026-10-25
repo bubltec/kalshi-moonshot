@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import random
 import time
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any
 
@@ -101,17 +102,23 @@ class Jobs:
             self.enqueue(kind, run_at=now, priority=priority)
 
     # ---- consuming ----
-    def claim(self, now: float | None = None) -> Job | None:
-        """Take the next due job. Expired ones are dropped on the way."""
+    def claim(self, now: float | None = None, *, kinds: Collection[str] | None = None, exclude: Collection[str] | None = None) -> Job | None:
+        """Take the next due job, only of these kinds if given and never of the excluded ones. Expired ones are dropped on the way."""
         now = time.time() if now is None else now
         self.db.execute(
             """UPDATE jobs SET status='expired', finished_ts=?
                WHERE status='pending' AND expires_ts IS NOT NULL AND expires_ts<?""",
             (now, now),
         )
+        cond = ""
+        args: list[Any] = [now]
+        for names, word in ((kinds, "IN"), (exclude, "NOT IN")):
+            if names:
+                cond += f" AND kind {word} ({','.join('?' for _ in names)})"
+                args += sorted(names)
         row = self.db.execute(
-            "SELECT * FROM jobs WHERE status='pending' AND run_at<=? ORDER BY priority DESC, run_at, id LIMIT 1",
-            (now,),
+            f"SELECT * FROM jobs WHERE status='pending' AND run_at<=?{cond} ORDER BY priority DESC, run_at, id LIMIT 1",
+            args,
         ).fetchone()
         if row is None:
             self.db.commit()

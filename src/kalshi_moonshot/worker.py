@@ -12,7 +12,9 @@ Stop it at any time. Finished work stays finished; running work is picked up aga
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import threading
 import time
 import uuid
 from collections.abc import Callable
@@ -33,6 +35,9 @@ from .store import Store
 from .strategy import LongShot, ask_trend, falling_reason, lane_reject_reason, side_view
 
 log = logging.getLogger("moonshot")
+# Jobs that are long and not needed to trade (downloading history, resolving settled markets, syncing fills, the broad scan, the hourly review). They run on their own thread,
+# so a 40-second job can never hold up a live lane's review or evaluation, and their requests are throttled to a third of the budget.
+MAINTENANCE = frozenset({"scan", "resolve", "review", "history", "account_sync", "patterns"})
 HISTORY_PRIORITY = -10  # runs only when no trading job is waiting (a running job is never interrupted)
 
 
@@ -85,6 +90,7 @@ class Worker:
         self.discovery: Any = None
         self.stopping = False
         self._last_cleanup = 0.0
+        self._split = False  # True once run_forever has started the maintenance thread: the main loop then leaves those jobs to it
 
     # ---- lifecycle ----
     def start(self) -> None:
@@ -262,16 +268,37 @@ class Worker:
     def run_forever(self) -> None:
         self.start()
         log.info("edits to .env apply on the next job; no rebuild. Stop with ctrl-c or `docker compose stop`.")
+        self._split = True
+        threading.Thread(target=self._maintenance_loop, name="maintenance", daemon=True).start()
         while not self.stopping:
             if not self.step():
                 time.sleep(1.0)
         log.info("stopped cleanly")
 
+    def _maintenance_once(self) -> bool:
+        """Claim and run one due maintenance job, throttled. Returns False when none was due."""
+        job = self.jobs.claim(kinds=MAINTENANCE)
+        if job is None:
+            return False
+        with self.client.background() if hasattr(self.client, "background") else contextlib.nullcontext():
+            self.run_job(job)
+        return True
+
+    def _maintenance_loop(self) -> None:
+        while not self.stopping:
+            try:
+                busy = self._maintenance_once()
+            except Exception:
+                log.exception("maintenance loop")
+                busy = False
+            if not busy:
+                time.sleep(1.0)
+
     def step(self) -> bool:
         """Claim and run one due job. Returns False when nothing was due."""
         self.refresh()
         self._housekeeping()
-        job = self.jobs.claim()
+        job = self.jobs.claim(exclude=MAINTENANCE if self._split else None)
         if job is None:
             return False
         self.run_job(job)
