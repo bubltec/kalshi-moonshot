@@ -369,6 +369,7 @@ class ProfitWatcher:
             t.trail_progress = 0.0  # arm on a multiple of the price paid, not on progress toward $1.00 (a 10c buy would otherwise wait for 46c)
             t.trail_activate = s.manual_cheap_arm_x - 1.0
             t.trail_giveback = s.manual_cheap_giveback
+            t.stop_drop, t.stop_since = 0.0, None  # no stop: a cheap buy is a lottery ticket, and its spread alone can look like a 30% drop
         else:
             t.x = 0.0
             t.trail_activate = s.manual_exit_activate

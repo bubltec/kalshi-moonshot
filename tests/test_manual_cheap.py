@@ -72,3 +72,14 @@ def test_a_dearer_position_keeps_the_general_hand_placed_rules_and_follows_the_a
 def test_the_defaults_match_what_the_user_asked_for():
     s = settings()
     assert (s.manual_cheap_max, s.manual_cheap_take_x, s.manual_cheap_arm_x, s.manual_cheap_giveback) == (0.25, 3.0, 1.5, 0.5)
+
+
+def test_a_cheap_buy_has_no_stop_even_when_the_hand_placed_stop_is_on_but_a_dearer_one_keeps_it():
+    s = settings()
+    cheap = watcher.Target("KXBTCD-26OCT2415-T80000", "manual", "yes", 0.10, 0.0, 0.0, 0.0, 30.0, 0.10, s.manual_exit_activate, s.manual_exit_drop, 10.0, s.manual_exit_fast, 3.0, 0.10)
+    dear = watcher.Target("KXBTCD-26OCT2415-T80000", "manual", "yes", 0.50, 0.0, 0.0, 0.0, 30.0, 0.10, s.manual_exit_activate, s.manual_exit_drop, 10.0, s.manual_exit_fast, 3.0, 0.50)
+    for t in (cheap, dear):
+        t.stop_drop, t.stop_since = 0.30, 123.0  # as _arm_stop leaves it with MANUAL_EXIT_STOP_LOSS=0.30
+        watcher.ProfitWatcher._cheap_rules(s, t)
+    assert cheap.stop_drop == 0.0 and cheap.stop_since is None
+    assert dear.stop_drop == 0.30 and dear.stop_since == 123.0
