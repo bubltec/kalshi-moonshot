@@ -206,6 +206,18 @@ CREATE TABLE IF NOT EXISTS candles (
   PRIMARY KEY (ticker, end_ts)
 );
 
+CREATE TABLE IF NOT EXISTS flips (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  ticker TEXT NOT NULL,
+  stopped_side TEXT NOT NULL,    -- the side that was sold at a stop; the flip considers the other one
+  lane TEXT,                     -- the lane that held it ('manual' for a hand-placed buy)
+  stake_usd REAL,
+  status TEXT NOT NULL DEFAULT 'pending',  -- pending | done | expired
+  note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_flips ON flips(status, ts);
+
 CREATE TABLE IF NOT EXISTS watchlist (
   lane TEXT NOT NULL,
   event_ticker TEXT NOT NULL,
@@ -583,6 +595,21 @@ class Store:
 
     def lane_versions(self, lane: str) -> list[db.Row]:
         return self.db.execute("SELECT ver, first_ts, settings FROM lane_versions WHERE lane=? ORDER BY first_ts", (lane,)).fetchall()
+
+    def add_flip(self, ticker: str, stopped_side: str, lane: str, stake_usd: float, ts: float | None = None) -> bool:
+        """Ask for a second look at the other side of a market a stop just sold. One request per market and side."""
+        if self.db.execute("SELECT 1 FROM flips WHERE ticker=? AND stopped_side=?", (ticker, stopped_side)).fetchone():
+            return False
+        self.db.execute("INSERT INTO flips (ts, ticker, stopped_side, lane, stake_usd) VALUES (?,?,?,?,?)", (time.time() if ts is None else ts, ticker, stopped_side, lane, stake_usd))
+        self.db.commit()
+        return True
+
+    def pending_flips(self) -> list[db.Row]:
+        return self.db.execute("SELECT * FROM flips WHERE status='pending' ORDER BY ts").fetchall()
+
+    def finish_flip(self, flip_id: int, status: str, note: str = "") -> None:
+        self.db.execute("UPDATE flips SET status=?, note=? WHERE id=?", (status, note[:300], flip_id))
+        self.db.commit()
 
     def exited_within(self, ticker: str, lane: str, seconds: float, now: float | None = None) -> float:
         """Seconds still to wait if this lane sold this market less than `seconds` ago, else 0."""

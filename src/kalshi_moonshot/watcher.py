@@ -527,6 +527,11 @@ class ProfitWatcher:
         line = f"sold hand-placed {filled:g}/{pos.count:g} {ticker} {pos.side} @ {avg:.4f} (paid {pos.entry:.2f}). {why} [socket]"
         log.info("watcher: %s", line)
         self.sold.append(line)
+        if filled > 0 and stop:
+            from . import reverse
+
+            with contextlib.suppress(Exception):
+                reverse.request(s, store, ticker, pos.side, manual.LANE, filled * pos.entry, why)
         if filled < pos.count - 0.005:
             self._back_off(ticker, manual.LANE)
 

@@ -681,6 +681,16 @@ _EXIT_LOCK = threading.Lock()  # one exit at a time, so the periodic pass and th
 EXIT_SLIP = 0.02  # an exit order is limited this far under the bid we saw: it is immediate-or-cancel, so it still fills at the best bid
 
 
+def _ask_flip(s: Settings, store: Store, row, lane: str, why: str) -> None:
+    """A stop just sold this bet: queue a look at the other side (reverse.py). Never lets a failure here touch the sale."""
+    try:
+        from . import reverse
+
+        reverse.request(s, store, row["ticker"], row["side"] or "yes", lane, float(row["stake_usd"] or 0.0), why)
+    except Exception:
+        log.debug("flip request failed", exc_info=True)
+
+
 def exit_position(
     s: Settings, client: KalshiClient, store: Store, row, bid: float, why: str,
     before_order: Callable[[], None] | None = None, slip: float = EXIT_SLIP,
@@ -697,6 +707,7 @@ def exit_position(
         side = row["side"] or "yes"
         if not s.is_live(lane, row["ticker"].split("-")[0]):
             store.mark_exited(row["ticker"], bid, why, lane)
+            _ask_flip(s, store, row, lane, why)
             return f"paper-sold {row['ticker']} @ {bid:.2f}. {why}"
         count = int(store.net_contracts(row["ticker"], s.env))
         if count <= 0:
@@ -721,6 +732,7 @@ def exit_position(
         )
         if store.net_contracts(row["ticker"], s.env) <= 0:
             store.mark_exited(row["ticker"], avg if filled else bid, why, lane)
+            _ask_flip(s, store, row, lane, why)
             return f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
         return f"partial exit {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
 

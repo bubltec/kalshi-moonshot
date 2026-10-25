@@ -161,6 +161,10 @@ def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
             entry_elapsed=(s.commodity_fast_from_min, s.commodity_fast_to_min),
             max_bet_pct=s.commodity_bet_pct, max_exposure_pct=s.commodity_exposure_pct,
         ),
+        # Not scanned (disabled): worker.do_flip feeds it the opposite side of a market a stop-loss just sold, and the language model decides whether buying that side is worth it.
+        "stop_flip": LaneSpec(
+            "stop_flip", SHAPE, "stop_flip", (0.05, 0.95), (0.0, 1.5), 0.10, 0.0, min_edge=0.05, stop_loss=False, sides=("yes", "no"), enabled=False,
+        ),
     }
     return lanes
 

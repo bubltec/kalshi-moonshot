@@ -354,7 +354,7 @@ class Worker:
         handlers = {
             "scan": self.do_scan, "evaluate": self.do_evaluate,
             "resolve": self.do_resolve, "stop_loss": self.do_stop_loss,
-            "review": self.do_review, "history": self.do_history, "account_sync": self.do_account_sync, "patterns": self.do_patterns,
+            "flip": self.do_flip, "review": self.do_review, "history": self.do_history, "account_sync": self.do_account_sync, "patterns": self.do_patterns,
         }
         try:
             handler = handlers.get(job.kind)
@@ -396,6 +396,7 @@ class Worker:
         self.jobs.enqueue("resolve", dedupe_key="resolve", max_attempts=s.job_max_attempts)
         self._schedule_stop_loss()
         self._ensure_tiered()
+        self._ensure_flip()
         return f"{len(markets)} markets, queued {queued} of {len(shots)} evaluations"
 
     def do_evaluate(self, job: Job) -> str:
@@ -502,6 +503,22 @@ class Worker:
 
     def estimators(self) -> dict:
         return build_estimators(self.est, self.store, self.searcher, self.quant)
+
+    def do_flip(self, job: Job) -> str:
+        """Look again at the other side of markets a stop just sold (reverse.py). Reschedules itself while any request is waiting."""
+        from . import reverse
+
+        lines = reverse.process(self.s, self.client, self.store, self.estimators()) if self.s.flip_after_stop else []
+        for line in lines:
+            log.info("%s", line)
+        self._ensure_flip()
+        return f"{len(lines)} settled"
+
+    def _ensure_flip(self) -> None:
+        """Keep the flip job alive: quick while a request is waiting, otherwise a slow check for ones the stop threads queued."""
+        if self.s.flip_after_stop:
+            wait = 10 if self.store.pending_flips() else 60
+            self.jobs.ensure("flip", time.time() + wait, max_attempts=self.s.job_max_attempts, priority=5)
 
     def do_resolve(self, job: Job) -> str:
         n = runner.resolve(self.client, self.store)
