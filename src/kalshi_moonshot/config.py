@@ -121,6 +121,10 @@ class Settings:
     manual_cheap_take_x: float  # ... sell at once when the bid is this many times the price paid
     manual_cheap_arm_x: float  # ... otherwise protect a profit once the bid has been this many times the price paid
     manual_cheap_giveback: float  # ... then sell when this share of the gain (peak over price paid) is given back, never under the price paid
+    discovery_enabled: bool  # one thread lists every series the lanes use and fills a shared cache; lanes read it instead of asking Kalshi each (marketdata.py)
+    discovery_seconds: float  # how often that thread lists each series again
+    discovery_max_age: float  # a lane's scope and review accept cached listings this young (the live quote stream keeps their prices current)
+    discovery_eval_age: float  # a PAPER lane's evaluation accepts a cached market this young; a live lane's evaluation always asks Kalshi
     manual_exit_stop: float  # stop-loss on hand-placed positions: sell at this fraction under the price paid (0 = none); same hours rules as the bot's
     tape_dir: Path  # where tape.db lives: a Docker-managed volume in compose, so SQLite's locking is not shared across the Mac/VM boundary
     backup_keep_days: int  # nightly consistent copies of the databases kept in DATA_DIR/backups
@@ -380,6 +384,10 @@ def load() -> Settings:
         manual_cheap_take_x=_f("MANUAL_CHEAP_TAKE_X", 3.0),
         manual_cheap_arm_x=_f("MANUAL_CHEAP_ARM_X", 1.5),
         manual_cheap_giveback=_f("MANUAL_CHEAP_GIVEBACK", 0.5),
+        discovery_enabled=_b("DISCOVERY_ENABLED", True),
+        discovery_seconds=max(5.0, _f("DISCOVERY_SECONDS", 45.0)),
+        discovery_max_age=max(0.0, _f("DISCOVERY_MAX_AGE", 60.0)),
+        discovery_eval_age=max(0.0, _f("DISCOVERY_EVAL_AGE", 10.0)),
         manual_exit_stop=_f("MANUAL_EXIT_STOP_LOSS", 0.30),
         manual_exit_stop_confirm=_f("MANUAL_EXIT_STOP_CONFIRM", 20.0),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),

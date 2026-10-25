@@ -8,6 +8,7 @@ import threading
 import time
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 from urllib.parse import urlparse
 
@@ -15,6 +16,8 @@ import httpx
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from .marketdata import MarketCache
 
 
 class KalshiError(RuntimeError):
@@ -97,6 +100,21 @@ class KalshiClient:
         self._gap = 1.0 / max(0.5, max_rps)  # minimum seconds between requests
         self._next_slot = 0.0
         self._lock = threading.Lock()
+        self.cache = MarketCache()  # every listing fetched is kept here for the lanes that read it (marketdata.py)
+        self._tl = threading.local()
+
+    @contextmanager
+    def shared(self, max_age: float) -> Iterator[None]:
+        """Inside this block, market listings and single markets may come from the shared cache when no older than max_age seconds (0 or less: always ask Kalshi)."""
+        prev = getattr(self._tl, "max_age", 0.0)
+        self._tl.max_age = max_age
+        try:
+            yield
+        finally:
+            self._tl.max_age = prev
+
+    def _age(self) -> float:
+        return float(getattr(self._tl, "max_age", 0.0))
 
     def ws_headers(self, url: str) -> dict[str, str]:
         """Signed headers for opening an authenticated WebSocket (a read-only data stream)."""
@@ -215,6 +233,8 @@ class KalshiClient:
 
     def event_markets(self, event_ticker: str) -> list[dict[str, Any]]:
         """Every open market in one event (e.g. a whole strike ladder)."""
+        if self._age() > 0 and (hit := self.cache.get_event(event_ticker, self._age())) is not None:
+            return hit
         out: list[dict[str, Any]] = []
         cursor = ""
         for _ in range(5):
@@ -226,10 +246,13 @@ class KalshiClient:
             cursor = body.get("cursor") or ""
             if not cursor:
                 break
+        self.cache.put_event(event_ticker, out)
         return out
 
     def series_markets(self, series: str) -> list[dict[str, Any]]:
         """Every open market in one series (a handful of requests, not a full-exchange scan)."""
+        if self._age() > 0 and (hit := self.cache.get_series(series, self._age())) is not None:
+            return hit
         out: list[dict[str, Any]] = []
         cursor = ""
         for _ in range(5):
@@ -241,6 +264,7 @@ class KalshiClient:
             cursor = body.get("cursor") or ""
             if not cursor:
                 break
+        self.cache.put_series(series, out)
         return out
 
     def settled_markets(self, series: str, limit: int = 40) -> list[dict[str, Any]]:
@@ -304,7 +328,11 @@ class KalshiClient:
         return body.get("candlesticks", [])
 
     def market(self, ticker: str) -> dict[str, Any]:
-        return self._request("GET", f"/markets/{ticker}")["market"]
+        if self._age() > 0 and (hit := self.cache.get_market(ticker, self._age())) is not None:
+            return hit
+        row = self._request("GET", f"/markets/{ticker}")["market"]
+        self.cache.put_market(ticker, row)
+        return row
 
     def orderbook(self, ticker: str) -> dict[str, Any]:
         return self._request("GET", f"/markets/{ticker}/orderbook")

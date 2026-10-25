@@ -121,8 +121,8 @@ class Tape:
             q, i, f, fl = self._quotes, self._index, self._feed, self._flow
             self._quotes, self._index, self._feed, self._flow = [], [], [], {}
             done = {k: v for k, v in self._fut.items() if k[0] <= cutoff}
-            for k in done:
-                del self._fut[k]
+            for finished in done:
+                del self._fut[finished]
         ft = [(sec, coin, v[0], v[1], v[2], int(v[3]), int(v[4])) for (sec, coin), v in done.items()]
         if not (q or i or f or fl or ft):
             return 0
@@ -177,6 +177,9 @@ class TapeRecorder:
 
     def _on_event(self, e: dict[str, Any]) -> None:
         self.tape.add(e)
+        cache = getattr(self.client, "cache", None)
+        if cache is not None and e.get("kind") == "quote":
+            cache.note_quote(e["ticker"], e.get("bid"), e.get("ask"), e.get("ts"))  # the shared market cache's prices stay as fresh as the stream
         for fn in self.listeners:
             try:
                 fn(e)

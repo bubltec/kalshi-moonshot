@@ -12,6 +12,7 @@ Stop it at any time. Finished work stays finished; running work is picked up aga
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 import uuid
@@ -26,6 +27,7 @@ from .config import Settings
 from .estimators import build_estimators
 from .jobs import PLACING, Job, Jobs
 from .kalshi import KalshiClient, KalshiRateLimited
+from .marketdata import Discovery
 from .lanes import lane_specs, spec_for, tiered, tiered_lanes
 from .search import NewsSearch
 from .store import Store
@@ -81,6 +83,7 @@ class Worker:
         self.recorder: Any = None
         self.watcher: Any = None
         self.entry_watcher: Any = None
+        self.discovery: Any = None
         self.stopping = False
         self._last_cleanup = 0.0
 
@@ -110,6 +113,7 @@ class Worker:
                 "history", time.time() + 300, max_attempts=self.s.job_max_attempts, priority=HISTORY_PRIORITY
             )
         self._ensure_tiered()
+        self._start_discovery()
         self._start_tape()
         from . import backup
 
@@ -231,8 +235,26 @@ class Worker:
         except Exception:
             log.exception("could not register %s with the watcher", ticker)
 
+    def _start_discovery(self) -> None:
+        """One thread lists the open markets of every series any lane uses and fills the shared cache (marketdata.py); lane jobs read from it, so a lane costs no requests."""
+        if self.discovery is not None or not hasattr(self.client, "cache"):
+            return
+        self.discovery = Discovery(
+            lambda: self.client, lambda: self.s,
+            lambda s: {name for spec in tiered_lanes(s) for name in runner.lane_series(spec, s)},
+        )
+        self.discovery.start()
+
+    def _shared(self, max_age: float) -> Any:
+        """Reads of listings and markets inside this block may come from the shared cache (a no-op when discovery is off or the client has no cache)."""
+        if max_age > 0 and self.s.discovery_enabled and hasattr(self.client, "shared"):
+            return self.client.shared(max_age)
+        return contextlib.nullcontext()
+
     def stop(self) -> None:
         self.stopping = True
+        if self.discovery is not None:
+            self.discovery.stop()
         if self.watcher is not None:
             self.watcher.stop()
         if self.entry_watcher is not None:
@@ -352,6 +374,12 @@ class Worker:
         return f"{len(markets)} markets, queued {queued} of {len(shots)} evaluations"
 
     def do_evaluate(self, job: Job) -> str:
+        """A live lane's evaluation always reads the real market (it is about to place an order); a paper lane's may use the shared cache."""
+        live = self.s.is_live(job.payload["shot"].get("lane", ""))
+        with self._shared(0.0 if live else self.s.discovery_eval_age):
+            return self._evaluate(job)
+
+    def _evaluate(self, job: Job) -> str:
         s = self.s
         shot = LongShot(**job.payload["shot"])
         # The shortlist may be minutes old. Re-read the market and drop it if it no longer fits.
@@ -420,7 +448,8 @@ class Worker:
             job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
             max_attempts=self.s.job_max_attempts, priority=spec.priority,
         )
-        n = runner.scope_lane(self.s, self.client, self.store, spec, quant=self.quant)
+        with self._shared(self.s.discovery_max_age):
+            n = runner.scope_lane(self.s, self.client, self.store, spec, quant=self.quant)
         self.jobs.run_now(f"lane_review:{spec.name}", priority=spec.priority)
         log.info("scope %s: watching %d event(s)", spec.name, n)
         return f"{n} events watched"
@@ -434,7 +463,8 @@ class Worker:
             job.kind, time.time() + every, max_attempts=self.s.job_max_attempts,
             priority=spec.priority,
         )
-        shots = runner.review_lane(self.s, self.client, self.store, spec, self.estimators())
+        with self._shared(self.s.discovery_max_age):
+            shots = runner.review_lane(self.s, self.client, self.store, spec, self.estimators())
         queued = 0
         for shot in shots:
             made = self.jobs.enqueue(
