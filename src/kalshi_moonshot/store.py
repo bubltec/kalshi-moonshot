@@ -146,6 +146,78 @@ CREATE TABLE IF NOT EXISTS shadow (
 );
 CREATE INDEX IF NOT EXISTS idx_shadow_ticker ON shadow(ticker, ts);
 
+CREATE TABLE IF NOT EXISTS behavior_cases (
+  ticker TEXT NOT NULL, side TEXT NOT NULL, ts REAL NOT NULL, kind TEXT NOT NULL,  -- kind: 'moment' (a sampled moment of a finished window) or 'buy' (our own real buy)
+  series TEXT, close_ts REAL,
+  features TEXT NOT NULL,        -- JSON: the full feature snapshot (factors.snapshot_full) at that moment
+  won INTEGER, reach99 INTEGER,  -- did the side settle at $1; did its bid touch 99c before the close
+  low_bid REAL, minutes_to_99 REAL,
+  PRIMARY KEY (ticker, side, ts, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_behavior_series ON behavior_cases(series, close_ts);
+
+CREATE TABLE IF NOT EXISTS scalp_cases (
+  ticker TEXT NOT NULL, side TEXT NOT NULL, ts REAL NOT NULL,  -- one attempt: a resting bid at the bid of a 30-48c side, replayed on the tape (scalp.py)
+  series TEXT, close_ts REAL,
+  features TEXT NOT NULL,        -- JSON: the full feature snapshot at that moment (factors.snapshot_full)
+  filled INTEGER,                -- the bid filled (the side's ask came down to it) within the wait
+  sell_hit INTEGER,              -- the resting sell above it filled
+  ret_taker REAL, ret_hold REAL, -- return per dollar if the unsold remainder is sold at the bid / held to the result; NULL when the bid never filled
+  PRIMARY KEY (ticker, side, ts)
+);
+CREATE INDEX IF NOT EXISTS idx_scalp_close ON scalp_cases(close_ts);
+
+CREATE TABLE IF NOT EXISTS curve_vectors (
+  ticker TEXT NOT NULL, minute INTEGER NOT NULL,  -- one vector point per finished crypto window and decision minute (vectors.py)
+  series TEXT, close_ts REAL,
+  vec TEXT NOT NULL,             -- JSON: the coin's path since the open, the 10-second tail, the hour and 3-hour context, Kalshi's mid per minute and its 10-second tail, each as distances (see vectors.py)
+  bid REAL, ask REAL,            -- the YES quote at the decision
+  y INTEGER,                     -- the window finished above its target
+  hit_yes INTEGER, hit_no INTEGER,  -- a resting sell 3c above the price paid would have filled within 3 minutes, buying YES / buying NO at the quote
+  PRIMARY KEY (ticker, minute)
+);
+CREATE INDEX IF NOT EXISTS idx_curve_vectors_series ON curve_vectors(series, close_ts);
+
+CREATE TABLE IF NOT EXISTS esports_forecasts (
+  event_ticker TEXT PRIMARY KEY, -- one forecast per match (esports.py)
+  ticker TEXT NOT NULL,          -- the team market that was asked about
+  game TEXT, team TEXT, rival TEXT,
+  ts REAL NOT NULL, start_ts REAL,
+  p_model REAL NOT NULL,         -- the model's chance that `team` wins, from news only (it never sees the price)
+  why TEXT, news TEXT,
+  bid REAL, ask REAL, mid REAL,  -- the market when the forecast was made
+  outcome TEXT, settled_ts REAL, -- 'yes' / 'no' once the match is over
+  p_rank REAL,                   -- the same question with both teams' rankings added to the news (rankings.py); empty when no ranking could be read
+  rank_why TEXT, ranking TEXT    -- what the model said, and the ranking lines it was shown
+);
+
+CREATE TABLE IF NOT EXISTS flips (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts REAL NOT NULL,
+  ticker TEXT NOT NULL,
+  stopped_side TEXT NOT NULL,    -- the side that was sold at a stop; the flip considers the other one
+  lane TEXT,                     -- the lane that held it ('manual' for a hand-placed buy)
+  stake_usd REAL,
+  status TEXT NOT NULL DEFAULT 'pending',  -- pending | done | expired
+  note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_flips ON flips(status, ts);
+
+CREATE TABLE IF NOT EXISTS manual_entries (
+  trade_id TEXT PRIMARY KEY,     -- Kalshi's id for the fill
+  ts REAL NOT NULL,
+  ticker TEXT NOT NULL,
+  side TEXT NOT NULL,            -- contract bought: 'yes' or 'no'
+  price REAL,                    -- price paid, in that side's own terms
+  count REAL,
+  order_id TEXT,
+  close_ts REAL,
+  factors TEXT,                  -- JSON entry context at the moment of the fill (factors.py); empty when the tape had none
+  template INTEGER NOT NULL DEFAULT 0,  -- 1 = you pointed this buy out as a good example; only these teach the factors
+  note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_manual_entries ON manual_entries(ticker, ts);
+
 CREATE TABLE IF NOT EXISTS fills (
   fill_id TEXT PRIMARY KEY,
   ts REAL NOT NULL,
@@ -206,24 +278,23 @@ CREATE TABLE IF NOT EXISTS candles (
   PRIMARY KEY (ticker, end_ts)
 );
 
-CREATE TABLE IF NOT EXISTS flips (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  ts REAL NOT NULL,
-  ticker TEXT NOT NULL,
-  stopped_side TEXT NOT NULL,    -- the side that was sold at a stop; the flip considers the other one
-  lane TEXT,                     -- the lane that held it ('manual' for a hand-placed buy)
-  stake_usd REAL,
-  status TEXT NOT NULL DEFAULT 'pending',  -- pending | done | expired
-  note TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_flips ON flips(status, ts);
-
 CREATE TABLE IF NOT EXISTS watchlist (
   lane TEXT NOT NULL,
   event_ticker TEXT NOT NULL,
   payload TEXT NOT NULL DEFAULT '{}',  -- close time, category, series from the scoping pass
   scoped_ts REAL NOT NULL,
   PRIMARY KEY (lane, event_ticker)
+);
+CREATE TABLE IF NOT EXISTS hour_slices (
+  hour_end REAL NOT NULL,
+  hour_et INTEGER NOT NULL,
+  dow INTEGER NOT NULL,
+  family TEXT NOT NULL,
+  n INTEGER NOT NULL,
+  won INTEGER NOT NULL,
+  pnl REAL NOT NULL,
+  avg_ask REAL,
+  PRIMARY KEY (hour_end, family)
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(status, run_at);
 """
@@ -293,12 +364,18 @@ class Store:
             ("contracts", "REAL"),
             ("stake_usd", "REAL"),
             ("lane_ver", "TEXT"),
+            ("factors", "TEXT"),  # JSON snapshot of the entry context (factors.py)
+            ("exit_factors", "TEXT"),  # JSON snapshot at the moment of the sale
         ):
             if name not in have:
                 self.db.execute(f"ALTER TABLE decisions ADD COLUMN {name} {ddl}")
                 if name == "version":
                     # Every row that exists before versions did was made by the old logic.
                     self.db.execute("UPDATE decisions SET version=?", (LEGACY_VERSION,))
+        have_es = {r["name"] for r in self.db.execute("PRAGMA table_info(esports_forecasts)")}
+        for name, ddl in (("p_rank", "REAL"), ("rank_why", "TEXT"), ("ranking", "TEXT")):
+            if name not in have_es:
+                self.db.execute(f"ALTER TABLE esports_forecasts ADD COLUMN {name} {ddl}")
         candle_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(candles)")}
         for col in ("bid_hi", "ask_lo"):
             if col not in candle_cols:
@@ -424,6 +501,36 @@ class Store:
         cur = self.db.execute(f"INSERT INTO decisions ({cols}) VALUES ({marks})", list(d.values()))
         self.db.commit()
         return int(cur.lastrowid or 0)
+
+    def add_flip(self, ticker: str, stopped_side: str, lane: str, stake_usd: float, ts: float | None = None) -> bool:
+        """Ask for a second look at the other side of a market a stop just sold. One request per market and side."""
+        if self.db.execute("SELECT 1 FROM flips WHERE ticker=? AND stopped_side=?", (ticker, stopped_side)).fetchone():
+            return False
+        self.db.execute("INSERT INTO flips (ts, ticker, stopped_side, lane, stake_usd) VALUES (?,?,?,?,?)", (time.time() if ts is None else ts, ticker, stopped_side, lane, stake_usd))
+        self.db.commit()
+        return True
+
+    def pending_flips(self) -> list[db.Row]:
+        return self.db.execute("SELECT * FROM flips WHERE status='pending' ORDER BY ts").fetchall()
+
+    def finish_flip(self, flip_id: int, status: str, note: str = "") -> None:
+        self.db.execute("UPDATE flips SET status=?, note=? WHERE id=?", (status, note[:300], flip_id))
+        self.db.commit()
+
+    def add_manual_entry(self, **e: Any) -> None:
+        """Record a hand-placed buy and the entry context at the moment of the fill. A repeated fill id is ignored."""
+        cols = ",".join(e)
+        self.db.execute(f"INSERT OR IGNORE INTO manual_entries ({cols}) VALUES ({','.join('?' for _ in e)})", list(e.values()))
+        self.db.commit()
+
+    def mark_template(self, ticker: str, note: str = "", undo: bool = False) -> int:
+        """Mark (or with undo, unmark) the hand-placed buys logged for this market as templates. Returns how many rows changed."""
+        cur = self.db.execute("UPDATE manual_entries SET template=?, note=? WHERE ticker=?", (0 if undo else 1, "" if undo else note, ticker))
+        self.db.commit()
+        return int(cur.rowcount or 0)
+
+    def is_bot_order(self, order_id: str) -> bool:
+        return bool(order_id) and self.db.execute("SELECT 1 FROM orders WHERE order_id=? LIMIT 1", (order_id,)).fetchone() is not None
 
     def paper_bets(self, open_only: bool, live: bool = False) -> list[db.Row]:
         """Sized bets (one per market, the first). open_only: still riding; else: finished.
@@ -594,6 +701,38 @@ class Store:
         ).fetchone()
         return float(row["n"])
 
+    # ---- resting sells: a take-profit sell resting on the book (runner._rest_take_profit) ----
+    # Placed as an orders row with side='rest' and fill_count 0 (it holds nothing yet); each fill is booked as an
+    # ordinary side='sell' row under the same order_id. Retiring one (cancelled, or given up on) zeroes its count.
+
+    def rest_sell(self, ticker: str, env: str) -> db.Row | None:
+        """The latest resting sell placed on this ticker, working or not."""
+        return self.db.execute(
+            "SELECT * FROM orders WHERE ticker=? AND env=? AND side='rest' ORDER BY id DESC LIMIT 1", (ticker, env)
+        ).fetchone()
+
+    def booked_rest_sell(self, order_id: str) -> tuple[float, float]:
+        """Contracts of a resting sell already booked as sold, and their average fill price."""
+        row = self.db.execute(
+            "SELECT COALESCE(SUM(fill_count), 0) AS n, COALESCE(SUM(price * fill_count), 0) AS pv FROM orders WHERE order_id=? AND side='sell'",
+            (order_id,),
+        ).fetchone()
+        n = float(row["n"])
+        return n, (float(row["pv"]) / n if n > 0 else 0.0)
+
+    def working_rest_sell(self, ticker: str, env: str) -> db.Row | None:
+        """The resting sell still working on this ticker: placed, not retired, and not yet fully filled."""
+        row = self.rest_sell(ticker, env)
+        if row is None or float(row["count"]) <= 0:
+            return None
+        booked, _ = self.booked_rest_sell(row["order_id"])
+        return row if booked < float(row["count"]) - 1e-9 else None
+
+    def retire_rest_sell(self, order_id: str) -> None:
+        """Mark a resting sell no longer working, so nothing keeps waiting for it or stands down for it."""
+        self.db.execute("UPDATE orders SET count=0 WHERE order_id=? AND side='rest'", (order_id,))
+        self.db.commit()
+
     def net_cost(self, ticker: str, env: str) -> float:
         """Dollars the bot's own orders have put into this ticker (buys cost, sales return), fees included in the order cost."""
         row = self.db.execute("SELECT COALESCE(SUM(cost_usd + CASE WHEN COALESCE(side,'buy')='buy' THEN COALESCE(fee_usd, 0) ELSE 0 END), 0) AS c FROM orders WHERE ticker=? AND env=?", (ticker, env)).fetchone()
@@ -607,21 +746,6 @@ class Store:
     def lane_versions(self, lane: str) -> list[db.Row]:
         return self.db.execute("SELECT ver, first_ts, settings FROM lane_versions WHERE lane=? ORDER BY first_ts", (lane,)).fetchall()
 
-    def add_flip(self, ticker: str, stopped_side: str, lane: str, stake_usd: float, ts: float | None = None) -> bool:
-        """Ask for a second look at the other side of a market a stop just sold. One request per market and side."""
-        if self.db.execute("SELECT 1 FROM flips WHERE ticker=? AND stopped_side=?", (ticker, stopped_side)).fetchone():
-            return False
-        self.db.execute("INSERT INTO flips (ts, ticker, stopped_side, lane, stake_usd) VALUES (?,?,?,?,?)", (time.time() if ts is None else ts, ticker, stopped_side, lane, stake_usd))
-        self.db.commit()
-        return True
-
-    def pending_flips(self) -> list[db.Row]:
-        return self.db.execute("SELECT * FROM flips WHERE status='pending' ORDER BY ts").fetchall()
-
-    def finish_flip(self, flip_id: int, status: str, note: str = "") -> None:
-        self.db.execute("UPDATE flips SET status=?, note=? WHERE id=?", (status, note[:300], flip_id))
-        self.db.commit()
-
     def exited_within(self, ticker: str, lane: str, seconds: float, now: float | None = None) -> float:
         """Seconds still to wait if this lane sold this market less than `seconds` ago, else 0."""
         now = time.time() if now is None else now
@@ -633,12 +757,12 @@ class Store:
         last = row["t"] if row and row["t"] is not None else None
         return max(0.0, last + seconds - now) if last is not None else 0.0
 
-    def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None) -> None:
+    def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None, factors: str = "") -> None:
         self.db.execute(
-            """UPDATE decisions SET exit_price=?, exit_ts=?, exit_reason=?
+            """UPDATE decisions SET exit_price=?, exit_ts=?, exit_reason=?, exit_factors=?
                WHERE ticker=? AND action='bet' AND outcome IS NULL AND exit_ts IS NULL
                  AND (? IS NULL OR COALESCE(lane,'moonshot')=?)""",
-            (price, time.time(), reason[:300], ticker, lane, lane),
+            (price, time.time(), reason[:300], factors or None, ticker, lane, lane),
         )
         self.db.commit()
 
@@ -719,6 +843,6 @@ class Store:
     def similar_text(self, title: str, rules: str = "", limit: int = 4) -> str:
         """Nearest settled cases for a new question. Empty when nothing useful matches."""
         return "\n".join(
-            f"- {c.title[:140]} -> {c.outcome}. {c.body[:180]}"
+            c.line()
             for c in self.rag.cases(f"{title} {rules}", limit=limit)
         )

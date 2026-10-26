@@ -52,9 +52,12 @@ def size_bet(
     ceilings = [s.max_usd_per_trade]
     if spec.usd_per_trade:
         ceilings.append(spec.usd_per_trade)
-    # A fixed-stake lane bets the same dollars every time; the odds do not scale it.
-    # `scale` (scale.py) grows both the stake and the lane's cap together once the lane's own record has earned it; the hard ceilings stay.
-    wanted = scale * (spec.fixed_stake or min(equity * s.kelly_fraction * full, equity * spec.max_bet_pct))
+    # A fixed-stake lane bets the same dollars every time; the odds do not scale it. But the lane's per-bet cap
+    # (max_bet_pct of equity) binds every lane, fixed or not: a flat $2 on a $13 balance is a 15% position,
+    # and the cap is the only thing that shrinks the bet as the balance falls.
+    # `scale` (scale.py) grows both the stake and the lane's caps together once the lane's own record has earned it; the hard ceilings stay.
+    per_bet = equity * spec.max_bet_pct * scale
+    wanted = min(scale * spec.fixed_stake, per_bet) if spec.fixed_stake else min(equity * s.kelly_fraction * full * scale, per_bet)
     cap = equity * spec.max_exposure_pct * scale
     stake = min(wanted, cap - lane_exposure, available, *ceilings)
     if stake <= 0.0:
@@ -65,6 +68,8 @@ def size_bet(
         return Sizing(0, 0.0, f"${stake:.2f} stake is under the cost of one contract")
     cost = ask * count + order_fee(ask, count)
     how = "fixed stake" if spec.fixed_stake else f"{full:.0%} Kelly, {s.kelly_fraction:.0%} of it"
+    if spec.fixed_stake and scale * spec.fixed_stake > per_bet + 1e-9:
+        how += f", capped at {spec.max_bet_pct:.0%} of equity"
     if scale > 1.0:
         how += f", x{scale:.2f} on the lane's record"
     return Sizing(count, cost, f"stake ${cost:.2f} ({how})")

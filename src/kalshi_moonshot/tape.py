@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from . import archive, db
+from .coinbasefeed import DEFAULT_PRODUCTS, CoinbaseFeed
 from .commodities import instrument_for, load_instruments
 from .config import Settings
 from .futflow import FuturesFlow
@@ -26,6 +27,9 @@ from .kalshiws import KalshiStream, index_for_series
 from .store import Store
 
 log = logging.getLogger("moonshot")
+
+FX_PAIRS = ("EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD")
+PAIR_PREFIX = "kraken:"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS quotes (
@@ -54,7 +58,11 @@ CREATE INDEX IF NOT EXISTS idx_fut_1s ON fut_1s(symbol, ts);
 """
 
 FLUSH_EVERY = 5.0
-REFRESH_EVERY = 20.0
+REFRESH_EVERY = 20.0  # how often the refresh loop looks at which series are due (each call lists only the series that are)
+SERIES_EVERY = 20.0  # a series with markets open is listed again this often: a new 15-minute window opens every 15 minutes
+IDLE_EVERY = 120.0  # a series with nothing open (a closed session) is looked at this often
+EXTRA_EVERY = 90.0  # sports and esports series list their matches hours ahead, so they need no faster
+EXTRA_IDLE_EVERY = 300.0
 PRUNE_EVERY = 3600.0
 FEED_MIN_GAP = 0.5  # at most one stored price per symbol per this many seconds
 
@@ -107,10 +115,10 @@ class Tape:
             row[1 if bought else 2] += px * size
             row[3 if bought else 4] += 1
 
-    def add_feed(self, symbol: str, px: float, ts: float) -> None:
+    def add_feed(self, symbol: str, px: float, ts: float, min_gap: float = FEED_MIN_GAP) -> None:
         with self._lock:
             prev = self._last_feed.get(symbol)
-            if prev is not None and (prev[0] == px or ts - prev[1] < FEED_MIN_GAP):
+            if prev is not None and (prev[0] == px or ts - prev[1] < min_gap):
                 return
             self._last_feed[symbol] = (px, ts)
             self._feed.append((ts, symbol, px))
@@ -171,9 +179,15 @@ class TapeRecorder:
         self.extra_tickers: Any = None  # a callable returning more tickers to stream (positions we hold in any market)
         self.listeners: list[Any] = []  # called with every event after it is stored (must be fast and never raise)
         self.stream = KalshiStream(client, self._on_event)
+        # Sports and esports series list a new market every few minutes, and a changed market list reconnects a stream. They get their own connection so the
+        # live one (15-minute quotes, settlement indexes, the account's fills) is never dropped for them.
+        self.extra_stream = KalshiStream(client, self._on_event, index_feed=False, fills=False)
+        self.coinbase = CoinbaseFeed(DEFAULT_PRODUCTS, lambda product, ts, px: self.tape.add_feed(f"coinbase:{product}", px, ts, 1.0)) if s.coinbase_feed_enabled else None
         self.futflow = FuturesFlow(s.fut_flow_coins, self.tape.add_fut) if s.fut_flow_enabled and s.fut_flow_coins else None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._refresh_thread: threading.Thread | None = None
+        self._listed: dict[str, tuple[float, set[str]]] = {}  # series -> (when it was listed, its open tickers)
 
     def _on_event(self, e: dict[str, Any]) -> None:
         self.tape.add(e)
@@ -187,7 +201,10 @@ class TapeRecorder:
                 log.exception("tape listener failed")
 
     def _series(self) -> list[str]:
-        return [f"{i.prefix}15M" for i in load_instruments(self.s.data_dir) if "15M" in i.suffixes]
+        from .runner import watched  # late: runner imports modules that import the tape
+        keep = watched(self.s)
+        names = [f"{i.prefix}15M" for i in load_instruments(self.s.data_dir) if "15M" in i.suffixes]
+        return names if keep is None else [n for n in names if n in keep]
 
     def _commodity_symbols(self) -> list[str]:
         out = []
@@ -197,25 +214,35 @@ class TapeRecorder:
                 out.append(inst.symbol)
         return sorted(set(out))
 
-    def refresh_tickers(self) -> int:
+    def _list(self, series: str, every_open: float, every_idle: float, now: float) -> set[str]:
+        """The open tickers of one series: the last listing, unless it is due again. Each listing is a request on the bot's shared, rate-limited client."""
+        seen = self._listed.get(series)
+        if seen is not None and now - seen[0] < (every_open if seen[1] else every_idle):
+            return seen[1]
+        try:
+            found = {m["ticker"] for m in self.client.series_markets(series) if m.get("status") in {"active", "open"}}
+        except KalshiError as exc:
+            log.debug("tape: could not list %s (%s)", series, exc)
+            return seen[1] if seen else set()
+        self._listed[series] = (now, found)
+        return found
+
+    def refresh_tickers(self, now: float | None = None) -> int:
+        now = time.time() if now is None else now
         tickers: set[str] = set()
         for ser in self._series():
-            try:
-                tickers.update(m["ticker"] for m in self.client.series_markets(ser) if m.get("status") in {"active", "open"})
-            except KalshiError as exc:
-                log.debug("tape: could not list %s (%s)", ser, exc)
+            tickers |= self._list(ser, SERIES_EVERY, IDLE_EVERY, now)
+        extras: set[str] = set()
         for ser in self.s.tape_extra_series:  # sports, esports and anything else named in TAPE_EXTRA_SERIES
-            try:
-                tickers.update(m["ticker"] for m in self.client.series_markets(ser) if m.get("status") in {"active", "open"})
-            except KalshiError as exc:
-                log.debug("tape: could not list %s (%s)", ser, exc)
+            extras |= self._list(ser, EXTRA_EVERY, EXTRA_IDLE_EVERY, now)
         if self.extra_tickers is not None:
             try:
                 tickers |= set(self.extra_tickers())
             except Exception as exc:
                 log.debug("tape: extra tickers failed (%s)", exc)
         self.stream.set_tickers(tickers)
-        return len(tickers)
+        self.extra_stream.set_tickers(extras - tickers)  # a market the live stream already carries is not recorded twice
+        return len(tickers) + len(extras - tickers)
 
     def follow(self, tickers: set[str]) -> None:
         """Start streaming these tickers now, without waiting for the next refresh (a position was just opened)."""
@@ -241,6 +268,19 @@ class TapeRecorder:
             got = kr.latest(sym)
             if got is not None:
                 self.tape.add_feed(sym, got[0], got[1])
+        # The currency 15-minute markets settle on ONE Pyth price at the close (not an average); Pyth's own feed is closed to us, so Kraken's spot for the same pairs is recorded once a second as `krakenfx:EUR/USD` etc.
+        # to test whether spot against the strike tells a collapse in the last minutes (scripts/fx_guard_study.py once a few days are in).
+        for pair in FX_PAIRS:
+            sym = PAIR_PREFIX + pair
+            got = kr.latest(sym)
+            if got is None:  # first use subscribes the pair; the next sample finds its price
+                try:
+                    kr.series(sym)
+                except Exception:
+                    continue
+                got = kr.latest(sym)
+            if got is not None:
+                self.tape.add_feed("krakenfx:" + pair, got[0], got[1])
 
     def sample_feed(self) -> None:
         self.sample_kraken()
@@ -262,25 +302,40 @@ class TapeRecorder:
         if self._thread and self._thread.is_alive():
             return
         self.stream.start()
+        if self.s.tape_extra_series:  # no extra series named: no second connection
+            self.extra_stream.start()
         if self.futflow is not None:
             self.futflow.start()
+        if self.coinbase is not None:
+            self.coinbase.start()
         self._thread = threading.Thread(target=self._run, name="tape", daemon=True)
         self._thread.start()
+        # Listing the series is slow (a request each, on a shared client): it runs on its own thread so it can never hold up the writes below.
+        self._refresh_thread = threading.Thread(target=self._refresh_loop, name="tape-refresh", daemon=True)
+        self._refresh_thread.start()
 
     def stop(self) -> None:
         self._stop.set()
         self.stream.close()
+        self.extra_stream.close()
         if self.futflow is not None:
             self.futflow.close()
+        if self.coinbase is not None:
+            self.coinbase.close()
+
+    def _refresh_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                self.refresh_tickers()
+            except Exception as exc:
+                log.warning("tape: %s", exc)
+            self._stop.wait(REFRESH_EVERY)
 
     def _run(self) -> None:
-        last_refresh = last_flush = last_prune = 0.0
+        last_flush = last_prune = 0.0
         while not self._stop.is_set():
             now = time.time()
             try:
-                if now - last_refresh >= REFRESH_EVERY:
-                    self.refresh_tickers()
-                    last_refresh = now
                 self.sample_feed()
                 if now - last_flush >= FLUSH_EVERY:
                     self.tape.flush()

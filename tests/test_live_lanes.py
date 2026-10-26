@@ -212,3 +212,54 @@ def test_a_misspelled_live_lane_is_reported_not_silently_ignored(tmp_path):
     assert lanes.unknown_live_lanes(settings(tmp_path, live_lanes=frozenset({"commodity"}))) == []
     assert lanes.unknown_live_lanes(settings(tmp_path, live_lanes=None)) == []
     assert lanes.unknown_live_lanes(settings(tmp_path, live_lanes=frozenset())) == []
+
+
+class PriceClient(Client):
+    def __init__(self):
+        super().__init__()
+        self.prices: list[float] = []
+
+    def buy_yes_ioc(self, ticker, count, price, client_order_id=None):
+        self.prices.append(price)
+        return super().buy_yes_ioc(ticker, count, price, client_order_id)
+
+
+def test_a_lane_can_allow_a_few_cents_over_the_ask_on_a_buy(tmp_path):
+    (tmp_path / "plain").mkdir()
+    (tmp_path / "slip").mkdir()
+    plain = settings(tmp_path / "plain", live_lanes=frozenset({"moonshot"}))
+    (tmp_path / "slip" / "strategies.toml").write_text("[lane.moonshot]\nbuy_slip = 0.02\n")
+    slip = settings(tmp_path / "slip", live_lanes=frozenset({"moonshot"}))
+    for s, expected in ((plain, 0.10), (slip, 0.12)):
+        store = Store(s.db_path)
+        client = PriceClient()
+        runner.evaluate(s, client, Est(), store, shot("KXM-9", "moonshot", ask=0.10))
+        assert client.prices == [pytest.approx(expected)]  # the limit is the ask plus the lane's allowance; the decision still records the ask it read
+        assert store.db.execute("SELECT price FROM orders").fetchone()[0] == pytest.approx(expected)
+        assert store.db.execute("SELECT ask FROM decisions WHERE ticker='KXM-9'").fetchone()[0] == pytest.approx(0.10)
+
+
+def test_the_allowance_never_takes_a_limit_past_99_cents(tmp_path):
+    (tmp_path / "strategies.toml").write_text("[lane.moonshot]\nbuy_slip = 0.05\n")
+    s = settings(tmp_path, live_lanes=frozenset({"moonshot"}))
+    client = PriceClient()
+    runner.evaluate(s, client, Est(), Store(s.db_path), shot("KXM-8", "moonshot", ask=0.97))
+    assert all(p <= 0.99 + 1e-9 for p in client.prices)
+
+
+def test_a_sub_cent_ask_is_never_bid_under(tmp_path):
+    (tmp_path / "strategies.toml").write_text("[lane.moonshot]\nprice = [0.50, 0.99]\n")
+    s = settings(tmp_path, live_lanes=frozenset({"moonshot"}))
+
+    class Deep(PriceClient):
+        def orderbook(self, ticker):  # NO bids at 0.086 are YES offered at 0.914
+            return {"orderbook_fp": {"no_dollars": [["0.0860", "500.00"]], "yes_dollars": [["0.0500", "500.00"]]}}
+
+    client = Deep()
+    class Sure:
+        def estimate(self, *a, **k):
+            return 0.99, "sure"
+
+    out = runner.evaluate(s, client, Sure(), Store(s.db_path), shot("KXM-7", "moonshot", ask=0.914))
+    assert client.prices, out
+    assert client.prices == [pytest.approx(0.914)]  # rounding the limit to cents would have made it 0.91, under the ask, and the order would not fill

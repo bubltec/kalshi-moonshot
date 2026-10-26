@@ -56,6 +56,7 @@ def test_the_stop_sits_where_the_lane_says_and_waits_ten_seconds(setup):
     t.stop_from = 0.0
     assert (t.stop_drop, t.stop_confirm) == (pytest.approx(0.6), 10.0)
     base = time.time()
+    t.close_ts = base + 240.0  # 4 minutes left: the calculated wait is min(the lane's 10 s, 45 s) — the cap this test is about
     w.on_event(quote(0.50, base))  # 37% under the 0.80 paid
     w.on_event(quote(0.39, base + 5))  # 51% under: the global 50% stop would sell, this lane's 60% does not
     assert w._jobs.empty()

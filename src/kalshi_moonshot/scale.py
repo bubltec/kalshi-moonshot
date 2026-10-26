@@ -108,6 +108,7 @@ def record(store: Any, lanes: tuple[str, ...], since: float = 0.0, current: dict
     """The weighted record of these lanes' finished bets. With no `current` versions every bet counts 1 (the plain record)."""
     wmap = {lane: weights_for(store, lane, ver, st, old_weight) for lane, (ver, st) in (current or {}).items()}
     pairs: list[tuple[float, float]] = []  # (return on stake, weight)
+    cluster_w: dict[Any, float] = {}  # weight per 15-minute slot (market close): bets closing together are one event
     for t in journal.trades(store):
         if t.lane not in lanes or t.stake <= 0 or t.opened_ts < since:
             continue
@@ -116,6 +117,8 @@ def record(store: Any, lanes: tuple[str, ...], since: float = 0.0, current: dict
             w = wmap[t.lane].get(t.ver, old_weight * LEGACY)  # a version we have no settings for counts like bets from before versions
         if w > 1e-6:
             pairs.append((t.pnl / t.stake, w))
+            key = t.close_ts or t.ticker
+            cluster_w[key] = cluster_w.get(key, 0.0) + w
     n = len(pairs)
     if n == 0:
         return Record(0, 0.0, 0.0)
@@ -124,6 +127,9 @@ def record(store: Any, lanes: tuple[str, ...], since: float = 0.0, current: dict
     denom = sw - sum(w * w for _, w in pairs) / sw
     sd = math.sqrt(sum(w * (r - mean) ** 2 for r, w in pairs) / denom) if denom > 1e-9 else 0.0
     n_eff = sw * sw / sum(w * w for _, w in pairs)
+    if cluster_w:
+        # The version weighting says how much each bet counts; the slot weighting says how many of them were independent.
+        n_eff = min(n_eff, sw * sw / sum(w * w for w in cluster_w.values()))
     return Record(n, mean, sd, n_eff)
 
 

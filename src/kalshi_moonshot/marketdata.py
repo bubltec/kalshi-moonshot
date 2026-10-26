@@ -20,6 +20,7 @@ from typing import Any
 
 log = logging.getLogger("moonshot")
 
+HOT_MAX = 10  # most series the fast tier lists: at the default 15 s cycle that is well under one request a second of the shared budget
 QUOTE_STALE = 600.0  # a derived row older than this is never used on the strength of a fresh quote alone
 
 
@@ -82,6 +83,12 @@ class MarketCache:
         now = self._clock()
         return bool(rows) and all((q := self._quotes.get(m.get("ticker", ""))) is not None and now - q[0] <= max_age for m in rows)
 
+    def series_age(self, series: str) -> float | None:
+        """Seconds since this series was last listed, or None if it never was."""
+        with self._lock:
+            hit = self._series.get(series)
+            return None if hit is None else self._clock() - hit[0]
+
     def get_series(self, series: str, max_age: float) -> list[dict[str, Any]] | None:
         with self._lock:
             hit = self._series.get(series)
@@ -131,14 +138,25 @@ class MarketCache:
 
 
 class Discovery:
-    """A background thread that keeps the cache filled: every `every` seconds it lists the open markets of each series in `wanted(settings)`."""
+    """Background threads that keep the cache filled.
 
-    def __init__(self, get_client: Callable[[], Any], get_settings: Callable[[], Any], wanted: Callable[[Any], set[str]]):
+    Slow tier: every `discovery_seconds` it lists the open markets of each series in `wanted(settings)`, spread over the cycle.
+    Fast tier: `hot(settings)` names the series that matter right now (one with an open bet, then one with a prospect on a lane's watchlist, live lanes first); those are
+    listed again every `discovery_hot_seconds`, on their own thread, so a new window or a moving price in what the bot is acting on is seen in seconds. The slow tier skips a
+    series the fast tier listed recently, so no market is read twice for the same freshness. Both go through the client's one rate limiter.
+    """
+
+    def __init__(self, get_client: Callable[[], Any], get_settings: Callable[[], Any], wanted: Callable[[Any], set[str]],
+                 hot: Callable[[Any], Any] | None = None):
         self.get_client, self.get_settings, self.wanted = get_client, get_settings, wanted  # the client can be replaced when the key or the rate limit changes
+        self.hot = hot
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._hot_thread: threading.Thread | None = None
         self.last_cycle = 0.0
         self.last_count = 0
+        self.last_hot = 0.0
+        self.last_hot_count = 0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -146,18 +164,27 @@ class Discovery:
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, name="discovery", daemon=True)
         self._thread.start()
+        if self.hot is not None:
+            self._hot_thread = threading.Thread(target=self._run_hot, name="discovery-hot", daemon=True)
+            self._hot_thread.start()
 
     def stop(self) -> None:
         self._stop.set()
 
+    def _fresh(self, client: Any, series: str, within: float) -> bool:
+        cache = getattr(client, "cache", None)
+        age = cache.series_age(series) if cache is not None and hasattr(cache, "series_age") else None
+        return age is not None and age < within
+
     def cycle(self) -> int:
-        """List every wanted series once. Returns how many succeeded."""
+        """List every wanted series once, except those listed within the last cycle by the fast tier. Returns how many succeeded."""
         s = self.get_settings()
         client = self.get_client()
-        wanted = sorted(self.wanted(s))
+        every = float(getattr(s, "discovery_seconds", 45.0))
+        wanted = [series for series in sorted(self.wanted(s)) if not self._fresh(client, series, every)]
         # Spread the requests over the cycle instead of firing them back to back: a burst of listings would hold the whole request budget for seconds and every other
         # caller (a live lane's order, a stop) would queue behind it.
-        gap = float(getattr(s, "discovery_seconds", 45.0)) * 0.8 / max(1, len(wanted))
+        gap = every * 0.8 / max(1, len(wanted))
         done = 0
         for series in wanted:
             if self._stop.is_set():
@@ -170,6 +197,38 @@ class Discovery:
             self._stop.wait(gap)
         self.last_cycle, self.last_count = time.time(), done
         return done
+
+    def hot_cycle(self) -> int:
+        """List the series that matter right now (at most HOT_MAX, in the order `hot` gives them) once. Returns how many succeeded."""
+        if self.hot is None:
+            return 0
+        s = self.get_settings()
+        client = self.get_client()
+        every = float(getattr(s, "discovery_hot_seconds", 15.0))
+        series_list = list(dict.fromkeys(self.hot(s)))[:HOT_MAX]
+        gap = every * 0.8 / max(1, len(series_list))
+        done = 0
+        for series in series_list:
+            if self._stop.is_set():
+                break
+            try:
+                client.series_markets(series)
+                done += 1
+            except Exception as exc:
+                log.debug("discovery: could not list %s (%s)", series, exc)
+            self._stop.wait(gap)
+        self.last_hot, self.last_hot_count = time.time(), done
+        return done
+
+    def _run_hot(self) -> None:
+        while not self._stop.is_set():
+            s = self.get_settings()
+            if getattr(s, "discovery_enabled", True):
+                try:
+                    self.hot_cycle()
+                except Exception:
+                    log.exception("discovery fast cycle failed")
+            self._stop.wait(max(5.0, float(getattr(s, "discovery_hot_seconds", 15.0))))
 
     def _run(self) -> None:
         reported = time.time()

@@ -17,8 +17,9 @@ import logging
 import queue
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -28,10 +29,12 @@ from .estimators import Estimator
 from .kalshi import KalshiClient, KalshiError
 from .lanes import LaneSpec, lane_specs, tiered
 from .store import Store
+from .strategy import LongShot
 
 log = logging.getLogger("moonshot")
 
 REFRESH_EVERY = 3.0  # seconds between reloads of the watched events
+GAIN_LOOKBACK = (5.0, 25.0)  # a side is gaining when its mid is above what it was between this many seconds ago
 
 
 def wanted(s: Settings) -> bool:
@@ -79,6 +82,9 @@ class EntryWatcher:
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self.reviewed: list[str] = []  # log lines, newest last (also logged)
+        self._hist: dict[str, deque[tuple[float, float, float]]] = {}  # ticker -> (time, YES bid, YES ask), the last half minute
+        self._armed: dict[tuple[str, str, str], dict[str, Any]] = {}  # (lane, ticker, side) -> {"t": when armed, "shot": the prepared shot or None while it is being prepared}
+        self._arm_jobs: queue.SimpleQueue[tuple[Any, ...]] = queue.SimpleQueue()  # ("warm", key) / ("fire", key, shot)
 
     # ---- socket side: must be fast and never raise ----
     def on_event(self, e: dict[str, Any]) -> None:
@@ -90,9 +96,14 @@ class EntryWatcher:
         now = datetime.fromtimestamp(float(e["ts"]), UTC)
         with self._lock:
             hits = [(lane, info) for (lane, ev), info in self.watch.items() if ev == event]
+        hist = self._hist.setdefault(e["ticker"], deque(maxlen=400))
+        hist.append((float(e["ts"]), float(e["bid"]), float(e["ask"])))
         for lane, info in hits:
             spec = specs.get(lane)
             if spec is None or not spec.enabled or not spec.entry_socket:
+                continue
+            if spec.entry_approach > 0 and self._approach(e, lane, spec, info, now):
+                self._last[(lane, event)] = time.time()  # the armed buy is on its way: the timed path must not queue a second review
                 continue
             key = (lane, event)
             if key in self._pending or time.time() - self._last.get(key, 0.0) < spec.entry_min_gap_seconds:
@@ -100,6 +111,97 @@ class EntryWatcher:
             if in_band(spec, float(e["bid"]), float(e["ask"])) and in_window(spec, info.get("close", ""), now):
                 self._pending.add(key)
                 self._jobs.put(key)
+
+    def _gaining(self, ticker: str, side: str, ts: float) -> bool:
+        """Whether the side's mid is above where it was 5-25 seconds ago (the side's own terms: a NO side gains when YES falls)."""
+        hist = self._hist.get(ticker)
+        if not hist:
+            return False
+
+        def mid(row: tuple[float, float, float]) -> float:
+            m = (row[1] + row[2]) / 2.0
+            return m if side == "yes" else 1.0 - m
+
+        old = [r for r in hist if ts - GAIN_LOOKBACK[1] <= r[0] <= ts - GAIN_LOOKBACK[0]]
+        return bool(old) and mid(hist[-1]) > mid(old[-1])
+
+    def _approach(self, e: dict[str, Any], lane: str, spec: LaneSpec, info: dict[str, Any], now: datetime) -> bool:
+        """Arm a side that is approaching the lane's floor from under, and fire the prepared buy the moment it reaches it. True when a buy was queued to fire.
+
+        Within `entry_approach` under the floor, gaining, and inside the entry window: the lane's review is run early (price band widened down by the approach) so the shot is ready. At the floor, if the shot is ready and the arming is younger than
+        `entry_arm_seconds`, the evaluation is queued at once with the fresh price. An arming older than that is dropped (reset). Nothing here places an order: the queued evaluation does, through the lane's own gates."""
+        lo, hi = spec.price
+        ts = float(e["ts"])
+        fired = False
+        for side in spec.sides:
+            price = float(e["ask"]) if side == "yes" else 1.0 - float(e["bid"])
+            bid = float(e["bid"]) if side == "yes" else 1.0 - float(e["ask"])
+            key = (lane, e["ticker"], side)
+            arm = self._armed.get(key)
+            if arm is not None and ts - arm["t"] > spec.entry_arm_seconds:
+                del self._armed[key]
+                arm = None
+            if lo - 1e-9 <= price <= hi + 1e-9:
+                if arm is not None and arm["shot"] is not None and in_window(spec, info.get("close", ""), now):
+                    del self._armed[key]
+                    self._arm_jobs.put(("fire", key, replace(arm["shot"], ask=round(price, 4), bid=round(max(bid, 0.0), 4))))
+                    fired = True
+                continue
+            if arm is None and max(lo - spec.entry_approach, 0.01) <= price < lo and in_window(spec, info.get("close", ""), now) and self._gaining(e["ticker"], side, ts):
+                self._armed[key] = {"t": ts, "shot": None}
+                self._arm_jobs.put(("warm", key))
+        return fired
+
+    def _warm(self, key: tuple[str, str, str]) -> None:
+        """Run the lane's review for the event now, with its price floor lowered by the approach, and keep the shot for this side."""
+        lane, ticker, side = key
+        s = self.get_settings()
+        spec = lane_specs(s).get(lane)
+        arm = self._armed.get(key)
+        if spec is None or arm is None:
+            return
+        wide = replace(spec, price=(max(spec.price[0] - spec.entry_approach, 0.01), spec.price[1]))
+        store = self.store_factory()
+        for shot in runner.review_lane(s, self.client, store, wide, self.estimators(store), only={event_of(ticker)}):
+            if shot.ticker == ticker and shot.side == side:
+                with self._lock:
+                    if key in self._armed:
+                        self._armed[key]["shot"] = shot
+                return
+
+    def _fire(self, key: tuple[str, str, str], shot: LongShot) -> None:
+        from .jobs import Jobs
+
+        s = self.get_settings()
+        spec = lane_specs(s).get(key[0])
+        if spec is None:
+            return
+        store = self.store_factory()
+        made = Jobs(store).enqueue(
+            "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
+            expires_in=60.0, max_attempts=s.job_max_attempts, priority=spec.priority,
+        )
+        line = f"{key[0]} {shot.ticker} {shot.side}: armed under the floor, reached it at {shot.ask:.2f}; evaluation {'queued' if made else 'already queued'}"
+        log.info("entry watcher: %s", line)
+        self.reviewed.append(line)
+
+    def _run_arms(self) -> None:
+        while not self._stop.is_set():
+            try:
+                job = self._arm_jobs.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            try:
+                if job[0] == "warm":
+                    self._warm(job[1])
+                else:
+                    self._fire(job[1], job[2])
+            except KalshiError as exc:
+                log.warning("entry watcher: arming %s failed (%s)", job[1], exc)
+                self._armed.pop(job[1], None)
+            except Exception:
+                log.exception("entry watcher: arming %s failed", job[1])
+                self._armed.pop(job[1], None)
 
     # ---- the review thread ----
     def refresh(self) -> None:
@@ -166,7 +268,7 @@ class EntryWatcher:
     def start(self) -> None:
         if self._threads:
             return
-        for fn, name in ((self._run_refresh, "entry-refresh"), (self._run_reviews, "entry-review")):
+        for fn, name in ((self._run_refresh, "entry-refresh"), (self._run_reviews, "entry-review"), (self._run_arms, "entry-arm")):
             th = threading.Thread(target=fn, name=name, daemon=True)
             th.start()
             self._threads.append(th)

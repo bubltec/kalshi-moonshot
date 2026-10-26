@@ -47,6 +47,7 @@ class LongShot:
     event_ticker: str = ""
     mutually_exclusive: bool = False  # at most one YES in this event can occur
     side: str = "yes"  # contract bought; for "no", ask/bid are NO prices (1 - yes_bid / 1 - yes_ask)
+    factors: str = ""  # JSON snapshot of the entry context, saved with the decision (factors.py); empty when the tape had none
 
 
 def _f(m: dict[str, Any], key: str) -> float:
@@ -297,6 +298,35 @@ def stop_loss_hit(entry: float, bid: float, hours_left: float, hours: float, dro
     if lost < drop:
         return None
     return f"stop-loss: {hours_left:.1f}h left, down {lost:.0%} ({entry:.2f} -> {bid:.2f})"
+
+
+def stop_wait(cap: float, seconds_left: float | None, fifteen_min: bool = False) -> float:
+    """How long a dipped bid must stay past the stop line before the stop believes it, in seconds.
+
+    Calculated, not guessed (scripts/stop_wait_study.py: all 7,200+ favorites bets replayed on their
+    recorded quotes, 45% stop, sale resting at 1.1x). A dip with 7+ minutes left is information — the
+    favorite is being repriced and does not come back (waiting cost up to 14 points of return). A dip
+    with 2-5 minutes left is mostly the tape overreacting against the settlement average, and it does
+    come back (waiting earned 7-16 points). Inside 2 minutes the dip IS the settlement pricing itself:
+    waiting turned a -52% exit into -87%. Of the rules tried, the best (-1.4% a bet, against -1.8% for
+    the cap-60 step rule, -2.0% for the flat 10 s before that, -2.2% at once, -2.6% no stop) sells at
+    once past 7 minutes and waits longest — up to 120 s — at 2-3 minutes.
+
+    `cap` is the lane's stop_confirm_seconds, the MOST the stop will ever wait; a lane that sets it to
+    0 still sells at once. The early-out and the 120 s tier are 15-minute findings, so they apply only
+    when `fifteen_min`; an hourly market (or an unknown close) past 7 minutes waits the cap, as before.
+    """
+    if cap <= 0:
+        return 0.0
+    if seconds_left is None:
+        return cap
+    if seconds_left > 420:
+        return 0.0 if fifteen_min else cap
+    if seconds_left > 180:
+        return min(cap, 45.0)
+    if seconds_left > 120:
+        return min(cap, 120.0 if fifteen_min else 60.0)
+    return 0.0
 
 
 def take_profit_hit(entry: float, bid: float, x: float = 0.0, at: float = 0.0) -> str | None:

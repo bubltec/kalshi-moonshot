@@ -18,6 +18,47 @@ def test_settled_decision_is_retrievable_without_the_price(tmp_path):
     assert "0.02" not in text
 
 
+def test_a_case_says_when_it_settled(tmp_path):
+    store = Store(tmp_path / "moonshot.db")
+    store.add_decision(
+        ticker="KXTEST-9", title="Will Toluca win by more than 3.5 goals?",
+        bid=0.01, ask=0.02, model_p=0.12, edge=0.09, action="bet",
+        reason="Toluca is the stronger side.", mode="observe", close_time="2026-10-20T01:00:00Z",
+    )
+    store.set_outcome("KXTEST-9", "no")
+    row = store.db.execute("SELECT settled_ts FROM rag_cases WHERE ticker='KXTEST-9'").fetchone()
+    assert row["settled_ts"] > 0  # indexed with its settlement time, so age and recency can be read later
+    assert "(settled today)" in store.similar_text("Will Club America win by more than 3.5 goals?")
+
+
+def test_a_base_rate_prefers_the_last_30_days(tmp_path):
+    import time
+
+    store = Store(tmp_path / "moonshot.db")
+    for i in range(6):  # two months ago this series resolved yes every time
+        _decide(store, f"KXOLD-A{i}", outcome="yes")
+    store.db.execute("UPDATE decisions SET settled_ts=? WHERE ticker LIKE 'KXOLD-A%'", (time.time() - 60 * 86400,))
+    for i in range(6):  # this month, never
+        _decide(store, f"KXOLD-B{i}", outcome="no")
+    store.db.commit()
+    store.rag.rebuild()
+    rate = store.rag.base_rate(series="KXOLD")
+    assert rate is not None and (rate.yes, rate.n, rate.recent) == (0, 6, True)
+    assert "last 30 days" in rate.line()
+
+
+def test_an_index_without_settlement_times_is_refilled(tmp_path):
+    from kalshi_moonshot.rag import Rag
+
+    store = Store(tmp_path / "moonshot.db")
+    _decide(store, "KXBACK-1", outcome="yes")
+    store.db.execute("UPDATE rag_cases SET settled_ts=NULL")
+    store.db.commit()
+    Rag(store)  # opening the index again notices the missing times and backfills from the decisions
+    row = store.db.execute("SELECT settled_ts FROM rag_cases WHERE ticker='KXBACK-1'").fetchone()
+    assert row["settled_ts"] > 0
+
+
 def test_unrelated_question_does_not_match_a_name(tmp_path):
     store = Store(tmp_path / "moonshot.db")
     store.add_decision(

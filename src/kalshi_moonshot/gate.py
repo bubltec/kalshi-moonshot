@@ -56,7 +56,7 @@ def since_ts(text: str) -> float:
 
 
 def table(store: Store, lanes: tuple[str, ...], window: float = 15.0, since: float = 0.0) -> dict[tuple[int, int], Cell]:
-    by: dict[tuple[int, int], list[float]] = {b: [] for b in BANDS}
+    by: dict[tuple[int, int], list[tuple[float, float]]] = {b: [] for b in BANDS}  # (market close, return): bets closing together are one slot
     wins: dict[tuple[int, int], int] = dict.fromkeys(BANDS, 0)
     for t in journal.trades(store):
         if t.lane not in lanes or not t.series.endswith("15M") or not t.close_ts or not t.opened_ts or t.stake <= 0:
@@ -65,14 +65,13 @@ def table(store: Store, lanes: tuple[str, ...], window: float = 15.0, since: flo
             continue
         band = band_of(window - (t.close_ts - t.opened_ts) / 60.0)
         if band is not None:
-            by[band].append(t.pnl / t.stake)
+            by[band].append((t.close_ts, t.pnl / t.stake))
             wins[band] += t.won
     out = {}
     for band, rois in by.items():
         n = len(rois)
-        mean = sum(rois) / n if n else 0.0
-        se = (math.sqrt(sum((r - mean) ** 2 for r in rois) / (n - 1)) / math.sqrt(n)) if n > 1 else float("inf")
-        out[band] = Cell(band, n, mean, se, wins[band])
+        mean = sum(r for _, r in rois) / n if n else 0.0
+        out[band] = Cell(band, n, mean, journal.cluster_se(rois, mean), wins[band])
     return out
 
 
@@ -80,7 +79,7 @@ def series_table(
     store: Store, lanes: tuple[str, ...], window: float = 15.0, since: float = 0.0
 ) -> dict[tuple[str, tuple[int, int]], Cell]:
     """One Cell per (series, minute band), from the same finished bets as table()."""
-    by: dict[tuple[str, tuple[int, int]], list[float]] = {}
+    by: dict[tuple[str, tuple[int, int]], list[tuple[float, float]]] = {}
     wins: dict[tuple[str, tuple[int, int]], int] = {}
     for t in journal.trades(store):
         if t.lane not in lanes or not t.series.endswith("15M") or not t.close_ts or not t.opened_ts or t.stake <= 0:
@@ -89,14 +88,13 @@ def series_table(
             continue
         band = band_of(window - (t.close_ts - t.opened_ts) / 60.0)
         if band is not None:
-            by.setdefault((t.series, band), []).append(t.pnl / t.stake)
+            by.setdefault((t.series, band), []).append((t.close_ts, t.pnl / t.stake))
             wins[(t.series, band)] = wins.get((t.series, band), 0) + t.won
     out = {}
     for key, rois in by.items():
         n = len(rois)
-        mean = sum(rois) / n
-        se = (math.sqrt(sum((r - mean) ** 2 for r in rois) / (n - 1)) / math.sqrt(n)) if n > 1 else float("inf")
-        out[key] = Cell(key[1], n, mean, se, wins[key])
+        mean = sum(r for _, r in rois) / n
+        out[key] = Cell(key[1], n, mean, journal.cluster_se(rois, mean), wins[key])
     return out
 
 

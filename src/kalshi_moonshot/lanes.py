@@ -29,6 +29,8 @@ from .config import Settings
 LLM = "llm"
 LADDER = "ladder"
 MARKET = "market"
+CURVE = "curve"  # the class of the move so far in the window (curve.py) gives the chance
+FORECAST = "forecast"  # the index's recent moves forecast the side's price (forecast.py)
 SHAPE = "llm_shape"  # the language model reads the shapes of similar past 15-minute windows (shape.py)
 
 
@@ -78,13 +80,24 @@ class LaneSpec:
     unstable_seconds: float = 20.0
     hover_dip: float = 0.0  # sell at the first profit (after fees) once the bid has dipped to this price or lower since entry, i.e. hovered near the strike; 0 = off
     reentry_cooldown_seconds: float = 0.0  # after this lane sells a market, wait this long before it may buy that market again (0 = no wait)
+    buy_rest_seconds: float = 0.0  # buy with a post-only RESTING order instead of an immediate one: it waits this many seconds at buy_rest_below under the ask and is dropped if unfilled (no fallback). A resting order that fills pays no taker fee; replay says it mostly fills on dips (0 = buy at the ask)
+    buy_rest_below: float = 0.01  # how far under the ask the resting buy sits, in dollars
+    max_open: int = 0  # at most this many bets of this lane open at once, across all its markets (0 = no limit); the next candidate waits until one closes
+    min_dwell_seconds: float = 0.0  # buy a side only after its price has been inside the lane's band this long (the tape's quotes). Buying the moment it crosses 70c lost 28% on 85 bets; waiting 30 s+ about 4% (0 = buy at once)
+    entry_trend_seconds: float = 0.0  # buy only when the side's price (mid of the tape's bid and ask, in its own terms) has not fallen over the last this many seconds by more than entry_trend_min (0 = no check). A market that is falling when we would buy lost 16-18% over 7 days; one flat or rising lost 0-5%
+    entry_trend_min: float = 0.0  # the least the side's price must have changed over entry_trend_seconds, in dollars (0.0 = not falling; 0.01 = up a cent)
+    entry_trend_z: float | None = None  # the same check in the market's own units: the move over entry_trend_seconds divided by that market's typical move over the same span (the standard deviation of its changes over the previous 2 minutes) must be MORE than this (0 = the side must be gaining; negative allows a fall of that many typical moves). Replaces entry_trend_min when set; None = off
     stop_loss_at: float = 0.0  # this lane's own stop, as a fraction under the price paid (0 = the global STOP_LOSS_DROP)
-    stop_confirm_seconds: float = 0.0  # the bid must stay past the stop line this long before the stop sells (0 = at once)
+    stop_confirm_seconds: float = 0.0  # the LONGEST the stop waits for a dipped bid to recover before selling (0 = at once); the actual wait is calculated from the time left — strategy.stop_wait, fitted in scripts/stop_wait_study.py
     stop_guard: bool = False  # True = the model's opinion may hold the stop back; the default is a hard stop that sells whatever the model thinks it is worth
     stop_model: bool = False  # a 15-minute lane's stop first asks the model about the window's shape and holds only when it values the position above the sale (STOP_MODEL_SECONDS wait; no answer = sell)
+    settlement_guard: float = 0.0  # OFF: 377 live sales, 88% would have won, -8.3c vs holding. Same job as the burst exit, worse signal. The watcher still has the code; 0.10 would turn it back on
+    settlement_flip: bool = False  # watch held 15-minute bets for a volume burst against the holder in the last 120 s and SELL the favorite (watcher.py: that is the peak-crash exit); also log the other side as a paper bet in burst_flip
+    burst_buy: float = 0.0  # dollars to put, for real, on the OTHER side (when it costs 5-25c) the first time that burst fires (0 = only log it). Needs settlement_flip and a live lane
     stop_loss: bool = True  # False = no stop-loss for this lane (a $1 ticket's loss is already capped; its spread alone can look like a 30% drop)
     take_profit_x: float = 0.0  # sell when the bid reaches this multiple of the price paid (0 = off); watched live on the socket
     take_profit_at: float = 0.0  # sell when the bid reaches this price (0 = off)
+    rest_sell: bool = False  # rest the take-profit sell on the book from the moment a live buy fills (post-only, so no taker fee) instead of having the watcher cross the book when the bid gets there; needs take_profit_x or take_profit_at. A stop or crash exit cancels it first and sells what is left
     trail_activate: float = 0.0  # peak-crash exit, when trail_progress is 0: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
     trail_progress: float | None = None  # arm the crash exit once the bid has covered this share of the way from the price paid to $1.00; None = the global CRASH_PROGRESS, 0 = use trail_activate (a gain on the price paid) instead
     trail_spot_sigma: float | None = None  # the crash exit waits while spot is still this many sigma on the winning side of the strike; None = the global CRASH_SPOT_SIGMA, 0 = off
@@ -112,7 +125,10 @@ class LaneSpec:
     review_minutes: float | None = None  # fast pass over the watchlist; None = the main scan only
     cooldown_minutes: float = 0.0  # skip a market decided on this recently
     entry_socket: bool = False  # two-level lanes: also re-review a watched event the moment a streamed quote puts a side in the price band (entrywatch.py)
+    entry_approach: float = 0.0  # arm a side when its price is within this many dollars UNDER the lane's floor and gaining (entrywatch.py): the lane's review and shot are prepared then, and the buy goes out the moment the price reaches the floor (0 = off)
+    entry_arm_seconds: float = 30.0  # an armed side that has not reached the floor within this long is dropped and may be armed again
     entry_min_gap_seconds: float = 2.0  # ... but not the same event more often than this
+    buy_slip: float = 0.0  # the buy order is limited this many dollars above the ask the bot read: it still fills at the best ask, and pays up to the allowance only if the book has moved (0 = limit at the ask)
     watch_max: int = 40
     priority: int = 0  # queue priority of this lane's jobs; higher runs first
     trust: float = 1.0  # prior weight on the estimator before our record has any say (0 to 1)
@@ -280,7 +296,7 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "entry_socket", "entry_min_gap_seconds",
+    "entry_socket", "entry_min_gap_seconds", "buy_slip",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
 })
 
@@ -306,7 +322,7 @@ def version_of(spec: LaneSpec, s: Any) -> str:
 
 
 def takes_profit(spec: LaneSpec) -> bool:
-    return spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0
+    return spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0
 
 
 def chance_ok(spec: LaneSpec, p: float) -> bool:

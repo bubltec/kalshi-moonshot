@@ -276,6 +276,11 @@ class KalshiClient:
             cursor = body.get("cursor") or ""
             if not cursor:
                 break
+        if not out:
+            # The server-side status filter returned nothing while the unfiltered list showed an active market (2026-10-24, 15-minute series).
+            # An empty answer is also the normal one for a closed series, so ask once more without the filter and keep the open markets ourselves.
+            body = self._request("GET", "/markets", params={"series_ticker": series, "limit": 1000})
+            out = [m for m in body.get("markets", []) if m.get("status") in {"active", "open"}]
         self.cache.put_series(series, out)
         return out
 
@@ -413,6 +418,59 @@ class KalshiClient:
             "self_trade_prevention_type": "taker_at_cross",
         }
         return self._request("POST", "/portfolio/events/orders", json=body, auth=True)
+
+    def buy_resting(
+        self, ticker: str, side: str, count: float, price: float, seconds: float, client_order_id: str | None = None, post_only: bool = True
+    ) -> dict[str, Any]:
+        """Buy `side` ("yes" or "no") at `price` (that side's own price) as a resting order that cancels itself after `seconds`.
+
+        Kalshi charges its trading fee to an order that matches at once; an order that rests on the book first pays none on a standard series (fee type `quadratic`).
+        `post_only` makes Kalshi refuse the order instead of letting it cross the book, where it would be charged as a taker.
+        NO is sent the way buy_no_ioc sends it: as an ask on the YES book at 1 - price.
+        """
+        body: dict[str, Any] = {
+            "ticker": ticker,
+            "client_order_id": client_order_id or str(uuid.uuid4()),
+            "side": "bid" if side == "yes" else "ask",
+            "count": f"{count:.2f}",
+            "price": f"{price if side == 'yes' else 1.0 - price:.4f}",
+            "time_in_force": "good_till_canceled",
+            "expiration_time": int(time.time() + seconds),
+            "post_only": post_only,
+            "self_trade_prevention_type": "taker_at_cross",
+        }
+        resp = self._request("POST", "/portfolio/events/orders", json=body, auth=True)
+        return resp if side == "yes" else _as_no(resp)
+
+    def sell_resting(
+        self, ticker: str, side: str, count: float, price: float, seconds: float, client_order_id: str | None = None, post_only: bool = True
+    ) -> dict[str, Any]:
+        """Sell `side` ("yes" or "no") at `price` (that side's own price) as a resting order that cancels itself after `seconds`.
+
+        The mirror of buy_resting: an order that rests on the book first is charged no trading fee on a standard
+        series (fee type `quadratic`); only an order that matches at once pays. `post_only` makes Kalshi refuse the
+        order instead of letting it cross the book, where it would be charged as a taker: a target the bid has already
+        reached is refused here and left to the watcher's immediate sale. reduce_only so it can only ever close the
+        position it was placed against. NO is sent the way sell_no_ioc sends it: as a bid on the YES book at 1 - price.
+        """
+        body: dict[str, Any] = {
+            "ticker": ticker,
+            "client_order_id": client_order_id or str(uuid.uuid4()),
+            "side": "ask" if side == "yes" else "bid",
+            "count": f"{count:.2f}",
+            "price": f"{price if side == 'yes' else 1.0 - price:.4f}",
+            "time_in_force": "good_till_canceled",
+            "expiration_time": int(time.time() + seconds),
+            "post_only": post_only,
+            "self_trade_prevention_type": "taker_at_cross",
+            "reduce_only": True,
+        }
+        resp = self._request("POST", "/portfolio/events/orders", json=body, auth=True)
+        return resp if side == "yes" else _as_no(resp)
+
+    def cancel_order(self, order_id: str) -> dict[str, Any]:
+        """Cancel one open order by id. Kalshi answers with the order's last state; a fill that beat the cancel is on it (and in the fills list)."""
+        return self._request("DELETE", f"/portfolio/events/orders/{order_id}", auth=True)
 
     def buy_no_ioc(
         self, ticker: str, count: float, no_price: float, client_order_id: str | None = None

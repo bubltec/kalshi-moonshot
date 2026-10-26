@@ -43,15 +43,20 @@ def _pct(x: float | None) -> str:
 
 def _kind(reason: str | None) -> str:
     r = (reason or "held to settlement").lower()
-    for key in ("stop-loss", "peak-crash", "hover", "unstable", "spike", "take-profit"):
+    for key in ("stop-loss", "burst", "settlement-guard", "peak-crash", "hover", "unstable", "spike", "take-profit"):
         if r.startswith(key):
             return key
     return "other exit"
 
 
-def lane_table(store: Any, since: float, s: Settings | None = None) -> list[str]:
+def lane_table(store: Any, since: float, s: Settings | None = None, ticker_like: str | None = None) -> list[str]:
     """One row per lane; a live lane is split by lane version (the newest first), because a lane that was tuned during the period is several different bets."""
-    rows = store.db.execute("SELECT lane, mode, ask, side, outcome, exit_price, exit_reason, stake_usd, lane_ver FROM decisions WHERE action = 'bet' AND ts >= ?", (since,)).fetchall()
+    sql = "SELECT lane, mode, ask, side, outcome, exit_price, exit_reason, stake_usd, lane_ver FROM decisions WHERE action = 'bet' AND ts >= ?"
+    args: list[Any] = [since]
+    if ticker_like:
+        sql += " AND ticker LIKE ?"
+        args.append(ticker_like)
+    rows = store.db.execute(sql, args).fetchall()
     current = {}
     if s is not None:
         current = {name: lanes.version_of(spec, s) for name, spec in lanes.lane_specs(s).items()}
@@ -78,8 +83,13 @@ def lane_table(store: Any, since: float, s: Settings | None = None) -> list[str]
     return out
 
 
-def exit_table(store: Any, since: float) -> list[str]:
-    rows = store.db.execute("SELECT lane, mode, ask, side, outcome, exit_price, exit_reason FROM decisions WHERE action = 'bet' AND ts >= ? AND exit_price IS NOT NULL", (since,)).fetchall()
+def exit_table(store: Any, since: float, ticker_like: str | None = None) -> list[str]:
+    sql = "SELECT lane, mode, ask, side, outcome, exit_price, exit_reason FROM decisions WHERE action = 'bet' AND ts >= ? AND exit_price IS NOT NULL"
+    args: list[Any] = [since]
+    if ticker_like:
+        sql += " AND ticker LIKE ?"
+        args.append(ticker_like)
+    rows = store.db.execute(sql, args).fetchall()
     by: dict[str, list] = defaultdict(list)
     for r in rows:
         x = _roi(r)
@@ -173,6 +183,34 @@ def market_gaps(store: Any, since: float, now: float) -> list[str]:
         per[datetime.fromtimestamp(float(r[0]), UTC).strftime("%m-%d")] += 1
     today = datetime.fromtimestamp(now, UTC).strftime("%m-%d")
     return ["BTC 15-minute windows per UTC day: " + "  ".join(f"{d}:{n}{'*' if d == today else ''}" for d, n in sorted(per.items())) + "   (96 is a full day; * is today so far)"]
+
+
+def hour_context(s: Settings, store: Any, hours: float = 1.0, now: float | None = None) -> str:
+    """The last `hours` of 15-minute favorites against the exchange clock, for the hourly review's model."""
+    from . import clock
+
+    now = now or time.time()
+    since = now - hours * 3600
+    snap = clock.snapshot(store, now, hours)
+    clock.record(store, snap)
+    book = (
+        "Current book (15-minute): resting buy 1c under the ask for 20s, hold to settlement, hard 45% stop "
+        "(wait calculated from time left), burst sells the favorite in the last 120s. "
+        "Take-profit, trail, stop-model and settlement-guard are off (they cut winners)."
+    )
+    live = ", ".join(sorted(s.live_lanes or [])) or "none"
+    return "\n".join([
+        clock.report(store, snap),
+        "",
+        book,
+        f"env={s.env} mode={s.mode}; live lanes: {live}",
+        "",
+        "== THIS HOUR'S 15-MINUTE BETS BY LANE",
+        *lane_table(store, since, s, ticker_like="%15M%"),
+        "",
+        "== WHAT THE EXITS DID",
+        *exit_table(store, since, ticker_like="%15M%"),
+    ])
 
 
 def notes(s: Settings) -> list[str]:

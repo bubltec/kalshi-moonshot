@@ -104,8 +104,15 @@ class Settings:
     shard_topup_max_per_day: float  # most dollars the bot may move between exchanges per day (New York time)
     patterns_hours: float  # how often to rewrite data/patterns.md from your trades (0 = off)
     tape_enabled: bool  # record contract quotes next to the price they follow (lead-lag study)
+    esports_forecast: bool  # forecast CS2 and Dota 2 matches with the local model and news, and score it against the market (esports.py); never trades
+    settlement_edge_enabled: bool  # log, as paper bets, the side whose exact settlement chance beats its ask in the last 150 s of every crypto 15-minute market (settlement_edge.py)
+    coinbase_feed_enabled: bool  # record Coinbase's real-time spot prices (about one a second per coin) on the tape (coinbasefeed.py)
     fut_flow_enabled: bool  # record Hyperliquid perpetual-futures trade flow per second on the tape (futflow.py)
     fut_flow_coins: tuple[str, ...]
+    behavior_cases_hours: float  # how often newly finished windows are added to the case memory (behavior.py); 0 = never
+    forecast_refit_hours: float  # how often the forecast weights are refit from the tape while a forecast lane is on (0 = never)
+    forecast_weights: str  # JSON file of forecast weights (forecast.py); empty = <data dir>/forecast_h5.json
+    watch_series: tuple[str, ...]  # opt-in list of series to follow (tape and discovery); empty = follow every series a lane or the instruments file names. Live lanes' own series are always followed
     tape_extra_series: tuple[str, ...]  # more series (sports, esports...) whose open markets the tape follows, quotes and trade flow
     manual_exit: bool  # sell positions you opened by hand, from the socket, to take a profit (see manual.py); off unless asked for
     manual_exit_skip: tuple[str, ...]  # ticker prefixes the manual exit leaves alone (positions you mean to hold)
@@ -123,6 +130,7 @@ class Settings:
     manual_cheap_giveback: float  # ... then sell when this share of the gain (peak over price paid) is given back, never under the price paid
     discovery_enabled: bool  # one thread lists every series the lanes use and fills a shared cache; lanes read it instead of asking Kalshi each (marketdata.py)
     discovery_seconds: float  # how often that thread lists each series again
+    discovery_hot_seconds: float  # how often the series the bot is acting on (an open bet, a prospect on a lane's watchlist) are listed again, on a second thread
     discovery_max_age: float  # a lane's scope and review accept cached listings this young (the live quote stream keeps their prices current)
     discovery_eval_age: float  # a PAPER lane's evaluation accepts a cached market this young; a live lane's evaluation always asks Kalshi
     estimate_share_seconds: float  # one lane's estimate of a market (model or ladder price) is reused by every other lane asking within this many seconds; 0 = each lane asks for itself
@@ -217,6 +225,7 @@ class Settings:
     # --- hourly review (see review.py). It can only tighten these. ---
     review_enabled: bool
     review_interval_minutes: int
+    review_llm: bool  # after the scorecard pass, send the last hour of bets to the local model for suggested improvements (review.py); never applies them
     rag_skip_lanes: frozenset[str]
 
     # --- local model (Ollama) ---
@@ -270,7 +279,13 @@ def apply_env_file(path: Path) -> bool:
     """
     if not path.is_file():
         return False
-    for raw in path.read_text().splitlines():
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        # Docker bind-mounts a file by inode; replacing .env on the host leaves a ghost path
+        # that still stats as a file but cannot be read until the container is recreated.
+        return False
+    for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -375,8 +390,15 @@ def load() -> Settings:
         archive_region=os.environ.get("ARCHIVE_REGION", "us-east-1").strip() or "us-east-1",
         archive_hot_days=max(2, _i("ARCHIVE_HOT_DAYS", 14)),
         archive_delete_local=_b("ARCHIVE_DELETE_LOCAL", False),
+        esports_forecast=_b("ESPORTS_FORECAST", True),
+        settlement_edge_enabled=_b("SETTLEMENT_EDGE_ENABLED", False),  # off: the paper observer's replay edge vanished once fills were delayed (scripts/settlement_edge_fill_study.py)
+        coinbase_feed_enabled=_b("COINBASE_FEED_ENABLED", True),
         fut_flow_enabled=_b("FUT_FLOW_ENABLED", True),
         fut_flow_coins=tuple(x.strip().upper() for x in os.environ.get("FUT_FLOW_COINS", "BTC,ETH,SOL,XRP,DOGE").split(",") if x.strip()),
+        behavior_cases_hours=max(0.0, _f("BEHAVIOR_CASES_HOURS", 2.0)),
+        forecast_refit_hours=max(0.0, _f("FORECAST_REFIT_HOURS", 2.0)),
+        forecast_weights=os.environ.get("FORECAST_WEIGHTS", "").strip(),
+        watch_series=tuple(x.strip() for x in os.environ.get("WATCH_SERIES", "").split(",") if x.strip()),
         tape_extra_series=tuple(x.strip() for x in os.environ.get("TAPE_EXTRA_SERIES", "").split(",") if x.strip()),
         manual_exit=_b("MANUAL_EXIT", False),
         manual_exit_skip=tuple(x.strip() for x in os.environ.get("MANUAL_EXIT_SKIP", "").split(",") if x.strip()),
@@ -393,6 +415,7 @@ def load() -> Settings:
         manual_cheap_giveback=_f("MANUAL_CHEAP_GIVEBACK", 0.5),
         discovery_enabled=_b("DISCOVERY_ENABLED", True),
         discovery_seconds=max(5.0, _f("DISCOVERY_SECONDS", 45.0)),
+        discovery_hot_seconds=max(5.0, _f("DISCOVERY_HOT_SECONDS", 15.0)),
         discovery_max_age=max(0.0, _f("DISCOVERY_MAX_AGE", 60.0)),
         discovery_eval_age=max(0.0, _f("DISCOVERY_EVAL_AGE", 10.0)),
         estimate_share_seconds=max(0.0, _f("ESTIMATE_SHARE_SECONDS", 60.0)),
@@ -474,6 +497,7 @@ def load() -> Settings:
         search_results=_i("SEARCH_RESULTS", 5),
         review_enabled=_b("REVIEW_ENABLED", True),
         review_interval_minutes=max(15, _i("REVIEW_INTERVAL_MINUTES", 60)),
+        review_llm=_b("REVIEW_LLM", True),
         rag_skip_lanes=frozenset(),
         ollama_url=os.environ.get("OLLAMA_URL", "http://host.docker.internal:11434").rstrip("/"),
         model=os.environ.get("MODEL", "qwen3:8b"),

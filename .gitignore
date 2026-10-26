@@ -14,3 +14,4 @@ dist/
 build/
 *.bak-*
 cdk.out/
+.env.demo

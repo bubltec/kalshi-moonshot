@@ -1,5 +1,7 @@
 import threading
 
+import pytest
+
 from kalshi_moonshot import config
 from kalshi_moonshot.kalshi import KalshiClient
 from kalshi_moonshot.marketdata import Discovery, MarketCache
@@ -204,3 +206,60 @@ def test_the_stop_backstop_reads_paper_bets_from_the_cache_but_real_ones_from_ka
     c = C()
     runner.stop_loss_pass(s, c, store)
     assert c.reads == {"KXBTCD-A": 10.0, "KXBTCD-B": 0.0}
+
+
+def test_the_fast_tier_lists_the_hot_series_in_order_up_to_its_cap(monkeypatch):
+    class C:
+        def __init__(self):
+            self.asked = []
+
+        def series_markets(self, series):
+            self.asked.append(series)
+            if series == "BAD":
+                raise RuntimeError("boom")
+            return []
+
+    c = C()
+    hot = ["KXBTC15M", "BAD", "KXETH15M", "KXBTC15M"] + [f"S{i}" for i in range(20)]  # a repeat, a failure and more than the cap
+    d = Discovery(lambda: c, lambda: config.load(), lambda s: set(), hot=lambda s: hot)
+    waits = []
+    monkeypatch.setattr(d._stop, "wait", lambda t=None: waits.append(t) or False)
+    done = d.hot_cycle()
+    assert c.asked[:3] == ["KXBTC15M", "BAD", "KXETH15M"] and len(c.asked) == 10  # held series first, the repeat dropped, the cap respected
+    assert done == 9 and waits == [pytest.approx(15.0 * 0.8 / 10)] * 10  # spread over the cycle, like the slow tier
+
+
+def test_the_slow_tier_skips_a_series_the_fast_tier_just_listed(monkeypatch):
+    c, _calls = client()
+    c.series_markets("KXBTC15M")  # the fast tier's listing fills the shared cache
+    asked = []
+    real = c.series_markets
+    monkeypatch.setattr(c, "series_markets", lambda series: asked.append(series) or real(series))
+    d = Discovery(lambda: c, lambda: config.load(), lambda s: {"KXBTC15M", "KXETH15M"})
+    monkeypatch.setattr(d._stop, "wait", lambda t=None: False)
+    d.cycle()
+    assert asked == ["KXETH15M"]  # the one that is fresh is not read again
+
+
+def test_no_hot_function_means_no_fast_tier():
+    d = Discovery(lambda: None, lambda: config.load(), lambda s: set())
+    assert d.hot_cycle() == 0
+
+
+def test_the_worker_names_open_bets_first_then_live_lane_prospects(tmp_path, monkeypatch):
+    from kalshi_moonshot.store import Store
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LIVE_LANES", "crypto_favorite")
+    (tmp_path / "strategies.toml").write_text('[lane.crypto_favorite]\nestimator="ladder"\nprice=[0.5,0.9]\nhours=[0.0,1.0]\nseries=["KXBTC15M"]\nreview_minutes=1\n'
+                                              '[lane.paper_fx]\nestimator="ladder"\nprice=[0.5,0.9]\nhours=[0.0,1.0]\nseries=["KXEURUSD15M"]\nreview_minutes=1\n')
+    s = config.load()
+    store = Store(s.db_path, frozenset())
+    store.db.execute(
+        "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (1.0, "KXSOL15M-A", "bet", "trade", 0.80, "yes", "crypto_favorite", 2, 1.6, "2099-01-01T00:00:00Z"))
+    store.db.commit()
+    store.set_watch("paper_fx", {"KXEURUSD15M-X": {"close": "2099-01-01T00:00:00Z", "series": "KXEURUSD15M"}})
+    store.set_watch("crypto_favorite", {"KXBTC15M-Y": {"close": "2099-01-01T00:00:00Z", "series": "KXBTC15M"}})
+    w = Worker(s, client()[0], None, store, None)
+    assert w._hot_series(s)[:3] == ["KXSOL15M", "KXBTC15M", "KXEURUSD15M"]  # the held bet, then the live lane's prospect, then the paper lane's

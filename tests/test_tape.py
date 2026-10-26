@@ -158,3 +158,29 @@ def test_the_recorder_stores_kraken_prices_for_the_crypto_markets_only(tmp_path)
     rec.sample_kraken()
     rec.tape.flush()
     assert rec.tape.db.execute("SELECT symbol, px FROM feed_ticks").fetchall()[0][:] == ("kraken:BTC/USD", 80000.0)
+
+
+def test_extra_series_are_recorded_on_their_own_connection(tmp_path):
+    s = config.load()
+    s = type(s)(**{**s.__dict__, "data_dir": tmp_path, "tape_extra_series": ("KXESOCCERGAME",)})
+
+    class Client:
+        authed = True
+
+        def series_markets(self, series):
+            return [{"ticker": f"{series}-26OCT241551AAABBB-AAA", "status": "active"}]
+
+    rec = TapeRecorder(Client(), s, None)  # type: ignore[arg-type]
+    n = rec.refresh_tickers()
+    assert n == 21  # the 20 live 15-minute markets and the one extra
+    assert rec.extra_stream._tickers == {"KXESOCCERGAME-26OCT241551AAABBB-AAA"}
+    assert not any(t.startswith("KXESOCCERGAME") for t in rec.stream._tickers)  # a new match every minute never reconnects the live stream
+
+
+def test_a_recording_only_stream_asks_for_quotes_and_nothing_else():
+    live = kalshiws.KalshiStream(object(), lambda e: None)  # type: ignore[arg-type]
+    extra = kalshiws.KalshiStream(object(), lambda e: None, index_feed=False, fills=False)  # type: ignore[arg-type]
+    channels = lambda stream: [c for m in stream.subscriptions(["T1"]) for c in m["params"]["channels"]]  # noqa: E731
+    assert channels(live) == ["cfbenchmarks_value", "fill", "ticker", "trade"]
+    assert channels(extra) == ["ticker", "trade"]
+    assert extra.subscriptions([]) == []  # nothing to follow: nothing to subscribe to

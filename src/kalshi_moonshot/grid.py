@@ -280,6 +280,25 @@ def _cell(n: int, avg: float | None, sq: float | None) -> Cell:
     return Cell(n, avg, math.sqrt(var / n) if n > 1 else float("inf"))
 
 
+def _clustered_cell(parts: list[tuple[int, float]], mean: float) -> Cell:
+    """A cell from its per-slot parts: (entries in the slot, their summed return) for each 15-minute close.
+
+    Windows that close at the same moment move together (the five coins are one macro move), so the standard
+    error is taken across slots, not across entries: a cell fed by 200 entries in 20 slots has the evidence of
+    20, not 200. The mean stays the plain average over entries.
+    """
+    n = sum(c for c, _ in parts)
+    if n < 2:
+        return Cell(n, mean if n else 0.0, float("inf"))
+    # Each slot's score is its summed deviation from the mean; the spread of those scores is the variance.
+    scores = [s - c * mean for c, s in parts]
+    g = len(scores)
+    if g < 2:
+        return Cell(n, mean, float("inf"))  # one slot is one observation, however many entries it holds
+    se = math.sqrt((g / (g - 1.0)) * sum(x * x for x in scores) / (n * n))
+    return Cell(n, mean, se)
+
+
 # which of (edge, alpha, beta) a level splits on, from the most specific down to none; a cell uses the first level that has the evidence
 LEVELS = ((1, 1, 1), (1, 1, 0), (0, 1, 1), (1, 0, 0), (0, 1, 0), (0, 0, 0))
 LABELS = {(1, 1, 1): "price+hour+market", (1, 1, 0): "price+hour", (0, 1, 1): "hour+market", (1, 0, 0): "price", (0, 1, 0): "hour", (0, 0, 0): "base"}
@@ -293,10 +312,18 @@ def cells(store: Any, series: tuple[str, ...], since: float = 0.0, rule: str = "
         cols = [c for c, on in (("edge", use_e), ("alpha", use_a), ("beta", use_b)) if on]
         extra = "".join(f", {c}" for c in cols)
         need = "".join(f" AND {c} IS NOT NULL" for c in cols)
-        sql = (f"SELECT mband, pband{extra}, COUNT(*) n, AVG(roi) m, SUM(roi*roi) sq FROM grid_obs "
-               f"WHERE series IN ({marks}) AND close_ts >= ? AND rule = ?{need} GROUP BY mband, pband{extra}")
+        # Group by the slot (close_ts) as well as the cell, so the cell's error is clustered by slot (see _clustered_cell).
+        sql = (f"SELECT mband, pband{extra}, close_ts, COUNT(*) n, SUM(roi) s FROM grid_obs "
+               f"WHERE series IN ({marks}) AND close_ts >= ? AND rule = ?{need} GROUP BY mband, pband{extra}, close_ts")
+        parts: dict[tuple, list[tuple[int, float]]] = {}
+        totals: dict[tuple, float] = {}
         for r in store.db.execute(sql, (*series, since, rule)):
-            out[(r["mband"], r["pband"], r["edge"] if use_e else None, r["alpha"] if use_a else None, r["beta"] if use_b else None)] = _cell(r["n"], r["m"], r["sq"])
+            key = (r["mband"], r["pband"], r["edge"] if use_e else None, r["alpha"] if use_a else None, r["beta"] if use_b else None)
+            parts.setdefault(key, []).append((int(r["n"]), float(r["s"])))
+            totals[key] = totals.get(key, 0.0) + float(r["s"])
+        for key, slot_parts in parts.items():
+            n = sum(c for c, _ in slot_parts)
+            out[key] = _clustered_cell(slot_parts, totals[key] / n if n else 0.0)
     return out
 
 

@@ -34,6 +34,21 @@ def test_the_lane_table_separates_live_from_paper_and_shows_what_the_exits_cost(
     assert f"{sold_gain:+.1%}" in paper and f"{held_gain:+.1%}" in paper and f"{sold_gain - held_gain:+.1%}" in paper
 
 
+def test_a_burst_exit_is_its_own_kind_in_the_table(tmp_path):
+    store = Store(tmp_path / "m.db", frozenset())
+    bet(store, "X1", "crypto_favorite", 0.88, "yes", "no", exit_price=0.82, reason="burst: 9x the market's normal volume")
+    text = "\n".join(digest.exit_table(store, time.time() - 3600))
+    assert "burst" in text and "take-profit" not in text
+
+
+def test_the_hour_context_is_the_15_minute_clock_without_infrastructure(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    store, _ = build(tmp_path)
+    text = digest.hour_context(config.load(), store, hours=1)
+    assert "15-MINUTE FAVORITES" in text and "THIS HOUR'S 15-MINUTE BETS" in text and "WHAT THE EXITS DID" in text
+    assert "DATA AND INFRASTRUCTURE" not in text and "resting buy" in text
+
+
 def test_the_exit_table_groups_by_kind_and_compares_sold_with_held(tmp_path):
     store, _ = build(tmp_path)
     text = "\n".join(digest.exit_table(store, time.time() - 3600))

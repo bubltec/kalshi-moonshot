@@ -27,3 +27,13 @@ BLANK=
 
 def test_apply_env_file_missing_is_a_noop(tmp_path):
     assert config.apply_env_file(tmp_path / "nope") is False
+
+
+def test_apply_env_file_stale_mount_is_a_noop():
+    from pathlib import Path
+    from unittest.mock import MagicMock
+
+    path = MagicMock(spec=Path)
+    path.is_file.return_value = True
+    path.read_text.side_effect = FileNotFoundError(2, "No such file or directory", ".env")
+    assert config.apply_env_file(path) is False

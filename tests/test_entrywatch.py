@@ -103,3 +103,48 @@ def test_refresh_loads_the_watchlists_of_socket_lanes_only(tmp_path):
     w = watcher(s, Client([]))
     w.refresh()
     assert list(w.watch) == [("commodity", EVENT)]
+
+
+def _approach_watcher():
+    w = entrywatch.EntryWatcher(lambda: None, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
+    spec = lanes.LaneSpec("x", "ladder", "x", (0.76, 0.92), (0, 1), 0.05, 0.0, sides=("yes", "no"), entry_approach=0.10, entry_arm_seconds=30.0)
+    return w, spec
+
+
+def _feed(w, ts, bid, ask, ticker="KXBTC15M-1"):
+    row = {"kind": "quote", "ticker": ticker, "bid": bid, "ask": ask, "ts": ts}
+    w._hist.setdefault(ticker, entrywatch.deque(maxlen=400)).append((ts, bid, ask))
+    return row
+
+
+def test_a_side_gaining_toward_the_floor_is_armed_and_fires_when_it_gets_there():
+    from kalshi_moonshot.strategy import LongShot
+
+    w, spec = _approach_watcher()
+    now = datetime.now(UTC)
+    _feed(w, 100.0, 0.66, 0.68)
+    e = _feed(w, 110.0, 0.72, 0.74)  # up 6c over 10 s, 2c under the floor... 0.74 is within 10c under 0.76
+    assert w._approach(e, "x", spec, {}, now) is False
+    key = ("x", "KXBTC15M-1", "yes")
+    assert key in w._armed and w._arm_jobs.get_nowait() == ("warm", key)
+    w._armed[key]["shot"] = LongShot("KXBTC15M-1", "t", "", 0.72, 0.74, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="x", series="KXBTC15M", side="yes")
+    e = _feed(w, 120.0, 0.76, 0.78)  # the floor is reached
+    assert w._approach(e, "x", spec, {}, now) is True
+    job = w._arm_jobs.get_nowait()
+    assert job[0] == "fire" and job[2].ask == pytest.approx(0.78) and key not in w._armed
+
+
+def test_a_side_that_is_not_gaining_is_not_armed_and_an_old_arming_is_reset():
+    w, spec = _approach_watcher()
+    now = datetime.now(UTC)
+    _feed(w, 100.0, 0.74, 0.76)
+    e = _feed(w, 110.0, 0.70, 0.72)  # falling
+    assert w._approach(e, "x", spec, {}, now) is False and not w._armed
+    _feed(w, 120.0, 0.60, 0.62)
+    e = _feed(w, 130.0, 0.70, 0.72)  # gaining now: armed
+    w._approach(e, "x", spec, {}, now)
+    key = ("x", "KXBTC15M-1", "yes")
+    assert key in w._armed
+    e = _feed(w, 170.0, 0.60, 0.62)  # 40 s later it has not reached the floor: dropped; not gaining over the last 25 s so it stays dropped
+    w._approach(e, "x", spec, {}, now)
+    assert key not in w._armed

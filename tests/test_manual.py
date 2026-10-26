@@ -228,3 +228,34 @@ def test_only_the_part_of_a_position_you_bought_is_yours(s):
     assert p.count == pytest.approx(7.0) and p.entry == pytest.approx((4.60 - 0.75) / 7.0)
     store.add_order(ticker="KXWTI-26OCT2214-T98.99", env=s.env, count=4, price=0.40, fill_count=4, cost_usd=1.60, fee_usd=0.0, side="buy")
     assert "KXWTI-26OCT2214-T98.99" not in {q.ticker for q in manual.ManualPositions(Client()).positions(s, store, fresh=True)}  # all the bot's
+
+
+def test_a_hand_placed_cash_out_must_clear_the_entry_fee_as_well_as_the_sale_fee(s, monkeypatch):
+    monkeypatch.setenv("MANUAL_EXIT_MIN_PROFIT", "0")
+    flat = config.load()
+    for bid, sells in ((0.43, False), (0.46, True)):  # paid 0.40: cost 0.40 + 1.7c entry fee, and the sale pays about 1.7c more
+        c = Client(bid=bid)
+        w = watcher.ProfitWatcher(lambda: flat, c, lambda: Store(flat.db_path))
+        w.refresh()
+        w._sell("KXWTI-26OCT2214-T98.99", "manual", "peak-crash: bid is 0.05 off its peak (paid 0.40) for 11s")
+        assert bool(c.sold) is sells, bid
+
+
+def test_the_rebuild_check_ignores_hand_placed_positions_unless_asked(tmp_path, monkeypatch, capsys):
+    from kalshi_moonshot import __main__ as cli
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+
+    class Hand:
+        def __init__(self, client):
+            pass
+
+        def positions(self, s, store, fresh=False):
+            return [manual.Position("KXRAIN-X", "yes", 3.0, 0.64)]
+
+    monkeypatch.setattr(manual, "ManualPositions", Hand)
+    monkeypatch.setattr(cli, "_client", lambda s: object())
+    parser = cli.build_parser()
+    assert cli.cmd_flat(s, parser.parse_args(["flat"])) == 0 and "not counted" in capsys.readouterr().out  # a rain bet does not hold up a restart
+    assert cli.cmd_flat(s, parser.parse_args(["flat", "--include-manual"])) == 1

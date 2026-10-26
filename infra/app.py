@@ -11,7 +11,6 @@ Account and region come from cdk.json (or -c account=... -c region=...). Nothing
 import os
 
 import aws_cdk as cdk
-
 from archive_stack import ArchiveStack
 
 app = cdk.App()

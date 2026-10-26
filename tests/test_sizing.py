@@ -175,6 +175,16 @@ def test_a_fixed_stake_is_the_same_dollars_whatever_the_odds(tmp_path):
     assert "fixed stake" in cheap.why
 
 
+def test_a_fixed_stake_is_capped_by_the_per_bet_share_of_equity(tmp_path):
+    s = example_lane(tmp_path)
+    lane = lanes.spec_for(s, "fifteen")  # fixed $2, per-bet cap 2% of equity by default
+    small = size_bet(lane, s, 0.05, 0.2, available=100, equity=13.0, lane_exposure=0)
+    assert small.cost_usd <= 13.0 * lane.max_bet_pct + 1e-9  # a flat $2 would be 15% of a $13 balance
+    assert "capped at" in small.why
+    big = size_bet(lane, s, 0.05, 0.2, available=500, equity=500, lane_exposure=0)
+    assert 1.7 <= big.cost_usd <= 2.0  # a fat balance still bets the fixed $2, no more
+
+
 def test_a_fixed_stake_still_respects_cash_and_the_lanes_room(tmp_path):
     s = example_lane(tmp_path)
     lane = lanes.spec_for(s, "fifteen")

@@ -92,6 +92,30 @@ def trades(store: Store) -> list[Trade]:
     return out
 
 
+def cluster_se(pairs: list[tuple[Any, float]], mean: float) -> float:
+    """Standard error of `mean` that respects clustering: (cluster key, value) pairs whose key matches move together.
+
+    Bets in one 15-minute slot (several coins, both sides, twin lanes) are one event wearing several tickers, so the
+    plain standard error over bets understates the uncertainty, badly when a rule fires on many coins at once.
+    This is the CR1 cluster-robust error: each cluster contributes its summed deviation from the mean, and the
+    spread of those sums (scaled by G/(G-1)) is the variance of the mean. With fewer than two clusters it falls
+    back to the plain error over the values.
+    """
+    import math
+
+    n = len(pairs)
+    if n < 2:
+        return float("inf")
+    groups: dict[Any, float] = {}
+    for key, value in pairs:
+        groups[key] = groups.get(key, 0.0) + (value - mean)
+    if len(groups) < 2:
+        var = sum((v - mean) ** 2 for _, v in pairs) / (n - 1)
+        return math.sqrt(var / n)
+    g = len(groups)
+    return math.sqrt((g / (g - 1.0)) * sum(s * s for s in groups.values()) / (n * n))
+
+
 def day_of(ts: float, tz: str = EXCHANGE_TZ) -> str:
     return datetime.fromtimestamp(ts, UTC).astimezone(ZoneInfo(tz)).strftime("%Y-%m-%d")
 

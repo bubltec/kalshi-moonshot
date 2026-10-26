@@ -129,6 +129,26 @@ class Ollama:
             log.info("llm %s: %s prompt tokens, %s answer tokens, %.1fs", tag, data.get("prompt_eval_count"), data.get("eval_count"), time.time() - started)
         return parse_estimate(data["message"]["content"])
 
+    def complete(self, prompt: str, tag: str = "") -> str:
+        """Send a prompt that asks for JSON and return the model's text as-is (no probability parse). For the hourly review."""
+        body = {
+            "model": self.model,
+            "stream": False,
+            "think": False,
+            "format": "json",
+            "keep_alive": "30m",
+            "options": {"temperature": 0.2},
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        started = time.time()
+        resp = self._http.post(f"{self.url}/api/chat", json=body)
+        resp.raise_for_status()
+        data = resp.json()
+        text = str((data.get("message") or {}).get("content") or "")
+        if tag:
+            log.info("llm %s: %s prompt tokens, %s answer tokens, %.1fs", tag, data.get("prompt_eval_count"), data.get("eval_count"), time.time() - started)
+        return text
+
     def ping(self) -> bool:
         try:
             return self._http.get(f"{self.url}/api/tags", timeout=5.0).status_code == 200

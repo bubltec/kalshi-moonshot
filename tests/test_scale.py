@@ -30,13 +30,29 @@ def test_the_stake_grows_with_the_lower_bound_and_stops_at_the_cap():
     assert some == pytest.approx(0.25 * lo / 0.49 * 200.0 / 2.0)  # a quarter of the Kelly stake the lower bound alone justifies
 
 
-def _bets(store, n, start=0):
-    for i in range(start, start + n):  # $2 bets that win 60% of the time at a 2x payout: +20% on stake
+def _bets(store, n, start=0, slots=None):
+    from datetime import UTC, datetime, timedelta
+
+    base = datetime(2099, 1, 1, tzinfo=UTC)
+    for j, i in enumerate(range(start, start + n)):  # $2 bets that win 60% of the time at a 2x payout: +20% on stake
         won = (i % 10) < 6
+        slot = j if slots is None else slots[j % len(slots)]  # each bet its own 15-minute slot, unless told to share
+        close = (base + timedelta(minutes=15 * slot)).strftime("%Y-%m-%dT%H:%M:%SZ")
         store.db.execute(
             "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, outcome, close_time) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (1000.0 + i, f"KXBTC15M-{i}", "bet", "observe", 0.5, "yes", "proving", 4, 2.0, "yes" if won else "no", "2099-01-01T00:00:00Z"))
+            (1000.0 + i, f"KXBTC15M-{i}", "bet", "observe", 0.5, "yes", "proving", 4, 2.0, "yes" if won else "no", close))
     store.db.commit()
+
+
+def test_bets_that_close_together_count_as_one_slot_of_evidence(tmp_path):
+    store = Store(tmp_path / "m.db")
+    _bets(store, 450, slots=[0])  # 450 bets, every one closing in the same 15-minute slot
+    rec = scale.record(store, ("proving",))
+    assert rec.n == 450 and rec.n_eff == pytest.approx(1.0)  # one slot is one independent observation
+    _bets(store, 0)  # nothing more
+    store2 = Store(tmp_path / "m2.db")
+    _bets(store2, 450, slots=list(range(45)))  # the same bets spread over 45 slots
+    assert scale.record(store2, ("proving",)).n_eff == pytest.approx(45.0)
 
 
 def test_the_record_comes_from_the_lanes_finished_bets_and_a_small_one_does_not_earn_growth(tmp_path):
@@ -94,20 +110,25 @@ def test_old_versions_count_by_similarity_and_fade_as_the_new_one_builds(tmp_pat
     store.note_lane_version("proving", "old", old_set)
     store.note_lane_version("proving", "new", cur_set)
     json.loads(store.lane_versions("proving")[0]["settings"])  # stored as readable settings
-    for i in range(60):  # the old version: a losing record, 60 bets of -50%
+    from datetime import UTC, datetime, timedelta
+
+    base = datetime(2099, 1, 1, tzinfo=UTC)
+    for i in range(60):  # the old version: a losing record, 60 bets of -50%, each in its own slot
+        close = (base + timedelta(minutes=15 * i)).strftime("%Y-%m-%dT%H:%M:%SZ")
         store.db.execute(
             "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, outcome, close_time, lane_ver) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (1000.0 + i, f"OLD-{i}", "bet", "observe", 0.5, "yes", "proving", 4, 2.0, "yes" if i % 4 == 0 else "no", "2099-01-01T00:00:00Z", "old"))
+            (1000.0 + i, f"OLD-{i}", "bet", "observe", 0.5, "yes", "proving", 4, 2.0, "yes" if i % 4 == 0 else "no", close, "old"))
     store.db.commit()
     current = {"proving": ("new", cur_set)}
     alone = scale.record(store, ("proving",), 0.0, current, 0.5)
     assert alone.n == 60 and alone.n_eff == pytest.approx(60.0)  # no new bets yet: only the old ones to go on, all at one weight
     weight = scale.weights_for(store, "proving", "new", cur_set, 0.5)
     assert weight["new"] == 1.0 and 0 < weight["old"] <= 0.5
-    for i in range(30):  # the new version: 30 winning bets
+    for i in range(30):  # the new version: 30 winning bets, each in its own slot
+        close = (base + timedelta(minutes=15 * (100 + i))).strftime("%Y-%m-%dT%H:%M:%SZ")
         store.db.execute(
             "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, outcome, close_time, lane_ver) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (2000.0 + i, f"NEW-{i}", "bet", "observe", 0.5, "yes", "proving", 4, 2.0, "yes", "2099-01-01T00:00:00Z", "new"))
+            (2000.0 + i, f"NEW-{i}", "bet", "observe", 0.5, "yes", "proving", 4, 2.0, "yes", close, "new"))
     store.db.commit()
     mixed = scale.record(store, ("proving",), 0.0, current, 0.5)
     plain = scale.record(store, ("proving",), 0.0)

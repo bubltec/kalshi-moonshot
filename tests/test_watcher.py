@@ -233,3 +233,19 @@ def test_a_bid_that_holds_counts_as_a_peak_even_when_quotes_keep_arriving(tmp_pa
     for ts, bid in ((1000.0, 0.30), (1001.0, 0.50), (1002.0, 0.40), (1003.0, 0.50), (1004.0, 0.30)):
         w._track_peak(t2, bid, ts)  # flickering every second: no bid stands 3 s, so no peak
     assert t2.peak == 0.30
+
+
+def test_a_profit_take_must_clear_both_fees(setup):
+    w, _s, store = make(setup, 0.31)  # a cent over the 0.30 paid, but the entry and sale fees cost about 3c together
+    w._sell("KXBTC15M-1", "late_ticket", "spike: bid rose")
+    assert w.sold == [] and len(store.open_bets()) == 1
+    w, _s, store = make(setup, 0.40)
+    w._sell("KXBTC15M-1", "late_ticket", "spike: bid rose")
+    assert len(w.sold) == 1
+
+
+def test_a_fixed_take_profit_covers_the_entries_a_multiple_cannot_reach():
+    assert take_profit_hit(0.80, 0.99, x=1.5, at=0.99) is not None  # 1.5x of 80c is above $1, so the fixed price is what sells
+    assert take_profit_hit(0.80, 0.98, x=1.5, at=0.99) is None
+    assert take_profit_hit(0.50, 0.75, x=1.5, at=0.99) is not None  # a cheap entry still sells at 1.5x, long before the fixed price
+    assert take_profit_hit(0.99, 0.99, x=1.5, at=0.99) is None  # already paid the level

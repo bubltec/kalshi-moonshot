@@ -28,8 +28,8 @@ from .config import Settings
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
 from .kalshi import KalshiClient, KalshiRateLimited
-from .marketdata import Discovery, shared_for
 from .lanes import lane_specs, spec_for, tiered, tiered_lanes
+from .marketdata import Discovery, shared_for
 from .search import NewsSearch
 from .store import Store
 from .strategy import LongShot, ask_trend, falling_reason, lane_reject_reason, side_view
@@ -39,6 +39,16 @@ log = logging.getLogger("moonshot")
 # so a 40-second job can never hold up a live lane's review or evaluation, and their requests are throttled to a third of the budget.
 MAINTENANCE = frozenset({"scan", "resolve", "review", "history", "account_sync", "patterns"})
 HISTORY_PRIORITY = -10  # runs only when no trading job is waiting (a running job is never interrupted)
+
+
+def _strike(m: dict) -> float | None:
+    for key in ("floor_strike", "cap_strike"):
+        try:
+            if m.get(key) not in (None, ""):
+                return float(m[key])
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def _price(m: dict, key: str) -> float:
@@ -87,7 +97,11 @@ class Worker:
         self.recorder: Any = None
         self.watcher: Any = None
         self.entry_watcher: Any = None
+        self.settlement_edge: Any = None
         self.discovery: Any = None
+        self._hot_local = threading.local()  # the discovery thread's own store connection
+        self.esports: Any = None
+        self._tape_db: Any = None  # a read connection to the tape, opened on first use, for the entry factors saved with decisions
         self.stopping = False
         self._last_cleanup = 0.0
         self.share = EstimateShare()  # one estimate per market, reused by every lane that asks soon after
@@ -121,6 +135,13 @@ class Worker:
         self._ensure_tiered()
         self._start_discovery()
         self._start_tape()
+        self._start_esports()
+        from . import forecast_fit
+
+        forecast_fit.start_refit(lambda: self.s)  # idle unless a forecast lane is on
+        from . import behavior
+
+        behavior.start_cases(lambda: self.s)  # add newly finished windows to the case memory every few hours
         from . import backup
 
         backup.start_nightly(lambda: self.s)
@@ -143,9 +164,22 @@ class Worker:
             log.info("tape recorder on: %s (kept %.0f days)", self.s.tape_path, self.s.tape_keep_days)
             self._start_watcher()
             self._start_entry_watcher()
+            self._start_settlement_edge()
         except Exception:
             log.exception("could not start the tape recorder; continuing without it")
             self.recorder = None
+
+    def _start_esports(self) -> None:
+        """Forecast CS2 and Dota 2 matches with the local model and news, to see whether it beats the market. Measure only; its own thread, no orders."""
+        from . import esports
+        from .rankings import Rankings
+
+        if not self.s.esports_forecast or self.esports is not None or not hasattr(self.est, "estimate"):
+            return
+        db_path = self.s.db_path
+        self.esports = esports.Forecaster(self.client, self.est, self.searcher, lambda: Store(db_path, self.s.exclude_versions), Rankings())
+        self.esports.start()
+        log.info("esports forecaster on: scoring the model against the market on CS2 and Dota 2 (no orders)")
 
     def _start_watcher(self) -> None:
         """Sell on the live socket when a lane's take-profit level is hit (only if some lane asks for one)."""
@@ -159,6 +193,7 @@ class Worker:
         )
         self.recorder.listeners.append(w.on_event)
         w.follow = self.recorder.follow
+        w.tape_factory = self._open_tape
         self.recorder.extra_tickers = lambda: self._held_for_watching() | w.manual_tickers()  # hourly, daily and hand-placed positions are streamed too
         w.start()
         self.watcher = w
@@ -179,6 +214,19 @@ class Worker:
         w.start()
         self.entry_watcher = w
         log.info("entry watcher on: reviewing a watched event as soon as its socket quote enters the lane's price band")
+
+    def _start_settlement_edge(self) -> None:
+        """Log, as paper bets, the side whose exact settlement chance beats its ask in the last 150 s of every crypto 15-minute market (settlement_edge.py). Measure only; its own thread."""
+        from . import settlement_edge
+
+        if self.recorder is None or self.settlement_edge is not None or not self.s.settlement_edge_enabled:
+            return
+        db_path = self.s.db_path
+        w = settlement_edge.SettlementEdge(lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions), self._open_tape)
+        self.recorder.listeners.append(w.on_event)
+        w.start()
+        self.settlement_edge = w
+        log.info("settlement edge on: logging the cheap side whose exact settlement chance beats its ask (paper only)")
 
     def _spot_side(self, ticker: str, side: str) -> float | None:
         """The chance, from the live spot price against the strike alone (no calibration), that this side pays. None when the market cannot be priced that way."""
@@ -260,8 +308,21 @@ class Worker:
         self.discovery = Discovery(
             lambda: self.client, lambda: self.s,
             lambda s: {name for spec in tiered_lanes(s) for name in runner.lane_series(spec, s)},
+            hot=self._hot_series,
         )
         self.discovery.start()
+
+    def _hot_series(self, s: Settings) -> list[str]:
+        """The series to list quickly, most important first: those with an open bet, then those with a prospect on a lane's watchlist (the live lanes' before the paper lanes').
+        Runs on the discovery thread, so it reads through a connection of its own."""
+        store = getattr(self._hot_local, "store", None)
+        if store is None:
+            store = self._hot_local.store = Store(s.db_path, s.exclude_versions)
+        live = s.live_lanes or frozenset()
+        out = [row["ticker"].split("-")[0] for row in store.open_bets()]
+        for spec in sorted(tiered_lanes(s), key=lambda x: x.name not in live):
+            out += [info.get("series") or event.split("-")[0] for event, info in store.watch(spec.name).items()]
+        return list(dict.fromkeys(out))
 
     def _shared(self, max_age: float) -> Any:
         """Reads of listings and markets inside this block may come from the shared cache (a no-op when discovery is off or the client has no cache)."""
@@ -275,6 +336,8 @@ class Worker:
             self.watcher.stop()
         if self.entry_watcher is not None:
             self.entry_watcher.stop()
+        if self.esports is not None:
+            self.esports.stop()
         if self.recorder is not None:
             self.recorder.stop()
 
@@ -443,7 +506,7 @@ class Worker:
             log.info("skip %s: no longer qualifies (%s)", shot.ticker, why_not)
             return f"skipped: {why_not}"
         view = side_view(m, shot.side)
-        shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"))
+        shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors=self._entry_factors(shot, spec, _strike(m)))
         # Same job, same order id: if the process dies after sending, a rerun cannot buy twice.
         order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
         out = runner.evaluate(
@@ -458,6 +521,21 @@ class Worker:
             self._schedule_stop_loss()
             self._watch_new_position(out.ticker)
         return f"{out.action} {out.ticker}"
+
+    def _open_tape(self) -> Any:
+        """A read connection to the tape. Each thread that reads it opens its own."""
+        from . import db
+
+        return db.connect(self.s.tape_path, "tape", shared=True)
+
+    def _entry_factors(self, shot: LongShot, spec, strike: float | None = None) -> str:
+        """Every feature we know of at the moment of the buy, saved with the decision so factors, the forecaster and the model can be read against results later. Any market with a tape quote;
+        never blocks a decision."""
+        if not self.s.tape_enabled:
+            return ""
+        from . import factors
+
+        return factors.snapshot_now(self.s, shot.ticker, shot.side, shot.close_time, "", strike)
 
     # ---- two-level lanes: a slow scoping pass feeds a fast reviewing pass ----
     def _ensure_tiered(self) -> None:

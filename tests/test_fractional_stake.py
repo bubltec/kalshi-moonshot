@@ -91,7 +91,7 @@ def test_an_unfunded_account_is_not_mistaken_for_a_refused_fraction(setup):
 
 
 def test_selling_a_fractional_live_position_sells_all_of_it_and_marks_it_exited(setup, monkeypatch):
-    s, store, shot = setup
+    s, store, _shot = setup
     monkeypatch.setenv("LIVE_LANES", "x")
     monkeypatch.setenv("COMMODITY_15M_LIVE", "true")
     s = config.load()

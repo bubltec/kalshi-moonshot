@@ -74,7 +74,8 @@ def parse_message(msg: dict[str, Any], received: float | None = None) -> dict[st
         if not body.get("market_ticker") or not count or side not in {"yes", "no"}:
             return None
         return {"kind": "fill", "ts": now, "ticker": body["market_ticker"], "side": side, "action": body.get("action") or "",
-                "count": count, "price": price, "taker": bool(body.get("is_taker"))}
+                "count": count, "price": price, "taker": bool(body.get("is_taker")),
+                "trade_id": body.get("trade_id") or "", "order_id": body.get("order_id") or ""}
     if kind == "cfbenchmarks_value":
         try:
             frame = json.loads(body.get("data") or "{}")
@@ -94,9 +95,11 @@ class KalshiStream:
     """Keeps one connection open, reconnects with backoff, and resubscribes when the market set changes."""
 
     def __init__(self, client: KalshiClient, on_event: Callable[[dict[str, Any]], None],
-                 indices: list[str] | None = None):
+                 indices: list[str] | None = None, index_feed: bool = True, fills: bool = True):
+        """index_feed and fills are off for a stream that only records extra markets: the live stream alone carries the settlement indexes and the account's fills."""
         self.client = client
         self.on_event = on_event
+        self.index_feed, self.fills = index_feed, fills
         self.indices = sorted(set(indices or INDEX_FOR.values()))
         self._tickers: set[str] = set()
         self._lock = threading.Lock()
@@ -144,12 +147,8 @@ class KalshiStream:
                     self._ws = ws
                     with self._lock:
                         tickers = sorted(self._tickers)
-                    await ws.send(json.dumps({"id": 1, "cmd": "subscribe", "params": {
-                        "channels": ["cfbenchmarks_value"], "index_ids": self.indices}}))
-                    await ws.send(json.dumps({"id": 3, "cmd": "subscribe", "params": {"channels": ["fill"]}}))  # every fill on the account, no ticker list
-                    if tickers:
-                        await ws.send(json.dumps({"id": 2, "cmd": "subscribe", "params": {
-                            "channels": ["ticker", "trade"], "market_tickers": tickers}}))
+                    for message in self.subscriptions(tickers):
+                        await ws.send(json.dumps(message))
                     self.connected_at, backoff = time.time(), 1.0
                     async for raw in ws:
                         self.handle(raw)
@@ -160,6 +159,17 @@ class KalshiStream:
                 break
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30.0)
+
+    def subscriptions(self, tickers: list[str]) -> list[dict[str, Any]]:
+        """The subscribe commands sent on every (re)connect."""
+        out: list[dict[str, Any]] = []
+        if self.index_feed:
+            out.append({"id": 1, "cmd": "subscribe", "params": {"channels": ["cfbenchmarks_value"], "index_ids": self.indices}})
+        if self.fills:
+            out.append({"id": 3, "cmd": "subscribe", "params": {"channels": ["fill"]}})  # every fill on the account, no ticker list
+        if tickers:
+            out.append({"id": 2, "cmd": "subscribe", "params": {"channels": ["ticker", "trade"], "market_tickers": tickers}})
+        return out
 
     def handle(self, raw: str | bytes) -> None:
         try:

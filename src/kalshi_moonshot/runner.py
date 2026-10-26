@@ -11,21 +11,21 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import math
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
-from . import gate, risk, shadow
+from . import factors, gate, risk, shadow
 from . import scale as scale_mod
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
 from .estimators import Estimate, EstimateShare, Estimator, build_estimators
 from .kalshi import MARKET_PAGES, KalshiClient, KalshiError, KalshiRateLimited
-from .marketdata import shared_for
 from .lanes import (
     LADDER,
     LaneSpec,
@@ -40,6 +40,7 @@ from .lanes import (
     version_of,
     wants_bet,
 )
+from .marketdata import shared_for
 from .search import NewsSearch
 from .sizing import Sizing, size_bet
 from .store import Store
@@ -57,6 +58,7 @@ from .strategy import (
     side_ask_notional,
     side_prob,
     stop_loss_hit,
+    stop_wait,
     take_profit_hit,
 )
 
@@ -202,13 +204,30 @@ def shortlists(
     return out
 
 
-def lane_series(spec: LaneSpec, s: Settings) -> list[str]:
-    """Series a two-level lane fetches by name: its own list, else every priced commodity series."""
+def _all_series(spec: LaneSpec, s: Settings) -> list[str]:
     if spec.series:
         return list(spec.series)
     return [
         i.prefix + suffix for i in load_instruments(s.data_dir) for suffix in i.suffixes
     ]
+
+
+def watched(s: Settings) -> set[str] | None:
+    """The series the bot follows when WATCH_SERIES opts in: that list, TAPE_EXTRA_SERIES, and every series a live lane uses (a live lane is never starved). None = no list, follow everything."""
+    if not s.watch_series:
+        return None
+    out = set(s.watch_series) | set(s.tape_extra_series)
+    for spec in tiered_lanes(s):
+        if s.live_lanes is None or spec.name in s.live_lanes:
+            out |= set(_all_series(spec, s))
+    return out
+
+
+def lane_series(spec: LaneSpec, s: Settings) -> list[str]:
+    """Series a two-level lane fetches by name: its own list, else every priced commodity series; with WATCH_SERIES set, only those on the list (a live lane keeps all of its own)."""
+    names = _all_series(spec, s)
+    keep = watched(s)
+    return names if keep is None else [n for n in names if n in keep]
 
 
 def scope_lane(
@@ -375,6 +394,8 @@ def _lane_version(store: Store, s: Settings, lane: str) -> str | None:
 
 def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
     fields.setdefault("lane_ver", _lane_version(store, s, shot.lane))
+    if shot.factors:
+        fields.setdefault("factors", shot.factors)
     store.add_decision(
         ticker=shot.ticker, title=shot.title, bid=shot.bid, ask=shot.ask, mode="trade" if s.is_live(shot.lane, shot.series) else "observe",
         close_time=shot.close_time, lane=shot.lane, category=shot.category,
@@ -485,6 +506,26 @@ def evaluate(
     if bet and spec.reentry_cooldown_seconds and (left := store.exited_within(shot.ticker, shot.lane, spec.reentry_cooldown_seconds)) > 0:
         bet = False
         note = f"cooling down: this lane sold {shot.ticker} {spec.reentry_cooldown_seconds - left:.0f}s ago and waits {spec.reentry_cooldown_seconds:.0f}s before buying it again. {note}"
+    if bet and spec.max_open > 0:
+        open_now = sum(1 for r in store.open_bets() if (r["lane"] or "moonshot") == shot.lane and r["ticker"] != shot.ticker)
+        if open_now >= spec.max_open:
+            bet = False
+            note = f"lane full: {open_now} bets already open (the lane holds at most {spec.max_open}). {note}"
+    if bet and spec.min_dwell_seconds > 0:
+        dwell = dwell_seconds(s, shot, spec.price[0])
+        if dwell is not None and dwell < spec.min_dwell_seconds:
+            bet = False
+            note = f"just arrived: this side has been in the price band {dwell:.0f}s and the lane waits {spec.min_dwell_seconds:.0f}s. {note}"
+    if bet and spec.entry_trend_seconds > 0 and spec.entry_trend_z is not None:
+        zed = side_trend_z(s, shot, spec.entry_trend_seconds)
+        if zed is not None and zed <= spec.entry_trend_z:
+            bet = False
+            note = f"trending against: this side moved {zed:+.1f} typical moves over the last {spec.entry_trend_seconds:.0f}s and the lane needs more than {spec.entry_trend_z:+.1f}. {note}"
+    elif bet and spec.entry_trend_seconds > 0:
+        moved = side_trend(s, shot, spec.entry_trend_seconds)
+        if moved is not None and moved < spec.entry_trend_min:
+            bet = False
+            note = f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
     sized = Sizing(0, 0.0, "")
     if bet:
         balance = store.bankroll.read(client, s, live=s.is_live(shot.lane, shot.series))
@@ -549,6 +590,105 @@ def _explain_unfunded(client: KalshiClient, shot: LongShot, cost: float) -> str 
     return (f"skipped: {shot.series} trades on Kalshi exchange {idx}, which holds ${here:.2f} of your cash "
             f"(cash is on {elsewhere}). Move funds there in the Kalshi app; orders for it are paused for "
             f"{UNFUNDED_PAUSE / 60:.0f} minutes")
+
+
+def dwell_seconds(s: Settings, shot: LongShot, floor: float, now: float | None = None) -> float | None:
+    """How many seconds the side we would buy has been at or above `floor` (the lane's lowest price), from the tape's quotes of the last 15 minutes. None when the tape has nothing to say."""
+    from . import db as database
+
+    now = time.time() if now is None else now
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        rows = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC", (shot.ticker, now, now - 900.0)).fetchall()
+    except Exception:
+        return None
+    if not rows:
+        return None
+    since = now  # the earliest quote of the unbroken run at or above the floor, newest first
+    for ts, bid, ask in rows:
+        price = ask if shot.side == "yes" else 1.0 - bid
+        if price < floor:
+            return now - since
+        since = ts
+    return now - since
+
+
+def below_line_seconds(s: Settings, ticker: str, side: str, line: float, now: float | None = None) -> float | None:
+    """How many seconds the side's bid has been unbroken at or below `line`, from the tape's quotes of the last 15 minutes. None when the tape has nothing to say (the socket watcher measures the same run live; this is only its backstop agreeing with it)."""
+    from . import db as database
+
+    now = time.time() if now is None else now
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        rows = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC", (ticker, now, now - 900.0)).fetchall()
+    except Exception:
+        return None
+    if not rows:
+        return None
+    since = now  # the earliest quote of the unbroken run at or below the line, newest first
+    for ts, bid, ask in rows:
+        price = bid if side == "yes" else 1.0 - ask
+        if price > line + 1e-9:
+            return now - since
+        since = ts
+    return now - since
+
+
+def side_trend(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
+    """How far the price of the side we would buy (the mid of its bid and ask, in its own terms) has moved over the last `seconds`, from the tape's quotes. None when the tape has no quote that far back or none lately."""
+    from . import db as database
+
+    now = time.time() if now is None else now
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        last = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC LIMIT 1", (shot.ticker, now, now - 30.0)).fetchone()
+        then = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC LIMIT 1", (shot.ticker, now - seconds, now - seconds - 60.0)).fetchone()
+    except Exception:
+        return None
+    if last is None or then is None:
+        return None
+
+    def price(row: Any) -> float:
+        mid = (row[1] + row[2]) / 2.0
+        return mid if shot.side == "yes" else 1.0 - mid
+
+    return price(last) - price(then)
+
+
+def side_trend_z(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
+    """The side's price move over the last `seconds` in units of that market's own noise: the move divided by the standard deviation of its `seconds`-long changes over the 2 minutes before. None when the tape has too little to say or the market has not moved."""
+    import bisect
+    import statistics
+
+    from . import db as database
+
+    now = time.time() if now is None else now
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        q = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts", (shot.ticker, now, now - 150.0 - seconds)).fetchall()
+    except Exception:
+        return None
+    if len(q) < 6 or now - q[-1][0] > 30.0:
+        return None
+    ts = [r[0] for r in q]
+    mid = [((r[1] + r[2]) / 2.0 if shot.side == "yes" else 1.0 - (r[1] + r[2]) / 2.0) for r in q]
+
+    def at(t: float) -> float | None:
+        i = bisect.bisect_right(ts, t) - 1
+        return mid[i] if i >= 0 else None
+
+    cur, then = at(now), at(now - seconds)
+    if cur is None or then is None:
+        return None
+    n = int(120 - seconds)
+    grid = [at(now - 5.0 - k) for k in range(120)]
+    steps = [a - b for a, b in zip(grid[:n], grid[int(seconds):int(seconds) + n], strict=False) if a is not None and b is not None]
+    if len(steps) < 20:
+        return None
+    sd = statistics.pstdev(steps)
+    if sd <= 1e-6:  # a market whose price never changed lately: no move is no gain, a move is a big one
+        return 0.0 if abs(cur - then) < 1e-9 else math.copysign(10.0, cur - then)
+    return (cur - then) / sd
 
 
 def _day_start(now: float) -> float:
@@ -616,16 +756,21 @@ def place(
 ) -> Placed:
     """Send the order for `count` contracts (sized by sizing.py) if the book and risk gate agree."""
     cost = shot.ask * count + order_fee(shot.ask, count)
-    cap = cost  # already sized under every ceiling; the gate re-checks the global ones
     if cost + 1e-9 < s.min_order_usd:
         return Placed(f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum")
+    # The order is immediate-or-cancel at a limit. At the ask it fails whenever the ask has ticked up since it was read (13% of real buys did); a lane may allow a few cents
+    # more. The order still fills at the best ask and pays the allowance only if the book has moved, so the most it can cost is the limit times the count: that is what is checked.
+    lane_spec = lane_specs(s).get(shot.lane)
+    limit = round(max(shot.ask, min(0.99, shot.ask + max(0.0, lane_spec.buy_slip if lane_spec is not None else 0.0))), 4)  # four decimals, the exchange's scale: rounding to cents could land under a sub-cent ask; never under the ask, never allowance past 99c
+    cost = limit * count + order_fee(limit, count)
+    cap = cost  # already sized under every ceiling; the gate re-checks the global ones
     try:
-        offered = side_ask_notional(client.orderbook(shot.ticker), shot.ask, shot.side)
+        offered = side_ask_notional(client.orderbook(shot.ticker), limit, shot.side)
     except KalshiError as exc:
         return Placed(f"skipped: could not read the book ({exc})")
     if offered + 1e-9 < s.min_order_usd:
         return Placed(
-            f"skipped: ${offered:.2f} offered at {shot.ask:.2f}, "
+            f"skipped: ${offered:.2f} offered at {limit:.2f}, "
             f"under the ${s.min_order_usd:.2f} minimum"
         )
     verdict = risk.check(
@@ -642,10 +787,18 @@ def place(
         return Placed(f"skipped: exchange {known} (where {shot.series} trades) has no cash; move funds there in the Kalshi app")
     if before_order:
         before_order()
+    if lane_spec is not None and lane_spec.buy_rest_seconds > 0:
+        placed = _place_resting(s, client, store, shot, why, count, lane_spec, order_key)
+        if placed.filled > 0:
+            entry = round(max(0.01, shot.ask - lane_spec.buy_rest_below), 4)  # a post-only buy fills at its own limit, so this is the price paid
+            note = _rest_take_profit(s, client, store, shot, lane_spec, placed.filled, entry)
+            if note:
+                return Placed(f"{placed.note} {note}", placed.filled, placed.cost)
+        return placed
     buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
     try:
         try:
-            resp = buy(shot.ticker, count, shot.ask, client_order_id=order_key)
+            resp = buy(shot.ticker, count, limit, client_order_id=order_key)
         except KalshiRateLimited:
             raise  # refused outright, so nothing was bought; the queue retries it later
         except KalshiError as exc:
@@ -654,7 +807,7 @@ def place(
             # A fractional order was refused: ask for the whole contracts that fit, and stop asking for fractions if that goes through.
             log.warning("fractional order for %s refused (%s); retrying %d whole contracts", shot.ticker, exc, int(count))
             count = int(count)
-            resp = buy(shot.ticker, count, shot.ask, client_order_id=order_key)
+            resp = buy(shot.ticker, count, limit, client_order_id=order_key)
             _NO_FRACTION.add("refused")
     except KalshiRateLimited:
         raise
@@ -668,14 +821,156 @@ def place(
     avg = float(resp.get("average_fill_price") or shot.ask)
     fee = float(resp.get("average_fee_paid") or 0.0) * filled
     store.add_order(
-        ticker=shot.ticker, env=s.env, count=count, price=shot.ask, fill_count=filled,
+        ticker=shot.ticker, env=s.env, count=count, price=limit, fill_count=filled,
         cost_usd=avg * filled + fee, fee_usd=fee, order_id=resp.get("order_id", ""),
         contract=shot.side,
     )
     spent = avg * filled + fee
+    rest_note = _rest_take_profit(s, client, store, shot, lane_spec, filled, avg) if filled > 0 else ""
     return Placed(
-        f"bought {shot.side.upper()} {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}", filled, spent
+        f"bought {shot.side.upper()} {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}" + (f" {rest_note}" if rest_note else ""), filled, spent
     )
+
+
+def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None) -> Placed:
+    """Rest a post-only buy `spec.buy_rest_below` under the ask for `spec.buy_rest_seconds`, then report what filled. Nothing is bought if it does not fill. A resting order that fills is charged no taker fee, and the fee Kalshi charged is recorded as it came."""
+    from . import account
+
+    price = round(max(0.01, shot.ask - spec.buy_rest_below), 4)
+    if price >= shot.ask - 1e-9:
+        return Placed(f"skipped: a resting buy needs a price under the ask {shot.ask:.2f}")
+    started = time.time()
+    try:
+        resp = client.buy_resting(shot.ticker, shot.side, count, price, spec.buy_rest_seconds, client_order_id=order_key)
+    except KalshiRateLimited:
+        raise
+    except KalshiError as exc:
+        return Placed(f"resting buy refused: {exc}")
+    order_id = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
+    filled = spent = fee_paid = 0.0
+    seen: set[str] = set()
+    deadline = started + spec.buy_rest_seconds + 3.0
+    while time.time() < deadline and filled < count - 1e-9:
+        time.sleep(2.0)
+        try:
+            rows = client.portfolio_rows("/portfolio/fills", "fills", int(started) - 5, pages=1)
+        except KalshiError:
+            continue
+        for f in rows:
+            row = account.fill_row(f)
+            if row is None or row[9] != order_id or row[0] in seen:
+                continue
+            seen.add(row[0])
+            n, yes_price, fee = float(row[4]), float(row[5]), float(row[7] or 0.0)
+            own = yes_price if shot.side == "yes" else 1.0 - yes_price
+            filled += n
+            spent += own * n + fee
+            fee_paid += fee
+    store.add_order(
+        ticker=shot.ticker, env=s.env, count=count, price=price, fill_count=filled, cost_usd=spent, fee_usd=fee_paid, order_id=order_id, contract=shot.side,
+    )
+    if filled <= 0:
+        return Placed(f"resting buy at {price:.2f} for {spec.buy_rest_seconds:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought")
+    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}. {why}", filled, spent)
+
+
+def rest_target_price(spec: LaneSpec, entry: float) -> float | None:
+    """The price a resting take-profit sell sits at: the lane's take-profit multiple of the price paid, or its fixed price.
+
+    None when the lane has no target, or none the bid could ever reach: the same test take_profit_hit makes
+    (a multiple that would need $1.00 or more is not a target, it is holding to settlement)."""
+    if entry <= 0:
+        return None
+    if spec.take_profit_x > 0 and entry * spec.take_profit_x < 1.0:
+        return round(min(0.99, entry * spec.take_profit_x), 4)
+    if spec.take_profit_at > 0 and entry < spec.take_profit_at:
+        return round(min(0.99, spec.take_profit_at), 4)
+    return None
+
+
+def _rest_take_profit(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec | None, filled: float, entry: float) -> str:
+    """Rest this lane's take-profit sell on the book, post-only, until the market closes. Returns a note for the bet's log line ('' = nothing rested).
+
+    The order is placed before the price reaches the target, which is the whole point: when the bid gets there it fills
+    as a maker and is charged no taker fee, instead of the watcher noticing and crossing the book. It is reduce-only, so
+    it can never sell more than the buy just filled. Any other exit (a stop, a crash) cancels it first and sells what is
+    left itself (exit_position). A refusal (the bid is already at the target, so post-only will not cross to it, or the
+    API balks at the order) is only a note: the watcher still sells at the target the immediate way. Never raises: the
+    buy has already filled, and losing the resting sell must not lose the bet's bookkeeping with it.
+    """
+    if spec is None or not spec.rest_sell or filled <= 0:
+        return ""
+    price = rest_target_price(spec, entry)
+    if price is None:
+        return ""
+    try:
+        close = datetime.fromisoformat(shot.close_time)
+    except (TypeError, ValueError):
+        return ""  # no known close, no honest expiry: the watcher sells at the target instead
+    if close.tzinfo is None:
+        close = close.replace(tzinfo=UTC)
+    seconds = close.timestamp() - time.time() - 5.0  # die with the market; Kalshi cancels orders at the close anyway
+    if seconds < 30:
+        return ""  # no time for a resting order to mean anything; the watcher sells at the target itself
+    try:
+        resp = client.sell_resting(shot.ticker, shot.side, round(filled, 2), price, seconds)
+    except KalshiError as exc:
+        return f"resting take-profit at {price:.2f} refused ({exc}); the watcher will sell at the target instead."
+    order_id = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
+    if not order_id:
+        return f"resting take-profit at {price:.2f} sent but Kalshi named no order; the watcher will sell at the target instead."
+    store.add_order(
+        ticker=shot.ticker, env=s.env, count=round(filled, 2), price=price, fill_count=0.0,
+        cost_usd=0.0, fee_usd=0.0, order_id=order_id, side="rest", contract=shot.side,
+    )
+    return f"take-profit rests at {price:.2f} until the close (order {order_id}): if the bid reaches it, it sells with no taker fee."
+
+
+def _book_resting_fills(s: Settings, client: KalshiClient, store: Store, ticker: str, cancel: bool = False) -> tuple[float, float, float]:
+    """Book what the resting take-profit sell on this ticker has filled, as ordinary sell orders. Returns (newly booked, booked in all, their average fill price).
+
+    Fills are read from Kalshi's fills list, matched by order id; each carries the fee Kalshi actually charged
+    (none, for an order that rested first), which is what gets recorded. With `cancel`, the order is cancelled
+    first and then retired: whatever filled before the cancel landed is booked here, and the caller sells what
+    is left itself. Never raises: a fills read that fails just books nothing this time.
+    """
+    from . import account
+
+    rest = store.rest_sell(ticker, s.env)
+    if rest is None:
+        return 0.0, 0.0, 0.0
+    order_id = rest["order_id"]
+    if cancel and store.working_rest_sell(ticker, s.env) is not None:
+        with contextlib.suppress(KalshiError):
+            client.cancel_order(order_id)
+    booked, _ = store.booked_rest_sell(order_id)
+    new = 0.0
+    fills: list[tuple] = []
+    with contextlib.suppress(KalshiError):
+        for f in client.portfolio_rows("/portfolio/fills", "fills", int(float(rest["ts"])) - 5, pages=1):
+            row = account.fill_row(f)
+            if row is not None and row[9] == order_id:
+                fills.append(row)
+    fills.sort(key=lambda r: r[1])
+    skip = booked
+    for r in fills:
+        n = float(r[4])
+        if skip >= n - 1e-9:
+            skip -= n
+            continue
+        take = n - max(skip, 0.0)
+        skip = 0.0
+        own = float(r[5]) if (rest["contract"] or "yes") == "yes" else 1.0 - float(r[5])
+        fee = float(r[7] or 0.0) * (take / n if n else 0.0)
+        store.add_order(
+            ticker=ticker, env=s.env, count=take, price=round(own, 4), fill_count=take,
+            cost_usd=-(own * take - fee), fee_usd=fee, order_id=order_id, side="sell", contract=rest["contract"] or "yes",
+        )
+        new += take
+    if cancel:
+        store.retire_rest_sell(order_id)
+    total, avg = store.booked_rest_sell(order_id)
+    return new, total, avg
 
 
 def _hours_left(close_time: str, now: datetime | None = None) -> float | None:
@@ -719,13 +1014,30 @@ def exit_position(
         if (row["ticker"], lane) not in {(r["ticker"], r["lane"] or "moonshot") for r in store.open_bets()}:
             return f"{row['ticker']}: already exited"
         side = row["side"] or "yes"
+        seen = factors.snapshot_now(s, row["ticker"], side, row["close_time"], row["factors"] or "")  # the context at the moment of the sale, saved with the exit
         if not s.is_live(lane, row["ticker"].split("-")[0]):
-            store.mark_exited(row["ticker"], bid, why, lane)
+            price = bid
+            if why.startswith("take-profit"):
+                # A lane that rests its sale (rest_sell) would have filled at the target the moment the bid touched
+                # it, so the paper sale books the target, not the bid this re-read happens to catch. Booking the
+                # re-read bid would grade the resting sell by a slippage it does not have.
+                spec = lane_specs(s).get(lane)
+                target = rest_target_price(spec, float(row["ask"] or 0.0)) if spec is not None and spec.rest_sell else None
+                if target is not None:
+                    price = target
+            store.mark_exited(row["ticker"], price, why, lane, seen)
             _ask_flip(s, store, row, lane, why)
-            return f"paper-sold {row['ticker']} @ {bid:.2f}. {why}"
+            return f"paper-sold {row['ticker']} @ {price:.2f}. {why}"
+        # A resting take-profit sell may be working on this position: cancel it and book whatever it filled
+        # before selling anything ourselves, or the two orders would race for the same contracts.
+        _new, rest_filled, rest_avg = _book_resting_fills(s, client, store, row["ticker"], cancel=True)
         count = round(store.net_contracts(row["ticker"], s.env), 2)
+        if count < 0.005 and rest_filled > 0:
+            store.mark_exited(row["ticker"], rest_avg, f"resting take-profit filled at {rest_avg:.4f} (no taker fee)", lane, seen)
+            _ask_flip(s, store, row, lane, why)
+            return f"sold {rest_filled:g} {row['ticker']} resting @ {rest_avg:.4f} (no taker fee); the {why} sale found nothing left"
         if count <= 0:
-            store.mark_exited(row["ticker"], bid, why, lane)
+            store.mark_exited(row["ticker"], bid, why, lane, seen)
             return f"paper-sold {row['ticker']} @ {bid:.2f} (no live fill). {why}"
         if before_order:
             before_order()
@@ -745,7 +1057,7 @@ def exit_position(
             side="sell", contract=side,
         )
         if store.net_contracts(row["ticker"], s.env) < 0.005:
-            store.mark_exited(row["ticker"], avg if filled else bid, why, lane)
+            store.mark_exited(row["ticker"], avg if filled else bid, why, lane, seen)
             _ask_flip(s, store, row, lane, why)
             return f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
         return f"partial exit {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
@@ -801,6 +1113,16 @@ def stop_loss_pass(
             why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, stop_drop_for(spec, s))
         if not why:
             continue
+        if why.startswith("take-profit") and store.working_rest_sell(row["ticker"], s.env) is not None:
+            continue  # a resting sell is working this target: it fills with no taker fee, or not at all; crossing the book here would only pay the fee it exists to avoid
+        if why.startswith("stop-loss"):
+            # The same calculated wait the socket watcher applies (strategy.stop_wait), measured on the
+            # tape: a backstop that sold mid-dip would rob the watcher of rebounds it is waiting for.
+            wait = stop_wait(spec.stop_confirm_seconds if spec is not None else 0.0, hours * 3600.0, row["ticker"].split("-")[0].endswith("15M"))
+            if wait > 0:
+                dipped = below_line_seconds(s, row["ticker"], side, entry * (1.0 - stop_drop_for(spec, s)), now.timestamp())
+                if dipped is not None and dipped < wait:
+                    continue
         notes.append(exit_position(s, client, store, row, bid, why, before_order, slip=EXIT_SLIP + (0.03 if why.startswith("stop-loss") else 0.0)))
     return notes
 

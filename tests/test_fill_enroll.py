@@ -15,7 +15,7 @@ FILL = {"type": "fill", "msg": {
 def test_a_fill_message_becomes_a_flat_event():
     e = kalshiws.parse_message(FILL, received=100.0)
     assert e == {"kind": "fill", "ts": 100.0, "ticker": "KXBTC15M-26OCT241000-T80000", "side": "yes", "action": "buy",
-                 "count": 4.0, "price": 0.44, "taker": True}
+                 "count": 4.0, "price": 0.44, "taker": True, "trade_id": "t1", "order_id": "o1"}
 
 
 def test_a_no_purchase_reports_the_side_bought():

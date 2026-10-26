@@ -3,6 +3,8 @@
 llm     asks the local model, giving it similar settled cases, their base rate, and fresh headlines
 ladder  prices a commodity threshold from the strike ladder and a live feed (commodities.py)
 llm_shape  asks the local model about a 15-minute window, showing it the window's price shape so far and the closest past windows (shape.py)
+curve  the class of the move so far in the window (curve.py): a table of what became of past moves of that shape gives the chance
+forecast  the index's recent moves (forecast.py) say where this side's price goes next; the chance returned is the ask plus that move, so a lane's min_edge is the move it wants
 market  has no opinion: it returns the market's own price, so a lane using it records what buying a price band earns
 
 A lane names its estimator in its spec; runner.py looks it up here and knows nothing else about it.
@@ -10,6 +12,7 @@ A lane names its estimator in its spec; runner.py looks it up here and knows not
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -19,10 +22,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
-from . import shape
+from . import curve, forecast, shape
 from .commodities import CommodityError, CommodityPricer
 from .config import Settings
-from .lanes import LADDER, LLM, MARKET, SHAPE, LaneSpec
+from .kalshiws import index_for_series
+from .lanes import CURVE, FORECAST, LADDER, LLM, MARKET, SHAPE, LaneSpec
 from .search import NewsSearch
 from .store import Store
 from .strategy import LongShot, edge, side_prob
@@ -62,7 +66,7 @@ class EstimateShare:
     places still reads the real market afterwards, so a shared estimate never stands in for a price.
     """
 
-    UNSHARED = frozenset({"market"})
+    UNSHARED = frozenset({"market", "forecast"})  # the forecast chance is built on the ask the lane sees now
 
     def __init__(self, clock: Callable[[], float] = time.time):
         self._clock = clock
@@ -266,6 +270,110 @@ class MarketEstimator:
         return Estimate(p_yes, f"no model: priced at the {shot.ask:.2f} asked", "")
 
 
+class ForecastEstimator:
+    """The chance is the ask plus the forecast move of the side's price (forecast.py), so edge is the move the weights expect, in dollars. Hold to the result and the lane's exits do the rest."""
+
+    def __init__(self) -> None:
+        self._local = threading.local()
+
+    def screen(self, shots, markets, spec, s, now):
+        return shots
+
+    def _tape(self, s: Settings) -> Any:
+        if getattr(self._local, "tape", None) is None:
+            from . import db
+
+            self._local.tape = db.connect(s.tape_path, "tape", shared=True)
+        return self._local.tape
+
+    def _gates(self, s: Settings, shot: LongShot, moves: list[float]) -> list[str]:
+        """The skip rules the case memory has found (behavior.write_gates) that this moment falls under. None found, no file or any failure means no skip."""
+        try:
+            gates = forecast.load_gates(f"{s.data_dir}/forecast_gates.json")
+            if not gates:
+                return []
+            from . import factors
+
+            tape = self._tape(s)
+            values: dict[str, float | None] = {"slice_7_15": moves[2]}
+            try:
+                close_ts = datetime.fromisoformat(str(shot.close_time)).timestamp()
+                values["prior_15"] = factors._prior_move(tape, shot.ticker, shot.side, close_ts)
+            except Exception:
+                values["prior_15"] = None  # one value the tape cannot give never switches off the others
+            try:
+                values["held_min"] = factors.held_minutes(tape, shot.ticker, shot.side, time.time())
+            except Exception:
+                values["held_min"] = None
+            return forecast.gates_tripped(gates, values)
+        except Exception:
+            log.debug("forecast gates: could not check %s", shot.ticker, exc_info=True)
+            return []
+
+    def estimate(self, client: Any, s: Settings, shot: LongShot) -> Estimate:
+        index_id = index_for_series(shot.series or shot.ticker.split("-")[0])
+        if index_id is None:
+            raise EstimateFailed(RuntimeError("no settlement index for this series"))
+        try:
+            weights = forecast.load_weights(s.forecast_weights or f"{s.data_dir}/forecast_h5.json")
+            moves = forecast.slice_moves(self._tape(s), weights, index_id, shot.side, time.time())
+        except Exception as exc:
+            self._local.tape = None
+            raise EstimateFailed(exc) from exc
+        if moves is None:
+            raise EstimateFailed(RuntimeError("the tape has no index reading for every look-back point"))
+        raw_move, reg, memory = forecast.forecast_move(weights, moves)
+        move = max(forecast.PRICE_MIN - shot.ask, min(raw_move, forecast.PRICE_MAX - shot.ask))  # prices live on 0.0001 to 0.9999: the forecast cannot promise more than the room left either way
+        tripped = self._gates(s, shot, moves)
+        # A skip rule that trips makes the chance a hair under the ask, so the lane passes; the forecast itself is still saved for the review.
+        p_side = max(forecast.PRICE_MIN, shot.ask - 0.0001) if tripped else min(forecast.PRICE_MAX, max(forecast.PRICE_MIN, shot.ask + move))
+        p_yes = p_side if shot.side == "yes" else 1.0 - p_side
+        context = json.dumps({"move": round(move, 5), "uncapped": round(raw_move, 5), "regression": round(reg, 5), "recalled": None if memory is None else round(memory, 5), "horizon": weights.horizon,
+                              "slices": [round(z, 3) for z in moves], "frozen_at": weights.cutoff, "skipped": tripped})
+        why = f"forecast {move * 100:+.2f}c over {weights.horizon} min (regression {reg * 100:+.2f}c" + ("" if memory is None else f", {len(weights.cases)} past moments say {memory * 100:+.2f}c") + ")"
+        if tripped:
+            why = "skipped by the record: " + "; ".join(tripped) + ". " + why
+        return Estimate(p_yes, why, context)
+
+
+class CurveEstimator:
+    """The chance a 15-minute crypto market finishes above its open, from the shape of the move so far (curve.py): its class, the random-walk baseline, and the table's shift for that class. Needs data/curve_table.json."""
+
+    def __init__(self) -> None:
+        self._local = threading.local()
+
+    def screen(self, shots, markets, spec, s, now):
+        return shots
+
+    def _tape(self, s: Settings) -> Any:
+        if getattr(self._local, "tape", None) is None:
+            from . import db
+
+            self._local.tape = db.connect(s.tape_path, "tape", shared=True)
+        return self._local.tape
+
+    def estimate(self, client: Any, s: Settings, shot: LongShot) -> Estimate:
+        series = shot.series or shot.ticker.split("-")[0]
+        index_id = index_for_series(series)
+        table = curve.load_table(s.data_dir)
+        if index_id is None or table is None:
+            raise EstimateFailed(RuntimeError("no curve table, or no settlement index for this series"))
+        try:
+            close_ts = datetime.fromisoformat(str(shot.close_time)).timestamp()
+            path, before, open_value = curve.minute_closes(self._tape(s), index_id, close_ts - 900.0, time.time())
+        except Exception as exc:
+            self._local.tape = None
+            raise EstimateFailed(exc) from exc
+        vol = curve.per_minute_vol(before)
+        info = curve.classify(open_value, path, vol) if open_value and vol else None
+        if info is None:
+            raise EstimateFailed(RuntimeError("outside the curve table's minutes, or the index history is incomplete"))
+        p_up, base, n = table.chance_up(series, info)
+        context = json.dumps({"class": info["class"], "minute": info["minute"], "baseline_up": round(base, 4), "p_up": round(p_up, 4), "windows": n, "shape": curve.describe(info["class"]),
+                              "range_pos": round(info["range_pos"], 3), "since_high": info["since_high"]})
+        return Estimate(p_up, f"curve class {info['class']} ({curve.describe(info['class'])}): up {p_up:.1%} against {base:.1%} for a random walk ({n} windows)", context)
+
+
 class LadderEstimator:
     def __init__(self, pricer: CommodityPricer):
         self.pricer = pricer
@@ -317,7 +425,7 @@ class LadderEstimator:
 def build_estimators(
     model: Any, store: Store, searcher: NewsSearch | None, quant: CommodityPricer | None
 ) -> dict[str, Estimator]:
-    out: dict[str, Estimator] = {LLM: LLMEstimator(model, store, searcher), MARKET: MarketEstimator()}
+    out: dict[str, Estimator] = {LLM: LLMEstimator(model, store, searcher), MARKET: MarketEstimator(), FORECAST: ForecastEstimator(), CURVE: CurveEstimator()}
     if hasattr(model, "ask"):
         out[SHAPE] = _shape_estimator(model, store)  # one per model and store: it holds the answers that come back between passes
     if quant is not None:

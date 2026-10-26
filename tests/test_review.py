@@ -86,3 +86,43 @@ def test_tuning_cannot_turn_steady_back_on_or_lower_the_edge(tmp_path):
     assert tuned.steady_enabled is True
     assert tuned.min_edge == 0.10
     assert report.summarize([])["settled"] == 0
+
+
+def test_the_hour_review_parses_suggestions_and_ignores_junk():
+    got = review._parse_suggestions(
+        '{"observations": ["fx stopped 8"], "suggestions": [{"change": "raise FX floor to 0.80", "why": "win 73%", "test": "next hour win%"}, "skip me"]}'
+    )
+    assert got["observations"] == ["fx stopped 8"]
+    assert got["suggestions"] == [{"change": "raise FX floor to 0.80", "why": "win 73%", "test": "next hour win%"}]
+
+
+def test_hour_suggest_writes_notes_and_never_applies_them(tmp_path, monkeypatch):
+    s = settings(tmp_path, review_llm=True, ollama_url="http://127.0.0.1:9", model="x")
+    store = Store(tmp_path / "m.db")
+
+    class Fake:
+        def ping(self):
+            return True
+
+        def complete(self, prompt, tag=""):
+            assert "15-MINUTE FAVORITES" in prompt
+            return '{"observations": ["crypto won all 74"], "suggestions": [{"change": "do not restore 1.1x", "why": "tp still 97% would have won", "test": "held pnl vs sold"}]}'
+
+    monkeypatch.setattr("kalshi_moonshot.llm.Ollama", lambda url, model: Fake())
+    notes = review.hour_suggest(s, store)
+    assert notes and "1 suggestion" in notes[0]
+    text = (tmp_path / "review-notes.md").read_text()
+    assert "do not restore 1.1x" in text and "not applied" in text
+    assert not (tmp_path / "tuning.json").exists()  # suggestions never become settings
+
+
+def test_hour_suggest_stays_quiet_when_the_model_is_down(tmp_path, monkeypatch):
+    s = settings(tmp_path, review_llm=True, ollama_url="http://127.0.0.1:9", model="x")
+
+    class Down:
+        def ping(self):
+            return False
+
+    monkeypatch.setattr("kalshi_moonshot.llm.Ollama", lambda url, model: Down())
+    assert review.hour_suggest(s, Store(tmp_path / "m.db")) == ["review llm: ollama not reachable, skipped"]
+    assert not (tmp_path / "review-notes.md").exists()

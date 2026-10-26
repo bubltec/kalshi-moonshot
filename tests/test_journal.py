@@ -69,3 +69,16 @@ def test_filters():
 def test_an_empty_book_summarizes_without_crashing():
     m = journal.summarize([])
     assert m.trades == 0 and m.pnl == 0.0
+
+
+def test_cluster_se_counts_slots_not_bets():
+    import math
+
+    one_slot = [(0, 1.0)] * 50 + [(0, -1.0)] * 50  # 100 bets, all in one slot, mean 0
+    assert journal.cluster_se(one_slot, 0.0) == pytest.approx(math.sqrt(100 / 99 / 100))  # one cluster: falls back to the plain error
+    paired = [(i // 2, 1.0) for i in range(100)] + [(100 + i // 2, -1.0) for i in range(100)]  # 200 bets, two to a slot, both the same way
+    plain_200 = math.sqrt(200 / 199 / 200)  # what pretending all 200 bets are independent would say
+    assert journal.cluster_se(paired, 0.0) > 1.3 * plain_200  # the pairs are one observation each: the error stays at the 100-slot scale
+    spread = [(i, 1.0) for i in range(50)] + [(50 + i, -1.0) for i in range(50)]  # every bet its own slot
+    assert journal.cluster_se(spread, 0.0) == pytest.approx(journal.cluster_se(paired, 0.0), rel=0.02)  # 100 slots either way, same evidence
+    assert journal.cluster_se([(0, 1.0)], 1.0) == float("inf")

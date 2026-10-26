@@ -184,7 +184,7 @@ def cmd_prune(s: config.Settings, args: argparse.Namespace) -> int:
 
 
 def cmd_review(s: config.Settings, args: argparse.Namespace) -> int:
-    """Run the hourly review once: print what it changed, or that nothing was clear."""
+    """Run the hourly review once: tighten a setting only when the scorecard is clear, then send the last hour of bets to the local model for suggested improvements (written to data/review-notes.md, never applied)."""
     from .review import run_review
 
     if not s.review_enabled:
@@ -884,7 +884,8 @@ def cmd_digest(s: config.Settings, args: argparse.Namespace) -> int:
 
     store = Store(s.db_path, s.exclude_versions)
     tape_db = Tape(s.tape_path).db
-    for days in args.days:
+    windows = [args.hours / 24.0] if args.hours is not None else args.days
+    for days in windows:
         print("\n".join(digest.report(s, store, tape_db, days)))
         print()
     return 0
@@ -899,7 +900,7 @@ def cmd_audit(s: config.Settings, args: argparse.Namespace) -> int:
 
 
 def cmd_flat(s: config.Settings, args: argparse.Namespace) -> int:
-    """Exit 0 when no real position is open (nothing to leave unwatched by a restart), else 1. Used by safe_rebuild.sh."""
+    """Exit 0 when the bot has no real bet open (nothing of its own to leave unwatched by a restart), else 1. Hand-placed positions are not counted unless --include-manual. Used by safe_rebuild.sh."""
     from datetime import UTC, datetime
 
     from . import manual
@@ -907,10 +908,152 @@ def cmd_flat(s: config.Settings, args: argparse.Namespace) -> int:
     store = Store(s.db_path, s.exclude_versions)
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     bets = [r for r in store.open_bets() if r["mode"] == "trade" and (r["close_time"] or "") > now]
-    hand = manual.ManualPositions(_client(s)).positions(s, store, fresh=True)
+    hand = manual.ManualPositions(_client(s)).positions(s, store, fresh=True) if args.include_manual else []
     n = len(bets) + len(hand)
-    print(f"open real positions: {n} ({len(bets)} the bot's, {len(hand)} hand-placed)")
+    print(f"open real positions: {n} ({len(bets)} the bot's, {len(hand)} hand-placed{'' if args.include_manual else '; hand-placed ones are not counted'})")
     return 1 if n else 0
+
+
+def cmd_factors(s: config.Settings, args: argparse.Namespace) -> int:
+    """Return per entry factor (spread, book imbalance, flow, activity, recent moves, minute) for finished bets that saved a snapshot (read-only)."""
+    from . import factors
+
+    store = Store(s.db_path, s.exclude_versions)
+    print("\n".join(factors.manual_report(store) if args.manual else factors.report(store, args.lane, args.min_n)))
+    return 0
+
+
+def cmd_forecast_fit(s: config.Settings, args: argparse.Namespace) -> int:
+    """Refit the forecast weights and case memory from the tape (the bot does this every few hours itself)."""
+    from . import forecast_fit
+
+    out = args.out or s.forecast_weights or f"{s.data_dir}/forecast_h{args.horizon}.json"
+    raw = forecast_fit.fit(s, args.horizon, out)
+    print(f"fitted {raw['moments']:,} moments, horizon {args.horizon} min -> {out}")
+    return 0
+
+
+def cmd_forecast_review(s: config.Settings, args: argparse.Namespace) -> int:
+    """How right the forecast lane's forecasts were: forecast move vs the move that followed (read-only)."""
+    from . import forecast_fit
+
+    print("\n".join(forecast_fit.review(s, args.lane, args.hours)))
+    if args.orders:
+        print("\n" + "\n".join(forecast_fit.review_orders(s, args.lane, args.hours)))
+    return 0
+
+
+def cmd_forecast_compare(s: config.Settings, args: argparse.Namespace) -> int:
+    """Replay the forecaster against a lane's real wins and losses, each day judged by a model fitted only on earlier days (read-only)."""
+    from . import forecast_fit
+
+    print("\n".join(forecast_fit.compare(s, args.lane, args.days, forecast_fit.HORIZON, args.min_move, args.save)))
+    return 0
+
+
+def cmd_behavior_cases(s: config.Settings, args: argparse.Namespace) -> int:
+    """Add finished 15-minute windows (features at each moment, and whether the side won / touched 99c) to the case memory."""
+    from . import behavior
+
+    print(f"added {behavior.build_cases(s, args.max_windows)} moments")
+    return 0
+
+
+def cmd_behavior_report(s: config.Settings, args: argparse.Namespace) -> int:
+    """Which saved features separate the markets that reach 99c from those that do not (read-only)."""
+    from . import behavior
+
+    print("\n".join(behavior.report_by_series(s) if args.by_series else behavior.report(s)))
+    return 0
+
+
+def cmd_scalp_cases(s: config.Settings, args: argparse.Namespace) -> int:
+    """Replay finished windows as 30-48c scalp attempts (resting bid, resting sell) and save each with its features and result."""
+    from . import scalp
+
+    print(f"added {scalp.build_cases(s, args.max_windows)} attempts")
+    return 0
+
+
+def cmd_curve_vectors(s: config.Settings, args: argparse.Namespace) -> int:
+    """Save every finished crypto window as vector points (the coin's curve, its 10-second tail, the hour context and Kalshi's own price curve) with what became of them."""
+    from . import vectors
+
+    print(f"added {vectors.build(s, args.max_windows)} vector points")
+    return 0
+
+
+def cmd_esports(s: config.Settings, args: argparse.Namespace) -> int:
+    """How the model's CS2 and Dota 2 forecasts compare with Kalshi's prices so far (read-only)."""
+    from . import esports
+
+    print("\n".join(esports.report(Store(s.db_path, s.exclude_versions))))
+    return 0
+
+
+def cmd_probe_maker(s: config.Settings, args: argparse.Namespace) -> int:
+    """Place ONE small resting buy under the market, to see a real fill with no fee. Dry run unless --yes. It cancels itself after --seconds."""
+    import time
+
+    from . import account
+    from .strategy import fee_per_contract
+
+    client = _client(s)
+    m = client.market(args.ticker)
+    yes_bid, yes_ask = float(m.get("yes_bid_dollars") or 0), float(m.get("yes_ask_dollars") or 0)
+    bid, ask = (yes_bid, yes_ask) if args.side == "yes" else (1.0 - yes_ask, 1.0 - yes_bid)
+    price = args.price if args.price is not None else round(ask - 0.01, 2)
+    print(f"{args.ticker} ({(m.get('title') or '')[:50]}): {args.side} bid {bid:.2f} / ask {ask:.2f}, status {m.get('status')}")
+    problems = []
+    if m.get("status") not in {"active", "open"}:
+        problems.append("the market is not open")
+    if not 0.01 <= price < ask - 1e-9:
+        problems.append(f"{price:.2f} is not under the ask ({ask:.2f}): it would cross the book and pay the fee")
+    if price < bid - 0.10:
+        problems.append(f"{price:.2f} is more than 10c under the bid ({bid:.2f}): it is unlikely to fill")
+    if not 0 < args.count <= 5:
+        problems.append("count must be between 0 and 5 contracts for a probe")
+    if not 10 <= args.seconds <= 900:
+        problems.append("seconds must be between 10 and 900")
+    if s.env == "prod" and not s.allow_real_money:
+        problems.append("real money is off (ALLOW_REAL_MONEY)")
+    cost = args.count * price
+    print(f"plan: buy {args.count:g} {args.side} at {price:.2f}, resting, post-only, good for {args.seconds:.0f}s; the most it can cost is ${cost:.2f}, and it is charged no fee if it rests. "
+          f"(Crossing the book would cost about ${args.count * fee_per_contract(price):.3f}.)")
+    if problems:
+        for why in problems:
+            print(f"refused: {why}")
+        return 1
+    if not args.yes:
+        print("dry run: nothing sent. Add --yes to send it.")
+        return 0
+    started = time.time()
+    resp = client.buy_resting(args.ticker, args.side, args.count, price, args.seconds)
+    order_id = resp.get("order_id") or (resp.get("order") or {}).get("order_id")
+    print(f"sent: order {order_id}")
+    deadline = started + args.seconds + 10
+    filled = 0.0
+    while time.time() < deadline and filled < args.count - 1e-9:
+        time.sleep(5)
+        for f in client.portfolio_rows("/portfolio/fills", "fills", int(started) - 5, pages=2):
+            row = account.fill_row(f)
+            if row is not None and row[9] == order_id:
+                filled += float(row[4])
+                print(f"filled: {float(row[4]):g} at yes {float(row[5]):.2f}, fee ${float(row[7] or 0):.4f}, taker {row[8]} (the standard taker fee here would be ${float(row[4]) * fee_per_contract(float(row[5])):.4f})")
+        print(f"  {time.strftime('%H:%M:%S')} filled so far {filled:g} of {args.count:g}")
+    print("done: filled" if filled else "done: expired unfilled, nothing was bought")
+    return 0
+
+
+def cmd_template(s: config.Settings, args: argparse.Namespace) -> int:
+    """Point out a hand-placed buy as a good example (a template) for the factors; only these teach the model. --undo removes the mark."""
+    from . import db, factors
+
+    store = Store(s.db_path, s.exclude_versions)
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    for ticker in (x.strip() for x in args.tickers.split(",") if x.strip()):
+        print(factors.mark_template(store, tape, ticker, args.note, args.undo))
+    return 0
 
 
 def cmd_scale(s: config.Settings, args: argparse.Namespace) -> int:
@@ -1050,7 +1193,7 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
-    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
+    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "factors": cmd_factors, "template": cmd_template, "probe-maker": cmd_probe_maker, "esports": cmd_esports, "forecast-fit": cmd_forecast_fit, "forecast-review": cmd_forecast_review, "forecast-compare": cmd_forecast_compare, "behavior-cases": cmd_behavior_cases, "scalp-cases": cmd_scalp_cases, "curve-vectors": cmd_curve_vectors, "behavior-report": cmd_behavior_report, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
     "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
@@ -1072,6 +1215,43 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--days", type=int, default=14)
             p.add_argument("--top", type=int, default=12, help="market types to list")
             p.add_argument("--tz", default="America/New_York")
+        if name == "flat":
+            p.add_argument("--include-manual", action="store_true", help="also count positions you placed by hand (a restart leaves those unwatched for a minute)")
+        if name == "probe-maker":
+            p.add_argument("ticker")
+            p.add_argument("--side", choices=["yes", "no"], default="yes")
+            p.add_argument("--price", type=float, default=None, help="that side's own price; default is 1c under its ask")
+            p.add_argument("--count", type=float, default=1.0)
+            p.add_argument("--seconds", type=float, default=180.0, help="how long it rests before cancelling itself")
+            p.add_argument("--yes", action="store_true", help="actually send the order; without this it only prints the plan")
+        if name == "template":
+            p.add_argument("tickers", help="one or more market tickers, comma separated, e.g. KXXRP15M-26OCT241415-15")
+            p.add_argument("--note", default="", help="why it was a good one, in your words")
+            p.add_argument("--undo", action="store_true", help="remove the template mark")
+        if name == "factors":
+            p.add_argument("--lane", default=None, help="only this lane's bets")
+            p.add_argument("--min-n", type=int, default=30, help="finished bets needed before a table is shown")
+            p.add_argument("--manual", action="store_true", help="your hand-placed buys instead of the bot's, with the context at each fill")
+        if name == "forecast-fit":
+            p.add_argument("--horizon", type=int, default=5, help="minutes ahead the forecast looks")
+            p.add_argument("--out", default="", help="where to write the weights; default FORECAST_WEIGHTS or <data dir>/forecast_h<horizon>.json")
+        if name == "forecast-review":
+            p.add_argument("--lane", default="forecast_h5")
+            p.add_argument("--hours", type=float, default=24.0)
+            p.add_argument("--orders", action="store_true", help="also replay each settled buy as the other order styles (rest at the bid, under the ask, by the last-30s move)")
+        if name == "forecast-compare":
+            p.add_argument("--lane", default="crypto_favorite")
+            p.add_argument("--days", type=float, default=4.0)
+            p.add_argument("--min-move", type=float, default=0.005, help="the forecast move, in dollars, the forecaster needs to approve a bet")
+            p.add_argument("--save", default="", help="write the disagreements to this JSON file (for the model to read)")
+        if name == "behavior-report":
+            p.add_argument("--by-series", action="store_true", help="each instrument (every coin, FX pair and commodity) on its own, never a category")
+        if name == "curve-vectors":
+            p.add_argument("--max-windows", type=int, default=800, help="finished windows to add this run")
+        if name == "scalp-cases":
+            p.add_argument("--max-windows", type=int, default=600, help="finished windows to replay this run")
+        if name == "behavior-cases":
+            p.add_argument("--max-windows", type=int, default=400, help="finished windows to add this run")
         if name == "shardmove":
             p.add_argument("--from", dest="source", default="event:2", help="event:SHARD or margined:SHARD (margined is Perpetuals)")
             p.add_argument("--to", dest="dest", default="event:0")
@@ -1106,6 +1286,7 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--out", default="archive-fetch", help="fetch: folder to download into")
         if name == "digest":
             p.add_argument("--days", type=float, nargs="+", default=[1.0, 7.0], help="look-back windows in days, one report each (default: the last day and the last week)")
+            p.add_argument("--hours", type=float, default=None, help="look-back in hours instead of --days (the hourly review sends this window to the local model)")
         if name == "versions":
             p.add_argument("--lane", help="one lane")
         if name == "grid":
