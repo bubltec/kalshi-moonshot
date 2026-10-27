@@ -22,12 +22,12 @@ import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, NamedTuple
 
-from . import manual, paperfill, runner, settlement
+from . import buyer, manual, paperfill, runner, settlement
 from .config import Settings
-from .kalshi import KalshiClient, KalshiError, KalshiRateLimited
+from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series
 from .lanes import LaneSpec, enabled_lanes, lane_specs, stop_drop_for, takes_profit
 from .store import Store
@@ -182,7 +182,7 @@ def side_bid(side: str, yes_bid: float, yes_ask: float) -> float:
 
 
 def _burst_category(ticker: str) -> str:
-    return "Crypto" if ticker.split("-")[0][2:].startswith(("BTC", "ETH", "SOL", "XRP", "DOGE")) else "Other"
+    return buyer.category(ticker)
 
 
 def _side_burst(book: dict[int, list[float]], sec: int, idx: int) -> tuple[float, float, float]:
@@ -547,79 +547,19 @@ class ProfitWatcher:
             self._hunt_buy(sig.hunt, sig.spec, sig.side, sig.ask, sig.reason, sig.ctx)
 
     def _hunt_buy(self, h: Hunt, spec: LaneSpec, side: str, ask: float, reason: str, ctx: dict[str, Any]) -> None:
-        """Paper (or live) buy of the cheap side after a hunt burst. Runs on the buy worker, never on the socket. A live order that does not fill is still logged as an observe bet, with why it missed in the reason and in context["miss"]."""
-        from . import runner
-        from .strategy import LongShot
-
-        tk = h.ticker
-        series = tk.split("-")[0]
+        """Paper (or live) buy of the cheap side after a hunt burst, under the hunting lane's rules (buyer.hunt_plan). Runs on the buy worker, never on the socket."""
         try:
-            s = self.get_settings()
-            store = self.store_factory()
-            open_same = [r for r in store.open_bets() if (r["lane"] or "") == spec.name]
-            if spec.max_open and len(open_same) >= spec.max_open:
-                return
-            if any(r["ticker"] == tk for r in open_same):
-                return
-            ask = round(ask, 4)
-            stake = spec.fixed_stake or 2.0
-            count = max(1.0, stake / max(ask, 0.01))
-            close = datetime.fromtimestamp(h.close_ts, UTC).strftime("%Y-%m-%dT%H:%M:%SZ") if h.close_ts else ""
-            live = s.is_live(spec.name, series) and getattr(self.client, "authed", False)
-            if live and spec.require_prior_win and store.db.execute(
-                "SELECT 1 FROM decisions d JOIN windows w ON w.ticker = d.ticker WHERE d.lane=? AND d.action='bet' AND d.ticker LIKE ? AND w.result IN ('yes','no') AND w.result = d.side LIMIT 1",
-                (spec.name, series + "-%"),
-            ).fetchone() is None:
-                live = False  # this series has not won for the lane yet: a paper bet only, so it can earn its way in
-                reason = f"{reason} (paper: {series} has no win yet)"
-            filled, cost, note = 0.0, 0.0, reason
-            if live:
-                shot = LongShot(tk, "", "", max(0.0, ask - 0.01), min(0.99, ask + 0.02), 0.0, close, max(0.0, (h.close_ts - time.time()) / 3600.0),
-                                lane=spec.name, series=series, category=_burst_category(tk), event_ticker=tk.rsplit("-", 1)[0], side=side)
-                try:
-                    placed = runner.place(s, self.client, store, shot, reason, float(max(1, int(stake / (ask + 0.02)))))
-                    filled, cost, note = placed.filled, placed.cost, placed.note
-                except KalshiRateLimited as exc:
-                    note = f"rate limited: {exc}"
-                log.info("burst hunt %s %s: %s", tk, side, note[:200])
-                ctx["live"] = True
-                if filled <= 0:
-                    ctx["miss"] = note[:200]  # a live order that bought nothing is logged as an observe bet at the quote read before it; this says it was not paper
-                    reason = f"{reason} (live order not filled: {note})"
-            store.add_decision(ticker=tk, title="", bid=0.0, ask=ask, model_p=0.0, edge=0.0, action="bet",
-                               mode="trade" if filled > 0 else "observe", lane=spec.name, category=_burst_category(tk), side=side,
-                               contracts=filled if filled > 0 else count, stake_usd=round(cost, 4) if filled > 0 else stake,
-                               reason=(note if filled > 0 else reason)[:300], context=json.dumps(ctx), close_time=close)
+            buyer.buy(buyer.hunt_plan(spec, h.ticker, side, ask, h.close_ts, reason, ctx, self.client), self.get_settings(), self.store_factory())
         except Exception:
-            log.exception("burst hunt: failed for %s", tk)
+            log.exception("burst hunt: failed for %s", h.ticker)
 
     def _burst_buy(self, t: Target, other: str, reason: str, ctx: dict[str, Any]) -> None:
-        """A burst hit a held favorite: buy the other side for real, a fixed small stake, once per market. Falls back to the paper bet when the lane is not live or the order does not fill.
+        """A burst hit a held favorite: buy the other side, a fixed small stake, once per market (buyer.flip_plan). Real when the holding lane is live, a paper bet otherwise or when the order does not fill.
         Runs on the buy worker, never on the socket."""
-        from . import runner
-        from .strategy import LongShot
-
-        tk = t.ticker
-        series = tk.split("-")[0]
         try:
-            s = self.get_settings()
-            store = self.store_factory()
-            ask = round(t.cur_other_ask, 4)
-            book = self._book(t.lane)
-            live = s.is_live(t.lane, series) and getattr(book, "authed", False)
-            filled, cost, note = 0.0, 0.0, "paper: the holding lane is not live"
-            if live:
-                count = max(1, int(t.burst_buy / (ask + 0.02)))  # whole contracts that fit the stake with the allowance
-                close = datetime.fromtimestamp(t.close_ts, UTC).isoformat()
-                shot = LongShot(tk, "", "", max(0.0, ask - 0.01), min(0.99, ask + 0.02), 0.0, close, max(0.0, (t.close_ts - time.time()) / 3600.0), lane="burst_flip", series=series,
-                                category=_burst_category(tk), event_ticker=tk.rsplit("-", 1)[0], side=other)
-                placed = runner.place(s, book, store, shot, reason, float(count))
-                filled, cost, note = placed.filled, placed.cost, placed.note
-                log.info("burst buy %s %s: %s", tk, other, note[:200])
-            store.add_decision(ticker=tk, title="", bid=0.0, ask=ask, model_p=0.0, edge=0.0, action="bet", mode="trade" if filled > 0 else "observe", lane="burst_flip", category=_burst_category(tk), side=other,
-                               contracts=filled if filled > 0 else 1.0, stake_usd=round(cost, 4) if filled > 0 else ask, reason=(note if filled > 0 else reason)[:300], context=json.dumps(ctx), close_time="")
+            buyer.buy(buyer.flip_plan(t, other, reason, ctx, self._book(t.lane)), self.get_settings(), self.store_factory())
         except Exception:
-            log.exception("burst buy: failed for %s", tk)
+            log.exception("burst buy: failed for %s", t.ticker)
 
     def _tape_db(self) -> Any:
         if getattr(self._tls, "tape", None) is None and self.tape_factory is not None:
