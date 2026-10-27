@@ -28,6 +28,8 @@ from .config import Settings
 
 # Paper twin of the commodity lane. It reads Polymarket and never places an order, even if named in LIVE_LANES.
 POLY_LANE = "commodity_poly"
+# Every Polymarket lane. Paper unless that lane is named in LIVE_LANES. An empty list does not turn them on.
+POLY_LANES = frozenset({POLY_LANE, "crypto_poly", "crypto_poly_5m"})
 
 LLM = "llm"
 LADDER = "ladder"
@@ -109,6 +111,8 @@ class LaneSpec:
     take_profit_at: float = 0.0  # sell when the bid reaches this price (0 = off)
     cash_before_minute: float = 0.0  # a 15-minute buy opened before this minute of the window is cashed out early (0 = off; strategy.early_cash)
     cash_leave_minute: float = 9.0  # that buy is sold once the window reaches this minute, while the bid is still above the price paid
+    cash_up_minute: float = 0.0  # once the window reaches this minute, sell if the bid is above the price paid (0 = off; strategy.cash_if_up)
+    cash_drop: float = 0.0  # ...and sell when the bid is this fraction under the price paid (0.30 = down 30%). 0 = off. A smaller dip is left to the other exit
     cash_at: float = 0.95  # or sooner, the moment the bid prints this
     watch_at: float = 0.0  # a favorite is watched once the bid prints this (0 = off; the moonshot lanes leave it off). A downtrend that stays there is sold after watch_ride_seconds, scaled by the time left (strategy.watch_trend). A hover or a spike is held
     watch_patient_left: float = 420.0  # watch_ride_seconds is the wait when at least this many seconds remain; less time left shortens the wait in proportion
@@ -342,7 +346,7 @@ def version_of(spec: LaneSpec, s: Any) -> str:
 
 
 def takes_profit(spec: LaneSpec) -> bool:
-    return spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0
+    return spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0
 
 
 def chance_ok(spec: LaneSpec, p: float) -> bool:

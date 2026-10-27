@@ -28,7 +28,7 @@ from .config import Settings
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
 from .kalshi import KalshiClient, KalshiError, KalshiRateLimited
-from .lanes import POLY_LANE, lane_specs, spec_for, tiered, tiered_lanes
+from .lanes import POLY_LANES, lane_specs, spec_for, tiered, tiered_lanes
 from .marketdata import Discovery, shared_for
 from .search import NewsSearch
 from .store import Store
@@ -295,8 +295,8 @@ class Worker:
         specs = lanes.lane_specs(self.s)
         out = set()
         for row in self.store.open_bets():
-            if (row["lane"] or "") == POLY_LANE:
-                continue  # Polymarket paper bets are quoted by the poller, not Kalshi's socket
+            if (row["lane"] or "") in POLY_LANES:
+                continue  # Polymarket bets are quoted by the Polymarket socket, not Kalshi's
             spec = specs.get(row["lane"] or "moonshot")
             stop_on = spec is not None and self.s.stop_loss_enabled and spec.stop_loss and not (
                 row["ticker"].split("-")[0].endswith("15M") and not self.s.stop_loss_fast)
@@ -503,8 +503,8 @@ class Worker:
         return self._poly_client
 
     def _venue(self, lane: str) -> Any:
-        """Where a lane's markets are read. The Polymarket commodity lane never falls back to Kalshi."""
-        if lane == POLY_LANE:
+        """Where a lane's markets are read. A Polymarket lane never falls back to Kalshi."""
+        if lane in POLY_LANES:
             client = self._poly()
             if client is None:
                 raise KalshiError("polymarket paper lane has no client")
@@ -532,8 +532,9 @@ class Worker:
                 self._poly_stream.start()
             try:
                 store = Store(self.s.db_path, self.s.exclude_versions)
-                tickers = {r["ticker"] for r in store.open_bets() if (r["lane"] or "") == POLY_LANE}
-                tickers.update(store.watch(POLY_LANE))
+                tickers = {r["ticker"] for r in store.open_bets() if (r["lane"] or "") in POLY_LANES}
+                for name in POLY_LANES:
+                    tickers.update(store.watch(name))
             except Exception:
                 log.debug("polymarket quotes: could not read open bets", exc_info=True)
                 continue
@@ -643,11 +644,11 @@ class Worker:
             job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
             max_attempts=self.s.job_max_attempts, priority=spec.priority,
         )
-        if spec.name == POLY_LANE and self._poly() is None:
+        if spec.name in POLY_LANES and self._poly() is None:
             return "polymarket paper lane has no client"
         venue = self._venue(spec.name)
         with shared_for(venue, self.s.discovery_max_age, self.s.discovery_enabled):
-            n = runner.scope_lane(self.s, venue, self.store, spec, quant=None if spec.name == POLY_LANE else self.quant)
+            n = runner.scope_lane(self.s, venue, self.store, spec, quant=None if spec.name in POLY_LANES else self.quant)
         self.jobs.run_now(f"lane_review:{spec.name}", priority=spec.priority)
         log.info("scope %s: watching %d event(s)", spec.name, n)
         return f"{n} events watched"
@@ -661,7 +662,7 @@ class Worker:
             job.kind, time.time() + every, max_attempts=self.s.job_max_attempts,
             priority=spec.priority,
         )
-        if spec.name == POLY_LANE and self._poly() is None:
+        if spec.name in POLY_LANES and self._poly() is None:
             return "polymarket paper lane has no client"
         venue = self._venue(spec.name)
         with shared_for(venue, self.s.discovery_max_age, self.s.discovery_enabled):

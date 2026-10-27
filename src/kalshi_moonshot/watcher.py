@@ -32,6 +32,7 @@ from .kalshiws import index_for_series
 from .lanes import LaneSpec, enabled_lanes, lane_specs, stop_drop_for, takes_profit
 from .store import Store
 from .strategy import (
+    cash_if_up,
     early_cash,
     fee_per_contract,
     flip,
@@ -116,6 +117,8 @@ class Target:
     opened_min: float = 1e9  # minutes into the window when this buy was placed
     cash_before: float = 0.0  # early_cash: a buy opened before this minute is sold early (0 = off)
     cash_leave: float = 0.0
+    cash_up: float = 0.0  # cash_if_up: sell once the window reaches this minute and the bid is above the price paid (0 = off)
+    cash_drop: float = 0.0  # ...or this fraction under the price paid (0 = off)
     cash_at: float = 0.0
     watch_at: float = 0.0  # watch_trend: start watching once the bid prints this (0 = off)
     watch_ride: float = 0.0  # the ride at watch_patient seconds left
@@ -338,7 +341,7 @@ class ProfitWatcher:
             minute_now = (15.0 - (t.close_ts - now) / 60.0) if t.close_ts > 0 else None
             recent = [b for ts, b in t.history if now - 3.0 <= ts <= now and b > 0]
             hovering = len(recent) >= 2 and price_shape(list(t.history), now, bid) == "hover"
-            why = take_profit_hit(t.entry, bid, t.x, t.at) or self._scalp(t, bid) or early_cash(
+            why = take_profit_hit(t.entry, bid, t.x, t.at) or cash_if_up(t.entry, bid, minute_now, t.cash_up, t.cash_drop) or self._scalp(t, bid) or early_cash(
                 t.entry, bid, t.opened_min, minute_now, before=t.cash_before, leave=t.cash_leave, hovering=hovering,
             ) or spike_hit(
                 list(t.history), now, t.entry, t.spike_cents, t.spike_seconds, t.spike_min_gain
@@ -447,6 +450,11 @@ class ProfitWatcher:
                 idx = 0 if side == "yes" else 1
                 d3 = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
                 if d3 < bar:
+                    continue
+                # Dollars on a side that just fell into the band is the favorite winning, not a turn.
+                # The buy is a side that was already sitting cheap (the same parked and crash checks as the older hunt).
+                crashing, _was = _hunt_crashing(h.quotes, side, now, ask)
+                if crashing or not _hunt_parked(h.quotes, side, now, ask, hi):
                     continue
                 h.fired = True
                 reason = f"flip: ${d3:.0f} bought against the {'no' if side == 'yes' else 'yes'} favorite in 3 s (bar ${bar:.0f}), {side} costs {ask:.2f}"
@@ -874,6 +882,7 @@ class ProfitWatcher:
             fresh[(ticker, lane)].spot_sigma = spec.trail_spot_sigma if spec.trail_spot_sigma is not None else s.crash_spot_sigma
             held = fresh[(ticker, lane)]
             held.cash_before, held.cash_leave, held.cash_at = spec.cash_before_minute, spec.cash_leave_minute, spec.cash_at
+            held.cash_up, held.cash_drop = spec.cash_up_minute, spec.cash_drop
             held.watch_at = spec.watch_at
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
             held.watch_loss, held.watch_loss_seconds = spec.watch_loss, spec.watch_loss_seconds
@@ -1106,7 +1115,8 @@ class ProfitWatcher:
                 bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = float(row["ask"] or 0.0)
             resting_paper = (spec := lane_specs(s).get(lane)) is not None and spec.rest_sell and not s.is_live(lane, ticker.split("-")[0])
-            if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not resting_paper and not why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst")):  # a profit-take never sells for a loss after both fees; a peak-crash, a stop, the settlement guard and a last-two-minutes burst do (the point is to get out). A paper lane that rests its sale is not re-read at all: its order filled at the target when the bid touched it, so a dipped re-read cannot veto it
+            cut = why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst")) or (why.startswith("cash-out:") and " under the " in why)
+            if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not resting_paper and not cut:  # a profit-take never sells for a loss after both fees; a peak-crash, a stop, the settlement guard, a last-two-minutes burst, and a timed drop do (the point is to get out). A paper lane that rests its sale is not re-read at all: its order filled at the target when the bid touched it, so a dipped re-read cannot veto it
                 self._back_off(ticker, lane)
                 return
             if bid <= 0:

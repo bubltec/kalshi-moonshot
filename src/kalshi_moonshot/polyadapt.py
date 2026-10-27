@@ -66,6 +66,8 @@ def series_for(symbol: str, horizon: str) -> str | None:
     h = horizon.lower()
     if h == "15m":
         return prefix + "15M"
+    if h == "5m":
+        return prefix + "5M"
     if h in {"1h", "hourly"}:
         return prefix if symbol.lower() in _CRYPTO else prefix + "H"
     if h in {"1d", "daily"}:

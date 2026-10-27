@@ -357,6 +357,21 @@ def early_cash(
     return None
 
 
+def cash_if_up(entry: float, bid: float, minute_now: float | None, after: float, drop: float = 0.0) -> str | None:
+    """Sell once the window reaches `after` minutes and the bid is above the price paid, or down `drop` of it.
+
+    `after` is the lane's cash_up_minute and `drop` its cash_drop (0 = that side off). A smaller dip
+    is left to the lane's other exit. None before that minute.
+    """
+    if after <= 0 or minute_now is None or minute_now < after or entry <= 0 or bid <= 0:
+        return None
+    if bid > entry:
+        return f"cash-out: bid {bid:.2f} is above the {entry:.2f} paid at minute {minute_now:.0f}"
+    if drop > 0 and (entry - bid) / entry >= drop - 1e-9:
+        return f"cash-out: bid {bid:.2f} is {(entry - bid) / entry:.0%} under the {entry:.2f} paid at minute {minute_now:.0f}"
+    return None
+
+
 def ride_for(seconds_left: float | None, ride: float, patient_left: float) -> float:
     """How long a visit under the watch line may last before a downtrend is sold.
 

@@ -242,12 +242,12 @@ class Settings:
         15-minute windows (series ending in 15M) additionally need COMMODITY_15M_LIVE, so a new
         short-horizon method can be paper-traded while the lane's slower markets trade for real.
         """
-        from .lanes import POLY_LANE
+        from .lanes import POLY_LANES
 
-        # Polymarket stays paper unless this lane is named. An empty LIVE_LANES means every Kalshi lane, not this one.
-        if lane == POLY_LANE and (self.live_lanes is None or lane not in self.live_lanes):
+        # Polymarket stays paper unless this lane is named. An empty LIVE_LANES means every Kalshi lane, not these.
+        if lane in POLY_LANES and (self.live_lanes is None or lane not in self.live_lanes):
             return False
-        if series.endswith("15M") and not self.fast_live:
+        if series.endswith(("15M", "5M")) and not self.fast_live:
             return False
         if series and not self._series_may_trade_live(series):
             return False

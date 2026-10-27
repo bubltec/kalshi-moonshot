@@ -814,6 +814,7 @@ def test_the_flip_trigger_buys_the_cheap_side_on_dollars_against_a_90c_favorite(
     now = 1_000_000.0
     sec = int(now)
     h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)  # YES is the 93c favorite; the NO side costs 0.07
+    h.quotes.extend((now - 20.0 + i, 0.93, 0.94) for i in range(21))  # NO has been sitting at 7c, not falling into it
     book = {sec: [0.0, 300.0, 0.0, 21.0], sec - 1: [0.0, 200.0, 0.0, 14.0]}  # NO takers bought $35 in 3 s: well under the bar
     w._on_hunt(h, spec, now, book, sec)
     assert bought == []
@@ -822,14 +823,22 @@ def test_the_flip_trigger_buys_the_cheap_side_on_dollars_against_a_90c_favorite(
     assert bought == [("KXETH15M-1", "no", 0.07, 400.0)]
     bought.clear()
     hb = watcher.Hunt("KXBTC15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)  # BTC needs $800: $455 is not enough
+    hb.quotes.extend((now - 20.0 + i, 0.93, 0.94) for i in range(21))
     w._on_hunt(hb, spec, now, book, sec)
     assert bought == []
     book[sec - 2] = [0.0, 12000.0, 0.0, 820.0]
     w._on_hunt(hb, spec, now, book, sec)
     assert bought and bought[0][3] == 800.0
     hf = watcher.Hunt("KXETH15M-2", "guarded", close_ts=now + 60.0, yes_bid=0.60, yes_ask=0.62)  # not a 90c favorite: nothing to flip
+    hf.quotes.extend((now - 20.0 + i, 0.60, 0.62) for i in range(21))
     bought.clear()
     w._on_hunt(hf, spec, now, book, sec)
+    assert bought == []
+    fell = watcher.Hunt("KXETH15M-3", "guarded", close_ts=now + 60.0, yes_bid=0.90, yes_ask=0.91)  # NO now 10c, but it was 40c a few seconds ago
+    fell.quotes.extend((now - 20.0 + i, 0.60, 0.62) for i in range(12))
+    fell.quotes.append((now, 0.90, 0.91))
+    bought.clear()
+    w._on_hunt(fell, spec, now, book, sec)
     assert bought == []
 
 

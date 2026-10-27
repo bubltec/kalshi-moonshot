@@ -58,6 +58,39 @@ def test_a_gold_window_uses_the_kalshi_series_and_stamp():
     assert row["close_time"].startswith("2026-10-27T12:45:00")
 
 
+def test_the_crypto_polymarket_lanes_are_paper():
+    from kalshi_moonshot.config import load
+    from kalshi_moonshot.lanes import lane_specs_from
+
+    text = (Path(__file__).resolve().parents[1] / "data" / "strategies.toml").read_text()
+    specs = lane_specs_from(load(), text)
+    fifteen, five = specs["crypto_poly"], specs["crypto_poly_5m"]
+    assert fifteen.series == ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M")
+    assert five.series == ("KXBTC5M", "KXETH5M", "KXSOL5M", "KXXRP5M", "KXDOGE5M")
+    assert (fifteen.timed_minutes, five.timed_minutes) == (15.0, 5.0)
+    assert fifteen.buy_rest_seconds == 0 and five.buy_rest_seconds == 0
+    assert five.entry_elapsed == (2.0, 4.0)
+    s = load()
+    assert not s.is_live("crypto_poly", "KXBTC15M") and not s.is_live("crypto_poly_5m", "KXBTC5M")
+
+
+def test_a_five_minute_crypto_window_uses_its_own_series():
+    raw = _gold()
+    raw["question"] = "Bitcoin Up or Down 5m"
+    raw["assetPriceTerms"] = {
+        "marketType": "ASSET_PRICE_MARKET_TYPE_UP_DOWN",
+        "asset": {"symbol": "btc"},
+        "horizon": "5m",
+        "windowStart": "2026-10-27T21:10:00Z",
+        "windowEnd": "2026-10-27T21:15:00Z",
+        "priceToBeat": {"value": "2340", "currency": "USD"},
+    }
+    row = market_to_kalshi(raw)
+    assert row is not None
+    assert row["series_ticker"] == "KXBTC5M"
+    assert row["ticker"] == "KXBTC5M-26OCT271715"
+
+
 def test_metadata_shape_from_the_docs_maps_the_same_way():
     raw = {
         "symbol": "cpc-btc-updown-15m-2026-09-21-0015z",

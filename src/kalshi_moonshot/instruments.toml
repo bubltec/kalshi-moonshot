@@ -76,31 +76,31 @@ proxy = true
 [[instrument]]
 prefix = "KXBTC"
 symbol = "kraken:BTC/USD"
-suffixes = ["", "D", "15M"]
+suffixes = ["", "D", "15M", "5M"]
 realtime = true
 
 [[instrument]]
 prefix = "KXETH"
 symbol = "kraken:ETH/USD"
-suffixes = ["", "D", "15M"]
+suffixes = ["", "D", "15M", "5M"]
 realtime = true
 
 [[instrument]]
 prefix = "KXSOL"
 symbol = "kraken:SOL/USD"
-suffixes = ["", "D", "15M"]
+suffixes = ["", "D", "15M", "5M"]
 realtime = true
 
 [[instrument]]
 prefix = "KXXRP"
 symbol = "kraken:XRP/USD"
-suffixes = ["", "D", "15M"]
+suffixes = ["", "D", "15M", "5M"]
 realtime = true
 
 [[instrument]]
 prefix = "KXDOGE"
 symbol = "kraken:DOGE/USD"
-suffixes = ["", "D", "15M"]
+suffixes = ["", "D", "15M", "5M"]
 realtime = true
 
 # --- New markets. Currencies are live; indices and Brent stay paper only (`live = false`): a live lane prices and logs them but never sends an order for them until

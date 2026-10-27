@@ -48,6 +48,7 @@ from .strategy import (
     LongShot,
     ask_trend,
     best_bid,
+    cash_if_up,
     early_cash,
     edge,
     falling_reason,
@@ -1266,6 +1267,8 @@ def stop_loss_pass(
             if not why and spec.scalp_at > 0:
                 high = high_since(s, row["ticker"], side, float(row["ts"] or 0.0), now.timestamp())
                 why = None if high is None else scalp_hit(bid, high, spec.scalp_at, spec.scalp_dip)
+        if not why and spec is not None and spec.cash_up_minute > 0 and fifteen:
+            why = cash_if_up(entry, bid, 15.0 - hours * 60.0, spec.cash_up_minute, spec.cash_drop)
         if not why and spec is not None and spec.cash_before_minute > 0 and fifteen and row["close_time"]:
             with contextlib.suppress(TypeError, ValueError):
                 close = datetime.fromisoformat(row["close_time"]).timestamp()

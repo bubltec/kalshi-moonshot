@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from kalshi_moonshot import config, watcher
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import (
+    cash_if_up,
     early_cash,
     hard_loss,
     price_shape,
@@ -127,6 +128,29 @@ def test_a_hover_under_the_watch_is_held_and_a_trend_is_abandoned_after_the_ride
     w.on_event(quote(0.42, base + 46))
     w.on_event(quote(0.38, base + 47))  # two steps down, still at the low, and the ride is over
     assert not w._jobs.empty() and "trending away" in w._jobs.get_nowait()[2]
+
+
+def test_after_minute_7_a_gain_is_sold_and_a_loss_is_kept(tmp_path, monkeypatch):
+    assert cash_if_up(0.40, 0.45, 6.2, 7) is None
+    assert cash_if_up(0.40, 0.39, 8.0, 7) is None
+    assert "above" in cash_if_up(0.40, 0.41, 7.0, 7)
+    assert cash_if_up(0.40, 0.29, 8.0, 7, 0.30) is None  # 27% under: still inside the 30% line
+    assert cash_if_up(0.40, 0.20, 6.0, 7, 0.30) is None  # before the minute, even a deep drop is kept
+    assert "under" in cash_if_up(0.40, 0.28, 8.0, 7, 0.30)
+    w, base = armed(tmp_path, monkeypatch, 420.0)  # minute 8 of the window
+    t = w.targets[("KXBTC15M-1", "fav")]
+    t.entry, t.stop_drop, t.cash_up, t.close_ts = 0.40, 0.0, 7.0, base + 420
+    w.on_event(quote(0.39, base))
+    assert w._jobs.empty()
+    w.on_event(quote(0.41, base + 1))
+    assert not w._jobs.empty() and "above" in w._jobs.get_nowait()[2]
+    w2, base2 = armed(tmp_path, monkeypatch, 420.0)
+    t2 = w2.targets[("KXBTC15M-1", "fav")]
+    t2.entry, t2.stop_drop, t2.cash_up, t2.cash_drop, t2.close_ts = 0.40, 0.0, 7.0, 0.30, base2 + 420
+    w2.on_event(quote(0.29, base2))  # 27% under
+    assert w2._jobs.empty()
+    w2.on_event(quote(0.28, base2 + 1))  # 30% under
+    assert not w2._jobs.empty() and "under" in w2._jobs.get_nowait()[2]
 
 
 def test_a_climb_through_70_rides_and_a_3c_dip_sells(tmp_path, monkeypatch):
