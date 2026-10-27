@@ -893,7 +893,7 @@ def test_the_socket_only_queues_a_hunt_buy_and_the_worker_places_it(tmp_path, mo
     w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
     placed = []
     monkeypatch.setattr(runner, "place", lambda *a, **k: (placed.append(a[3].ticker) or runner.Placed("bought", 5.0, 0.4)))
-    w._buys.put((time.time(), h, spec, "no", 0.05, "burst hunt: test", {}))
+    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec))
     assert placed == [] and store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 0  # nothing happens until the worker takes it
     w._drain_buys()
     assert placed == ["KXETH15M-1"]
@@ -905,7 +905,7 @@ def test_a_live_hunt_order_that_does_not_fill_says_why_it_missed(tmp_path, monke
 
     w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
     monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("order failed: no fill at the limit"))
-    w._buys.put((time.time(), h, spec, "no", 0.05, "burst hunt: test", {}))
+    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec))
     w._drain_buys()
     row = store.db.execute("SELECT mode, reason, context FROM decisions WHERE ticker='KXETH15M-1'").fetchone()
     assert row["mode"] == "observe" and "live order not filled: order failed: no fill at the limit" in row["reason"]
@@ -923,7 +923,7 @@ def test_a_rate_limited_hunt_order_is_logged_not_lost(tmp_path, monkeypatch):
         raise KalshiRateLimited("429")
 
     monkeypatch.setattr(runner, "place", limited)
-    w._buys.put((time.time(), h, spec, "no", 0.05, "burst hunt: test", {}))
+    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec))
     w._drain_buys()
     row = store.db.execute("SELECT mode, reason FROM decisions WHERE ticker='KXETH15M-1'").fetchone()
     assert row is not None and row["mode"] == "observe" and "rate limited" in row["reason"]
@@ -935,6 +935,30 @@ def test_a_hunt_buy_that_waited_too_long_in_the_queue_is_dropped(tmp_path, monke
     w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
     placed = []
     monkeypatch.setattr(runner, "place", lambda *a, **k: placed.append(1))
-    w._buys.put((time.time() - watcher.HUNT_BUY_STALE - 1.0, h, spec, "no", 0.05, "burst hunt: test", {}))
+    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec, queued=time.time() - watcher.HUNT_BUY_STALE - 1.0))
     w._drain_buys()
     assert placed == [] and store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 0
+
+
+def test_a_burst_on_a_held_favorite_queues_the_flip_buy_and_the_worker_places_it(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    w, _s, store, close = _watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    t.burst_buy = 1.0
+    bought = []
+    monkeypatch.setattr(runner, "place", lambda *a, **k: (bought.append(a[3].side) or runner.Placed("bought NO 8/8 @ 0.1000", 8.0, 0.85)))
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    w.client.authed = True
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    _quiet_minute(w, now)
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
+    sell = w._jobs.get_nowait()
+    assert isinstance(sell, watcher.SellSignal) and sell.why.startswith("burst:")  # the favorite is sold by the sell worker
+    assert w._buys.qsize() == 1 and bought == []  # and the other side is only queued: the socket bought nothing
+    w._drain_buys()
+    assert bought == ["no"]
+    row = store.db.execute("SELECT mode, side FROM decisions WHERE lane='burst_flip'").fetchone()
+    assert row["mode"] == "trade" and row["side"] == "no"

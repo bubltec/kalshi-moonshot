@@ -23,7 +23,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import manual, paperfill, runner, settlement
 from .config import Settings
@@ -67,13 +67,20 @@ BURST_CHEAP = 0.50  # taker buys on a side priced under this are the cheap-side 
 BURST_BAND = (0.80, 0.97)  # the held side's bid must be in this band: a favorite
 BUY_BAND = (0.05, 0.25)  # the other side is bought for real only when it costs this much
 BURST_WINDOW = 120.0  # a burst sells the held favorite when this many seconds or fewer remain. Past that, holding still paid (burst_flip record: last 120 s sold +6 to +8c vs holding -5 to -8c; at 2-5 min holding was still ahead)
-HUNT_BUY_STALE = 10.0  # a hunt buy that waited this long in the queue is dropped: its price was read at the burst, and the ask has moved since
+HUNT_BUY_STALE = 10.0  # a queued buy (hunt or flip) that waited this long in the queue is dropped: its price was read at the burst, and the ask has moved since
 SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the close)
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
 HOLD_MARGIN = 0.01  # holding must beat the sale value by this much before an exit is withheld
 RETRY_AFTER = 15.0  # seconds before a declined sale is looked at again
 HISTORY_KEEP = 120.0  # seconds of bids kept per market, for the spike rule
 FILL_SETTLE = 3.0  # seconds after a fill before positions are read: the bot's own bet must be on the books first, or it would look hand-placed
+
+
+class SellSignal(NamedTuple):
+    """A watcher's call to sell a held position; the sell worker acts on it. A plain 3-tuple underneath, so it unpacks as (ticker, lane, why)."""
+    ticker: str
+    lane: str
+    why: str
 
 
 @dataclass
@@ -272,6 +279,26 @@ class Hunt:
     quotes: deque[tuple[float, float, float]] = field(default_factory=deque)  # (ts, yes bid, yes ask), last HUNT_CRASH_LOOKBACK and a bit
 
 
+@dataclass
+class BuySignal:
+    """A watcher's call to buy; the buy worker acts on it. `kind` says which buy:
+    hunt = the cheap side of a market with no position (a burst_hunt lane; `hunt` and `spec` are set, `ask` was read at the burst),
+    flip = the other side of a held favorite whose burst is selling it (`held` is the target; its lane's burst_buy sets the stake)."""
+    kind: str
+    side: str
+    ask: float
+    reason: str
+    ctx: dict[str, Any]
+    hunt: Hunt | None = None
+    spec: LaneSpec | None = None
+    held: Target | None = None
+    queued: float = field(default_factory=time.time)
+
+    @property
+    def ticker(self) -> str:
+        return (self.hunt or self.held).ticker  # type: ignore[union-attr]
+
+
 class ProfitWatcher:
     def __init__(
         self, get_settings: Callable[[], Settings], client: KalshiClient, store_factory: Callable[[], Store],
@@ -297,8 +324,8 @@ class ProfitWatcher:
         self._hunts: dict[str, Hunt] = {}  # ticker -> a burst_hunt watch (no position)
         self._hunt_by_series: dict[str, LaneSpec] = {}  # series -> LaneSpec for burst_hunt lanes
         self._lock = threading.Lock()
-        self._jobs: queue.SimpleQueue[tuple[str, str, str]] = queue.SimpleQueue()  # (ticker, lane, why)
-        self._buys: queue.SimpleQueue[tuple[float, Hunt, LaneSpec, str, float, str, dict[str, Any]]] = queue.SimpleQueue()  # (queued at, hunt, lane, side, ask, why, context): hunt buys for the buy worker. The socket only enqueues
+        self._jobs: queue.SimpleQueue[SellSignal] = queue.SimpleQueue()  # sells for the sell worker. The socket only enqueues
+        self._buys: queue.SimpleQueue[BuySignal] = queue.SimpleQueue()  # buys for the buy worker. The socket only enqueues
         self._inflight: set[tuple[str, str]] = set()
         self.follow: Callable[[set[str]], None] | None = None  # start streaming these tickers now (the tape recorder's follow)
         self.tape_factory: Callable[[], Any] | None = None  # opens a read connection to the tape, for the entry context saved with a hand-placed buy
@@ -357,7 +384,7 @@ class ProfitWatcher:
             reason = self._stop_hit(t, bid, now) or fast or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._settlement_hit(t, bid, now, e)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
-                self._jobs.put((t.ticker, t.lane, reason))
+                self._jobs.put(SellSignal(t.ticker, t.lane, reason))
 
     def _on_trade(self, e: dict[str, Any]) -> None:
         """A trade on a market we hold. Per second it keeps the contracts traded by YES takers and NO takers over the last two minutes. On the first burst against a held favorite (the last 3 seconds' volume a multiple of the market's own
@@ -404,11 +431,11 @@ class ProfitWatcher:
                 key = (t.ticker, t.lane)
                 if key not in self._inflight:
                     self._inflight.add(key)
-                    self._jobs.put((t.ticker, t.lane, reason))  # sell the favorite: the burst is the peak crashing in the last two minutes
+                    self._jobs.put(SellSignal(t.ticker, t.lane, reason))  # sell the favorite: the burst is the peak crashing in the last two minutes
                 if not first:
                     continue  # a repeat burst after a sale that filled nothing only sells again
                 if t.burst_buy > 0 and BUY_BAND[0] <= t.cur_other_ask <= BUY_BAND[1]:
-                    threading.Thread(target=self._burst_buy, args=(t, other, reason, ctx), name="burst-buy", daemon=True).start()
+                    self._buys.put(BuySignal("flip", other, round(t.cur_other_ask, 4), reason, ctx, held=t))
                     continue
                 try:
                     store = self.store_factory()
@@ -465,7 +492,7 @@ class ProfitWatcher:
                 h.fired = True
                 reason = f"flip: ${d3:.0f} bought against the {'no' if side == 'yes' else 'yes'} favorite in 3 s (bar ${bar:.0f}), {side} costs {ask:.2f}"
                 ctx = {"dollars_3s": round(d3, 1), "bar": bar, "favorite": round(1.0 - cheap_mid, 3), "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name}
-                self._buys.put((time.time(), h, spec, side, ask, reason, ctx))
+                self._buys.put(BuySignal("hunt", side, ask, reason, ctx, hunt=h, spec=spec))
                 return
             vol, base, ratio = _side_burst(book, sec, 0 if side == "yes" else 1)
             if not (lo <= ask <= hi) or not _hunt_burst(vol, base, ratio):
@@ -487,11 +514,11 @@ class ProfitWatcher:
             reason = (f"burst hunt: {ratio:.0f}x {side}'s own normal volume ({vol:.0f} contracts in 3 s), {side} costs {ask:.2f}")
             ctx = {"ratio": round(ratio, 1), "with_3s": round(vol, 1), "normal_second": round(base, 1),
                    "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name}
-            self._buys.put((time.time(), h, spec, side, ask, reason, ctx))
+            self._buys.put(BuySignal("hunt", side, ask, reason, ctx, hunt=h, spec=spec))
             return
 
     def _run_buys(self) -> None:
-        """The buy worker: hunt buys come off the queue one at a time, so a slow order never holds up the socket (or a sale on the sell worker)."""
+        """The buy worker: buys (hunt and flip) come off the queue one at a time, so a slow order never holds up the socket or a sale on the sell worker."""
         while not self._stop.is_set():
             try:
                 job = self._buys.get(timeout=1.0)
@@ -500,7 +527,7 @@ class ProfitWatcher:
             self._buy_job(job)
 
     def _drain_buys(self) -> None:
-        """Run every queued hunt buy now, on this thread (the worker does the same one at a time)."""
+        """Run every queued buy now, on this thread (the worker does the same one at a time)."""
         while True:
             try:
                 job = self._buys.get_nowait()
@@ -508,14 +535,16 @@ class ProfitWatcher:
                 return
             self._buy_job(job)
 
-    def _buy_job(self, job: tuple[float, Hunt, LaneSpec, str, float, str, dict[str, Any]]) -> None:
-        queued, h, spec, side, ask, reason, ctx = job
-        waited = time.time() - queued
+    def _buy_job(self, sig: BuySignal) -> None:
+        waited = time.time() - sig.queued
         if waited > HUNT_BUY_STALE:
-            log.info("burst hunt skipped, %s %s: the buy waited %.0fs in the queue, the price it was read at is gone", h.ticker, side, waited)
+            log.info("%s buy skipped, %s %s: the buy waited %.0fs in the queue, the price it was read at is gone", sig.kind, sig.ticker, sig.side, waited)
             return
-        ctx["queued_s"] = round(waited, 2)
-        self._hunt_buy(h, spec, side, ask, reason, ctx)
+        sig.ctx["queued_s"] = round(waited, 2)
+        if sig.kind == "flip" and sig.held is not None:
+            self._burst_buy(sig.held, sig.side, sig.reason, sig.ctx)
+        elif sig.hunt is not None and sig.spec is not None:
+            self._hunt_buy(sig.hunt, sig.spec, sig.side, sig.ask, sig.reason, sig.ctx)
 
     def _hunt_buy(self, h: Hunt, spec: LaneSpec, side: str, ask: float, reason: str, ctx: dict[str, Any]) -> None:
         """Paper (or live) buy of the cheap side after a hunt burst. Runs on the buy worker, never on the socket. A live order that does not fill is still logged as an observe bet, with why it missed in the reason and in context["miss"]."""
@@ -566,7 +595,7 @@ class ProfitWatcher:
 
     def _burst_buy(self, t: Target, other: str, reason: str, ctx: dict[str, Any]) -> None:
         """A burst hit a held favorite: buy the other side for real, a fixed small stake, once per market. Falls back to the paper bet when the lane is not live or the order does not fill.
-        Runs in its own thread, never on the socket."""
+        Runs on the buy worker, never on the socket."""
         from . import runner
         from .strategy import LongShot
 
@@ -864,13 +893,13 @@ class ProfitWatcher:
             fast = self._stop_hit(t, t.last_bid, now) or self._fast_crash(t, t.last_bid)
             if fast and key not in self._inflight:
                 self._inflight.add(key)
-                self._jobs.put((t.ticker, t.lane, fast))
+                self._jobs.put(SellSignal(t.ticker, t.lane, fast))
                 continue
             if t.below_since is not None and now - t.below_since >= t.trail_confirm and key not in self._inflight and now >= t.retry_after:
                 why = None if below_floor(t, t.last_bid) else trail_hit(t.entry, t.peak, t.last_bid, arm_gain(t), crash_drop(t))
                 if why:
                     self._inflight.add(key)
-                    self._jobs.put((t.ticker, t.lane, f"{why} for {now - t.below_since:.0f}s"))
+                    self._jobs.put(SellSignal(t.ticker, t.lane, f"{why} for {now - t.below_since:.0f}s"))
 
     # ---- housekeeping and the selling thread ----
     def refresh(self) -> None:
