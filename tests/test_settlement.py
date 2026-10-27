@@ -1090,3 +1090,128 @@ def test_the_flow_ledger_drops_a_market_that_stopped_trading(tmp_path, monkeypat
     w._flow["KXLIVE15M-1"] = {sec - 2: [5.0, 5.0, 1.0, 1.0]}
     w.refresh()
     assert "KXOLD15M-1" not in w._flow and "KXLIVE15M-1" in w._flow
+
+
+def _hunt_job(w, h, spec, side="no", ask=0.05):
+    """What _on_hunt does when a trigger fires: mark the market fired and queue the buy."""
+    h.fired = True
+    w._buys.put(watcher.BuySignal("hunt", side, ask, "burst hunt: test", {}, hunt=h, spec=spec))
+
+
+def _two_rows(store):
+    return store.db.execute("SELECT id, mode, ask, contracts, stake_usd, reason, context FROM decisions WHERE ticker='KXETH15M-1'").fetchall()
+
+
+def test_a_hunt_that_certainly_bought_nothing_may_fire_again_and_the_fill_upgrades_its_row(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+    answers = iter([runner.Placed("bought NO 0/7 @ 0.0700"), runner.Placed("bought NO 7/7 @ 0.0600", 7.0, 0.45)])
+    monkeypatch.setattr(runner, "place", lambda *a, **k: next(answers))
+    _hunt_job(w, h, spec)
+    w._drain_buys()
+    rows = _two_rows(store)
+    assert len(rows) == 1 and rows[0]["mode"] == "observe"  # the first miss is the paper fallback, as before
+    assert h.fired is False and h.attempts == 1 and h.miss_row == rows[0]["id"] and h.retry_at > time.time()  # and the market may fire again
+    _hunt_job(w, h, spec, ask=0.06)
+    w._drain_buys()
+    rows = _two_rows(store)
+    assert len(rows) == 1  # the same row, not a second bet on the market
+    assert rows[0]["mode"] == "trade" and rows[0]["contracts"] == 7.0 and rows[0]["stake_usd"] == pytest.approx(0.45) and rows[0]["ask"] == pytest.approx(0.06)
+    ctx = json.loads(rows[0]["context"])
+    assert ctx["attempt"] == 2 and ctx["first_ask"] == pytest.approx(0.05)
+    assert h.fired is True  # a fill ends it
+
+
+def test_a_hunt_stops_retrying_after_its_attempts_and_keeps_one_paper_row(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(runner, "place", lambda *a, **k: (calls.append(1) or runner.Placed("bought NO 0/7 @ 0.0700")))
+    for _ in range(watcher.HUNT_ATTEMPTS):
+        assert h.fired is False
+        _hunt_job(w, h, spec)
+        w._drain_buys()
+    assert len(calls) == watcher.HUNT_ATTEMPTS and h.fired is True  # spent
+    rows = _two_rows(store)
+    assert len(rows) == 1 and rows[0]["mode"] == "observe" and json.loads(rows[0]["context"])["attempt"] == watcher.HUNT_ATTEMPTS
+
+
+def test_a_miss_that_may_have_filled_is_never_retried(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    for note in ("order failed: ReadTimeout: timed out", "blocked by risk: daily loss", "skipped: order $0.10 is under the $0.25 minimum", "skipped: exchange 1 (where KXETH15M trades) has no cash"):
+        w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+        monkeypatch.setattr(runner, "place", lambda *a, _n=note, **k: runner.Placed(_n))
+        _hunt_job(w, h, spec)
+        w._drain_buys()
+        assert h.fired is True and h.attempts == 1, note  # one attempt: the order may have gone through, or can never go through
+        store.db.execute("DELETE FROM decisions WHERE ticker='KXETH15M-1'")
+        store.db.commit()
+
+
+def test_a_rate_limited_or_unreadable_book_is_retried(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.kalshi import KalshiRateLimited
+
+    w, _store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+
+    def limited(*a, **k):
+        raise KalshiRateLimited("429")
+
+    monkeypatch.setattr(runner, "place", limited)
+    _hunt_job(w, h, spec)
+    w._drain_buys()
+    assert h.fired is False and h.attempts == 1  # nothing was sent
+    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("skipped: could not read the book (timeout)"))
+    _hunt_job(w, h, spec)
+    w._drain_buys()
+    assert h.fired is False and h.attempts == 2
+
+
+def test_a_retry_for_another_row_or_after_a_restart_is_blocked(tmp_path, monkeypatch):
+    from kalshi_moonshot import buyer, runner
+
+    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("bought NO 0/7 @ 0.0700"))
+    _hunt_job(w, h, spec)
+    w._drain_buys()
+    monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not buy twice")))
+    fresh = watcher.Hunt("KXETH15M-1", "guarded", close_ts=time.time() + 100)  # after a restart the hunt knows nothing of the first row
+    _hunt_job(w, fresh, spec)
+    w._drain_buys()
+    assert len(_two_rows(store)) == 1
+    plan = buyer.hunt_plan(spec, "KXETH15M-1", "no", 0.05, fresh.close_ts, "r", {}, w.client)
+    plan.retry_of = 999999  # a row that is not the one this market holds
+    assert buyer.buy(plan, w.get_settings(), store).outcome == "skipped"
+
+
+def test_a_stale_dropped_buy_lets_the_market_fire_again(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+    monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("stale")))
+    h.fired = True
+    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec, queued=time.time() - watcher.HUNT_BUY_STALE - 1.0))
+    w._drain_buys()
+    assert h.fired is False and h.attempts == 0 and _two_rows(store) == []  # nothing was tried, so no attempt is used
+
+
+def test_a_hunt_waits_out_its_retry_cooldown(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import lanes
+
+    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.15), hunt_dollars=400.0, sides=("yes", "no"), fixed_stake=0.5, max_open=0)
+    now = 1_000_000.0
+    sec = int(now)
+    h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)
+    h.quotes.extend((now - 20.0 + i, 0.93, 0.94) for i in range(21))
+    book = {sec: [0.0, 6000.0, 0.0, 455.0]}  # $455 against the favorite
+    h.retry_at = now + 3.0
+    w._on_hunt(h, spec, now, book, sec)
+    assert w._buys.empty()  # still cooling down
+    w._on_hunt(h, spec, now + 4.0, {sec + 4: book[sec]}, sec + 4)
+    assert w._buys.qsize() == 1  # the burst is still on and the cooldown is over

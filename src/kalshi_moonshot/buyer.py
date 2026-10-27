@@ -25,7 +25,15 @@ from .strategy import LongShot
 log = logging.getLogger("moonshot")
 
 ALLOWANCE = 0.02  # a live buy's limit is this much over the ask, so a quote that ticked up since it was read still fills; the stake is sized with it
+SENT_NOTHING = ("bought ", "skipped: could not read the book", "skipped: $")  # notes of a zero fill that is certain: the exchange answered an IOC with no contracts, or no order went out. "order failed" is not one (a timeout may have filled), nor is a risk block or a too-small order
 FLIP_LANE = "burst_flip"  # the lane a bet on the other side of a held favorite is logged under
+
+
+@dataclass
+class BuyResult:
+    outcome: str  # "filled", "paper" (the lane is not live), "missed" (a live order bought nothing) or "skipped"
+    retryable: bool = False  # a miss that certainly bought nothing, so the market may be tried again
+    row_id: int | None = None  # the decision row this buy wrote or updated
 
 
 def whole_contracts(stake: float, ask: float) -> float:
@@ -58,6 +66,7 @@ class BuyPlan:
     cap_lane: str | None = None  # the lane whose open bets cap this buy (None = no cap)
     max_open: int = 0  # 0 = no limit
     require_prior_win: bool = False
+    retry_of: int | None = None  # the decision row of an earlier try on this market that bought nothing
     series: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -94,36 +103,56 @@ def _has_won(store: Store, lane: str, series: str) -> bool:
     ).fetchone() is not None
 
 
-def buy(plan: BuyPlan, s: Settings, store: Store) -> None:
-    """Carry out one buy: skip it if the lane is full or already holds the market, place it for real if the lane is live (a paper bet otherwise), and log the decision."""
+def buy(plan: BuyPlan, s: Settings, store: Store) -> BuyResult:
+    """Carry out one buy: skip it if the lane is full or already holds the market, place it for real if the lane is live (a paper bet otherwise), and log the decision.
+
+    A live order that certainly bought nothing leaves the paper-fallback bet and says the market may fire again (BuyResult.retryable). That second try (plan.retry_of is the
+    first try's row) does not add a bet: a fill upgrades the same row to a trade, a miss only notes the attempt."""
     tk, ask, reason = plan.ticker, plan.ask, plan.reason
+    retrying = plan.retry_of is not None
+    held = None
     if plan.cap_lane is not None:
         open_same = [r for r in store.open_bets() if (r["lane"] or "") == plan.cap_lane]
-        if plan.max_open and len(open_same) >= plan.max_open:
+        if not retrying and plan.max_open and len(open_same) >= plan.max_open:
             log.info("%s skipped, %s %s: %s already holds %d of its %d open bets", plan.label, tk, plan.side, plan.cap_lane, len(open_same), plan.max_open)
-            return
-        if any(r["ticker"] == tk for r in open_same):
+            return BuyResult("skipped")
+        held = next((r for r in open_same if r["ticker"] == tk), None)
+        if held is not None and not (retrying and held["id"] == plan.retry_of):
             log.info("%s skipped, %s %s: %s already holds this market", plan.label, tk, plan.side, plan.cap_lane)
-            return
+            return BuyResult("skipped")
+    if retrying and held is None:
+        log.info("%s skipped, %s %s: the row of the first try is gone", plan.label, tk, plan.side)
+        return BuyResult("skipped")
     live = s.is_live(plan.live_lane, plan.series) and getattr(plan.venue, "authed", False)
     if live and plan.require_prior_win and not _has_won(store, plan.decision_lane, plan.series):
         live = False  # this series has not won for the lane yet: a paper bet only, so it can earn its way in
         reason = f"{reason} (paper: {plan.series} has no win yet)"
-    filled, cost, note = 0.0, 0.0, reason
+    filled, cost, note, retryable = 0.0, 0.0, reason, False
     if live:
         shot = LongShot(tk, "", "", max(0.0, ask - 0.01), min(0.99, ask + ALLOWANCE), 0.0, plan.shot_close, max(0.0, (plan.close_ts - time.time()) / 3600.0),
                         lane=plan.decision_lane, series=plan.series, category=category(tk), event_ticker=tk.rsplit("-", 1)[0], side=plan.side)
         try:
             placed = runner.place(s, plan.venue, store, shot, reason, whole_contracts(plan.stake, ask))
             filled, cost, note = placed.filled, placed.cost, placed.note
+            retryable = filled <= 0 and note.startswith(SENT_NOTHING)
         except KalshiRateLimited as exc:
-            note = f"rate limited: {exc}"
+            note, retryable = f"rate limited: {exc}", True  # refused outright: nothing was bought
         log.info("%s %s %s: %s", plan.label, tk, plan.side, note[:200])
         plan.ctx["live"] = True
         if filled <= 0:
             plan.ctx["miss"] = note[:200]  # a live order that bought nothing is logged as an observe bet at the quote read before it; this says it was not paper
             reason = f"{reason} (live order not filled: {note})"
-    store.add_decision(ticker=tk, title="", bid=0.0, ask=ask, model_p=0.0, edge=0.0, action="bet", mode="trade" if filled > 0 else "observe",
-                       lane=plan.decision_lane, category=category(tk), side=plan.side, contracts=filled if filled > 0 else plan.paper_contracts,
-                       stake_usd=round(cost, 4) if filled > 0 else plan.paper_stake, reason=(note if filled > 0 else reason)[:300],
-                       context=json.dumps(plan.ctx), close_time=plan.log_close)
+    if retrying and held is not None:
+        plan.ctx["first_ask"] = held["ask"]
+        if filled > 0:
+            store.db.execute("UPDATE decisions SET mode='trade', ask=?, contracts=?, stake_usd=?, reason=?, context=? WHERE id=?",
+                             (ask, filled, round(cost, 4), note[:300], json.dumps(plan.ctx), plan.retry_of))
+        else:
+            store.db.execute("UPDATE decisions SET context=? WHERE id=?", (json.dumps(plan.ctx), plan.retry_of))
+        store.db.commit()
+        return BuyResult("filled" if filled > 0 else "missed", retryable, plan.retry_of)
+    row = store.add_decision(ticker=tk, title="", bid=0.0, ask=ask, model_p=0.0, edge=0.0, action="bet", mode="trade" if filled > 0 else "observe",
+                             lane=plan.decision_lane, category=category(tk), side=plan.side, contracts=filled if filled > 0 else plan.paper_contracts,
+                             stake_usd=round(cost, 4) if filled > 0 else plan.paper_stake, reason=(note if filled > 0 else reason)[:300],
+                             context=json.dumps(plan.ctx), close_time=plan.log_close)
+    return BuyResult("filled" if filled > 0 else ("missed" if live else "paper"), retryable, row)

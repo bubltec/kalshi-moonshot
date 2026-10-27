@@ -67,6 +67,8 @@ BURST_CHEAP = 0.50  # taker buys on a side priced under this are the cheap-side 
 BURST_BAND = (0.80, 0.97)  # the held side's bid must be in this band: a favorite
 BUY_BAND = (0.05, 0.25)  # the other side is bought for real only when it costs this much
 BURST_WINDOW = 120.0  # a burst sells the held favorite when this many seconds or fewer remain. Past that, holding still paid (burst_flip record: last 120 s sold +6 to +8c vs holding -5 to -8c; at 2-5 min holding was still ahead)
+HUNT_ATTEMPTS = 3  # a hunt buys a market at most this many times when each try certainly bought nothing (buyer.SENT_NOTHING); every try re-checks the whole trigger
+HUNT_RETRY_AFTER = 3.0  # seconds between those tries
 HUNT_BUY_STALE = 10.0  # a queued buy (hunt or flip) that waited this long in the queue is dropped: its price was read at the burst, and the ask has moved since
 SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the close)
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
@@ -276,6 +278,9 @@ class Hunt:
     yes_bid: float = 0.0
     yes_ask: float = 0.0
     fired: bool = False
+    attempts: int = 0  # live tries that bought nothing
+    retry_at: float = 0.0  # no new try before this time
+    miss_row: int | None = None  # the decision row of the first miss: a later fill upgrades it to a trade instead of adding a second bet
     quotes: deque[tuple[float, float, float]] = field(default_factory=deque)  # (ts, yes bid, yes ask), last HUNT_CRASH_LOOKBACK and a bit
 
 
@@ -464,7 +469,7 @@ class ProfitWatcher:
 
     def _on_hunt(self, h: Hunt, spec: LaneSpec, now: float, book: dict[int, list[float]], sec: int) -> None:
         """No position: buy the cheap side if THAT side's own taker tape just 5x'd. A 95c YES pile-on is ignored; a 5c NO dump is the burst."""
-        if h.fired or h.close_ts <= 0 or not (10.0 <= h.close_ts - now <= BURST_WINDOW):
+        if h.fired or h.close_ts <= 0 or now < h.retry_at or not (10.0 <= h.close_ts - now <= BURST_WINDOW):
             return
         asks = {"yes": h.yes_ask, "no": 1.0 - h.yes_bid}
         lo, hi = spec.price
@@ -539,19 +544,33 @@ class ProfitWatcher:
         waited = time.time() - sig.queued
         if waited > HUNT_BUY_STALE:
             log.info("%s buy skipped, %s %s: the buy waited %.0fs in the queue, the price it was read at is gone", sig.kind, sig.ticker, sig.side, waited)
+            if sig.hunt is not None:
+                sig.hunt.fired = False  # nothing was tried, so the market may fire again at a fresh price (no attempt used)
             return
         sig.ctx["queued_s"] = round(waited, 2)
         if sig.kind == "flip" and sig.held is not None:
             self._burst_buy(sig.held, sig.side, sig.reason, sig.ctx)
         elif sig.hunt is not None and sig.spec is not None:
-            self._hunt_buy(sig.hunt, sig.spec, sig.side, sig.ask, sig.reason, sig.ctx)
+            h = sig.hunt
+            res = self._hunt_buy(h, sig.spec, sig.side, sig.ask, sig.reason, sig.ctx)
+            if res is not None and res.outcome == "missed":
+                h.attempts += 1
+                h.miss_row = res.row_id
+                if res.retryable and h.attempts < HUNT_ATTEMPTS:
+                    h.retry_at = time.time() + HUNT_RETRY_AFTER
+                    h.fired = False
 
-    def _hunt_buy(self, h: Hunt, spec: LaneSpec, side: str, ask: float, reason: str, ctx: dict[str, Any]) -> None:
-        """Paper (or live) buy of the cheap side after a hunt burst, under the hunting lane's rules (buyer.hunt_plan). Runs on the buy worker, never on the socket."""
+    def _hunt_buy(self, h: Hunt, spec: LaneSpec, side: str, ask: float, reason: str, ctx: dict[str, Any]) -> buyer.BuyResult | None:
+        """Paper (or live) buy of the cheap side after a hunt burst, under the hunting lane's rules (buyer.hunt_plan). Runs on the buy worker, never on the socket.
+        A try after a miss carries the first try's row (h.miss_row), so a fill upgrades that bet instead of adding a second one."""
         try:
-            buyer.buy(buyer.hunt_plan(spec, h.ticker, side, ask, h.close_ts, reason, ctx, self.client), self.get_settings(), self.store_factory())
+            plan = buyer.hunt_plan(spec, h.ticker, side, ask, h.close_ts, reason, ctx, self.client)
+            plan.retry_of = h.miss_row
+            ctx["attempt"] = h.attempts + 1
+            return buyer.buy(plan, self.get_settings(), self.store_factory())
         except Exception:
             log.exception("burst hunt: failed for %s", h.ticker)
+            return None
 
     def _burst_buy(self, t: Target, other: str, reason: str, ctx: dict[str, Any]) -> None:
         """A burst hit a held favorite: buy the other side, a fixed small stake, once per market (buyer.flip_plan). Real when the holding lane is live, a paper bet otherwise or when the order does not fill.
