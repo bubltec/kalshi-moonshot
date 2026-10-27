@@ -113,13 +113,15 @@ class LaneSpec:
     cash_leave_minute: float = 9.0  # that buy is sold once the window reaches this minute, while the bid is still above the price paid
     cash_up_minute: float = 0.0  # once the window reaches this minute, sell if the bid is above the price paid (0 = off; strategy.cash_if_up)
     cash_drop: float = 0.0  # ...and sell when the bid is this fraction under the price paid (0.30 = down 30%). 0 = off. A smaller dip is left to the other exit
+    cash_left_seconds: float = 0.0  # with this many seconds left, sell a hover that is still under the price paid (0 = off; strategy.cash_if_losing). A bid still above the price paid is held
     cash_at: float = 0.95  # or sooner, the moment the bid prints this
     watch_at: float = 0.0  # a favorite is watched once the bid prints this (0 = off; the moonshot lanes leave it off). A downtrend that stays there is sold after watch_ride_seconds, scaled by the time left (strategy.watch_trend). A hover or a spike is held
     watch_patient_left: float = 420.0  # watch_ride_seconds is the wait when at least this many seconds remain; less time left shortens the wait in proportion
     watch_ride_seconds: float = 0.0  # how long a visit under watch_at may last, at watch_patient_left, before a downtrend is abandoned (0 = a downtrend sells as soon as the last 3 seconds say so)
     watch_loss: float = 0.0  # hard stop: sell when the bid has lost this fraction of the price paid (0.75 keeps about a quarter). 0 = off. Checked the whole 15-minute window, ahead of the 45% line
     watch_loss_seconds: float = 3.0  # once that line prints, this many seconds to bounce back above it
-    scalp_at: float = 0.0  # once the bid prints this, follow the high (0 = off). A climb keeps riding (strategy.scalp_hit)
+    scalp_at: float = 0.0  # once the bid prints this price, follow the high (0 = off). A climb keeps riding (strategy.scalp_hit)
+    scalp_up: float = 0.0  # or once the bid is this far above the price paid (0 = off). Whichever arm is set and reached first
     scalp_dip: float = 0.03  # sell the moment the bid is this far under that high
     rest_sell: bool = False  # rest the take-profit sell on the book from the moment a live buy fills (post-only, so no taker fee) instead of having the watcher cross the book when the bid gets there; needs take_profit_x or take_profit_at. A stop or crash exit cancels it first and sells what is left
     trail_activate: float = 0.0  # peak-crash exit, when trail_progress is 0: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
@@ -346,7 +348,7 @@ def version_of(spec: LaneSpec, s: Any) -> str:
 
 
 def takes_profit(spec: LaneSpec) -> bool:
-    return spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0
+    return spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.scalp_up > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0 or spec.cash_left_seconds > 0
 
 
 def chance_ok(spec: LaneSpec, p: float) -> bool:

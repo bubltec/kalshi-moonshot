@@ -48,6 +48,7 @@ from .strategy import (
     LongShot,
     ask_trend,
     best_bid,
+    cash_if_losing,
     cash_if_up,
     early_cash,
     edge,
@@ -1264,11 +1265,15 @@ def stop_loss_pass(
         fifteen = row["ticker"].split("-")[0].endswith("15M")
         if profit_on and spec is not None:
             why = take_profit_hit(entry, bid, spec.take_profit_x, spec.take_profit_at)
-            if not why and spec.scalp_at > 0:
+            arms = [p for p in (spec.scalp_at, entry + spec.scalp_up if spec.scalp_up > 0 else 0.0) if p > 0]
+            if not why and arms:
                 high = high_since(s, row["ticker"], side, float(row["ts"] or 0.0), now.timestamp())
-                why = None if high is None else scalp_hit(bid, high, spec.scalp_at, spec.scalp_dip)
+                why = None if high is None else scalp_hit(bid, high, min(arms), spec.scalp_dip)
         if not why and spec is not None and spec.cash_up_minute > 0 and fifteen:
             why = cash_if_up(entry, bid, 15.0 - hours * 60.0, spec.cash_up_minute, spec.cash_drop)
+        left = hours * 3600.0
+        if not why and spec is not None and spec.cash_left_seconds > 0 and 0 <= left <= spec.cash_left_seconds:
+            why = cash_if_losing(entry, bid, left, spec.cash_left_seconds, _hovering(s, row["ticker"], side, bid, now.timestamp()))
         if not why and spec is not None and spec.cash_before_minute > 0 and fifteen and row["close_time"]:
             with contextlib.suppress(TypeError, ValueError):
                 close = datetime.fromisoformat(row["close_time"]).timestamp()
@@ -1279,7 +1284,6 @@ def stop_loss_pass(
                     hovering=_hovering(s, row["ticker"], side, bid, now.timestamp()),
                 )
         owned = False
-        left = hours * 3600.0
         if not why and stop_on and spec is not None and left > 0:
             if spec.watch_loss > 0 and entry > 0 and bid <= entry * (1.0 - spec.watch_loss):
                 owned = True

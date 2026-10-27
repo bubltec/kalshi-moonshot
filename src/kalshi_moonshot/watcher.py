@@ -32,6 +32,7 @@ from .kalshiws import index_for_series
 from .lanes import LaneSpec, enabled_lanes, lane_specs, stop_drop_for, takes_profit
 from .store import Store
 from .strategy import (
+    cash_if_losing,
     cash_if_up,
     early_cash,
     fee_per_contract,
@@ -119,13 +120,15 @@ class Target:
     cash_leave: float = 0.0
     cash_up: float = 0.0  # cash_if_up: sell once the window reaches this minute and the bid is above the price paid (0 = off)
     cash_drop: float = 0.0  # ...or this fraction under the price paid (0 = off)
+    cash_left: float = 0.0  # cash_if_losing: with this many seconds left, sell a hover still under the price paid (0 = off)
     cash_at: float = 0.0
     watch_at: float = 0.0  # watch_trend: start watching once the bid prints this (0 = off)
     watch_ride: float = 0.0  # the ride at watch_patient seconds left
     watch_patient: float = 420.0
     watch_loss: float = 0.0  # hard_loss fraction of the price paid (0 = off)
     watch_loss_seconds: float = 3.0
-    scalp_at: float = 0.0  # scalp_hit: follow the high once the bid prints this (0 = off)
+    scalp_at: float = 0.0  # scalp_hit: follow the high once the bid prints this price (0 = off)
+    scalp_up: float = 0.0  # or once the bid is this far above the price paid (0 = off)
     scalp_dip: float = 0.03
     scalp_high: float = 0.0  # the highest bid since the arm printed
     index_id: str = ""  # the settlement index of this market
@@ -339,9 +342,10 @@ class ProfitWatcher:
                 t.stop_ref = min(t.entry, bid)  # hand-placed: measure the stop from what it could be sold for, not the ask paid (the spread is not a loss)
             self._track_peak(t, bid, now)
             minute_now = (15.0 - (t.close_ts - now) / 60.0) if t.close_ts > 0 else None
+            left = (t.close_ts - now) if t.close_ts > 0 else None
             recent = [b for ts, b in t.history if now - 3.0 <= ts <= now and b > 0]
             hovering = len(recent) >= 2 and price_shape(list(t.history), now, bid) == "hover"
-            why = take_profit_hit(t.entry, bid, t.x, t.at) or cash_if_up(t.entry, bid, minute_now, t.cash_up, t.cash_drop) or self._scalp(t, bid) or early_cash(
+            why = take_profit_hit(t.entry, bid, t.x, t.at) or cash_if_up(t.entry, bid, minute_now, t.cash_up, t.cash_drop) or self._scalp(t, bid) or cash_if_losing(t.entry, bid, left, t.cash_left, hovering) or early_cash(
                 t.entry, bid, t.opened_min, minute_now, before=t.cash_before, leave=t.cash_leave, hovering=hovering,
             ) or spike_hit(
                 list(t.history), now, t.entry, t.spike_cents, t.spike_seconds, t.spike_min_gain
@@ -737,12 +741,14 @@ class ProfitWatcher:
         t.below_since = self._since(t, bid, now)
 
     def _scalp(self, t: Target, bid: float) -> str | None:
-        """Armed at scalp_at. A new high rides; a dip of scalp_dip from that high sells on this print."""
-        if t.scalp_at <= 0 or t.scalp_dip <= 0 or bid <= 0:
+        """Armed at scalp_at, or scalp_up above the price paid, whichever is reached first. A new high rides; a dip of scalp_dip from that high sells on this print."""
+        arms = [p for p in (t.scalp_at, t.entry + t.scalp_up if t.scalp_up > 0 else 0.0) if p > 0]
+        arm = min(arms) if arms else 0.0
+        if arm <= 0 or t.scalp_dip <= 0 or bid <= 0:
             return None
-        if bid + 1e-9 >= t.scalp_at:
+        if bid + 1e-9 >= arm:
             t.scalp_high = max(t.scalp_high, bid)
-        return scalp_hit(bid, t.scalp_high, t.scalp_at, t.scalp_dip)
+        return scalp_hit(bid, t.scalp_high, arm, t.scalp_dip)
 
     def _stop_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The stop-loss, on the socket: the bid is `stop_drop` under the price paid (and, for an hourly market, the last hour has begun)."""
@@ -882,11 +888,11 @@ class ProfitWatcher:
             fresh[(ticker, lane)].spot_sigma = spec.trail_spot_sigma if spec.trail_spot_sigma is not None else s.crash_spot_sigma
             held = fresh[(ticker, lane)]
             held.cash_before, held.cash_leave, held.cash_at = spec.cash_before_minute, spec.cash_leave_minute, spec.cash_at
-            held.cash_up, held.cash_drop = spec.cash_up_minute, spec.cash_drop
+            held.cash_up, held.cash_drop, held.cash_left = spec.cash_up_minute, spec.cash_drop, spec.cash_left_seconds
             held.watch_at = spec.watch_at
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
             held.watch_loss, held.watch_loss_seconds = spec.watch_loss, spec.watch_loss_seconds
-            held.scalp_at, held.scalp_dip = spec.scalp_at, spec.scalp_dip
+            held.scalp_at, held.scalp_up, held.scalp_dip = spec.scalp_at, spec.scalp_up, spec.scalp_dip
             if row["close_time"] and str(row["ticker"]).split("-")[0].endswith("15M"):
                 with contextlib.suppress(TypeError, ValueError):
                     close = datetime.fromisoformat(row["close_time"]).timestamp()

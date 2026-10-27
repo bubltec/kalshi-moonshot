@@ -372,6 +372,20 @@ def cash_if_up(entry: float, bid: float, minute_now: float | None, after: float,
     return None
 
 
+def cash_if_losing(entry: float, bid: float, seconds_left: float | None, within: float, hovering: bool) -> str | None:
+    """Sell a hover that is still under the price paid once `within` seconds remain.
+
+    `within` is the lane's cash_left_seconds (0 = off). The market is still quoting, and holding
+    that hover to the result can settle as a total loss. A bid at or above the price paid is left
+    to settle. A move that is not a hover is left to the lane's other exit.
+    """
+    if within <= 0 or not hovering or seconds_left is None or seconds_left < 0 or seconds_left > within:
+        return None
+    if entry <= 0 or bid <= 0 or bid >= entry:
+        return None
+    return f"cash-out: bid {bid:.2f} is under the {entry:.2f} paid with {seconds_left:.0f}s left"
+
+
 def ride_for(seconds_left: float | None, ride: float, patient_left: float) -> float:
     """How long a visit under the watch line may last before a downtrend is sold.
 

@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from kalshi_moonshot import config, watcher
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import (
+    cash_if_losing,
     cash_if_up,
     early_cash,
     hard_loss,
@@ -153,6 +154,20 @@ def test_after_minute_7_a_gain_is_sold_and_a_loss_is_kept(tmp_path, monkeypatch)
     assert not w2._jobs.empty() and "under" in w2._jobs.get_nowait()[2]
 
 
+def test_the_last_five_seconds_sell_a_losing_hover(tmp_path, monkeypatch):
+    assert cash_if_losing(0.40, 0.30, 6.0, 5, True) is None
+    assert cash_if_losing(0.40, 0.41, 4.0, 5, True) is None  # still above the price paid
+    assert cash_if_losing(0.40, 0.30, 4.0, 5, False) is None  # a move, not a hover
+    assert "under" in cash_if_losing(0.40, 0.30, 5.0, 5, True)
+    w, base = armed(tmp_path, monkeypatch, 4.0)
+    t = w.targets[("KXBTC15M-1", "fav")]
+    t.entry, t.stop_drop, t.cash_left, t.close_ts = 0.40, 0.0, 5.0, base + 4
+    w.on_event(quote(0.30, base))  # one print is not a hover yet
+    assert w._jobs.empty()
+    w.on_event(quote(0.31, base + 1))  # sitting under the price paid, 3s left
+    assert not w._jobs.empty() and "under" in w._jobs.get_nowait()[2]
+
+
 def test_a_climb_through_70_rides_and_a_3c_dip_sells(tmp_path, monkeypatch):
     assert scalp_hit(0.74, 0.74, 0.70, 0.03) is None  # at the high
     assert scalp_hit(0.72, 0.74, 0.70, 0.03) is None  # 2c under
@@ -170,6 +185,16 @@ def test_a_climb_through_70_rides_and_a_3c_dip_sells(tmp_path, monkeypatch):
     assert w._jobs.empty()
     w.on_event(quote(0.71, base + 5))  # 3c under 0.74
     assert not w._jobs.empty() and "scalp" in w._jobs.get_nowait()[2]
+    w2, base2 = armed(tmp_path, monkeypatch, 600.0)
+    t2 = w2.targets[("KXBTC15M-1", "fav")]
+    t2.entry, t2.stop_drop, t2.scalp_at, t2.scalp_up, t2.scalp_dip = 0.40, 0.0, 0.0, 0.10, 0.03
+    w2.on_event(quote(0.49, base2))  # 9c above the price paid: the trail is not armed
+    assert w2._jobs.empty()
+    w2.on_event(quote(0.52, base2 + 1))  # 12c above, so this is the high
+    w2.on_event(quote(0.50, base2 + 2))  # 2c under it
+    assert w2._jobs.empty()
+    w2.on_event(quote(0.49, base2 + 3))  # 3c under the 0.52 high
+    assert not w2._jobs.empty() and "scalp" in w2._jobs.get_nowait()[2]
 
 
 def test_an_hourly_favorite_uses_the_same_watch(tmp_path, monkeypatch):
