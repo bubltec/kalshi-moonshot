@@ -31,6 +31,8 @@ def test_is_live(tmp_path):
     assert only.is_live("commodity") and not only.is_live("moonshot")
     assert not settings(tmp_path, mode="observe", live_lanes=frozenset({"commodity"})).is_live("commodity")
     assert not settings(tmp_path, live_lanes=frozenset()).is_live("commodity")
+    assert not settings(tmp_path, live_lanes=None).is_live("commodity_poly")
+    assert not settings(tmp_path, live_lanes=frozenset({"commodity_poly"})).is_live("commodity_poly", "KXGOLD15M")
 
 
 class Client:
@@ -167,6 +169,15 @@ def test_a_partial_fill_is_recorded_at_the_size_that_filled(tmp_path):
     assert out.action == "bet"
     row = store.db.execute("SELECT contracts, stake_usd FROM decisions").fetchone()
     assert row["contracts"] == 1 and row["stake_usd"] == pytest.approx(0.20, abs=0.02)
+
+
+def test_a_fractional_fill_is_not_chopped_down_to_a_whole_contract(tmp_path):
+    s = settings(tmp_path, live_lanes=frozenset({"moonshot"}))
+    store = Store(s.db_path)
+    out = runner.evaluate(s, FillClient(1.28), Est(), store, shot("KXP-2", "moonshot", ask=0.20))
+    assert out.action == "bet"
+    row = store.db.execute("SELECT contracts FROM decisions").fetchone()
+    assert row["contracts"] == pytest.approx(1.28)
 
 
 def test_an_order_that_does_not_fill_leaves_no_position(tmp_path):

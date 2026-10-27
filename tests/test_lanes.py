@@ -26,6 +26,17 @@ def test_bet_rule_uses_the_lanes_own_parameters(tmp_path):
     assert not lanes.wants_bet(steady, 0.25, 0.70, 0.0)
 
 
+def test_a_burst_hunt_lane_is_not_on_the_main_scan(tmp_path):
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.crypto_moonshot]\nestimator='ladder'\nprice=[0.02,0.20]\nhours=[0.0,0.04]\n"
+        "burst_hunt=true\nseries=['KXBTC15M']\nalways=true\n"
+    )
+    s = settings(tmp_path)
+    assert lanes.lane_specs(s)["crypto_moonshot"].burst_hunt
+    assert "crypto_moonshot" not in [x.name for x in lanes.main_lanes(s)]
+    assert "crypto_moonshot" in [x.name for x in lanes.enabled_lanes(s)]
+
+
 def test_a_toml_file_changes_a_lane_and_adds_a_new_one(tmp_path):
     (tmp_path / "strategies.toml").write_text(
         """

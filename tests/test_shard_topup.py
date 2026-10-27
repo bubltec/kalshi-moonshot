@@ -9,6 +9,7 @@ class Client:
         self.cash = dict(cash)
         self.moves = []
         self.orders = 0
+        self.authed = True
 
     def market(self, ticker):
         return {"exchange_index": 0}
@@ -91,6 +92,27 @@ def test_place_tops_up_then_orders(tmp_path, monkeypatch):
     c = Client({0: 0.0, 2: 100.0})
     out = runner.place(s, c, store, shot, "why", 3)
     assert "bought" in out.note and c.orders == 1 and c.moves == [(10.0, 2, 0)]
+
+
+def test_open_positions_are_funded_up_to_the_target_before_trading(tmp_path, monkeypatch):
+    s, store, _shot = make(tmp_path, monkeypatch, SHARD_TOPUP_TARGET_USD="10")
+    c = Client({0: 1.0, 2: 100.0, 3: 0.0})
+    c.positions = lambda: {"market_positions": [
+        {"ticker": "KXBTC15M-1", "position_fp": "10", "market_exposure_dollars": "0.50"},
+        {"ticker": "KXGOLD15M-1", "position_fp": "-3", "market_exposure_dollars": "2.40"},
+    ]}
+    c.market = lambda ticker: {"exchange_index": 0 if ticker.startswith("KXBTC") else 3}
+    runner.fund_open_exchanges(s, c, store)
+    assert c.moves == [(9.0, 2, 0), (10.0, 2, 3)]
+    assert c.cash[0] == 10.0 and c.cash[3] == 10.0
+
+
+def test_an_exchange_with_no_open_position_is_left_alone(tmp_path, monkeypatch):
+    s, store, _shot = make(tmp_path, monkeypatch, SHARD_TOPUP_TARGET_USD="10")
+    c = Client({0: 0.0, 2: 100.0})
+    c.positions = lambda: {"market_positions": []}
+    runner.fund_open_exchanges(s, c, store)
+    assert c.moves == []
 
 
 def test_a_transfer_that_never_lands_skips_the_order(tmp_path, monkeypatch):

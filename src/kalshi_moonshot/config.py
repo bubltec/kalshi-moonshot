@@ -124,10 +124,10 @@ class Settings:
     manual_exit_unstable_gain: float  # sell a hand-placed position that is up this fraction while the bid is swinging (0 = off)
     manual_exit_unstable_range: float  # ... the bid's high-low in dollars over manual_exit_unstable_seconds
     manual_exit_unstable_seconds: float
-    manual_cheap_max: float  # a hand-placed buy at or under this price is a "moonshot": let it ride, no stop, sell only for a profit (see watcher._cheap_rules)
-    manual_cheap_take_x: float  # ... sell at once when the bid is this many times the price paid
-    manual_cheap_arm_x: float  # ... otherwise protect a profit once the bid has been this many times the price paid
-    manual_cheap_giveback: float  # ... then sell when this share of the gain (peak over price paid) is given back, never under the price paid
+    manual_cheap_max: float  # a hand-placed buy at or under this price is a moonshot: hold to settlement (see watcher._cheap_rules)
+    manual_cheap_take_x: float  # optional cash-out: sell at once when the bid is this many times the price paid (0 = hold)
+    manual_cheap_arm_x: float  # optional trail: arm once the bid has been this many times the price paid (0 = hold)
+    manual_cheap_giveback: float  # ... then sell when this share of the gain is given back, never under the price paid
     discovery_enabled: bool  # one thread lists every series the lanes use and fills a shared cache; lanes read it instead of asking Kalshi each (marketdata.py)
     discovery_seconds: float  # how often that thread lists each series again
     discovery_hot_seconds: float  # how often the series the bot is acting on (an open bet, a prospect on a lane's watchlist) are listed again, on a second thread
@@ -242,6 +242,10 @@ class Settings:
         15-minute windows (series ending in 15M) additionally need COMMODITY_15M_LIVE, so a new
         short-horizon method can be paper-traded while the lane's slower markets trade for real.
         """
+        from .lanes import POLY_LANE
+
+        if lane == POLY_LANE:
+            return False  # Polymarket commodities are paper, whatever LIVE_LANES says
         if series.endswith("15M") and not self.fast_live:
             return False
         if series and not self._series_may_trade_live(series):
@@ -410,9 +414,9 @@ def load() -> Settings:
         manual_exit_unstable_range=_f("MANUAL_EXIT_UNSTABLE_RANGE", 0.06),
         manual_exit_unstable_seconds=_f("MANUAL_EXIT_UNSTABLE_SECONDS", 20.0),
         manual_cheap_max=_f("MANUAL_CHEAP_MAX", 0.25),
-        manual_cheap_take_x=_f("MANUAL_CHEAP_TAKE_X", 3.0),
-        manual_cheap_arm_x=_f("MANUAL_CHEAP_ARM_X", 1.5),
-        manual_cheap_giveback=_f("MANUAL_CHEAP_GIVEBACK", 0.5),
+        manual_cheap_take_x=_f("MANUAL_CHEAP_TAKE_X", 0.0),
+        manual_cheap_arm_x=_f("MANUAL_CHEAP_ARM_X", 0.0),
+        manual_cheap_giveback=_f("MANUAL_CHEAP_GIVEBACK", 0.0),
         discovery_enabled=_b("DISCOVERY_ENABLED", True),
         discovery_seconds=max(5.0, _f("DISCOVERY_SECONDS", 45.0)),
         discovery_hot_seconds=max(5.0, _f("DISCOVERY_HOT_SECONDS", 15.0)),

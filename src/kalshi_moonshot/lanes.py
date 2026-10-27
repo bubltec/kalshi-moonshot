@@ -26,6 +26,9 @@ from typing import Any
 
 from .config import Settings
 
+# Paper twin of the commodity lane. It reads Polymarket and never places an order, even if named in LIVE_LANES.
+POLY_LANE = "commodity_poly"
+
 LLM = "llm"
 LADDER = "ladder"
 MARKET = "market"
@@ -92,8 +95,15 @@ class LaneSpec:
     stop_guard: bool = False  # True = the model's opinion may hold the stop back; the default is a hard stop that sells whatever the model thinks it is worth
     stop_model: bool = False  # a 15-minute lane's stop first asks the model about the window's shape and holds only when it values the position above the sale (STOP_MODEL_SECONDS wait; no answer = sell)
     settlement_guard: float = 0.0  # OFF: 377 live sales, 88% would have won, -8.3c vs holding. Same job as the burst exit, worse signal. The watcher still has the code; 0.10 would turn it back on
-    settlement_flip: bool = False  # watch held 15-minute bets for a volume burst against the holder in the last 120 s and SELL the favorite (watcher.py: that is the peak-crash exit); also log the other side as a paper bet in burst_flip
+    settlement_flip: bool = False  # watch held 15-minute bets for a volume burst against the holder in the last 120 s and SELL the favorite (watcher.py: that is the peak-crash exit); also log the other side as a paper bet in burst_flip. A silent book cannot 5x itself (BURST_MIN_NORMAL)
     burst_buy: float = 0.0  # dollars to put, for real, on the OTHER side (when it costs 5-25c) the first time that burst fires (0 = only log it). Needs settlement_flip and a live lane
+    burst_dollars: float = 0.0  # the burst EXIT of a lane with settlement_flip, in dollars: sell the held 90c+ favorite in the last 120 s when at least this many dollars are bought against it in 3 s (0 = the older multiple-of-normal rule). Per family from burst_exit_study: crypto 400, currencies 50, metals/energy 400
+    burst_dollars_btc: float = 0.0  # the same for BTC: a bar of its own, or -1 to keep the older rule (it beat holding by 5.3c on BTC; the dollar bar did not)
+    hunt_dollars: float = 0.0  # a burst_hunt lane's trigger in dollars: a 90c+ favorite and at least this many dollars bought AGAINST it (the cheap side's takers) in 3 s, in the last 120 s; buy the cheap side. 0 = the older multiple-of-normal burst
+    hunt_dollars_btc: float = 0.0  # the same bar for BTC, whose volume is far larger (0 = the same bar as the others)
+    require_prior_win: bool = False  # a burst_hunt lane buys a series for real only once one of its own bets on that series (live or paper) has already won; until then the series is logged as paper bets only, so it can earn its way in
+    burst_hunt: bool = False  # watch this lane's 15-minute series in the last 120 s WITHOUT a position and buy a side in price[] when volume spikes (moonshot v2). Watcher-only; the main scan never sees it
+    stop_from_seconds: float = 0.0  # the stop-loss acts only once this many seconds remain before the close (0 = whenever the hour rule allows). Replay of 6,299 favorites bets: holding through early dips until 3 minutes left helped commodity +1.2 and fx +1.1 points per dollar (within the error), cost crypto 1.1
     stop_loss: bool = True  # False = no stop-loss for this lane (a $1 ticket's loss is already capped; its spread alone can look like a 30% drop)
     take_profit_x: float = 0.0  # sell when the bid reaches this multiple of the price paid (0 = off); watched live on the socket
     take_profit_at: float = 0.0  # sell when the bid reaches this price (0 = off)
@@ -274,7 +284,7 @@ def tiered(spec: LaneSpec) -> bool:
 
 def main_lanes(s: Settings) -> list[LaneSpec]:
     """Enabled lanes served by the all-markets scan."""
-    return [lane for lane in enabled_lanes(s) if not tiered(lane)]
+    return [lane for lane in enabled_lanes(s) if not tiered(lane) and not lane.burst_hunt]
 
 
 def tiered_lanes(s: Settings) -> list[LaneSpec]:

@@ -1,6 +1,8 @@
 """The last minute of a 15-minute crypto market: the settlement average, the guard, and the Coinbase tick parser."""
 import json
 import math
+import time
+from datetime import UTC, datetime
 
 import pytest
 
@@ -72,13 +74,14 @@ class _Tape:
         return type("R", (), {"fetchall": lambda self_, rows=rows: rows})()
 
 
-def _watcher(tmp_path, monkeypatch, guard=0.10):
+def _watcher(tmp_path, monkeypatch, guard=0.10, ticker="KXBTC15M-1"):
+    series = ticker.split("-")[0]
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_guard={guard}\nsettlement_flip=true\nseries=['KXBTC15M']\nalways=true\n")
+    (tmp_path / "strategies.toml").write_text(f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_guard={guard}\nsettlement_flip=true\nseries=['{series}']\nalways=true\n")
     s = config.load()
     store = Store(s.db_path)
     close = 2_000_000.0
-    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, "KXBTC15M-1", "bet", "observe", 0.90, "yes", "guarded", 3, 2.7, "2099-01-01T00:00:00Z"))
+    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, ticker, "bet", "observe", 0.90, "yes", "guarded", 3, 2.7, "2099-01-01T00:00:00Z"))
     store.db.commit()
 
     class Client:
@@ -129,11 +132,11 @@ def test_the_guard_sale_goes_through_even_at_a_loss_and_logs_a_paper_flip(tmp_pa
     assert flip["side"] == "no" and flip["action"] == "bet" and flip["ask"] == pytest.approx(0.12)
 
 
-def _quiet_minute(w, now, per_second=40):
+def _quiet_minute(w, now, per_second=40, ticker="KXBTC15M-1"):
     """Two minutes of ordinary trading before `now`: 40 contracts a second, half and half."""
     for k in range(125, 4, -1):
-        w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now - k, "count": per_second / 2, "taker": "yes", "price": 0.9})
-        w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now - k, "count": per_second / 2, "taker": "no", "price": 0.9})
+        w.on_event({"kind": "trade", "ticker": ticker, "ts": now - k, "count": per_second / 2, "taker": "yes", "price": 0.9})
+        w.on_event({"kind": "trade", "ticker": ticker, "ts": now - k, "count": per_second / 2, "taker": "no", "price": 0.9})
 
 
 def test_a_burst_is_volume_against_the_markets_own_normal_not_a_fixed_number(tmp_path, monkeypatch):
@@ -150,7 +153,7 @@ def test_a_burst_is_volume_against_the_markets_own_normal_not_a_fixed_number(tmp
     rows = store.db.execute("SELECT side, ask, action, context FROM decisions WHERE lane='burst_flip'").fetchall()
     assert len(rows) == 1 and rows[0]["side"] == "no" and rows[0]["ask"] == pytest.approx(0.10)
     ctx = json.loads(rows[0]["context"])
-    assert ctx["ratio"] >= 5 and ctx["share"] >= 0.6 and ctx["normal_second"] == pytest.approx(40.0)
+    assert ctx["ratio"] >= 5 and ctx["normal_second"] == pytest.approx(20.0)  # this SIDE's own median second (half of the mixed 40)
     assert not w._jobs.empty() and w._jobs.get_nowait()[2].startswith("burst:")  # last 120 s: sell the favorite, that is the peak-crash exit
 
 
@@ -163,6 +166,212 @@ def test_a_burst_before_the_last_two_minutes_is_not_an_exit(tmp_path, monkeypatc
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
     assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
     assert w._jobs.empty()
+
+
+def test_a_silent_book_cannot_five_times_its_own_silence(tmp_path, monkeypatch):
+    w, _s, store, close = _watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    _quiet_minute(w, now, per_second=0)  # no trades: the median second is 0, so 5x would be 5x of nothing
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
+    assert w._jobs.empty()
+
+
+def test_a_300_contract_print_on_a_thin_gold_book_is_not_a_crash(tmp_path, monkeypatch):
+    w, _s, store, close = _watcher(tmp_path, monkeypatch, ticker="KXGOLD15M-1")
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXGOLD15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    _quiet_minute(w, now, per_second=2, ticker="KXGOLD15M-1")  # copper/natgas-like: a handful of contracts a second
+    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 1, "count": 324, "taker": "no", "price": 0.5})  # today's copper "358x" print
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
+    assert w._jobs.empty()
+
+
+def test_a_burst_on_gold_with_a_real_baseline_sells(tmp_path, monkeypatch):
+    w, _s, store, close = _watcher(tmp_path, monkeypatch, ticker="KXGOLD15M-1")
+    t = w.targets[("KXGOLD15M-1", "guarded")]
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXGOLD15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    assert t.cur_bid == pytest.approx(0.90)
+    _quiet_minute(w, now, ticker="KXGOLD15M-1")
+    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
+    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
+    rows = store.db.execute("SELECT side, ask FROM decisions WHERE lane='burst_flip'").fetchall()
+    assert len(rows) == 1 and rows[0]["side"] == "no"
+    assert not w._jobs.empty() and w._jobs.get_nowait()[2].startswith("burst:")
+
+
+def _hunt_watcher(tmp_path, monkeypatch, ticker="KXBTC15M-1"):
+    series = ticker.split("-")[0]
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(
+        f"[lane.crypto_moonshot]\nestimator='ladder'\nprice=[0.02,0.10]\nhours=[0.0,0.04]\nalways=true\n"
+        f"burst_hunt=true\nseries=['{series}']\nsides=['yes','no']\nfixed_stake=2.0\nstop_loss=false\n"
+    )
+    s = config.load()
+    store = Store(s.db_path)
+    close = 2_000_000.0
+
+    class Client:
+        def market(self, ticker):
+            return {"ticker": ticker, "floor_strike": 100.0, "close_time": "1970-01-24T03:33:20Z", "yes_bid_dollars": "0.90", "yes_ask_dollars": "0.91", "title": "t"}
+
+    w = watcher.ProfitWatcher(lambda: s, Client(), lambda: Store(s.db_path))
+    w.refresh()
+    return w, s, store, close
+
+
+def _sat_cheap(w, at, bid=0.90, ask=0.91, ticker="KXBTC15M-1"):
+    """The cheap side's ask, every second for the 20s before `at`."""
+    for k in range(21):
+        w.on_event({"kind": "quote", "ticker": ticker, "bid": bid, "ask": ask, "ts": at - 20 + k})
+
+
+def test_a_barely_5x_print_under_500_contracts_is_not_a_moonshot(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.92, "ask": 0.93, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now)  # 20 NO contracts a second; 350 in one second is about 5.7x and under the 500 cushion
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 350, "taker": "no", "price": 0.08})
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
+
+
+def test_a_5x_print_of_500_contracts_is_still_a_moonshot(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.92, "ask": 0.93, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now)
+    _sat_cheap(w, now + 1, bid=0.92, ask=0.93)  # NO has been 8c for 20s, and the quiet minute already bought it
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 520, "taker": "no", "price": 0.08})
+    row = store.db.execute("SELECT side FROM decisions WHERE lane='crypto_moonshot'").fetchone()
+    assert row is not None and row["side"] == "no"
+
+
+def test_a_hunt_does_not_buy_a_side_that_is_crashing(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now)
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.35, "ask": 0.36, "ts": now - 8})  # NO costs 65c
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.85, "ask": 0.86, "ts": now + 1})  # NO costs 15c: down 50c
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.15})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.15})
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
+
+
+def test_a_few_cent_dip_is_not_a_crash(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now)
+    _sat_cheap(w, now, bid=0.91, ask=0.92)  # NO sat at 9c, then eased to 7c
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.93, "ask": 0.94, "ts": now + 1})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.10})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.10})
+    row = store.db.execute("SELECT side FROM decisions WHERE lane='crypto_moonshot'").fetchone()
+    assert row is not None and row["side"] == "no"
+
+
+def test_a_burst_that_just_arrived_at_a_low_price_is_not_a_moonshot(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now)
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.60, "ask": 0.61, "ts": now - 14})  # NO costs 40c
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now + 1})  # NO costs 10c now
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.10})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.10})
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
+
+
+def test_one_cheap_quote_is_not_repeat_buying(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now)
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now + 1})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.10})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.10})
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
+
+
+def test_a_burst_hunt_buys_the_cheap_side_without_a_held_favorite(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    w.refresh()  # close time from the market
+    _quiet_minute(w, now)
+    _sat_cheap(w, now + 1)
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
+    row = store.db.execute("SELECT side, ask, lane, mode FROM decisions WHERE lane='crypto_moonshot'").fetchone()
+    assert row is not None and row["side"] == "no" and row["ask"] == pytest.approx(0.10) and row["mode"] == "observe"
+
+
+def test_a_one_cent_ask_is_not_a_moonshot(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.99, "ask": 1.00, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now)
+    _sat_cheap(w, now + 1, bid=0.99, ask=1.00)  # NO has been 1c
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.01})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.01})
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
+
+
+def test_a_burst_hunt_ignores_a_side_outside_2_to_20_cents(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.70, "ask": 0.72, "ts": now - 130})  # NO costs 30c
+    w.refresh()
+    _quiet_minute(w, now)
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
+
+
+def test_a_favorite_pile_on_does_not_hide_a_cheap_side_burst(tmp_path, monkeypatch):
+    """YES at 95c prints a huge volume; NO at 5c also 5xs its own tape. The burst is the 5c buys."""
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.95, "ask": 0.96, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now)
+    _sat_cheap(w, now + 1, bid=0.95, ask=0.96)  # NO has been 5c
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 8000, "taker": "yes", "price": 0.95})
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 800, "taker": "no", "price": 0.05})
+    row = store.db.execute("SELECT side, ask FROM decisions WHERE lane='crypto_moonshot'").fetchone()
+    assert row is not None and row["side"] == "no" and row["ask"] == pytest.approx(0.05)
+
+
+def test_a_favorite_only_spike_is_not_a_cheap_burst(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.95, "ask": 0.96, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now)
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 9000, "taker": "yes", "price": 0.95})
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
+
+
+def test_a_burst_hunt_ignores_gold(tmp_path, monkeypatch):
+    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)  # lane series is KXBTC15M only
+    now = close - 120
+    w.on_event({"kind": "quote", "ticker": "KXGOLD15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
+    w.refresh()
+    _quiet_minute(w, now, ticker="KXGOLD15M-1")
+    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
+    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
+    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
 
 
 def test_the_same_volume_in_a_busy_market_is_not_a_burst(tmp_path, monkeypatch):
@@ -370,3 +579,272 @@ def test_a_resting_buy_reports_what_filled_and_the_fee_charged(tmp_path, monkeyp
     out = runner._place_resting(s, c, store, shot, "why", 2.0, spec, None)
     assert c.sent == [("no", 2.0, pytest.approx(0.81), 20.0)]
     assert out.filled == 2.0 and out.cost == pytest.approx(1.62) and "fee $0.0000" in out.note
+
+
+def test_a_postgres_connection_serves_one_thread_at_a_time():
+    import threading
+    import time
+
+    from kalshi_moonshot.db import PgConn
+
+    inside, worst = [0], [0]
+
+    class Slow:
+        closed = False
+        broken = False
+
+        def execute(self, *a, **k):
+            inside[0] += 1
+            worst[0] = max(worst[0], inside[0])
+            time.sleep(0.01)
+            inside[0] -= 1
+
+            class Cur:
+                description = None
+                rowcount = 0
+
+                def fetchall(self):
+                    return []
+
+                def fetchone(self):
+                    return None
+            return Cur()
+
+        def rollback(self):
+            pass
+
+        def commit(self):
+            pass
+
+    c = PgConn.__new__(PgConn)
+    c.dsn, c.schema, c._dirty, c._pk, c.conn, c._lock = "", "x", False, {}, Slow(), threading.RLock()
+    ts = [threading.Thread(target=lambda: [c.execute("SELECT 1") for _ in range(5)]) for _ in range(4)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert worst[0] == 1  # never two statements in flight on the one connection
+
+
+def test_a_paper_bet_buys_the_way_the_live_lane_does(tmp_path, monkeypatch):
+    from kalshi_moonshot import db, paperfill
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.resting]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\nbuy_rest_seconds=20\nbuy_rest_below=0.01\n")
+    s = config.load()
+    store = Store(s.db_path)
+    tape = db.connect(str(tmp_path / "tape.db"), "tape", shared=True)
+    tape.execute("CREATE TABLE IF NOT EXISTS quotes (ts REAL NOT NULL, ticker TEXT NOT NULL, bid REAL, ask REAL, last REAL, sts INTEGER, bid_size REAL, ask_size REAL)")
+
+    tape.execute("CREATE TABLE IF NOT EXISTS flow_1s (ts INTEGER NOT NULL, ticker TEXT NOT NULL, yes_vol REAL NOT NULL, no_vol REAL NOT NULL, n INTEGER NOT NULL, vwap REAL)")
+
+    def bet(tk, ts):
+        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, reason) VALUES (?,?,?,?,?,?,?,?,?,?)", (ts, tk, "bet", "observe", 0.80, "yes", "resting", 2.5, 2.0, "x"))
+
+    def quotes(tk, rows):
+        for ts, bid, ask in rows:
+            tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (?,?,?,?)", (ts, tk, bid, ask))
+
+    bet("KXBTC15M-RUNS", 1000.0)  # the ask never comes down: the bid misses it
+    quotes("KXBTC15M-RUNS", [(999.0, 0.78, 0.80), (1005.0, 0.80, 0.82), (1015.0, 0.85, 0.87)])
+    bet("KXBTC15M-DIPS", 1000.0)  # the ask comes down to our bid inside the window: it fills
+    quotes("KXBTC15M-DIPS", [(999.0, 0.78, 0.80), (1008.0, 0.77, 0.79)])
+    bet("KXBTC15M-CROSS", 1000.0)  # the ask had already moved under our bid when the order went in: refused
+    quotes("KXBTC15M-CROSS", [(999.0, 0.76, 0.78), (1002.0, 0.76, 0.78)])
+    bet("KXBTC15M-SOLD", 1000.0)  # the ask stays up, but a seller hits our bid at 0.79: it fills
+    quotes("KXBTC15M-SOLD", [(999.0, 0.78, 0.80), (1010.0, 0.78, 0.80)])
+    tape.execute("INSERT INTO flow_1s (ts, ticker, yes_vol, no_vol, n, vwap) VALUES (?,?,?,?,?,?)", (1006, "KXBTC15M-SOLD", 0.0, 12.0, 2, 0.79))
+    store.db.commit()
+    got = paperfill.settle(s, store, tape, now=1100.0)
+    assert got == {"filled": 2, "missed": 2}
+    rows = {r["ticker"]: r for r in store.db.execute("SELECT ticker, action, ask, stake_usd FROM decisions").fetchall()}
+    assert rows["KXBTC15M-DIPS"]["action"] == "bet" and rows["KXBTC15M-DIPS"]["ask"] == pytest.approx(0.79)
+    assert rows["KXBTC15M-RUNS"]["action"] == "pass" and rows["KXBTC15M-RUNS"]["stake_usd"] is None
+    assert rows["KXBTC15M-CROSS"]["action"] == "pass"
+    assert rows["KXBTC15M-SOLD"]["action"] == "bet"
+    assert paperfill.settle(s, store, tape, now=1200.0) == {"filled": 0, "missed": 0}  # each bet is judged once
+
+
+def test_the_gap_report_puts_paper_and_live_side_by_side(tmp_path, monkeypatch):
+    from kalshi_moonshot import gap
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    store = Store(s.db_path)
+    for i, (mode, side) in enumerate((("trade", "yes"), ("trade", "yes"), ("observe", "yes"), ("observe", "yes"))):
+        tk = f"KXBTC15M-{i}"
+        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, lane_ver) VALUES (?,?,?,?,?,?,?,?,?,?)", (time.time() - 60, tk, "bet", mode, 0.80, side, "x", 2.0, 1.6, "v1"))
+        store.db.execute("INSERT INTO windows (ticker, series, close_ts, result, fetched_ts) VALUES (?,?,?,?,?)", (tk, "KXBTC15M", 1000.0 + i, "yes" if i != 1 else "no", 1.0))
+    store.db.commit()
+    text = gap.report(store, hours=1)
+    assert "x  (version v1)" in text and "live    2 bets" in text and "paper   2 bets" in text and "paper wins +50 points more than live" in text
+
+
+def test_a_sale_that_fills_nothing_is_retried_lower_against_a_fresh_book(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    _w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    store.add_order(ticker="KXBTC15M-1", env=s.env, count=2.0, price=0.90, fill_count=2.0, cost_usd=1.8, fee_usd=0.0, order_id="b", contract="yes")
+    row = next(r for r in store.open_bets() if r["ticker"] == "KXBTC15M-1")
+
+    class C:
+        def __init__(self):
+            self.sells = []
+
+        def sell_yes_ioc(self, ticker, count, price):
+            self.sells.append((round(count, 2), price))
+            if len(self.sells) < 3:
+                return {"fill_count": "0", "order_id": f"s{len(self.sells)}"}  # the first two find no bid at their price
+            return {"fill_count": f"{count}", "average_fill_price": "0.70", "average_fee_paid": "0", "order_id": "s3"}
+
+        def orderbook(self, ticker):
+            return {"orderbook_fp": {"yes_dollars": [["0.55", "10"], ["0.72", "4"]], "no_dollars": []}}
+
+    c = C()
+    line = runner.exit_position(s, c, store, row, 0.80, "burst: test", slip=0.02)
+    assert line.startswith("sold 2")
+    assert c.sells[0] == (2.0, 0.78) and c.sells[1] == (2.0, 0.70) and c.sells[2][1] == 0.67  # 0.72 - 0.02, then 0.72 - 0.05
+    assert store.net_contracts("KXBTC15M-1", s.env) < 0.005
+
+
+def test_best_bid_reads_the_side_of_the_book_it_sells_into():
+    from kalshi_moonshot.strategy import best_bid
+
+    book = {"orderbook_fp": {"yes_dollars": [["0.40", "5"], ["0.61", "2"], ["0.70", "0"]], "no_dollars": [["0.30", "8"]]}}
+    assert best_bid(book, "yes") == 0.61  # a zero-size row is not a bid
+    assert best_bid(book, "no") == 0.30
+    assert best_bid({"orderbook_fp": {"yes_dollars": [], "no_dollars": []}}, "yes") is None
+
+
+def test_a_lane_can_keep_its_stop_quiet_until_the_last_minutes(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_guard=0.0\nsettlement_flip=false\nseries=['KXBTC15M']\nalways=true\nstop_loss=true\nstop_loss_at=0.45\nstop_from_seconds=180\n")
+    s = config.load()
+    store = Store(s.db_path)
+    close = time.time() + 600.0
+    iso = datetime.fromtimestamp(close, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, "KXBTC15M-1", "bet", "observe", 0.80, "yes", "guarded", 3, 2.4, iso))
+    store.db.commit()
+
+    class Client:
+        def market(self, ticker):
+            return {"ticker": ticker}
+
+    w = watcher.ProfitWatcher(lambda: s, Client(), lambda: Store(s.db_path))
+    w.refresh()
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert t.stop_from == pytest.approx(close - 180.0, abs=2.0)
+    assert w._stop_hit(t, 0.30, time.time()) is None  # 10 minutes out the dip is ignored
+    assert w._stop_hit(t, 0.30, close - 100.0) is not None  # inside the last three minutes it sells
+
+
+def test_a_resting_buy_is_sized_to_its_own_price_and_spends_the_whole_stake(tmp_path, monkeypatch):
+    from kalshi_moonshot import lanes, sizing
+
+    _w, s, _store, _close = _watcher(tmp_path, monkeypatch)
+    spec = lanes.lane_specs(s)["guarded"]
+    spec = __import__("dataclasses").replace(spec, fixed_stake=2.0, max_bet_pct=1.0, max_exposure_pct=1.0)
+    at_ask = sizing.size_bet(spec, s, 0.9, 0.90, 100.0, 100.0, 0.0, fractional=True)
+    resting = sizing.size_bet(spec, s, 0.9, 0.90, 100.0, 100.0, 0.0, fractional=True, maker_price=0.89)
+    assert at_ask.contracts == pytest.approx(2.20) and at_ask.cost_usd == pytest.approx(2.0, abs=0.05)  # the ask plus the taker fee
+    assert resting.contracts == pytest.approx(2.24) and resting.cost_usd == pytest.approx(1.9936)  # 2.24 contracts at the resting 0.89, no fee
+
+
+def test_a_hunt_lane_may_widen_how_expensive_a_parked_side_can_be():
+    from collections import deque
+
+    now = 1000.0
+    quotes = deque((now - 20.0 + k, 0.84, 0.86) for k in range(21))  # the NO side's ask sits at 0.16 for 20 s: YES bid 0.84
+    # side "no": ask = 1 - yes_bid = 0.16
+    assert watcher._hunt_parked(quotes, "no", now, 0.16) is False  # over the default 10c cap
+    assert watcher._hunt_parked(quotes, "no", now, 0.16, 0.17) is True  # a lane that buys up to 17c accepts it
+    quotes2 = deque((now - 20.0 + k, 0.90, 0.92) for k in range(21))  # 0.10: parked under the default cap
+    assert watcher._hunt_parked(quotes2, "no", now, 0.10) is True
+
+
+def test_a_hunt_lane_that_requires_a_prior_win_buys_only_series_that_have_won(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import lanes, runner
+
+    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", require_prior_win=True, fixed_stake=0.5, max_open=0)
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    w.client.authed = True
+    placed = []
+    monkeypatch.setattr(runner, "place", lambda *a, **k: (placed.append(a[3].ticker) or runner.Placed("bought", 5.0, 0.4)))
+    h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=time.time() + 100)
+    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd) VALUES (?,?,?,?,?,?,?,?,?)", (1.0, "KXETH15M-0", "bet", "observe", 0.05, "no", "guarded", 10, 0.5))
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, result, fetched_ts) VALUES (?,?,?,?,?)", ("KXETH15M-0", "KXETH15M", 5.0, "no", 1.0))
+    store.db.commit()
+    w._hunt_buy(h, spec, "no", 0.05, "burst hunt: test", {})  # ETH has won for this lane: real
+    h2 = watcher.Hunt("KXBTC15M-1", "guarded", close_ts=time.time() + 100)
+    w._hunt_buy(h2, spec, "no", 0.05, "burst hunt: test", {})  # BTC has not: paper
+    assert placed == ["KXETH15M-1"]
+    rows = {r["ticker"]: r["mode"] for r in store.db.execute("SELECT ticker, mode FROM decisions WHERE ticker LIKE '%-1' AND lane='guarded'").fetchall()}
+    assert rows["KXETH15M-1"] == "trade" and rows["KXBTC15M-1"] == "observe"
+
+
+def test_a_side_sliding_to_a_cheaper_price_is_not_a_dollar_burst():
+    sec = 1000
+    book = {}
+    for k in range(4, 125):  # a quiet side: 10 contracts a second at 30c = $3 a second
+        book[sec - k] = [10.0, 0.0, 3.0, 0.0]
+    for k in range(3):  # the price has fallen to 3c: the same $3 a second buys 100 contracts, ten times the count
+        book[sec - k] = [100.0, 0.0, 3.0, 0.0]
+    contracts = watcher._side_burst(book, sec, 0)
+    assert contracts[2] > 5.0  # in contracts it looks like a 10x burst
+    assert watcher._side_dollar_ratio(book, sec, 0) < 2.0  # in dollars the money behind it is the same as before
+    for k in range(3):  # real money: $30 a second
+        book[sec - k] = [1000.0, 0.0, 30.0, 0.0]
+    assert watcher._side_dollar_ratio(book, sec, 0) >= 5.0
+
+
+def test_the_flip_trigger_buys_the_cheap_side_on_dollars_against_a_90c_favorite(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import lanes
+
+    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.15), hunt_dollars=400.0, hunt_dollars_btc=800.0, sides=("yes", "no"), fixed_stake=0.5, max_open=0)
+    bought = []
+    monkeypatch.setattr(w, "_hunt_buy", lambda h, sp, side, ask, reason, ctx: bought.append((h.ticker, side, round(ask, 2), ctx["bar"])))
+    now = 1_000_000.0
+    sec = int(now)
+    h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)  # YES is the 93c favorite; the NO side costs 0.07
+    book = {sec: [0.0, 300.0, 0.0, 21.0], sec - 1: [0.0, 200.0, 0.0, 14.0]}  # NO takers bought $35 in 3 s: well under the bar
+    w._on_hunt(h, spec, now, book, sec)
+    assert bought == []
+    book[sec - 2] = [0.0, 6000.0, 0.0, 420.0]  # $455 against the favorite
+    w._on_hunt(h, spec, now, book, sec)
+    assert bought == [("KXETH15M-1", "no", 0.07, 400.0)]
+    bought.clear()
+    hb = watcher.Hunt("KXBTC15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)  # BTC needs $800: $455 is not enough
+    w._on_hunt(hb, spec, now, book, sec)
+    assert bought == []
+    book[sec - 2] = [0.0, 12000.0, 0.0, 820.0]
+    w._on_hunt(hb, spec, now, book, sec)
+    assert bought and bought[0][3] == 800.0
+    hf = watcher.Hunt("KXETH15M-2", "guarded", close_ts=now + 60.0, yes_bid=0.60, yes_ask=0.62)  # not a 90c favorite: nothing to flip
+    bought.clear()
+    w._on_hunt(hf, spec, now, book, sec)
+    assert bought == []
+
+
+def test_the_burst_exit_can_use_the_moonshot_dollars_instead_of_a_multiple(tmp_path, monkeypatch):
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    t.burst_bar = 400.0
+    t.cur_bid, t.cur_other_ask, t.side = 0.93, 0.08, "yes"
+    now = close - 60
+    sec = int(now)
+    book = {sec: [0.0, 5000.0, 0.0, 250.0]}  # NO takers (against the YES holder) bought $250 in the last 3 s: under the $400 bar, however many contracts it was
+    w._flow["KXBTC15M-1"] = book
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.92})
+    assert w._jobs.empty()
+    book[sec - 1] = [0.0, 3000.0, 0.0, 200.0]  # $450+ in all
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.92})
+    job = w._jobs.get_nowait()
+    assert job[2].startswith("burst: $4")

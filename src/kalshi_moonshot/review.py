@@ -26,7 +26,7 @@ SUGGEST_HEAD = """You are reviewing one hour of the bot's 15-minute ladder favor
 
 Suggest improvements the operator can test on 15-minute markets. Do not change settings yourself. Do not invent numbers that are not in the report. Do not talk about hourly or daily markets unless the report does.
 
-The book is already: resting buy, hold to settlement, a 45% stop whose wait is calculated from time left, and a volume-burst exit in the last 120s. Take-profit, trail, stop-model and settlement-guard are off because they cut winners. Do not suggest turning those back on unless this hour's numbers clearly reverse that.
+The book is already: resting buy, hold to settlement, a 45% stop whose wait is calculated from time left, and a volume-burst exit in the last 120s on any 15-minute market that actually trades (a silent book cannot 5x itself). crypto_moonshot buys a 2-10c crypto side that has been sitting there while that side keeps getting bought, without holding the favorite. manual is your app fills, logged for study: cheap (≤25c) holds to settlement. Take-profit, trail, stop-model and settlement-guard are off because they cut winners. Do not suggest turning those back on unless this hour's numbers clearly reverse that.
 
 Reply with ONLY JSON:
 {"observations": ["one factual reading of this clock hour vs its 7-day baseline", "..."],

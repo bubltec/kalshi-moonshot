@@ -47,6 +47,7 @@ from .store import Store
 from .strategy import (
     LongShot,
     ask_trend,
+    best_bid,
     edge,
     falling_reason,
     flip,
@@ -57,6 +58,7 @@ from .strategy import (
     rising,
     side_ask_notional,
     side_prob,
+    price_shape,
     stop_loss_hit,
     stop_wait,
     take_profit_hit,
@@ -533,6 +535,7 @@ def evaluate(
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
             balance.open_by_lane.get(shot.lane, 0.0), grown.mult, fractional=s.fractional_stake and not _NO_FRACTION,
+            maker_price=round(max(0.01, shot.ask - spec.buy_rest_below), 4) if spec.buy_rest_seconds > 0 else None,
         )
         if grown.note:
             note = f"{grown.note}. {note}"
@@ -551,7 +554,8 @@ def evaluate(
         note = placed.note
         if placed.filled > 0:
             # Record what actually filled, not what was asked for: a partial fill is a smaller bet.
-            sized = Sizing(int(placed.filled), placed.cost, sized.why)
+            # Keep the fraction. int(1.28) stored a 1.28-contract fill as 1, so the win was booked at $1.
+            sized = Sizing(round(placed.filled, 2), placed.cost, sized.why)
         else:
             bet = False  # blocked, refused, failed or unfilled: there is no position to track
     action = "bet" if bet else "pass"
@@ -634,6 +638,24 @@ def below_line_seconds(s: Settings, ticker: str, side: str, line: float, now: fl
     return now - since
 
 
+def _not_a_downtrend(s: Settings, ticker: str, side: str, bid: float, now: float) -> bool:
+    """True when the last 3 seconds are a spike or a hover, or the bid is still at 50c or above, so the stop holds."""
+    if bid >= 0.50:
+        return True
+    from . import db as database
+
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        rows = tape.execute(
+            "SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts",
+            (ticker, now, now - 30.0),
+        ).fetchall()
+    except Exception:
+        return True
+    points = [(float(ts), float(qbid) if side == "yes" else 1.0 - float(ask)) for ts, qbid, ask in rows]
+    return price_shape(points, now, bid) != "trend"
+
+
 def side_trend(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
     """How far the price of the side we would buy (the mid of its bid and ask, in its own terms) has moved over the last `seconds`, from the tape's quotes. None when the tape has no quote that far back or none lately."""
     from . import db as database
@@ -697,11 +719,43 @@ def _day_start(now: float) -> float:
     return start_of_day(now)
 
 
+def _fill_shard(s: Settings, client: KalshiClient, store: Store, idx: int, need: float, why: str) -> str | None:
+    """Bring exchange `idx` up to `need` dollars, from the richest other exchange.
+
+    None means it already holds that much, or the transfer landed. A string means it could not.
+    The source is never left under SHARD_TOPUP_KEEP_USD, and a day never moves more than SHARD_TOPUP_MAX_USD_PER_DAY.
+    When the exchange is short of the target as well as this need, the move aims at the target.
+    """
+    cash = client.shard_balances()
+    here = cash.get(idx, 0.0)
+    if here + 1e-9 >= need:
+        _UNFUNDED.pop(idx, None)
+        return None
+    sources = {i: c - s.shard_topup_keep for i, c in cash.items() if i != idx and c - s.shard_topup_keep > 0}
+    if not sources:
+        return (f"skipped: exchange {idx} holds ${here:.2f}, and no other exchange has cash above the "
+                f"${s.shard_topup_keep:.0f} floor to move in")
+    src = max(sources, key=lambda i: sources[i])
+    room = s.shard_topup_max_per_day - store.shard_moved_since(_day_start(time.time()))
+    amount = round(min(max(need - here, s.shard_topup_target - here), sources[src], room), 2)
+    if amount + 1e-9 < need - here:
+        return (f"skipped: exchange {idx} needs ${need - here:.2f} more but the top-up limit allows "
+                f"${max(amount, 0):.2f} (daily cap ${s.shard_topup_max_per_day:.0f})")
+    resp = client.shard_transfer(amount, "event_contract", src, "event_contract", idx)
+    store.add_shard_move(src, idx, amount, why, str(resp.get("transfer_id", "")))
+    log.info("moved $%.2f from exchange %d to exchange %d (%s)", amount, src, idx, why)
+    for _ in range(8):  # the transfer is asynchronous: wait for it to land
+        time.sleep(1.0)
+        if client.shard_balances().get(idx, 0.0) + 1e-9 >= need:
+            _UNFUNDED.pop(idx, None)
+            return None
+    return f"skipped: moved ${amount:.2f} to exchange {idx} but it has not landed yet; the next review retries"
+
+
 def _top_up(s: Settings, client: KalshiClient, store: Store, shot: LongShot, cost: float) -> str | None:
     """Make sure the exchange this order trades on holds enough cash, moving some in from another exchange if it does not.
 
-    Returns None when the order may go ahead, or the reason it should be skipped. Opt-in (SHARD_TOPUP_TARGET_USD > 0),
-    never takes the source below SHARD_TOPUP_KEEP_USD, and never moves more than SHARD_TOPUP_MAX_USD_PER_DAY in a day.
+    Returns None when the order may go ahead, or the reason it should be skipped. Opt-in (SHARD_TOPUP_TARGET_USD > 0).
     """
     if s.shard_topup_target <= 0:
         return None
@@ -712,33 +766,59 @@ def _top_up(s: Settings, client: KalshiClient, store: Store, shot: LongShot, cos
             if raw is None:
                 return None
             idx = _EXCHANGE_OF[shot.series] = int(raw)
-        cash = client.shard_balances()
-        here = cash.get(idx, 0.0)
-        if here + 1e-9 >= cost:
+        if client.shard_balances().get(idx, 0.0) + 1e-9 >= cost:
             _UNFUNDED.pop(idx, None)
             return None
-        want = max(cost - here, s.shard_topup_target - here)
-        sources = {i: c - s.shard_topup_keep for i, c in cash.items() if i != idx and c - s.shard_topup_keep > 0}
-        if not sources:
-            return f"skipped: exchange {idx} holds ${here:.2f}, and no other exchange has cash above the ${s.shard_topup_keep:.0f} floor to move in"
-        src = max(sources, key=lambda i: sources[i])
-        room = s.shard_topup_max_per_day - store.shard_moved_since(_day_start(time.time()))
-        amount = round(min(want, sources[src], room), 2)
-        if amount + 1e-9 < cost - here:
-            return f"skipped: exchange {idx} needs ${cost - here:.2f} more but the top-up limit allows ${max(amount, 0):.2f} (daily cap ${s.shard_topup_max_per_day:.0f})"
-        resp = client.shard_transfer(amount, "event_contract", src, "event_contract", idx)
-        store.add_shard_move(src, idx, amount, f"top up for {shot.ticker}", str(resp.get("transfer_id", "")))
-        log.info("moved $%.2f from exchange %d to exchange %d for %s", amount, src, idx, shot.ticker)
-        for _ in range(8):  # the transfer is asynchronous: wait for it to land
-            time.sleep(1.0)
-            if client.shard_balances().get(idx, 0.0) + 1e-9 >= cost:
-                _UNFUNDED.pop(idx, None)
-                return None
-        return f"skipped: moved ${amount:.2f} to exchange {idx} but it has not landed yet; the next review retries"
+        note = _fill_shard(s, client, store, idx, cost, f"top up for {shot.ticker}")
+        return note
     except KalshiRateLimited:
         raise
     except KalshiError as exc:
         return f"skipped: could not top up exchange cash ({exc})"
+
+
+def fund_open_exchanges(s: Settings, client: KalshiClient, store: Store) -> None:
+    """Before any order: each exchange that already holds a position should already hold the top-up target.
+
+    A transfer takes a few seconds to land. Doing it here keeps that wait off the moment a moonshot print qualifies.
+    An exchange with no open position is left alone; the first order there still tops itself up.
+    """
+    if s.shard_topup_target <= 0 or not getattr(client, "authed", False):
+        return
+    from .manual import parse_positions
+
+    try:
+        held = parse_positions(client.positions())
+    except KalshiError as exc:
+        log.warning("could not read open positions before funding exchanges: %s", exc)
+        return
+    indexes: set[int] = set()
+    for pos in held:
+        try:
+            raw = client.market(pos.ticker).get("exchange_index")
+        except KalshiError as exc:
+            log.warning("could not read the exchange for %s: %s", pos.ticker, exc)
+            continue
+        if raw is None:
+            continue
+        idx = int(raw)
+        indexes.add(idx)
+        _EXCHANGE_OF[pos.ticker.split("-")[0]] = idx
+    if not indexes:
+        log.info("no open position, so no exchange was funded ahead of trading")
+        return
+    for idx in sorted(indexes):
+        try:
+            note = _fill_shard(s, client, store, idx, s.shard_topup_target, "before trading")
+        except KalshiRateLimited:
+            raise
+        except KalshiError as exc:
+            log.warning("could not fund exchange %s before trading: %s", idx, exc)
+            continue
+        if note:
+            log.warning("exchange %s was not funded before trading: %s", idx, note)
+        else:
+            log.info("exchange %s holds at least $%.2f before trading", idx, s.shard_topup_target)
 
 
 class Placed(NamedTuple):
@@ -987,6 +1067,7 @@ def _hours_left(close_time: str, now: datetime | None = None) -> float | None:
 _EXIT_LOCK = threading.Lock()  # one exit at a time, so the periodic pass and the live watcher never sell the same bet twice
 
 
+EXIT_RETRY_SLIP = (0.02, 0.05, 0.10)  # if the first sale fills nothing (or part), sell the rest this far under a fresh read of the best bid, three more times
 EXIT_SLIP = 0.02  # an exit order is limited this far under the bid we saw: it is immediate-or-cancel, so it still fills at the best bid
 
 
@@ -1056,6 +1137,38 @@ def exit_position(
             cost_usd=-(avg * filled - fee), fee_usd=fee, order_id=resp.get("order_id", ""),
             side="sell", contract=side,
         )
+        proceeds, sold = avg * filled, filled
+        left = store.net_contracts(row["ticker"], s.env)
+        if left >= 0.005 and not why.startswith("take-profit"):
+            # A sale into a book that has just been cleared fills nothing at a bid read a moment ago (burst and crash exits do this). Read the book again and sell what is left a little lower each time.
+            for extra in EXIT_RETRY_SLIP:
+                time.sleep(0.4)
+                try:
+                    fresh = best_bid(client.orderbook(row["ticker"]), side)
+                except KalshiError:
+                    fresh = None
+                if fresh is None:
+                    break  # nobody is bidding: nothing to sell into
+                try:
+                    r2 = sell(row["ticker"], round(left, 2), max(0.01, round(fresh - extra, 2)))
+                except KalshiRateLimited:
+                    raise
+                except KalshiError:
+                    break
+                f2 = float(r2.get("fill_count") or 0.0)
+                a2 = float(r2.get("average_fill_price") or fresh)
+                fee2 = float(r2.get("average_fee_paid") or 0.0) * f2
+                store.add_order(
+                    ticker=row["ticker"], env=s.env, count=left, price=fresh, fill_count=f2,
+                    cost_usd=-(a2 * f2 - fee2), fee_usd=fee2, order_id=r2.get("order_id", ""), side="sell", contract=side,
+                )
+                proceeds += a2 * f2
+                sold += f2
+                left = store.net_contracts(row["ticker"], s.env)
+                if left < 0.005:
+                    break
+            avg = proceeds / sold if sold > 0 else avg
+            filled = sold
         if store.net_contracts(row["ticker"], s.env) < 0.005:
             store.mark_exited(row["ticker"], avg if filled else bid, why, lane, seen)
             _ask_flip(s, store, row, lane, why)
@@ -1070,6 +1183,7 @@ def stop_loss_pass(
     *,
     now: datetime | None = None,
     before_order: Callable[[], None] | None = None,
+    client_for: Callable[[str], KalshiClient] | None = None,
 ) -> list[str]:
     """Check every open bet. Sell (or paper-sell) those that hit the stop or a take-profit level. Returns log lines.
 
@@ -1091,10 +1205,11 @@ def stop_loss_pass(
         hours = _hours_left(row["close_time"], now)
         if hours is None:
             continue
+        book = client_for(row["lane"] or "moonshot") if client_for is not None else client
         try:
-            # A paper bet may be read from the shared market cache; a real one always asks Kalshi, because a sale is priced from what it reads.
-            with shared_for(client, 0.0 if row["mode"] == "trade" else s.discovery_eval_age, s.discovery_enabled):
-                m = client.market(row["ticker"])
+            # A paper bet may be read from the shared market cache; a real one always asks the venue, because a sale is priced from what it reads.
+            with shared_for(book, 0.0 if row["mode"] == "trade" else s.discovery_eval_age, s.discovery_enabled):
+                m = book.market(row["ticker"])
         except KalshiError as exc:
             notes.append(f"stop {row['ticker']}: market lookup failed ({exc})")
             continue
@@ -1118,12 +1233,16 @@ def stop_loss_pass(
         if why.startswith("stop-loss"):
             # The same calculated wait the socket watcher applies (strategy.stop_wait), measured on the
             # tape: a backstop that sold mid-dip would rob the watcher of rebounds it is waiting for.
-            wait = stop_wait(spec.stop_confirm_seconds if spec is not None else 0.0, hours * 3600.0, row["ticker"].split("-")[0].endswith("15M"))
+            # Last 2 minutes: sell only a downtrend that is already under 50c (strategy.price_shape).
+            fifteen = row["ticker"].split("-")[0].endswith("15M")
+            if fifteen and hours * 3600.0 <= 120 and _not_a_downtrend(s, row["ticker"], side, bid, now.timestamp()):
+                continue
+            wait = stop_wait(spec.stop_confirm_seconds if spec is not None else 0.0, hours * 3600.0, fifteen)
             if wait > 0:
                 dipped = below_line_seconds(s, row["ticker"], side, entry * (1.0 - stop_drop_for(spec, s)), now.timestamp())
                 if dipped is not None and dipped < wait:
                     continue
-        notes.append(exit_position(s, client, store, row, bid, why, before_order, slip=EXIT_SLIP + (0.03 if why.startswith("stop-loss") else 0.0)))
+        notes.append(exit_position(s, book, store, row, bid, why, before_order, slip=EXIT_SLIP + (0.03 if why.startswith("stop-loss") else 0.0)))
     return notes
 
 
@@ -1157,12 +1276,13 @@ def next_stop_loss_at(s: Settings, store: Store, now: float | None = None) -> fl
     return soonest
 
 
-def resolve(client: KalshiClient, store: Store) -> int:
+def resolve(client: KalshiClient, store: Store, client_for: Callable[[str], KalshiClient] | None = None) -> int:
     """Fill in outcomes for markets that have settled. Returns how many markets resolved."""
     n = 0
     for ticker in store.unresolved_tickers():
+        book = client_for(ticker) if client_for is not None else client
         try:
-            m = client.market(ticker)
+            m = book.market(ticker)
         except KalshiError:
             continue
         if m.get("result") in {"yes", "no"}:

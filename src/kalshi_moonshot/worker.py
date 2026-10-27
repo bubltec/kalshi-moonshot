@@ -27,8 +27,8 @@ from .commodities import CommodityPricer
 from .config import Settings
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
-from .kalshi import KalshiClient, KalshiRateLimited
-from .lanes import lane_specs, spec_for, tiered, tiered_lanes
+from .kalshi import KalshiClient, KalshiError, KalshiRateLimited
+from .lanes import POLY_LANE, lane_specs, spec_for, tiered, tiered_lanes
 from .marketdata import Discovery, shared_for
 from .search import NewsSearch
 from .store import Store
@@ -103,6 +103,7 @@ class Worker:
         self.esports: Any = None
         self._tape_db: Any = None  # a read connection to the tape, opened on first use, for the entry factors saved with decisions
         self.stopping = False
+        self._poly_client: Any = None  # PolymarketClient, False once building it has failed, None until first use
         self._last_cleanup = 0.0
         self.share = EstimateShare()  # one estimate per market, reused by every lane that asks soon after
         self._split = False  # True once run_forever has started the maintenance thread: the main loop then leaves those jobs to it
@@ -110,6 +111,12 @@ class Worker:
     # ---- lifecycle ----
     def start(self) -> None:
         """Recover from the last run, and scan right away (a restart is how you force a re-run)."""
+        from .runner import fund_open_exchanges
+
+        try:
+            fund_open_exchanges(self.s, self.client, self.store)
+        except Exception:
+            log.exception("could not fund exchanges before trading; continuing")
         resumed, parked = self.jobs.recover()
         if resumed:
             log.info("resuming %d job(s) that were running when the bot stopped", resumed)
@@ -135,6 +142,7 @@ class Worker:
         self._ensure_tiered()
         self._start_discovery()
         self._start_tape()
+        threading.Thread(target=self._quote_polymarket, name="polymarket-paper", daemon=True).start()
         self._start_esports()
         from . import forecast_fit
 
@@ -284,6 +292,8 @@ class Worker:
         specs = lanes.lane_specs(self.s)
         out = set()
         for row in self.store.open_bets():
+            if (row["lane"] or "") == POLY_LANE:
+                continue  # Polymarket paper bets are quoted by the poller, not Kalshi's socket
             spec = specs.get(row["lane"] or "moonshot")
             stop_on = spec is not None and self.s.stop_loss_enabled and spec.stop_loss and not (
                 row["ticker"].split("-")[0].endswith("15M") and not self.s.stop_loss_fast)
@@ -474,17 +484,67 @@ class Worker:
         self._ensure_flip()
         return f"{len(markets)} markets, queued {queued} of {len(shots)} evaluations"
 
+    def _poly(self) -> Any:
+        """The Polymarket client, or None when it cannot be built. Public market data needs no key."""
+        if self._poly_client is False:
+            return None
+        if self._poly_client is None:
+            from .polymarket import client_from_env
+
+            try:
+                self._poly_client = client_from_env()
+            except Exception as exc:
+                log.warning("polymarket paper lane off: %s", exc)
+                self._poly_client = False
+                return None
+        return self._poly_client
+
+    def _venue(self, lane: str) -> Any:
+        """Where a lane's markets are read. The Polymarket commodity lane never falls back to Kalshi."""
+        if lane == POLY_LANE:
+            client = self._poly()
+            if client is None:
+                raise KalshiError("polymarket paper lane has no client")
+            return client
+        return self.client
+
+    def _quote_polymarket(self) -> None:
+        """Feed Polymarket bids into the watcher so a paper commodity bet can be sold on the same rules. No order is sent."""
+        while not self.stopping:
+            time.sleep(2.0)
+            watcher = self.watcher
+            client = self._poly()
+            if watcher is None or client is None:
+                continue
+            try:
+                rows = [r for r in Store(self.s.db_path, self.s.exclude_versions).open_bets() if (r["lane"] or "") == POLY_LANE]
+            except Exception:
+                log.debug("polymarket paper quotes: could not read open bets", exc_info=True)
+                continue
+            for row in rows:
+                try:
+                    m = client.market(row["ticker"])
+                    bid, ask = float(m.get("yes_bid_dollars") or 0), float(m.get("yes_ask_dollars") or 0)
+                except Exception:
+                    log.debug("polymarket paper quote failed for %s", row["ticker"], exc_info=True)
+                    continue
+                if ask <= 0:
+                    continue
+                watcher.on_event({"kind": "quote", "ts": time.time(), "ticker": row["ticker"], "bid": bid, "ask": ask})
+
     def do_evaluate(self, job: Job) -> str:
         """A live lane's evaluation always reads the real market (it is about to place an order); a paper lane's may use the shared cache."""
-        live = self.s.is_live(job.payload["shot"].get("lane", ""))
-        with self._shared(0.0 if live else self.s.discovery_eval_age):
+        lane = job.payload["shot"].get("lane", "")
+        live = self.s.is_live(lane)
+        with shared_for(self._venue(lane), 0.0 if live else self.s.discovery_eval_age, self.s.discovery_enabled):
             return self._evaluate(job)
 
     def _evaluate(self, job: Job) -> str:
         s = self.s
         shot = LongShot(**job.payload["shot"])
+        client = self._venue(shot.lane)
         # The shortlist may be minutes old. Re-read the market and drop it if it no longer fits.
-        m = self.client.market(shot.ticker)
+        m = client.market(shot.ticker)
         m["category"] = shot.category
         if shot.series:
             m.setdefault("series_ticker", shot.series)
@@ -494,7 +554,7 @@ class Worker:
         why_not = lane_reject_reason(side_view(m, shot.side), spec, s, now)
         if not why_not and spec.trend == "not_falling":
             try:
-                candles = self.client.candlesticks(shot.series, shot.ticker, spec.lookback_hours)
+                candles = client.candlesticks(shot.series, shot.ticker, spec.lookback_hours)
             except Exception:
                 candles = []
             why_not = falling_reason(ask_trend(candles, shot.side), spec.max_drop)
@@ -510,7 +570,7 @@ class Worker:
         # Same job, same order id: if the process dies after sending, a rerun cannot buy twice.
         order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
         out = runner.evaluate(
-            s, self.client, self.est, self.store, shot, self.searcher,
+            s, client, self.est, self.store, shot, self.searcher,
             quant=self.quant, estimators=self.estimators(), share=self.share,
             raise_model_errors=not job.last_attempt,
             order_key=order_key,
@@ -564,8 +624,11 @@ class Worker:
             job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
             max_attempts=self.s.job_max_attempts, priority=spec.priority,
         )
-        with self._shared(self.s.discovery_max_age):
-            n = runner.scope_lane(self.s, self.client, self.store, spec, quant=self.quant)
+        if spec.name == POLY_LANE and self._poly() is None:
+            return "polymarket paper lane has no client"
+        venue = self._venue(spec.name)
+        with shared_for(venue, self.s.discovery_max_age, self.s.discovery_enabled):
+            n = runner.scope_lane(self.s, venue, self.store, spec, quant=None if spec.name == POLY_LANE else self.quant)
         self.jobs.run_now(f"lane_review:{spec.name}", priority=spec.priority)
         log.info("scope %s: watching %d event(s)", spec.name, n)
         return f"{n} events watched"
@@ -579,8 +642,11 @@ class Worker:
             job.kind, time.time() + every, max_attempts=self.s.job_max_attempts,
             priority=spec.priority,
         )
-        with self._shared(self.s.discovery_max_age):
-            shots = runner.review_lane(self.s, self.client, self.store, spec, self.estimators())
+        if spec.name == POLY_LANE and self._poly() is None:
+            return "polymarket paper lane has no client"
+        venue = self._venue(spec.name)
+        with shared_for(venue, self.s.discovery_max_age, self.s.discovery_enabled):
+            shots = runner.review_lane(self.s, venue, self.store, spec, self.estimators())
         queued = 0
         for shot in shots:
             made = self.jobs.enqueue(
@@ -611,7 +677,7 @@ class Worker:
             self.jobs.ensure("flip", time.time() + wait, max_attempts=self.s.job_max_attempts, priority=5)
 
     def do_resolve(self, job: Job) -> str:
-        n = runner.resolve(self.client, self.store)
+        n = runner.resolve(self.client, self.store, client_for=lambda ticker: self._venue(self.store.decision_lane(ticker)))
         log.info("resolved %d settled markets", n)
         return f"{n} resolved"
 
@@ -619,6 +685,7 @@ class Worker:
         notes = runner.stop_loss_pass(
             self.s, self.client, self.store,
             before_order=lambda: self.jobs.checkpoint(job.id, PLACING),
+            client_for=self._venue,
         )
         for line in notes:
             log.info("%s", line)

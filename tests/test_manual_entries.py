@@ -67,6 +67,10 @@ def test_a_hand_placed_buy_is_logged_with_its_context_and_the_bots_own_is_not(wo
     assert [r["trade_id"] for r in rows] == ["T1"]  # the bot's own order is not yours
     assert rows[0]["side"] == "no" and rows[0]["price"] == pytest.approx(0.70)  # a fill reports the YES price (0.30); the NO side paid 0.70
     assert rows[0]["template"] == 0 and json.loads(rows[0]["factors"])["imbalance"] is not None
+    bet = Store(s.db_path).db.execute("SELECT lane, mode, ask, side, contracts, reason FROM decisions").fetchone()
+    assert bet["lane"] == "manual" and bet["mode"] == "observe" and bet["side"] == "no"
+    assert bet["ask"] == pytest.approx(0.70) and bet["contracts"] == pytest.approx(10.0) and bet["reason"] == "hand-placed buy"
+    assert Store(s.db_path).paper_bets(open_only=True) == []  # a study row must not eat the paper bankroll
 
 
 def test_only_marked_buys_are_templates_and_a_mark_can_be_undone(world):
@@ -93,6 +97,17 @@ def test_a_buy_from_before_logging_is_rebuilt_from_account_history(world):
     assert row["side"] == "no" and row["price"] == pytest.approx(0.68) and row["template"] == 1 and row["note"] == "good run"
     assert json.loads(row["factors"])["elapsed_min"] == pytest.approx(5.0, abs=0.1)
     assert "no hand-placed buy found" in factors.mark_template(store, tape, "KXNOPE-1")
+
+
+def test_a_cheap_moonshot_is_logged_to_study_and_a_second_fill_adds_size(world):
+    s, _store, _tape, now, _close = world
+    w = make(world)
+    w.on_event(fill_event(now - watcher.FILL_SETTLE - 1, order_id="M1", trade_id="T1", side="yes", price=0.08))
+    w.on_event(fill_event(now - watcher.FILL_SETTLE - 1, order_id="M2", trade_id="T2", side="yes", price=0.08))
+    w.enroll_fills()
+    row = Store(s.db_path).db.execute("SELECT contracts, reason, ask FROM decisions WHERE lane='manual'").fetchone()
+    assert row["reason"] == "hand-placed moonshot" and row["ask"] == pytest.approx(0.08)
+    assert row["contracts"] == pytest.approx(20.0)
 
 
 def test_the_profile_needs_three_templates(world):

@@ -537,12 +537,15 @@ class Store:
 
         live=False: paper bets, those made while their lane was not placing orders.
         live=True: bets that were sent as real orders.
+        Hand-placed buys (lane manual) are logged for study and left out of both.
+
         """
         done = "(COALESCE(outcome,'') IN ('yes','no') OR exit_ts IS NOT NULL)"
         return self.db.execute(
             f"""SELECT id, ticker, lane, side, outcome, contracts, stake_usd, exit_price
                 FROM decisions
                 WHERE action='bet' AND stake_usd IS NOT NULL AND contracts > 0
+                  AND COALESCE(lane,'moonshot') != 'manual'
                   AND (CASE WHEN mode = 'trade' THEN 1 ELSE 0 END) = ?
                   AND {'NOT ' + done if open_only else done}""",
             (1 if live else 0,),
@@ -623,6 +626,14 @@ class Store:
             "DELETE FROM watchlist WHERE lane=? AND event_ticker=?", (lane, event_ticker)
         )
         self.db.commit()
+
+    def decision_lane(self, ticker: str) -> str:
+        """The lane of the newest unsettled decision on this ticker, or "" when there is none."""
+        row = self.db.execute(
+            "SELECT lane FROM decisions WHERE ticker=? AND outcome IS NULL ORDER BY ts DESC LIMIT 1",
+            (ticker,),
+        ).fetchone()
+        return (row["lane"] if row else "") or ""
 
     def unresolved_tickers(self) -> list[str]:
         rows = self.db.execute(

@@ -307,10 +307,11 @@ def stop_wait(cap: float, seconds_left: float | None, fifteen_min: bool = False)
     recorded quotes, 45% stop, sale resting at 1.1x). A dip with 7+ minutes left is information — the
     favorite is being repriced and does not come back (waiting cost up to 14 points of return). A dip
     with 2-5 minutes left is mostly the tape overreacting against the settlement average, and it does
-    come back (waiting earned 7-16 points). Inside 2 minutes the dip IS the settlement pricing itself:
-    waiting turned a -52% exit into -87%. Of the rules tried, the best (-1.4% a bet, against -1.8% for
-    the cap-60 step rule, -2.0% for the flat 10 s before that, -2.2% at once, -2.6% no stop) sells at
-    once past 7 minutes and waits longest — up to 120 s — at 2-3 minutes.
+    come back (waiting earned 7-16 points). Inside the last 2 minutes there is no extra wait: a sale
+    happens only under 50c, and only when the last 3 seconds are a downtrend (strategy.price_shape).
+    A spike or a hover is not a sale. Of the rules tried, the best (-1.4% a bet, against
+    -1.8% for the cap-60 step rule, -2.0% for the flat 10 s before that, -2.2% at once, -2.6% no stop)
+    sells at once past 7 minutes and waits longest — up to 120 s — at 2-3 minutes.
 
     `cap` is the lane's stop_confirm_seconds, the MOST the stop will ever wait; a lane that sets it to
     0 still sells at once. The early-out and the 120 s tier are 15-minute findings, so they apply only
@@ -326,7 +327,34 @@ def stop_wait(cap: float, seconds_left: float | None, fifteen_min: bool = False)
         return min(cap, 45.0)
     if seconds_left > 120:
         return min(cap, 120.0 if fifteen_min else 60.0)
-    return 0.0
+    return 0.0  # last 2 minutes: no timer. price_shape says whether the bid under 50c is a trend
+
+
+def price_shape(points: list[tuple[float, float]], now: float, bid: float) -> str:
+    """What the last 3 seconds of bids are: 'trend', 'spike', or 'hover'.
+
+    A hover barely moved (under 8c). A spike dropped and has already retraced at least half, or the
+    whole drop is still a single gap. A trend stepped down at least twice and is still at the low.
+    The stop sells only a trend, and only once the bid is under 50c. This reads the path already
+    in hand; it does not wait another 3 seconds.
+    """
+    recent = [b for t, b in points if now - 3.0 <= t <= now and b > 0]
+    if len(recent) < 2:
+        return "hover"
+    high, low = max(recent), min(recent)
+    if high - low < 0.08:
+        return "hover"
+    if bid > low + 0.02 and (bid - low) >= 0.5 * (high - low):
+        return "spike"
+    steps = 0
+    prev = recent[0]
+    for price in recent[1:]:
+        if price < prev - 0.02:
+            steps += 1
+        prev = price
+    if steps >= 2 and bid <= low + 0.02:
+        return "trend"
+    return "spike"
 
 
 def take_profit_hit(entry: float, bid: float, x: float = 0.0, at: float = 0.0) -> str | None:
@@ -426,6 +454,21 @@ def side_ask_notional(book: dict[str, Any], limit: float, side: str = "yes") -> 
         if 0 < no_px <= limit + 1e-9:
             total += no_px * qty
     return total
+
+
+def best_bid(book: dict[str, Any], side: str = "yes") -> float | None:
+    """The highest price anyone bids for the given contract right now (what a sale of it would get), from the order book; None when nobody does.
+    Kalshi's book lists bids for each contract: YES bids under yes_dollars, NO bids under no_dollars."""
+    raw = book.get("orderbook_fp") or book
+    best = None
+    for row in raw.get("yes_dollars" if side == "yes" else "no_dollars") or []:
+        try:
+            px, qty = float(row[0]), float(row[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if qty > 0 and px > 0 and (best is None or px > best):
+            best = px
+    return best
 
 
 def yes_ask_notional(book: dict[str, Any], limit: float) -> float:

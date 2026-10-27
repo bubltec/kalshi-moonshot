@@ -324,6 +324,14 @@ def cmd_shadow(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_gap(s: config.Settings, args: argparse.Namespace) -> int:
+    """Paper against live, lane by lane, on the same hours and lane version (read-only)."""
+    from . import gap
+
+    print(gap.report(Store(s.db_path, s.exclude_versions), args.hours, args.all_versions))
+    return 0
+
+
 def cmd_daily(s: config.Settings, args: argparse.Namespace) -> int:
     """Day-by-day profit and loss of the bets actually taken, with drawdown and profit factor."""
     from . import journal
@@ -1195,7 +1203,7 @@ COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
     "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "factors": cmd_factors, "template": cmd_template, "probe-maker": cmd_probe_maker, "esports": cmd_esports, "forecast-fit": cmd_forecast_fit, "forecast-review": cmd_forecast_review, "forecast-compare": cmd_forecast_compare, "behavior-cases": cmd_behavior_cases, "scalp-cases": cmd_scalp_cases, "curve-vectors": cmd_curve_vectors, "behavior-report": cmd_behavior_report, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
-    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
+    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "gap": cmd_gap, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
 
 
@@ -1324,6 +1332,9 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--series", help="comma list, e.g. KXBTC15M,KXGOLD15M")
             p.add_argument("--series-suffix", default="15M")
             p.add_argument("--tz", default="America/New_York", help="time zone for the by-hour table")
+        if name == "gap":
+            p.add_argument("--hours", type=float, default=24.0, help="how far back to look")
+            p.add_argument("--all-versions", action="store_true", help="mix every lane version instead of only the current one")
         if name == "daily":
             p.add_argument("--lane", help="only this lane (moonshot, steady, commodity)")
             grp = p.add_mutually_exclusive_group()

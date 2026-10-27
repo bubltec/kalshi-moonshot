@@ -195,7 +195,9 @@ def hour_context(s: Settings, store: Any, hours: float = 1.0, now: float | None 
     clock.record(store, snap)
     book = (
         "Current book (15-minute): resting buy 1c under the ask for 20s, hold to settlement, hard 45% stop "
-        "(wait calculated from time left), burst sells the favorite in the last 120s. "
+        "(wait calculated from time left), burst sells the favorite in the last 120s (only if that market actually trades). "
+        "crypto_moonshot buys a 2-10c crypto side that has been sitting there while that side keeps getting bought, without holding the favorite. "
+        "manual is your app fills, logged for study: cheap (≤25c) holds to settlement; dearer still uses the trail. "
         "Take-profit, trail, stop-model and settlement-guard are off (they cut winners)."
     )
     live = ", ".join(sorted(s.live_lanes or [])) or "none"

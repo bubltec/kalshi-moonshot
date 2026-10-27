@@ -15,6 +15,7 @@ it shrinks. Nothing here ever exceeds available cash or the hard dollar ceilings
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from .config import Settings
@@ -43,7 +44,7 @@ def kelly_share(p: float, ask: float) -> float:
 
 def size_bet(
     spec: LaneSpec, s: Settings, p: float, ask: float,
-    available: float, equity: float, lane_exposure: float, scale: float = 1.0, fractional: bool | None = None,
+    available: float, equity: float, lane_exposure: float, scale: float = 1.0, fractional: bool | None = None, maker_price: float | None = None,
 ) -> Sizing:
     """Contracts to buy now. contracts == 0 comes with the reason it was not sized."""
     full = kelly_share(p, ask)
@@ -63,10 +64,16 @@ def size_bet(
     if stake <= 0.0:
         room = cap - lane_exposure
         return Sizing(0, 0.0, "no room left" if room <= 0 else "no cash available")
-    count = contracts_for_budget(stake, ask, s.fractional_stake if fractional is None else fractional)
+    frac = s.fractional_stake if fractional is None else fractional
+    if maker_price is not None and 0 < maker_price < ask:
+        # A resting buy fills at its own price and pays no taker fee: size it to that price, so the dollars spent are the stake (a 2.2-contract bet sized at the ask plus the fee spent $1.96 of a $2 stake).
+        count = math.floor(stake / maker_price * 100.0 + 1e-9) / 100.0 if frac else float(int(stake / maker_price + 1e-9))
+        cost = maker_price * count
+    else:
+        count = contracts_for_budget(stake, ask, frac)
+        cost = ask * count + order_fee(ask, count)
     if count < 1:  # fractions only refine a bet of at least one contract
         return Sizing(0, 0.0, f"${stake:.2f} stake is under the cost of one contract")
-    cost = ask * count + order_fee(ask, count)
     how = "fixed stake" if spec.fixed_stake else f"{full:.0%} Kelly, {s.kelly_fraction:.0%} of it"
     if spec.fixed_stake and scale * spec.fixed_stake > per_bet + 1e-9:
         how += f", capped at {spec.max_bet_pct:.0%} of equity"

@@ -180,6 +180,18 @@ class PgCursor:
         pass
 
 
+def _locked(fn):
+    """One statement at a time on a connection. The worker's maintenance thread and its main loop share one Store, and so one connection; psycopg
+    refuses a second command while one is in flight ('another command is already in progress') and that took the whole process down."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return fn(self, *args, **kwargs)
+    return wrapper
+
+
 class PgConn:
     """A Postgres connection that speaks the dialect the code was written in (see the module docstring)."""
 
@@ -187,6 +199,7 @@ class PgConn:
 
     def __init__(self, dsn: str, schema: str):
         self.dsn, self.schema = dsn, schema
+        self._lock = threading.RLock()
         self._dirty = False  # a write is waiting for commit()
         self._pk: dict[str, tuple[list[str], list[str]]] = {}  # table -> (columns, primary key)
         self.conn: Any = None
@@ -244,6 +257,7 @@ class PgConn:
             self.conn.rollback()  # a read leaves nothing open: no idle-in-transaction connection holding the database back
 
     # ---- the sqlite3-shaped interface ----
+    @_locked
     def execute(self, sql: str, params: Any = ()) -> PgCursor:
         text = sql.strip().rstrip(";")
         head = text[:20].lower()
@@ -293,6 +307,7 @@ class PgConn:
         self._dirty = False
         raise exc
 
+    @_locked
     def executemany(self, sql: str, seq: Any) -> PgCursor:
         text = sql.strip().rstrip(";")
         if text[:20].lower().startswith("insert or"):
@@ -330,12 +345,14 @@ class PgConn:
             return PgCursor(None, rows=[PgRow(("ok",), ("quick_check",))])
         return PgCursor(None, rows=[])
 
+    @_locked
     def commit(self) -> None:
         if self.conn.closed:
             return
         self.conn.commit()
         self._dirty = False
 
+    @_locked
     def rollback(self) -> None:
         if not self.conn.closed:
             self.conn.rollback()

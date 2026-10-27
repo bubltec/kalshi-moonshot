@@ -1,12 +1,13 @@
 """The stop's wait is calculated from the time left (strategy.stop_wait; fitted in scripts/stop_wait_study.py):
-none inside 2 minutes, 45 s at 3-7 minutes, up to 120 s at 2-3 on a 15-minute market, and none past 7 there
-either (an early dip is repricing) — hourly markets keep the lane's cap past 7, and the cap always binds."""
+none inside 2 minutes, where a sale is only a downtrend already under 50c (strategy.price_shape),
+45 s at 3-7 minutes, up to 120 s at 2-3, and none past 7 (an early dip is repricing) — hourly markets
+keep the lane's cap past 7, and the cap always binds."""
 import time
 from datetime import UTC, datetime
 
 from kalshi_moonshot import config, watcher
 from kalshi_moonshot.store import Store
-from kalshi_moonshot.strategy import stop_wait
+from kalshi_moonshot.strategy import price_shape, stop_wait
 
 TOML = (
     "[lane.fav]\nestimator='ladder'\nprice=[0.5,0.9]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=5.0\n"
@@ -20,8 +21,10 @@ def test_the_wait_follows_the_clock_and_never_exceeds_the_cap():
     assert stop_wait(60.0, 400.0) == 45.0  # 5-7 minutes left
     assert stop_wait(60.0, 240.0) == 45.0  # 3-5 minutes
     assert stop_wait(60.0, 150.0) == 60.0  # 2-3 minutes: the full minute, dips here are noise
-    assert stop_wait(60.0, 90.0) == 0.0  # inside 2 minutes the dip is the settlement pricing: out at once
+    assert stop_wait(60.0, 90.0) == 0.0  # hourly, inside 2 minutes: the 20s wick-wait is a 15-minute finding
     assert stop_wait(60.0, 30.0) == 0.0
+    assert stop_wait(120.0, 90.0, fifteen_min=True) == 0.0  # last 2 minutes: the shape decides, no timer
+    assert stop_wait(120.0, 30.0, fifteen_min=True) == 0.0
     assert stop_wait(10.0, 150.0) == 10.0  # a smaller lane cap still binds
     assert stop_wait(0.0, 150.0) == 0.0  # a lane that asked for no wait gets none
     assert stop_wait(120.0, 500.0, fifteen_min=True) == 0.0  # an early dip on a 15-minute market is repricing: out at once
@@ -81,10 +84,30 @@ def test_a_rebound_inside_the_wait_disarms_the_stop(tmp_path, monkeypatch):
     assert not w._jobs.empty()
 
 
-def test_inside_two_minutes_the_stop_sells_at_once(tmp_path, monkeypatch):
-    w, base = armed(tmp_path, monkeypatch, 90.0)
-    w.on_event(quote(0.40, base))
+def test_the_three_shapes():
+    assert price_shape([(0, 0.57), (1, 0.57), (2, 0.51), (3, 0.25)], 3, 0.25) == "trend"  # gold, 8:44:50
+    assert price_shape([(0, 0.42), (1, 0.42), (2, 0.25)], 2, 0.25) == "spike"  # one gap, not a second step down
+    assert price_shape([(0, 0.42), (1, 0.25), (2, 0.39)], 2, 0.39) == "spike"  # retraced more than half
+    assert price_shape([(0, 0.40), (1, 0.42), (2, 0.39)], 2, 0.39) == "hover"
+
+
+def test_a_downtrend_under_50_sells_on_that_print(tmp_path, monkeypatch):
+    w, base = armed(tmp_path, monkeypatch, 20.0)
+    w.on_event(quote(0.57, base))  # still above the 0.44 line
+    w.on_event(quote(0.51, base + 1))
+    assert w._jobs.empty()
+    w.on_event(quote(0.25, base + 2))  # under 50c, two steps down, still at the low
     assert not w._jobs.empty() and "stop-loss" in w._jobs.get_nowait()[2]
+
+
+def test_a_single_gap_and_a_hover_are_not_sold(tmp_path, monkeypatch):
+    w, base = armed(tmp_path, monkeypatch, 20.0)
+    w.on_event(quote(0.42, base))
+    w.on_event(quote(0.25, base + 1))  # one gap under 50c: a spike, not a trend
+    w.on_event(quote(0.40, base + 3))
+    w.on_event(quote(0.41, base + 4))  # hovering under the line
+    w.on_event(quote(0.39, base + 5))
+    assert w._jobs.empty()
 
 
 def test_past_seven_minutes_a_15m_dip_sells_at_once(tmp_path, monkeypatch):

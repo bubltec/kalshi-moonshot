@@ -56,6 +56,10 @@ def test_the_watcher_follows_hand_placed_positions_only_when_asked(s, monkeypatc
     w.refresh()
     assert {t for (t, lane) in w.targets if lane == "manual"} == {"KXWTI-26OCT2214-T98.99", "KXNASDAQ100U-X"}
     assert w.manual_tickers() == {"KXWTI-26OCT2214-T98.99", "KXNASDAQ100U-X"}
+    store = Store(s.db_path)
+    logged = {r["ticker"] for r in store.db.execute("SELECT ticker, lane, mode FROM decisions").fetchall()}
+    assert logged == {"KXWTI-26OCT2214-T98.99", "KXNASDAQ100U-X"}
+    assert store.paper_bets(open_only=True) == []
     monkeypatch.setenv("MANUAL_EXIT", "false")
     off = config.load()
     w2 = watcher.ProfitWatcher(lambda: off, c, lambda: Store(off.db_path))
@@ -80,6 +84,8 @@ def test_a_peak_crash_sells_a_hand_placed_position_for_a_profit(s):
     w._sell("KXWTI-26OCT2214-T98.99", "manual", "peak-crash: bid 0.55 is 0.07 off its 0.62 peak (paid 0.40) for 11s")
     assert [(x[0], x[1], x[2]) for x in c.sold] == [("yes", "KXWTI-26OCT2214-T98.99", 4.0)]
     assert c.sold[0][3] == pytest.approx(0.53)  # the 2c cushion under the bid
+    done = Store(s.db_path).db.execute("SELECT exit_price, exit_reason FROM decisions WHERE ticker=?", ("KXWTI-26OCT2214-T98.99",)).fetchone()
+    assert done["exit_price"] == pytest.approx(0.53) and "peak-crash" in done["exit_reason"]
 
 
 def test_a_hand_placed_position_is_never_sold_at_or_under_cost(s):
