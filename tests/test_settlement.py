@@ -1,6 +1,7 @@
 """The last minute of a 15-minute crypto market: the settlement average, the guard, and the Coinbase tick parser."""
 import json
 import math
+import queue
 import time
 from datetime import UTC, datetime
 
@@ -203,6 +204,17 @@ def test_a_burst_on_gold_with_a_real_baseline_sells(tmp_path, monkeypatch):
     assert not w._jobs.empty() and w._jobs.get_nowait()[2].startswith("burst:")
 
 
+def _buy_inline(w):
+    """In production the buy worker takes a hunt buy off the queue; in a test it runs on the spot, so the row (or its absence) can be read right after the trade."""
+
+    class Inline(queue.SimpleQueue):
+        def put(self, job, block=True, timeout=None):
+            super().put(job)
+            w._drain_buys()
+
+    w._buys = Inline()
+
+
 def _hunt_watcher(tmp_path, monkeypatch, ticker="KXBTC15M-1"):
     series = ticker.split("-")[0]
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
@@ -220,6 +232,7 @@ def _hunt_watcher(tmp_path, monkeypatch, ticker="KXBTC15M-1"):
 
     w = watcher.ProfitWatcher(lambda: s, Client(), lambda: Store(s.db_path))
     w.refresh()
+    _buy_inline(w)
     return w, s, store, close
 
 
@@ -808,6 +821,7 @@ def test_the_flip_trigger_buys_the_cheap_side_on_dollars_against_a_90c_favorite(
     from kalshi_moonshot import lanes
 
     w, s, _store, _close = _watcher(tmp_path, monkeypatch)
+    _buy_inline(w)
     spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.15), hunt_dollars=400.0, hunt_dollars_btc=800.0, sides=("yes", "no"), fixed_stake=0.5, max_open=0)
     bought = []
     monkeypatch.setattr(w, "_hunt_buy", lambda h, sp, side, ask, reason, ctx: bought.append((h.ticker, side, round(ask, 2), ctx["bar"])))
@@ -857,3 +871,70 @@ def test_the_burst_exit_can_use_the_moonshot_dollars_instead_of_a_multiple(tmp_p
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.92})
     job = w._jobs.get_nowait()
     assert job[2].startswith("burst: $4")
+
+
+def _queued_hunt(tmp_path, monkeypatch):
+    """A hunt watcher with real queueing (no inline runner) and a lane that trades for real."""
+    import dataclasses
+
+    from kalshi_moonshot import lanes
+
+    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", fixed_stake=0.5, max_open=0)
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    w.client.authed = True
+    h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=time.time() + 100)
+    return w, store, spec, h
+
+
+def test_the_socket_only_queues_a_hunt_buy_and_the_worker_places_it(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+    placed = []
+    monkeypatch.setattr(runner, "place", lambda *a, **k: (placed.append(a[3].ticker) or runner.Placed("bought", 5.0, 0.4)))
+    w._buys.put((time.time(), h, spec, "no", 0.05, "burst hunt: test", {}))
+    assert placed == [] and store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 0  # nothing happens until the worker takes it
+    w._drain_buys()
+    assert placed == ["KXETH15M-1"]
+    assert store.db.execute("SELECT mode FROM decisions WHERE ticker='KXETH15M-1'").fetchone()["mode"] == "trade"
+
+
+def test_a_live_hunt_order_that_does_not_fill_says_why_it_missed(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("order failed: no fill at the limit"))
+    w._buys.put((time.time(), h, spec, "no", 0.05, "burst hunt: test", {}))
+    w._drain_buys()
+    row = store.db.execute("SELECT mode, reason, context FROM decisions WHERE ticker='KXETH15M-1'").fetchone()
+    assert row["mode"] == "observe" and "live order not filled: order failed: no fill at the limit" in row["reason"]
+    ctx = json.loads(row["context"])
+    assert ctx["live"] is True and ctx["miss"] == "order failed: no fill at the limit"
+
+
+def test_a_rate_limited_hunt_order_is_logged_not_lost(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.kalshi import KalshiRateLimited
+
+    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+
+    def limited(*a, **k):
+        raise KalshiRateLimited("429")
+
+    monkeypatch.setattr(runner, "place", limited)
+    w._buys.put((time.time(), h, spec, "no", 0.05, "burst hunt: test", {}))
+    w._drain_buys()
+    row = store.db.execute("SELECT mode, reason FROM decisions WHERE ticker='KXETH15M-1'").fetchone()
+    assert row is not None and row["mode"] == "observe" and "rate limited" in row["reason"]
+
+
+def test_a_hunt_buy_that_waited_too_long_in_the_queue_is_dropped(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+    placed = []
+    monkeypatch.setattr(runner, "place", lambda *a, **k: placed.append(1))
+    w._buys.put((time.time() - watcher.HUNT_BUY_STALE - 1.0, h, spec, "no", 0.05, "burst hunt: test", {}))
+    w._drain_buys()
+    assert placed == [] and store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 0

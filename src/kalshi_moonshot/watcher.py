@@ -27,7 +27,7 @@ from typing import Any
 
 from . import manual, paperfill, runner, settlement
 from .config import Settings
-from .kalshi import KalshiClient, KalshiError
+from .kalshi import KalshiClient, KalshiError, KalshiRateLimited
 from .kalshiws import index_for_series
 from .lanes import LaneSpec, enabled_lanes, lane_specs, stop_drop_for, takes_profit
 from .store import Store
@@ -67,6 +67,7 @@ BURST_CHEAP = 0.50  # taker buys on a side priced under this are the cheap-side 
 BURST_BAND = (0.80, 0.97)  # the held side's bid must be in this band: a favorite
 BUY_BAND = (0.05, 0.25)  # the other side is bought for real only when it costs this much
 BURST_WINDOW = 120.0  # a burst sells the held favorite when this many seconds or fewer remain. Past that, holding still paid (burst_flip record: last 120 s sold +6 to +8c vs holding -5 to -8c; at 2-5 min holding was still ahead)
+HUNT_BUY_STALE = 10.0  # a hunt buy that waited this long in the queue is dropped: its price was read at the burst, and the ask has moved since
 SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the close)
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
 HOLD_MARGIN = 0.01  # holding must beat the sale value by this much before an exit is withheld
@@ -297,6 +298,7 @@ class ProfitWatcher:
         self._hunt_by_series: dict[str, LaneSpec] = {}  # series -> LaneSpec for burst_hunt lanes
         self._lock = threading.Lock()
         self._jobs: queue.SimpleQueue[tuple[str, str, str]] = queue.SimpleQueue()  # (ticker, lane, why)
+        self._buys: queue.SimpleQueue[tuple[float, Hunt, LaneSpec, str, float, str, dict[str, Any]]] = queue.SimpleQueue()  # (queued at, hunt, lane, side, ask, why, context): hunt buys for the buy worker. The socket only enqueues
         self._inflight: set[tuple[str, str]] = set()
         self.follow: Callable[[set[str]], None] | None = None  # start streaming these tickers now (the tape recorder's follow)
         self.tape_factory: Callable[[], Any] | None = None  # opens a read connection to the tape, for the entry context saved with a hand-placed buy
@@ -463,7 +465,7 @@ class ProfitWatcher:
                 h.fired = True
                 reason = f"flip: ${d3:.0f} bought against the {'no' if side == 'yes' else 'yes'} favorite in 3 s (bar ${bar:.0f}), {side} costs {ask:.2f}"
                 ctx = {"dollars_3s": round(d3, 1), "bar": bar, "favorite": round(1.0 - cheap_mid, 3), "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name}
-                self._hunt_buy(h, spec, side, ask, reason, ctx)
+                self._buys.put((time.time(), h, spec, side, ask, reason, ctx))
                 return
             vol, base, ratio = _side_burst(book, sec, 0 if side == "yes" else 1)
             if not (lo <= ask <= hi) or not _hunt_burst(vol, base, ratio):
@@ -485,11 +487,38 @@ class ProfitWatcher:
             reason = (f"burst hunt: {ratio:.0f}x {side}'s own normal volume ({vol:.0f} contracts in 3 s), {side} costs {ask:.2f}")
             ctx = {"ratio": round(ratio, 1), "with_3s": round(vol, 1), "normal_second": round(base, 1),
                    "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name}
-            self._hunt_buy(h, spec, side, ask, reason, ctx)
+            self._buys.put((time.time(), h, spec, side, ask, reason, ctx))
             return
 
+    def _run_buys(self) -> None:
+        """The buy worker: hunt buys come off the queue one at a time, so a slow order never holds up the socket (or a sale on the sell worker)."""
+        while not self._stop.is_set():
+            try:
+                job = self._buys.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            self._buy_job(job)
+
+    def _drain_buys(self) -> None:
+        """Run every queued hunt buy now, on this thread (the worker does the same one at a time)."""
+        while True:
+            try:
+                job = self._buys.get_nowait()
+            except queue.Empty:
+                return
+            self._buy_job(job)
+
+    def _buy_job(self, job: tuple[float, Hunt, LaneSpec, str, float, str, dict[str, Any]]) -> None:
+        queued, h, spec, side, ask, reason, ctx = job
+        waited = time.time() - queued
+        if waited > HUNT_BUY_STALE:
+            log.info("burst hunt skipped, %s %s: the buy waited %.0fs in the queue, the price it was read at is gone", h.ticker, side, waited)
+            return
+        ctx["queued_s"] = round(waited, 2)
+        self._hunt_buy(h, spec, side, ask, reason, ctx)
+
     def _hunt_buy(self, h: Hunt, spec: LaneSpec, side: str, ask: float, reason: str, ctx: dict[str, Any]) -> None:
-        """Paper (or live) buy of the cheap side after a hunt burst. Never on the socket."""
+        """Paper (or live) buy of the cheap side after a hunt burst. Runs on the buy worker, never on the socket. A live order that does not fill is still logged as an observe bet, with why it missed in the reason and in context["miss"]."""
         from . import runner
         from .strategy import LongShot
 
@@ -518,9 +547,16 @@ class ProfitWatcher:
             if live:
                 shot = LongShot(tk, "", "", max(0.0, ask - 0.01), min(0.99, ask + 0.02), 0.0, close, max(0.0, (h.close_ts - time.time()) / 3600.0),
                                 lane=spec.name, series=series, category=_burst_category(tk), event_ticker=tk.rsplit("-", 1)[0], side=side)
-                placed = runner.place(s, self.client, store, shot, reason, float(max(1, int(stake / (ask + 0.02)))))
-                filled, cost, note = placed.filled, placed.cost, placed.note
+                try:
+                    placed = runner.place(s, self.client, store, shot, reason, float(max(1, int(stake / (ask + 0.02)))))
+                    filled, cost, note = placed.filled, placed.cost, placed.note
+                except KalshiRateLimited as exc:
+                    note = f"rate limited: {exc}"
                 log.info("burst hunt %s %s: %s", tk, side, note[:200])
+                ctx["live"] = True
+                if filled <= 0:
+                    ctx["miss"] = note[:200]  # a live order that bought nothing is logged as an observe bet at the quote read before it; this says it was not paper
+                    reason = f"{reason} (live order not filled: {note})"
             store.add_decision(ticker=tk, title="", bid=0.0, ask=ask, model_p=0.0, edge=0.0, action="bet",
                                mode="trade" if filled > 0 else "observe", lane=spec.name, category=_burst_category(tk), side=side,
                                contracts=filled if filled > 0 else count, stake_usd=round(cost, 4) if filled > 0 else stake,
@@ -1270,7 +1306,7 @@ class ProfitWatcher:
         if self._threads:
             return
         for fn, name in (
-            (self._run_refresh, "watch-refresh"), (self._run_sells, "watch-sell"), (self._run_timers, "watch-timer"),
+            (self._run_refresh, "watch-refresh"), (self._run_sells, "watch-sell"), (self._run_buys, "watch-buy"), (self._run_timers, "watch-timer"),
             (self._run_fills, "watch-fills"),
         ):
             th = threading.Thread(target=fn, name=name, daemon=True)
