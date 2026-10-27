@@ -103,6 +103,21 @@ class LaneSpec:
     burst_dollars_btc: float = 0.0  # the same for BTC: a bar of its own, or -1 to keep the older rule (it beat holding by 5.3c on BTC; the dollar bar did not)
     hunt_dollars: float = 0.0  # a burst_hunt lane's trigger in dollars: a 90c+ favorite and at least this many dollars bought AGAINST it (the cheap side's takers) in 3 s, in the last 120 s; buy the cheap side. 0 = the older multiple-of-normal burst
     hunt_dollars_btc: float = 0.0  # the same bar for BTC, whose volume is far larger (0 = the same bar as the others)
+    hunt_favorite: float = 0.90  # a burst_hunt dollar trigger buys the cheap side only when the OTHER side is at least this priced (a 90c+ favorite). Lower it together with price[1]: a 20c side is an 80c favorite
+    hunt_cheap: float = 0.50  # the cheap side is a side priced under this
+    hunt_window: float = 120.0  # a hunt acts when this many seconds or fewer remain...
+    hunt_min_left: float = 10.0  # ...and at least this many (an order sent later lands after the close)
+    hunt_crash: float = 0.10  # skip a side whose ask has fallen this much...
+    hunt_crash_seconds: float = 12.0  # ...within this many seconds: a 60c favorite falling to 14c on the print is the crash, not a turn
+    hunt_park_seconds: float = 20.0  # the ask must have been on screen this long...
+    hunt_park_high: float = 0.10  # ...never above max(this, price[1])...
+    hunt_park_span: float = 0.06  # ...and within this of the ask we would pay, so the price is parked, not still arriving
+    hunt_attempts: int = 3  # a hunt buys a market at most this many times when each try certainly bought nothing (buyer.SENT_NOTHING); every try re-checks the whole trigger
+    hunt_retry_seconds: float = 3.0  # seconds between those tries
+    hunt_stale_seconds: float = 10.0  # a queued buy that waited this long is dropped: its price was read at the burst and the ask has moved since
+    burst_favorite: float = 0.90  # the burst EXIT of a lane with settlement_flip and burst_dollars sells the held side only while its bid is at least this (a favorite)
+    burst_window: float = 120.0  # ...in the last this many seconds. Past that, holding still paid (burst_flip record: last 120 s sold +6 to +8c vs holding -5 to -8c; at 2-5 min holding was still ahead)
+    burst_min_left: float = 10.0  # ...and not in the last this many (a sale sent later lands after the close)
     require_prior_win: bool = False  # a burst_hunt lane buys a series for real only once one of its own bets on that series (live or paper) has already won; until then the series is logged as paper bets only, so it can earn its way in
     burst_hunt: bool = False  # watch this lane's 15-minute series in the last 120 s WITHOUT a position and buy a side in price[] when volume spikes (moonshot v2). Watcher-only; the main scan never sees it
     stop_from_seconds: float = 0.0  # the stop-loss acts only once this many seconds remain before the close (0 = whenever the hour rule allows). Replay of 6,299 favorites bets: holding through early dips until 3 minutes left helped commodity +1.2 and fx +1.1 points per dollar (within the error), cost crypto 1.1

@@ -935,7 +935,7 @@ def test_a_hunt_buy_that_waited_too_long_in_the_queue_is_dropped(tmp_path, monke
     w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
     placed = []
     monkeypatch.setattr(runner, "place", lambda *a, **k: placed.append(1))
-    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec, queued=time.time() - watcher.HUNT_BUY_STALE - 1.0))
+    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec, queued=time.time() - spec.hunt_stale_seconds - 1.0))
     w._drain_buys()
     assert placed == [] and store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 0
 
@@ -1129,13 +1129,13 @@ def test_a_hunt_stops_retrying_after_its_attempts_and_keeps_one_paper_row(tmp_pa
     w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
     calls = []
     monkeypatch.setattr(runner, "place", lambda *a, **k: (calls.append(1) or runner.Placed("bought NO 0/7 @ 0.0700")))
-    for _ in range(watcher.HUNT_ATTEMPTS):
+    for _ in range(spec.hunt_attempts):
         assert h.fired is False
         _hunt_job(w, h, spec)
         w._drain_buys()
-    assert len(calls) == watcher.HUNT_ATTEMPTS and h.fired is True  # spent
+    assert len(calls) == spec.hunt_attempts and h.fired is True  # spent
     rows = _two_rows(store)
-    assert len(rows) == 1 and rows[0]["mode"] == "observe" and json.loads(rows[0]["context"])["attempt"] == watcher.HUNT_ATTEMPTS
+    assert len(rows) == 1 and rows[0]["mode"] == "observe" and json.loads(rows[0]["context"])["attempt"] == spec.hunt_attempts
 
 
 def test_a_miss_that_may_have_filled_is_never_retried(tmp_path, monkeypatch):
@@ -1193,7 +1193,7 @@ def test_a_stale_dropped_buy_lets_the_market_fire_again(tmp_path, monkeypatch):
     w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
     monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("stale")))
     h.fired = True
-    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec, queued=time.time() - watcher.HUNT_BUY_STALE - 1.0))
+    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec, queued=time.time() - spec.hunt_stale_seconds - 1.0))
     w._drain_buys()
     assert h.fired is False and h.attempts == 0 and _two_rows(store) == []  # nothing was tried, so no attempt is used
 
@@ -1215,3 +1215,110 @@ def test_a_hunt_waits_out_its_retry_cooldown(tmp_path, monkeypatch):
     assert w._buys.empty()  # still cooling down
     w._on_hunt(h, spec, now + 4.0, {sec + 4: book[sec]}, sec + 4)
     assert w._buys.qsize() == 1  # the burst is still on and the cooldown is over
+
+
+def test_the_hunt_and_burst_settings_default_to_what_was_hard_coded():
+    from kalshi_moonshot.lanes import LaneSpec
+
+    assert (LaneSpec.hunt_favorite, LaneSpec.hunt_cheap, LaneSpec.hunt_window, LaneSpec.hunt_min_left) == (0.90, 0.50, 120.0, 10.0)
+    assert (LaneSpec.hunt_crash, LaneSpec.hunt_crash_seconds, LaneSpec.hunt_park_seconds, LaneSpec.hunt_park_high, LaneSpec.hunt_park_span) == (0.10, 12.0, 20.0, 0.10, 0.06)
+    assert (LaneSpec.hunt_attempts, LaneSpec.hunt_retry_seconds, LaneSpec.hunt_stale_seconds) == (3, 3.0, 10.0)
+    assert (LaneSpec.burst_favorite, LaneSpec.burst_window, LaneSpec.burst_min_left) == (0.90, 120.0, 10.0)
+
+
+def test_the_hunt_and_burst_settings_come_from_strategies_toml(tmp_path, monkeypatch):
+    from kalshi_moonshot import lanes
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.crypto_moonshot]\nestimator='ladder'\nprice=[0.02,0.20]\nhours=[0.0,0.04]\nburst_hunt=true\nhunt_dollars=400\n"
+        "hunt_favorite=0.80\nhunt_window=90\nhunt_attempts=1\nburst_favorite=0.85\n"
+    )
+    spec = lanes.lane_specs(config.load())["crypto_moonshot"]
+    assert (spec.hunt_favorite, spec.hunt_window, spec.hunt_attempts, spec.burst_favorite) == (0.80, 90, 1, 0.85)
+    assert spec.hunt_crash == 0.10  # the ones it does not name keep their defaults
+
+
+def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, **spec_changes):
+    """A hunt on a YES-priced market with $455 bought against the favorite in the last 3 s, and the cheap side sitting at its ask for 20 s. Returns what _on_hunt queued."""
+    import dataclasses
+
+    from kalshi_moonshot import lanes
+
+    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.20), hunt_dollars=400.0, sides=("no",), fixed_stake=0.5, max_open=0, **spec_changes)
+    now = 1_000_000.0
+    sec = int(now)
+    h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + left, yes_bid=yes_bid, yes_ask=yes_ask)
+    h.quotes.extend((now - 20.0 + i, yes_bid, yes_ask) for i in range(21))
+    w._on_hunt(h, spec, now, {sec: [0.0, 6000.0, 0.0, 455.0]}, sec)
+    return w._buys.qsize()
+
+
+def test_the_favorite_floor_is_the_lanes_setting(tmp_path, monkeypatch):
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86) == 0  # NO costs 15c: an 85c favorite, under the default 90c
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86, hunt_favorite=0.80) == 1  # the lane says 80c is enough
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, hunt_favorite=0.95) == 0  # and a stricter lane can ask for more
+
+
+def test_the_hunt_window_is_the_lanes_setting(tmp_path, monkeypatch):
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, left=90.0) == 1
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, left=90.0, hunt_window=60.0) == 0  # too early for this lane
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, left=20.0) == 1
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, left=20.0, hunt_min_left=30.0) == 0  # too late for this lane
+
+
+def test_the_cheap_side_ceiling_is_the_lanes_setting(tmp_path, monkeypatch):
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94) == 1  # NO costs 7c
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, hunt_cheap=0.05) == 0  # this lane calls only a side under 5c cheap
+
+
+def test_the_crash_and_parked_checks_are_the_lanes_settings(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import lanes
+
+    _w, s, _store, _close = _watcher(tmp_path, monkeypatch)
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded")
+    now = 1_000_000.0
+    eased = watcher.deque([(now - 5.0, 0.90, 0.91), (now - 4.0, 0.93, 0.94)])  # NO eased from 10c to 7c, 3c, within 5 s
+    assert watcher._hunt_crashing(eased, "no", now, 0.07)[0] is False  # the default needs 10c
+    assert watcher._hunt_crashing(eased, "no", now, 0.07, 0.02, 12.0)[0] is True  # a lane that calls 2c a crash
+    assert watcher._hunt_crashing(eased, "no", now, 0.07, 0.02, 3.0)[0] is False  # ...but only looks back 3 s: that quote is older
+    sat = watcher.deque((now - 20.0 + i, 0.93, 0.94) for i in range(21))
+    assert watcher._hunt_parked(sat, "no", now, 0.07) is True
+    assert watcher._hunt_parked(sat, "no", now, 0.07, spec.price[1], 40.0) is False  # a lane that wants 40 s on screen: only 20 s of quotes
+    high = watcher.deque((now - 20.0 + i, 0.80, 0.81) for i in range(21))  # NO sat at 19c for 20 s and is now 7c: it fell, so it is not parked at the price we would pay
+    assert watcher._hunt_parked(high, "no", now, 0.07, 0.30, 20.0, 0.30, 0.06) is False  # 19c is 12c over the 7c ask, past the default 6c span
+    assert watcher._hunt_parked(high, "no", now, 0.07, 0.30, 20.0, 0.30, 0.15) is True  # a lane that allows a 15c span accepts it
+
+
+def test_the_retry_limit_is_the_lanes_setting(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import runner
+
+    w, _store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("bought NO 0/7 @ 0.0700"))
+    _hunt_job(w, h, dataclasses.replace(spec, hunt_attempts=1))
+    w._drain_buys()
+    assert h.fired is True and h.attempts == 1  # this lane allows one try
+
+
+def test_the_burst_exit_favorite_and_window_are_the_lanes_settings(tmp_path, monkeypatch):
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    t.burst_bar = 400.0
+    t.cur_bid, t.cur_other_ask, t.side = 0.85, 0.16, "yes"  # an 85c favorite
+    now = close - 60
+    sec = int(now)
+    w._flow["KXBTC15M-1"] = {sec: [0.0, 6000.0, 0.0, 455.0]}
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.84})
+    assert w._jobs.empty()  # under the default 90c favorite: not sold
+    t.burst_favorite = 0.80
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.84})
+    assert w._jobs.get_nowait().why.startswith("burst: $4")
+    t.burst_logged = False
+    t.burst_window = 30.0  # this lane only sells in the last 30 s, and 60 remain
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.84})
+    assert w._jobs.empty()
