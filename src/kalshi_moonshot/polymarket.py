@@ -151,26 +151,43 @@ class PolymarketClient:
     def fill_event_info(self, tickers: list[str]) -> dict[str, tuple[str, str, bool]]:
         return self.event_info()
 
-    def markets_closing(self, min_ts: float, max_ts: float, pages: int = 20, page_size: int | None = None) -> Iterator[dict[str, Any]]:
-        """Open markets whose end falls in the window, already in Kalshi's shape. Others are skipped."""
+    def _market_pages(self, params: dict[str, Any], pages: int = 20, page_size: int | None = None) -> Iterator[dict[str, Any]]:
+        """Raw market rows from the list endpoint. `GET /v1/markets/{slug}` 404s for these slugs; the list does not."""
         size = page_size or self.page_size
         for page in range(pages):
             body = self._request("GET", "/v1/markets", base=self.gateway, params={
-                "active": True, "closed": False, "limit": size, "offset": page * size,
-                "endDateMin": _iso(min_ts), "endDateMax": _iso(max_ts),
+                **params, "limit": size, "offset": page * size,
             })
             markets = body.get("markets") or []
             if not markets:
                 return
-            for raw in markets:
-                row = market_to_kalshi(raw)
-                if row is None or row["status"] not in {"active", "open"}:
-                    continue
-                self._remember(row)
-                self.cache.put_market(row["ticker"], row)
-                yield row
+            yield from markets
             if len(markets) < size:
                 return
+
+    def _raw_by_slug(self, slug: str) -> dict[str, Any]:
+        for raw in self._market_pages({"slug": slug}, pages=1, page_size=1):
+            if (raw.get("slug") or raw.get("symbol") or "") == slug:
+                return raw
+        raise PolymarketError(f"no Polymarket market for {slug}")
+
+    def _keep(self, raw: dict[str, Any]) -> dict[str, Any] | None:
+        row = market_to_kalshi(raw)
+        if row is None:
+            return None
+        self._remember(row)
+        self.cache.put_market(row["ticker"], row)
+        return row
+
+    def markets_closing(self, min_ts: float, max_ts: float, pages: int = 20, page_size: int | None = None) -> Iterator[dict[str, Any]]:
+        """Open markets whose end falls in the window, already in Kalshi's shape. Others are skipped."""
+        for raw in self._market_pages({
+            "active": True, "closed": False, "endDateMin": _iso(min_ts), "endDateMax": _iso(max_ts),
+        }, pages=pages, page_size=page_size):
+            row = self._keep(raw)
+            if row is None or row["status"] not in {"active", "open"}:
+                continue
+            yield row
 
     def _listed_rows(self, min_ts: float, max_ts: float) -> list[dict[str, Any]]:
         """One listing of a close-time window, reused for a few seconds so a scope of eight series is one fetch."""
@@ -207,26 +224,42 @@ class PolymarketClient:
         if age > 0 and (hit := self.cache.get_market(ticker, age)) is not None:
             return hit
         slug = self._slug_of.get(ticker, "")
-        if not slug:
+        raws: list[dict[str, Any]] | Iterator[dict[str, Any]]
+        if slug:
+            try:
+                raws = [self._raw_by_slug(slug)]
+            except PolymarketError:
+                raws = []
+        else:
+            raws = []
+        if not raws:
             close = ticker_close(ticker)
             if close is None:
                 raise PolymarketError(f"no Polymarket slug for {ticker}")
-            ts = close.timestamp()
-            for row in self.markets_closing(ts - 90, ts + 90):
-                if row["ticker"] == ticker:
+            # An open window's endDate can sit after the window itself, so the close-time
+            # search misses it. The open listing, which the scope already uses, has it.
+            for row in self.series_markets(ticker.split("-")[0]):
+                if row.get("ticker") == ticker:
                     return row
-            raise PolymarketError(f"no Polymarket market for {ticker}")
-        body = self._request("GET", f"/v1/markets/{slug}", base=self.gateway)
-        raw = body.get("market") or body
-        row = market_to_kalshi(raw)
-        if row is None:
-            raise PolymarketError(f"{ticker} is not a series this bot trades")
-        self._remember(row)
-        self.cache.put_market(row["ticker"], row)
-        return row
+            ts = close.timestamp()
+            # Closed windows are included. The open-only listing drops a market the moment it settles,
+            # which is when a paper bet still needs its settlement price.
+            raws = self._market_pages({"endDateMin": _iso(ts - 90), "endDateMax": _iso(ts + 90)}, pages=4)
+        for raw in raws:
+            row = self._keep(raw)
+            if row is not None and row["ticker"] == ticker:
+                return row
+        raise PolymarketError(f"no Polymarket market for {ticker}")
 
     def orderbook(self, ticker: str) -> dict[str, Any]:
-        body = self._request("GET", f"/v1/markets/{self._slug(ticker)}/book", base=self.gateway)
+        """The book. An open 15-minute window 404s on the gateway and is served by the API host."""
+        path = f"/v1/markets/{self._slug(ticker)}/book"
+        try:
+            body = self._request("GET", path, base=self.gateway)
+        except PolymarketError as exc:
+            if "404" not in str(exc):
+                raise
+            body = self._request("GET", path, base=self.api)
         return book_to_kalshi(body)
 
     def balance(self) -> dict[str, Any]:

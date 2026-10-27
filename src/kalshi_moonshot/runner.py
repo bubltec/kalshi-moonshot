@@ -48,20 +48,24 @@ from .strategy import (
     LongShot,
     ask_trend,
     best_bid,
+    early_cash,
     edge,
     falling_reason,
     flip,
+    hard_loss,
     lane_candidates,
     lane_reject_reason,
     one_per_mutex_event,
     order_fee,
+    price_shape,
     rising,
+    scalp_hit,
     side_ask_notional,
     side_prob,
-    price_shape,
     stop_loss_hit,
     stop_wait,
     take_profit_hit,
+    watch_trend,
 )
 
 log = logging.getLogger("moonshot")
@@ -617,6 +621,23 @@ def dwell_seconds(s: Settings, shot: LongShot, floor: float, now: float | None =
     return now - since
 
 
+def high_since(s: Settings, ticker: str, side: str, since: float, now: float | None = None) -> float | None:
+    """The side's highest bid on the tape since `since`. None when the tape has nothing to say."""
+    from . import db as database
+
+    now = time.time() if now is None else now
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        rows = tape.execute(
+            "SELECT bid, ask FROM quotes WHERE ticker=? AND ts>=? AND ts<=? AND bid > 0 AND ask > 0",
+            (ticker, since, now),
+        ).fetchall()
+    except Exception:
+        return None
+    prices = [float(bid) if side == "yes" else 1.0 - float(ask) for bid, ask in rows]
+    return max(prices) if prices else None
+
+
 def below_line_seconds(s: Settings, ticker: str, side: str, line: float, now: float | None = None) -> float | None:
     """How many seconds the side's bid has been unbroken at or below `line`, from the tape's quotes of the last 15 minutes. None when the tape has nothing to say (the socket watcher measures the same run live; this is only its backstop agreeing with it)."""
     from . import db as database
@@ -638,9 +659,26 @@ def below_line_seconds(s: Settings, ticker: str, side: str, line: float, now: fl
     return now - since
 
 
-def _not_a_downtrend(s: Settings, ticker: str, side: str, bid: float, now: float) -> bool:
-    """True when the last 3 seconds are a spike or a hover, or the bid is still at 50c or above, so the stop holds."""
-    if bid >= 0.50:
+def _hovering(s: Settings, ticker: str, side: str, bid: float, now: float) -> bool:
+    """The last 3 seconds barely moved, and there is more than one print. The socket uses the same test."""
+    from . import db as database
+
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        rows = tape.execute(
+            "SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts",
+            (ticker, now, now - 3.0),
+        ).fetchall()
+    except Exception:
+        return False
+    points = [(float(ts), float(qbid) if side == "yes" else 1.0 - float(ask)) for ts, qbid, ask in rows]
+    recent = [b for ts, b in points if now - 3.0 <= ts <= now and b > 0]
+    return len(recent) >= 2 and price_shape(points, now, bid) == "hover"
+
+
+def _not_a_downtrend(s: Settings, ticker: str, side: str, bid: float, now: float, *, hold_at: float | None = 0.50) -> bool:
+    """True when the last 3 seconds are a spike or a hover, or the bid is still at `hold_at` or above, so the stop holds. hold_at None skips that price check."""
+    if hold_at is not None and bid >= hold_at:
         return True
     from . import db as database
 
@@ -757,7 +795,7 @@ def _top_up(s: Settings, client: KalshiClient, store: Store, shot: LongShot, cos
 
     Returns None when the order may go ahead, or the reason it should be skipped. Opt-in (SHARD_TOPUP_TARGET_USD > 0).
     """
-    if s.shard_topup_target <= 0:
+    if s.shard_topup_target <= 0 or not hasattr(client, "shard_balances"):
         return None
     try:
         idx = _EXCHANGE_OF.get(shot.series)
@@ -862,7 +900,7 @@ def place(
     topped = _top_up(s, client, store, shot, cost)
     if topped:
         return Placed(topped)
-    known = _EXCHANGE_OF.get(shot.series)
+    known = _EXCHANGE_OF.get(shot.series) if hasattr(client, "shard_balances") else None
     if known is not None and _UNFUNDED.get(known, 0.0) > time.time():
         return Placed(f"skipped: exchange {known} (where {shot.series} trades) has no cash; move funds there in the Kalshi app")
     if before_order:
@@ -1222,19 +1260,47 @@ def stop_loss_pass(
             bid = float(quoted.get("yes_bid_dollars") or 0.0)
         entry = float(row["ask"] or 0.0)
         why = None
+        fifteen = row["ticker"].split("-")[0].endswith("15M")
         if profit_on and spec is not None:
             why = take_profit_hit(entry, bid, spec.take_profit_x, spec.take_profit_at)
-        if not why and stop_on:
+            if not why and spec.scalp_at > 0:
+                high = high_since(s, row["ticker"], side, float(row["ts"] or 0.0), now.timestamp())
+                why = None if high is None else scalp_hit(bid, high, spec.scalp_at, spec.scalp_dip)
+        if not why and spec is not None and spec.cash_before_minute > 0 and fifteen and row["close_time"]:
+            with contextlib.suppress(TypeError, ValueError):
+                close = datetime.fromisoformat(row["close_time"]).timestamp()
+                opened = 15.0 - (close - float(row["ts"])) / 60.0
+                why = early_cash(
+                    entry, bid, opened, 15.0 - hours * 60.0,
+                    before=spec.cash_before_minute, leave=spec.cash_leave_minute,
+                    hovering=_hovering(s, row["ticker"], side, bid, now.timestamp()),
+                )
+        owned = False
+        left = hours * 3600.0
+        if not why and stop_on and spec is not None and left > 0:
+            if spec.watch_loss > 0 and entry > 0 and bid <= entry * (1.0 - spec.watch_loss):
+                owned = True
+                dipped = below_line_seconds(s, row["ticker"], side, entry * (1.0 - spec.watch_loss), now.timestamp())
+                why = hard_loss(entry, bid, 0.0 if dipped is None else dipped, spec.watch_loss, spec.watch_loss_seconds)
+            elif spec.watch_at > 0 and entry > spec.watch_at and bid <= spec.watch_at:
+                owned = True
+                trend = not _not_a_downtrend(s, row["ticker"], side, bid, now.timestamp(), hold_at=None)
+                dipped = below_line_seconds(s, row["ticker"], side, spec.watch_at, now.timestamp())
+                why = watch_trend(
+                    entry, bid, left, 0.0 if dipped is None else dipped, line=spec.watch_at,
+                    ride=spec.watch_ride_seconds, patient_left=spec.watch_patient_left, trend=trend,
+                )
+        if not why and stop_on and not owned:
             why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, stop_drop_for(spec, s))
         if not why:
             continue
         if why.startswith("take-profit") and store.working_rest_sell(row["ticker"], s.env) is not None:
             continue  # a resting sell is working this target: it fills with no taker fee, or not at all; crossing the book here would only pay the fee it exists to avoid
-        if why.startswith("stop-loss"):
+        if why.startswith("stop-loss") and "(watched)" not in why:
             # The same calculated wait the socket watcher applies (strategy.stop_wait), measured on the
             # tape: a backstop that sold mid-dip would rob the watcher of rebounds it is waiting for.
             # Last 2 minutes: sell only a downtrend that is already under 50c (strategy.price_shape).
-            fifteen = row["ticker"].split("-")[0].endswith("15M")
+            # A visit under 50c already waited, above.
             if fifteen and hours * 3600.0 <= 120 and _not_a_downtrend(s, row["ticker"], side, bid, now.timestamp()):
                 continue
             wait = stop_wait(spec.stop_confirm_seconds if spec is not None else 0.0, hours * 3600.0, fifteen)

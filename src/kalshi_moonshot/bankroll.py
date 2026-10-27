@@ -66,7 +66,7 @@ class Bankroll:
 
     def __init__(self, store: Store):
         self.store = store
-        self._cached: tuple[float, Balance] | None = None
+        self._cached: dict[int, tuple[float, Balance]] = {}
 
     def read(self, client: Any, s: Settings, live: bool = True) -> Balance:
         paper = paper_balance(self.store, s)
@@ -76,8 +76,9 @@ class Bankroll:
             paper = Balance(max(0.0, s.paper_bankroll_usd - sum(paper.open_by_lane.values())), s.paper_bankroll_usd, "paper", paper.open_by_lane)
         if not live or s.mode != "trade" or not getattr(client, "authed", False):
             return paper
-        if self._cached and time.time() - self._cached[0] < self.TTL:
-            return self._cached[1]
+        hit = self._cached.get(id(client))
+        if hit and time.time() - hit[0] < self.TTL:
+            return hit[1]
         resp = client.balance()
         cash = float(resp.get("balance_dollars") or (resp.get("balance") or 0) / 100.0)
         held = float(resp.get("portfolio_value") or 0) / 100.0
@@ -86,5 +87,5 @@ class Bankroll:
             lane = r["lane"] or "moonshot"
             real_open[lane] = real_open.get(lane, 0.0) + r["stake_usd"]
         real = Balance(cash, cash + held, "kalshi", real_open)
-        self._cached = (time.time(), real)
+        self._cached[id(client)] = (time.time(), real)
         return real

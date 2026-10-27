@@ -1,17 +1,31 @@
 """The stop's wait is calculated from the time left (strategy.stop_wait; fitted in scripts/stop_wait_study.py):
-none inside 2 minutes, where a sale is only a downtrend already under 50c (strategy.price_shape),
+none inside 2 minutes for a cheap contract, where a sale is only a downtrend already under 50c (strategy.price_shape),
 45 s at 3-7 minutes, up to 120 s at 2-3, and none past 7 (an early dip is repricing) — hourly markets
-keep the lane's cap past 7, and the cap always binds."""
+keep the lane's cap past 7, and the cap always binds.
+
+A lane that sets watch_at watches that price instead (strategy.watch_trend, strategy.hard_loss). The ride,
+the clock it is sized to, the hard loss, and the bounce are that lane's fields."""
 import time
 from datetime import UTC, datetime
 
 from kalshi_moonshot import config, watcher
 from kalshi_moonshot.store import Store
-from kalshi_moonshot.strategy import price_shape, stop_wait
+from kalshi_moonshot.strategy import (
+    early_cash,
+    hard_loss,
+    price_shape,
+    ride_for,
+    scalp_hit,
+    stop_wait,
+    watch_trend,
+)
 
 TOML = (
     "[lane.fav]\nestimator='ladder'\nprice=[0.5,0.9]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=5.0\n"
     "stop_loss=true\nstop_loss_at=0.45\nstop_confirm_seconds=60\nstop_guard=false\n"
+)
+WATCH = (
+    "watch_at=0.50\nwatch_patient_left=420\nwatch_ride_seconds=45\nwatch_loss=0.75\nwatch_loss_seconds=3\n"
 )
 
 
@@ -46,10 +60,10 @@ def quote(bid, ts, ticker="KXBTC15M-1"):
     return {"kind": "quote", "ticker": ticker, "bid": bid, "ask": bid + 0.01, "ts": ts}
 
 
-def armed(tmp_path, monkeypatch, seconds_left, ticker="KXBTC15M-1"):
+def armed(tmp_path, monkeypatch, seconds_left, ticker="KXBTC15M-1", watch=False):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     s = config.load()
-    (s.data_dir / "strategies.toml").write_text(TOML)
+    (s.data_dir / "strategies.toml").write_text(TOML + (WATCH if watch else ""))
     store = Store(s.db_path)
     base = time.time()
     close = datetime.fromtimestamp(base + seconds_left, UTC).isoformat()
@@ -76,7 +90,7 @@ def test_mid_market_the_stop_waits_45_seconds_for_a_rebound(tmp_path, monkeypatc
 def test_a_rebound_inside_the_wait_disarms_the_stop(tmp_path, monkeypatch):
     w, base = armed(tmp_path, monkeypatch, 240.0)
     w.on_event(quote(0.40, base))
-    w.on_event(quote(0.50, base + 20))  # back above the line: the wait restarts from zero
+    w.on_event(quote(0.55, base + 20))  # back above 50c: the wait restarts from zero
     w.on_event(quote(0.40, base + 30))
     w.on_event(quote(0.40, base + 60))  # only 30 s into the new dip
     assert w._jobs.empty()
@@ -91,23 +105,90 @@ def test_the_three_shapes():
     assert price_shape([(0, 0.40), (1, 0.42), (2, 0.39)], 2, 0.39) == "hover"
 
 
-def test_a_downtrend_under_50_sells_on_that_print(tmp_path, monkeypatch):
-    w, base = armed(tmp_path, monkeypatch, 20.0)
-    w.on_event(quote(0.57, base))  # still above the 0.44 line
-    w.on_event(quote(0.51, base + 1))
-    assert w._jobs.empty()
-    w.on_event(quote(0.25, base + 2))  # under 50c, two steps down, still at the low
-    assert not w._jobs.empty() and "stop-loss" in w._jobs.get_nowait()[2]
+def test_the_ride_scales_with_the_time_left_and_the_hard_loss_waits_its_bounce():
+    assert ride_for(500, 45, 420) == 45  # at least 7 minutes left: the full ride
+    assert ride_for(210, 45, 420) == 45 * 210 / 420  # half the clock, half the ride
+    assert ride_for(500, 0, 420) == 0
+    assert hard_loss(0.80, 0.20, 2, 0.75, 3) is None  # 75% down, still inside the 3s bounce
+    assert "watched" in hard_loss(0.80, 0.20, 3, 0.75, 3)
+    assert hard_loss(0.80, 0.30, 9, 0.75, 3) is None  # back above the hard line
+    assert watch_trend(0.80, 0.48, 500, 10, line=0.50, ride=45, patient_left=420, trend=True) is None
+    assert "trending away" in watch_trend(0.80, 0.48, 500, 45, line=0.50, ride=45, patient_left=420, trend=True)
+    assert "trending away" in watch_trend(0.80, 0.48, 2000, 45, line=0.50, ride=45, patient_left=420, trend=True)  # an hourly market uses the same ride
+    assert watch_trend(0.80, 0.48, 500, 90, line=0.50, ride=45, patient_left=420, trend=False) is None  # a hover is held
 
 
-def test_a_single_gap_and_a_hover_are_not_sold(tmp_path, monkeypatch):
-    w, base = armed(tmp_path, monkeypatch, 20.0)
-    w.on_event(quote(0.42, base))
-    w.on_event(quote(0.25, base + 1))  # one gap under 50c: a spike, not a trend
-    w.on_event(quote(0.40, base + 3))
-    w.on_event(quote(0.41, base + 4))  # hovering under the line
-    w.on_event(quote(0.39, base + 5))
+def test_a_hover_under_the_watch_is_held_and_a_trend_is_abandoned_after_the_ride(tmp_path, monkeypatch):
+    w, base = armed(tmp_path, monkeypatch, 500.0, watch=True)  # more than 7 minutes: the ride is the full 45s
+    w.on_event(quote(0.50, base))
+    w.on_event(quote(0.48, base + 44))  # still a hover, and inside the ride
     assert w._jobs.empty()
+    w.on_event(quote(0.46, base + 45))
+    w.on_event(quote(0.42, base + 46))
+    w.on_event(quote(0.38, base + 47))  # two steps down, still at the low, and the ride is over
+    assert not w._jobs.empty() and "trending away" in w._jobs.get_nowait()[2]
+
+
+def test_a_climb_through_70_rides_and_a_3c_dip_sells(tmp_path, monkeypatch):
+    assert scalp_hit(0.74, 0.74, 0.70, 0.03) is None  # at the high
+    assert scalp_hit(0.72, 0.74, 0.70, 0.03) is None  # 2c under
+    assert "scalp" in scalp_hit(0.71, 0.74, 0.70, 0.03)
+    assert scalp_hit(0.40, 0.0, 0.70, 0.03) is None  # 70c has not printed
+    w, base = armed(tmp_path, monkeypatch, 600.0)
+    t = w.targets[("KXBTC15M-1", "fav")]
+    t.entry, t.stop_drop, t.scalp_at, t.scalp_dip = 0.40, 0.0, 0.70, 0.03
+    w.on_event(quote(0.40, base))
+    w.on_event(quote(0.69, base + 1))
+    assert w._jobs.empty()
+    w.on_event(quote(0.70, base + 2))
+    w.on_event(quote(0.74, base + 3))  # the high lifts the line
+    w.on_event(quote(0.72, base + 4))
+    assert w._jobs.empty()
+    w.on_event(quote(0.71, base + 5))  # 3c under 0.74
+    assert not w._jobs.empty() and "scalp" in w._jobs.get_nowait()[2]
+
+
+def test_an_hourly_favorite_uses_the_same_watch(tmp_path, monkeypatch):
+    w, base = armed(tmp_path, monkeypatch, 2000.0, ticker="KXGOLDH-1", watch=True)
+    w.on_event(quote(0.50, base, "KXGOLDH-1"))
+    w.on_event(quote(0.48, base + 44, "KXGOLDH-1"))
+    assert w._jobs.empty()
+    w.on_event(quote(0.46, base + 45, "KXGOLDH-1"))
+    w.on_event(quote(0.42, base + 46, "KXGOLDH-1"))
+    w.on_event(quote(0.38, base + 47, "KXGOLDH-1"))
+    assert not w._jobs.empty() and "trending away" in w._jobs.get_nowait()[2]
+
+
+def test_the_hard_loss_sells_after_its_bounce_and_a_recovery_restarts_it(tmp_path, monkeypatch):
+    w, base = armed(tmp_path, monkeypatch, 500.0, watch=True)  # 0.80 paid, 75% leaves 0.20
+    w.on_event(quote(0.20, base))
+    w.on_event(quote(0.20, base + 2))
+    assert w._jobs.empty()
+    w.on_event(quote(0.30, base + 2.5))  # back above the hard line, still under the watch
+    assert w._jobs.empty()
+    w.on_event(quote(0.20, base + 4))
+    w.on_event(quote(0.20, base + 6))  # only 2s into the new visit
+    assert w._jobs.empty()
+    w.on_event(quote(0.19, base + 7))
+    assert not w._jobs.empty() and "watched" in w._jobs.get_nowait()[2]
+
+
+def test_a_buy_before_minute_7_cashes_a_profitable_hover():
+    assert early_cash(0.84, 0.90, 4.2, 6.0) is None  # ahead, but not hovering and not minute 9 yet
+    assert "hovering" in early_cash(0.84, 0.90, 4.2, 6.0, hovering=True)
+    assert early_cash(0.84, 0.90, 8.0, 9.0, hovering=True) is None  # bought at minute 8: held
+    assert "at minute 9" in early_cash(0.84, 0.88, 4.2, 9.0)  # still ahead when the window reaches minute 9
+    assert early_cash(0.84, 0.80, 4.2, 9.0) is None  # under the price paid: the stop decides, not the cash-out
+
+
+def test_an_early_buy_sells_a_hover_above_the_price_paid(tmp_path, monkeypatch):
+    w, base = armed(tmp_path, monkeypatch, 540.0)  # 9 minutes left: minute 6 of the window
+    t = w.targets[("KXBTC15M-1", "fav")]
+    t.opened_min, t.cash_before, t.cash_leave, t.close_ts = 4.2, 7.0, 9.0, base + 540
+    w.on_event(quote(0.90, base))  # one print is not a hover yet
+    assert w._jobs.empty()
+    w.on_event(quote(0.90, base + 1))  # sitting above the 0.80 paid
+    assert not w._jobs.empty() and "hovering" in w._jobs.get_nowait()[2]
 
 
 def test_past_seven_minutes_a_15m_dip_sells_at_once(tmp_path, monkeypatch):

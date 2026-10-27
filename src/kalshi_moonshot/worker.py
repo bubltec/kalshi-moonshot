@@ -104,6 +104,7 @@ class Worker:
         self._tape_db: Any = None  # a read connection to the tape, opened on first use, for the entry factors saved with decisions
         self.stopping = False
         self._poly_client: Any = None  # PolymarketClient, False once building it has failed, None until first use
+        self._poly_stream: Any = None
         self._last_cleanup = 0.0
         self.share = EstimateShare()  # one estimate per market, reused by every lane that asks soon after
         self._split = False  # True once run_forever has started the maintenance thread: the main loop then leaves those jobs to it
@@ -203,6 +204,7 @@ class Worker:
         w.follow = self.recorder.follow
         w.tape_factory = self._open_tape
         self.recorder.extra_tickers = lambda: self._held_for_watching() | w.manual_tickers()  # hourly, daily and hand-placed positions are streamed too
+        w.client_for = self._venue  # a Polymarket stop sells on Polymarket; every other lane keeps the Kalshi client
         w.start()
         self.watcher = w
         log.info("take-profit watcher on: selling from the live socket when a lane's level is hit")
@@ -219,6 +221,7 @@ class Worker:
             lambda store: build_estimators(self.est, store, self.searcher, self.quant),
         )
         self.recorder.listeners.append(w.on_event)
+        w.client_for = self._venue  # the same review, on the lane's own venue
         w.start()
         self.entry_watcher = w
         log.info("entry watcher on: reviewing a watched event as soon as its socket quote enters the lane's price band")
@@ -508,29 +511,45 @@ class Worker:
             return client
         return self.client
 
+    def _on_poly_quote(self, event: dict) -> None:
+        """A Polymarket price, handed to the same entry and exit listeners the Kalshi socket uses."""
+        if self.entry_watcher is not None:
+            self.entry_watcher.on_event(event)
+        if self.watcher is not None:
+            self.watcher.on_event(event)
+
     def _quote_polymarket(self) -> None:
-        """Feed Polymarket bids into the watcher so a paper commodity bet can be sold on the same rules. No order is sent."""
+        """Keep the Polymarket price socket on watched markets and open bets. Read HTTP only while that socket is down."""
         while not self.stopping:
             time.sleep(2.0)
-            watcher = self.watcher
             client = self._poly()
-            if watcher is None or client is None:
+            if client is None:
                 continue
+            if self._poly_stream is None:
+                from .polyws import PolymarketStream
+
+                self._poly_stream = PolymarketStream(client, self._on_poly_quote)
+                self._poly_stream.start()
             try:
-                rows = [r for r in Store(self.s.db_path, self.s.exclude_versions).open_bets() if (r["lane"] or "") == POLY_LANE]
+                store = Store(self.s.db_path, self.s.exclude_versions)
+                tickers = {r["ticker"] for r in store.open_bets() if (r["lane"] or "") == POLY_LANE}
+                tickers.update(store.watch(POLY_LANE))
             except Exception:
-                log.debug("polymarket paper quotes: could not read open bets", exc_info=True)
+                log.debug("polymarket quotes: could not read open bets", exc_info=True)
                 continue
-            for row in rows:
+            self._poly_stream.set_tickers(tickers)
+            if self._poly_stream.connected:
+                continue
+            for ticker in tickers:
                 try:
-                    m = client.market(row["ticker"])
+                    m = client.market(ticker)
                     bid, ask = float(m.get("yes_bid_dollars") or 0), float(m.get("yes_ask_dollars") or 0)
                 except Exception:
-                    log.debug("polymarket paper quote failed for %s", row["ticker"], exc_info=True)
+                    log.debug("polymarket quote failed for %s", ticker, exc_info=True)
                     continue
                 if ask <= 0:
                     continue
-                watcher.on_event({"kind": "quote", "ts": time.time(), "ticker": row["ticker"], "bid": bid, "ask": ask})
+                self._on_poly_quote({"kind": "quote", "ts": time.time(), "ticker": ticker, "bid": bid, "ask": ask})
 
     def do_evaluate(self, job: Job) -> str:
         """A live lane's evaluation always reads the real market (it is about to place an order); a paper lane's may use the shared cache."""

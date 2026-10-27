@@ -67,6 +67,29 @@ def test_a_quote_in_range_queues_one_review_and_a_repeat_does_not(tmp_path):
     assert w._jobs.qsize() == 1
 
 
+def test_a_quote_whose_ticker_is_the_event_queues_the_same_review(tmp_path):
+    s = socket_settings(tmp_path)
+    w = watcher(s, Client(live_event()))
+    event = "KXGOLD15M-26OCT271515"  # Polymarket's ticker is the event; Kalshi adds a strike suffix
+    w.watch = {("commodity", event): {"close": (datetime.now(UTC) + timedelta(minutes=5)).isoformat()}}
+    w.on_event(quote(0.85, 0.87, ticker=event))
+    assert w._jobs.qsize() == 1
+    assert w._jobs.get_nowait() == ("commodity", event)
+
+
+def test_a_review_uses_the_lanes_own_venue(tmp_path):
+    s = socket_settings(tmp_path)
+    store = Store(s.db_path)
+    kalshi, poly = Client(live_event()), Client(live_event())
+    runner.scope_lane(s, kalshi, store, lanes.spec_for(s, "commodity"))
+    kalshi.calls.clear()
+    w = watcher(s, kalshi)
+    w.client_for = lambda lane: poly
+    assert w.review("commodity", EVENT) == 1
+    assert kalshi.calls == []
+    assert poly.calls == [f"event:{EVENT}"]
+
+
 def test_a_quote_out_of_range_queues_nothing(tmp_path):
     s = socket_settings(tmp_path)
     w = watcher(s, Client(live_event()))

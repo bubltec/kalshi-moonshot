@@ -45,6 +45,11 @@ def event_of(ticker: str) -> str:
     return ticker.rsplit("-", 1)[0]
 
 
+def quote_keys(ticker: str) -> set[str]:
+    """Events this quote can belong to. A Kalshi ticker carries a strike suffix; a Polymarket ticker is the event."""
+    return {event_of(ticker), ticker}
+
+
 def in_band(spec: LaneSpec, bid: float, ask: float) -> bool:
     """Whether a YES-book quote puts a side the lane may buy inside its price band."""
     lo, hi = spec.price
@@ -72,6 +77,7 @@ class EntryWatcher:
     ):
         self.get_settings = get_settings
         self.client = client
+        self.client_for: Callable[[str], Any] | None = None  # the lane's venue; None keeps self.client for every lane
         self.store_factory = store_factory
         self.estimators = estimators
         self.watch: dict[tuple[str, str], dict[str, Any]] = {}  # (lane, event) -> the scoping pass's info for it
@@ -90,15 +96,15 @@ class EntryWatcher:
     def on_event(self, e: dict[str, Any]) -> None:
         if e.get("kind") != "quote" or e.get("bid") is None or e.get("ask") is None:
             return
-        event = event_of(e["ticker"])
+        keys = quote_keys(str(e["ticker"]))
         s = self.get_settings()
         specs = lane_specs(s)
         now = datetime.fromtimestamp(float(e["ts"]), UTC)
         with self._lock:
-            hits = [(lane, info) for (lane, ev), info in self.watch.items() if ev == event]
+            hits = [(lane, ev, info) for (lane, ev), info in self.watch.items() if ev in keys]
         hist = self._hist.setdefault(e["ticker"], deque(maxlen=400))
         hist.append((float(e["ts"]), float(e["bid"]), float(e["ask"])))
-        for lane, info in hits:
+        for lane, event, info in hits:
             spec = specs.get(lane)
             if spec is None or not spec.enabled or not spec.entry_socket:
                 continue
@@ -162,7 +168,7 @@ class EntryWatcher:
             return
         wide = replace(spec, price=(max(spec.price[0] - spec.entry_approach, 0.01), spec.price[1]))
         store = self.store_factory()
-        for shot in runner.review_lane(s, self.client, store, wide, self.estimators(store), only={event_of(ticker)}):
+        for shot in runner.review_lane(s, self._book(lane), store, wide, self.estimators(store), only=quote_keys(ticker)):
             if shot.ticker == ticker and shot.side == side:
                 with self._lock:
                     if key in self._armed:
@@ -204,6 +210,12 @@ class EntryWatcher:
                 self._armed.pop(job[1], None)
 
     # ---- the review thread ----
+    def _book(self, lane: str) -> Any:
+        """The venue this lane trades. One review for every provider."""
+        if self.client_for is not None:
+            return self.client_for(lane)
+        return self.client
+
     def refresh(self) -> None:
         """Reload which events each entry_socket lane is watching."""
         s = self.get_settings()
@@ -225,7 +237,7 @@ class EntryWatcher:
         if spec is None or not spec.enabled or not spec.entry_socket:
             return 0
         store = self.store_factory()
-        shots = runner.review_lane(s, self.client, store, spec, self.estimators(store), only={event})
+        shots = runner.review_lane(s, self._book(lane), store, spec, self.estimators(store), only={event})
         jobs = Jobs(store)
         every = (spec.review_minutes or 2.0) * 60
         queued = 0

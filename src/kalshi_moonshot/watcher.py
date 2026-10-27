@@ -31,7 +31,19 @@ from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series
 from .lanes import LaneSpec, enabled_lanes, lane_specs, stop_drop_for, takes_profit
 from .store import Store
-from .strategy import fee_per_contract, flip, price_shape, spike_hit, stop_wait, take_profit_hit, trail_hit
+from .strategy import (
+    early_cash,
+    fee_per_contract,
+    flip,
+    hard_loss,
+    price_shape,
+    scalp_hit,
+    spike_hit,
+    stop_wait,
+    take_profit_hit,
+    trail_hit,
+    watch_trend,
+)
 
 log = logging.getLogger("moonshot")
 
@@ -91,6 +103,7 @@ class Target:
     low: float = 1.0  # lowest bid seen since this position was opened
     stop_confirm: float = 0.0  # the bid must stay past the stop line this many seconds before the stop sells (0 = at once)
     stop_since: float | None = None  # when the bid first fell past the stop line and has stayed there
+    loss_since: float | None = None  # when the bid first reached the hard-loss line and has stayed there
     stop_ref: float = 0.0  # price the stop is measured from when it is not the price paid (a hand-placed buy: the bid it could be sold at)
     stop_from: float = 0.0  # ... but only once this unix time is reached (an hourly market is only stopped in its last STOP_LOSS_HOURS)
     trail_progress: float = 0.0  # >0: the crash exit arms once the bid has covered this share of the way from the price paid to $1.00, instead of trail_activate
@@ -100,6 +113,18 @@ class Target:
     settle_flip: bool = False  # after that sale, log a paper bet on the other side (never an order)
     strike: float = 0.0  # the market's target
     close_ts: float = 0.0
+    opened_min: float = 1e9  # minutes into the window when this buy was placed
+    cash_before: float = 0.0  # early_cash: a buy opened before this minute is sold early (0 = off)
+    cash_leave: float = 0.0
+    cash_at: float = 0.0
+    watch_at: float = 0.0  # watch_trend: start watching once the bid prints this (0 = off)
+    watch_ride: float = 0.0  # the ride at watch_patient seconds left
+    watch_patient: float = 420.0
+    watch_loss: float = 0.0  # hard_loss fraction of the price paid (0 = off)
+    watch_loss_seconds: float = 3.0
+    scalp_at: float = 0.0  # scalp_hit: follow the high once the bid prints this (0 = off)
+    scalp_dip: float = 0.03
+    scalp_high: float = 0.0  # the highest bid since the arm printed
     index_id: str = ""  # the settlement index of this market
     settle_checked: float = 0.0  # the guard looks at most once a second
     cur_bid: float = 0.0  # the latest bid and the opposite side's ask, from the socket
@@ -257,6 +282,7 @@ class ProfitWatcher:
         self.hold_value = hold_value  # (open bet, store) -> the model's calibrated chance this position pays, or None if unknown
         self.get_settings = get_settings
         self.client = client
+        self.client_for: Callable[[str], Any] | None = None  # lane -> the venue that holds it; Kalshi when unset
         self.manual = manual.ManualPositions(client)
         self.store_factory = store_factory
         self.targets: dict[tuple[str, str], Target] = {}  # keyed by (ticker, lane)
@@ -273,6 +299,12 @@ class ProfitWatcher:
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self.sold: list[str] = []  # log lines, newest last (also logged)
+
+    def _book(self, lane: str) -> Any:
+        """The venue for this lane. A Polymarket position is sold there, not on the Kalshi client."""
+        if self.client_for is not None:
+            return self.client_for(lane)
+        return self.client
 
     # ---- socket side: must be fast and never raise ----
     def on_event(self, e: dict[str, Any]) -> None:
@@ -303,7 +335,12 @@ class ProfitWatcher:
             if t.lane == manual.LANE and t.stop_confirm and not t.stop_ref and bid > 0:
                 t.stop_ref = min(t.entry, bid)  # hand-placed: measure the stop from what it could be sold for, not the ask paid (the spread is not a loss)
             self._track_peak(t, bid, now)
-            why = take_profit_hit(t.entry, bid, t.x, t.at) or spike_hit(
+            minute_now = (15.0 - (t.close_ts - now) / 60.0) if t.close_ts > 0 else None
+            recent = [b for ts, b in t.history if now - 3.0 <= ts <= now and b > 0]
+            hovering = len(recent) >= 2 and price_shape(list(t.history), now, bid) == "hover"
+            why = take_profit_hit(t.entry, bid, t.x, t.at) or self._scalp(t, bid) or early_cash(
+                t.entry, bid, t.opened_min, minute_now, before=t.cash_before, leave=t.cash_leave, hovering=hovering,
+            ) or spike_hit(
                 list(t.history), now, t.entry, t.spike_cents, t.spike_seconds, t.spike_min_gain
             )
             key = (t.ticker, t.lane)
@@ -491,14 +528,15 @@ class ProfitWatcher:
             s = self.get_settings()
             store = self.store_factory()
             ask = round(t.cur_other_ask, 4)
-            live = s.is_live(t.lane, series) and getattr(self.client, "authed", False)
+            book = self._book(t.lane)
+            live = s.is_live(t.lane, series) and getattr(book, "authed", False)
             filled, cost, note = 0.0, 0.0, "paper: the holding lane is not live"
             if live:
                 count = max(1, int(t.burst_buy / (ask + 0.02)))  # whole contracts that fit the stake with the allowance
                 close = datetime.fromtimestamp(t.close_ts, UTC).isoformat()
                 shot = LongShot(tk, "", "", max(0.0, ask - 0.01), min(0.99, ask + 0.02), 0.0, close, max(0.0, (t.close_ts - time.time()) / 3600.0), lane="burst_flip", series=series,
                                 category=_burst_category(tk), event_ticker=tk.rsplit("-", 1)[0], side=other)
-                placed = runner.place(s, self.client, store, shot, reason, float(count))
+                placed = runner.place(s, book, store, shot, reason, float(count))
                 filled, cost, note = placed.filled, placed.cost, placed.note
                 log.info("burst buy %s %s: %s", tk, other, note[:200])
             store.add_decision(ticker=tk, title="", bid=0.0, ask=ask, model_p=0.0, edge=0.0, action="bet", mode="trade" if filled > 0 else "observe", lane="burst_flip", category=_burst_category(tk), side=other,
@@ -690,13 +728,42 @@ class ProfitWatcher:
         t.last_bid, t.last_ts = bid, now
         t.below_since = self._since(t, bid, now)
 
+    def _scalp(self, t: Target, bid: float) -> str | None:
+        """Armed at scalp_at. A new high rides; a dip of scalp_dip from that high sells on this print."""
+        if t.scalp_at <= 0 or t.scalp_dip <= 0 or bid <= 0:
+            return None
+        if bid + 1e-9 >= t.scalp_at:
+            t.scalp_high = max(t.scalp_high, bid)
+        return scalp_hit(bid, t.scalp_high, t.scalp_at, t.scalp_dip)
+
     def _stop_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The stop-loss, on the socket: the bid is `stop_drop` under the price paid (and, for an hourly market, the last hour has begun)."""
-        if t.stop_drop <= 0 or bid <= 0 or t.entry <= 0 or now < t.stop_from:
+        if t.stop_drop <= 0 or bid <= 0 or t.entry <= 0:
             return None
         if time.time() < t.retry_after:
             return None
         ref = t.stop_ref or t.entry
+        left = t.close_ts - now if t.close_ts else None
+        open_market = left is not None and left > 0
+        if open_market and t.watch_loss > 0 and ref > 0 and bid <= ref * (1.0 - t.watch_loss):
+            if t.loss_since is None:
+                t.loss_since = now
+            hit = hard_loss(ref, bid, now - t.loss_since, t.watch_loss, t.watch_loss_seconds)
+            return f"{hit} (socket)" if hit else None
+        t.loss_since = None
+        if open_market and t.watch_at > 0 and ref > t.watch_at and bid <= t.watch_at:
+            if t.stop_since is None:
+                t.stop_since = now
+            trend = price_shape(list(t.history), now, bid) == "trend"
+            hit = watch_trend(
+                ref, bid, left, now - t.stop_since, line=t.watch_at,
+                ride=t.watch_ride, patient_left=t.watch_patient, trend=trend,
+            )
+            return f"{hit} (socket)" if hit else None  # this visit is being watched: a hover or a spike is not the 45% line's sale
+        if t.watch_at > 0 and bid > t.watch_at:
+            t.stop_since = None
+        if now < t.stop_from:
+            return None
         if bid > ref * (1 - t.stop_drop) + 1e-9:
             t.stop_since = None
             return None
@@ -704,10 +771,12 @@ class ProfitWatcher:
             t.stop_since = now
         # Last 2 minutes: the loss is under 50c, and the last 3 seconds say which kind. A trend sells
         # on this print. A spike or a hover does not, and there is no extra wait.
-        if t.close_ts and t.ticker.split("-")[0].endswith("15M") and 0 < t.close_ts - now <= 120:
-            if bid >= 0.50 or price_shape(list(t.history), now, bid) != "trend":
-                t.stop_since = None
-                return None
+        if (
+            t.close_ts and t.ticker.split("-")[0].endswith("15M") and 0 < t.close_ts - now <= 120
+            and (bid >= 0.50 or price_shape(list(t.history), now, bid) != "trend")
+        ):
+            t.stop_since = None
+            return None
         # How long this dip must last depends on the clock (strategy.stop_wait): none inside 2 minutes,
         # none past 7 on a 15-minute market, up to the lane's cap at 2-5 minutes, where dips rebound.
         wait = stop_wait(t.stop_confirm, t.close_ts - now if t.close_ts else None, t.ticker.split("-")[0].endswith("15M"))
@@ -803,6 +872,18 @@ class ProfitWatcher:
             fresh[(ticker, lane)].trail_progress = spec.trail_progress if spec.trail_progress is not None else s.crash_progress
             fresh[(ticker, lane)].trail_giveback = spec.trail_giveback if spec.trail_giveback is not None else s.crash_giveback
             fresh[(ticker, lane)].spot_sigma = spec.trail_spot_sigma if spec.trail_spot_sigma is not None else s.crash_spot_sigma
+            held = fresh[(ticker, lane)]
+            held.cash_before, held.cash_leave, held.cash_at = spec.cash_before_minute, spec.cash_leave_minute, spec.cash_at
+            held.watch_at = spec.watch_at
+            held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
+            held.watch_loss, held.watch_loss_seconds = spec.watch_loss, spec.watch_loss_seconds
+            held.scalp_at, held.scalp_dip = spec.scalp_at, spec.scalp_dip
+            if row["close_time"] and str(row["ticker"]).split("-")[0].endswith("15M"):
+                with contextlib.suppress(TypeError, ValueError):
+                    close = datetime.fromisoformat(row["close_time"]).timestamp()
+                    held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0
+                    if held.close_ts <= 0:
+                        held.close_ts = close
             if stop_on:
                 fresh[(ticker, lane)].stop_drop = stop_drop_for(spec, s)
                 fresh[(ticker, lane)].stop_confirm = spec.stop_confirm_seconds
@@ -1014,7 +1095,8 @@ class ProfitWatcher:
                 return
             if why.startswith("take-profit") and store.working_rest_sell(ticker, s.env) is not None:
                 return  # a resting sell is working this target (runner._rest_take_profit): it fills with no taker fee, or its own life ends at the close and this rule takes over again; crossing the book here would only pay the fee it exists to avoid
-            m = self.client.market(ticker)
+            book = self._book(lane)
+            m = book.market(ticker)
             if m.get("result") in {"yes", "no"}:
                 return
             side = row["side"] or "yes"
@@ -1066,7 +1148,7 @@ class ProfitWatcher:
             if t is not None and t.last_ts and time.time() - t.last_ts < 5.0 and t.last_bid > 0:
                 bid = min(bid, t.last_bid)
             slip = runner.EXIT_SLIP + (0.02 if "fast exit" in why else 0.0) + (0.03 if why.startswith("stop-loss") else 0.0)  # a collapse needs the surest fill
-            line = runner.exit_position(s, self.client, store, row, bid, why + " [socket]", slip=slip)
+            line = runner.exit_position(s, book, store, row, bid, why + " [socket]", slip=slip)
             log.info("watcher: %s", line)
             self.sold.append(line)
             if why.startswith("burst") and t is not None and line.startswith("partial exit"):

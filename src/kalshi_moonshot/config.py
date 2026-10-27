@@ -244,8 +244,9 @@ class Settings:
         """
         from .lanes import POLY_LANE
 
-        if lane == POLY_LANE:
-            return False  # Polymarket commodities are paper, whatever LIVE_LANES says
+        # Polymarket stays paper unless this lane is named. An empty LIVE_LANES means every Kalshi lane, not this one.
+        if lane == POLY_LANE and (self.live_lanes is None or lane not in self.live_lanes):
+            return False
         if series.endswith("15M") and not self.fast_live:
             return False
         if series and not self._series_may_trade_live(series):

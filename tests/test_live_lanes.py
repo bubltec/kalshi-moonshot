@@ -32,7 +32,8 @@ def test_is_live(tmp_path):
     assert not settings(tmp_path, mode="observe", live_lanes=frozenset({"commodity"})).is_live("commodity")
     assert not settings(tmp_path, live_lanes=frozenset()).is_live("commodity")
     assert not settings(tmp_path, live_lanes=None).is_live("commodity_poly")
-    assert not settings(tmp_path, live_lanes=frozenset({"commodity_poly"})).is_live("commodity_poly", "KXGOLD15M")
+    assert not settings(tmp_path, live_lanes=frozenset({"commodity_poly"}), fast_live=False).is_live("commodity_poly", "KXGOLD15M")
+    assert settings(tmp_path, live_lanes=frozenset({"commodity_poly"}), fast_live=True).is_live("commodity_poly", "KXGOLD15M")
 
 
 class Client:

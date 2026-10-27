@@ -270,4 +270,5 @@ def balance_to_kalshi(raw: dict[str, Any]) -> dict[str, Any]:
     power = usd.get("buyingPower")
     if power is None:
         power = usd.get("currentBalance") or 0
-    return {"balance_breakdown": [{"balance": f"{float(power):.4f}", "exchange_index": 0}]}
+    cash = f"{float(power):.4f}"
+    return {"balance_dollars": cash, "balance_breakdown": [{"balance": cash, "exchange_index": 0}]}

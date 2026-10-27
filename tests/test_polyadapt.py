@@ -84,6 +84,86 @@ def test_the_ticker_stamp_is_the_close_in_new_york():
     assert close.isoformat().startswith("2026-10-27T08:45:00")
 
 
+def test_a_socket_price_is_a_quote_on_our_ticker():
+    from kalshi_moonshot.polyws import quote_from
+
+    msg = {"marketDataLite": {
+        "marketSlug": "cpausp-gold-updown-15m",
+        "bestBid": {"value": "0.60"},
+        "bestAsk": {"value": "0.61"},
+    }}
+    quote = quote_from(msg, {"cpausp-gold-updown-15m": "KXGOLD15M-26OCT271445"}, now=10.0)
+    assert quote is not None
+    assert quote["ticker"] == "KXGOLD15M-26OCT271445"
+    assert quote["bid"] == pytest.approx(0.60)
+    assert quote["ask"] == pytest.approx(0.61)
+    assert quote_from(msg, {}, now=10.0) is None
+
+
+def test_a_remembered_slug_is_read_from_the_list():
+    raw = _gold()
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["slug"] = request.url.params.get("slug")
+        return httpx.Response(200, json={"markets": [raw]})
+
+    client = PolymarketClient(gateway="https://gateway.test", api="https://api.test")
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+    client._slug_of["KXGOLD15M-26OCT270845"] = raw["slug"]
+    row = client.market("KXGOLD15M-26OCT270845")
+    assert seen["path"] == "/v1/markets"
+    assert seen["slug"] == raw["slug"]
+    assert row["yes_bid_dollars"] == "0.6400"
+
+
+def test_an_open_window_is_found_from_the_active_listing():
+    raw = _gold()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("active") == "true":
+            return httpx.Response(200, json={"markets": [raw]})
+        return httpx.Response(200, json={"markets": []})
+
+    client = PolymarketClient(gateway="https://gateway.test", api="https://api.test")
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+    row = client.market("KXGOLD15M-26OCT270845")
+    assert row["polymarket_slug"] == raw["slug"]
+    assert row["yes_bid_dollars"] == "0.6400"
+
+
+def test_a_settled_window_is_found_without_a_remembered_slug():
+    raw = _gold()
+    raw["status"] = "MARKET_STATUS_RESOLVED"
+    raw["closed"] = True
+    raw["assetPriceTerms"] = {**raw["assetPriceTerms"], "settlementPrice": {"value": "4010.00", "currency": "USD"}}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"markets": [raw]})
+
+    client = PolymarketClient(gateway="https://gateway.test", api="https://api.test")
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+    row = client.market("KXGOLD15M-26OCT270845")
+    assert row["result"] == "no"
+    assert row["status"] == "settled"
+
+
+def test_an_open_book_falls_back_to_the_api_host():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host.startswith("gateway"):
+            return httpx.Response(404, text="not found")
+        return httpx.Response(200, json={"marketData": {
+            "bids": [{"px": {"value": "0.58"}, "qty": "3"}],
+            "offers": [{"px": {"value": "0.60"}, "qty": "2"}],
+        }})
+
+    client = PolymarketClient(gateway="https://gateway.test", api="https://api.test")
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+    client._slug_of["KXGOLD15M-26OCT270845"] = "gold-slug"
+    assert best_bid(client.orderbook("KXGOLD15M-26OCT270845"), "yes") == pytest.approx(0.58)
+
+
 def test_a_restart_finds_the_slug_from_the_ticker():
     raw = _gold()
 
@@ -141,6 +221,7 @@ def test_positions_and_balance_match_the_kalshi_readers():
     assert by_ticker["KXGOLD15M-26OCT270845"].count == pytest.approx(3.37)
     assert by_ticker["btc-slug"].side == "no"
     bal = balance_to_kalshi({"balances": [{"currency": "USD", "buyingPower": 42.5, "currentBalance": 50}]})
+    assert float(bal["balance_dollars"]) == pytest.approx(42.5)
     assert float(bal["balance_breakdown"][0]["balance"]) == pytest.approx(42.5)
     assert bal["balance_breakdown"][0]["exchange_index"] == 0
 

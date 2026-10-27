@@ -330,6 +330,94 @@ def stop_wait(cap: float, seconds_left: float | None, fifteen_min: bool = False)
     return 0.0  # last 2 minutes: no timer. price_shape says whether the bid under 50c is a trend
 
 
+EARLY_BUY_MINUTE = 7.0
+
+
+# A favorite bought before minute 7 is not held to settlement. While the bid is above the price paid
+# and the last 3 seconds are a hover, it is sold. It is also sold at minute 9 if it is still ahead.
+CASH_BEFORE_MINUTE = EARLY_BUY_MINUTE
+CASH_LEAVE_MINUTE = 9.0
+
+
+def _early(opened_min: float, before: float) -> bool:
+    return before > 0 and 0 <= opened_min < before
+
+
+def early_cash(
+    entry: float, bid: float, opened_min: float, minute_now: float | None,
+    *, before: float = CASH_BEFORE_MINUTE, leave: float = CASH_LEAVE_MINUTE, hovering: bool = False,
+) -> str | None:
+    """Why a buy opened before minute 7 should be sold now, or None. A later buy holds."""
+    if not _early(opened_min, before) or entry <= 0 or bid <= entry:
+        return None
+    if hovering:
+        return f"cash-out: bid {bid:.2f} is hovering above the {entry:.2f} paid (bought {opened_min:.0f} min in)"
+    if minute_now is not None and minute_now >= leave:
+        return f"cash-out: bought {opened_min:.0f} min in, selling {bid:.2f} at minute {minute_now:.0f} (paid {entry:.2f})"
+    return None
+
+
+def ride_for(seconds_left: float | None, ride: float, patient_left: float) -> float:
+    """How long a visit under the watch line may last before a downtrend is sold.
+
+    `ride` is that wait when at least `patient_left` seconds remain. Less time left shortens it in
+    proportion, so both numbers are the lane's (strategies.toml) and not a fixed clock.
+    """
+    if ride <= 0 or seconds_left is None or seconds_left <= 0:
+        return 0.0
+    if patient_left <= 0 or seconds_left >= patient_left:
+        return ride
+    return ride * seconds_left / patient_left
+
+
+def hard_loss(entry: float, bid: float, under_for: float, loss: float, bounce: float) -> str | None:
+    """Sell once the bid has given back `loss` of the price paid and stayed there for `bounce` seconds.
+
+    A print back above that line restarts `under_for`. None while the bounce is still open, or when
+    `loss` is 0. Both numbers come from the lane.
+    """
+    if loss <= 0 or entry <= 0 or bid <= 0 or bid > entry * (1.0 - loss):
+        return None
+    if under_for < bounce:
+        return None
+    held = f" for {under_for:.0f}s" if bounce else ""
+    return f"stop-loss: bid {bid:.2f} is {1 - bid / entry:.0%} under the {entry:.2f} paid{held} (watched)"
+
+
+def scalp_hit(bid: float, high: float, arm: float, dip: float) -> str | None:
+    """Sell once the bid has printed `arm` and then fallen `dip` dollars from the high since.
+
+    A higher print raises that high, so a climb keeps riding. None until the arm has printed, or while
+    the bid is still within `dip` of the high. `arm` and `dip` come from the lane.
+    """
+    if arm <= 0 or dip <= 0 or bid <= 0 or high < arm - 1e-9:
+        return None
+    if bid > high - dip + 1e-9:
+        return None
+    return f"scalp: bid {bid:.2f} is {high - bid:.2f} under the {high:.2f} high since {arm:.2f}"
+
+
+def watch_trend(
+    entry: float, bid: float, seconds_left: float | None, under_for: float,
+    *, line: float, ride: float, patient_left: float, trend: bool,
+) -> str | None:
+    """Sell a favorite whose bid has stayed at or under `line` and is trending away.
+
+    A hover or a spike is not a sale: the visit is only being watched. `under_for` is how long this
+    visit has already lasted. The wait is ride_for. None while that wait is still running.
+    A lane leaves this off by not setting `line` (the moonshot lanes).
+    """
+    if line <= 0 or seconds_left is None or seconds_left <= 0:
+        return None
+    if entry <= line or bid <= 0 or bid > line or not trend:
+        return None
+    wait = ride_for(seconds_left, ride, patient_left)
+    if under_for < wait:
+        return None
+    held = f" for {under_for:.0f}s" if wait else ""
+    return f"stop-loss: bid {bid:.2f} trending away under {line:.2f}{held} with {seconds_left:.0f}s left (paid {entry:.2f}) (watched)"
+
+
 def price_shape(points: list[tuple[float, float]], now: float, bid: float) -> str:
     """What the last 3 seconds of bids are: 'trend', 'spike', or 'hover'.
 
