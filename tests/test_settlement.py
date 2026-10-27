@@ -964,15 +964,17 @@ def test_a_burst_on_a_held_favorite_queues_the_flip_buy_and_the_worker_places_it
     assert row["mode"] == "trade" and row["side"] == "no"
 
 
-def test_a_hunt_lane_at_its_max_open_buys_nothing_more(tmp_path, monkeypatch):
+def test_a_hunt_lane_at_its_max_open_buys_nothing_more(tmp_path, monkeypatch, caplog):
     import dataclasses
 
     from kalshi_moonshot import runner
 
     w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)  # the fixture already holds one open bet in this lane
     monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no order past max_open")))
-    w._hunt_buy(h, dataclasses.replace(spec, max_open=1), "no", 0.05, "burst hunt: test", {})
+    with caplog.at_level("INFO", logger="moonshot"):
+        w._hunt_buy(h, dataclasses.replace(spec, max_open=1), "no", 0.05, "burst hunt: test", {})
     assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 0
+    assert "already holds 1 of its 1 open bets" in caplog.text  # a skipped trigger is not silent
     monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("bought", 5.0, 0.4))
     w._hunt_buy(h, dataclasses.replace(spec, max_open=2), "no", 0.05, "burst hunt: test", {})  # one slot left
     assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 1
@@ -1015,7 +1017,7 @@ def test_a_paper_hunt_is_sized_by_the_stake_at_the_ask_and_defaults_to_two_dolla
     w._hunt_buy(h, dataclasses.replace(spec, fixed_stake=0.0), "no", 0.05, "burst hunt: test", {})
     row = store.db.execute("SELECT mode, contracts, stake_usd, ask, lane, close_time FROM decisions WHERE ticker='KXETH15M-1'").fetchone()
     assert row["mode"] == "observe" and row["lane"] == "guarded" and row["ask"] == pytest.approx(0.05)
-    assert row["stake_usd"] == pytest.approx(2.0) and row["contracts"] == pytest.approx(40.0)  # no fixed stake: $2, in fractional contracts
+    assert row["contracts"] == pytest.approx(28.0) and row["stake_usd"] == pytest.approx(1.4)  # no fixed stake: $2 over the 7c limit is 28 whole contracts, the same count a live order asks for, paid at the ask
     assert len(row["close_time"]) == 20 and row["close_time"].endswith("Z")
 
 
@@ -1065,3 +1067,26 @@ def test_a_flip_order_that_does_not_fill_says_why_it_missed(tmp_path, monkeypatc
     assert [r["mode"] for r in rows] == ["observe", "observe"]  # both attempts are logged, not lost
     assert "live order not filled: order failed: no fill at the limit" in rows[0]["reason"] and json.loads(rows[0]["context"])["miss"] == "order failed: no fill at the limit"
     assert "rate limited" in rows[1]["reason"]
+
+
+def test_a_paper_hunt_and_a_live_one_are_the_same_size(tmp_path, monkeypatch):
+    from kalshi_moonshot import buyer, runner
+
+    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
+    live = []
+    monkeypatch.setattr(runner, "place", lambda settings, client, st, shot, why, count, **kw: (live.append(count) or runner.Placed("bought", count, 0.4)))
+    w._hunt_buy(h, spec, "no", 0.03, "burst hunt: test", {})
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": False)
+    paper = watcher.Hunt("KXSOL15M-1", "guarded", close_ts=time.time() + 100)
+    w._hunt_buy(paper, spec, "no", 0.03, "burst hunt: test", {})
+    row = store.db.execute("SELECT contracts FROM decisions WHERE ticker='KXSOL15M-1'").fetchone()
+    assert live == [10.0] and row["contracts"] == 10.0 == buyer.whole_contracts(0.5, 0.03)  # not 16.7 contracts on paper against 10 live
+
+
+def test_the_flow_ledger_drops_a_market_that_stopped_trading(tmp_path, monkeypatch):
+    w, _s, _store, _close = _watcher(tmp_path, monkeypatch)
+    sec = int(time.time())
+    w._flow["KXOLD15M-1"] = {sec - 900: [5.0, 5.0, 1.0, 1.0]}
+    w._flow["KXLIVE15M-1"] = {sec - 2: [5.0, 5.0, 1.0, 1.0]}
+    w.refresh()
+    assert "KXOLD15M-1" not in w._flow and "KXLIVE15M-1" in w._flow

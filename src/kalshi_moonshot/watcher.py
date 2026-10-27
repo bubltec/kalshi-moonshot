@@ -924,6 +924,8 @@ class ProfitWatcher:
                 del self._hunts[tk]
             hunts = list(self._hunts.values())
         now = time.time()
+        for tk in [tk for tk, b in list(self._flow.items()) if max(list(b), default=0) < now - 300.0]:
+            self._flow.pop(tk, None)  # a market that stopped trading five minutes ago: the ledger only trims itself when a trade arrives, so a closed window's rows would stay for good
         follow: set[str] = set()
         for h in hunts:
             if h.close_ts <= 0:

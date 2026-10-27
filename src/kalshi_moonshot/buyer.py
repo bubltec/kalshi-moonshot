@@ -28,6 +28,11 @@ ALLOWANCE = 0.02  # a live buy's limit is this much over the ask, so a quote tha
 FLIP_LANE = "burst_flip"  # the lane a bet on the other side of a held favorite is logged under
 
 
+def whole_contracts(stake: float, ask: float) -> float:
+    """The whole contracts a live order for this stake asks for: the stake over the ask plus the allowance, at least one. A paper bet is sized the same way, so the two can be compared."""
+    return float(max(1, int(stake / (ask + ALLOWANCE))))
+
+
 def category(ticker: str) -> str:
     return "Crypto" if ticker.split("-")[0][2:].startswith(("BTC", "ETH", "SOL", "XRP", "DOGE")) else "Other"
 
@@ -64,9 +69,10 @@ def hunt_plan(spec: LaneSpec, ticker: str, side: str, ask: float, close_ts: floa
     ask = round(ask, 4)
     stake = spec.fixed_stake or 2.0
     close = datetime.fromtimestamp(close_ts, UTC).strftime("%Y-%m-%dT%H:%M:%SZ") if close_ts else ""
+    count = whole_contracts(stake, ask)
     return BuyPlan(
         ticker, side, ask, reason, ctx, venue, decision_lane=spec.name, live_lane=spec.name, stake=stake,
-        paper_contracts=max(1.0, stake / max(ask, 0.01)), paper_stake=stake, close_ts=close_ts, shot_close=close, log_close=close,
+        paper_contracts=count, paper_stake=round(count * ask, 4), close_ts=close_ts, shot_close=close, log_close=close,
         label="burst hunt", cap_lane=spec.name, max_open=spec.max_open, require_prior_win=spec.require_prior_win,
     )
 
@@ -94,8 +100,10 @@ def buy(plan: BuyPlan, s: Settings, store: Store) -> None:
     if plan.cap_lane is not None:
         open_same = [r for r in store.open_bets() if (r["lane"] or "") == plan.cap_lane]
         if plan.max_open and len(open_same) >= plan.max_open:
+            log.info("%s skipped, %s %s: %s already holds %d of its %d open bets", plan.label, tk, plan.side, plan.cap_lane, len(open_same), plan.max_open)
             return
         if any(r["ticker"] == tk for r in open_same):
+            log.info("%s skipped, %s %s: %s already holds this market", plan.label, tk, plan.side, plan.cap_lane)
             return
     live = s.is_live(plan.live_lane, plan.series) and getattr(plan.venue, "authed", False)
     if live and plan.require_prior_win and not _has_won(store, plan.decision_lane, plan.series):
@@ -106,7 +114,7 @@ def buy(plan: BuyPlan, s: Settings, store: Store) -> None:
         shot = LongShot(tk, "", "", max(0.0, ask - 0.01), min(0.99, ask + ALLOWANCE), 0.0, plan.shot_close, max(0.0, (plan.close_ts - time.time()) / 3600.0),
                         lane=plan.decision_lane, series=plan.series, category=category(tk), event_ticker=tk.rsplit("-", 1)[0], side=plan.side)
         try:
-            placed = runner.place(s, plan.venue, store, shot, reason, float(max(1, int(plan.stake / (ask + ALLOWANCE)))))
+            placed = runner.place(s, plan.venue, store, shot, reason, whole_contracts(plan.stake, ask))
             filled, cost, note = placed.filled, placed.cost, placed.note
         except KalshiRateLimited as exc:
             note = f"rate limited: {exc}"
