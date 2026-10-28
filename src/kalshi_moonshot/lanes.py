@@ -104,6 +104,7 @@ class LaneSpec:
     hunt_dollars: float = 0.0  # a burst_hunt lane's trigger in dollars: a 90c+ favorite and at least this many dollars bought AGAINST it (the cheap side's takers) in 3 s, in the last 120 s; buy the cheap side. 0 = the older multiple-of-normal burst
     hunt_dollars_btc: float = 0.0  # the same bar for BTC, whose volume is far larger (0 = the same bar as the others)
     hunt_favorite: float = 0.0  # a burst_hunt dollar trigger buys the cheap side only when the OTHER side is at least this priced (0 = no requirement; 0.90 was the flip study's 90c+ favorite). price[1] is then the only band: a 20c side is an 80c favorite
+    hunt_spike: float = 0.0  # a dollar trigger also needs the last 3 s of dollars bought on the cheap side to be at least this multiple of that side's own normal 3 s (median second of the 2 minutes before). 0 = the dollar bar alone. On a market that is busy all the time (BTC) a fixed bar fires on ordinary trading; a multiple fires on a surge (scripts/spike_trigger_study.py)
     hunt_cheap: float = 0.50  # the cheap side is a side priced under this
     hunt_window: float = 120.0  # a hunt acts when this many seconds or fewer remain...
     hunt_min_left: float = 10.0  # ...and at least this many (an order sent later lands after the close)

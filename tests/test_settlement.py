@@ -1221,6 +1221,7 @@ def test_the_hunt_and_burst_settings_default_to_what_was_hard_coded():
     from kalshi_moonshot.lanes import LaneSpec
 
     assert (LaneSpec.hunt_favorite, LaneSpec.hunt_cheap, LaneSpec.hunt_window, LaneSpec.hunt_min_left) == (0.0, 0.50, 120.0, 10.0)  # no favorite requirement unless a lane sets one
+    assert LaneSpec.hunt_spike == 0.0  # and no spike requirement: the dollar bar alone
     assert (LaneSpec.hunt_crash, LaneSpec.hunt_crash_seconds, LaneSpec.hunt_park_seconds, LaneSpec.hunt_park_high, LaneSpec.hunt_park_span) == (0.10, 12.0, 20.0, 0.10, 0.06)
     assert (LaneSpec.hunt_attempts, LaneSpec.hunt_retry_seconds, LaneSpec.hunt_stale_seconds) == (3, 3.0, 10.0)
     assert (LaneSpec.burst_favorite, LaneSpec.burst_window, LaneSpec.burst_min_left) == (0.90, 120.0, 10.0)
@@ -1239,19 +1240,23 @@ def test_the_hunt_and_burst_settings_come_from_strategies_toml(tmp_path, monkeyp
     assert spec.hunt_crash == 0.10  # the ones it does not name keep their defaults
 
 
-def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, **spec_changes):
+def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, baseline=0.0, **spec_changes):
     """A hunt on a YES-priced market with $455 bought against the favorite in the last 3 s, and the cheap side sitting at its ask for 20 s. Returns what _on_hunt queued."""
     import dataclasses
 
     from kalshi_moonshot import lanes
 
     w, s, _store, _close = _watcher(tmp_path, monkeypatch)
-    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.20), hunt_dollars=400.0, sides=("no",), fixed_stake=0.5, max_open=0, **spec_changes)
+    fields = {"name": "guarded", "price": (0.02, 0.20), "hunt_dollars": 400.0, "sides": ("no",), "fixed_stake": 0.5, "max_open": 0, **spec_changes}
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], **fields)
     now = 1_000_000.0
     sec = int(now)
     h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + left, yes_bid=yes_bid, yes_ask=yes_ask)
     h.quotes.extend((now - 20.0 + i, yes_bid, yes_ask) for i in range(21))
-    w._on_hunt(h, spec, now, {sec: [0.0, 6000.0, 0.0, 455.0]}, sec)
+    book = {sec: [0.0, 6000.0, 0.0, 455.0]}
+    for k in range(3, 123):  # the market's ordinary second on the cheap (NO) side: `baseline` dollars
+        book[sec - k] = [0.0, 0.0, 0.0, baseline]
+    w._on_hunt(h, spec, now, book, sec)
     return w._buys.qsize()
 
 
@@ -1514,3 +1519,18 @@ def test_the_retry_after_a_cross_uses_a_new_client_order_id(tmp_path, monkeypatc
     sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.18,)), answers=[_cross(), {"order_id": "o1"}], order_key="KXBTC15M-9-guarded", ids=ids)
     assert len(sent) == 2 and out.filled == 2.0  # the retry went through
     assert ids[0] == "KXBTC15M-9-guarded" and ids[1] != ids[0] and ids[1].startswith("KXBTC15M-9-guarded")  # a different id, derived from the same key so a re-run of the job repeats it, not doubles up
+
+
+def test_a_spike_is_the_multiple_of_the_sides_own_normal_not_a_fixed_number(tmp_path, monkeypatch):
+    # $455 bought against the favorite in 3 s. On a quiet market (a normal second of $50) that is 3x normal; on a busy one ($300 a second) it is half of a normal 3 s.
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=50.0) == 1  # no spike requirement: the bar alone fires
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=300.0) == 1  # even on a market where $455 is below its usual 3 s
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=300.0, hunt_spike=3.0) == 0  # a spike lane does not buy that
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=50.0, hunt_spike=3.0) == 1  # 455 / (3 x 50) is 3.03x: a spike
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=50.0, hunt_spike=5.0) == 0  # but not 5x
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=0.0, hunt_spike=5.0) == 1  # a side with no normal buying at all: anything is a spike
+
+
+def test_the_spike_still_needs_the_dollar_bar(tmp_path, monkeypatch):
+    # 20x its own normal is a spike, but $455 is the whole of it only because the normal is $7.6 a second; a lane with a $1,000 bar still waits
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=7.6, hunt_spike=5.0, hunt_dollars=1000.0) == 0

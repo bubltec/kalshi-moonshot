@@ -488,6 +488,8 @@ class ProfitWatcher:
                 d3 = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
                 if d3 < bar:
                     continue
+                if spec.hunt_spike > 0 and _side_dollar_ratio(book, sec, idx) < spec.hunt_spike:
+                    continue  # the bar is met, but not as a surge on this side's own normal buying
                 # Dollars on a side that just fell into the band is the favorite winning, not a turn.
                 # The buy is a side that was already sitting cheap (the same parked and crash checks as the older hunt).
                 crashing, _was = _hunt_crashing(h.quotes, side, now, ask, spec.hunt_crash, spec.hunt_crash_seconds)
@@ -495,7 +497,7 @@ class ProfitWatcher:
                     continue
                 h.fired = True
                 reason = f"flip: ${d3:.0f} bought against the {'no' if side == 'yes' else 'yes'} favorite in 3 s (bar ${bar:.0f}), {side} costs {ask:.2f}"
-                ctx = {"dollars_3s": round(d3, 1), "bar": bar, "favorite": round(1.0 - cheap_mid, 3), "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name}
+                ctx = {"dollars_3s": round(d3, 1), "bar": bar, "spike": round(_side_dollar_ratio(book, sec, idx), 1), "favorite": round(1.0 - cheap_mid, 3), "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name}
                 self._buys.put(BuySignal("hunt", side, ask, reason, ctx, hunt=h, spec=spec))
                 return
             vol, base, ratio = _side_burst(book, sec, 0 if side == "yes" else 1)
