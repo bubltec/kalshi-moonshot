@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import random
 import threading
 import time
@@ -18,6 +19,9 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from .marketdata import MarketCache
+
+log = logging.getLogger("moonshot")
+SLOW_PACE_SECONDS = 3.0  # a request that waits this long for its turn is logged, so a queue behind the shared request budget shows in the logs
 
 
 class KalshiError(RuntimeError):
@@ -147,6 +151,8 @@ class KalshiClient:
             slot = max(now, self._next_slot) + extra
             self._next_slot = slot + self._gap
         delay = slot - now
+        if delay > SLOW_PACE_SECONDS:
+            log.info("request waited %.1fs for its turn under the shared request budget", delay)
         if delay > 0:
             time.sleep(delay)
 
@@ -187,6 +193,7 @@ class KalshiClient:
                 continue
             if resp.status_code == 429:
                 last_wait = self._backoff(attempt, self._retry_after(resp))
+                log.warning("%s %s was refused with 429 (try %d/%d); every caller now waits %.1fs", method, path, attempt + 1, RETRIES, last_wait)
                 self._pace(extra=last_wait)  # slows every caller, then this one waits its turn
                 continue
             if resp.status_code >= 500 and safe and attempt < RETRIES - 1:
