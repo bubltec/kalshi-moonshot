@@ -210,8 +210,8 @@ class KalshiClient:
                 continue
             if resp.status_code == 429:
                 last_wait = self._backoff(attempt, self._retry_after(resp))
-                log.warning("%s %s was refused with 429 (try %d/%d); every caller now waits %.1fs", method, path, attempt + 1, RETRIES, last_wait)
-                self._pace(extra=last_wait, write=not safe)  # slows every caller of that kind, then this one waits its turn
+                log.warning("%s %s was refused with 429 (try %d/%d); this call retries in %.1fs", method, path, attempt + 1, RETRIES, last_wait)
+                time.sleep(last_wait)  # only this caller waits out the 429, then takes its normal turn again: it must not hold every other thread's requests back (a sale would wait behind a read's backoff)
                 continue
             if resp.status_code >= 500 and safe and attempt < RETRIES - 1:
                 time.sleep(self._backoff(attempt, None))
