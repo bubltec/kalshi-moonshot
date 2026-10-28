@@ -613,6 +613,11 @@ class ProfitWatcher:
             log.warning("watcher: not selling %s %s on a Polymarket bid of %.2f: Kalshi's bid is %.2f (%s)", t.ticker, t.side, bid, ref, reason[:80])
         return None
 
+    def _market_static(self, ticker: str) -> dict[str, Any]:
+        """A market read for its fixed fields (close time, strike): kept for ten minutes where the client can, so the 3-second refresh does not ask again."""
+        reader = getattr(self.client, "market_static", None)
+        return reader(ticker) if reader is not None else self.client.market(ticker)
+
     def _tape_db(self) -> Any:
         if getattr(self._tls, "tape", None) is None and self.tape_factory is not None:
             self._tls.tape = self.tape_factory()
@@ -704,7 +709,7 @@ class ProfitWatcher:
         paid = None if price is None else (price if side == "yes" else 1.0 - price)
         close_ts, close_time, snap = None, "", ""
         try:
-            close_time = str(self.client.market(e["ticker"]).get("close_time", ""))
+            close_time = str(self._market_static(e["ticker"]).get("close_time", ""))
             close_ts = datetime.fromisoformat(close_time).timestamp()
             if self.tape_factory is not None:
                 if self._tape is None:
@@ -951,7 +956,7 @@ class ProfitWatcher:
                 tg.index_id = (index_for_series(ticker.split("-")[0]) or "") if guard else ""
                 if tg.close_ts <= 0 or (guard and tg.strike <= 0):
                     try:
-                        mk = self.client.market(ticker)
+                        mk = self._market_static(ticker)
                         tg.strike = float(mk.get("floor_strike") or 0.0)
                         tg.close_ts = datetime.fromisoformat(str(mk.get("close_time"))).timestamp()
                     except (TypeError, ValueError, KalshiError):
@@ -1004,7 +1009,7 @@ class ProfitWatcher:
         for h in hunts:
             if h.close_ts <= 0:
                 try:
-                    mk = self.client.market(h.ticker)
+                    mk = self._market_static(h.ticker)
                     h.close_ts = datetime.fromisoformat(str(mk.get("close_time"))).timestamp()
                 except (TypeError, ValueError, KalshiError):
                     h.close_ts = 0.0
@@ -1077,7 +1082,7 @@ class ProfitWatcher:
             if not store.holds_sized_bet(p.ticker, manual.LANE):
                 close_time = ""
                 with contextlib.suppress(KalshiError, TypeError, ValueError):
-                    close_time = str(self.client.market(p.ticker).get("close_time", ""))
+                    close_time = str(self._market_static(p.ticker).get("close_time", ""))
                 self._note_manual_study(store, ticker=p.ticker, side=p.side, paid=p.entry, count=p.count, close_time=close_time, replace=True)
             fresh[key] = old
 
@@ -1105,7 +1110,7 @@ class ProfitWatcher:
         if s.manual_exit_stop <= 0 or (t.ticker.split("-")[0].endswith("15M") and not s.stop_loss_fast):
             return
         try:
-            close = datetime.fromisoformat(str(self.client.market(t.ticker).get("close_time", ""))).timestamp()
+            close = datetime.fromisoformat(str(self._market_static(t.ticker).get("close_time", ""))).timestamp()
         except (TypeError, ValueError, KalshiError):
             return  # no close time, no stop: better unwatched than stopped on a guess
         t.stop_drop = s.manual_exit_stop
@@ -1263,7 +1268,7 @@ class ProfitWatcher:
         pos = next((p for p in self.manual.positions(s, store, fresh=True) if p.ticker == ticker), None)
         if pos is None:
             return  # sold, settled, or now the bot's
-        m = self.client.market(ticker)
+        m = self.client.market(ticker)  # a live bid and the result: never the kept copy
         if m.get("result") in {"yes", "no"}:
             return
         quoted = flip(m) if pos.side == "no" else m

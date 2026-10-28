@@ -1518,16 +1518,33 @@ def next_stop_loss_at(s: Settings, store: Store, now: float | None = None) -> fl
     return soonest
 
 
+RESOLVE_BATCH = 100  # markets asked for in one request when resolving
+
+
 def resolve(client: KalshiClient, store: Store, client_for: Callable[[str], KalshiClient] | None = None) -> int:
     """Fill in outcomes for markets that have settled. Returns how many markets resolved."""
     n = 0
+    groups: dict[int, tuple[Any, list[str]]] = {}
     for ticker in store.unresolved_tickers():
         book = client_for(ticker) if client_for is not None else client
-        try:
-            m = book.market(ticker)
-        except KalshiError:
-            continue
-        if m.get("result") in {"yes", "no"}:
-            store.set_outcome(ticker, m["result"])
-            n += 1
+        groups.setdefault(id(book), (book, []))[1].append(ticker)
+    for book, tickers in groups.values():
+        found: dict[str, dict[str, Any]] = {}
+        if hasattr(book, "markets_by_tickers"):
+            for i in range(0, len(tickers), RESOLVE_BATCH):
+                try:
+                    for m in book.markets_by_tickers(tickers[i:i + RESOLVE_BATCH]):
+                        found[m.get("ticker", "")] = m
+                except KalshiError:
+                    continue  # that batch is read one by one below
+        for ticker in tickers:
+            m = found.get(ticker)
+            if m is None:
+                try:
+                    m = book.market(ticker)  # not in a batch (a venue without batches, or a market the listing left out)
+                except KalshiError:
+                    continue
+            if m.get("result") in {"yes", "no"}:
+                store.set_outcome(ticker, m["result"])
+                n += 1
     return n

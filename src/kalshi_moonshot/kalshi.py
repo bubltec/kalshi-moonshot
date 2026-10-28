@@ -22,6 +22,8 @@ from . import reqstats, steptime
 from .marketdata import MarketCache
 
 log = logging.getLogger("moonshot")
+_EVENT_CACHE: dict[str, tuple[float, dict[str, tuple[str, str, bool]]]] = {}  # base url -> (when listed, event_ticker -> info), shared by every client and thread
+_EVENT_LOCK = threading.Lock()
 SLOW_PACE_SECONDS = 3.0  # a request that waits this long for its turn is logged, so a queue behind the shared request budget shows in the logs
 
 
@@ -104,6 +106,7 @@ class KalshiClient:
         self._http = httpx.Client(timeout=20.0)
         self._gap = 1.0 / max(0.5, max_rps)  # minimum seconds between requests
         self._next_slot = 0.0
+        self._static: dict[str, tuple[float, dict[str, Any]]] = {}
         self._next_write_slot = 0.0  # orders and cancels queue apart from reads: Kalshi limits writes separately, and a sale must not wait behind a page of market reads
         self._lock = threading.Lock()
         self.cache = MarketCache()  # every listing fetched is kept here for the lanes that read it (marketdata.py)
@@ -320,24 +323,29 @@ class KalshiClient:
         return self._request("GET", f"/events/{ticker}").get("event") or {}
 
     def event_info(self, ttl: float = 3600.0, pages: int = 60) -> dict[str, tuple[str, str, bool]]:
-        """event_ticker -> (category, series_ticker, mutually_exclusive). Cached."""
-        cached = getattr(self, "_event_info", None)
+        """event_ticker -> (category, series_ticker, mutually_exclusive). One cache for the whole process, filled by one thread at a time: the listing is a few pages, but every thread (and every client) that found
+        the cache empty used to page it on its own, so a restart made about 40 full listings in a minute."""
+        cached = _EVENT_CACHE.get(self.base_url)
         if cached and time.time() - cached[0] < ttl:
             return cached[1]
-        info: dict[str, tuple[str, str, bool]] = {}
-        cursor = ""
-        for _ in range(pages):
-            params: dict[str, Any] = {"status": "open", "limit": min(self.page_size, 200)}
-            if cursor:
-                params["cursor"] = cursor
-            body = self._request("GET", "/events", params=params)
-            for e in body.get("events", []):
-                info[e["event_ticker"]] = _event_tuple(e)
-            cursor = body.get("cursor") or ""
-            if not cursor:
-                break
-        self._event_info = (time.time(), info)
-        return info
+        with _EVENT_LOCK:
+            cached = _EVENT_CACHE.get(self.base_url)  # another thread may have filled it while this one waited
+            if cached and time.time() - cached[0] < ttl:
+                return cached[1]
+            info: dict[str, tuple[str, str, bool]] = {}
+            cursor = ""
+            for _ in range(pages):
+                params: dict[str, Any] = {"status": "open", "limit": min(self.page_size, 200)}
+                if cursor:
+                    params["cursor"] = cursor
+                body = self._request("GET", "/events", params=params)
+                for e in body.get("events", []):
+                    info[e["event_ticker"]] = _event_tuple(e)
+                cursor = body.get("cursor") or ""
+                if not cursor:
+                    break
+            _EVENT_CACHE[self.base_url] = (time.time(), info)
+            return info
 
     def fill_event_info(self, tickers: list[str]) -> dict[str, tuple[str, str, bool]]:
         """Like event_info, plus a one-off fetch for any ticker the cache missed.
@@ -355,7 +363,9 @@ class KalshiClient:
                 continue
             if e.get("event_ticker") or ticker:
                 info[e.get("event_ticker") or ticker] = _event_tuple(e)
-        self._event_info = (time.time(), info)
+        shared = _EVENT_CACHE.get(self.base_url)
+        if shared:
+            shared[1].update(info)  # what was looked up one by one is kept for the next caller; the cache keeps its own age
         return info
 
     def candlesticks(self, series: str, ticker: str, hours: int = 6) -> list[dict[str, Any]]:
@@ -367,6 +377,25 @@ class KalshiClient:
             params={"start_ts": now - hours * 3600, "end_ts": now, "period_interval": 60},
         )
         return body.get("candlesticks", [])
+
+    def market_static(self, ticker: str, ttl: float = 600.0) -> dict[str, Any]:
+        """A market read for the fields that never change (close time, strike, title), kept for `ttl` seconds. The watcher asked for the same market on every 3-second refresh."""
+        hit = self._static.get(ticker)
+        if hit and time.time() - hit[0] < ttl:
+            return hit[1]
+        row = self.market(ticker)
+        self._static[ticker] = (time.time(), row)
+        if len(self._static) > 500:
+            for old in sorted(self._static, key=lambda t: self._static[t][0])[:100]:
+                self._static.pop(old, None)
+        return row
+
+    def markets_by_tickers(self, tickers: list[str]) -> list[dict[str, Any]]:
+        """Up to 100 markets in one request (any status, settled ones included)."""
+        if not tickers:
+            return []
+        body = self._request("GET", "/markets", params={"tickers": ",".join(tickers[:100]), "limit": min(100, len(tickers))})
+        return list(body.get("markets", []))
 
     def market(self, ticker: str) -> dict[str, Any]:
         if self._age() > 0 and (hit := self.cache.get_market(ticker, self._age())) is not None:
