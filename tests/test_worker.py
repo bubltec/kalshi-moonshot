@@ -276,3 +276,27 @@ def test_a_sell_worker_runs_only_the_stop_sweep(tmp_path):
     w._sell_loop()
     assert ran == ["stop_loss"]
     assert status(w, "evaluate") == {"pending": 1}
+
+
+def test_changing_the_request_rate_keeps_the_same_client_open(tmp_path):
+    from kalshi_moonshot.kalshi import KalshiClient
+
+    client = KalshiClient("https://demo.test", max_rps=3.0)
+    s = settings(tmp_path, max_rps=3.0)
+    faster = settings(tmp_path, max_rps=8.0)
+    w = Worker(s, client, FakeEst(), Store(s.db_path), None, client_factory=lambda fresh: KalshiClient("https://other.test"), reload=lambda: faster)
+    w.refresh()
+    assert w.client is client and not client._http.is_closed  # nothing was swapped or closed under the other threads
+    assert abs(client._gap - 1 / 8.0) < 1e-9
+
+
+def test_a_new_key_swaps_the_client_without_closing_the_old_one(tmp_path):
+    from kalshi_moonshot.kalshi import KalshiClient
+
+    client = KalshiClient("https://demo.test", max_rps=3.0)
+    s = settings(tmp_path)
+    rekeyed = settings(tmp_path, key_id="another")
+    fresh_client = KalshiClient("https://demo.test", max_rps=3.0)
+    w = Worker(s, client, FakeEst(), Store(s.db_path), None, client_factory=lambda fresh: fresh_client, reload=lambda: rekeyed)
+    w.refresh()
+    assert w.client is fresh_client and not client._http.is_closed  # threads still holding the old one keep working

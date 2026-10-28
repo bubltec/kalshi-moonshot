@@ -448,16 +448,10 @@ class Worker:
             log.exception("could not reload settings; keeping the previous ones")
             return
         s = self.s
-        if (
-            self._client_factory
-            and (
-                fresh.base_url != s.base_url or fresh.key_id != s.key_id
-                or fresh.private_key_path != s.private_key_path or fresh.max_rps != s.max_rps
-                or fresh.page_size != s.page_size
-            )
-        ):
-            self.client._http.close()
-            self.client = self._client_factory(fresh)
+        if self._client_factory and (fresh.base_url != s.base_url or fresh.key_id != s.key_id or fresh.private_key_path != s.private_key_path):
+            self.client = self._client_factory(fresh)  # the old client is left open: the watcher and the other threads still hold it, and a closed client fails every request they send
+        elif (fresh.max_rps != s.max_rps or fresh.page_size != s.page_size) and hasattr(self.client, "set_rate"):
+            self.client.set_rate(fresh.max_rps, fresh.page_size)  # the same client, so every thread gets the new rate
         if self._est_factory and (fresh.ollama_url != s.ollama_url or fresh.model != s.model):
             self.est._http.close()
             self.est = self._est_factory(fresh)

@@ -109,6 +109,11 @@ class KalshiClient:
         self.cache = MarketCache()  # every listing fetched is kept here for the lanes that read it (marketdata.py)
         self._tl = threading.local()
 
+    def set_rate(self, max_rps: float, page_size: int) -> None:
+        """Change the request rate and page size of this client in place. Every thread holds this same client, so a new client with the old one closed would leave them all failing with 'client has been closed'."""
+        self._gap = 1.0 / max(0.5, max_rps)
+        self.page_size = min(1000, max(1, page_size))
+
     @contextmanager
     def shared(self, max_age: float) -> Iterator[None]:
         """Inside this block, market listings and single markets may come from the shared cache when no older than max_age seconds (0 or less: always ask Kalshi)."""
