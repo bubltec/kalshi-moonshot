@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from . import steptime
 from .marketdata import MarketCache
 
 log = logging.getLogger("moonshot")
@@ -156,6 +157,8 @@ class KalshiClient:
                 slot = max(now, self._next_slot) + extra
                 self._next_slot = slot + self._gap
         delay = slot - now
+        if delay > 0:
+            steptime.add("request wait", delay)
         if delay > SLOW_PACE_SECONDS:
             log.info("request waited %.1fs for its turn under the shared request budget", delay)
         if delay > 0:
@@ -189,9 +192,12 @@ class KalshiClient:
             if getattr(self._tl, "bg", False):
                 time.sleep(2 * self._gap)  # outside the pacing lock: the slots it leaves free go to the threads that are not in the background
             self._pace(write=not safe)
+            asked = time.perf_counter()
             try:
                 resp = self._http.request(method, url, params=params, json=json, headers=headers)
+                steptime.add("kalshi requests", time.perf_counter() - asked)
             except httpx.TransportError as exc:  # timeout, connection reset, DNS
+                steptime.add("kalshi requests", time.perf_counter() - asked)
                 if not safe or attempt == RETRIES - 1:
                     raise KalshiError(f"{method} {path}: {type(exc).__name__}: {exc}") from exc
                 time.sleep(self._backoff(attempt, None))

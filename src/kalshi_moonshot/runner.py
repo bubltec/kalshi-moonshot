@@ -20,7 +20,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
 
-from . import factors, gate, risk, shadow
+from . import factors, gate, risk, shadow, steptime
 from . import scale as scale_mod
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
@@ -548,7 +548,8 @@ def evaluate(
             note = f"against the coin: its price moved {'down' if shot.side == 'yes' else 'up'} or stood still over the last {spec.entry_spot_seconds:.0f}s. {note}"
     sized = Sizing(0, 0.0, "")
     if bet:
-        balance = store.bankroll.read(client, s, live=s.is_live(shot.lane, shot.series))
+        with steptime.step("balance read"):
+            balance = store.bankroll.read(client, s, live=s.is_live(shot.lane, shot.series))
         grown = scale_mod.for_lane(store, spec, balance.equity, s=s)
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
@@ -980,7 +981,8 @@ def place(
     cost = limit * count + order_fee(limit, count)
     cap = cost  # already sized under every ceiling; the gate re-checks the global ones
     try:
-        book = client.orderbook(shot.ticker)
+        with steptime.step("order book"):
+            book = client.orderbook(shot.ticker)
         offered = side_ask_notional(book, limit, shot.side)
     except KalshiError as exc:
         return Placed(f"skipped: could not read the book ({exc})")
@@ -989,13 +991,15 @@ def place(
             f"skipped: ${offered:.2f} offered at {limit:.2f}, "
             f"under the ${s.min_order_usd:.2f} minimum"
         )
-    verdict = risk.check(
-        s, store, shot.ticker, cost, max_trade=cap,
-        event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive,
-    )
+    with steptime.step("risk check"):
+        verdict = risk.check(
+            s, store, shot.ticker, cost, max_trade=cap,
+            event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive,
+        )
     if not verdict.ok:
         return Placed(f"blocked by risk: {verdict.reason}")
-    topped = _top_up(s, client, store, shot, cost)
+    with steptime.step("top up"):
+        topped = _top_up(s, client, store, shot, cost)
     if topped:
         return Placed(topped)
     known = _EXCHANGE_OF.get(shot.series) if hasattr(client, "shard_balances") else None
@@ -1019,7 +1023,8 @@ def place(
     while True:
         try:
             try:
-                resp = buy(shot.ticker, count, limit, client_order_id=key)
+                with steptime.step("order"):
+                    resp = buy(shot.ticker, count, limit, client_order_id=key)
             except KalshiRateLimited:
                 raise  # refused outright, so nothing was bought; the queue retries it later
             except KalshiError as exc:

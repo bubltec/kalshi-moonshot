@@ -22,7 +22,7 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from typing import Any
 
-from . import runner
+from . import runner, steptime
 from .commodities import CommodityPricer
 from .config import Settings
 from .estimators import EstimateShare, build_estimators
@@ -483,6 +483,7 @@ class Worker:
             "resolve": self.do_resolve, "stop_loss": self.do_stop_loss,
             "flip": self.do_flip, "review": self.do_review, "history": self.do_history, "account_sync": self.do_account_sync, "patterns": self.do_patterns,
         }
+        steptime.begin()
         try:
             handler = handlers.get(job.kind)
             if handler is None and job.kind.startswith(("lane_scope:", "lane_review:")):
@@ -493,7 +494,7 @@ class Worker:
             self.jobs.complete(job.id, handler(job) or "")
             if time.time() - began > SLOW_JOB_SECONDS:
                 shot = job.payload.get("shot") or {}
-                log.info("slow job %d (%s%s): ran %.0fs, %.0fs after it was queued", job.id, job.kind, f" {shot.get('lane', '')} {shot.get('ticker', '')}" if shot else "", time.time() - began, began - job.created_ts)
+                log.info("slow job %d (%s%s): ran %.0fs, %.0fs after it was queued. %s", job.id, job.kind, f" {shot.get('lane', '')} {shot.get('ticker', '')}" if shot else "", time.time() - began, began - job.created_ts, steptime.summary())
         except KalshiRateLimited as exc:
             log.warning("job %d (%s) rate limited; trying again in %.0fs", job.id, job.kind, exc.retry_after)
             self.jobs.defer(job, exc.retry_after, str(exc))
@@ -504,6 +505,8 @@ class Worker:
             else:
                 log.warning("job %d (%s) failed (try %d/%d), will retry: %s",
                             job.id, job.kind, job.attempts, job.max_attempts, exc)
+        finally:
+            steptime.end()
 
     def do_scan(self, job: Job) -> str:
         s = self.s
@@ -607,7 +610,8 @@ class Worker:
         shot = LongShot(**job.payload["shot"])
         client = self._venue(shot.lane)
         # The shortlist may be minutes old. Re-read the market and drop it if it no longer fits.
-        m = client.market(shot.ticker)
+        with steptime.step("market read"):
+            m = client.market(shot.ticker)
         m["category"] = shot.category
         if shot.series:
             m.setdefault("series_ticker", shot.series)
@@ -629,7 +633,9 @@ class Worker:
             log.info("skip %s: no longer qualifies (%s)", shot.ticker, why_not)
             return f"skipped: {why_not}"
         view = side_view(m, shot.side)
-        shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors=self._entry_factors(shot, spec, _strike(m)))
+        with steptime.step("entry factors"):
+            factors_text = self._entry_factors(shot, spec, _strike(m))
+        shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors=factors_text)
         # Same job, same order id: if the process dies after sending, a rerun cannot buy twice.
         order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
         with runner.lane_lock(shot.lane):  # evaluations of one lane run one after another, so its checks (lane full, cooling down, other side taken) see each other's bets

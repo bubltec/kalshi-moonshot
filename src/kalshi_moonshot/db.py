@@ -22,8 +22,11 @@ import os
 import re
 import sqlite3
 import threading
+import time
 from pathlib import Path
 from typing import Any
+
+from . import steptime
 
 log = logging.getLogger("moonshot")
 
@@ -187,8 +190,14 @@ def _locked(fn):
 
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
+        asked = time.perf_counter()
         with self._lock:
-            return fn(self, *args, **kwargs)
+            got = time.perf_counter()
+            try:
+                return fn(self, *args, **kwargs)
+            finally:
+                steptime.add("database lock wait", got - asked)
+                steptime.add("database", time.perf_counter() - got)
     return wrapper
 
 
