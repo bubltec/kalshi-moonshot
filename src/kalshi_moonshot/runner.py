@@ -986,6 +986,10 @@ def place(
         offered = side_ask_notional(book, limit, shot.side)
     except KalshiError as exc:
         return Placed(f"skipped: could not read the book ({exc})")
+    if lane_spec is not None and lane_spec.buy_max_move > 0:
+        fresh = best_ask(book, shot.side)
+        if fresh is not None and fresh < shot.ask - lane_spec.buy_max_move - 1e-9:
+            return Placed(f"skipped: the {shot.side} ask fell from {shot.ask:.2f} to {fresh:.2f} while the order waited (the lane allows a fall of {lane_spec.buy_max_move:.2f})")
     if offered + 1e-9 < s.min_order_usd:
         return Placed(
             f"skipped: ${offered:.2f} offered at {limit:.2f}, "

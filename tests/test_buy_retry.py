@@ -135,3 +135,42 @@ def test_a_failed_retry_order_is_reported_and_does_not_raise(setup):
     client = Client(fills=[0.0, KalshiError("POST -> 400: invalid_price")], asks=[0.30])
     got = runner.place(s, client, store, shot, "why", 2.0)
     assert got.filled == 0 and "order failed" in got.note and len(client.sent) == 2
+
+
+def test_a_buy_is_skipped_when_the_ask_fell_far_under_the_decision(setup):
+    s, store, shot, spec = setup
+    spec(buy_max_move=0.05, buy_retries=0)
+    client = Client(fills=[1.5], asks=[0.20])  # decided at 0.31; the book now offers 0.20
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert got.filled == 0 and "fell from 0.31 to 0.20" in got.note and client.sent == []  # nothing was ordered
+    assert not got.note.startswith(runner_sent_nothing())  # not a miss the hunt would retry
+
+
+def test_a_small_fall_still_buys(setup):
+    s, store, shot, spec = setup
+    spec(buy_max_move=0.05, buy_retries=0)
+    client = Client(fills=[1.5], asks=[0.27])  # 4c under the decision: inside the 5c the lane allows
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert got.filled == 1.5 and len(client.sent) == 1
+
+
+def test_a_rise_is_left_to_the_limit_not_the_guard(setup):
+    s, store, shot, spec = setup
+    spec(buy_max_move=0.05, buy_retries=0)
+    client = Client(fills=[1.5], asks=[0.31])  # at the decision price: nothing for the guard to do
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert got.filled == 1.5
+
+
+def test_the_guard_is_off_unless_the_lane_sets_it(setup):
+    s, store, shot, spec = setup
+    spec(buy_retries=0)
+    client = Client(fills=[1.5], asks=[0.20])
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert got.filled == 1.5
+
+
+def runner_sent_nothing():
+    from kalshi_moonshot import buyer
+
+    return buyer.SENT_NOTHING
