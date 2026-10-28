@@ -662,6 +662,20 @@ def below_line_seconds(s: Settings, ticker: str, side: str, line: float, now: fl
     return now - since
 
 
+def scalp_sweep_hit(s: Settings, spec: LaneSpec, ticker: str, side: str, entry: float, bid: float, opened: float, now: float) -> str | None:
+    """The scalp exit for the periodic sweep, which has the tape instead of a live socket: the bid is scalp_dip under the high since the bet, and has been for scalp_dip_seconds
+    (from the tape; if the tape cannot say how long, no sale on a guess). The socket watcher applies the same rule to its own timer."""
+    arms = [p for p in (spec.scalp_at, entry + spec.scalp_up if spec.scalp_up > 0 else 0.0) if p > 0]
+    if not arms:
+        return None
+    high = high_since(s, ticker, side, opened, now)
+    why = None if high is None else scalp_hit(bid, high, min(arms), spec.scalp_dip)
+    if why is None or high is None or spec.scalp_dip_seconds <= 0:
+        return why
+    held = below_line_seconds(s, ticker, side, high - spec.scalp_dip, now)
+    return f"{why} for {held:.0f}s" if held is not None and held >= spec.scalp_dip_seconds else None
+
+
 def _hovering(s: Settings, ticker: str, side: str, bid: float, now: float) -> bool:
     """The last 3 seconds barely moved, and there is more than one print. The socket uses the same test."""
     from . import db as database
@@ -1302,10 +1316,8 @@ def stop_loss_pass(
         fifteen = row["ticker"].split("-")[0].endswith("15M")
         if profit_on and spec is not None:
             why = take_profit_hit(entry, bid, spec.take_profit_x, spec.take_profit_at)
-            arms = [p for p in (spec.scalp_at, entry + spec.scalp_up if spec.scalp_up > 0 else 0.0) if p > 0]
-            if not why and arms:
-                high = high_since(s, row["ticker"], side, float(row["ts"] or 0.0), now.timestamp())
-                why = None if high is None else scalp_hit(bid, high, min(arms), spec.scalp_dip)
+            if not why:
+                why = scalp_sweep_hit(s, spec, row["ticker"], side, entry, bid, float(row["ts"] or 0.0), now.timestamp())
         if not why and spec is not None and spec.cash_up_minute > 0 and fifteen:
             why = cash_if_up(entry, bid, 15.0 - hours * 60.0, spec.cash_up_minute, spec.cash_drop)
         left = hours * 3600.0

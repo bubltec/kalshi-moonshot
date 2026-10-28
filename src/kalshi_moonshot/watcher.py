@@ -130,6 +130,8 @@ class Target:
     scalp_at: float = 0.0  # scalp_hit: follow the high once the bid prints this price (0 = off)
     scalp_up: float = 0.0  # or once the bid is this far above the price paid (0 = off)
     scalp_dip: float = 0.03
+    scalp_dip_seconds: float = LaneSpec.scalp_dip_seconds  # the dip must hold this long before it sells (lane scalp_dip_seconds)
+    scalp_dip_since: float | None = None  # when the bid first went scalp_dip under the high and has stayed there
     scalp_high: float = 0.0  # the highest bid since the arm printed
     index_id: str = ""  # the settlement index of this market
     settle_checked: float = 0.0  # the guard looks at most once a second
@@ -376,7 +378,7 @@ class ProfitWatcher:
             left = (t.close_ts - now) if t.close_ts > 0 else None
             recent = [b for ts, b in t.history if now - 3.0 <= ts <= now and b > 0]
             hovering = len(recent) >= 2 and price_shape(list(t.history), now, bid) == "hover"
-            why = take_profit_hit(t.entry, bid, t.x, t.at) or cash_if_up(t.entry, bid, minute_now, t.cash_up, t.cash_drop) or self._scalp(t, bid) or cash_if_losing(t.entry, bid, left, t.cash_left, hovering) or early_cash(
+            why = take_profit_hit(t.entry, bid, t.x, t.at) or cash_if_up(t.entry, bid, minute_now, t.cash_up, t.cash_drop) or self._scalp(t, bid, now) or cash_if_losing(t.entry, bid, left, t.cash_left, hovering) or early_cash(
                 t.entry, bid, t.opened_min, minute_now, before=t.cash_before, leave=t.cash_leave, hovering=hovering,
             ) or spike_hit(
                 list(t.history), now, t.entry, t.spike_cents, t.spike_seconds, t.spike_min_gain
@@ -763,15 +765,25 @@ class ProfitWatcher:
         t.last_bid, t.last_ts = bid, now
         t.below_since = self._since(t, bid, now)
 
-    def _scalp(self, t: Target, bid: float) -> str | None:
-        """Armed at scalp_at, or scalp_up above the price paid, whichever is reached first. A new high rides; a dip of scalp_dip from that high sells on this print."""
+    def _scalp(self, t: Target, bid: float, now: float) -> str | None:
+        """Armed at scalp_at, or scalp_up above the price paid, whichever is reached first. A new high rides; a dip of scalp_dip from that high sells once the bid has stayed that far under it for
+        scalp_dip_seconds. A bid back inside the dip, or a new high, starts the count again. The clock loop calls this too, so a quiet market (no quotes) still sells a dip that has held."""
         arms = [p for p in (t.scalp_at, t.entry + t.scalp_up if t.scalp_up > 0 else 0.0) if p > 0]
         arm = min(arms) if arms else 0.0
         if arm <= 0 or t.scalp_dip <= 0 or bid <= 0:
             return None
         if bid + 1e-9 >= arm:
             t.scalp_high = max(t.scalp_high, bid)
-        return scalp_hit(bid, t.scalp_high, arm, t.scalp_dip)
+        hit = scalp_hit(bid, t.scalp_high, arm, t.scalp_dip)
+        if hit is None:
+            t.scalp_dip_since = None
+            return None
+        if t.scalp_dip_seconds <= 0:
+            return hit
+        if t.scalp_dip_since is None:
+            t.scalp_dip_since = now
+        held = now - t.scalp_dip_since
+        return f"{hit} for {held:.0f}s" if held >= t.scalp_dip_seconds else None
 
     def _stop_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The stop-loss, on the socket: the bid is `stop_drop` under the price paid (and, for an hourly market, the last hour has begun)."""
@@ -842,6 +854,13 @@ class ProfitWatcher:
         with self._lock:
             targets = list(self.targets.values())
         for t in targets:
+            key = (t.ticker, t.lane)
+            if t.scalp_dip_since is not None and t.last_ts and key not in self._inflight:
+                why = self._scalp(t, t.last_bid, now)  # a dip that has held 3 s while no quote arrived
+                if why:
+                    self._inflight.add(key)
+                    self._jobs.put(SellSignal(t.ticker, t.lane, why))
+                    continue
             if not t.last_ts or (t.trail_drop <= 0 and t.stop_drop <= 0):
                 continue
             if now - t.bid_since >= t.trail_hold:
@@ -916,7 +935,7 @@ class ProfitWatcher:
             held.watch_at = spec.watch_at
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
             held.watch_loss, held.watch_loss_seconds = spec.watch_loss, spec.watch_loss_seconds
-            held.scalp_at, held.scalp_up, held.scalp_dip = spec.scalp_at, spec.scalp_up, spec.scalp_dip
+            held.scalp_at, held.scalp_up, held.scalp_dip, held.scalp_dip_seconds = spec.scalp_at, spec.scalp_up, spec.scalp_dip, spec.scalp_dip_seconds
             if row["close_time"] and str(row["ticker"]).split("-")[0].endswith("15M"):
                 with contextlib.suppress(TypeError, ValueError):
                     close = datetime.fromisoformat(row["close_time"]).timestamp()

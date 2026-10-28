@@ -175,7 +175,7 @@ def test_a_climb_through_70_rides_and_a_3c_dip_sells(tmp_path, monkeypatch):
     assert scalp_hit(0.40, 0.0, 0.70, 0.03) is None  # 70c has not printed
     w, base = armed(tmp_path, monkeypatch, 600.0)
     t = w.targets[("KXBTC15M-1", "fav")]
-    t.entry, t.stop_drop, t.scalp_at, t.scalp_dip = 0.40, 0.0, 0.70, 0.03
+    t.entry, t.stop_drop, t.scalp_at, t.scalp_dip, t.scalp_dip_seconds = 0.40, 0.0, 0.70, 0.03, 0.0  # no wait: the old rule, sold on the first print 3c under
     w.on_event(quote(0.40, base))
     w.on_event(quote(0.69, base + 1))
     assert w._jobs.empty()
@@ -187,7 +187,7 @@ def test_a_climb_through_70_rides_and_a_3c_dip_sells(tmp_path, monkeypatch):
     assert not w._jobs.empty() and "scalp" in w._jobs.get_nowait()[2]
     w2, base2 = armed(tmp_path, monkeypatch, 600.0)
     t2 = w2.targets[("KXBTC15M-1", "fav")]
-    t2.entry, t2.stop_drop, t2.scalp_at, t2.scalp_up, t2.scalp_dip = 0.40, 0.0, 0.0, 0.10, 0.03
+    t2.entry, t2.stop_drop, t2.scalp_at, t2.scalp_up, t2.scalp_dip, t2.scalp_dip_seconds = 0.40, 0.0, 0.0, 0.10, 0.03, 0.0
     w2.on_event(quote(0.49, base2))  # 9c above the price paid: the trail is not armed
     assert w2._jobs.empty()
     w2.on_event(quote(0.52, base2 + 1))  # 12c above, so this is the high
@@ -253,3 +253,107 @@ def test_past_seven_minutes_an_hourly_market_still_waits_the_cap(tmp_path, monke
     assert w._jobs.empty()  # the early-out is a 15-minute finding; the hourly stop waits its 60 s cap
     w.on_event(quote(0.40, base + 61, "KXBTC-1"))
     assert not w._jobs.empty()
+
+
+def _scalp_target(tmp_path, monkeypatch, seconds=3.0):
+    w, base = armed(tmp_path, monkeypatch, 600.0)
+    t = w.targets[("KXBTC15M-1", "fav")]
+    t.entry, t.stop_drop, t.scalp_at, t.scalp_up, t.scalp_dip, t.scalp_dip_seconds = 0.40, 0.0, 0.0, 0.10, 0.03, seconds
+    w.on_event(quote(0.40, base))
+    w.on_event(quote(0.52, base + 1))  # 12c above the price paid: armed, and 0.52 is the high
+    return w, t, base
+
+
+def test_a_dip_must_hold_for_the_lanes_seconds_before_the_scalp_sells(tmp_path, monkeypatch):
+    w, _t, base = _scalp_target(tmp_path, monkeypatch)
+    w.on_event(quote(0.49, base + 2))  # 3c under the high: the dip starts
+    assert w._jobs.empty()
+    w.on_event(quote(0.50, base + 3))  # back to 2c under: it did not hold, so the clock starts over
+    w.on_event(quote(0.49, base + 4))
+    w.on_event(quote(0.49, base + 6))  # 2 s into the second dip
+    assert w._jobs.empty()
+    w.on_event(quote(0.49, base + 7))  # 3 s
+    job = w._jobs.get_nowait()
+    assert "scalp" in job.why and "for 3s" in job.why
+
+
+def test_a_new_high_during_a_dip_starts_the_count_again(tmp_path, monkeypatch):
+    w, t, base = _scalp_target(tmp_path, monkeypatch)
+    w.on_event(quote(0.49, base + 2))  # the dip starts
+    w.on_event(quote(0.56, base + 3))  # a new high: not a dip any more
+    assert t.scalp_high == 0.56 and w._jobs.empty()
+    w.on_event(quote(0.53, base + 4))  # 3c under the new high: a new dip
+    w.on_event(quote(0.53, base + 6))
+    assert w._jobs.empty()  # 2 s
+    w.on_event(quote(0.53, base + 7))
+    assert not w._jobs.empty()
+
+
+def test_a_held_dip_is_sold_by_the_clock_when_the_market_goes_quiet(tmp_path, monkeypatch):
+    w, _t, base = _scalp_target(tmp_path, monkeypatch)
+    w.on_event(quote(0.49, base + 2))  # the dip starts, and no quote follows
+    w.check_timers(base + 4.0)
+    assert w._jobs.empty()  # 2 s
+    w.check_timers(base + 5.5)
+    assert "scalp" in w._jobs.get_nowait().why  # 3.5 s
+
+
+def test_with_no_wait_a_dip_sells_on_the_first_print(tmp_path, monkeypatch):
+    w, _t, base = _scalp_target(tmp_path, monkeypatch, seconds=0.0)
+    w.on_event(quote(0.49, base + 2))
+    assert "scalp" in w._jobs.get_nowait().why
+
+
+def test_the_sweep_sells_a_scalp_only_after_the_dip_has_held(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import lanes, runner
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(TOML)
+    s = config.load()
+    spec = dataclasses.replace(lanes.lane_specs(s)["fav"], scalp_up=0.10, scalp_dip=0.03, scalp_dip_seconds=3.0)
+    monkeypatch.setattr(runner, "high_since", lambda *a, **k: 0.52)
+    held = {"for": 2.0}
+    monkeypatch.setattr(runner, "below_line_seconds", lambda s_, ticker, side, line, now=None: (held["for"], round(line, 2))[0] if round(line, 2) == 0.49 else None)
+    args = (s, spec, "KXBTC15M-1", "yes", 0.40, 0.49, 1.0, 100.0)
+    assert runner.scalp_sweep_hit(*args) is None  # 3c under the 0.52 high, but only for 2 s
+    held["for"] = 3.0
+    assert "scalp" in runner.scalp_sweep_hit(*args)
+    assert runner.scalp_sweep_hit(s, spec, "KXBTC15M-1", "yes", 0.40, 0.51, 1.0, 100.0) is None  # 1c under: no dip
+    held["for"] = 0.0
+    monkeypatch.setattr(runner, "below_line_seconds", lambda *a, **k: None)  # the tape has nothing to say about how long: do not sell on a guess
+    assert runner.scalp_sweep_hit(*args) is None
+    assert "scalp" in runner.scalp_sweep_hit(s, dataclasses.replace(spec, scalp_dip_seconds=0.0), "KXBTC15M-1", "yes", 0.40, 0.49, 1.0, 100.0)  # no wait: sold on the print
+
+
+def test_a_higher_bid_resets_the_high_even_a_moment_before_the_dip_would_have_sold(tmp_path, monkeypatch):
+    w, t, base = _scalp_target(tmp_path, monkeypatch)
+    w.on_event(quote(0.49, base + 2))  # the dip starts, 3c under the 0.52 high
+    w.on_event(quote(0.49, base + 4))  # 2 s in
+    assert t.scalp_high == 0.52 and w._jobs.empty()
+    w.on_event(quote(0.53, base + 4.9))  # 1c over the old high, a hair before 3 s: the high is now 0.53
+    assert t.scalp_high == 0.53 and t.scalp_dip_since is None and w._jobs.empty()
+    w.on_event(quote(0.49, base + 5))  # 4c under the NEW high: a fresh dip, from here
+    w.on_event(quote(0.49, base + 7.5))  # 2.5 s into it. Under the old high's count this would already have sold
+    assert w._jobs.empty()
+    w.on_event(quote(0.49, base + 8))
+    assert "0.53 high" in w._jobs.get_nowait().why  # sold against the new high
+
+
+def test_the_clock_does_not_sell_a_dip_that_a_higher_bid_has_ended(tmp_path, monkeypatch):
+    w, t, base = _scalp_target(tmp_path, monkeypatch)
+    w.on_event(quote(0.49, base + 2))
+    w.on_event(quote(0.56, base + 3))  # a new high ends the dip
+    w.check_timers(base + 9.0)  # long past 3 s since the first dip began
+    assert t.scalp_high == 0.56 and w._jobs.empty()
+
+
+def test_a_bid_that_only_equals_the_high_is_not_a_new_high_but_it_does_end_the_dip(tmp_path, monkeypatch):
+    w, t, base = _scalp_target(tmp_path, monkeypatch)
+    w.on_event(quote(0.49, base + 2))
+    w.on_event(quote(0.52, base + 3))  # back to the high
+    assert t.scalp_high == 0.52 and t.scalp_dip_since is None
+    w.on_event(quote(0.49, base + 4))
+    w.on_event(quote(0.49, base + 6))
+    assert w._jobs.empty()  # the count restarted at base + 4

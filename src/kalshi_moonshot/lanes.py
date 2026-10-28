@@ -137,7 +137,8 @@ class LaneSpec:
     watch_loss_seconds: float = 3.0  # once that line prints, this many seconds to bounce back above it
     scalp_at: float = 0.0  # once the bid prints this price, follow the high (0 = off). A climb keeps riding (strategy.scalp_hit)
     scalp_up: float = 0.0  # or once the bid is this far above the price paid (0 = off). Whichever arm is set and reached first
-    scalp_dip: float = 0.03  # sell the moment the bid is this far under that high
+    scalp_dip: float = 0.03  # sell when the bid is this far under that high...
+    scalp_dip_seconds: float = 3.0  # ...and has stayed that far under it for this many seconds (0 = on the first print). A dip that recovers sooner is noise, not a reversal
     rest_sell: bool = False  # rest the take-profit sell on the book from the moment a live buy fills (post-only, so no taker fee) instead of having the watcher cross the book when the bid gets there; needs take_profit_x or take_profit_at. A stop or crash exit cancels it first and sells what is left
     trail_activate: float = 0.0  # peak-crash exit, when trail_progress is 0: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
     trail_progress: float | None = None  # arm the crash exit once the bid has covered this share of the way from the price paid to $1.00; None = the global CRASH_PROGRESS, 0 = use trail_activate (a gain on the price paid) instead
