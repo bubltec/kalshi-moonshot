@@ -1429,8 +1429,9 @@ def test_a_repriced_resting_buy_rests_its_take_profit_from_the_price_it_paid(tmp
     assert entries == [pytest.approx(0.79)]  # the take-profit counts from what was paid, not from the planned 0.81
 
 
-def _resting_retry(tmp_path, monkeypatch, *, first_book, answers, fresh_book=None, fresh_error=False, shot_ask=0.83):
-    """_place_resting where the exchange answers each order from `answers` (an exception to refuse, a dict to accept). Returns (orders sent, Placed, book reads)."""
+def _resting_retry(tmp_path, monkeypatch, *, first_book, answers, fresh_book=None, fresh_error=False, shot_ask=0.83, order_key=None, ids=None):
+    """_place_resting where the exchange answers each order from `answers` (an exception to refuse, a dict to accept). Returns (orders sent, Placed, book reads).
+    Like Kalshi, it refuses a client_order_id it has already seen with 409 order_already_exists, even one on an order it rejected; `ids` collects the ids sent."""
     import dataclasses
 
     from kalshi_moonshot import lanes, runner
@@ -1453,6 +1454,10 @@ def _resting_retry(tmp_path, monkeypatch, *, first_book, answers, fresh_book=Non
 
         def buy_resting(self, ticker, side, count, price, seconds, client_order_id=None, post_only=True):
             self.sent.append(price)
+            seen = [] if ids is None else ids
+            if client_order_id is not None and client_order_id in seen:
+                raise KalshiError('POST /portfolio/events/orders -> 409: {"error":{"code":"order_already_exists","message":"order already exists"}}')
+            seen.append(client_order_id)
             answer = answers[len(self.sent) - 1]
             if isinstance(answer, Exception):
                 raise answer
@@ -1464,7 +1469,7 @@ def _resting_retry(tmp_path, monkeypatch, *, first_book, answers, fresh_book=Non
     spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], buy_rest_seconds=20.0, buy_rest_below=0.01, price=(0.76, 0.92))
     shot = LongShot("KXBTC15M-9", "t", "", shot_ask - 0.01, shot_ask, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXBTC15M", side="no")
     c = C()
-    out = runner._place_resting(s, c, store, shot, "why", 2.0, spec, None, first_book)
+    out = runner._place_resting(s, c, store, shot, "why", 2.0, spec, order_key, first_book)
     return c.sent, out, reads
 
 
@@ -1501,3 +1506,11 @@ def test_a_retry_after_a_cross_skips_if_the_fresh_ask_has_left_the_band(tmp_path
 def test_a_retry_that_cannot_read_the_book_reports_the_refusal(tmp_path, monkeypatch):
     sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), answers=[_cross(), {"order_id": "never"}], fresh_error=True)
     assert len(sent) == 1 and out.filled == 0 and out.note.startswith("resting buy refused") and "post only cross" in out.note
+
+
+def test_the_retry_after_a_cross_uses_a_new_client_order_id(tmp_path, monkeypatch):
+    # the scan path gives every order a stable key. Kalshi remembers the id of the order it rejected, so sending the same key again is a duplicate (409) and the retry never lands
+    ids = []
+    sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.18,)), answers=[_cross(), {"order_id": "o1"}], order_key="KXBTC15M-9-guarded", ids=ids)
+    assert len(sent) == 2 and out.filled == 2.0  # the retry went through
+    assert ids[0] == "KXBTC15M-9-guarded" and ids[1] != ids[0] and ids[1].startswith("KXBTC15M-9-guarded")  # a different id, derived from the same key so a re-run of the job repeats it, not doubles up

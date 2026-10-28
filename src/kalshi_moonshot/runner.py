@@ -1012,7 +1012,8 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
             return Placed(skip)
         started = time.time()
         try:
-            resp = client.buy_resting(shot.ticker, shot.side, count, price, spec.buy_rest_seconds, client_order_id=order_key)
+            # Kalshi remembers the client_order_id of the order it refused, so the same one again is a duplicate (409 order_already_exists). The retry's own id comes from the same key: a re-run of this job repeats it rather than doubling up.
+            resp = client.buy_resting(shot.ticker, shot.side, count, price, spec.buy_rest_seconds, client_order_id=f"{order_key}-retry" if order_key else None)
         except KalshiRateLimited:
             raise
         except KalshiError as exc2:
