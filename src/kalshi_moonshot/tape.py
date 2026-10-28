@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,229 @@ CREATE INDEX IF NOT EXISTS idx_fut_1s ON fut_1s(symbol, ts);
 """
 
 FLUSH_EVERY = 5.0
+RECENT_SECONDS = 60.0  # the live snapshot: every quote and feed price still in this window, kept after the database flush
+STOP_SECONDS = 900.0  # a market being watched keeps this much quote history, loaded once when the watch starts
+INDEX_SECONDS = 1860.0  # a settlement index keeps this much, so the last-minute chance can be computed without a query
+
+
+class Recent:
+    """The last 60 seconds of the tape, in memory. Readers use it instead of the database when it already covers the question."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._quotes: dict[str, deque[tuple[float, float, float]]] = {}
+        self._feed: dict[str, deque[tuple[float, float]]] = {}
+        self._stop: dict[str, tuple[float, deque[tuple[float, float, float]]]] = {}  # ticker -> (loaded from, quotes since)
+        self._feed_watch: dict[str, tuple[float, deque[tuple[float, float]]]] = {}  # symbol -> (loaded from, prices since)
+        self._index: dict[str, tuple[float, deque[tuple[float, float]]]] = {}  # index id -> (loaded from, ticks since)
+        self._index_ready: set[str] = set()
+
+    def clear(self) -> None:
+        with self._lock:
+            self._quotes.clear()
+            self._feed.clear()
+            self._stop.clear()
+            self._feed_watch.clear()
+            self._index.clear()
+            self._index_ready.clear()
+
+    def note_quote(self, ticker: str, ts: float, bid: float, ask: float) -> None:
+        row = (float(ts), float(bid), float(ask))
+        self._note(self._quotes, ticker, row, row[0])
+        self._extend_stop(ticker, row)
+
+    def stop_armed(self, ticker: str) -> bool:
+        with self._lock:
+            return ticker in self._stop
+
+    def arm_stop(self, ticker: str, loaded_from: float, rows: list[tuple[float, float, float]]) -> None:
+        """Keep `rows` as this ticker's stop history. A second call leaves the first one in place."""
+        with self._lock:
+            if ticker in self._stop:
+                return
+            by = {row[0]: row for row in rows}
+            for row in self._quotes.get(ticker, ()):
+                by[row[0]] = row
+            kept: deque[tuple[float, float, float]] = deque(by[k] for k in sorted(by))
+            if kept:
+                cutoff = kept[-1][0] - STOP_SECONDS
+                while kept and kept[0][0] < cutoff:
+                    kept.popleft()
+            self._stop[ticker] = (float(loaded_from), kept)
+
+    def stop_quotes(self, ticker: str, start: float, end: float) -> list[tuple[float, float, float]] | None:
+        """This watch's quotes with start < ts <= end. None when the watch was never loaded, or it does not reach `start`."""
+        with self._lock:
+            slot = self._stop.get(ticker)
+            if slot is None:
+                return None
+            loaded_from, rows = slot
+            if loaded_from > start:
+                return None
+            return [row for row in rows if start < row[0] <= end and row[1] > 0 and row[2] > 0]
+
+    def _extend_stop(self, ticker: str, row: tuple[float, float, float]) -> None:
+        with self._lock:
+            slot = self._stop.get(ticker)
+            if slot is None:
+                return
+            loaded_from, rows = slot
+            rows.append(row)
+            cutoff = row[0] - STOP_SECONDS
+            while rows and rows[0][0] < cutoff:
+                rows.popleft()
+            self._stop[ticker] = (max(loaded_from, cutoff), rows)
+
+    def feed_armed(self, symbol: str) -> bool:
+        with self._lock:
+            return symbol in self._feed_watch
+
+    def arm_feed(self, symbol: str, loaded_from: float, rows: list[tuple[float, float]]) -> None:
+        with self._lock:
+            if symbol in self._feed_watch:
+                return
+            by = {row[0]: row for row in rows}
+            for row in self._feed.get(symbol, ()):
+                by[row[0]] = row
+            kept: deque[tuple[float, float]] = deque(by[k] for k in sorted(by))
+            self._feed_watch[symbol] = (float(loaded_from), kept)
+
+    def feed_rows(self, symbol: str, start: float, end: float) -> list[tuple[float, float]] | None:
+        with self._lock:
+            slot = self._feed_watch.get(symbol)
+            if slot is None:
+                return None
+            loaded_from, rows = slot
+            if loaded_from > start:
+                return None
+            return [row for row in rows if start < row[0] <= end]
+
+    def index_armed(self, index_id: str) -> bool:
+        with self._lock:
+            return index_id in self._index_ready
+
+    def arm_index(self, index_id: str, loaded_from: float, rows: list[tuple[float, float]]) -> None:
+        with self._lock:
+            if index_id in self._index_ready:
+                return
+            by = {row[0]: row for row in rows}
+            slot = self._index.get(index_id)
+            if slot is not None:
+                for row in slot[1]:
+                    by[row[0]] = row
+            kept: deque[tuple[float, float]] = deque(by[k] for k in sorted(by))
+            self._index[index_id] = (float(loaded_from), kept)
+            self._index_ready.add(index_id)
+
+    def index_rows(self, index_id: str, start: float, end: float) -> list[tuple[float, float]] | None:
+        with self._lock:
+            if index_id not in self._index_ready:
+                return None
+            slot = self._index.get(index_id)
+            if slot is None:
+                return None
+            loaded_from, rows = slot
+            if loaded_from > start:
+                return None
+            return [row for row in rows if start < row[0] <= end]
+
+    def _extend_pair(self, table: dict[str, tuple[float, deque]], key: str, row: tuple[float, float], keep: float) -> None:
+        with self._lock:
+            slot = table.get(key)
+            if slot is None:
+                return
+            loaded_from, rows = slot
+            rows.append(row)
+            cutoff = row[0] - keep
+            while rows and rows[0][0] < cutoff:
+                rows.popleft()
+            table[key] = (max(loaded_from, cutoff), rows)
+
+    def note_feed(self, symbol: str, ts: float, px: float) -> None:
+        row = (float(ts), float(px))
+        self._note(self._feed, symbol, row, row[0])
+        self._extend_pair(self._feed_watch, symbol, row, STOP_SECONDS)
+
+    def note_index(self, index_id: str, ts: float, value: float) -> None:
+        """Keep the tick even before the history load, so nothing that arrives during that load is missed."""
+        row = (float(ts), float(value))
+        with self._lock:
+            slot = self._index.get(index_id)
+            if slot is None:
+                self._index[index_id] = (row[0], deque([row]))
+                return
+            loaded_from, rows = slot
+            rows.append(row)
+            cutoff = row[0] - INDEX_SECONDS
+            while rows and rows[0][0] < cutoff:
+                rows.popleft()
+            self._index[index_id] = (max(loaded_from, cutoff), rows)
+
+    def _note(self, table: dict[str, deque], key: str, row: tuple, ts: float) -> None:
+        cutoff = ts - RECENT_SECONDS
+        with self._lock:
+            rows = table.get(key)
+            if rows is None:
+                rows = deque()
+                table[key] = rows
+            rows.append(row)
+            while rows and rows[0][0] < cutoff:
+                rows.popleft()
+
+    def prune(self, now: float) -> None:
+        cutoff = now - RECENT_SECONDS
+        with self._lock:
+            for table in (self._quotes, self._feed):
+                dead = [key for key, rows in table.items() if not rows or rows[-1][0] < cutoff]
+                for key in dead:
+                    del table[key]
+            quiet = [key for key, (_loaded, rows) in self._stop.items() if not rows or rows[-1][0] < now - STOP_SECONDS]
+            for key in quiet:
+                del self._stop[key]
+
+    def quotes(self, ticker: str, start: float, end: float) -> list[tuple[float, float, float]] | None:
+        """Quotes with start < ts <= end. None when this snapshot does not reach `start` and the database may know more."""
+        return self._slice(self._quotes, ticker, start, end)
+
+    def feed(self, symbol: str, start: float, end: float) -> list[tuple[float, float]] | None:
+        """Feed prices with start < ts <= end. None when the snapshot does not reach `start`."""
+        return self._slice(self._feed, symbol, start, end)
+
+    def latest_quote(self, ticker: str, start: float, end: float) -> tuple[float, float, float] | None:
+        """The newest quote with start < ts <= end. None when the snapshot covers that window and it is empty. MISS when it does not, so the caller reads the database."""
+        with self._lock:
+            rows = self._quotes.get(ticker)
+            if not rows:
+                return MISS
+            found = None
+            for row in rows:
+                if start < row[0] <= end and row[1] > 0 and row[2] > 0:
+                    found = row
+            if found is not None or rows[0][0] <= start:
+                return found
+            return MISS
+
+    def quote_tail(self, ticker: str, start: float, end: float) -> list[tuple[float, float, float]]:
+        """Quotes in range that the snapshot holds, even when it does not reach `start`."""
+        with self._lock:
+            return [row for row in self._quotes.get(ticker, ()) if start < row[0] <= end]
+
+    def feed_tail(self, symbol: str, start: float, end: float) -> list[tuple[float, float]]:
+        with self._lock:
+            return [row for row in self._feed.get(symbol, ()) if start < row[0] <= end]
+
+    def _slice(self, table: dict[str, deque], key: str, start: float, end: float) -> list | None:
+        with self._lock:
+            rows = table.get(key)
+            if not rows:
+                return None
+            if rows[0][0] > start:
+                return None  # the snapshot starts after the question does, so the database may have the older part
+            return [row for row in rows if start < row[0] <= end]
+
+
+recent = Recent()
+MISS = object()  # the snapshot has no answer, and the database might
 REFRESH_EVERY = 20.0  # how often the refresh loop looks at which series are due (each call lists only the series that are)
 SERIES_EVERY = 20.0  # a series with markets open is listed again this often: a new 15-minute window opens every 15 minutes
 IDLE_EVERY = 120.0  # a series with nothing open (a closed session) is looked at this often
@@ -98,6 +322,7 @@ class Tape:
                 self._last_quote[e["ticker"]] = key
                 self._quotes.append((e["ts"], e["ticker"], e["bid"], e["ask"], e.get("last"), e.get("sts"),
                                      e.get("bid_size"), e.get("ask_size")))
+                recent.note_quote(e["ticker"], e["ts"], e["bid"], e["ask"])
             elif e["kind"] == "trade":
                 row = self._flow.setdefault((int(e["ts"]), e["ticker"]), [0.0, 0.0, 0.0, 0.0])
                 row[0 if e["taker"] == "yes" else 1] += e["count"]
@@ -106,6 +331,7 @@ class Tape:
             elif e["kind"] == "index":
                 self._index.append((e["ts"], e["index_id"], e["value"], e.get("avg60"), e.get("quarter_avg"),
                                     e.get("src_ms")))
+                recent.note_index(e["index_id"], e["ts"], e["value"])
 
     def add_fut(self, coin: str, ts: float, px: float, size: float, bought: bool) -> None:
         """One live perpetual-futures trade: folded into its second's row (see futflow.py)."""
@@ -122,6 +348,7 @@ class Tape:
                 return
             self._last_feed[symbol] = (px, ts)
             self._feed.append((ts, symbol, px))
+            recent.note_feed(symbol, ts, px)
 
     def flush(self, now: float | None = None) -> int:
         cutoff = int((now if now is not None else time.time()) - 2)  # a second still being filled stays in memory, so each (second, coin) is one row
@@ -144,6 +371,7 @@ class Tape:
             self.db.executemany("INSERT INTO feed_ticks VALUES (?,?,?)", f)
             self.db.executemany("INSERT INTO fut_1s VALUES (?,?,?,?,?,?,?)", ft)
             self.db.commit()
+            recent.prune(now if now is not None else time.time())
         except Exception:
             self.db.rollback()
             with self._lock:  # the database was unreachable for a moment: keep these rows for the next flush instead of losing them
@@ -242,6 +470,7 @@ class TapeRecorder:
                 log.debug("tape: extra tickers failed (%s)", exc)
         self.stream.set_tickers(tickers)
         self.extra_stream.set_tickers(extras - tickers)  # a market the live stream already carries is not recorded twice
+        self._arm(tickers | extras, now)
         return len(tickers) + len(extras - tickers)
 
     def follow(self, tickers: set[str]) -> None:
@@ -249,6 +478,27 @@ class TapeRecorder:
         current = set(self.stream._tickers)
         if not tickers <= current:
             self.stream.set_tickers(current | set(tickers))
+        self._arm(set(tickers), time.time())
+
+    def _arm(self, tickers: set[str], now: float) -> None:
+        """Load each market's history once, on this thread, so a later bid or sale does not wait on the database."""
+        from .runner import _spot_symbols, arm_feed_history, arm_index_history, arm_stop_history
+
+        for ticker in tickers:
+            arm_stop_history(self.s, ticker, now)
+        symbols: set[str] = set()
+        indexes: set[str] = set()
+        for ser in self._series():
+            idx = index_for_series(ser)
+            if idx:
+                indexes.add(idx)
+            symbols.update(_spot_symbols(ser))
+        for sym in self._commodity_symbols():
+            symbols.add(sym)
+        for symbol in symbols:
+            arm_feed_history(self.s, symbol, now)
+        for index_id in indexes:
+            arm_index_history(self.s, index_id, now)
 
     def _crypto_symbols(self) -> list[str]:
         """Kraken spot symbols behind the crypto 15-minute markets. Kalshi settles on the BRTI-style index; Kraken's own trades are a faster look at the same price."""

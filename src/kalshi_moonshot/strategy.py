@@ -399,15 +399,20 @@ def ride_for(seconds_left: float | None, ride: float, patient_left: float) -> fl
     return ride * seconds_left / patient_left
 
 
-def hard_loss(entry: float, bid: float, under_for: float, loss: float, bounce: float) -> str | None:
+def hard_loss(
+    entry: float, bid: float, under_for: float, loss: float, bounce: float, *, low: float = 0.0, lift: float = 0.0,
+) -> str | None:
     """Sell once the bid has given back `loss` of the price paid and stayed there for `bounce` seconds.
 
-    A print back above that line restarts `under_for`. None while the bounce is still open, or when
-    `loss` is 0. Both numbers come from the lane.
+    A print back above that line restarts `under_for`. A bid more than `lift` above `low` (the worst
+    print of this visit) is already coming back, so it is held. `lift` of 0 ignores that. None while
+    the bounce is still open, or when `loss` is 0. The numbers come from the lane.
     """
     if loss <= 0 or entry <= 0 or bid <= 0 or bid > entry * (1.0 - loss):
         return None
     if under_for < bounce:
+        return None
+    if lift > 0 and low > 0 and bid > low + lift:
         return None
     held = f" for {under_for:.0f}s" if bounce else ""
     return f"stop-loss: bid {bid:.2f} is {1 - bid / entry:.0%} under the {entry:.2f} paid{held} (watched)"
@@ -450,10 +455,11 @@ def watch_trend(
 def price_shape(points: list[tuple[float, float]], now: float, bid: float) -> str:
     """What the last 3 seconds of bids are: 'trend', 'spike', or 'hover'.
 
-    A hover barely moved (under 8c). A spike dropped and has already retraced at least half, or the
-    whole drop is still a single gap. A trend stepped down at least twice and is still at the low.
-    The stop sells only a trend, and only once the bid is under 50c. This reads the path already
-    in hand; it does not wait another 3 seconds.
+    A hover barely moved (under 8c). A spike dropped and has already retraced at least half, the
+    whole drop is still a single gap, or the bid fell 20c or more inside this window: that is one
+    air pocket, and the bounce has not had a print yet. A trend stepped down at least twice, by
+    less than that, and is still at the low. The stop sells only a trend, and only once the bid
+    is under 50c. This reads the path already in hand; it does not wait another 3 seconds.
     """
     recent = [b for t, b in points if now - 3.0 <= t <= now and b > 0]
     if len(recent) < 2:
@@ -462,6 +468,8 @@ def price_shape(points: list[tuple[float, float]], now: float, bid: float) -> st
     if high - low < 0.08:
         return "hover"
     if bid > low + 0.02 and (bid - low) >= 0.5 * (high - low):
+        return "spike"
+    if high - low >= 0.20:
         return "spike"
     steps = 0
     prev = recent[0]

@@ -107,6 +107,7 @@ class Target:
     stop_confirm: float = 0.0  # the bid must stay past the stop line this many seconds before the stop sells (0 = at once)
     stop_since: float | None = None  # when the bid first fell past the stop line and has stayed there
     loss_since: float | None = None  # when the bid first reached the hard-loss line and has stayed there
+    loss_low: float = 0.0  # the worst bid of that visit. A bounce of watch_loss_lift off it is held
     stop_ref: float = 0.0  # price the stop is measured from when it is not the price paid (a hand-placed buy: the bid it could be sold at)
     stop_from: float = 0.0  # ... but only once this unix time is reached (an hourly market is only stopped in its last STOP_LOSS_HOURS)
     trail_progress: float = 0.0  # >0: the crash exit arms once the bid has covered this share of the way from the price paid to $1.00, instead of trail_activate
@@ -128,6 +129,7 @@ class Target:
     watch_patient: float = 420.0
     watch_loss: float = 0.0  # hard_loss fraction of the price paid (0 = off)
     watch_loss_seconds: float = 3.0
+    watch_loss_lift: float = 0.0  # hard_loss: a bounce this far off loss_low is held (0 = off)
     cross_gap: float = 0.0  # lane stop_cross_gap: skip a sale on a Polymarket bid this far under the Kalshi bid (0 = off)
     cross_logged: float = 0.0  # when the last skipped sale was logged
     scalp_at: float = 0.0  # scalp_hit: follow the high once the bid prints this price (0 = off)
@@ -596,16 +598,23 @@ class ProfitWatcher:
     def _cross_checked(self, t: Target, bid: float, now: float, reason: str) -> str | None:
         """A sale decided on a Polymarket bid is held back when Kalshi's bid for the same side and market is more than the lane's stop_cross_gap above it: Polymarket prints bids that are not real (exactly 0.15 on markets Kalshi has at 0.75), and a stop sold into one.
         Kalshi's bid is the tape's newest quote for the ticker, at most CROSS_STALE seconds old; with none, the sale goes ahead."""
-        tape = self._tape_db()
-        if tape is None:
+        from . import tape as tape_mod
+
+        if tape_mod.recent.stop_armed(t.ticker):
+            got = tape_mod.recent.stop_quotes(t.ticker, now - CROSS_STALE, now)
+            book = None if not got else (float(got[-1][1]), float(got[-1][2]))
+        else:
+            tape = self._tape_db()
+            if tape is None:
+                return reason
+            try:
+                row = tape.execute("SELECT bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC LIMIT 1", (t.ticker, now, now - CROSS_STALE)).fetchone()
+            except Exception:
+                return reason
+            book = None if row is None else (float(row[0]), float(row[1]))
+        if book is None:
             return reason
-        try:
-            row = tape.execute("SELECT bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC LIMIT 1", (t.ticker, now, now - CROSS_STALE)).fetchone()
-        except Exception:
-            return reason
-        if row is None:
-            return reason
-        ref = side_bid(t.side, float(row[0]), float(row[1]))
+        ref = side_bid(t.side, book[0], book[1])
         if ref - bid <= t.cross_gap:
             return reason
         if now - t.cross_logged > 30.0:
@@ -836,9 +845,15 @@ class ProfitWatcher:
         if open_market and t.watch_loss > 0 and ref > 0 and bid <= ref * (1.0 - t.watch_loss):
             if t.loss_since is None:
                 t.loss_since = now
-            hit = hard_loss(ref, bid, now - t.loss_since, t.watch_loss, t.watch_loss_seconds)
+                t.loss_low = bid
+            elif bid < t.loss_low:
+                t.loss_low = bid
+            hit = hard_loss(
+                ref, bid, now - t.loss_since, t.watch_loss, t.watch_loss_seconds, low=t.loss_low, lift=t.watch_loss_lift,
+            )
             return f"{hit} (socket)" if hit else None
         t.loss_since = None
+        t.loss_low = 0.0
         if open_market and t.watch_at > 0 and ref > t.watch_at and bid <= t.watch_at:
             if t.stop_since is None:
                 t.stop_since = now
@@ -973,7 +988,7 @@ class ProfitWatcher:
             held.cash_up, held.cash_drop, held.cash_left = spec.cash_up_minute, spec.cash_drop, spec.cash_left_seconds
             held.watch_at = spec.watch_at
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
-            held.watch_loss, held.watch_loss_seconds = spec.watch_loss, spec.watch_loss_seconds
+            held.watch_loss, held.watch_loss_seconds, held.watch_loss_lift = spec.watch_loss, spec.watch_loss_seconds, spec.watch_loss_lift
             held.cross_gap = spec.stop_cross_gap
             held.scalp_at, held.scalp_up, held.scalp_dip, held.scalp_dip_seconds = spec.scalp_at, spec.scalp_up, spec.scalp_dip, spec.scalp_dip_seconds
             held.scalp_dip_hard = spec.scalp_dip_hard
@@ -995,6 +1010,11 @@ class ProfitWatcher:
                     fresh[(ticker, lane)].stop_from = 0.0
         if s.manual_exit and getattr(self.client, "authed", False):
             self._add_manual(s, store, fresh)
+        for ticker, _lane in fresh:
+            runner.arm_stop_history(s, ticker)  # one read of the last 15 minutes; live quotes extend it
+        for held in fresh.values():
+            if held.index_id:
+                runner.arm_index_history(s, held.index_id)
         hunt_by = {ser: spec for spec in enabled_lanes(s) if spec.burst_hunt for ser in spec.series}
         with self._lock:
             self.targets = fresh

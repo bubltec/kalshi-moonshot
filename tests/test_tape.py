@@ -177,6 +177,82 @@ def test_extra_series_are_recorded_on_their_own_connection(tmp_path):
     assert not any(t.startswith("KXESOCCERGAME") for t in rec.stream._tickers)  # a new match every minute never reconnects the live stream
 
 
+def test_the_last_minute_answers_the_trend_before_it_is_written(tmp_path):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.strategy import LongShot
+    from kalshi_moonshot.tape import recent
+
+    recent.clear()
+    tape = Tape(tmp_path / "tape.db")
+    now = time.time()
+    tape.add({"kind": "quote", "ts": now - 12, "ticker": "MEM-1", "bid": 0.40, "ask": 0.42, "last": 0.41, "sts": 1})
+    tape.add({"kind": "quote", "ts": now - 2, "ticker": "MEM-1", "bid": 0.46, "ask": 0.48, "last": 0.47, "sts": 1})
+    tape.add_feed("coinbase:XRP-USD", 1.33, now - 1)
+    # nothing flushed: the database file for this read does not even have the table
+
+    class S:
+        tape_path = str(tmp_path / "not-written.db")
+
+    yes = LongShot("MEM-1", "", "", 0.46, 0.48, 0.0, "", 0.1, side="yes")
+    assert abs(runner.side_trend(S, yes, 10.0, now=now) - 0.06) < 1e-9  # mid 0.41 then, 0.47 now
+    assert tape.flush() == 3  # the write still happens, and the minute stays after it
+    assert recent.latest_quote("MEM-1", now - 30, now)[0] == now - 2
+    assert recent.feed_tail("coinbase:XRP-USD", now - 30, now) == [(now - 1, 1.33)]
+    recent.note_quote("MEM-1", now + 61, 0.10, 0.12)  # a minute later the earlier prints have aged out
+    assert recent.quote_tail("MEM-1", now - 30, now) == []
+    recent.clear()
+
+
+def test_a_watch_loads_its_stop_history_once(tmp_path):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.tape import recent
+
+    recent.clear()
+    tape = Tape(tmp_path / "tape.db")
+    now = time.time()
+    tape.add({"kind": "quote", "ts": now - 40, "ticker": "STOP-1", "bid": 0.30, "ask": 0.32, "last": 0.31, "sts": 1})
+    tape.add({"kind": "quote", "ts": now - 10, "ticker": "STOP-1", "bid": 0.28, "ask": 0.30, "last": 0.29, "sts": 1})
+    tape.flush()
+
+    class S:
+        tape_path = str(tmp_path / "tape.db")
+
+    runner.arm_stop_history(S, "STOP-1", now)
+    tape.db.execute("DELETE FROM quotes")
+    tape.db.commit()
+    seconds, low = runner.under_line(S, "STOP-1", "yes", 0.40, now)
+    assert seconds == 40 and abs(low - 0.28) < 1e-9  # the deleted rows are still in the watch
+    tape.add({"kind": "quote", "ts": now, "ticker": "STOP-1", "bid": 0.22, "ask": 0.24, "last": 0.23, "sts": 1})
+    _seconds, low = runner.under_line(S, "STOP-1", "yes", 0.40, now)
+    assert abs(low - 0.22) < 1e-9  # a quote after the load extends the same visit
+    runner.arm_stop_history(S, "STOP-1", now)  # the database is empty now; the first load stands
+    assert runner.under_line(S, "STOP-1", "yes", 0.40, now)[1] == low
+    recent.clear()
+
+
+def test_a_watched_market_answers_a_trend_from_memory(tmp_path):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.strategy import LongShot
+    from kalshi_moonshot.tape import recent
+
+    recent.clear()
+    tape = Tape(tmp_path / "tape.db")
+    now = time.time()
+    tape.add({"kind": "quote", "ts": now - 90, "ticker": "WATCH-1", "bid": 0.40, "ask": 0.42, "last": 0.41, "sts": 1})
+    tape.add({"kind": "quote", "ts": now - 2, "ticker": "WATCH-1", "bid": 0.50, "ask": 0.52, "last": 0.51, "sts": 1})
+    tape.flush()
+
+    class S:
+        tape_path = str(tmp_path / "tape.db")
+
+    runner.arm_stop_history(S, "WATCH-1", now)
+    tape.db.execute("DELETE FROM quotes")
+    tape.db.commit()
+    yes = LongShot("WATCH-1", "", "", 0.50, 0.52, 0.0, "", 0.1, side="yes")
+    assert abs(runner.side_trend(S, yes, 60.0, now=now) - 0.10) < 1e-9  # the minute-ago quote is only in the watch
+    recent.clear()
+
+
 def test_a_recording_only_stream_asks_for_quotes_and_nothing_else():
     live = kalshiws.KalshiStream(object(), lambda e: None)  # type: ignore[arg-type]
     extra = kalshiws.KalshiStream(object(), lambda e: None, index_feed=False, fills=False)  # type: ignore[arg-type]

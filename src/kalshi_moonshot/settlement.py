@@ -100,19 +100,28 @@ class Model:
         if left <= 0 or spot is None or now - spot[0] > 5.0:
             return None
         try:
-            tape = self._tape()
-            if tape is None:
-                return None
+            from . import tape as tape_mod
+
             cached = self.sigma.get(index_id)
             if cached is None or now - cached[0] > 60.0:
-                rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value > 0 ORDER BY ts", (index_id, now - 1860.0, now)).fetchall()
+                rows = tape_mod.recent.index_rows(index_id, now - 1860.0, now)
+                if rows is None:
+                    tape = self._tape()
+                    if tape is None:
+                        return None
+                    rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value > 0 ORDER BY ts", (index_id, now - 1860.0, now)).fetchall()
                 cached = (now, sigma_per_second([r[0] for r in rows], [r[1] for r in rows], now))
                 self.sigma[index_id] = cached
             if cached[1] is None:
                 return None
             locked = 0.0
             if left < WINDOW:
-                rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value > 0 ORDER BY ts", (index_id, close_ts - WINDOW - 25.0, now)).fetchall()
+                rows = tape_mod.recent.index_rows(index_id, close_ts - WINDOW - 25.0, now)
+                if rows is None:
+                    tape = self._tape()
+                    if tape is None:
+                        return None
+                    rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value > 0 ORDER BY ts", (index_id, close_ts - WINDOW - 25.0, now)).fetchall()
                 got = locked_average([r[0] for r in rows], [r[1] for r in rows], close_ts, now)
                 if got is None:
                     return None

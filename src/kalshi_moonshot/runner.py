@@ -528,14 +528,20 @@ def evaluate(
             note = f"just arrived: this side has been in the price band {dwell:.0f}s and the lane waits {spec.min_dwell_seconds:.0f}s. {note}"
     if bet and spec.entry_trend_seconds > 0 and spec.entry_trend_z is not None:
         zed = side_trend_z(s, shot, spec.entry_trend_seconds)
-        if zed is not None and zed <= spec.entry_trend_z:
+        if zed is None or zed <= spec.entry_trend_z:
             bet = False
-            note = f"trending against: this side moved {zed:+.1f} typical moves over the last {spec.entry_trend_seconds:.0f}s and the lane needs more than {spec.entry_trend_z:+.1f}. {note}"
+            note = (
+                f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if zed is None
+                else f"trending against: this side moved {zed:+.1f} typical moves over the last {spec.entry_trend_seconds:.0f}s and the lane needs more than {spec.entry_trend_z:+.1f}. {note}"
+            )
     elif bet and spec.entry_trend_seconds > 0:
         moved = side_trend(s, shot, spec.entry_trend_seconds)
-        if moved is not None and moved < spec.entry_trend_min:
+        if moved is None or moved < spec.entry_trend_min:
             bet = False
-            note = f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
+            note = (
+                f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
+                else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
+            )
     if bet and spec.entry_spot_ticks > 0:
         aligned = spot_ticks_aligned(s, shot, spec.entry_spot_ticks)
         if aligned is False:
@@ -616,16 +622,142 @@ def _explain_unfunded(client: KalshiClient, shot: LongShot, cost: float) -> str 
             f"{UNFUNDED_PAUSE / 60:.0f} minutes")
 
 
-def dwell_seconds(s: Settings, shot: LongShot, floor: float, now: float | None = None) -> float | None:
-    """How many seconds the side we would buy has been at or above `floor` (the lane's lowest price), from the tape's quotes of the last 15 minutes. None when the tape has nothing to say."""
+def _load_quotes(s: Settings, ticker: str, start: float, end: float) -> list[tuple[float, float, float]]:
+    """Quotes with start < ts <= end, oldest first. A market being watched answers from memory. Otherwise the 60s snapshot, and the database only when this market is not watched."""
     from . import db as database
+    from . import tape as tape_mod
 
-    now = time.time() if now is None else now
+    if tape_mod.recent.stop_armed(ticker):
+        got = tape_mod.recent.stop_quotes(ticker, start, end)
+        if got is None:
+            got = tape_mod.recent.quote_tail(ticker, start, end)
+        return [(ts, bid, ask) for ts, bid, ask in got if bid > 0 and ask > 0]
+    got = tape_mod.recent.quotes(ticker, start, end)
+    if got is not None:
+        return [(ts, bid, ask) for ts, bid, ask in got if bid > 0 and ask > 0]
+    rows: list[tuple[float, float, float]] = []
     try:
         tape = database.connect(s.tape_path, "tape", shared=True)
-        rows = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC", (shot.ticker, now, now - 900.0)).fetchall()
+        rows = [(float(ts), float(bid), float(ask)) for ts, bid, ask in tape.execute(
+            "SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts",
+            (ticker, end, start),
+        )]
     except Exception:
-        return None
+        rows = []
+    extra = [(ts, bid, ask) for ts, bid, ask in tape_mod.recent.quote_tail(ticker, start, end) if bid > 0 and ask > 0]
+    if not extra:
+        return rows
+    by = {row[0]: row for row in rows}
+    for row in extra:
+        by[row[0]] = row
+    return [by[k] for k in sorted(by)]
+
+
+def _load_feed(s: Settings, symbol: str, start: float, end: float) -> list[tuple[float, float]]:
+    """Feed prices with start < ts <= end, oldest first. A watched symbol answers from memory."""
+    from . import db as database
+    from . import tape as tape_mod
+
+    if tape_mod.recent.feed_armed(symbol):
+        got = tape_mod.recent.feed_rows(symbol, start, end)
+        return list(got) if got is not None else tape_mod.recent.feed_tail(symbol, start, end)
+    got = tape_mod.recent.feed(symbol, start, end)
+    if got is not None:
+        return list(got)
+    rows: list[tuple[float, float]] = []
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        rows = [(float(ts), float(px)) for ts, px in tape.execute(
+            "SELECT ts, px FROM feed_ticks WHERE symbol=? AND ts<=? AND ts>? ORDER BY ts", (symbol, end, start),
+        )]
+    except Exception:
+        rows = []
+    extra = tape_mod.recent.feed_tail(symbol, start, end)
+    if not extra:
+        return rows
+    by = dict(rows)
+    for row in extra:
+        by[row[0]] = row
+    return [by[k] for k in sorted(by)]
+
+
+def arm_stop_history(s: Settings, ticker: str, now: float | None = None) -> None:
+    """Load the last 15 minutes of this market's quotes once, when a watch of it starts. Later quotes extend that copy; the stop reads it instead of the database."""
+    from . import db as database
+    from . import tape as tape_mod
+
+    if tape_mod.recent.stop_armed(ticker):
+        return
+    now = time.time() if now is None else now
+    if not database.tape_exists(s.tape_path):
+        return
+    start = now - tape_mod.STOP_SECONDS
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        rows = [(float(ts), float(bid), float(ask)) for ts, bid, ask in tape.execute(
+            "SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts",
+            (ticker, now, start),
+        )]
+    except Exception:
+        return
+    tape_mod.recent.arm_stop(ticker, start, rows)
+
+
+def arm_feed_history(s: Settings, symbol: str, now: float | None = None) -> None:
+    """Load the last 15 minutes of one spot price once, when a watch that might compare it starts."""
+    from . import db as database
+    from . import tape as tape_mod
+
+    if tape_mod.recent.feed_armed(symbol):
+        return
+    now = time.time() if now is None else now
+    if not database.tape_exists(s.tape_path):
+        return
+    start = now - tape_mod.STOP_SECONDS
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        rows = [(float(ts), float(px)) for ts, px in tape.execute(
+            "SELECT ts, px FROM feed_ticks WHERE symbol=? AND ts<=? AND ts>? ORDER BY ts", (symbol, now, start),
+        )]
+    except Exception:
+        return
+    tape_mod.recent.arm_feed(symbol, start, rows)
+
+
+def arm_index_history(s: Settings, index_id: str, now: float | None = None) -> None:
+    """Load the last 31 minutes of a settlement index once. The last-minute chance then reads the copy."""
+    from . import db as database
+    from . import tape as tape_mod
+
+    if tape_mod.recent.index_armed(index_id):
+        return
+    now = time.time() if now is None else now
+    if not database.tape_exists(s.tape_path):
+        return
+    start = now - tape_mod.INDEX_SECONDS
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        rows = [(float(ts), float(value)) for ts, value in tape.execute(
+            "SELECT ts, value FROM index_ticks WHERE index_id=? AND ts<=? AND ts>? AND value > 0 ORDER BY ts",
+            (index_id, now, start),
+        )]
+    except Exception:
+        return
+    tape_mod.recent.arm_index(index_id, start, rows)
+
+
+def _stop_quotes(s: Settings, ticker: str, start: float, end: float) -> list[tuple[float, float, float]]:
+    """Quotes for a stop check. A watch that already loaded its 15 minutes answers from memory."""
+    from . import tape as tape_mod
+
+    got = tape_mod.recent.stop_quotes(ticker, start, end)
+    return got if got is not None else _load_quotes(s, ticker, start, end)
+
+
+def dwell_seconds(s: Settings, shot: LongShot, floor: float, now: float | None = None) -> float | None:
+    """How many seconds the side we would buy has been at or above `floor` (the lane's lowest price), from the tape's quotes of the last 15 minutes. None when the tape has nothing to say."""
+    now = time.time() if now is None else now
+    rows = list(reversed(_load_quotes(s, shot.ticker, now - 900.0, now)))
     if not rows:
         return None
     since = now  # the earliest quote of the unbroken run at or above the floor, newest first
@@ -639,40 +771,35 @@ def dwell_seconds(s: Settings, shot: LongShot, floor: float, now: float | None =
 
 def high_since(s: Settings, ticker: str, side: str, since: float, now: float | None = None) -> float | None:
     """The side's highest bid on the tape since `since`. None when the tape has nothing to say."""
-    from . import db as database
-
     now = time.time() if now is None else now
-    try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
-        rows = tape.execute(
-            "SELECT bid, ask FROM quotes WHERE ticker=? AND ts>=? AND ts<=? AND bid > 0 AND ask > 0",
-            (ticker, since, now),
-        ).fetchall()
-    except Exception:
-        return None
-    prices = [float(bid) if side == "yes" else 1.0 - float(ask) for bid, ask in rows]
+    rows = _stop_quotes(s, ticker, since - 1e-6, now)
+    prices = [bid if side == "yes" else 1.0 - ask for _ts, bid, ask in rows]
     return max(prices) if prices else None
 
 
-def below_line_seconds(s: Settings, ticker: str, side: str, line: float, now: float | None = None) -> float | None:
-    """How many seconds the side's bid has been unbroken at or below `line`, from the tape's quotes of the last 15 minutes. None when the tape has nothing to say (the socket watcher measures the same run live; this is only its backstop agreeing with it)."""
-    from . import db as database
-
+def under_line(s: Settings, ticker: str, side: str, line: float, now: float | None = None) -> tuple[float, float] | None:
+    """(seconds the side's bid has stayed at or below `line`, lowest bid of that run), from the last 15 minutes of tape. None when the tape has nothing under the line. The socket watcher measures the same run live; this is its backstop."""
     now = time.time() if now is None else now
-    try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
-        rows = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC", (ticker, now, now - 900.0)).fetchall()
-    except Exception:
-        return None
+    rows = list(reversed(_stop_quotes(s, ticker, now - 900.0, now)))
     if not rows:
         return None
-    since = now  # the earliest quote of the unbroken run at or below the line, newest first
-    for ts, bid, ask in rows:
-        price = bid if side == "yes" else 1.0 - ask
+    since = now
+    low: float | None = None
+    for ts, bid, ask in rows:  # newest first: stop at the first print back above the line
+        price = float(bid) if side == "yes" else 1.0 - float(ask)
         if price > line + 1e-9:
-            return now - since
-        since = ts
-    return now - since
+            break
+        since = float(ts)
+        low = price if low is None else min(low, price)
+    if low is None:
+        return 0.0, 0.0  # the newest print is already above the line, so this visit has not started
+    return now - since, low
+
+
+def below_line_seconds(s: Settings, ticker: str, side: str, line: float, now: float | None = None) -> float | None:
+    """How many seconds the side's bid has been unbroken at or below `line`. None when the tape has nothing to say."""
+    visit = under_line(s, ticker, side, line, now)
+    return None if visit is None else visit[0]
 
 
 def scalp_sweep_hit(s: Settings, spec: LaneSpec, ticker: str, side: str, entry: float, bid: float, opened: float, now: float) -> str | None:
@@ -693,17 +820,8 @@ def scalp_sweep_hit(s: Settings, spec: LaneSpec, ticker: str, side: str, entry: 
 
 def _hovering(s: Settings, ticker: str, side: str, bid: float, now: float) -> bool:
     """The last 3 seconds barely moved, and there is more than one print. The socket uses the same test."""
-    from . import db as database
-
-    try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
-        rows = tape.execute(
-            "SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts",
-            (ticker, now, now - 3.0),
-        ).fetchall()
-    except Exception:
-        return False
-    points = [(float(ts), float(qbid) if side == "yes" else 1.0 - float(ask)) for ts, qbid, ask in rows]
+    rows = _load_quotes(s, ticker, now - 3.0, now)
+    points = [(ts, qbid if side == "yes" else 1.0 - ask) for ts, qbid, ask in rows]
     recent = [b for ts, b in points if now - 3.0 <= ts <= now and b > 0]
     return len(recent) >= 2 and price_shape(points, now, bid) == "hover"
 
@@ -712,31 +830,24 @@ def _not_a_downtrend(s: Settings, ticker: str, side: str, bid: float, now: float
     """True when the last 3 seconds are a spike or a hover, or the bid is still at `hold_at` or above, so the stop holds. hold_at None skips that price check."""
     if hold_at is not None and bid >= hold_at:
         return True
-    from . import db as database
-
-    try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
-        rows = tape.execute(
-            "SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts",
-            (ticker, now, now - 30.0),
-        ).fetchall()
-    except Exception:
-        return True
-    points = [(float(ts), float(qbid) if side == "yes" else 1.0 - float(ask)) for ts, qbid, ask in rows]
+    rows = _load_quotes(s, ticker, now - 30.0, now)
+    points = [(ts, qbid if side == "yes" else 1.0 - ask) for ts, qbid, ask in rows]
     return price_shape(points, now, bid) != "trend"
 
 
 def side_trend(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
-    """How far the price of the side we would buy (the mid of its bid and ask, in its own terms) has moved over the last `seconds`, from the tape's quotes. None when the tape has no quote that far back or none lately."""
-    from . import db as database
+    """How far the price of the side we would buy (the mid of its bid and ask, in its own terms) has moved over the last `seconds`, from the tape's quotes. None when the tape has no quote that far back or none lately. A lane that asks for this check treats None as no buy: it has nothing to compare."""
+    from . import tape as tape_mod
 
     now = time.time() if now is None else now
-    try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
-        last = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC LIMIT 1", (shot.ticker, now, now - 30.0)).fetchone()
-        then = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC LIMIT 1", (shot.ticker, now - seconds, now - seconds - 60.0)).fetchone()
-    except Exception:
-        return None
+    last = tape_mod.recent.latest_quote(shot.ticker, now - 30.0, now)
+    then = tape_mod.recent.latest_quote(shot.ticker, now - seconds - 60.0, now - seconds)
+    if last is tape_mod.MISS:
+        last_rows = _load_quotes(s, shot.ticker, now - 30.0, now)
+        last = last_rows[-1] if last_rows else None
+    if then is tape_mod.MISS:
+        then_rows = _load_quotes(s, shot.ticker, now - seconds - 60.0, now - seconds)
+        then = then_rows[-1] if then_rows else None
     if last is None or then is None:
         return None
 
@@ -767,16 +878,10 @@ def _spot_symbols(series: str) -> list[str]:
 
 def _spot_prices(s: Settings, shot: LongShot, seconds: float, now: float) -> list[tuple[float, float]]:
     """(ts, price) of the underlying over the last `seconds`, oldest first, from the first feed that has a price newer than SPOT_STALE. [] when there is none."""
-    from . import db as database
-
-    try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
-        for symbol in _spot_symbols(shot.series or shot.ticker.split("-")[0]):
-            rows = tape.execute("SELECT ts, px FROM feed_ticks WHERE symbol=? AND ts<=? AND ts>? ORDER BY ts", (symbol, now, now - seconds)).fetchall()
-            if rows and now - float(rows[-1][0]) <= SPOT_STALE:
-                return [(float(a), float(b)) for a, b in rows]
-    except Exception:
-        return []
+    for symbol in _spot_symbols(shot.series or shot.ticker.split("-")[0]):
+        rows = _load_feed(s, symbol, now - seconds, now)
+        if rows and now - rows[-1][0] <= SPOT_STALE:
+            return rows
     return []
 
 
@@ -806,14 +911,8 @@ def side_trend_z(s: Settings, shot: LongShot, seconds: float, now: float | None 
     import bisect
     import statistics
 
-    from . import db as database
-
     now = time.time() if now is None else now
-    try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
-        q = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts", (shot.ticker, now, now - 150.0 - seconds)).fetchall()
-    except Exception:
-        return None
+    q = _load_quotes(s, shot.ticker, now - 150.0 - seconds, now)
     if len(q) < 6 or now - q[-1][0] > 30.0:
         return None
     ts = [r[0] for r in q]
@@ -1427,6 +1526,7 @@ def stop_loss_pass(
         if m.get("result") in {"yes", "no"}:
             continue
         side = row["side"] or "yes"
+        arm_stop_history(s, row["ticker"], now.timestamp())
         quoted = flip(m) if side == "no" else m
         bid = 0.0
         with contextlib.suppress(TypeError, ValueError):
@@ -1456,8 +1556,11 @@ def stop_loss_pass(
         if not why and stop_on and spec is not None and left > 0:
             if spec.watch_loss > 0 and entry > 0 and bid <= entry * (1.0 - spec.watch_loss):
                 owned = True
-                dipped = below_line_seconds(s, row["ticker"], side, entry * (1.0 - spec.watch_loss), now.timestamp())
-                why = hard_loss(entry, bid, 0.0 if dipped is None else dipped, spec.watch_loss, spec.watch_loss_seconds)
+                visit = under_line(s, row["ticker"], side, entry * (1.0 - spec.watch_loss), now.timestamp())
+                why = hard_loss(
+                    entry, bid, 0.0 if visit is None else visit[0], spec.watch_loss, spec.watch_loss_seconds,
+                    low=0.0 if visit is None else visit[1], lift=spec.watch_loss_lift,
+                )
             elif spec.watch_at > 0 and entry > spec.watch_at and bid <= spec.watch_at:
                 owned = True
                 trend = not _not_a_downtrend(s, row["ticker"], side, bid, now.timestamp(), hold_at=None)

@@ -126,3 +126,13 @@ def test_evaluate_passes_during_the_cooldown_and_buys_after_it(tmp_path):
     store.db.commit()
     free = runner.evaluate(s, None, Est(0.5), store, shot(ticker="KXA-1", lane="cool", ask=0.5))
     assert free.action == "bet"
+
+
+def test_a_trend_check_with_no_quote_to_compare_does_not_buy(tmp_path):
+    from tests.test_sizing import Est, settings, shot
+
+    s = settings(tmp_path, tape_dir=tmp_path / "tape")
+    (s.data_dir / "strategies.toml").write_text(
+        "[lane.cool]\nestimator='llm'\nprice=[0.01,0.99]\nhours=[0.0,48.0]\nalways=true\nfixed_stake=2.0\nentry_trend_seconds=10\n")
+    out = runner.evaluate(s, None, Est(0.5), Store(s.db_path), shot(ticker="KXA-1", lane="cool", ask=0.5))
+    assert out.action == "pass" and "no reference" in out.note

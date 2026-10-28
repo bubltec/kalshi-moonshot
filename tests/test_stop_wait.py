@@ -101,7 +101,9 @@ def test_a_rebound_inside_the_wait_disarms_the_stop(tmp_path, monkeypatch):
 
 
 def test_the_three_shapes():
-    assert price_shape([(0, 0.57), (1, 0.57), (2, 0.51), (3, 0.25)], 3, 0.25) == "trend"  # gold, 8:44:50
+    assert price_shape([(0, 0.57), (1, 0.57), (2, 0.51), (3, 0.25)], 3, 0.25) == "spike"  # 32c in 3s is one air pocket, not a trend
+    assert price_shape([(0, 0.76), (1, 0.55), (2, 0.34)], 2, 0.34) == "spike"  # natgas 12:13: the sharp drop that came straight back
+    assert price_shape([(0, 0.55), (1, 0.48), (2, 0.40)], 2, 0.40) == "trend"  # two steps, and the whole drop is under 20c
     assert price_shape([(0, 0.42), (1, 0.42), (2, 0.25)], 2, 0.25) == "spike"  # one gap, not a second step down
     assert price_shape([(0, 0.42), (1, 0.25), (2, 0.39)], 2, 0.39) == "spike"  # retraced more than half
     assert price_shape([(0, 0.40), (1, 0.42), (2, 0.39)], 2, 0.39) == "hover"
@@ -114,6 +116,8 @@ def test_the_ride_scales_with_the_time_left_and_the_hard_loss_waits_its_bounce()
     assert hard_loss(0.80, 0.20, 2, 0.75, 3) is None  # 75% down, still inside the 3s bounce
     assert "watched" in hard_loss(0.80, 0.20, 3, 0.75, 3)
     assert hard_loss(0.80, 0.30, 9, 0.75, 3) is None  # back above the hard line
+    assert hard_loss(0.80, 0.46, 20, 0.40, 20, low=0.34, lift=0.08) is None  # 12c off the low: the dip is coming back
+    assert "watched" in hard_loss(0.80, 0.36, 20, 0.40, 20, low=0.34, lift=0.08)  # still within 8c of the low after 20s
     assert watch_trend(0.80, 0.48, 500, 10, line=0.50, ride=45, patient_left=420, trend=True) is None
     assert "trending away" in watch_trend(0.80, 0.48, 500, 45, line=0.50, ride=45, patient_left=420, trend=True)
     assert "trending away" in watch_trend(0.80, 0.48, 2000, 45, line=0.50, ride=45, patient_left=420, trend=True)  # an hourly market uses the same ride
@@ -206,6 +210,27 @@ def test_an_hourly_favorite_uses_the_same_watch(tmp_path, monkeypatch):
     w.on_event(quote(0.42, base + 46, "KXGOLDH-1"))
     w.on_event(quote(0.38, base + 47, "KXGOLDH-1"))
     assert not w._jobs.empty() and "trending away" in w._jobs.get_nowait()[2]
+
+
+def test_a_bounce_off_the_low_holds_and_a_sit_at_the_low_sells(tmp_path, monkeypatch):
+    w, base = armed(tmp_path, monkeypatch, 500.0)
+    t = w.targets[("KXBTC15M-1", "fav")]
+    t.watch_loss, t.watch_loss_seconds, t.watch_loss_lift = 0.40, 20.0, 0.08
+    w.on_event(quote(0.34, base))  # 40% under 0.80 is 0.48
+    w.on_event(quote(0.46, base + 20))  # 12c off the 0.34 low, still under the line
+    assert w._jobs.empty()
+    w.on_event(quote(0.36, base + 21))  # back within 8c of that low, and the 20s have passed
+    assert not w._jobs.empty() and "watched" in w._jobs.get_nowait()[2]
+    sit = tmp_path / "sit"
+    sit.mkdir()
+    w2, base2 = armed(sit, monkeypatch, 500.0)
+    t2 = w2.targets[("KXBTC15M-1", "fav")]
+    t2.watch_loss, t2.watch_loss_seconds, t2.watch_loss_lift = 0.40, 20.0, 0.08
+    w2.on_event(quote(0.34, base2))
+    w2.on_event(quote(0.35, base2 + 19))
+    assert w2._jobs.empty()
+    w2.on_event(quote(0.35, base2 + 20))
+    assert not w2._jobs.empty() and "for 20s" in w2._jobs.get_nowait()[2]
 
 
 def test_the_hard_loss_sells_after_its_bounce_and_a_recovery_restarts_it(tmp_path, monkeypatch):
