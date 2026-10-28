@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from . import steptime
+from . import reqstats, steptime
 from .marketdata import MarketCache
 
 log = logging.getLogger("moonshot")
@@ -198,6 +198,7 @@ class KalshiClient:
                 time.sleep(2 * self._gap)  # outside the pacing lock: the slots it leaves free go to the threads that are not in the background
             self._pace(write=not safe)
             asked = time.perf_counter()
+            reqstats.count(method, path)
             try:
                 resp = self._http.request(method, url, params=params, json=json, headers=headers)
                 steptime.add("kalshi requests", time.perf_counter() - asked)

@@ -22,7 +22,7 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from typing import Any
 
-from . import runner, steptime
+from . import reqstats, runner, steptime
 from .commodities import CommodityPricer
 from .config import Settings
 from .estimators import EstimateShare, build_estimators
@@ -365,6 +365,7 @@ class Worker:
         log.info("edits to .env apply on the next job; no rebuild. Stop with ctrl-c or `docker compose stop`.")
         self._split = True
         threading.Thread(target=self._maintenance_loop, name="maintenance", daemon=True).start()
+        threading.Thread(target=reqstats.log_loop, args=(lambda: self.stopping,), name="req-stats", daemon=True).start()
         for i in range(self.s.buy_workers):
             threading.Thread(target=self._buy_loop, name=f"buy-job-{i}", daemon=True).start()
         self._buy_threads = self.s.buy_workers
@@ -478,6 +479,7 @@ class Worker:
             "flip": self.do_flip, "review": self.do_review, "history": self.do_history, "account_sync": self.do_account_sync, "patterns": self.do_patterns,
         }
         steptime.begin()
+        reqstats.set_source(job.kind)
         try:
             handler = handlers.get(job.kind)
             if handler is None and job.kind.startswith(("lane_scope:", "lane_review:")):
@@ -501,6 +503,7 @@ class Worker:
                             job.id, job.kind, job.attempts, job.max_attempts, exc)
         finally:
             steptime.end()
+            reqstats.set_source(None)
 
     def do_scan(self, job: Job) -> str:
         s = self.s
