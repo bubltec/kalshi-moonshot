@@ -151,6 +151,7 @@ class Settings:
     max_rps: float  # Kalshi requests per second the bot paces itself to
     page_size: int  # markets and events per Kalshi page (max 1000)
     job_max_attempts: int  # tries per queued job before it is parked as dead
+    sell_workers: int  # threads that run only stop-loss sweeps, apart from scans, reviews and buys (0 = they share the main job thread)
     buy_workers: int  # threads that run only evaluate (buy) jobs, so a scan, review or scope pass never holds a buy back (0 = buys share the main job thread)
     skip_categories: frozenset[str]  # Kalshi event categories, e.g. Sports
     exclude_versions: frozenset[str]  # strategy versions left out of report and similar-case search
@@ -448,6 +449,7 @@ def load() -> Settings:
         page_size=min(1000, max(1, _i("KALSHI_PAGE_SIZE", 1000))),
         job_max_attempts=max(1, _i("JOB_MAX_ATTEMPTS", 3)),
         buy_workers=max(0, _i("BUY_WORKERS", 3)),
+        sell_workers=max(0, _i("SELL_WORKERS", 1)),
         exclude_versions=_csv("EXCLUDE_VERSIONS", "v1"),
         moonshot_sides=_sides("MOONSHOT_SIDES"),
         kelly_fraction=min(1.0, max(0.0, _f("KELLY_FRACTION", 0.25))),

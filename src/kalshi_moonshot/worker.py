@@ -38,7 +38,8 @@ log = logging.getLogger("moonshot")
 # Jobs that are long and not needed to trade (downloading history, resolving settled markets, syncing fills, the broad scan, the hourly review). They run on their own thread,
 # so a 40-second job can never hold up a live lane's review or evaluation, and their requests are throttled to a third of the budget.
 MAINTENANCE = frozenset({"scan", "resolve", "review", "history", "account_sync", "patterns"})
-BUY_KINDS = frozenset({"evaluate"})  # the job that sizes and places a buy. With BUY_WORKERS above 0 these run on their own threads, so a lane scope or review (or another lane's slow buy) never queues a buy behind it
+SELL_KINDS = frozenset({"stop_loss"})  # the stop-loss sweep. With SELL_WORKERS above 0 it runs on its own thread: behind scopes and reviews it waited 5 minutes
+BUY_KINDS = frozenset({"evaluate", "flip"})  # the job that sizes and places a buy. With BUY_WORKERS above 0 these run on their own threads, so a lane scope or review (or another lane's slow buy) never queues a buy behind it
 SLOW_JOB_SECONDS = 10.0  # a job that runs longer than this is logged with how long it ran, so a slow stage can be found in the logs
 BUY_POLL = 0.5  # seconds a buy worker sleeps when no buy is due
 HISTORY_PRIORITY = -10  # runs only when no trading job is waiting (a running job is never interrupted)
@@ -111,6 +112,7 @@ class Worker:
         self._last_cleanup = 0.0
         self.share = EstimateShare()  # one estimate per market, reused by every lane that asks soon after
         self._split = False  # True once run_forever has started the maintenance thread: the main loop then leaves those jobs to it
+        self._sell_threads = 0  # how many dedicated sell workers run_forever started
         self._buy_threads = 0  # how many dedicated buy workers run_forever started: while it is above 0 the main loop leaves evaluate jobs to them
 
     # ---- lifecycle ----
@@ -366,6 +368,9 @@ class Worker:
         for i in range(self.s.buy_workers):
             threading.Thread(target=self._buy_loop, name=f"buy-job-{i}", daemon=True).start()
         self._buy_threads = self.s.buy_workers
+        for i in range(self.s.sell_workers):
+            threading.Thread(target=self._sell_loop, name=f"sell-job-{i}", daemon=True).start()
+        self._sell_threads = self.s.sell_workers
         if self._buy_threads:
             log.info("%d buy worker(s) run evaluate jobs apart from scans and reviews", self._buy_threads)
         while not self.stopping:
@@ -404,11 +409,23 @@ class Worker:
                 log.exception("buy worker")
             time.sleep(BUY_POLL)
 
+    def _sell_loop(self) -> None:
+        """A sell worker: claims only the stop-loss sweep, so what holds up a sale is another sale, never a scan, review or scope."""
+        while not self.stopping:
+            try:
+                job = self.jobs.claim(kinds=SELL_KINDS)
+                if job is not None:
+                    self.run_job(job)
+                    continue
+            except Exception:
+                log.exception("sell worker")
+            time.sleep(BUY_POLL)
+
     def step(self) -> bool:
         """Claim and run one due job. Returns False when nothing was due."""
         self.refresh()
         self._housekeeping()
-        left_out = (MAINTENANCE | (BUY_KINDS if self._buy_threads else frozenset())) if self._split else None
+        left_out = (MAINTENANCE | (BUY_KINDS if self._buy_threads else frozenset()) | (SELL_KINDS if self._sell_threads else frozenset())) if self._split else None
         job = self.jobs.claim(exclude=left_out)
         if job is None:
             return False
@@ -475,7 +492,8 @@ class Worker:
             began = time.time()
             self.jobs.complete(job.id, handler(job) or "")
             if time.time() - began > SLOW_JOB_SECONDS:
-                log.info("slow job %d (%s): ran %.0fs, %.0fs after it was queued", job.id, job.kind, time.time() - began, began - job.created_ts)
+                shot = job.payload.get("shot") or {}
+                log.info("slow job %d (%s%s): ran %.0fs, %.0fs after it was queued", job.id, job.kind, f" {shot.get('lane', '')} {shot.get('ticker', '')}" if shot else "", time.time() - began, began - job.created_ts)
         except KalshiRateLimited as exc:
             log.warning("job %d (%s) rate limited; trying again in %.0fs", job.id, job.kind, exc.retry_after)
             self.jobs.defer(job, exc.retry_after, str(exc))

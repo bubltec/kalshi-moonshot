@@ -247,3 +247,32 @@ def test_a_buy_worker_runs_only_evaluate_jobs(tmp_path):
 def test_one_lane_gets_one_lock_and_lanes_do_not_share(tmp_path):
     assert runner.lane_lock("a") is runner.lane_lock("a")
     assert runner.lane_lock("a") is not runner.lane_lock("b")
+
+
+def test_the_main_loop_leaves_the_stop_sweep_to_the_sell_worker(tmp_path):
+    from kalshi_moonshot.worker import BUY_KINDS, MAINTENANCE, SELL_KINDS
+
+    w = worker(tmp_path)
+    w.jobs.enqueue("stop_loss", {}, run_at=1.0)
+    w._split = True
+    w._buy_threads = 3
+    w._sell_threads = 1
+    assert w.jobs.claim(exclude=MAINTENANCE | BUY_KINDS | SELL_KINDS) is None
+    assert w.jobs.claim(kinds=SELL_KINDS).kind == "stop_loss"
+
+
+def test_a_sell_worker_runs_only_the_stop_sweep(tmp_path):
+    w = worker(tmp_path)
+    w.jobs.enqueue("evaluate", {"shot": {}}, run_at=1.0)
+    w.jobs.enqueue("stop_loss", {}, run_at=1.0)
+    ran: list[str] = []
+
+    def record(job):
+        ran.append(job.kind)
+        w.jobs.complete(job.id, "")
+        w.stopping = True
+
+    w.run_job = record
+    w._sell_loop()
+    assert ran == ["stop_loss"]
+    assert status(w, "evaluate") == {"pending": 1}
