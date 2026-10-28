@@ -150,6 +150,7 @@ class Target:
     burst_window: float = LaneSpec.burst_window  # ...in the last this many seconds (lane burst_window)...
     burst_min_left: float = LaneSpec.burst_min_left  # ...and not in the last this many (lane burst_min_left)
     burst_bar: float = 0.0  # the dollars bought against the held favorite in 3 s that sell it (burst_dollars; 0 = the older multiple-of-normal rule)
+    burst_spot_edge: float = LaneSpec.burst_spot_edge  # a burst sells only when spot's own chance for this side is not more than this far over the sale price (lane burst_spot_edge; 0 = off)
     burst_resell: bool = False  # the burst sale filled nothing: the next burst sells again (the log and the other-side buy stay once)
     flip_hint: tuple[float, float] = (0.0, 0.0)  # (the other side's ask, its chance) at the moment the guard fired
     history: deque = field(default_factory=lambda: deque(maxlen=400))
@@ -968,6 +969,7 @@ class ProfitWatcher:
                 btc = ticker.split("-")[0].startswith("KXBTC")
                 tg.burst_bar = 0.0 if (btc and spec.burst_dollars_btc < 0) else (spec.burst_dollars_btc if (btc and spec.burst_dollars_btc > 0) else spec.burst_dollars)
                 tg.burst_favorite, tg.burst_window, tg.burst_min_left, tg.burst_share = spec.burst_favorite, spec.burst_window, spec.burst_min_left, spec.burst_share
+                tg.burst_spot_edge = spec.burst_spot_edge
                 tg.index_id = (index_for_series(ticker.split("-")[0]) or "") if guard else ""
                 if tg.close_ts <= 0 or (guard and tg.strike <= 0):
                     try:
@@ -1188,9 +1190,29 @@ class ProfitWatcher:
         if t is not None:
             t.retry_after = time.time() + seconds
 
-    def _spot_holds(self, t: Target | None, ticker: str, side: str, why: str) -> bool:
+    def _burst_spot_holds(self, t: Target, ticker: str, side: str, bid: float) -> bool:
+        """A burst sells on order flow alone, and a one-second wick in the reference price looks the same as a crash. When spot's own chance that this side pays is more than `burst_spot_edge` over what the sale gets (the bid less its fee), the
+        sale is worth less than holding, so wait: the next burst may sell again, and the stop-loss still protects the downside. Unknown spot means no opinion: the sale goes ahead."""
+        if t.burst_spot_edge <= 0 or self.spot_side is None or bid <= 0:
+            return False
+        try:
+            p = self.spot_side(ticker, side)
+        except Exception as exc:
+            log.debug("watcher: no spot opinion for %s (%s)", ticker, exc)
+            return False
+        sale = bid - fee_per_contract(bid)
+        if p is None or p <= sale + t.burst_spot_edge:
+            return False
+        log.info("watcher: holding %s through the burst: spot gives this side a %.0f%% chance against a sale at %.2f, so the dip is a wick", ticker, 100 * p, sale)
+        t.burst_resell = True
+        self._back_off(ticker, t.lane)
+        return True
+
+    def _spot_holds(self, t: Target | None, ticker: str, side: str, why: str, bid: float = 0.0) -> bool:
         """A crash exit protects a profit from a collapse. While spot is still comfortably on the winning side of the strike (more than
         `spot_sigma` sigma) a bid that dipped is noise, so wait and look again. Unknown spot means no opinion: the exit goes ahead."""
+        if t is not None and why.startswith("burst"):
+            return self._burst_spot_holds(t, ticker, side, bid)
         if t is None or t.spot_sigma <= 0 or self.spot_side is None or not why.startswith("peak-crash"):
             return False
         try:
@@ -1239,7 +1261,7 @@ class ProfitWatcher:
             if why.startswith("peak-crash") and tgt is not None and below_floor(tgt, bid):
                 self._back_off(ticker, lane)  # under the price paid the stop-loss decides, not the crash exit
                 return
-            if self._spot_holds(tgt, ticker, side, why):
+            if self._spot_holds(tgt, ticker, side, why, bid):
                 return
             hard_stop = why.startswith("stop-loss") and not self._stop_guard(lane)  # a lane may ask for a stop that no model opinion can hold back
             if why.startswith("stop-loss") and self._stop_model_lane(lane) and self._model_holds_stop(s, ticker, lane, side, entry, bid, str(row["close_time"] or "")):
