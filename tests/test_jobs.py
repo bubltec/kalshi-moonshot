@@ -122,3 +122,29 @@ def test_claim_can_be_limited_to_some_kinds_or_exclude_others(tmp_path):
     assert j.claim(10.0, kinds={"resolve", "history"}).kind == "history"  # the oldest of the kinds asked for
     assert j.claim(10.0, kinds={"resolve"}).kind == "resolve"
     assert j.claim(10.0) is None
+
+
+def test_two_workers_never_claim_the_same_job(tmp_path):
+    import threading
+
+    from kalshi_moonshot import db
+
+    j = make(tmp_path)
+    j.db = db.connect(tmp_path / "m.db", "main", shared=True)  # one connection several threads use, as the live Postgres one is
+    for i in range(40):
+        j.enqueue("evaluate", {"i": i}, run_at=1.0)
+    got: list[int] = []
+    lock = threading.Lock()
+
+    def work():
+        while (job := j.claim(10.0, kinds={"evaluate"})) is not None:
+            with lock:
+                got.append(job.id)
+
+    threads = [threading.Thread(target=work) for _ in range(4)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert len(got) == 40
+    assert len(set(got)) == 40  # no job went to two workers

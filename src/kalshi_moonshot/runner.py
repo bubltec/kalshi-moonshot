@@ -554,10 +554,11 @@ def evaluate(
         else:
             note = f"{sized.why}. {note}"
     if bet and s.is_live(shot.lane, shot.series):
-        placed = place(
-            s, client, store, shot, note, sized.contracts,
-            order_key=order_key, before_order=before_order,
-        )
+        with contextlib.nullcontext() if spec.buy_rest_seconds > 0 else _ORDER_LOCK:  # a resting buy waits for its fill: it must not hold every other lane's order
+            placed = place(
+                s, client, store, shot, note, sized.contracts,
+                order_key=order_key, before_order=before_order,
+            )
         note = placed.note
         if placed.filled > 0:
             # Record what actually filled, not what was asked for: a partial fill is a smaller bet.
@@ -883,6 +884,17 @@ class Placed(NamedTuple):
     filled: float = 0.0  # contracts that actually filled
     cost: float = 0.0  # dollars spent on them, fee included
     price: float = 0.0  # a resting buy's own price, which can differ from the ask it was planned at (0 = not a resting buy)
+
+
+_LANE_LOCKS: dict[str, threading.Lock] = {}
+_LANE_LOCKS_GUARD = threading.Lock()
+_ORDER_LOCK = threading.Lock()  # the risk check, the order and its ledger row happen as one step for an immediate buy: two workers cannot both pass a global cap and then both buy
+
+
+def lane_lock(lane: str) -> threading.Lock:
+    """The lock one lane's evaluations take, so buy workers can run different lanes at the same time without two of one lane racing past its own limits."""
+    with _LANE_LOCKS_GUARD:
+        return _LANE_LOCKS.setdefault(lane, threading.Lock())
 
 
 _NO_FRACTION: set[str] = set()  # filled once Kalshi has refused a fractional order that the whole-contract retry then got through: stop asking for fractions

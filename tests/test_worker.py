@@ -205,3 +205,45 @@ def test_partial_fetch_is_kept_only_when_allowed():
     assert [m["ticker"] for m in runner.candidate_markets(s, Flaky(), partial_ok=True)] == ["AAA"]
     with pytest.raises(KalshiError):
         runner.candidate_markets(s, Flaky(), partial_ok=False)
+
+
+def test_the_main_loop_leaves_evaluate_jobs_to_the_buy_workers(tmp_path):
+    w = worker(tmp_path)
+    w.jobs.enqueue("evaluate", {"shot": {}}, run_at=1.0)
+    w._split = True
+    w._buy_threads = 2
+    claimed = w.jobs.claim(exclude=(__import__("kalshi_moonshot.worker", fromlist=["x"]).MAINTENANCE | frozenset({"evaluate"})))
+    assert claimed is None  # the main loop skips it
+    assert w.jobs.claim(kinds={"evaluate"}).kind == "evaluate"  # a buy worker takes it
+
+
+def test_without_buy_workers_the_main_loop_still_runs_evaluate_jobs(tmp_path):
+    w = worker(tmp_path, buy_workers=0)
+    w.start()
+    w.run_job(w.jobs.claim(kinds={"scan"}))  # the scan queues the two evaluations
+    w._split = True
+    drain(w)
+    assert status(w, "evaluate") == {"done": 2}
+
+
+def test_a_buy_worker_runs_only_evaluate_jobs(tmp_path):
+    w = worker(tmp_path)
+    w.start()
+    w.run_job(w.jobs.claim(kinds={"scan"}))  # the scan queues the two evaluations
+    w.jobs.enqueue("lane_scope:x", {}, run_at=1.0)
+    ran: list[str] = []
+
+    def record(job):
+        ran.append(job.kind)
+        w.jobs.complete(job.id, "")
+        w.stopping = len(ran) >= 2  # stop once both evaluations have gone through
+
+    w.run_job = record
+    w._buy_loop()
+    assert ran == ["evaluate", "evaluate"]
+    assert status(w, "lane_scope:x") == {"pending": 1}  # a buy worker leaves every other kind alone
+
+
+def test_one_lane_gets_one_lock_and_lanes_do_not_share(tmp_path):
+    assert runner.lane_lock("a") is runner.lane_lock("a")
+    assert runner.lane_lock("a") is not runner.lane_lock("b")

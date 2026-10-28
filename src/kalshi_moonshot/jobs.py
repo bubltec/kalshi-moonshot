@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import random
+import threading
 import time
 from collections.abc import Collection
 from dataclasses import dataclass
@@ -43,6 +44,7 @@ class Job:
 class Jobs:
     def __init__(self, store: Store):
         self.db = store.db
+        self._claim_lock = threading.Lock()  # several workers claim from one queue: the pick and the mark-as-running must not interleave
 
     # ---- producing ----
     def enqueue(
@@ -104,6 +106,10 @@ class Jobs:
     # ---- consuming ----
     def claim(self, now: float | None = None, *, kinds: Collection[str] | None = None, exclude: Collection[str] | None = None) -> Job | None:
         """Take the next due job, only of these kinds if given and never of the excluded ones. Expired ones are dropped on the way."""
+        with self._claim_lock:
+            return self._claim(now, kinds, exclude)
+
+    def _claim(self, now: float | None, kinds: Collection[str] | None, exclude: Collection[str] | None) -> Job | None:
         now = time.time() if now is None else now
         self.db.execute(
             """UPDATE jobs SET status='expired', finished_ts=?
