@@ -1427,3 +1427,77 @@ def test_a_repriced_resting_buy_rests_its_take_profit_from_the_price_it_paid(tmp
     assert out.filled == 2.0
     assert seen["book"] is book  # the book place() already read is the one the resting buy is priced against
     assert entries == [pytest.approx(0.79)]  # the take-profit counts from what was paid, not from the planned 0.81
+
+
+def _resting_retry(tmp_path, monkeypatch, *, first_book, answers, fresh_book=None, fresh_error=False, shot_ask=0.83):
+    """_place_resting where the exchange answers each order from `answers` (an exception to refuse, a dict to accept). Returns (orders sent, Placed, book reads)."""
+    import dataclasses
+
+    from kalshi_moonshot import lanes, runner
+    from kalshi_moonshot.kalshi import KalshiError
+    from kalshi_moonshot.strategy import LongShot
+
+    _w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    reads = []
+
+    class C:
+        def __init__(self):
+            self.sent = []
+
+        def orderbook(self, ticker):
+            reads.append(ticker)
+            if fresh_error:
+                raise KalshiError("GET orderbook: timeout")
+            return fresh_book
+
+        def buy_resting(self, ticker, side, count, price, seconds, client_order_id=None, post_only=True):
+            self.sent.append(price)
+            answer = answers[len(self.sent) - 1]
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+        def portfolio_rows(self, path, key, min_ts=None, pages=1):
+            return [{"fill_id": "f1", "market_ticker": "KXBTC15M-9", "count_fp": "2", "yes_price_dollars": "0.2100", "fee_cost": "0", "ts": 1.0, "book_side": "ask", "is_taker": False, "order_id": "o1", "action": "buy", "side": "no"}]
+
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], buy_rest_seconds=20.0, buy_rest_below=0.01, price=(0.76, 0.92))
+    shot = LongShot("KXBTC15M-9", "t", "", shot_ask - 0.01, shot_ask, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXBTC15M", side="no")
+    c = C()
+    out = runner._place_resting(s, c, store, shot, "why", 2.0, spec, None, first_book)
+    return c.sent, out, reads
+
+
+def _cross():
+    from kalshi_moonshot.kalshi import KalshiError
+
+    return KalshiError('POST /portfolio/events/orders -> 400: {"error":{"code":"invalid_order","message":"invalid order","details":"post only cross"}}')
+
+
+def test_a_post_only_cross_is_tried_once_more_against_a_fresh_book(tmp_path, monkeypatch):
+    # the book read first still showed NO at 0.83; by the time the order landed it was 0.82 (best YES bid 0.18) and 0.82 crossed
+    sent, out, reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.18,)), answers=[_cross(), {"order_id": "o1"}])
+    assert sent == [pytest.approx(0.82), pytest.approx(0.81)]  # the second order rests 1c under the ask as the fresh book has it
+    assert reads == ["KXBTC15M-9"] and out.filled == 2.0 and out.price == pytest.approx(0.81)
+
+
+def test_a_second_post_only_cross_is_a_refusal_not_a_loop(tmp_path, monkeypatch):
+    sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.18,)), answers=[_cross(), _cross(), {"order_id": "never"}])
+    assert len(sent) == 2 and out.filled == 0 and out.note.startswith("resting buy refused") and "post only cross" in out.note
+
+
+def test_a_refusal_that_is_not_a_cross_is_not_retried(tmp_path, monkeypatch):
+    from kalshi_moonshot.kalshi import KalshiError
+
+    sent, out, reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.18,)), answers=[KalshiError("POST /portfolio/events/orders -> 400: insufficient_balance")])
+    assert len(sent) == 1 and reads == [] and out.note.startswith("resting buy refused") and out.filled == 0
+
+
+def test_a_retry_after_a_cross_skips_if_the_fresh_ask_has_left_the_band(tmp_path, monkeypatch):
+    sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.30,)), answers=[_cross(), {"order_id": "never"}])
+    assert len(sent) == 1 and out.filled == 0 and out.note.startswith("skipped:") and "0.70" in out.note  # NO is 0.70 now, under the 0.76 floor
+
+
+def test_a_retry_that_cannot_read_the_book_reports_the_refusal(tmp_path, monkeypatch):
+    sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), answers=[_cross(), {"order_id": "never"}], fresh_error=True)
+    assert len(sent) == 1 and out.filled == 0 and out.note.startswith("resting buy refused") and "post only cross" in out.note

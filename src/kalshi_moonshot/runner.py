@@ -955,29 +955,54 @@ def place(
     )
 
 
-def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None, book: dict[str, Any] | None = None) -> Placed:
-    """Rest a post-only buy `spec.buy_rest_below` under the ask for `spec.buy_rest_seconds`, then report what filled. Nothing is bought if it does not fill. A resting order that fills is charged no taker fee, and the fee Kalshi charged is recorded as it came."""
-    from . import account
-
+def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) -> tuple[float | None, str]:
+    """(the price a resting buy sits at, "") or (None, why it is skipped). It rests `buy_rest_below` under the ask. The ask was read some time ago and may have fallen since; a post-only buy at or over the ask
+    is refused ("post only cross": 94% of 275 refusals in two days), so when the live book's ask is lower it rests the same distance under that one. A fallen ask under the lane's price floor skips the buy.
+    A risen ask does not raise the price, and a missing or empty book leaves the planned price."""
     price = round(max(0.01, shot.ask - spec.buy_rest_below), 4)
     if price >= shot.ask - 1e-9:
-        return Placed(f"skipped: a resting buy needs a price under the ask {shot.ask:.2f}")
+        return None, f"skipped: a resting buy needs a price under the ask {shot.ask:.2f}"
     live_ask = best_ask(book, shot.side) if book else None
     if live_ask is not None and live_ask < shot.ask - 1e-9:
-        # The ask was read some time ago and has fallen since. A post-only buy at or over the ask is refused ("post only cross"; 94% of 275 refusals in two days), so it rests the same distance under the ask as it is now.
         if live_ask < spec.price[0] - 1e-9:
-            return Placed(f"skipped: the {shot.side} ask fell from {shot.ask:.2f} to {live_ask:.2f}, under the lane's {spec.price[0]:.2f} floor")
+            return None, f"skipped: the {shot.side} ask fell from {shot.ask:.2f} to {live_ask:.2f}, under the lane's {spec.price[0]:.2f} floor"
         lowered = round(max(0.01, live_ask - spec.buy_rest_below), 4)
         if lowered < price:
             log.info("resting buy %s %s: the ask fell from %.2f to %.2f, resting at %.2f instead of %.2f", shot.ticker, shot.side, shot.ask, live_ask, lowered, price)
             price = lowered
+    return price, ""
+
+
+def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None, book: dict[str, Any] | None = None) -> Placed:
+    """Rest a post-only buy `spec.buy_rest_below` under the ask for `spec.buy_rest_seconds`, then report what filled. Nothing is bought if it does not fill. A resting order that fills is charged no taker fee, and the fee Kalshi charged is recorded as it came."""
+    from . import account
+
+    price, skip = _resting_price(shot, spec, book)
+    if price is None:
+        return Placed(skip)
     started = time.time()
     try:
         resp = client.buy_resting(shot.ticker, shot.side, count, price, spec.buy_rest_seconds, client_order_id=order_key)
     except KalshiRateLimited:
         raise
     except KalshiError as exc:
-        return Placed(f"resting buy refused: {exc}")
+        if "post only cross" not in str(exc):
+            return Placed(f"resting buy refused: {exc}")
+        # Refused outright, so nothing was placed and another try cannot double up. The book moves faster than the order travels (a thin market's ask flickers about once a second), so look again and rest under the ask as it is now, once.
+        try:
+            fresh = client.orderbook(shot.ticker)
+        except KalshiError:
+            return Placed(f"resting buy refused: {exc}")
+        price, skip = _resting_price(shot, spec, fresh)
+        if price is None:
+            return Placed(skip)
+        started = time.time()
+        try:
+            resp = client.buy_resting(shot.ticker, shot.side, count, price, spec.buy_rest_seconds, client_order_id=order_key)
+        except KalshiRateLimited:
+            raise
+        except KalshiError as exc2:
+            return Placed(f"resting buy refused: {exc2}")
     order_id = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
     filled = spent = fee_paid = 0.0
     seen: set[str] = set()
