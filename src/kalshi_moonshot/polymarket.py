@@ -9,6 +9,8 @@ a Kalshi-shaped dict; see polyadapt.py.
 from __future__ import annotations
 
 import base64
+import json
+import logging
 import threading
 import time
 from collections.abc import Iterator
@@ -30,6 +32,8 @@ from .polyadapt import (
     signing_key,
     ticker_close,
 )
+
+log = logging.getLogger("moonshot")
 
 GATEWAY = "https://gateway.polymarket.us"
 API = "https://api.polymarket.us"
@@ -294,6 +298,9 @@ class PolymarketClient:
             body["goodTillTime"] = _iso(time.time() + seconds)
         resp = self._request("POST", "/v1/orders", base=self.api, json=body, auth=True)
         out = order_to_kalshi(resp, side)
+        if out["fill_count"] <= 0 and tif == "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL":
+            # An immediate order that fills nothing says why in its answer; the bot kept only the fill count, so a side that never fills (59 of 59 NO buys on commodity_poly) went unexplained.
+            log.warning("polymarket %s %.0f %s at %s filled nothing: %s", intent, count, body["marketSlug"], body["price"]["value"], json.dumps(resp)[:700])
         if out["order_id"]:
             self._order_slug[out["order_id"]] = body["marketSlug"]
         return out

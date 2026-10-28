@@ -291,3 +291,19 @@ def test_an_order_is_sent_with_the_side_price_and_comes_back_filled():
     assert out["fill_count"] == pytest.approx(2)
     assert out["average_fill_price"] == pytest.approx(0.40)
     assert out["order_id"] == "ord-9"
+
+
+def test_an_immediate_order_that_fills_nothing_logs_the_exchanges_answer(caplog):
+    import logging
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"id": "o1", "executions": [{"type": "EXECUTION_TYPE_CANCELED", "text": "no liquidity at the limit"}], "order": {"id": "o1", "cumQuantity": "0"}})
+
+    client = PolymarketClient(gateway="https://gateway.test", api="https://api.test")
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+    client._slug_of["KXGOLD15M-26OCT270845"] = "gold-slug"
+    client._headers = lambda method, path: {}  # no keys in a test
+    with caplog.at_level(logging.WARNING, logger="moonshot"):
+        got = client.buy_no_ioc("KXGOLD15M-26OCT270845", 1.1, 0.91)
+    assert got["fill_count"] == 0
+    assert any("ORDER_INTENT_BUY_SHORT" in r.message and "no liquidity at the limit" in r.message and "0.9100" in r.message for r in caplog.records)
