@@ -1534,3 +1534,33 @@ def test_a_spike_is_the_multiple_of_the_sides_own_normal_not_a_fixed_number(tmp_
 def test_the_spike_still_needs_the_dollar_bar(tmp_path, monkeypatch):
     # 20x its own normal is a spike, but $455 is the whole of it only because the normal is $7.6 a second; a lane with a $1,000 bar still waits
     assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=7.6, hunt_spike=5.0, hunt_dollars=1000.0) == 0
+
+
+def _burst_exit(tmp_path, monkeypatch, *, with_holder, share):
+    """A YES holder at an 85c bid; $455 bought AGAINST it (NO takers) in 3 s, and `with_holder` dollars bought WITH it (YES takers). Returns the sell signals queued."""
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    t.burst_bar, t.burst_favorite, t.burst_share = 400.0, 0.0, share
+    t.cur_bid, t.cur_other_ask, t.side = 0.85, 0.16, "yes"
+    now = close - 60
+    sec = int(now)
+    w._flow["KXBTC15M-1"] = {sec: [0.0, 6000.0, with_holder, 455.0]}  # [YES contracts, NO contracts, YES dollars, NO dollars]
+    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.84})
+    return w._jobs.qsize()
+
+
+def test_a_burst_where_the_held_side_is_also_being_bought_is_not_a_crash(tmp_path, monkeypatch):
+    # the setting off: any $455 against the holder sells, however hard the holder's own side is being bought
+    assert _burst_exit(tmp_path, monkeypatch, with_holder=0.0, share=0.0) == 1
+    assert _burst_exit(tmp_path, monkeypatch, with_holder=1500.0, share=0.0) == 1
+    # the holder's side pumped ($1,500 with it against $455 against: 23% of the dollars): a lane that wants a one-sided burst holds
+    assert _burst_exit(tmp_path, monkeypatch, with_holder=1500.0, share=0.75) == 0
+    # one-sided ($455 against, $50 with: 90%) sells
+    assert _burst_exit(tmp_path, monkeypatch, with_holder=50.0, share=0.75) == 1
+    assert _burst_exit(tmp_path, monkeypatch, with_holder=0.0, share=0.75) == 1  # nothing bought with the holder at all
+
+
+def test_the_burst_share_defaults_to_off():
+    from kalshi_moonshot.lanes import LaneSpec
+
+    assert LaneSpec.burst_share == 0.0

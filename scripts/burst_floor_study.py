@@ -24,6 +24,7 @@ WINDOWS = main.db.execute("SELECT ticker, series, result, close_ts FROM windows 
 CRYPTO = ("BTC", "ETH", "SOL", "XRP", "DOGE")
 COMMODITY = ("GOLD", "SILVER", "WTI", "BRENT", "NATGAS", "COPPER", "PLATINUM", "PALLADIUM")
 FLOORS = (0.90, 0.85, 0.80, 0.70, 0.60, 0.50, 0.0)
+SHARES = (0.0, 0.5, 0.75, 0.9)  # the share of the last 3 s of dollars that was AGAINST the held side (0 = no condition). A pump of the held side itself is a low share
 WAS_FAVORITE = 0.76
 
 
@@ -41,7 +42,7 @@ def bar(series):
     return 400.0 if kind(series) != "currency" else 50.0
 
 
-events = {f: [] for f in FLOORS}
+events = {(f, sh): [] for f in FLOORS for sh in SHARES}
 n_windows = 0
 for m in WINDOWS:
     close = float(m["close_ts"])
@@ -62,8 +63,8 @@ for m in WINDOWS:
         if i >= 0 and sec + 0.999 - ts_list[i] <= 15:
             bids[sec] = {"yes": float(q[i][1]), "no": 1.0 - float(q[i][2])}
     the_bar = bar(m["series"])
-    for side, against in (("yes", nd), ("no", yd)):
-        fired = dict.fromkeys(FLOORS, False)
+    for side, against, withh in (("yes", nd, yd), ("no", yd, nd)):
+        fired = dict.fromkeys(events, False)
         for sec in range(int(close) - 120, int(close) - 9):
             now, after = bids.get(sec), bids.get(sec + 1)
             if not now or not after:
@@ -73,10 +74,13 @@ for m in WINDOWS:
             d3 = against[sec] + against[sec - 1] + against[sec - 2]
             if d3 < the_bar:
                 continue
-            for f in FLOORS:
-                if not fired[f] and now[side] >= f:
-                    fired[f] = True
-                    events[f].append((m["series"], side, now[side], after[side], 1.0 if m["result"] == side else 0.0))
+            w3 = withh[sec] + withh[sec - 1] + withh[sec - 2]
+            share = d3 / (d3 + w3 + 1e-9)
+            for key in events:
+                f, sh = key
+                if not fired[key] and now[side] >= f and share >= sh:
+                    fired[key] = True
+                    events[key].append((m["series"], side, now[side], after[side], 1.0 if m["result"] == side else 0.0))
 
 
 def stat(rows):
@@ -90,19 +94,22 @@ def stat(rows):
 
 
 print(f"{n_windows} finished 15-minute windows replayed. A held side was 0.76+ in the 60 s before; the exit fires once per window and side at the first second the bar is reached with the bid at or over the floor.\n")
-print(f"{'floor':>6} | {'events':>6} {'still won':>9} {'avg sale':>9} {'selling better by':>18} {'+-':>6}")
+print("selling better than holding, per contract (events in brackets; +- is the standard error). Rows: the floor on the held side's bid. Columns: the share of the 3-second dollars that was AGAINST the held side.\n")
+print(f"{'floor':>6} | " + " | ".join(f"share >= {sh:.2f}".rjust(22) for sh in SHARES))
 for f in FLOORS:
-    r = stat(events[f])
-    if r:
-        print(f"{f:>6.2f} | {r[0]:>6} {100*r[1]:>8.1f}% {r[2]:>9.3f} {r[3]:>+18.3f} {r[4]:>6.3f}")
+    cells = []
+    for sh in SHARES:
+        r = stat(events[(f, sh)])
+        cells.append((f"{r[3]:+.3f} +-{r[4]:.3f} [{r[0]}]" if r else "-").rjust(22))
+    print(f"{f:>6.2f} | " + " | ".join(cells))
+print("\nStill won (the burst was noise) at the same cells:")
+for f in (0.90, 0.80, 0.0):
+    print(f"{f:>6.2f} | " + " | ".join((f"{100*stat(events[(f, sh)])[1]:.1f}%" if events[(f, sh)] else "-").rjust(22) for sh in SHARES))
 for label in ("crypto", "commodity", "currency"):
-    print(f"\n{label}:")
-    for f in (0.90, 0.80, 0.70, 0.0):
-        r = stat([e for e in events[f] if kind(e[0]) == label])
-        if r:
-            print(f"  floor {f:>4.2f}: events {r[0]:>4}  still won {100*r[1]:>5.1f}%  avg sale {r[2]:.3f}  selling better by {r[3]:+.3f} +-{r[4]:.3f}")
-print("\nThe events the 0.90 floor leaves out, but a lower floor takes (floor 0.70 minus floor 0.90):")
-extra = [e for e in events[0.70] if e not in events[0.90]]
-r = stat(extra)
-if r:
-    print(f"  events {r[0]}  still won {100*r[1]:.1f}%  avg sale {r[2]:.3f}  selling better by {r[3]:+.3f} +-{r[4]:.3f}")
+    print(f"\n{label} (selling better by, events), floor 0.90 and no floor, share 0 / 0.75:")
+    for f in (0.90, 0.0):
+        row = []
+        for sh in (0.0, 0.75):
+            r = stat([e for e in events[(f, sh)] if kind(e[0]) == label])
+            row.append((f"{r[3]:+.3f} +-{r[4]:.3f} [{r[0]}]" if r else "-").rjust(24))
+        print(f"  floor {f:>4.2f}: " + " | ".join(row))

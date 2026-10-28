@@ -139,6 +139,7 @@ class Target:
     cur_other_ask: float = 0.0
     burst_buy: float = 0.0  # dollars to buy the other side with, for real, on a burst (lane burst_buy)
     burst_logged: bool = False  # one burst log per held market
+    burst_share: float = LaneSpec.burst_share  # the share of the 3 s of dollars that must be against the holder for a burst to sell it (lane burst_share; 0 = off)
     burst_favorite: float = LaneSpec.burst_favorite  # the held side's bid must be at least this for a burst to sell it (lane burst_favorite)
     burst_window: float = LaneSpec.burst_window  # ...in the last this many seconds (lane burst_window)...
     burst_min_left: float = LaneSpec.burst_min_left  # ...and not in the last this many (lane burst_min_left)
@@ -416,6 +417,9 @@ class ProfitWatcher:
                     continue
                 against = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
                 base, ratio, hit = t.burst_bar, against / t.burst_bar, against >= t.burst_bar
+                if hit and t.burst_share > 0:
+                    with_holder = sum((book.get(sec - k) or [0.0] * 4)[(1 - idx) + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > (1 - idx) + 2)
+                    hit = against / (against + with_holder + 1e-9) >= t.burst_share  # the held side being bought as hard is not a crash
             else:
                 if not (BURST_BAND[0] <= t.cur_bid <= BURST_BAND[1]) or t.cur_other_ask <= 0 or not (t.burst_min_left <= t.close_ts - now <= t.burst_window):
                     continue
@@ -915,7 +919,7 @@ class ProfitWatcher:
                 tg.burst_buy = spec.burst_buy if tg.settle_flip else 0.0
                 btc = ticker.split("-")[0].startswith("KXBTC")
                 tg.burst_bar = 0.0 if (btc and spec.burst_dollars_btc < 0) else (spec.burst_dollars_btc if (btc and spec.burst_dollars_btc > 0) else spec.burst_dollars)
-                tg.burst_favorite, tg.burst_window, tg.burst_min_left = spec.burst_favorite, spec.burst_window, spec.burst_min_left
+                tg.burst_favorite, tg.burst_window, tg.burst_min_left, tg.burst_share = spec.burst_favorite, spec.burst_window, spec.burst_min_left, spec.burst_share
                 tg.index_id = (index_for_series(ticker.split("-")[0]) or "") if guard else ""
                 if tg.close_ts <= 0 or (guard and tg.strike <= 0):
                     try:
