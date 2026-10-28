@@ -102,15 +102,18 @@ for B in (200, 400, 1600, 3200):
     add(f"$ bar {B} (all coins)", lambda c, btc, B=B: c[3] >= B)
 for K in (2, 3, 5, 8, 12):
     add(f"{K}x normal, and at least $100", lambda c, btc, K=K: c[4] >= K and c[3] >= 100)
-for K in (3, 5):
+for K in (3, 5, 8, 12, 20, 30, 50):
     add(f"CURRENT bar and {K}x normal", lambda c, btc, K=K: c[3] >= (800 if btc else 400) and c[4] >= K)
 add("CURRENT bar, favorite 90c+", lambda c, btc: c[3] >= (800 if btc else 400) and c[5] >= 0.90)
 add("5x normal and $100, favorite 90c+", lambda c, btc: c[4] >= 5 and c[3] >= 100 and c[5] >= 0.90)
 
 results = {n: [] for n in RULES}
 n_windows = 0
+first_close = last_close = None
 for tk, series, result, close, q, fl in windows():
     n_windows += 1
+    first_close = close if first_close is None else min(first_close, close)
+    last_close = close if last_close is None else max(last_close, close)
     cs = candidates(q, fl, close)
     btc = series == "KXBTC15M"
     for name, fn in RULES.items():
@@ -133,18 +136,19 @@ def summarize(rows):
     return n, wins, p, math.sqrt(p * (1 - p) / n), px, statistics.mean(rets), se
 
 
-print(f"{n_windows} finished windows replayed (five coins), lane band {LO:.2f}-{HI:.2f}\n")
-print(f"{'rule':44} {'fires':>5} {'won':>4} {'win %':>6} {'+-':>5} {'avg ask':>8} {'return/$ (fee paid)':>20} {'+-':>6}")
+days = max((last_close - first_close) / 86400.0, 1e-9)
+print(f"{n_windows} finished windows replayed (five coins) over {days:.1f} days, lane band {LO:.2f}-{HI:.2f}\n")
+print(f"{'rule':44} {'fires':>5} {'/day':>5} {'won':>4} {'win %':>6} {'+-':>5} {'avg ask':>8} {'return/$ (fee paid)':>20} {'+-':>6}")
 for name in RULES:
     r = summarize(results[name])
     if r is None:
         print(f"{name:44} {0:>5}")
         continue
     n, w, p, sp, px, ret, se = r
-    print(f"{name:44} {n:>5} {int(w):>4} {100*p:>5.1f}% {100*sp:>4.1f}% {px:>8.3f} {ret:>+19.1%} {100*se:>5.1f}%")
+    print(f"{name:44} {n:>5} {n/days:>5.1f} {int(w):>4} {100*p:>5.1f}% {100*sp:>4.1f}% {px:>8.3f} {ret:>+19.1%} {100*se:>5.1f}%")
 
 print("\nBTC only / not BTC (CURRENT vs 5x normal and $100 vs control):")
-for name in ("any second the guards pass (control)", "CURRENT: $ bar (BTC 800, others 400)", "5x normal, and at least $100", "8x normal, and at least $100"):
+for name in ("any second the guards pass (control)", "CURRENT: $ bar (BTC 800, others 400)", "CURRENT bar and 5x normal", "CURRENT bar and 8x normal", "CURRENT bar and 12x normal", "CURRENT bar and 20x normal", "CURRENT bar and 30x normal"):
     for label, pick in (("BTC", lambda r: r[1] == "KXBTC15M"), ("not BTC", lambda r: r[1] != "KXBTC15M")):
         r = summarize([x for x in results[name] if pick(x)])
         if r:
