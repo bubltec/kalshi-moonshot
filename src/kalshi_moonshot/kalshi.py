@@ -103,6 +103,7 @@ class KalshiClient:
         self._http = httpx.Client(timeout=20.0)
         self._gap = 1.0 / max(0.5, max_rps)  # minimum seconds between requests
         self._next_slot = 0.0
+        self._next_write_slot = 0.0  # orders and cancels queue apart from reads: Kalshi limits writes separately, and a sale must not wait behind a page of market reads
         self._lock = threading.Lock()
         self.cache = MarketCache()  # every listing fetched is kept here for the lanes that read it (marketdata.py)
         self._tl = threading.local()
@@ -140,7 +141,7 @@ class KalshiClient:
     def authed(self) -> bool:
         return bool(self._key and self.key_id)
 
-    def _pace(self, extra: float = 0.0) -> None:
+    def _pace(self, extra: float = 0.0, write: bool = False) -> None:
         """Space requests out so a long paging run does not hit the rate limit at all.
 
         extra pushes every later request back too, which is how a 429 slows the whole client
@@ -148,8 +149,12 @@ class KalshiClient:
         """
         with self._lock:
             now = time.monotonic()
-            slot = max(now, self._next_slot) + extra
-            self._next_slot = slot + self._gap
+            if write:
+                slot = max(now, self._next_write_slot) + extra
+                self._next_write_slot = slot + self._gap
+            else:
+                slot = max(now, self._next_slot) + extra
+                self._next_slot = slot + self._gap
         delay = slot - now
         if delay > SLOW_PACE_SECONDS:
             log.info("request waited %.1fs for its turn under the shared request budget", delay)
@@ -183,7 +188,7 @@ class KalshiClient:
             headers = signed_headers(self._key, self.key_id, method, url) if auth else {}
             if getattr(self._tl, "bg", False):
                 time.sleep(2 * self._gap)  # outside the pacing lock: the slots it leaves free go to the threads that are not in the background
-            self._pace()
+            self._pace(write=not safe)
             try:
                 resp = self._http.request(method, url, params=params, json=json, headers=headers)
             except httpx.TransportError as exc:  # timeout, connection reset, DNS
@@ -194,7 +199,7 @@ class KalshiClient:
             if resp.status_code == 429:
                 last_wait = self._backoff(attempt, self._retry_after(resp))
                 log.warning("%s %s was refused with 429 (try %d/%d); every caller now waits %.1fs", method, path, attempt + 1, RETRIES, last_wait)
-                self._pace(extra=last_wait)  # slows every caller, then this one waits its turn
+                self._pace(extra=last_wait, write=not safe)  # slows every caller of that kind, then this one waits its turn
                 continue
             if resp.status_code >= 500 and safe and attempt < RETRIES - 1:
                 time.sleep(self._backoff(attempt, None))
