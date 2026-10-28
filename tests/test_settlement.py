@@ -1564,3 +1564,66 @@ def test_the_burst_share_defaults_to_off():
     from kalshi_moonshot.lanes import LaneSpec
 
     assert LaneSpec.burst_share == 0.0
+
+
+def _spot_tape(tmp_path, rows, symbol="coinbase:BTC-USD"):
+    from kalshi_moonshot import db
+
+    class S:
+        tape_path = str(tmp_path / "tape.db")
+
+    tape = db.connect(S.tape_path, "tape", shared=True)
+    tape.execute("CREATE TABLE IF NOT EXISTS feed_ticks (ts REAL NOT NULL, symbol TEXT NOT NULL, px REAL NOT NULL)")
+    for ts, px in rows:
+        tape.execute("INSERT INTO feed_ticks (ts, symbol, px) VALUES (?,?,?)", (ts, symbol, px))
+    tape.commit()
+    return S
+
+
+def _shot(side):
+    from kalshi_moonshot.strategy import LongShot
+
+    return LongShot("KXBTC15M-1", "", "", 0.74, 0.76, 0.0, "", 0.1, side=side, series="KXBTC15M")
+
+
+def test_spot_ticks_must_all_go_the_way_of_the_bet(tmp_path):
+    from kalshi_moonshot import runner
+
+    S = _spot_tape(tmp_path, [(100.0, 100.0), (101.0, 100.5), (102.0, 100.5), (103.0, 101.0), (104.0, 101.2)])  # changes (a repeated price skipped): +0.5, +0.5, +0.2
+    assert runner.spot_ticks_aligned(S, _shot("yes"), 3, now=105.0) is True
+    assert runner.spot_ticks_aligned(S, _shot("no"), 3, now=105.0) is False  # a DOWN bet needs the coin falling
+    assert runner.spot_ticks_aligned(S, _shot("yes"), 4, now=105.0) is None  # only three changes on the tape: no opinion
+    (tmp_path / "b").mkdir()
+    S2 = _spot_tape(tmp_path / "b", [(100.0, 100.0), (101.0, 100.4), (102.0, 100.2), (103.0, 100.6)])
+    assert runner.spot_ticks_aligned(S2, _shot("yes"), 3, now=104.0) is False  # up, down, up: not three ups
+
+
+def test_a_stale_spot_price_gives_no_opinion(tmp_path):
+    from kalshi_moonshot import runner
+
+    S = _spot_tape(tmp_path, [(100.0, 100.0), (101.0, 100.5), (102.0, 101.0), (103.0, 101.5)])
+    assert runner.spot_ticks_aligned(S, _shot("yes"), 3, now=104.0) is True
+    assert runner.spot_ticks_aligned(S, _shot("yes"), 3, now=300.0) is None  # the last price is minutes old
+    assert runner.spot_move(S, _shot("yes"), 2.0, now=300.0) is None
+
+
+def test_spot_move_is_signed_by_the_bets_direction(tmp_path):
+    from kalshi_moonshot import runner
+
+    S = _spot_tape(tmp_path, [(100.0, 100.0), (103.0, 99.0), (106.0, 101.0)])
+    assert runner.spot_move(S, _shot("yes"), 5.0, now=107.0) == pytest.approx(1.0)  # 100 five seconds back (the tick at 100), 101 now: up 1
+    assert runner.spot_move(S, _shot("no"), 5.0, now=107.0) == pytest.approx(-1.0)  # the same rise is against a DOWN bet
+    assert runner.spot_move(S, _shot("yes"), 50.0, now=107.0) is None  # nothing that far back
+
+
+def test_the_spot_check_falls_back_to_the_instruments_own_feed(tmp_path):
+    from kalshi_moonshot import runner
+
+    S = _spot_tape(tmp_path, [(100.0, 100.0), (101.0, 100.5), (102.0, 101.0), (103.0, 101.5)], symbol="kraken:BTC/USD")
+    assert runner.spot_ticks_aligned(S, _shot("yes"), 3, now=104.0) is True
+
+
+def test_a_lane_without_the_spot_settings_ignores_them():
+    from kalshi_moonshot.lanes import LaneSpec
+
+    assert LaneSpec.entry_spot_ticks == 0 and LaneSpec.entry_spot_seconds == 0.0  # off unless a lane sets them

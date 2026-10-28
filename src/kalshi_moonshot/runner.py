@@ -10,6 +10,7 @@ headlines. Orders are placed only when MODE=trade and the risk gate agrees.
 from __future__ import annotations
 
 import contextlib
+import itertools
 import logging
 import math
 import threading
@@ -535,6 +536,16 @@ def evaluate(
         if moved is not None and moved < spec.entry_trend_min:
             bet = False
             note = f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
+    if bet and spec.entry_spot_ticks > 0:
+        aligned = spot_ticks_aligned(s, shot, spec.entry_spot_ticks)
+        if aligned is False:
+            bet = False
+            note = f"against the coin: its last {spec.entry_spot_ticks} spot price changes did not all go {'up' if shot.side == 'yes' else 'down'}. {note}"
+    if bet and spec.entry_spot_seconds > 0:
+        moved_spot = spot_move(s, shot, spec.entry_spot_seconds)
+        if moved_spot is not None and moved_spot <= 0:
+            bet = False
+            note = f"against the coin: its price moved {'down' if shot.side == 'yes' else 'up'} or stood still over the last {spec.entry_spot_seconds:.0f}s. {note}"
     sized = Sizing(0, 0.0, "")
     if bet:
         balance = store.bankroll.read(client, s, live=s.is_live(shot.lane, shot.series))
@@ -733,6 +744,60 @@ def side_trend(s: Settings, shot: LongShot, seconds: float, now: float | None = 
         return mid if shot.side == "yes" else 1.0 - mid
 
     return price(last) - price(then)
+
+
+SPOT_STALE = 30.0  # a spot price older than this says nothing about now
+SPOT_LOOKBACK = 40.0  # seconds of spot prices read to find the last changes
+
+
+def _spot_symbols(series: str) -> list[str]:
+    """Where the underlying's price is in the tape's feed_ticks: Coinbase's product first (it ticks most often), then the instrument's own symbol."""
+    from .commodities import symbol_for
+
+    inst = symbol_for(series)
+    if not inst:
+        return []
+    out = []
+    if inst.startswith("kraken:") and "/" in inst:
+        out.append("coinbase:" + inst.split(":", 1)[1].replace("/", "-"))
+    out.append(inst)
+    return out
+
+
+def _spot_prices(s: Settings, shot: LongShot, seconds: float, now: float) -> list[tuple[float, float]]:
+    """(ts, price) of the underlying over the last `seconds`, oldest first, from the first feed that has a price newer than SPOT_STALE. [] when there is none."""
+    from . import db as database
+
+    try:
+        tape = database.connect(s.tape_path, "tape", shared=True)
+        for symbol in _spot_symbols(shot.series or shot.ticker.split("-")[0]):
+            rows = tape.execute("SELECT ts, px FROM feed_ticks WHERE symbol=? AND ts<=? AND ts>? ORDER BY ts", (symbol, now, now - seconds)).fetchall()
+            if rows and now - float(rows[-1][0]) <= SPOT_STALE:
+                return [(float(a), float(b)) for a, b in rows]
+    except Exception:
+        return []
+    return []
+
+
+def spot_ticks_aligned(s: Settings, shot: LongShot, ticks: int, now: float | None = None) -> bool | None:
+    """Whether the underlying's last `ticks` price changes (repeated prices skipped) all moved the way this bet goes: up for YES, down for NO. None when the tape has no fresh price or too few changes to say."""
+    now = time.time() if now is None else now
+    prices = _spot_prices(s, shot, SPOT_LOOKBACK, now)
+    changes = [b[1] - a[1] for a, b in itertools.pairwise(prices) if b[1] != a[1]]
+    if len(changes) < ticks:
+        return None
+    sign = 1.0 if shot.side == "yes" else -1.0
+    return all(sign * c > 0 for c in changes[-ticks:])
+
+
+def spot_move(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
+    """The underlying's net move over the last `seconds`, signed so that positive goes the way this bet goes (up for YES, down for NO). None when the tape has no fresh price or none that far back."""
+    now = time.time() if now is None else now
+    prices = _spot_prices(s, shot, seconds + 60.0, now)
+    old = [p for t, p in prices if t <= now - seconds]
+    if not prices or not old:
+        return None
+    return (prices[-1][1] - old[-1]) * (1.0 if shot.side == "yes" else -1.0)
 
 
 def side_trend_z(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
