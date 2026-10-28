@@ -588,6 +588,13 @@ def best_bid(book: dict[str, Any], side: str = "yes") -> float | None:
     return best
 
 
+def best_ask(book: dict[str, Any], side: str = "yes") -> float | None:
+    """The lowest price anyone offers the given contract at right now (what an immediate buy of it would pay), from the order book; None when no one does.
+    The book lists bids only: a NO bid at 0.80 is a YES ask at 0.20, so a side's ask is 1 minus the best bid on the other contract."""
+    other = best_bid(book, "no" if side == "yes" else "yes")
+    return None if other is None else round(1.0 - other, 4)
+
+
 def yes_ask_notional(book: dict[str, Any], limit: float) -> float:
     """Dollars of YES for sale at or under limit.
 

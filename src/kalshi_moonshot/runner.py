@@ -47,6 +47,7 @@ from .store import Store
 from .strategy import (
     LongShot,
     ask_trend,
+    best_ask,
     best_bid,
     cash_if_losing,
     cash_if_up,
@@ -865,6 +866,7 @@ class Placed(NamedTuple):
     note: str
     filled: float = 0.0  # contracts that actually filled
     cost: float = 0.0  # dollars spent on them, fee included
+    price: float = 0.0  # a resting buy's own price, which can differ from the ask it was planned at (0 = not a resting buy)
 
 
 _NO_FRACTION: set[str] = set()  # filled once Kalshi has refused a fractional order that the whole-contract retry then got through: stop asking for fractions
@@ -885,7 +887,8 @@ def place(
     cost = limit * count + order_fee(limit, count)
     cap = cost  # already sized under every ceiling; the gate re-checks the global ones
     try:
-        offered = side_ask_notional(client.orderbook(shot.ticker), limit, shot.side)
+        book = client.orderbook(shot.ticker)
+        offered = side_ask_notional(book, limit, shot.side)
     except KalshiError as exc:
         return Placed(f"skipped: could not read the book ({exc})")
     if offered + 1e-9 < s.min_order_usd:
@@ -908,12 +911,12 @@ def place(
     if before_order:
         before_order()
     if lane_spec is not None and lane_spec.buy_rest_seconds > 0:
-        placed = _place_resting(s, client, store, shot, why, count, lane_spec, order_key)
+        placed = _place_resting(s, client, store, shot, why, count, lane_spec, order_key, book)
         if placed.filled > 0:
-            entry = round(max(0.01, shot.ask - lane_spec.buy_rest_below), 4)  # a post-only buy fills at its own limit, so this is the price paid
+            entry = placed.price or round(max(0.01, shot.ask - lane_spec.buy_rest_below), 4)  # a post-only buy fills at its own limit, so this is the price paid
             note = _rest_take_profit(s, client, store, shot, lane_spec, placed.filled, entry)
             if note:
-                return Placed(f"{placed.note} {note}", placed.filled, placed.cost)
+                return Placed(f"{placed.note} {note}", placed.filled, placed.cost, placed.price)
         return placed
     buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
     try:
@@ -952,13 +955,22 @@ def place(
     )
 
 
-def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None) -> Placed:
+def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None, book: dict[str, Any] | None = None) -> Placed:
     """Rest a post-only buy `spec.buy_rest_below` under the ask for `spec.buy_rest_seconds`, then report what filled. Nothing is bought if it does not fill. A resting order that fills is charged no taker fee, and the fee Kalshi charged is recorded as it came."""
     from . import account
 
     price = round(max(0.01, shot.ask - spec.buy_rest_below), 4)
     if price >= shot.ask - 1e-9:
         return Placed(f"skipped: a resting buy needs a price under the ask {shot.ask:.2f}")
+    live_ask = best_ask(book, shot.side) if book else None
+    if live_ask is not None and live_ask < shot.ask - 1e-9:
+        # The ask was read some time ago and has fallen since. A post-only buy at or over the ask is refused ("post only cross"; 94% of 275 refusals in two days), so it rests the same distance under the ask as it is now.
+        if live_ask < spec.price[0] - 1e-9:
+            return Placed(f"skipped: the {shot.side} ask fell from {shot.ask:.2f} to {live_ask:.2f}, under the lane's {spec.price[0]:.2f} floor")
+        lowered = round(max(0.01, live_ask - spec.buy_rest_below), 4)
+        if lowered < price:
+            log.info("resting buy %s %s: the ask fell from %.2f to %.2f, resting at %.2f instead of %.2f", shot.ticker, shot.side, shot.ask, live_ask, lowered, price)
+            price = lowered
     started = time.time()
     try:
         resp = client.buy_resting(shot.ticker, shot.side, count, price, spec.buy_rest_seconds, client_order_id=order_key)
@@ -991,7 +1003,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     )
     if filled <= 0:
         return Placed(f"resting buy at {price:.2f} for {spec.buy_rest_seconds:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought")
-    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}. {why}", filled, spent)
+    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}. {why}", filled, spent, price)
 
 
 def rest_target_price(spec: LaneSpec, entry: float) -> float | None:

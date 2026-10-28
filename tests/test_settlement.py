@@ -1323,3 +1323,107 @@ def test_the_burst_exit_favorite_and_window_are_the_lanes_settings(tmp_path, mon
     t.burst_window = 30.0  # this lane only sells in the last 30 s, and 60 remain
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.84})
     assert w._jobs.empty()
+
+
+def _book(yes_bids=(), no_bids=()):
+    return {"orderbook_fp": {"yes_dollars": [[str(p), "100"] for p in yes_bids], "no_dollars": [[str(p), "100"] for p in no_bids]}}
+
+
+def test_the_best_ask_of_a_side_is_one_minus_the_best_bid_of_the_other():
+    from kalshi_moonshot.strategy import best_ask
+
+    book = _book(yes_bids=(0.19, 0.20), no_bids=(0.78, 0.80))
+    assert best_ask(book, "no") == pytest.approx(0.80)  # NO is offered at 1 - the best YES bid, 0.20
+    assert best_ask(book, "yes") == pytest.approx(0.20)  # YES at 1 - the best NO bid, 0.80
+    assert best_ask(_book(), "yes") is None and best_ask({}, "no") is None  # nobody bids the other side: no ask
+
+
+def _resting(tmp_path, monkeypatch, *, book, shot_ask=0.82, fill_yes_price="0.2100", price_band=(0.76, 0.92), side="no"):
+    """_place_resting against a fake exchange. Returns (what was sent, the Placed, the shot)."""
+    import dataclasses
+
+    from kalshi_moonshot import lanes, runner
+    from kalshi_moonshot.strategy import LongShot
+
+    _w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+
+    class C:
+        def __init__(self):
+            self.sent = []
+
+        def buy_resting(self, ticker, side, count, price, seconds, client_order_id=None, post_only=True):
+            self.sent.append((side, count, price))
+            return {"order_id": "o1"}
+
+        def portfolio_rows(self, path, key, min_ts=None, pages=1):
+            return [{"fill_id": "f1", "market_ticker": "KXBTC15M-9", "count_fp": "2", "yes_price_dollars": fill_yes_price, "fee_cost": "0", "ts": 1.0, "book_side": "ask", "is_taker": False, "order_id": "o1", "action": "buy", "side": side}]
+
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], buy_rest_seconds=20.0, buy_rest_below=0.01, price=price_band)
+    shot = LongShot("KXBTC15M-9", "t", "", shot_ask - 0.01, shot_ask, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXBTC15M", side=side)
+    c = C()
+    out = runner._place_resting(s, c, store, shot, "why", 2.0, spec, None, book)
+    return c.sent, out
+
+
+def test_a_resting_buy_never_sits_at_or_over_the_ask_it_would_cross(tmp_path, monkeypatch):
+    # read at 0.82 for NO, but the book now offers NO at 0.80 (best YES bid 0.20): 0.81 would have crossed and been refused
+    sent, out = _resting(tmp_path, monkeypatch, book=_book(yes_bids=(0.20,)))
+    assert sent == [("no", 2.0, pytest.approx(0.79))]  # 1c under the ask as it is now
+    assert out.filled == 2.0 and out.price == pytest.approx(0.79)
+
+
+def test_a_resting_buy_keeps_its_price_when_the_ask_has_not_fallen(tmp_path, monkeypatch):
+    sent, out = _resting(tmp_path, monkeypatch, book=_book(yes_bids=(0.18,)), fill_yes_price="0.1900")  # NO is offered at 0.82, as read
+    assert sent == [("no", 2.0, pytest.approx(0.81))] and out.price == pytest.approx(0.81)
+
+
+def test_a_resting_buy_is_not_raised_when_the_ask_has_risen(tmp_path, monkeypatch):
+    sent, _out = _resting(tmp_path, monkeypatch, book=_book(yes_bids=(0.10,)), fill_yes_price="0.1900")  # NO is offered at 0.90 now
+    assert sent == [("no", 2.0, pytest.approx(0.81))]  # still the price the lane planned: a higher one would only cost more
+
+
+def test_a_resting_buy_is_skipped_when_the_ask_has_left_the_lanes_band(tmp_path, monkeypatch):
+    sent, out = _resting(tmp_path, monkeypatch, book=_book(yes_bids=(0.30,)))  # NO is offered at 0.70, under the lane's 0.76 floor
+    assert sent == [] and out.filled == 0 and out.note.startswith("skipped:") and "0.70" in out.note and "0.82" in out.note and "0.76" in out.note
+
+
+def test_a_resting_buy_with_no_book_is_priced_as_before(tmp_path, monkeypatch):
+    sent, out = _resting(tmp_path, monkeypatch, book=None, fill_yes_price="0.1900")
+    assert sent == [("no", 2.0, pytest.approx(0.81))] and out.price == pytest.approx(0.81)
+    sent, out = _resting(tmp_path, monkeypatch, book=_book(), fill_yes_price="0.1900")  # an empty book has no ask to cross
+    assert sent == [("no", 2.0, pytest.approx(0.81))]
+
+
+def test_a_repriced_resting_buy_rests_its_take_profit_from_the_price_it_paid(tmp_path, monkeypatch):
+    import dataclasses
+    from types import SimpleNamespace
+
+    from kalshi_moonshot import lanes, runner
+    from kalshi_moonshot.strategy import LongShot
+
+    _w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], buy_rest_seconds=20.0, buy_rest_below=0.01, price=(0.76, 0.92))
+    monkeypatch.setattr(runner, "lane_specs", lambda settings: {"guarded": spec})
+    book = _book(yes_bids=(0.20,))  # NO is offered at 0.80 now; the shot below was read at 0.82
+
+    class C:
+        def orderbook(self, ticker):
+            return book
+
+    monkeypatch.setattr(runner.risk, "check", lambda *a, **k: SimpleNamespace(ok=True, reason=""))
+    monkeypatch.setattr(runner, "_top_up", lambda *a, **k: None)
+    seen = {}
+
+    def fake_resting(settings, client, st, shot, why, count, sp, key, live_book=None):
+        seen["book"] = live_book
+        return runner.Placed("bought NO 2/2 resting at 0.79", 2.0, 1.58, 0.79)
+
+    entries = []
+    monkeypatch.setattr(runner, "_place_resting", fake_resting)
+    monkeypatch.setattr(runner, "_rest_take_profit", lambda settings, client, st, shot, sp, filled, entry: (entries.append(entry) or ""))
+    shot = LongShot("KXBTC15M-9", "t", "", 0.81, 0.82, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXBTC15M", side="no")
+    out = runner.place(s, C(), store, shot, "why", 2.0)
+    assert out.filled == 2.0
+    assert seen["book"] is book  # the book place() already read is the one the resting buy is priced against
+    assert entries == [pytest.approx(0.79)]  # the take-profit counts from what was paid, not from the planned 0.81
