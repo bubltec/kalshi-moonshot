@@ -401,3 +401,63 @@ def test_the_sweep_applies_the_hard_drop_too(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "below_line_seconds", lambda *a, **k: 1.0)  # only 1 s under the line
     assert runner.scalp_sweep_hit(s, spec, "KXBTC15M-1", "yes", 0.40, 0.49, 1.0, 100.0) is None  # 3c under for 1 s: still waiting
     assert "hard drop" in runner.scalp_sweep_hit(s, spec, "KXBTC15M-1", "yes", 0.40, 0.45, 1.0, 100.0)  # 7c under: sold at once
+
+
+POLY_TOML = TOML + "stop_cross_gap=0.20\n"
+
+
+def poly_quote(bid, ts, ticker="KXBTC15M-1"):
+    return {**quote(bid, ts, ticker), "src": "poly"}
+
+
+def cross_armed(tmp_path, monkeypatch, kalshi_bid, gap=True):
+    w, base = armed(tmp_path, monkeypatch, 240.0)
+    if gap:
+        s = w.get_settings()
+        (s.data_dir / "strategies.toml").write_text(POLY_TOML)
+        w.refresh()
+    from kalshi_moonshot import db
+
+    tape = db.connect(str(tmp_path / "tape.db"), "tape", shared=True)
+    tape.execute("CREATE TABLE IF NOT EXISTS quotes (ts REAL NOT NULL, ticker TEXT NOT NULL, bid REAL, ask REAL, last REAL, sts INTEGER, bid_size REAL, ask_size REAL)")
+    for dt in (-1, 49):  # Kalshi keeps quoting: a fresh one sits under each Polymarket print below
+        tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (?,?,?,?)", (base + dt, "KXBTC15M-1", kalshi_bid, kalshi_bid + 0.01))
+    tape.commit()
+    w.tape_factory = lambda: tape
+    t = w.targets[("KXBTC15M-1", "fav")]
+    t.stop_from = 0.0
+    return w, base, t
+
+
+def test_a_polymarket_bid_far_under_kalshis_does_not_sell(tmp_path, monkeypatch):
+    w, base, t = cross_armed(tmp_path, monkeypatch, kalshi_bid=0.74)
+    assert t.cross_gap == 0.20
+    w.on_event(poly_quote(0.15, base))  # past every stop line, but Kalshi has the same side at 0.74
+    w.on_event(poly_quote(0.15, base + 50))
+    assert w._jobs.empty()
+
+
+def test_a_polymarket_bid_that_agrees_with_kalshi_still_sells(tmp_path, monkeypatch):
+    w, base, _t = cross_armed(tmp_path, monkeypatch, kalshi_bid=0.18)  # Kalshi is down there too: a real collapse
+    w.on_event(poly_quote(0.15, base))
+    w.on_event(poly_quote(0.15, base + 50))
+    assert not w._jobs.empty() and "stop-loss" in w._jobs.get_nowait()[2]
+
+
+def test_the_check_ignores_kalshi_quotes_and_lanes_without_the_setting(tmp_path, monkeypatch):
+    w, base, _t = cross_armed(tmp_path, monkeypatch, kalshi_bid=0.74)
+    w.on_event(quote(0.15, base))  # a Kalshi socket quote (no src): not what the check is about
+    w.on_event(quote(0.15, base + 50))
+    assert not w._jobs.empty()
+    w2, base2, t2 = cross_armed(tmp_path / "off", monkeypatch, kalshi_bid=0.74, gap=False) if (tmp_path / "off").mkdir() is None else (None, None, None)
+    assert t2.cross_gap == 0.0
+    w2.on_event(poly_quote(0.15, base2))
+    w2.on_event(poly_quote(0.15, base2 + 50))
+    assert not w2._jobs.empty()  # no gap set: the sale goes ahead as before
+
+
+def test_with_no_fresh_kalshi_quote_the_sale_goes_ahead(tmp_path, monkeypatch):
+    w, base, _t = cross_armed(tmp_path, monkeypatch, kalshi_bid=0.74)
+    w.on_event(poly_quote(0.15, base + 400))  # the tape's quote is minutes old by now
+    w.on_event(poly_quote(0.15, base + 460))
+    assert not w._jobs.empty()

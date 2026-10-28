@@ -46,7 +46,7 @@ def quote_from(msg: dict[str, Any], ticker_of: dict[str, str], now: float | None
     ticker = ticker_of.get(slug, "")
     if not ticker or bid is None or ask is None or bid <= 0 or ask <= 0:
         return None
-    return {"kind": "quote", "ts": now if now is not None else time.time(), "ticker": ticker, "bid": bid, "ask": ask}
+    return {"kind": "quote", "ts": now if now is not None else time.time(), "ticker": ticker, "bid": bid, "ask": ask, "src": "poly"}
 
 
 class PolymarketStream:

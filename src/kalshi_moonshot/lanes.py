@@ -138,6 +138,7 @@ class LaneSpec:
     watch_patient_left: float = 420.0  # watch_ride_seconds is the wait when at least this many seconds remain; less time left shortens the wait in proportion
     watch_ride_seconds: float = 0.0  # how long a visit under watch_at may last, at watch_patient_left, before a downtrend is abandoned (0 = a downtrend sells as soon as the last 3 seconds say so)
     watch_loss: float = 0.0  # hard stop: sell when the bid has lost this fraction of the price paid (0.75 keeps about a quarter). 0 = off. Checked the whole 15-minute window, ahead of the 45% line
+    stop_cross_gap: float = 0.0  # a Polymarket lane: do not sell on a Polymarket bid that is more than this many dollars under the Kalshi bid for the same side and market (0 = off). Polymarket prints a bid of exactly 0.15 on markets Kalshi has at 0.75: the stops sold healthy bets into it
     watch_loss_seconds: float = 3.0  # once that line prints, this many seconds to bounce back above it
     scalp_at: float = 0.0  # once the bid prints this price, follow the high (0 = off). A climb keeps riding (strategy.scalp_hit)
     scalp_up: float = 0.0  # or once the bid is this far above the price paid (0 = off). Whichever arm is set and reached first

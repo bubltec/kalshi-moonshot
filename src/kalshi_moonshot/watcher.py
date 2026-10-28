@@ -64,6 +64,7 @@ SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the cl
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
 HOLD_MARGIN = 0.01  # holding must beat the sale value by this much before an exit is withheld
 RETRY_AFTER = 15.0  # seconds before a declined sale is looked at again
+CROSS_STALE = 15.0  # a Kalshi quote older than this is not compared with a Polymarket bid
 HISTORY_KEEP = 120.0  # seconds of bids kept per market, for the spike rule
 FILL_SETTLE = 3.0  # seconds after a fill before positions are read: the bot's own bet must be on the books first, or it would look hand-placed
 
@@ -127,6 +128,8 @@ class Target:
     watch_patient: float = 420.0
     watch_loss: float = 0.0  # hard_loss fraction of the price paid (0 = off)
     watch_loss_seconds: float = 3.0
+    cross_gap: float = 0.0  # lane stop_cross_gap: skip a sale on a Polymarket bid this far under the Kalshi bid (0 = off)
+    cross_logged: float = 0.0  # when the last skipped sale was logged
     scalp_at: float = 0.0  # scalp_hit: follow the high once the bid prints this price (0 = off)
     scalp_up: float = 0.0  # or once the bid is this far above the price paid (0 = off)
     scalp_dip: float = 0.03
@@ -388,6 +391,8 @@ class ProfitWatcher:
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
             reason = self._stop_hit(t, bid, now) or fast or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._settlement_hit(t, bid, now, e)
+            if reason and t.cross_gap > 0 and e.get("src") == "poly":
+                reason = self._cross_checked(t, bid, now, reason)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
                 self._jobs.put(SellSignal(t.ticker, t.lane, reason))
@@ -587,6 +592,26 @@ class ProfitWatcher:
             buyer.buy(buyer.flip_plan(t, other, reason, ctx, self._book(t.lane)), self.get_settings(), self.store_factory())
         except Exception:
             log.exception("burst buy: failed for %s", t.ticker)
+
+    def _cross_checked(self, t: Target, bid: float, now: float, reason: str) -> str | None:
+        """A sale decided on a Polymarket bid is held back when Kalshi's bid for the same side and market is more than the lane's stop_cross_gap above it: Polymarket prints bids that are not real (exactly 0.15 on markets Kalshi has at 0.75), and a stop sold into one.
+        Kalshi's bid is the tape's newest quote for the ticker, at most CROSS_STALE seconds old; with none, the sale goes ahead."""
+        tape = self._tape_db()
+        if tape is None:
+            return reason
+        try:
+            row = tape.execute("SELECT bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC LIMIT 1", (t.ticker, now, now - CROSS_STALE)).fetchone()
+        except Exception:
+            return reason
+        if row is None:
+            return reason
+        ref = side_bid(t.side, float(row[0]), float(row[1]))
+        if ref - bid <= t.cross_gap:
+            return reason
+        if now - t.cross_logged > 30.0:
+            t.cross_logged = now
+            log.warning("watcher: not selling %s %s on a Polymarket bid of %.2f: Kalshi's bid is %.2f (%s)", t.ticker, t.side, bid, ref, reason[:80])
+        return None
 
     def _tape_db(self) -> Any:
         if getattr(self._tls, "tape", None) is None and self.tape_factory is not None:
@@ -944,6 +969,7 @@ class ProfitWatcher:
             held.watch_at = spec.watch_at
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
             held.watch_loss, held.watch_loss_seconds = spec.watch_loss, spec.watch_loss_seconds
+            held.cross_gap = spec.stop_cross_gap
             held.scalp_at, held.scalp_up, held.scalp_dip, held.scalp_dip_seconds = spec.scalp_at, spec.scalp_up, spec.scalp_dip, spec.scalp_dip_seconds
             held.scalp_dip_hard = spec.scalp_dip_hard
             if row["close_time"] and str(row["ticker"]).split("-")[0].endswith("15M"):

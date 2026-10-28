@@ -593,7 +593,7 @@ class Worker:
                     continue
                 if ask <= 0:
                     continue
-                self._on_poly_quote({"kind": "quote", "ts": time.time(), "ticker": ticker, "bid": bid, "ask": ask})
+                self._on_poly_quote({"kind": "quote", "ts": time.time(), "ticker": ticker, "bid": bid, "ask": ask, "src": "poly"})
 
     def do_evaluate(self, job: Job) -> str:
         """A live lane's evaluation always reads the real market (it is about to place an order); a paper lane's may use the shared cache."""
