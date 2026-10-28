@@ -8,6 +8,7 @@ RUN V=$(cut -d. -f1,2 /etc/alpine-release) \
     && printf '%s\n' "${ALPINE_MIRROR}/v${V}/main" "${ALPINE_MIRROR}/v${V}/community" > /etc/apk/repositories \
     && apk add --no-cache --virtual .build-deps git build-base clang21 llvm21-dev \
     && git clone --depth 1 --branch ${PGVECTOR_VERSION} https://github.com/pgvector/pgvector.git /tmp/pgvector \
-    && cd /tmp/pgvector && make && make install \
+    # OPTFLAGS is empty on purpose: pgvector's default is -march=native, so an image built on an Apple-silicon Mac crashes (SIGILL) on the cloud's Graviton CPUs
+    && cd /tmp/pgvector && make OPTFLAGS="" && make install \
     && cd / && rm -rf /tmp/pgvector \
     && apk del .build-deps
