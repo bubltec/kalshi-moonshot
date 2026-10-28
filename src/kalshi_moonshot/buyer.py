@@ -24,7 +24,7 @@ from .strategy import LongShot
 
 log = logging.getLogger("moonshot")
 
-ALLOWANCE = 0.02  # a live buy's limit is this much over the ask, so a quote that ticked up since it was read still fills; the stake is sized with it
+ALLOWANCE = 0.02  # the default for how far over the ask a live buy's limit sits, so a quote that ticked up since it was read still fills; a hunting lane sets its own (hunt_allowance). The stake is sized with it
 SENT_NOTHING = ("bought ", "skipped: could not read the book", "skipped: $")  # notes of a zero fill that is certain: the exchange answered an IOC with no contracts, or no order went out. "order failed" is not one (a timeout may have filled), nor is a risk block or a too-small order
 FLIP_LANE = "burst_flip"  # the lane a bet on the other side of a held favorite is logged under
 
@@ -36,9 +36,9 @@ class BuyResult:
     row_id: int | None = None  # the decision row this buy wrote or updated
 
 
-def whole_contracts(stake: float, ask: float) -> float:
+def whole_contracts(stake: float, ask: float, allowance: float = ALLOWANCE) -> float:
     """The whole contracts a live order for this stake asks for: the stake over the ask plus the allowance, at least one. A paper bet is sized the same way, so the two can be compared."""
-    return float(max(1, int(stake / (ask + ALLOWANCE))))
+    return float(max(1, int(stake / (ask + allowance))))
 
 
 def category(ticker: str) -> str:
@@ -67,6 +67,7 @@ class BuyPlan:
     max_open: int = 0  # 0 = no limit
     require_prior_win: bool = False
     retry_of: int | None = None  # the decision row of an earlier try on this market that bought nothing
+    allowance: float = ALLOWANCE  # dollars over the ask the live order's limit may reach
     series: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -78,11 +79,11 @@ def hunt_plan(spec: LaneSpec, ticker: str, side: str, ask: float, close_ts: floa
     ask = round(ask, 4)
     stake = spec.fixed_stake or 2.0
     close = datetime.fromtimestamp(close_ts, UTC).strftime("%Y-%m-%dT%H:%M:%SZ") if close_ts else ""
-    count = whole_contracts(stake, ask)
+    count = whole_contracts(stake, ask, spec.hunt_allowance)
     return BuyPlan(
         ticker, side, ask, reason, ctx, venue, decision_lane=spec.name, live_lane=spec.name, stake=stake,
         paper_contracts=count, paper_stake=round(count * ask, 4), close_ts=close_ts, shot_close=close, log_close=close,
-        label="burst hunt", cap_lane=spec.name, max_open=spec.max_open, require_prior_win=spec.require_prior_win,
+        label="burst hunt", cap_lane=spec.name, max_open=spec.max_open, require_prior_win=spec.require_prior_win, allowance=spec.hunt_allowance,
     )
 
 
@@ -129,10 +130,10 @@ def buy(plan: BuyPlan, s: Settings, store: Store) -> BuyResult:
         reason = f"{reason} (paper: {plan.series} has no win yet)"
     filled, cost, note, retryable = 0.0, 0.0, reason, False
     if live:
-        shot = LongShot(tk, "", "", max(0.0, ask - 0.01), min(0.99, ask + ALLOWANCE), 0.0, plan.shot_close, max(0.0, (plan.close_ts - time.time()) / 3600.0),
+        shot = LongShot(tk, "", "", max(0.0, ask - 0.01), min(0.99, ask + plan.allowance), 0.0, plan.shot_close, max(0.0, (plan.close_ts - time.time()) / 3600.0),
                         lane=plan.decision_lane, series=plan.series, category=category(tk), event_ticker=tk.rsplit("-", 1)[0], side=plan.side)
         try:
-            placed = runner.place(s, plan.venue, store, shot, reason, whole_contracts(plan.stake, ask))
+            placed = runner.place(s, plan.venue, store, shot, reason, whole_contracts(plan.stake, ask, plan.allowance))
             filled, cost, note = placed.filled, placed.cost, placed.note
             retryable = filled <= 0 and note.startswith(SENT_NOTHING)
         except KalshiRateLimited as exc:

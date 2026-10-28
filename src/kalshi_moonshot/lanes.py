@@ -115,6 +115,7 @@ class LaneSpec:
     hunt_park_seconds: float = 20.0  # the ask must have been on screen this long...
     hunt_park_high: float = 0.10  # ...never above max(this, price[1])...
     hunt_park_span: float = 0.06  # ...and within this of the ask we would pay, so the price is parked, not still arriving
+    hunt_allowance: float = 0.02  # how many dollars over the ask a hunt buy's limit may reach (it still fills at the best ask). The burst that triggers a hunt also eats the cheap offers, and the ask can jump more than 2c in the second before the order lands: two moonshot triggers today found "$0.00 offered at 0.17" against an ask of 0.15. The stake is sized with it
     hunt_attempts: int = 3  # a hunt buys a market at most this many times when each try certainly bought nothing (buyer.SENT_NOTHING); every try re-checks the whole trigger
     hunt_retry_seconds: float = 3.0  # seconds between those tries
     hunt_stale_seconds: float = 10.0  # a queued buy that waited this long is dropped: its price was read at the burst and the ask has moved since
@@ -347,7 +348,7 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "entry_socket", "entry_min_gap_seconds", "buy_slip", "buy_retries", "buy_retry_seconds", "buy_retry_chase",
+    "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "buy_retries", "buy_retry_seconds", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
 })
 
