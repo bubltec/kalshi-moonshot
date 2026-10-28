@@ -1012,40 +1012,71 @@ def place(
                 return Placed(f"{placed.note} {note}", placed.filled, placed.cost, placed.price)
         return placed
     buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
-    try:
+    retries = lane_spec.buy_retries if lane_spec is not None else 0
+    first_at = time.time()
+    key = order_key
+    attempt = 0
+    while True:
         try:
-            resp = buy(shot.ticker, count, limit, client_order_id=order_key)
+            try:
+                resp = buy(shot.ticker, count, limit, client_order_id=key)
+            except KalshiRateLimited:
+                raise  # refused outright, so nothing was bought; the queue retries it later
+            except KalshiError as exc:
+                if count == int(count) or int(count) < 1 or "insufficient_balance" in str(exc):
+                    raise
+                # A fractional order was refused: ask for the whole contracts that fit, and stop asking for fractions if that goes through.
+                log.warning("fractional order for %s refused (%s); retrying %d whole contracts", shot.ticker, exc, int(count))
+                count = int(count)
+                resp = buy(shot.ticker, count, limit, client_order_id=key)
+                _NO_FRACTION.add("refused")
         except KalshiRateLimited:
-            raise  # refused outright, so nothing was bought; the queue retries it later
+            raise
         except KalshiError as exc:
-            if count == int(count) or int(count) < 1 or "insufficient_balance" in str(exc):
-                raise
-            # A fractional order was refused: ask for the whole contracts that fit, and stop asking for fractions if that goes through.
-            log.warning("fractional order for %s refused (%s); retrying %d whole contracts", shot.ticker, exc, int(count))
-            count = int(count)
-            resp = buy(shot.ticker, count, limit, client_order_id=order_key)
-            _NO_FRACTION.add("refused")
-    except KalshiRateLimited:
-        raise
-    except KalshiError as exc:
-        if "insufficient_balance" in str(exc):
-            why_not = _explain_unfunded(client, shot, cost)
-            if why_not:
-                return Placed(why_not)
-        return Placed(f"order failed: {exc}")
-    filled = float(resp.get("fill_count") or 0.0)
-    avg = float(resp.get("average_fill_price") or shot.ask)
-    fee = float(resp.get("average_fee_paid") or 0.0) * filled
-    store.add_order(
-        ticker=shot.ticker, env=s.env, count=count, price=limit, fill_count=filled,
-        cost_usd=avg * filled + fee, fee_usd=fee, order_id=resp.get("order_id", ""),
-        contract=shot.side,
-    )
-    spent = avg * filled + fee
+            if "insufficient_balance" in str(exc):
+                why_not = _explain_unfunded(client, shot, cost)
+                if why_not:
+                    return Placed(why_not)
+            return Placed(f"order failed: {exc}")
+        filled = float(resp.get("fill_count") or 0.0)
+        avg = float(resp.get("average_fill_price") or shot.ask)
+        fee = float(resp.get("average_fee_paid") or 0.0) * filled
+        store.add_order(
+            ticker=shot.ticker, env=s.env, count=count, price=limit, fill_count=filled,
+            cost_usd=avg * filled + fee, fee_usd=fee, order_id=resp.get("order_id", ""),
+            contract=shot.side,
+        )
+        spent = avg * filled + fee
+        if filled > 0 or lane_spec is None or attempt >= retries or time.time() - first_at > lane_spec.buy_retry_seconds:
+            break
+        again = _requote(s, client, store, shot, lane_spec, count)
+        if again is None:
+            break
+        attempt += 1
+        limit = again
+        key = f"{order_key}-r{attempt}" if order_key else None  # a new id: Kalshi refuses one it has seen, even on an order that filled nothing
+        log.info("buy %s %s: nothing filled, trying again at %.2f (try %d of %d)", shot.ticker, shot.side, limit, attempt + 1, retries + 1)
     rest_note = _rest_take_profit(s, client, store, shot, lane_spec, filled, avg) if filled > 0 else ""
     return Placed(
         f"bought {shot.side.upper()} {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}" + (f" {rest_note}" if rest_note else ""), filled, spent
     )
+
+
+def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, count: float) -> float | None:
+    """The limit for a second try after an immediate buy filled nothing, or None to give up. It reads the book again and prices the order off the fresh ask, but never above the first limit plus
+    `buy_retry_chase`, never outside the lane's price band, and only if the risk gate still agrees at that price: a market that ran away is not chased."""
+    try:
+        ask = best_ask(client.orderbook(shot.ticker), shot.side)
+    except KalshiError:
+        return None
+    if ask is None or ask < spec.price[0] - 1e-9 or ask > spec.price[1] + 1e-9:
+        return None
+    limit = round(min(0.99, ask + max(0.0, spec.buy_slip)), 4)
+    if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
+        return None
+    cost = limit * count + order_fee(limit, count)
+    verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive)
+    return limit if verdict.ok else None
 
 
 def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) -> tuple[float | None, str]:
