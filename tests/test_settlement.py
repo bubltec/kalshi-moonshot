@@ -822,7 +822,7 @@ def test_the_flip_trigger_buys_the_cheap_side_on_dollars_against_a_90c_favorite(
 
     w, s, _store, _close = _watcher(tmp_path, monkeypatch)
     _buy_inline(w)
-    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.15), hunt_dollars=400.0, hunt_dollars_btc=800.0, sides=("yes", "no"), fixed_stake=0.5, max_open=0)
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.15), hunt_dollars=400.0, hunt_dollars_btc=800.0, hunt_favorite=0.90, sides=("yes", "no"), fixed_stake=0.5, max_open=0)
     bought = []
     monkeypatch.setattr(w, "_hunt_buy", lambda h, sp, side, ask, reason, ctx: bought.append((h.ticker, side, round(ask, 2), ctx["bar"])))
     now = 1_000_000.0
@@ -843,8 +843,8 @@ def test_the_flip_trigger_buys_the_cheap_side_on_dollars_against_a_90c_favorite(
     book[sec - 2] = [0.0, 12000.0, 0.0, 820.0]
     w._on_hunt(hb, spec, now, book, sec)
     assert bought and bought[0][3] == 800.0
-    hf = watcher.Hunt("KXETH15M-2", "guarded", close_ts=now + 60.0, yes_bid=0.60, yes_ask=0.62)  # not a 90c favorite: nothing to flip
-    hf.quotes.extend((now - 20.0 + i, 0.60, 0.62) for i in range(21))
+    hf = watcher.Hunt("KXETH15M-2", "guarded", close_ts=now + 60.0, yes_bid=0.87, yes_ask=0.88)  # NO is 13c, in the band, but the favorite is 87c: this lane wants 90c
+    hf.quotes.extend((now - 20.0 + i, 0.87, 0.88) for i in range(21))
     bought.clear()
     w._on_hunt(hf, spec, now, book, sec)
     assert bought == []
@@ -1220,7 +1220,7 @@ def test_a_hunt_waits_out_its_retry_cooldown(tmp_path, monkeypatch):
 def test_the_hunt_and_burst_settings_default_to_what_was_hard_coded():
     from kalshi_moonshot.lanes import LaneSpec
 
-    assert (LaneSpec.hunt_favorite, LaneSpec.hunt_cheap, LaneSpec.hunt_window, LaneSpec.hunt_min_left) == (0.90, 0.50, 120.0, 10.0)
+    assert (LaneSpec.hunt_favorite, LaneSpec.hunt_cheap, LaneSpec.hunt_window, LaneSpec.hunt_min_left) == (0.0, 0.50, 120.0, 10.0)  # no favorite requirement unless a lane sets one
     assert (LaneSpec.hunt_crash, LaneSpec.hunt_crash_seconds, LaneSpec.hunt_park_seconds, LaneSpec.hunt_park_high, LaneSpec.hunt_park_span) == (0.10, 12.0, 20.0, 0.10, 0.06)
     assert (LaneSpec.hunt_attempts, LaneSpec.hunt_retry_seconds, LaneSpec.hunt_stale_seconds) == (3, 3.0, 10.0)
     assert (LaneSpec.burst_favorite, LaneSpec.burst_window, LaneSpec.burst_min_left) == (0.90, 120.0, 10.0)
@@ -1256,9 +1256,10 @@ def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, **spec_c
 
 
 def test_the_favorite_floor_is_the_lanes_setting(tmp_path, monkeypatch):
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86) == 0  # NO costs 15c: an 85c favorite, under the default 90c
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86, hunt_favorite=0.80) == 1  # the lane says 80c is enough
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, hunt_favorite=0.95) == 0  # and a stricter lane can ask for more
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86) == 1  # NO costs 15c: with no floor set, the dollars and the price band decide
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86, hunt_favorite=0.90) == 0  # a lane that asks for a 90c favorite does not buy an 85c one
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86, hunt_favorite=0.80) == 1  # and 80c is enough for another
+    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, hunt_favorite=0.95) == 0  # a stricter lane can ask for more
 
 
 def test_the_hunt_window_is_the_lanes_setting(tmp_path, monkeypatch):

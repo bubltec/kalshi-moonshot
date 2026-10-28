@@ -475,7 +475,7 @@ class ProfitWatcher:
             if ask <= 0 or ask >= spec.hunt_cheap:
                 continue
             if spec.hunt_dollars > 0:
-                # The flip trigger (collapse_study / flip_trigger_study, 2026-10-27): a favorite (hunt_favorite, 90c), and at least $X bought AGAINST it (this cheap side's takers) in the last 3 s, in the last hunt_window seconds. Absolute dollars, not a multiple of normal.
+                # The flip trigger (collapse_study / flip_trigger_study, 2026-10-27): a favorite if the lane sets hunt_favorite (it was 90c; 0 = off), and at least $X bought AGAINST it (this cheap side's takers) in the last 3 s, in the last hunt_window seconds. Absolute dollars, not a multiple of normal.
                 if not (lo <= ask <= hi):
                     continue
                 cheap_mid = (h.yes_bid + h.yes_ask) / 2.0 if side == "yes" else 1.0 - (h.yes_bid + h.yes_ask) / 2.0

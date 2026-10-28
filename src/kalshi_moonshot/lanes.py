@@ -103,7 +103,7 @@ class LaneSpec:
     burst_dollars_btc: float = 0.0  # the same for BTC: a bar of its own, or -1 to keep the older rule (it beat holding by 5.3c on BTC; the dollar bar did not)
     hunt_dollars: float = 0.0  # a burst_hunt lane's trigger in dollars: a 90c+ favorite and at least this many dollars bought AGAINST it (the cheap side's takers) in 3 s, in the last 120 s; buy the cheap side. 0 = the older multiple-of-normal burst
     hunt_dollars_btc: float = 0.0  # the same bar for BTC, whose volume is far larger (0 = the same bar as the others)
-    hunt_favorite: float = 0.90  # a burst_hunt dollar trigger buys the cheap side only when the OTHER side is at least this priced (a 90c+ favorite). Lower it together with price[1]: a 20c side is an 80c favorite
+    hunt_favorite: float = 0.0  # a burst_hunt dollar trigger buys the cheap side only when the OTHER side is at least this priced (0 = no requirement; 0.90 was the flip study's 90c+ favorite). price[1] is then the only band: a 20c side is an 80c favorite
     hunt_cheap: float = 0.50  # the cheap side is a side priced under this
     hunt_window: float = 120.0  # a hunt acts when this many seconds or fewer remain...
     hunt_min_left: float = 10.0  # ...and at least this many (an order sent later lands after the close)
