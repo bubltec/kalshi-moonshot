@@ -58,11 +58,7 @@ def exit_value(g, side, e, paid, close, won):
         b = px[0]
         left, el = close - sec, sec - t0
         fire = False
-        if el >= CASH_MIN and b > paid:
-            fire = True
-        elif b <= paid - CASH_DROP and el >= CASH_MIN:
-            fire = True
-        elif left <= 5 and b < paid:
+        if (el >= CASH_MIN and b > paid) or (b <= paid - CASH_DROP and el >= CASH_MIN) or (left <= 5 and b < paid):
             fire = True
         if not fire:
             if b >= paid + UP - 1e-9:
@@ -107,7 +103,7 @@ for w in wins:
                     ok = 0.14 <= ask <= 0.42 and prev is not None and ask >= prev[1] - 1e-9 and (sec - t0) >= 30
                 else:
                     prev = side_px(g, sec - W, side)
-                    lows = [p[1] for p in (side_px(g, sec - k, side) for k in range(0, LOOK + 1)) if p is not None]
+                    lows = [p[1] for p in (side_px(g, sec - k, side) for k in range(LOOK + 1)) if p is not None]
                     ok = prev is not None and bool(lows) and ask <= CAP and min(lows) < LOW and ask - prev[1] >= R - 1e-9
                 if not ok:
                     continue
@@ -128,7 +124,7 @@ for name, *_ in RULES:
     wins_ = sum(1 for x in r if x[1] > 0) / len(r)
     per = [x[1] / x[2] for x in r]
     by = defaultdict(float)
-    for x, p in zip(r, per):
+    for x, p in zip(r, per, strict=True):
         by[x[0]] += p
     se = math.sqrt(len(by)) * statistics.pstdev(list(by.values())) / len(r) if len(by) > 1 else float("nan")
     print(f"{name:40} {len(r):>5} {100 * wins_:>4.0f}% {100 * statistics.mean(x[1] for x in r):>+12.1f}c {100 * statistics.mean(per):>+12.1f}% {100 * se:>11.1f}%")
