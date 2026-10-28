@@ -672,6 +672,8 @@ def scalp_sweep_hit(s: Settings, spec: LaneSpec, ticker: str, side: str, entry: 
     why = None if high is None else scalp_hit(bid, high, min(arms), spec.scalp_dip)
     if why is None or high is None or spec.scalp_dip_seconds <= 0:
         return why
+    if spec.scalp_dip_hard > 0 and high - bid >= spec.scalp_dip_hard - 1e-9:
+        return f"{why} (hard drop)"
     held = below_line_seconds(s, ticker, side, high - spec.scalp_dip, now)
     return f"{why} for {held:.0f}s" if held is not None and held >= spec.scalp_dip_seconds else None
 

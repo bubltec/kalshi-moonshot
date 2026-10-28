@@ -130,6 +130,7 @@ class Target:
     scalp_at: float = 0.0  # scalp_hit: follow the high once the bid prints this price (0 = off)
     scalp_up: float = 0.0  # or once the bid is this far above the price paid (0 = off)
     scalp_dip: float = 0.03
+    scalp_dip_hard: float = LaneSpec.scalp_dip_hard  # a fall this far under the high sells at once (lane scalp_dip_hard; 0 = off)
     scalp_dip_seconds: float = LaneSpec.scalp_dip_seconds  # the dip must hold this long before it sells (lane scalp_dip_seconds)
     scalp_dip_since: float | None = None  # when the bid first went scalp_dip under the high and has stayed there
     scalp_high: float = 0.0  # the highest bid since the arm printed
@@ -786,6 +787,8 @@ class ProfitWatcher:
             return None
         if t.scalp_dip_seconds <= 0:
             return hit
+        if t.scalp_dip_hard > 0 and t.scalp_high - bid >= t.scalp_dip_hard - 1e-9:
+            return f"{hit} (hard drop)"  # a sharp reversal does not wait: the bid keeps falling while the count runs
         if t.scalp_dip_since is None:
             t.scalp_dip_since = now
         held = now - t.scalp_dip_since
@@ -942,6 +945,7 @@ class ProfitWatcher:
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
             held.watch_loss, held.watch_loss_seconds = spec.watch_loss, spec.watch_loss_seconds
             held.scalp_at, held.scalp_up, held.scalp_dip, held.scalp_dip_seconds = spec.scalp_at, spec.scalp_up, spec.scalp_dip, spec.scalp_dip_seconds
+            held.scalp_dip_hard = spec.scalp_dip_hard
             if row["close_time"] and str(row["ticker"]).split("-")[0].endswith("15M"):
                 with contextlib.suppress(TypeError, ValueError):
                     close = datetime.fromisoformat(row["close_time"]).timestamp()

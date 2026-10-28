@@ -357,3 +357,47 @@ def test_a_bid_that_only_equals_the_high_is_not_a_new_high_but_it_does_end_the_d
     w.on_event(quote(0.49, base + 4))
     w.on_event(quote(0.49, base + 6))
     assert w._jobs.empty()  # the count restarted at base + 4
+
+
+def test_a_hard_drop_sells_at_once_without_waiting_the_dip_seconds(tmp_path, monkeypatch):
+    w, t, base = _scalp_target(tmp_path, monkeypatch)
+    t.scalp_dip_hard = 0.06
+    w.on_event(quote(0.49, base + 2))  # 3c under the 0.52 high: a dip, so it waits its 3 s as before
+    assert w._jobs.empty()
+    w.on_event(quote(0.45, base + 3))  # 7c under: past the hard drop, so no more waiting
+    job = w._jobs.get_nowait()
+    assert "scalp" in job.why and "hard drop" in job.why
+
+
+def test_a_fall_short_of_the_hard_drop_still_waits(tmp_path, monkeypatch):
+    w, t, base = _scalp_target(tmp_path, monkeypatch)
+    t.scalp_dip_hard = 0.06
+    w.on_event(quote(0.47, base + 2))  # 5c under the high: a dip, but not a hard one
+    w.on_event(quote(0.47, base + 4))
+    assert w._jobs.empty()
+    w.on_event(quote(0.47, base + 5))  # 3 s
+    assert "scalp" in w._jobs.get_nowait().why
+
+
+def test_the_hard_drop_is_off_unless_the_lane_sets_it(tmp_path, monkeypatch):
+    from kalshi_moonshot.lanes import LaneSpec
+
+    assert LaneSpec.scalp_dip_hard == 0.0
+    w, _t, base = _scalp_target(tmp_path, monkeypatch)
+    w.on_event(quote(0.40, base + 2))  # 12c under the high, but no hard drop set: it waits
+    assert w._jobs.empty()
+
+
+def test_the_sweep_applies_the_hard_drop_too(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import lanes, runner
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(TOML)
+    s = config.load()
+    spec = dataclasses.replace(lanes.lane_specs(s)["fav"], scalp_up=0.10, scalp_dip=0.03, scalp_dip_seconds=3.0, scalp_dip_hard=0.06)
+    monkeypatch.setattr(runner, "high_since", lambda *a, **k: 0.52)
+    monkeypatch.setattr(runner, "below_line_seconds", lambda *a, **k: 1.0)  # only 1 s under the line
+    assert runner.scalp_sweep_hit(s, spec, "KXBTC15M-1", "yes", 0.40, 0.49, 1.0, 100.0) is None  # 3c under for 1 s: still waiting
+    assert "hard drop" in runner.scalp_sweep_hit(s, spec, "KXBTC15M-1", "yes", 0.40, 0.45, 1.0, 100.0)  # 7c under: sold at once
