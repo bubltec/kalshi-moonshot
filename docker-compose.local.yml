@@ -1,0 +1,14 @@
+# This Mac's paper bot, on .env.local instead of the live .env:
+#   docker compose -p moonshot-local -f docker-compose.yml -f docker-compose.local.yml up -d
+# -p gives it its own database volumes, so its paper record starts clean and never mixes with an older local one.
+services:
+  bot:
+    env_file: !override
+      - .env.local
+    environment:
+      ENV_FILE: /app/.env.local  # the bot re-reads this file on every scan; without it that would be the live .env
+    volumes: !override
+      - ./data:/data
+      - tape:/tape
+      - ./.secrets:/app/.secrets:ro
+      - ./.env.local:/app/.env.local:ro
