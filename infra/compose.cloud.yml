@@ -1,0 +1,39 @@
+# The bot and its database on one machine. No Ollama: the model stays on the Mac, and a review
+# that cannot reach it skips. Images are filled in by the stack (infra/bot_stack.py).
+services:
+  bot:
+    image: BOT_IMAGE
+    restart: unless-stopped
+    stop_grace_period: 60s
+    env_file: /mnt/moonshot/env/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATA_DIR: /data
+      TAPE_DIR: /tape
+      DATABASE_URL: postgresql://moonshot:${POSTGRES_PASSWORD:-moonshot}@db:5432/moonshot
+      DB_SCHEMA_MAIN: moonshot
+      DB_SCHEMA_TAPE: tape
+    volumes:
+      - /mnt/moonshot/data:/data
+      - /mnt/moonshot/secrets:/app/.secrets:ro
+      - /mnt/moonshot/env/.env:/app/.env:ro
+
+  db:
+    image: DB_IMAGE
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_USER: moonshot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-moonshot}
+      POSTGRES_DB: moonshot
+    volumes:
+      - /mnt/moonshot/pgdata:/var/lib/postgresql
+    shm_size: 256mb
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "synchronous_commit=on", "-c", "max_connections=60"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moonshot -d moonshot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

@@ -216,6 +216,20 @@ destroyed); lifecycle rules that move tape files to Intelligent-Tiering and back
 Athena workgroup, capped at 10 GB scanned per query, so years of ticks can be queried with SQL without restoring anything. Account and region are in
 `infra/cdk.json`; `-c alert_email=you@example.com` adds an AWS Budgets email alert at 80% of `-c budget_usd` (default 10).
 
+## Running in Ohio
+
+Kalshi's matching engine is in AWS us-east-2. `infra/bot_stack.py` is one small machine there (a `t4g.medium`, no open ports, reached through Systems Manager) plus a 100 GB disk for Postgres that stays if the machine is replaced. The model is not installed; a review that cannot reach Ollama on the Mac skips. The archive stack is unchanged and stays where `cdk.json` puts it.
+
+```
+cd infra
+cdk deploy --profile <profile> KalshiMoonshotBot    # once
+cd ..
+scripts/cloud_push.sh --build                       # first time, and after a code change
+scripts/cloud_push.sh                               # after a lane or .env change
+```
+
+Stop the local bot before the first `--build`. Both would trade the same account. A plain `scripts/cloud_push.sh` copies `data/strategies.toml`, `.env`, and `.secrets/` onto the machine. The running bot reads those on its next decision. `--build` also ships a new image and restarts the containers. Logs: `aws ssm start-session --region us-east-2 --target <instance id>` then `docker logs -f $(docker ps -qf name=bot)`. `-c bot_instance=t4g.small` or `-c bot_volume_gb=200` changes the size.
+
 Using it (`src/kalshi_moonshot/archive.py`): it does nothing until `ARCHIVE_BUCKET` is set in `.env`.
 
 ```
