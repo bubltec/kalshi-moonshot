@@ -249,3 +249,14 @@ def test_a_fixed_take_profit_covers_the_entries_a_multiple_cannot_reach():
     assert take_profit_hit(0.80, 0.98, x=1.5, at=0.99) is None
     assert take_profit_hit(0.50, 0.75, x=1.5, at=0.99) is not None  # a cheap entry still sells at 1.5x, long before the fixed price
     assert take_profit_hit(0.99, 0.99, x=1.5, at=0.99) is None  # already paid the level
+
+
+def test_the_socket_covers_a_position_only_while_its_quotes_are_arriving(setup):
+    w, *_ = make(setup, 0.9)
+    key = ("KXBTC15M-1", "late_ticket")
+    assert not w.covers(*key, now=1000.0)  # a target that has seen no quote is not being covered
+    w.on_event(quote(0.60, 0.62, ts=1000.0))
+    assert w.covers(*key, now=1010.0)
+    assert not w.covers(*key, now=1000.0 + watcher.SOCKET_QUIET + 1)  # quiet for too long: the sweep takes over
+    assert w.covers(*key, beat=1000.0 + watcher.SOCKET_QUIET, now=1000.0 + watcher.SOCKET_QUIET + 1)  # a quiet market on a live stream stays covered
+    assert not w.covers("KXBTC15M-2", "late_ticket", now=1010.0)

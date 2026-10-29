@@ -1494,10 +1494,14 @@ def stop_loss_pass(
     now: datetime | None = None,
     before_order: Callable[[], None] | None = None,
     client_for: Callable[[str], KalshiClient] | None = None,
+    socket_covers: Callable[[str, str], bool] | None = None,
 ) -> list[str]:
     """Check every open bet. Sell (or paper-sell) those that hit the stop or a take-profit level. Returns log lines.
 
     Take-profit is also watched live on the socket (watcher.py); this pass is the slower backstop for it.
+    The loss exits (the hard loss, the 50c watch, the generic stop) are the socket's alone while `socket_covers(ticker, lane)` says its
+    price events are reaching that position: this pass reads REST and the tape, a second price source for the same rule. It decides a loss
+    only for a position the socket is not covering (no stream, or the stream has gone quiet).
     """
     specs = lane_specs(s)
     now = now or datetime.now(UTC)
@@ -1553,7 +1557,8 @@ def stop_loss_pass(
                     hovering=_hovering(s, row["ticker"], side, bid, now.timestamp()),
                 )
         owned = False
-        if not why and stop_on and spec is not None and left > 0:
+        loss_on = stop_on and not (socket_covers is not None and socket_covers(row["ticker"], row["lane"] or "moonshot"))
+        if not why and loss_on and spec is not None and left > 0:
             if spec.watch_loss > 0 and entry > 0 and bid <= entry * (1.0 - spec.watch_loss):
                 owned = True
                 visit = under_line(s, row["ticker"], side, entry * (1.0 - spec.watch_loss), now.timestamp())
@@ -1569,7 +1574,7 @@ def stop_loss_pass(
                     entry, bid, left, 0.0 if dipped is None else dipped, line=spec.watch_at,
                     ride=spec.watch_ride_seconds, patient_left=spec.watch_patient_left, trend=trend,
                 )
-        if not why and stop_on and not owned:
+        if not why and loss_on and not owned:
             why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, stop_drop_for(spec, s))
         if not why:
             continue

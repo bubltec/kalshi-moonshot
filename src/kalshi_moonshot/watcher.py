@@ -64,6 +64,7 @@ SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the cl
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
 HOLD_MARGIN = 0.01  # holding must beat the sale value by this much before an exit is withheld
 RETRY_AFTER = 15.0  # seconds before a declined sale is looked at again
+SOCKET_QUIET = 20.0  # seconds without a quote (or any stream event) before the sweep decides a position's loss exit instead of the socket
 CROSS_STALE = 15.0  # a Kalshi quote older than this is not compared with a Polymarket bid
 HISTORY_KEEP = 120.0  # seconds of bids kept per market, for the spike rule
 FILL_SETTLE = 3.0  # seconds after a fill before positions are read: the bot's own bet must be on the books first, or it would look hand-placed
@@ -346,6 +347,16 @@ class ProfitWatcher:
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self.sold: list[str] = []  # log lines, newest last (also logged)
+
+    def covers(self, ticker: str, lane: str, beat: float = 0.0, now: float | None = None) -> bool:
+        """True while the socket's price events are reaching this position, so its loss exits are decided here and nowhere else.
+
+        The position needs a target that has already seen a quote, and either that quote or the stream's last event (`beat`, for a market
+        that is simply quiet) is under SOCKET_QUIET seconds old. Otherwise the stream is not covering it and the sweep takes over."""
+        now = time.time() if now is None else now
+        with self._lock:
+            t = self.targets.get((ticker, lane))
+        return t is not None and t.last_ts > 0 and now - max(t.last_ts, beat) < SOCKET_QUIET
 
     def _book(self, lane: str) -> Any:
         """The venue for this lane. A Polymarket position is sold there, not on the Kalshi client."""

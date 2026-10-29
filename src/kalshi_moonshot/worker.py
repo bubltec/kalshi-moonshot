@@ -748,11 +748,20 @@ class Worker:
         log.info("resolved %d settled markets", n)
         return f"{n} resolved"
 
+    def _socket_covers(self, ticker: str, lane: str) -> bool:
+        """Whether the live socket is deciding this position's loss exit (watcher.covers). False with no watcher, so the sweep keeps its old job."""
+        w, rec = self.watcher, self.recorder
+        if w is None:
+            return False
+        beat = max((getattr(x, "last_event_at", None) or 0.0) for x in (getattr(rec, "stream", None), getattr(rec, "extra_stream", None)))
+        return w.covers(ticker, lane, beat)
+
     def do_stop_loss(self, job: Job) -> str:
         notes = runner.stop_loss_pass(
             self.s, self.client, self.store,
             before_order=lambda: self.jobs.checkpoint(job.id, PLACING),
             client_for=self._venue,
+            socket_covers=self._socket_covers,
         )
         for line in notes:
             log.info("%s", line)

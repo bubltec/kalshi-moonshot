@@ -124,6 +124,20 @@ def test_stop_loss_exits_a_no_position_by_its_own_price(tmp_path):
     assert any("sold" in n for n in notes)
 
 
+def test_the_sweep_leaves_a_loss_to_the_socket_while_the_socket_covers_it(tmp_path):
+    s = settings(tmp_path, mode="trade", env="demo")
+    store = Store(s.db_path)
+    open_bet(store, "no", 0.90)
+    store.add_order(ticker="KXC-1", env="demo", count=2, price=0.90, fill_count=2,
+                    cost_usd=1.8, fee_usd=0.0, contract="no")
+    covered = StopClient(yes_bid="0.8000", yes_ask="0.8500")
+    assert runner.stop_loss_pass(s, covered, store, socket_covers=lambda ticker, lane: True) == []
+    assert covered.sold_no == []  # the socket decides this one
+    uncovered = StopClient(yes_bid="0.8000", yes_ask="0.8500")
+    runner.stop_loss_pass(s, uncovered, store, socket_covers=lambda ticker, lane: False)
+    assert len(uncovered.sold_no) == 1  # the socket is not covering it: the backstop sells
+
+
 def test_stop_loss_leaves_a_no_position_alone_when_it_is_winning(tmp_path):
     s = settings(tmp_path, mode="trade", env="demo")
     store = Store(s.db_path)
