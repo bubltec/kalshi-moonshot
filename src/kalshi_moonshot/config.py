@@ -234,6 +234,9 @@ class Settings:
     ollama_url: str
     model: str
 
+    # --- which lanes run ---
+    paper_lanes: bool = True  # False = a lane not named in LIVE_LANES is switched off, not paper-traded: the live host runs only what is live. No effect while LIVE_LANES is empty (then every lane is live)
+
     @property
     def base_url(self) -> str:
         return PROD_BASE if self.env == "prod" else DEMO_BASE
@@ -361,6 +364,7 @@ def load() -> Settings:
         mode=mode,
         allow_real_money=_b("ALLOW_REAL_MONEY", False),
         live_lanes=_live_lanes(),
+        paper_lanes=_b("PAPER_LANES", True),
         fast_live=_b("COMMODITY_15M_LIVE", False),
         data_dir=data_dir,
         key_id=os.environ.get("KALSHI_KEY_ID", "").strip(),

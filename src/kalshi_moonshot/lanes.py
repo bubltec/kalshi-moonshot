@@ -294,6 +294,9 @@ def lane_specs_from(s: Settings, strategies_toml: str | None) -> dict[str, LaneS
             )
         if spec.entry_socket and not tiered(spec):
             raise ValueError(f"lane {spec.name!r}: entry_socket needs review_minutes, because it re-runs that lane's review")
+    if not s.paper_lanes and s.live_lanes is not None:
+        # The live host runs only what is live. A switched-off lane keeps its spec, so a bet it left open is still stopped and sold.
+        lanes = {name: spec if name in s.live_lanes else replace(spec, enabled=False) for name, spec in lanes.items()}
     return lanes
 
 
