@@ -147,14 +147,16 @@ def test_a_side_gaining_toward_the_floor_is_armed_and_fires_when_it_gets_there()
     now = datetime.now(UTC)
     _feed(w, 100.0, 0.66, 0.68)
     e = _feed(w, 110.0, 0.72, 0.74)  # up 6c over 10 s, 2c under the floor... 0.74 is within 10c under 0.76
-    assert w._approach(e, "x", spec, {}, now) is False
+    assert w._approach(e, "x", spec, {}, now) is True  # armed, so a taker buy is not also queued
     key = ("x", "KXBTC15M-1", "yes")
     assert key in w._armed and w._arm_jobs.get_nowait() == ("warm", key)
     w._armed[key]["shot"] = LongShot("KXBTC15M-1", "t", "", 0.72, 0.74, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="x", series="KXBTC15M", side="yes")
-    e = _feed(w, 120.0, 0.76, 0.78)  # the floor is reached
+    e = _feed(w, 115.0, 0.75, 0.76)  # the ask is the floor: a bid there would take, so it waits
+    assert w._approach(e, "x", spec, {}, now) is True and w._arm_jobs.empty()
+    e = _feed(w, 120.0, 0.76, 0.78)  # the ask is above the floor: the bid goes out at the floor
     assert w._approach(e, "x", spec, {}, now) is True
     job = w._arm_jobs.get_nowait()
-    assert job[0] == "fire" and job[2].ask == pytest.approx(0.78) and key not in w._armed
+    assert job[0] == "fire" and job[2].ask == pytest.approx(0.76) and key in w._armed
 
 
 def test_a_side_that_is_not_gaining_is_not_armed_and_an_old_arming_is_reset():

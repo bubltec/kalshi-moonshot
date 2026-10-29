@@ -4,11 +4,13 @@ A 15-minute contract can cross into its price band and out again between two pol
 still decides which events are worth watching; this listener sits on the tape recorder's socket and, for a lane that sets
 `entry_socket = true`, notices a quote that puts one side of a watched event inside the lane's price band and entry window.
 
-It decides nothing itself. A hit runs the lane's own review on that one event (runner.review_lane: the same filters,
-estimator, cooldown and one-per rule as the polled review) and queues the same `evaluate` jobs, so sizing, risk limits and
-paper-versus-live are untouched. The polled review keeps running as the fallback if the socket drops.
+A hit runs the lane's own review on that one event (runner.review_lane: the same filters, estimator, cooldown and
+one-per rule as the polled review) and queues the same `evaluate` jobs, so sizing, risk limits and paper-versus-live
+are untouched. The polled review keeps running as the fallback if the socket drops.
 
-Nothing here starts unless a tiered lane sets `entry_socket`, and nothing here places an order.
+A lane with `entry_approach` also rests a buy at its price floor while a side is climbing toward that floor. The bid
+sits until it fills or `entry_arm_seconds` runs out, and Kalshi cancels it then. Nothing is spent unless it fills.
+Nothing here starts unless a tiered lane sets `entry_socket`.
 """
 
 from __future__ import annotations
@@ -143,31 +145,29 @@ class EntryWatcher:
         return bool(old) and mid(hist[-1]) > mid(old[-1])
 
     def _approach(self, e: dict[str, Any], lane: str, spec: LaneSpec, info: dict[str, Any], now: datetime) -> bool:
-        """Arm a side that is approaching the lane's floor from under, and fire the prepared buy the moment it reaches it. True when a buy was queued to fire.
+        """Arm a side climbing toward the floor, and rest a buy at that floor once the ask is above it. True while a side is armed, so the taker path does not also buy.
 
-        Within `entry_approach` under the floor, gaining, and inside the entry window: the lane's review is run early (price band widened down by the approach) so the shot is ready. At the floor, if the shot is ready and the arming is younger than
-        `entry_arm_seconds`, the evaluation is queued at once with the fresh price. An arming older than that is dropped (reset). Nothing here places an order: the queued evaluation does, through the lane's own gates."""
-        lo, hi = spec.price
+        Within `entry_approach` under the floor, gaining, and inside the entry window: the lane's review runs early, with the price band widened down by the approach, so the shot is ready. Once the side's ask is above the floor, the bid is queued at the floor. It rests for `entry_arm_seconds` and is canceled if it does not fill. A bid at the floor while the ask is still there or lower would take the book, so that quote does not send it. An arm older than `entry_arm_seconds` is dropped."""
+        lo, _hi = spec.price
         ts = float(e["ts"])
-        fired = False
+        held = False
         for side in spec.sides:
             price = float(e["ask"]) if side == "yes" else 1.0 - float(e["bid"])
-            bid = float(e["bid"]) if side == "yes" else 1.0 - float(e["ask"])
             key = (lane, e["ticker"], side)
             arm = self._armed.get(key)
             if arm is not None and ts - arm["t"] > spec.entry_arm_seconds:
                 del self._armed[key]
                 arm = None
-            if lo - 1e-9 <= price <= hi + 1e-9:
-                if arm is not None and arm["shot"] is not None and in_window(spec, info.get("close", ""), now):
-                    del self._armed[key]
-                    self._arm_jobs.put(("fire", key, replace(arm["shot"], ask=round(price, 4), bid=round(max(bid, 0.0), 4))))
-                    fired = True
-                continue
+            due = arm is not None and time.time() - float(arm.get("offered") or 0.0) >= spec.entry_min_gap_seconds
+            if due and arm["shot"] is not None and price > lo + 1e-9 and in_window(spec, info.get("close", ""), now):
+                arm["offered"] = time.time()
+                self._arm_jobs.put(("fire", key, replace(arm["shot"], ask=round(lo, 4), bid=round(max(lo - 0.01, 0.01), 4))))
             if arm is None and max(lo - spec.entry_approach, 0.01) <= price < lo and in_window(spec, info.get("close", ""), now) and self._gaining(e["ticker"], side, ts):
-                self._armed[key] = {"t": ts, "shot": None}
+                self._armed[key] = {"t": ts, "shot": None, "offered": 0.0}
                 self._arm_jobs.put(("warm", key))
-        return fired
+            if key in self._armed:
+                held = True
+        return held
 
     def _warm(self, key: tuple[str, str, str]) -> None:
         """Run the lane's review for the event now, with its price floor lowered by the approach, and keep the shot for this side."""
@@ -199,10 +199,10 @@ class EntryWatcher:
         if lane_full(store, spec, quote_keys(shot.ticker)):
             return
         made = Jobs(store).enqueue(
-            "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
-            expires_in=60.0, max_attempts=s.job_max_attempts, priority=spec.priority,
+            "evaluate", {"shot": asdict(shot), "floor_bid": True}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
+            expires_in=max(60.0, spec.entry_arm_seconds + 15.0), max_attempts=s.job_max_attempts, priority=spec.priority,
         )
-        line = f"{key[0]} {shot.ticker} {shot.side}: armed under the floor, reached it at {shot.ask:.2f}; evaluation {'queued' if made else 'already queued'}"
+        line = f"{key[0]} {shot.ticker} {shot.side}: bid resting at the floor {shot.ask:.2f} for {spec.entry_arm_seconds:.0f}s; evaluation {'queued' if made else 'already queued'}"
         log.info("entry watcher: %s", line)
         self.reviewed.append(line)
 

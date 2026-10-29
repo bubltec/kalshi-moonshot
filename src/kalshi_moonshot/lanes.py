@@ -176,8 +176,8 @@ class LaneSpec:
     review_minutes: float | None = None  # fast pass over the watchlist; None = the main scan only
     cooldown_minutes: float = 0.0  # skip a market decided on this recently
     entry_socket: bool = False  # two-level lanes: also re-review a watched event the moment a streamed quote puts a side in the price band (entrywatch.py)
-    entry_approach: float = 0.0  # arm a side when its price is within this many dollars UNDER the lane's floor and gaining (entrywatch.py): the lane's review and shot are prepared then, and the buy goes out the moment the price reaches the floor (0 = off)
-    entry_arm_seconds: float = 30.0  # an armed side that has not reached the floor within this long is dropped and may be armed again
+    entry_approach: float = 0.0  # arm a side when its price is within this many dollars UNDER the lane's floor and gaining (entrywatch.py). The watch then rests a buy AT the floor; it is not a take of the ask (0 = off)
+    entry_arm_seconds: float = 30.0  # the resting floor bid is canceled after this many seconds if it has not filled. An arm that never got its bid out is dropped then too, and may be armed again
     entry_min_gap_seconds: float = 2.0  # ... but not the same event more often than this
     buy_max_move: float = 0.0  # skip a buy when the order book's ask on the side has FALLEN more than this many dollars under the ask the decision was made at (0 = off). A job can wait many seconds behind the shared request budget between deciding and ordering; a Gold NO decided at 0.86 was bought at 0.24 eight seconds before the close, after the side had collapsed
     buy_retries: int = 0  # when an immediate buy fills nothing, read the book again and send it once more, up to this many times, right away (0 = no retry). The next signal on the market comes a median 108 s later and about 3.7c dearer

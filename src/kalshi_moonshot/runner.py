@@ -42,6 +42,7 @@ from .lanes import (
     wants_bet,
 )
 from .marketdata import shared_for
+from .paperfill import FLOOR_MARK
 from .search import NewsSearch
 from .sizing import Sizing, size_bet
 from .store import Store
@@ -455,6 +456,7 @@ def evaluate(
     order_key: str | None = None,
     before_order: Callable[[], None] | None = None,
     share: EstimateShare | None = None,
+    rest_seconds: float = 0.0,
 ) -> Outcome:
     """Rate one market, log the decision, and place an order if allowed.
 
@@ -560,7 +562,7 @@ def evaluate(
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
             balance.open_by_lane.get(shot.lane, 0.0), grown.mult, fractional=s.fractional_stake and not _NO_FRACTION,
-            maker_price=round(max(0.01, shot.ask - spec.buy_rest_below), 4) if spec.buy_rest_seconds > 0 else None,
+            maker_price=shot.ask if rest_seconds > 0 else (round(max(0.01, shot.ask - spec.buy_rest_below), 4) if spec.buy_rest_seconds > 0 else None),
         )
         if grown.note:
             note = f"{grown.note}. {note}"
@@ -572,10 +574,10 @@ def evaluate(
         else:
             note = f"{sized.why}. {note}"
     if bet and s.is_live(shot.lane, shot.series):
-        with contextlib.nullcontext() if spec.buy_rest_seconds > 0 else _ORDER_LOCK:  # a resting buy waits for its fill: it must not hold every other lane's order
+        with contextlib.nullcontext() if rest_seconds > 0 or spec.buy_rest_seconds > 0 else _ORDER_LOCK:  # a resting buy waits for its fill: it must not hold every other lane's order
             placed = place(
                 s, client, store, shot, note, sized.contracts,
-                order_key=order_key, before_order=before_order,
+                order_key=order_key, before_order=before_order, rest_seconds=rest_seconds,
             )
         note = placed.note
         if placed.filled > 0:
@@ -584,6 +586,8 @@ def evaluate(
             sized = Sizing(round(placed.filled, 2), placed.cost, sized.why)
         else:
             bet = False  # blocked, refused, failed or unfilled: there is no position to track
+    if bet and rest_seconds > 0 and not s.is_live(shot.lane, shot.series):
+        note = f"{FLOOR_MARK} {rest_seconds:.0f}s: a paper bid at the floor {shot.ask:.2f}, judged on the tape] {note}"  # up front: the reason is cut at 300 characters
     action = "bet" if bet else "pass"
     held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
     _log(
@@ -1068,8 +1072,13 @@ _NO_FRACTION: set[str] = set()  # filled once Kalshi has refused a fractional or
 def place(
     s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float,
     order_key: str | None = None, before_order: Callable[[], None] | None = None,
+    rest_seconds: float = 0.0,
 ) -> Placed:
-    """Send the order for `count` contracts (sized by sizing.py) if the book and risk gate agree."""
+    """Send the order for `count` contracts (sized by sizing.py) if the book and risk gate agree.
+
+    `rest_seconds` rests a post-only bid at `shot.ask` for that long instead of taking the ask. The bid is sent only when the ask is already above that price, so it cannot take a cheaper book, and the exchange cancels it when the time runs out."""
+    if rest_seconds > 0:
+        return _place_floor_bid(s, client, store, shot, why, count, rest_seconds, order_key, before_order)
     cost = shot.ask * count + order_fee(shot.ask, count)
     if cost + 1e-9 < s.min_order_usd:
         return Placed(f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum")
@@ -1205,20 +1214,61 @@ def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) 
     return price, ""
 
 
-def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None, book: dict[str, Any] | None = None) -> Placed:
-    """Rest a post-only buy `spec.buy_rest_below` under the ask for `spec.buy_rest_seconds`, then report what filled. Nothing is bought if it does not fill. A resting order that fills is charged no taker fee, and the fee Kalshi charged is recorded as it came."""
+def _place_floor_bid(
+    s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, seconds: float,
+    order_key: str | None, before_order: Callable[[], None] | None,
+) -> Placed:
+    """Rest a post-only bid at `shot.ask` for `seconds`. Nothing is bought when the ask is not above that price: that bid would take the book instead of waiting."""
+    price = round(shot.ask, 4)
+    cost = price * count  # a bid that rests pays no taker fee; the fill records whatever fee did come back
+    if cost + 1e-9 < s.min_order_usd:
+        return Placed(f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum")
+    try:
+        with steptime.step("order book"):
+            book = client.orderbook(shot.ticker)
+    except KalshiError as exc:
+        return Placed(f"skipped: could not read the book ({exc})")
+    live = best_ask(book, shot.side)
+    if live is None or live <= price + 1e-9:
+        shown = "missing" if live is None else f"{live:.2f}"
+        return Placed(f"bid at {price:.2f} not placed: the ask is {shown}, so that bid would take the book")
+    with steptime.step("risk check"):
+        verdict = risk.check(
+            s, store, shot.ticker, cost, max_trade=cost,
+            event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive,
+        )
+    if not verdict.ok:
+        return Placed(f"blocked by risk: {verdict.reason}")
+    with steptime.step("top up"):
+        topped = _top_up(s, client, store, shot, cost)
+    if topped:
+        return Placed(topped)
+    if before_order:
+        before_order()
+    spec = lane_specs(s).get(shot.lane)
+    if spec is None:
+        return Placed("skipped: the lane is gone")
+    return _place_resting(s, client, store, shot, why, count, spec, order_key, book, price=price, seconds=seconds, hold_price=True)
+
+
+def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None, book: dict[str, Any] | None = None, price: float | None = None, seconds: float | None = None, hold_price: bool = False) -> Placed:
+    """Rest a post-only buy `spec.buy_rest_below` under the ask for `spec.buy_rest_seconds`, then report what filled. Nothing is bought if it does not fill. A resting order that fills is charged no taker fee, and the fee Kalshi charged is recorded as it came.
+
+    `price` and `seconds` fix both, for a bid that must stay at one price (the lane's floor). `hold_price` refuses a cross instead of walking that price down."""
     from . import account
 
-    price, skip = _resting_price(shot, spec, book)
+    wait = spec.buy_rest_seconds if seconds is None else seconds
     if price is None:
-        return Placed(skip)
+        price, skip = _resting_price(shot, spec, book)
+        if price is None:
+            return Placed(skip)
     started = time.time()
     try:
-        resp = client.buy_resting(shot.ticker, shot.side, count, price, spec.buy_rest_seconds, client_order_id=order_key)
+        resp = client.buy_resting(shot.ticker, shot.side, count, price, wait, client_order_id=order_key)
     except KalshiRateLimited:
         raise
     except KalshiError as exc:
-        if "post only cross" not in str(exc):
+        if "post only cross" not in str(exc) or hold_price:
             return Placed(f"resting buy refused: {exc}")
         # Refused outright, so nothing was placed and another try cannot double up. The book moves faster than the order travels (a thin market's ask flickers about once a second), so look again and rest under the ask as it is now, once.
         try:
@@ -1231,7 +1281,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
         started = time.time()
         try:
             # Kalshi remembers the client_order_id of the order it refused, so the same one again is a duplicate (409 order_already_exists). The retry's own id comes from the same key: a re-run of this job repeats it rather than doubling up.
-            resp = client.buy_resting(shot.ticker, shot.side, count, price, spec.buy_rest_seconds, client_order_id=f"{order_key}-retry" if order_key else None)
+            resp = client.buy_resting(shot.ticker, shot.side, count, price, wait, client_order_id=f"{order_key}-retry" if order_key else None)
         except KalshiRateLimited:
             raise
         except KalshiError as exc2:
@@ -1239,7 +1289,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     order_id = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
     filled = spent = fee_paid = 0.0
     seen: set[str] = set()
-    deadline = started + spec.buy_rest_seconds + 3.0
+    deadline = started + wait + 3.0
     while time.time() < deadline and filled < count - 1e-9:
         time.sleep(2.0)
         try:
@@ -1260,7 +1310,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
         ticker=shot.ticker, env=s.env, count=count, price=price, fill_count=filled, cost_usd=spent, fee_usd=fee_paid, order_id=order_id, contract=shot.side,
     )
     if filled <= 0:
-        return Placed(f"resting buy at {price:.2f} for {spec.buy_rest_seconds:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought")
+        return Placed(f"resting buy at {price:.2f} for {wait:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought")
     return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}. {why}", filled, spent, price)
 
 

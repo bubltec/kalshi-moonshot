@@ -617,6 +617,12 @@ class Worker:
         spec = spec_for(s, shot.lane)
         m.setdefault("event_ticker", shot.event_ticker)
         why_not = lane_reject_reason(side_view(m, shot.side), spec, s, now)
+        floor_bid = bool(job.payload.get("floor_bid"))
+        if floor_bid and why_not and why_not.startswith("ask outside"):
+            live_ask = _price(side_view(m, shot.side), "yes_ask_dollars")
+            lo, hi = spec.price
+            if lo - spec.entry_approach - 1e-9 <= live_ask <= hi + 1e-9:
+                why_not = None
         if not why_not and spec.trend == "not_falling":
             try:
                 candles = client.candlesticks(shot.series, shot.ticker, spec.lookback_hours)
@@ -634,6 +640,10 @@ class Worker:
         with steptime.step("entry factors"):
             factors_text = self._entry_factors(shot, spec, _strike(m))
         shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors=factors_text)
+        rest_seconds = 0.0
+        if floor_bid:
+            shot = replace(shot, ask=spec.price[0])  # the bid is the floor, not whatever the ask has run to
+            rest_seconds = spec.entry_arm_seconds
         # Same job, same order id: if the process dies after sending, a rerun cannot buy twice.
         order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
         with runner.lane_lock(shot.lane):  # evaluations of one lane run one after another, so its checks (lane full, cooling down, other side taken) see each other's bets
@@ -643,6 +653,7 @@ class Worker:
                 raise_model_errors=not job.last_attempt,
                 order_key=order_key,
                 before_order=lambda: self.jobs.checkpoint(job.id, PLACING),
+                rest_seconds=rest_seconds,
             )
         print(runner.format_outcome(out), flush=True)
         if out.action == "bet":
