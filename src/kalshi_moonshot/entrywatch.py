@@ -29,7 +29,7 @@ from . import runner
 from .config import Settings
 from .estimators import Estimator
 from .kalshi import KalshiClient, KalshiError
-from .lanes import LaneSpec, lane_specs, tiered
+from .lanes import LaneSpec, in_blackout, lane_specs, tiered
 from .store import Store
 from .strategy import LongShot
 
@@ -71,8 +71,10 @@ def in_band(spec: LaneSpec, bid: float, ask: float) -> bool:
     return "no" in spec.sides and bid > 0 and lo <= 1.0 - bid <= hi
 
 
-def in_window(spec: LaneSpec, close: str, now: datetime) -> bool:
-    """Whether the lane may bet on this event yet / still, by minutes elapsed in its fixed-length window."""
+def in_window(spec: LaneSpec, close: str, now: datetime, series: str = "") -> bool:
+    """Whether the lane may bet on this event yet / still, by minutes elapsed in its fixed-length window, and outside its blackout windows."""
+    if in_blackout(spec, now, series):
+        return False
     if not spec.timed_suffix:
         return True
     try:
@@ -127,7 +129,7 @@ class EntryWatcher:
             key = (lane, event)
             if key in self._pending or time.time() - self._last.get(key, 0.0) < spec.entry_min_gap_seconds:
                 continue
-            if in_band(spec, float(e["bid"]), float(e["ask"])) and in_window(spec, info.get("close", ""), now):
+            if in_band(spec, float(e["bid"]), float(e["ask"])) and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 self._pending.add(key)
                 self._jobs.put(key)
 
@@ -159,10 +161,10 @@ class EntryWatcher:
                 del self._armed[key]
                 arm = None
             due = arm is not None and time.time() - float(arm.get("offered") or 0.0) >= spec.entry_min_gap_seconds
-            if due and arm["shot"] is not None and price > lo + 1e-9 and in_window(spec, info.get("close", ""), now):
+            if due and arm["shot"] is not None and price > lo + 1e-9 and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 arm["offered"] = time.time()
                 self._arm_jobs.put(("fire", key, replace(arm["shot"], ask=round(lo, 4), bid=round(max(lo - 0.01, 0.01), 4))))
-            if arm is None and max(lo - spec.entry_approach, 0.01) <= price < lo and in_window(spec, info.get("close", ""), now) and self._gaining(e["ticker"], side, ts):
+            if arm is None and max(lo - spec.entry_approach, 0.01) <= price < lo and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))) and self._gaining(e["ticker"], side, ts):
                 self._armed[key] = {"t": ts, "shot": None, "offered": 0.0}
                 self._arm_jobs.put(("warm", key))
             if key in self._armed:

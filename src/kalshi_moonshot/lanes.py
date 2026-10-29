@@ -18,11 +18,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import tomllib
 from dataclasses import dataclass, fields, replace
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .config import Settings
 
@@ -191,6 +194,7 @@ class LaneSpec:
     timed_suffix: str = ""  # series ending in this are fixed-length windows with an entry window
     timed_minutes: float = 15.0  # length of such a window
     entry_elapsed: tuple[float, float] = (0.0, 1e9)  # bet only this many minutes after it opens
+    blackout_et: tuple[str, ...] = ()  # no new entries inside these New York clock windows, each "HH:MM-HH:MM" (a window may cross midnight), or "SERIES@HH:MM-HH:MM" to bar just that series (e.g. "KXNATGAS15M@17:00-18:00", the CME daily break on a thin feed). Open bets are still managed and sold
     shadow_suffix: str = ""  # series ending in this are only measured (see shadow.py), never bet
     enabled: bool = True
 
@@ -250,9 +254,14 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "gate_from", "scale_from"):
+    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et"):
         if key in row:
             row[key] = tuple(row[key])
+    for window in row.get("blackout_et", ()):
+        try:
+            parse_window(window)
+        except ValueError as exc:
+            raise ValueError(f"lane {name!r}: {exc}") from exc
     if bad := set(row.get("sides", ())) - {"yes", "no"}:
         raise ValueError(f"lane {name!r}: sides must be \"yes\" and/or \"no\", got {sorted(bad)}")
     if base is None:
@@ -356,6 +365,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "buy_max_move", "buy_retries", "buy_retry_seconds", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
+    "blackout_et",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -371,7 +381,40 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["trail_activate"] = repr(0.1)  # arming follows the progress rule, so a declared trail_activate is unused; held at the value every lane carried so existing versions stay continuous
     out["stops_on_15m"] = repr(s.stop_loss_fast)
     out["kelly_fraction"] = repr(None if spec.fixed_stake else s.kelly_fraction)
+    if spec.blackout_et:
+        out["blackout_et"] = repr(spec.blackout_et)
     return out
+
+
+ET = ZoneInfo("America/New_York")
+_WINDOW = re.compile(r"^(?:([A-Z0-9]+)@)?(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$")
+
+
+def parse_window(text: str) -> tuple[str, int, int]:
+    """"[SERIES@]HH:MM-HH:MM" as (series, start, end), the times in minutes after midnight. The series is "" when the window applies to every series. A window of no length is an error."""
+    m = _WINDOW.match(text.strip())
+    if not m:
+        raise ValueError(f"blackout window {text!r} is not [SERIES@]HH:MM-HH:MM")
+    a, b = int(m.group(2)) * 60 + int(m.group(3)), int(m.group(4)) * 60 + int(m.group(5))
+    if not (0 <= a < 1440 and 0 <= b < 1440) or a == b:
+        raise ValueError(f"blackout window {text!r} is not a time range")
+    return m.group(1) or "", a, b
+
+
+def in_blackout(spec: LaneSpec, now: datetime, series: str = "") -> bool:
+    """Whether `now` is inside one of the lane's blackout windows for this series, read on the New York clock (so it follows daylight saving).
+    A window with no series bars every series; one that names a series bars only that one (and, with no series given, is not counted)."""
+    if not spec.blackout_et:
+        return False
+    local = now.astimezone(ET)
+    minute = local.hour * 60 + local.minute
+    for text in spec.blackout_et:
+        only, a, b = parse_window(text)
+        if only and only != series:
+            continue
+        if (a <= minute < b) if a < b else (minute >= a or minute < b):
+            return True
+    return False
 
 
 def version_of(spec: LaneSpec, s: Any) -> str:

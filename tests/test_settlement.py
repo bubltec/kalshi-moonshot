@@ -1627,3 +1627,34 @@ def test_a_lane_without_the_spot_settings_ignores_them():
     from kalshi_moonshot.lanes import LaneSpec
 
     assert LaneSpec.entry_spot_ticks == 0 and LaneSpec.entry_spot_seconds == 0.0  # off unless a lane sets them
+
+
+def test_the_energy_moonshot_buys_a_cheap_side_that_just_fell_and_has_not_sat_there(tmp_path, monkeypatch):
+    """The coin moonshot refuses a side whose ask just fell or has not been parked; the energy one takes the dollar bar alone (scripts/moonshot_funnel_study.py)."""
+    import dataclasses
+
+    from kalshi_moonshot import lanes
+
+    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
+    toml = (
+        "[lane.coins]\nestimator='ladder'\nprice=[0.02,0.20]\nhours=[0.0,0.04]\nalways=true\nburst_hunt=true\nseries=['KXBTC15M']\nsides=['yes','no']\nfixed_stake=0.5\nstop_loss=false\n"
+        "hunt_dollars=400\nhunt_spike=5\n"
+        "[lane.energy]\ninherit='coins'\nseries=['KXNATGAS15M']\nhunt_spike=0\nhunt_crash=1.0\nhunt_park_seconds=5\nhunt_park_high=1.0\nhunt_park_span=1.0\n"
+    )
+    specs = lanes.lane_specs_from(s, toml)
+    bought = []
+    _buy_inline(w)
+    monkeypatch.setattr(w, "_hunt_buy", lambda h, sp, side, ask, reason, ctx: bought.append((sp.name, side, round(ask, 2))))
+    now = 1_000_000.0
+    sec = int(now)
+    book = {sec: [0.0, 9000.0, 0.0, 500.0]}  # NO takers bought $500 in the last second: over the $400 bar, however thin the book was
+    def hunt(lane):
+        h = watcher.Hunt("KXNATGAS15M-1", lane, close_ts=now + 60.0, yes_bid=0.84, yes_ask=0.85)  # NO costs 0.16
+        h.quotes.extend((now - 8.0 + i, 0.55, 0.56) for i in range(7))  # NO was 0.44 a few seconds ago ...
+        h.quotes.append((now, 0.84, 0.85))  # ... and is 0.16 now: a fall of 28c, and it has not been under 20c for 20 s
+        return h
+    w._on_hunt(hunt("coins"), dataclasses.replace(specs["coins"], name="coins"), now, book, sec)
+    assert bought == []  # crash and parked checks refuse it
+    w._on_hunt(hunt("energy"), dataclasses.replace(specs["energy"], name="energy"), now, book, sec)
+    assert bought == [("energy", "no", 0.16)]  # the dollar bar alone is enough
+    assert specs["energy"].series == ("KXNATGAS15M",) and specs["energy"].burst_hunt  # and it is the same kind of lane, on its own series

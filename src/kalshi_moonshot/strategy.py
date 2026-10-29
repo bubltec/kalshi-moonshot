@@ -13,7 +13,7 @@ from typing import Any
 
 from .commodities import load_instruments, symbol_for
 from .config import Settings
-from .lanes import LaneSpec, spec_for
+from .lanes import LaneSpec, in_blackout, spec_for
 
 # Kalshi's general taker fee is about 7% of contracts * p * (1 - p), rounded up to the cent.
 # Some series differ (see their fee schedule), so treat this as an estimate; live fills report
@@ -88,6 +88,8 @@ def lane_reject_reason(m: dict[str, Any], spec: LaneSpec, s: Settings, now: date
     if category and category in skipped:
         return "category skipped"
     series = _series(m)
+    if in_blackout(spec, now, series):
+        return "blackout: the lane makes no new entries in this time window"
     if spec.series and series not in spec.series:
         return "series not in this lane"
     if spec.needs_instrument and symbol_for(series, load_instruments(s.data_dir)) is None:

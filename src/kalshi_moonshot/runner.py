@@ -257,6 +257,7 @@ def scope_lane(
     relaxed = replace(
         spec, price=(0.0, 1.0), max_spread=1.0, min_volume=0.0, min_return=0.0,
         entry_elapsed=(0.0, 1e9),  # a window not yet in its entry range must still be watched
+        blackout_et=(),  # and a blackout ends: the watchlist must be ready the moment it does
     )
     try:
         info = client.event_info()
