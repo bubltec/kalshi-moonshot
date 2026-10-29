@@ -25,6 +25,7 @@ from typing import Any
 from . import reqstats, runner, steptime
 from .commodities import CommodityPricer
 from .config import Settings
+from .entrywatch import lane_full, quote_keys
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
 from .kalshi import KalshiClient, KalshiError, KalshiRateLimited
@@ -716,6 +717,8 @@ class Worker:
             shots = runner.review_lane(self.s, venue, self.store, spec, self.estimators())
         queued = 0
         for shot in shots:
+            if lane_full(self.store, spec, quote_keys(shot.ticker)):
+                continue  # an evaluation would only answer "lane full" (runner.evaluate), after reading the market
             made = self.jobs.enqueue(
                 "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
                 expires_in=max(60.0, 2 * every), max_attempts=self.s.job_max_attempts,

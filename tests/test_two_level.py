@@ -198,3 +198,17 @@ def test_disabled_lane_jobs_end_quietly(tmp_path):
     w.jobs.enqueue("lane_review:commodity")
     w.run_job(w.jobs.claim())
     assert not any(k.startswith("lane_review") for k, st, _ in w.jobs.counts() if st == "pending")
+
+
+def test_review_job_queues_nothing_for_a_lane_that_is_full(tmp_path):
+    (tmp_path / "strategies.toml").write_text("[lane.commodity]\nmax_open = 1\n")
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    w = Worker(s, Client(live_event()), None, store, None, quant=live_quant())
+    runner.scope_lane(s, w.client, store, lanes.spec_for(s, "commodity"))
+    store.add_decision(ticker="KXGOLDD-26OCT20-T4000", title="t", bid=0.8, ask=0.82, model_p=0.9, edge=0.05, action="bet", mode="observe", lane="commodity", side="yes")
+    w.jobs.enqueue("lane_review:commodity", priority=10)
+    w.run_job(w.jobs.claim())
+    assert store.db.execute("SELECT COUNT(*) FROM jobs WHERE kind='evaluate'").fetchone()[0] == 0  # the lane holds its one bet elsewhere
+    nxt = store.db.execute("SELECT run_at FROM jobs WHERE kind='lane_review:commodity' AND status='pending'").fetchone()
+    assert nxt is not None  # and the review still reschedules itself

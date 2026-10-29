@@ -171,3 +171,56 @@ def test_a_side_that_is_not_gaining_is_not_armed_and_an_old_arming_is_reset():
     e = _feed(w, 170.0, 0.60, 0.62)  # 40 s later it has not reached the floor: dropped; not gaining over the last 25 s so it stays dropped
     w._approach(e, "x", spec, {}, now)
     assert key not in w._armed
+
+
+def full_lane_settings(tmp_path, cap):
+    (tmp_path / "strategies.toml").write_text(f'[lane.commodity]\nentry_socket = true\nmax_open = {cap}\n')
+    return settings(tmp_path)
+
+
+def hold(store, ticker):
+    store.add_decision(ticker=ticker, title="t", bid=0.8, ask=0.82, model_p=0.9, edge=0.05, action="bet", mode="observe", lane="commodity", side="yes")
+
+
+def test_a_review_of_a_full_lane_reads_nothing(tmp_path):
+    s = full_lane_settings(tmp_path, 1)
+    store = Store(s.db_path)
+    client = Client(live_event())
+    runner.scope_lane(s, client, store, lanes.spec_for(s, "commodity"))
+    hold(store, "KXGOLDD-26OCT20-T4000")  # one bet open in another event: the lane holds its one
+    client.calls.clear()
+    w = watcher(s, client)
+    assert w.review("commodity", EVENT) == 0
+    assert client.calls == []  # no request spent on a market the lane cannot take
+    assert Store(s.db_path).db.execute("SELECT COUNT(*) FROM jobs WHERE kind='evaluate'").fetchone()[0] == 0
+
+
+def test_a_review_goes_ahead_while_the_lane_has_room_or_the_bet_is_this_event(tmp_path):
+    s = full_lane_settings(tmp_path, 2)
+    store = Store(s.db_path)
+    client = Client(live_event())
+    runner.scope_lane(s, client, store, lanes.spec_for(s, "commodity"))
+    hold(store, "KXGOLDD-26OCT20-T4000")  # one of two slots used
+    w = watcher(s, client)
+    assert w.review("commodity", EVENT) == 1
+    full = entrywatch.lane_full
+    spec = lanes.spec_for(s, "commodity")
+    assert not full(store, spec, {EVENT})
+    hold(store, f"{EVENT}-T3900")  # the second slot, taken in this very event
+    assert not full(store, spec, {EVENT})  # the other bet numbers one of two: this event may still be reviewed
+    assert not full(store, spec, {"KXGOLDD-26OCT20"})  # and so may the other event it holds
+    assert full(store, spec, {"KXGOLDD-26OCT22"})  # a third event finds both slots taken
+
+
+def test_arming_a_side_in_a_full_lane_prepares_no_shot(tmp_path):
+    s = full_lane_settings(tmp_path, 1)
+    store = Store(s.db_path)
+    client = Client(live_event())
+    runner.scope_lane(s, client, store, lanes.spec_for(s, "commodity"))
+    hold(store, "KXGOLDD-26OCT20-T4000")
+    client.calls.clear()
+    w = watcher(s, client)
+    key = ("commodity", f"{EVENT}-T3970", "yes")
+    w._armed[key] = {"t": time.time(), "shot": None, "offered": 0.0}
+    w._warm(key)
+    assert client.calls == [] and w._armed[key]["shot"] is None

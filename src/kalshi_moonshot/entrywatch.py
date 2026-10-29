@@ -50,6 +50,17 @@ def quote_keys(ticker: str) -> set[str]:
     return {event_of(ticker), ticker}
 
 
+def lane_full(store: Store, spec: LaneSpec, keys: set[str]) -> bool:
+    """Whether the lane already holds its max_open bets in markets outside `keys` (the event keys of the market being looked at).
+
+    An evaluation then ends in "lane full" (runner.evaluate), after the review has read the market for it: this answers first, from the
+    store, and costs no request. The evaluation keeps its own check, which stays the one that decides."""
+    if spec.max_open <= 0:
+        return False
+    held = [r["ticker"] for r in store.open_bets() if (r["lane"] or "moonshot") == spec.name]
+    return sum(1 for t in held if not (quote_keys(t) & keys)) >= spec.max_open
+
+
 def in_band(spec: LaneSpec, bid: float, ask: float) -> bool:
     """Whether a YES-book quote puts a side the lane may buy inside its price band."""
     lo, hi = spec.price
@@ -168,6 +179,8 @@ class EntryWatcher:
             return
         wide = replace(spec, price=(max(spec.price[0] - spec.entry_approach, 0.01), spec.price[1]))
         store = self.store_factory()
+        if lane_full(store, spec, quote_keys(ticker)):
+            return  # the arm stays, with no shot, until it times out: nothing fires, and it is not re-armed on every quote
         for shot in runner.review_lane(s, self._book(lane), store, wide, self.estimators(store), only=quote_keys(ticker)):
             if shot.ticker == ticker and shot.side == side:
                 with self._lock:
@@ -183,6 +196,8 @@ class EntryWatcher:
         if spec is None:
             return
         store = self.store_factory()
+        if lane_full(store, spec, quote_keys(shot.ticker)):
+            return
         made = Jobs(store).enqueue(
             "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
             expires_in=60.0, max_attempts=s.job_max_attempts, priority=spec.priority,
@@ -237,6 +252,8 @@ class EntryWatcher:
         if spec is None or not spec.enabled or not spec.entry_socket:
             return 0
         store = self.store_factory()
+        if lane_full(store, spec, {event}):
+            return 0
         shots = runner.review_lane(s, self._book(lane), store, spec, self.estimators(store), only={event})
         jobs = Jobs(store)
         every = (spec.review_minutes or 2.0) * 60
