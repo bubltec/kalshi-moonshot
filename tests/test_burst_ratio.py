@@ -7,7 +7,7 @@ from kalshi_moonshot import lanes
 from kalshi_moonshot.watcher import _market_normal_dollars
 from tests.test_settlement import _quiet_minute, _watcher
 
-LANE = "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_flip=true\nburst_ratio={ratio}\nburst_favorite={floor}\nburst_share=0.75\nseries=['KXBTC15M']\nalways=true\n"
+LANE = "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nburst_exit=true\nburst_ratio={ratio}\nburst_favorite={floor}\nburst_share=0.75\nseries=['KXBTC15M']\nalways=true\n"
 
 
 def _ratio_watcher(tmp_path, monkeypatch, ratio=6, floor=0.89):
@@ -76,3 +76,16 @@ def test_the_lane_version_only_changes_for_a_lane_that_sets_the_ratio(tmp_path, 
     spec = lanes.spec_for(s, "moonshot")
     assert "burst_ratio" not in lanes.settings_of(spec, s)
     assert lanes.settings_of(dataclasses.replace(spec, burst_ratio=6.0), s)["burst_ratio"] == "6.0"
+
+
+def test_the_old_setting_name_still_turns_the_burst_exit_on_and_the_version_keeps_its_key(tmp_path, monkeypatch):
+    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    for key in ("settlement_flip", "burst_exit"):
+        (tmp_path / "strategies.toml").write_text(LANE.replace("burst_exit=true", f"{key}=true").format(ratio=6, floor=0.89))
+        w.targets.clear()
+        w.refresh()
+        assert w.targets[("KXBTC15M-1", "guarded")].burst_exit is True
+    from kalshi_moonshot import lanes
+
+    spec = lanes.spec_for(s, "guarded")
+    assert lanes.settings_of(spec, s)["settlement_flip"] == "True"  # the version fingerprint keeps the key every lane's version was made with

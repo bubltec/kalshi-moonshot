@@ -78,7 +78,7 @@ class _Tape:
 def _watcher(tmp_path, monkeypatch, guard=0.10, ticker="KXBTC15M-1"):
     series = ticker.split("-")[0]
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_guard={guard}\nsettlement_flip=true\nseries=['{series}']\nalways=true\n")
+    (tmp_path / "strategies.toml").write_text(f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_guard={guard}\nburst_exit=true\nseries=['{series}']\nalways=true\n")
     s = config.load()
     store = Store(s.db_path)
     close = 2_000_000.0
@@ -733,7 +733,7 @@ def test_best_bid_reads_the_side_of_the_book_it_sells_into():
 
 def test_a_lane_can_keep_its_stop_quiet_until_the_last_minutes(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_guard=0.0\nsettlement_flip=false\nseries=['KXBTC15M']\nalways=true\nstop_loss=true\nstop_loss_at=0.45\nstop_from_seconds=180\n")
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_guard=0.0\nburst_exit=false\nseries=['KXBTC15M']\nalways=true\nstop_loss=true\nstop_loss_at=0.45\nstop_from_seconds=180\n")
     s = config.load()
     store = Store(s.db_path)
     close = time.time() + 600.0

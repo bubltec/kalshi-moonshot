@@ -100,7 +100,7 @@ price=[0.78,0.92]
 hours=[0.0,0.26]
 timed_suffix='15M'
 stop_loss=false
-settlement_flip=true
+burst_exit=true
 burst_dollars=400
 cash_left_seconds=5
 """

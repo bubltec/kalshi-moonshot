@@ -115,7 +115,7 @@ class Target:
     spot_sigma: float = 0.0  # the crash exit holds while spot is more than this many sigma on the winning side of the strike (0 = off)
     trail_giveback: float = 0.0  # >0: the crash exit sells once this share of the gain (peak over price paid) is given back, instead of trail_drop (0 = the fixed drop)
     settle_guard: float = 0.0  # sell in the last 150 s when the exact settlement chance falls this far under the bid (settlement.py; 0 = off)
-    settle_flip: bool = False  # after that sale, log a paper bet on the other side (never an order)
+    burst_exit: bool = False  # after that sale, log a paper bet on the other side (never an order)
     strike: float = 0.0  # the market's target
     close_ts: float = 0.0
     opened_min: float = 1e9  # minutes into the window when this buy was placed
@@ -435,7 +435,7 @@ class ProfitWatcher:
         """A trade on a market we hold. Per second it keeps the contracts traded by YES takers and NO takers over the last two minutes. On the first burst against a held favorite (the last 3 seconds' volume a multiple of the market's own
         normal second, most of it against the holder, and that normal itself at least BURST_MIN_NORMAL) in the last burst_window seconds (the lane's setting) it sells the favorite — that is the peak-crash exit (the bid is still 80c+, volume is dumping, and holding
         those last two minutes lost). A 300-contract print on a silent book is not a crash: the ratio is only meaningful once the market actually trades. It also logs the opposite side as a paper bet (lane burst_flip) and, when burst_buy is set,
-        buys a dollar of it. Any 15-minute market, not only crypto. Only for a lane that asked for flips (settlement_flip)."""
+        buys a dollar of it. Any 15-minute market, not only crypto. Only for a lane that asked for flips (burst_exit)."""
         tk, now = e["ticker"], float(e["ts"])
         sec = int(now)
         book = self._flow.setdefault(tk, {})
@@ -446,7 +446,7 @@ class ProfitWatcher:
         for old in [k for k in book if k < sec - 125]:
             del book[old]
         with self._lock:
-            held = [t for (ticker, _), t in self.targets.items() if ticker == tk and t.settle_flip and (not t.burst_logged or t.burst_resell)]
+            held = [t for (ticker, _), t in self.targets.items() if ticker == tk and t.burst_exit and (not t.burst_logged or t.burst_resell)]
             hunt = self._hunts.get(tk)
             spec = self._hunt_by_series.get(tk.split("-")[0])
         for t in held:
@@ -1039,13 +1039,13 @@ class ProfitWatcher:
             if fresh[(ticker, lane)].close_ts <= 0 and row["close_time"]:
                 with contextlib.suppress(TypeError, ValueError):
                     fresh[(ticker, lane)].close_ts = datetime.fromisoformat(row["close_time"]).timestamp()
-            flip = spec.settlement_flip and ticker.split("-")[0].endswith("15M")  # volume bursts are watched on every 15-minute market, not only crypto
+            flip = spec.burst_exit and ticker.split("-")[0].endswith("15M")  # volume bursts are watched on every 15-minute market, not only crypto
             if guard or flip:
                 tg = fresh[(ticker, lane)]
-                tg.settle_guard, tg.settle_flip = (spec.settlement_guard if guard else 0.0), spec.settlement_flip and flip
+                tg.settle_guard, tg.burst_exit = (spec.settlement_guard if guard else 0.0), spec.burst_exit and flip
                 stake = float(row["stake_usd"] or 0.0)
                 hedge = round(spec.burst_buy_pct * stake, 2) if spec.burst_buy_pct > 0 else spec.burst_buy  # a share of the bet when the lane sets one, else its flat dollars
-                tg.burst_buy = hedge if tg.settle_flip else 0.0
+                tg.burst_buy = hedge if tg.burst_exit else 0.0
                 btc = ticker.split("-")[0].startswith("KXBTC")
                 tg.burst_bar = 0.0 if (btc and spec.burst_dollars_btc < 0) else (spec.burst_dollars_btc if (btc and spec.burst_dollars_btc > 0) else spec.burst_dollars)
                 tg.burst_favorite, tg.burst_window, tg.burst_min_left, tg.burst_share = spec.burst_favorite, spec.burst_window, spec.burst_min_left, spec.burst_share
@@ -1059,7 +1059,7 @@ class ProfitWatcher:
                         tg.close_ts = datetime.fromisoformat(str(mk.get("close_time"))).timestamp()
                     except (TypeError, ValueError, KalshiError):
                         tg.settle_guard = 0.0  # no strike or close time: better unguarded than guarded on a guess
-                        tg.settle_flip = False
+                        tg.burst_exit = False
             fresh[(ticker, lane)].unstable_range = spec.unstable_range
             fresh[(ticker, lane)].unstable_seconds = spec.unstable_seconds
             fresh[(ticker, lane)].hover_dip = spec.hover_dip
@@ -1381,7 +1381,7 @@ class ProfitWatcher:
             self.sold.append(line)
             if why.startswith("burst") and t is not None and line.startswith("partial exit"):
                 t.burst_resell = True  # the burst sale did not finish: the next burst tries again
-            if why.startswith("settlement-guard") and t is not None and t.settle_flip and line.startswith(("sold", "paper-sold")):
+            if why.startswith("settlement-guard") and t is not None and t.burst_exit and line.startswith(("sold", "paper-sold")):
                 self._paper_flip(store, row, t, m)
         except KalshiError as exc:
             log.warning("watcher: could not sell %s (%s)", ticker, exc)

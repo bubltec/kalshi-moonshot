@@ -50,11 +50,11 @@ def describe(sp):
         exits.append(f"trailing exit: {sp.trail_drop * 100:g}c off the peak")
     if sp.scalp_at:
         exits.append(f"scalp: follow the high once the bid prints {sp.scalp_at:g}")
-    if sp.settlement_flip and sp.burst_ratio:
+    if sp.burst_exit and sp.burst_ratio:
         exits.append(f"BURST (last {sp.burst_window:g} s): sell when the dollars bought against the holder in 3 s are {sp.burst_ratio:g}x the market's normal, at least ${sp.burst_min_dollars:g}, {sp.burst_share * 100:g}%+ of the flow, and the bid is at least {sp.burst_favorite:g}")
-    elif sp.settlement_flip and sp.burst_dollars:
+    elif sp.burst_exit and sp.burst_dollars:
         exits.append(f"BURST (last {sp.burst_window:g} s): sell when ${sp.burst_dollars:g} is bought against the holder in 3 s and the bid is at least {sp.burst_favorite:g}")
-    elif sp.settlement_flip:
+    elif sp.burst_exit:
         exits.append(f"BURST (last {sp.burst_window:g} s): sell on a 5x volume burst against the holder (older fixed-band rule)")
     if sp.drop_cents:
         wait = f", and only if the bid is still {(sp.drop_stay or sp.drop_cents) * 100:g}c under the high {sp.drop_confirm:g} s later" if sp.drop_confirm else ""
@@ -63,7 +63,7 @@ def describe(sp):
         exits.append(f"last {sp.cash_left_seconds:g} s: sell a bid that hovers under the price paid")
     out.append("  EXITS    " + ("\n           ".join(exits) if exits else "none: held to settlement"))
     hedge = []
-    if sp.settlement_flip and (sp.burst_buy or sp.burst_buy_pct):
+    if sp.burst_exit and (sp.burst_buy or sp.burst_buy_pct):
         hedge.append(f"after a burst sale, buys the other side with {sp.burst_buy_pct * 100:g}% of the stake" if sp.burst_buy_pct else f"after a burst sale, buys the other side with {money(sp.burst_buy)}")
     if sp.drop_cents and sp.drop_buy:
         hedge.append(f"when a fall is found (before the sale), buys the other side if it costs {lanes_band(sp)}")

@@ -102,12 +102,12 @@ class LaneSpec:
     stop_guard: bool = False  # True = the model's opinion may hold the stop back; the default is a hard stop that sells whatever the model thinks it is worth
     stop_model: bool = False  # a 15-minute lane's stop first asks the model about the window's shape and holds only when it values the position above the sale (STOP_MODEL_SECONDS wait; no answer = sell)
     settlement_guard: float = 0.0  # OFF: 377 live sales, 88% would have won, -8.3c vs holding. Same job as the burst exit, worse signal. The watcher still has the code; 0.10 would turn it back on
-    settlement_flip: bool = False  # watch held 15-minute bets for a volume burst against the holder in the last 120 s and SELL the favorite (watcher.py: that is the peak-crash exit); also log the other side as a paper bet in burst_flip. A silent book cannot 5x itself (BURST_MIN_NORMAL)
+    burst_exit: bool = False  # watch held 15-minute bets for a volume burst against the holder in the last 120 s and SELL the favorite (watcher.py: that is the peak-crash exit); also log the other side as a paper bet in burst_flip. A silent book cannot 5x itself (BURST_MIN_NORMAL)
     burst_ratio: float = 0.0  # the burst EXIT as a multiple of the market's own normal: sell when the dollars bought against the holder in 3 s are at least this many times this market's normal 3 s (the median second of the 120 s before, both sides, times 3). A bar that grows in a busy market and shrinks in a quiet one. 0 = off (burst_dollars, the flat bar, applies). When set it replaces burst_dollars
     burst_min_dollars: float = 50.0  # ...and at least this many dollars, so a dead market's ordinary print is not a crash
     burst_buy_pct: float = 0.0  # the same hedge sized as a share of the held bet's own stake (0.17 on a $6 bet is about $1): it scales with the bet. When set it replaces burst_buy
-    burst_buy: float = 0.0  # dollars to put, for real, on the OTHER side (when it costs 5-25c) the first time that burst fires (0 = only log it). Needs settlement_flip and a live lane
-    burst_dollars: float = 0.0  # the burst EXIT of a lane with settlement_flip, in dollars: sell the held 90c+ favorite in the last 120 s when at least this many dollars are bought against it in 3 s (0 = the older multiple-of-normal rule). Per family from burst_exit_study: crypto 400, currencies 50, metals/energy 400
+    burst_buy: float = 0.0  # dollars to put, for real, on the OTHER side (when it costs 5-25c) the first time that burst fires (0 = only log it). Needs burst_exit and a live lane
+    burst_dollars: float = 0.0  # the burst EXIT of a lane with burst_exit, in dollars: sell the held 90c+ favorite in the last 120 s when at least this many dollars are bought against it in 3 s (0 = the older multiple-of-normal rule). Per family from burst_exit_study: crypto 400, currencies 50, metals/energy 400
     burst_dollars_btc: float = 0.0  # the same for BTC: a bar of its own, or -1 to keep the older rule (it beat holding by 5.3c on BTC; the dollar bar did not)
     hunt_dollars: float = 0.0  # a burst_hunt lane's trigger in dollars: a 90c+ favorite and at least this many dollars bought AGAINST it (the cheap side's takers) in 3 s, in the last 120 s; buy the cheap side. 0 = the older multiple-of-normal burst
     hunt_dollars_btc: float = 0.0  # the same bar for BTC, whose volume is far larger (0 = the same bar as the others)
@@ -125,7 +125,7 @@ class LaneSpec:
     hunt_attempts: int = 3  # a hunt buys a market at most this many times when each try certainly bought nothing (buyer.SENT_NOTHING); every try re-checks the whole trigger
     hunt_retry_seconds: float = 3.0  # seconds between those tries
     hunt_stale_seconds: float = 10.0  # a queued buy that waited this long is dropped: its price was read at the burst and the ask has moved since
-    burst_favorite: float = 0.90  # the burst EXIT of a lane with settlement_flip and burst_dollars sells the held side only while its bid is at least this (a favorite)
+    burst_favorite: float = 0.90  # the burst EXIT of a lane with burst_exit and burst_dollars sells the held side only while its bid is at least this (a favorite)
     drop_cents: float = 0.0  # a held favorite whose bid falls this many dollars within drop_seconds, in the burst window, is SOLD whatever the taker flow (0 = off). A book that thins gives a fall with almost no taker dollars, which the burst exit cannot see (KXCOPPER15M-26OCT301000: 0.85 -> 0.55 in four seconds, then 0). scripts/drop_exit_study.py: 0.25 in 3 s sold better than holding by about 10c a contract; 0.10-0.15 did not beat holding
     drop_seconds: float = 3.0  # ...measured against the highest bid of the last this many seconds
     drop_was: float = 0.76  # ...and only when the bid had been at least this in the last 60 s, so it is a favorite that is falling and not a long shot sliding
@@ -256,6 +256,10 @@ def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
 
 
 def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
+    if "settlement_flip" in row:  # the burst exit's old name
+        if "burst_exit" in row:
+            raise ValueError(f"lane {name!r}: set burst_exit or its old name settlement_flip, not both")
+        row = {("burst_exit" if k == "settlement_flip" else k): v for k, v in row.items()}
     known = {f.name for f in fields(LaneSpec)}
     unknown = set(row) - known
     if unknown:
@@ -382,6 +386,7 @@ _NOT_LOGIC = frozenset({
 def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     """Everything that decides what this lane buys, how much, and how it gets out, including the global rules that reach it."""
     out = {f.name: repr(getattr(spec, f.name)) for f in fields(spec) if f.name not in _NOT_LOGIC}
+    out["settlement_flip"] = out.pop("burst_exit")  # the old name, so no lane's version changes with the rename
     out["effective_stop"] = repr(stop_drop_for(spec, s) if spec.stop_loss else None)
     out["crash_spot_sigma"] = repr(spec.trail_spot_sigma if spec.trail_spot_sigma is not None else s.crash_spot_sigma)
     out["crash_giveback"] = repr(spec.trail_giveback if spec.trail_giveback is not None else s.crash_giveback)

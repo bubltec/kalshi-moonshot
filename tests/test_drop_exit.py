@@ -6,7 +6,7 @@ from tests.test_settlement import _watcher
 def _held(tmp_path, monkeypatch, drop=0.25, ticker="KXCOPPER15M-1", extra=""):
     w, _s, _store, close = _watcher(tmp_path, monkeypatch, ticker=ticker)
     (tmp_path / "strategies.toml").write_text(
-        f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_flip=true\nseries=['{ticker.split('-')[0]}']\nalways=true\nstop_loss=false\ndrop_cents={drop}\n{extra}"
+        f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nburst_exit=true\nseries=['{ticker.split('-')[0]}']\nalways=true\nstop_loss=false\ndrop_cents={drop}\n{extra}"
     )
     w.refresh()
     t = w.targets[(ticker, "guarded")]
@@ -64,7 +64,7 @@ def test_a_long_shot_sliding_is_not_a_favorite_falling(tmp_path, monkeypatch):
 
 def test_the_exit_is_off_unless_the_lane_sets_it(tmp_path, monkeypatch):
     w, _s, _store, close = _watcher(tmp_path, monkeypatch, ticker="KXCOPPER15M-1")
-    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_flip=true\nseries=['KXCOPPER15M']\nalways=true\nstop_loss=false\ncash_left_seconds=5\n")
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nburst_exit=true\nseries=['KXCOPPER15M']\nalways=true\nstop_loss=false\ncash_left_seconds=5\n")
     w.refresh()  # watched for another reason, drop_cents left at 0
     for k in range(40, 5, -1):
         _quote(w, "KXCOPPER15M-1", 0.85, close - 100 - k)
