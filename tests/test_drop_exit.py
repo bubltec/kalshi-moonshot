@@ -3,10 +3,10 @@ import pytest
 from tests.test_settlement import _watcher
 
 
-def _held(tmp_path, monkeypatch, drop=0.25, ticker="KXCOPPER15M-1"):
+def _held(tmp_path, monkeypatch, drop=0.25, ticker="KXCOPPER15M-1", extra=""):
     w, _s, _store, close = _watcher(tmp_path, monkeypatch, ticker=ticker)
     (tmp_path / "strategies.toml").write_text(
-        f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_flip=true\nseries=['{ticker.split('-')[0]}']\nalways=true\nstop_loss=false\ndrop_cents={drop}\n"
+        f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_flip=true\nseries=['{ticker.split('-')[0]}']\nalways=true\nstop_loss=false\ndrop_cents={drop}\n{extra}"
     )
     w.refresh()
     t = w.targets[(ticker, "guarded")]
@@ -70,3 +70,41 @@ def test_the_exit_is_off_unless_the_lane_sets_it(tmp_path, monkeypatch):
         _quote(w, "KXCOPPER15M-1", 0.85, close - 100 - k)
     _fall(w, "KXCOPPER15M-1", close - 100, [0.85, 0.82, 0.74, 0.55])
     assert w._jobs.empty()
+
+
+def _settle_quiet(w, close, left, bid=0.85):
+    for k in range(40, 5, -1):
+        _quote(w, "KXCOPPER15M-1", bid, close - left - k)
+
+
+def test_a_confirmed_fall_that_stays_down_sells_after_the_wait(tmp_path, monkeypatch):
+    w, t, close = _held(tmp_path, monkeypatch, drop=0.15, extra="drop_seconds=5\ndrop_confirm=4\ndrop_stay=0.10\n")
+    _settle_quiet(w, close, 100)
+    _fall(w, "KXCOPPER15M-1", close - 100, [0.85, 0.80, 0.74, 0.60])
+    assert w._jobs.empty() and t.drop_armed_at is not None  # the fall only arms the exit
+    for k in (1, 2, 3):
+        _quote(w, "KXCOPPER15M-1", 0.58, close - 100 + k)
+    assert w._jobs.empty()
+    _quote(w, "KXCOPPER15M-1", 0.57, close - 100 + 4)  # four seconds on, still 28c under the high
+    assert w._jobs.get_nowait()[2].startswith("drop: bid 0.57 is still 0.28 under 0.85")
+
+
+def test_a_fall_that_bounces_back_inside_the_wait_is_a_spike_and_is_held(tmp_path, monkeypatch):
+    w, t, close = _held(tmp_path, monkeypatch, drop=0.15, extra="drop_seconds=5\ndrop_confirm=4\ndrop_stay=0.10\n")
+    _settle_quiet(w, close, 100)
+    _fall(w, "KXCOPPER15M-1", close - 100, [0.85, 0.80, 0.74, 0.60])
+    for k, b in ((1, 0.70), (2, 0.78), (3, 0.82), (4, 0.84)):
+        _quote(w, "KXCOPPER15M-1", b, close - 100 + k)
+    assert w._jobs.empty() and t.drop_armed_at is None
+
+
+def test_the_window_is_the_lanes_own(tmp_path, monkeypatch):
+    w, _t, close = _held(tmp_path, monkeypatch, extra="drop_window=180\n")
+    _settle_quiet(w, close, 150)
+    _fall(w, "KXCOPPER15M-1", close - 150, [0.85, 0.82, 0.74, 0.55])
+    assert not w._jobs.empty()  # 150 s left is inside a 180 s window
+    (tmp_path / "b").mkdir()
+    w2, _t2, close2 = _held(tmp_path / "b", monkeypatch)
+    _settle_quiet(w2, close2, 150)
+    _fall(w2, "KXCOPPER15M-1", close2 - 150, [0.85, 0.82, 0.74, 0.55])
+    assert w2._jobs.empty()  # and outside the default 120 s one

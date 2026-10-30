@@ -129,6 +129,10 @@ class LaneSpec:
     drop_cents: float = 0.0  # a held favorite whose bid falls this many dollars within drop_seconds, in the burst window, is SOLD whatever the taker flow (0 = off). A book that thins gives a fall with almost no taker dollars, which the burst exit cannot see (KXCOPPER15M-26OCT301000: 0.85 -> 0.55 in four seconds, then 0). scripts/drop_exit_study.py: 0.25 in 3 s sold better than holding by about 10c a contract; 0.10-0.15 did not beat holding
     drop_seconds: float = 3.0  # ...measured against the highest bid of the last this many seconds
     drop_was: float = 0.76  # ...and only when the bid had been at least this in the last 60 s, so it is a favorite that is falling and not a long shot sliding
+    drop_confirm: float = 0.0  # a fall only ARMS the exit; it sells when the bid is still drop_stay under the fall's high this many seconds later (0 = sell at once). A spike bounces back inside seconds, a flip does not (scripts/drop_flip_vs_spike_study.py: waiting 4-6 s lifted selling over holding from about 0 to +0.05 a contract on both halves of the data)
+    drop_stay: float = 0.0  # ...how far under the high the bid must still be at the check (0 = drop_cents)
+    drop_window: float = 120.0  # the exit watches the last this many seconds before the close (burst_min_left is the other end). Falls before the last three minutes did not pay in the replay
+    drop_buy: bool = False  # a drop sale also buys the other side with the lane's burst_buy stake, when it costs 5-25c (the same hedge as a burst sale). Bought at the fall it broke even over 305 falls (+0.004 +-0.027 a contract)
     burst_share: float = 0.0  # the burst exit also needs this share of the last 3 s of dollars to have been bought AGAINST the held side (0 = the dollar bar alone). A burst where the held side is being bought as hard is two-way trading or a pump of the side we hold, not a crash (scripts/burst_floor_study.py)
     burst_spot_edge: float = 0.0  # a burst sells only when spot's own chance that the held side pays is NOT more than this many points over what the sale gets (the bid less its fee); over that the dip is a wick in the price and it holds (0 = off, order flow alone decides). commodity: a one-second spike in the reference price crashed a 0.96 bid to 0.43 and sold a bet that went on to win
     burst_window: float = 120.0  # ...in the last this many seconds. Past that, holding still paid (burst_flip record: last 120 s sold +6 to +8c vs holding -5 to -8c; at 2-5 min holding was still ahead)
@@ -370,7 +374,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
-    "blackout_et", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -392,6 +396,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["burst_buy_pct"] = repr(spec.burst_buy_pct)
     if spec.drop_cents:
         out["drop_cents"], out["drop_seconds"], out["drop_was"] = repr(spec.drop_cents), repr(spec.drop_seconds), repr(spec.drop_was)
+        if spec.drop_confirm or spec.drop_stay or spec.drop_window != 120.0 or spec.drop_buy:
+            out["drop_confirm"], out["drop_stay"], out["drop_window"], out["drop_buy"] = repr(spec.drop_confirm), repr(spec.drop_stay), repr(spec.drop_window), repr(spec.drop_buy)
     if spec.burst_ratio:
         out["burst_ratio"] = repr(spec.burst_ratio)
         out["burst_min_dollars"] = repr(spec.burst_min_dollars)

@@ -6,6 +6,7 @@ A fall: the held side's bid is `LOOSE` under its highest bid of the last 5 s, in
 wins else 0; `better` = sale - hold per contract (positive: selling was right). All features use data up to that second only; `bounce` (the best bid in the 10 s after) is for labelling and never a feature.
     SECTION=1 .. each feature in buckets: how often the side still won and how much better selling was
     SECTION=2 .. rules built from the features, tuned on the earlier 60% of windows and scored on the later 40%
+    SECTION=4 .. buying the OTHER side at its ask when the fall is found: win rate and profit per contract by what it cost
     SECTION=3 .. wait k seconds after the fall and sell only if the bid is still `stay` under its high (a spike bounces back, a flip does not)
 Read-only. Places nothing.    scripts/cloud.sh run scripts/drop_flip_vs_spike_study.py SECTION=1
 """
@@ -20,6 +21,7 @@ from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
 SECTION = os.environ.get("SECTION", "1")
+LAST_S, FIRST_S = int(os.environ.get("LAST_S", "120")), int(os.environ.get("FIRST_S", "10"))  # the part of the market the falls are taken from: seconds before the close
 s = config.reload()
 tape = db.connect(s.tape_path, "tape", shared=True)
 main = Store(s.db_path, s.exclude_versions)
@@ -29,8 +31,8 @@ LOOSE, WAS = 0.15, 0.76
 rows = []
 for m in WINDOWS:
     close = float(m["close_ts"])
-    q = tape.execute("SELECT ts, bid, ask, bid_size, ask_size FROM quotes WHERE ticker=? AND ts>? AND ts<=? AND bid > 0 AND ask > 0 ORDER BY ts", (m["ticker"], close - 330, close)).fetchall()
-    fl = tape.execute("SELECT ts, yes_vol, no_vol, vwap FROM flow_1s WHERE ticker=? AND ts>? AND ts<=?", (m["ticker"], int(close - 335), int(close))).fetchall()
+    q = tape.execute("SELECT ts, bid, ask, bid_size, ask_size FROM quotes WHERE ticker=? AND ts>? AND ts<=? AND bid > 0 AND ask > 0 ORDER BY ts", (m["ticker"], close - LAST_S - 210, close)).fetchall()
+    fl = tape.execute("SELECT ts, yes_vol, no_vol, vwap FROM flow_1s WHERE ticker=? AND ts>? AND ts<=?", (m["ticker"], int(close - LAST_S - 215), int(close))).fetchall()
     if len(q) < 60 or len(fl) < 20:
         continue
     yd, nd = defaultdict(float), defaultdict(float)
@@ -40,13 +42,13 @@ for m in WINDOWS:
             nd[int(ts)] += float(nv) * (1.0 - float(vw))
     ts_list = [float(r[0]) for r in q]
     bids, sizes = {}, {}
-    for sec in range(int(close) - 330, int(close) + 1):
+    for sec in range(int(close) - LAST_S - 210, int(close) + 1):
         i = bisect.bisect_right(ts_list, sec + 0.999) - 1
         if i >= 0 and sec + 0.999 - ts_list[i] <= 15:
             bids[sec] = {"yes": float(q[i][1]), "no": 1.0 - float(q[i][2])}
             sizes[sec] = (float(q[i][3] or 0.0), float(q[i][4] or 0.0), float(q[i][2]) - float(q[i][1]))
     for side, against, withh in (("yes", nd, yd), ("no", yd, nd)):
-        for sec in range(int(close) - 120, int(close) - 10):
+        for sec in range(int(close) - LAST_S, int(close) - FIRST_S):
             now, after = bids.get(sec), bids.get(sec + 1)
             if not now or not after or sec not in sizes:
                 continue
@@ -74,7 +76,7 @@ for m in WINDOWS:
                 "against3": a3, "share3": a3 / (a3 + w3 + 1e-9), "ratio": a3 / base, "share10": a10 / (a10 + w10 + 1e-9),
                 "held_bid_depth": hb, "held_ask_depth": ha, "spread": spread, "activity": base / 3.0,
                 "slid_before": (max(prior) - prior[-1]) if prior else 0.0,
-                "high5": high5, "path": [bids[x][side] if x in bids else None for x in range(sec, sec + 14)],
+                "other_ask": 1.0 - now[side], "high5": high5, "path": [bids[x][side] if x in bids else None for x in range(sec, sec + 14)],
             })
             break  # one row per window and side
 
@@ -90,7 +92,7 @@ def line(label, sel):
     return f"  {label:<28} n={len(sel):<4} side still won {100 * statistics.mean(r['won'] for r in sel):3.0f}%  sold at {statistics.mean(r['sale'] for r in sel):.2f}  selling better by {statistics.mean(b):+.3f} +-{sem(b):.3f}"
 
 
-print(f"{len(WINDOWS)} commodity windows; {len(rows)} falls of {LOOSE:.2f}+ within 5 s (one per window and side)\n")
+print(f"{len(WINDOWS)} commodity windows; {len(rows)} falls of {LOOSE:.2f}+ within 5 s, taken from {LAST_S} s to {FIRST_S} s before the close (one per window and side)\n")
 if SECTION == "1":
     print(line("all falls", rows), "\n")
     FEATURES = ("drop3", "drop5", "bid", "left", "against3", "share3", "ratio", "share10", "held_bid_depth", "held_ask_depth", "spread", "activity", "slid_before", "bounce")
@@ -104,6 +106,15 @@ if SECTION == "1":
     print("\nspike or flip in hindsight (bounce = the best bid in the next 10 s above the bid at the fall; NOT usable live):")
     for lo, hi in ((-1, 0.02), (0.02, 0.10), (0.10, 0.20), (0.20, 2)):
         print(line(f"bounce {lo:.2f}..{hi:.2f}", [r for r in rows if lo <= r["bounce"] < hi]))
+elif SECTION == "4":
+    print("buy 1 contract of the other side at its ask (1 - the held bid) the second the fall is found, hold to settlement, fee paid:\n")
+    for lo, hi in ((0.0, 0.20), (0.20, 0.30), (0.30, 0.40), (0.40, 0.55), (0.55, 1.01), (0.0, 1.01)):
+        sel = [r for r in rows if lo <= r["other_ask"] < hi]
+        if not sel:
+            print(f"  other side costs {lo:.2f}-{min(hi, 1.0):.2f}: -")
+            continue
+        pay = [(1.0 - r["won"]) - r["other_ask"] - fee(r["other_ask"]) for r in sel]
+        print(f"  other side costs {lo:.2f}-{min(hi, 1.0):.2f}: n={len(sel):<4} it won {100 * statistics.mean(1.0 - r['won'] for r in sel):3.0f}%  avg price {statistics.mean(r['other_ask'] for r in sel):.2f}  profit per contract {statistics.mean(pay):+.3f} +-{sem(pay):.3f}")
 elif SECTION == "3":
     rows.sort(key=lambda r: r["close"])
     cut = int(len(rows) * 0.6)

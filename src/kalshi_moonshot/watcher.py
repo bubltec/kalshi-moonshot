@@ -150,6 +150,12 @@ class Target:
     drop_cents: float = 0.0  # sell when the bid falls this far inside drop_seconds in the burst window (lane drop_cents; 0 = off)
     drop_seconds: float = LaneSpec.drop_seconds
     drop_was: float = LaneSpec.drop_was
+    drop_confirm: float = 0.0
+    drop_stay: float = 0.0
+    drop_window: float = LaneSpec.drop_window
+    drop_buy: bool = False
+    drop_armed_at: float | None = None  # when a fall was found and is waiting out drop_confirm
+    drop_high: float = 0.0  # the bid it fell from
     burst_favorite: float = LaneSpec.burst_favorite  # the held side's bid must be at least this for a burst to sell it (lane burst_favorite)
     burst_window: float = LaneSpec.burst_window  # ...in the last this many seconds (lane burst_window)...
     burst_min_left: float = LaneSpec.burst_min_left  # ...and not in the last this many (lane burst_min_left)
@@ -421,6 +427,10 @@ class ProfitWatcher:
             if reason and key not in self._inflight:
                 self._inflight.add(key)
                 self._jobs.put(SellSignal(t.ticker, t.lane, reason))
+                if reason.startswith("drop:") and t.drop_buy and not t.burst_logged and t.burst_buy > 0 and BUY_BAND[0] <= t.cur_other_ask <= BUY_BAND[1]:
+                    t.burst_logged = True  # one other-side buy per market, shared with the burst exit
+                    other = "no" if t.side == "yes" else "yes"
+                    self._buys.put(BuySignal("flip", other, round(t.cur_other_ask, 4), reason, {"bid": round(bid, 4), "other_ask": round(t.cur_other_ask, 4), "left": round(t.close_ts - now, 1), "held_lane": t.lane}, held=t))
 
     def _on_trade(self, e: dict[str, Any]) -> None:
         """A trade on a market we hold. Per second it keeps the contracts traded by YES takers and NO takers over the last two minutes. On the first burst against a held favorite (the last 3 seconds' volume a multiple of the market's own
@@ -925,14 +935,29 @@ class ProfitWatcher:
         return f"stop-loss: bid {bid:.2f} is {1 - bid / ref:.0%} under the {ref:.2f} {'mark' if t.stop_ref else 'paid'}{held} (socket)"
 
     def _drop_hit(self, t: Target, bid: float, now: float) -> str | None:
-        """A fast fall in the held side's own bid, whatever the taker flow. The burst exit needs dollars bought against the holder; a thinning book falls with almost none (scripts/drop_exit_study.py). In the burst window, sell a side whose bid is `drop_cents` under its highest bid of the last `drop_seconds`, when it had been a favorite (`drop_was`) in the last minute."""
-        if t.drop_cents <= 0 or bid <= 0 or t.close_ts <= 0 or not (t.burst_min_left <= t.close_ts - now <= t.burst_window):
+        """A fast fall in the held side's own bid, whatever the taker flow. The burst exit needs dollars bought against the holder; a thinning book falls with almost none (scripts/drop_exit_study.py). In the last `drop_window` seconds, a bid `drop_cents` under its highest of the last `drop_seconds`, when it had been a favorite (`drop_was`) in the last minute, is a fall.
+        With `drop_confirm` the fall only arms the exit: it sells if the bid is still `drop_stay` under the high that many seconds later, and lets a bounce go (a spike)."""
+        if t.drop_cents <= 0 or bid <= 0 or t.close_ts <= 0:
             return None
-        recent = [b for ts, b in t.history if now - t.drop_seconds <= ts <= now]
-        high = max(recent, default=0.0)
+        left = t.close_ts - now
+        if not (t.burst_min_left <= left <= t.drop_window):
+            t.drop_armed_at = None
+            return None
+        if t.drop_armed_at is not None:
+            if now - t.drop_armed_at < t.drop_confirm:
+                return None
+            armed, high = t.drop_armed_at, t.drop_high
+            t.drop_armed_at = None
+            if high - bid + 1e-9 < (t.drop_stay or t.drop_cents):
+                return None  # it bounced back: a spike, not a flip
+            return f"drop: bid {bid:.2f} is still {high - bid:.2f} under {high:.2f} {now - armed:.0f} s after it fell, with {left:.0f} s left"
+        high = max((b for ts, b in t.history if now - t.drop_seconds <= ts <= now), default=0.0)
         if high - bid + 1e-9 < t.drop_cents or max((b for ts, b in t.history if now - 60.0 <= ts <= now), default=0.0) < t.drop_was:
             return None
-        return f"drop: bid {bid:.2f} fell {high - bid:.2f} in {t.drop_seconds:.0f} s from {high:.2f} with {t.close_ts - now:.0f} s left"
+        if t.drop_confirm > 0:
+            t.drop_armed_at, t.drop_high = now, high
+            return None
+        return f"drop: bid {bid:.2f} fell {high - bid:.2f} in {t.drop_seconds:.0f} s from {high:.2f} with {left:.0f} s left"
 
     def _fast_crash(self, t: Target, bid: float) -> str | None:
         """A gap down: the position was armed (up trail_activate on a held peak) and the bid is now trail_fast below that peak."""
@@ -967,7 +992,7 @@ class ProfitWatcher:
                 t.peak = max(t.peak, t.last_bid)
             t.below_since = self._since(t, t.last_bid, now)
             key = (t.ticker, t.lane)
-            fast = self._stop_hit(t, t.last_bid, now) or self._fast_crash(t, t.last_bid)
+            fast = self._stop_hit(t, t.last_bid, now) or self._fast_crash(t, t.last_bid) or (self._drop_hit(t, t.cur_bid, now) if t.drop_armed_at is not None else None)
             if fast and key not in self._inflight:
                 self._inflight.add(key)
                 self._jobs.put(SellSignal(t.ticker, t.lane, fast))
@@ -1038,6 +1063,7 @@ class ProfitWatcher:
             held.cash_up, held.cash_drop, held.cash_left = spec.cash_up_minute, spec.cash_drop, spec.cash_left_seconds
             held.watch_at = spec.watch_at
             held.drop_cents, held.drop_seconds, held.drop_was = spec.drop_cents, spec.drop_seconds, spec.drop_was
+            held.drop_confirm, held.drop_stay, held.drop_window, held.drop_buy = spec.drop_confirm, spec.drop_stay, spec.drop_window, spec.drop_buy
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
             held.watch_loss, held.watch_loss_seconds, held.watch_loss_lift = spec.watch_loss, spec.watch_loss_seconds, spec.watch_loss_lift
             held.cross_gap = spec.stop_cross_gap
