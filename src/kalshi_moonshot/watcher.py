@@ -155,6 +155,8 @@ class Target:
     drop_window: float = LaneSpec.drop_window
     drop_buy: bool = False
     drop_buy_max: float = LaneSpec.drop_buy_max
+    bounce_fall: float = 0.0  # sell into the first bounce: the bid fell this far under the price paid, then bounced bounce_up off its low (lane bounce_fall; 0 = off)
+    bounce_up: float = LaneSpec.bounce_up
     drop_armed_at: float | None = None  # when a fall was found and is waiting out drop_confirm
     drop_high: float = 0.0  # the bid it fell from
     burst_favorite: float = LaneSpec.burst_favorite  # the held side's bid must be at least this for a burst to sell it (lane burst_favorite)
@@ -422,7 +424,7 @@ class ProfitWatcher:
             )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._settlement_hit(t, bid, now, e)
+            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._settlement_hit(t, bid, now, e)
             if t.drop_buy and not t.burst_logged and t.burst_buy > 0 and (t.drop_armed_at == now or (reason or "").startswith("drop: bid") and t.drop_confirm <= 0):
                 self._drop_hedge(t, bid, now)  # the other side is bought when the fall is found, before the sale: after the confirmed fall it costs far more
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
@@ -942,6 +944,16 @@ class ProfitWatcher:
         ctx = {"bid": round(bid, 4), "other_ask": round(t.cur_other_ask, 4), "left": round(t.close_ts - now, 1), "held_lane": t.lane, "kind": "drop"}
         self._buys.put(BuySignal("flip", other, round(t.cur_other_ask, 4), f"drop: the {t.side} bid fell to {bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}", ctx, held=t))
 
+    def _bounce_hit(self, t: Target, bid: float, now: float) -> str | None:
+        """Sell into the first bounce of a losing bet. The bid has fallen `bounce_fall` or more under the price paid (`t.low` is the lowest bid since the position opened) and has now bounced `bounce_up` or more off that low: the
+        first recovery is the best price a falling bet gets back (scripts/exit_tradeoff.py). Not in the last `burst_min_left` seconds, where a sale has nothing left to catch."""
+        if t.bounce_fall <= 0 or bid <= 0 or t.entry <= 0 or t.close_ts <= 0:
+            return None
+        left = t.close_ts - now
+        if left < t.burst_min_left or t.entry - t.low + 1e-9 < t.bounce_fall or bid - t.low + 1e-9 < t.bounce_up:
+            return None
+        return f"bounce: bid fell to {t.low:.2f} (paid {t.entry:.2f}) and bounced to {bid:.2f}, {bid - t.low:.2f} off the low, with {left:.0f} s left"
+
     def _drop_hit(self, t: Target, bid: float, now: float) -> str | None:
         """A fast fall in the held side's own bid, whatever the taker flow. The burst exit needs dollars bought against the holder; a thinning book falls with almost none (scripts/drop_exit_study.py). In the last `drop_window` seconds, a bid `drop_cents` under its highest of the last `drop_seconds`, when it had been a favorite (`drop_was`) in the last minute, is a fall.
         With `drop_confirm` the fall only arms the exit: it sells if the bid is still `drop_stay` under the high that many seconds later, and lets a bounce go (a spike)."""
@@ -1070,6 +1082,7 @@ class ProfitWatcher:
             held.cash_before, held.cash_leave, held.cash_at = spec.cash_before_minute, spec.cash_leave_minute, spec.cash_at
             held.cash_up, held.cash_drop, held.cash_left = spec.cash_up_minute, spec.cash_drop, spec.cash_left_seconds
             held.watch_at = spec.watch_at
+            held.bounce_fall, held.bounce_up = spec.bounce_fall, spec.bounce_up
             held.drop_cents, held.drop_seconds, held.drop_was = spec.drop_cents, spec.drop_seconds, spec.drop_was
             held.drop_confirm, held.drop_stay, held.drop_window, held.drop_buy, held.drop_buy_max = spec.drop_confirm, spec.drop_stay, spec.drop_window, spec.drop_buy, spec.drop_buy_max
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left

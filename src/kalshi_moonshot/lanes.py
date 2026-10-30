@@ -127,6 +127,8 @@ class LaneSpec:
     hunt_stale_seconds: float = 10.0  # a queued buy that waited this long is dropped: its price was read at the burst and the ask has moved since
     burst_favorite: float = 0.90  # the burst EXIT of a lane with burst_exit and burst_dollars sells the held side only while its bid is at least this (a favorite)
     drop_cents: float = 0.0  # a held favorite whose bid falls this many dollars within drop_seconds, in the burst window, is SOLD whatever the taker flow (0 = off). A book that thins gives a fall with almost no taker dollars, which the burst exit cannot see (KXCOPPER15M-26OCT301000: 0.85 -> 0.55 in four seconds, then 0). scripts/drop_exit_study.py: 0.25 in 3 s sold better than holding by about 10c a contract; 0.10-0.15 did not beat holding
+    bounce_fall: float = 0.0  # sell into the first bounce (0 = off): once the held bid has fallen this far under the price paid and then bounces bounce_up off its low, sell, any time up to burst_min_left before the close (scripts/exit_tradeoff.py: ~half the losing dollars cut at about zero net cost, at the price of selling most positions)
+    bounce_up: float = 0.04  # ...how far the bid must bounce off its low for the sale
     drop_seconds: float = 3.0  # ...measured against the highest bid of the last this many seconds
     drop_was: float = 0.76  # ...and only when the bid had been at least this in the last 60 s, so it is a favorite that is falling and not a long shot sliding
     drop_confirm: float = 0.0  # a fall only ARMS the exit; it sells when the bid is still drop_stay under the fall's high this many seconds later (0 = sell at once). A spike bounces back inside seconds, a flip does not (scripts/drop_flip_vs_spike_study.py: waiting 4-6 s lifted selling over holding from about 0 to +0.05 a contract on both halves of the data)
@@ -379,7 +381,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
-    "blackout_et", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -404,6 +406,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["drop_cents"], out["drop_seconds"], out["drop_was"] = repr(spec.drop_cents), repr(spec.drop_seconds), repr(spec.drop_was)
         if spec.drop_confirm or spec.drop_stay or spec.drop_window != 120.0 or spec.drop_buy or spec.drop_buy_max != 0.25:
             out["drop_confirm"], out["drop_stay"], out["drop_window"], out["drop_buy"], out["drop_buy_max"] = repr(spec.drop_confirm), repr(spec.drop_stay), repr(spec.drop_window), repr(spec.drop_buy), repr(spec.drop_buy_max)
+    if spec.bounce_fall:
+        out["bounce_fall"], out["bounce_up"] = repr(spec.bounce_fall), repr(spec.bounce_up)
     if spec.burst_ratio:
         out["burst_ratio"] = repr(spec.burst_ratio)
         out["burst_min_dollars"] = repr(spec.burst_min_dollars)
@@ -447,7 +451,7 @@ def version_of(spec: LaneSpec, s: Any) -> str:
 
 
 def takes_profit(spec: LaneSpec) -> bool:
-    return spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.scalp_up > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0 or spec.cash_left_seconds > 0 or spec.drop_cents > 0
+    return spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.scalp_up > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0 or spec.cash_left_seconds > 0 or spec.drop_cents > 0 or spec.bounce_fall > 0
 
 
 def chance_ok(spec: LaneSpec, p: float) -> bool:
