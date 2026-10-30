@@ -147,6 +147,9 @@ class Target:
     burst_buy: float = 0.0  # dollars to buy the other side with, for real, on a burst (lane burst_buy)
     burst_logged: bool = False  # one burst log per held market
     burst_share: float = LaneSpec.burst_share  # the share of the 3 s of dollars that must be against the holder for a burst to sell it (lane burst_share; 0 = off)
+    drop_cents: float = 0.0  # sell when the bid falls this far inside drop_seconds in the burst window (lane drop_cents; 0 = off)
+    drop_seconds: float = LaneSpec.drop_seconds
+    drop_was: float = LaneSpec.drop_was
     burst_favorite: float = LaneSpec.burst_favorite  # the held side's bid must be at least this for a burst to sell it (lane burst_favorite)
     burst_window: float = LaneSpec.burst_window  # ...in the last this many seconds (lane burst_window)...
     burst_min_left: float = LaneSpec.burst_min_left  # ...and not in the last this many (lane burst_min_left)
@@ -412,7 +415,7 @@ class ProfitWatcher:
             )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._stop_hit(t, bid, now) or fast or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._settlement_hit(t, bid, now, e)
+            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._settlement_hit(t, bid, now, e)
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
                 reason = self._cross_checked(t, bid, now, reason)
             if reason and key not in self._inflight:
@@ -921,6 +924,16 @@ class ProfitWatcher:
         held = f" for {now - t.stop_since:.0f}s" if wait else ""
         return f"stop-loss: bid {bid:.2f} is {1 - bid / ref:.0%} under the {ref:.2f} {'mark' if t.stop_ref else 'paid'}{held} (socket)"
 
+    def _drop_hit(self, t: Target, bid: float, now: float) -> str | None:
+        """A fast fall in the held side's own bid, whatever the taker flow. The burst exit needs dollars bought against the holder; a thinning book falls with almost none (scripts/drop_exit_study.py). In the burst window, sell a side whose bid is `drop_cents` under its highest bid of the last `drop_seconds`, when it had been a favorite (`drop_was`) in the last minute."""
+        if t.drop_cents <= 0 or bid <= 0 or t.close_ts <= 0 or not (t.burst_min_left <= t.close_ts - now <= t.burst_window):
+            return None
+        recent = [b for ts, b in t.history if now - t.drop_seconds <= ts <= now]
+        high = max(recent, default=0.0)
+        if high - bid + 1e-9 < t.drop_cents or max((b for ts, b in t.history if now - 60.0 <= ts <= now), default=0.0) < t.drop_was:
+            return None
+        return f"drop: bid {bid:.2f} fell {high - bid:.2f} in {t.drop_seconds:.0f} s from {high:.2f} with {t.close_ts - now:.0f} s left"
+
     def _fast_crash(self, t: Target, bid: float) -> str | None:
         """A gap down: the position was armed (up trail_activate on a held peak) and the bid is now trail_fast below that peak."""
         if t.trail_fast <= 0 or t.trail_drop <= 0 or bid <= 0 or time.time() < t.retry_after:
@@ -1024,6 +1037,7 @@ class ProfitWatcher:
             held.cash_before, held.cash_leave, held.cash_at = spec.cash_before_minute, spec.cash_leave_minute, spec.cash_at
             held.cash_up, held.cash_drop, held.cash_left = spec.cash_up_minute, spec.cash_drop, spec.cash_left_seconds
             held.watch_at = spec.watch_at
+            held.drop_cents, held.drop_seconds, held.drop_was = spec.drop_cents, spec.drop_seconds, spec.drop_was
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
             held.watch_loss, held.watch_loss_seconds, held.watch_loss_lift = spec.watch_loss, spec.watch_loss_seconds, spec.watch_loss_lift
             held.cross_gap = spec.stop_cross_gap
