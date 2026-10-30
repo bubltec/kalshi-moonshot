@@ -154,6 +154,7 @@ class Target:
     drop_stay: float = 0.0
     drop_window: float = LaneSpec.drop_window
     drop_buy: bool = False
+    drop_buy_max: float = LaneSpec.drop_buy_max
     drop_armed_at: float | None = None  # when a fall was found and is waiting out drop_confirm
     drop_high: float = 0.0  # the bid it fell from
     burst_favorite: float = LaneSpec.burst_favorite  # the held side's bid must be at least this for a burst to sell it (lane burst_favorite)
@@ -422,15 +423,13 @@ class ProfitWatcher:
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
             reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._settlement_hit(t, bid, now, e)
+            if t.drop_buy and not t.burst_logged and t.burst_buy > 0 and (t.drop_armed_at == now or (reason or "").startswith("drop: bid") and t.drop_confirm <= 0):
+                self._drop_hedge(t, bid, now)  # the other side is bought when the fall is found, before the sale: after the confirmed fall it costs far more
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
                 reason = self._cross_checked(t, bid, now, reason)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
                 self._jobs.put(SellSignal(t.ticker, t.lane, reason))
-                if reason.startswith("drop:") and t.drop_buy and not t.burst_logged and t.burst_buy > 0 and BUY_BAND[0] <= t.cur_other_ask <= BUY_BAND[1]:
-                    t.burst_logged = True  # one other-side buy per market, shared with the burst exit
-                    other = "no" if t.side == "yes" else "yes"
-                    self._buys.put(BuySignal("flip", other, round(t.cur_other_ask, 4), reason, {"bid": round(bid, 4), "other_ask": round(t.cur_other_ask, 4), "left": round(t.close_ts - now, 1), "held_lane": t.lane}, held=t))
 
     def _on_trade(self, e: dict[str, Any]) -> None:
         """A trade on a market we hold. Per second it keeps the contracts traded by YES takers and NO takers over the last two minutes. On the first burst against a held favorite (the last 3 seconds' volume a multiple of the market's own
@@ -934,6 +933,15 @@ class ProfitWatcher:
         held = f" for {now - t.stop_since:.0f}s" if wait else ""
         return f"stop-loss: bid {bid:.2f} is {1 - bid / ref:.0%} under the {ref:.2f} {'mark' if t.stop_ref else 'paid'}{held} (socket)"
 
+    def _drop_hedge(self, t: Target, bid: float, now: float) -> None:
+        """Buy the other side of a held favorite whose bid has just fallen (the lane's burst_buy stake, once per market, the same buy as a burst sale's), while it still costs at most `drop_buy_max`."""
+        if not (BUY_BAND[0] <= t.cur_other_ask <= t.drop_buy_max):
+            return
+        t.burst_logged = True
+        other = "no" if t.side == "yes" else "yes"
+        ctx = {"bid": round(bid, 4), "other_ask": round(t.cur_other_ask, 4), "left": round(t.close_ts - now, 1), "held_lane": t.lane, "kind": "drop"}
+        self._buys.put(BuySignal("flip", other, round(t.cur_other_ask, 4), f"drop: the {t.side} bid fell to {bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}", ctx, held=t))
+
     def _drop_hit(self, t: Target, bid: float, now: float) -> str | None:
         """A fast fall in the held side's own bid, whatever the taker flow. The burst exit needs dollars bought against the holder; a thinning book falls with almost none (scripts/drop_exit_study.py). In the last `drop_window` seconds, a bid `drop_cents` under its highest of the last `drop_seconds`, when it had been a favorite (`drop_was`) in the last minute, is a fall.
         With `drop_confirm` the fall only arms the exit: it sells if the bid is still `drop_stay` under the high that many seconds later, and lets a bounce go (a spike)."""
@@ -1063,7 +1071,7 @@ class ProfitWatcher:
             held.cash_up, held.cash_drop, held.cash_left = spec.cash_up_minute, spec.cash_drop, spec.cash_left_seconds
             held.watch_at = spec.watch_at
             held.drop_cents, held.drop_seconds, held.drop_was = spec.drop_cents, spec.drop_seconds, spec.drop_was
-            held.drop_confirm, held.drop_stay, held.drop_window, held.drop_buy = spec.drop_confirm, spec.drop_stay, spec.drop_window, spec.drop_buy
+            held.drop_confirm, held.drop_stay, held.drop_window, held.drop_buy, held.drop_buy_max = spec.drop_confirm, spec.drop_stay, spec.drop_window, spec.drop_buy, spec.drop_buy_max
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
             held.watch_loss, held.watch_loss_seconds, held.watch_loss_lift = spec.watch_loss, spec.watch_loss_seconds, spec.watch_loss_lift
             held.cross_gap = spec.stop_cross_gap
