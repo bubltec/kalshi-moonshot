@@ -83,3 +83,8 @@ def test_a_failed_flush_keeps_the_futures_seconds_and_merges_late_trades(tmp_pat
 def test_the_recorder_is_on_by_default_for_the_five_coins():
     s = config.load()
     assert s.fut_flow_enabled is True and s.fut_flow_coins == ("BTC", "ETH", "SOL", "XRP", "DOGE")
+
+
+def test_a_builder_dex_coin_keeps_its_case_and_a_plain_coin_is_upper_cased(monkeypatch):
+    monkeypatch.setenv("FUT_FLOW_COINS", "btc, xyz:GOLD,xyz:CL")
+    assert config.load().fut_flow_coins == ("BTC", "xyz:GOLD", "xyz:CL")
