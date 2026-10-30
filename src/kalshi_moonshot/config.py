@@ -80,7 +80,10 @@ class Settings:
     max_usd_per_trade: float
     max_loss_per_day: float  # stop buying for the day once realized losses reach this (not a spending cap)
     max_open_positions: int
-    min_order_usd: float  # skip a buy when less than this is offered at our price
+    min_order_usd: float  # skip a buy when the order costs less than this (the exchange's dust floor)
+    min_offer_ratio: float  # skip a buy when the book offers less than this share of the order's cost at our price (0 = the old flat min_order_usd on the offer)
+    max_trade_pct: float  # one trade's ceiling as a share of equity (0 = the flat max_usd_per_trade)
+    max_loss_pct_per_day: float  # stop buying for the day once realized losses reach this share of equity (0 = the flat max_loss_per_day)
 
     # --- long-shot selection ---
     min_price: float  # cheapest ask we will consider, dollars
@@ -373,6 +376,9 @@ def load() -> Settings:
         max_loss_per_day=_f("MAX_LOSS_PER_DAY", _f("MAX_USD_PER_DAY", 20.0)),  # the old name still works, now as a loss limit
         max_open_positions=_i("MAX_OPEN_POSITIONS", 8),
         min_order_usd=_f("MIN_ORDER_USD", 0.25),
+        min_offer_ratio=max(0.0, _f("MIN_OFFER_RATIO", 0.0)),
+        max_trade_pct=max(0.0, _f("MAX_TRADE_PCT", 0.0)),
+        max_loss_pct_per_day=max(0.0, _f("MAX_LOSS_PCT_PER_DAY", 0.0)),
         min_price=_f("MIN_PRICE", 0.02),
         max_price=_f("MAX_PRICE", 0.10),
         min_volume=_f("MIN_VOLUME", 100.0),

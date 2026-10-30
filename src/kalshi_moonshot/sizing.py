@@ -50,7 +50,7 @@ def size_bet(
     full = kelly_share(p, ask)
     if full <= 0.0 and not spec.fixed_stake:
         return Sizing(0, 0.0, "no edge after the fee at this chance and price")
-    ceilings = [s.max_usd_per_trade]
+    ceilings = [equity * s.max_trade_pct if s.max_trade_pct > 0 else s.max_usd_per_trade]  # a share of equity when set, so it grows and shrinks with the account like the bet does
     if spec.usd_per_trade:
         ceilings.append(spec.usd_per_trade)
     # A fixed-stake lane bets the same dollars every time; the odds do not scale it. But the lane's per-bet cap

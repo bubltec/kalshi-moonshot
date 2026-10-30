@@ -103,6 +103,9 @@ class LaneSpec:
     stop_model: bool = False  # a 15-minute lane's stop first asks the model about the window's shape and holds only when it values the position above the sale (STOP_MODEL_SECONDS wait; no answer = sell)
     settlement_guard: float = 0.0  # OFF: 377 live sales, 88% would have won, -8.3c vs holding. Same job as the burst exit, worse signal. The watcher still has the code; 0.10 would turn it back on
     settlement_flip: bool = False  # watch held 15-minute bets for a volume burst against the holder in the last 120 s and SELL the favorite (watcher.py: that is the peak-crash exit); also log the other side as a paper bet in burst_flip. A silent book cannot 5x itself (BURST_MIN_NORMAL)
+    burst_ratio: float = 0.0  # the burst EXIT as a multiple of the market's own normal: sell when the dollars bought against the holder in 3 s are at least this many times this market's normal 3 s (the median second of the 120 s before, both sides, times 3). A bar that grows in a busy market and shrinks in a quiet one. 0 = off (burst_dollars, the flat bar, applies). When set it replaces burst_dollars
+    burst_min_dollars: float = 50.0  # ...and at least this many dollars, so a dead market's ordinary print is not a crash
+    burst_buy_pct: float = 0.0  # the same hedge sized as a share of the held bet's own stake (0.17 on a $6 bet is about $1): it scales with the bet. When set it replaces burst_buy
     burst_buy: float = 0.0  # dollars to put, for real, on the OTHER side (when it costs 5-25c) the first time that burst fires (0 = only log it). Needs settlement_flip and a live lane
     burst_dollars: float = 0.0  # the burst EXIT of a lane with settlement_flip, in dollars: sell the held 90c+ favorite in the last 120 s when at least this many dollars are bought against it in 3 s (0 = the older multiple-of-normal rule). Per family from burst_exit_study: crypto 400, currencies 50, metals/energy 400
     burst_dollars_btc: float = 0.0  # the same for BTC: a bar of its own, or -1 to keep the older rule (it beat holding by 5.3c on BTC; the dollar bar did not)
@@ -184,7 +187,6 @@ class LaneSpec:
     entry_min_gap_seconds: float = 2.0  # ... but not the same event more often than this
     buy_max_move: float = 0.0  # skip a buy when the order book's ask on the side has FALLEN more than this many dollars under the ask the decision was made at (0 = off). A job can wait many seconds behind the shared request budget between deciding and ordering; a Gold NO decided at 0.86 was bought at 0.24 eight seconds before the close, after the side had collapsed
     buy_retries: int = 0  # when an immediate buy fills nothing, read the book again and send it once more, up to this many times, right away (0 = no retry). The next signal on the market comes a median 108 s later and about 3.7c dearer
-    buy_retry_seconds: float = 5.0  # a retry only goes out within this many seconds of the first attempt
     buy_retry_chase: float = 0.0  # how many dollars over the first limit a retry may pay (0 = never above it). The lane's price band and the risk gate still apply
     buy_slip: float = 0.0  # the buy order is limited this many dollars above the ask the bot read: it still fills at the best ask, and pays up to the allowance only if the book has moved (0 = limit at the ask)
     watch_max: int = 40
@@ -363,9 +365,9 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "buy_max_move", "buy_retries", "buy_retry_seconds", "buy_retry_chase",
+    "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
-    "blackout_et",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "burst_buy_pct", "burst_ratio", "burst_min_dollars",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -383,6 +385,11 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     out["kelly_fraction"] = repr(None if spec.fixed_stake else s.kelly_fraction)
     if spec.blackout_et:
         out["blackout_et"] = repr(spec.blackout_et)
+    if spec.burst_buy_pct:
+        out["burst_buy_pct"] = repr(spec.burst_buy_pct)
+    if spec.burst_ratio:
+        out["burst_ratio"] = repr(spec.burst_ratio)
+        out["burst_min_dollars"] = repr(spec.burst_min_dollars)
     return out
 
 

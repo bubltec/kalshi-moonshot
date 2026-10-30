@@ -82,7 +82,7 @@ def _watcher(tmp_path, monkeypatch, guard=0.10, ticker="KXBTC15M-1"):
     s = config.load()
     store = Store(s.db_path)
     close = 2_000_000.0
-    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, ticker, "bet", "observe", 0.90, "yes", "guarded", 3, 2.7, "2099-01-01T00:00:00Z"))
+    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, ticker, "bet", "observe", 0.90, "yes", "guarded", 3, 2.7, "1970-01-24T03:33:20Z"))
     store.db.commit()
 
     class Client:
@@ -750,7 +750,7 @@ def test_a_lane_can_keep_its_stop_quiet_until_the_last_minutes(tmp_path, monkeyp
     t = w.targets[("KXBTC15M-1", "guarded")]
     assert t.stop_from == pytest.approx(close - 180.0, abs=2.0)
     assert w._stop_hit(t, 0.30, time.time()) is None  # 10 minutes out the dip is ignored
-    assert w._stop_hit(t, 0.30, close - 100.0) is not None  # inside the last three minutes it sells
+    assert w._stop_hit(t, 0.30, close - 170.0) is not None  # inside the last three minutes it sells (the last two have their own rule: a hover or spike is not sold, and this test has no price history to call a trend)
 
 
 def test_a_resting_buy_is_sized_to_its_own_price_and_spends_the_whole_stake(tmp_path, monkeypatch):

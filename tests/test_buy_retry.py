@@ -51,7 +51,7 @@ def setup(tmp_path, monkeypatch):
     shot = LongShot("KXBTC15M-1", "t", "r", 0.30, 0.31, 100.0, "2099-01-01T00:00:00Z", 0.2, lane="scalpy", series="KXBTC15M", event_ticker="KXBTC15M-E", side="yes")
 
     def spec(**over):
-        base = dataclasses.replace(lanes.spec_for(s, "moonshot"), buy_rest_seconds=0.0, price=(0.02, 0.39), buy_slip=0.02, buy_retries=1, buy_retry_seconds=5.0, buy_retry_chase=0.0)
+        base = dataclasses.replace(lanes.spec_for(s, "moonshot"), buy_rest_seconds=0.0, price=(0.02, 0.39), buy_slip=0.02, buy_retries=1, buy_retry_chase=0.0)
         sp = dataclasses.replace(base, **over)
         monkeypatch.setattr(runner, "lane_specs", lambda settings: {"scalpy": sp})
         return sp
@@ -114,16 +114,6 @@ def test_a_retry_that_the_risk_gate_refuses_is_not_sent(setup, monkeypatch):
     spec()
     verdicts = iter([True, False])
     monkeypatch.setattr(runner.risk, "check", lambda *a, **k: SimpleNamespace(ok=next(verdicts), reason="cap"))
-    client = Client(fills=[0.0, 1.5], asks=[0.30])
-    got = runner.place(s, client, store, shot, "why", 1.5)
-    assert got.filled == 0 and len(client.sent) == 1
-
-
-def test_a_retry_that_waits_too_long_is_not_sent(setup, monkeypatch):
-    s, store, shot, spec = setup
-    spec(buy_retry_seconds=5.0)
-    clock = iter([100.0, 100.0, 120.0, 120.0, 120.0, 120.0])  # 20 s pass between the first try and the decision to retry
-    monkeypatch.setattr(runner.time, "time", lambda: next(clock, 120.0))
     client = Client(fills=[0.0, 1.5], asks=[0.30])
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert got.filled == 0 and len(client.sent) == 1

@@ -150,6 +150,8 @@ class Target:
     burst_favorite: float = LaneSpec.burst_favorite  # the held side's bid must be at least this for a burst to sell it (lane burst_favorite)
     burst_window: float = LaneSpec.burst_window  # ...in the last this many seconds (lane burst_window)...
     burst_min_left: float = LaneSpec.burst_min_left  # ...and not in the last this many (lane burst_min_left)
+    burst_ratio: float = 0.0  # the burst exit as a multiple of this market's own normal 3 s of dollars (lane burst_ratio; 0 = off, burst_bar applies)
+    burst_min_dollars: float = 50.0  # ...and at least this many dollars (lane burst_min_dollars)
     burst_bar: float = 0.0  # the dollars bought against the held favorite in 3 s that sell it (burst_dollars; 0 = the older multiple-of-normal rule)
     burst_spot_edge: float = LaneSpec.burst_spot_edge  # a burst sells only when spot's own chance for this side is not more than this far over the sale price (lane burst_spot_edge; 0 = off)
     burst_resell: bool = False  # the burst sale filled nothing: the next burst sells again (the log and the other-side buy stay once)
@@ -214,6 +216,12 @@ def _side_dollar_ratio(book: dict[int, list[float]], sec: int, idx: int) -> floa
     per = sorted((book.get(sec - 3 - k) or [0.0] * 4)[idx + 2] if len(book.get(sec - 3 - k) or [0.0] * 4) > idx + 2 else 0.0 for k in range(120))
     base = (per[59] + per[60]) / 2.0
     return vol / (3.0 * base + 0.01)
+
+
+def _market_normal_dollars(book: dict[int, list[float]], sec: int) -> float:
+    """This market's normal 3 seconds in dollars: the median second of the 120 seconds before the last 3, with both sides' takers counted, times 3."""
+    per = sorted(((r[2] + r[3]) if (r := book.get(sec - 3 - k)) and len(r) > 3 else 0.0) for k in range(120))
+    return 3.0 * (per[59] + per[60]) / 2.0
 
 
 def _is_side_burst(vol: float, base: float, ratio: float) -> bool:
@@ -431,7 +439,18 @@ class ProfitWatcher:
             spec = self._hunt_by_series.get(tk.split("-")[0])
         for t in held:
             idx = 1 if t.side == "yes" else 0  # NO takers against a YES holder, YES takers against a NO holder
-            if t.burst_bar > 0:
+            if t.burst_ratio > 0:
+                # The burst as a multiple of this market's own normal 3 s of dollars (scripts/burst_exit_replay2.py, 2026-10-30), with the lane's floor on the held side's bid and the one-sided share below
+                if t.cur_bid < t.burst_favorite or t.cur_other_ask <= 0 or not (t.burst_min_left <= t.close_ts - now <= t.burst_window):
+                    continue
+                against = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
+                base = max(_market_normal_dollars(book, sec), 1.0)
+                ratio = against / base
+                hit = against >= t.burst_ratio * base and against >= t.burst_min_dollars
+                if hit and t.burst_share > 0:
+                    with_holder = sum((book.get(sec - k) or [0.0] * 4)[(1 - idx) + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > (1 - idx) + 2)
+                    hit = against / (against + with_holder + 1e-9) >= t.burst_share
+            elif t.burst_bar > 0:
                 # The moonshot's identifier (burst_exit_study, 2026-10-27): at least $X bought AGAINST a 90c favorite in 3 s. Absolute dollars, not a multiple of normal, and a bar per family: the contract-multiple rule sold metals and energy winners early (-2.3c a contract against holding).
                 if t.cur_bid < t.burst_favorite or t.cur_other_ask <= 0 or not (t.burst_min_left <= t.close_ts - now <= t.burst_window):
                     continue
@@ -450,7 +469,9 @@ class ProfitWatcher:
                 t.burst_logged = True
                 t.burst_resell = False
                 other = "no" if t.side == "yes" else "yes"
-                if t.burst_bar > 0:
+                if t.burst_ratio > 0:
+                    reason = (f"burst: ${against:.0f} bought against the {t.side} holder in 3 s, {ratio:.1f}x this market's normal ${base:.0f} (bar {t.burst_ratio:.0f}x), the favorite's bid {t.cur_bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}")
+                elif t.burst_bar > 0:
                     reason = (f"burst: ${against:.0f} bought against the {t.side} holder in 3 s (bar ${t.burst_bar:.0f}), the favorite's bid {t.cur_bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}")
                 else:
                     reason = (f"burst: {ratio:.0f}x this side's normal volume against the {t.side} holder ({against:.0f} contracts in 3 s), the favorite's bid {t.cur_bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}")
@@ -976,10 +997,13 @@ class ProfitWatcher:
             if guard or flip:
                 tg = fresh[(ticker, lane)]
                 tg.settle_guard, tg.settle_flip = (spec.settlement_guard if guard else 0.0), spec.settlement_flip and flip
-                tg.burst_buy = spec.burst_buy if tg.settle_flip else 0.0
+                stake = float(row["stake_usd"] or 0.0)
+                hedge = round(spec.burst_buy_pct * stake, 2) if spec.burst_buy_pct > 0 else spec.burst_buy  # a share of the bet when the lane sets one, else its flat dollars
+                tg.burst_buy = hedge if tg.settle_flip else 0.0
                 btc = ticker.split("-")[0].startswith("KXBTC")
                 tg.burst_bar = 0.0 if (btc and spec.burst_dollars_btc < 0) else (spec.burst_dollars_btc if (btc and spec.burst_dollars_btc > 0) else spec.burst_dollars)
                 tg.burst_favorite, tg.burst_window, tg.burst_min_left, tg.burst_share = spec.burst_favorite, spec.burst_window, spec.burst_min_left, spec.burst_share
+                tg.burst_ratio, tg.burst_min_dollars = spec.burst_ratio, spec.burst_min_dollars
                 tg.burst_spot_edge = spec.burst_spot_edge
                 tg.index_id = (index_for_series(ticker.split("-")[0]) or "") if guard else ""
                 if tg.close_ts <= 0 or (guard and tg.strike <= 0):

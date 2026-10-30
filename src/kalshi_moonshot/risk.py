@@ -41,9 +41,12 @@ def check(
     max_trade: float | None = None,
     event_ticker: str = "",
     mutually_exclusive: bool = False,
+    equity: float = 0.0,
 ) -> Verdict:
-    """max_trade lets a lane use a tighter per-trade cap. It can never loosen the global one."""
-    cap = s.max_usd_per_trade if max_trade is None else min(max_trade, s.max_usd_per_trade)
+    """max_trade lets a lane use a tighter per-trade cap. It can never loosen the global one. `equity` (the account's cash plus open bets) is for the caps set as a share of it: with MAX_TRADE_PCT the
+    per-trade ceiling was already applied when the bet was sized, so a sized order passes here, and MAX_LOSS_PCT_PER_DAY turns into dollars of that equity."""
+    by_pct = s.max_trade_pct > 0 and equity > 0
+    cap = (max_trade if max_trade is not None else equity * s.max_trade_pct) if by_pct else (s.max_usd_per_trade if max_trade is None else min(max_trade, s.max_usd_per_trade))
     if s.kill_file.exists():
         return Verdict(False, "kill switch file is present")
     if s.mode != "trade":
@@ -66,6 +69,7 @@ def check(
     # Realized losses today, from the synced account history (so your own trades count too). It is as fresh as the
     # last account sync (ACCOUNT_SYNC_MINUTES). Wins offset losses; money merely spent on open positions does not count.
     lost = -realized_since(store, start_of_day(now))
-    if s.max_loss_per_day > 0 and lost >= s.max_loss_per_day - 1e-9:
-        return Verdict(False, f"daily loss limit: down ${lost:.2f} today (limit ${s.max_loss_per_day:.2f})")
+    limit = equity * s.max_loss_pct_per_day if s.max_loss_pct_per_day > 0 and equity > 0 else s.max_loss_per_day
+    if limit > 0 and lost >= limit - 1e-9:
+        return Verdict(False, f"daily loss limit: down ${lost:.2f} today (limit ${limit:.2f})")
     return Verdict(True)

@@ -66,7 +66,7 @@ def _price(m: dict, key: str) -> float:
 def knobs(s: Settings) -> tuple:
     """Settings whose change is worth a log line."""
     return (
-        s.env, s.mode, tuple(sorted(s.live_lanes or ())), s.fast_live, s.real_money, s.min_order_usd, s.min_price, s.max_price, s.min_volume, s.max_spread,
+        s.env, s.mode, tuple(sorted(s.live_lanes or ())), s.fast_live, s.real_money, s.min_order_usd, s.min_offer_ratio, s.max_trade_pct, s.max_loss_pct_per_day, s.min_price, s.max_price, s.min_volume, s.max_spread,
         s.min_hours_to_close, s.min_edge, s.scan_pages, s.shortlist, s.scan_interval_minutes,
         s.model, tuple(sorted(s.skip_categories)), s.skip_numeric, tuple(sorted(s.exclude_versions)),
         s.max_rps, s.page_size, s.job_max_attempts, s.moonshot_max_drop,

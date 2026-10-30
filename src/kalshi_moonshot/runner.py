@@ -1070,6 +1070,16 @@ def lane_lock(lane: str) -> threading.Lock:
 _NO_FRACTION: set[str] = set()  # filled once Kalshi has refused a fractional order that the whole-contract retry then got through: stop asking for fractions
 
 
+def _cap_equity(s: Settings, client: KalshiClient, store: Store) -> float:
+    """The account's equity, read only when a cap is set as a share of it (MAX_TRADE_PCT, MAX_LOSS_PCT_PER_DAY); the bankroll read is cached, so this is not a new request each buy."""
+    if s.max_trade_pct <= 0 and s.max_loss_pct_per_day <= 0:
+        return 0.0
+    try:
+        return float(store.bankroll.read(client, s).equity)
+    except Exception:
+        return 0.0
+
+
 def place(
     s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float,
     order_key: str | None = None, before_order: Callable[[], None] | None = None,
@@ -1099,15 +1109,18 @@ def place(
         fresh = best_ask(book, shot.side)
         if fresh is not None and fresh < shot.ask - lane_spec.buy_max_move - 1e-9:
             return Placed(f"skipped: the {shot.side} ask fell from {shot.ask:.2f} to {fresh:.2f} while the order waited (the lane allows a fall of {lane_spec.buy_max_move:.2f})")
-    if offered + 1e-9 < s.min_order_usd:
+    need = s.min_offer_ratio * cost if s.min_offer_ratio > 0 else s.min_order_usd  # a share of our own order when the ratio is set, else the old flat dollars
+    if offered + 1e-9 < need:
         return Placed(
+            f"skipped: ${offered:.2f} offered at {limit:.2f}, "
+            f"under the ${need:.2f} needed ({s.min_offer_ratio:.0%} of the ${cost:.2f} order)" if s.min_offer_ratio > 0 else
             f"skipped: ${offered:.2f} offered at {limit:.2f}, "
             f"under the ${s.min_order_usd:.2f} minimum"
         )
     with steptime.step("risk check"):
         verdict = risk.check(
             s, store, shot.ticker, cost, max_trade=cap,
-            event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive,
+            event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store),
         )
     if not verdict.ok:
         return Placed(f"blocked by risk: {verdict.reason}")
@@ -1115,7 +1128,7 @@ def place(
         topped = _top_up(s, client, store, shot, cost)
     if topped:
         return Placed(topped)
-    known = _EXCHANGE_OF.get(shot.series) if hasattr(client, "shard_balances") else None
+    known = _EXCHANGE_OF.get(shot.series)  # filled only when a Kalshi refusal named the exchange, so another venue's series never matches
     if known is not None and _UNFUNDED.get(known, 0.0) > time.time():
         return Placed(f"skipped: exchange {known} (where {shot.series} trades) has no cash; move funds there in the Kalshi app")
     if before_order:
@@ -1130,7 +1143,6 @@ def place(
         return placed
     buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
     retries = lane_spec.buy_retries if lane_spec is not None else 0
-    first_at = time.time()
     key = order_key
     attempt = 0
     while True:
@@ -1165,7 +1177,7 @@ def place(
             contract=shot.side,
         )
         spent = avg * filled + fee
-        if filled > 0 or lane_spec is None or attempt >= retries or time.time() - first_at > lane_spec.buy_retry_seconds:
+        if filled > 0 or lane_spec is None or attempt >= retries:
             break
         again = _requote(s, client, store, shot, lane_spec, count)
         if again is None:
@@ -1193,7 +1205,7 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
     if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
         return None
     cost = limit * count + order_fee(limit, count)
-    verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive)
+    verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store))
     return limit if verdict.ok else None
 
 
@@ -1236,7 +1248,7 @@ def _place_floor_bid(
     with steptime.step("risk check"):
         verdict = risk.check(
             s, store, shot.ticker, cost, max_trade=cost,
-            event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive,
+            event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store),
         )
     if not verdict.ok:
         return Placed(f"blocked by risk: {verdict.reason}")
