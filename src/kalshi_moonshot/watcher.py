@@ -140,6 +140,7 @@ class Target:
     scalp_dip_seconds: float = LaneSpec.scalp_dip_seconds  # the dip must hold this long before it sells (lane scalp_dip_seconds)
     scalp_dip_since: float | None = None  # when the bid first went scalp_dip under the high and has stayed there
     scalp_high: float = 0.0  # the highest bid since the arm printed
+    cash_out: float = 0.0  # lane cash_out_at: sell the moment the bid is at or under this price (0 = off)
     scalp_high_ts: float = 0.0  # when that high last rose
     scalp_plateau: float = 0.0  # lane scalp_plateau_seconds: sell a bid that has made no new high for this long (0 = off)
     index_id: str = ""  # the settlement index of this market
@@ -419,7 +420,7 @@ class ProfitWatcher:
             left = (t.close_ts - now) if t.close_ts > 0 else None
             recent = [b for ts, b in t.history if now - 3.0 <= ts <= now and b > 0]
             hovering = len(recent) >= 2 and price_shape(list(t.history), now, bid) == "hover"
-            why = take_profit_hit(t.entry, bid, t.x, t.at) or cash_if_up(t.entry, bid, minute_now, t.cash_up, t.cash_drop) or self._scalp(t, bid, now) or cash_if_losing(t.entry, bid, left, t.cash_left, hovering) or early_cash(
+            why = (f"cash-out: bid {bid:.2f} is at the {t.cash_out:.2f} line, {t.entry:.2f} paid" if t.cash_out > 0 and 0 < bid <= t.cash_out + 1e-9 else None) or take_profit_hit(t.entry, bid, t.x, t.at) or cash_if_up(t.entry, bid, minute_now, t.cash_up, t.cash_drop) or self._scalp(t, bid, now) or cash_if_losing(t.entry, bid, left, t.cash_left, hovering) or early_cash(
                 t.entry, bid, t.opened_min, minute_now, before=t.cash_before, leave=t.cash_leave, hovering=hovering,
             ) or spike_hit(
                 list(t.history), now, t.entry, t.spike_cents, t.spike_seconds, t.spike_min_gain
@@ -1098,6 +1099,7 @@ class ProfitWatcher:
             held.scalp_at, held.scalp_up, held.scalp_dip, held.scalp_dip_seconds = spec.scalp_at, spec.scalp_up, spec.scalp_dip, spec.scalp_dip_seconds
             held.scalp_dip_hard = spec.scalp_dip_hard
             held.scalp_plateau = spec.scalp_plateau_seconds
+            held.cash_out = spec.cash_out_at
             if row["close_time"] and str(row["ticker"]).split("-")[0].endswith("15M"):
                 with contextlib.suppress(TypeError, ValueError):
                     close = datetime.fromisoformat(row["close_time"]).timestamp()

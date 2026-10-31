@@ -509,3 +509,22 @@ def test_a_plateau_never_sells_under_the_arm(tmp_path, monkeypatch):
     w.on_event(quote(0.52, base + 2))
     w.on_event(quote(0.45, base + 30))  # long flat, but the bid is back under the arm (0.50)
     assert w._jobs.empty()
+
+
+def test_a_cash_out_line_sells_the_moment_the_bid_is_at_or_under_it(tmp_path, monkeypatch):
+    w, base = armed(tmp_path, monkeypatch, 150.0)
+    t = w.targets[("KXBTC15M-1", "fav")]
+    t.entry, t.stop_drop, t.cash_out = 0.93, 0.0, 0.20
+    w.on_event(quote(0.60, base))  # far under the price paid, but over the line: held
+    w.on_event(quote(0.21, base + 1))
+    assert w._jobs.empty()
+    w.on_event(quote(0.20, base + 2))
+    assert "cash-out" in w._jobs.get_nowait().why
+
+
+def test_no_cash_out_line_sells_nothing_on_a_collapse(tmp_path, monkeypatch):
+    w, base = armed(tmp_path, monkeypatch, 150.0)
+    t = w.targets[("KXBTC15M-1", "fav")]
+    t.entry, t.stop_drop, t.cash_out = 0.93, 0.0, 0.0
+    w.on_event(quote(0.10, base))
+    assert w._jobs.empty()
