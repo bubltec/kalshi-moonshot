@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import math
 import random
 import threading
 import time
@@ -26,6 +27,17 @@ _EVENT_CACHE: dict[str, tuple[float, dict[str, tuple[str, str, bool]]]] = {}  # 
 _EVENT_LOCK = threading.Lock()
 SLOW_PACE_SECONDS = 3.0  # a request that waits this long for its turn is logged, so a queue behind the shared request budget shows in the logs
 
+
+
+def snap_price(price: float, up: bool = False) -> float:
+    """A limit price on Kalshi's tick grid: a tenth of a cent under 10c and over 90c, a cent between (the tapered ladder crypto and energy markets use). An order priced off the grid is refused with
+    `invalid_price` (live: a limit of the ask 0.093 plus a 5c allowance, 0.143, bought nothing on three BTC buys at 7-10c). Rounds down by default (a YES buy's limit never reaches over what was meant, a YES sale's floor drops, so it still fills); `up` for the YES price of a NO buy (the NO side's limit never reaches over
+    what was meant) and of buying YES back to close a NO (the order still fills)."""
+    p = round(price, 6)
+    step = 0.01 if 0.10 - 1e-9 <= p <= 0.90 + 1e-9 else 0.001
+    n = p / step
+    k = math.ceil(n - 1e-6) if up else math.floor(n + 1e-6)
+    return round(k * step, 4)
 
 class KalshiError(RuntimeError):
     pass
@@ -466,7 +478,7 @@ class KalshiClient:
             "client_order_id": client_order_id or str(uuid.uuid4()),
             "side": "bid",
             "count": f"{count:.2f}",
-            "price": f"{price_dollars:.4f}",
+            "price": f"{snap_price(price_dollars):.4f}",
             "time_in_force": "immediate_or_cancel",
             "self_trade_prevention_type": "taker_at_cross",
         }
@@ -539,7 +551,7 @@ class KalshiClient:
             "client_order_id": client_order_id or str(uuid.uuid4()),
             "side": "ask",
             "count": f"{count:.2f}",
-            "price": f"{1.0 - no_price:.4f}",
+            "price": f"{snap_price(1.0 - no_price, up=True):.4f}",
             "time_in_force": "immediate_or_cancel",
             "self_trade_prevention_type": "taker_at_cross",
         }
@@ -554,7 +566,7 @@ class KalshiClient:
             "client_order_id": client_order_id or str(uuid.uuid4()),
             "side": "bid",
             "count": f"{count:.2f}",
-            "price": f"{1.0 - no_price:.4f}",
+            "price": f"{snap_price(1.0 - no_price, up=True):.4f}",
             "time_in_force": "immediate_or_cancel",
             "self_trade_prevention_type": "taker_at_cross",
             "reduce_only": True,
@@ -572,7 +584,7 @@ class KalshiClient:
             "client_order_id": client_order_id or str(uuid.uuid4()),
             "side": "ask",
             "count": f"{count:.2f}",
-            "price": f"{price_dollars:.4f}",
+            "price": f"{snap_price(price_dollars):.4f}",
             "time_in_force": "immediate_or_cancel",
             "self_trade_prevention_type": "taker_at_cross",
             "reduce_only": True,
