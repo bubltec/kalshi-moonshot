@@ -544,7 +544,8 @@ class ProfitWatcher:
                     continue
                 bar = spec.hunt_dollars_btc if spec.hunt_dollars_btc > 0 and h.ticker.split("-")[0].startswith("KXBTC") else spec.hunt_dollars
                 idx = 0 if side == "yes" else 1
-                d3 = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
+                window = max(1, int(round(spec.hunt_seconds)))
+                d3 = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(window) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
                 if d3 < bar:
                     continue
                 if spec.hunt_spike > 0 and _side_dollar_ratio(book, sec, idx) < spec.hunt_spike:
@@ -555,8 +556,8 @@ class ProfitWatcher:
                 if crashing or not _hunt_parked(h.quotes, side, now, ask, hi, spec.hunt_park_seconds, spec.hunt_park_high, spec.hunt_park_span):
                     continue
                 h.fired = True
-                reason = f"flip: ${d3:.0f} bought against the {'no' if side == 'yes' else 'yes'} favorite in 3 s (bar ${bar:.0f}), {side} costs {ask:.2f}"
-                ctx = {"dollars_3s": round(d3, 1), "bar": bar, "spike": round(_side_dollar_ratio(book, sec, idx), 1), "favorite": round(1.0 - cheap_mid, 3), "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name}
+                reason = f"flip: ${d3:.0f} bought against the {'no' if side == 'yes' else 'yes'} favorite in {window} s (bar ${bar:.0f}), {side} costs {ask:.2f}"
+                ctx = {"dollars_3s": round(d3, 1), "bar": bar, "spike": round(_side_dollar_ratio(book, sec, idx), 1), "favorite": round(1.0 - cheap_mid, 3), "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name, "trigger_ts": round(now, 3)}
                 self._buys.put(BuySignal("hunt", side, ask, reason, ctx, hunt=h, spec=spec))
                 return
             vol, base, ratio = _side_burst(book, sec, 0 if side == "yes" else 1)
@@ -578,7 +579,7 @@ class ProfitWatcher:
             h.fired = True
             reason = (f"burst hunt: {ratio:.0f}x {side}'s own normal volume ({vol:.0f} contracts in 3 s), {side} costs {ask:.2f}")
             ctx = {"ratio": round(ratio, 1), "with_3s": round(vol, 1), "normal_second": round(base, 1),
-                   "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name}
+                   "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name, "trigger_ts": round(now, 3)}
             self._buys.put(BuySignal("hunt", side, ask, reason, ctx, hunt=h, spec=spec))
             return
 

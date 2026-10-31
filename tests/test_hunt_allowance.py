@@ -41,3 +41,24 @@ def test_the_live_order_limit_is_the_ask_plus_the_plans_allowance(tmp_path, monk
     plan = buyer.hunt_plan(sp, "KXBTC15M-1", "yes", 0.15, 2_000_000_000.0, "r", {}, Venue())
     buyer.buy(plan, s, store)
     assert abs(seen["limit"] - 0.20) < 1e-9 and seen["count"] == 5.0
+
+
+def test_a_live_hunt_buy_records_when_it_was_sent_and_when_the_venue_answered(tmp_path, monkeypatch):
+    import time
+
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.store import Store
+
+    sp = spec(tmp_path, monkeypatch, hunt_allowance=0.05)
+    s = config.load()
+    store = Store(s.db_path)
+
+    class Venue:
+        authed = True
+
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    monkeypatch.setattr(runner, "place", lambda settings, client, st, shot, why, count, **kw: runner.Placed("bought", count, 0.4))
+    ctx = {"trigger_ts": time.time() - 0.2}
+    plan = buyer.hunt_plan(sp, "KXBTC15M-1", "yes", 0.15, 2_000_000_000.0, "r", ctx, Venue())
+    buyer.buy(plan, s, store)
+    assert ctx["trigger_ts"] <= ctx["sent_ts"] <= ctx["done_ts"]  # trigger to sent to answered, in order

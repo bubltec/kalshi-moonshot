@@ -110,6 +110,7 @@ class LaneSpec:
     burst_dollars: float = 0.0  # the burst EXIT of a lane with burst_exit, in dollars: sell the held 90c+ favorite in the last 120 s when at least this many dollars are bought against it in 3 s (0 = the older multiple-of-normal rule). Per family from burst_exit_study: crypto 400, currencies 50, metals/energy 400
     burst_dollars_btc: float = 0.0  # the same for BTC: a bar of its own, or -1 to keep the older rule (it beat holding by 5.3c on BTC; the dollar bar did not)
     hunt_dollars: float = 0.0  # a burst_hunt lane's trigger in dollars: a 90c+ favorite and at least this many dollars bought AGAINST it (the cheap side's takers) in 3 s, in the last 120 s; buy the cheap side. 0 = the older multiple-of-normal burst
+    hunt_seconds: float = 3.0  # the window the dollar bar counts over: the last this many seconds of dollars bought on the cheap side (3 = the original; 1 = the latest second alone, so it fires sooner and the same bar is a faster pace)
     hunt_dollars_btc: float = 0.0  # the same bar for BTC, whose volume is far larger (0 = the same bar as the others)
     hunt_favorite: float = 0.0  # a burst_hunt dollar trigger buys the cheap side only when the OTHER side is at least this priced (0 = no requirement; 0.90 was the flip study's 90c+ favorite). price[1] is then the only band: a 20c side is an 80c favorite
     hunt_spike: float = 0.0  # a dollar trigger also needs the last 3 s of dollars bought on the cheap side to be at least this multiple of that side's own normal 3 s (median second of the 2 minutes before). 0 = the dollar bar alone. On a market that is busy all the time (BTC) a fixed bar fires on ordinary trading; a multiple fires on a surge (scripts/spike_trigger_study.py)
@@ -379,7 +380,7 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "buy_max_move", "buy_retries", "buy_retry_chase",
+    "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
     "blackout_et", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
@@ -406,6 +407,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["drop_cents"], out["drop_seconds"], out["drop_was"] = repr(spec.drop_cents), repr(spec.drop_seconds), repr(spec.drop_was)
         if spec.drop_confirm or spec.drop_stay or spec.drop_window != 120.0 or spec.drop_buy or spec.drop_buy_max != 0.25:
             out["drop_confirm"], out["drop_stay"], out["drop_window"], out["drop_buy"], out["drop_buy_max"] = repr(spec.drop_confirm), repr(spec.drop_stay), repr(spec.drop_window), repr(spec.drop_buy), repr(spec.drop_buy_max)
+    if spec.hunt_seconds != 3.0:
+        out["hunt_seconds"] = repr(spec.hunt_seconds)
     if spec.bounce_fall:
         out["bounce_fall"], out["bounce_up"] = repr(spec.bounce_fall), repr(spec.bounce_up)
     if spec.burst_ratio:

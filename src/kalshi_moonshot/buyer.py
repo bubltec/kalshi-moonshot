@@ -132,9 +132,11 @@ def buy(plan: BuyPlan, s: Settings, store: Store) -> BuyResult:
     if live:
         shot = LongShot(tk, "", "", max(0.0, ask - 0.01), min(0.99, ask + plan.allowance), 0.0, plan.shot_close, max(0.0, (plan.close_ts - time.time()) / 3600.0),
                         lane=plan.decision_lane, series=plan.series, category=category(tk), event_ticker=tk.rsplit("-", 1)[0], side=plan.side)
+        plan.ctx["sent_ts"] = round(time.time(), 3)  # with the watcher's trigger_ts: trigger to order sent, and order sent to answer
         try:
             placed = runner.place(s, plan.venue, store, shot, reason, whole_contracts(plan.stake, ask, plan.allowance))
             filled, cost, note = placed.filled, placed.cost, placed.note
+            plan.ctx["done_ts"] = round(time.time(), 3)
             retryable = filled <= 0 and note.startswith(SENT_NOTHING)
         except KalshiRateLimited as exc:
             note, retryable = f"rate limited: {exc}", True  # refused outright: nothing was bought

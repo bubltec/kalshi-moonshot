@@ -1658,3 +1658,44 @@ def test_the_energy_moonshot_buys_a_cheap_side_that_just_fell_and_has_not_sat_th
     w._on_hunt(hunt("energy"), dataclasses.replace(specs["energy"], name="energy"), now, book, sec)
     assert bought == [("energy", "no", 0.16)]  # the dollar bar alone is enough
     assert specs["energy"].series == ("KXNATGAS15M",) and specs["energy"].burst_hunt  # and it is the same kind of lane, on its own series
+
+
+def test_the_flip_trigger_counts_the_dollar_bar_over_the_lanes_own_window(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import lanes
+
+    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
+    _buy_inline(w)
+    base = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.15), hunt_dollars=200.0, hunt_favorite=0.90, sides=("yes", "no"), fixed_stake=0.5, max_open=0)
+    bought = []
+    monkeypatch.setattr(w, "_hunt_buy", lambda h, sp, side, ask, reason, ctx: bought.append((side, ctx["bar"], reason)))
+    now = 1_000_000.0
+    sec = int(now)
+    book = {sec: [0.0, 1000.0, 0.0, 70.0], sec - 1: [0.0, 6000.0, 0.0, 420.0]}  # $70 in the latest second, $490 over the last two
+
+    def hunt():
+        h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)
+        h.quotes.extend((now - 20.0 + i, 0.93, 0.94) for i in range(21))
+        return h
+
+    w._on_hunt(hunt(), dataclasses.replace(base, hunt_seconds=1.0), now, book, sec)
+    assert bought == []  # the latest second alone is under the $200 bar
+    w._on_hunt(hunt(), dataclasses.replace(base, hunt_seconds=3.0), now, book, sec)
+    assert len(bought) == 1 and "in 3 s" in bought[0][2]  # the 3-second window sees the big second before it
+    book[sec] = [0.0, 3000.0, 0.0, 210.0]
+    bought.clear()
+    w._on_hunt(hunt(), dataclasses.replace(base, hunt_seconds=1.0), now, book, sec)
+    assert len(bought) == 1 and "in 1 s" in bought[0][2] and bought[0][1] == 200.0
+
+
+def test_a_lane_on_the_default_window_keeps_its_version_and_a_changed_one_does_not(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import lanes
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    spec = lanes.spec_for(s, "moonshot")
+    assert "hunt_seconds" not in lanes.settings_of(spec, s)
+    assert "hunt_seconds" in lanes.settings_of(dataclasses.replace(spec, hunt_seconds=1.0), s)
