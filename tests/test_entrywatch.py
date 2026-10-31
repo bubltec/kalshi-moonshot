@@ -344,3 +344,29 @@ def test_a_late_lane_ignores_ticks_outside_minutes_12_to_14():
     w, spec, info = _late_watcher(lambda sec: 100.0 + (900 - sec) * 0.01 + _wiggle(sec))
     _tick(w, spec, info, 40, 120.0)  # 14.3 minutes in: too late
     assert w._arm_jobs.empty() and not w._late_done
+
+
+def test_prune_forgets_markets_that_are_over_and_keeps_live_ones():
+    w, spec, info = _late_watcher(lambda sec: 100.0)
+    now = CLOSE + 1000.0
+    w._hist["OLD"] = entrywatch.deque([(now - 500.0, 0.4, 0.5)], maxlen=400)
+    w._hist["LIVE"] = entrywatch.deque([(now - 5.0, 0.4, 0.5)], maxlen=400)
+    w._late_done[("x", "OLD")] = CLOSE  # closed 1000 s ago
+    w._late_done[("x", "LIVE")] = now + 100.0
+    w._late_state[("x", "OLD")] = {"close": CLOSE}
+    w._late_state[("x", "LIVE")] = {"close": now + 100.0}
+    w._moved[("x", "OLD")] = now - 4000.0
+    w._moved[("x", "LIVE")] = now - 10.0
+    w._armed[("x", "OLD", "yes")] = {"t": now - 4000.0, "shot": None, "offered": 0.0}
+    w.prune(now)
+    assert list(w._hist) == ["LIVE"] and list(w._late_done) == [("x", "LIVE")] and list(w._late_state) == [("x", "LIVE")]
+    assert list(w._moved) == [("x", "LIVE")] and not w._armed
+    assert len(w._idx["BRTI"]) > 0  # the index rings are bounded by their length, not pruned
+
+
+def test_the_refresh_thread_prunes_every_pass():
+    w = entrywatch.EntryWatcher(lambda: None, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
+    w._hist["GONE"] = entrywatch.deque([(1.0, 0.4, 0.5)], maxlen=400)
+    w.refresh = lambda: w._stop.set()  # type: ignore[method-assign]
+    w._run_refresh()
+    assert "GONE" not in w._hist

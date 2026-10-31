@@ -111,7 +111,7 @@ class EntryWatcher:
         self._arm_jobs: queue.SimpleQueue[tuple[Any, ...]] = queue.SimpleQueue()  # ("warm", key) / ("fire", key, shot) / ("move", key, ts, was, now)
         self._idx: dict[str, deque[tuple[float, float]]] = {}  # settlement index id -> (time, value), about a second apart: the late lane reads the whole window from it
         self._late_state: dict[tuple[str, str], dict[str, Any]] = {}  # (lane, ticker) -> the trend and the coin's usual move, fixed once at minute 12
-        self._late_done: set[tuple[str, str]] = set()  # one look per market: the first new extreme, bought or not
+        self._late_done: dict[tuple[str, str], float] = {}  # (lane, ticker) -> the market's close time: one look per market, the first new extreme, bought or not
         self._moved: dict[tuple[str, str], float] = {}  # (lane, ticker) -> when a move last queued a buy
 
     # ---- socket side: must be fast and never raise ----
@@ -147,6 +147,25 @@ class EntryWatcher:
             if in_band(spec, float(e["bid"]), float(e["ask"])) and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 self._pending.add(key)
                 self._jobs.put(key)
+
+    def prune(self, now: float | None = None) -> None:
+        """Forget what belongs to markets that are over, so nothing grows with the days. Run by the refresh thread every few seconds. A market's quote history goes two minutes after its last quote, its late-trend look
+        and state a few minutes after its close, and a stale arm or move marker an hour after it was made. The settlement index rings hold a fixed number of ticks."""
+        now = time.time() if now is None else now
+        with self._lock:
+            for tk in [tk for tk, rows in self._hist.items() if not rows or rows[-1][0] < now - 120.0]:
+                self._hist.pop(tk, None)
+            for k in [k for k, close in self._late_done.items() if close < now - 300.0]:
+                self._late_done.pop(k, None)
+                self._late_state.pop(k, None)
+            for k in [k for k, x in self._late_state.items() if x["close"] < now - 300.0]:
+                self._late_state.pop(k, None)
+            for k in [k for k, when in self._moved.items() if when < now - 3600.0]:
+                self._moved.pop(k, None)
+            for k in [k for k, when in self._last.items() if when < now - 3600.0]:
+                self._last.pop(k, None)
+            for k in [k for k, arm in self._armed.items() if now - float(arm.get("t") or 0.0) > 3600.0]:
+                self._armed.pop(k, None)
 
     def _on_index(self, e: dict[str, Any]) -> None:
         """A settlement index tick: remember it and let each late-trend lane look at the markets that index settles."""
@@ -204,14 +223,10 @@ class EntryWatcher:
         if st is None:
             st = self._late_prepare(idx, spec, close)
             if st is None or st["trend"] == "mixed":
-                self._late_done.add(key)
+                self._late_done[key] = close
                 log.info("entry watcher: %s %s: %s", lane, ticker, "no index history for the trend" if st is None else f"mixed trend ({st['ups']} up, {st['downs']} down), passed")
                 return
             self._late_state[key] = st
-            if len(self._late_state) > 400:  # a market is looked at for 2 minutes: drop the old ones
-                for k in [k for k, x in self._late_state.items() if x["close"] < ts - 3600]:
-                    self._late_state.pop(k, None)
-                    self._late_done.discard(k)
         prior = [x for t, x in self._idx[idx] if close - 900.0 <= t < ts]
         if not prior:
             return
@@ -221,7 +236,7 @@ class EntryWatcher:
             side = "no"
         else:
             return
-        self._late_done.add(key)
+        self._late_done[key] = close
         z = math.log(v / strike) / (st["sigma"] * math.sqrt(max(close - ts, 1.0)))
         sig = {"trend": st["trend"], "ups": st["ups"], "downs": st["downs"], "z": round(z, 2), "index": v, "strike": strike, "minute": round(minute, 2), "ts": round(ts, 3)}
         if abs(z) < spec.late_min_z:
@@ -461,6 +476,7 @@ class EntryWatcher:
         while not self._stop.is_set():
             try:
                 self.refresh()
+                self.prune()
             except Exception:
                 log.exception("entry watcher: refresh failed")
             self._stop.wait(REFRESH_EVERY)

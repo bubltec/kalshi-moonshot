@@ -1126,6 +1126,9 @@ class ProfitWatcher:
         hunt_by = {ser: spec for spec in enabled_lanes(s) if spec.burst_hunt for ser in spec.series}
         with self._lock:
             self.targets = fresh
+            for k in [k for k in self._soft_holds if k not in fresh]:
+                self._soft_holds.pop(k, None)  # a bet that settled or was sold with a soft hold pending
+            self._inflight.intersection_update(fresh)  # a sale signal for a market that has since ended
             self._hunt_by_series = hunt_by
             for tk in [tk for tk, h in self._hunts.items() if tk.split("-")[0] not in hunt_by]:
                 del self._hunts[tk]
