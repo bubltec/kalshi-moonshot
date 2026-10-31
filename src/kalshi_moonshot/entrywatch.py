@@ -15,7 +15,9 @@ Nothing here starts unless a tiered lane sets `entry_socket`.
 
 from __future__ import annotations
 
+import bisect
 import logging
+import math
 import queue
 import threading
 import time
@@ -29,6 +31,7 @@ from . import runner
 from .config import Settings
 from .estimators import Estimator
 from .kalshi import KalshiClient, KalshiError
+from .kalshiws import index_for_series
 from .lanes import LaneSpec, in_blackout, lane_specs, tiered
 from .store import Store
 from .strategy import LongShot
@@ -106,10 +109,16 @@ class EntryWatcher:
         self._hist: dict[str, deque[tuple[float, float, float]]] = {}  # ticker -> (time, YES bid, YES ask), the last half minute
         self._armed: dict[tuple[str, str, str], dict[str, Any]] = {}  # (lane, ticker, side) -> {"t": when armed, "shot": the prepared shot or None while it is being prepared}
         self._arm_jobs: queue.SimpleQueue[tuple[Any, ...]] = queue.SimpleQueue()  # ("warm", key) / ("fire", key, shot) / ("move", key, ts, was, now)
+        self._idx: dict[str, deque[tuple[float, float]]] = {}  # settlement index id -> (time, value), about a second apart: the late lane reads the whole window from it
+        self._late_state: dict[tuple[str, str], dict[str, Any]] = {}  # (lane, ticker) -> the trend and the coin's usual move, fixed once at minute 12
+        self._late_done: set[tuple[str, str]] = set()  # one look per market: the first new extreme, bought or not
         self._moved: dict[tuple[str, str], float] = {}  # (lane, ticker) -> when a move last queued a buy
 
     # ---- socket side: must be fast and never raise ----
     def on_event(self, e: dict[str, Any]) -> None:
+        if e.get("kind") == "index" and e.get("index_id") and e.get("value"):
+            self._on_index(e)
+            return
         if e.get("kind") != "quote" or e.get("bid") is None or e.get("ask") is None:
             return
         keys = quote_keys(str(e["ticker"]))
@@ -124,6 +133,8 @@ class EntryWatcher:
             spec = specs.get(lane)
             if spec is None or not spec.enabled or not spec.entry_socket:
                 continue
+            if spec.late_steps > 0:
+                continue  # a late-trend lane buys on the index's ticks (_on_index), never on a quote entering a band
             if spec.entry_move > 0:
                 self._move(e, lane, spec, info, now)  # a move lane never takes the ask: its only entry is the resting buy after a move
                 continue
@@ -136,6 +147,111 @@ class EntryWatcher:
             if in_band(spec, float(e["bid"]), float(e["ask"])) and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 self._pending.add(key)
                 self._jobs.put(key)
+
+    def _on_index(self, e: dict[str, Any]) -> None:
+        """A settlement index tick: remember it and let each late-trend lane look at the markets that index settles."""
+        idx, ts, v = str(e["index_id"]), float(e["ts"]), float(e["value"])
+        self._idx.setdefault(idx, deque(maxlen=2400)).append((ts, v))
+        specs = lane_specs(self.get_settings())
+        with self._lock:
+            hits = [(lane, info) for (lane, _ev), info in self.watch.items()]
+        for lane, info in hits:
+            spec = specs.get(lane)
+            if spec is not None and spec.enabled and spec.late_steps > 0 and index_for_series(str(info.get("series", ""))) == idx:
+                self._late(lane, spec, info, idx, ts, v)
+
+    def _late_prepare(self, idx: str, spec: LaneSpec, close: float) -> dict[str, Any] | None:
+        """The trend over minutes 9-12 (a vote over `late_steps` equal steps) and the coin's usual 1 s move over the same span. None when the index has no ticks that far back (the bot started late)."""
+        ticks = list(self._idx.get(idx, ()))
+        ts = [t for t, _ in ticks]
+
+        def at(t: float) -> float | None:
+            i = bisect.bisect_right(ts, t) - 1
+            return ticks[i][1] if i >= 0 and t - ts[i] <= 5.0 else None
+
+        start, end = int(close - 360), int(close - 180)
+        pts = [at(start + 180.0 * k / spec.late_steps) for k in range(spec.late_steps + 1)]
+        secs = [at(t) for t in range(start, end + 1)]
+        if any(p is None for p in pts) or sum(1 for x in secs if x is None) > 20:
+            return None
+        rets = [math.log(b / a) for a, b in zip(secs, secs[1:]) if a and b]
+        if len(rets) < 100:
+            return None
+        mean = sum(rets) / len(rets)
+        sigma = (sum((r - mean) ** 2 for r in rets) / len(rets)) ** 0.5
+        if sigma <= 0:
+            return None
+        ups = sum(1 for a, b in zip(pts, pts[1:]) if b > a)
+        downs = sum(1 for a, b in zip(pts, pts[1:]) if b < a)
+        need = spec.late_agree or spec.late_steps // 2 + 1
+        trend = "up" if ups >= need and ups > downs else "down" if downs >= need and downs > ups else "mixed"
+        return {"trend": trend, "sigma": sigma, "ups": ups, "downs": downs, "close": close}
+
+    def _late(self, lane: str, spec: LaneSpec, info: dict[str, Any], idx: str, ts: float, v: float) -> None:
+        """Between late_from_minute and late_to_minute: the first index tick that sets a new high of the whole window with a trend up and the index over the strike (or a new low, trend down, under it) is the signal. It buys when the distance
+        from the strike, in the coin's usual moves over the time left, is at least late_min_z. The first such tick ends the look at this market whether it buys or not (the replay's rule)."""
+        ticker, strike = str(info.get("ticker") or ""), info.get("strike")
+        try:
+            close = datetime.fromisoformat(str(info.get("close"))).timestamp()
+            strike = float(strike)
+        except (TypeError, ValueError):
+            return
+        key = (lane, ticker)
+        minute = (ts - (close - 900.0)) / 60.0
+        if not ticker or key in self._late_done or not spec.late_from_minute <= minute <= spec.late_to_minute:
+            return
+        st = self._late_state.get(key)
+        if st is None:
+            st = self._late_prepare(idx, spec, close)
+            if st is None or st["trend"] == "mixed":
+                self._late_done.add(key)
+                log.info("entry watcher: %s %s: %s", lane, ticker, "no index history for the trend" if st is None else f"mixed trend ({st['ups']} up, {st['downs']} down), passed")
+                return
+            self._late_state[key] = st
+            if len(self._late_state) > 400:  # a market is looked at for 2 minutes: drop the old ones
+                for k in [k for k, x in self._late_state.items() if x["close"] < ts - 3600]:
+                    self._late_state.pop(k, None)
+                    self._late_done.discard(k)
+        prior = [x for t, x in self._idx[idx] if close - 900.0 <= t < ts]
+        if not prior:
+            return
+        if st["trend"] == "up" and v > max(prior) and v > strike:
+            side = "yes"
+        elif st["trend"] == "down" and v < min(prior) and v < strike:
+            side = "no"
+        else:
+            return
+        self._late_done.add(key)
+        z = math.log(v / strike) / (st["sigma"] * math.sqrt(max(close - ts, 1.0)))
+        sig = {"trend": st["trend"], "ups": st["ups"], "downs": st["downs"], "z": round(z, 2), "index": v, "strike": strike, "minute": round(minute, 2), "ts": round(ts, 3)}
+        if abs(z) < spec.late_min_z:
+            log.info("entry watcher: %s %s: new extreme but z %.2f is under %.2f, passed", lane, ticker, z, spec.late_min_z)
+            return
+        self._arm_jobs.put(("late", (lane, ticker, side), sig))
+
+    def _late_fire(self, key: tuple[str, str, str], sig: dict[str, Any]) -> None:
+        """Run the lane's review for the market and queue the buy (an ordinary evaluation: the ask, taker) for the side the signal chose."""
+        from .jobs import Jobs
+
+        lane, ticker, side = key
+        s = self.get_settings()
+        spec = lane_specs(s).get(lane)
+        if spec is None:
+            return
+        store = self.store_factory()
+        if lane_full(store, spec, quote_keys(ticker)):
+            return
+        for shot in runner.review_lane(s, self._book(lane), store, spec, self.estimators(store), only=quote_keys(ticker)):
+            if shot.ticker == ticker and shot.side == side:
+                made = Jobs(store).enqueue(
+                    "evaluate", {"shot": asdict(shot), "late": sig}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
+                    expires_in=60.0, max_attempts=s.job_max_attempts, priority=spec.priority,
+                )
+                line = f"{lane} {ticker} {side}: new window extreme, {sig['trend']} trend ({sig['ups']} up {sig['downs']} down), z {sig['z']}; evaluation {'queued' if made else 'already queued'}"
+                log.info("entry watcher: %s", line)
+                self.reviewed.append(line)
+                return
+        log.info("entry watcher: %s %s %s: signal, but the review offered no shot (price band or spread)", lane, ticker, side)
 
     def _move(self, e: dict[str, Any], lane: str, spec: LaneSpec, info: dict[str, Any], now: datetime) -> None:
         """A YES mid that has moved `entry_move` within `entry_move_seconds` and is at the far end of that move: queue a resting buy of the side that fell (YES fell: buy YES; YES rose: NO fell, buy NO)."""
@@ -264,7 +380,9 @@ class EntryWatcher:
             except queue.Empty:
                 continue
             try:
-                if job[0] == "move":
+                if job[0] == "late":
+                    self._late_fire(job[1], job[2])
+                elif job[0] == "move":
                     self._move_fire(job[1], job[2], job[3], job[4])
                 elif job[0] == "warm":
                     self._warm(job[1])

@@ -199,6 +199,11 @@ class LaneSpec:
     entry_move: float = 0.0  # a socket move trigger: when YES moves this many dollars within entry_move_seconds either way, rest a buy on the side that FELL (a YES fall buys YES, a YES rise buys NO). Needs entry_socket; the taker path is off for the lane (0 = off)
     entry_move_seconds: float = 3.0  # the span the move is measured over
     entry_move_below: float = 0.02  # the move buy rests this far under the fallen side's ask (post-only, no taker fee if it fills) for entry_arm_seconds
+    late_steps: int = 0  # a late-window trend lane (entrywatch.py): the settlement index over minutes 9-12 is sampled in this many equal steps (odd, so no split vote); 0 = off
+    late_agree: int = 0  # steps that must agree for a trend (0 = a bare majority). Fewer than this is "mixed": the lane passes
+    late_min_z: float = 0.8  # the index's distance from the strike, in units of the coin's usual move over the time left (sigma over minutes 9-12 times the square root of seconds left), on the trend's side
+    late_from_minute: float = 12.0  # the buy is the first time in this part of the window that the index sets a new high of the whole window (up trend, above the strike) or a new low (down trend, below it)
+    late_to_minute: float = 14.0
     entry_min_gap_seconds: float = 2.0  # ... but not the same event more often than this
     buy_max_move: float = 0.0  # skip a buy when the order book's ask on the side has FALLEN more than this many dollars under the ask the decision was made at (0 = off). A job can wait many seconds behind the shared request budget between deciding and ordering; a Gold NO decided at 0.86 was bought at 0.24 eight seconds before the close, after the side had collapsed
     buy_retries: int = 0  # when an immediate buy fills nothing, read the book again and send it once more, up to this many times, right away (0 = no retry). The next signal on the market comes a median 108 s later and about 3.7c dearer
@@ -322,6 +327,8 @@ def lane_specs_from(s: Settings, strategies_toml: str | None) -> dict[str, LaneS
                 f"lane {spec.name!r}: review_minutes needs `series` or `needs_instrument`, "
                 "because a fast pass can only fetch what it can name"
             )
+        if spec.late_steps and (spec.late_steps < 3 or spec.late_steps % 2 == 0 or spec.late_agree > spec.late_steps or not spec.entry_socket):
+            raise ValueError(f"lane {spec.name!r}: late_steps must be an odd number of 3 or more, late_agree at most that, and entry_socket on")
         if spec.entry_socket and not tiered(spec):
             raise ValueError(f"lane {spec.name!r}: entry_socket needs review_minutes, because it re-runs that lane's review")
     if not s.paper_lanes and s.live_lanes is not None:
@@ -384,7 +391,7 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "entry_move", "entry_move_seconds", "entry_move_below", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
+    "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "entry_move", "entry_move_seconds", "entry_move_below", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
     "blackout_et", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
@@ -415,6 +422,9 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["hunt_seconds"] = repr(spec.hunt_seconds)
     if spec.entry_move:
         out["entry_move"], out["entry_move_seconds"], out["entry_move_below"] = repr(spec.entry_move), repr(spec.entry_move_seconds), repr(spec.entry_move_below)
+    if spec.late_steps:
+        out["late_steps"], out["late_agree"], out["late_min_z"] = repr(spec.late_steps), repr(spec.late_agree), repr(spec.late_min_z)
+        out["late_from_minute"], out["late_to_minute"] = repr(spec.late_from_minute), repr(spec.late_to_minute)
     if spec.scalp_plateau_seconds:
         out["scalp_plateau_seconds"] = repr(spec.scalp_plateau_seconds)
     if spec.bounce_fall:

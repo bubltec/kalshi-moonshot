@@ -280,7 +280,7 @@ def scope_lane(
             if lane_reject_reason(m, relaxed, s, now) is None:
                 found.setdefault(
                     m["event_ticker"],
-                    {"close": m.get("close_time", ""), "category": category, "series": series},
+                    {"close": m.get("close_time", ""), "category": category, "series": series, "ticker": m.get("ticker", ""), "strike": m.get("floor_strike")},
                 )
     if names and failed == len(names):
         raise KalshiError(f"scope {spec.name}: every series fetch failed")

@@ -286,3 +286,61 @@ def test_move_settings_do_not_change_other_lanes_versions():
 def config_stub():
     from kalshi_moonshot import config
     return config.load()
+
+
+CLOSE = 100_000.0
+
+
+def _late_watcher(path, strike=100.0, agree=4):
+    """A watcher that has seen one index tick a second from the window's open to minute 12, following `path(t)` (seconds before the close -> index value)."""
+    w = entrywatch.EntryWatcher(lambda: None, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
+    spec = lanes.LaneSpec("x", "ladder", "x", (0.5, 0.99), (0, 0.1), 0.10, 0.0, sides=("yes", "no"), late_steps=5, late_agree=agree, late_min_z=0.8)
+    ring = w._idx.setdefault("BRTI", entrywatch.deque(maxlen=2400))
+    for sec in range(900, 180, -1):
+        ring.append((CLOSE - sec, path(sec)))
+    info = {"close": datetime.fromtimestamp(CLOSE, UTC).isoformat(), "ticker": "KXBTC15M-X", "strike": strike, "series": "KXBTC15M"}
+    return w, spec, info
+
+
+def _wiggle(sec):
+    return 0.002 * ((sec * 7919) % 13 - 6)  # a small, repeatable jitter so the coin has a usual move
+
+
+def _tick(w, spec, info, sec_left, value):
+    w._idx["BRTI"].append((CLOSE - sec_left, value))
+    w._late("x", spec, info, "BRTI", CLOSE - sec_left, value)
+
+
+def test_a_steady_climb_over_the_strike_buys_yes_at_the_first_new_high():
+    w, spec, info = _late_watcher(lambda sec: 100.0 + max(0, 700 - sec) * 0.004 + _wiggle(sec) if sec > 360 else 100.0 + (360 - sec) * 0.012 + 2.8 + _wiggle(sec))
+    top = max(x for _, x in w._idx["BRTI"])
+    _tick(w, spec, info, 170, top + 0.5)  # a new high of the whole window, well over the strike
+    job = w._arm_jobs.get_nowait()
+    assert job[0] == "late" and job[1] == ("x", "KXBTC15M-X", "yes") and job[2]["trend"] == "up" and job[2]["z"] >= 0.8
+    _tick(w, spec, info, 160, top + 1.0)  # one look per market
+    assert w._arm_jobs.empty()
+
+
+def test_a_falling_history_buys_no_when_the_index_sets_a_new_low_under_the_strike():
+    w, spec, info = _late_watcher(lambda sec: 100.0 - max(0, 700 - sec) * 0.004 + _wiggle(sec) if sec > 360 else 100.0 - (360 - sec) * 0.012 - 2.8 + _wiggle(sec), strike=100.0)
+    low = min(x for _, x in w._idx["BRTI"])
+    _tick(w, spec, info, 170, low - 0.5)
+    assert w._arm_jobs.get_nowait()[1][2] == "no"
+
+
+def test_a_choppy_history_is_passed_and_so_is_a_new_extreme_too_close_to_the_strike():
+    w, spec, info = _late_watcher(lambda sec: 100.0 + (0.05 if (sec // 36) % 2 else -0.05) + _wiggle(sec))
+    _tick(w, spec, info, 170, 101.0)
+    assert w._arm_jobs.empty() and ("x", "KXBTC15M-X") in w._late_done  # a 3-2 or worse vote is mixed: no buy
+    climb = lambda sec: 100.0 + max(0, 700 - sec) * 0.004 + _wiggle(sec) if sec > 360 else 100.0 + (360 - sec) * 0.012 + 2.8 + _wiggle(sec)  # noqa: E731
+    w2, spec, info = _late_watcher(climb)
+    top = max(x for _, x in w2._idx["BRTI"])
+    info["strike"] = top  # the new high is only a hair over the strike: far under 0.8 of a usual move
+    _tick(w2, spec, info, 170, top + 0.0015)
+    assert w2._arm_jobs.empty() and ("x", "KXBTC15M-X") in w2._late_done
+
+
+def test_a_late_lane_ignores_ticks_outside_minutes_12_to_14():
+    w, spec, info = _late_watcher(lambda sec: 100.0 + (900 - sec) * 0.01 + _wiggle(sec))
+    _tick(w, spec, info, 40, 120.0)  # 14.3 minutes in: too late
+    assert w._arm_jobs.empty() and not w._late_done
