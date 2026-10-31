@@ -165,6 +165,7 @@ class LaneSpec:
     scalp_dip: float = 0.03  # sell when the bid is this far under that high...
     scalp_dip_hard: float = 0.0  # a fall this far under the high sells at once, without waiting scalp_dip_seconds: in a sharp reversal the bid keeps falling while the wait runs (0 = off). 6c was best in scripts/scalp_dip_study.py
     scalp_dip_seconds: float = 3.0  # ...and has stayed that far under it for this many seconds (0 = on the first print). A dip that recovers sooner is noise, not a reversal
+    scalp_plateau_seconds: float = 0.0  # once armed, sell when the bid has made no new high for this many seconds (a plateau) and is still at or over the arm (0 = off)
     rest_sell: bool = False  # rest the take-profit sell on the book from the moment a live buy fills (post-only, so no taker fee) instead of having the watcher cross the book when the bid gets there; needs take_profit_x or take_profit_at. A stop or crash exit cancels it first and sells what is left
     trail_activate: float = 0.0  # peak-crash exit, when trail_progress is 0: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
     trail_progress: float | None = None  # arm the crash exit once the bid has covered this share of the way from the price paid to $1.00; None = the global CRASH_PROGRESS, 0 = use trail_activate (a gain on the price paid) instead
@@ -195,6 +196,9 @@ class LaneSpec:
     entry_socket: bool = False  # two-level lanes: also re-review a watched event the moment a streamed quote puts a side in the price band (entrywatch.py)
     entry_approach: float = 0.0  # arm a side when its price is within this many dollars UNDER the lane's floor and gaining (entrywatch.py). The watch then rests a buy AT the floor; it is not a take of the ask (0 = off)
     entry_arm_seconds: float = 30.0  # the resting floor bid is canceled after this many seconds if it has not filled. An arm that never got its bid out is dropped then too, and may be armed again
+    entry_move: float = 0.0  # a socket move trigger: when YES moves this many dollars within entry_move_seconds either way, rest a buy on the side that FELL (a YES fall buys YES, a YES rise buys NO). Needs entry_socket; the taker path is off for the lane (0 = off)
+    entry_move_seconds: float = 3.0  # the span the move is measured over
+    entry_move_below: float = 0.02  # the move buy rests this far under the fallen side's ask (post-only, no taker fee if it fills) for entry_arm_seconds
     entry_min_gap_seconds: float = 2.0  # ... but not the same event more often than this
     buy_max_move: float = 0.0  # skip a buy when the order book's ask on the side has FALLEN more than this many dollars under the ask the decision was made at (0 = off). A job can wait many seconds behind the shared request budget between deciding and ordering; a Gold NO decided at 0.86 was bought at 0.24 eight seconds before the close, after the side had collapsed
     buy_retries: int = 0  # when an immediate buy fills nothing, read the book again and send it once more, up to this many times, right away (0 = no retry). The next signal on the market comes a median 108 s later and about 3.7c dearer
@@ -380,7 +384,7 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
+    "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "entry_move", "entry_move_seconds", "entry_move_below", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
     "blackout_et", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
@@ -409,6 +413,10 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
             out["drop_confirm"], out["drop_stay"], out["drop_window"], out["drop_buy"], out["drop_buy_max"] = repr(spec.drop_confirm), repr(spec.drop_stay), repr(spec.drop_window), repr(spec.drop_buy), repr(spec.drop_buy_max)
     if spec.hunt_seconds != 3.0:
         out["hunt_seconds"] = repr(spec.hunt_seconds)
+    if spec.entry_move:
+        out["entry_move"], out["entry_move_seconds"], out["entry_move_below"] = repr(spec.entry_move), repr(spec.entry_move_seconds), repr(spec.entry_move_below)
+    if spec.scalp_plateau_seconds:
+        out["scalp_plateau_seconds"] = repr(spec.scalp_plateau_seconds)
     if spec.bounce_fall:
         out["bounce_fall"], out["bounce_up"] = repr(spec.bounce_fall), repr(spec.bounce_up)
     if spec.burst_ratio:

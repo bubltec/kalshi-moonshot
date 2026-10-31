@@ -226,3 +226,63 @@ def test_arming_a_side_in_a_full_lane_prepares_no_shot(tmp_path):
     w._armed[key] = {"t": time.time(), "shot": None, "offered": 0.0}
     w._warm(key)
     assert client.calls == [] and w._armed[key]["shot"] is None
+
+
+def _move_watcher(**kw):
+    w = entrywatch.EntryWatcher(lambda: None, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
+    spec = lanes.LaneSpec("x", "ladder", "x", (0.03, 0.70), (0, 1), 0.06, 0.0, sides=("yes", "no"), entry_move=0.40, entry_move_seconds=3.0, entry_arm_seconds=10.0, **kw)
+    return w, spec
+
+
+def test_a_40c_fall_in_3s_queues_a_buy_of_yes_and_a_40c_rise_a_buy_of_no():
+    now = datetime.now(UTC)
+    w, spec = _move_watcher()
+    _feed(w, 100.0, 0.84, 0.86)
+    w._move(_feed(w, 101.0, 0.60, 0.62), "x", spec, {}, now)  # 24c: not enough
+    assert w._arm_jobs.empty()
+    w._move(_feed(w, 102.5, 0.44, 0.46), "x", spec, {}, now)  # 40c under the 0.85 mid of 2.5 s ago
+    job = w._arm_jobs.get_nowait()
+    assert job[0] == "move" and job[1] == ("x", "KXBTC15M-1", "yes") and job[3] == pytest.approx(0.85) and job[4] == pytest.approx(0.45)
+    w2, spec = _move_watcher()
+    _feed(w2, 100.0, 0.14, 0.16)
+    w2._move(_feed(w2, 102.0, 0.54, 0.56), "x", spec, {}, now)  # YES up 40c: NO fell, so buy NO
+    assert w2._arm_jobs.get_nowait()[1][2] == "no"
+
+
+def test_a_slow_move_or_a_repeat_queues_nothing():
+    now = datetime.now(UTC)
+    w, spec = _move_watcher()
+    _feed(w, 100.0, 0.84, 0.86)
+    w._move(_feed(w, 104.0, 0.44, 0.46), "x", spec, {}, now)  # 40c, but over 4 s: the 3 s span only sees the end
+    assert w._arm_jobs.empty()
+    w._move(_feed(w, 105.0, 0.20, 0.22), "x", spec, {}, now)  # 24c from the 0.45 mid a second ago; the 0.85 is 5 s back, outside the span
+    assert w._arm_jobs.empty()
+    w2, spec = _move_watcher()
+    _feed(w2, 100.0, 0.84, 0.86)
+    w2._move(_feed(w2, 101.0, 0.44, 0.46), "x", spec, {}, now)
+    assert not w2._arm_jobs.empty()
+    w2._arm_jobs.get_nowait()
+    w2._move(_feed(w2, 102.0, 0.30, 0.32), "x", spec, {}, now)  # still falling: one buy per rest window
+    assert w2._arm_jobs.empty()
+
+
+def test_a_move_lane_never_takes_the_ask_and_a_side_it_does_not_trade_is_skipped():
+    now = datetime.now(UTC)
+    w, spec = _move_watcher()
+    spec = lanes.LaneSpec(**{**spec.__dict__, "sides": ("no",)})
+    _feed(w, 100.0, 0.84, 0.86)
+    w._move(_feed(w, 101.0, 0.44, 0.46), "x", spec, {}, now)  # YES fell: that would be a YES buy
+    assert w._arm_jobs.empty()
+
+
+def test_move_settings_do_not_change_other_lanes_versions():
+    plain = lanes.LaneSpec("x", "ladder", "x", (0.1, 0.9), (0, 1), 0.05, 0.0)
+    assert "entry_move" not in lanes.settings_of(plain, config_stub()) and "scalp_plateau_seconds" not in lanes.settings_of(plain, config_stub())
+    moved = lanes.LaneSpec("x", "ladder", "x", (0.1, 0.9), (0, 1), 0.05, 0.0, entry_move=0.4, scalp_plateau_seconds=10)
+    out = lanes.settings_of(moved, config_stub())
+    assert out["entry_move"] == "0.4" and out["scalp_plateau_seconds"] == "10"
+
+
+def config_stub():
+    from kalshi_moonshot import config
+    return config.load()

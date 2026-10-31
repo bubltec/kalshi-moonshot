@@ -140,6 +140,8 @@ class Target:
     scalp_dip_seconds: float = LaneSpec.scalp_dip_seconds  # the dip must hold this long before it sells (lane scalp_dip_seconds)
     scalp_dip_since: float | None = None  # when the bid first went scalp_dip under the high and has stayed there
     scalp_high: float = 0.0  # the highest bid since the arm printed
+    scalp_high_ts: float = 0.0  # when that high last rose
+    scalp_plateau: float = 0.0  # lane scalp_plateau_seconds: sell a bid that has made no new high for this long (0 = off)
     index_id: str = ""  # the settlement index of this market
     settle_checked: float = 0.0  # the guard looks at most once a second
     cur_bid: float = 0.0  # the latest bid and the opposite side's ask, from the socket
@@ -867,10 +869,14 @@ class ProfitWatcher:
         if arm <= 0 or t.scalp_dip <= 0 or bid <= 0:
             return None
         if bid + 1e-9 >= arm:
+            if bid > t.scalp_high + 1e-9 or t.scalp_high_ts <= 0:
+                t.scalp_high_ts = now
             t.scalp_high = max(t.scalp_high, bid)
         hit = scalp_hit(bid, t.scalp_high, arm, t.scalp_dip)
         if hit is None:
             t.scalp_dip_since = None
+            if t.scalp_plateau > 0 and t.scalp_high >= arm - 1e-9 and bid + 1e-9 >= arm and t.scalp_high_ts > 0 and now - t.scalp_high_ts >= t.scalp_plateau:
+                return f"scalp: plateau, no new high over {t.scalp_high:.2f} for {now - t.scalp_high_ts:.0f}s, bid {bid:.2f}"
             return None
         if t.scalp_dip_seconds <= 0:
             return hit
@@ -1001,7 +1007,7 @@ class ProfitWatcher:
             targets = list(self.targets.values())
         for t in targets:
             key = (t.ticker, t.lane)
-            if t.scalp_dip_since is not None and t.last_ts and key not in self._inflight:
+            if (t.scalp_dip_since is not None or (t.scalp_plateau > 0 and t.scalp_high_ts > 0)) and t.last_ts and key not in self._inflight:
                 why = self._scalp(t, t.last_bid, now)  # a dip that has held 3 s while no quote arrived
                 if why:
                     self._inflight.add(key)
@@ -1091,6 +1097,7 @@ class ProfitWatcher:
             held.cross_gap = spec.stop_cross_gap
             held.scalp_at, held.scalp_up, held.scalp_dip, held.scalp_dip_seconds = spec.scalp_at, spec.scalp_up, spec.scalp_dip, spec.scalp_dip_seconds
             held.scalp_dip_hard = spec.scalp_dip_hard
+            held.scalp_plateau = spec.scalp_plateau_seconds
             if row["close_time"] and str(row["ticker"]).split("-")[0].endswith("15M"):
                 with contextlib.suppress(TypeError, ValueError):
                     close = datetime.fromisoformat(row["close_time"]).timestamp()

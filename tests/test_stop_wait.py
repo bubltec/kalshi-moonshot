@@ -486,3 +486,26 @@ def test_with_no_fresh_kalshi_quote_the_sale_goes_ahead(tmp_path, monkeypatch):
     w.on_event(poly_quote(0.15, base + 400))  # the tape's quote is minutes old by now
     w.on_event(poly_quote(0.15, base + 460))
     assert not w._jobs.empty()
+
+
+def test_a_plateau_sells_once_armed_and_a_new_high_restarts_the_clock(tmp_path, monkeypatch):
+    w, t, base = _scalp_target(tmp_path, monkeypatch, seconds=0.0)
+    t.scalp_plateau = 10.0
+    t.scalp_dip = 0.05  # a wide dip, so only the plateau can sell here
+    t.scalp_high_ts = 0.0
+    w.on_event(quote(0.52, base + 2))  # 0.52 is the high, first printed now
+    w.on_event(quote(0.52, base + 11))  # 9 s flat
+    assert w._jobs.empty()
+    w.on_event(quote(0.53, base + 12))  # a new high: the count starts again
+    w.on_event(quote(0.53, base + 21))
+    assert w._jobs.empty()
+    w.on_event(quote(0.53, base + 23))  # 11 s with no new high, bid still over the arm
+    assert "plateau" in w._jobs.get_nowait().why
+
+
+def test_a_plateau_never_sells_under_the_arm(tmp_path, monkeypatch):
+    w, t, base = _scalp_target(tmp_path, monkeypatch, seconds=0.0)
+    t.scalp_plateau, t.scalp_dip = 10.0, 0.30
+    w.on_event(quote(0.52, base + 2))
+    w.on_event(quote(0.45, base + 30))  # long flat, but the bid is back under the arm (0.50)
+    assert w._jobs.empty()

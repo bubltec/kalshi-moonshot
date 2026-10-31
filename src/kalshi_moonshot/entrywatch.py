@@ -105,7 +105,8 @@ class EntryWatcher:
         self.reviewed: list[str] = []  # log lines, newest last (also logged)
         self._hist: dict[str, deque[tuple[float, float, float]]] = {}  # ticker -> (time, YES bid, YES ask), the last half minute
         self._armed: dict[tuple[str, str, str], dict[str, Any]] = {}  # (lane, ticker, side) -> {"t": when armed, "shot": the prepared shot or None while it is being prepared}
-        self._arm_jobs: queue.SimpleQueue[tuple[Any, ...]] = queue.SimpleQueue()  # ("warm", key) / ("fire", key, shot)
+        self._arm_jobs: queue.SimpleQueue[tuple[Any, ...]] = queue.SimpleQueue()  # ("warm", key) / ("fire", key, shot) / ("move", key, ts, was, now)
+        self._moved: dict[tuple[str, str], float] = {}  # (lane, ticker) -> when a move last queued a buy
 
     # ---- socket side: must be fast and never raise ----
     def on_event(self, e: dict[str, Any]) -> None:
@@ -123,6 +124,9 @@ class EntryWatcher:
             spec = specs.get(lane)
             if spec is None or not spec.enabled or not spec.entry_socket:
                 continue
+            if spec.entry_move > 0:
+                self._move(e, lane, spec, info, now)  # a move lane never takes the ask: its only entry is the resting buy after a move
+                continue
             if spec.entry_approach > 0 and self._approach(e, lane, spec, info, now):
                 self._last[(lane, event)] = time.time()  # the armed buy is on its way: the timed path must not queue a second review
                 continue
@@ -132,6 +136,51 @@ class EntryWatcher:
             if in_band(spec, float(e["bid"]), float(e["ask"])) and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 self._pending.add(key)
                 self._jobs.put(key)
+
+    def _move(self, e: dict[str, Any], lane: str, spec: LaneSpec, info: dict[str, Any], now: datetime) -> None:
+        """A YES mid that has moved `entry_move` within `entry_move_seconds` and is at the far end of that move: queue a resting buy of the side that fell (YES fell: buy YES; YES rose: NO fell, buy NO)."""
+        ticker, ts = str(e["ticker"]), float(e["ts"])
+        key = (lane, ticker)
+        if time.time() - self._moved.get(key, 0.0) < max(spec.entry_min_gap_seconds, spec.entry_arm_seconds + 5.0):
+            return
+        mids = [(r[0], (r[1] + r[2]) / 2.0) for r in self._hist.get(ticker, ()) if ts - spec.entry_move_seconds <= r[0] <= ts]
+        if len(mids) < 2:
+            return
+        now_mid = mids[-1][1]
+        hi, lo = max(m for _, m in mids), min(m for _, m in mids)
+        if hi - now_mid >= spec.entry_move - 1e-9:
+            side = "yes"  # YES fell
+        elif now_mid - lo >= spec.entry_move - 1e-9:
+            side = "no"  # YES rose, so NO fell
+        else:
+            return
+        if side not in spec.sides or not in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
+            return
+        self._moved[key] = time.time()
+        self._arm_jobs.put(("move", (lane, ticker, side), ts, round(hi if side == "yes" else lo, 4), round(now_mid, 4)))
+
+    def _move_fire(self, key: tuple[str, str, str], ts: float, was: float, now_mid: float) -> None:
+        """Run the lane's review for the market, then queue the resting buy (post-only, `entry_move_below` under the fallen side's ask) as an evaluation. The price is re-read by the worker."""
+        from .jobs import Jobs
+
+        lane, ticker, side = key
+        s = self.get_settings()
+        spec = lane_specs(s).get(lane)
+        if spec is None:
+            return
+        store = self.store_factory()
+        if lane_full(store, spec, quote_keys(ticker)):
+            return
+        for shot in runner.review_lane(s, self._book(lane), store, spec, self.estimators(store), only=quote_keys(ticker)):
+            if shot.ticker == ticker and shot.side == side:
+                made = Jobs(store).enqueue(
+                    "evaluate", {"shot": asdict(shot), "floor_bid": True, "move": {"ts": ts, "yes_was": was, "yes_now": now_mid, "queued_ts": round(time.time(), 3)}},
+                    dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}", expires_in=max(60.0, spec.entry_arm_seconds + 15.0), max_attempts=s.job_max_attempts, priority=spec.priority,
+                )
+                line = f"{lane} {ticker} {side}: YES moved {was:.2f} -> {now_mid:.2f} in {spec.entry_move_seconds:.0f}s; resting buy {spec.entry_move_below:.2f} under the ask; evaluation {'queued' if made else 'already queued'}"
+                log.info("entry watcher: %s", line)
+                self.reviewed.append(line)
+                return
 
     def _gaining(self, ticker: str, side: str, ts: float) -> bool:
         """Whether the side's mid is above where it was 5-25 seconds ago (the side's own terms: a NO side gains when YES falls)."""
@@ -215,7 +264,9 @@ class EntryWatcher:
             except queue.Empty:
                 continue
             try:
-                if job[0] == "warm":
+                if job[0] == "move":
+                    self._move_fire(job[1], job[2], job[3], job[4])
+                elif job[0] == "warm":
                     self._warm(job[1])
                 else:
                     self._fire(job[1], job[2])

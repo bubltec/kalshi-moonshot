@@ -28,7 +28,7 @@ from .config import Settings
 from .entrywatch import lane_full, quote_keys
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
-from .kalshi import KalshiClient, KalshiError, KalshiRateLimited
+from .kalshi import KalshiClient, KalshiError, KalshiRateLimited, snap_price
 from .lanes import POLY_LANES, lane_specs, spec_for, tiered, tiered_lanes
 from .marketdata import Discovery, shared_for
 from .search import NewsSearch
@@ -642,7 +642,10 @@ class Worker:
         shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors=factors_text)
         rest_seconds = 0.0
         if floor_bid:
-            shot = replace(shot, ask=spec.price[0])  # the bid is the floor, not whatever the ask has run to
+            if spec.entry_move > 0:  # a move lane's bid rests under the live ask, post-only, so it can only fill as a maker
+                shot = replace(shot, ask=snap_price(max(0.01, shot.ask - spec.entry_move_below)))
+            else:
+                shot = replace(shot, ask=spec.price[0])  # the bid is the floor, not whatever the ask has run to
             rest_seconds = spec.entry_arm_seconds
         # Same job, same order id: if the process dies after sending, a rerun cannot buy twice.
         order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
