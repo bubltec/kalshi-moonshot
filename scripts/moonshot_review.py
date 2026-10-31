@@ -25,7 +25,7 @@ main = Store(s.db_path, s.exclude_versions)
 
 DAYS = float(os.environ.get("DAYS", "7"))
 MIN_EVENTS = 15
-LO = 0.02
+LO = float(os.environ.get("LO", "0.02"))
 WINDOW, MIN_LEFT = 120, 10
 FAMILIES = {"coins": ("crypto_moonshot", {"BTC", "ETH", "SOL", "XRP", "DOGE"}), "energy": ("energy_moonshot", {"WTI", "BRENT", "NATGAS"})}
 GRID = {"bar": (200.0, 400.0, 800.0), "spike": (0.0, 3.0, 5.0), "crash_park": (False, True), "hi": (0.12, 0.20)}

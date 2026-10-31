@@ -7,7 +7,7 @@ AGAINST the holder over the last 3 seconds (flow_1s: contracts x price paid) pas
     Nx normal         the 3 seconds are at least N times this market's own normal 3 s (the median second of the 120 s before, times 3), and at least $50
 A bet never sold settles at 1 or 0. "vs holding" is the rule's total P&L minus holding every bet to settlement. Rows are by commodity too, so one market's behavior cannot hide in the pool.
 
-    scripts/cloud.sh run scripts/burst_exit_replay2.py [DAYS=3] [LAT=1]       (long: start it in the background on the host)
+    scripts/cloud.sh run scripts/burst_exit_replay2.py [DAYS=3] [LAT=1] [MIN_LEFT=10] [PEAK=0]       (long: start it in the background on the host)
 """
 import os
 import re
@@ -24,7 +24,8 @@ main = Store(s.db_path, s.exclude_versions)
 
 DAYS = float(os.environ.get("DAYS", "3"))
 LAT = int(os.environ.get("LAT", "1"))
-MIN_LEFT, WINDOW_LEFT, SHARE = 10, 120, 0.75
+MIN_LEFT, WINDOW_LEFT, SHARE = int(os.environ.get("MIN_LEFT", "10")), 120, 0.75
+PEAK = int(os.environ.get("PEAK", "0"))  # seconds back to look for the burst floor: 0 = the bid now, 5 = the best bid of the last 5 s (the bid a collapse has already taken down is not what the floor should read)
 RULES = [("fixed $500", "fixed", 500.0), ("fixed $250", "fixed", 250.0), ("fixed $150", "fixed", 150.0),
          ("2% of volume", "share", 0.02), ("4% of volume", "share", 0.04), ("8% of volume", "share", 0.08), ("15% of volume", "share", 0.15),
          ("3x normal", "normal", 3.0), ("6x normal", "normal", 6.0)]
@@ -70,6 +71,8 @@ for b in bets:
             continue
         total = cum.get(max((x for x in secs_sorted if x <= t), default=0), 0.0)
         normal3 = 3.0 * statistics.median([sum(flow.get(t - 3 - k, [0.0, 0.0])) for k in range(120)])
+        if PEAK:
+            bid = max([bid] + [x for x in (held_bid(t - k) for k in range(1, PEAK + 1)) if x is not None])
         sec.append((bid, fill, against, against / (against + withh + 1e-9), total, normal3))
     data.append((b, sec))
 

@@ -250,6 +250,15 @@ def _hunt_burst(vol: float, base: float, ratio: float) -> bool:
     return ratio >= HUNT_CLEAR_RATIO or vol >= HUNT_CLEAR_FLOOR
 
 
+def _hunt_contract_bar(spec: LaneSpec, ticker: str) -> float:
+    """The contract spike this market has to clear. A series named in hunt_contracts_by uses that coin's own number."""
+    series = ticker.split("-")[0]
+    for name, bar in spec.hunt_contracts_by:
+        if series == name:
+            return float(bar)
+    return spec.hunt_contracts
+
+
 def _side_ask(side: str, yes_bid: float, yes_ask: float) -> float:
     return yes_ask if side == "yes" else 1.0 - yes_bid
 
@@ -447,13 +456,29 @@ class ProfitWatcher:
         row = book.setdefault(sec, [0.0, 0.0, 0.0, 0.0])  # YES-taker contracts, NO-taker contracts, then the dollars they paid (a NO taker pays 1 - the YES price)
         yes_taker = e.get("taker") == "yes"
         row[0 if yes_taker else 1] += float(e["count"])
-        row[2 if yes_taker else 3] += float(e["count"]) * (float(e.get("price") or 0.0) if yes_taker else 1.0 - float(e.get("price") or 0.0))
+        yes_px = float(e.get("price") or 0.0)
+        count = float(e["count"])
+        paid = yes_px if yes_taker else 1.0 - yes_px  # what the taker paid for the side they bought
+        row[2 if yes_taker else 3] += count * paid
         for old in [k for k in book if k < sec - 125]:
             del book[old]
         with self._lock:
             held = [t for (ticker, _), t in self.targets.items() if ticker == tk and t.burst_exit and (not t.burst_logged or t.burst_resell)]
             hunt = self._hunts.get(tk)
             spec = self._hunt_by_series.get(tk.split("-")[0])
+        if spec is not None and _hunt_contract_bar(spec, tk) > 0:
+            sold_px = 1.0 - paid  # the side they sold into
+            if len(row) < 7:
+                row.extend([0.0] * (7 - len(row)))
+            flip = False
+            if spec.hunt_sell_over > 0 and sold_px + 1e-9 >= spec.hunt_sell_over:
+                row[4] += count  # contracts sold on the winning side
+                flip = True
+            if spec.hunt_buy_under > 0 and 0 < paid <= spec.hunt_buy_under + 1e-9:
+                row[5] += count  # contracts bought on the losing side
+                flip = True
+            if not flip and spec.hunt_sell_over > 0 and paid + 1e-9 >= spec.hunt_sell_over:
+                row[6] += count  # contracts bought on the winning side. A cheap buy is the other trade, already in the two buckets above
         for t in held:
             idx = 1 if t.side == "yes" else 0  # NO takers against a YES holder, YES takers against a NO holder
             if t.burst_ratio > 0:
@@ -538,6 +563,27 @@ class ProfitWatcher:
             ask = asks[side]
             if ask <= 0 or ask >= spec.hunt_cheap:
                 continue
+            bar = _hunt_contract_bar(spec, h.ticker)
+            if bar > 0:
+                # A contract spike. Each coin has its own bar (hunt_contracts_by): 1,000 contracts is the ETH print from 2026-10-26, and a busier coin has to clear more. Either bucket clearing the bar buys the cheap side once, at the ask.
+                if not (lo <= ask <= hi):
+                    continue
+                window = max(1, int(round(spec.hunt_seconds)))
+                sold_n = sum(r[4] for k in range(window) if len(r := book.get(sec - k) or []) > 4)
+                bought_n = sum(r[5] for k in range(window) if len(r := book.get(sec - k) or []) > 5)
+                won_n = sum(r[6] for k in range(window) if len(r := book.get(sec - k) or []) > 6)
+                if sold_n <= bar and bought_n <= bar:
+                    continue
+                if won_n > sold_n and won_n > bought_n:
+                    continue  # more contracts bought on the winning side than either side of the spike: the favorite is being accumulated, not flipped
+                crashing, _was = _hunt_crashing(h.quotes, side, now, ask, spec.hunt_crash, spec.hunt_crash_seconds)
+                if crashing or not _hunt_parked(h.quotes, side, now, ask, hi, spec.hunt_park_seconds, spec.hunt_park_high, spec.hunt_park_span):
+                    continue
+                h.fired = True
+                reason = (f"spike: {sold_n:.0f} contracts sold on the winning side, {bought_n:.0f} bought under {spec.hunt_buy_under * 100:.0f}c, {won_n:.0f} bought on the winning side in {window} s (bar {bar:.0f}), {side} costs {ask:.2f}")
+                ctx = {"sold": round(sold_n, 1), "bought": round(bought_n, 1), "won": round(won_n, 1), "bar": bar, "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name, "trigger_ts": round(now, 3)}
+                self._buys.put(BuySignal("hunt", side, ask, reason, ctx, hunt=h, spec=spec))
+                return
             if spec.hunt_dollars > 0:
                 # The flip trigger (collapse_study / flip_trigger_study, 2026-10-27): a favorite if the lane sets hunt_favorite (it was 90c; 0 = off), and at least $X bought AGAINST it (this cheap side's takers) in the last 3 s, in the last hunt_window seconds. Absolute dollars, not a multiple of normal.
                 if not (lo <= ask <= hi):

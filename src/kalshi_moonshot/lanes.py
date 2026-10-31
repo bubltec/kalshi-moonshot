@@ -110,7 +110,11 @@ class LaneSpec:
     burst_dollars: float = 0.0  # the burst EXIT of a lane with burst_exit, in dollars: sell the held 90c+ favorite in the last 120 s when at least this many dollars are bought against it in 3 s (0 = the older multiple-of-normal rule). Per family from burst_exit_study: crypto 400, currencies 50, metals/energy 400
     burst_dollars_btc: float = 0.0  # the same for BTC: a bar of its own, or -1 to keep the older rule (it beat holding by 5.3c on BTC; the dollar bar did not)
     hunt_dollars: float = 0.0  # a burst_hunt lane's trigger in dollars: a 90c+ favorite and at least this many dollars bought AGAINST it (the cheap side's takers) in 3 s, in the last 120 s; buy the cheap side. 0 = the older multiple-of-normal burst
-    hunt_seconds: float = 3.0  # the window the dollar bar counts over: the last this many seconds of dollars bought on the cheap side (3 = the original; 1 = the latest second alone, so it fires sooner and the same bar is a faster pace)
+    hunt_seconds: float = 3.0  # the window the bar counts over: the last this many seconds (3 = the original dollar bar; 2 = the contract spike)
+    hunt_contracts: float = 0.0  # buy the cheap side when this many contracts trade in hunt_seconds, either sold on the winning side (hunt_sell_over) or bought on the losing side (hunt_buy_under). 0 = off, and hunt_dollars or the older 5x applies. A coin named in hunt_contracts_by uses its own number instead. The 2026-10-26 ETH buy was 2,144 contracts in 3 s against a normal second of 132
+    hunt_contracts_by: tuple[tuple[str, float], ...] = ()  # (series, contracts) overrides of hunt_contracts. Each coin's book is a different size: the same 1,000 that is a spike on DOGE is an ordinary BTC second
+    hunt_sell_over: float = 0.0  # a sale counts toward hunt_contracts when the side sold is priced at least this high (the winning side). 0 = that bucket is off
+    hunt_buy_under: float = 0.0  # a buy counts toward hunt_contracts when the side bought is priced at or under this (the losing side). 0 = that bucket is off. A trade that is both (an 8c buy is a sale of the 92c side) is counted in each bucket, and either one clearing the bar buys once
     hunt_dollars_btc: float = 0.0  # the same bar for BTC, whose volume is far larger (0 = the same bar as the others)
     hunt_favorite: float = 0.0  # a burst_hunt dollar trigger buys the cheap side only when the OTHER side is at least this priced (0 = no requirement; 0.90 was the flip study's 90c+ favorite). price[1] is then the only band: a 20c side is an 80c favorite
     hunt_spike: float = 0.0  # a dollar trigger also needs the last 3 s of dollars bought on the cheap side to be at least this multiple of that side's own normal 3 s (median second of the 2 minutes before). 0 = the dollar bar alone. On a market that is busy all the time (BTC) a fixed bar fires on ordinary trading; a multiple fires on a surge (scripts/spike_trigger_study.py)
@@ -284,6 +288,10 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("series", "sides", "gate_from", "scale_from", "blackout_et"):
         if key in row:
             row[key] = tuple(row[key])
+    if "hunt_contracts_by" in row:
+        raw = row["hunt_contracts_by"] or {}
+        pairs = raw.items() if isinstance(raw, dict) else raw
+        row["hunt_contracts_by"] = tuple((str(name), float(bar)) for name, bar in pairs)
     for window in row.get("blackout_et", ()):
         try:
             parse_window(window)
@@ -394,7 +402,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
-    "blackout_et", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -421,6 +429,11 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
             out["drop_confirm"], out["drop_stay"], out["drop_window"], out["drop_buy"], out["drop_buy_max"] = repr(spec.drop_confirm), repr(spec.drop_stay), repr(spec.drop_window), repr(spec.drop_buy), repr(spec.drop_buy_max)
     if spec.hunt_seconds != 3.0:
         out["hunt_seconds"] = repr(spec.hunt_seconds)
+    if spec.hunt_contracts > 0 or spec.hunt_contracts_by:
+        out["hunt_contracts"] = repr(spec.hunt_contracts)
+        if spec.hunt_contracts_by:
+            out["hunt_contracts_by"] = repr(spec.hunt_contracts_by)
+        out["hunt_sell_over"], out["hunt_buy_under"] = repr(spec.hunt_sell_over), repr(spec.hunt_buy_under)
     if spec.entry_move:
         out["entry_move"], out["entry_move_seconds"], out["entry_move_below"] = repr(spec.entry_move), repr(spec.entry_move_seconds), repr(spec.entry_move_below)
     if spec.cash_out_at:

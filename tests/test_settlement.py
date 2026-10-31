@@ -1240,7 +1240,7 @@ def test_the_hunt_and_burst_settings_come_from_strategies_toml(tmp_path, monkeyp
     assert spec.hunt_crash == 0.10  # the ones it does not name keep their defaults
 
 
-def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, baseline=0.0, **spec_changes):
+def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, baseline=0.0, flow=None, ticker="KXETH15M-1", **spec_changes):
     """A hunt on a YES-priced market with $455 bought against the favorite in the last 3 s, and the cheap side sitting at its ask for 20 s. Returns what _on_hunt queued."""
     import dataclasses
 
@@ -1251,13 +1251,56 @@ def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, baseline
     spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], **fields)
     now = 1_000_000.0
     sec = int(now)
-    h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + left, yes_bid=yes_bid, yes_ask=yes_ask)
+    h = watcher.Hunt(ticker, "guarded", close_ts=now + left, yes_bid=yes_bid, yes_ask=yes_ask)
     h.quotes.extend((now - 20.0 + i, yes_bid, yes_ask) for i in range(21))
-    book = {sec: [0.0, 6000.0, 0.0, 455.0]}
-    for k in range(3, 123):  # the market's ordinary second on the cheap (NO) side: `baseline` dollars
-        book[sec - k] = [0.0, 0.0, 0.0, baseline]
+    if flow is None:
+        book = {sec: [0.0, 6000.0, 0.0, 455.0]}
+        for k in range(3, 123):  # the market's ordinary second on the cheap (NO) side: `baseline` dollars
+            book[sec - k] = [0.0, 0.0, 0.0, baseline]
+    else:
+        book = {sec - k: row for k, row in flow.items()}
     w._on_hunt(h, spec, now, book, sec)
     return w._buys.qsize()
+
+
+def test_a_thousand_contracts_in_two_seconds_buys_the_cheap_side(tmp_path, monkeypatch):
+    common = dict(yes_bid=0.93, yes_ask=0.94, hunt_dollars=0.0, hunt_contracts=1000.0, hunt_seconds=2.0, hunt_crash=1.0, hunt_park_seconds=2.0, hunt_park_high=1.0, hunt_park_span=1.0)
+    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 600, 0], 1: [0, 0, 0, 0, 500, 0]}, **common) == 1  # 1,100 sold on the winning side across 2 seconds, NO at 7c
+    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 1001]}, **common) == 1  # just over 1,000 bought on the losing side
+    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 1000]}, **common) == 0  # 1,000 is not over the bar
+    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 1001]}, yes_bid=0.75, yes_ask=0.76, hunt_dollars=0.0, hunt_contracts=1000.0, hunt_seconds=2.0, hunt_crash=1.0, hunt_park_seconds=2.0, hunt_park_high=1.0, hunt_park_span=1.0) == 0  # NO at 25c is above the 20c band
+    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 1100, 1100, 1200]}, **common) == 0  # 1,200 bought on the winning side is more than the spike
+    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 1100, 1100, 1000]}, **common) == 1  # the spike is still the larger print
+
+
+def test_a_cheap_buy_is_counted_as_both_a_winning_sale_and_a_losing_buy(tmp_path, monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot import lanes
+
+    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
+    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], hunt_contracts=1000.0, hunt_sell_over=0.50, hunt_buy_under=0.20)
+    w._hunt_by_series["KXETH15M"] = spec
+    w._on_trade({"ticker": "KXETH15M-1", "ts": 1_000_000.0, "count": 100, "price": 0.08, "taker": "yes"})  # bought YES at 8c, sold NO at 92c
+    row = w._flow["KXETH15M-1"][1_000_000]
+    assert (row[4], row[5], row[6]) == (100, 100, 0)
+    w._on_trade({"ticker": "KXETH15M-1", "ts": 1_000_000.4, "count": 40, "price": 0.70, "taker": "no"})  # sold YES at 70c, bought NO at 30c: winning sale, not a buy under 20c
+    assert (row[4], row[5], row[6]) == (140, 100, 0)
+    w._on_trade({"ticker": "KXETH15M-1", "ts": 1_000_000.6, "count": 200, "price": 0.92, "taker": "yes"})  # bought YES at 92c: the winning side, not a flip
+    assert (row[4], row[5], row[6]) == (140, 100, 200)
+    listed = dataclasses.replace(spec, hunt_contracts=0.0, hunt_contracts_by=(("KXETH15M", 3100.0),))
+    w._hunt_by_series["KXETH15M"] = listed
+    w._on_trade({"ticker": "KXETH15M-1", "ts": 1_000_001.0, "count": 10, "price": 0.08, "taker": "yes"})  # a coin named only in the per-coin map still gets counted
+    assert w._flow["KXETH15M-1"][1_000_001][4] == 10
+
+
+def test_each_coin_has_its_own_contract_bar(tmp_path, monkeypatch):
+    bars = (("KXBTC15M", 6000.0), ("KXETH15M", 1000.0))
+    common = dict(yes_bid=0.93, yes_ask=0.94, hunt_dollars=0.0, hunt_contracts=1000.0, hunt_contracts_by=bars, hunt_seconds=2.0, hunt_crash=1.0, hunt_park_seconds=2.0, hunt_park_high=1.0, hunt_park_span=1.0)
+    flow = {0: [0, 0, 0, 0, 0, 1001]}
+    assert _dollar_hunt(tmp_path, monkeypatch, flow=flow, ticker="KXETH15M-1", **common) == 1  # ETH's bar is 1,000
+    assert _dollar_hunt(tmp_path, monkeypatch, flow=flow, ticker="KXBTC15M-1", **common) == 0  # the same 1,001 is under BTC's 6,000
+    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 6001]}, ticker="KXBTC15M-1", **common) == 1
 
 
 def test_the_favorite_floor_is_the_lanes_setting(tmp_path, monkeypatch):
