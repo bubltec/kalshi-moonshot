@@ -4,8 +4,28 @@
     {
       "name": "public-site",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "public-site", "exec", "vite", "--port", "5174"],
+      "runtimeArgs": [
+        "--dir",
+        "public-site",
+        "exec",
+        "vite",
+        "--port",
+        "5174"
+      ],
       "port": 5174
+    },
+    {
+      "name": "admin-site",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "admin-site",
+        "exec",
+        "vite",
+        "--port",
+        "5175"
+      ],
+      "port": 5175
     }
   ]
 }

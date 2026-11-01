@@ -1,0 +1,290 @@
+{
+ "generated": "2026-11-01T06:25:44+00:00",
+ "lanes": [
+  {
+   "lane": "burst_flip",
+   "mode": "paper",
+   "retired": true,
+   "bets": 186,
+   "settled": 186,
+   "win_rate": 0.468,
+   "staked_usd": 91.28,
+   "pnl_usd": -6.43,
+   "daily_pnl_usd": {
+    "2026-10-29": 0.32,
+    "2026-10-30": -8.08,
+    "2026-10-31": 1.33
+   },
+   "exits": {}
+  },
+  {
+   "lane": "climb_down",
+   "mode": "paper",
+   "retired": true,
+   "bets": 2,
+   "settled": 2,
+   "win_rate": 0.0,
+   "staked_usd": 4.0,
+   "pnl_usd": -0.86,
+   "daily_pnl_usd": {
+    "2026-10-29": -0.47,
+    "2026-11-01": -0.38
+   },
+   "exits": {
+    "cash-out": {
+     "sales": 1,
+     "pnl_usd": -0.47
+    },
+    "peak-crash": {
+     "sales": 1,
+     "pnl_usd": -0.38
+    }
+   }
+  },
+  {
+   "lane": "commodity",
+   "mode": "paper",
+   "retired": false,
+   "bets": 298,
+   "settled": 298,
+   "win_rate": 0.745,
+   "staked_usd": 1039.24,
+   "pnl_usd": -52.49,
+   "daily_pnl_usd": {
+    "2026-10-29": -32.32,
+    "2026-10-30": -21.26,
+    "2026-10-31": 1.09
+   },
+   "exits": {
+    "burst": {
+     "sales": 38,
+     "pnl_usd": -85.34
+    },
+    "cash-out": {
+     "sales": 18,
+     "pnl_usd": -43.02
+    },
+    "drop": {
+     "sales": 3,
+     "pnl_usd": -1.82
+    }
+   }
+  },
+  {
+   "lane": "commodity_bounce",
+   "mode": "paper",
+   "retired": false,
+   "bets": 17,
+   "settled": 17,
+   "win_rate": 0.824,
+   "staked_usd": 69.95,
+   "pnl_usd": 7.23,
+   "daily_pnl_usd": {
+    "2026-10-30": 1.86,
+    "2026-10-31": 5.37
+   },
+   "exits": {
+    "burst": {
+     "sales": 1,
+     "pnl_usd": -0.42
+    },
+    "cash-out": {
+     "sales": 1,
+     "pnl_usd": -0.26
+    },
+    "drop": {
+     "sales": 1,
+     "pnl_usd": -0.78
+    }
+   }
+  },
+  {
+   "lane": "commodity_burst",
+   "mode": "paper",
+   "retired": false,
+   "bets": 105,
+   "settled": 105,
+   "win_rate": 0.771,
+   "staked_usd": 439.72,
+   "pnl_usd": -29.99,
+   "daily_pnl_usd": {
+    "2026-10-30": -28.21,
+    "2026-10-31": -1.78
+   },
+   "exits": {
+    "burst": {
+     "sales": 4,
+     "pnl_usd": -0.31
+    },
+    "cash-out": {
+     "sales": 12,
+     "pnl_usd": -44.46
+    }
+   }
+  },
+  {
+   "lane": "commodity_spot",
+   "mode": "paper",
+   "retired": false,
+   "bets": 209,
+   "settled": 209,
+   "win_rate": 0.732,
+   "staked_usd": 844.5,
+   "pnl_usd": -28.18,
+   "daily_pnl_usd": {
+    "2026-10-29": -24.14,
+    "2026-10-30": 1.51,
+    "2026-10-31": -5.54
+   },
+   "exits": {
+    "burst": {
+     "sales": 30,
+     "pnl_usd": -70.67
+    },
+    "cash-out": {
+     "sales": 14,
+     "pnl_usd": -25.72
+    },
+    "drop": {
+     "sales": 8,
+     "pnl_usd": -6.55
+    }
+   }
+  },
+  {
+   "lane": "crypto_favorite",
+   "mode": "paper",
+   "retired": false,
+   "bets": 549,
+   "settled": 548,
+   "win_rate": 0.728,
+   "staked_usd": 681.96,
+   "pnl_usd": 3.24,
+   "daily_pnl_usd": {
+    "2026-10-29": -11.01,
+    "2026-10-30": -9.42,
+    "2026-10-31": 15.29,
+    "2026-11-01": 8.38
+   },
+   "exits": {
+    "burst": {
+     "sales": 112,
+     "pnl_usd": -49.26
+    },
+    "stop-loss": {
+     "sales": 28,
+     "pnl_usd": -19.02
+    }
+   }
+  },
+  {
+   "lane": "crypto_moonshot",
+   "mode": "paper",
+   "retired": false,
+   "bets": 84,
+   "settled": 83,
+   "win_rate": 0.229,
+   "staked_usd": 35.65,
+   "pnl_usd": 36.77,
+   "daily_pnl_usd": {
+    "2026-10-29": 3.72,
+    "2026-10-30": 6.71,
+    "2026-10-31": 29.87,
+    "2026-11-01": -3.53
+   },
+   "exits": {}
+  },
+  {
+   "lane": "early_scalp",
+   "mode": "paper",
+   "retired": false,
+   "bets": 787,
+   "settled": 777,
+   "win_rate": 0.382,
+   "staked_usd": 335.24,
+   "pnl_usd": -62.38,
+   "daily_pnl_usd": {
+    "2026-10-29": -14.41,
+    "2026-10-30": -25.73,
+    "2026-10-31": -22.19,
+    "2026-11-01": -0.04
+   },
+   "exits": {
+    "cash-out": {
+     "sales": 243,
+     "pnl_usd": -88.2
+    },
+    "scalp": {
+     "sales": 525,
+     "pnl_usd": 23.18
+    }
+   }
+  },
+  {
+   "lane": "energy_moonshot",
+   "mode": "paper",
+   "retired": false,
+   "bets": 20,
+   "settled": 20,
+   "win_rate": 0.35,
+   "staked_usd": 6.57,
+   "pnl_usd": 9.44,
+   "daily_pnl_usd": {
+    "2026-10-30": 6.21,
+    "2026-10-31": 3.23
+   },
+   "exits": {}
+  },
+  {
+   "lane": "fx_favorite",
+   "mode": "paper",
+   "retired": false,
+   "bets": 184,
+   "settled": 184,
+   "win_rate": 0.658,
+   "staked_usd": 263.38,
+   "pnl_usd": -20.7,
+   "daily_pnl_usd": {
+    "2026-10-29": -9.42,
+    "2026-10-30": -11.29
+   },
+   "exits": {
+    "burst": {
+     "sales": 49,
+     "pnl_usd": -34.29
+    },
+    "cash-out": {
+     "sales": 7,
+     "pnl_usd": -3.93
+    },
+    "stop-loss": {
+     "sales": 10,
+     "pnl_usd": -9.92
+    }
+   }
+  },
+  {
+   "lane": "rest_lab",
+   "mode": "paper",
+   "retired": true,
+   "bets": 5,
+   "settled": 5,
+   "win_rate": 0.2,
+   "staked_usd": 2.48,
+   "pnl_usd": -0.55,
+   "daily_pnl_usd": {
+    "2026-10-31": -0.55
+   },
+   "exits": {
+    "scalp": {
+     "sales": 3,
+     "pnl_usd": 0.29
+    },
+    "stop-loss": {
+     "sales": 1,
+     "pnl_usd": -0.34
+    }
+   }
+  }
+ ]
+}
