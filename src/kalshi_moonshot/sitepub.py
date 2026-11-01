@@ -13,7 +13,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from . import exporter, lanes
+from . import control, exporter, lanes, overrides
 from .config import Settings
 
 log = logging.getLogger("moonshot")
@@ -39,7 +39,13 @@ def publish_once(s: Settings, store: Any, client: Any, now: float | None = None)
 
 def publish_admin_once(s: Settings, store: Any, client: Any, now: float | None = None) -> int:
     """The admin file (dollars) goes to its own private key, never the public one."""
-    data = exporter.admin_json(store, now, active=set(lanes.lane_specs(s)))
+    specs = lanes.lane_specs(s)
+    data = exporter.admin_json(store, now, active=set(specs))
+    data["settings"] = {"schema": overrides.schema(), "lanes": overrides.effective(specs)}  # what the editor shows; the bounds are overrides.TUNABLES
+    try:
+        data["control"] = control.state(s, client)
+    except Exception:
+        log.exception("site: could not read the control state")
     body = json.dumps(data, indent=1).encode()
     client.put_object(Bucket=s.site_bucket, Key=ADMIN_KEY, Body=body, ContentType="application/json", CacheControl="private, no-store")
     return len(body)

@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from . import overrides
 from .config import Settings
 
 # Paper twin of the commodity lane. It reads Polymarket and never places an order, even if named in LIVE_LANES.
@@ -326,12 +327,13 @@ def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> 
     return {**_inherited(rows, parent, (*_seen, name)), **row}
 
 
-def lane_specs_from(s: Settings, strategies_toml: str | None) -> dict[str, LaneSpec]:
+def lane_specs_from(s: Settings, strategies_toml: str | None, overrides_json: str | None = None) -> dict[str, LaneSpec]:
     lanes = builtin_lanes(s)
     if strategies_toml:
         rows = tomllib.loads(strategies_toml).get("lane") or {}
         for name in rows:
             lanes[name] = _overlay(lanes.get(name), name, _inherited(rows, name))
+    lanes = overrides.apply(lanes, overrides.parse(overrides_json))  # the admin page's changes, already checked against overrides.TUNABLES
     for spec in lanes.values():
         if tiered(spec) and not (spec.series or spec.needs_instrument):
             raise ValueError(
@@ -349,8 +351,8 @@ def lane_specs_from(s: Settings, strategies_toml: str | None) -> dict[str, LaneS
 
 
 @lru_cache(maxsize=8)
-def _cached(s: Settings, text: str | None) -> dict[str, LaneSpec]:
-    return lane_specs_from(s, text)
+def _cached(s: Settings, text: str | None, changes: str | None) -> dict[str, LaneSpec]:
+    return lane_specs_from(s, text, changes)
 
 
 def strategies_path(data_dir: Path) -> Path:
@@ -361,7 +363,7 @@ def lane_specs(s: Settings) -> dict[str, LaneSpec]:
     """Lanes for these settings, with DATA_DIR/strategies.toml applied. Cached per file content."""
     path = strategies_path(s.data_dir)
     text = path.read_text() if path.is_file() else None
-    return _cached(s, text)
+    return _cached(s, text, overrides.load_text(s.data_dir))
 
 
 def enabled_lanes(s: Settings) -> list[LaneSpec]:
