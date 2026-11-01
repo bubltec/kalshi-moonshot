@@ -41,6 +41,13 @@ export const freshToken = (id, privateKey, nowSeconds) => {
 
 const cookie = (name, value, path, maxAge, sameSite = 'Lax') => `${name}=${value}; Path=${path}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=${sameSite}`;
 const redirect = (location, cookies = []) => ({ statusCode: 302, headers: { Location: location, 'Cache-Control': 'no-store' }, cookies, body: '' });
+// After sign-in: a page that sets the cookies and then moves on, instead of a bare 302. Some browsers (in-app ones especially) drop cookies set on a redirect that leaves the site's own page.
+const landing = (location, cookies) => ({
+  statusCode: 200,
+  headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  cookies,
+  body: `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="refresh" content="0;url=${location}"><title>Signed in</title><body style="font-family:system-ui;background:#000;color:#ddd;padding:2rem"><p>Signed in. <a style="color:#8ab4ff" href="${location}">Open the admin page</a></p><script>location.replace(${JSON.stringify(location)})</script>`,
+});
 const page = (status, text) => ({ statusCode: status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }, body: text });
 
 let secrets;
@@ -85,7 +92,7 @@ export async function handler(event, _context, deps = {}) {
     if (!user || !allowed.includes(String(user.id))) return page(403, 'this GitHub account is not allowed');
     const expires = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
     const signed = signedCookies({ origin, keyPairId: env.CF_KEY_PAIR_ID, privateKey, expires });
-    return redirect(`${origin}/admin/`, [
+    return landing(`${origin}/admin/`, [
       ...Object.entries(signed).map(([k, v]) => cookie(k, v, '/admin', SESSION_SECONDS)),
       cookie('admin_fresh', freshToken(user.id, privateKey, Math.floor(Date.now() / 1000)), '/admin/api', SESSION_SECONDS),
       cookie('oauth_state', '', '/auth', 0),
