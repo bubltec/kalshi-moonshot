@@ -94,10 +94,80 @@ def _watcher(tmp_path, monkeypatch, guard=0.10, ticker="KXBTC15M-1"):
     return w, s, store, close
 
 
+def _through_watcher(tmp_path, monkeypatch, sale=0.003, seconds=60):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\n"
+        f"strike_through_sale={sale}\nstrike_through_seconds={seconds}\nsettlement_guard=0\nburst_exit=false\n"
+        "series=['KXBTC15M']\nalways=true\n"
+    )
+    s = config.load()
+    store = Store(s.db_path)
+    store.db.execute(
+        "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (1.0, "KXBTC15M-1", "bet", "observe", 0.90, "yes", "guarded", 3, 2.7, "1970-01-24T03:33:20Z"),
+    )
+    store.db.commit()
+
+    class Client:
+        def market(self, ticker):
+            return {"ticker": ticker, "floor_strike": 100.0, "close_time": "1970-01-24T03:33:20Z", "yes_bid_dollars": "0.90", "yes_ask_dollars": "0.91", "title": "t"}
+
+    w = watcher.ProfitWatcher(lambda: s, Client(), lambda: Store(s.db_path))
+    w.refresh()
+    return w, s, store, 2_000_000.0
+
+
 def test_the_guard_arms_only_a_lane_that_asks_for_it(tmp_path, monkeypatch):
     w, *_ = _watcher(tmp_path, monkeypatch)
     t = w.targets[("KXBTC15M-1", "guarded")]
     assert t.settle_guard == 0.10 and t.strike == 100.0 and t.close_ts == 2_000_000.0 and t.index_id == "BRTI"
+
+
+def test_strike_through_sale_stays_out_of_a_lane_until_it_is_set(tmp_path, monkeypatch):
+    from kalshi_moonshot import lanes
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    plain = lanes.LaneSpec(name="x", estimator="ladder", label="x", max_spread=0.05, min_volume=0.0, price=(0.1, 0.9), hours=(0, 1))
+    assert "strike_through_sale" not in lanes.settings_of(plain, s) and not lanes.takes_profit(plain)
+    on = lanes.LaneSpec(**{**plain.__dict__, "strike_through_sale": 0.003, "strike_through_seconds": 45.0})
+    out = lanes.settings_of(on, s)
+    assert out["strike_through_sale"] == "0.003" and out["strike_through_seconds"] == "45.0" and lanes.takes_profit(on)
+    assert lanes.version_of(plain, s) == lanes.version_of(lanes.LaneSpec(**plain.__dict__), s)
+
+
+def test_a_strike_through_sells_at_the_bid_once_the_index_is_through(tmp_path, monkeypatch):
+    w, _s, store, close = _through_watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert t.strike == 100.0 and t.index_id == "BRTI" and t.strike_through == 0.003 and t.strike_through_seconds == 60
+    now = close - 50  # 50s left, inside the 60s window
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.40, "ask": 0.41, "ts": now - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 100.5})  # still on the winning side of a YES
+    assert w._jobs.empty()
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.93, "ask": 0.94, "ts": now + 7})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 10, "value": 99.996})  # 0.004% through, but the bid is 3s old
+    assert w._jobs.empty()
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": now + 20 - 0.4})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 20, "value": 99.996})  # the 62c bid is from this second
+    sell = w._jobs.get_nowait()
+    assert sell.why.startswith("strike-through") and "0.62" in sell.why
+    assert w._strike_through_hit(t, 0.62, close - 90, close - 90) is None  # 90s left: outside the window
+    t.strike_through = 0
+    w._spot["BRTI"] = (close - 50, 99.996)
+    assert w._strike_through_hit(t, 0.62, close - 50, close - 50) is None  # 0 turns the sale off
+    t.strike_through = 0.003
+    w._spot["BRTI"] = (close - 40, 99.996)
+    assert w._strike_through_hit(t, 1.0, close - 40, close - 40) is None  # a $1 bid is still a win
+    t.side = "no"
+    w._spot["BRTI"] = (close - 40, 100.004)  # 0.004% through a NO
+    assert w._strike_through_hit(t, 0.54, close - 40, close - 40).startswith("strike-through")
+    w._inflight.add(("KXBTC15M-1", "guarded"))
+    w.client.market = lambda ticker: {"ticker": ticker, "yes_bid_dollars": "0.62", "yes_ask_dollars": "0.63", "title": "t", "close_time": "2099-01-01T00:00:00Z"}
+    t.side = "yes"
+    w._sell("KXBTC15M-1", "guarded", "strike-through: test")  # 0.62 under the 0.90 paid: a profit-take would refuse this
+    assert [r for r in store.open_bets() if r["lane"] == "guarded"] == []
+    assert store.db.execute("SELECT exit_price FROM decisions WHERE lane='guarded'").fetchone()["exit_price"] == pytest.approx(0.62)
 
 
 def test_the_guard_sells_when_the_chance_falls_under_the_bid_and_stays_quiet_otherwise(tmp_path, monkeypatch):
@@ -1609,24 +1679,22 @@ def test_the_burst_share_defaults_to_off():
     assert LaneSpec.burst_share == 0.0
 
 
-def _spot_tape(tmp_path, rows, symbol="coinbase:BTC-USD"):
-    from kalshi_moonshot import db
+def _spot_tape(tmp_path, rows, symbol="hl:xyz:GOLD"):
+    from kalshi_moonshot import tape as tape_mod
 
     class S:
         tape_path = str(tmp_path / "tape.db")
 
-    tape = db.connect(S.tape_path, "tape", shared=True)
-    tape.execute("CREATE TABLE IF NOT EXISTS feed_ticks (ts REAL NOT NULL, symbol TEXT NOT NULL, px REAL NOT NULL)")
+    tape_mod.recent.clear()
     for ts, px in rows:
-        tape.execute("INSERT INTO feed_ticks (ts, symbol, px) VALUES (?,?,?)", (ts, symbol, px))
-    tape.commit()
+        tape_mod.recent.note_feed(symbol, ts, px)
     return S
 
 
 def _shot(side):
     from kalshi_moonshot.strategy import LongShot
 
-    return LongShot("KXBTC15M-1", "", "", 0.74, 0.76, 0.0, "", 0.1, side=side, series="KXBTC15M")
+    return LongShot("KXGOLD15M-1", "", "", 0.74, 0.76, 0.0, "", 0.1, side=side, series="KXGOLD15M")
 
 
 def test_spot_ticks_must_all_go_the_way_of_the_bet(tmp_path):
@@ -1659,11 +1727,13 @@ def test_spot_move_is_signed_by_the_bets_direction(tmp_path):
     assert runner.spot_move(S, _shot("yes"), 50.0, now=107.0) is None  # nothing that far back
 
 
-def test_the_spot_check_falls_back_to_the_instruments_own_feed(tmp_path):
+def test_crypto_spot_is_not_read_from_an_exchange(tmp_path):
     from kalshi_moonshot import runner
+    from kalshi_moonshot.strategy import LongShot
 
     S = _spot_tape(tmp_path, [(100.0, 100.0), (101.0, 100.5), (102.0, 101.0), (103.0, 101.5)], symbol="kraken:BTC/USD")
-    assert runner.spot_ticks_aligned(S, _shot("yes"), 3, now=104.0) is True
+    shot = LongShot("KXBTC15M-1", "", "", 0.74, 0.76, 0.0, "", 0.1, side="yes", series="KXBTC15M")
+    assert runner.spot_ticks_aligned(S, shot, 3, now=104.0) is None
 
 
 def test_a_lane_without_the_spot_settings_ignores_them():

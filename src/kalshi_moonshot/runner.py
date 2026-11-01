@@ -658,34 +658,6 @@ def _load_quotes(s: Settings, ticker: str, start: float, end: float) -> list[tup
     return [by[k] for k in sorted(by)]
 
 
-def _load_feed(s: Settings, symbol: str, start: float, end: float) -> list[tuple[float, float]]:
-    """Feed prices with start < ts <= end, oldest first. A watched symbol answers from memory."""
-    from . import db as database
-    from . import tape as tape_mod
-
-    if tape_mod.recent.feed_armed(symbol):
-        got = tape_mod.recent.feed_rows(symbol, start, end)
-        return list(got) if got is not None else tape_mod.recent.feed_tail(symbol, start, end)
-    got = tape_mod.recent.feed(symbol, start, end)
-    if got is not None:
-        return list(got)
-    rows: list[tuple[float, float]] = []
-    try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
-        rows = [(float(ts), float(px)) for ts, px in tape.execute(
-            "SELECT ts, px FROM feed_ticks WHERE symbol=? AND ts<=? AND ts>? ORDER BY ts", (symbol, end, start),
-        )]
-    except Exception:
-        rows = []
-    extra = tape_mod.recent.feed_tail(symbol, start, end)
-    if not extra:
-        return rows
-    by = dict(rows)
-    for row in extra:
-        by[row[0]] = row
-    return [by[k] for k in sorted(by)]
-
-
 def arm_stop_history(s: Settings, ticker: str, now: float | None = None) -> None:
     """Load the last 15 minutes of this market's quotes once, when a watch of it starts. Later quotes extend that copy; the stop reads it instead of the database."""
     from . import db as database
@@ -868,23 +840,32 @@ SPOT_LOOKBACK = 40.0  # seconds of spot prices read to find the last changes
 
 
 def _spot_symbols(series: str) -> list[str]:
-    """Where the underlying's price is in the tape's feed_ticks: Coinbase's product first (it ticks most often), then the instrument's own symbol."""
+    """The one underlying price a decision reads. Crypto uses Coinbase. Anything else uses its own instrument."""
     from .commodities import symbol_for
 
     inst = symbol_for(series)
-    if not inst:
+    if not inst or inst.startswith("kraken:"):
         return []
-    out = []
-    if inst.startswith("kraken:") and "/" in inst:
-        out.append("coinbase:" + inst.split(":", 1)[1].replace("/", "-"))
-    out.append(inst)
-    return out
+    return [inst]
 
 
-def _spot_prices(s: Settings, shot: LongShot, seconds: float, now: float) -> list[tuple[float, float]]:
-    """(ts, price) of the underlying over the last `seconds`, oldest first, from the first feed that has a price newer than SPOT_STALE. [] when there is none."""
+def _memory_feed(symbol: str, start: float, end: float) -> list[tuple[float, float]]:
+    """Spot prices held for a decision. Never opens the tape: a watch answers from its copy, and otherwise from the live snapshot."""
+    from . import tape as tape_mod
+
+    if tape_mod.recent.feed_armed(symbol):
+        got = tape_mod.recent.feed_rows(symbol, start, end)
+        return list(got) if got is not None else tape_mod.recent.feed_tail(symbol, start, end)
+    got = tape_mod.recent.feed(symbol, start, end)
+    if got is not None:
+        return list(got)
+    return tape_mod.recent.feed_tail(symbol, start, end)
+
+
+def _spot_prices(_s: Settings, shot: LongShot, seconds: float, now: float) -> list[tuple[float, float]]:
+    """(ts, price) of the underlying over the last `seconds`, oldest first, from memory. [] when there is no price newer than SPOT_STALE."""
     for symbol in _spot_symbols(shot.series or shot.ticker.split("-")[0]):
-        rows = _load_feed(s, symbol, now - seconds, now)
+        rows = _memory_feed(symbol, now - seconds, now)
         if rows and now - rows[-1][0] <= SPOT_STALE:
             return rows
     return []

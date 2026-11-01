@@ -481,6 +481,8 @@ class CommodityPricer:
         inst = instrument_for(series, load_instruments(s.data_dir))
         if inst is None:
             raise CommodityError(f"{series} is not a supported instrument series")
+        if inst.symbol.startswith("kraken:"):
+            raise CommodityError(f"{series} is not priced from an exchange feed")
         hours = _hours_to_close(markets, now)
         pricing = price_event(markets, inst, self.feed, s, now, hours, self.memory, self.windows)
         floor = s.commodity_tail_floor
@@ -503,7 +505,7 @@ class CommodityPricer:
             return 0
         learned = 0
         for inst in load_instruments(s.data_dir):
-            if f"{WINDOW_MINUTES}M" not in inst.suffixes:
+            if f"{WINDOW_MINUTES}M" not in inst.suffixes or inst.symbol.startswith("kraken:"):
                 continue
             series = f"{inst.prefix}{WINDOW_MINUTES}M"
             if now_ts - self._tried.get(series, 0.0) < WINDOW_REFRESH:
@@ -522,6 +524,12 @@ class CommodityPricer:
 
     def estimate(self, client: Any, shot: Any, s: Settings) -> tuple[float, str]:
         """Fresh P(yes) for a shortlisted market, re-reading its whole ladder."""
+        inst = instrument_for(getattr(shot, "series", "") or "", load_instruments(s.data_dir))
+        if inst is not None and inst.symbol.startswith("kraken:"):
+            # These lanes bet the contract's own price. Kraken is not an input, so do not open it.
+            ask = float(getattr(shot, "ask", 0.0) or 0.0)
+            p_yes = 1.0 - ask if getattr(shot, "side", "yes") == "no" else ask
+            return min(1.0, max(0.0, p_yes)), "price band"
         markets = client.event_markets(shot.event_ticker)
         for m in markets:
             m.setdefault("series_ticker", shot.series)

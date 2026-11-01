@@ -61,6 +61,8 @@ HUNT_REPEAT_FLOOR = 20.0  # a second counts once it matches a normal second, and
 BURST_BAND = (0.80, 0.97)  # the held side's bid must be in this band: a favorite
 BUY_BAND = (0.05, 0.25)  # the other side is bought for real only when it costs this much
 SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the close)
+THROUGH_QUOTE = 1.0  # a bid older than this, before the index tick that went through, is the quote from before the cross
+THROUGH_SPOT = 5.0  # an index tick older than this is not a reason to sell
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
 HOLD_MARGIN = 0.01  # holding must beat the sale value by this much before an exit is withheld
 RETRY_AFTER = 15.0  # seconds before a declined sale is looked at again
@@ -141,6 +143,8 @@ class Target:
     scalp_dip_since: float | None = None  # when the bid first went scalp_dip under the high and has stayed there
     scalp_high: float = 0.0  # the highest bid since the arm printed
     cash_out: float = 0.0  # lane cash_out_at: sell the moment the bid is at or under this price (0 = off)
+    strike_through: float = 0.0  # lane strike_through_sale, in percent of the strike (0.003 = 0.003%). 0 = off
+    strike_through_seconds: float = 0.0  # that sale only looks in the last this many seconds
     scalp_high_ts: float = 0.0  # when that high last rose
     scalp_plateau: float = 0.0  # lane scalp_plateau_seconds: sell a bid that has made no new high for this long (0 = off)
     index_id: str = ""  # the settlement index of this market
@@ -402,7 +406,9 @@ class ProfitWatcher:
             self._on_fill(e)
             return
         if e.get("kind") == "index" and e.get("index_id") and e.get("value"):
-            self._spot[str(e["index_id"])] = (float(e["ts"]), float(e["value"]))
+            idx, now = str(e["index_id"]), float(e["ts"])
+            self._spot[idx] = (now, float(e["value"]))
+            self._strike_through_on_index(idx, now)  # the bid collapses within a few seconds of the cross, so the sale is checked on the index tick, not the next quote
             return
         if e.get("kind") == "trade" and e.get("ticker") and e.get("count"):
             self._on_trade(e)
@@ -436,7 +442,7 @@ class ProfitWatcher:
             )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._settlement_hit(t, bid, now, e)
+            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
             if t.drop_buy and not t.burst_logged and t.burst_buy > 0 and (t.drop_armed_at == now or (reason or "").startswith("drop: bid") and t.drop_confirm <= 0):
                 self._drop_hedge(t, bid, now)  # the other side is bought when the fall is found, before the sale: after the confirmed fall it costs far more
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
@@ -699,16 +705,11 @@ class ProfitWatcher:
 
         if tape_mod.recent.stop_armed(t.ticker):
             got = tape_mod.recent.stop_quotes(t.ticker, now - CROSS_STALE, now)
-            book = None if not got else (float(got[-1][1]), float(got[-1][2]))
         else:
-            tape = self._tape_db()
-            if tape is None:
-                return reason
-            try:
-                row = tape.execute("SELECT bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts DESC LIMIT 1", (t.ticker, now, now - CROSS_STALE)).fetchone()
-            except Exception:
-                return reason
-            book = None if row is None else (float(row[0]), float(row[1]))
+            got = tape_mod.recent.quotes(t.ticker, now - CROSS_STALE, now)
+            if got is None:
+                got = tape_mod.recent.quote_tail(t.ticker, now - CROSS_STALE, now)
+        book = None if not got else (float(got[-1][1]), float(got[-1][2]))
         if book is None:
             return reason
         ref = side_bid(t.side, book[0], book[1])
@@ -728,6 +729,38 @@ class ProfitWatcher:
         if getattr(self._tls, "tape", None) is None and self.tape_factory is not None:
             self._tls.tape = self.tape_factory()
         return getattr(self._tls, "tape", None)
+
+    def _strike_through_on_index(self, index_id: str, now: float) -> None:
+        """A held favorite whose index just went through the strike. The latest bid is used only when it printed within a second of this tick; an older bid is from before the cross."""
+        with self._lock:
+            hits = [t for t in self.targets.values() if t.index_id == index_id and t.strike_through > 0]
+        for t in hits:
+            if t.last_ts <= 0 or t.cur_bid <= 0:
+                continue
+            reason = self._strike_through_hit(t, t.cur_bid, now, t.last_ts)
+            key = (t.ticker, t.lane)
+            if reason and key not in self._inflight:
+                self._inflight.add(key)
+                self._jobs.put(SellSignal(t.ticker, t.lane, reason))
+
+    def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
+        """Sell in the last strike_through_seconds once the settlement index is strike_through percent through the strike against the side held.
+        The index has to be through already (a tick still on the winning side says nothing), and the bid has to be from that tick, not the quote from before it. A bid still priced as a win (0.99 or more) is left to settle. 0 = off."""
+        if t.strike_through <= 0 or t.strike_through_seconds <= 0 or t.strike <= 0 or t.close_ts <= 0 or not t.index_id or bid <= 0 or bid >= 0.99:
+            return None
+        left = t.close_ts - now
+        if not (SETTLE_LAST < left <= t.strike_through_seconds):
+            return None
+        spot = self._spot.get(t.index_id)
+        if spot is None:
+            return None
+        spot_ts, value = spot
+        if value <= 0 or now - spot_ts > THROUGH_SPOT or quote_ts < spot_ts - THROUGH_QUOTE:
+            return None
+        through = (t.strike - value) / t.strike if t.side == "yes" else (value - t.strike) / t.strike
+        if through < t.strike_through / 100.0:
+            return None
+        return f"strike-through: index is {through * 100:.4f}% through the strike with {left:.0f}s left, bid {bid:.2f}"
 
     def _settlement_hit(self, t: Target, bid: float, now: float, e: dict[str, Any]) -> str | None:
         """The last-minute guard. Kalshi settles a 15-minute crypto market on the 60-second average of the index at the close, so in the last 150 seconds the chance this side finishes ahead can be computed exactly from the spot, the locked part
@@ -1146,6 +1179,17 @@ class ProfitWatcher:
             held.scalp_dip_hard = spec.scalp_dip_hard
             held.scalp_plateau = spec.scalp_plateau_seconds
             held.cash_out = spec.cash_out_at
+            held.strike_through = spec.strike_through_sale
+            held.strike_through_seconds = spec.strike_through_seconds
+            if spec.strike_through_sale > 0 and spec.strike_through_seconds > 0 and ticker.split("-")[0].endswith("15M"):
+                held.index_id = held.index_id or (index_for_series(ticker.split("-")[0]) or "")
+                if held.index_id and (held.strike <= 0 or held.close_ts <= 0):
+                    try:
+                        mk = self._market_static(ticker)
+                        held.strike = float(mk.get("floor_strike") or 0.0)
+                        held.close_ts = datetime.fromisoformat(str(mk.get("close_time"))).timestamp()
+                    except (TypeError, ValueError, KalshiError):
+                        held.strike_through = 0.0  # no strike: the sale stays off rather than guessing which side is through
             if row["close_time"] and str(row["ticker"]).split("-")[0].endswith("15M"):
                 with contextlib.suppress(TypeError, ValueError):
                     close = datetime.fromisoformat(row["close_time"]).timestamp()
@@ -1405,8 +1449,8 @@ class ProfitWatcher:
                 bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = float(row["ask"] or 0.0)
             resting_paper = (spec := lane_specs(s).get(lane)) is not None and spec.rest_sell and not s.is_live(lane, ticker.split("-")[0])
-            cut = why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst")) or (why.startswith("cash-out:") and " under the " in why)
-            if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not resting_paper and not cut:  # a profit-take never sells for a loss after both fees; a peak-crash, a stop, the settlement guard, a last-two-minutes burst, and a timed drop do (the point is to get out). A paper lane that rests its sale is not re-read at all: its order filled at the target when the bid touched it, so a dipped re-read cannot veto it
+            cut = why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst", "strike-through")) or (why.startswith("cash-out:") and " under the " in why)
+            if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not resting_paper and not cut:  # a profit-take never sells for a loss after both fees; a peak-crash, a stop, the settlement guard, a last-two-minutes burst, a strike-through sale, and a timed drop do (the point is to get out). A paper lane that rests its sale is not re-read at all: its order filled at the target when the bid touched it, so a dipped re-read cannot veto it
                 self._back_off(ticker, lane)
                 return
             if bid <= 0:

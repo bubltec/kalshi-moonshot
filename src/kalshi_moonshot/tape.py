@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 from . import archive, db
-from .coinbasefeed import DEFAULT_PRODUCTS, CoinbaseFeed
 from .commodities import instrument_for, load_instruments
 from .config import Settings
 from .futflow import FuturesFlow
@@ -28,9 +27,6 @@ from .kalshiws import KalshiStream, index_for_series
 from .store import Store
 
 log = logging.getLogger("moonshot")
-
-FX_PAIRS = ("EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD")
-PAIR_PREFIX = "kraken:"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS quotes (
@@ -410,7 +406,6 @@ class TapeRecorder:
         # Sports and esports series list a new market every few minutes, and a changed market list reconnects a stream. They get their own connection so the
         # live one (15-minute quotes, settlement indexes, the account's fills) is never dropped for them.
         self.extra_stream = KalshiStream(client, self._on_event, index_feed=False, fills=False)
-        self.coinbase = CoinbaseFeed(DEFAULT_PRODUCTS, lambda product, ts, px: self.tape.add_feed(f"coinbase:{product}", px, ts, 1.0)) if s.coinbase_feed_enabled else None
         self.futflow = FuturesFlow(s.fut_flow_coins, self.tape.add_fut) if s.fut_flow_enabled and s.fut_flow_coins else None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -500,40 +495,8 @@ class TapeRecorder:
         for index_id in indexes:
             arm_index_history(self.s, index_id, now)
 
-    def _crypto_symbols(self) -> list[str]:
-        """Kraken spot symbols behind the crypto 15-minute markets. Kalshi settles on the BRTI-style index; Kraken's own trades are a faster look at the same price."""
-        out = []
-        for ser in self._series():
-            inst = instrument_for(ser, load_instruments(self.s.data_dir))
-            if inst and inst.symbol.startswith("kraken:") and index_for_series(ser) is not None:
-                out.append(inst.symbol)
-        return sorted(set(out))
-
-    def sample_kraken(self) -> None:
-        """Store Kraken's latest price for each crypto symbol beside the index ticks, to test whether a faster exchange price leads the quote."""
-        kr = getattr(self.feed, "kraken", None)
-        if kr is None:
-            return
-        for sym in self._crypto_symbols():
-            got = kr.latest(sym)
-            if got is not None:
-                self.tape.add_feed(sym, got[0], got[1])
-        # The currency 15-minute markets settle on ONE Pyth price at the close (not an average); Pyth's own feed is closed to us, so Kraken's spot for the same pairs is recorded once a second as `krakenfx:EUR/USD` etc.
-        # to test whether spot against the strike tells a collapse in the last minutes (scripts/fx_guard_study.py once a few days are in).
-        for pair in FX_PAIRS:
-            sym = PAIR_PREFIX + pair
-            got = kr.latest(sym)
-            if got is None:  # first use subscribes the pair; the next sample finds its price
-                try:
-                    kr.series(sym)
-                except Exception:
-                    continue
-                got = kr.latest(sym)
-            if got is not None:
-                self.tape.add_feed("krakenfx:" + pair, got[0], got[1])
-
     def sample_feed(self) -> None:
-        self.sample_kraken()
+        """Store Hyperliquid's latest price for each commodity. Crypto and currency decisions do not read Kraken or Coinbase."""
         hl = getattr(self.feed, "hyperliquid", None)
         if hl is None:
             return
@@ -556,8 +519,6 @@ class TapeRecorder:
             self.extra_stream.start()
         if self.futflow is not None:
             self.futflow.start()
-        if self.coinbase is not None:
-            self.coinbase.start()
         self._thread = threading.Thread(target=self._run, name="tape", daemon=True)
         self._thread.start()
         # Listing the series is slow (a request each, on a shared client): it runs on its own thread so it can never hold up the writes below.
@@ -570,8 +531,6 @@ class TapeRecorder:
         self.extra_stream.close()
         if self.futflow is not None:
             self.futflow.close()
-        if self.coinbase is not None:
-            self.coinbase.close()
 
     def _refresh_loop(self) -> None:
         while not self._stop.is_set():

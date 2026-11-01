@@ -23,7 +23,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from . import curve, forecast, shape
-from .commodities import CommodityError, CommodityPricer
+from .commodities import CommodityError, CommodityPricer, instrument_for, load_instruments
 from .config import Settings
 from .kalshiws import index_for_series
 from .lanes import CURVE, FORECAST, LADDER, LLM, MARKET, SHAPE, LaneSpec
@@ -397,9 +397,25 @@ class LadderEstimator:
         # the thin near-expiry ladders of the same instrument then reuse.
         wanted = {shot.event_ticker for shot in shots}
         priced: dict[str, dict[str, tuple[float, str]]] = {}
+        instruments = load_instruments(s.data_dir)
         for event in sorted(wanted, key=lambda ev: -len(by_event.get(ev, []))):
+            rows = by_event.get(event, [])
+            series = (rows[0].get("series_ticker") if rows else "") or event.split("-")[0]
+            inst = instrument_for(series, instruments)
+            if spec.always and inst is not None and inst.symbol.startswith("kraken:"):
+                # The lane bets the price band. Do not open Kraken to price it.
+                band: dict[str, tuple[float, str]] = {}
+                for m in rows:
+                    try:
+                        ask = float(m.get("yes_ask_dollars") or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if ask > 0:
+                        band[m["ticker"]] = (ask, "price band")
+                priced[event] = band
+                continue
             try:
-                priced[event] = self.pricer.price_markets(by_event.get(event, []), s, now)
+                priced[event] = self.pricer.price_markets(rows, s, now)
             except CommodityError:
                 priced[event] = {}
         keep: list[tuple[float, LongShot]] = []

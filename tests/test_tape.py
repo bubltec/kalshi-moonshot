@@ -5,7 +5,7 @@ import sqlite3
 import time
 
 from kalshi_moonshot import config, kalshiws, leadlag
-from kalshi_moonshot.tape import Tape, TapeRecorder
+from kalshi_moonshot.tape import Tape, TapeRecorder, recent
 
 QUOTE = {"type": "ticker", "sid": 1, "msg": {
     "market_ticker": "KXBTC15M-26OCT192030-30", "price_dollars": "0.4700", "yes_bid_dollars": "0.4600",
@@ -142,22 +142,24 @@ def test_build_tracks_aligns_quotes_and_the_index(tmp_path):
 
 
 
-def test_the_recorder_stores_kraken_prices_for_the_crypto_markets_only(tmp_path):
+def test_the_recorder_does_not_sample_kraken(tmp_path):
     s = config.load()
     s = type(s)(**{**s.__dict__, "data_dir": tmp_path})
 
     class Kraken:
         def latest(self, symbol):
-            return (80000.0, 100.0) if symbol == "kraken:BTC/USD" else None  # the others have not ticked yet
+            raise AssertionError(symbol)
+
+        def series(self, symbol):
+            raise AssertionError(symbol)
 
     class Feed:
         kraken = Kraken()
 
     rec = TapeRecorder(object(), s, Feed())  # type: ignore[arg-type]
-    assert "kraken:BTC/USD" in rec._crypto_symbols() and not any("PAXG" in x or "XAUT" in x for x in rec._crypto_symbols())
-    rec.sample_kraken()
+    rec.sample_feed()
     rec.tape.flush()
-    assert rec.tape.db.execute("SELECT symbol, px FROM feed_ticks").fetchall()[0][:] == ("kraken:BTC/USD", 80000.0)
+    assert rec.tape.db.execute("SELECT count(*) FROM feed_ticks").fetchone()[0] == 0
 
 
 def test_extra_series_are_recorded_on_their_own_connection(tmp_path):
