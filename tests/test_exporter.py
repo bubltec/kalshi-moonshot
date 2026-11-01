@@ -5,7 +5,7 @@ import time
 from kalshi_moonshot import exporter
 
 NOW = 1_800_000_000.0
-FORBIDDEN_KEY = re.compile(r"stake|usd|pnl|price|bid|ask|cost|roi|dollar|contract|fee|ticker|entry|exit_|settled_ts|^ts$|time", re.I)
+FORBIDDEN_KEY = re.compile(r"stake|usd|pnl|price|bid|ask|cost|roi|dollar|contract|fee|ticker|entry|exit_|settled_ts|^ts$|time", re.IGNORECASE)
 ALLOWED_TOP = set(exporter.PUBLIC_KEYS)
 ALLOWED_LANE = set(exporter.PUBLIC_LANE_KEYS)
 
@@ -83,7 +83,7 @@ def test_validate_public_accepts_the_export_and_rejects_anything_else():
 
 
 def test_only_current_lanes_are_public_and_a_retired_lane_stays_in_the_admin_file():
-    r = rows() + [bet(300, lane="climb_down", mode="observe")]
+    r = [*rows(), bet(300, lane="climb_down", mode="observe")]
     active = {"crypto_favorite"}
     pub = exporter.build_public(r, NOW, active)
     assert [lane["lane"] for lane in pub["lanes"]] == ["crypto_favorite"]
