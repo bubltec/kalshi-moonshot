@@ -146,6 +146,19 @@ CREATE TABLE IF NOT EXISTS shadow (
 );
 CREATE INDEX IF NOT EXISTS idx_shadow_ticker ON shadow(ticker, ts);
 
+CREATE TABLE IF NOT EXISTS position_checks (
+  ticker TEXT NOT NULL, lane TEXT NOT NULL, mark INTEGER NOT NULL,  -- one look at an open position per mark: seconds left it stands for (240, 210 ... 30, 10); see checkins.py
+  side TEXT, ts REAL NOT NULL, left_s REAL, close_ts REAL,
+  entry REAL,                    -- the price paid, in the side's terms
+  bid REAL, other_ask REAL,      -- what the side could be sold for, and what the other side costs
+  strike REAL, spot REAL, spot_age REAL,
+  through REAL,                  -- signed share of the strike the index is through against the side (positive = on the losing side)
+  through_on INTEGER, through_kept INTEGER,  -- the strike-through watch's own state
+  features TEXT,                 -- JSON: the full feature snapshot (factors.snapshot_now) at that moment
+  PRIMARY KEY (ticker, lane, mark)
+);
+CREATE INDEX IF NOT EXISTS idx_position_checks_ts ON position_checks(ts);
+
 CREATE TABLE IF NOT EXISTS behavior_cases (
   ticker TEXT NOT NULL, side TEXT NOT NULL, ts REAL NOT NULL, kind TEXT NOT NULL,  -- kind: 'moment' (a sampled moment of a finished window) or 'buy' (our own real buy)
   series TEXT, close_ts REAL,

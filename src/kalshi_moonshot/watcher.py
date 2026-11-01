@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, NamedTuple
 
-from . import buyer, manual, paperfill, runner, settlement
+from . import buyer, checkins, manual, paperfill, runner, settlement
 from .config import Settings
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series
@@ -152,6 +152,7 @@ class Target:
     through_best: float = 0.0  # the closest the index has come back toward the strike since that low
     through_best_ts: float = 0.0  # when that recovery last improved, or when the low was set if it has not
     through_bounce: bool = False  # the index has moved back toward the strike since the low
+    checked: set[int] = field(default_factory=set)  # check-in marks (checkins.MARKS) already handled for this position
     through_since: float = 0.0  # when the current stretch at or past the 0.003% marker began. 0 = not in one
     scalp_high_ts: float = 0.0  # when that high last rose
     scalp_plateau: float = 0.0  # lane scalp_plateau_seconds: sell a bid that has made no new high for this long (0 = off)
@@ -377,6 +378,7 @@ class ProfitWatcher:
         self.client_for: Callable[[str], Any] | None = None  # lane -> the venue that holds it; Kalshi when unset
         self.manual = manual.ManualPositions(client)
         self.store_factory = store_factory
+        self._checks: queue.Queue[Any] = queue.Queue(maxsize=200)  # (target, mark, time, spot) waiting to be saved by checkins.py
         self.targets: dict[tuple[str, str], Target] = {}  # keyed by (ticker, lane)
         self._paper_rest_at = 0.0
         self._hunts: dict[str, Hunt] = {}  # ticker -> a burst_hunt watch (no position)
@@ -1142,6 +1144,12 @@ class ProfitWatcher:
         with self._lock:
             targets = list(self.targets.values())
         for t in targets:
+            if t.close_ts > 0:
+                mark = checkins.due(t.close_ts - now, t.checked)
+                if mark is not None:
+                    with contextlib.suppress(queue.Full):
+                        self._checks.put_nowait((t, mark, now, self._spot.get(t.index_id) if t.index_id else None))  # the tape read happens on its own thread, never here
+        for t in targets:
             key = (t.ticker, t.lane)
             if (t.scalp_dip_since is not None or (t.scalp_plateau > 0 and t.scalp_high_ts > 0)) and t.last_ts and key not in self._inflight:
                 why = self._scalp(t, t.last_bid, now)  # a dip that has held 3 s while no quote arrived
@@ -1634,6 +1642,22 @@ class ProfitWatcher:
                 log.exception("watcher: timer check failed")
             self._stop.wait(1.0)
 
+    def _run_checks(self) -> None:
+        """Save the check-in rows (checkins.py). Slow reads of the tape live here so the one-second timer and the sell thread never wait on them."""
+        store = None
+        while not self._stop.is_set():
+            try:
+                t, mark, now, spot = self._checks.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            try:
+                store = store or self.store_factory()
+                row = checkins.build_row(t, mark, now, spot, checkins.snapshot(self.get_settings(), t))
+                checkins.record(store, row)
+            except Exception:
+                log.exception("watcher: could not save a check-in for %s", getattr(t, "ticker", "?"))
+                store = None
+
     def _run_refresh(self) -> None:
         while not self._stop.is_set():
             try:
@@ -1655,7 +1679,7 @@ class ProfitWatcher:
             return
         for fn, name in (
             (self._run_refresh, "watch-refresh"), (self._run_sells, "watch-sell"), (self._run_buys, "watch-buy"), (self._run_timers, "watch-timer"),
-            (self._run_fills, "watch-fills"),
+            (self._run_fills, "watch-fills"), (self._run_checks, "watch-checks"),
         ):
             th = threading.Thread(target=fn, name=name, daemon=True)
             th.start()
