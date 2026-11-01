@@ -42,11 +42,12 @@ class SiteStack(Stack):
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL, enforce_ssl=True, encryption=s3.BucketEncryption.S3_MANAGED,
             removal_policy=RemovalPolicy.RETAIN,
         )
-        bot_role = str(self.node.try_get_context("bot_role_arn") or "")  # the bot host's role (KalshiMoonshotBot HostRole), set in cdk.json
-        if bot_role:
+        # Who the bot signs in as: the archive user whose keys are in the bot's .env (environment keys win over the host role), and the host role itself. Both set in cdk.json.
+        writers = [str(arn) for arn in (self.node.try_get_context("bot_principal_arns") or [])]
+        if writers:
             # Granted here, on the bucket, rather than on the role: the bot stack is in another region and changing it would redeploy the live host.
             bucket.add_to_resource_policy(iam.PolicyStatement(
-                sid="BotPublishesThePublicCounts", effect=iam.Effect.ALLOW, principals=[iam.ArnPrincipal(bot_role)],
+                sid="BotPublishesThePublicCounts", effect=iam.Effect.ALLOW, principals=[iam.ArnPrincipal(arn) for arn in writers],
                 actions=["s3:PutObject"], resources=[bucket.arn_for_objects("public/public.json")],  # that one object: no other key, no read, no delete
             ))
         certificate = acm.Certificate(self, "Certificate", domain_name=SITE_DOMAIN, validation=acm.CertificateValidation.from_dns(zone))
