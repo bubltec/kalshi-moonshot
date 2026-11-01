@@ -137,19 +137,28 @@ def test_strike_through_sale_stays_out_of_a_lane_until_it_is_set(tmp_path, monke
     assert lanes.version_of(plain, s) == lanes.version_of(lanes.LaneSpec(**plain.__dict__), s)
 
 
-def test_a_strike_through_sells_at_the_bid_once_the_index_is_through(tmp_path, monkeypatch):
+def _clear_through(t):
+    t.through_kept = t.through_on = t.through_bounce = False
+    t.through_worst = t.through_best = t.through_best_ts = 0.0
+
+
+def test_a_strike_through_watches_the_cross_and_sells_when_the_bounce_fails(tmp_path, monkeypatch):
     w, _s, store, close = _through_watcher(tmp_path, monkeypatch)
     t = w.targets[("KXBTC15M-1", "guarded")]
     assert t.strike == 100.0 and t.index_id == "BRTI" and t.strike_through == 0.003 and t.strike_through_seconds == 60
+    pause = t.strike_through_seconds / 2
     now = close - 50  # 50s left, inside the 60s window
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.40, "ask": 0.41, "ts": now - 0.2})
     w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 100.5})  # still on the winning side of a YES
     assert w._jobs.empty()
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.93, "ask": 0.94, "ts": now + 7})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 10, "value": 99.996})  # 0.004% through, but the bid is 3s old
-    assert w._jobs.empty()
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 10, "value": 99.996})  # 0.004% through starts the watch; the old bid is not a sale
+    assert w._jobs.empty() and t.through_on
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": now + 20 - 0.4})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 20, "value": 99.996})  # the 62c bid is from this second
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 20, "value": 99.996})  # ten seconds under is still inside the half-window
+    assert w._jobs.empty()
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": now + 10 + pause - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 10 + pause, "value": 99.996})  # still 0.004% through, and half the window has run out
     sell = w._jobs.get_nowait()
     assert sell.why.startswith("strike-through") and "0.62" in sell.why
     assert w._strike_through_hit(t, 0.62, close - 90, close - 90) is None  # 90s left: outside the window
@@ -157,17 +166,52 @@ def test_a_strike_through_sells_at_the_bid_once_the_index_is_through(tmp_path, m
     w._spot["BRTI"] = (close - 50, 99.996)
     assert w._strike_through_hit(t, 0.62, close - 50, close - 50) is None  # 0 turns the sale off
     t.strike_through = 0.003
+    _clear_through(t)
     w._spot["BRTI"] = (close - 40, 99.996)
-    assert w._strike_through_hit(t, 1.0, close - 40, close - 40) is None  # a $1 bid is still a win
+    assert w._strike_through_hit(t, 1.0, close - 40, close - 40) is None  # the cross only arms the watch
+    w._spot["BRTI"] = (close - 40 + pause, 99.996)
+    assert w._strike_through_hit(t, 1.0, close - 40 + pause, close - 40 + pause) is None  # a $1 bid is still a win
+    _clear_through(t)
     t.side = "no"
     w._spot["BRTI"] = (close - 40, 100.004)  # 0.004% through a NO
-    assert w._strike_through_hit(t, 0.54, close - 40, close - 40).startswith("strike-through")
+    assert w._strike_through_hit(t, 0.54, close - 40, close - 40) is None
+    w._spot["BRTI"] = (close - 40 + pause, 100.004)
+    assert w._strike_through_hit(t, 0.54, close - 40 + pause, close - 40 + pause).startswith("strike-through")
     w._inflight.add(("KXBTC15M-1", "guarded"))
     w.client.market = lambda ticker: {"ticker": ticker, "yes_bid_dollars": "0.62", "yes_ask_dollars": "0.63", "title": "t", "close_time": "2099-01-01T00:00:00Z"}
     t.side = "yes"
     w._sell("KXBTC15M-1", "guarded", "strike-through: test")  # 0.62 under the 0.90 paid: a profit-take would refuse this
     assert [r for r in store.open_bets() if r["lane"] == "guarded"] == []
     assert store.db.execute("SELECT exit_price FROM decisions WHERE lane='guarded'").fetchone()["exit_price"] == pytest.approx(0.62)
+
+
+def test_a_strike_through_sells_when_the_bounce_turns_back_down(tmp_path, monkeypatch):
+    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch)
+    now = close - 50
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.40, "ask": 0.41, "ts": now - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 99.980})  # 0.020% through starts the watch
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 2, "value": 99.990})  # back to 0.010% through: the bounce
+    assert w._jobs.empty()
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.55, "ask": 0.56, "ts": now + 3 - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 3, "value": 99.988})  # 0.002% worse than the bounce, short of another 0.003%
+    sell = w._jobs.get_nowait()
+    assert sell.why.startswith("strike-through") and "0.55" in sell.why
+
+
+def test_a_strike_through_that_comes_back_to_the_winning_side_is_held(tmp_path, monkeypatch):
+    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    now = close - 50
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.32, "ask": 0.35, "ts": now - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 99.9815})  # 0.0185% through: the watch starts, the sharp drop is not a sale
+    assert w._jobs.empty() and t.through_on and not t.through_kept
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 6, "value": 99.9868})  # a bounce back toward the strike, still under
+    assert w._jobs.empty() and t.through_bounce
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 11, "value": 100.002})  # back on the winning side
+    assert t.through_kept and w._jobs.empty()
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.20, "ask": 0.22, "ts": now + 20 - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 20, "value": 99.990})  # through again later: the position is already kept to the close
+    assert w._jobs.empty()
 
 
 def test_the_guard_sells_when_the_chance_falls_under_the_bid_and_stays_quiet_otherwise(tmp_path, monkeypatch):

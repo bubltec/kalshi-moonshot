@@ -159,8 +159,8 @@ class LaneSpec:
     cash_left_seconds: float = 0.0  # with this many seconds left, sell a hover that is still under the price paid (0 = off; strategy.cash_if_losing). A bid still above the price paid is held
     cash_at: float = 0.95  # or sooner, the moment the bid prints this
     cash_out_at: float = 0.0  # sell the moment the bid is at or under this price (0 = off): a cash-out line in dollars, so a bet that has collapsed returns what is left of it. Not a fraction of the price paid
-    strike_through_sale: float = 0.0  # percent of the strike (0.003 = 0.003%). In the last strike_through_seconds, sell when the settlement index is already this far through the strike against the side held. 0 = off
-    strike_through_seconds: float = 60.0  # that sale only looks this close to the close. 0 = off
+    strike_through_sale: float = 0.0  # percent of the strike (0.003 = 0.003%). In the last strike_through_seconds, a cross this far through the strike starts a watch: a return to the winning side is held to the close, a turn back down after the bounce sells, and a pause of half that window still under the strike sells. 0 = off
+    strike_through_seconds: float = 60.0  # the watch only looks this close to the close, and a plateau sells after half of it. 0 = off
     watch_at: float = 0.0  # a favorite is watched once the bid prints this (0 = off; the moonshot lanes leave it off). A downtrend that stays there is sold after watch_ride_seconds, scaled by the time left (strategy.watch_trend). A hover or a spike is held
     watch_patient_left: float = 420.0  # watch_ride_seconds is the wait when at least this many seconds remain; less time left shortens the wait in proportion
     watch_ride_seconds: float = 0.0  # how long a visit under watch_at may last, at watch_patient_left, before a downtrend is abandoned (0 = a downtrend sells as soon as the last 3 seconds say so)

@@ -143,8 +143,14 @@ class Target:
     scalp_dip_since: float | None = None  # when the bid first went scalp_dip under the high and has stayed there
     scalp_high: float = 0.0  # the highest bid since the arm printed
     cash_out: float = 0.0  # lane cash_out_at: sell the moment the bid is at or under this price (0 = off)
-    strike_through: float = 0.0  # lane strike_through_sale, in percent of the strike (0.003 = 0.003%). 0 = off
-    strike_through_seconds: float = 0.0  # that sale only looks in the last this many seconds
+    strike_through: float = 0.0  # lane strike_through_sale, in percent of the strike (0.003 = 0.003%). 0 = off. This far through starts a watch; it does not sell
+    strike_through_seconds: float = 0.0  # that watch only looks in the last this many seconds
+    through_kept: bool = False  # the index came back to the winning side after a cross: hold this position to the close
+    through_on: bool = False  # a cross has armed the watch and the index is still through
+    through_worst: float = 0.0  # the deepest through-fraction of this visit
+    through_best: float = 0.0  # the closest the index has come back toward the strike since that low
+    through_best_ts: float = 0.0  # when that recovery last improved, or when the low was set if it has not
+    through_bounce: bool = False  # the index has moved back toward the strike since the low
     scalp_high_ts: float = 0.0  # when that high last rose
     scalp_plateau: float = 0.0  # lane scalp_plateau_seconds: sell a bid that has made no new high for this long (0 = off)
     index_id: str = ""  # the settlement index of this market
@@ -418,7 +424,7 @@ class ProfitWatcher:
             if src is not None:
                 self._spot_src[idx] = src
             self._spot[idx] = (now, float(e["value"]))
-            self._strike_through_on_index(idx, now)  # the bid collapses within a few seconds of the cross, so the sale is checked on the index tick, not the next quote
+            self._strike_through_on_index(idx, now)  # the watch follows the index tick: a cross starts it, and the sale is the failed bounce afterward
             return
         if e.get("kind") == "trade" and e.get("ticker") and e.get("count"):
             self._on_trade(e)
@@ -740,8 +746,13 @@ class ProfitWatcher:
             self._tls.tape = self.tape_factory()
         return getattr(self._tls, "tape", None)
 
+    def _strike_through_clear(self, t: Target) -> None:
+        t.through_on = False
+        t.through_worst = t.through_best = t.through_best_ts = 0.0
+        t.through_bounce = False
+
     def _strike_through_on_index(self, index_id: str, now: float) -> None:
-        """A held favorite whose index just went through the strike. The latest bid is used only when it printed within a second of this tick; an older bid is from before the cross."""
+        """A held favorite whose index has crossed the strike. The latest bid is used only when it printed within a second of this tick; an older bid is from before the cross."""
         with self._lock:
             hits = [t for t in self.targets.values() if t.index_id == index_id and t.strike_through > 0]
         for t in hits:
@@ -754,9 +765,9 @@ class ProfitWatcher:
                 self._jobs.put(SellSignal(t.ticker, t.lane, reason))
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
-        """Sell in the last strike_through_seconds once the settlement index is strike_through percent through the strike against the side held.
-        The index has to be through already (a tick still on the winning side says nothing), and the bid has to be from that tick, not the quote from before it. A bid still priced as a win (0.99 or more) is left to settle. 0 = off."""
-        if t.strike_through <= 0 or t.strike_through_seconds <= 0 or t.strike <= 0 or t.close_ts <= 0 or not t.index_id or bid <= 0 or bid >= 0.99:
+        """In the last strike_through_seconds, a cross of strike_through percent starts a watch. It does not sell.
+        The index then either comes back to the winning side, and the position is held to the close, or it turns back down after that bounce, or it is still under the strike after half of strike_through_seconds. Either of those sells the bid from that tick. A bid still priced as a win (0.99 or more) is left to settle. 0 = off."""
+        if t.through_kept or t.strike_through <= 0 or t.strike_through_seconds <= 0 or t.strike <= 0 or t.close_ts <= 0 or not t.index_id:
             return None
         left = t.close_ts - now
         if not (SETTLE_LAST < left <= t.strike_through_seconds):
@@ -765,12 +776,35 @@ class ProfitWatcher:
         if spot is None:
             return None
         spot_ts, value = spot
-        if value <= 0 or now - spot_ts > THROUGH_SPOT or quote_ts < spot_ts - THROUGH_QUOTE:
+        if value <= 0 or now - spot_ts > THROUGH_SPOT:
             return None
         through = (t.strike - value) / t.strike if t.side == "yes" else (value - t.strike) / t.strike
-        if through < t.strike_through / 100.0:
+        line = t.strike_through / 100.0
+        pause = t.strike_through_seconds / 2.0
+        if through <= 0:
+            if t.through_on:
+                t.through_kept = True  # the bounce got back to the winning side: this position is held to the close
+                self._strike_through_clear(t)
             return None
-        return f"strike-through: index is {through * 100:.4f}% through the strike with {left:.0f}s left, bid {bid:.2f}"
+        if not t.through_on:
+            if through < line:
+                return None
+            t.through_on, t.through_worst, t.through_best, t.through_best_ts, t.through_bounce = True, through, through, now, False
+            return None  # 0.003% is the marker that starts the watch, not a sale
+        if through < t.through_best:
+            t.through_best, t.through_best_ts, t.through_bounce = through, now, True
+            return None  # the bounce is still climbing back toward the strike
+        fell = t.through_bounce and through > t.through_best
+        if not fell and through > t.through_worst:
+            t.through_worst, t.through_best, t.through_best_ts, t.through_bounce = through, through, now, False
+            return None  # still the sharp drop: the bounce has not had its chance
+        if not fell and now - t.through_best_ts < pause:
+            return None
+        if bid <= 0 or bid >= 0.99 or quote_ts < spot_ts - THROUGH_QUOTE:
+            return None
+        if fell:
+            return f"strike-through: index fell back to {through * 100:.4f}% through the strike after a bounce, {left:.0f}s left, bid {bid:.2f}"
+        return f"strike-through: index paused {through * 100:.4f}% through the strike, {left:.0f}s left, bid {bid:.2f}"
 
     def _settlement_hit(self, t: Target, bid: float, now: float, e: dict[str, Any]) -> str | None:
         """The last-minute guard. Kalshi settles a 15-minute crypto market on the 60-second average of the index at the close, so in the last 150 seconds the chance this side finishes ahead can be computed exactly from the spot, the locked part
