@@ -66,7 +66,7 @@ export async function handler(event, _context, deps = {}) {
   const origin = env.SITE_ORIGIN;
   const allowed = (env.ADMIN_GITHUB_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
   if (!env.GITHUB_CLIENT_ID || allowed.length === 0) return page(503, 'admin login is not configured');
-  const path = event.rawPath || '/';
+  const path = (event.rawPath || '/').replace(/\/+$/, '') || '/'; // /auth/github/ is the same page
   const query = event.queryStringParameters || {};
   const cookies = parseCookies((event.cookies || []).join('; '));
 

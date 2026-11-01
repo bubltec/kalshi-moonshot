@@ -54,3 +54,8 @@ test('helpers', () => {
   assert.deepEqual(parseCookies('a=1; b=2=3'), { a: '1', b: '2=3' });
   assert.ok(safeEqual('x', 'x') && !safeEqual('x', 'y') && !safeEqual('', ''));
 });
+
+test('a trailing slash is the same page', async () => {
+  const r = await handler({ rawPath: '/auth/github/', queryStringParameters: {}, cookies: [] }, {}, { env, secrets, fetch: github(1) });
+  assert.equal(r.statusCode, 302);
+});
