@@ -110,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     client = _client()
     doc = _read(client, s.site_bucket)
     diffs = differences(s, text, doc)
-    if not diffs:
+    if not diffs or doc is None:
         print("the page has no changes that differ from the lane file")
         return 0
     print(f"page changes (revision {doc['revision']}) against {path}:")
