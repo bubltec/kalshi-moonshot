@@ -139,7 +139,7 @@ def test_strike_through_sale_stays_out_of_a_lane_until_it_is_set(tmp_path, monke
 
 def _clear_through(t):
     t.through_kept = t.through_on = t.through_bounce = False
-    t.through_worst = t.through_best = t.through_best_ts = 0.0
+    t.through_worst = t.through_best = t.through_best_ts = t.through_since = 0.0
 
 
 def test_a_strike_through_watches_the_cross_and_sells_when_the_bounce_fails(tmp_path, monkeypatch):
@@ -183,6 +183,31 @@ def test_a_strike_through_watches_the_cross_and_sells_when_the_bounce_fails(tmp_
     w._sell("KXBTC15M-1", "guarded", "strike-through: test")  # 0.62 under the 0.90 paid: a profit-take would refuse this
     assert [r for r in store.open_bets() if r["lane"] == "guarded"] == []
     assert store.db.execute("SELECT exit_price FROM decisions WHERE lane='guarded'").fetchone()["exit_price"] == pytest.approx(0.62)
+
+
+def test_a_stay_through_sells_before_the_last_minute_and_a_shorter_dip_is_held(tmp_path, monkeypatch):
+    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    now = close - 300  # five minutes left: outside the last-minute sale
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.85, "ask": 0.86, "ts": now - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 99.996})  # 0.004% through starts the stay clock
+    assert w._jobs.empty()
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.84, "ask": 0.85, "ts": now + 34 - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 34, "value": 99.996})  # 34s is the dip that came back and paid
+    assert w._jobs.empty()
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 40, "value": 100.01})  # back on the winning side before 45s
+    assert t.through_kept and w._jobs.empty()
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.83, "ask": 0.84, "ts": now + 40 + watcher.THROUGH_STAY - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 40 + watcher.THROUGH_STAY, "value": 99.990})
+    assert w._jobs.empty()  # kept to the close, so the later stay is not a sale
+    _clear_through(t)
+    later = close - 280
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.85, "ask": 0.86, "ts": later - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": later, "value": 99.996})
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.80, "ask": 0.81, "ts": later + watcher.THROUGH_STAY - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": later + watcher.THROUGH_STAY, "value": 99.996})
+    sell = w._jobs.get_nowait()
+    assert sell.why.startswith("strike-through") and "0.80" in sell.why
 
 
 def test_a_strike_through_sells_when_the_bounce_turns_back_down(tmp_path, monkeypatch):

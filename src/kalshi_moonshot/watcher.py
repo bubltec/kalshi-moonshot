@@ -63,6 +63,7 @@ BUY_BAND = (0.05, 0.25)  # the other side is bought for real only when it costs 
 SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the close)
 THROUGH_QUOTE = 1.0  # a bid older than this, before the index tick that went through, is the quote from before the cross
 THROUGH_SPOT = 5.0  # an index tick older than this is not a reason to sell
+THROUGH_STAY = 45.0  # outside the last minute, this long continuously through is a sale. A shorter dip is the one that comes back and pays
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
 HOLD_MARGIN = 0.01  # holding must beat the sale value by this much before an exit is withheld
 RETRY_AFTER = 15.0  # seconds before a declined sale is looked at again
@@ -151,6 +152,7 @@ class Target:
     through_best: float = 0.0  # the closest the index has come back toward the strike since that low
     through_best_ts: float = 0.0  # when that recovery last improved, or when the low was set if it has not
     through_bounce: bool = False  # the index has moved back toward the strike since the low
+    through_since: float = 0.0  # when the current stretch at or past the 0.003% marker began. 0 = not in one
     scalp_high_ts: float = 0.0  # when that high last rose
     scalp_plateau: float = 0.0  # lane scalp_plateau_seconds: sell a bid that has made no new high for this long (0 = off)
     index_id: str = ""  # the settlement index of this market
@@ -424,7 +426,7 @@ class ProfitWatcher:
             if src is not None:
                 self._spot_src[idx] = src
             self._spot[idx] = (now, float(e["value"]))
-            self._strike_through_on_index(idx, now)  # the watch follows the index tick: a cross starts it, and the sale is the failed bounce afterward
+            self._strike_through_on_index(idx, now)  # the watch follows the index tick: a long stay through sells at any time, and the last minute still sells a failed bounce
             return
         if e.get("kind") == "trade" and e.get("ticker") and e.get("count"):
             self._on_trade(e)
@@ -748,7 +750,7 @@ class ProfitWatcher:
 
     def _strike_through_clear(self, t: Target) -> None:
         t.through_on = False
-        t.through_worst = t.through_best = t.through_best_ts = 0.0
+        t.through_worst = t.through_best = t.through_best_ts = t.through_since = 0.0
         t.through_bounce = False
 
     def _strike_through_on_index(self, index_id: str, now: float) -> None:
@@ -765,12 +767,12 @@ class ProfitWatcher:
                 self._jobs.put(SellSignal(t.ticker, t.lane, reason))
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
-        """In the last strike_through_seconds, a cross of strike_through percent starts a watch. It does not sell.
-        The index then either comes back to the winning side, and the position is held to the close, or it turns back down after that bounce, or it is still under the strike after half of strike_through_seconds. Either of those sells the bid from that tick. A bid still priced as a win (0.99 or more) is left to settle. 0 = off."""
+        """A cross of strike_through percent starts a watch. It does not sell.
+        Back on the winning side, the position is held to the close. A stretch that stays through for THROUGH_STAY seconds sells at any time left. In the last strike_through_seconds the same watch also sells a turn back down, or a pause of half that window. A bid still priced as a win (0.99 or more) is left to settle. 0 = off."""
         if t.through_kept or t.strike_through <= 0 or t.strike_through_seconds <= 0 or t.strike <= 0 or t.close_ts <= 0 or not t.index_id:
             return None
         left = t.close_ts - now
-        if not (SETTLE_LAST < left <= t.strike_through_seconds):
+        if left <= SETTLE_LAST:
             return None
         spot = self._spot.get(t.index_id)
         if spot is None:
@@ -783,27 +785,37 @@ class ProfitWatcher:
         pause = t.strike_through_seconds / 2.0
         if through <= 0:
             if t.through_on:
-                t.through_kept = True  # the bounce got back to the winning side: this position is held to the close
+                t.through_kept = True  # back on the winning side before the stay ran out: hold this position to the close
                 self._strike_through_clear(t)
             return None
+        if through >= line:
+            if t.through_since <= 0:
+                t.through_since = now  # the 45s clock counts only a continuous stretch past the marker
+        else:
+            t.through_since = 0.0
+        stayed = t.through_since > 0 and now - t.through_since >= THROUGH_STAY
         if not t.through_on:
             if through < line:
                 return None
             t.through_on, t.through_worst, t.through_best, t.through_best_ts, t.through_bounce = True, through, through, now, False
-            return None  # 0.003% is the marker that starts the watch, not a sale
-        if through < t.through_best:
-            t.through_best, t.through_best_ts, t.through_bounce = through, now, True
-            return None  # the bounce is still climbing back toward the strike
-        fell = t.through_bounce and through > t.through_best
-        if not fell and through > t.through_worst:
-            t.through_worst, t.through_best, t.through_best_ts, t.through_bounce = through, through, now, False
-            return None  # still the sharp drop: the bounce has not had its chance
-        if not fell and now - t.through_best_ts < pause:
+            return None  # 0.003% starts the watch, including the stay clock
+        in_window = left <= t.strike_through_seconds
+        fell = False
+        if in_window:
+            if through < t.through_best:
+                t.through_best, t.through_best_ts, t.through_bounce = through, now, True
+            else:
+                fell = t.through_bounce and through > t.through_best
+                if not fell and through > t.through_worst:
+                    t.through_worst, t.through_best, t.through_best_ts, t.through_bounce = through, through, now, False
+        if not stayed and not (in_window and (fell or now - t.through_best_ts >= pause)):
             return None
         if bid <= 0 or bid >= 0.99 or quote_ts < spot_ts - THROUGH_QUOTE:
             return None
         if fell:
             return f"strike-through: index fell back to {through * 100:.4f}% through the strike after a bounce, {left:.0f}s left, bid {bid:.2f}"
+        if stayed and not in_window:
+            return f"strike-through: index stayed {through * 100:.4f}% through the strike, {left:.0f}s left, bid {bid:.2f}"
         return f"strike-through: index paused {through * 100:.4f}% through the strike, {left:.0f}s left, bid {bid:.2f}"
 
     def _settlement_hit(self, t: Target, bid: float, now: float, e: dict[str, Any]) -> str | None:
