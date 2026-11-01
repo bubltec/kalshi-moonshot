@@ -2,6 +2,9 @@
 # Send this Mac's lane file and .env to the Ohio host. The bot picks them up on its next decision.
 #   scripts/cloud_push.sh            # strategies.toml, .env, and .secrets
 #   scripts/cloud_push.sh --build    # that, then a new image and a container restart
+# The admin page's Settings tab changes lanes on top of strategies.toml. Pushing the file while such changes exist would leave them shadowing it, so the push stops and lists them:
+#   python -m kalshi_moonshot.settings_sync fold    # keep the page's values in the file     (or `drop` to discard them), then push again
+#   scripts/cloud_push.sh --ignore-page-changes     # push anyway
 # One copy of the bot should be running. Stop the local one before the cloud one trades.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -11,7 +14,23 @@ stack="${BOT_STACK:-KalshiMoonshotBot}"
 profile=()
 if [ -n "${AWS_PROFILE:-}" ]; then profile=(--profile "$AWS_PROFILE"); fi
 build=0
-if [ "${1:-}" = "--build" ]; then build=1; fi
+ignore=0
+for arg in "$@"; do
+  case "$arg" in
+    --build) build=1 ;;
+    --ignore-page-changes) ignore=1 ;;
+  esac
+done
+
+if [ "$ignore" = 0 ] && [ -f data/strategies.toml ]; then
+  py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python
+  set +e
+  "$py" -m kalshi_moonshot.settings_sync status
+  code=$?
+  set -e
+  if [ "$code" = 1 ]; then echo "not pushed: settle the page's changes first (see the top of this script)" >&2; exit 1; fi
+  if [ "$code" != 0 ]; then echo "(could not check the page's changes; pushing anyway)" >&2; fi
+fi
 
 put() {
   aws "${profile[@]}" ssm put-parameter --region "$region" --name "$1" --type SecureString --overwrite --value "file://$2" >/dev/null

@@ -48,4 +48,6 @@ export interface ControlState {
 export interface AdminSettings {
   schema: Record<string, Tunable>;
   lanes: Record<string, Record<string, Value>>;
+  /** The lane file's values alone; where a lane differs from this, the value was set on the page. */
+  base?: Record<string, Record<string, Value>>;
 }

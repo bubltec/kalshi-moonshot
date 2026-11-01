@@ -96,12 +96,13 @@ export function Settings({ data, reload }: { data: AdminData; reload: () => void
                   <tbody>
                     {Object.entries(settings.schema).map(([field, t]) => {
                       const now = settings.lanes[l.lane]![field]!;
+                      const fileValue = settings.base?.[l.lane]?.[field];  // what strategies.toml alone gives; a difference means this was changed on this page
                       const draft = drafts[l.lane]?.[field];
                       const changed = draft !== undefined;
                       return (
                         <tr key={field} className={changed ? 'changed' : undefined}>
                           <td>{t.label}</td>
-                          <td>{show(now, t)}</td>
+                          <td>{show(now, t)}{fileValue !== undefined && fileValue !== now ? <Badge tone="warn">file: {show(fileValue, t)}</Badge> : null}</td>
                           <td>
                             {t.kind === 'bool' ? (
                               <Switch label={field} checked={typeof (draft ?? now) === 'boolean' ? (draft ?? now) as boolean : false} onCheckedChange={(v) => setField(l.lane, field, v)} />

@@ -41,7 +41,9 @@ def publish_admin_once(s: Settings, store: Any, client: Any, now: float | None =
     """The admin file (dollars) goes to its own private key, never the public one."""
     specs = lanes.lane_specs(s)
     data = exporter.admin_json(store, now, active=set(specs))
-    data["settings"] = {"schema": overrides.schema(), "lanes": overrides.effective(specs)}  # what the editor shows; the bounds are overrides.TUNABLES
+    path = lanes.strategies_path(s.data_dir)
+    base = overrides.effective(lanes.lane_specs_from(s, path.read_text() if path.is_file() else None, None))  # the lane file alone, so the page can mark what was changed on it
+    data["settings"] = {"schema": overrides.schema(), "lanes": overrides.effective(specs), "base": base}  # what the editor shows; the bounds are overrides.TUNABLES
     try:
         data["control"] = control.state(s, client)
     except Exception:
