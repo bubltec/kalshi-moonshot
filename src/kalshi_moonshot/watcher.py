@@ -357,6 +357,7 @@ class ProfitWatcher:
     ):
         self.spot_side = spot_side  # (ticker, side) -> the chance, from spot against the strike alone, that this side pays; None if unknown
         self._model = settlement.Model(lambda: self.tape_factory() if self.tape_factory is not None else None)  # the exact settlement chance (settlement.py)
+        self._spot_src: dict[str, float] = {}  # index -> source time (ms) of the reading in _spot
         self._spot = self._model.spot  # settlement index -> (time, latest value), from the socket's index ticks
         self._tls = threading.local()
         self._flow: dict[str, dict[int, list[float]]] = {}  # ticker -> second -> [YES-taker contracts, NO-taker contracts], the last 125 seconds
@@ -405,8 +406,17 @@ class ProfitWatcher:
         if e.get("kind") == "fill":
             self._on_fill(e)
             return
-        if e.get("kind") == "index" and e.get("index_id") and e.get("value"):
+        if e.get("kind") in ("index", "index_fast") and e.get("index_id") and e.get("value"):
             idx, now = str(e["index_id"]), float(e["ts"])
+            src = e.get("src_ms")
+            if isinstance(src, (int, float)) and 0 < src < 1e11:
+                src *= 1000  # a source time in seconds, not milliseconds
+            elif not isinstance(src, (int, float)) or src <= 0:
+                src = None
+            if src is not None and src < self._spot_src.get(idx, 0):
+                return  # the two index channels interleave; an older reading never replaces a newer one
+            if src is not None:
+                self._spot_src[idx] = src
             self._spot[idx] = (now, float(e["value"]))
             self._strike_through_on_index(idx, now)  # the bid collapses within a few seconds of the cross, so the sale is checked on the index tick, not the next quote
             return

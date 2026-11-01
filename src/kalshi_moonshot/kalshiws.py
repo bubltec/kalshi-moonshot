@@ -1,9 +1,11 @@
 """Kalshi's authenticated WebSocket: live contract quotes and the settlement indexes themselves.
 
-Three channels on one connection:
+Five channels on one connection (ticker and trade are separate subscriptions, so their markets can change without a reconnect):
 
   fill                every fill on the account, the bot's and yours from the app (the watcher enrolls a hand-placed buy from it)
   ticker              every change of a market's bid / ask / last price, as it happens
+  trade               every public print, with the taker's side
+  cfbenchmarks_value_5hz  the same indexes up to five times a second, with no averages (the strike-through sale reads it; the tape does not)
   cfbenchmarks_value  the CF Benchmarks indexes Kalshi settles its crypto markets on (BRTI for bitcoin,
                       ETHUSD_RTI, ...), about once a second, each with its trailing 60-second average,
                       which is the quantity the 15-minute crypto markets compare
@@ -88,6 +90,12 @@ def parse_message(msg: dict[str, Any], received: float | None = None) -> dict[st
         win = _f((body.get("last_60s_windowed_average_15min") or {}).get("value"))
         return {"kind": "index", "ts": now, "index_id": body["index_id"], "value": value,
                 "avg60": avg, "quarter_avg": win, "src_ms": frame.get("time"), "sts": msg.get("sending_ts_ms")}
+    if kind == "cfbenchmarks_value_5hz":  # up to five ticks a second, no averages: for the sale, never the tape
+        value = _f(body.get("value_usd"))
+        if value is None or not body.get("index_id"):
+            return None
+        return {"kind": "index_fast", "ts": now, "index_id": body["index_id"], "value": value,
+                "src_ms": body.get("source_ts_ms"), "sts": msg.get("sending_ts_ms")}
     return None
 
 
@@ -102,6 +110,9 @@ class KalshiStream:
         self.index_feed, self.fills = index_feed, fills
         self.indices = sorted(set(indices or INDEX_FOR.values()))
         self._tickers: set[str] = set()
+        self._live: set[str] = set()  # the markets the open connection is subscribed to right now
+        self._sids: dict[str, int] = {}  # channel -> subscription id on the open connection
+        self._next_cmd = 100  # ids for update commands; the subscribe commands use 1 to 4
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -111,12 +122,53 @@ class KalshiStream:
         self.last_event_at: float | None = None
 
     def set_tickers(self, tickers: set[str]) -> None:
-        """Replace the markets whose quotes are streamed. A change reconnects (cheap and robust)."""
+        """Replace the markets whose quotes are streamed. An open connection adds and drops markets in place, so the index feed and fills keep flowing."""
         with self._lock:
             changed = tickers != self._tickers
             self._tickers = set(tickers)
         if changed and self._ws is not None and self._loop is not None:
-            asyncio.run_coroutine_threadsafe(self._ws.close(), self._loop)
+            asyncio.run_coroutine_threadsafe(self._sync(), self._loop)
+
+    async def _sync(self) -> None:
+        """Bring the open connection's markets in line with the wanted set. Runs on the stream's own loop, so syncs never interleave."""
+        ws = self._ws
+        if ws is None:
+            return
+        try:
+            with self._lock:
+                want = set(self._tickers)
+            if want == self._live:
+                return
+            sids = [self._sids.get("ticker"), self._sids.get("trade")]
+            if not self._live:  # nothing subscribed yet (or all dropped): a fresh subscribe
+                if self._sids:
+                    return  # a subscribe is already in flight; its ack runs this again
+                for message in self._market_subscriptions(sorted(want)):
+                    await ws.send(json.dumps(message))
+                self._live = want
+                return
+            if None in sids:
+                return  # the acks have not arrived; each runs this again
+            if not want:
+                await ws.send(json.dumps({"id": self._cmd(), "cmd": "unsubscribe", "params": {"sids": sids}}))
+                self._live, self._sids = set(), {}
+                return
+            added, removed = sorted(want - self._live), sorted(self._live - want)
+            for channel, sid in zip(("ticker", "trade"), sids):
+                for action, tickers in (("add_markets", added), ("delete_markets", removed)):
+                    if tickers:
+                        params: dict[str, Any] = {"sids": [sid], "action": action, "market_tickers": tickers}
+                        if channel == "ticker" and action == "add_markets":
+                            params["send_initial_snapshot"] = True
+                        await ws.send(json.dumps({"id": self._cmd(), "cmd": "update_subscription", "params": params}))
+            self._live = want
+        except Exception as exc:
+            log.warning("kalshi websocket: could not update subscription (%s); reconnecting", exc)
+            await ws.close()
+
+    def _cmd(self) -> int:
+        self._next_cmd += 1
+        return self._next_cmd
 
     def start(self) -> None:
         with self._lock:
@@ -145,8 +197,10 @@ class KalshiStream:
                     WS_URL, additional_headers=self.client.ws_headers(WS_URL), open_timeout=15, ping_interval=20,
                 ) as ws:
                     self._ws = ws
+                    self._sids = {}
                     with self._lock:
                         tickers = sorted(self._tickers)
+                    self._live = set(tickers)
                     for message in self.subscriptions(tickers):
                         await ws.send(json.dumps(message))
                     self.connected_at, backoff = time.time(), 1.0
@@ -154,7 +208,7 @@ class KalshiStream:
                         self.handle(raw)
             except Exception as exc:
                 log.warning("kalshi websocket: %s; reconnecting in %.0fs", exc, backoff)
-            self._ws = None
+            self._ws, self._live, self._sids = None, set(), {}
             if self._stop:
                 break
             await asyncio.sleep(backoff)
@@ -165,11 +219,20 @@ class KalshiStream:
         out: list[dict[str, Any]] = []
         if self.index_feed:
             out.append({"id": 1, "cmd": "subscribe", "params": {"channels": ["cfbenchmarks_value"], "index_ids": self.indices}})
+            out.append({"id": 5, "cmd": "subscribe", "params": {"channels": ["cfbenchmarks_value_5hz"], "index_ids": self.indices}})
         if self.fills:
             out.append({"id": 3, "cmd": "subscribe", "params": {"channels": ["fill"]}})  # every fill on the account, no ticker list
         if tickers:
-            out.append({"id": 2, "cmd": "subscribe", "params": {"channels": ["ticker", "trade"], "market_tickers": tickers}})
+            out.extend(self._market_subscriptions(tickers))
         return out
+
+    @staticmethod
+    def _market_subscriptions(tickers: list[str]) -> list[dict[str, Any]]:
+        """Quotes and public trades are separate subscriptions (each has its own sid, which update_subscription needs); a quote snapshot on subscribe spares waiting for a quiet market's next change."""
+        return [
+            {"id": 2, "cmd": "subscribe", "params": {"channels": ["ticker"], "market_tickers": tickers, "send_initial_snapshot": True}},
+            {"id": 4, "cmd": "subscribe", "params": {"channels": ["trade"], "market_tickers": tickers}},
+        ]
 
     def handle(self, raw: str | bytes) -> None:
         try:
@@ -178,6 +241,15 @@ class KalshiStream:
             return
         if msg.get("type") == "error":
             log.warning("kalshi websocket error: %s", str(msg.get("msg"))[:160])
+            if (msg.get("id") or 0) > 100 and self._ws is not None and self._loop is not None:  # a refused update: start over from a clean subscribe
+                asyncio.run_coroutine_threadsafe(self._ws.close(), self._loop)
+            return
+        if msg.get("type") == "subscribed":
+            channel, sid = (msg.get("msg") or {}).get("channel"), (msg.get("msg") or {}).get("sid")
+            if channel in {"ticker", "trade"} and isinstance(sid, int):
+                self._sids[channel] = sid
+                if self._loop is not None and "ticker" in self._sids and "trade" in self._sids:
+                    asyncio.run_coroutine_threadsafe(self._sync(), self._loop)  # the wanted set may have moved since the subscribe went out
             return
         event = parse_message(msg)
         if event is not None:

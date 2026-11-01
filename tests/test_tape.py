@@ -259,6 +259,44 @@ def test_a_recording_only_stream_asks_for_quotes_and_nothing_else():
     live = kalshiws.KalshiStream(object(), lambda e: None)  # type: ignore[arg-type]
     extra = kalshiws.KalshiStream(object(), lambda e: None, index_feed=False, fills=False)  # type: ignore[arg-type]
     channels = lambda stream: [c for m in stream.subscriptions(["T1"]) for c in m["params"]["channels"]]  # noqa: E731
-    assert channels(live) == ["cfbenchmarks_value", "fill", "ticker", "trade"]
+    assert channels(live) == ["cfbenchmarks_value", "cfbenchmarks_value_5hz", "fill", "ticker", "trade"]
     assert channels(extra) == ["ticker", "trade"]
     assert extra.subscriptions([]) == []  # nothing to follow: nothing to subscribe to
+
+
+def test_a_changed_watch_list_updates_the_open_subscription_instead_of_reconnecting():
+    import asyncio
+    import json
+
+    sent: list[dict] = []
+
+    class FakeWs:
+        async def send(self, raw):
+            sent.append(json.loads(raw))
+
+        async def close(self):
+            sent.append({"closed": True})
+
+    stream = kalshiws.KalshiStream(object(), lambda e: None)  # type: ignore[arg-type]
+    stream._ws, stream._live, stream._tickers = FakeWs(), {"A", "B"}, {"A", "C"}
+    stream._sids = {"ticker": 7, "trade": 8}
+    asyncio.run(stream._sync())
+    updates = [(m["params"]["sids"], m["params"]["action"], m["params"]["market_tickers"]) for m in sent]
+    assert updates == [([7], "add_markets", ["C"]), ([7], "delete_markets", ["B"]), ([8], "add_markets", ["C"]), ([8], "delete_markets", ["B"])]
+    assert sent[0]["params"]["send_initial_snapshot"] and "send_initial_snapshot" not in sent[2]["params"]
+    assert stream._live == {"A", "C"}
+    sent.clear()
+    stream._tickers = set()
+    asyncio.run(stream._sync())
+    assert sent[0]["cmd"] == "unsubscribe" and sent[0]["params"]["sids"] == [7, 8] and stream._live == set()
+    sent.clear()
+    stream._tickers = {"Z"}
+    asyncio.run(stream._sync())
+    assert [m["params"]["channels"] for m in sent] == [["ticker"], ["trade"]] and sent[0]["params"]["send_initial_snapshot"]
+
+
+def test_a_fast_index_tick_is_its_own_kind_and_never_goes_back_in_time():
+    msg = {"type": "cfbenchmarks_value_5hz", "msg": {"index_id": "BRTI", "value_usd": "67000.12500000", "source_ts_ms": 1000, "data": "{}"}}
+    e = kalshiws.parse_message(msg, received=5.0)
+    assert e == {"kind": "index_fast", "ts": 5.0, "index_id": "BRTI", "value": 67000.125, "src_ms": 1000, "sts": None}
+    assert kalshiws.parse_message({"type": "cfbenchmarks_value_5hz", "msg": {"index_id": "BRTI"}}) is None
