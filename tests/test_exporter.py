@@ -67,3 +67,16 @@ def test_a_wider_row_cannot_reach_the_public_file():
         x["secret_balance"] = 123456.0
     assert "secret_balance" not in json.dumps(exporter.build_public(r, NOW))
     assert time.time() > 0
+
+
+def test_validate_public_accepts_the_export_and_rejects_anything_else():
+    import pytest
+
+    good = exporter.build_public(rows(), NOW)
+    exporter.validate_public(good)
+    with pytest.raises(ValueError):
+        exporter.validate_public({**good, "pnl_usd": 1})
+    with pytest.raises(ValueError):
+        exporter.validate_public({**good, "lanes": [{**good["lanes"][0], "stake": 5}]})
+    with pytest.raises(ValueError):
+        exporter.validate_public({**good, "lanes": [{**good["lanes"][0], "markets": {"KXBTC15M-26OCT311230-30": 1}}]})

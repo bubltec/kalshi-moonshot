@@ -108,6 +108,19 @@ def build_admin(rows: list[Any], now: float) -> dict[str, Any]:
     return {"generated": datetime.fromtimestamp(now, UTC).isoformat(timespec="seconds"), "lanes": lanes}
 
 
+def validate_public(data: dict[str, Any]) -> None:
+    """Raise if a public.json carries anything beyond the allowlist: an unknown key, a dollar sign, or a market that is a specific ticker. Run before every upload."""
+    if set(data) != set(PUBLIC_KEYS):
+        raise ValueError(f"public.json top-level keys {sorted(data)} are not {sorted(PUBLIC_KEYS)}")
+    for lane in data["lanes"]:
+        if set(lane) != set(PUBLIC_LANE_KEYS):
+            raise ValueError(f"lane {lane.get('lane')!r} has keys {sorted(lane)}")
+        if any("-" in series for series in lane["markets"]):
+            raise ValueError(f"lane {lane['lane']!r} lists a specific ticker")
+    if "$" in json.dumps(data):
+        raise ValueError("public.json contains a dollar sign")
+
+
 SQL = "SELECT ts, ticker, lane, mode, ask, side, outcome, exit_price, exit_reason, stake_usd, settled_ts FROM decisions WHERE action = 'bet'"
 
 
@@ -127,7 +140,12 @@ def main() -> int:
 
     ap = argparse.ArgumentParser(description="Write public.json and admin.json for the websites.")
     ap.add_argument("--out", default="site-data")
+    ap.add_argument("--check", metavar="FILE", help="only validate this public.json against the allowlist (exit 1 if it fails)")
     args = ap.parse_args()
+    if args.check:
+        validate_public(json.loads(Path(args.check).read_text()))
+        print(f"{args.check}: ok")
+        return 0
     s = config.reload()
     paths = export(Store(s.db_path, s.exclude_versions), Path(args.out))
     for name, p in paths.items():
