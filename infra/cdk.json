@@ -11,6 +11,7 @@
     "archive_days_hot": 14,
     "backup_expire_days": 400,
     "athena_scan_limit_gb": 10,
-    "@aws-cdk/core:checkSecretUsage": true
+    "@aws-cdk/core:checkSecretUsage": true,
+    "admin_github_client_id": "Ov23liAwpMzsYiUu6mWI"
   }
 }
