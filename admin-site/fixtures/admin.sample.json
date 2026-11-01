@@ -43,7 +43,7 @@
   },
   {
    "lane": "commodity",
-   "mode": "paper",
+   "mode": "live",
    "retired": false,
    "bets": 298,
    "settled": 298,
@@ -153,7 +153,7 @@
   },
   {
    "lane": "crypto_favorite",
-   "mode": "paper",
+   "mode": "live",
    "retired": false,
    "bets": 549,
    "settled": 548,
@@ -179,7 +179,7 @@
   },
   {
    "lane": "crypto_moonshot",
-   "mode": "paper",
+   "mode": "live",
    "retired": false,
    "bets": 84,
    "settled": 83,
@@ -286,5 +286,87 @@
     }
    }
   }
- ]
+ ],
+ "settings": {
+  "schema": {
+   "min_edge": {
+    "kind": "float",
+    "low": 0,
+    "high": 0.5,
+    "label": "Minimum edge to bet",
+    "unit": "",
+    "risk": "down"
+   },
+   "max_open": {
+    "kind": "int",
+    "low": 0,
+    "high": 20,
+    "label": "Most bets open at once (0 = no limit)",
+    "unit": "",
+    "risk": "up"
+   },
+   "fixed_stake": {
+    "kind": "float",
+    "low": 0,
+    "high": 25,
+    "label": "Fixed dollars per bet (0 = sized by odds)",
+    "unit": "$",
+    "risk": "up"
+   },
+   "enabled": {
+    "kind": "bool",
+    "low": 0,
+    "high": 0,
+    "label": "Lane on",
+    "unit": "",
+    "risk": "up"
+   }
+  },
+  "lanes": {
+   "commodity": {
+    "min_edge": 0.12,
+    "max_open": 3,
+    "fixed_stake": 2.0,
+    "enabled": true
+   },
+   "crypto_favorite": {
+    "min_edge": 0.12,
+    "max_open": 3,
+    "fixed_stake": 2.0,
+    "enabled": true
+   },
+   "crypto_moonshot": {
+    "min_edge": 0.12,
+    "max_open": 3,
+    "fixed_stake": 2.0,
+    "enabled": true
+   }
+  }
+ },
+ "control": {
+  "applied_revision": 1,
+  "status": {
+   "revision": 1,
+   "state": "applied",
+   "errors": [],
+   "at": "2026-11-01T14:00:00+00:00"
+  },
+  "document": {
+   "revision": 1,
+   "history": [
+    {
+     "revision": 1,
+     "at": "2026-11-01T14:00:00+00:00",
+     "by": "194750",
+     "lane": "commodity",
+     "changes": {
+      "min_edge": {
+       "from": 0.1,
+       "to": 0.12
+      }
+     }
+    }
+   ]
+  }
+ }
 }

@@ -1,5 +1,6 @@
 import { AppFooter, AppFrame, AppHeader, AppMain, AppSection, Badge, Card, Cluster, ErrorBox, Loading, Notice, Stack, Tab, Tabs, TabsList, TabsPanel, Text } from '@bubltec/uiux';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Settings } from './Settings';
 import type { AdminData, AdminLane } from './types';
 
 const usd = (n: number) => `${n < 0 ? '-' : n > 0 ? '+' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -90,12 +91,13 @@ export function App() {
   const [data, setData] = useState<AdminData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState('live');
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch('./admin.json', { cache: 'no-cache' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`admin.json: ${r.status}`))))
       .then(setData)
       .catch((e: Error) => setError(e.message));
   }, []);
+  useEffect(load, [load]);
 
   const live = data?.lanes.filter((l) => l.mode === 'live') ?? [];
   const paper = data?.lanes.filter((l) => l.mode === 'paper') ?? [];
@@ -105,7 +107,7 @@ export function App() {
       <AppMain>
         <AppSection>
           <Stack>
-            <Notice tone="warn">Real dollar values. Read-only for now.</Notice>
+            <Notice tone="warn">Real dollar values. Changes go to the live bot, from the Settings tab.</Notice>
             {error ? <ErrorBox title="Could not load admin.json">{error}</ErrorBox> : null}
             {!data && !error ? <Loading /> : null}
             {data ? (
@@ -115,7 +117,9 @@ export function App() {
                   <TabsList>
                     <Tab value="live">Live ({live.length})</Tab>
                     <Tab value="paper">Paper ({paper.length})</Tab>
+                    <Tab value="settings">Settings</Tab>
                   </TabsList>
+                  <TabsPanel value="settings"><Settings data={data} reload={load} /></TabsPanel>
                   {(['live', 'paper'] as const).map((mode) => (
                     <TabsPanel key={mode} value={mode}>
                       <Stack>
