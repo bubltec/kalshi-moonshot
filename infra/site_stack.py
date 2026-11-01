@@ -110,6 +110,10 @@ class SiteStack(Stack):
                 sid="BotReadsTheControlChange", effect=iam.Effect.ALLOW, principals=[iam.ArnPrincipal(arn) for arn in writers],
                 actions=["s3:GetObject"], resources=[bucket.arn_for_objects("control/overrides.json"), bucket.arn_for_objects("control/status.json")],
             ))
+            bucket.add_to_resource_policy(iam.PolicyStatement(  # S3 answers a read of a missing key with "access denied" unless the reader may list the bucket; the first read, before the page has changed anything, is a missing key
+                sid="BotMayTellMissingFromDenied", effect=iam.Effect.ALLOW, principals=[iam.ArnPrincipal(arn) for arn in writers],
+                actions=["s3:ListBucket"], resources=[bucket.bucket_arn],
+            ))
             bucket.add_to_resource_policy(iam.PolicyStatement(
                 sid="BotReportsTheControlStatus", effect=iam.Effect.ALLOW, principals=[iam.ArnPrincipal(arn) for arn in writers],
                 actions=["s3:PutObject"], resources=[bucket.arn_for_objects("control/status.json")],

@@ -59,6 +59,7 @@ def test_the_admin_area_needs_signed_cookies_and_the_login_lambda_is_wired(tmp_p
     assert "POST" not in by_path["/admin/*"]["AllowedMethods"] and "POST" not in by_path["/auth/*"]["AllowedMethods"]
     t.has_resource_properties("AWS::S3::BucketPolicy", {"PolicyDocument": {"Statement": Match.array_with([
         Match.object_like({"Sid": "BotReadsTheControlChange", "Action": "s3:GetObject"}),
+        Match.object_like({"Sid": "BotMayTellMissingFromDenied", "Action": "s3:ListBucket"}),
         Match.object_like({"Sid": "BotReportsTheControlStatus", "Action": "s3:PutObject"})])}})
     # least privilege for the API Lambda: only the signing key, and these S3 keys
     api = next(r for r in t.find_resources("AWS::Lambda::Function").values() if "CF_PUBLIC_KEY" in r["Properties"]["Environment"]["Variables"])
