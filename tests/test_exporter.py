@@ -80,3 +80,13 @@ def test_validate_public_accepts_the_export_and_rejects_anything_else():
         exporter.validate_public({**good, "lanes": [{**good["lanes"][0], "stake": 5}]})
     with pytest.raises(ValueError):
         exporter.validate_public({**good, "lanes": [{**good["lanes"][0], "markets": {"KXBTC15M-26OCT311230-30": 1}}]})
+
+
+def test_only_current_lanes_are_public_and_a_retired_lane_stays_in_the_admin_file():
+    r = rows() + [bet(300, lane="climb_down", mode="observe")]
+    active = {"crypto_favorite"}
+    pub = exporter.build_public(r, NOW, active)
+    assert [lane["lane"] for lane in pub["lanes"]] == ["crypto_favorite"]
+    assert "climb_down" not in json.dumps(pub)
+    adm = {lane["lane"]: lane for lane in exporter.build_admin(r, NOW, active)["lanes"]}
+    assert adm["climb_down"]["retired"] is True and adm["crypto_favorite"]["retired"] is False

@@ -3,51 +3,6 @@
  "min_settled_for_rate": 30,
  "lanes": [
   {
-   "lane": "burst_flip",
-   "mode": "paper",
-   "bets": 185,
-   "settled": 185,
-   "pending": 0,
-   "held_won": 87,
-   "held_lost": 98,
-   "cashed_out": 0,
-   "win_rate": 0.47,
-   "markets": {
-    "KXAUDUSD15M": 6,
-    "KXBRENT15M": 16,
-    "KXBTC15M": 8,
-    "KXCOPPER15M": 1,
-    "KXDOGE15M": 5,
-    "KXETH15M": 7,
-    "KXEURUSD15M": 10,
-    "KXGBPUSD15M": 11,
-    "KXGOLD15M": 11,
-    "KXNATGAS15M": 20,
-    "KXPALLADIUM15M": 5,
-    "KXPLATINUM15M": 7,
-    "KXSILVER15M": 10,
-    "KXSOL15M": 15,
-    "KXUSDCAD15M": 6,
-    "KXUSDJPY15M": 5,
-    "KXWTI15M": 29,
-    "KXXRP15M": 13
-   }
-  },
-  {
-   "lane": "climb_down",
-   "mode": "paper",
-   "bets": 1,
-   "settled": 1,
-   "pending": 0,
-   "held_won": 0,
-   "held_lost": 0,
-   "cashed_out": 1,
-   "win_rate": null,
-   "markets": {
-    "KXBTC15M": 1
-   }
-  },
-  {
    "lane": "commodity",
    "mode": "paper",
    "bets": 298,

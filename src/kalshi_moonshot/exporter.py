@@ -6,6 +6,7 @@ Both files are built from the `decisions` table by the two functions below. The 
 the top-level keys in PUBLIC_KEYS), never by dropping columns from a wider record, so a column added later cannot reach it by accident; tests/test_exporter.py checks that no
 money-like key or value appears in it. It carries no tickers, prices, stakes, contract counts or times finer than a day, and leaves out the last DELAY_SECONDS of bets.
 A lane's win rate stays hidden (null) until it has MIN_SETTLED settled bets, because a rate over a handful of bets says nothing.
+Only lanes in the current config are listed publicly; a deleted lane's history stays in admin.json, marked retired.
 Read-only: nothing here changes a setting or places an order.
 """
 
@@ -56,11 +57,12 @@ def _day(ts: float) -> str:
     return datetime.fromtimestamp(ts, UTC).strftime("%Y-%m-%d")
 
 
-def build_public(rows: list[Any], now: float) -> dict[str, Any]:
+def build_public(rows: list[Any], now: float, active: set[str] | None = None) -> dict[str, Any]:
+    """`active` is the set of lanes in the current config; a lane that was deleted or retired is not listed. None lists every lane in the rows (tests)."""
     cutoff = now - DELAY_SECONDS
     by: dict[tuple[str, str], list[Any]] = defaultdict(list)
     for r in rows:
-        if r["ts"] <= cutoff:
+        if r["ts"] <= cutoff and (active is None or (r["lane"] or "moonshot") in active):
             by[(r["lane"] or "moonshot", "live" if r["mode"] == "trade" else "paper")].append(r)
     lanes = []
     for (lane, mode), rs in sorted(by.items(), key=lambda kv: (kv[0][1] != "live", kv[0][0])):
@@ -81,7 +83,8 @@ def build_public(rows: list[Any], now: float) -> dict[str, Any]:
     return {"as_of": _day(cutoff), "min_settled_for_rate": MIN_SETTLED, "lanes": lanes}
 
 
-def build_admin(rows: list[Any], now: float) -> dict[str, Any]:
+def build_admin(rows: list[Any], now: float, active: set[str] | None = None) -> dict[str, Any]:
+    """Every lane that has rows, each marked `retired` when it is no longer in the current config, so a deleted lane's record stays readable here."""
     by: dict[tuple[str, str], list[Any]] = defaultdict(list)
     for r in rows:
         by[(r["lane"] or "moonshot", "live" if r["mode"] == "trade" else "paper")].append(r)
@@ -98,7 +101,7 @@ def build_admin(rows: list[Any], now: float) -> dict[str, Any]:
                 k["sales"] += 1
                 k["pnl_usd"] += pnl
         lanes.append({
-            "lane": lane, "mode": mode, "bets": len(rs), "settled": len(settled),
+            "lane": lane, "mode": mode, "retired": active is not None and lane not in active, "bets": len(rs), "settled": len(settled),
             "win_rate": round(sum(1 for _, p in settled if p > 0) / len(settled), 3) if settled else None,
             "staked_usd": round(sum((r["stake_usd"] or 0.0) for r, _ in settled), 2),
             "pnl_usd": round(sum((r["stake_usd"] or 0.0) * p for r, p in settled), 2),
@@ -124,18 +127,18 @@ def validate_public(data: dict[str, Any]) -> None:
 SQL = "SELECT ts, ticker, lane, mode, ask, side, outcome, exit_price, exit_reason, stake_usd, settled_ts FROM decisions WHERE action = 'bet'"
 
 
-def export(store: Any, out: Path, now: float | None = None) -> dict[str, Path]:
+def export(store: Any, out: Path, now: float | None = None, active: set[str] | None = None) -> dict[str, Path]:
     now = time.time() if now is None else now
     rows = store.db.execute(SQL).fetchall()
     out.mkdir(parents=True, exist_ok=True)
     paths = {"public": out / "public.json", "admin": out / "admin.json"}
-    paths["public"].write_text(json.dumps(build_public(rows, now), indent=1))
-    paths["admin"].write_text(json.dumps(build_admin(rows, now), indent=1))
+    paths["public"].write_text(json.dumps(build_public(rows, now, active), indent=1))
+    paths["admin"].write_text(json.dumps(build_admin(rows, now, active), indent=1))
     return paths
 
 
 def main() -> int:
-    from . import config
+    from . import config, lanes
     from .store import Store
 
     ap = argparse.ArgumentParser(description="Write public.json and admin.json for the websites.")
@@ -147,7 +150,7 @@ def main() -> int:
         print(f"{args.check}: ok")
         return 0
     s = config.reload()
-    paths = export(Store(s.db_path, s.exclude_versions), Path(args.out))
+    paths = export(Store(s.db_path, s.exclude_versions), Path(args.out), active=set(lanes.lane_specs(s)))
     for name, p in paths.items():
         print(f"{name}: {p} ({p.stat().st_size:,} bytes)")
     return 0
