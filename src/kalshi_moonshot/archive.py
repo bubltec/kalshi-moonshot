@@ -293,6 +293,25 @@ def fetch_day(s: Settings, client: Any, day: str, out: Path, tables: list[str] |
     return got
 
 
+def load_day(tape_db: Any, table: str, day: str, path: Path) -> int:
+    """Insert one archived day's Parquet file into the tape. A day that already has rows in the table is left alone (returns 0), so a range can be re-run safely and a day the live tape is writing is never doubled."""
+    import pyarrow.parquet as pq
+
+    lo, hi = day_bounds(day)
+    if tape_db.execute(f"SELECT 1 FROM {table} WHERE ts >= ? AND ts < ? LIMIT 1", (lo, hi)).fetchone():
+        return 0
+    cols = [name for name, _ in TABLES[table]]
+    marks = ",".join("?" * len(cols))
+    loaded = 0
+    for batch in pq.ParquetFile(str(path)).iter_batches(batch_size=50_000, columns=cols):
+        data = batch.to_pydict()
+        rows = list(zip(*(data[c] for c in cols), strict=True))
+        tape_db.executemany(f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({marks})", rows)
+        loaded += len(rows)
+    tape_db.commit()
+    return loaded
+
+
 # ---- the background job ----
 def start_nightly(get_settings: Any, make_store: Any, make_tape_db: Any) -> None:
     """A background thread: every few hours, upload whatever complete days and backups are not in the bucket yet, and delete archived days from the local tape

@@ -174,3 +174,17 @@ def test_the_columns_match_the_athena_tables_defined_in_infra():
     node = next(n for n in tree.body if isinstance(n, ast.AnnAssign) and getattr(n.target, "id", "") == "TAPE_TABLES")
     assert ast.literal_eval(node.value) == {t: [list(c) for c in cols] for t, cols in archive.TABLES.items()} or \
         {t: [tuple(c) for c in cols] for t, cols in ast.literal_eval(node.value).items()} == archive.TABLES
+
+
+def test_load_day_inserts_an_archived_day_once(tmp_path):
+    from kalshi_moonshot.tape import Tape
+
+    src, dst = Tape(tmp_path / "a.db").db, Tape(tmp_path / "b.db").db
+    lo, _ = archive.day_bounds("2026-10-30")
+    src.executemany("INSERT INTO index_ticks VALUES (?,?,?,?,?,?)", [(lo + 1, "BRTI", 1.0, 1.5, None, 5), (lo + 2, "BRTI", 2.0, None, None, 6)])
+    src.commit()
+    f = tmp_path / "index_ticks-2026-10-30.parquet"
+    assert archive.export_day(src, "index_ticks", "2026-10-30", f) == 2
+    assert archive.load_day(dst, "index_ticks", "2026-10-30", f) == 2
+    assert archive.load_day(dst, "index_ticks", "2026-10-30", f) == 0  # already there
+    assert tuple(dst.execute("SELECT COUNT(*), MAX(value) FROM index_ticks").fetchone()) == (2, 2.0)
