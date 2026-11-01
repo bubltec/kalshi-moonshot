@@ -4,7 +4,7 @@
 //   /auth/callback  GitHub returns here; the state must match, the GitHub user's numeric id must be in ADMIN_GITHUB_IDS, then three signed cookies for /admin/*
 //   /auth/logout    expire the cookies
 // Only the numeric GitHub id counts (a login name can be released and reused). No dependencies beyond the AWS SDK that the Node runtime includes.
-import { createSign, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, createSign, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const SESSION_SECONDS = 8 * 3600;
 
@@ -32,6 +32,13 @@ export function signedCookies({ origin, keyPairId, privateKey, expires }) {
 }
 
 // Lax, not Strict: the redirect from GitHub back to /admin/ is a cross-site chain, and a Strict cookie is not sent on it (a blank page).
+/** Proof of a recent GitHub sign-in, for the settings API: "id.timestamp.hmac". The key comes from the CloudFront private key, which the API Lambda can also read, so there is no second secret to keep. */
+export const freshKey = (privateKey) => createHash('sha256').update(`fresh:${privateKey}`).digest();
+export const freshToken = (id, privateKey, nowSeconds) => {
+  const body = `${id}.${nowSeconds}`;
+  return `${body}.${createHmac('sha256', freshKey(privateKey)).update(body).digest('hex')}`;
+};
+
 const cookie = (name, value, path, maxAge, sameSite = 'Lax') => `${name}=${value}; Path=${path}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=${sameSite}`;
 const redirect = (location, cookies = []) => ({ statusCode: 302, headers: { Location: location, 'Cache-Control': 'no-store' }, cookies, body: '' });
 const page = (status, text) => ({ statusCode: status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }, body: text });
@@ -80,12 +87,13 @@ export async function handler(event, _context, deps = {}) {
     const signed = signedCookies({ origin, keyPairId: env.CF_KEY_PAIR_ID, privateKey, expires });
     return redirect(`${origin}/admin/`, [
       ...Object.entries(signed).map(([k, v]) => cookie(k, v, '/admin', SESSION_SECONDS)),
+      cookie('admin_fresh', freshToken(user.id, privateKey, Math.floor(Date.now() / 1000)), '/admin/api', SESSION_SECONDS),
       cookie('oauth_state', '', '/auth', 0),
     ]);
   }
 
   if (path === '/auth/logout') {
-    return redirect(`${origin}/`, ['CloudFront-Policy', 'CloudFront-Signature', 'CloudFront-Key-Pair-Id'].map((k) => cookie(k, '', '/admin', 0)));
+    return redirect(`${origin}/`, ['CloudFront-Policy', 'CloudFront-Signature', 'CloudFront-Key-Pair-Id'].map((k) => cookie(k, '', '/admin', 0)).concat(cookie('admin_fresh', '', '/admin/api', 0)));
   }
   return page(404, 'not found');
 }

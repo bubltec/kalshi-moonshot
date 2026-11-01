@@ -1,3 +1,5 @@
+import json
+
 import aws_cdk as cdk
 from aws_cdk.assertions import Match, Template
 from site_stack import SITE_DOMAIN, SiteStack
@@ -50,10 +52,24 @@ def test_the_admin_area_needs_signed_cookies_and_the_login_lambda_is_wired(tmp_p
     t.has_resource_properties("AWS::Lambda::Function", {"Runtime": "nodejs22.x", "Environment": {"Variables": Match.object_like({"ADMIN_GITHUB_IDS": "194750", "GITHUB_CLIENT_ID": "cid"})}})
     t.has_resource_properties("AWS::S3::BucketPolicy", {"PolicyDocument": {"Statement": Match.array_with([
         Match.object_like({"Sid": "BotPublishesTheAdminCounts", "Resource": Match.any_value()})])}})
+    # the settings editor: its route needs the cookies too and comes before /admin/* (the first match wins); the bot reads one change and reports one status
+    paths = [b["PathPattern"] for b in dist["CacheBehaviors"]]
+    assert paths.index("/admin/api/*") < paths.index("/admin/*") and "TrustedKeyGroups" in by_path["/admin/api/*"]
+    assert by_path["/admin/api/*"]["ViewerProtocolPolicy"] == "https-only" and "POST" in by_path["/admin/api/*"]["AllowedMethods"]
+    assert "POST" not in by_path["/admin/*"]["AllowedMethods"] and "POST" not in by_path["/auth/*"]["AllowedMethods"]
+    t.has_resource_properties("AWS::S3::BucketPolicy", {"PolicyDocument": {"Statement": Match.array_with([
+        Match.object_like({"Sid": "BotReadsTheControlChange", "Action": "s3:GetObject"}),
+        Match.object_like({"Sid": "BotReportsTheControlStatus", "Action": "s3:PutObject"})])}})
+    # least privilege for the API Lambda: only the signing key, and these S3 keys
+    api = next(r for r in t.find_resources("AWS::Lambda::Function").values() if "CF_PUBLIC_KEY" in r["Properties"]["Environment"]["Variables"])
+    assert "BEGIN PUBLIC KEY" in api["Properties"]["Environment"]["Variables"]["CF_PUBLIC_KEY"]
+    policy = json.dumps([p["Properties"]["PolicyDocument"] for k, p in t.find_resources("AWS::IAM::Policy").items() if "AdminApi" in k])
+    assert "cf-private-key" in policy and "github-client-secret" not in policy and '"s3:DeleteObject"' not in policy and "control/audit/*" in policy
 
 
-def test_without_a_key_there_is_no_admin_area():
-    t = template()
+def test_without_a_key_there_is_no_admin_area(tmp_path):
+    app = cdk.App(context={"admin_public_key_file": str(tmp_path / "missing.pem")})  # the repo's own key file exists now
+    t = Template.from_stack(SiteStack(app, "Site", env=cdk.Environment(account="123456789012", region="us-east-1")))
     dist = next(iter(t.find_resources("AWS::CloudFront::Distribution").values()))["Properties"]["DistributionConfig"]
     assert [b["PathPattern"] for b in dist["CacheBehaviors"]] == ["/assets/*"]
     t.resource_count_is("AWS::Lambda::Function", 0)

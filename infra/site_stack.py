@@ -98,6 +98,16 @@ class SiteStack(Stack):
                 actions=["s3:PutObject"], resources=[bucket.arn_for_objects("admin/admin.json")],
             ))
 
+        if writers:  # the settings editor: the bot pulls the page's change and says what became of it
+            bucket.add_to_resource_policy(iam.PolicyStatement(
+                sid="BotReadsTheControlChange", effect=iam.Effect.ALLOW, principals=[iam.ArnPrincipal(arn) for arn in writers],
+                actions=["s3:GetObject"], resources=[bucket.arn_for_objects("control/overrides.json"), bucket.arn_for_objects("control/status.json")],
+            ))
+            bucket.add_to_resource_policy(iam.PolicyStatement(
+                sid="BotReportsTheControlStatus", effect=iam.Effect.ALLOW, principals=[iam.ArnPrincipal(arn) for arn in writers],
+                actions=["s3:PutObject"], resources=[bucket.arn_for_objects("control/status.json")],
+            ))
+
         admin_behaviors = {}
         key_file = Path(str(self.node.try_get_context("admin_public_key_file") or ADMIN_KEY_FILE))
         if key_file.exists():  # no key yet (scripts/admin_keys.sh): no admin behaviors, only the public site
@@ -117,8 +127,31 @@ class SiteStack(Stack):
             )
             login.add_to_role_policy(iam.PolicyStatement(actions=["ssm:GetParameter"], resources=[f"arn:aws:ssm:{self.region}:{self.account}:parameter{SSM_PREFIX}/*"]))
             url = login.add_function_url(auth_type=lambda_.FunctionUrlAuthType.NONE)
+            api = lambda_.Function(
+                self, "AdminApi", runtime=lambda_.Runtime.NODEJS_22_X, handler="index.handler", code=lambda_.Code.from_asset(str(Path(__file__).with_name("admin_api"))),
+                timeout=Duration.seconds(10), memory_size=256,
+                environment={
+                    "ADMIN_GITHUB_IDS": ",".join(str(i) for i in (self.node.try_get_context("admin_github_ids") or [])),
+                    "SITE_ORIGIN": f"https://{SITE_DOMAIN}",
+                    "CF_PUBLIC_KEY": key_file.read_text(),
+                    "CF_KEY_PAIR_ID": public_key.public_key_id,
+                    "BUCKET": bucket.bucket_name,
+                    "PRIVATE_KEY_PARAM": f"{SSM_PREFIX}/cf-private-key",
+                },
+            )
+            # Least privilege: the signing key (to check the sign-in token), the two documents it reads, and the two places it writes.
+            api.add_to_role_policy(iam.PolicyStatement(actions=["ssm:GetParameter"], resources=[f"arn:aws:ssm:{self.region}:{self.account}:parameter{SSM_PREFIX}/cf-private-key"]))
+            api.add_to_role_policy(iam.PolicyStatement(actions=["s3:GetObject"], resources=[bucket.arn_for_objects("admin/admin.json"), bucket.arn_for_objects("control/overrides.json")]))
+            api.add_to_role_policy(iam.PolicyStatement(actions=["s3:PutObject"], resources=[bucket.arn_for_objects("control/overrides.json"), bucket.arn_for_objects("control/audit/*")]))
+            api_url = api.add_function_url(auth_type=lambda_.FunctionUrlAuthType.NONE)  # public like the login's; the Lambda checks the signed cookies itself
             guard = cloudfront.Function(self, "AdminGuard", code=cloudfront.FunctionCode.from_inline(ADMIN_REQUEST_JS), runtime=cloudfront.FunctionRuntime.JS_2_0)
             admin_behaviors = {
+                "/admin/api/*": cloudfront.BehaviorOptions(  # before /admin/*: the first match wins
+                    origin=origins.HttpOrigin(Fn.select(2, Fn.split("/", api_url.url)), protocol_policy=cloudfront.OriginProtocolPolicy.HTTPS_ONLY),
+                    viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY, response_headers_policy=headers, allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+                    cache_policy=cloudfront.CachePolicy.CACHING_DISABLED, origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+                    trusted_key_groups=[key_group],
+                ),
                 "/admin/*": cloudfront.BehaviorOptions(
                     origin=origins.S3BucketOrigin.with_origin_access_control(bucket), viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                     response_headers_policy=headers, allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD, cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
