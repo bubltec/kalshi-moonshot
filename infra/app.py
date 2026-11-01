@@ -14,6 +14,7 @@ import os
 import aws_cdk as cdk
 from archive_stack import ArchiveStack
 from bot_stack import BotStack
+from site_stack import SiteStack
 
 app = cdk.App()
 account = app.node.try_get_context("account") or os.environ.get("CDK_DEFAULT_ACCOUNT")
@@ -31,6 +32,12 @@ BotStack(
     "KalshiMoonshotBot",
     env=cdk.Environment(account=account, region=app.node.try_get_context("bot_region") or "us-east-2"),
     description="One host in Ohio that runs the bot and its database. The model stays on the Mac.",
+)
+SiteStack(
+    app,
+    "KalshiMoonshotSite",
+    env=cdk.Environment(account=account, region="us-east-1"),  # CloudFront's certificate and the shared WAF live in us-east-1
+    description="kalshi-moonshot.bubbletech.io: a private bucket behind CloudFront and the shared bubbletech WAF.",
 )
 cdk.Tags.of(app).add("project", "kalshi-moonshot")
 app.synth()
