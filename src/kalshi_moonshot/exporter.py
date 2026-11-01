@@ -92,10 +92,17 @@ def build_admin(rows: list[Any], now: float, active: set[str] | None = None) -> 
     for (lane, mode), rs in sorted(by.items(), key=lambda kv: (kv[0][1] != "live", kv[0][0])):
         settled = [(r, p) for r in rs if (p := _profit(r)) is not None]
         daily: dict[str, float] = defaultdict(float)
+        days: dict[str, dict[str, float]] = defaultdict(lambda: {"settled": 0, "wins": 0, "staked_usd": 0.0, "pnl_usd": 0.0})
         kinds: dict[str, dict[str, float]] = defaultdict(lambda: {"sales": 0, "pnl_usd": 0.0})
         for r, p in settled:
             pnl = (r["stake_usd"] or 0.0) * p
-            daily[_day(r["settled_ts"] or r["ts"])] += pnl
+            day = _day(r["settled_ts"] or r["ts"])
+            daily[day] += pnl
+            d = days[day]
+            d["settled"] += 1
+            d["wins"] += p > 0
+            d["staked_usd"] += r["stake_usd"] or 0.0
+            d["pnl_usd"] += pnl
             if r["exit_price"] is not None:
                 k = kinds[exit_kind(r["exit_reason"])]
                 k["sales"] += 1
@@ -106,6 +113,9 @@ def build_admin(rows: list[Any], now: float, active: set[str] | None = None) -> 
             "staked_usd": round(sum((r["stake_usd"] or 0.0) for r, _ in settled), 2),
             "pnl_usd": round(sum((r["stake_usd"] or 0.0) * p for r, p in settled), 2),
             "daily_pnl_usd": {d: round(v, 2) for d, v in sorted(daily.items())},
+            # the same days with counts, so the page can total every lane over one shared window
+            "daily": {d: {"settled": int(v["settled"]), "wins": int(v["wins"]), "staked_usd": round(v["staked_usd"], 2), "pnl_usd": round(v["pnl_usd"], 2)} for d, v in sorted(days.items())},
+            "last_bet": _day(max(r["ts"] for r in rs)),
             "exits": {k: {"sales": int(v["sales"]), "pnl_usd": round(v["pnl_usd"], 2)} for k, v in sorted(kinds.items())},
         })
     return {"generated": datetime.fromtimestamp(now, UTC).isoformat(timespec="seconds"), "lanes": lanes}

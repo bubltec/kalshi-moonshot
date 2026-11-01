@@ -9,6 +9,8 @@ export interface AdminLane {
   staked_usd: number;
   pnl_usd: number;
   daily_pnl_usd: Record<string, number>;
+  daily: Record<string, { settled: number; wins: number; staked_usd: number; pnl_usd: number }>;
+  last_bet: string;
   exits: Record<string, { sales: number; pnl_usd: number }>;
 }
 

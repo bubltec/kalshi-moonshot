@@ -1,4 +1,4 @@
-import { AppFooter, AppFrame, AppHeader, AppMain, AppSection, Badge, Card, Cluster, ErrorBox, Loading, Notice, Stack, Tab, Tabs, TabsList, TabsPanel, Text } from '@bubltec/uiux';
+import { AppFooter, AppFrame, AppHeader, AppMain, AppSection, Badge, Button, Card, Cluster, ErrorBox, Loading, Notice, Stack, Tab, Tabs, TabsList, TabsPanel, Text } from '@bubltec/uiux';
 import { useCallback, useEffect, useState } from 'react';
 import { Settings } from './Settings';
 import type { AdminData, AdminLane } from './types';
@@ -24,8 +24,23 @@ function Curve({ daily }: { daily: Record<string, number> }) {
   );
 }
 
-function LaneTable({ lanes }: { lanes: AdminLane[] }) {
-  const totals = lanes.reduce((a, l) => ({ staked: a.staked + l.staked_usd, pnl: a.pnl + l.pnl_usd, bets: a.bets + l.settled }), { staked: 0, pnl: 0, bets: 0 });
+/** One window for every lane, so rows compare like with like: the last N UTC days up to the day the file was made (0 = all history). */
+const WINDOWS = [{ value: '1', label: 'Today', days: 1 }, { value: '7', label: '7 days', days: 7 }, { value: '30', label: '30 days', days: 30 }, { value: '0', label: 'All', days: 0 }];
+
+interface Row { settled: number; wins: number; staked_usd: number; pnl_usd: number }
+function inWindow(l: AdminLane, since: string | null): Row {
+  const row = { settled: 0, wins: 0, staked_usd: 0, pnl_usd: 0 };
+  for (const [day, d] of Object.entries(l.daily)) {
+    if (since !== null && day < since) continue;
+    row.settled += d.settled; row.wins += d.wins; row.staked_usd += d.staked_usd; row.pnl_usd += d.pnl_usd;
+  }
+  return row;
+}
+const sinceDay = (generated: string, days: number) => (days === 0 ? null : new Date(Date.parse(generated) - (days - 1) * 86_400_000).toISOString().slice(0, 10));
+
+function LaneTable({ lanes, since }: { lanes: AdminLane[]; since: string | null }) {
+  const rows = lanes.map((l) => ({ l, r: inWindow(l, since) }));
+  const totals = rows.reduce((a, { r }) => ({ staked: a.staked + r.staked_usd, pnl: a.pnl + r.pnl_usd, bets: a.bets + r.settled }), { staked: 0, pnl: 0, bets: 0 });
   return (
     <div className="table-wrap">
       <table className="lanes">
@@ -33,15 +48,15 @@ function LaneTable({ lanes }: { lanes: AdminLane[] }) {
           <tr><th>lane</th><th>mode</th><th>settled</th><th>win rate</th><th>staked</th><th>P&amp;L</th><th>return</th></tr>
         </thead>
         <tbody>
-          {lanes.map((l) => (
+          {rows.map(({ l, r }) => (
             <tr key={`${l.lane}-${l.mode}`}>
-              <td>{laneName(l.lane)} {l.retired ? <Badge tone="warn">retired</Badge> : null}</td>
+              <td>{laneName(l.lane)} {l.retired ? <Badge tone="warn">retired</Badge> : null} {r.settled === 0 ? <Badge tone="neutral">no bets here, last {l.last_bet}</Badge> : null}</td>
               <td>{l.mode}</td>
-              <td>{l.settled}</td>
-              <td>{l.win_rate === null ? '-' : `${(l.win_rate * 100).toFixed(0)}%`}</td>
-              <td>{usd(l.staked_usd).replace(/^\+/, '')}</td>
-              <td className={tone(l.pnl_usd)}>{usd(l.pnl_usd)}</td>
-              <td className={tone(l.pnl_usd)}>{l.staked_usd > 0 ? `${((l.pnl_usd / l.staked_usd) * 100).toFixed(1)}%` : '-'}</td>
+              <td>{r.settled}</td>
+              <td>{r.settled ? `${((r.wins / r.settled) * 100).toFixed(0)}%` : '-'}</td>
+              <td>{usd(r.staked_usd).replace(/^\+/, '')}</td>
+              <td className={tone(r.pnl_usd)}>{usd(r.pnl_usd)}</td>
+              <td className={tone(r.pnl_usd)}>{r.staked_usd > 0 ? `${((r.pnl_usd / r.staked_usd) * 100).toFixed(1)}%` : '-'}</td>
             </tr>
           ))}
           <tr>
@@ -56,7 +71,9 @@ function LaneTable({ lanes }: { lanes: AdminLane[] }) {
   );
 }
 
-function LaneDetail({ lane }: { lane: AdminLane }) {
+function LaneDetail({ lane, since }: { lane: AdminLane; since: string | null }) {
+  const pnl = inWindow(lane, since).pnl_usd;
+  const daily = Object.fromEntries(Object.entries(lane.daily_pnl_usd).filter(([d]) => since === null || d >= since));
   const exits = Object.entries(lane.exits).sort((a, b) => b[1].sales - a[1].sales);
   return (
     <Card>
@@ -65,9 +82,9 @@ function LaneDetail({ lane }: { lane: AdminLane }) {
           <Text variant="title">{laneName(lane.lane)}</Text>
           <Badge tone={lane.mode === 'live' ? 'accent' : 'neutral'}>{lane.mode}</Badge>
           {lane.retired ? <Badge tone="warn">retired</Badge> : null}
-          <Badge tone={lane.pnl_usd >= 0 ? 'ok' : 'danger'}>{usd(lane.pnl_usd)}</Badge>
+          <Badge tone={pnl >= 0 ? 'ok' : 'danger'}>{usd(pnl)}</Badge>
         </Cluster>
-        <Curve daily={lane.daily_pnl_usd} />
+        <Curve daily={daily} />
         {exits.length ? (
           <div className="table-wrap">
             <table className="lanes">
@@ -91,6 +108,7 @@ export function App() {
   const [data, setData] = useState<AdminData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState('live');
+  const [window_, setWindow] = useState('0');
   const load = useCallback(() => {
     fetch('./admin.json', { cache: 'no-cache' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`admin.json: ${r.status}`))))
@@ -112,7 +130,12 @@ export function App() {
             {!data && !error ? <Loading /> : null}
             {data ? (
               <>
-                <Text variant="muted">Generated {data.generated}</Text>
+                <Cluster>
+                  <Text variant="muted">Generated {data.generated}. Lanes table window:</Text>
+                  {WINDOWS.map((w) => (
+                    <Button key={w.value} variant={window_ === w.value ? 'solid' : 'ghost'} onClick={() => setWindow(w.value)}>{w.label}</Button>
+                  ))}
+                </Cluster>
                 <Tabs value={tab} onValueChange={setTab}>
                   <TabsList>
                     <Tab value="live">Live ({live.length})</Tab>
@@ -123,10 +146,10 @@ export function App() {
                   {(['live', 'paper'] as const).map((mode) => (
                     <TabsPanel key={mode} value={mode}>
                       <Stack>
-                        <LaneTable lanes={mode === 'live' ? live : paper} />
+                        <LaneTable lanes={mode === 'live' ? live : paper} since={sinceDay(data.generated, WINDOWS.find((w) => w.value === window_)!.days)} />
                         <div className="detail-grid">
                           {(mode === 'live' ? live : paper).map((l) => (
-                            <LaneDetail key={`${l.lane}-${l.mode}`} lane={l} />
+                            <LaneDetail key={`${l.lane}-${l.mode}`} lane={l} since={sinceDay(data.generated, WINDOWS.find((w) => w.value === window_)!.days)} />
                           ))}
                         </div>
                       </Stack>
