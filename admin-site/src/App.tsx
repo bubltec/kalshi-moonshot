@@ -120,7 +120,7 @@ export function App() {
   const load = useCallback(() => {
     fetch('./admin.json', { cache: 'no-cache' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`admin.json: ${r.status}`))))
-      .then(setData)
+      .then((d: AdminData) => setData({ ...d, lanes: d.lanes.map((l) => ({ ...l, settles: l.settles ?? [] })) }))
       .catch((e: Error) => setError(e.message));
   }, []);
   useEffect(load, [load]);
@@ -135,6 +135,7 @@ export function App() {
         <AppSection>
           <Stack>
             <Notice tone="warn">Real dollar values. Changes go to the live bot, from the Settings tab.</Notice>
+            {data && data.lanes.some((l) => l.bets > 0 && l.settles.length === 0 && l.settled > 0) ? <Notice tone="warn">The bot is still publishing the new data (about 5 minutes after a restart); curves and windows fill in then.</Notice> : null}
             {error ? <ErrorBox title="Could not load admin.json">{error}</ErrorBox> : null}
             {!data && !error ? <Loading /> : null}
             {data ? (
