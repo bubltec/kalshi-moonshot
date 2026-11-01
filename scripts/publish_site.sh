@@ -31,6 +31,7 @@ fi
 
 if [ "$mode" = data ] || [ "$mode" = all ]; then
   [ "$(basename "$file")" = public.json ] || { echo "only a file named public.json can be published (got $file)" >&2; exit 1; }
+  [ -f "$file" ] || { echo "$file not found: write it with  python -m kalshi_moonshot.exporter --out site-data" >&2; exit 1; }
   .venv/bin/python -m kalshi_moonshot.exporter --check "$file"
   aws_ s3 cp "$file" "s3://$bucket/public/public.json" --content-type application/json --cache-control "public, max-age=60" --region "$region"
   aws_ cloudfront create-invalidation --distribution-id "$dist" --paths "/public.json" >/dev/null
