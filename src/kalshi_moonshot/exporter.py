@@ -94,6 +94,7 @@ def build_admin(rows: list[Any], now: float, active: set[str] | None = None) -> 
         daily: dict[str, float] = defaultdict(float)
         days: dict[str, dict[str, float]] = defaultdict(lambda: {"settled": 0, "wins": 0, "staked_usd": 0.0, "pnl_usd": 0.0})
         kinds: dict[str, dict[str, float]] = defaultdict(lambda: {"sales": 0, "pnl_usd": 0.0})
+        events = sorted([int(r["settled_ts"] or r["ts"]), round((r["stake_usd"] or 0.0) * p, 2), round(r["stake_usd"] or 0.0, 2), int(p > 0)] for r, p in settled)
         for r, p in settled:
             pnl = (r["stake_usd"] or 0.0) * p
             day = _day(r["settled_ts"] or r["ts"])
@@ -115,6 +116,7 @@ def build_admin(rows: list[Any], now: float, active: set[str] | None = None) -> 
             "daily_pnl_usd": {d: round(v, 2) for d, v in sorted(daily.items())},
             # the same days with counts, so the page can total every lane over one shared window
             "daily": {d: {"settled": int(v["settled"]), "wins": int(v["wins"]), "staked_usd": round(v["staked_usd"], 2), "pnl_usd": round(v["pnl_usd"], 2)} for d, v in sorted(days.items())},
+            "settles": events,  # [settled time, P&L $, stake $, 1 if a win] per settled bet: the page draws curves and totals any window from these
             "last_bet": _day(max(r["ts"] for r in rs)),
             "exits": {k: {"sales": int(v["sales"]), "pnl_usd": round(v["pnl_usd"], 2)} for k, v in sorted(kinds.items())},
         })

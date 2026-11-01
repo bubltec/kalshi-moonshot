@@ -7,39 +7,48 @@ const usd = (n: number) => `${n < 0 ? '-' : n > 0 ? '+' : ''}$${Math.abs(n).toLo
 const tone = (n: number) => (n > 0 ? 'pos' : n < 0 ? 'neg' : undefined);
 const laneName = (lane: string) => lane.replaceAll('_', ' ');
 
-/** A lane's cumulative P&L by day as a line: the equity curve. */
-function Curve({ daily }: { daily: Record<string, number> }) {
-  const days = Object.keys(daily).sort();
-  if (days.length < 2) return <p className="legend">not enough days for a curve</p>;
+/** A lane's cumulative P&L over the shared window, one step per settled bet. The time axis is the same for every lane, so a lane that stopped ends where it stopped. */
+function Curve({ lane, from, to }: { lane: AdminLane; from: number; to: number }) {
+  const inside = lane.settles.filter(([ts]) => ts >= from);
+  if (inside.length === 0) return <p className="legend">no settled bets in this window</p>;
   let run = 0;
-  const ys = days.map((d) => (run += daily[d]!));
-  const lo = Math.min(0, ...ys), hi = Math.max(0, ...ys), span = hi - lo || 1;
-  const pts = ys.map((y, i) => `${(i / (ys.length - 1)) * 100},${40 - ((y - lo) / span) * 40}`).join(' ');
-  const zero = 40 - ((0 - lo) / span) * 40;
+  const pts: [number, number][] = [[from, 0]];
+  for (const [ts, pnl] of inside) { pts.push([ts, run]); run += pnl; pts.push([ts, run]); }
+  const ys = pts.map((q) => q[1]);
+  const lo = Math.min(0, ...ys), hi = Math.max(0, ...ys), span = hi - lo || 1, width = to - from || 1;
+  const X = (ts: number) => ((ts - from) / width) * 100, Y = (v: number) => 40 - ((v - lo) / span) * 40;
+  const last = pts[pts.length - 1]!;
   return (
-    <svg className="spark" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`cumulative P&L ${usd(ys[ys.length - 1]!)} over ${days.length} days`}>
-      <line x1="0" x2="100" y1={zero} y2={zero} />
-      <polyline points={pts} />
+    <svg className="spark" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`cumulative P&L ${usd(run)} over ${inside.length} settled bets`}>
+      <line x1="0" x2="100" y1={Y(0)} y2={Y(0)} />
+      <polyline points={pts.map(([ts, v]) => `${X(ts)},${Y(v)}`).join(' ')} />
+      <line className="end" x1={X(last[0])} x2={X(last[0])} y1="0" y2="40" />
     </svg>
   );
 }
 
-/** One window for every lane, so rows compare like with like: the last N UTC days up to the day the file was made (0 = all history). */
-const WINDOWS = [{ value: '1', label: 'Today', days: 1 }, { value: '7', label: '7 days', days: 7 }, { value: '30', label: '30 days', days: 30 }, { value: '0', label: 'All', days: 0 }];
+/** One window for every lane, so rows compare like with like: the last N hours up to when the file was made (0 = all history). */
+const WINDOWS = [{ value: '24', label: '24 hours', hours: 24 }, { value: '168', label: '7 days', hours: 168 }, { value: '720', label: '30 days', hours: 720 }, { value: '0', label: 'All', hours: 0 }];
 
 interface Row { settled: number; wins: number; staked_usd: number; pnl_usd: number }
-function inWindow(l: AdminLane, since: string | null): Row {
+function inWindow(l: AdminLane, from: number): Row {
   const row = { settled: 0, wins: 0, staked_usd: 0, pnl_usd: 0 };
-  for (const [day, d] of Object.entries(l.daily)) {
-    if (since !== null && day < since) continue;
-    row.settled += d.settled; row.wins += d.wins; row.staked_usd += d.staked_usd; row.pnl_usd += d.pnl_usd;
+  for (const [ts, pnl, stake, win] of l.settles) {
+    if (ts < from) continue;
+    row.settled += 1; row.wins += win; row.staked_usd += stake; row.pnl_usd += pnl;
   }
   return row;
 }
-const sinceDay = (generated: string, days: number) => (days === 0 ? null : new Date(Date.parse(generated) - (days - 1) * 86_400_000).toISOString().slice(0, 10));
+/** [from, to] in epoch seconds for a window; "all" starts at the first settled bet of any lane. */
+function span(data: AdminData, hours: number): [number, number] {
+  const to = Date.parse(data.generated) / 1000;
+  if (hours > 0) return [to - hours * 3600, to];
+  const first = Math.min(to, ...data.lanes.flatMap((l) => l.settles.slice(0, 1).map((s) => s[0])));
+  return [first, to];
+}
 
-function LaneTable({ lanes, since }: { lanes: AdminLane[]; since: string | null }) {
-  const rows = lanes.map((l) => ({ l, r: inWindow(l, since) }));
+function LaneTable({ lanes, from }: { lanes: AdminLane[]; from: number }) {
+  const rows = lanes.map((l) => ({ l, r: inWindow(l, from) }));
   const totals = rows.reduce((a, { r }) => ({ staked: a.staked + r.staked_usd, pnl: a.pnl + r.pnl_usd, bets: a.bets + r.settled }), { staked: 0, pnl: 0, bets: 0 });
   return (
     <div className="table-wrap">
@@ -50,7 +59,7 @@ function LaneTable({ lanes, since }: { lanes: AdminLane[]; since: string | null 
         <tbody>
           {rows.map(({ l, r }) => (
             <tr key={`${l.lane}-${l.mode}`}>
-              <td>{laneName(l.lane)} {l.retired ? <Badge tone="warn">retired</Badge> : null} {r.settled === 0 ? <Badge tone="neutral">no bets here, last {l.last_bet}</Badge> : null}</td>
+              <td>{laneName(l.lane)} {l.retired ? <Badge tone="warn">retired</Badge> : null} {r.settled === 0 ? <Badge tone="neutral">no settled bets in this window, last {l.last_bet}</Badge> : null}</td>
               <td>{l.mode}</td>
               <td>{r.settled}</td>
               <td>{r.settled ? `${((r.wins / r.settled) * 100).toFixed(0)}%` : '-'}</td>
@@ -71,9 +80,8 @@ function LaneTable({ lanes, since }: { lanes: AdminLane[]; since: string | null 
   );
 }
 
-function LaneDetail({ lane, since }: { lane: AdminLane; since: string | null }) {
-  const pnl = inWindow(lane, since).pnl_usd;
-  const daily = Object.fromEntries(Object.entries(lane.daily_pnl_usd).filter(([d]) => since === null || d >= since));
+function LaneDetail({ lane, from, to }: { lane: AdminLane; from: number; to: number }) {
+  const pnl = inWindow(lane, from).pnl_usd;
   const exits = Object.entries(lane.exits).sort((a, b) => b[1].sales - a[1].sales);
   return (
     <Card>
@@ -84,7 +92,7 @@ function LaneDetail({ lane, since }: { lane: AdminLane; since: string | null }) 
           {lane.retired ? <Badge tone="warn">retired</Badge> : null}
           <Badge tone={pnl >= 0 ? 'ok' : 'danger'}>{usd(pnl)}</Badge>
         </Cluster>
-        <Curve daily={daily} />
+        <Curve lane={lane} from={from} to={to} />
         {exits.length ? (
           <div className="table-wrap">
             <table className="lanes">
@@ -108,7 +116,7 @@ export function App() {
   const [data, setData] = useState<AdminData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState('live');
-  const [window_, setWindow] = useState('0');
+  const [window_, setWindow] = useState('24');
   const load = useCallback(() => {
     fetch('./admin.json', { cache: 'no-cache' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`admin.json: ${r.status}`))))
@@ -117,6 +125,7 @@ export function App() {
   }, []);
   useEffect(load, [load]);
 
+  const range = data ? span(data, WINDOWS.find((w) => w.value === window_)!.hours) : ([0, 0] as [number, number]);
   const live = data?.lanes.filter((l) => l.mode === 'live') ?? [];
   const paper = data?.lanes.filter((l) => l.mode === 'paper') ?? [];
   return (
@@ -146,10 +155,10 @@ export function App() {
                   {(['live', 'paper'] as const).map((mode) => (
                     <TabsPanel key={mode} value={mode}>
                       <Stack>
-                        <LaneTable lanes={mode === 'live' ? live : paper} since={sinceDay(data.generated, WINDOWS.find((w) => w.value === window_)!.days)} />
+                        <LaneTable lanes={mode === 'live' ? live : paper} from={range[0]} />
                         <div className="detail-grid">
                           {(mode === 'live' ? live : paper).map((l) => (
-                            <LaneDetail key={`${l.lane}-${l.mode}`} lane={l} since={sinceDay(data.generated, WINDOWS.find((w) => w.value === window_)!.days)} />
+                            <LaneDetail key={`${l.lane}-${l.mode}`} lane={l} from={range[0]} to={range[1]} />
                           ))}
                         </div>
                       </Stack>

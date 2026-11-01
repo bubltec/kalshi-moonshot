@@ -59,6 +59,8 @@ def test_the_admin_file_carries_the_money():
     lane = adm["lanes"][0]
     assert lane["staked_usd"] > 0 and "stop-loss" in lane["exits"]
     assert sum(lane["daily_pnl_usd"].values()) - lane["pnl_usd"] < 0.05
+    assert len(lane["settles"]) == lane["settled"] and abs(sum(e[1] for e in lane["settles"]) - lane["pnl_usd"]) < 0.05
+    assert [e[0] for e in lane["settles"]] == sorted(e[0] for e in lane["settles"])
 
 
 def test_a_wider_row_cannot_reach_the_public_file():
