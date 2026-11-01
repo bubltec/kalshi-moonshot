@@ -54,19 +54,34 @@ def sale_ret(b, bid):
     return (bid - EXIT_SLIP - fee(bid)) / cost - 1
 
 
-def simulate(b, ticks, qts, bids, line, stay, window, pause_frac=0.5, rearm=False, rearm_left=0):
+def simulate(b, ticks, qts, bids, line, stay, window, pause_frac=0.5, rearm=False, rearm_left=0, second=None):
     """The (time left, bid, return) of the sale, or None if the rule holds to the close."""
     through_on = False
     since_t = 0.0
     worst = best = best_ts = 0.0
     bounce = False
+    kept = False  # came back once; with `second` = (stay, minimum bid), a second stretch past the line that lasts `stay` seconds sells if the bid is still `minimum` or more
+    since2 = 0.0
     for ts, v in ticks:
         left = b["close_ts"] - ts
         if left <= 3:
             return None
         th = (b["strike"] - v) / b["strike"] if b["side"] == "yes" else (v - b["strike"]) / b["strike"]
+        if kept:
+            if th >= line:
+                since2 = since2 or ts
+                if ts - since2 >= second[0]:
+                    i = bisect.bisect_right(qts, ts) - 1
+                    if i >= 0 and ts - qts[i] <= 5 and second[1] <= bids[i] < 0.99:
+                        return left, bids[i], sale_ret(b, bids[i])
+            else:
+                since2 = 0.0
+            continue
         if th <= 0:
             if through_on:
+                if second is not None:
+                    kept, since2 = True, 0.0
+                    continue
                 if not (rearm or left <= rearm_left):
                     return None
                 through_on, since_t, bounce = False, 0.0, False
@@ -103,11 +118,11 @@ def simulate(b, ticks, qts, bids, line, stay, window, pause_frac=0.5, rearm=Fals
     return None
 
 
-def run(line, stay, window, rearm=False, rearm_left=0):
+def run(line, stay, window, rearm=False, rearm_left=0, second=None):
     n = won_anyway = 0
     sold_usd = held_usd = 0.0
     for b, ticks, qts, bids in data:
-        r = simulate(b, ticks, qts, bids, line, stay, window, 0.5, rearm, rearm_left)
+        r = simulate(b, ticks, qts, bids, line, stay, window, 0.5, rearm, rearm_left, second)
         h = hold_ret(b)
         if r is None:
             sold_usd += b["stake_usd"] * h
@@ -164,3 +179,13 @@ for rl in (0, 60, 90, 120, 180, 240):
     for line in (0.003, 0.005):
         n, wa, pl, hold = run(line / 100, 45, 60, False, rl)
         print(f"  rearm_left {rl:>3} line {line}: sold {n:>2} (would have won {wa}) P&L {pl:+8.2f}")
+
+print("\nsecond stretch after a return sells only after a longer stay with the bid still above a floor (line / first stay 45 / window 60):")
+print(f"  {'line':>6} {'stay2':>5} {'min bid':>7} {'sold':>5} {'would-win':>9} {'P&L $':>9}")
+base = run(0.003 / 100, 45, 60)
+print(f"  {'now':>6} {'-':>5} {'-':>7} {base[0]:>5} {base[1]:>9} {base[2]:>+9.2f}")
+for line in (0.003, 0.005):
+    for stay2 in (30, 45, 60, 90):
+        for minbid in (0.0, 0.15, 0.25, 0.35):
+            n, wa, pl, hold = run(line / 100, 45, 60, False, 0, (stay2, minbid))
+            print(f"  {line:>6} {stay2:>5} {minbid:>7} {n:>5} {wa:>9} {pl:>+9.2f}")
