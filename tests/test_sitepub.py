@@ -38,3 +38,15 @@ def test_a_file_that_fails_the_allowlist_is_never_uploaded(tmp_path, monkeypatch
     with pytest.raises(ValueError):
         sitepub.publish_once(s, store, s3)
     assert s3.puts == []
+
+
+def test_the_admin_file_goes_to_its_own_private_key(tmp_path):
+    import dataclasses
+
+    s = dataclasses.replace(config.load(), site_bucket="b")
+    store = Store(tmp_path / "m.db", s.exclude_versions)
+    s3 = FakeS3()
+    sitepub.publish_admin_once(s, store, s3, now=1_800_000_000.0)
+    put = s3.puts[0]
+    assert put["Key"] == "admin/admin.json" and put["CacheControl"] == "private, no-store"
+    assert not put["Key"].startswith("public/")

@@ -134,6 +134,10 @@ def public_json(store: Any, now: float | None = None, active: set[str] | None = 
     return data
 
 
+def admin_json(store: Any, now: float | None = None, active: set[str] | None = None) -> dict[str, Any]:
+    return build_admin(store.db.execute(SQL).fetchall(), time.time() if now is None else now, active)
+
+
 def export(store: Any, out: Path, now: float | None = None, active: set[str] | None = None) -> dict[str, Path]:
     now = time.time() if now is None else now
     rows = store.db.execute(SQL).fetchall()

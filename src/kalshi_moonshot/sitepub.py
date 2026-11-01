@@ -20,6 +20,7 @@ log = logging.getLogger("moonshot")
 
 KEY = "public/public.json"
 CACHE_CONTROL = "public, max-age=60"
+ADMIN_KEY = "admin/admin.json"  # not under public/, so the public site cannot reach it; the admin site serves it only to a signed-in session
 
 
 def client_for(s: Settings) -> Any:
@@ -36,6 +37,14 @@ def publish_once(s: Settings, store: Any, client: Any, now: float | None = None)
     return len(body)
 
 
+def publish_admin_once(s: Settings, store: Any, client: Any, now: float | None = None) -> int:
+    """The admin file (dollars) goes to its own private key, never the public one."""
+    data = exporter.admin_json(store, now, active=set(lanes.lane_specs(s)))
+    body = json.dumps(data, indent=1).encode()
+    client.put_object(Bucket=s.site_bucket, Key=ADMIN_KEY, Body=body, ContentType="application/json", CacheControl="private, no-store")
+    return len(body)
+
+
 def start(get_settings: Callable[[], Settings], make_store: Callable[[], Any]) -> None:
     def loop() -> None:
         time.sleep(300.0)  # let the bot settle after a start
@@ -47,6 +56,10 @@ def start(get_settings: Callable[[], Settings], make_store: Callable[[], Any]) -
                     log.info("site: published %s (%d bytes)", KEY, size)
                 except Exception:
                     log.exception("site: publish failed; the page keeps the last file")
+                try:
+                    log.info("site: published %s (%d bytes)", ADMIN_KEY, publish_admin_once(s, make_store(), client_for(s)))
+                except Exception:
+                    log.exception("site: admin publish failed; the admin page keeps the last file")
             time.sleep(max(300.0, s.site_publish_minutes * 60.0))
 
     threading.Thread(target=loop, name="sitepub", daemon=True).start()

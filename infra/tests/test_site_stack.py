@@ -33,3 +33,27 @@ def test_the_bot_may_write_only_the_public_counts_object():
     t = Template.from_stack(SiteStack(app, "Site", env=cdk.Environment(account="123456789012", region="us-east-1")))
     t.has_resource_properties("AWS::S3::BucketPolicy", {"PolicyDocument": {"Statement": Match.array_with([
         Match.object_like({"Sid": "BotPublishesThePublicCounts", "Action": "s3:PutObject", "Principal": {"AWS": [user, role]}})])}})
+
+
+def test_the_admin_area_needs_signed_cookies_and_the_login_lambda_is_wired(tmp_path):
+    import subprocess
+
+    key = tmp_path / "pub.pem"
+    private = subprocess.run(["openssl", "genrsa", "2048"], capture_output=True, check=True).stdout
+    key.write_bytes(subprocess.run(["openssl", "rsa", "-pubout"], input=private, capture_output=True, check=True).stdout)
+    app = cdk.App(context={"admin_public_key_file": str(key), "admin_github_ids": ["194750"], "admin_github_client_id": "cid", "bot_principal_arns": ["arn:aws:iam::123456789012:user/w"]})
+    t = Template.from_stack(SiteStack(app, "Site", env=cdk.Environment(account="123456789012", region="us-east-1")))
+    dist = next(iter(t.find_resources("AWS::CloudFront::Distribution").values()))["Properties"]["DistributionConfig"]
+    by_path = {b["PathPattern"]: b for b in dist["CacheBehaviors"]}
+    assert "TrustedKeyGroups" in by_path["/admin/*"] and "TrustedKeyGroups" not in dist["DefaultCacheBehavior"]
+    assert by_path["/admin/*"]["ViewerProtocolPolicy"] == "redirect-to-https" and "/auth/*" in by_path
+    t.has_resource_properties("AWS::Lambda::Function", {"Runtime": "nodejs22.x", "Environment": {"Variables": Match.object_like({"ADMIN_GITHUB_IDS": "194750", "GITHUB_CLIENT_ID": "cid"})}})
+    t.has_resource_properties("AWS::S3::BucketPolicy", {"PolicyDocument": {"Statement": Match.array_with([
+        Match.object_like({"Sid": "BotPublishesTheAdminCounts", "Resource": Match.any_value()})])}})
+
+
+def test_without_a_key_there_is_no_admin_area():
+    t = template()
+    dist = next(iter(t.find_resources("AWS::CloudFront::Distribution").values()))["Properties"]["DistributionConfig"]
+    assert [b["PathPattern"] for b in dist["CacheBehaviors"]] == ["/assets/*"]
+    t.resource_count_is("AWS::Lambda::Function", 0)

@@ -3,6 +3,7 @@
   "context": {
     "account": "288892511071",
     "region": "us-east-1",
+    "admin_github_ids": ["194750"],
     "bot_principal_arns": [
       "arn:aws:iam::288892511071:user/kalshi-moonshot-archive-writer",
       "arn:aws:iam::288892511071:role/KalshiMoonshotBot-HostRole96745B4B-yBTEgnvbVPc2"

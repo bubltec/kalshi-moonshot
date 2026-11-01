@@ -6,18 +6,24 @@ Reuses what the sibling repos already own, and creates none of it:
 The ACL rate-limits per Host header, so the site needs its own rule there: add { name: 'moonshot', hosts: ['kalshi-moonshot.bubbletech.io'], limit: 1000 }
 to WAF_SITES in ../bubbletech.io/infra/cdk/lib/config.ts and deploy DotioWaf before this stack. Until then the shared ACL's default action (allow) applies and the site is unthrottled.
 
-Bucket layout (CloudFront serves only public/, so nothing else in the bucket is reachable from the web):
-    public/index.html, public/assets/*     the built public-site
-    public/public.json                     counts only; written by the exporter
-    admin/                                 reserved for admin.json (never behind this distribution's public behavior)
+Bucket layout:
+    public/index.html, public/assets/*     the built public-site (the default behavior serves only this prefix)
+    public/public.json                     counts only; written by the bot
+    admin/index.html, admin/assets/*       the built admin-site (the /admin/* behavior: only with CloudFront signed cookies)
+    admin/admin.json                       dollars; written by the bot, same behavior
+Signing in: /auth/* is a Lambda (infra/admin_auth) that does GitHub OAuth for one allowed numeric GitHub id and sets the signed cookies; CloudFront checks them at the edge
+against the trusted key group, so the admin files need no auth code. Keys: scripts/admin_keys.sh makes the pair (private half to SSM, public half to infra/admin_cf_public_key.pem).
 
 Must live in us-east-1: CloudFront's ACM certificate and CLOUDFRONT-scope WAF are us-east-1 only.
 """
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
+from pathlib import Path
+
+from aws_cdk import CfnOutput, Duration, Fn, RemovalPolicy, Stack
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as origins
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
 from aws_cdk import aws_s3 as s3
@@ -28,6 +34,22 @@ ROOT_DOMAIN = "bubbletech.io"
 HOSTED_ZONE_ID = "Z08503632G57OD1I2BJ7V"  # political-sloth's SlothDns ParentZone, the same id dotio and greed pin
 WAF_ARN_PARAMETER = "/bubbletech/waf/web-acl-arn"
 SITE_DOMAIN = f"kalshi-moonshot.{ROOT_DOMAIN}"
+
+ADMIN_KEY_FILE = Path(__file__).with_name("admin_cf_public_key.pem")
+SSM_PREFIX = "/kalshi-moonshot/admin"
+
+# At the edge, before CloudFront checks the cookies: no session cookie goes to the login; /admin/ is the admin page's index.html.
+ADMIN_REQUEST_JS = """
+function handler(event) {
+  var r = event.request;
+  if (!r.cookies['CloudFront-Signature']) {
+    return { statusCode: 302, statusDescription: 'Found', headers: { location: { value: '/auth/github' }, 'cache-control': { value: 'no-store' } } };
+  }
+  if (r.uri === '/admin') return { statusCode: 301, statusDescription: 'Moved Permanently', headers: { location: { value: '/admin/' } } };
+  if (r.uri.endsWith('/')) r.uri += 'index.html';
+  return r;
+}
+"""
 
 CSP = "default-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 
@@ -70,12 +92,52 @@ class SiteStack(Stack):
         origin = origins.S3BucketOrigin.with_origin_access_control(bucket, origin_path="/public")
         behavior = dict(origin=origin, viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS, response_headers_policy=headers, allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD)
 
+        if writers:
+            bucket.add_to_resource_policy(iam.PolicyStatement(
+                sid="BotPublishesTheAdminCounts", effect=iam.Effect.ALLOW, principals=[iam.ArnPrincipal(arn) for arn in writers],
+                actions=["s3:PutObject"], resources=[bucket.arn_for_objects("admin/admin.json")],
+            ))
+
+        admin_behaviors = {}
+        key_file = Path(str(self.node.try_get_context("admin_public_key_file") or ADMIN_KEY_FILE))
+        if key_file.exists():  # no key yet (scripts/admin_keys.sh): no admin behaviors, only the public site
+            public_key = cloudfront.PublicKey(self, "AdminPublicKey", encoded_key=key_file.read_text())
+            key_group = cloudfront.KeyGroup(self, "AdminKeyGroup", items=[public_key])
+            login = lambda_.Function(
+                self, "AdminLogin", runtime=lambda_.Runtime.NODEJS_22_X, handler="index.handler", code=lambda_.Code.from_asset(str(Path(__file__).with_name("admin_auth"))),
+                timeout=Duration.seconds(10), memory_size=256,
+                environment={
+                    "GITHUB_CLIENT_ID": str(self.node.try_get_context("admin_github_client_id") or ""),
+                    "ADMIN_GITHUB_IDS": ",".join(str(i) for i in (self.node.try_get_context("admin_github_ids") or [])),
+                    "SITE_ORIGIN": f"https://{SITE_DOMAIN}",
+                    "CF_KEY_PAIR_ID": public_key.public_key_id,
+                    "CLIENT_SECRET_PARAM": f"{SSM_PREFIX}/github-client-secret",
+                    "PRIVATE_KEY_PARAM": f"{SSM_PREFIX}/cf-private-key",
+                },
+            )
+            login.add_to_role_policy(iam.PolicyStatement(actions=["ssm:GetParameter"], resources=[f"arn:aws:ssm:{self.region}:{self.account}:parameter{SSM_PREFIX}/*"]))
+            url = login.add_function_url(auth_type=lambda_.FunctionUrlAuthType.NONE)
+            guard = cloudfront.Function(self, "AdminGuard", code=cloudfront.FunctionCode.from_inline(ADMIN_REQUEST_JS), runtime=cloudfront.FunctionRuntime.JS_2_0)
+            admin_behaviors = {
+                "/admin/*": cloudfront.BehaviorOptions(
+                    origin=origins.S3BucketOrigin.with_origin_access_control(bucket), viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                    response_headers_policy=headers, allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD, cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+                    trusted_key_groups=[key_group],
+                    function_associations=[cloudfront.FunctionAssociation(function=guard, event_type=cloudfront.FunctionEventType.VIEWER_REQUEST)],
+                ),
+                "/auth/*": cloudfront.BehaviorOptions(
+                    origin=origins.HttpOrigin(Fn.select(2, Fn.split("/", url.url)), protocol_policy=cloudfront.OriginProtocolPolicy.HTTPS_ONLY),
+                    viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY, response_headers_policy=headers, allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+                    cache_policy=cloudfront.CachePolicy.CACHING_DISABLED, origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+                ),
+            }
+
         distribution = cloudfront.Distribution(
             self, "Distribution",
             domain_names=[SITE_DOMAIN], certificate=certificate, default_root_object="index.html",
             web_acl_id=ssm.StringParameter.value_for_string_parameter(self, WAF_ARN_PARAMETER),  # owned by DotioWaf: one ACL for every bubbletech site
             default_behavior=cloudfront.BehaviorOptions(cache_policy=short, **behavior),
-            additional_behaviors={"/assets/*": cloudfront.BehaviorOptions(cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED, **behavior)},
+            additional_behaviors={"/assets/*": cloudfront.BehaviorOptions(cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED, **behavior), **admin_behaviors},
             error_responses=[cloudfront.ErrorResponse(http_status=403, response_http_status=404, response_page_path="/index.html", ttl=Duration.seconds(30))],
             minimum_protocol_version=cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
         )
