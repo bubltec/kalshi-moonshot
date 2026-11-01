@@ -27,6 +27,71 @@ function Split({ lane }: { lane: PublicLane }) {
   );
 }
 
+/** Win rate so far, by day, drawn only from the day the lane has enough settled bets for a rate to mean anything. */
+function RateCurve({ lane, minSettled }: { lane: PublicLane; minSettled: number }) {
+  let n = 0, w = 0;
+  const pts: number[] = [];
+  for (const [, settled, won] of lane.daily) {
+    n += settled; w += won;
+    if (n >= minSettled) pts.push(w / n);
+  }
+  if (pts.length < 2) return <p className="legend">win rate curve appears after {minSettled} settled bets and a second day</p>;
+  const line = pts.map((v, i) => `${(i / (pts.length - 1)) * 100},${40 - v * 40}`).join(' ');
+  return (
+    <Stack>
+      <svg className="spark" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`win rate over time, now ${(pts[pts.length - 1]! * 100).toFixed(0)}%`}>
+        <line x1="0" x2="100" y1="20" y2="20" />
+        <polyline points={line} />
+      </svg>
+      <p className="legend">win rate so far, by day (the middle line is 50%)</p>
+    </Stack>
+  );
+}
+
+/** Settled bets per day, the won share in green and the rest in red. */
+function DailyBars({ lane }: { lane: PublicLane }) {
+  const days = lane.daily.slice(-30);
+  if (days.length === 0) return null;
+  const top = Math.max(...days.map((d) => d[1]));
+  const w = 100 / days.length;
+  return (
+    <Stack>
+      <svg className="bars" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`settled bets per day over ${days.length} days`}>
+        {days.map(([day, settled, won], i) => {
+          const h = (settled / top) * 38, hw = (won / top) * 38;
+          return (
+            <g key={day}>
+              <rect className="bar-lost" x={i * w + w * 0.1} width={w * 0.8} y={40 - h} height={h - hw} />
+              <rect className="bar-won" x={i * w + w * 0.1} width={w * 0.8} y={40 - hw} height={hw} />
+            </g>
+          );
+        })}
+      </svg>
+      <p className="legend">settled bets per day · won in green, lost in red</p>
+    </Stack>
+  );
+}
+
+function SummaryTable({ lanes }: { lanes: PublicLane[] }) {
+  return (
+    <div className="table-wrap">
+      <table className="lanes">
+        <thead>
+          <tr><th>lane</th><th>bets</th><th>won</th><th>lost</th><th>cashed out</th><th>pending</th><th>win rate</th></tr>
+        </thead>
+        <tbody>
+          {lanes.map((l) => (
+            <tr key={`${l.lane}-${l.mode}`}>
+              <td>{laneName(l.lane)}</td><td>{l.bets}</td><td>{l.held_won}</td><td>{l.held_lost}</td><td>{l.cashed_out}</td><td>{l.pending}</td>
+              <td>{l.win_rate === null ? '-' : `${(l.win_rate * 100).toFixed(0)}%`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function LaneCard({ lane, minSettled }: { lane: PublicLane; minSettled: number }) {
   const markets = Object.entries(lane.markets).sort((a, b) => b[1] - a[1]);
   return (
@@ -49,6 +114,8 @@ function LaneCard({ lane, minSettled }: { lane: PublicLane; minSettled: number }
           <div><dt>pending</dt><dd>{lane.pending}</dd></div>
         </dl>
         <Split lane={lane} />
+        <DailyBars lane={lane} />
+        <RateCurve lane={lane} minSettled={minSettled} />
         <Cluster>
           {markets.map(([series, n]) => (
             <Badge key={series}>{seriesName(series)} · {n}</Badge>
@@ -66,7 +133,7 @@ export function App() {
   useEffect(() => {
     fetch('./public.json', { cache: 'no-cache' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`public.json: ${r.status}`))))
-      .then(setData)
+      .then((d: PublicData) => setData({ ...d, lanes: d.lanes.filter((l) => l.mode === 'live').map((l) => ({ ...l, daily: l.daily ?? [] })) }))
       .catch((e: Error) => setError(e.message));
   }, []);
 
@@ -77,13 +144,14 @@ export function App() {
         <AppSection>
           <Stack>
             <Notice>
-              Counts only, no dollar amounts. Results run a day behind. A win rate appears once a lane has {data?.min_settled_for_rate ?? 30} settled bets. A paper lane trades on paper, not real money.
+              Live lanes only. Counts only, no dollar amounts. Results run a day behind. A win rate appears once a lane has {data?.min_settled_for_rate ?? 30} settled bets.
             </Notice>
             {error ? <ErrorBox title="Could not load the results">{error}</ErrorBox> : null}
             {!data && !error ? <Loading /> : null}
             {data ? (
               <>
                 <Text variant="muted">Through {data.as_of}</Text>
+                <SummaryTable lanes={data.lanes} />
                 <div className="lane-grid">
                   {data.lanes.map((lane) => (
                     <LaneCard key={`${lane.lane}-${lane.mode}`} lane={lane} minSettled={data.min_settled_for_rate} />

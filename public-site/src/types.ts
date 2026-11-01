@@ -10,6 +10,8 @@ export interface PublicLane {
   cashed_out: number;
   win_rate: number | null;
   markets: Record<string, number>;
+  /** [day, settled that day, won that day]: counts only. */
+  daily: [string, number, number][];
 }
 
 export interface PublicData {

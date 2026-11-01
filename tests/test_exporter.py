@@ -92,3 +92,17 @@ def test_only_current_lanes_are_public_and_a_retired_lane_stays_in_the_admin_fil
     assert "climb_down" not in json.dumps(pub)
     adm = {lane["lane"]: lane for lane in exporter.build_admin(r, NOW, active)["lanes"]}
     assert adm["climb_down"]["retired"] is True and adm["crypto_favorite"]["retired"] is False
+
+
+def test_the_public_file_carries_per_day_counts_and_still_no_money():
+    pub = exporter.build_public(rows(), NOW)
+    lane = pub["lanes"][0]
+    assert lane["daily"] and sum(d[1] for d in lane["daily"]) == lane["settled"]
+    assert all(0 <= d[2] <= d[1] for d in lane["daily"])
+    assert "$" not in json.dumps(pub)
+    exporter.validate_public(pub)
+
+
+def test_paper_lanes_are_not_in_the_public_file():
+    pub = exporter.build_public(rows() + [bet(i, lane="papery", mode="paper") for i in range(40)], NOW)
+    assert {(x["lane"], x["mode"]) for x in pub["lanes"]} == {("crypto_favorite", "live")}

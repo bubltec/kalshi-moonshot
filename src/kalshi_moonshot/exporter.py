@@ -4,9 +4,9 @@
 
 Both files are built from the `decisions` table by the two functions below. The public file is assembled from an explicit allowlist of fields (PUBLIC_LANE_KEYS and
 the top-level keys in PUBLIC_KEYS), never by dropping columns from a wider record, so a column added later cannot reach it by accident; tests/test_exporter.py checks that no
-money-like key or value appears in it. It carries no tickers, prices, stakes, contract counts or times finer than a day, and leaves out the last DELAY_SECONDS of bets.
+money-like key or value appears in it. It carries no tickers, prices, stakes, contract counts or times finer than a day (its per-day lists are settled and won counts), and leaves out the last DELAY_SECONDS of bets.
 A lane's win rate stays hidden (null) until it has MIN_SETTLED settled bets, because a rate over a handful of bets says nothing.
-Only lanes in the current config are listed publicly; a deleted lane's history stays in admin.json, marked retired.
+Only live lanes in the current config are listed publicly; a deleted lane's history stays in admin.json, marked retired.
 Read-only: nothing here changes a setting or places an order.
 """
 
@@ -26,7 +26,7 @@ from .strategy import fee_per_contract as fee
 DELAY_SECONDS = 24 * 3600.0
 MIN_SETTLED = 30
 PUBLIC_KEYS = ("as_of", "min_settled_for_rate", "lanes")
-PUBLIC_LANE_KEYS = ("lane", "mode", "bets", "settled", "pending", "held_won", "held_lost", "cashed_out", "win_rate", "markets")
+PUBLIC_LANE_KEYS = ("lane", "mode", "bets", "settled", "pending", "held_won", "held_lost", "cashed_out", "win_rate", "markets", "daily")
 EXIT_KINDS = ("stop-loss", "burst", "settlement-guard", "peak-crash", "hover", "unstable", "spike", "take-profit", "strike-through", "cash-out", "drop", "scalp")
 
 
@@ -62,7 +62,7 @@ def build_public(rows: list[Any], now: float, active: set[str] | None = None) ->
     cutoff = now - DELAY_SECONDS
     by: dict[tuple[str, str], list[Any]] = defaultdict(list)
     for r in rows:
-        if r["ts"] <= cutoff and (active is None or (r["lane"] or "moonshot") in active):
+        if r["ts"] <= cutoff and r["mode"] == "trade" and (active is None or (r["lane"] or "moonshot") in active):  # only live lanes are public
             by[(r["lane"] or "moonshot", "live" if r["mode"] == "trade" else "paper")].append(r)
     lanes = []
     for (lane, mode), rs in sorted(by.items(), key=lambda kv: (kv[0][1] != "live", kv[0][0])):
@@ -70,6 +70,11 @@ def build_public(rows: list[Any], now: float, active: set[str] | None = None) ->
         exited = [(r, p) for r, p in settled if r["exit_price"] is not None]
         held = [(r, p) for r, p in settled if r["exit_price"] is None]
         wins = sum(1 for _, p in settled if p > 0)
+        days: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+        for r, p in settled:  # settled bets and wins per day: counts only, nothing finer than a day
+            d = days[_day(r["settled_ts"] or r["ts"])]
+            d[0] += 1
+            d[1] += p > 0
         markets: dict[str, int] = defaultdict(int)
         for r in rs:
             markets[series_of(r["ticker"])] += 1
@@ -79,6 +84,7 @@ def build_public(rows: list[Any], now: float, active: set[str] | None = None) ->
             "cashed_out": len(exited),
             "win_rate": round(wins / len(settled), 3) if len(settled) >= MIN_SETTLED else None,
             "markets": dict(sorted(markets.items())),
+            "daily": [[d, v[0], v[1]] for d, v in sorted(days.items())],
         })
     return {"as_of": _day(cutoff), "min_settled_for_rate": MIN_SETTLED, "lanes": lanes}
 
