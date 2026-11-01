@@ -300,3 +300,12 @@ def test_a_fast_index_tick_is_its_own_kind_and_never_goes_back_in_time():
     e = kalshiws.parse_message(msg, received=5.0)
     assert e == {"kind": "index_fast", "ts": 5.0, "index_id": "BRTI", "value": 67000.125, "src_ms": 1000, "sts": None}
     assert kalshiws.parse_message({"type": "cfbenchmarks_value_5hz", "msg": {"index_id": "BRTI"}}) is None
+
+
+def test_fast_index_ticks_are_recorded_apart_from_the_one_second_index(tmp_path):
+    tape = Tape(tmp_path / "tape.db")
+    tape.add({"kind": "index_fast", "ts": 1.0, "index_id": "BRTI", "value": 67000.5, "src_ms": 1000})
+    tape.add({"kind": "index_fast", "ts": 1.2, "index_id": "BRTI", "value": 67001.0, "src_ms": 1200})
+    assert tape.flush() == 2
+    assert tape.db.execute("SELECT COUNT(*) FROM index_fast").fetchone()[0] == 2
+    assert tape.db.execute("SELECT COUNT(*) FROM index_ticks").fetchone()[0] == 0

@@ -22,6 +22,7 @@ TAPE_TABLES: dict[str, list[tuple[str, str]]] = {
     "quotes": [("ts", "double"), ("ticker", "string"), ("bid", "double"), ("ask", "double"), ("last", "double"), ("sts", "bigint"), ("bid_size", "double"), ("ask_size", "double")],
     "flow_1s": [("ts", "bigint"), ("ticker", "string"), ("yes_vol", "double"), ("no_vol", "double"), ("n", "int"), ("vwap", "double")],
     "index_ticks": [("ts", "double"), ("index_id", "string"), ("value", "double"), ("avg60", "double"), ("quarter_avg", "double"), ("src_ms", "bigint")],
+    "index_fast": [("ts", "double"), ("index_id", "string"), ("value", "double"), ("src_ms", "bigint")],
     "feed_ticks": [("ts", "double"), ("symbol", "string"), ("px", "double")],
     "fut_1s": [("ts", "bigint"), ("symbol", "string"), ("px", "double"), ("buy_usd", "double"), ("sell_usd", "double"), ("buy_n", "int"), ("sell_n", "int")],
 }

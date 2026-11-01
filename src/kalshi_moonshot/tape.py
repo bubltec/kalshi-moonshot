@@ -37,6 +37,10 @@ CREATE TABLE IF NOT EXISTS index_ticks (
   ts REAL NOT NULL, index_id TEXT NOT NULL, value REAL, avg60 REAL, quarter_avg REAL, src_ms INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_index_ticks ON index_ticks(index_id, ts);
+CREATE TABLE IF NOT EXISTS index_fast (
+  ts REAL NOT NULL, index_id TEXT NOT NULL, value REAL, src_ms INTEGER  -- the 5hz index feed: up to five ticks a second, no averages
+);
+CREATE INDEX IF NOT EXISTS idx_index_fast ON index_fast(index_id, ts);
 CREATE TABLE IF NOT EXISTS flow_1s (
   ts INTEGER NOT NULL, ticker TEXT NOT NULL,
   yes_vol REAL NOT NULL, no_vol REAL NOT NULL,  -- contracts bought by takers on each side during this second
@@ -301,6 +305,7 @@ class Tape:
         self._lock = threading.Lock()
         self._quotes: list[tuple] = []
         self._index: list[tuple] = []
+        self._fast: list[tuple] = []
         self._feed: list[tuple] = []
         self._flow: dict[tuple[int, str], list[float]] = {}  # (second, ticker) -> [yes_vol, no_vol, n, price*count]
         self._fut: dict[tuple[int, str], list[float]] = {}  # (second, coin) -> [last px, buy usd, sell usd, buy n, sell n]
@@ -328,6 +333,8 @@ class Tape:
                 self._index.append((e["ts"], e["index_id"], e["value"], e.get("avg60"), e.get("quarter_avg"),
                                     e.get("src_ms")))
                 recent.note_index(e["index_id"], e["ts"], e["value"])
+            elif e["kind"] == "index_fast":  # recorded for replays; kept out of the live index window, which is one tick a second
+                self._fast.append((e["ts"], e["index_id"], e["value"], e.get("src_ms")))
 
     def add_fut(self, coin: str, ts: float, px: float, size: float, bought: bool) -> None:
         """One live perpetual-futures trade: folded into its second's row (see futflow.py)."""
@@ -349,13 +356,13 @@ class Tape:
     def flush(self, now: float | None = None) -> int:
         cutoff = int((now if now is not None else time.time()) - 2)  # a second still being filled stays in memory, so each (second, coin) is one row
         with self._lock:
-            q, i, f, fl = self._quotes, self._index, self._feed, self._flow
-            self._quotes, self._index, self._feed, self._flow = [], [], [], {}
+            q, i, f, fl, fast = self._quotes, self._index, self._feed, self._flow, self._fast
+            self._quotes, self._index, self._feed, self._flow, self._fast = [], [], [], {}, []
             done = {k: v for k, v in self._fut.items() if k[0] <= cutoff}
             for finished in done:
                 del self._fut[finished]
         ft = [(sec, coin, v[0], v[1], v[2], int(v[3]), int(v[4])) for (sec, coin), v in done.items()]
-        if not (q or i or f or fl or ft):
+        if not (q or i or f or fl or ft or fast):
             return 0
         try:
             self.db.executemany("INSERT INTO quotes (ts, ticker, bid, ask, last, sts, bid_size, ask_size) VALUES (?,?,?,?,?,?,?,?)", q)
@@ -364,6 +371,7 @@ class Tape:
                 [(sec, tk, v[0], v[1], int(v[2]), (v[3] / (v[0] + v[1])) if (v[0] + v[1]) else None) for (sec, tk), v in fl.items()],
             )
             self.db.executemany("INSERT INTO index_ticks VALUES (?,?,?,?,?,?)", i)
+            self.db.executemany("INSERT INTO index_fast VALUES (?,?,?,?)", fast)
             self.db.executemany("INSERT INTO feed_ticks VALUES (?,?,?)", f)
             self.db.executemany("INSERT INTO fut_1s VALUES (?,?,?,?,?,?,?)", ft)
             self.db.commit()
@@ -373,6 +381,7 @@ class Tape:
             with self._lock:  # the database was unreachable for a moment: keep these rows for the next flush instead of losing them
                 self._quotes = q + self._quotes
                 self._index = i + self._index
+                self._fast = fast + self._fast
                 self._feed = f + self._feed
                 for sec, coin, px, bu, su, bn, sn in ft:  # put the futures seconds back, merging with any trades that arrived since
                     mine = self._fut.setdefault((sec, coin), [px, 0.0, 0.0, 0.0, 0.0])
@@ -385,7 +394,7 @@ class Tape:
                     for k in range(4):
                         mine[k] += v[k]
             raise
-        return len(q) + len(i) + len(f) + len(fl) + len(ft)
+        return len(q) + len(i) + len(f) + len(fl) + len(ft) + len(fast)
 
     def prune(self, keep_days: float, now: float | None = None) -> None:
         cutoff = (now if now is not None else time.time()) - keep_days * 86400

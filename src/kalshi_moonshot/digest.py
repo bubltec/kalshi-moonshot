@@ -128,7 +128,7 @@ def health(s: Settings, store: Any, tape_db: Any, now: float) -> list[str]:
         out.append(f"futures flow recorded: {rows:,} rows over {days} UTC days. The test against Kalshi's quotes needs about 14 (the file DATA_DIR/review-notes.md says where that stands)")
     except Exception:
         out.append("futures flow: table not readable")
-    for table in ("quotes", "flow_1s", "index_ticks", "feed_ticks", "fut_1s"):
+    for table in ("quotes", "flow_1s", "index_ticks", "index_fast", "feed_ticks", "fut_1s"):
         with contextlib.suppress(Exception):
             out.append(f"  tape.{table}: {tape_db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]:,} local rows")
     if db.use_postgres():
