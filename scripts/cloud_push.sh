@@ -28,7 +28,7 @@ if [ "$ignore" = 0 ] && [ -f data/strategies.toml ]; then
   "$py" -m kalshi_moonshot.settings_sync status
   code=$?
   set -e
-  if [ "$code" = 1 ]; then echo "not pushed: settle the page's changes first (see the top of this script)" >&2; exit 1; fi
+  if [ "$code" = 3 ]; then echo "not pushed: settle the page's changes first (see the top of this script)" >&2; exit 1; fi
   if [ "$code" != 0 ]; then echo "(could not check the page's changes; pushing anyway)" >&2; fi
 fi
 

@@ -4,7 +4,7 @@ A lane's settings come from two places: data/strategies.toml (pushed with script
 applied by the bot on top of the file). A change on the page wins over the file, so a value edited in the file can silently stop mattering. This lists every page change next to the file's value and
 settles them one of two ways:
 
-    python -m kalshi_moonshot.settings_sync status    # page changes beside the file's values; exit 1 when any exist
+    python -m kalshi_moonshot.settings_sync status    # page changes beside the file's values; exit 3 when any exist
     python -m kalshi_moonshot.settings_sync fold      # write the page's values into strategies.toml, then clear the page's changes (push the file after)
     python -m kalshi_moonshot.settings_sync drop      # throw the page's changes away; the file stays as it is
 
@@ -25,6 +25,7 @@ from typing import Any
 from . import config, lanes, overrides
 
 KEY = "control/overrides.json"
+CHANGES_EXIST = 3  # `status` exit code; a crash is 1, so a failed check is not mistaken for page changes
 
 
 def differences(s: config.Settings, toml_text: str | None, doc: dict[str, Any] | None) -> list[tuple[str, str, Any, Any]]:
@@ -118,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {lane}.{field}: file {file_value}  page {page_value}")
     if args.command == "status":
         print("\nrun `fold` to keep the page's values in the file, or `drop` to discard them")
-        return 1
+        return CHANGES_EXIST
     changes = {f"{lane}.{field}": {"from": fv, "to": pv} for lane, field, fv, pv in diffs}
     if args.command == "fold":
         new = text or ""
