@@ -2,6 +2,7 @@
 # Reach the Ohio host without typing an instance id. Everything goes through Systems Manager (no open ports).
 #   scripts/cloud.sh status                      # machine, containers, last log lines
 #   scripts/cloud.sh logs [N]                    # the bot's last N log lines (default 200), then follow
+#   scripts/cloud.sh grep PATTERN [N]            # the matching lines among the last N (default 5000), then exit; no follow
 #   scripts/cloud.sh psql                        # an interactive psql on the cloud database
 #   scripts/cloud.sh sql "SELECT count(*) FROM tape.quotes"   # one query, results printed
 #   scripts/cloud.sh run scripts/some_study.py [VAR=value ...]   # a study from this repo, run against the CLOUD tape and trades
@@ -55,6 +56,9 @@ case "${1:-}" in
     ;;
   logs)
     stream "sudo docker logs --tail ${2:-200} -f $bot 2>&1"
+    ;;
+  grep)
+    stream "sudo docker logs --tail ${3:-5000} $bot 2>&1 | grep -E -- '${2:?pattern}' | tail -50"
     ;;
   psql)
     stream "sudo docker exec -it $db $pg"
