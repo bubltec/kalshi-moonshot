@@ -149,6 +149,9 @@ class Settings:
     archive_bucket: str  # S3 bucket that old tape days and backups are shipped to ('' = no archive; see archive.py)
     archive_region: str
     archive_hot_days: int  # tape days kept in the local database; older ones, once archived and verified, may be deleted locally
+    site_bucket: str  # S3 bucket of the public website (infra/site_stack.py); the bot writes only public/public.json there, with its host role ('' = off; see sitepub.py)
+    site_region: str
+    site_publish_minutes: int  # how often public.json is rebuilt and uploaded
     archive_delete_local: bool  # off: the archive only uploads. On: archived days older than archive_hot_days are deleted from the local tape
     max_rps: float  # Kalshi requests per second the bot paces itself to
     page_size: int  # markets and events per Kalshi page (max 1000)
@@ -406,6 +409,9 @@ def load() -> Settings:
         archive_region=os.environ.get("ARCHIVE_REGION", "us-east-1").strip() or "us-east-1",
         archive_hot_days=max(2, _i("ARCHIVE_HOT_DAYS", 14)),
         archive_delete_local=_b("ARCHIVE_DELETE_LOCAL", False),
+        site_bucket=os.environ.get("SITE_BUCKET", "").strip(),
+        site_region=os.environ.get("SITE_REGION", "us-east-1").strip() or "us-east-1",
+        site_publish_minutes=max(5, _i("SITE_PUBLISH_MINUTES", 30)),
         esports_forecast=_b("ESPORTS_FORECAST", True),
         settlement_edge_enabled=_b("SETTLEMENT_EDGE_ENABLED", False),  # off: the paper observer's replay edge vanished once fills were delayed (scripts/settlement_edge_fill_study.py)
         fut_flow_enabled=_b("FUT_FLOW_ENABLED", True),

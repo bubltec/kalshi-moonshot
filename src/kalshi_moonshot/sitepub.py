@@ -1,0 +1,52 @@
+"""Keep the public website's numbers fresh: every SITE_PUBLISH_MINUTES the bot rebuilds public.json (counts only, current lanes, a day behind: exporter.py) and uploads it.
+
+It writes one object, public/public.json, in the bucket the KalshiMoonshotSite stack made, with the host's IAM role (infra/bot_stack.py grants exactly that key). admin.json is never
+built here. The file is checked against the exporter's allowlist before it leaves, and a failed pass only logs: the page keeps the last file. Idle while SITE_BUCKET is empty.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import threading
+import time
+from collections.abc import Callable
+from typing import Any
+
+from . import exporter, lanes
+from .config import Settings
+
+log = logging.getLogger("moonshot")
+
+KEY = "public/public.json"
+CACHE_CONTROL = "public, max-age=60"
+
+
+def client_for(s: Settings) -> Any:
+    import boto3
+
+    return boto3.client("s3", region_name=s.site_region)
+
+
+def publish_once(s: Settings, store: Any, client: Any, now: float | None = None) -> int:
+    """Build, check and upload the file. Returns its size in bytes."""
+    data = exporter.public_json(store, now, active=set(lanes.lane_specs(s)))
+    body = json.dumps(data, indent=1).encode()
+    client.put_object(Bucket=s.site_bucket, Key=KEY, Body=body, ContentType="application/json", CacheControl=CACHE_CONTROL)
+    return len(body)
+
+
+def start(get_settings: Callable[[], Settings], make_store: Callable[[], Any]) -> None:
+    def loop() -> None:
+        time.sleep(300.0)  # let the bot settle after a start
+        while True:
+            s = get_settings()
+            if s.site_bucket:
+                try:
+                    size = publish_once(s, make_store(), client_for(s))
+                    log.info("site: published %s (%d bytes)", KEY, size)
+                except Exception:
+                    log.exception("site: publish failed; the page keeps the last file")
+            time.sleep(max(300.0, s.site_publish_minutes * 60.0))
+
+    threading.Thread(target=loop, name="sitepub", daemon=True).start()

@@ -127,6 +127,13 @@ def validate_public(data: dict[str, Any]) -> None:
 SQL = "SELECT ts, ticker, lane, mode, ask, side, outcome, exit_price, exit_reason, stake_usd, settled_ts FROM decisions WHERE action = 'bet'"
 
 
+def public_json(store: Any, now: float | None = None, active: set[str] | None = None) -> dict[str, Any]:
+    """The public file's content, checked against the allowlist before it is returned."""
+    data = build_public(store.db.execute(SQL).fetchall(), time.time() if now is None else now, active)
+    validate_public(data)
+    return data
+
+
 def export(store: Any, out: Path, now: float | None = None, active: set[str] | None = None) -> dict[str, Path]:
     now = time.time() if now is None else now
     rows = store.db.execute(SQL).fetchall()
