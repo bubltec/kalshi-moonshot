@@ -31,6 +31,7 @@ export function signedCookies({ origin, keyPairId, privateKey, expires }) {
   return { 'CloudFront-Policy': cfBase64(policy), 'CloudFront-Signature': cfBase64(signature), 'CloudFront-Key-Pair-Id': keyPairId };
 }
 
+// Lax, not Strict: the redirect from GitHub back to /admin/ is a cross-site chain, and a Strict cookie is not sent on it (a blank page).
 const cookie = (name, value, path, maxAge, sameSite = 'Lax') => `${name}=${value}; Path=${path}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=${sameSite}`;
 const redirect = (location, cookies = []) => ({ statusCode: 302, headers: { Location: location, 'Cache-Control': 'no-store' }, cookies, body: '' });
 const page = (status, text) => ({ statusCode: status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }, body: text });
@@ -78,13 +79,13 @@ export async function handler(event, _context, deps = {}) {
     const expires = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
     const signed = signedCookies({ origin, keyPairId: env.CF_KEY_PAIR_ID, privateKey, expires });
     return redirect(`${origin}/admin/`, [
-      ...Object.entries(signed).map(([k, v]) => cookie(k, v, '/admin', SESSION_SECONDS, 'Strict')),
+      ...Object.entries(signed).map(([k, v]) => cookie(k, v, '/admin', SESSION_SECONDS)),
       cookie('oauth_state', '', '/auth', 0),
     ]);
   }
 
   if (path === '/auth/logout') {
-    return redirect(`${origin}/`, ['CloudFront-Policy', 'CloudFront-Signature', 'CloudFront-Key-Pair-Id'].map((k) => cookie(k, '', '/admin', 0, 'Strict')));
+    return redirect(`${origin}/`, ['CloudFront-Policy', 'CloudFront-Signature', 'CloudFront-Key-Pair-Id'].map((k) => cookie(k, '', '/admin', 0)));
   }
   return page(404, 'not found');
 }
