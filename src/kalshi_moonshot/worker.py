@@ -172,7 +172,10 @@ class Worker:
         sitepub.start(lambda: self.s, lambda: Store(self.s.db_path, self.s.exclude_versions))  # idle until SITE_BUCKET is set
         from . import control
 
-        control.start(lambda: self.s, lambda s: sitepub.publish_admin_once(s, Store(s.db_path, s.exclude_versions), sitepub.client_for(s)))  # the admin page's lane changes; idle until SITE_BUCKET is set
+        def publish_admin(s: Settings) -> None:
+            sitepub.publish_admin_once(s, Store(s.db_path, s.exclude_versions), sitepub.client_for(s))
+
+        control.start(lambda: self.s, publish_admin)  # the admin page's lane changes; idle until SITE_BUCKET is set
 
     def _start_tape(self) -> None:
         """Record quotes next to the feed price they follow (read-only; see tape.py)."""
