@@ -3,7 +3,7 @@
   "context": {
     "account": "288892511071",
     "region": "us-east-1",
-    "site_bucket": "kalshimoonshotsite-sitebucket397a1860-zfqniwmpqxyz",
+    "bot_role_arn": "arn:aws:iam::288892511071:role/KalshiMoonshotBot-HostRole96745B4B-yBTEgnvbVPc2",
     "archive_days_hot": 14,
     "backup_expire_days": 400,
     "athena_scan_limit_gb": 10,

@@ -17,6 +17,7 @@ from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as origins
+from aws_cdk import aws_iam as iam
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
 from aws_cdk import aws_s3 as s3
@@ -41,6 +42,13 @@ class SiteStack(Stack):
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL, enforce_ssl=True, encryption=s3.BucketEncryption.S3_MANAGED,
             removal_policy=RemovalPolicy.RETAIN,
         )
+        bot_role = str(self.node.try_get_context("bot_role_arn") or "")  # the bot host's role (KalshiMoonshotBot HostRole), set in cdk.json
+        if bot_role:
+            # Granted here, on the bucket, rather than on the role: the bot stack is in another region and changing it would redeploy the live host.
+            bucket.add_to_resource_policy(iam.PolicyStatement(
+                sid="BotPublishesThePublicCounts", effect=iam.Effect.ALLOW, principals=[iam.ArnPrincipal(bot_role)],
+                actions=["s3:PutObject"], resources=[bucket.arn_for_objects("public/public.json")],  # that one object: no other key, no read, no delete
+            ))
         certificate = acm.Certificate(self, "Certificate", domain_name=SITE_DOMAIN, validation=acm.CertificateValidation.from_dns(zone))
 
         headers = cloudfront.ResponseHeadersPolicy(

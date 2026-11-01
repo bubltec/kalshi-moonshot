@@ -25,3 +25,11 @@ def test_the_bucket_is_private_and_only_the_public_prefix_is_served():
     t.has_resource_properties("AWS::CloudFront::Distribution", {"DistributionConfig": Match.object_like({"Origins": Match.array_with([Match.object_like({"OriginPath": "/public"})])})})
     assert next(iter(t.find_resources("AWS::S3::Bucket").values()))["DeletionPolicy"] == "Retain"
     t.has_resource_properties("AWS::CloudFront::ResponseHeadersPolicy", {"ResponseHeadersPolicyConfig": Match.object_like({"CustomHeadersConfig": {"Items": [Match.object_like({"Header": "X-Robots-Tag"})]}})})
+
+
+def test_the_bot_role_may_write_only_the_public_counts_object():
+    arn = "arn:aws:iam::123456789012:role/Bot-HostRole"
+    app = cdk.App(context={"bot_role_arn": arn})
+    t = Template.from_stack(SiteStack(app, "Site", env=cdk.Environment(account="123456789012", region="us-east-1")))
+    t.has_resource_properties("AWS::S3::BucketPolicy", {"PolicyDocument": {"Statement": Match.array_with([
+        Match.object_like({"Sid": "BotPublishesThePublicCounts", "Action": "s3:PutObject", "Principal": {"AWS": arn}})])}})

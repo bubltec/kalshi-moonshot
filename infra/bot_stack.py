@@ -52,13 +52,6 @@ class BotStack(Stack):
             actions=["ssm:GetParameter", "ssm:GetParametersByPath"],
             resources=[f"arn:aws:ssm:{self.region}:{self.account}:parameter/kalshi-moonshot/*"],
         ))
-        site_bucket = str(ctx("site_bucket") or "")  # the KalshiMoonshotSite stack's BucketName output (cdk.json)
-        if site_bucket:
-            role.add_to_policy(iam.PolicyStatement(
-                sid="PublishThePublicCounts",
-                actions=["s3:PutObject"],
-                resources=[f"arn:aws:s3:::{site_bucket}/public/public.json"],  # that one object: no other key, no read, no delete
-            ))
         role.add_to_policy(iam.PolicyStatement(
             sid="DecryptThoseParameters",
             actions=["kms:Decrypt"],

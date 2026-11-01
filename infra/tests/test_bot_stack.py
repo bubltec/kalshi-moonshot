@@ -1,4 +1,3 @@
-import json
 import aws_cdk as cdk
 from aws_cdk.assertions import Match, Template
 from bot_stack import BotStack
@@ -41,11 +40,3 @@ def test_instance_type_and_disk_size_come_from_context():
     t.has_resource_properties("AWS::EC2::Instance", {"InstanceType": "t4g.small"})
     t.has_resource_properties("AWS::EC2::Volume", Match.object_like({"Size": 40}))
 
-
-def test_the_host_may_write_only_the_public_counts_object_when_the_site_bucket_is_set():
-    app = cdk.App(context={"site_bucket": "the-site-bucket"})
-    t = Template.from_stack(BotStack(app, "Bot", env=cdk.Environment(account="123456789012", region="us-east-2")))
-    t.has_resource_properties("AWS::IAM::Policy", {"PolicyDocument": {"Statement": Match.array_with([
-        {"Sid": "PublishThePublicCounts", "Effect": "Allow", "Action": "s3:PutObject", "Resource": "arn:aws:s3:::the-site-bucket/public/public.json"}])}})
-    off = Template.from_stack(BotStack(cdk.App(), "Bot2", env=cdk.Environment(account="123456789012", region="us-east-2")))
-    assert "PublishThePublicCounts" not in json.dumps(off.to_json())
