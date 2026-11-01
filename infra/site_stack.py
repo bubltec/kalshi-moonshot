@@ -51,6 +51,13 @@ function handler(event) {
 }
 """
 
+# /admin/* does not match "/admin" itself, so that bare path would fall through to the public site. It needs no cookie: it only points at /admin/, which does.
+ADMIN_BARE_JS = """
+function handler() {
+  return { statusCode: 301, statusDescription: 'Moved Permanently', headers: { location: { value: '/admin/' } } };
+}
+"""
+
 CSP = "default-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 
 
@@ -145,7 +152,13 @@ class SiteStack(Stack):
             api.add_to_role_policy(iam.PolicyStatement(actions=["s3:PutObject"], resources=[bucket.arn_for_objects("control/overrides.json"), bucket.arn_for_objects("control/audit/*")]))
             api_url = api.add_function_url(auth_type=lambda_.FunctionUrlAuthType.NONE)  # public like the login's; the Lambda checks the signed cookies itself
             guard = cloudfront.Function(self, "AdminGuard", code=cloudfront.FunctionCode.from_inline(ADMIN_REQUEST_JS), runtime=cloudfront.FunctionRuntime.JS_2_0)
+            bare = cloudfront.Function(self, "AdminBare", code=cloudfront.FunctionCode.from_inline(ADMIN_BARE_JS), runtime=cloudfront.FunctionRuntime.JS_2_0)
             admin_behaviors = {
+                "/admin": cloudfront.BehaviorOptions(
+                    origin=origins.S3BucketOrigin.with_origin_access_control(bucket), viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                    response_headers_policy=headers, allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD, cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+                    function_associations=[cloudfront.FunctionAssociation(function=bare, event_type=cloudfront.FunctionEventType.VIEWER_REQUEST)],
+                ),
                 "/admin/api/*": cloudfront.BehaviorOptions(  # before /admin/*: the first match wins
                     origin=origins.HttpOrigin(Fn.select(2, Fn.split("/", api_url.url)), protocol_policy=cloudfront.OriginProtocolPolicy.HTTPS_ONLY),
                     viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY, response_headers_policy=headers, allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
