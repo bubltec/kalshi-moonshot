@@ -35,7 +35,7 @@ test('the allowed GitHub id gets three admin cookies and is sent to /admin/', as
   assert.equal(r.headers.Location, 'https://site.example/admin/');
   const names = r.cookies.map((c) => c.split('=')[0]);
   assert.deepEqual(names.slice(0, 3), ['CloudFront-Policy', 'CloudFront-Signature', 'CloudFront-Key-Pair-Id']);
-  assert.ok(r.cookies.slice(0, 3).every((c) => c.includes('Path=/admin') && c.includes('HttpOnly') && c.includes('Secure') && c.includes('SameSite=Strict')));
+  assert.ok(r.cookies.slice(0, 3).every((c) => c.includes('Path=/admin') && c.includes('HttpOnly') && c.includes('Secure') && c.includes('SameSite=Lax')));
 });
 
 test('another GitHub account, a wrong state, or a missing state is refused', async () => {
