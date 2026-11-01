@@ -1,0 +1,218 @@
+{
+ "as_of": "2026-10-31",
+ "min_settled_for_rate": 30,
+ "lanes": [
+  {
+   "lane": "burst_flip",
+   "mode": "paper",
+   "bets": 185,
+   "settled": 185,
+   "pending": 0,
+   "held_won": 87,
+   "held_lost": 98,
+   "cashed_out": 0,
+   "win_rate": 0.47,
+   "markets": {
+    "KXAUDUSD15M": 6,
+    "KXBRENT15M": 16,
+    "KXBTC15M": 8,
+    "KXCOPPER15M": 1,
+    "KXDOGE15M": 5,
+    "KXETH15M": 7,
+    "KXEURUSD15M": 10,
+    "KXGBPUSD15M": 11,
+    "KXGOLD15M": 11,
+    "KXNATGAS15M": 20,
+    "KXPALLADIUM15M": 5,
+    "KXPLATINUM15M": 7,
+    "KXSILVER15M": 10,
+    "KXSOL15M": 15,
+    "KXUSDCAD15M": 6,
+    "KXUSDJPY15M": 5,
+    "KXWTI15M": 29,
+    "KXXRP15M": 13
+   }
+  },
+  {
+   "lane": "climb_down",
+   "mode": "paper",
+   "bets": 1,
+   "settled": 1,
+   "pending": 0,
+   "held_won": 0,
+   "held_lost": 0,
+   "cashed_out": 1,
+   "win_rate": null,
+   "markets": {
+    "KXBTC15M": 1
+   }
+  },
+  {
+   "lane": "commodity",
+   "mode": "paper",
+   "bets": 298,
+   "settled": 298,
+   "pending": 0,
+   "held_won": 222,
+   "held_lost": 17,
+   "cashed_out": 59,
+   "win_rate": 0.745,
+   "markets": {
+    "KXBRENT15M": 47,
+    "KXCOPPER15M": 35,
+    "KXGOLD15M": 35,
+    "KXNATGAS15M": 36,
+    "KXPALLADIUM15M": 18,
+    "KXPLATINUM15M": 26,
+    "KXSILVER15M": 37,
+    "KXWTI15M": 64
+   }
+  },
+  {
+   "lane": "commodity_bounce",
+   "mode": "paper",
+   "bets": 17,
+   "settled": 17,
+   "pending": 0,
+   "held_won": 14,
+   "held_lost": 0,
+   "cashed_out": 3,
+   "win_rate": null,
+   "markets": {
+    "KXBRENT15M": 4,
+    "KXNATGAS15M": 8,
+    "KXWTI15M": 5
+   }
+  },
+  {
+   "lane": "commodity_burst",
+   "mode": "paper",
+   "bets": 105,
+   "settled": 105,
+   "pending": 0,
+   "held_won": 80,
+   "held_lost": 9,
+   "cashed_out": 16,
+   "win_rate": 0.771,
+   "markets": {
+    "KXBRENT15M": 22,
+    "KXCOPPER15M": 3,
+    "KXGOLD15M": 9,
+    "KXNATGAS15M": 14,
+    "KXPALLADIUM15M": 7,
+    "KXPLATINUM15M": 6,
+    "KXSILVER15M": 10,
+    "KXWTI15M": 34
+   }
+  },
+  {
+   "lane": "commodity_spot",
+   "mode": "paper",
+   "bets": 209,
+   "settled": 209,
+   "pending": 0,
+   "held_won": 153,
+   "held_lost": 4,
+   "cashed_out": 52,
+   "win_rate": 0.732,
+   "markets": {
+    "KXBRENT15M": 42,
+    "KXCOPPER15M": 12,
+    "KXGOLD15M": 30,
+    "KXNATGAS15M": 29,
+    "KXPALLADIUM15M": 13,
+    "KXPLATINUM15M": 18,
+    "KXSILVER15M": 27,
+    "KXWTI15M": 38
+   }
+  },
+  {
+   "lane": "crypto_favorite",
+   "mode": "paper",
+   "bets": 419,
+   "settled": 419,
+   "pending": 0,
+   "held_won": 278,
+   "held_lost": 1,
+   "cashed_out": 140,
+   "win_rate": 0.666,
+   "markets": {
+    "KXBTC15M": 74,
+    "KXDOGE15M": 110,
+    "KXETH15M": 80,
+    "KXSOL15M": 73,
+    "KXXRP15M": 82
+   }
+  },
+  {
+   "lane": "crypto_moonshot",
+   "mode": "paper",
+   "bets": 47,
+   "settled": 47,
+   "pending": 0,
+   "held_won": 10,
+   "held_lost": 37,
+   "cashed_out": 0,
+   "win_rate": 0.213,
+   "markets": {
+    "KXBTC15M": 20,
+    "KXDOGE15M": 1,
+    "KXETH15M": 13,
+    "KXSOL15M": 7,
+    "KXXRP15M": 6
+   }
+  },
+  {
+   "lane": "early_scalp",
+   "mode": "paper",
+   "bets": 520,
+   "settled": 520,
+   "pending": 0,
+   "held_won": 3,
+   "held_lost": 1,
+   "cashed_out": 516,
+   "win_rate": 0.373,
+   "markets": {
+    "KXBTC15M": 99,
+    "KXDOGE15M": 102,
+    "KXETH15M": 112,
+    "KXSOL15M": 95,
+    "KXXRP15M": 112
+   }
+  },
+  {
+   "lane": "energy_moonshot",
+   "mode": "paper",
+   "bets": 20,
+   "settled": 20,
+   "pending": 0,
+   "held_won": 7,
+   "held_lost": 13,
+   "cashed_out": 0,
+   "win_rate": null,
+   "markets": {
+    "KXBRENT15M": 1,
+    "KXNATGAS15M": 6,
+    "KXWTI15M": 13
+   }
+  },
+  {
+   "lane": "fx_favorite",
+   "mode": "paper",
+   "bets": 184,
+   "settled": 184,
+   "pending": 0,
+   "held_won": 117,
+   "held_lost": 1,
+   "cashed_out": 66,
+   "win_rate": 0.658,
+   "markets": {
+    "KXAUDUSD15M": 39,
+    "KXEURUSD15M": 47,
+    "KXGBPUSD15M": 35,
+    "KXUSDCAD15M": 27,
+    "KXUSDJPY15M": 36
+   }
+  }
+ ]
+}
