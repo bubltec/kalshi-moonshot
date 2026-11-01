@@ -17,28 +17,36 @@ from kalshi_moonshot.kalshiws import index_for_series
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
-s = config.reload()
-tape = db.connect(s.tape_path, "tape", shared=True)
-main = Store(s.db_path, s.exclude_versions)
-since = datetime.fromisoformat(os.environ.get("SINCE", "2026-10-29")).replace(tzinfo=timezone.utc).timestamp()
+DUMP = os.environ.get("DUMP")  # a file written by DUMP_OUT=1 on the host: replay offline, with no database
+if DUMP:
+    import json
+    data = [(r["bet"], r["ticks"], r["qts"], r["bids"]) for r in json.load(open(DUMP))]
+    print(f"{len(data)} live crypto_favorite bets from {DUMP}")
+else:
+    s = config.reload()
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    main = Store(s.db_path, s.exclude_versions)
+    since = datetime.fromisoformat(os.environ.get("SINCE", "2026-10-29")).replace(tzinfo=timezone.utc).timestamp()
 
-bets = main.db.execute(
-    "SELECT d.ts, d.ticker, d.side, d.ask, d.stake_usd, d.exit_price, d.exit_reason, d.outcome, w.strike, w.close_ts, w.series "
-    "FROM decisions d JOIN windows w ON w.ticker = d.ticker WHERE d.lane = 'crypto_favorite' AND d.action = 'bet' AND d.mode = 'trade' AND d.ts > ? AND d.outcome IN ('yes','no') AND w.strike > 0 ORDER BY d.ts", (since,)).fetchall()
-print(f"{len(bets)} live crypto_favorite bets since {os.environ.get('SINCE', '2026-10-29')}")
+    bets = main.db.execute(
+        "SELECT d.ts, d.ticker, d.side, d.ask, d.stake_usd, d.exit_price, d.exit_reason, d.outcome, w.strike, w.close_ts, w.series "
+        "FROM decisions d JOIN windows w ON w.ticker = d.ticker WHERE d.lane = 'crypto_favorite' AND d.action = 'bet' AND d.mode = 'trade' AND d.ts > ? AND d.outcome IN ('yes','no') AND w.strike > 0 ORDER BY d.ts", (since,)).fetchall()
+    print(f"{len(bets)} live crypto_favorite bets since {os.environ.get('SINCE', '2026-10-29')}", file=__import__("sys").stderr)
 
+    def paths(b):
+        ix = index_for_series(b["series"])
+        ticks = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value > 0 ORDER BY ts", (ix, b["ts"], b["close_ts"])).fetchall()
+        quotes = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid > 0 AND ask > 0 ORDER BY ts", (b["ticker"], b["ts"], b["close_ts"] + 5)).fetchall()
+        return ticks, [(q[0], q[1] if b["side"] == "yes" else 1.0 - q[2]) for q in quotes]  # the NO bid is one minus the YES ask
 
-def paths(b):
-    ix = index_for_series(b["series"])
-    ticks = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value > 0 ORDER BY ts", (ix, b["ts"], b["close_ts"])).fetchall()
-    quotes = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid > 0 AND ask > 0 ORDER BY ts", (b["ticker"], b["ts"], b["close_ts"] + 5)).fetchall()
-    return ticks, [(q[0], q[1] if b["side"] == "yes" else 1.0 - q[2]) for q in quotes]  # the NO bid is one minus the YES ask
-
-
-data = []
-for b in bets:
-    ticks, quotes = paths(b)
-    data.append((b, ticks, [q[0] for q in quotes], [q[1] for q in quotes]))
+    data = []
+    for b in bets:
+        ticks, quotes = paths(b)
+        data.append((dict(zip(b.keys(), tuple(b))), [tuple(x) for x in ticks], [q[0] for q in quotes], [q[1] for q in quotes]))
+    if os.environ.get("DUMP_OUT"):
+        import json
+        print("JSON>>" + json.dumps([{"bet": b, "ticks": t, "qts": q, "bids": d} for b, t, q, d in data]))
+        raise SystemExit(0)
 dens = [len(t) / max(b["close_ts"] - b["ts"], 1) for b, t, _, _ in data if t]
 print(f"index ticks per second: median {sorted(dens)[len(dens)//2]:.2f}; bets with no ticks: {sum(1 for _, t, _, _ in data if not t)}")
 
@@ -49,9 +57,15 @@ def hold_ret(b):
     return (1.0 if won else 0.0) / cost - 1
 
 
+# A sale fills a moment after the rule fires, and the book often moves in that moment: against the 15 live strike-through sales the tape bid at the trigger was off by 7.7c on average, the tape bid one second
+# later by 1.8c. So the default prices a sale at the bid DELAY seconds after the trigger with SLIP on top; SLIP=0.02 DELAY=0 is the older, optimistic setting.
+DELAY = float(os.environ.get("DELAY", "1.0"))
+SLIP = float(os.environ.get("SLIP", "0.0"))
+
+
 def sale_ret(b, bid):
     cost = b["ask"] + fee(b["ask"])
-    return (bid - EXIT_SLIP - fee(bid)) / cost - 1
+    return (bid - SLIP - fee(bid)) / cost - 1
 
 
 def simulate(b, ticks, qts, bids, line, stay, window, pause_frac=0.5, rearm=False, rearm_left=0, second=None):
@@ -111,9 +125,10 @@ def simulate(b, ticks, qts, bids, line, stay, window, pause_frac=0.5, rearm=Fals
         i = bisect.bisect_right(qts, ts) - 1
         if i < 0 or ts - qts[i] > 5:
             continue
-        bid = bids[i]
-        if bid >= 0.99:
+        if bids[i] >= 0.99:
             continue
+        j = bisect.bisect_right(qts, ts + DELAY) - 1  # the bid the sale actually meets
+        bid = bids[max(i, j)]
         return left, bid, sale_ret(b, bid)
     return None
 
@@ -139,10 +154,10 @@ actual = sum(b["stake_usd"] * (sale_ret(b, b["exit_price"]) if b["exit_price"] i
 print(f"\nactual P&L of these bets ${actual:+.2f}; held all to the close ${sum(b['stake_usd'] * hold_ret(b) for b, *_ in data):+.2f}\n")
 print(f"{'line%':>7} {'stay':>5} {'win':>4} {'sold':>5} {'wouldwin':>8} {'P&L $':>9} {'vs hold':>9}")
 rows = []
-for line, stay, window in itertools.product((0.001, 0.002, 0.003, 0.005, 0.01), (5, 10, 15, 20, 30, 45, 60), (0, 30, 60, 90)):
+for line, stay, window in itertools.product((0.003, 0.005, 0.008), (20, 30, 45, 60), (0, 60, 90, 120, 180, 240)):
     n, wa, pl, hold = run(line / 100.0, stay, window)
     rows.append((pl, line, stay, window, n, wa, hold))
-for pl, line, stay, window, n, wa, hold in sorted(rows, reverse=True)[:15] + [r for r in rows if (r[1], r[2], r[3]) == (0.003, 45, 60)]:
+for pl, line, stay, window, n, wa, hold in sorted(rows, reverse=True)[:10] + [r for r in rows if (r[1], r[2]) == (0.005, 45)]:
     print(f"{line:>7} {stay:>5} {window:>4} {n:>5} {wa:>8} {pl:>+9.2f} {pl - hold:>+9.2f}")
 
 print("\nbets that ended as a loss (held or sold) under the current rule 0.003 / 45 / 60:")
@@ -189,3 +204,16 @@ for line in (0.003, 0.005):
         for minbid in (0.0, 0.15, 0.25, 0.35):
             n, wa, pl, hold = run(line / 100, 45, 60, False, 0, (stay2, minbid))
             print(f"  {line:>6} {stay2:>5} {minbid:>7} {n:>5} {wa:>9} {pl:>+9.2f}")
+
+print("\nthe last-minute watch over a wider window, with the pause that sells held at a fixed number of seconds (line 0.005 / stay 45; fill as set by DELAY and SLIP):")
+print(f"  {'window':>6} {'pause s':>7} {'sold':>5} {'would-win':>9} {'P&L $':>9}")
+for window in (60, 90, 120, 180):
+    for pause in (15, 30, 45, 60):
+        n = wa = 0
+        pl = 0.0
+        for b, ticks, qts, bids in data:
+            r = simulate(b, ticks, qts, bids, 0.005 / 100, 45, window, pause / window)
+            n += r is not None
+            wa += r is not None and b["outcome"] == b["side"]
+            pl += b["stake_usd"] * (hold_ret(b) if r is None else r[2])
+        print(f"  {window:>6} {pause:>7} {n:>5} {wa:>9} {pl:>+9.2f}")

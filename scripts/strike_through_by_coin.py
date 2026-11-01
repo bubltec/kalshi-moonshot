@@ -5,6 +5,7 @@ Prints each coin's typical 1-minute move (in percent of the price) so a line can
 """
 import bisect
 import math
+import os
 import statistics
 
 from kalshi_moonshot import config, db
@@ -16,8 +17,8 @@ from kalshi_moonshot.strategy import fee_per_contract as fee
 s = config.reload()
 tape = db.connect(s.tape_path, "tape", shared=True)
 main = Store(s.db_path, s.exclude_versions)
-SERIES = ("KXBTC15M", "KXETH15M", "KXDOGE15M")
-LINES = (0.002, 0.003, 0.005, 0.008, 0.012, 0.018, 0.027, 0.04)
+SERIES = tuple(os.environ.get("SERIES", "KXBTC15M,KXETH15M,KXDOGE15M").split(","))
+LINES = tuple(float(x) for x in os.environ.get("LINES", "0.002,0.003,0.005,0.008,0.012,0.018,0.027,0.04").split(","))
 STAYS = (20, 30, 45, 60)
 WINDOW = 60
 
@@ -72,7 +73,7 @@ def simulate(p, line, stay):
 
 pop = []
 move = {}
-for w in main.db.execute("SELECT ticker, series, result, close_ts, strike FROM windows WHERE series IN (?,?,?) AND result IN ('yes','no') AND strike > 0 ORDER BY close_ts", SERIES).fetchall():
+for w in main.db.execute(f"SELECT ticker, series, result, close_ts, strike FROM windows WHERE series IN ({','.join('?' * len(SERIES))}) AND result IN ('yes','no') AND strike > 0 ORDER BY close_ts", SERIES).fetchall():
     ix = index_for_series(w["series"])
     lo = w["close_ts"] - 900
     q = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid > 0 AND ask > 0 ORDER BY ts", (w["ticker"], lo, w["close_ts"] + 3)).fetchall()
@@ -112,7 +113,7 @@ for coin in sorted({p["coin"] for p in pop}):
             res.append((tot / len(g), line, stay, n, lost))
     print(f"\n{coin}: {len(g)} entries, held return/$ {held:+.4f}, whole losses {sum(not p['won'] for p in g)}")
     print(f"  {'line%':>6} {'stay':>4} {'sold':>5} {'were losers':>11} {'return/$':>9} {'vs held':>8}")
-    for r, line, stay, n, lost in sorted(res, reverse=True)[:6]:
+    for r, line, stay, n, lost in sorted(res, reverse=True)[: int(os.environ.get('TOP', '6'))]:
         print(f"  {line:>6} {stay:>4} {n:>5} {lost:>11} {r:>+9.4f} {r - held:>+8.4f}")
     byline = {}
     for r, line, stay, n, lost in res:
