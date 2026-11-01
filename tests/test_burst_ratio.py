@@ -11,7 +11,7 @@ LANE = "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nb
 
 
 def _ratio_watcher(tmp_path, monkeypatch, ratio=6, floor=0.89):
-    w, s, store, close = _watcher(tmp_path, monkeypatch)
+    w, _s, store, close = _watcher(tmp_path, monkeypatch)
     (tmp_path / "strategies.toml").write_text(LANE.format(ratio=ratio, floor=floor))
     w.targets.clear()
     w.refresh()
@@ -35,7 +35,7 @@ def test_the_market_normal_is_the_median_second_of_both_sides_times_three():
 
 
 def test_dollars_over_six_times_normal_sell_the_favorite(tmp_path, monkeypatch):
-    w, store, now = _ratio_watcher(tmp_path, monkeypatch)
+    w, _store, now = _ratio_watcher(tmp_path, monkeypatch)
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 1000, "taker": "no", "price": 0.5})  # $500 against a YES holder, over the $360 bar
     assert not w._jobs.empty()
     reason = w._jobs.get_nowait()[2]
@@ -43,27 +43,27 @@ def test_dollars_over_six_times_normal_sell_the_favorite(tmp_path, monkeypatch):
 
 
 def test_a_print_under_six_times_normal_does_not_sell(tmp_path, monkeypatch):
-    w, store, now = _ratio_watcher(tmp_path, monkeypatch)
+    w, _store, now = _ratio_watcher(tmp_path, monkeypatch)
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 500, "taker": "no", "price": 0.5})  # $250: four times normal
     assert w._jobs.empty()
 
 
 def test_a_burst_under_the_floor_does_not_sell(tmp_path, monkeypatch):
-    w, store, now = _ratio_watcher(tmp_path, monkeypatch, floor=0.89)
+    w, _store, now = _ratio_watcher(tmp_path, monkeypatch, floor=0.89)
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.80, "ask": 0.81, "ts": now + 0.5})  # the favorite is already down to 0.80
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 3000, "taker": "no", "price": 0.5})
     assert w._jobs.empty()
 
 
 def test_a_burst_with_the_holder_also_being_bought_is_not_a_crash(tmp_path, monkeypatch):
-    w, store, now = _ratio_watcher(tmp_path, monkeypatch)
+    w, _store, now = _ratio_watcher(tmp_path, monkeypatch)
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 1000, "taker": "yes", "price": 0.9})  # the holder's own side bought just as hard
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 1000, "taker": "no", "price": 0.5})
     assert w._jobs.empty()
 
 
 def test_a_dead_market_needs_the_dollar_minimum(tmp_path, monkeypatch):
-    w, store, now = _ratio_watcher(tmp_path, monkeypatch)
+    w, _store, now = _ratio_watcher(tmp_path, monkeypatch)
     # a market that normally trades about nothing: 6x of almost nothing is still under $50
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 60, "taker": "no", "price": 0.5})  # $30
     assert w._jobs.empty()
@@ -79,7 +79,7 @@ def test_the_lane_version_only_changes_for_a_lane_that_sets_the_ratio(tmp_path, 
 
 
 def test_the_old_setting_name_still_turns_the_burst_exit_on_and_the_version_keeps_its_key(tmp_path, monkeypatch):
-    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
     for key in ("settlement_flip", "burst_exit"):
         (tmp_path / "strategies.toml").write_text(LANE.replace("burst_exit=true", f"{key}=true").format(ratio=6, floor=0.89))
         w.targets.clear()

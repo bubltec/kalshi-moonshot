@@ -420,7 +420,8 @@ def _knn_says(s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, s
     from . import knn
 
     try:
-        strike = float(client.market(shot.ticker).get("floor_strike"))
+        got = client.market(shot.ticker).get("floor_strike")
+        strike = float(got) if got is not None else None
     except (TypeError, ValueError, KalshiError):
         strike = None
     try:
@@ -439,7 +440,8 @@ def _grid_says(s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, 
     grid.refresh_soon(lambda: Store(s.db_path, s.exclude_versions), tape, series, spec.grid_rule)
     elapsed = spec.timed_minutes - shot.hours_to_close * 60.0
     try:
-        strike = float(client.market(shot.ticker).get("floor_strike"))
+        got = client.market(shot.ticker).get("floor_strike")
+        strike = float(got) if got is not None else None
     except (TypeError, ValueError, KalshiError):
         strike = None
     edge, alpha, beta = grid.live_features(tape, shot.series, shot.side, time.time(), strike, shot.hours_to_close * 60.0, shot.ask)

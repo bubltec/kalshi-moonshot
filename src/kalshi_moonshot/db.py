@@ -97,7 +97,9 @@ def strip_comments(sql: str) -> str:
 
 
 def split_statements(script: str) -> list[str]:
-    parts, cur, quoted = [], [], False
+    parts: list[str] = []
+    cur: list[str] = []
+    quoted = False
     for ch in strip_comments(script):
         if ch == "'":
             quoted = not quoted

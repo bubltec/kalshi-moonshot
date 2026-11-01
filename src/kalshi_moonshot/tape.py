@@ -247,7 +247,7 @@ class Recent:
         """Feed prices with start < ts <= end. None when the snapshot does not reach `start`."""
         return self._slice(self._feed, symbol, start, end)
 
-    def latest_quote(self, ticker: str, start: float, end: float) -> tuple[float, float, float] | None:
+    def latest_quote(self, ticker: str, start: float, end: float) -> tuple[float, float, float] | _Miss | None:
         """The newest quote with start < ts <= end. None when the snapshot covers that window and it is empty. MISS when it does not, so the caller reads the database."""
         with self._lock:
             rows = self._quotes.get(ticker)
@@ -281,7 +281,13 @@ class Recent:
 
 
 recent = Recent()
-MISS = object()  # the snapshot has no answer, and the database might
+
+
+class _Miss:
+    """The snapshot has no answer, and the database might."""
+
+
+MISS = _Miss()
 REFRESH_EVERY = 20.0  # how often the refresh loop looks at which series are due (each call lists only the series that are)
 SERIES_EVERY = 20.0  # a series with markets open is listed again this often: a new 15-minute window opens every 15 minutes
 IDLE_EVERY = 120.0  # a series with nothing open (a closed session) is looked at this often

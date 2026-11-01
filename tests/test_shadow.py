@@ -31,7 +31,7 @@ def test_snapshot_records_15_minute_markets_only_and_not_twice_in_a_row(tmp_path
     row = store.shadow_rows(settled_only=False)[0]
     assert row["series"] == "KXBTC15M" and row["yes_ask"] == 0.03
     assert 2.9 < row["minutes_left"] < 3.1
-    assert row["model_p"] is not None and row["model_p"] < 0.1  # 0.6% above the price in 3 minutes
+    assert row["model_p"] is None and "unpriced" in row["note"]  # a crypto series is not priced from an exchange feed
 
 
 def test_an_unpriceable_market_is_still_logged_with_its_book(tmp_path):

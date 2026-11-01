@@ -25,6 +25,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from itertools import pairwise
 from typing import Any
 
 from . import runner
@@ -164,8 +165,8 @@ class EntryWatcher:
                 self._moved.pop(k, None)
             for k in [k for k, when in self._last.items() if when < now - 3600.0]:
                 self._last.pop(k, None)
-            for k in [k for k, arm in self._armed.items() if now - float(arm.get("t") or 0.0) > 3600.0]:
-                self._armed.pop(k, None)
+            for arm_key in [key for key, arm in self._armed.items() if now - float(arm.get("t") or 0.0) > 3600.0]:
+                self._armed.pop(arm_key, None)
 
     def _on_index(self, e: dict[str, Any]) -> None:
         """A settlement index tick: remember it and let each late-trend lane look at the markets that index settles."""
@@ -193,15 +194,16 @@ class EntryWatcher:
         secs = [at(t) for t in range(start, end + 1)]
         if any(p is None for p in pts) or sum(1 for x in secs if x is None) > 20:
             return None
-        rets = [math.log(b / a) for a, b in zip(secs, secs[1:]) if a and b]
+        rets = [math.log(b / a) for a, b in pairwise(secs) if a and b]
         if len(rets) < 100:
             return None
         mean = sum(rets) / len(rets)
         sigma = (sum((r - mean) ** 2 for r in rets) / len(rets)) ** 0.5
         if sigma <= 0:
             return None
-        ups = sum(1 for a, b in zip(pts, pts[1:]) if b > a)
-        downs = sum(1 for a, b in zip(pts, pts[1:]) if b < a)
+        steps = [p for p in pts if p is not None]
+        ups = sum(1 for a, b in pairwise(steps) if b > a)
+        downs = sum(1 for a, b in pairwise(steps) if b < a)
         need = spec.late_agree or spec.late_steps // 2 + 1
         trend = "up" if ups >= need and ups > downs else "down" if downs >= need and downs > ups else "mixed"
         return {"trend": trend, "sigma": sigma, "ups": ups, "downs": downs, "close": close}
@@ -209,10 +211,12 @@ class EntryWatcher:
     def _late(self, lane: str, spec: LaneSpec, info: dict[str, Any], idx: str, ts: float, v: float) -> None:
         """Between late_from_minute and late_to_minute: the first index tick that sets a new high of the whole window with a trend up and the index over the strike (or a new low, trend down, under it) is the signal. It buys when the distance
         from the strike, in the coin's usual moves over the time left, is at least late_min_z. The first such tick ends the look at this market whether it buys or not (the replay's rule)."""
-        ticker, strike = str(info.get("ticker") or ""), info.get("strike")
+        ticker, raw_strike = str(info.get("ticker") or ""), info.get("strike")
         try:
             close = datetime.fromisoformat(str(info.get("close"))).timestamp()
-            strike = float(strike)
+            if raw_strike is None:
+                raise TypeError
+            strike = float(raw_strike)
         except (TypeError, ValueError):
             return
         key = (lane, ticker)
@@ -340,8 +344,7 @@ class EntryWatcher:
             if arm is not None and ts - arm["t"] > spec.entry_arm_seconds:
                 del self._armed[key]
                 arm = None
-            due = arm is not None and time.time() - float(arm.get("offered") or 0.0) >= spec.entry_min_gap_seconds
-            if due and arm["shot"] is not None and price > lo + 1e-9 and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
+            if arm is not None and time.time() - float(arm.get("offered") or 0.0) >= spec.entry_min_gap_seconds and arm["shot"] is not None and price > lo + 1e-9 and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 arm["offered"] = time.time()
                 self._arm_jobs.put(("fire", key, replace(arm["shot"], ask=round(lo, 4), bid=round(max(lo - 0.01, 0.01), 4))))
             if arm is None and max(lo - spec.entry_approach, 0.01) <= price < lo and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))) and self._gaining(e["ticker"], side, ts):

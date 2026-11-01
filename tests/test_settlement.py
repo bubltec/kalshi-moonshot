@@ -1334,7 +1334,7 @@ def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, baseline
 
 
 def test_a_thousand_contracts_in_two_seconds_buys_the_cheap_side(tmp_path, monkeypatch):
-    common = dict(yes_bid=0.93, yes_ask=0.94, hunt_dollars=0.0, hunt_contracts=1000.0, hunt_seconds=2.0, hunt_crash=1.0, hunt_park_seconds=2.0, hunt_park_high=1.0, hunt_park_span=1.0)
+    common = {"yes_bid": 0.93, "yes_ask": 0.94, "hunt_dollars": 0.0, "hunt_contracts": 1000.0, "hunt_seconds": 2.0, "hunt_crash": 1.0, "hunt_park_seconds": 2.0, "hunt_park_high": 1.0, "hunt_park_span": 1.0}
     assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 600, 0], 1: [0, 0, 0, 0, 500, 0]}, **common) == 1  # 1,100 sold on the winning side across 2 seconds, NO at 7c
     assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 1001]}, **common) == 1  # just over 1,000 bought on the losing side
     assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 1000]}, **common) == 0  # 1,000 is not over the bar
@@ -1366,7 +1366,7 @@ def test_a_cheap_buy_is_counted_as_both_a_winning_sale_and_a_losing_buy(tmp_path
 
 def test_each_coin_has_its_own_contract_bar(tmp_path, monkeypatch):
     bars = (("KXBTC15M", 6000.0), ("KXETH15M", 1000.0))
-    common = dict(yes_bid=0.93, yes_ask=0.94, hunt_dollars=0.0, hunt_contracts=1000.0, hunt_contracts_by=bars, hunt_seconds=2.0, hunt_crash=1.0, hunt_park_seconds=2.0, hunt_park_high=1.0, hunt_park_span=1.0)
+    common = {"yes_bid": 0.93, "yes_ask": 0.94, "hunt_dollars": 0.0, "hunt_contracts": 1000.0, "hunt_contracts_by": bars, "hunt_seconds": 2.0, "hunt_crash": 1.0, "hunt_park_seconds": 2.0, "hunt_park_high": 1.0, "hunt_park_span": 1.0}
     flow = {0: [0, 0, 0, 0, 0, 1001]}
     assert _dollar_hunt(tmp_path, monkeypatch, flow=flow, ticker="KXETH15M-1", **common) == 1  # ETH's bar is 1,000
     assert _dollar_hunt(tmp_path, monkeypatch, flow=flow, ticker="KXBTC15M-1", **common) == 0  # the same 1,001 is under BTC's 6,000

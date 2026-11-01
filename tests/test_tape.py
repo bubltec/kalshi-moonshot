@@ -182,7 +182,6 @@ def test_extra_series_are_recorded_on_their_own_connection(tmp_path):
 def test_the_last_minute_answers_the_trend_before_it_is_written(tmp_path):
     from kalshi_moonshot import runner
     from kalshi_moonshot.strategy import LongShot
-    from kalshi_moonshot.tape import recent
 
     recent.clear()
     tape = Tape(tmp_path / "tape.db")
@@ -207,7 +206,6 @@ def test_the_last_minute_answers_the_trend_before_it_is_written(tmp_path):
 
 def test_a_watch_loads_its_stop_history_once(tmp_path):
     from kalshi_moonshot import runner
-    from kalshi_moonshot.tape import recent
 
     recent.clear()
     tape = Tape(tmp_path / "tape.db")
@@ -235,7 +233,6 @@ def test_a_watch_loads_its_stop_history_once(tmp_path):
 def test_a_watched_market_answers_a_trend_from_memory(tmp_path):
     from kalshi_moonshot import runner
     from kalshi_moonshot.strategy import LongShot
-    from kalshi_moonshot.tape import recent
 
     recent.clear()
     tape = Tape(tmp_path / "tape.db")

@@ -250,9 +250,9 @@ class PolymarketClient:
             # which is when a paper bet still needs its settlement price.
             raws = self._market_pages({"endDateMin": _iso(ts - 90), "endDateMax": _iso(ts + 90)}, pages=4)
         for raw in raws:
-            row = self._keep(raw)
-            if row is not None and row["ticker"] == ticker:
-                return row
+            kept = self._keep(raw)
+            if kept is not None and kept["ticker"] == ticker:
+                return kept
         raise PolymarketError(f"no Polymarket market for {ticker}")
 
     def orderbook(self, ticker: str) -> dict[str, Any]:

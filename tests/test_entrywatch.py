@@ -347,7 +347,7 @@ def test_a_late_lane_ignores_ticks_outside_minutes_12_to_14():
 
 
 def test_prune_forgets_markets_that_are_over_and_keeps_live_ones():
-    w, spec, info = _late_watcher(lambda sec: 100.0)
+    w, _spec, _info = _late_watcher(lambda sec: 100.0)
     now = CLOSE + 1000.0
     w._hist["OLD"] = entrywatch.deque([(now - 500.0, 0.4, 0.5)], maxlen=400)
     w._hist["LIVE"] = entrywatch.deque([(now - 5.0, 0.4, 0.5)], maxlen=400)

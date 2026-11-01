@@ -73,7 +73,8 @@ def test_the_daily_loss_limit_blocks_until_the_next_day(s, store):
     lose(store, "L1", s.max_loss_per_day, now - 60)
     v = risk.check(s, store, "NEW", 1.0, now=now)
     assert not v.ok and "daily loss limit" in v.reason
-    assert risk.check(s, store, "NEW", 1.0, now=now + 86_400).ok  # a new day starts clean
+    tomorrow = risk.start_of_day(risk.start_of_day(now) + 26 * 3600) + 60
+    assert risk.check(s, store, "NEW", 1.0, now=tomorrow).ok  # the next New York midnight starts clean, including the 25-hour fallback day
 
 
 def test_wins_offset_losses_toward_the_limit(s, store):

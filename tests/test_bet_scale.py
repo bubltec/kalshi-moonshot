@@ -19,7 +19,7 @@ def _settings(tmp_path, monkeypatch, **env):
 
 
 def test_the_hedge_is_a_share_of_the_held_bets_stake(tmp_path, monkeypatch):
-    w, s, store, _close = _watcher(tmp_path, monkeypatch)  # the held bet staked $2.70
+    w, _s, _store, _close = _watcher(tmp_path, monkeypatch)  # the held bet staked $2.70
     (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nburst_exit=true\nburst_buy_pct=0.5\nseries=['KXBTC15M']\nalways=true\n")
     w.targets.clear()
     w.refresh()
@@ -27,7 +27,7 @@ def test_the_hedge_is_a_share_of_the_held_bets_stake(tmp_path, monkeypatch):
 
 
 def test_a_flat_hedge_still_works_when_no_share_is_set(tmp_path, monkeypatch):
-    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    w, _s, _store, _close = _watcher(tmp_path, monkeypatch)
     (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nburst_exit=true\nburst_buy=1.0\nseries=['KXBTC15M']\nalways=true\n")
     w.targets.clear()
     w.refresh()
@@ -91,7 +91,7 @@ class _ThinBook:
         return getattr(self.inner, name)
 
 
-def test_a_thin_book_passes_the_flat_minimum_but_not_a_share_of_a_big_order(setup):
+def test_a_thin_book_passes_the_flat_minimum_but_not_a_share_of_a_big_order(setup):  # noqa: F811
     import dataclasses
 
     from tests.test_buy_retry import Client

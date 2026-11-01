@@ -442,11 +442,14 @@ def cross_armed(tmp_path, monkeypatch, kalshi_bid, gap=True):
         (s.data_dir / "strategies.toml").write_text(POLY_TOML)
         w.refresh()
     from kalshi_moonshot import db
+    from kalshi_moonshot.tape import recent
 
+    recent.clear()
     tape = db.connect(str(tmp_path / "tape.db"), "tape", shared=True)
     tape.execute("CREATE TABLE IF NOT EXISTS quotes (ts REAL NOT NULL, ticker TEXT NOT NULL, bid REAL, ask REAL, last REAL, sts INTEGER, bid_size REAL, ask_size REAL)")
     for dt in (-1, 49):  # Kalshi keeps quoting: a fresh one sits under each Polymarket print below
         tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (?,?,?,?)", (base + dt, "KXBTC15M-1", kalshi_bid, kalshi_bid + 0.01))
+        recent.note_quote("KXBTC15M-1", base + dt, kalshi_bid, kalshi_bid + 0.01)  # the sale compares the bid in memory, not the database
     tape.commit()
     w.tape_factory = lambda: tape
     t = w.targets[("KXBTC15M-1", "fav")]

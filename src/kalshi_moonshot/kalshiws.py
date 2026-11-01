@@ -154,7 +154,7 @@ class KalshiStream:
                 self._live, self._sids = set(), {}
                 return
             added, removed = sorted(want - self._live), sorted(self._live - want)
-            for channel, sid in zip(("ticker", "trade"), sids):
+            for channel, sid in zip(("ticker", "trade"), sids, strict=True):
                 for action, tickers in (("add_markets", added), ("delete_markets", removed)):
                     if tickers:
                         params: dict[str, Any] = {"sids": [sid], "action": action, "market_tickers": tickers}

@@ -111,7 +111,7 @@ def test_the_window_is_the_lanes_own(tmp_path, monkeypatch):
 
 
 def test_the_other_side_is_bought_when_the_fall_is_found_before_the_sale(tmp_path, monkeypatch):
-    w, t, close = _held(tmp_path, monkeypatch, drop=0.15, extra="drop_seconds=5\ndrop_confirm=4\ndrop_stay=0.10\ndrop_buy=true\ndrop_buy_max=0.40\nburst_buy=1.0\n")
+    w, _t, close = _held(tmp_path, monkeypatch, drop=0.15, extra="drop_seconds=5\ndrop_confirm=4\ndrop_stay=0.10\ndrop_buy=true\ndrop_buy_max=0.40\nburst_buy=1.0\n")
     _settle_quiet(w, close, 100)
     _fall(w, "KXCOPPER15M-1", close - 100, [0.85, 0.80, 0.74, 0.68])  # the YES bid is 0.68, so NO costs 0.32
     assert w._jobs.empty()  # not sold yet: the fall is only armed

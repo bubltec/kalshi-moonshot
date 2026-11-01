@@ -453,7 +453,7 @@ class ProfitWatcher:
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
             reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
-            if t.drop_buy and not t.burst_logged and t.burst_buy > 0 and (t.drop_armed_at == now or (reason or "").startswith("drop: bid") and t.drop_confirm <= 0):
+            if t.drop_buy and not t.burst_logged and t.burst_buy > 0 and (t.drop_armed_at == now or ((reason or "").startswith("drop: bid") and t.drop_confirm <= 0)):
                 self._drop_hedge(t, bid, now)  # the other side is bought when the fall is found, before the sale: after the confirmed fall it costs far more
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
                 reason = self._cross_checked(t, bid, now, reason)
@@ -584,7 +584,7 @@ class ProfitWatcher:
                 # A contract spike. Each coin has its own bar (hunt_contracts_by): 1,000 contracts is the ETH print from 2026-10-26, and a busier coin has to clear more. Either bucket clearing the bar buys the cheap side once, at the ask.
                 if not (lo <= ask <= hi):
                     continue
-                window = max(1, int(round(spec.hunt_seconds)))
+                window = max(1, round(spec.hunt_seconds))
                 sold_n = sum(r[4] for k in range(window) if len(r := book.get(sec - k) or []) > 4)
                 bought_n = sum(r[5] for k in range(window) if len(r := book.get(sec - k) or []) > 5)
                 won_n = sum(r[6] for k in range(window) if len(r := book.get(sec - k) or []) > 6)
@@ -609,7 +609,7 @@ class ProfitWatcher:
                     continue
                 bar = spec.hunt_dollars_btc if spec.hunt_dollars_btc > 0 and h.ticker.split("-")[0].startswith("KXBTC") else spec.hunt_dollars
                 idx = 0 if side == "yes" else 1
-                window = max(1, int(round(spec.hunt_seconds)))
+                window = max(1, round(spec.hunt_seconds))
                 d3 = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(window) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
                 if d3 < bar:
                     continue

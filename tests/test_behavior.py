@@ -64,4 +64,5 @@ def test_the_skip_rules_wait_for_enough_windows(tmp_path):
     s, _ = _setup(tmp_path)
     s.data_dir = str(tmp_path)
     behavior.build_cases(s)
-    assert json.load(open(tmp_path / "forecast_gates.json"))["gates"] == {}  # one window is far under the minimum
+    with (tmp_path / "forecast_gates.json").open() as gates:
+        assert json.load(gates)["gates"] == {}  # one window is far under the minimum
