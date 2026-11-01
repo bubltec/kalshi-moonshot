@@ -16,3 +16,4 @@ build/
 cdk.out/
 .env.demo
 .env.local
+site-data/
