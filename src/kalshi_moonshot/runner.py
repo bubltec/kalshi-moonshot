@@ -547,6 +547,11 @@ def evaluate(
                 f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
                 else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
             )
+    if bet and spec.entry_spike_seconds > 0:
+        rose, swung = side_spike(s, shot, spec.entry_spike_seconds)
+        if (rose is not None and rose >= spec.entry_spike_rise) or (swung is not None and swung >= spec.entry_spike_range):
+            bet = False
+            note = f"spike: this side's price rose {100 * (rose or 0):+.0f}c and its bid swung {100 * (swung or 0):.0f}c over the last {spec.entry_spike_seconds:.0f}s (the lane skips {100 * spec.entry_spike_rise:.0f}c / {100 * spec.entry_spike_range:.0f}c). {note}"
     if bet and spec.entry_spot_ticks > 0:
         aligned = spot_ticks_aligned(s, shot, spec.entry_spot_ticks)
         if aligned is False:
@@ -835,6 +840,26 @@ def side_trend(s: Settings, shot: LongShot, seconds: float, now: float | None = 
         return mid if shot.side == "yes" else 1.0 - mid
 
     return price(last) - price(then)
+
+
+def side_spike(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> tuple[float | None, float | None]:
+    """(how far the side's mid has risen over the last `seconds`, how far its bid swung inside them), from the tape's quotes. None for either when the tape has no quote to say."""
+    now = time.time() if now is None else now
+    rows = _load_quotes(s, shot.ticker, now - seconds - 60.0, now)
+    if not rows or now - rows[-1][0] > 30.0:
+        return None, None
+
+    def mid(r: Any) -> float:
+        m = (r[1] + r[2]) / 2.0
+        return m if shot.side == "yes" else 1.0 - m
+
+    def bid(r: Any) -> float:
+        return r[1] if shot.side == "yes" else 1.0 - r[2]
+
+    back = [r for r in rows if r[0] <= now - seconds]
+    inside = [bid(r) for r in rows if r[0] >= now - seconds]
+    rose = mid(rows[-1]) - mid(back[-1]) if back else None
+    return rose, (max(inside) - min(inside) if inside else None)
 
 
 SPOT_STALE = 30.0  # a spot price older than this says nothing about now

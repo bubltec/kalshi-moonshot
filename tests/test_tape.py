@@ -306,3 +306,27 @@ def test_fast_index_ticks_are_recorded_apart_from_the_one_second_index(tmp_path)
     assert tape.flush() == 2
     assert tape.db.execute("SELECT COUNT(*) FROM index_fast").fetchone()[0] == 2
     assert tape.db.execute("SELECT COUNT(*) FROM index_ticks").fetchone()[0] == 0
+
+
+def test_side_spike_reads_the_rise_and_the_swing_of_the_side(tmp_path):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.strategy import LongShot
+
+    recent.clear()
+    tape = Tape(tmp_path / "tape.db")
+    now = time.time()
+    for ts, bid, ask in ((now - 100, 0.50, 0.52), (now - 60, 0.60, 0.62), (now - 30, 0.90, 0.92), (now - 2, 0.82, 0.84)):
+        tape.add({"kind": "quote", "ts": ts, "ticker": "SPK-1", "bid": bid, "ask": ask, "last": bid, "sts": 1})
+
+    tape.flush()
+
+    class S:
+        tape_path = str(tmp_path / "tape.db")
+
+    yes = LongShot("SPK-1", "", "", 0.82, 0.84, 0.0, "", 0.1, side="yes")
+    rose, swung = runner.side_spike(S, yes, 90.0, now=now)
+    assert abs(rose - 0.32) < 1e-9  # mid 0.51 at -100 s, 0.83 now
+    assert abs(swung - 0.30) < 1e-9  # bid 0.60 to 0.90 inside the 90 s
+    no = LongShot("SPK-1", "", "", 0.16, 0.18, 0.0, "", 0.1, side="no")
+    assert abs(runner.side_spike(S, no, 90.0, now=now)[0] + 0.32) < 1e-9  # the NO side fell
+    recent.clear()
