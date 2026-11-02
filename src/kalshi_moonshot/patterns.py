@@ -88,7 +88,16 @@ def binom_tail(k: int, n: int, p: float) -> float:
     """P(X >= k) for X ~ Binomial(n, p): how likely at least k larger wins is by chance in a group of n trades."""
     if k <= 0:
         return 1.0
-    return min(1.0, sum(math.comb(n, i) * p**i * (1 - p) ** (n - i) for i in range(k, n + 1)))
+    if k > n:
+        return 0.0
+    if p <= 0.0:
+        return 0.0
+    if p >= 1.0:
+        return 1.0
+    # In log space: math.comb(n, i) outgrows a float once a group passes about a thousand trades.
+    lp, lq = math.log(p), math.log1p(-p)
+    top = math.lgamma(n + 1)
+    return min(1.0, sum(math.exp(top - math.lgamma(i + 1) - math.lgamma(n - i + 1) + i * lp + (n - i) * lq) for i in range(k, n + 1)))
 
 
 @dataclass(frozen=True)

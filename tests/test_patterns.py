@@ -42,3 +42,13 @@ def test_binomial_tail_basics():
     assert patterns.binom_tail(0, 10, 0.3) == 1.0
     assert patterns.binom_tail(10, 10, 0.5) == pytest.approx(0.5**10)
     assert patterns.binom_tail(5, 10, 0.5) == pytest.approx(0.623046875)
+
+
+def test_binom_tail_survives_groups_of_thousands_of_trades():
+    import math
+
+    from kalshi_moonshot.patterns import binom_tail
+    exact = sum(math.comb(12, i) * 0.3**i * 0.7 ** (12 - i) for i in range(5, 13))
+    assert abs(binom_tail(5, 12, 0.3) - exact) < 1e-12
+    assert 0.0 <= binom_tail(1200, 5000, 0.2) <= 1.0  # math.comb(5000, 1200) is far past a float
+    assert binom_tail(0, 10, 0.5) == 1.0 and binom_tail(11, 10, 0.5) == 0.0
