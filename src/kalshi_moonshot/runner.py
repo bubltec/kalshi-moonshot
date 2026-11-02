@@ -552,6 +552,11 @@ def evaluate(
         if (rose is not None and rose >= spec.entry_spike_rise) or (swung is not None and swung >= spec.entry_spike_range):
             bet = False
             note = f"spike: this side's price rose {100 * (rose or 0):+.0f}c and its bid swung {100 * (swung or 0):.0f}c over the last {spec.entry_spike_seconds:.0f}s (the lane skips {100 * spec.entry_spike_rise:.0f}c / {100 * spec.entry_spike_range:.0f}c). {note}"
+    if bet and spec.entry_bounce_rise > 0:
+        rise30, dip90 = side_bounce(s, shot)
+        if rise30 is not None and dip90 is not None and rise30 >= spec.entry_bounce_rise and dip90 >= spec.entry_bounce_dip:
+            bet = False
+            note = f"bounce: this side's ask rose {100 * rise30:.0f}c over the last 30s after its bid dipped {100 * dip90:.0f}c inside 90s (the lane skips {100 * spec.entry_bounce_rise:.0f}c / {100 * spec.entry_bounce_dip:.0f}c). {note}"
     if bet and spec.entry_spot_ticks > 0:
         aligned = spot_ticks_aligned(s, shot, spec.entry_spot_ticks)
         if aligned is False:
@@ -860,6 +865,27 @@ def side_spike(s: Settings, shot: LongShot, seconds: float, now: float | None = 
     inside = [bid(r) for r in rows if r[0] >= now - seconds]
     rose = mid(rows[-1]) - mid(back[-1]) if back else None
     return rose, (max(inside) - min(inside) if inside else None)
+
+
+def side_bounce(s: Settings, shot: LongShot, now: float | None = None) -> tuple[float | None, float | None]:
+    """(how far the side's ask has risen over the last 30 s, how far its bid dipped under where it stood 90 s ago), from the tape's quotes, the same two numbers the decision's factors record as rise_30 and dip_90. None for both without a quote 90 s back or one lately."""
+    now = time.time() if now is None else now
+    rows = _load_quotes(s, shot.ticker, now - 150.0, now)
+    if not rows or now - rows[-1][0] > 30.0:
+        return None, None
+
+    def ask(r: Any) -> float:
+        return r[2] if shot.side == "yes" else 1.0 - r[1]
+
+    def bid(r: Any) -> float:
+        return r[1] if shot.side == "yes" else 1.0 - r[2]
+
+    back90 = [i for i, r in enumerate(rows) if r[0] <= now - 90.0]
+    back30 = [r for r in rows if r[0] <= now - 30.0]
+    if not back90 or not back30:
+        return None, None
+    i = back90[-1]
+    return ask(rows[-1]) - ask(back30[-1]), max(0.0, bid(rows[i]) - min(bid(r) for r in rows[i:]))
 
 
 SPOT_STALE = 30.0  # a spot price older than this says nothing about now

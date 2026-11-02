@@ -330,3 +330,24 @@ def test_side_spike_reads_the_rise_and_the_swing_of_the_side(tmp_path):
     no = LongShot("SPK-1", "", "", 0.16, 0.18, 0.0, "", 0.1, side="no")
     assert abs(runner.side_spike(S, no, 90.0, now=now)[0] + 0.32) < 1e-9  # the NO side fell
     recent.clear()
+
+
+def test_side_bounce_reads_the_rise_after_a_dip(tmp_path):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.strategy import LongShot
+
+    recent.clear()
+    tape = Tape(tmp_path / "tape.db")
+    now = time.time()
+    for ts, bid, ask in ((now - 100, 0.84, 0.85), (now - 60, 0.72, 0.74), (now - 35, 0.73, 0.75), (now - 2, 0.85, 0.86)):
+        tape.add({"kind": "quote", "ts": ts, "ticker": "BNC-1", "bid": bid, "ask": ask, "last": bid, "sts": 1})
+    tape.flush()
+
+    class S:
+        tape_path = str(tmp_path / "tape.db")
+
+    yes = LongShot("BNC-1", "", "", 0.85, 0.86, 0.0, "", 0.1, side="yes")
+    rise, dip = runner.side_bounce(S, yes, now=now)
+    assert abs(rise - 0.11) < 1e-9  # ask 0.75 at -35 s, 0.86 now
+    assert abs(dip - 0.12) < 1e-9  # bid 0.84 at -100 s, 0.72 low
+    recent.clear()
