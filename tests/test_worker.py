@@ -290,6 +290,17 @@ def test_changing_the_request_rate_keeps_the_same_client_open(tmp_path):
     assert abs(client._gap - 1 / 8.0) < 1e-9
 
 
+def test_a_reload_reaches_the_tape_recorder(tmp_path):
+    from types import SimpleNamespace
+
+    s = settings(tmp_path)
+    fresh = settings(tmp_path, max_rps=8.0)
+    w = Worker(s, FakeClient(), FakeEst(), Store(s.db_path), None, reload=lambda: fresh)
+    w.recorder = SimpleNamespace(s=s)
+    w.refresh()
+    assert w.recorder.s is fresh  # WATCH_SERIES edits reach the tape without a restart
+
+
 def test_a_new_key_swaps_the_client_without_closing_the_old_one(tmp_path):
     from kalshi_moonshot.kalshi import KalshiClient
 

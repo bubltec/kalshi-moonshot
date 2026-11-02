@@ -478,6 +478,8 @@ class Worker:
                 fresh.env, fresh.mode, fresh.max_price, fresh.min_edge, fresh.scan_interval_minutes,
             )
         self.s = fresh
+        if self.recorder is not None:
+            self.recorder.s = fresh  # the tape follows WATCH_SERIES and TAPE_EXTRA_SERIES as they change, without a restart
         if self.searcher:
             self.searcher.results = fresh.search_results
 
