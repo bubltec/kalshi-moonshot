@@ -17,6 +17,7 @@ import json
 import logging
 import math
 import queue
+import re
 import threading
 import time
 from collections import deque
@@ -65,6 +66,7 @@ THROUGH_QUOTE = 1.0  # a bid older than this, before the index tick that went th
 THROUGH_SPOT = 5.0  # an index tick older than this is not a reason to sell
 THROUGH_STAY = 45.0  # outside the last minute, this long continuously through is a sale. A shorter dip is the one that comes back and pays
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
+BURST_BID_SLACK = 0.15  # a burst sale is held back when the bid read just before the order is more than this under the favorite's bid that triggered it: a thin book flickers (copper, 2026-11-02: 0.91 at the trigger, 0.19 a second later, and the bet settled a winner)
 HOLD_MARGIN = 0.01  # holding must beat the sale value by this much before an exit is withheld
 RETRY_AFTER = 15.0  # seconds before a declined sale is looked at again
 SOCKET_QUIET = 20.0  # seconds without a quote (or any stream event) before the sweep decides a position's loss exit instead of the socket
@@ -72,6 +74,12 @@ CROSS_STALE = 15.0  # a Kalshi quote older than this is not compared with a Poly
 HISTORY_KEEP = 120.0  # seconds of bids kept per market, for the spike rule
 FILL_SETTLE = 3.0  # seconds after a fill before positions are read: the bot's own bet must be on the books first, or it would look hand-placed
 
+
+
+def burst_bid_collapsed(why: str, bid: float) -> bool:
+    """True when a burst sale's fresh bid is more than BURST_BID_SLACK under the favorite's bid printed in its reason (the bid that triggered it)."""
+    m = re.search(r"the favorite's bid (\d*\.?\d+)", why)
+    return why.startswith("burst") and m is not None and bid < float(m.group(1)) - BURST_BID_SLACK
 
 class SellSignal(NamedTuple):
     """A watcher's call to sell a held position; the sell worker acts on it. A plain 3-tuple underneath, so it unpacks as (ticker, lane, why)."""
@@ -1566,6 +1574,10 @@ class ProfitWatcher:
             # The socket is the freshest price (REST can show an older quote), so anchor the order to the lower of the two.
             if t is not None and t.last_ts and time.time() - t.last_ts < 5.0 and t.last_bid > 0:
                 bid = min(bid, t.last_bid)
+            if burst_bid_collapsed(why, bid):
+                log.info("watcher: holding %s: the bid read %.2f is more than %.2f under the burst's trigger bid, so a thin book flickered; looking again", ticker, bid, BURST_BID_SLACK)
+                self._back_off(ticker, lane, seconds=1.0)
+                return
             slip = runner.EXIT_SLIP + (0.02 if "fast exit" in why else 0.0) + (0.03 if why.startswith("stop-loss") else 0.0)  # a collapse needs the surest fill
             ordering = time.time()
             line = runner.exit_position(s, book, store, row, bid, why + " [socket]", slip=slip)
