@@ -146,6 +146,7 @@ class Target:
     cash_out: float = 0.0  # lane cash_out_at: sell the moment the bid is at or under this price (0 = off)
     strike_through: float = 0.0  # lane strike_through_sale, in percent of the strike (0.003 = 0.003%). 0 = off. This far through starts a watch; it does not sell
     strike_through_seconds: float = 0.0  # that watch only looks in the last this many seconds
+    strike_through_rearm: bool = False  # lane strike_through_rearm: a return to the winning side restarts the watch instead of holding to the close
     through_kept: bool = False  # the index came back to the winning side after a cross: hold this position to the close
     through_on: bool = False  # a cross has armed the watch and the index is still through
     through_worst: float = 0.0  # the deepest through-fraction of this visit
@@ -788,8 +789,9 @@ class ProfitWatcher:
         pause = t.strike_through_seconds / 2.0
         if through <= 0:
             if t.through_on:
-                t.through_kept = True  # back on the winning side before the stay ran out: hold this position to the close
-                self._strike_through_clear(t)
+                if not t.strike_through_rearm:
+                    t.through_kept = True  # back on the winning side before the stay ran out: hold this position to the close
+                self._strike_through_clear(t)  # with re-arm the next cross starts a new watch and a new stay clock
             return None
         if through >= line:
             if t.through_since <= 0:
@@ -1246,6 +1248,7 @@ class ProfitWatcher:
             held.cash_out = spec.cash_out_at
             held.strike_through = spec.strike_through_sale
             held.strike_through_seconds = spec.strike_through_seconds
+            held.strike_through_rearm = spec.strike_through_rearm
             if spec.strike_through_sale > 0 and spec.strike_through_seconds > 0 and ticker.split("-")[0].endswith("15M"):
                 held.index_id = held.index_id or (strike_index_for(ticker.split("-")[0]) or "")
                 if held.index_id and (held.strike <= 0 or held.close_ts <= 0):

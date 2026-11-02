@@ -17,6 +17,7 @@ from kalshi_moonshot.kalshiws import index_for_series
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
+INDEX_TABLE = os.environ.get("INDEX_TABLE", "index_ticks")  # index_fast = the 5 Hz feed the live watcher reads; index_ticks = one tick a second
 DUMP = os.environ.get("DUMP")  # a file written by DUMP_OUT=1 on the host: replay offline, with no database
 if DUMP:
     import json
@@ -35,7 +36,7 @@ else:
 
     def paths(b):
         ix = index_for_series(b["series"])
-        ticks = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value > 0 ORDER BY ts", (ix, b["ts"], b["close_ts"])).fetchall()
+        ticks = tape.execute(f"SELECT ts, value FROM {INDEX_TABLE} WHERE index_id=? AND ts BETWEEN ? AND ? AND value > 0 ORDER BY ts", (ix, b["ts"], b["close_ts"])).fetchall()
         quotes = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid > 0 AND ask > 0 ORDER BY ts", (b["ticker"], b["ts"], b["close_ts"] + 5)).fetchall()
         return ticks, [(q[0], q[1] if b["side"] == "yes" else 1.0 - q[2]) for q in quotes]  # the NO bid is one minus the YES ask
 

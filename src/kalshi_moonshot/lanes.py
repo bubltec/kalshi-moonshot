@@ -161,6 +161,7 @@ class LaneSpec:
     cash_out_at: float = 0.0  # sell the moment the bid is at or under this price (0 = off): a cash-out line in dollars, so a bet that has collapsed returns what is left of it. Not a fraction of the price paid
     strike_through_sale: float = 0.0  # percent of the strike (0.003 = 0.003%). A cross this far through starts a watch: a return to the winning side is held to the close, a stay of 45s through sells at any time, and in the last strike_through_seconds a turn back down or a pause of half that window also sells. 0 = off
     strike_through_seconds: float = 60.0  # the faster bounce sale only looks this close to the close. A 45s stay through sells with more time left. 0 = off
+    strike_through_rearm: bool = False  # after the index comes back to the winning side the watch starts over (a second cross gets its own stay clock) instead of holding the bet to the close. 2026-11-02 replay on the 5 Hz index, 200 live crypto_favorite bets: +$100.9 re-arming against +$84.3 holding after a return
     watch_at: float = 0.0  # a favorite is watched once the bid prints this (0 = off; the moonshot lanes leave it off). A downtrend that stays there is sold after watch_ride_seconds, scaled by the time left (strategy.watch_trend). A hover or a spike is held
     watch_patient_left: float = 420.0  # watch_ride_seconds is the wait when at least this many seconds remain; less time left shortens the wait in proportion
     watch_ride_seconds: float = 0.0  # how long a visit under watch_at may last, at watch_patient_left, before a downtrend is abandoned (0 = a downtrend sells as soon as the last 3 seconds say so)
@@ -455,6 +456,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     if spec.strike_through_sale > 0:
         out["strike_through_sale"] = repr(spec.strike_through_sale)
         out["strike_through_seconds"] = repr(spec.strike_through_seconds)
+        if spec.strike_through_rearm:
+            out["strike_through_rearm"] = "true"
     return out
 
 

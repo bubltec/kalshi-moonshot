@@ -94,11 +94,11 @@ def _watcher(tmp_path, monkeypatch, guard=0.10, ticker="KXBTC15M-1"):
     return w, s, store, close
 
 
-def _through_watcher(tmp_path, monkeypatch, sale=0.003, seconds=60):
+def _through_watcher(tmp_path, monkeypatch, sale=0.003, seconds=60, rearm=False):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(
         "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\n"
-        f"strike_through_sale={sale}\nstrike_through_seconds={seconds}\nsettlement_guard=0\nburst_exit=false\n"
+        f"strike_through_sale={sale}\nstrike_through_seconds={seconds}\nstrike_through_rearm={str(rearm).lower()}\nsettlement_guard=0\nburst_exit=false\n"
         "series=['KXBTC15M']\nalways=true\n"
     )
     s = config.load()
@@ -1881,3 +1881,33 @@ def test_a_lane_on_the_default_window_keeps_its_version_and_a_changed_one_does_n
     spec = lanes.spec_for(s, "moonshot")
     assert "hunt_seconds" not in lanes.settings_of(spec, s)
     assert "hunt_seconds" in lanes.settings_of(dataclasses.replace(spec, hunt_seconds=1.0), s)
+
+
+def _return_then_second_stay(w, close):
+    now = close - 300
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.85, "ask": 0.86, "ts": now - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 99.996})  # 0.004% through starts the watch
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 20, "value": 100.01})  # back on the winning side
+    again = now + 60
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.84, "ask": 0.85, "ts": again - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": again, "value": 99.996})  # a second cross
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.80, "ask": 0.81, "ts": again + watcher.THROUGH_STAY - 0.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": again + watcher.THROUGH_STAY, "value": 99.996})
+
+
+def test_a_rearmed_strike_through_sells_a_second_stay_after_a_return(tmp_path, monkeypatch):
+    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch, rearm=True)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert t.strike_through_rearm
+    _return_then_second_stay(w, close)
+    assert not t.through_kept
+    sell = w._jobs.get_nowait()
+    assert sell.why.startswith("strike-through") and "0.80" in sell.why
+
+
+def test_without_rearm_a_return_holds_the_bet_to_the_close(tmp_path, monkeypatch):
+    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert not t.strike_through_rearm
+    _return_then_second_stay(w, close)
+    assert t.through_kept and w._jobs.empty()
