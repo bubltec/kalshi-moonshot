@@ -26,3 +26,11 @@ def test_existing_markets_stay_live(tmp_path, monkeypatch):
     for series in ("KXBTC15M", "KXGOLD15M", "KXWTI15M", "KXBRENT15M", "KXBRENTD", "KXGOLDH"):
         assert s.is_live("commodity", series), series
     assert s.is_live("commodity")  # no series named: the lane itself is live
+
+
+def test_treasury_yields_are_paper_only_and_priced_from_the_contract(tmp_path, monkeypatch):
+    s = settings(tmp_path, monkeypatch)
+    for series in ("KX2YRRATE15M", "KX5YRRATE15M", "KX10YRRATE15M", "KX30YRRATE15M"):
+        inst = cm.instrument_for(series)
+        assert inst is not None and not inst.live and cm.contract_priced(inst.symbol), series
+        assert not s.is_live("commodity", series), series

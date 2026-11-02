@@ -894,10 +894,10 @@ SPOT_LOOKBACK = 40.0  # seconds of spot prices read to find the last changes
 
 def _spot_symbols(series: str) -> list[str]:
     """The one underlying price a decision reads. Crypto uses Coinbase. Anything else uses its own instrument."""
-    from .commodities import symbol_for
+    from .commodities import contract_priced, symbol_for
 
     inst = symbol_for(series)
-    if not inst or inst.startswith("kraken:"):
+    if not inst or contract_priced(inst):
         return []
     return [inst]
 

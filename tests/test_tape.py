@@ -74,7 +74,7 @@ def test_the_recorder_follows_the_open_15_minute_markets(tmp_path):
 
     rec = TapeRecorder(Client(), s, None)  # type: ignore[arg-type]
     n = rec.refresh_tickers()
-    assert n == 20 and all(t.endswith("-26OCT192030-30") for t in rec.stream._tickers)
+    assert n == 24 and all(t.endswith("-26OCT192030-30") for t in rec.stream._tickers)
     assert "hl:xyz:GOLD" in rec._commodity_symbols() and not any("BTC" in x for x in rec._commodity_symbols())
 
 
@@ -174,7 +174,7 @@ def test_extra_series_are_recorded_on_their_own_connection(tmp_path):
 
     rec = TapeRecorder(Client(), s, None)  # type: ignore[arg-type]
     n = rec.refresh_tickers()
-    assert n == 21  # the 20 live 15-minute markets and the one extra
+    assert n == 25  # the 24 15-minute markets and the one extra
     assert rec.extra_stream._tickers == {"KXESOCCERGAME-26OCT241551AAABBB-AAA"}
     assert not any(t.startswith("KXESOCCERGAME") for t in rec.stream._tickers)  # a new match every minute never reconnects the live stream
 
