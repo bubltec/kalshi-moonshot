@@ -705,6 +705,34 @@ def test_a_lane_with_max_open_waits_when_it_is_full(tmp_path, monkeypatch):
     assert out.action == "pass" and "lane full" in out.note
 
 
+def test_a_lane_with_max_same_side_skips_the_third_bet_on_one_side_of_a_window(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.strategy import LongShot
+
+    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nmax_same_side=2\nfixed_stake=2.0\nseries=['KXBTC15M','KXETH15M','KXDOGE15M']\n")
+    s = config.load()
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    def held(ticker, side):
+        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, ticker, "bet", "observe", 0.90, side, "guarded", 3, 2.7, "2099-01-01T00:00:00Z"))
+
+    held("KXBTC15M-26NOV021607-07", "yes")
+    held("KXETH15M-26NOV021607-07", "yes")
+    held("KXBTC15M-26NOV021622-22", "yes")  # another window: not counted
+    store.db.commit()
+    third = LongShot("KXDOGE15M-26NOV021607-07", "t", "", 0.88, 0.90, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXDOGE15M", side="yes")
+    out = runner.evaluate(s, w.client, None, store, third, estimators={"market": Fixed()})
+    assert out.action == "pass" and "same side held" in out.note
+    other_side = LongShot("KXDOGE15M-26NOV021607-07", "t", "", 0.88, 0.90, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXDOGE15M", side="no")
+    out = runner.evaluate(s, w.client, None, store, other_side, estimators={"market": Fixed()})
+    assert "same side held" not in out.note
+
+
 def test_a_resting_buy_reports_what_filled_and_the_fee_charged(tmp_path, monkeypatch):
     import dataclasses
 

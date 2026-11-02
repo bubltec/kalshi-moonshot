@@ -526,6 +526,12 @@ def evaluate(
         if open_now >= spec.max_open:
             bet = False
             note = f"lane full: {open_now} bets already open (the lane holds at most {spec.max_open}). {note}"
+    if bet and spec.max_same_side > 0:
+        window = shot.ticker.split("-")[1] if shot.ticker.count("-") >= 2 else None
+        same = sum(1 for r in store.open_bets() if window and (r["lane"] or "moonshot") == shot.lane and r["side"] == shot.side and r["ticker"] != shot.ticker and r["ticker"].count("-") >= 2 and r["ticker"].split("-")[1] == window)
+        if same >= spec.max_same_side:
+            bet = False
+            note = f"same side held: {same} of this lane's bets are already {shot.side.upper()} in this window (the lane holds at most {spec.max_same_side}). {note}"
     if bet and spec.min_dwell_seconds > 0:
         dwell = dwell_seconds(s, shot, spec.price[0])
         if dwell is not None and dwell < spec.min_dwell_seconds:
