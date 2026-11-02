@@ -103,7 +103,7 @@ symbol = "kraken:DOGE/USD"
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
 
-# --- New markets. Currencies are live; indices and Brent stay paper only (`live = false`): a live lane prices and logs them but never sends an order for them until
+# --- New markets. Currencies are live; indices stay paper only (`live = false`; Brent went live 2026-11-02): a live lane prices and logs them but never sends an order for them until
 # you flip the switch here. Currencies use Hyperliquid's EUR/GBP/JPY perpetuals, or Kraken's spot FX where there is no perp.
 # Indices use the S&P 500 and Nasdaq-100 perps (Kalshi's index markets run in US trading hours); Brent adds its 15-minute series.
 
@@ -169,4 +169,4 @@ symbol = "hl:xyz:BRENTOIL"
 suffixes = ["15M"]
 realtime = true
 proxy = true
-live = false
+live = true  # 2026-11-02 (user): live. Paper record before the switch: 264 bets over 8 days, +3.5% as run, 79% won, about the same as the live WTI and natural gas
