@@ -387,6 +387,7 @@ class ProfitWatcher:
         self._jobs: queue.SimpleQueue[SellSignal] = queue.SimpleQueue()  # sells for the sell worker. The socket only enqueues
         self._buys: queue.SimpleQueue[BuySignal] = queue.SimpleQueue()  # buys for the buy worker. The socket only enqueues
         self._inflight: set[tuple[str, str]] = set()
+        self._signalled: dict[tuple[str, str], float] = {}  # when each sell signal was queued, to time the sale (queue, checks, order)
         self.follow: Callable[[set[str]], None] | None = None  # start streaming these tickers now (the tape recorder's follow)
         self.tape_factory: Callable[[], Any] | None = None  # opens a read connection to the tape, for the entry context saved with a hand-placed buy
         self._tape: Any = None
@@ -469,7 +470,7 @@ class ProfitWatcher:
                 reason = self._cross_checked(t, bid, now, reason)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
-                self._jobs.put(SellSignal(t.ticker, t.lane, reason))
+                self._queue_sell(SellSignal(t.ticker, t.lane, reason))
 
     def _on_trade(self, e: dict[str, Any]) -> None:
         """A trade on a market we hold. Per second it keeps the contracts traded by YES takers and NO takers over the last two minutes. On the first burst against a held favorite (the last 3 seconds' volume a multiple of the market's own
@@ -548,7 +549,7 @@ class ProfitWatcher:
                 key = (t.ticker, t.lane)
                 if key not in self._inflight:
                     self._inflight.add(key)
-                    self._jobs.put(SellSignal(t.ticker, t.lane, reason))  # sell the favorite: the burst is the peak crashing in the last two minutes
+                    self._queue_sell(SellSignal(t.ticker, t.lane, reason))  # sell the favorite: the burst is the peak crashing in the last two minutes
                 if not first:
                     continue  # a repeat burst after a sale that filled nothing only sells again
                 if t.burst_buy > 0 and BUY_BAND[0] <= t.cur_other_ask <= BUY_BAND[1]:
@@ -766,7 +767,7 @@ class ProfitWatcher:
             key = (t.ticker, t.lane)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
-                self._jobs.put(SellSignal(t.ticker, t.lane, reason))
+                self._queue_sell(SellSignal(t.ticker, t.lane, reason))
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """A cross of strike_through percent starts a watch. It does not sell.
@@ -1155,7 +1156,7 @@ class ProfitWatcher:
                 why = self._scalp(t, t.last_bid, now)  # a dip that has held 3 s while no quote arrived
                 if why:
                     self._inflight.add(key)
-                    self._jobs.put(SellSignal(t.ticker, t.lane, why))
+                    self._queue_sell(SellSignal(t.ticker, t.lane, why))
                     continue
             if not t.last_ts or (t.trail_drop <= 0 and t.stop_drop <= 0):
                 continue
@@ -1166,13 +1167,13 @@ class ProfitWatcher:
             fast = self._stop_hit(t, t.last_bid, now) or self._fast_crash(t, t.last_bid) or (self._drop_hit(t, t.cur_bid, now) if t.drop_armed_at is not None else None)
             if fast and key not in self._inflight:
                 self._inflight.add(key)
-                self._jobs.put(SellSignal(t.ticker, t.lane, fast))
+                self._queue_sell(SellSignal(t.ticker, t.lane, fast))
                 continue
             if t.below_since is not None and now - t.below_since >= t.trail_confirm and key not in self._inflight and now >= t.retry_after:
                 why = None if below_floor(t, t.last_bid) else trail_hit(t.entry, t.peak, t.last_bid, arm_gain(t), crash_drop(t))
                 if why:
                     self._inflight.add(key)
-                    self._jobs.put(SellSignal(t.ticker, t.lane, f"{why} for {now - t.below_since:.0f}s"))
+                    self._queue_sell(SellSignal(t.ticker, t.lane, f"{why} for {now - t.below_since:.0f}s"))
 
     # ---- housekeeping and the selling thread ----
     def refresh(self) -> None:
@@ -1490,7 +1491,13 @@ class ProfitWatcher:
         self._back_off(ticker, t.lane)
         return True
 
+    def _queue_sell(self, sig: SellSignal) -> None:
+        self._signalled[(sig.ticker, sig.lane)] = time.time()
+        self._jobs.put(sig)
+
     def _sell(self, ticker: str, lane: str, why: str) -> None:
+        picked = time.time()
+        queued = self._signalled.pop((ticker, lane), picked)
         s = self.get_settings()
         store = self.store_factory()
         try:
@@ -1504,6 +1511,7 @@ class ProfitWatcher:
                 return  # a resting sell is working this target (runner._rest_take_profit): it fills with no taker fee, or its own life ends at the close and this rule takes over again; crossing the book here would only pay the fee it exists to avoid
             book = self._book(lane)
             m = book.market(ticker)
+            read = time.time()
             if m.get("result") in {"yes", "no"}:
                 return
             side = row["side"] or "yes"
@@ -1556,8 +1564,11 @@ class ProfitWatcher:
             if t is not None and t.last_ts and time.time() - t.last_ts < 5.0 and t.last_bid > 0:
                 bid = min(bid, t.last_bid)
             slip = runner.EXIT_SLIP + (0.02 if "fast exit" in why else 0.0) + (0.03 if why.startswith("stop-loss") else 0.0)  # a collapse needs the surest fill
+            ordering = time.time()
             line = runner.exit_position(s, book, store, row, bid, why + " [socket]", slip=slip)
             log.info("watcher: %s", line)
+            log.info("watcher: sale timing %s: %.0f ms waiting in the queue, %.0f ms reading the market and checking, %.0f ms deciding to sell, %.0f ms placing the order",
+                     ticker, (picked - queued) * 1000, (read - picked) * 1000, (ordering - read) * 1000, (time.time() - ordering) * 1000)
             self.sold.append(line)
             if why.startswith("burst") and t is not None and line.startswith("partial exit"):
                 t.burst_resell = True  # the burst sale did not finish: the next burst tries again
