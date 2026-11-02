@@ -17,6 +17,7 @@ from kalshi_moonshot.kalshiws import index_for_series
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
+STAY_LEFT = float(os.environ.get("STAY_LEFT", "0"))
 INDEX_TABLE = os.environ.get("INDEX_TABLE", "index_ticks")  # index_fast = the 5 Hz feed the live watcher reads; index_ticks = one tick a second
 DUMP = os.environ.get("DUMP")  # a file written by DUMP_OUT=1 on the host: replay offline, with no database
 if DUMP:
@@ -106,7 +107,7 @@ def simulate(b, ticks, qts, bids, line, stay, window, pause_frac=0.5, rearm=Fals
                 since_t = ts
         else:
             since_t = 0.0
-        stayed = since_t > 0 and ts - since_t >= stay
+        stayed = since_t > 0 and ts - since_t >= stay and (STAY_LEFT <= 0 or left <= STAY_LEFT)  # STAY_LEFT: the long stay sells only this close to the end (0 = at any time left, as the bot runs)
         if not through_on:
             if th < line:
                 continue
