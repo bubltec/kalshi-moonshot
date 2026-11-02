@@ -28,7 +28,7 @@ from typing import Any, NamedTuple
 from . import buyer, checkins, manual, paperfill, runner, settlement
 from .config import Settings
 from .kalshi import KalshiClient, KalshiError
-from .kalshiws import index_for_series
+from .kalshiws import index_for_series, strike_index_for
 from .lanes import LaneSpec, enabled_lanes, lane_specs, stop_drop_for, takes_profit
 from .store import Store
 from .strategy import (
@@ -1246,7 +1246,7 @@ class ProfitWatcher:
             held.strike_through = spec.strike_through_sale
             held.strike_through_seconds = spec.strike_through_seconds
             if spec.strike_through_sale > 0 and spec.strike_through_seconds > 0 and ticker.split("-")[0].endswith("15M"):
-                held.index_id = held.index_id or (index_for_series(ticker.split("-")[0]) or "")
+                held.index_id = held.index_id or (strike_index_for(ticker.split("-")[0]) or "")
                 if held.index_id and (held.strike <= 0 or held.close_ts <= 0):
                     try:
                         mk = self._market_static(ticker)

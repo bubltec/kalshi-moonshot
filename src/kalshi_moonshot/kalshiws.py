@@ -44,6 +44,15 @@ def index_for_series(series: str) -> str | None:
     return None
 
 
+def strike_index_for(series: str) -> str | None:
+    """The index a 15-minute market's strike is read against: the CF Benchmarks index for crypto, the Pyth feed for commodities."""
+    from .pythfeed import (
+        index_for_series as pyth_index,  # late: pythfeed needs httpx only when it runs
+    )
+
+    return index_for_series(series) or pyth_index(series)
+
+
 def _f(v: Any) -> float | None:
     try:
         return float(v) if v not in (None, "") else None

@@ -24,6 +24,8 @@ from .config import Settings
 from .futflow import FuturesFlow
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import KalshiStream, index_for_series
+from .pythfeed import PythFeed
+from .pythfeed import api_key as pyth_key
 from .store import Store
 
 log = logging.getLogger("moonshot")
@@ -422,6 +424,8 @@ class TapeRecorder:
         # live one (15-minute quotes, settlement indexes, the account's fills) is never dropped for them.
         self.extra_stream = KalshiStream(client, self._on_event, index_feed=False, fills=False)
         self.futflow = FuturesFlow(s.fut_flow_coins, self.tape.add_fut) if s.fut_flow_enabled and s.fut_flow_coins else None
+        key = pyth_key()
+        self.pyth = PythFeed(self._on_event, key) if key else None  # the commodity markets' settlement prices, one tick a second on the tape (pythfeed.py)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._refresh_thread: threading.Thread | None = None
@@ -534,6 +538,8 @@ class TapeRecorder:
             self.extra_stream.start()
         if self.futflow is not None:
             self.futflow.start()
+        if self.pyth is not None:
+            self.pyth.start()
         self._thread = threading.Thread(target=self._run, name="tape", daemon=True)
         self._thread.start()
         # Listing the series is slow (a request each, on a shared client): it runs on its own thread so it can never hold up the writes below.
@@ -546,6 +552,8 @@ class TapeRecorder:
         self.extra_stream.close()
         if self.futflow is not None:
             self.futflow.close()
+        if self.pyth is not None:
+            self.pyth.close()
 
     def _refresh_loop(self) -> None:
         while not self._stop.is_set():
