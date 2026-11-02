@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from . import archive, db
+from .biquotefeed import BiQuoteFeed
+from .biquotefeed import enabled as biquote_enabled
 from .commodities import instrument_for, load_instruments
 from .config import Settings
 from .futflow import FuturesFlow
@@ -425,6 +427,7 @@ class TapeRecorder:
         self.extra_stream = KalshiStream(client, self._on_event, index_feed=False, fills=False)
         self.futflow = FuturesFlow(s.fut_flow_coins, self.tape.add_fut) if s.fut_flow_enabled and s.fut_flow_coins else None
         key = pyth_key()
+        self.biquote = BiQuoteFeed(self._on_event) if biquote_enabled() else None  # the commodity prices from BiQuote's free stream, recorded to test how well they call the settled direction (biquotefeed.py)
         self.pyth = PythFeed(self._on_event, key) if key else None  # the commodity markets' settlement prices, one tick a second on the tape (pythfeed.py)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -538,6 +541,8 @@ class TapeRecorder:
             self.extra_stream.start()
         if self.futflow is not None:
             self.futflow.start()
+        if self.biquote is not None:
+            self.biquote.start()
         if self.pyth is not None:
             self.pyth.start()
         self._thread = threading.Thread(target=self._run, name="tape", daemon=True)
@@ -552,6 +557,8 @@ class TapeRecorder:
         self.extra_stream.close()
         if self.futflow is not None:
             self.futflow.close()
+        if self.biquote is not None:
+            self.biquote.close()
         if self.pyth is not None:
             self.pyth.close()
 
