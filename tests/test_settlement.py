@@ -733,6 +733,71 @@ def test_a_lane_with_max_same_side_skips_the_third_bet_on_one_side_of_a_window(t
     assert "same side held" not in out.note
 
 
+def _choppy_world(tmp_path, monkeypatch, lane_extra):
+    import time as _time
+
+    from kalshi_moonshot import db, regime
+
+    regime.reset()
+    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    (tmp_path / "strategies.toml").write_text(f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\n{lane_extra}\n")
+    s = config.load()
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape.execute("CREATE TABLE IF NOT EXISTS quotes (ts REAL NOT NULL, ticker TEXT NOT NULL, bid REAL, ask REAL, last REAL, sts INTEGER, bid_size REAL, ask_size REAL)")
+    now = _time.time()
+    for k in range(14):  # 14 settled windows whose YES favorite (ask 0.85) won only 4 times
+        close = int(now - 600 - 900 * k)
+        ticker = f"KXBTC15M-{k}"
+        store.db.execute("INSERT INTO windows (ticker, series, close_ts, result, fetched_ts) VALUES (?,?,?,?,?)", (ticker, "KXBTC15M", close, "yes" if k < 4 else "no", now))
+        tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (?,?,?,?)", (close - 300.0, ticker, 0.84, 0.85))
+    tape.commit()
+    store.db.commit()
+    return w, s, store
+
+
+def _choppy_shot(left_seconds, ask):
+    from kalshi_moonshot.strategy import LongShot
+
+    return LongShot("KXBTC15M-99", "t", "", ask - 0.01, ask, left_seconds / 3600.0, "2099-01-01T00:00:00Z", left_seconds / 3600.0, lane="guarded", series="KXBTC15M", side="yes")
+
+
+def test_a_choppy_market_limits_buys_to_the_last_seconds_and_a_higher_price(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.estimators import Estimate
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    w, s, store = _choppy_world(tmp_path, monkeypatch, "choppy_floor=0.8\nchoppy_left_max=300\nchoppy_price_min=0.82")
+    early = runner.evaluate(s, w.client, None, store, _choppy_shot(420, 0.85), estimators={"market": Fixed()})
+    assert early.action == "pass" and "choppy market" in early.note and "last 300s" in early.note
+    cheap = runner.evaluate(s, w.client, None, store, _choppy_shot(200, 0.80), estimators={"market": Fixed()})
+    assert cheap.action == "pass" and "choppy market" in cheap.note and "0.82 or more" in cheap.note
+    late = runner.evaluate(s, w.client, None, store, _choppy_shot(200, 0.85), estimators={"market": Fixed()})
+    assert "choppy market" not in late.note
+
+
+def test_a_choppy_market_can_skip_every_buy_and_a_calm_one_changes_nothing(tmp_path, monkeypatch):
+    from kalshi_moonshot import regime, runner
+    from kalshi_moonshot.estimators import Estimate
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    w, s, store = _choppy_world(tmp_path, monkeypatch, "choppy_floor=0.8\nchoppy_skip=true")
+    out = runner.evaluate(s, w.client, None, store, _choppy_shot(200, 0.85), estimators={"market": Fixed()})
+    assert out.action == "pass" and "buying nothing" in out.note
+    rate, n = regime.favorite_rate(s, store, ("KXBTC15M",), 12.0)
+    assert n == 14 and rate == pytest.approx(4 / 14)
+    regime.reset()
+    store.db.execute("UPDATE windows SET result='yes'")  # the favorites all won: calm
+    store.db.commit()
+    calm = runner.evaluate(s, w.client, None, store, _choppy_shot(420, 0.85), estimators={"market": Fixed()})
+    assert "choppy market" not in calm.note
+
+
 def test_a_resting_buy_reports_what_filled_and_the_fee_charged(tmp_path, monkeypatch):
     import dataclasses
 

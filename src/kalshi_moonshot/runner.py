@@ -526,6 +526,21 @@ def evaluate(
         if open_now >= spec.max_open:
             bet = False
             note = f"lane full: {open_now} bets already open (the lane holds at most {spec.max_open}). {note}"
+    if bet and spec.choppy_floor > 0:
+        from . import regime
+
+        is_choppy, rate, counted = regime.choppy(s, store, spec.choppy_series or spec.series, spec.choppy_hours, spec.choppy_floor)
+        if is_choppy:
+            left = shot.hours_to_close * 3600.0
+            why = (
+                "buying nothing" if spec.choppy_skip
+                else f"buying only in the last {spec.choppy_left_max:.0f}s" if spec.choppy_left_max > 0 and left > spec.choppy_left_max
+                else f"buying only at {spec.choppy_price_min:.2f} or more" if spec.choppy_price_min > 0 and shot.ask < spec.choppy_price_min
+                else None
+            )
+            if why:
+                bet = False
+                note = f"choppy market: the favorites won {rate:.0%} of the last {counted} windows ({spec.choppy_hours:g}h), under {spec.choppy_floor:.0%}, so the lane is {why}. {note}"
     if bet and spec.max_same_side > 0:
         window = shot.ticker.split("-")[1] if shot.ticker.count("-") >= 2 else None
         same = sum(1 for r in store.open_bets() if window and (r["lane"] or "moonshot") == shot.lane and r["side"] == shot.side and r["ticker"] != shot.ticker and r["ticker"].count("-") >= 2 and r["ticker"].split("-")[1] == window)
