@@ -142,6 +142,81 @@ def _clear_through(t):
     t.through_worst = t.through_best = t.through_best_ts = t.through_since = 0.0
 
 
+def _shock_watcher(tmp_path, monkeypatch, extra=""):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nshock_bp=8\nshock_seconds=60\nshock_margin_bp=5\nshock_last=120\n"
+        f"settlement_guard=0\nburst_exit=false\nseries=['KXBTC15M']\nalways=true\n{extra}"
+    )
+    s = config.load()
+    store = Store(s.db_path)
+    store.db.execute(
+        "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (1.0, "KXBTC15M-1", "bet", "observe", 0.82, "yes", "guarded", 3, 2.7, "1970-01-24T03:33:20Z"),
+    )
+    store.db.commit()
+
+    class Client:
+        def market(self, ticker):
+            return {"ticker": ticker, "floor_strike": 100.0, "close_time": "1970-01-24T03:33:20Z", "yes_bid_dollars": "0.82", "yes_ask_dollars": "0.83", "title": "t"}
+
+    w = watcher.ProfitWatcher(lambda: s, Client(), lambda: Store(s.db_path))
+    w.refresh()
+    return w, 2_000_000.0
+
+
+def test_a_shock_exit_sells_when_the_spot_jumps_against_a_thin_cushion(tmp_path, monkeypatch):
+    w, close = _shock_watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert t.shock_bp == 8 and t.shock_index == "BRTI" and t.shock_ref == 100.0
+    for k in range(125, 50, -5):  # the spot sits 10 bp above the strike for a minute (a YES is safe)
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": close - 50.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - 50, "value": 100.01})  # 9 bp down in 60 s, 1 bp above the strike
+    sell = w._jobs.get_nowait()
+    assert sell.why.startswith("shock exit") and "0.62" in sell.why
+
+
+def test_a_shock_exit_ignores_a_small_move_a_wide_cushion_and_a_bid_outside_its_range(tmp_path, monkeypatch):
+    w, close = _shock_watcher(tmp_path, monkeypatch)
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    for k in range(125, 50, -5):
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
+    now = close - 50
+    w._spot["BRTI"] = (now, 100.07)
+    assert w._shock_hit(t, 0.62, now, now) is None  # 3 bp down: not a shock
+    w._spot["BRTI"] = (now, 100.01)
+    assert w._shock_hit(t, 0.95, now, now) is None  # the market is not worried: a bid over 0.89 is left alone
+    assert w._shock_hit(t, 0.03, now, now) is None  # a bid under 0.05 has already priced the loss
+    assert w._shock_hit(t, 0.62, close - 130, close - 130) is None  # outside the last 120 s
+    t.shock_ref = 99.0  # a cushion of 100+ bp: the jump is no threat
+    assert w._shock_hit(t, 0.62, now, now) is None
+    t.shock_ref = 100.0
+    assert w._shock_hit(t, 0.62, now, now) is not None
+    t.side = "no"  # a NO is helped by the same move
+    assert w._shock_hit(t, 0.62, now, now) is None
+
+
+def test_a_shock_exit_waits_for_a_full_lookback_of_history(tmp_path, monkeypatch):
+    w, close = _shock_watcher(tmp_path, monkeypatch)
+    for k in range(25, 50, -5):  # only 25 s of ticks since the watcher started
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - 110 + (25 - k), "value": 100.10})
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": close - 79.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - 79, "value": 100.01})
+    assert w._jobs.empty()
+
+
+def test_a_lane_without_a_shock_setting_gets_no_shock_exit(tmp_path, monkeypatch):
+    from kalshi_moonshot import lanes
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    plain = lanes.LaneSpec(name="x", estimator="ladder", label="x", max_spread=0.05, min_volume=0.0, price=(0.1, 0.9), hours=(0, 1))
+    assert "shock_bp" not in lanes.settings_of(plain, s) and not lanes.takes_profit(plain)
+    on = lanes.LaneSpec(**{**plain.__dict__, "shock_bp": 8.0})
+    assert lanes.settings_of(on, s)["shock_bp"] == "8.0" and lanes.takes_profit(on)
+
+
 def test_a_strike_through_watches_the_cross_and_sells_when_the_bounce_fails(tmp_path, monkeypatch):
     w, _s, store, close = _through_watcher(tmp_path, monkeypatch)
     t = w.targets[("KXBTC15M-1", "guarded")]

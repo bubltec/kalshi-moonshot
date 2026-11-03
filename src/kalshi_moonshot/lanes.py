@@ -94,6 +94,10 @@ class LaneSpec:
     max_open: int = 0  # at most this many bets of this lane open at once, across all its markets (0 = no limit); the next candidate waits until one closes
     max_same_side: int = 0  # at most this many of this lane's open bets on the same side of the same 15-minute window (BTC, ETH and DOGE YES together is one bet on one move); 0 = no limit. 2026-11-02 replay, 30 days of crypto_favorite: the 3rd same-side bet in a window won 13 of 22 for -$46.6, the 1st and 2nd won 82-86%
     same_side_lanes: tuple[str, ...] = ()  # lanes whose open bets count toward max_same_side together with this lane's own (empty = this lane alone), so two lanes on one coin family share one cap
+    shock_bp: float = 0.0  # shock exit: in the last shock_last seconds, sell when the spot has moved this many basis points against the bet over the last shock_seconds and is within shock_margin_bp of the strike (0 = off). Commodities read BiQuote against its price at the window open, crypto reads the settlement index against the strike. 2026-11-03 replay of 259 held commodity bets over 12 days: 60 s, 8 bp, 5 bp +$44; crypto gaps in seconds, so it sold only for a few cents there
+    shock_seconds: float = 60.0
+    shock_margin_bp: float = 5.0
+    shock_last: float = 120.0
     choppy_floor: float = 0.0  # a choppy market: the favorites (the side with an ask in 0.78-0.92 from minute 7) of choppy_series settled in the last choppy_hours have won less often than this (regime.py). 0 = no choppy rules. While choppy the next three settings apply
     choppy_hours: float = 12.0
     choppy_series: tuple[str, ...] = ()  # whose favorites are counted; empty = this lane's own series. The crypto lanes count all five coins together: one coin's 2 hours alone is too few windows
@@ -420,7 +424,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
-    "blackout_et", "max_same_side", "same_side_lanes", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_seconds", "shock_margin_bp", "shock_last", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -443,6 +447,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["max_same_side"] = repr(spec.max_same_side)
         if spec.same_side_lanes:
             out["same_side_lanes"] = repr(spec.same_side_lanes)
+    if spec.shock_bp:
+        out["shock_bp"], out["shock_seconds"], out["shock_margin_bp"], out["shock_last"] = repr(spec.shock_bp), repr(spec.shock_seconds), repr(spec.shock_margin_bp), repr(spec.shock_last)
     if spec.choppy_floor:
         out["choppy_floor"], out["choppy_hours"], out["choppy_series"] = repr(spec.choppy_floor), repr(spec.choppy_hours), repr(spec.choppy_series)
         out["choppy_left_max"], out["choppy_price_min"], out["choppy_skip"] = repr(spec.choppy_left_max), repr(spec.choppy_price_min), repr(spec.choppy_skip)
@@ -518,7 +524,7 @@ def version_of(spec: LaneSpec, s: Any) -> str:
 
 
 def takes_profit(spec: LaneSpec) -> bool:
-    return spec.cash_out_at > 0 or spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.scalp_up > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0 or spec.cash_left_seconds > 0 or spec.drop_cents > 0 or spec.bounce_fall > 0 or spec.strike_through_sale > 0
+    return spec.cash_out_at > 0 or spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.scalp_up > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0 or spec.cash_left_seconds > 0 or spec.drop_cents > 0 or spec.bounce_fall > 0 or spec.strike_through_sale > 0 or spec.shock_bp > 0
 
 
 def chance_ok(spec: LaneSpec, p: float) -> bool:

@@ -27,6 +27,7 @@ from datetime import datetime
 from typing import Any, NamedTuple
 
 from . import buyer, checkins, manual, paperfill, runner, settlement
+from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series, strike_index_for
@@ -64,6 +65,8 @@ BUY_BAND = (0.05, 0.25)  # the other side is bought for real only when it costs 
 SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the close)
 THROUGH_QUOTE = 1.0  # a bid older than this, before the index tick that went through, is the quote from before the cross
 THROUGH_SPOT = 5.0  # an index tick older than this is not a reason to sell
+SHOCK_BID = (0.05, 0.89)  # the shock exit sells only a bid in this range: below it the market has already priced the loss, above it the market is not worried
+SHOCK_KEEP = 130.0  # seconds of index ticks kept for the shock exit to look back over
 THROUGH_STAY = 45.0  # outside the last minute, this long continuously through is a sale. A shorter dip is the one that comes back and pays
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
 BURST_BID_SLACK = 0.15  # a burst sale is held back when the bid read just before the order is more than this under the favorite's bid that triggered it: a thin book flickers (copper, 2026-11-02: 0.91 at the trigger, 0.19 a second later, and the bet settled a winner)
@@ -154,6 +157,12 @@ class Target:
     cash_out: float = 0.0  # lane cash_out_at: sell the moment the bid is at or under this price (0 = off)
     strike_through: float = 0.0  # lane strike_through_sale, in percent of the strike (0.003 = 0.003%). 0 = off. This far through starts a watch; it does not sell
     strike_through_seconds: float = 0.0  # that watch only looks in the last this many seconds
+    shock_bp: float = 0.0  # lane shock_bp (0 = off), with its seconds, cushion and last-seconds window
+    shock_seconds: float = 60.0
+    shock_margin_bp: float = 5.0
+    shock_last: float = 120.0
+    shock_index: str = ""  # the index it reads
+    shock_ref: float = 0.0  # the price the cushion is measured from: the strike (crypto) or the index's own price at the window open (commodities)
     strike_through_rearm: bool = False  # lane strike_through_rearm: a return to the winning side restarts the watch instead of holding to the close
     through_kept: bool = False  # the index came back to the winning side after a cross: hold this position to the close
     through_on: bool = False  # a cross has armed the watch and the index is still through
@@ -376,6 +385,8 @@ class ProfitWatcher:
         self.spot_side = spot_side  # (ticker, side) -> the chance, from spot against the strike alone, that this side pays; None if unknown
         self._model = settlement.Model(lambda: self.tape_factory() if self.tape_factory is not None else None)  # the exact settlement chance (settlement.py)
         self._spot_src: dict[str, float] = {}  # index -> source time (ms) of the reading in _spot
+        self._shock_refs: dict[tuple[str, str], float] = {}  # (ticker, index) -> the price its shock exit measures the cushion from
+        self._shock_hist: dict[str, deque] = {}  # index -> (time, value) ticks of the last SHOCK_KEEP seconds, kept only for the indexes a shock exit reads
         self._spot = self._model.spot  # settlement index -> (time, latest value), from the socket's index ticks
         self._tls = threading.local()
         self._flow: dict[str, dict[int, list[float]]] = {}  # ticker -> second -> [YES-taker contracts, NO-taker contracts], the last 125 seconds
@@ -438,6 +449,12 @@ class ProfitWatcher:
             if src is not None:
                 self._spot_src[idx] = src
             self._spot[idx] = (now, float(e["value"]))
+            hist = self._shock_hist.get(idx)
+            if hist is not None:
+                hist.append((now, float(e["value"])))
+                while hist and now - hist[0][0] > SHOCK_KEEP:
+                    hist.popleft()
+                self._shock_on_index(idx, now)
             self._strike_through_on_index(idx, now)  # the watch follows the index tick: a long stay through sells at any time, and the last minute still sells a failed bounce
             return
         if e.get("kind") == "trade" and e.get("ticker") and e.get("count"):
@@ -472,7 +489,7 @@ class ProfitWatcher:
             )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
+            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._shock_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
             if t.drop_buy and not t.burst_logged and t.burst_buy > 0 and (t.drop_armed_at == now or ((reason or "").startswith("drop: bid") and t.drop_confirm <= 0)):
                 self._drop_hedge(t, bid, now)  # the other side is bought when the fall is found, before the sale: after the confirmed fall it costs far more
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
@@ -777,6 +794,69 @@ class ProfitWatcher:
             if reason and key not in self._inflight:
                 self._inflight.add(key)
                 self._queue_sell(SellSignal(t.ticker, t.lane, reason))
+
+    def _shock_reference(self, t: Target, index_id: str) -> float:
+        """What the shock exit measures the cushion from. A BiQuote commodity price differs from Kalshi's strike by a dollar or two, so it is read against the same index's own price when the window opened (the tape); a crypto settlement index is read against the strike itself."""
+        if not index_id.startswith("BQ_"):
+            if t.strike <= 0:
+                try:
+                    t.strike = float(self._market_static(t.ticker).get("floor_strike") or 0.0)
+                except (TypeError, ValueError, KalshiError):
+                    return 0.0
+            return t.strike
+        if (t.ticker, index_id) in self._shock_refs:
+            return self._shock_refs[(t.ticker, index_id)]
+        tape = self._tape_db()
+        if tape is None:
+            return 0.0
+        opened = t.close_ts - 900.0
+        try:
+            row = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts LIMIT 1", (index_id, opened - 5.0, opened + 20.0)).fetchone()
+        except Exception:
+            return 0.0
+        ref = float(row[0]) if row else 0.0
+        if ref > 0:
+            self._shock_refs[(t.ticker, index_id)] = ref
+        return ref
+
+    def _shock_on_index(self, index_id: str, now: float) -> None:
+        with self._lock:
+            hits = [t for t in self.targets.values() if t.shock_index == index_id and t.shock_bp > 0]
+        for t in hits:
+            if t.last_ts <= 0 or t.cur_bid <= 0:
+                continue
+            reason = self._shock_hit(t, t.cur_bid, now, t.last_ts)
+            key = (t.ticker, t.lane)
+            if reason and key not in self._inflight:
+                self._inflight.add(key)
+                self._queue_sell(SellSignal(t.ticker, t.lane, reason))
+
+    def _shock_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
+        """The shock exit: in the last shock_last seconds, the spot has moved shock_bp basis points against this bet over the last shock_seconds and sits within shock_margin_bp of the reference, so a sale is better than the close. Needs a bid in SHOCK_BID, a fresh spot and a quote that is not older than the tick."""
+        if t.shock_bp <= 0 or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index:
+            return None
+        left = t.close_ts - now
+        if left <= SETTLE_LAST or left > t.shock_last:
+            return None
+        spot = self._spot.get(t.shock_index)
+        hist = self._shock_hist.get(t.shock_index)
+        if spot is None or not hist:
+            return None
+        spot_ts, value = spot
+        if value <= 0 or now - spot_ts > THROUGH_SPOT or bid < SHOCK_BID[0] or bid > SHOCK_BID[1] or quote_ts < spot_ts - THROUGH_QUOTE:
+            return None
+        then = now - t.shock_seconds
+        if hist[0][0] > then:
+            return None  # not enough history yet to look back that far
+        past = next((v for ts, v in reversed(hist) if ts <= then), 0.0)
+        if past <= 0:
+            return None
+        sign = 1.0 if t.side == "yes" else -1.0
+        margin = math.log(value / t.shock_ref) * sign * 1e4
+        move = math.log(value / past) * sign * 1e4
+        if move > -t.shock_bp or margin > t.shock_margin_bp:
+            return None
+        return f"shock exit: spot moved {-move:.1f} bp against us in {t.shock_seconds:.0f}s and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """A cross of strike_through percent starts a watch. It does not sell.
@@ -1272,6 +1352,14 @@ class ProfitWatcher:
                     held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0
                     if held.close_ts <= 0:
                         held.close_ts = close
+            if spec.shock_bp > 0 and spec.shock_seconds > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
+                series_name = ticker.split("-")[0]
+                sid = biquote_index(series_name) or index_for_series(series_name) or ""
+                ref = self._shock_reference(held, sid) if sid else 0.0
+                if ref > 0:
+                    held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last
+                    held.shock_index, held.shock_ref = sid, ref
+                    self._shock_hist.setdefault(sid, deque())
             if stop_on:
                 fresh[(ticker, lane)].stop_drop = stop_drop_for(spec, s)
                 fresh[(ticker, lane)].stop_confirm = spec.stop_confirm_seconds

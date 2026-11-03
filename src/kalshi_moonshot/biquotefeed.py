@@ -39,6 +39,16 @@ FEEDS: dict[str, str] = {
 }
 _BY_SYMBOL = {symbol: index for index, symbol in FEEDS.items()}
 
+SERIES_INDEX = {"KXGOLD": "BQ_GOLD", "KXSILVER": "BQ_SILVER", "KXPLATINUM": "BQ_PLATINUM", "KXPALLADIUM": "BQ_PALLADIUM", "KXWTI": "BQ_WTI", "KXBRENT": "BQ_BRENT", "KXNATGAS": "BQ_NATGAS", "KXCOPPER": "BQ_COPPER"}
+
+
+def index_for_series(series: str) -> str | None:
+    """The BiQuote tape index that follows a commodity 15-minute series, or None."""
+    for prefix, index in SERIES_INDEX.items():
+        if series.startswith(prefix) and series[len(prefix):] == "15M":
+            return index
+    return None
+
 
 def enabled() -> bool:
     return os.environ.get("BIQUOTE_FEED", "1").strip().lower() not in {"0", "off", "false", "no"}
