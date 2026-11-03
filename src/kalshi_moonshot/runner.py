@@ -531,8 +531,14 @@ def evaluate(
 
         try:
             kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0)
-        except Exception:  # a tape that cannot say is no reason to skip
+        except Exception as exc:  # a tape that cannot say is no reason to skip
             kind = None
+            log.warning("variety unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if kind is None:
+            log.info("variety of %s %s: could not be read (no BiQuote reference near the window open, or too few recent ticks), so it is not skipped", shot.ticker, shot.side)
+        else:
+            log.info("variety of %s %s %s: %s", shot.ticker, shot.lane, shot.side, kind)
+            note = f"[variety {kind}] {note}"
         if kind is not None and variants.skipped(spec.skip_varieties, kind, shot.side):
             bet = False
             note = f"variety {kind} ({variants.NAMES[kind]}): this lane does not buy it. {note}"
