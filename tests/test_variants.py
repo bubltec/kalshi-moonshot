@@ -49,8 +49,8 @@ def test_the_favorite_is_the_first_qualifying_side_between_minute_seven_and_the_
         (close - 300, 0.86, 0.87),
         (close - 100, 0.90, 0.91),  # inside the last two minutes: too late
     ]
-    side, ask, at = variants.favorite_entry(quotes, close)
-    assert side == "no" and ask == pytest.approx(0.86) and at == close - 400
+    side, ask, at, bid = variants.favorite_entry(quotes, close)
+    assert side == "no" and ask == pytest.approx(0.86) and at == close - 400 and bid == pytest.approx(0.85)
     assert variants.favorite_entry([(close - 300, 0.80, 0.85)], close) is None  # a 5c spread is too wide
     assert variants.favorite_entry([(close - 300, 0.95, 0.96)], close) is None  # above the band
     assert variants.favorite_entry([], close) is None
