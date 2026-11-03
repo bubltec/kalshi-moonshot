@@ -533,7 +533,7 @@ def evaluate(
             kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0)
         except Exception:  # a tape that cannot say is no reason to skip
             kind = None
-        if variants.skipped(spec.skip_varieties, kind, shot.side):
+        if kind is not None and variants.skipped(spec.skip_varieties, kind, shot.side):
             bet = False
             note = f"variety {kind} ({variants.NAMES[kind]}): this lane does not buy it. {note}"
     if bet and spec.choppy_floor > 0:
@@ -542,19 +542,19 @@ def evaluate(
         is_choppy, rate, counted = regime.choppy(s, store, spec.choppy_series or spec.series, spec.choppy_hours, spec.choppy_floor)
         if is_choppy:
             left = shot.hours_to_close * 3600.0
-            why = (
+            choppy_why = (
                 "buying nothing" if spec.choppy_skip
                 else f"buying only in the last {spec.choppy_left_max:.0f}s" if spec.choppy_left_max > 0 and left > spec.choppy_left_max
                 else f"buying only at {spec.choppy_price_min:.2f} or more" if spec.choppy_price_min > 0 and shot.ask < spec.choppy_price_min
                 else None
             )
-            if why:
+            if choppy_why:
                 bet = False
-                note = f"choppy market: the favorites won {rate:.0%} of the last {counted} windows ({spec.choppy_hours:g}h), under {spec.choppy_floor:.0%}, so the lane is {why}. {note}"
+                note = f"choppy market: the favorites won {rate:.0%} of the last {counted} windows ({spec.choppy_hours:g}h), under {spec.choppy_floor:.0%}, so the lane is {choppy_why}. {note}"
     if bet and spec.max_same_side > 0:
         window = shot.ticker.split("-")[1] if shot.ticker.count("-") >= 2 else None
-        counted = {shot.lane, *spec.same_side_lanes}
-        same = sum(1 for r in store.open_bets() if window and (r["lane"] or "moonshot") in counted and r["side"] == shot.side and r["ticker"] != shot.ticker and r["ticker"].count("-") >= 2 and r["ticker"].split("-")[1] == window)
+        same_lanes = {shot.lane, *spec.same_side_lanes}
+        same = sum(1 for r in store.open_bets() if window and (r["lane"] or "moonshot") in same_lanes and r["side"] == shot.side and r["ticker"] != shot.ticker and r["ticker"].count("-") >= 2 and r["ticker"].split("-")[1] == window)
         if same >= spec.max_same_side:
             bet = False
             note = f"same side held: {same} of this lane's bets are already {shot.side.upper()} in this window (the lane holds at most {spec.max_same_side}). {note}"

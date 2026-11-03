@@ -259,14 +259,14 @@ def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_
     board = market_scoreboard(s, days, recent_days)
     pooled: dict[tuple[str, str, str], dict] = defaultdict(lambda: defaultdict(float))
     by_coin: dict[tuple[str, str], dict] = defaultdict(lambda: {"n": 0, "wins": 0})
-    for (cls, name, side, v), c in board.items():
+    for (cls, name, side, v), cell in board.items():
         p = pooled[(cls, side, v)]
-        for k, x in c.items():
+        for k, x in cell.items():
             p[k] += x
         if cls == "crypto":
             bc = by_coin[(v, name)]
-            bc["n"] += c["n"]
-            bc["wins"] += c["wins"]
+            bc["n"] += cell["n"]
+            bc["wins"] += cell["wins"]
     out = [
         f"every favorite of the last {days:g} days by variety (a lane or not), held to the result on a $10 ticket with the taker fee; a loss settles at zero. 'recent' is the last {recent_days:g} day(s).",
         "flip = buying the other side at its ask instead; it wins when the favorite loses (its price is about 0.1-0.25, so it wins about one time in five).",
@@ -274,8 +274,8 @@ def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_
     for cls in ("crypto", "commodity"):
         out.append("")
         out.append(f"{cls}:  side  variety                              n  zeros%     net   $/bet | flip wins%  price  $/bet | recent n  zeros%     net  flip $")
-        for (c, side, v), x in sorted(pooled.items(), key=lambda kv: (kv[0][2], kv[0][1])):
-            if c != cls or x["n"] < min_n:
+        for (klass, side, v), x in sorted(pooled.items(), key=lambda kv: (kv[0][2], kv[0][1])):
+            if klass != cls or x["n"] < min_n:
                 continue
             rz = f"{(1 - x['recent_wins'] / x['recent_n']) * 100:5.0f}%" if x["recent_n"] else "    - "
             out.append(
@@ -288,9 +288,13 @@ def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_
     out.append("variety                              " + " ".join(f"{c:>9}" for c in coins))
     for v in sorted(NAMES):
         cells = []
-        for c in coins:
-            bc = by_coin.get((v, c))
-            cells.append(f"{(1 - bc['wins'] / bc['n']) * 100:4.0f}%/{int(bc['n']):3d}" if bc and bc["n"] >= 5 else "        -")
+        for coin in coins:
+            coin_cell = by_coin.get((v, coin))
+            cells.append(
+                f"{(1 - coin_cell['wins'] / coin_cell['n']) * 100:4.0f}%/{int(coin_cell['n']):3d}"
+                if coin_cell and coin_cell["n"] >= 5
+                else "        -"
+            )
         out.append(f"{v} {NAMES[v]:34} " + " ".join(f"{x:>9}" for x in cells))
     return out
 

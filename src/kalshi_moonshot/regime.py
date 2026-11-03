@@ -53,9 +53,14 @@ def favorite_rate(s: Settings, store, series: tuple[str, ...], hours: float, now
         "SELECT ticker, series, close_ts, result FROM windows WHERE close_ts BETWEEN ? AND ? AND result IN ('yes','no')",
         (now - hours * 3600.0, now),
     ).fetchall()
-    won = [favorite_won(s, r["ticker"], r["close_ts"], r["result"]) for r in rows if r["series"] in series]
-    won = [w for w in won if w is not None]
-    out = (sum(won) / len(won) if len(won) >= MIN_WINDOWS else None, len(won))
+    hits: list[bool] = []
+    for r in rows:
+        if r["series"] not in series:
+            continue
+        w = favorite_won(s, r["ticker"], r["close_ts"], r["result"])
+        if w is not None:
+            hits.append(w)
+    out = (sum(hits) / len(hits) if len(hits) >= MIN_WINDOWS else None, len(hits))
     _rates[key] = (now, out)
     return out
 
