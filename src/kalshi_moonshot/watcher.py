@@ -385,6 +385,7 @@ class ProfitWatcher:
         self.spot_side = spot_side  # (ticker, side) -> the chance, from spot against the strike alone, that this side pays; None if unknown
         self._model = settlement.Model(lambda: self.tape_factory() if self.tape_factory is not None else None)  # the exact settlement chance (settlement.py)
         self._spot_src: dict[str, float] = {}  # index -> source time (ms) of the reading in _spot
+        self._shock_logged: set[tuple[str, str]] = set()  # shock exits already reported as armed or not
         self._shock_refs: dict[tuple[str, str], float] = {}  # (ticker, index) -> the price its shock exit measures the cushion from
         self._shock_hist: dict[str, deque] = {}  # index -> (time, value) ticks of the last SHOCK_KEEP seconds, kept only for the indexes a shock exit reads
         self._spot = self._model.spot  # settlement index -> (time, latest value), from the socket's index ticks
@@ -1356,6 +1357,12 @@ class ProfitWatcher:
                 series_name = ticker.split("-")[0]
                 sid = biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
+                if (ticker, lane) not in self._shock_logged and (ref > 0 or sid):
+                    self._shock_logged.add((ticker, lane))
+                    if ref > 0:
+                        log.info("watcher: shock exit armed on %s %s: reads %s against %.4f (%.0f bp over %.0fs, within %.0f bp, last %.0fs)", ticker, lane, sid, ref, spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last)
+                    else:
+                        log.warning("watcher: shock exit NOT armed on %s %s: no reference price for %s (%s)", ticker, lane, sid, "no tape" if self._tape_db() is None else "no tick near the window open")
                 if ref > 0:
                     held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last
                     held.shock_index, held.shock_ref = sid, ref
