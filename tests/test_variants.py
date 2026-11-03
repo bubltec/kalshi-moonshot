@@ -38,3 +38,19 @@ def test_a_snapshot_counts_the_crossings_and_refuses_thin_or_stale_history():
     assert variants.snapshot(ts, v, 100.0, "yes", ts[-1] + 60.0, ts[-1] + 360.0) is None  # the last tick is a minute old
     assert variants.snapshot(ts, v, 0.0, "yes", ts[-1], ts[-1] + 300.0) is None  # no strike
     assert not math.isnan(snap["z"])
+
+
+def test_the_favorite_is_the_first_qualifying_side_between_minute_seven_and_the_last_two_minutes():
+    close = 1000.0
+    quotes = [
+        (close - 600, 0.84, 0.85),  # before minute 7: too early
+        (close - 470, 0.60, 0.62),  # no side in the band
+        (close - 400, 0.14, 0.15),  # the NO side asks 0.86 with a 1c spread
+        (close - 300, 0.86, 0.87),
+        (close - 100, 0.90, 0.91),  # inside the last two minutes: too late
+    ]
+    side, ask, at = variants.favorite_entry(quotes, close)
+    assert side == "no" and ask == pytest.approx(0.86) and at == close - 400
+    assert variants.favorite_entry([(close - 300, 0.80, 0.85)], close) is None  # a 5c spread is too wide
+    assert variants.favorite_entry([(close - 300, 0.95, 0.96)], close) is None  # above the band
+    assert variants.favorite_entry([], close) is None

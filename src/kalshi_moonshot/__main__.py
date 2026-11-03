@@ -979,7 +979,10 @@ def cmd_variants(s: config.Settings, args: argparse.Namespace) -> int:
     """How each variety of favorite (the spot's path against the strike over the last five minutes) has paid, by asset class and side (read-only)."""
     from . import variants
 
-    print("\n".join(variants.report(s, args.days, args.recent_days, args.min_n)))
+    if args.market:
+        print("\n".join(variants.market_report(s, args.days, args.recent_days, args.min_n)))
+    else:
+        print("\n".join(variants.report(s, args.days, args.recent_days, args.min_n)))
     return 0
 
 
@@ -1264,6 +1267,7 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--days", type=float, default=12.0)
             p.add_argument("--recent-days", type=float, default=3.0, help="the latest stretch shown next to the whole")
             p.add_argument("--min-n", type=int, default=5, help="hide cells with fewer bets than this")
+            p.add_argument("--market", action="store_true", help="every crypto window's favorite, whether or not a lane bought it (keeps the observation going while the choppy rule has the lanes paused); use --days 6 --recent-days 1")
         if name == "behavior-report":
             p.add_argument("--by-series", action="store_true", help="each instrument (every coin, FX pair and commodity) on its own, never a category")
         if name == "curve-vectors":

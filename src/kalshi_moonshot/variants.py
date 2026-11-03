@@ -156,3 +156,96 @@ def report(s: Settings, days: float = 12.0, recent_days: float = 3.0, min_n: int
     spread = statistics.pstdev([c["net"] / c["n"] for c in board.values() if c["n"] >= min_n]) if len(board) > 1 else 0.0
     out.append(f"spread of $/bet across the cells above: {spread:.2f}")
     return out
+
+
+COINS = {"KXBTC15M": "BTC", "KXETH15M": "ETH", "KXSOL15M": "SOL", "KXXRP15M": "XRP", "KXDOGE15M": "DOGE"}
+
+
+def favorite_entry(quotes: Sequence[tuple[float, float, float]], close_ts: float, band: tuple[float, float] = (0.78, 0.92), max_spread: float = 0.03, left: tuple[float, float] = (480.0, 120.0)) -> tuple[str, float, float] | None:
+    """The first moment a crypto favorite lane would buy a window: from `left[0]` to `left[1]` seconds before the close, a side whose ask is inside `band` with a spread of `max_spread` or less.
+    `quotes` are (time, yes bid, yes ask) ascending. Returns (side, ask, time), or None when no side qualified."""
+    for at, yes_bid, yes_ask in quotes:
+        remaining = close_ts - at
+        if remaining > left[0] or remaining < left[1]:
+            continue
+        for side, bid, ask in (("yes", yes_bid, yes_ask), ("no", 1.0 - yes_ask, 1.0 - yes_bid)):
+            if band[0] <= ask <= band[1] and ask - bid <= max_spread + 1e-9:
+                return side, ask, at
+    return None
+
+
+def market_scoreboard(s: Settings, days: float = 6.0, recent_days: float = 1.0, now: float | None = None) -> dict[tuple[str, str, str], dict]:
+    """Every crypto window's favorite (favorite_entry), read as a variety at the moment of its buy and held to the result, whether or not a lane bought it. This keeps the observation going while a lane is paused,
+    for instance by the choppy rule. Totals by (coin, side, variety) carry the count, the wins (a loss is a bet that settles at zero) and the net of a 10-dollar ticket with the taker fee, all and `recent_days` alone."""
+    now = time.time() if now is None else now
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    store = Store(s.db_path, s.exclude_versions)
+    windows = store.db.execute(
+        "SELECT ticker, series, close_ts, strike, result FROM windows WHERE close_ts BETWEEN ? AND ? AND result IN ('yes','no') AND strike > 0 ORDER BY close_ts",
+        (now - days * 86400.0, now - 600.0),
+    ).fetchall()
+    ticks: dict[str, tuple[list[float], list[float]]] = {}
+    for series in COINS:
+        index = crypto_index(series)
+        r = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND value>0 ORDER BY ts", (index, now - (days + 1) * 86400.0)).fetchall()
+        ticks[series] = ([float(x[0]) for x in r], [float(x[1]) for x in r])
+    board: dict[tuple[str, str, str], dict] = defaultdict(lambda: {"n": 0, "wins": 0, "net": 0.0, "recent_n": 0, "recent_wins": 0, "recent_net": 0.0})
+    for w in windows:
+        if w["series"] not in COINS:
+            continue
+        close = float(w["close_ts"])
+        q = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid>0 AND ask>0 ORDER BY ts", (w["ticker"], close - 480.0, close - 120.0)).fetchall()
+        pick = favorite_entry([(float(x[0]), float(x[1]), float(x[2])) for x in q], close)
+        if pick is None:
+            continue
+        side, ask, at = pick
+        ts, values = ticks[w["series"]]
+        snap = snapshot(ts, values, float(w["strike"]), side, at, close)
+        if snap is None:
+            continue
+        contracts = 10.0 / ask
+        won = w["result"] == side
+        pnl = ((1.0 - ask) * contracts if won else -10.0) - fee_per_contract(ask) * contracts
+        cell = board[(COINS[w["series"]], side, snap["variety"])]
+        cell["n"] += 1
+        cell["wins"] += won
+        cell["net"] += pnl
+        if at >= now - recent_days * 86400.0:
+            cell["recent_n"] += 1
+            cell["recent_wins"] += won
+            cell["recent_net"] += pnl
+    return dict(board)
+
+
+def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_n: int = 8) -> list[str]:
+    """The market-wide scoreboard by variety and side with every coin pooled, then the zero rate of each variety by coin."""
+    board = market_scoreboard(s, days, recent_days)
+    pooled: dict[tuple[str, str], dict] = defaultdict(lambda: {"n": 0, "wins": 0, "net": 0.0, "recent_n": 0, "recent_wins": 0, "recent_net": 0.0})
+    by_coin: dict[tuple[str, str], dict] = defaultdict(lambda: {"n": 0, "wins": 0})
+    for (coin, side, v), c in board.items():
+        p = pooled[(side, v)]
+        for k in p:
+            p[k] += c[k]
+        bc = by_coin[(v, coin)]
+        bc["n"] += c["n"]
+        bc["wins"] += c["wins"]
+    out = [
+        f"every crypto window's favorite of the last {days:g} days by variety (a lane or not), held to the result on a $10 ticket with the taker fee; a loss settles at zero. 'recent' is the last {recent_days:g} day(s)",
+        "side  variety                              n  zeros%     net   $/bet | recent n  zeros%     net",
+    ]
+    for (side, v), c in sorted(pooled.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+        if c["n"] < min_n:
+            continue
+        rz = f"{(1 - c['recent_wins'] / c['recent_n']) * 100:5.0f}%" if c["recent_n"] else "    - "
+        out.append(f"{side:4}  {v} {NAMES[v]:32} {c['n']:4d} {(1 - c['wins'] / c['n']) * 100:5.0f}% {c['net']:+8.1f} {c['net'] / c['n']:+6.2f} | {c['recent_n']:6d} {rz} {c['recent_net']:+8.1f}")
+    out.append("")
+    out.append("zero rate (share of favorites that settled at zero) of each variety by coin, with the count:")
+    coins = list(COINS.values())
+    out.append("variety                              " + " ".join(f"{c:>9}" for c in coins))
+    for v in sorted(NAMES):
+        cells = []
+        for c in coins:
+            bc = by_coin.get((v, c))
+            cells.append(f"{(1 - bc['wins'] / bc['n']) * 100:4.0f}%/{bc['n']:3d}" if bc and bc["n"] >= 5 else "        -")
+        out.append(f"{v} {NAMES[v]:34} " + " ".join(f"{x:>9}" for x in cells))
+    return out
