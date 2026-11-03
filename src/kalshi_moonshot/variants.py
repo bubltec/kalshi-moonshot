@@ -51,8 +51,12 @@ def classify(z: float, slope: float, crosses: int) -> str:
     return "D" if slope <= -SLOPE else "F" if slope >= SLOPE else "E"
 
 
-def snapshot(ts: Sequence[float], values: Sequence[float], strike: float, side: str, at: float, close_ts: float) -> dict | None:
-    """The three numbers and the letter at time `at`, from the spot's ticks (ascending times). None when the spot history is too thin or stale."""
+GRID = 1.0  # seconds: both feeds are read on this grid, so a crossing means the same on a 2.5 s crypto index and a 1 s commodity feed
+
+
+def snapshot(ts: Sequence[float], values: Sequence[float], strike: float, side: str, at: float, close_ts: float, grid: float = GRID) -> dict | None:
+    """The three numbers and the letter at time `at`, from the spot's ticks (ascending times). None when the spot history is too thin or stale.
+    With `grid` > 0 the last LOOK seconds are first put on an even grid (each point is the latest tick at or before it), so the volatility and the crossings do not depend on how often a feed ticks; 0 reads the raw ticks."""
     i = bisect.bisect_right(ts, at) - 1
     j = bisect.bisect_right(ts, at - LOOK) - 1
     if i < 0 or j < 0 or strike <= 0 or ts[i] < at - 10.0 or ts[j] < at - LOOK - 20.0 or close_ts - at <= 0:
@@ -60,11 +64,22 @@ def snapshot(ts: Sequence[float], values: Sequence[float], strike: float, side: 
     lo = bisect.bisect_left(ts, at - LOOK)
     if i - lo < 10:
         return None
-    sq = 0.0
-    for k in range(lo + 1, i + 1):
-        sq += math.log(values[k] / values[k - 1]) ** 2
-    dt = ts[i] - ts[lo]
-    if dt <= 0 or sq <= 0:
+    if grid > 0:
+        steps = int(LOOK / grid)
+        points = []
+        for k in range(steps + 1):
+            idx = bisect.bisect_right(ts, at - LOOK + k * grid) - 1
+            if idx >= 0:
+                points.append(values[idx])
+        seq = points
+        dt = (len(seq) - 1) * grid
+    else:
+        seq = list(values[lo : i + 1])
+        dt = ts[i] - ts[lo]
+    if len(seq) < 10 or dt <= 0:
+        return None
+    sq = sum(math.log(b / a) ** 2 for a, b in itertools.pairwise(seq))
+    if sq <= 0:
         return None
     rate = math.sqrt(sq / dt)
     sign = 1.0 if side == "yes" else -1.0
@@ -72,8 +87,7 @@ def snapshot(ts: Sequence[float], values: Sequence[float], strike: float, side: 
     before = math.log(values[j] / strike) * sign
     z = cushion / (rate * math.sqrt(close_ts - at))
     slope = (cushion - before) / (rate * math.sqrt(LOOK))
-    seg = [x - strike for x in values[j : i + 1]]
-    crosses = sum(1 for a, b in itertools.pairwise(seg) if (a > 0) != (b > 0))
+    crosses = sum(1 for a, b in itertools.pairwise([x - strike for x in seq]) if (a > 0) != (b > 0))
     return {"z": z, "slope": slope, "crosses": crosses, "variety": classify(z, slope, crosses)}
 
 

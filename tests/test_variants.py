@@ -54,3 +54,15 @@ def test_the_favorite_is_the_first_qualifying_side_between_minute_seven_and_the_
     assert variants.favorite_entry([(close - 300, 0.80, 0.85)], close) is None  # a 5c spread is too wide
     assert variants.favorite_entry([(close - 300, 0.95, 0.96)], close) is None  # above the band
     assert variants.favorite_entry([], close) is None
+
+
+def test_the_grid_makes_a_slow_and_a_fast_feed_read_alike():
+    def path(t):  # one spot path: 1 bp wiggles that cross the strike of 100 every 20 s
+        return 100.0 + (0.01 if (t // 20) % 2 else -0.01)
+
+    fast = [(1000.0 + k, path(k)) for k in range(400)]  # a tick every second
+    slow = [(1000.0 + k, path(k)) for k in range(0, 400, 3)]  # the same path, a tick every 3 s
+    a = variants.snapshot([x for x, _ in fast], [y for _, y in fast], 100.0, "yes", 1399.0, 1699.0)
+    b = variants.snapshot([x for x, _ in slow], [y for _, y in slow], 100.0, "yes", 1398.0, 1698.0)
+    assert a is not None and b is not None
+    assert a["variety"] == b["variety"] == "G" and abs(a["crosses"] - b["crosses"]) <= 1
