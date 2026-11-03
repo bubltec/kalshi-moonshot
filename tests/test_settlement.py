@@ -177,6 +177,12 @@ def test_a_shock_exit_sells_when_the_spot_jumps_against_a_thin_cushion(tmp_path,
     assert sell.why.startswith("shock exit") and "0.62" in sell.why
 
 
+def test_a_shock_exit_is_not_armed_on_a_series_the_lane_turns_it_off_for(tmp_path, monkeypatch):
+    w, _ = _shock_watcher(tmp_path, monkeypatch, extra="shock_off_series=['KXBTC15M']\n")
+    t = next(iter(w.targets.values()))
+    assert t.shock_bp == 0
+
+
 def test_a_shock_exit_ignores_a_small_move_a_wide_cushion_and_a_bid_outside_its_range(tmp_path, monkeypatch):
     w, close = _shock_watcher(tmp_path, monkeypatch)
     t = w.targets[("KXBTC15M-1", "guarded")]

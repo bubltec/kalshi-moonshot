@@ -1438,7 +1438,7 @@ class ProfitWatcher:
                 if ref > 0:
                     held.shock_index, held.shock_ref = sid, ref
                     self._shock_hist.setdefault(sid, deque())
-                    if spec.shock_bp > 0 and spec.shock_seconds > 0:
+                    if spec.shock_bp > 0 and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
                         held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
                     if spec.wrong_side_bp > 0 and spec.wrong_side_seconds > 0 and spec.wrong_side_varieties:
                         held.variety = self._entry_variety(held, sid, ref, float(row["ts"]))

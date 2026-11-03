@@ -102,6 +102,7 @@ class LaneSpec:
     wrong_side_bp: float = 0.0  # wrong-side exit: sell once the spot has sat this many basis points on the wrong side of its window-open price (the strike for crypto) for wrong_side_seconds straight (0 = off). Only for a position whose variety at the buy is in wrong_side_varieties (variants.py). 2026-11-03 replay of 76 held commodity bets read as G (oscillating): 5 bp for 15 s sold 15, 14 of them losers, +$20; the near varieties lost money on it and crypto gained nothing
     wrong_side_seconds: float = 15.0
     wrong_side_varieties: tuple[str, ...] = ()
+    shock_off_series: tuple[str, ...] = ()  # series the shock exit does not act on, e.g. KXBRENT15M: its spot makes sharp 8 bp moves that reverse, so a 2026-11-03 replay sold 8 times for 3 losers saved and 5 winners cut, -$17.9 vs holding at every cushion
     skip_varieties: tuple[str, ...] = ()  # varieties (variants.py letters) this lane does not buy: "G" on either side, "A-yes" on one side. Read at the decision from BiQuote against its window-open price, so commodities only; an unreadable one is not skipped. 2026-11-03 walk-forward on the lanes' live bets: the cells that paid in training were the same in three folds and left out G and A-yes, which then lost $49, $19 and $9 in the test period
     choppy_floor: float = 0.0  # a choppy market: the favorites (the side with an ask in 0.78-0.92 from minute 7) of choppy_series settled in the last choppy_hours have won less often than this (regime.py). 0 = no choppy rules. While choppy the next three settings apply
     choppy_hours: float = 12.0
@@ -311,7 +312,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "skip_varieties"):
+    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "skip_varieties", "shock_off_series"):
         if key in row:
             row[key] = tuple(row[key])
     if "hunt_contracts_by" in row:
@@ -429,7 +430,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
-    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_seconds", "shock_margin_bp", "shock_last", "shock_memory", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_seconds", "shock_margin_bp", "shock_last", "shock_memory", "shock_off_series", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -456,6 +457,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["shock_bp"], out["shock_seconds"], out["shock_margin_bp"], out["shock_last"] = repr(spec.shock_bp), repr(spec.shock_seconds), repr(spec.shock_margin_bp), repr(spec.shock_last)
         if spec.shock_memory:
             out["shock_memory"] = repr(spec.shock_memory)
+    if spec.shock_off_series:
+        out["shock_off_series"] = repr(spec.shock_off_series)
     if spec.skip_varieties:
         out["skip_varieties"] = repr(spec.skip_varieties)
     if spec.wrong_side_bp:
