@@ -66,6 +66,8 @@ SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the cl
 THROUGH_QUOTE = 1.0  # a bid older than this, before the index tick that went through, is the quote from before the cross
 THROUGH_SPOT = 5.0  # an index tick older than this is not a reason to sell
 SHOCK_BID = (0.05, 0.89)  # the shock exit sells only a bid in this range: below it the market has already priced the loss, above it the market is not worried
+SHOCK_LOG_MIN = 3.0  # bp of move against a held bet that is worth a shock_log row
+
 SHOCK_KEEP = 130.0  # seconds of index ticks kept for the shock exit to look back over
 THROUGH_STAY = 45.0  # outside the last minute, this long continuously through is a sale. A shorter dip is the one that comes back and pays
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
@@ -163,6 +165,7 @@ class Target:
     shock_last: float = 120.0
     shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
     shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
+    shock_logged: float = 0.0  # lowest worst-move already written to shock_log for this bet
     shock_index: str = ""  # the index it reads
     wrong_bp: float = 0.0  # lane wrong_side_bp (0 = off): sell once the spot sits this far on the wrong side of shock_ref for wrong_seconds, for a position whose variety at the buy is in wrong_varieties
     wrong_seconds: float = 15.0
@@ -890,6 +893,21 @@ class ProfitWatcher:
             t.shock_noted = now
             log.info("watcher: shock watch %s %s, %.0fs left: %s", t.ticker, t.lane, t.close_ts - now, text)
 
+    def _shock_log(self, t: Target, now: float, margin: float, move: float, worst: float, bid: float, fired: bool) -> None:
+        """One shock_log row per new low of the move against this bet (3 bp or worse, and 1 bp under the last row), and one when the exit fires."""
+        if not fired and (worst > -SHOCK_LOG_MIN or worst > t.shock_logged - 1.0):
+            return
+        t.shock_logged = min(t.shock_logged, worst)
+        try:
+            store = self.store_factory()
+            store.db.execute(
+                "INSERT INTO shock_log (ts, ticker, lane, series, side, left_s, entry, bid, cushion_bp, move_bp, worst_bp, fired) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (now, t.ticker, t.lane, t.ticker.split("-")[0], t.side, round(t.close_ts - now, 2), t.entry, bid, round(margin, 2), round(move, 2), round(worst, 2), int(fired)),
+            )
+            store.db.commit()
+        except Exception as exc:  # a log row must never stop an exit
+            log.warning("watcher: shock_log write failed for %s: %s", t.ticker, exc)
+
     def _shock_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """The shock exit: in the last shock_last seconds, the spot has moved shock_bp basis points against this bet over the last shock_seconds and sits within shock_margin_bp of the reference, so a sale is better than the close. Needs a bid in SHOCK_BID, a fresh spot and a quote that is not older than the tick."""
         if t.shock_bp <= 0 or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index:
@@ -923,12 +941,14 @@ class ProfitWatcher:
             worst = min(m for _, m in t.shock_moves)
         if left > t.shock_last:
             return None
+        self._shock_log(t, now, margin, move, worst, bid, False)
         if bid < SHOCK_BID[0] or bid > SHOCK_BID[1] or quote_ts < spot_ts - THROUGH_QUOTE:
             self._shock_note(t, now, f"not usable: bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick; cushion {margin:+.1f} bp, worst move {worst:+.1f} bp")
             return None
         self._shock_note(t, now, f"cushion {margin:+.1f} bp, {t.shock_seconds:.0f}s move {move:+.1f} bp (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{t.shock_bp:.0f} bp or worse with a cushion of {t.shock_margin_bp:.0f} bp or less)")
         if worst > -t.shock_bp or margin > t.shock_margin_bp:
             return None
+        self._shock_log(t, now, margin, move, worst, bid, True)
         return f"shock exit: spot moved {-worst:.1f} bp against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:

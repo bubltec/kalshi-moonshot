@@ -158,6 +158,14 @@ CREATE TABLE IF NOT EXISTS position_checks (
   PRIMARY KEY (ticker, lane, mark)
 );
 CREATE INDEX IF NOT EXISTS idx_position_checks_ts ON position_checks(ts);
+CREATE TABLE IF NOT EXISTS shock_log (  -- every new low of the spot's move against a held bet (3 bp or worse), whether or not the shock exit sold: the data per-asset shock settings get fitted on. The outcome is joined from decisions by ticker and lane
+  ts REAL NOT NULL, ticker TEXT NOT NULL, lane TEXT NOT NULL, series TEXT, side TEXT,
+  left_s REAL, entry REAL, bid REAL,
+  cushion_bp REAL,               -- bp the spot sits on the winning side of its reference (negative = through)
+  move_bp REAL, worst_bp REAL,   -- the latest shock_seconds move, and the worst one inside the shock memory (negative = against the bet)
+  fired INTEGER                  -- 1 when this look sold the position
+);
+CREATE INDEX IF NOT EXISTS idx_shock_log_ticker ON shock_log(ticker);
 
 CREATE TABLE IF NOT EXISTS behavior_cases (
   ticker TEXT NOT NULL, side TEXT NOT NULL, ts REAL NOT NULL, kind TEXT NOT NULL,  -- kind: 'moment' (a sampled moment of a finished window) or 'buy' (our own real buy)

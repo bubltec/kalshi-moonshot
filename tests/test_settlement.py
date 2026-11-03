@@ -175,6 +175,8 @@ def test_a_shock_exit_sells_when_the_spot_jumps_against_a_thin_cushion(tmp_path,
     w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - 50, "value": 100.01})  # 9 bp down in 60 s, 1 bp above the strike
     sell = w._jobs.get_nowait()
     assert sell.why.startswith("shock exit") and "0.62" in sell.why
+    rows = Store(config.load().db_path).db.execute("SELECT series, side, bid, fired, worst_bp FROM shock_log WHERE ticker='KXBTC15M-1'").fetchall()
+    assert rows and rows[-1]["fired"] == 1 and rows[-1]["series"] == "KXBTC15M" and rows[-1]["worst_bp"] <= -8
 
 
 def test_a_shock_exit_is_not_armed_on_a_series_the_lane_turns_it_off_for(tmp_path, monkeypatch):
