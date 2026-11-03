@@ -543,7 +543,8 @@ def evaluate(
                 note = f"choppy market: the favorites won {rate:.0%} of the last {counted} windows ({spec.choppy_hours:g}h), under {spec.choppy_floor:.0%}, so the lane is {why}. {note}"
     if bet and spec.max_same_side > 0:
         window = shot.ticker.split("-")[1] if shot.ticker.count("-") >= 2 else None
-        same = sum(1 for r in store.open_bets() if window and (r["lane"] or "moonshot") == shot.lane and r["side"] == shot.side and r["ticker"] != shot.ticker and r["ticker"].count("-") >= 2 and r["ticker"].split("-")[1] == window)
+        counted = {shot.lane, *spec.same_side_lanes}
+        same = sum(1 for r in store.open_bets() if window and (r["lane"] or "moonshot") in counted and r["side"] == shot.side and r["ticker"] != shot.ticker and r["ticker"].count("-") >= 2 and r["ticker"].split("-")[1] == window)
         if same >= spec.max_same_side:
             bet = False
             note = f"same side held: {same} of this lane's bets are already {shot.side.upper()} in this window (the lane holds at most {spec.max_same_side}). {note}"

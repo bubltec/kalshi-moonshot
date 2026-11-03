@@ -733,6 +733,32 @@ def test_a_lane_with_max_same_side_skips_the_third_bet_on_one_side_of_a_window(t
     assert "same side held" not in out.note
 
 
+def test_max_same_side_can_count_the_bets_of_other_lanes_together(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.strategy import LongShot
+
+    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nmax_same_side=2\nsame_side_lanes=['sibling']\nfixed_stake=2.0\nseries=['KXBTC15M','KXSOL15M']\n"
+    )
+    s = config.load()
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    def held(ticker, lane):
+        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, ticker, "bet", "observe", 0.90, "yes", lane, 3, 2.7, "2099-01-01T00:00:00Z"))
+
+    held("KXBTC15M-26NOV021607-07", "guarded")
+    held("KXETH15M-26NOV021607-07", "sibling")  # another lane, same window and side: counts
+    store.db.commit()
+    third = LongShot("KXSOL15M-26NOV021607-07", "t", "", 0.88, 0.90, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXSOL15M", side="yes")
+    out = runner.evaluate(s, w.client, None, store, third, estimators={"market": Fixed()})
+    assert out.action == "pass" and "same side held" in out.note
+
+
 def _choppy_world(tmp_path, monkeypatch, lane_extra):
     import time as _time
 

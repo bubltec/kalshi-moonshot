@@ -93,6 +93,7 @@ class LaneSpec:
     buy_rest_below: float = 0.01  # how far under the ask the resting buy sits, in dollars
     max_open: int = 0  # at most this many bets of this lane open at once, across all its markets (0 = no limit); the next candidate waits until one closes
     max_same_side: int = 0  # at most this many of this lane's open bets on the same side of the same 15-minute window (BTC, ETH and DOGE YES together is one bet on one move); 0 = no limit. 2026-11-02 replay, 30 days of crypto_favorite: the 3rd same-side bet in a window won 13 of 22 for -$46.6, the 1st and 2nd won 82-86%
+    same_side_lanes: tuple[str, ...] = ()  # lanes whose open bets count toward max_same_side together with this lane's own (empty = this lane alone), so two lanes on one coin family share one cap
     choppy_floor: float = 0.0  # a choppy market: the favorites (the side with an ask in 0.78-0.92 from minute 7) of choppy_series settled in the last choppy_hours have won less often than this (regime.py). 0 = no choppy rules. While choppy the next three settings apply
     choppy_hours: float = 12.0
     choppy_series: tuple[str, ...] = ()  # whose favorites are counted; empty = this lane's own series. The crypto lanes count all five coins together: one coin's 2 hours alone is too few windows
@@ -301,7 +302,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series"):
+    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes"):
         if key in row:
             row[key] = tuple(row[key])
     if "hunt_contracts_by" in row:
@@ -419,7 +420,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
-    "blackout_et", "max_same_side", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "max_same_side", "same_side_lanes", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -440,6 +441,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["blackout_et"] = repr(spec.blackout_et)
     if spec.max_same_side:
         out["max_same_side"] = repr(spec.max_same_side)
+        if spec.same_side_lanes:
+            out["same_side_lanes"] = repr(spec.same_side_lanes)
     if spec.choppy_floor:
         out["choppy_floor"], out["choppy_hours"], out["choppy_series"] = repr(spec.choppy_floor), repr(spec.choppy_hours), repr(spec.choppy_series)
         out["choppy_left_max"], out["choppy_price_min"], out["choppy_skip"] = repr(spec.choppy_left_max), repr(spec.choppy_price_min), repr(spec.choppy_skip)
