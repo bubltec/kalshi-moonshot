@@ -7,6 +7,7 @@ The buy fills at the ask one second after the signal. It then sells at the bid o
 
     scripts/cloud.sh run scripts/scalp_cheap_replay.py        # treasuries, all recorded days
     SERIES=KXGOLD15M,KXSILVER15M DAYS=7 scripts/cloud.sh run scripts/scalp_cheap_replay.py
+TARGET_MODE=mult reads TARGETS as multiples of the fill (1.0 = sell at double); TRENDS=9 turns the trend rule off.
 Prints one line per (trend rule, target, exit) with bets, win rate, net dollars on a $STAKE ticket, and how many ended as total losses.
 """
 import bisect
@@ -26,6 +27,7 @@ TREND_SECONDS = float(os.environ.get("TREND_SECONDS", "60"))
 STAKE = float(os.environ.get("STAKE", "10"))
 TRENDS = [float(x) for x in os.environ.get("TRENDS", "-0.10,-0.05,0,0.05,0.10").split(",")]
 TARGETS = [float(x) for x in os.environ.get("TARGETS", "0.10,0.15,0.20").split(",")]
+MULT = os.environ.get("TARGET_MODE") == "mult"  # targets are a share of the fill price (1.0 = sell at double) instead of cents
 EXITS = [float(x) for x in os.environ.get("EXITS", "0,60,120").split(",")]
 
 s = config.reload()
@@ -64,7 +66,9 @@ def run(data, trend, target, exit_left):
                 if not PRICE_LO <= ask <= PRICE_HI:
                     continue
                 move = _mid(yb, ya, i, side) - _mid(yb, ya, j, side)
-                if (trend < 0 and move > trend) or (trend > 0 and move < trend) or (trend == 0 and abs(move) > 0.02):
+                if trend >= 9:
+                    pass  # TRENDS=9: no trend rule
+                elif (trend < 0 and move > trend) or (trend > 0 and move < trend) or (trend == 0 and abs(move) > 0.02):
                     continue
                 k = min(bisect.bisect_left(ts, t + 1), len(ts) - 1)
                 fill = ya[k] if side == "yes" else 1 - yb[k]
@@ -74,7 +78,7 @@ def run(data, trend, target, exit_left):
                 out = None
                 for u in range(k, len(ts)):
                     bid = yb[u] if side == "yes" else 1 - ya[u]
-                    if bid >= fill + target:
+                    if bid >= fill + (fill * target if MULT else target):
                         v = min(bisect.bisect_left(ts, ts[u] + 1), len(ts) - 1)
                         px = yb[v] if side == "yes" else 1 - ya[v]
                         out = (px - fill) * n - fee(px) * n - fee(fill) * n
