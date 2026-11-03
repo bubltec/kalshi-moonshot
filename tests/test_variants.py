@@ -73,3 +73,18 @@ def test_a_skip_list_names_a_variety_on_either_side_or_on_one():
     assert variants.skipped(("G", "A-yes"), "A", "yes") and not variants.skipped(("G", "A-yes"), "A", "no")
     assert not variants.skipped(("G", "A-yes"), "B", "yes")
     assert not variants.skipped(("G",), None, "yes")  # a variety that cannot be read is never skipped
+
+
+def test_the_market_report_prints_every_class_with_its_flip(monkeypatch):
+    def cell(n, wins, net, flip_wins, flip_net, flip_price):
+        return {"n": n, "wins": wins, "net": net, "recent_n": 4, "recent_wins": 3, "recent_net": -2.0, "flip_wins": flip_wins, "flip_net": flip_net, "flip_price": flip_price, "recent_flip_net": 1.5}
+
+    board = {
+        ("crypto", "BTC", "yes", "F"): cell(40.0, 31.0, -12.0, 9.0, 8.0, 8.0),
+        ("crypto", "ETH", "yes", "F"): cell(30.0, 24.0, -5.0, 6.0, -3.0, 6.0),
+        ("commodity", "COPPER", "no", "G"): cell(20.0, 15.0, -9.0, 5.0, 14.0, 4.0),
+    }
+    monkeypatch.setattr(variants, "market_scoreboard", lambda *a, **k: board)
+    text = "\n".join(variants.market_report(None, min_n=5))
+    assert "crypto:" in text and "commodity:" in text and "F near, pulling away" in text and "G oscillating" in text
+    assert "flip" in text and "+0.07" in text  # crypto F yes: (8.0 - 3.0) / 70 bets

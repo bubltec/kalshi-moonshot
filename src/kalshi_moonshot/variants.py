@@ -290,7 +290,7 @@ def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_
         cells = []
         for c in coins:
             bc = by_coin.get((v, c))
-            cells.append(f"{(1 - bc['wins'] / bc['n']) * 100:4.0f}%/{bc['n']:3d}" if bc and bc["n"] >= 5 else "        -")
+            cells.append(f"{(1 - bc['wins'] / bc['n']) * 100:4.0f}%/{int(bc['n']):3d}" if bc and bc["n"] >= 5 else "        -")
         out.append(f"{v} {NAMES[v]:34} " + " ".join(f"{x:>9}" for x in cells))
     return out
 
