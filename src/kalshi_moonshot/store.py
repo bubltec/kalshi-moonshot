@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS shock_log (  -- every new low of the spot's move agai
   left_s REAL, entry REAL, bid REAL,
   cushion_bp REAL,               -- bp the spot sits on the winning side of its reference (negative = through)
   move_bp REAL, worst_bp REAL,   -- the latest shock_seconds move, and the worst one inside the shock memory (negative = against the bet)
-  fired INTEGER                  -- 1 when this look sold the position
+  fired INTEGER                  -- 0 not sold, 1 sold, 2 would have sold (a log-only watch)
 );
 CREATE INDEX IF NOT EXISTS idx_shock_log_ticker ON shock_log(ticker);
 

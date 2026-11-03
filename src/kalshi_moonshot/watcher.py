@@ -165,6 +165,8 @@ class Target:
     shock_last: float = 120.0
     shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
     shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
+    shock_log_only: bool = False  # lane shock_log_only: write shock_log rows, never sell
+    shock_would: bool = False  # the would-fire row of a log-only watch is written once
     shock_logged: float = 0.0  # lowest worst-move already written to shock_log for this bet
     shock_index: str = ""  # the index it reads
     wrong_bp: float = 0.0  # lane wrong_side_bp (0 = off): sell once the spot sits this far on the wrong side of shock_ref for wrong_seconds, for a position whose variety at the buy is in wrong_varieties
@@ -897,8 +899,8 @@ class ProfitWatcher:
             t.shock_noted = now
             log.info("watcher: shock watch %s %s, %.0fs left: %s", t.ticker, t.lane, t.close_ts - now, text)
 
-    def _shock_log(self, t: Target, now: float, margin: float, move: float, worst: float, bid: float, fired: bool) -> None:
-        """One shock_log row per new low of the move against this bet (3 bp or worse, and 1 bp under the last row), and one when the exit fires."""
+    def _shock_log(self, t: Target, now: float, margin: float, move: float, worst: float, bid: float, fired: int) -> None:
+        """fired: 0 not sold, 1 sold, 2 would have sold (a log-only watch). One shock_log row per new low of the move against this bet (3 bp or worse, and 1 bp under the last row), and one when the exit fires."""
         if not fired and (worst > -SHOCK_LOG_MIN or worst > t.shock_logged - 1.0):
             return
         t.shock_logged = min(t.shock_logged, worst)
@@ -906,7 +908,7 @@ class ProfitWatcher:
             store = self.store_factory()
             store.db.execute(
                 "INSERT INTO shock_log (ts, ticker, lane, series, side, left_s, entry, bid, cushion_bp, move_bp, worst_bp, fired) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (now, t.ticker, t.lane, t.ticker.split("-")[0], t.side, round(t.close_ts - now, 2), t.entry, bid, round(margin, 2), round(move, 2), round(worst, 2), int(fired)),
+                (now, t.ticker, t.lane, t.ticker.split("-")[0], t.side, round(t.close_ts - now, 2), t.entry, bid, round(margin, 2), round(move, 2), round(worst, 2), fired),
             )
             store.db.commit()
         except Exception as exc:  # a log row must never stop an exit
@@ -945,14 +947,19 @@ class ProfitWatcher:
             worst = min(m for _, m in t.shock_moves)
         if left > t.shock_last:
             return None
-        self._shock_log(t, now, margin, move, worst, bid, False)
+        self._shock_log(t, now, margin, move, worst, bid, 0)
         if bid < SHOCK_BID[0] or bid > SHOCK_BID[1] or quote_ts < spot_ts - THROUGH_QUOTE:
             self._shock_note(t, now, f"not usable: bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick; cushion {margin:+.1f} bp, worst move {worst:+.1f} bp")
             return None
         self._shock_note(t, now, f"cushion {margin:+.1f} bp, {t.shock_seconds:.0f}s move {move:+.1f} bp (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{t.shock_bp:.0f} bp or worse with a cushion of {t.shock_margin_bp:.0f} bp or less)")
         if worst > -t.shock_bp or margin > t.shock_margin_bp:
             return None
-        self._shock_log(t, now, margin, move, worst, bid, True)
+        if t.shock_log_only:
+            if not t.shock_would:
+                t.shock_would = True
+                self._shock_log(t, now, margin, move, worst, bid, 2)
+            return None
+        self._shock_log(t, now, margin, move, worst, bid, 1)
         return f"shock exit: spot moved {-worst:.1f} bp against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
@@ -1464,6 +1471,7 @@ class ProfitWatcher:
                     self._shock_hist.setdefault(sid, deque())
                     if spec.shock_bp > 0 and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
                         held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
+                        held.shock_log_only = spec.shock_log_only
                     if spec.wrong_side_bp > 0 and spec.wrong_side_seconds > 0 and (not spec.wrong_side_series or ticker.split("-")[0] in spec.wrong_side_series):
                         if spec.wrong_side_varieties:
                             held.variety = self._entry_variety(held, sid, ref, float(row["ts"]))

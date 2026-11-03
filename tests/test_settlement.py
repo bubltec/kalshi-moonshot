@@ -185,6 +185,19 @@ def test_a_shock_exit_is_not_armed_on_a_series_the_lane_turns_it_off_for(tmp_pat
     assert t.shock_bp == 0
 
 
+def test_a_log_only_shock_watch_writes_a_would_fire_row_and_never_sells(tmp_path, monkeypatch):
+    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_log_only=true\n")
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert t.shock_log_only
+    for k in range(125, 50, -5):
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
+    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": close - 50.2})
+    w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - 50, "value": 100.01})
+    assert w._jobs.empty()
+    rows = Store(config.load().db_path).db.execute("SELECT fired FROM shock_log WHERE ticker='KXBTC15M-1'").fetchall()
+    assert [r["fired"] for r in rows][-1] == 2
+
+
 def test_a_shock_exit_ignores_a_small_move_a_wide_cushion_and_a_bid_outside_its_range(tmp_path, monkeypatch):
     w, close = _shock_watcher(tmp_path, monkeypatch)
     t = w.targets[("KXBTC15M-1", "guarded")]
