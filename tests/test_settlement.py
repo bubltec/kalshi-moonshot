@@ -276,6 +276,33 @@ def test_a_wrong_side_exit_waits_while_the_spot_comes_back_and_skips_other_varie
     assert w2._jobs.empty()
 
 
+def _fade_after_a_shock(w, close, sell_expected):
+    """A YES whose spot sits 20 bp over the strike, drops 19 bp between 200 and 190 s left (a shock) and then sits 1 bp over it, bid 0.55."""
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    fired = None
+    for left in range(250, 4, -2):
+        value = 100.20 if left > 200 else 100.01 if left < 190 else 100.20 - 0.019 * (200 - left)
+        w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.55, "ask": 0.56, "ts": close - left - 0.2})
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - left, "value": value})
+        if not w._jobs.empty():
+            fired = (left, w._jobs.get_nowait().why)
+            break
+    assert (fired is not None) == sell_expected
+    return t, fired
+
+
+def test_a_shock_exit_with_memory_sells_a_shock_that_came_just_before_its_window(tmp_path, monkeypatch):
+    w, close = _shock_watcher(tmp_path, monkeypatch, "shock_memory=120\n")
+    assert w.targets[("KXBTC15M-1", "guarded")].shock_memory == 120
+    _, fired = _fade_after_a_shock(w, close, True)
+    assert fired[0] <= 120 and fired[1].startswith("shock exit") and "bid 0.55" in fired[1]
+
+
+def test_a_shock_exit_without_memory_forgets_a_shock_once_it_is_older_than_its_lookback(tmp_path, monkeypatch):
+    w, close = _shock_watcher(tmp_path, monkeypatch)
+    _fade_after_a_shock(w, close, False)  # by 120 s left the 60 s lookback no longer reaches the drop
+
+
 def test_a_lane_without_a_shock_setting_gets_no_shock_exit(tmp_path, monkeypatch):
     from kalshi_moonshot import lanes
 

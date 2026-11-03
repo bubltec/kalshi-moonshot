@@ -98,6 +98,7 @@ class LaneSpec:
     shock_seconds: float = 60.0
     shock_margin_bp: float = 5.0
     shock_last: float = 120.0
+    shock_memory: float = 0.0  # seconds a shock is remembered: the worst shock_seconds move seen in this many seconds counts, not only the latest one (0 = only the latest). The shock can come just before the last-seconds window and fade (Brent, 2026-11-03: -12 bp at 125 s left, -8 by 120); with 120 s of memory the replay on 324 held commodity bets gave +$38 against +$15 for the latest move alone, and nothing on crypto
     wrong_side_bp: float = 0.0  # wrong-side exit: sell once the spot has sat this many basis points on the wrong side of its window-open price (the strike for crypto) for wrong_side_seconds straight (0 = off). Only for a position whose variety at the buy is in wrong_side_varieties (variants.py). 2026-11-03 replay of 76 held commodity bets read as G (oscillating): 5 bp for 15 s sold 15, 14 of them losers, +$20; the near varieties lost money on it and crypto gained nothing
     wrong_side_seconds: float = 15.0
     wrong_side_varieties: tuple[str, ...] = ()
@@ -428,7 +429,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_slip", "hunt_allowance", "hunt_seconds", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
-    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_seconds", "shock_margin_bp", "shock_last", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_seconds", "shock_margin_bp", "shock_last", "shock_memory", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -453,6 +454,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
             out["same_side_lanes"] = repr(spec.same_side_lanes)
     if spec.shock_bp:
         out["shock_bp"], out["shock_seconds"], out["shock_margin_bp"], out["shock_last"] = repr(spec.shock_bp), repr(spec.shock_seconds), repr(spec.shock_margin_bp), repr(spec.shock_last)
+        if spec.shock_memory:
+            out["shock_memory"] = repr(spec.shock_memory)
     if spec.skip_varieties:
         out["skip_varieties"] = repr(spec.skip_varieties)
     if spec.wrong_side_bp:

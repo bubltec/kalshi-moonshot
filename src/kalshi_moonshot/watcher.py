@@ -161,6 +161,8 @@ class Target:
     shock_seconds: float = 60.0
     shock_margin_bp: float = 5.0
     shock_last: float = 120.0
+    shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
+    shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
     shock_index: str = ""  # the index it reads
     wrong_bp: float = 0.0  # lane wrong_side_bp (0 = off): sell once the spot sits this far on the wrong side of shock_ref for wrong_seconds, for a position whose variety at the buy is in wrong_varieties
     wrong_seconds: float = 15.0
@@ -893,31 +895,41 @@ class ProfitWatcher:
         if t.shock_bp <= 0 or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index:
             return None
         left = t.close_ts - now
-        if left <= SETTLE_LAST or left > t.shock_last:
+        if left <= SETTLE_LAST or left > t.shock_last + max(t.shock_memory, 0.0):
             return None
         spot = self._spot.get(t.shock_index)
         hist = self._shock_hist.get(t.shock_index)
         if spot is None or not hist:
-            self._shock_note(t, now, f"no spot or no history for {t.shock_index}")
+            if left <= t.shock_last:
+                self._shock_note(t, now, f"no spot or no history for {t.shock_index}")
             return None
         spot_ts, value = spot
-        if value <= 0 or now - spot_ts > THROUGH_SPOT or bid < SHOCK_BID[0] or bid > SHOCK_BID[1] or quote_ts < spot_ts - THROUGH_QUOTE:
-            self._shock_note(t, now, f"not usable: spot {now - spot_ts:.1f}s old, bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick")
-            return None
         then = now - t.shock_seconds
-        if hist[0][0] > then:
-            self._shock_note(t, now, f"only {now - hist[0][0]:.0f}s of history, needs {t.shock_seconds:.0f}s")
-            return None  # not enough history yet to look back that far
+        if value <= 0 or now - spot_ts > THROUGH_SPOT or hist[0][0] > then:
+            if left <= t.shock_last:
+                self._shock_note(t, now, f"not usable: spot {now - spot_ts:.1f}s old, {now - hist[0][0]:.0f}s of history")
+            return None
         past = next((v for ts, v in reversed(hist) if ts <= then), 0.0)
         if past <= 0:
             return None
         sign = 1.0 if t.side == "yes" else -1.0
         margin = math.log(value / t.shock_ref) * sign * 1e4
         move = math.log(value / past) * sign * 1e4
-        self._shock_note(t, now, f"cushion {margin:+.1f} bp, {t.shock_seconds:.0f}s move {move:+.1f} bp, bid {bid:.2f} (sells at a move of -{t.shock_bp:.0f} bp or worse with a cushion of {t.shock_margin_bp:.0f} bp or less)")
-        if move > -t.shock_bp or margin > t.shock_margin_bp:
+        worst = move
+        if t.shock_memory > 0:  # a shock before the last-seconds window still counts inside it
+            t.shock_moves.append((now, move))
+            while t.shock_moves and now - t.shock_moves[0][0] > t.shock_memory:
+                t.shock_moves.popleft()
+            worst = min(m for _, m in t.shock_moves)
+        if left > t.shock_last:
             return None
-        return f"shock exit: spot moved {-move:.1f} bp against us in {t.shock_seconds:.0f}s and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
+        if bid < SHOCK_BID[0] or bid > SHOCK_BID[1] or quote_ts < spot_ts - THROUGH_QUOTE:
+            self._shock_note(t, now, f"not usable: bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick; cushion {margin:+.1f} bp, worst move {worst:+.1f} bp")
+            return None
+        self._shock_note(t, now, f"cushion {margin:+.1f} bp, {t.shock_seconds:.0f}s move {move:+.1f} bp (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{t.shock_bp:.0f} bp or worse with a cushion of {t.shock_margin_bp:.0f} bp or less)")
+        if worst > -t.shock_bp or margin > t.shock_margin_bp:
+            return None
+        return f"shock exit: spot moved {-worst:.1f} bp against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """A cross of strike_through percent starts a watch. It does not sell.
@@ -1427,7 +1439,7 @@ class ProfitWatcher:
                     held.shock_index, held.shock_ref = sid, ref
                     self._shock_hist.setdefault(sid, deque())
                     if spec.shock_bp > 0 and spec.shock_seconds > 0:
-                        held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last
+                        held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
                     if spec.wrong_side_bp > 0 and spec.wrong_side_seconds > 0 and spec.wrong_side_varieties:
                         held.variety = self._entry_variety(held, sid, ref, float(row["ts"]))
                         if held.variety in spec.wrong_side_varieties:
