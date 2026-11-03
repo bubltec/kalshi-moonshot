@@ -526,6 +526,16 @@ def evaluate(
         if open_now >= spec.max_open:
             bet = False
             note = f"lane full: {open_now} bets already open (the lane holds at most {spec.max_open}). {note}"
+    if bet and spec.skip_varieties:
+        from . import variants
+
+        try:
+            kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0)
+        except Exception:  # a tape that cannot say is no reason to skip
+            kind = None
+        if variants.skipped(spec.skip_varieties, kind, shot.side):
+            bet = False
+            note = f"variety {kind} ({variants.NAMES[kind]}): this lane does not buy it. {note}"
     if bet and spec.choppy_floor > 0:
         from . import regime
 

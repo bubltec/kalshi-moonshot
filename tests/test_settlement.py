@@ -904,6 +904,63 @@ def test_max_same_side_can_count_the_bets_of_other_lanes_together(tmp_path, monk
     assert out.action == "pass" and "same side held" in out.note
 
 
+def _variety_world(tmp_path, monkeypatch, ticks, extra="skip_varieties=['G', 'A-yes']"):
+    import time as _time
+
+    from kalshi_moonshot import db, regime
+
+    regime.reset()
+    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    (tmp_path / "strategies.toml").write_text(f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXCOPPER15M']\n{extra}\n")
+    s = config.load()
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape.execute("CREATE TABLE IF NOT EXISTS index_ticks (ts REAL NOT NULL, index_id TEXT NOT NULL, value REAL, avg60 REAL, quote_avg REAL, src_ms INTEGER)")
+    now = _time.time()
+    close = now + 437.0
+    tape.execute("INSERT INTO index_ticks (ts, index_id, value) VALUES (?,?,?)", (close - 897.0, "BQ_COPPER", 100.0))  # the price at the window open
+    for k, value in enumerate(ticks):
+        tape.execute("INSERT INTO index_ticks (ts, index_id, value) VALUES (?,?,?)", (now - 302.0 + k * 2.0, "BQ_COPPER", value))
+    tape.commit()
+    return w, s, store
+
+
+def _copper_shot(side="yes", ask=0.86):
+    from kalshi_moonshot.strategy import LongShot
+
+    return LongShot("KXCOPPER15M-9", "t", "", ask - 0.01, ask, 437.0 / 3600.0, "2099-01-01T00:00:00Z", 437.0 / 3600.0, lane="guarded", series="KXCOPPER15M", side=side)
+
+
+def test_a_lane_skips_the_varieties_on_its_list_and_buys_the_rest(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.estimators import Estimate
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    chop = [100.03 if (k // 10) % 2 else 99.97 for k in range(151)]  # crosses the open price every 20 s: variety G
+    w, s, store = _variety_world(tmp_path, monkeypatch, chop)
+    out = runner.evaluate(s, w.client, None, store, _copper_shot("yes"), estimators={"market": Fixed()})
+    assert out.action == "pass" and "variety G" in out.note and "does not buy it" in out.note
+    calm = [100.20 + 0.0004 * (k % 2) for k in range(151)]  # a steady cushion far above the open price: variety B
+    w2, s2, store2 = _variety_world(tmp_path / "b", monkeypatch, calm) if (tmp_path / "b").mkdir() is None else (None, None, None)
+    ok = runner.evaluate(s2, w2.client, None, store2, _copper_shot("yes"), estimators={"market": Fixed()})
+    assert "does not buy it" not in ok.note
+
+
+def test_a_lane_buys_when_the_variety_cannot_be_read(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.estimators import Estimate
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    w, s, store = _variety_world(tmp_path, monkeypatch, [])  # no ticks at all
+    out = runner.evaluate(s, w.client, None, store, _copper_shot("yes"), estimators={"market": Fixed()})
+    assert "does not buy it" not in out.note
+
+
 def _choppy_world(tmp_path, monkeypatch, lane_extra):
     import time as _time
 

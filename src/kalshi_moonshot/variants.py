@@ -263,3 +263,26 @@ def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_
             cells.append(f"{(1 - bc['wins'] / bc['n']) * 100:4.0f}%/{bc['n']:3d}" if bc and bc["n"] >= 5 else "        -")
         out.append(f"{v} {NAMES[v]:34} " + " ".join(f"{x:>9}" for x in cells))
     return out
+
+
+def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None) -> str | None:
+    """The variety a commodity bet would be at this moment, from the BiQuote ticks of the last five minutes against BiQuote's own price when the window opened. None when the series has no BiQuote index,
+    or the tape has no tick near the open or too few recent ones: a caller that skips on a variety must not skip on None."""
+    index = biquote_index(series)
+    if not index or left_seconds <= 0:
+        return None
+    now = time.time() if now is None else now
+    close = now + left_seconds
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    opened = close - 900.0
+    ref = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts LIMIT 1", (index, opened - 5.0, opened + 20.0)).fetchone()
+    if not ref:
+        return None
+    rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index, now - LOOK - 40.0, now)).fetchall()
+    snap = snapshot([float(r[0]) for r in rows], [float(r[1]) for r in rows], float(ref[0]), side, now, close)
+    return snap["variety"] if snap else None
+
+
+def skipped(varieties: Sequence[str], variety: str | None, side: str) -> bool:
+    """Whether a lane's skip list names this variety: "G" skips it on either side, "A-yes" only on that side."""
+    return variety is not None and (variety in varieties or f"{variety}-{side}" in varieties)

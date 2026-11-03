@@ -66,3 +66,10 @@ def test_the_grid_makes_a_slow_and_a_fast_feed_read_alike():
     b = variants.snapshot([x for x, _ in slow], [y for _, y in slow], 100.0, "yes", 1398.0, 1698.0)
     assert a is not None and b is not None
     assert a["variety"] == b["variety"] == "G" and abs(a["crosses"] - b["crosses"]) <= 1
+
+
+def test_a_skip_list_names_a_variety_on_either_side_or_on_one():
+    assert variants.skipped(("G", "A-yes"), "G", "no") and variants.skipped(("G", "A-yes"), "G", "yes")
+    assert variants.skipped(("G", "A-yes"), "A", "yes") and not variants.skipped(("G", "A-yes"), "A", "no")
+    assert not variants.skipped(("G", "A-yes"), "B", "yes")
+    assert not variants.skipped(("G",), None, "yes")  # a variety that cannot be read is never skipped
