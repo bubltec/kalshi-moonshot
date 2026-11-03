@@ -206,6 +206,76 @@ def test_a_shock_exit_waits_for_a_full_lookback_of_history(tmp_path, monkeypatch
     assert w._jobs.empty()
 
 
+def _wrong_side_world(tmp_path, monkeypatch, before):
+    """A KXCOPPER15M YES bought 437 s before the close; `before` is the 5 minutes of BiQuote ticks ahead of the buy as (seconds before the close, value)."""
+    from kalshi_moonshot import db
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nwrong_side_bp=5\nwrong_side_seconds=15\nwrong_side_varieties=['G']\n"
+        "settlement_guard=0\nburst_exit=false\nstop_loss=false\nwatch_loss=0\nseries=['KXCOPPER15M']\nalways=true\n"
+    )
+    s = config.load()
+    close = 2_000_000.0
+    store = Store(s.db_path)
+    store.db.execute(
+        "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (close - 437.0, "KXCOPPER15M-1", "bet", "trade", 0.83, "yes", "guarded", 3, 2.7, "1970-01-24T03:33:20Z"),
+    )
+    store.db.commit()
+
+    class Client:
+        def market(self, ticker):
+            return {"ticker": ticker, "floor_strike": 100.0, "close_time": "1970-01-24T03:33:20Z", "yes_bid_dollars": "0.80", "yes_ask_dollars": "0.81", "title": "t"}
+
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape.execute("CREATE TABLE IF NOT EXISTS index_ticks (ts REAL NOT NULL, index_id TEXT NOT NULL, value REAL, avg60 REAL, quarter_avg REAL, src_ms INTEGER)")
+    tape.execute("INSERT INTO index_ticks (ts, index_id, value) VALUES (?,?,?)", (close - 897.0, "BQ_COPPER", 100.0))  # the price at the window open
+    for sec, value in before:
+        tape.execute("INSERT INTO index_ticks (ts, index_id, value) VALUES (?,?,?)", (close - sec, "BQ_COPPER", value))
+    tape.commit()
+    w = watcher.ProfitWatcher(lambda: s, Client(), lambda: Store(s.db_path))
+    w.tape_factory = lambda: db.connect(s.tape_path, "tape", shared=True)
+    w.refresh()
+    return w, close
+
+
+def _feed(w, close, sec, value, bid):
+    w.on_event({"kind": "quote", "ticker": "KXCOPPER15M-1", "bid": bid, "ask": bid + 0.01, "ts": close - sec - 0.2})
+    w.on_event({"kind": "index", "index_id": "BQ_COPPER", "ts": close - sec, "value": value})
+
+
+def test_a_wrong_side_exit_sells_an_oscillating_position_that_stays_wrong_for_long_enough(tmp_path, monkeypatch):
+    chop = [(740 - 2 * k, 100.03 if (k // 10) % 2 else 99.97) for k in range(151)]  # a tick every 2 s that crosses the open price every 20 s: variety G
+    w, close = _wrong_side_world(tmp_path, monkeypatch, chop)
+    t = w.targets[("KXCOPPER15M-1", "guarded")]
+    assert t.variety == "G" and t.wrong_bp == 5 and t.shock_ref == 100.0
+    _feed(w, close, 400, 99.94, 0.40)  # 6 bp on the wrong side: the clock starts
+    assert w._jobs.empty()
+    _feed(w, close, 392, 99.94, 0.38)  # 8 s later: not long enough
+    assert w._jobs.empty()
+    _feed(w, close, 384, 99.94, 0.35)  # 16 s: sell
+    sell = w._jobs.get_nowait()
+    assert sell.why.startswith("wrong-side exit") and "variety G" in sell.why and "0.35" in sell.why
+
+
+def test_a_wrong_side_exit_waits_while_the_spot_comes_back_and_skips_other_varieties(tmp_path, monkeypatch):
+    chop = [(740 - 2 * k, 100.03 if (k // 10) % 2 else 99.97) for k in range(151)]
+    w, close = _wrong_side_world(tmp_path, monkeypatch, chop)
+    _feed(w, close, 400, 99.94, 0.40)
+    _feed(w, close, 392, 100.02, 0.60)  # back on the right side: the clock resets
+    _feed(w, close, 384, 99.94, 0.40)
+    _feed(w, close, 376, 99.94, 0.38)  # 8 s into the new stretch
+    assert w._jobs.empty()
+    calm = [(740 - 2 * k, 100.20 + 0.0004 * (k % 2)) for k in range(151)]  # a steady cushion far above the open price: variety B
+    w2, close = _wrong_side_world(tmp_path / "b", monkeypatch, calm) if (tmp_path / "b").mkdir() is None else (None, None)
+    t2 = w2.targets[("KXCOPPER15M-1", "guarded")]
+    assert t2.variety == "B" and t2.wrong_bp == 0
+    _feed(w2, close, 400, 99.94, 0.40)
+    _feed(w2, close, 380, 99.94, 0.30)
+    assert w2._jobs.empty()
+
+
 def test_a_lane_without_a_shock_setting_gets_no_shock_exit(tmp_path, monkeypatch):
     from kalshi_moonshot import lanes
 

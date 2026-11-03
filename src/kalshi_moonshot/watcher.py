@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, NamedTuple
 
-from . import buyer, checkins, manual, paperfill, runner, settlement
+from . import buyer, checkins, manual, paperfill, runner, settlement, variants
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
 from .kalshi import KalshiClient, KalshiError
@@ -162,6 +162,10 @@ class Target:
     shock_margin_bp: float = 5.0
     shock_last: float = 120.0
     shock_index: str = ""  # the index it reads
+    wrong_bp: float = 0.0  # lane wrong_side_bp (0 = off): sell once the spot sits this far on the wrong side of shock_ref for wrong_seconds, for a position whose variety at the buy is in wrong_varieties
+    wrong_seconds: float = 15.0
+    wrong_since: float = 0.0  # when the spot first went that far wrong and has stayed
+    variety: str = ""  # the variants.py letter at the buy
     shock_ref: float = 0.0  # the price the cushion is measured from: the strike (crypto) or the index's own price at the window open (commodities)
     strike_through_rearm: bool = False  # lane strike_through_rearm: a return to the winning side restarts the watch instead of holding to the close
     through_kept: bool = False  # the index came back to the winning side after a cross: hold this position to the close
@@ -385,6 +389,7 @@ class ProfitWatcher:
         self.spot_side = spot_side  # (ticker, side) -> the chance, from spot against the strike alone, that this side pays; None if unknown
         self._model = settlement.Model(lambda: self.tape_factory() if self.tape_factory is not None else None)  # the exact settlement chance (settlement.py)
         self._spot_src: dict[str, float] = {}  # index -> source time (ms) of the reading in _spot
+        self._varieties: dict[tuple[str, str], str] = {}  # (ticker, lane) -> its variety at the buy
         self._shock_logged: set[tuple[str, str]] = set()  # shock exits already reported as armed or not
         self._shock_refs: dict[tuple[str, str], float] = {}  # (ticker, index) -> the price its shock exit measures the cushion from
         self._shock_hist: dict[str, deque] = {}  # index -> (time, value) ticks of the last SHOCK_KEEP seconds, kept only for the indexes a shock exit reads
@@ -490,7 +495,7 @@ class ProfitWatcher:
             )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._shock_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
+            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
             if t.drop_buy and not t.burst_logged and t.burst_buy > 0 and (t.drop_armed_at == now or ((reason or "").startswith("drop: bid") and t.drop_confirm <= 0)):
                 self._drop_hedge(t, bid, now)  # the other side is bought when the fall is found, before the sale: after the confirmed fall it costs far more
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
@@ -820,13 +825,57 @@ class ProfitWatcher:
             self._shock_refs[(t.ticker, index_id)] = ref
         return ref
 
+    def _entry_variety(self, t: Target, index_id: str, ref: float, bought_at: float) -> str:
+        """The variants.py letter of a position at its buy, from the index ticks of the five minutes before it (the tape). Empty when the tape cannot say."""
+        key = (t.ticker, t.lane)
+        if key in self._varieties:
+            return self._varieties[key]
+        tape = self._tape_db()
+        if tape is None:
+            return ""
+        try:
+            rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index_id, bought_at - variants.LOOK - 40.0, bought_at)).fetchall()
+            snap = variants.snapshot([float(r[0]) for r in rows], [float(r[1]) for r in rows], ref, t.side, bought_at, t.close_ts)
+        except Exception:
+            return ""
+        out = snap["variety"] if snap else ""
+        if out:
+            self._varieties[key] = out
+            log.info("watcher: %s %s is variety %s (%s) at its buy", t.ticker, t.lane, out, variants.NAMES[out])
+        return out
+
+    def _wrong_side_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
+        """The wrong-side exit: the spot has stayed wrong_bp basis points on the losing side of its reference for wrong_seconds, on a position whose variety at the buy asked for it. A bid under 0.03 is not worth an order."""
+        if t.wrong_bp <= 0 or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index:
+            return None
+        left = t.close_ts - now
+        if left <= SETTLE_LAST:
+            return None
+        spot = self._spot.get(t.shock_index)
+        if spot is None:
+            return None
+        spot_ts, value = spot
+        if value <= 0 or now - spot_ts > THROUGH_SPOT:
+            return None
+        sign = 1.0 if t.side == "yes" else -1.0
+        cushion = math.log(value / t.shock_ref) * sign * 1e4
+        if cushion > -t.wrong_bp:
+            t.wrong_since = 0.0
+            return None
+        if t.wrong_since <= 0:
+            t.wrong_since = now
+            return None
+        if now - t.wrong_since < t.wrong_seconds or bid < 0.03 or bid >= 0.99 or quote_ts < spot_ts - THROUGH_QUOTE:
+            return None
+        return f"wrong-side exit: spot {-cushion:.1f} bp on the wrong side of its window-open price for {now - t.wrong_since:.0f}s (variety {t.variety}), {left:.0f}s left, bid {bid:.2f}"
+
     def _shock_on_index(self, index_id: str, now: float) -> None:
         with self._lock:
-            hits = [t for t in self.targets.values() if t.shock_index == index_id and t.shock_bp > 0]
+            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.wrong_bp > 0)]
         for t in hits:
             if t.last_ts <= 0 or t.cur_bid <= 0:
                 continue
-            reason = self._shock_hit(t, t.cur_bid, now, t.last_ts)
+            reason = self._shock_hit(t, t.cur_bid, now, t.last_ts) or self._wrong_side_hit(t, t.cur_bid, now, t.last_ts)
             key = (t.ticker, t.lane)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
@@ -1353,20 +1402,25 @@ class ProfitWatcher:
                     held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0
                     if held.close_ts <= 0:
                         held.close_ts = close
-            if spec.shock_bp > 0 and spec.shock_seconds > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
+            if (spec.shock_bp > 0 or spec.wrong_side_bp > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
                 sid = biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
                 if (ticker, lane) not in self._shock_logged and (ref > 0 or sid):
                     self._shock_logged.add((ticker, lane))
                     if ref > 0:
-                        log.info("watcher: shock exit armed on %s %s: reads %s against %.4f (%.0f bp over %.0fs, within %.0f bp, last %.0fs)", ticker, lane, sid, ref, spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last)
+                        log.info("watcher: spot exits armed on %s %s: read %s against %.4f (shock %.0f bp over %.0fs within %.0f bp; wrong side %.0f bp for %.0fs on %s)", ticker, lane, sid, ref, spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.wrong_side_bp, spec.wrong_side_seconds, "".join(spec.wrong_side_varieties) or "-")
                     else:
-                        log.warning("watcher: shock exit NOT armed on %s %s: no reference price for %s (%s)", ticker, lane, sid, "no tape" if self._tape_db() is None else "no tick near the window open")
+                        log.warning("watcher: spot exits NOT armed on %s %s: no reference price for %s (%s)", ticker, lane, sid, "no tape" if self._tape_db() is None else "no tick near the window open")
                 if ref > 0:
-                    held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last
                     held.shock_index, held.shock_ref = sid, ref
                     self._shock_hist.setdefault(sid, deque())
+                    if spec.shock_bp > 0 and spec.shock_seconds > 0:
+                        held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last
+                    if spec.wrong_side_bp > 0 and spec.wrong_side_seconds > 0 and spec.wrong_side_varieties:
+                        held.variety = self._entry_variety(held, sid, ref, float(row["ts"]))
+                        if held.variety in spec.wrong_side_varieties:
+                            held.wrong_bp, held.wrong_seconds = spec.wrong_side_bp, spec.wrong_side_seconds
             if stop_on:
                 fresh[(ticker, lane)].stop_drop = stop_drop_for(spec, s)
                 fresh[(ticker, lane)].stop_confirm = spec.stop_confirm_seconds
