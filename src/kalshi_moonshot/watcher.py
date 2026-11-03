@@ -169,6 +169,7 @@ class Target:
     shock_index: str = ""  # the index it reads
     wrong_bp: float = 0.0  # lane wrong_side_bp (0 = off): sell once the spot sits this far on the wrong side of shock_ref for wrong_seconds, for a position whose variety at the buy is in wrong_varieties
     wrong_seconds: float = 15.0
+    wrong_last: float = 0.0  # lane wrong_side_last: act only inside this many seconds before the close (0 = the whole window)
     wrong_since: float = 0.0  # when the spot first went that far wrong and has stayed
     variety: str = ""  # the variants.py letter at the buy
     shock_noted: float = 0.0  # when the shock watch last wrote its line to the log (at most one every 10 s)
@@ -851,11 +852,14 @@ class ProfitWatcher:
         return out
 
     def _wrong_side_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
-        """The wrong-side exit: the spot has stayed wrong_bp basis points on the losing side of its reference for wrong_seconds, on a position whose variety at the buy asked for it. A bid under 0.03 is not worth an order."""
+        """The wrong-side exit: the spot has stayed wrong_bp basis points on the losing side of its reference for wrong_seconds, on a position whose variety at the buy asked for it. Sells only a bid in SHOCK_BID, like the shock exit."""
         if t.wrong_bp <= 0 or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index:
             return None
         left = t.close_ts - now
         if left <= SETTLE_LAST:
+            return None
+        if t.wrong_last > 0 and left > t.wrong_last:
+            t.wrong_since = 0.0  # the clock starts inside the last-seconds window
             return None
         spot = self._spot.get(t.shock_index)
         if spot is None:
@@ -871,7 +875,7 @@ class ProfitWatcher:
         if t.wrong_since <= 0:
             t.wrong_since = now
             return None
-        if now - t.wrong_since < t.wrong_seconds or bid < 0.03 or bid >= 0.99 or quote_ts < spot_ts - THROUGH_QUOTE:
+        if now - t.wrong_since < t.wrong_seconds or bid < SHOCK_BID[0] or bid > SHOCK_BID[1] or quote_ts < spot_ts - THROUGH_QUOTE:
             return None
         return f"wrong-side exit: spot {-cushion:.1f} bp on the wrong side of its window-open price for {now - t.wrong_since:.0f}s (variety {t.variety}), {left:.0f}s left, bid {bid:.2f}"
 
@@ -1460,10 +1464,11 @@ class ProfitWatcher:
                     self._shock_hist.setdefault(sid, deque())
                     if spec.shock_bp > 0 and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
                         held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
-                    if spec.wrong_side_bp > 0 and spec.wrong_side_seconds > 0 and spec.wrong_side_varieties:
-                        held.variety = self._entry_variety(held, sid, ref, float(row["ts"]))
-                        if held.variety in spec.wrong_side_varieties:
-                            held.wrong_bp, held.wrong_seconds = spec.wrong_side_bp, spec.wrong_side_seconds
+                    if spec.wrong_side_bp > 0 and spec.wrong_side_seconds > 0 and (not spec.wrong_side_series or ticker.split("-")[0] in spec.wrong_side_series):
+                        if spec.wrong_side_varieties:
+                            held.variety = self._entry_variety(held, sid, ref, float(row["ts"]))
+                        if not spec.wrong_side_varieties or held.variety in spec.wrong_side_varieties:
+                            held.wrong_bp, held.wrong_seconds, held.wrong_last = spec.wrong_side_bp, spec.wrong_side_seconds, spec.wrong_side_last
             if stop_on:
                 fresh[(ticker, lane)].stop_drop = stop_drop_for(spec, s)
                 fresh[(ticker, lane)].stop_confirm = spec.stop_confirm_seconds

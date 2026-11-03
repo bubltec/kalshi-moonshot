@@ -214,14 +214,14 @@ def test_a_shock_exit_waits_for_a_full_lookback_of_history(tmp_path, monkeypatch
     assert w._jobs.empty()
 
 
-def _wrong_side_world(tmp_path, monkeypatch, before):
+def _wrong_side_world(tmp_path, monkeypatch, before, extra="", varieties="wrong_side_varieties=['G']\n"):
     """A KXCOPPER15M YES bought 437 s before the close; `before` is the 5 minutes of BiQuote ticks ahead of the buy as (seconds before the close, value)."""
     from kalshi_moonshot import db
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(
-        "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nwrong_side_bp=5\nwrong_side_seconds=15\nwrong_side_varieties=['G']\n"
-        "settlement_guard=0\nburst_exit=false\nstop_loss=false\nwatch_loss=0\nseries=['KXCOPPER15M']\nalways=true\n"
+        "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nwrong_side_bp=5\nwrong_side_seconds=15\n"
+        f"{varieties}{extra}settlement_guard=0\nburst_exit=false\nstop_loss=false\nwatch_loss=0\nseries=['KXCOPPER15M']\nalways=true\n"
     )
     s = config.load()
     close = 2_000_000.0
@@ -265,6 +265,22 @@ def test_a_wrong_side_exit_sells_an_oscillating_position_that_stays_wrong_for_lo
     _feed(w, close, 384, 99.94, 0.35)  # 16 s: sell
     sell = w._jobs.get_nowait()
     assert sell.why.startswith("wrong-side exit") and "variety G" in sell.why and "0.35" in sell.why
+
+
+def test_a_wrong_side_exit_in_the_last_seconds_starts_its_clock_there_and_only_for_its_series(tmp_path, monkeypatch):
+    calm = [(740 - 2 * k, 100.01) for k in range(151)]
+    w, close = _wrong_side_world(tmp_path, monkeypatch, calm, extra="wrong_side_last=120\nwrong_side_series=['KXCOPPER15M']\n", varieties="")
+    t = w.targets[("KXCOPPER15M-1", "guarded")]
+    assert t.wrong_bp == 5 and t.wrong_last == 120
+    _feed(w, close, 300, 99.94, 0.40)  # wrong side, but 300 s out: no clock yet
+    _feed(w, close, 125, 99.94, 0.38)
+    assert w._jobs.empty() and t.wrong_since == 0.0
+    _feed(w, close, 110, 99.94, 0.36)  # inside the last 120 s: the clock starts
+    assert w._jobs.empty()
+    _feed(w, close, 94, 99.94, 0.34)  # 16 s later: sell
+    assert w._jobs.get_nowait().why.startswith("wrong-side exit")
+    w2, _ = _wrong_side_world(tmp_path / "b", monkeypatch, calm, extra="wrong_side_series=['KXWTI15M']\n", varieties="") if (tmp_path / "b").mkdir() is None else (None, None)
+    assert w2.targets[("KXCOPPER15M-1", "guarded")].wrong_bp == 0
 
 
 def test_a_wrong_side_exit_waits_while_the_spot_comes_back_and_skips_other_varieties(tmp_path, monkeypatch):
