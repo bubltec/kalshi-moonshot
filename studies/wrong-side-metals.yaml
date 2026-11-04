@@ -1,0 +1,10 @@
+description: "sell a metal when its spot has sat on the wrong side of the window-open price for a few seconds, close to the end: gold 2026-11-04 14:15 slid onto the strike over the last minute while the book still bid 0.90"
+lane: commodity_energy
+bets: {lane: commodity_precious}
+since_days: 14
+fixed:
+  wrong_side_series: [KXGOLD15M, KXSILVER15M, KXPLATINUM15M, KXPALLADIUM15M, KXCOPPER15M]
+grid:
+  wrong_side_bp: [0, 0.5, 1, 2]
+  wrong_side_seconds: [5, 10, 20]
+  wrong_side_last: [60, 90, 120, 180]

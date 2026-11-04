@@ -47,6 +47,7 @@ NAMES = {
     "E": "near, flat",
     "F": "near, pulling away",
     "G": "oscillating around the strike",
+    "H": "near, eroding gradually (flat over 5 min, cushion shrinking over the last 2)",
 }
 
 
@@ -59,8 +60,10 @@ def classify(z: float, slope: float, crosses: int) -> str:
     return "D" if slope <= -SLOPE else "F" if slope >= SLOPE else "E"
 
 
+GRADUAL_D120 = -0.5  # the cushion lost this many typical two-minute moves over the last 120 s ...
+GRADUAL_EROSION = 0.4  # ... and sits this many typical five-minute moves under its peak of the last five minutes
 CUSTOM_FILE = "varieties.toml"
-FEATURES = ("z", "slope", "crosses", "vol_ratio", "since_cross")  # the numbers a custom variety may test: see snapshot()
+FEATURES = ("z", "slope", "crosses", "vol_ratio", "since_cross", "d60", "d120", "erosion")  # the numbers a custom variety may test: see snapshot()
 _BASE_NAMES = dict(NAMES)
 _custom: list[tuple[str, str, Any]] = []  # (letter, name, compiled test), tried in file order before the built-in letters
 _custom_mtime: dict[str, float] = {}
@@ -123,7 +126,10 @@ def classify_features(f: dict[str, float]) -> str:
                 return letter
         except (ZeroDivisionError, TypeError):
             continue
-    return classify(f["z"], f["slope"], int(f["crosses"]))
+    letter = classify(f["z"], f["slope"], int(f["crosses"]))
+    if letter == "E" and f.get("d120", 0.0) <= GRADUAL_D120 and f.get("erosion", 0.0) >= GRADUAL_EROSION and f["z"] > 0:
+        return "H"  # near and flat over five minutes, but the cushion has been shrinking steadily over the last two (a drift, not a spike)
+    return letter
 
 
 GRID = 1.0  # seconds: both feeds are read on this grid, so a crossing means the same on a 2.5 s crypto index and a 1 s commodity feed
@@ -170,7 +176,13 @@ def snapshot(ts: Sequence[float], values: Sequence[float], strike: float, side: 
     tail_sq = sum(math.log(b / a) ** 2 for a, b in itertools.pairwise(tail))
     tail_dt = (len(tail) - 1) * grid if grid > 0 else dt * (len(tail) - 1) / max(1, len(seq) - 1)
     vol_ratio = math.sqrt(tail_sq / tail_dt) / rate if tail_dt > 0 else 1.0
-    f = {"z": z, "slope": slope, "crosses": crosses, "vol_ratio": vol_ratio, "since_cross": since_cross}
+    d60 = d120 = erosion = 0.0
+    if grid > 0 and len(seq) >= 121:  # how fast the cushion has been shrinking lately, in the same typical-move units
+        cush = [math.log(x / strike) * sign for x in seq]
+        d60 = (cush[-1] - cush[-61]) / (rate * math.sqrt(60.0))
+        d120 = (cush[-1] - cush[-121]) / (rate * math.sqrt(120.0))
+        erosion = (max(cush) - cush[-1]) / (rate * math.sqrt(LOOK))
+    f = {"z": z, "slope": slope, "crosses": crosses, "vol_ratio": vol_ratio, "since_cross": since_cross, "d60": d60, "d120": d120, "erosion": erosion}
     return {**f, "variety": classify_features(f)}
 
 
@@ -435,6 +447,7 @@ def skipped(varieties: Sequence[str], variety: str | None, side: str) -> bool:
 
 
 CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left_s", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety")
+MIN_PRIOR = 10  # older favorites a variety needs before the auto skip may act on it
 LEDGER_KEEP = 72 * 3600.0  # how much settled history the in-memory ledger holds
 LEDGER_WARM = 48 * 3600.0  # how far back a cold start computes when favorite_cases holds nothing
 
@@ -481,7 +494,7 @@ class Ledger:
         """The "variety-side" cells a lane should not buy right now.
 
         A cell's recent record (the last `hours`) is blended with its longer record (everything older in the ledger) as a prior worth `prior_weight` bets, so a handful of recent bets can move a cell but not flip it
-        on noise. It is skipped when the blend loses `min_loss` or more a $10 bet and the recent window holds at least `min_n` of its favorites. A cell with no longer record is judged on the recent window alone."""
+        on noise. It is skipped when the blend loses `min_loss` or more a $10 bet and the recent window holds at least `min_n` of its favorites. A cell with fewer than MIN_PRIOR older favorites is never skipped."""
         cut = now - hours * 3600.0
         recent = self.cells(cut, now, cls)
         older = self.cells(0.0, cut, cls)
@@ -491,7 +504,9 @@ class Ledger:
                 continue
             m_recent = net / n
             n_old, net_old = older.get(key, (0, 0.0))
-            post = (n * m_recent + prior_weight * (net_old / n_old)) / (n + prior_weight) if n_old else m_recent
+            if n_old < MIN_PRIOR:
+                continue  # a new or rare variety (a freshly added letter) has no record to blend with: five recent bets are not enough to skip it
+            post = (n * m_recent + prior_weight * (net_old / n_old)) / (n + prior_weight)
             if post <= -min_loss:
                 out.append(f"{key[2]}-{key[1]}")
         return tuple(out)

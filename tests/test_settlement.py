@@ -2317,6 +2317,7 @@ def test_a_crypto_lane_skips_what_the_ledger_shows_losing_and_only_when_it_asks_
     (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\nskip_varieties_auto=true\n")
     s = config.load()
     variants.ledger.add([{"ticker": f"x{k}", "cls": "crypto", "side": "yes", "variety": "B", "close_ts": now - 1800 + k, "pnl": -4.0} for k in range(8)])  # the last half hour: B-yes has lost 8 times
+    variants.ledger.add([{"ticker": f"o{k}", "cls": "crypto", "side": "yes", "variety": "B", "close_ts": now - 20 * 3600 + k, "pnl": -4.0} for k in range(12)])  # and it lost earlier too: there is a record to blend with
     store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 437.0, 100.0, now))
     store.db.commit()
     index = variants.crypto_index("KXBTC15M")

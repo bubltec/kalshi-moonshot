@@ -100,9 +100,9 @@ def test_the_ledger_judges_the_recent_stretch_against_the_older_record():
     led.add([_rec(now - 20 * 3600 + k, "F", "yes", +0.5) for k in range(40)])  # a long record that paid
     led.add([_rec(now - 3600 + k, "F", "yes", -3.0) for k in range(6)])  # six bad recent bets: the blend is (6*-3 + 15*0.5)/21 = -0.5
     led.add([_rec(now - 3600 + k, "B", "yes", -3.0) for k in range(4)])  # too few recent bets to judge
-    led.add([_rec(now - 3600 + k, "G", "no", -3.0) for k in range(6)])  # bad recent, and nothing older: judged on the recent stretch alone
+    led.add([_rec(now - 3600 + k, "G", "no", -3.0) for k in range(6)])  # bad recent, and nothing older: no record to blend with, never skipped
     led.add([_rec(now - 3600 + k, "E", "no", -0.2) for k in range(6)] + [_rec(now - 20 * 3600 + k, "E", "no", +2.0, ticker=f"o{k}") for k in range(30)])  # a small dip against a good record
-    assert led.skips("crypto", now, hours=6.0, prior_weight=15.0, min_loss=0.10, min_n=5) == ("G-no", "F-yes")  # sorted by (class, side, variety)
+    assert led.skips("crypto", now, hours=6.0, prior_weight=15.0, min_loss=0.10, min_n=5) == ("F-yes",)
     assert led.skips("commodity", now) == ()
 
 
@@ -119,21 +119,21 @@ def test_a_custom_variety_comes_from_a_file_and_is_checked(tmp_path):
 
     s = SimpleNamespace(data_dir=tmp_path)
     (tmp_path / variants.CUSTOM_FILE).write_text(
-        '[[variety]]\nletter="H"\nname="near and speeding up"\nwhen="z < 1 and vol_ratio > 1.5"\n'
+        '[[variety]]\nletter="K"\nname="near and speeding up"\nwhen="z < 1 and vol_ratio > 1.5"\n'
         '[[variety]]\nletter="J"\nname="bad"\nwhen="__import__(1)"\n'
         '[[variety]]\nletter="B"\nname="reuses a built-in letter"\nwhen="z > 0"\n')
     variants._custom_mtime.clear()
     variants.load_custom(s)
     try:
-        assert variants.NAMES["H"] == "near and speeding up" and "J" not in variants.NAMES and variants.NAMES["B"] == "far, flat"
-        assert variants.classify_features({"z": 0.4, "slope": 0.0, "crosses": 0, "vol_ratio": 2.0, "since_cross": 300.0}) == "H"
+        assert variants.NAMES["K"] == "near and speeding up" and "J" not in variants.NAMES and variants.NAMES["B"] == "far, flat"
+        assert variants.classify_features({"z": 0.4, "slope": 0.0, "crosses": 0, "vol_ratio": 2.0, "since_cross": 300.0}) == "K"
         assert variants.classify_features({"z": 0.4, "slope": 0.0, "crosses": 0, "vol_ratio": 1.0, "since_cross": 300.0}) == "E"  # no custom test holds: the built-in letter
-        assert variants.skipped(("H-yes",), "H", "yes") and not variants.skipped(("H-yes",), "H", "no")
+        assert variants.skipped(("K-yes",), "K", "yes") and not variants.skipped(("K-yes",), "K", "no")
     finally:
         (tmp_path / variants.CUSTOM_FILE).unlink()
         variants._custom_mtime.clear()
         variants.load_custom(s)
-    assert "H" not in variants.NAMES
+    assert "K" not in variants.NAMES
 
 
 def test_the_snapshot_carries_the_features_a_custom_variety_can_test():
@@ -484,3 +484,17 @@ def test_an_underdog_lane_skips_a_far_and_flat_favorite(tmp_path, monkeypatch):
     finally:
         ticks.history.clear()
         ticks.strikes.clear()
+
+
+def test_a_gradual_erosion_is_its_own_variety_and_a_spike_or_a_steady_cushion_is_not():
+    ts = [1000.0 + k for k in range(401)]
+    steady = [100.45 + 0.02 * (1 if k % 2 else -1) for k in range(401)]  # a near cushion that does not move
+    snap = variants.snapshot(ts, steady, 100.0, "yes", ts[-1], ts[-1] + 150.0)
+    assert snap is not None and snap["variety"] != "H" and abs(snap["d120"]) < 0.5
+    # flat for three minutes, then a steady slide in the last two: the cushion shrinks without a single jump
+    slide = [100.45 + 0.02 * (1 if k % 2 else -1) - (0.30 * (k - 281) / 120.0 if k > 281 else 0.0) for k in range(401)]
+    snap = variants.snapshot(ts, slide, 100.0, "yes", ts[-1], ts[-1] + 150.0)
+    assert snap is not None and snap["d120"] <= variants.GRADUAL_D120 and snap["erosion"] >= variants.GRADUAL_EROSION
+    assert snap["variety"] == "H" and "H" in variants.NAMES
+    assert variants.classify_features({"z": 0.5, "slope": 0.0, "crosses": 0, "vol_ratio": 1.0, "since_cross": 300.0, "d60": -0.2, "d120": -0.1, "erosion": 0.1}) == "E"  # no erosion: stays E
+    assert variants.classify_features({"z": 1.5, "slope": 0.0, "crosses": 0, "vol_ratio": 1.0, "since_cross": 300.0, "d60": -0.9, "d120": -0.9, "erosion": 0.9}) == "B"  # far and flat keeps its letter: H only subdivides E
