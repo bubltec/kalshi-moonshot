@@ -10,7 +10,7 @@ from .tape import Tape, capture
 
 
 def _from_db(days: float, lane: str, series: list[str] | None = None, as_lane: str = "") -> list[Tape]:
-    """Every settled bet of `lane` (of `series`, if given) in the last `days` days that was held to the close, as a tape of lane `as_lane`."""
+    """Every settled bet of `lane` (of `series`, if given) in the last `days` days, as a tape of lane `as_lane`. Bets the live bot sold early are included: replaying only the held ones leaves out the very cases an exit acted on, and the tape holds the result the market settled at."""
     import time
 
     from .. import config, db
@@ -19,7 +19,7 @@ def _from_db(days: float, lane: str, series: list[str] | None = None, as_lane: s
     s = config.reload()
     store, tape_db = Store(s.db_path, s.exclude_versions), db.connect(s.tape_path, "tape", shared=True)
     rows = store.db.execute(
-        "SELECT d.ticker FROM decisions d JOIN windows w ON w.ticker=d.ticker WHERE d.action='bet' AND d.mode='trade' AND d.lane=? AND d.exit_price IS NULL AND d.outcome IN ('yes','no') AND d.ts>?",
+        "SELECT d.ticker FROM decisions d JOIN windows w ON w.ticker=d.ticker WHERE d.action='bet' AND d.mode='trade' AND d.lane=? AND w.result IN ('yes','no') AND d.ts>?",
         (lane, time.time() - days * 86400.0),
     ).fetchall()
     out = []
