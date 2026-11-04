@@ -27,6 +27,7 @@ from . import db
 from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
+from .kalshiws import RECORD_ONLY
 from .kalshiws import index_for_series as crypto_index
 from .store import Store
 from .strategy import fee_per_contract
@@ -289,6 +290,8 @@ def favorites(s: Settings, start: float, end: float) -> Iterator[dict]:
 
     for w in windows:
         series = w["series"]
+        if series in RECORD_ONLY:
+            continue
         crypto = crypto_index(series)
         index = crypto or biquote_index(series)
         if not index:

@@ -34,7 +34,10 @@ WS_URL = "wss://api.elections.kalshi.com/trade-api/ws/v2"
 INDEX_FOR = {
     "KXBTC": "BRTI", "KXETH": "ETHUSD_RTI", "KXSOL": "SOLUSD_RTI", "KXXRP": "XRPUSD_RTI",
     "KXDOGE": "DOGEUSD_RTI",
+    # 2026-11-04: recorded to study, not traded or scored (RECORD_ONLY). The ids were checked against the stream (40 ticks in 40 s each); TON has no index id there, so its quotes are recorded without a spot.
+    "KXADA": "ADAUSD_RTI", "KXBCH": "BCHUSD_RTI", "KXBNB": "BNBUSD_RTI", "KXHYPE": "HYPEUSD_RTI", "KXNEAR": "NEARUSD_RTI", "KXZEC": "ZECUSD_RTI",
 }
+RECORD_ONLY = frozenset({"KXADA15M", "KXBCH15M", "KXBNB15M", "KXHYPE15M", "KXNEAR15M", "KXTON15M", "KXZEC15M"})  # crypto 15-minute series that are only recorded: the ledger, the gates and the lanes leave them out until each has been studied
 
 
 def index_for_series(series: str) -> str | None:
