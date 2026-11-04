@@ -1,23 +1,23 @@
 rows:
-- bets: 9
+- bets: 10
   delta: 0.77
-  hold: -20.55
+  hold: -19.89
   on_losers: 2
   sales: 2
   shock_bp: 0
   stuck: 0
   wrong_side_bp: 0
-- bets: 9
-  delta: 2.79
-  hold: -20.55
+- bets: 10
+  delta: 2.01
+  hold: -19.89
   on_losers: 3
-  sales: 5
+  sales: 6
   shock_bp: 8
   stuck: 0
   wrong_side_bp: 0
-- bets: 9
+- bets: 10
   delta: 0.77
-  hold: -20.55
+  hold: -19.89
   on_losers: 2
   sales: 2
   shock_bp: 100
