@@ -16,6 +16,7 @@ import contextlib
 import json
 import logging
 import math
+import os
 import queue
 import re
 import threading
@@ -70,6 +71,7 @@ SHOCK_LOG_MIN = 3.0  # bp of move against a held bet that is worth a shock_log r
 
 SHOCK_KEEP = 130.0  # seconds of index ticks kept for the shock exit to look back over
 THROUGH_STAY = 45.0  # outside the last minute, this long continuously through is a sale. A shorter dip is the one that comes back and pays
+TUNE_EVERY = 6 * 3600.0  # seconds between rewrites of the tuned variety skips (variants.tune)
 REFRESH_EVERY = 3.0  # seconds between reloads of the open-bet list
 BURST_BID_SLACK = 0.15  # a burst sale is held back when the bid read just before the order is more than this under the favorite's bid that triggered it: a thin book flickers (copper, 2026-11-02: 0.91 at the trigger, 0.19 a second later, and the bet settled a winner)
 HOLD_MARGIN = 0.01  # holding must beat the sale value by this much before an exit is withheld
@@ -416,6 +418,7 @@ class ProfitWatcher:
         self._checks: queue.Queue[Any] = queue.Queue(maxsize=200)  # (target, mark, time, spot) waiting to be saved by checkins.py
         self.targets: dict[tuple[str, str], Target] = {}  # keyed by (ticker, lane)
         self._paper_rest_at = 0.0
+        self._tuned_at = 0.0
         self._hunts: dict[str, Hunt] = {}  # ticker -> a burst_hunt watch (no position)
         self._hunt_by_series: dict[str, LaneSpec] = {}  # series -> LaneSpec for burst_hunt lanes
         self._lock = threading.Lock()
@@ -1525,6 +1528,9 @@ class ProfitWatcher:
         if follow and self.follow is not None:
             self.follow(follow)
         self._book_resting(store, s)
+        if time.time() - self._tuned_at >= TUNE_EVERY and any(sp.skip_varieties_auto for sp in lane_specs(s).values()):
+            self._tuned_at = time.time()
+            threading.Thread(target=self._tune_varieties, args=(s,), daemon=True, name="tune-varieties").start()  # the scoreboard reads days of ticks: off the refresh cycle and at low priority
         if time.time() - self._paper_rest_at >= 10.0:
             self._paper_rest_at = time.time()
             try:
@@ -1533,6 +1539,16 @@ class ProfitWatcher:
                     log.info("watcher: paper resting buys judged: %d would have filled, %d would not", got["filled"], got["missed"])
             except Exception:
                 log.debug("watcher: paper resting judgement failed", exc_info=True)
+
+    def _tune_varieties(self, s: Settings) -> None:
+        """Rewrite the tuned skip list (variants.tune). A failure leaves the old file, which expires on its own."""
+        with contextlib.suppress(OSError):
+            os.nice(10)
+        try:
+            out = variants.write_tuned(s)
+            log.info("watcher: tuned variety skips: %s", out["skip"])
+        except Exception:
+            log.warning("watcher: tuning the variety skips failed", exc_info=True)
 
     def _book_resting(self, store: Store, s: Settings) -> None:
         """Book fills of resting take-profit sells (runner._rest_take_profit) and close the bets they finish.

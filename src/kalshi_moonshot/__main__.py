@@ -979,6 +979,12 @@ def cmd_variants(s: config.Settings, args: argparse.Namespace) -> int:
     """How each variety of favorite (the spot's path against the strike over the last five minutes) has paid, by asset class and side (read-only)."""
     from . import variants
 
+    if args.tune:
+        out = variants.write_tuned(s) if args.write else variants.tune(s)
+        print(f"skip list from the last {out['days']:g} days (a cell must lose {out['min_loss']:.2f} a $10 bet in both halves): {out['skip']}" + (f"; written to {s.data_dir / variants.TUNED_FILE}" if args.write else "; not written (add --write)"))
+        for cell, c in out["cells"].items():
+            print(f"  {cell:16} older {c['n_old']:5.0f} bets {c['per_bet_old']:+.2f}   newer {c['n_new']:5.0f} bets {c['per_bet_new']:+.2f}")
+        return 0
     if args.market:
         print("\n".join(variants.market_report(s, args.days, args.recent_days, args.min_n)))
     else:
@@ -1267,6 +1273,8 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--days", type=float, default=12.0)
             p.add_argument("--recent-days", type=float, default=3.0, help="the latest stretch shown next to the whole")
             p.add_argument("--min-n", type=int, default=5, help="hide cells with fewer bets than this")
+            p.add_argument("--tune", action="store_true", help="the cells that lost in both halves of --days (the skip list a lane with skip_varieties_auto uses)")
+            p.add_argument("--write", action="store_true", help="with --tune: save the list where the lanes read it")
             p.add_argument("--market", action="store_true", help="every crypto window's favorite, whether or not a lane bought it (keeps the observation going while the choppy rule has the lanes paused); use --days 6 --recent-days 1")
         if name == "behavior-report":
             p.add_argument("--by-series", action="store_true", help="each instrument (every coin, FX pair and commodity) on its own, never a category")

@@ -2296,3 +2296,38 @@ def test_without_rearm_a_return_holds_the_bet_to_the_close(tmp_path, monkeypatch
     assert not t.strike_through_rearm
     _return_then_second_stay(w, close)
     assert t.through_kept and w._jobs.empty()
+
+
+def test_a_crypto_lane_skips_what_the_tuned_list_names_and_only_when_it_asks_for_it(tmp_path, monkeypatch):
+    import json
+    import time as _time
+
+    from kalshi_moonshot import db, regime, runner, variants
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    regime.reset()
+    variants._tuned_cache.clear()
+    w, s, store, _close = _watcher(tmp_path, monkeypatch)
+    now = _time.time()
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\nskip_varieties_auto=true\n")
+    (tmp_path / variants.TUNED_FILE).write_text(json.dumps({"at": now, "skip": {"crypto": ["B-yes"], "commodity": []}}))
+    s = config.load()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 437.0, 100.0, now))
+    store.db.commit()
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape.execute("CREATE TABLE IF NOT EXISTS index_ticks (ts REAL NOT NULL, index_id TEXT NOT NULL, value REAL, avg60 REAL, quote_avg REAL, src_ms INTEGER)")
+    for k in range(151):  # 20 bp over the strike and steady: variety B
+        tape.execute("INSERT INTO index_ticks (ts, index_id, value) VALUES (?,?,?)", (now - 302.0 + k * 2.0, variants.crypto_index("KXBTC15M"), 100.20 + 0.0004 * (k % 2)))
+    tape.commit()
+    shot = LongShot("KXBTC15M-9", "t", "", 0.85, 0.86, 437.0 / 3600.0, "2099-01-01T00:00:00Z", 437.0 / 3600.0, lane="guarded", series="KXBTC15M", side="yes")
+    out = runner.evaluate(s, w.client, None, store, shot, estimators={"market": Fixed()})
+    assert out.action == "pass" and "variety B" in out.note and "does not buy it" in out.note
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\n")  # without the setting the list is not read
+    s2 = config.load()
+    ok = runner.evaluate(s2, w.client, None, store, shot, estimators={"market": Fixed()})
+    assert "does not buy it" not in ok.note

@@ -88,3 +88,52 @@ def test_the_market_report_prints_every_class_with_its_flip(monkeypatch):
     text = "\n".join(variants.market_report(None, min_n=5))
     assert "crypto:" in text and "commodity:" in text and "F near, pulling away" in text and "G oscillating" in text
     assert "flip" in text and "+0.07" in text  # crypto F yes: (8.0 - 3.0) / 70 bets
+
+
+def _cell(n, net):
+    return {"n": n, "net": net}
+
+
+def test_tune_skips_only_cells_that_lost_in_both_halves(monkeypatch):
+    older = {("crypto", "BTC", "yes", "F"): _cell(60, -60.0), ("crypto", "ETH", "yes", "F"): _cell(60, -60.0), ("crypto", "BTC", "no", "G"): _cell(100, -70.0),
+             ("crypto", "BTC", "yes", "E"): _cell(100, +8.0), ("crypto", "BTC", "no", "A"): _cell(100, -3.0), ("crypto", "BTC", "no", "B"): _cell(10, -50.0)}
+    newer = {("crypto", "BTC", "yes", "F"): _cell(60, -70.0), ("crypto", "ETH", "yes", "F"): _cell(60, -50.0), ("crypto", "BTC", "no", "G"): _cell(100, +46.0),
+             ("crypto", "BTC", "yes", "E"): _cell(100, -112.0), ("crypto", "BTC", "no", "A"): _cell(100, -2.0), ("crypto", "BTC", "no", "B"): _cell(10, -50.0)}
+    boards = iter([older, newer])
+    monkeypatch.setattr(variants, "market_scoreboard", lambda *a, **k: next(boards))
+    out = variants.tune(None, days=10.0, min_n=40, min_loss=0.10, now=1_000_000.0)
+    assert out["skip"] == {"crypto": ["F-yes"], "commodity": []}  # F-yes lost both halves; G won one, E won one, A lost a cent, B had too few bets
+
+
+def test_a_lane_reads_the_tuned_list_for_its_own_asset_class_and_ignores_a_stale_one(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    s = SimpleNamespace(data_dir=tmp_path)
+    variants._tuned_cache.clear()
+    monkeypatch.setattr(variants.time, "time", lambda: 2_000_000.0)
+    (tmp_path / variants.TUNED_FILE).write_text('{"at": 1999000.0, "skip": {"crypto": ["F-yes"], "commodity": ["G"]}}')
+    assert variants.tuned_skips(s, "KXBTC15M") == ("F-yes",)
+    assert variants.tuned_skips(s, "KXWTI15M") == ("G",)
+    assert variants.tuned_skips(s, "KXNOTHING") == ()
+    (tmp_path / variants.TUNED_FILE).write_text('{"at": 1000.0, "skip": {"crypto": ["F-yes"]}}')  # older than three days
+    variants._tuned_cache.clear()
+    assert variants.tuned_skips(s, "KXBTC15M") == ()
+    (tmp_path / variants.TUNED_FILE).write_text("not json")
+    variants._tuned_cache.clear()
+    assert variants.tuned_skips(s, "KXBTC15M") == ()
+
+
+def test_a_crypto_variety_is_read_against_the_strike(monkeypatch):
+    import sqlite3
+    from types import SimpleNamespace
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE index_ticks (index_id TEXT, ts REAL, value REAL)")
+    index = variants.crypto_index("KXBTC15M")
+    now = 5000.0
+    conn.executemany("INSERT INTO index_ticks VALUES (?,?,?)", [(index, now - 340 + k, 100.2 + 0.001 * (k % 2)) for k in range(341)])  # 20 bp over a strike of 100, steady
+    monkeypatch.setattr(variants.db, "connect", lambda *a, **k: conn)
+    s = SimpleNamespace(tape_path="x")
+    assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now, strike=100.0) == "B"
+    assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now) is None  # no strike, no variety
+    assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now, strike=0.0) is None

@@ -299,24 +299,103 @@ def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_
     return out
 
 
-def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None) -> str | None:
-    """The variety a commodity bet would be at this moment, from the BiQuote ticks of the last five minutes against BiQuote's own price when the window opened. None when the series has no BiQuote index,
-    or the tape has no tick near the open or too few recent ones: a caller that skips on a variety must not skip on None."""
-    index = biquote_index(series)
+def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None, strike: float | None = None) -> str | None:
+    """The variety a bet would be at this moment, from the index ticks of the last five minutes. A commodity reads BiQuote against its own price when the window opened; a crypto coin reads its settlement index against
+    the window's `strike`. None when the series has no index, the reference is missing (no BiQuote tick near the open, or no strike for a coin), or there are too few recent ticks:
+    a caller that skips on a variety must not skip on None."""
+    crypto = crypto_index(series)
+    index = crypto or biquote_index(series)
     if not index or left_seconds <= 0:
         return None
     now = time.time() if now is None else now
     close = now + left_seconds
     tape = db.connect(s.tape_path, "tape", shared=True)
-    opened = close - 900.0
-    ref = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts LIMIT 1", (index, opened - 5.0, opened + 20.0)).fetchone()
-    if not ref:
-        return None
+    if crypto:
+        if not strike or strike <= 0:
+            return None
+        ref = strike
+    else:
+        opened = close - 900.0
+        row = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts LIMIT 1", (index, opened - 5.0, opened + 20.0)).fetchone()
+        if not row:
+            return None
+        ref = float(row[0])
     rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index, now - LOOK - 40.0, now)).fetchall()
-    snap = snapshot([float(r[0]) for r in rows], [float(r[1]) for r in rows], float(ref[0]), side, now, close)
+    snap = snapshot([float(r[0]) for r in rows], [float(r[1]) for r in rows], ref, side, now, close)
     return snap["variety"] if snap else None
 
 
 def skipped(varieties: Sequence[str], variety: str | None, side: str) -> bool:
     """Whether a lane's skip list names this variety: "G" skips it on either side, "A-yes" only on that side."""
     return variety is not None and (variety in varieties or f"{variety}-{side}" in varieties)
+
+
+TUNED_FILE = "tuned_varieties.json"
+TUNE_MAX_AGE = 3 * 86400.0  # a tuned list older than this is ignored: the markets it described have moved on
+_tuned_cache: dict[str, tuple[float, dict]] = {}
+
+
+def tune(s: Settings, days: float = 10.0, min_n: int = 40, min_loss: float = 0.10, now: float | None = None) -> dict:
+    """The cells of the market-wide scoreboard that lost in BOTH halves of the last `days` days, so a lane can stop buying them without anyone reading a report.
+
+    The window is cut in two (older, newer) and each half is scored on its own with market_scoreboard. A (class, side, variety) cell is skipped only when each half has at least min_n/2 favorites and lost
+    at least `min_loss` dollars a $10 bet in each: a cell that lost in one half and won in the other is noise, and a cell that merely lost a cent is not worth a rule."""
+    now = time.time() if now is None else now
+    half = days / 2.0
+    older = market_scoreboard(s, half, half, now - half * 86400.0)
+    newer = market_scoreboard(s, half, half, now)
+
+    def pooled(board: dict) -> dict[tuple[str, str, str], tuple[float, float]]:
+        out: dict[tuple[str, str, str], list[float]] = defaultdict(lambda: [0.0, 0.0])
+        for (cls, _name, side, v), c in board.items():
+            out[(cls, side, v)][0] += c["n"]
+            out[(cls, side, v)][1] += c["net"]
+        return {k: (n, net) for k, (n, net) in out.items()}
+
+    a, b = pooled(older), pooled(newer)
+    skip: dict[str, list[str]] = {"crypto": [], "commodity": []}
+    cells: dict[str, dict[str, float]] = {}
+    for key in sorted(set(a) & set(b)):
+        (n1, net1), (n2, net2) = a[key], b[key]
+        cls, side, v = key
+        cells[f"{cls}:{v}-{side}"] = {"n_old": n1, "per_bet_old": round(net1 / n1, 3), "n_new": n2, "per_bet_new": round(net2 / n2, 3)}
+        if n1 >= min_n / 2 and n2 >= min_n / 2 and net1 / n1 <= -min_loss and net2 / n2 <= -min_loss:
+            skip[cls].append(f"{v}-{side}")
+    return {"at": now, "days": days, "min_n": min_n, "min_loss": min_loss, "skip": skip, "cells": cells}
+
+
+def write_tuned(s: Settings, **kw) -> dict:
+    """Run tune() and save it where the lanes read it (data_dir/tuned_varieties.json), replacing the old file in one step."""
+    import json
+    import os
+
+    out = tune(s, **kw)
+    path = s.data_dir / TUNED_FILE
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(out, indent=1))
+    os.replace(tmp, path)
+    _tuned_cache.pop(str(path), None)
+    return out
+
+
+def tuned_skips(s: Settings, series: str, now: float | None = None) -> tuple[str, ...]:
+    """The tuned skip list for this series asset class: () when there is no file, it is older than TUNE_MAX_AGE, or it cannot be read."""
+    import json
+
+    cls = "crypto" if crypto_index(series) else "commodity" if biquote_index(series) else None
+    if cls is None:
+        return ()
+    path = s.data_dir / TUNED_FILE
+    try:
+        mtime = path.stat().st_mtime
+        hit = _tuned_cache.get(str(path))
+        if hit is None or hit[0] != mtime:
+            hit = (mtime, json.loads(path.read_text()))
+            _tuned_cache[str(path)] = hit
+    except (OSError, ValueError):
+        return ()
+    data = hit[1]
+    now = time.time() if now is None else now
+    if now - float(data.get("at", 0.0)) > TUNE_MAX_AGE:
+        return ()
+    return tuple(data.get("skip", {}).get(cls, ()))

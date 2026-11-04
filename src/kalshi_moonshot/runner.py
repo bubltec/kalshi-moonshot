@@ -526,20 +526,26 @@ def evaluate(
         if open_now >= spec.max_open:
             bet = False
             note = f"lane full: {open_now} bets already open (the lane holds at most {spec.max_open}). {note}"
-    if bet and spec.skip_varieties:
+    skips = spec.skip_varieties
+    if bet and spec.skip_varieties_auto:
+        from . import variants
+
+        skips = tuple(dict.fromkeys((*skips, *variants.tuned_skips(s, shot.series))))
+    if bet and skips:
         from . import variants
 
         try:
-            kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0)
+            row = store.db.execute("SELECT strike FROM windows WHERE ticker=?", (shot.ticker,)).fetchone()
+            kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=float(row["strike"] or 0.0) if row else None)
         except Exception as exc:  # a tape that cannot say is no reason to skip
             kind = None
             log.warning("variety unreadable for %s %s: %s", shot.ticker, shot.side, exc)
         if kind is None:
-            log.info("variety of %s %s: could not be read (no BiQuote reference near the window open, or too few recent ticks), so it is not skipped", shot.ticker, shot.side)
+            log.info("variety of %s %s: could not be read (no reference price near the window open or no strike, or too few recent ticks), so it is not skipped", shot.ticker, shot.side)
         else:
             log.info("variety of %s %s %s: %s", shot.ticker, shot.lane, shot.side, kind)
             note = f"[variety {kind}] {note}"
-        if kind is not None and variants.skipped(spec.skip_varieties, kind, shot.side):
+        if kind is not None and variants.skipped(skips, kind, shot.side):
             bet = False
             note = f"variety {kind} ({variants.NAMES[kind]}): this lane does not buy it. {note}"
     if bet and spec.choppy_floor > 0:
