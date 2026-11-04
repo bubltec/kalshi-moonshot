@@ -10,3 +10,9 @@ By crossings of 50c in the last 5 minutes:
 The setup in the 2026-11-04 07:38 screenshot (30Y priced 81c, yield back over its target after crossing it about three times, 6 minutes left): ask 0.78-0.84 with 2+ crossings and 300-420 s left: 13 favorites, 62% won, -$32.2 (-$2.48 a bet). Everything else: 164, 89%, +$40.4.
 
 Reading: a treasury favorite pays when the price has sat on one side (a calm chart), and loses when the yield is oscillating across its target, the same as the oscillating variety G in crypto and commodities. Small samples (88, 27, 27, 35); one 2.5-day stretch.
+
+Exits (scripts/treasury_exit_study.py; 181 favorites, 91 calm; sell at our side's bid, with the taker fee, when its bid is at or under a level, with and without a requirement that it stays there N seconds):
+  hold to settlement: all +$16.0, calm only +$63.4
+  a plain quote stop (bid <= 0.50, 0.60, 0.40, or entry minus 20c / 30c): -$190 to -$290 against holding. The book flickers: the stop fires on 41-75 winners and only 23 losers.
+  with persistence (bid <= 0.40 for 30-60 s, last 3 minutes only): about -$17 (all) and -$5 (calm) against holding. Even the best persistence rule does not beat holding.
+So the exit for these markets is to hold. A stop needs a yield feed to tell a real move from flicker; none is available (Pyth rates cost about $500 a month).
