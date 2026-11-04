@@ -445,3 +445,42 @@ def test_a_live_markets_strike_comes_from_the_listing_in_memory_not_from_the_win
         ticks.history.clear()
         ticks.strikes.clear()
         volregime.regime = volregime.VolRegime()
+
+
+def test_an_underdog_lane_skips_a_far_and_flat_favorite(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants, volregime
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.05,0.5]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nskip_other_varieties=['B']\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    ticks.strikes.clear()
+    volregime.regime = volregime.VolRegime()
+    now = _time.time()
+    ticks.strikes.note("KXBTC15M-9", 100.0)
+    index = variants.crypto_index("KXBTC15M")
+    shot = LongShot("KXBTC15M-9", "t", "", 0.11, 0.12, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="guarded", series="KXBTC15M", side="no")
+    try:
+        for k in range(176):  # the index sits 20 bp over the strike and barely moves: the YES favorite is far and flat (B)
+            ticks.history.note(index, now - 350.0 + k * 2.0, 100.20 + 0.0004 * (k % 2))
+        flat = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert flat.action == "pass" and "variety B" in flat.note and "does not buy against it" in flat.note
+        ticks.history.clear()
+        for k in range(176):  # the same distance but still running away from the strike (A): bought
+            ticks.history.note(index, now - 350.0 + k * 2.0, 100.02 + 0.0012 * k + 0.0004 * (k % 2))
+        run = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert "does not buy against it" not in run.note and "[favorite " in run.note
+    finally:
+        ticks.history.clear()
+        ticks.strikes.clear()

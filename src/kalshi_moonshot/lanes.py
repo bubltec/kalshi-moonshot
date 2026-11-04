@@ -114,6 +114,7 @@ class LaneSpec:
     skip_varieties_auto: bool = False  # also skip the varieties the in-memory ledger (variants.Ledger) shows losing right now for the asset class of the series: the last auto_hours of settled favorites, blended with the older ledger as a prior. The ledger is refreshed every few minutes by the watcher and read without a query; crypto reads its settlement index against the window strike
     min_vol_rel: float = 0.0  # buy only when the coin's volatility over the last 6 h is at least this many times its 72 h normal (volregime.py). 0 = off. 1.3 is the wild regime: favorites priced 0.82+ lose to their underdog there. No reading = no buy
     max_vol_rel: float = 0.0  # buy only when it is at most this (a calm regime: below 0.7 favorites won 87%). 0 = off. No reading = no buy
+    skip_other_varieties: tuple[str, ...] = ()  # skip when the OTHER side (the favorite, for an underdog buy) is one of these varieties at the buy. "B" = far from the strike and flat: 2026-11-04 study of wild-regime underdogs, a far-and-flat favorite saw 1 underdog win in 42 (none on 5 of 6 days, none in the first half), the rest 30 in 157. Unreadable = no buy
     max_cushion_z: float = 99.0  # buy only when the bet's side has a cushion of at most this many typical moves (variants snapshot z, the bet's side: negative = the side is behind the strike). -1 = the other side leads by one or more. 99 = off. Unreadable = no buy
     skip_markets_auto: bool = False  # also skip a market (gold, palladium, ETH...) or a market's price band that the ledger shows losing over auto_market_hours, judged against its asset class (variants.Ledger.market_skip). Varieties pool every market of a class; the markets differ
     auto_market_hours: float = 48.0  # the stretch a market is judged over: its quality moves slowly, so this is longer than auto_hours
@@ -332,7 +333,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "shock_off_series"):
+    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series"):
         if key in row:
             row[key] = tuple(row[key])
     if "hunt_contracts_by" in row:

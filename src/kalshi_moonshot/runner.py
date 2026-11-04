@@ -588,6 +588,24 @@ def evaluate(
             note = f"cushion z {snap['z']:+.2f} is above the lane's {spec.max_cushion_z:g}. {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
+    if bet and spec.skip_other_varieties:
+        from . import ticks as ticks_mod
+        from . import variants
+
+        other = "no" if shot.side == "yes" else "yes"
+        try:
+            osnap = variants.snapshot_now(s, shot.series, other, shot.hours_to_close * 3600.0, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
+        except Exception as exc:
+            osnap = None
+            log.warning("variety of the other side unreadable for %s: %s", shot.ticker, exc)
+        if osnap is None:
+            bet = False
+            note = f"variety of the other side unreadable for {shot.ticker}. {note}"
+        elif variants.skipped(spec.skip_other_varieties, osnap["variety"], other):
+            bet = False
+            note = f"the favorite is variety {osnap['variety']} ({variants.NAMES[osnap['variety']]}): the lane does not buy against it. {note}"
+        else:
+            note = f"[favorite {osnap['variety']}] {note}"
     if bet and spec.max_crossings >= 0:
         from . import ticks as ticks_mod
 
