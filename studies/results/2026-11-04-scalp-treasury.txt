@@ -1,0 +1,13 @@
+Scalp study, treasury vs crypto vs commodity (2026-11-04). scripts/scalp_treasury_study.py, run on the host at low priority over the last 3 days of Kalshi quotes (about 260 treasury, 450 crypto, 450 commodity windows, 5 s grid, minute 1 to 14).
+
+Mean reversion of the quote mid (variance ratio of 30 s moves to 6x the 5 s moves, mid between 0.2 and 0.8; 1 = a random walk):
+  treasury 0.55   crypto 0.92   commodity 0.89     sd of a 5 s move: treasury 5.5c, crypto 4.2c, commodity 3.9c
+So the chart looks mean-reverting for a reason: treasury quotes do snap back far more than the others. But the spread is a constant 4c (median and p90), so a round trip crosses 4c plus fees.
+
+Round trips, per trade, net of fees (taker in = buy at the ask; maker in = rest at the bid 20 s and take only a fill; exit = resting sell k above the price paid, a 6c stop, or the bid after 2 minutes):
+  treasury  taker in  k 4c  -16.4c a trade, 19% won      maker in  k 4c  -9.5c, 18% won
+  crypto    taker in  k 4c   -4.7c, 49% won               maker in  k 4c  -5.2c, 36% won
+  commodity taker in  k 4c   -6.0c, 40% won               maker in  k 4c  -6.6c, 28% won
+  Waiting for a 4c dip first, or a bigger target (8c), changed little. Every cell lost; treasury lost the most.
+
+Reading: the mean reversion is real in the quotes but it is mostly the thin book flickering around a 4c spread, which a trader cannot collect: the price has to move 8c from the mid before a taker scalp breaks even. What is missing is a spot yield to say which flicker is noise and which is a move: Pyth is not on the tape (no US30Y index ticks), so no variety can be read for these markets. Untested: only entering when the book is a 2c spread, a maker bid and a maker sell on both sides at once, and a Pyth reference.
