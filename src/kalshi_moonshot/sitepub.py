@@ -31,7 +31,7 @@ def client_for(s: Settings) -> Any:
 
 def publish_once(s: Settings, store: Any, client: Any, now: float | None = None) -> int:
     """Build, check and upload the file. Returns its size in bytes."""
-    data = exporter.public_json(store, now, active=set(lanes.lane_specs(s)))
+    data = exporter.public_json(store, now, active=exporter.public_lane_names(s))
     body = json.dumps(data, indent=1).encode()
     client.put_object(Bucket=s.site_bucket, Key=KEY, Body=body, ContentType="application/json", CacheControl=CACHE_CONTROL)
     return len(body)

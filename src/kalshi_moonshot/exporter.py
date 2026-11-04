@@ -145,6 +145,14 @@ def validate_public(data: dict[str, Any]) -> None:
 SQL = "SELECT ts, ticker, lane, mode, ask, side, outcome, exit_price, exit_reason, stake_usd, settled_ts FROM decisions WHERE action = 'bet'"
 
 
+def public_lane_names(s) -> set[str]:
+    """The lanes the public page may list: only those enabled in the current config. A lane that is switched off (the base `commodity` lane its children inherit from, the moonshots) keeps its record in the admin
+    export but is not shown publicly, however many live bets it once placed."""
+    from . import lanes
+
+    return {name for name, spec in lanes.lane_specs(s).items() if spec.enabled}
+
+
 def public_json(store: Any, now: float | None = None, active: set[str] | None = None) -> dict[str, Any]:
     """The public file's content, checked against the allowlist before it is returned."""
     data = build_public(store.db.execute(SQL).fetchall(), time.time() if now is None else now, active)
@@ -167,7 +175,7 @@ def export(store: Any, out: Path, now: float | None = None, active: set[str] | N
 
 
 def main() -> int:
-    from . import config, lanes
+    from . import config
     from .store import Store
 
     ap = argparse.ArgumentParser(description="Write public.json and admin.json for the websites.")
@@ -179,7 +187,7 @@ def main() -> int:
         print(f"{args.check}: ok")
         return 0
     s = config.reload()
-    paths = export(Store(s.db_path, s.exclude_versions), Path(args.out), active=set(lanes.lane_specs(s)))
+    paths = export(Store(s.db_path, s.exclude_versions), Path(args.out), active=public_lane_names(s))
     for name, p in paths.items():
         print(f"{name}: {p} ({p.stat().st_size:,} bytes)")
     return 0
