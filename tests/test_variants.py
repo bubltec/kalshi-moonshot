@@ -372,3 +372,31 @@ def test_the_record_only_crypto_series_have_an_index_but_never_reach_the_ledger_
     assert kalshiws.index_for_series("KXTON15M") is None and "KXTON15M" in kalshiws.RECORD_ONLY  # no spot index: its quotes only
     assert not ({"KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M"} & kalshiws.RECORD_ONLY)
     assert "ADA" not in variants.COINS.values()  # the volatility regime only measures the coins that are traded
+
+
+def test_the_volatility_regime_updates_from_a_history_warmed_for_eight_hours(tmp_path):
+    from types import SimpleNamespace
+
+    from kalshi_moonshot import ticks, volregime
+
+    ticks.history.clear()
+    now = 2_000_000.0
+    rows = []
+    px = 100.0
+    for k in range(8 * 3600):  # 8 h of 1 Hz ticks with a one-minute zigzag
+        if k % 60 == 0:
+            px *= 1.0006 if (k // 60) % 2 else 0.9994
+        rows.append((now - 8 * 3600 + k, px))
+    ticks.history.warm("IX", rows, now - 8 * 3600)
+    reg = volregime.VolRegime()
+    reg._base_at = now  # the baseline is not due: only the current figure is redone
+    reg.set("BTC", None, 40.0)
+    ratios = reg.update(SimpleNamespace(), {"BTC": "IX"}, now)
+    assert ratios["BTC"] is not None and 1.0 < ratios["BTC"] < 3.0
+    ticks.history.clear()
+    ticks.history.warm("IX", [r for r in rows if r[0] > now - 6 * 3600], now - 6 * 3600)  # a 6-hour load cannot cover 6 h 2 min
+    reg2 = volregime.VolRegime()
+    reg2._base_at = now
+    reg2.set("BTC", None, 40.0)
+    assert reg2.update(SimpleNamespace(), {"BTC": "IX"}, now)["BTC"] is None
+    ticks.history.clear()

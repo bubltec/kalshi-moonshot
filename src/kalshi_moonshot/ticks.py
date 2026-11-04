@@ -153,8 +153,8 @@ class MidHistory:
 mids = MidHistory()
 
 
-def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 6.0) -> int:
-    """Load the last `hours` of each index from the tape into `history`. Meant for a background thread at start-up; returns how many ticks were loaded."""
+def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 8.0) -> int:
+    """Load the last `hours` of each index from the tape into `history` (8 by default: the volatility regime reads the last 6 hours and 2 minutes, so a 6-hour load would never cover it). Meant for a background thread at start-up; returns how many ticks were loaded."""
     from . import db
 
     if not db.tape_exists(s.tape_path):
