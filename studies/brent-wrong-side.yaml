@@ -1,0 +1,8 @@
+description: "whether the wrong-side exit, now on WTI only, would also cut Brent's total losses (the shock exit loses on Brent; the wrong-side exit was never tried there)"
+lane: commodity_energy
+bets: {lane: commodity_energy, series: [KXBRENT15M]}
+since_days: 14
+grid:
+  wrong_side_series: [["KXWTI15M"], ["KXBRENT15M"]]
+  wrong_side_bp: [1, 2, 3, 5]
+  wrong_side_seconds: [10, 15, 30]

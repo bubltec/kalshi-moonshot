@@ -1,0 +1,10 @@
+delta: 0.456
+exit_left: 50.0
+exit_price: 0.13
+hold_pnl: -2.985
+signals: 1
+sold: true
+sold_pnl: -2.53
+tape: doge-2115-no-sale-into-a-collapse
+why: 'strike-through: index fell back to 0.0406% through the strike after a bounce,
+  50s left, bid 0.13 [socket]'

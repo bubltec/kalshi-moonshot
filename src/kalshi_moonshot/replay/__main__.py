@@ -94,6 +94,8 @@ def main() -> None:
         study = studies.load(a.file)
         grid = study.grid
         tapes = _from_db(study.since_days, study.bets_lane, study.series, study.lane) if a.since else [Tape.load(p) for p in sorted(a.tapes.glob("*.json"))]
+        if not a.since and study.series:
+            tapes = [t for t in tapes if t.ticker.split("-")[0] in study.series]
         rows = sweep(tapes, a.lanes.read_text(), grid, study.lane, study.fixed)
         if a.csv:
             import csv

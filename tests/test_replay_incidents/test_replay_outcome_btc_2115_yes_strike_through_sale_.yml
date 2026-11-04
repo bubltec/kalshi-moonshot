@@ -1,0 +1,10 @@
+delta: 0.315
+exit_left: 194.7
+exit_price: 0.099
+hold_pnl: -3.018
+signals: 1
+sold: true
+sold_pnl: -2.703
+tape: btc-2115-yes-strike-through-sale
+why: 'strike-through: index stayed 0.1242% through the strike, 195s left, bid 0.10
+  [socket]'

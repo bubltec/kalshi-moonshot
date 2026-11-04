@@ -53,7 +53,7 @@ def sweep(tapes: Iterable[Tape], lanes_toml: str, grid: dict[str, list[Any]], la
     for point in grid_points(grid):
         for t in tapes:
             o: Outcome = run(t, override(lanes_toml, lane or t.lane, **{**(fixed or {}), **point}))
-            rows.append({**point, "tape": o.tape, "series": t.ticker.split("-")[0], "variety": t.variety, "signals": o.signals, "sold": o.sold, "stuck": o.stuck,
+            rows.append({**{k: ("+".join(map(str, v)) if isinstance(v, list | tuple) else v) for k, v in point.items()}, "tape": o.tape, "series": t.ticker.split("-")[0], "variety": t.variety, "signals": o.signals, "sold": o.sold, "stuck": o.stuck,
                          "exit_left": o.exit_left, "sold_pnl": o.sold_pnl, "hold_pnl": o.hold_pnl, "delta": o.delta, "loser": t.hold_pnl() < 0})
     return rows
 
