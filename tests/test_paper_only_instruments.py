@@ -28,9 +28,10 @@ def test_existing_markets_stay_live(tmp_path, monkeypatch):
     assert s.is_live("commodity")  # no series named: the lane itself is live
 
 
-def test_treasury_yields_are_paper_only_and_priced_from_the_contract(tmp_path, monkeypatch):
+def test_treasury_yields_are_live_only_for_the_lane_that_is_named_and_priced_from_the_contract(tmp_path, monkeypatch):
+    """2026-11-04 (user): the four yield series are live, at $1 a bet, but only for a lane named in LIVE_LANES; they are priced from the contract's own band (no yield feed)."""
     s = settings(tmp_path, monkeypatch)
     for series in ("KX2YRRATE15M", "KX5YRRATE15M", "KX10YRRATE15M", "KX30YRRATE15M"):
         inst = cm.instrument_for(series)
-        assert inst is not None and not inst.live and cm.contract_priced(inst.symbol), series
-        assert not s.is_live("commodity", series), series
+        assert inst is not None and inst.live and cm.contract_priced(inst.symbol), series
+        assert not s.is_live("some_unnamed_lane", series) or s.live_lanes is None, series

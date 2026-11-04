@@ -177,7 +177,7 @@ symbol = "pyth:US2Y"
 suffixes = ["15M"]
 realtime = true
 proxy = true
-live = false  # 2026-11-02: listed by Kalshi, settles on Pyth's US2Y yield (percent). Paper only until a record of settled windows exists
+live = true  # 2026-11-04 (user): live at $1 a bet, calm favorites only. Settles on Pyth\'s US2Y yield (percent); no yield feed on our side (Pyth rates cost about $500 a month), so no spot exits
 
 [[instrument]]
 prefix = "KX5YRRATE"
@@ -185,7 +185,7 @@ symbol = "pyth:US5Y"
 suffixes = ["15M"]
 realtime = true
 proxy = true
-live = false  # 2026-11-02: listed by Kalshi, settles on Pyth's US5Y yield (percent). Paper only until a record of settled windows exists
+live = true  # 2026-11-04 (user): live at $1 a bet, calm favorites only. Settles on Pyth\'s US5Y yield (percent); no yield feed on our side (Pyth rates cost about $500 a month), so no spot exits
 
 [[instrument]]
 prefix = "KX10YRRATE"
@@ -193,7 +193,7 @@ symbol = "pyth:US10Y"
 suffixes = ["15M"]
 realtime = true
 proxy = true
-live = false  # 2026-11-02: listed by Kalshi, settles on Pyth's US10Y yield (percent). Paper only until a record of settled windows exists
+live = true  # 2026-11-04 (user): live at $1 a bet, calm favorites only. Settles on Pyth\'s US10Y yield (percent); no yield feed on our side (Pyth rates cost about $500 a month), so no spot exits
 
 [[instrument]]
 prefix = "KX30YRRATE"
@@ -201,4 +201,4 @@ symbol = "pyth:US30Y"
 suffixes = ["15M"]
 realtime = true
 proxy = true
-live = false  # 2026-11-02: listed by Kalshi, settles on Pyth's US30Y yield (percent). Paper only until a record of settled windows exists
+live = true  # 2026-11-04 (user): live at $1 a bet, calm favorites only. Settles on Pyth\'s US30Y yield (percent); no yield feed on our side (Pyth rates cost about $500 a month), so no spot exits
