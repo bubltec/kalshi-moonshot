@@ -76,6 +76,18 @@ def test_a_profit_take_still_refuses_to_sell_below_cost(setup):
     assert len(Store(s.db_path).open_bets()) == 1
 
 
+@pytest.mark.parametrize("why", [
+    "shock exit: spot moved 11.4 bp against us in 60s (now -11.4) and is +3.1 bp from the strike, 120s left, bid 0.62",
+    "wrong-side exit: spot 2.0 bp on the wrong side of its window-open price for 10s (variety D), 100s left, bid 0.62",
+])
+def test_a_shock_or_wrong_side_exit_sells_below_cost(setup, why):
+    s, _store = setup
+    w = watcher.ProfitWatcher(lambda: s, FakeClient(0.28), lambda: Store(s.db_path))
+    w.refresh()
+    w._sell("KXBTC15M-1", "late_ticket", why)  # a loss-cutting sale: the profit-take veto must not hold it back (2026-11-03 WTI 20:15 fired for 120 s and never sold)
+    assert Store(s.db_path).open_bets() == []
+
+
 def test_exit_orders_are_limited_under_the_bid_and_a_fast_exit_slips_more(setup):
     import time
 
