@@ -1,0 +1,6 @@
+description: how far and how long the spot sits on the wrong side before the wrong-side exit sells
+lane: commodity_energy
+since_days: 14
+grid:
+  wrong_side_bp: [0, 1, 2, 3, 5]
+  wrong_side_seconds: [5, 10, 15, 30]

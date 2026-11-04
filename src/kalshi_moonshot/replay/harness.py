@@ -7,6 +7,7 @@ throw-away store. The watcher's clock is the tape's, so back-offs and look-backs
 from __future__ import annotations
 
 import heapq
+import logging
 import os
 import tempfile
 import time as real_time
@@ -97,6 +98,7 @@ def _run(tape: Tape) -> Outcome:
     store.db.commit()
     clock = _Clock()
     clock.now = tape.bought_ts or tape.close_ts - 900.0
+    logging.disable(logging.INFO)  # the watcher logs every arming and shock watch; a sweep runs thousands
     shim = SimpleNamespace(time=clock, monotonic=clock, perf_counter=clock, sleep=lambda _s: None, strftime=real_time.strftime, gmtime=real_time.gmtime)
     real = watcher.time
     watcher.time = shim  # type: ignore[assignment]

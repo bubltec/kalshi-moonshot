@@ -1,0 +1,7 @@
+# A study is a lane, the bets to replay, and a grid of lane settings. Run: python -m kalshi_moonshot.replay study studies/shock.yaml --lanes <strategies.toml> [--tapes DIR | --since]
+description: how hard and how close to the strike a shock has to be before the exit sells (WTI and the other energy bets)
+lane: commodity_energy
+since_days: 14
+grid:
+  shock_bp: [0, 6, 8, 10, 12]
+  shock_margin_bp: [0, 3, 5, 8, 12]

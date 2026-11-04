@@ -1,0 +1,6 @@
+description: whether a shock from before the last-seconds window still counts, and how long that window is
+lane: commodity_energy
+since_days: 14
+grid:
+  shock_memory: [0, 60, 120]
+  shock_last: [60, 90, 120]

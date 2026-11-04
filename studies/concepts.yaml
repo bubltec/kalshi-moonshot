@@ -1,0 +1,23 @@
+# The strategy board: every idea we have tried or plan to, with a status and the evidence behind it.
+#   promising   live or ready, evidence supports it            needs_work  mixed or unfinished evidence, a named next step
+#   dead        tested, loses, do not rebuild (kept so we do not retest it)   untested  planned, no evidence yet
+# Evidence is a study file (studies/*.yaml, rerun after any change to the watcher) or a dated note. Change a status by editing it here.
+concepts:
+  - {id: shock-exit-energy, status: needs_work, lane: commodity_energy, study: shock, evidence: "2026-11-03 replay +$44 on 259 commodity bets, but the live sale was vetoed as a loss until 11-04 (fixed); rerun on 14 days with the fix", next: "rerun studies/shock.yaml and the per-asset fit from shock_log"}
+  - {id: shock-exit-brent, status: dead, lane: commodity_energy, evidence: "2026-11-03: 8 sales, 3 on losers, -$17.9 vs holding at every cushion; Brent spikes reverse", next: "off via shock_off_series"}
+  - {id: shock-exit-crypto, status: untested, lane: crypto_favorite, evidence: "log-only since 2026-11-03; rows with fired=2 in shock_log are the would-sells", next: "review shock_log after 24 h of data"}
+  - {id: shock-threshold-by-volatility, status: dead, lane: commodity_energy, evidence: "2026-11-03: per-asset volatility scaling did not beat a fixed 8 bp", next: "revisit only with shock_log data per asset"}
+  - {id: wrong-side-exit-wti, status: promising, lane: commodity_energy, study: wrong-side, evidence: "2026-11-03: caught 10 of 11 WTI total losses, +$19.2 (before the veto fix, so the live record is empty)", next: "rerun on 14 days, watch the first live sales"}
+  - {id: wrong-side-drift-filter, status: dead, lane: commodity_energy, evidence: "2026-11-03: a prior-gradual-drift filter was not supported by the replay"}
+  - {id: burst-exit-commodity, status: dead, lane: commodity_energy, evidence: "2026-11-03: 14 days of live burst sales -$90 sold vs -$55 held; replaced by the spot exits"}
+  - {id: burst-exit-crypto, status: needs_work, lane: crypto_favorite, evidence: "ratio 20 live; BTC levels not tuned", next: "burst-by-coin replay with total losses counted"}
+  - {id: strike-through-crypto, status: needs_work, lane: crypto_btc, evidence: "barely moves net return but turns zeros into partial losses", next: "BTC's own level"}
+  - {id: choppy-skip-crypto, status: promising, lane: crypto_favorite, evidence: "favorites won 88-92% mornings and 74-80% afternoons of 11-01/02; 6 h window, XRP removed", next: "confirm resume and BTC fills"}
+  - {id: skip-varieties-g-a-yes, status: promising, lane: commodity_energy, evidence: "walk-forward over the live bets, three folds, profitable cells only", next: "variety logging live; diagnose the platinum G bet that was not skipped"}
+  - {id: btc-lane-85c-floor, status: needs_work, lane: crypto_btc, evidence: "BTC 0.78-0.89 won 78-80% and lost; 0.89-0.92 won 95%", next: "check the 85-89c stretch; 89c floor if it loses"}
+  - {id: resting-entry, status: needs_work, lane: commodity_energy, evidence: "resting at ask-0.01 beat taking on commodities by +$7.7 and lost -$2.5 on crypto; misses are the winners", next: "per-variety rule"}
+  - {id: flip-the-favorite, status: needs_work, lane: commodity_energy, evidence: "buying the other side wins 8-27% by variety; positive only for commodity G (small samples)", next: "more G data"}
+  - {id: edge-score-and-book-imbalance, status: dead, lane: all, evidence: "2026-10-27: tested, no signal"}
+  - {id: xrp-lane, status: dead, lane: crypto, evidence: "losing; removed from the choppy count 2026-11-03"}
+  - {id: more-varieties-than-a-g, status: untested, lane: commodity_energy, next: "extend variants.py"}
+  - {id: per-asset-settings-from-shock-log, status: untested, lane: commodity_energy, next: "24-hour shock_log review"}
