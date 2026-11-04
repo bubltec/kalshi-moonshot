@@ -1,0 +1,10 @@
+delta: 3.958
+exit_left: 109.1
+exit_price: 0.58
+hold_pnl: -6.116
+signals: 1
+sold: true
+sold_pnl: -2.159
+tape: wti-1730-yes-total-loss
+why: 'wrong-side exit: spot 3.1 bp on the wrong side of its window-open price for
+  10s (variety ), 109s left, bid 0.58 [socket]'

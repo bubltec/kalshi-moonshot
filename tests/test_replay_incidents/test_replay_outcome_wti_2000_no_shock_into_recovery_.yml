@@ -1,0 +1,10 @@
+delta: -1.868
+exit_left: 104.3
+exit_price: 0.74
+hold_pnl: 0.751
+signals: 1
+sold: true
+sold_pnl: -1.117
+tape: wti-2000-no-shock-into-recovery
+why: 'shock exit: spot moved 8.3 bp against us in 60s (now -3.1) and is +4.1 bp from
+  the strike, 104s left, bid 0.74 [socket]'

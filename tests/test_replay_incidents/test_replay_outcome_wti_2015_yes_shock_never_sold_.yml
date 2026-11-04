@@ -1,0 +1,10 @@
+delta: 4.404
+exit_left: 119.6
+exit_price: 0.62
+hold_pnl: -6.056
+signals: 1
+sold: true
+sold_pnl: -1.653
+tape: wti-2015-yes-shock-never-sold
+why: 'shock exit: spot moved 13.4 bp against us in 60s (now -11.4) and is +3.1 bp
+  from the strike, 120s left, bid 0.62 [socket]'

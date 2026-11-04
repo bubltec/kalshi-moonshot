@@ -1,0 +1,21 @@
+# The exit settings of the live commodity_energy lane (data/strategies.toml, 2026-11-03), flattened: a replay needs only what the watcher reads.
+# Change a value here and the replay goldens show what it does to every recorded incident.
+[lane.commodity_energy]
+estimator = "ladder"
+series = ["KXWTI15M", "KXBRENT15M", "KXNATGAS15M"]
+price = [0.78, 0.92]
+hours = [0.0, 0.26]
+always = true
+burst_exit = false
+settlement_guard = 0
+stop_loss = false
+shock_bp = 8
+shock_seconds = 60
+shock_margin_bp = 5
+shock_last = 120
+shock_memory = 120
+shock_off_series = ["KXBRENT15M"]
+wrong_side_bp = 1
+wrong_side_seconds = 10
+wrong_side_last = 120
+wrong_side_series = ["KXWTI15M"]
