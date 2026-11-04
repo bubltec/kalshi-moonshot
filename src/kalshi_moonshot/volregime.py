@@ -54,6 +54,10 @@ class VolRegime:
         self._base_at = 0.0
         self.updated_at = 0.0
 
+    def base(self, coin: str) -> float | None:
+        with self._lock:
+            return self._base.get(coin)
+
     def rel(self, coin: str) -> float | None:
         """This coin's volatility over its normal, or None when either is unknown. Reads memory only."""
         with self._lock:
@@ -111,3 +115,124 @@ class VolRegime:
 
 
 regime = VolRegime()
+
+LOOKS = {"crypto": LOOK, "commodity": 4 * 3600.0}  # the look-back each asset class is read over
+DEFAULT_MAX = 1.3  # the stand-aside level until a tuned one exists (a favorite lane)
+DEFAULT_MIN = 1.3  # the wild level an underdog lane needs until a tuned one exists
+THRESHOLDS_FILE = "vol_thresholds.json"
+TUNE_EVERY = 12 * 3600.0  # 2026-11-04 (user): every 12 hours
+_CANDIDATES = (0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.7, 2.0)
+
+
+def vol_rel_at(coin: str, index: str, at: float, look: float) -> float | None:
+    """The volatility ratio a favorite saw when it was bought: the in-memory tick history over the `look` seconds before `at`, against the coin's current normal. None when the history does not reach back that far
+    (an old favorite scored on a cold start) or the normal is not known: the ledger then saves no ratio for it."""
+    base = regime.base(coin)
+    got = ticks_mod.history.window(index, at - look - 120.0, at)
+    if got is None or not base:
+        return None
+    vol = hourly_vol_bp(minute_values(got[0], got[1]), int(at // 60), look)
+    return vol / base if vol else None
+
+
+class Thresholds:
+    """The tuned volatility levels per asset class, in memory, saved to data_dir/vol_thresholds.json so a restart keeps yesterday's tuning. `stand_aside` is the ratio above which a class's favorites lost (a favorite lane
+    skips above it); `wild_min` is the ratio at or above which a favorite priced 0.82+ has had an underdog that paid (an underdog lane buys from it)."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.stand_aside: dict[str, float] = {}
+        self.wild_min: dict[str, float] = {}
+        self.tuned_at = 0.0
+
+    def get_max(self, cls: str, default: float) -> float:
+        with self._lock:
+            return self.stand_aside.get(cls, default)
+
+    def get_min(self, cls: str, default: float) -> float:
+        with self._lock:
+            return self.wild_min.get(cls, default)
+
+    def load(self, data_dir) -> None:
+        import json
+
+        try:
+            d = json.loads((data_dir / THRESHOLDS_FILE).read_text())
+        except (OSError, ValueError):
+            return
+        with self._lock:
+            self.stand_aside, self.wild_min, self.tuned_at = dict(d.get("stand_aside", {})), dict(d.get("wild_min", {})), float(d.get("tuned_at", 0.0))
+
+    def save(self, data_dir) -> None:
+        import json
+        import os
+
+        with self._lock:
+            payload = {"stand_aside": self.stand_aside, "wild_min": self.wild_min, "tuned_at": self.tuned_at}
+        path = data_dir / THRESHOLDS_FILE
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, indent=1))
+        os.replace(tmp, path)
+
+
+thresholds = Thresholds()
+
+
+def tune_thresholds(rows: list[dict], previous_max: dict[str, float] | None = None, previous_min: dict[str, float] | None = None, blend: float = 0.5,
+                    min_n: int = 40, max_loss: float = 0.15, min_gain: float = 0.8) -> tuple[dict[str, float], dict[str, float]]:
+    """The two levels per class from favorites that carry a volatility ratio (rows: cls, ask, pnl, flip_pnl, vol_rel).
+
+    stand_aside: among the candidate levels, the one whose favorites ABOVE it avoided the most loss, provided they lost at least `max_loss` a $10 bet on average with `min_n` of them: skipping them is what the record
+    supports. wild_min: the same for the underdog: favorites priced 0.82+ at or above the level whose flip made at least `min_gain` a bet on average, with the most total. A class with no qualifying level keeps no tuned
+    value (the lane's static setting stands). A new level is blended with the previous one (`blend` of the new), so one odd day cannot swing it."""
+    out_max: dict[str, float] = {}
+    out_min: dict[str, float] = {}
+    for cls in {r["cls"] for r in rows}:
+        mine = [r for r in rows if r["cls"] == cls and r.get("vol_rel") is not None]
+        scored = []
+        for t in _CANDIDATES:
+            above = [r["pnl"] for r in mine if r["vol_rel"] > t]
+            if len(above) >= min_n and sum(above) / len(above) <= -max_loss:
+                scored.append((t, -sum(above)))
+        if scored:
+            top = max(loss for _, loss in scored)
+            tied = [t for t, loss in scored if loss >= top - 1e-9]  # levels that skip the same favorites: the middle one, not an edge of the gap
+            best = tied[len(tied) // 2]
+            prev = (previous_max or {}).get(cls)
+            out_max[cls] = round(best if prev is None else blend * best + (1 - blend) * prev, 3)
+        scoredw = []
+        for t in _CANDIDATES:
+            wild = [r["flip_pnl"] for r in mine if r["vol_rel"] >= t and r["ask"] >= 0.82]
+            if len(wild) >= min_n and sum(wild) / len(wild) >= min_gain:
+                scoredw.append((t, sum(wild)))
+        if scoredw:
+            topw = max(gain for _, gain in scoredw)
+            tiedw = [t for t, gain in scoredw if gain >= topw - 1e-9]
+            bestw = tiedw[len(tiedw) // 2]
+            prev = (previous_min or {}).get(cls)
+            out_min[cls] = round(bestw if prev is None else blend * bestw + (1 - blend) * prev, 3)
+    return out_max, out_min
+
+
+def retune(s, now: float | None = None) -> dict:
+    """Read the last 7 days of recorded favorites, refit both levels, keep them in memory and on disk, and log what changed. Meant for the watcher's background thread, every 12 hours."""
+    from .store import Store
+
+    now = time.time() if now is None else now
+    store = Store(s.db_path, s.exclude_versions)
+    try:
+        rows = [dict(zip(("cls", "ask", "pnl", "flip_pnl", "vol_rel"), (r["cls"], r["ask"], r["pnl"], r["flip_pnl"], r["vol_rel"]), strict=True))
+                for r in store.db.execute("SELECT cls, ask, pnl, flip_pnl, vol_rel FROM favorite_cases WHERE vol_rel IS NOT NULL AND close_ts > ?", (now - 7 * 86400.0,)).fetchall()]
+    except Exception:
+        log.warning("volregime: could not read the recorded favorites", exc_info=True)
+        return {}
+    with thresholds._lock:
+        prev_max, prev_min = dict(thresholds.stand_aside), dict(thresholds.wild_min)
+    new_max, new_min = tune_thresholds(rows, prev_max, prev_min)
+    with thresholds._lock:
+        thresholds.stand_aside.update(new_max)
+        thresholds.wild_min.update(new_min)
+        thresholds.tuned_at = now
+    thresholds.save(s.data_dir)
+    log.info("volregime: tuned from %d favorites: stand aside above %s (was %s); underdog from %s (was %s)", len(rows), new_max, prev_max, new_min, prev_min)
+    return {"stand_aside": new_max, "wild_min": new_min, "n": len(rows)}

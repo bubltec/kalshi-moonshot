@@ -563,12 +563,17 @@ def evaluate(
         from . import variants, volregime
 
         vrel = volregime.regime.rel(variants.coin_of(shot.series))
+        lo, hi = spec.min_vol_rel, spec.max_vol_rel
+        if spec.auto_vol_gate:
+            vcls = "crypto" if variants.crypto_index(shot.series) else "commodity"
+            lo = volregime.thresholds.get_min(vcls, lo) if lo > 0 else 0.0
+            hi = volregime.thresholds.get_max(vcls, hi) if hi > 0 else 0.0
         if vrel is None:
             bet = False
             note = f"volatility regime unknown for {variants.coin_of(shot.series)}. {note}"
-        elif (spec.min_vol_rel > 0 and vrel < spec.min_vol_rel) or (spec.max_vol_rel > 0 and vrel > spec.max_vol_rel):
+        elif (lo > 0 and vrel < lo) or (hi > 0 and vrel > hi):
             bet = False
-            note = f"volatility regime {vrel:.2f}x its normal is outside the lane's {spec.min_vol_rel:g}-{spec.max_vol_rel:g}. {note}"
+            note = f"volatility regime {vrel:.2f}x its normal is outside the lane's {lo:g}-{hi:g}. {note}"
         else:
             note = f"[vol {vrel:.2f}x] {note}"
     if bet and spec.max_cushion_z < 90:

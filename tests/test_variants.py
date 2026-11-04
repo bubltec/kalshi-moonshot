@@ -548,3 +548,58 @@ def test_a_commodity_lane_stands_aside_in_a_wild_regime_and_a_commodity_has_its_
         assert "[vol 1.10x]" in calm.note and "outside the lane" not in calm.note
     finally:
         volregime.regime = volregime.VolRegime()
+
+
+def _vrow(cls, vol_rel, pnl, flip=0.0, ask=0.85):
+    return {"cls": cls, "vol_rel": vol_rel, "pnl": pnl, "flip_pnl": flip, "ask": ask}
+
+
+def test_the_tuner_finds_the_level_above_which_favorites_lost_and_the_level_from_which_the_underdog_paid(tmp_path):
+    from kalshi_moonshot import volregime
+
+    rows = ([_vrow("crypto", 0.7, +0.3, flip=-3.0) for _ in range(60)]                      # calm: favorites pay, the underdog does not
+            + [_vrow("crypto", 1.15, +0.1, flip=-1.0) for _ in range(50)]                    # in between: a little positive
+            + [_vrow("crypto", 1.6, -0.9, flip=+2.0) for _ in range(50)]                     # wild: favorites lose, the underdog pays
+            + [_vrow("commodity", 0.8, +0.1) for _ in range(80)] + [_vrow("commodity", 1.4, -0.4) for _ in range(45)]
+            + [_vrow("crypto", None, -9.0) for _ in range(30)])                              # no ratio saved: ignored
+    mx, mn = volregime.tune_thresholds(rows)
+    assert mx["crypto"] == 1.3 and mn["crypto"] == 1.3 and mx["commodity"] == 1.1  # levels 1.2-1.5 (crypto) and 0.9-1.3 (commodity) skip the same favorites: the middle of each run
+    assert "commodity" not in mn  # no underdog evidence there: the lane's static setting stands
+    mx2, _ = volregime.tune_thresholds(rows, previous_max={"crypto": 1.0})
+    assert mx2["crypto"] == pytest.approx(1.15)  # half way from yesterday's 1.0 to today's 1.3
+    assert volregime.tune_thresholds([_vrow("crypto", 1.6, -0.9) for _ in range(10)]) == ({}, {})  # too few favorites: no tuned level
+
+
+def test_a_lane_with_auto_vol_gate_follows_the_tuned_level(tmp_path, monkeypatch):
+    from kalshi_moonshot import config, regime, runner, variants, volregime
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXGOLD15M']\nmax_vol_rel=1.3\nauto_vol_gate=true\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    volregime.regime = volregime.VolRegime()
+    volregime.thresholds = volregime.Thresholds()
+    volregime.regime.set("GOLD", 24.0, 20.0)  # 1.2x
+    shot = LongShot("KXGOLD15M-9", "t", "", 0.85, 0.86, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="guarded", series="KXGOLD15M", side="yes")
+    try:
+        assert variants.coin_of("KXGOLD15M") == "GOLD"
+        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert "[vol 1.20x]" in ok.note  # no tuned level yet: the static 1.3 applies
+        volregime.thresholds.stand_aside["commodity"] = 1.1  # tuned tighter
+        tight = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert tight.action == "pass" and "outside the lane" in tight.note
+        volregime.thresholds.save(tmp_path)
+        again = volregime.Thresholds()
+        again.load(tmp_path)  # a restart keeps the tuning
+        assert again.get_max("commodity", 1.3) == 1.1 and again.get_max("crypto", 1.3) == 1.3
+    finally:
+        volregime.regime = volregime.VolRegime()
+        volregime.thresholds = volregime.Thresholds()

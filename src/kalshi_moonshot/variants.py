@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import bisect
+import contextlib
 import itertools
 import logging
 import math
@@ -23,7 +24,7 @@ from collections import defaultdict, deque
 from collections.abc import Iterator, Sequence
 from typing import Any
 
-from . import db
+from . import db, volregime
 from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
@@ -330,8 +331,11 @@ def favorites(s: Settings, start: float, end: float) -> Iterator[dict]:
         other = max(1.0 - bid, 0.02)  # the other side's ask
         flip_contracts = 10.0 / other
         flip = ((1.0 - other) * flip_contracts if not won else -10.0) - fee_per_contract(other) * flip_contracts
-        yield {"ticker": w["ticker"], "series": series, "cls": "crypto" if crypto else "commodity", "coin": COINS.get(series) or series[2:-3], "side": side, "ts": at, "close_ts": close,
-               "ask": ask, "bid": bid, "left_s": close - at, "won": bool(won), "pnl": pnl, "flip_pnl": flip, "flip_price": other, **snap}
+        coin_name = COINS.get(series) or series[2:-3]
+        cls_name = "crypto" if crypto else "commodity"
+        yield {"ticker": w["ticker"], "series": series, "cls": cls_name, "coin": coin_name, "side": side, "ts": at, "close_ts": close,
+               "ask": ask, "bid": bid, "left_s": close - at, "won": bool(won), "pnl": pnl, "flip_pnl": flip, "flip_price": other,
+               "vol_rel": volregime.vol_rel_at(coin_name, index, at, volregime.LOOKS[cls_name]), **snap}
 
 
 def market_scoreboard(s: Settings, days: float = 6.0, recent_days: float = 1.0, now: float | None = None) -> dict[tuple[str, str, str, str], dict]:
@@ -446,7 +450,7 @@ def skipped(varieties: Sequence[str], variety: str | None, side: str) -> bool:
     return variety is not None and (variety in varieties or f"{variety}-{side}" in varieties)
 
 
-CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left_s", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety")
+CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left_s", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety", "vol_rel")
 MIN_PRIOR = 10  # older favorites a variety needs before the auto skip may act on it
 LEDGER_KEEP = 72 * 3600.0  # how much settled history the in-memory ledger holds
 LEDGER_WARM = 48 * 3600.0  # how far back a cold start computes when favorite_cases holds nothing
@@ -557,8 +561,14 @@ def coin_of(series: str) -> str:
 def _ensure_cases(store: Store) -> None:
     store.db.execute(
         "CREATE TABLE IF NOT EXISTS favorite_cases (ticker TEXT PRIMARY KEY, series TEXT, cls TEXT, coin TEXT, side TEXT, ts REAL, close_ts REAL, ask REAL, bid REAL, left_s REAL, won INTEGER, pnl REAL, "
-        "flip_pnl REAL, z REAL, slope REAL, crosses INTEGER, vol_ratio REAL, since_cross REAL, variety TEXT)"
+        "flip_pnl REAL, z REAL, slope REAL, crosses INTEGER, vol_ratio REAL, since_cross REAL, variety TEXT, vol_rel REAL)"
     )
+    try:  # a table made before vol_rel existed gets the column (the statement fails harmlessly when it is already there)
+        store.db.execute("ALTER TABLE favorite_cases ADD COLUMN vol_rel REAL")
+        store.db.commit()
+    except Exception:
+        with contextlib.suppress(Exception):
+            store.db.rollback()
     store.db.execute("CREATE INDEX IF NOT EXISTS idx_favorite_cases_close ON favorite_cases(close_ts)")
 
 

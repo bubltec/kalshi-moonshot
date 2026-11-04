@@ -1564,6 +1564,10 @@ class ProfitWatcher:
             ratios = volregime.regime.update(s, coins)
             log.info("watcher: volatility regime %s", {c: (round(r, 2) if r else None) for c, r in ratios.items()})
             added = variants.refresh_ledger(s)
+            if not volregime.thresholds.tuned_at:
+                volregime.thresholds.load(s.data_dir)
+            if time.time() - volregime.thresholds.tuned_at >= volregime.TUNE_EVERY and added >= 0:
+                volregime.retune(s)
             if added:
                 log.info("watcher: variety ledger +%d favorites (%d held)", added, len(variants.ledger))
         except Exception:
