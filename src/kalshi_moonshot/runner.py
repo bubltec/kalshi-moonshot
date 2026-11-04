@@ -530,7 +530,7 @@ def evaluate(
     if bet and spec.skip_varieties_auto:
         from . import variants
 
-        skips = tuple(dict.fromkeys((*skips, *variants.tuned_skips(s, shot.series))))
+        skips = tuple(dict.fromkeys((*skips, *variants.ledger.skips("crypto" if variants.crypto_index(shot.series) else "commodity", time.time(), spec.auto_hours, spec.auto_prior_weight, spec.auto_min_loss, spec.auto_min_n))))
     if bet and skips:
         from . import variants
 

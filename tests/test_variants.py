@@ -90,50 +90,123 @@ def test_the_market_report_prints_every_class_with_its_flip(monkeypatch):
     assert "flip" in text and "+0.07" in text  # crypto F yes: (8.0 - 3.0) / 70 bets
 
 
-def _cell(n, net):
-    return {"n": n, "net": net}
+def _rec(close, variety="F", side="yes", pnl=-1.0, cls="crypto", ticker=None):
+    return {"ticker": ticker or f"T{close}{variety}{side}", "cls": cls, "side": side, "variety": variety, "close_ts": close, "pnl": pnl}
 
 
-def test_tune_skips_only_cells_that_lost_in_both_halves(monkeypatch):
-    older = {("crypto", "BTC", "yes", "F"): _cell(60, -60.0), ("crypto", "ETH", "yes", "F"): _cell(60, -60.0), ("crypto", "BTC", "no", "G"): _cell(100, -70.0),
-             ("crypto", "BTC", "yes", "E"): _cell(100, +8.0), ("crypto", "BTC", "no", "A"): _cell(100, -3.0), ("crypto", "BTC", "no", "B"): _cell(10, -50.0)}
-    newer = {("crypto", "BTC", "yes", "F"): _cell(60, -70.0), ("crypto", "ETH", "yes", "F"): _cell(60, -50.0), ("crypto", "BTC", "no", "G"): _cell(100, +46.0),
-             ("crypto", "BTC", "yes", "E"): _cell(100, -112.0), ("crypto", "BTC", "no", "A"): _cell(100, -2.0), ("crypto", "BTC", "no", "B"): _cell(10, -50.0)}
-    boards = iter([older, newer])
-    monkeypatch.setattr(variants, "market_scoreboard", lambda *a, **k: next(boards))
-    out = variants.tune(None, days=10.0, min_n=40, min_loss=0.10, now=1_000_000.0)
-    assert out["skip"] == {"crypto": ["F-yes"], "commodity": []}  # F-yes lost both halves; G won one, E won one, A lost a cent, B had too few bets
+def test_the_ledger_judges_the_recent_stretch_against_the_older_record():
+    led = variants.Ledger()
+    now = 100 * 3600.0
+    led.add([_rec(now - 20 * 3600 + k, "F", "yes", +0.5) for k in range(40)])  # a long record that paid
+    led.add([_rec(now - 3600 + k, "F", "yes", -3.0) for k in range(6)])  # six bad recent bets: the blend is (6*-3 + 15*0.5)/21 = -0.5
+    led.add([_rec(now - 3600 + k, "B", "yes", -3.0) for k in range(4)])  # too few recent bets to judge
+    led.add([_rec(now - 3600 + k, "G", "no", -3.0) for k in range(6)])  # bad recent, and nothing older: judged on the recent stretch alone
+    led.add([_rec(now - 3600 + k, "E", "no", -0.2) for k in range(6)] + [_rec(now - 20 * 3600 + k, "E", "no", +2.0, ticker=f"o{k}") for k in range(30)])  # a small dip against a good record
+    assert led.skips("crypto", now, hours=6.0, prior_weight=15.0, min_loss=0.10, min_n=5) == ("G-no", "F-yes")  # sorted by (class, side, variety)
+    assert led.skips("commodity", now) == ()
 
 
-def test_a_lane_reads_the_tuned_list_for_its_own_asset_class_and_ignores_a_stale_one(tmp_path, monkeypatch):
+def test_the_ledger_forgets_what_is_older_than_its_keep_and_ignores_a_duplicate():
+    led = variants.Ledger()
+    led.add([_rec(1000.0, ticker="a"), _rec(1000.0, ticker="a")])
+    assert len(led) == 1
+    led.add([_rec(1000.0 + variants.LEDGER_KEEP + 10, ticker="b")])
+    assert len(led) == 1 and "a" not in led.seen
+
+
+def test_a_custom_variety_comes_from_a_file_and_is_checked(tmp_path):
     from types import SimpleNamespace
 
     s = SimpleNamespace(data_dir=tmp_path)
-    variants._tuned_cache.clear()
-    monkeypatch.setattr(variants.time, "time", lambda: 2_000_000.0)
-    (tmp_path / variants.TUNED_FILE).write_text('{"at": 1999000.0, "skip": {"crypto": ["F-yes"], "commodity": ["G"]}}')
-    assert variants.tuned_skips(s, "KXBTC15M") == ("F-yes",)
-    assert variants.tuned_skips(s, "KXWTI15M") == ("G",)
-    assert variants.tuned_skips(s, "KXNOTHING") == ()
-    (tmp_path / variants.TUNED_FILE).write_text('{"at": 1000.0, "skip": {"crypto": ["F-yes"]}}')  # older than three days
-    variants._tuned_cache.clear()
-    assert variants.tuned_skips(s, "KXBTC15M") == ()
-    (tmp_path / variants.TUNED_FILE).write_text("not json")
-    variants._tuned_cache.clear()
-    assert variants.tuned_skips(s, "KXBTC15M") == ()
+    (tmp_path / variants.CUSTOM_FILE).write_text(
+        '[[variety]]\nletter="H"\nname="near and speeding up"\nwhen="z < 1 and vol_ratio > 1.5"\n'
+        '[[variety]]\nletter="J"\nname="bad"\nwhen="__import__(1)"\n'
+        '[[variety]]\nletter="B"\nname="reuses a built-in letter"\nwhen="z > 0"\n')
+    variants._custom_mtime.clear()
+    variants.load_custom(s)
+    try:
+        assert variants.NAMES["H"] == "near and speeding up" and "J" not in variants.NAMES and variants.NAMES["B"] == "far, flat"
+        assert variants.classify_features({"z": 0.4, "slope": 0.0, "crosses": 0, "vol_ratio": 2.0, "since_cross": 300.0}) == "H"
+        assert variants.classify_features({"z": 0.4, "slope": 0.0, "crosses": 0, "vol_ratio": 1.0, "since_cross": 300.0}) == "E"  # no custom test holds: the built-in letter
+        assert variants.skipped(("H-yes",), "H", "yes") and not variants.skipped(("H-yes",), "H", "no")
+    finally:
+        (tmp_path / variants.CUSTOM_FILE).unlink()
+        variants._custom_mtime.clear()
+        variants.load_custom(s)
+    assert "H" not in variants.NAMES
 
 
-def test_a_crypto_variety_is_read_against_the_strike(monkeypatch):
-    import sqlite3
+def test_the_snapshot_carries_the_features_a_custom_variety_can_test():
+    wobble = [100.0 + 0.2 + 0.0004 * (k % 2) for k in range(400)]
+    ts, v = _ticks(wobble)
+    snap = variants.snapshot(ts, v, 100.0, "yes", ts[-1], ts[-1] + 300.0)
+    assert snap is not None and set(variants.FEATURES) <= set(snap) and snap["since_cross"] == variants.LOOK and snap["vol_ratio"] == pytest.approx(1.0, abs=0.3)
+
+
+def test_the_tick_history_answers_a_window_from_memory_and_says_when_it_cannot():
+    from kalshi_moonshot import ticks
+
+    h = ticks.TickHistory(keep=100.0)
+    for k in range(10):
+        h.note("IX", 1000.0 + k, 50.0 + k)
+    h.note("IX", 1005.0, 99.0)  # a late tick is dropped, the series stays ordered
+    assert h.window("IX", 1002.0, 1004.0) == ([1002.0, 1003.0, 1004.0], [52.0, 53.0, 54.0])
+    assert h.window("IX", 900.0, 1004.0) is None  # the history starts at 1000: the tape must answer
+    h.warm("IX", [(900.0 + k, 40.0) for k in range(100)], 900.0)
+    got = h.window("IX", 900.0, 1001.0)
+    assert got is not None and got[0][0] == 900.0 and got[0][-1] == 1001.0 and got[1][-1] == 51.0 and len(got[0]) == 102
+    assert h.first_at_or_after("IX", 1003.5, 2.0) == 54.0 and h.first_at_or_after("IX", 1100.0, 2.0) is None
+    for k in range(10, 400):
+        h.note("IX", 1000.0 + k, 1.0)
+    assert h.window("IX", 1000.0, 1400.0) is None and h.size("IX") < 400  # old ticks were trimmed away
+
+
+def test_a_crypto_variety_is_read_from_memory_against_the_strike(monkeypatch):
     from types import SimpleNamespace
 
-    conn = sqlite3.connect(":memory:")
-    conn.execute("CREATE TABLE index_ticks (index_id TEXT, ts REAL, value REAL)")
+    from kalshi_moonshot import ticks
+
+    ticks.history.clear()
     index = variants.crypto_index("KXBTC15M")
     now = 5000.0
-    conn.executemany("INSERT INTO index_ticks VALUES (?,?,?)", [(index, now - 340 + k, 100.2 + 0.001 * (k % 2)) for k in range(341)])  # 20 bp over a strike of 100, steady
-    monkeypatch.setattr(variants.db, "connect", lambda *a, **k: conn)
-    s = SimpleNamespace(tape_path="x")
-    assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now, strike=100.0) == "B"
-    assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now) is None  # no strike, no variety
-    assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now, strike=0.0) is None
+    for k in range(341):
+        ticks.history.note(index, now - 340 + k, 100.2 + 0.001 * (k % 2))  # 20 bp over a strike of 100, steady
+    monkeypatch.setattr(variants.db, "connect", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the tape must not be read")))
+    s = SimpleNamespace(tape_path="x", data_dir=__import__("pathlib").Path("/nonexistent"))
+    try:
+        assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now, strike=100.0) == "B"
+        assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now) is None  # no strike, no variety
+    finally:
+        ticks.history.clear()
+
+
+def test_the_ledger_scores_settled_favorites_saves_them_and_reloads_after_a_restart(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, db
+    from kalshi_moonshot.store import Store
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    store = Store(s.db_path)
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape.execute("CREATE TABLE IF NOT EXISTS quotes (ts REAL NOT NULL, ticker TEXT NOT NULL, bid REAL, ask REAL, last REAL, sts INTEGER, bid_size REAL, ask_size REAL)")
+    tape.execute("CREATE TABLE IF NOT EXISTS index_ticks (ts REAL NOT NULL, index_id TEXT NOT NULL, value REAL, avg60 REAL, quote_avg REAL, src_ms INTEGER)")
+    now = _time.time()
+    close = now - 1200.0
+    index = variants.crypto_index("KXBTC15M")
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, result, fetched_ts) VALUES (?,?,?,?,?,?)", ("KXBTC15M-1", "KXBTC15M", close, 100.0, "yes", now))
+    store.db.commit()
+    tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (?,?,?,?)", (close - 300.0, "KXBTC15M-1", 0.84, 0.85))
+    for k in range(400):  # 20 bp over the strike, steady, through the whole window
+        tape.execute("INSERT INTO index_ticks (ts, index_id, value) VALUES (?,?,?)", (close - 700.0 + k * 2.0, index, 100.2 + 0.0004 * (k % 2)))
+    tape.commit()
+    variants.ledger.__init__()
+    assert variants.refresh_ledger(s, now) == 1
+    row = variants.ledger.rows[0]
+    assert row["variety"] == "B" and row["won"] and row["side"] == "yes" and row["pnl"] > 0
+    saved = Store(s.db_path).db.execute("SELECT variety, won, z FROM favorite_cases").fetchall()
+    assert len(saved) == 1 and saved[0]["variety"] == "B" and saved[0]["won"] == 1
+    variants.ledger.__init__()  # a restart: the table is reloaded, nothing is scored twice
+    assert variants.refresh_ledger(s, now) == 0 and len(variants.ledger) == 1
+    variants.ledger.__init__()

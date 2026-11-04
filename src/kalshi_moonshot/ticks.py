@@ -1,0 +1,122 @@
+"""Every settlement-index tick of the run, in memory, so a decision never has to ask the database what the spot has been doing.
+
+One pair of float arrays per index (times, values): 16 bytes a tick, so a day of a 1 Hz feed is about 1.4 MB. tape.Recent.note_index feeds it as ticks arrive; warm() fills the hours before this
+process started, once, from the tape. A read is two bisects and a slice. Nothing here touches the database wrapper: warm() uses a plain read on the tape, and only at start-up.
+"""
+
+from __future__ import annotations
+
+import bisect
+import logging
+import threading
+from array import array
+from collections.abc import Sequence
+
+log = logging.getLogger("kalshi_moonshot.ticks")
+
+KEEP_SECONDS = 12 * 3600.0  # how much of each index is kept; older ticks are dropped in chunks
+TRIM_SLACK = 1800.0  # trim only when this much extra has piled up, so a trim is rare and cheap per tick
+
+
+class TickHistory:
+    def __init__(self, keep: float = KEEP_SECONDS) -> None:
+        self.keep = keep
+        self.slack = min(TRIM_SLACK, keep)
+        self._lock = threading.Lock()
+        self._ts: dict[str, array] = {}
+        self._val: dict[str, array] = {}
+        self._from: dict[str, float] = {}  # the earliest time this index is known to be complete from (a warm-up start, or the first live tick)
+
+    def note(self, index_id: str, ts: float, value: float) -> None:
+        if value <= 0:
+            return
+        with self._lock:
+            t = self._ts.get(index_id)
+            if t is None:
+                t = self._ts[index_id] = array("d")
+                self._val[index_id] = array("d")
+                self._from[index_id] = ts
+            elif t and ts < t[-1]:
+                return  # a late or duplicate tick: the series stays ordered
+            t.append(ts)
+            self._val[index_id].append(value)
+            if ts - t[0] > self.keep + self.slack:
+                cut = bisect.bisect_left(t, ts - self.keep)
+                del t[:cut]
+                del self._val[index_id][:cut]
+                self._from[index_id] = max(self._from[index_id], t[0])
+
+    def warm(self, index_id: str, rows: Sequence[tuple[float, float]], loaded_from: float) -> None:
+        """Put older ticks (ascending, from the tape) in front of whatever has arrived live. Done once per index."""
+        with self._lock:
+            if index_id in self._from and self._from[index_id] <= loaded_from:
+                return
+            live_ts, live_val = self._ts.get(index_id), self._val.get(index_id)
+            t, v = array("d"), array("d")
+            first_live = live_ts[0] if live_ts else float("inf")
+            for ts, value in rows:
+                if ts < first_live and value > 0:
+                    t.append(ts)
+                    v.append(value)
+            if live_ts is not None and live_val is not None:
+                t.extend(live_ts)
+                v.extend(live_val)
+            self._ts[index_id], self._val[index_id] = t, v
+            self._from[index_id] = loaded_from
+
+    def covers(self, index_id: str, start: float) -> bool:
+        with self._lock:
+            return index_id in self._from and self._from[index_id] <= start and bool(self._ts.get(index_id))
+
+    def window(self, index_id: str, start: float, end: float) -> tuple[list[float], list[float]] | None:
+        """(times, values) with start <= ts <= end, or None when the history does not reach `start` (the caller then asks the tape)."""
+        with self._lock:
+            if index_id not in self._from or self._from[index_id] > start or not self._ts.get(index_id):
+                return None
+            t, v = self._ts[index_id], self._val[index_id]
+            lo, hi = bisect.bisect_left(t, start), bisect.bisect_right(t, end)
+            return t[lo:hi].tolist(), v[lo:hi].tolist()
+
+    def first_at_or_after(self, index_id: str, start: float, within: float) -> float | None:
+        """The first tick value at or after `start` and no more than `within` seconds later (a window-open reference), or None."""
+        with self._lock:
+            if index_id not in self._from or self._from[index_id] > start or not self._ts.get(index_id):
+                return None
+            t = self._ts[index_id]
+            i = bisect.bisect_left(t, start)
+            if i >= len(t) or t[i] - start > within:
+                return None
+            return self._val[index_id][i]
+
+    def size(self, index_id: str) -> int:
+        with self._lock:
+            return len(self._ts.get(index_id, ()))
+
+    def clear(self) -> None:
+        with self._lock:
+            self._ts.clear()
+            self._val.clear()
+            self._from.clear()
+
+
+history = TickHistory()
+
+
+def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 6.0) -> int:
+    """Load the last `hours` of each index from the tape into `history`. Meant for a background thread at start-up; returns how many ticks were loaded."""
+    from . import db
+
+    if not db.tape_exists(s.tape_path):
+        return 0
+    start = now - hours * 3600.0
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    total = 0
+    for index_id in indexes:
+        try:
+            rows = [(float(ts), float(v)) for ts, v in tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value>0 ORDER BY ts", (index_id, start, now))]
+        except Exception:
+            log.warning("ticks: could not warm %s", index_id, exc_info=True)
+            continue
+        history.warm(index_id, rows, start)
+        total += len(rows)
+    return total

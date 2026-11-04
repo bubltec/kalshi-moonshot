@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import archive, db
+from . import ticks as ticks_mod
 from .biquotefeed import BiQuoteFeed
 from .biquotefeed import enabled as biquote_enabled
 from .commodities import instrument_for, load_instruments
@@ -211,6 +212,7 @@ class Recent:
     def note_index(self, index_id: str, ts: float, value: float) -> None:
         """Keep the tick even before the history load, so nothing that arrives during that load is missed."""
         row = (float(ts), float(value))
+        ticks_mod.history.note(index_id, row[0], row[1])  # the whole run, compact, for the variety read (ticks.py)
         with self._lock:
             slot = self._index.get(index_id)
             if slot is None:

@@ -2298,11 +2298,10 @@ def test_without_rearm_a_return_holds_the_bet_to_the_close(tmp_path, monkeypatch
     assert t.through_kept and w._jobs.empty()
 
 
-def test_a_crypto_lane_skips_what_the_tuned_list_names_and_only_when_it_asks_for_it(tmp_path, monkeypatch):
-    import json
+def test_a_crypto_lane_skips_what_the_ledger_shows_losing_and_only_when_it_asks_for_it(tmp_path, monkeypatch):
     import time as _time
 
-    from kalshi_moonshot import db, regime, runner, variants
+    from kalshi_moonshot import regime, runner, ticks, variants
     from kalshi_moonshot.estimators import Estimate
     from kalshi_moonshot.strategy import LongShot
 
@@ -2311,23 +2310,25 @@ def test_a_crypto_lane_skips_what_the_tuned_list_names_and_only_when_it_asks_for
             return Estimate(0.9, "fixed")
 
     regime.reset()
-    variants._tuned_cache.clear()
+    ticks.history.clear()
+    variants.ledger.__init__()
     w, s, store, _close = _watcher(tmp_path, monkeypatch)
     now = _time.time()
     (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\nskip_varieties_auto=true\n")
-    (tmp_path / variants.TUNED_FILE).write_text(json.dumps({"at": now, "skip": {"crypto": ["B-yes"], "commodity": []}}))
     s = config.load()
+    variants.ledger.add([{"ticker": f"x{k}", "cls": "crypto", "side": "yes", "variety": "B", "close_ts": now - 1800 + k, "pnl": -4.0} for k in range(8)])  # the last half hour: B-yes has lost 8 times
     store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 437.0, 100.0, now))
     store.db.commit()
-    tape = db.connect(s.tape_path, "tape", shared=True)
-    tape.execute("CREATE TABLE IF NOT EXISTS index_ticks (ts REAL NOT NULL, index_id TEXT NOT NULL, value REAL, avg60 REAL, quote_avg REAL, src_ms INTEGER)")
-    for k in range(151):  # 20 bp over the strike and steady: variety B
-        tape.execute("INSERT INTO index_ticks (ts, index_id, value) VALUES (?,?,?)", (now - 302.0 + k * 2.0, variants.crypto_index("KXBTC15M"), 100.20 + 0.0004 * (k % 2)))
-    tape.commit()
+    index = variants.crypto_index("KXBTC15M")
+    for k in range(176):  # 20 bp over the strike and steady: variety B, read from memory (the history reaches back past the 340 s the read asks for)
+        ticks.history.note(index, now - 350.0 + k * 2.0, 100.20 + 0.0004 * (k % 2))
     shot = LongShot("KXBTC15M-9", "t", "", 0.85, 0.86, 437.0 / 3600.0, "2099-01-01T00:00:00Z", 437.0 / 3600.0, lane="guarded", series="KXBTC15M", side="yes")
-    out = runner.evaluate(s, w.client, None, store, shot, estimators={"market": Fixed()})
-    assert out.action == "pass" and "variety B" in out.note and "does not buy it" in out.note
-    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\n")  # without the setting the list is not read
-    s2 = config.load()
-    ok = runner.evaluate(s2, w.client, None, store, shot, estimators={"market": Fixed()})
-    assert "does not buy it" not in ok.note
+    try:
+        out = runner.evaluate(s, w.client, None, store, shot, estimators={"market": Fixed()})
+        assert out.action == "pass" and "variety B" in out.note and "does not buy it" in out.note
+        (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\n")  # without the setting the ledger is not read
+        ok = runner.evaluate(config.load(), w.client, None, store, shot, estimators={"market": Fixed()})
+        assert "does not buy it" not in ok.note
+    finally:
+        ticks.history.clear()
+        variants.ledger.__init__()

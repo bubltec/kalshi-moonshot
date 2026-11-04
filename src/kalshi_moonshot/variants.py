@@ -11,20 +11,27 @@ scoreboard keeps each class and side apart and shows the latest days next to the
 
 from __future__ import annotations
 
+import ast
 import bisect
 import itertools
+import logging
 import math
 import statistics
+import threading
 import time
-from collections import defaultdict
-from collections.abc import Sequence
+from collections import defaultdict, deque
+from collections.abc import Iterator, Sequence
+from typing import Any
 
 from . import db
+from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
 from .kalshiws import index_for_series as crypto_index
 from .store import Store
 from .strategy import fee_per_contract
+
+log = logging.getLogger("kalshi_moonshot.variants")
 
 FAR = 1.0  # a cushion of at least this many typical moves left is "far"
 SLOPE = 0.5  # a five-minute change of this many typical five-minute moves is "moving"
@@ -49,6 +56,73 @@ def classify(z: float, slope: float, crosses: int) -> str:
     if z >= FAR:
         return "A" if slope >= SLOPE else "C" if slope <= -SLOPE else "B"
     return "D" if slope <= -SLOPE else "F" if slope >= SLOPE else "E"
+
+
+CUSTOM_FILE = "varieties.toml"
+FEATURES = ("z", "slope", "crosses", "vol_ratio", "since_cross")  # the numbers a custom variety may test: see snapshot()
+_BASE_NAMES = dict(NAMES)
+_custom: list[tuple[str, str, Any]] = []  # (letter, name, compiled test), tried in file order before the built-in letters
+_custom_mtime: dict[str, float] = {}
+
+_ALLOWED = (ast.Expression, ast.BoolOp, ast.And, ast.Or, ast.Not, ast.UnaryOp, ast.USub, ast.UAdd, ast.Compare, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.Eq, ast.NotEq,
+            ast.BinOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Name, ast.Load, ast.Constant)
+
+
+def compile_test(expr: str) -> Any:
+    """A custom variety's `when` text as a checked expression over FEATURES only: comparisons, and/or/not and plain arithmetic. Anything else (a call, an attribute, a name that is not a feature) is refused."""
+    tree = ast.parse(expr, mode="eval")
+    for node in ast.walk(tree):
+        if not isinstance(node, _ALLOWED):
+            raise ValueError(f"not allowed in a variety test: {type(node).__name__}")
+        if isinstance(node, ast.Name) and node.id not in FEATURES:
+            raise ValueError(f"unknown feature {node.id!r}; the features are {', '.join(FEATURES)}")
+        if isinstance(node, ast.Constant) and not isinstance(node.value, (int, float)):
+            raise ValueError("only numbers may appear in a variety test")
+    return compile(tree, "<variety>", "eval")
+
+
+def load_custom(s: Settings | Any) -> None:
+    """Read data_dir/varieties.toml when it changed: [[variety]] entries with a letter (not one of A-G), a name and a `when` test. A bad entry is logged and left out; the built-in letters always work."""
+    import tomllib
+
+    path = s.data_dir / CUSTOM_FILE
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = -1.0
+    if _custom_mtime.get(str(path)) == mtime:
+        return
+    _custom_mtime[str(path)] = mtime
+    found: list[tuple[str, str, Any]] = []
+    if mtime >= 0:
+        try:
+            entries = tomllib.loads(path.read_text()).get("variety", [])
+        except (OSError, ValueError):
+            log.warning("variants: %s could not be read; custom varieties are off", path, exc_info=True)
+            entries = []
+        for e in entries:
+            letter = str(e.get("letter", "")).strip()
+            try:
+                if not letter or letter in _BASE_NAMES:
+                    raise ValueError("a custom variety needs its own letter, not A-G")
+                found.append((letter, str(e.get("name", letter)), compile_test(str(e["when"]))))
+            except (KeyError, ValueError, SyntaxError) as exc:
+                log.warning("variants: custom variety %r skipped: %s", e.get("letter"), exc)
+    _custom[:] = found
+    NAMES.clear()
+    NAMES.update(_BASE_NAMES)
+    NAMES.update({letter: name for letter, name, _ in found})
+
+
+def classify_features(f: dict[str, float]) -> str:
+    """The variety of a set of features: the first custom variety whose test holds, else the built-in letter."""
+    for letter, _name, test in _custom:
+        try:
+            if eval(test, {"__builtins__": {}}, f):  # the test was checked by compile_test
+                return letter
+        except (ZeroDivisionError, TypeError):
+            continue
+    return classify(f["z"], f["slope"], int(f["crosses"]))
 
 
 GRID = 1.0  # seconds: both feeds are read on this grid, so a crossing means the same on a 2.5 s crypto index and a 1 s commodity feed
@@ -87,8 +161,16 @@ def snapshot(ts: Sequence[float], values: Sequence[float], strike: float, side: 
     before = math.log(values[j] / strike) * sign
     z = cushion / (rate * math.sqrt(close_ts - at))
     slope = (cushion - before) / (rate * math.sqrt(LOOK))
-    crosses = sum(1 for a, b in itertools.pairwise([x - strike for x in seq]) if (a > 0) != (b > 0))
-    return {"z": z, "slope": slope, "crosses": crosses, "variety": classify(z, slope, crosses)}
+    sides = [(x - strike) > 0 for x in seq]
+    crosses = sum(1 for a, b in itertools.pairwise(sides) if a != b)
+    last = next((k for k in range(len(sides) - 1, 0, -1) if sides[k] != sides[k - 1]), None)
+    since_cross = LOOK if last is None else (len(sides) - 1 - last) * (dt / (len(sides) - 1))
+    tail = seq[-61:] if grid > 0 else seq[-max(2, len(seq) // 5):]  # the last minute on the grid (a fifth of the ticks off it)
+    tail_sq = sum(math.log(b / a) ** 2 for a, b in itertools.pairwise(tail))
+    tail_dt = (len(tail) - 1) * grid if grid > 0 else dt * (len(tail) - 1) / max(1, len(seq) - 1)
+    vol_ratio = math.sqrt(tail_sq / tail_dt) / rate if tail_dt > 0 else 1.0
+    f = {"z": z, "slope": slope, "crosses": crosses, "vol_ratio": vol_ratio, "since_cross": since_cross}
+    return {**f, "variety": classify_features(f)}
 
 
 def _pnl(row, held_fee: bool = True) -> float:
@@ -188,27 +270,23 @@ def favorite_entry(quotes: Sequence[tuple[float, float, float]], close_ts: float
     return None
 
 
-def market_scoreboard(s: Settings, days: float = 6.0, recent_days: float = 1.0, now: float | None = None) -> dict[tuple[str, str, str, str], dict]:
-    """Every crypto and commodity window's favorite (favorite_entry), read as a variety at the moment of its buy and held to the result, whether or not a lane bought it. This keeps the observation going while a lane
-    is paused, for instance by the choppy rule. Totals by (class, market, side, variety) carry the count, the wins (a loss settles at zero) and the net of a 10-dollar ticket with the taker fee, all and `recent_days` alone,
-    and the flip: buying the OTHER side at its ask (one minus the favorite's bid) instead, which wins when the favorite loses. Commodities are read against BiQuote's price at the window open, so they only go back to when that feed began."""
-    now = time.time() if now is None else now
+def favorites(s: Settings, start: float, end: float) -> Iterator[dict]:
+    """Every crypto and commodity window that closed in (start, end] and has a result, as its favorite (favorite_entry) read as a variety at the moment of the buy: the features, the side, the price, whether it won, what a $10 ticket
+    made with the taker fee, and what the flip (the other side) would have made. One dict per window, whether or not a lane bought it. Commodities are read against BiQuote's price at the window open."""
+    load_custom(s)
     tape = db.connect(s.tape_path, "tape", shared=True)
     store = Store(s.db_path, s.exclude_versions)
     windows = store.db.execute(
-        "SELECT ticker, series, close_ts, strike, result FROM windows WHERE close_ts BETWEEN ? AND ? AND result IN ('yes','no') AND strike > 0 ORDER BY close_ts",
-        (now - days * 86400.0, now - 600.0),
+        "SELECT ticker, series, close_ts, strike, result FROM windows WHERE close_ts > ? AND close_ts <= ? AND result IN ('yes','no') AND strike > 0 ORDER BY close_ts", (start, end),
     ).fetchall()
     ticks: dict[str, tuple[list[float], list[float]]] = {}
 
     def feed(index: str) -> tuple[list[float], list[float]]:
         if index not in ticks:
-            r = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND value>0 ORDER BY ts", (index, now - (days + 1) * 86400.0)).fetchall()
+            r = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value>0 ORDER BY ts", (index, start - 1500.0, end)).fetchall()
             ticks[index] = ([float(x[0]) for x in r], [float(x[1]) for x in r])
         return ticks[index]
 
-    keys = ("n", "wins", "net", "recent_n", "recent_wins", "recent_net", "flip_wins", "flip_net", "flip_price", "recent_flip_net")
-    board: dict[tuple[str, str, str, str], dict] = defaultdict(lambda: dict.fromkeys(keys, 0.0))
     for w in windows:
         series = w["series"]
         crypto = crypto_index(series)
@@ -237,20 +315,29 @@ def market_scoreboard(s: Settings, days: float = 6.0, recent_days: float = 1.0, 
         other = max(1.0 - bid, 0.02)  # the other side's ask
         flip_contracts = 10.0 / other
         flip = ((1.0 - other) * flip_contracts if not won else -10.0) - fee_per_contract(other) * flip_contracts
-        name = COINS.get(series) or series[2:-3]
-        cell = board[("crypto" if crypto else "commodity", name, side, snap["variety"])]
-        recent = at >= now - recent_days * 86400.0
+        yield {"ticker": w["ticker"], "series": series, "cls": "crypto" if crypto else "commodity", "coin": COINS.get(series) or series[2:-3], "side": side, "ts": at, "close_ts": close,
+               "ask": ask, "bid": bid, "left": close - at, "won": bool(won), "pnl": pnl, "flip_pnl": flip, "flip_price": other, **snap}
+
+
+def market_scoreboard(s: Settings, days: float = 6.0, recent_days: float = 1.0, now: float | None = None) -> dict[tuple[str, str, str, str], dict]:
+    """favorites() totalled by (class, market, side, variety): the count, the wins (a loss settles at zero) and the net of a 10-dollar ticket with the taker fee, all and `recent_days` alone, and the flip. This keeps the
+    observation going while a lane is paused, for instance by the choppy rule."""
+    now = time.time() if now is None else now
+    keys = ("n", "wins", "net", "recent_n", "recent_wins", "recent_net", "flip_wins", "flip_net", "flip_price", "recent_flip_net")
+    board: dict[tuple[str, str, str, str], dict] = defaultdict(lambda: dict.fromkeys(keys, 0.0))
+    for r in favorites(s, now - days * 86400.0, now - 600.0):
+        cell = board[(r["cls"], r["coin"], r["side"], r["variety"])]
         cell["n"] += 1
-        cell["wins"] += won
-        cell["net"] += pnl
-        cell["flip_wins"] += not won
-        cell["flip_net"] += flip
-        cell["flip_price"] += other
-        if recent:
+        cell["wins"] += r["won"]
+        cell["net"] += r["pnl"]
+        cell["flip_wins"] += not r["won"]
+        cell["flip_net"] += r["flip_pnl"]
+        cell["flip_price"] += r["flip_price"]
+        if r["ts"] >= now - recent_days * 86400.0:
             cell["recent_n"] += 1
-            cell["recent_wins"] += won
-            cell["recent_net"] += pnl
-            cell["recent_flip_net"] += flip
+            cell["recent_wins"] += r["won"]
+            cell["recent_net"] += r["pnl"]
+            cell["recent_flip_net"] += r["flip_pnl"]
     return dict(board)
 
 
@@ -300,28 +387,37 @@ def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_
 
 
 def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None, strike: float | None = None) -> str | None:
-    """The variety a bet would be at this moment, from the index ticks of the last five minutes. A commodity reads BiQuote against its own price when the window opened; a crypto coin reads its settlement index against
-    the window's `strike`. None when the series has no index, the reference is missing (no BiQuote tick near the open, or no strike for a coin), or there are too few recent ticks:
-    a caller that skips on a variety must not skip on None."""
+    """The variety a bet would be at this moment, from the index ticks of the last five minutes, which are read from memory (ticks.history) and only from the tape when the history does not reach back that far.
+    A commodity reads BiQuote against its own price when the window opened; a crypto coin reads its settlement index against the window's `strike`. None when the series has no index, the reference is missing
+    (no BiQuote tick near the open, or no strike for a coin), or there are too few recent ticks: a caller that skips on a variety must not skip on None."""
     crypto = crypto_index(series)
     index = crypto or biquote_index(series)
     if not index or left_seconds <= 0:
         return None
     now = time.time() if now is None else now
     close = now + left_seconds
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    load_custom(s)
     if crypto:
         if not strike or strike <= 0:
             return None
-        ref = strike
+        ref: float | None = strike
     else:
         opened = close - 900.0
-        row = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts LIMIT 1", (index, opened - 5.0, opened + 20.0)).fetchone()
-        if not row:
+        ref = ticks_mod.history.first_at_or_after(index, opened - 5.0, 25.0)
+        if ref is None:
+            tape = db.connect(s.tape_path, "tape", shared=True)
+            row = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts LIMIT 1", (index, opened - 5.0, opened + 20.0)).fetchone()
+            ref = float(row[0]) if row else None
+        if ref is None:
             return None
-        ref = float(row[0])
-    rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index, now - LOOK - 40.0, now)).fetchall()
-    snap = snapshot([float(r[0]) for r in rows], [float(r[1]) for r in rows], ref, side, now, close)
+    if ref is None:
+        return None
+    got = ticks_mod.history.window(index, now - LOOK - 40.0, now)
+    if got is None:
+        tape = db.connect(s.tape_path, "tape", shared=True)
+        rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index, now - LOOK - 40.0, now)).fetchall()
+        got = ([float(r[0]) for r in rows], [float(r[1]) for r in rows])
+    snap = snapshot(got[0], got[1], ref, side, now, close)
     return snap["variety"] if snap else None
 
 
@@ -330,72 +426,96 @@ def skipped(varieties: Sequence[str], variety: str | None, side: str) -> bool:
     return variety is not None and (variety in varieties or f"{variety}-{side}" in varieties)
 
 
-TUNED_FILE = "tuned_varieties.json"
-TUNE_MAX_AGE = 3 * 86400.0  # a tuned list older than this is ignored: the markets it described have moved on
-_tuned_cache: dict[str, tuple[float, dict]] = {}
+CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety")
+LEDGER_KEEP = 72 * 3600.0  # how much settled history the in-memory ledger holds
+LEDGER_WARM = 48 * 3600.0  # how far back a cold start computes when favorite_cases holds nothing
 
 
-def tune(s: Settings, days: float = 10.0, min_n: int = 40, min_loss: float = 0.10, now: float | None = None) -> dict:
-    """The cells of the market-wide scoreboard that lost in BOTH halves of the last `days` days, so a lane can stop buying them without anyone reading a report.
+class Ledger:
+    """Every settled favorite of the last LEDGER_KEEP seconds, in memory, so the question "what does this variety pay right now" is answered from a list and never from a query.
 
-    The window is cut in two (older, newer) and each half is scored on its own with market_scoreboard. A (class, side, variety) cell is skipped only when each half has at least min_n/2 favorites and lost
-    at least `min_loss` dollars a $10 bet in each: a cell that lost in one half and won in the other is noise, and a cell that merely lost a cent is not worth a rule."""
+    Rows arrive from refresh_ledger() (a background job, new windows only) and are also saved to the favorite_cases table with their whole feature vector: that table is the history a regression can be fitted on later,
+    and it is what a restart reloads."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.rows: deque[dict] = deque()
+        self.seen: set[str] = set()
+        self.last_close = 0.0
+
+    def add(self, recs: Sequence[dict]) -> list[dict]:
+        new = []
+        with self._lock:
+            for r in sorted(recs, key=lambda r: r["close_ts"]):
+                if r["ticker"] in self.seen:
+                    continue
+                self.seen.add(r["ticker"])
+                self.rows.append(r)
+                self.last_close = max(self.last_close, r["close_ts"])
+                new.append(r)
+            cutoff = self.last_close - LEDGER_KEEP
+            while self.rows and self.rows[0]["close_ts"] < cutoff:
+                self.seen.discard(self.rows.popleft()["ticker"])
+        return new
+
+    def cells(self, start: float, end: float, cls: str | None = None) -> dict[tuple[str, str, str], tuple[int, float]]:
+        """(class, side, variety) -> (count, net $ of a $10 ticket each) for favorites that closed in (start, end]."""
+        out: dict[tuple[str, str, str], list[float]] = defaultdict(lambda: [0, 0.0])
+        with self._lock:
+            for r in self.rows:
+                if start < r["close_ts"] <= end and (cls is None or r["cls"] == cls):
+                    c = out[(r["cls"], r["side"], r["variety"])]
+                    c[0] += 1
+                    c[1] += r["pnl"]
+        return {k: (int(n), net) for k, (n, net) in out.items()}
+
+    def skips(self, cls: str, now: float, hours: float = 6.0, prior_weight: float = 15.0, min_loss: float = 0.10, min_n: int = 5) -> tuple[str, ...]:
+        """The "variety-side" cells a lane should not buy right now.
+
+        A cell's recent record (the last `hours`) is blended with its longer record (everything older in the ledger) as a prior worth `prior_weight` bets, so a handful of recent bets can move a cell but not flip it
+        on noise. It is skipped when the blend loses `min_loss` or more a $10 bet and the recent window holds at least `min_n` of its favorites. A cell with no longer record is judged on the recent window alone."""
+        cut = now - hours * 3600.0
+        recent = self.cells(cut, now, cls)
+        older = self.cells(0.0, cut, cls)
+        out = []
+        for key, (n, net) in sorted(recent.items()):
+            if n < min_n:
+                continue
+            m_recent = net / n
+            n_old, net_old = older.get(key, (0, 0.0))
+            post = (n * m_recent + prior_weight * (net_old / n_old)) / (n + prior_weight) if n_old else m_recent
+            if post <= -min_loss:
+                out.append(f"{key[2]}-{key[1]}")
+        return tuple(out)
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+
+ledger = Ledger()
+
+
+def _ensure_cases(store: Store) -> None:
+    store.db.execute(
+        "CREATE TABLE IF NOT EXISTS favorite_cases (ticker TEXT PRIMARY KEY, series TEXT, cls TEXT, coin TEXT, side TEXT, ts REAL, close_ts REAL, ask REAL, bid REAL, left REAL, won INTEGER, pnl REAL, "
+        "flip_pnl REAL, z REAL, slope REAL, crosses INTEGER, vol_ratio REAL, since_cross REAL, variety TEXT)"
+    )
+    store.db.execute("CREATE INDEX IF NOT EXISTS idx_favorite_cases_close ON favorite_cases(close_ts)")
+
+
+def refresh_ledger(s: Settings, now: float | None = None) -> int:
+    """Bring the ledger up to date, in a background job: reload what favorite_cases holds on a cold start, then score the windows settled since (with a look-back for results that arrive late) and save them.
+    Returns how many favorites were added."""
     now = time.time() if now is None else now
-    half = days / 2.0
-    older = market_scoreboard(s, half, half, now - half * 86400.0)
-    newer = market_scoreboard(s, half, half, now)
-
-    def pooled(board: dict) -> dict[tuple[str, str, str], tuple[float, float]]:
-        out: dict[tuple[str, str, str], list[float]] = defaultdict(lambda: [0.0, 0.0])
-        for (cls, _name, side, v), c in board.items():
-            out[(cls, side, v)][0] += c["n"]
-            out[(cls, side, v)][1] += c["net"]
-        return {k: (n, net) for k, (n, net) in out.items()}
-
-    a, b = pooled(older), pooled(newer)
-    skip: dict[str, list[str]] = {"crypto": [], "commodity": []}
-    cells: dict[str, dict[str, float]] = {}
-    for key in sorted(set(a) & set(b)):
-        (n1, net1), (n2, net2) = a[key], b[key]
-        cls, side, v = key
-        cells[f"{cls}:{v}-{side}"] = {"n_old": n1, "per_bet_old": round(net1 / n1, 3), "n_new": n2, "per_bet_new": round(net2 / n2, 3)}
-        if n1 >= min_n / 2 and n2 >= min_n / 2 and net1 / n1 <= -min_loss and net2 / n2 <= -min_loss:
-            skip[cls].append(f"{v}-{side}")
-    return {"at": now, "days": days, "min_n": min_n, "min_loss": min_loss, "skip": skip, "cells": cells}
-
-
-def write_tuned(s: Settings, **kw) -> dict:
-    """Run tune() and save it where the lanes read it (data_dir/tuned_varieties.json), replacing the old file in one step."""
-    import json
-    import os
-
-    out = tune(s, **kw)
-    path = s.data_dir / TUNED_FILE
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(out, indent=1))
-    os.replace(tmp, path)
-    _tuned_cache.pop(str(path), None)
-    return out
-
-
-def tuned_skips(s: Settings, series: str, now: float | None = None) -> tuple[str, ...]:
-    """The tuned skip list for this series asset class: () when there is no file, it is older than TUNE_MAX_AGE, or it cannot be read."""
-    import json
-
-    cls = "crypto" if crypto_index(series) else "commodity" if biquote_index(series) else None
-    if cls is None:
-        return ()
-    path = s.data_dir / TUNED_FILE
-    try:
-        mtime = path.stat().st_mtime
-        hit = _tuned_cache.get(str(path))
-        if hit is None or hit[0] != mtime:
-            hit = (mtime, json.loads(path.read_text()))
-            _tuned_cache[str(path)] = hit
-    except (OSError, ValueError):
-        return ()
-    data = hit[1]
-    now = time.time() if now is None else now
-    if now - float(data.get("at", 0.0)) > TUNE_MAX_AGE:
-        return ()
-    return tuple(data.get("skip", {}).get(cls, ()))
+    store = Store(s.db_path, s.exclude_versions)
+    _ensure_cases(store)
+    if not len(ledger):
+        rows = store.db.execute(f"SELECT {', '.join(CASE_FIELDS)} FROM favorite_cases WHERE close_ts > ? ORDER BY close_ts", (now - LEDGER_KEEP,)).fetchall()
+        ledger.add([{**{k: r[k] for k in CASE_FIELDS}, "won": bool(r["won"])} for r in rows])
+    start = (ledger.last_close - 1800.0) if ledger.last_close else now - LEDGER_WARM
+    added = ledger.add(list(favorites(s, start, now - 600.0)))
+    for r in added:
+        store.db.execute(f"INSERT OR IGNORE INTO favorite_cases ({', '.join(CASE_FIELDS)}) VALUES ({', '.join('?' * len(CASE_FIELDS))})", tuple(int(r[k]) if k in ("won", "crosses") else r[k] for k in CASE_FIELDS))
+    if added:
+        store.db.commit()
+    return len(added)
