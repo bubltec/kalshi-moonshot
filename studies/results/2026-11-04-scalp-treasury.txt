@@ -15,3 +15,13 @@ Reading: the mean reversion is real in the quotes but it is mostly the thin book
 Maker only, no stop (rest a bid 20 s, then a resting sell k above, holding up to 2/5/10 minutes, then the bid): treasury k 4c: 10 min hold won 73% but still -6.6c a trade; 5 min 66% won, -6.7c; 2 min 48%, -8.5c. Crypto -6.3c at 10 minutes. A tighter 2c target is no better. The winners are small (a few cents), the timeouts and drops are large, and the 4c spread is paid on every exit that is not a fill.
 
 Spot yield: Kalshi settles these on Pyth (the 1-minute candle close of InterestRate.US30Y etc.; the market lists floor_strike, and expiration_value once settled), but Pyth's public Hermes answers 401 and its benchmarks API 404 today, so the yields need an API key (PYTH_API_KEY). The four feed ids are in pythfeed.FEEDS (PYTH_US2Y/5Y/10Y/30Y) and record to the tape as soon as a key is set.
+
+Signals from Kalshi's own quotes (scripts/treasury_signal_study.py, 19,025 samples, next 30 s move of a mid-priced treasury market):
+  own move over the last 30 s: corr -0.10; after the largest drops the next 30 s averages +2.9c, after the largest rises -1.2c (reversion)
+  the other three yields' moves over 30 s: corr 0.005 overall, but others up 5c+ while this one is not up: +3.0c next 30 s (563 cases); others down 5c+: -2.4c (449) (a lead-lag across the four yield markets)
+  book size imbalance: corr 0.05; top decile +1.1c, bottom -0.9c
+So buy-low-sell-high has a real signal, about 3c per 30 s.
+
+Trading those signals (scripts/treasury_scalp_signals_study.py; entry on a 6c drop and/or the lead-lag signal; exit by a resting sell 3c or 5c above, a hedge lock when the opposite side's ask makes 1 - cost - fees positive, or the bid after 90 s):
+  taker in: -13.6c to -16.6c a trade, 32-43% won; maker in: -7.1c to -8.5c, 45-50% won; the lock fired on 1-17% of trades
+All-in cost of a taker round trip is about 7c (4c spread plus about 3.4c of fees at mid prices) against a 3c signal, and the losers (drift toward 0 or 1 late in a window) are far bigger than the winners. Not yet tried: entries limited to the first minutes, a stop, and resting both the buy and the sell so no spread or fee is paid.
