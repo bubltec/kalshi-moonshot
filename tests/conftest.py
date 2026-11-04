@@ -18,6 +18,15 @@ def _isolated_data_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_read_memory(monkeypatch):
+    """Store remembers its hot reads while nothing has written (store.remembers). Many tests write rows with a raw statement and read them straight back, so the memory is off here; tests/test_store_memory.py turns it on."""
+    from kalshi_moonshot import store
+
+    monkeypatch.setattr(store, "MEMO_TTL", 0.0)
+    store._MEMO.clear()
+
+
+@pytest.fixture(autouse=True)
 def _no_crash_minimum(monkeypatch):
     """The older exit tests use cheap prices and a plain gain to arm; the progress, give-back and spot rules have their own tests."""
     monkeypatch.setenv("CRASH_PROGRESS", "0")

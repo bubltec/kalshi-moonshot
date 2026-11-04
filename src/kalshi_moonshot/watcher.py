@@ -1142,12 +1142,14 @@ class ProfitWatcher:
                     (count, stake, round(paid, 4), row["id"]),
                 )
                 store.db.commit()
+                store.touch("bets")
             else:
                 store.db.execute(
                     "UPDATE decisions SET contracts=?, stake_usd=? WHERE id=?",
                     ((row["contracts"] or 0.0) + count, (row["stake_usd"] or 0.0) + stake, row["id"]),
                 )
                 store.db.commit()
+                store.touch("bets")
             return
         store.add_decision(
             ticker=ticker, title="", bid=0.0, ask=round(paid, 4), model_p=0.0, edge=0.0,

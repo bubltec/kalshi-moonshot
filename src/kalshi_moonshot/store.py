@@ -324,6 +324,46 @@ _PREP_LOCK = threading.Lock()
 _PREPARED: set[tuple[str, str]] = set()  # Postgres schemas already created and indexed in this process (a Store is built often)
 
 
+MEMO_TTL = 5.0  # seconds: the longest a remembered answer is kept even when nothing in this process wrote. Another process (the CLI, an admin job) writes without telling this one; this bounds how stale that can make a read.
+_GEN: dict[tuple[str, str], int] = {}
+_MEMO: dict[tuple, tuple[tuple[int, ...], float, Any]] = {}
+_MEMO_LOCK = threading.Lock()
+
+
+def _remembered(fn: Any) -> Any:
+    """Answer a hot read from memory while nothing it depends on has been written.
+
+    Each method names the domains it reads ("bets": the decisions rows; "orders": the orders rows). Every write through this module bumps its domains' generation (touch), so a remembered answer is used only while no
+    write has happened in this process since it was read, and for at most MEMO_TTL seconds. The generation is read BEFORE the query, so a write that lands during it leaves the entry stale rather than fresh."""
+
+    domains: tuple[str, ...] = fn.__memo_domains__
+
+    def wrapper(self: Store, *args: Any, **kw: Any) -> Any:
+        key = (str(self.path), fn.__name__, args, tuple(sorted(kw.items())))
+        gens = tuple(_GEN.get((str(self.path), d), 0) for d in domains)
+        now = time.monotonic()
+        hit = _MEMO.get(key)
+        if hit is not None and hit[0] == gens and now - hit[1] < MEMO_TTL:
+            val = hit[2]
+        else:
+            val = fn(self, *args, **kw)
+            with _MEMO_LOCK:
+                _MEMO[key] = (gens, now, val)
+        return list(val) if isinstance(val, list) else set(val) if isinstance(val, set) else val
+
+    wrapper.__name__ = fn.__name__
+    wrapper.__doc__ = fn.__doc__
+    return wrapper
+
+
+def remembers(*domains: str) -> Any:
+    def mark(fn: Any) -> Any:
+        fn.__memo_domains__ = domains
+        return _remembered(fn)
+
+    return mark
+
+
 class Store:
     def __init__(self, path: Path | str, exclude_versions: Iterable[str] = ()):
         self.path = Path(path)
@@ -348,6 +388,12 @@ class Store:
         self.bankroll = Bankroll(self)
         if first:
             self.rag.rebuild()
+
+    def touch(self, *domains: str) -> None:
+        """Tell the read memory that rows of these domains ("bets", "orders") changed. Every write in this module does it; code that writes with a raw statement on store.db must call it after the commit."""
+        with _MEMO_LOCK:
+            for d in domains:
+                _GEN[(str(self.path), d)] = _GEN.get((str(self.path), d), 0) + 1
 
     def _drop_old_grid(self) -> None:
         """The learner's tables gained the exit rule in their key. They are a cache of replays of the tape (grid.update rebuilds them), so an old shape is dropped."""
@@ -507,6 +553,7 @@ class Store:
         backup = self._snapshot()
         self.db.execute(f"DELETE FROM decisions WHERE {where}", versions)
         self.db.commit()
+        self.touch("bets", "orders")
         self.generation += 1
         self.rebuild_rag()
         out["deleted"] = deletable
@@ -521,6 +568,8 @@ class Store:
         marks = ",".join("?" for _ in d)
         cur = self.db.execute(f"INSERT INTO decisions ({cols}) VALUES ({marks})", list(d.values()))
         self.db.commit()
+        if d.get("action") == "bet":
+            self.touch("bets")
         return int(cur.lastrowid or 0)
 
     def add_flip(self, ticker: str, stopped_side: str, lane: str, stake_usd: float, ts: float | None = None) -> bool:
@@ -572,6 +621,7 @@ class Store:
             (1 if live else 0,),
         ).fetchall()
 
+    @remembers('bets')
     def holds_sized_bet(self, ticker: str, lane: str | None = None) -> bool:
         """A sized bet on this market is already open (so a re-score must not stake it again).
 
@@ -690,6 +740,7 @@ class Store:
             (outcome, time.time(), ticker),
         )
         self.db.commit()
+        self.touch("bets", "orders")
         self.generation += 1
         self.rag.index_settled([ticker])
 
@@ -700,6 +751,7 @@ class Store:
             f"SELECT * FROM decisions WHERE outcome IN ('yes','no'){extra} ORDER BY ts", args
         ).fetchall()
 
+    @remembers('bets')
     def bet_tickers_in_event(self, event_ticker: str) -> set[str]:
         """Unresolved paper or real bets in this event. Empty when event_ticker is blank."""
         if not event_ticker:
@@ -723,7 +775,9 @@ class Store:
         marks = ",".join("?" for _ in o)
         self.db.execute(f"INSERT INTO orders ({cols}) VALUES ({marks})", list(o.values()))
         self.db.commit()
+        self.touch("orders")
 
+    @remembers('orders')
     def net_contracts(self, ticker: str, env: str) -> float:
         row = self.db.execute(
             """SELECT COALESCE(SUM(CASE WHEN COALESCE(side,'buy')='buy' THEN fill_count
@@ -737,12 +791,14 @@ class Store:
     # Placed as an orders row with side='rest' and fill_count 0 (it holds nothing yet); each fill is booked as an
     # ordinary side='sell' row under the same order_id. Retiring one (cancelled, or given up on) zeroes its count.
 
+    @remembers('orders')
     def rest_sell(self, ticker: str, env: str) -> db.Row | None:
         """The latest resting sell placed on this ticker, working or not."""
         return self.db.execute(
             "SELECT * FROM orders WHERE ticker=? AND env=? AND side='rest' ORDER BY id DESC LIMIT 1", (ticker, env)
         ).fetchone()
 
+    @remembers('orders')
     def booked_rest_sell(self, order_id: str) -> tuple[float, float]:
         """Contracts of a resting sell already booked as sold, and their average fill price."""
         row = self.db.execute(
@@ -764,6 +820,7 @@ class Store:
         """Mark a resting sell no longer working, so nothing keeps waiting for it or stands down for it."""
         self.db.execute("UPDATE orders SET count=0 WHERE order_id=? AND side='rest'", (order_id,))
         self.db.commit()
+        self.touch("orders")
 
     def net_cost(self, ticker: str, env: str) -> float:
         """Dollars the bot's own orders have put into this ticker (buys cost, sales return), fees included in the order cost."""
@@ -778,15 +835,25 @@ class Store:
     def lane_versions(self, lane: str) -> list[db.Row]:
         return self.db.execute("SELECT ver, first_ts, settings FROM lane_versions WHERE lane=? ORDER BY first_ts", (lane,)).fetchall()
 
-    def exited_within(self, ticker: str, lane: str, seconds: float, now: float | None = None) -> float:
-        """Seconds still to wait if this lane sold this market less than `seconds` ago, else 0."""
-        now = time.time() if now is None else now
+    @remembers()
+    def window_strike(self, ticker: str) -> float | None:
+        """The strike of a market's window (None until the window row exists). A strike never changes, so this is remembered for the memory's TTL whatever else is written."""
+        row = self.db.execute("SELECT strike FROM windows WHERE ticker=?", (ticker,)).fetchone()
+        return float(row["strike"]) if row and row["strike"] else None
+
+    @remembers("bets")
+    def _last_exit(self, ticker: str, lane: str) -> float | None:
         row = self.db.execute(
             """SELECT MAX(exit_ts) AS t FROM decisions
                WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL""",
             (ticker, lane),
         ).fetchone()
-        last = row["t"] if row and row["t"] is not None else None
+        return float(row["t"]) if row and row["t"] is not None else None
+
+    def exited_within(self, ticker: str, lane: str, seconds: float, now: float | None = None) -> float:
+        """Seconds still to wait if this lane sold this market less than `seconds` ago, else 0."""
+        now = time.time() if now is None else now
+        last = self._last_exit(ticker, lane)
         return max(0.0, last + seconds - now) if last is not None else 0.0
 
     def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None, factors: str = "") -> None:
@@ -797,7 +864,9 @@ class Store:
             (price, time.time(), reason[:300], factors or None, ticker, lane, lane),
         )
         self.db.commit()
+        self.touch("bets")
 
+    @remembers('bets')
     def open_bets(self) -> list[db.Row]:
         """Unresolved bets not yet stopped out. One row per ticker and lane (that lane's first bet)."""
         return self.db.execute(
@@ -849,6 +918,7 @@ class Store:
             (env,),
         ).fetchall()
 
+    @remembers('bets', 'orders')
     def open_position_tickers(self, env: str) -> set[str]:
         """Tickers we still hold, from the orders themselves: more bought than sold, and the market not settled.
 

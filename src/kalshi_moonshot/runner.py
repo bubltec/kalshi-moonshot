@@ -535,8 +535,7 @@ def evaluate(
         from . import variants
 
         try:
-            row = store.db.execute("SELECT strike FROM windows WHERE ticker=?", (shot.ticker,)).fetchone()
-            kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=float(row["strike"] or 0.0) if row else None)
+            kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=store.window_strike(shot.ticker))
         except Exception as exc:  # a tape that cannot say is no reason to skip
             kind = None
             log.warning("variety unreadable for %s %s: %s", shot.ticker, shot.side, exc)

@@ -153,6 +153,7 @@ def buy(plan: BuyPlan, s: Settings, store: Store) -> BuyResult:
         else:
             store.db.execute("UPDATE decisions SET context=? WHERE id=?", (json.dumps(plan.ctx), plan.retry_of))
         store.db.commit()
+        store.touch("bets")
         return BuyResult("filled" if filled > 0 else "missed", retryable, plan.retry_of)
     row = store.add_decision(ticker=tk, title="", bid=0.0, ask=ask, model_p=0.0, edge=0.0, action="bet", mode="trade" if filled > 0 else "observe",
                              lane=plan.decision_lane, category=category(tk), side=plan.side, contracts=filled if filled > 0 else plan.paper_contracts,

@@ -90,4 +90,5 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                 )
                 out["missed"] += 1
         store.db.commit()
+        store.touch("bets")
     return out
