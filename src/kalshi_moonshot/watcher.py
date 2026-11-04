@@ -1541,6 +1541,8 @@ class ProfitWatcher:
             self._paper_rest_at = time.time()
             try:
                 got = paperfill.settle(s, store, self._tape_db())
+                taker = paperfill.settle_taker(s, store, self._tape_db())
+                got = {"filled": got["filled"] + taker["filled"], "missed": got["missed"] + taker["missed"]}
                 if got["filled"] or got["missed"]:
                     log.info("watcher: paper resting buys judged: %d would have filled, %d would not", got["filled"], got["missed"])
             except Exception:

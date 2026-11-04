@@ -13,12 +13,14 @@ import time
 from typing import Any
 
 from .config import Settings
+from .fillmodel import simulate_taker_buy
 from .lanes import lane_specs
 from .store import Store
 from .strategy import fee_per_contract
 
 FLOOR_MARK = "[floor-bid"  # runner.evaluate puts this at the front of a paper buy that a live lane would have rested at its floor
 MARK = "[rest-v2"
+MARK_FM = "[fill-model"  # a taker paper bet judged on the tape (settle_taker)
 OLD_MARK = "[rest-checked"  # the first version judged by the ask alone; it threw out bets a resting bid does fill, by a trade at its price while the ask stayed higher
 GRACE = 5.0  # seconds after the window before a bet is judged, so the last quotes are on the tape
 
@@ -87,6 +89,51 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                 store.db.execute(
                     "UPDATE decisions SET action='pass', contracts=NULL, stake_usd=NULL, outcome=NULL, reason=? WHERE id=?",
                     (f"{reason} {MARK}: a resting bid at {price:.2f} would not have filled, {why}]", r["id"]),
+                )
+                out["missed"] += 1
+        store.db.commit()
+        store.touch("bets")
+    return out
+
+
+def settle_taker(s: Settings, store: Store, tape: Any, now: float | None = None) -> dict[str, int]:
+    """Judge the paper bets of a taker lane that sets paper_fill_model, once their quotes are on the tape: a bet whose side's ask, at the decision, was within the lane's limit (the decision price plus buy_slip) is refilled at that ask;
+    one whose ask was over the limit becomes a pass. Live lanes are never touched. Returns {"filled": n, "missed": n}."""
+    now = time.time() if now is None else now
+    out = {"filled": 0, "missed": 0}
+    specs = {name: sp for name, sp in lane_specs(s).items() if sp.paper_fill_model and sp.buy_rest_seconds <= 0 and sp.entry_approach <= 0}
+    if not specs or tape is None:
+        return out
+    for lane, spec in specs.items():
+        rows = store.db.execute(
+            f"""SELECT id, ts, ticker, side, ask, reason, stake_usd FROM decisions
+                WHERE lane=? AND mode='observe' AND action='bet' AND exit_ts IS NULL AND ts < ? AND ts > ?
+                  AND COALESCE(reason,'') NOT LIKE '%{MARK_FM}%' AND COALESCE(reason,'') NOT LIKE '%live order not filled%'""",
+            (lane, now - GRACE, now - 24 * 3600),
+        ).fetchall()
+        for r in rows:
+            if s.is_live(lane, r["ticker"].split("-")[0]):
+                continue  # a live lane's bets were real orders
+            quotes = tape.execute(
+                "SELECT ts, bid, ask, bid_size, ask_size FROM quotes WHERE ticker=? AND ts >= ? AND ts <= ? AND bid > 0 AND ask > 0 ORDER BY ts",
+                (r["ticker"], r["ts"] - 1.0, r["ts"] + 5.0),
+            ).fetchall()
+            if not quotes:
+                continue
+            fill = simulate_taker_buy([tuple(float(x or 0.0) for x in q) for q in quotes], r["side"], float(r["ts"]), float(r["ask"]), spec.buy_slip)
+            reason = (r["reason"] or "")[:230]
+            if fill.filled and fill.price is not None:
+                stake = spec.fixed_stake or float(r["stake_usd"] or 0.0)
+                n = round(stake / (fill.price + fee_per_contract(fill.price)), 2) if stake > 0 else None
+                store.db.execute(
+                    "UPDATE decisions SET ask=?, contracts=COALESCE(?, contracts), reason=? WHERE id=?",
+                    (fill.price, n, f"{reason} {MARK_FM}: filled at {fill.price:.3f} (logged {float(r['ask']):.3f})]", r["id"]),
+                )
+                out["filled"] += 1
+            else:
+                store.db.execute(
+                    "UPDATE decisions SET action='pass', contracts=NULL, stake_usd=NULL, outcome=NULL, reason=? WHERE id=?",
+                    (f"{reason} {MARK_FM}: not filled, the ask was over the limit {float(r['ask']) + spec.buy_slip:.3f}]", r["id"]),
                 )
                 out["missed"] += 1
         store.db.commit()
