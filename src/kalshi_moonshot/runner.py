@@ -1212,7 +1212,14 @@ def place(
             note = _rest_take_profit(s, client, store, shot, lane_spec, placed.filled, entry)
             if note:
                 return Placed(f"{placed.note} {note}", placed.filled, placed.cost, placed.price)
-        return placed
+        if placed.filled > 0 or not lane_spec.buy_rest_then_take or "did not fill" not in placed.note:
+            return placed  # a refusal or a skip is not a miss: only a bid that rested its time and filled nothing falls back to the ask
+        again = _requote(s, client, store, shot, lane_spec, count)
+        if again is None:
+            return placed
+        log.info("buy %s %s: the resting bid did not fill, taking the ask at %.2f", shot.ticker, shot.side, again)
+        limit = again
+        order_key = f"{order_key}-take" if order_key else None  # a new id: Kalshi refuses one it has seen, even on an order that filled nothing
     buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
     retries = lane_spec.buy_retries if lane_spec is not None else 0
     key = order_key

@@ -164,3 +164,57 @@ def runner_sent_nothing():
     from kalshi_moonshot import buyer
 
     return buyer.SENT_NOTHING
+
+
+class RestClient(Client):
+    """A client whose resting bid fills nothing (or what `rest_fill` says) before the ask is bought."""
+
+    def __init__(self, fills, asks, rest_fill=None):
+        super().__init__(fills, asks)
+        self.rest_fill, self.rested = rest_fill, []
+
+    def buy_resting(self, ticker, side, count, price, seconds, client_order_id=None, post_only=True):
+        self.rested.append((count, round(price, 4)))
+        return {"order_id": "r1"}
+
+    def portfolio_rows(self, path, key, min_ts=None, pages=1):
+        if self.rest_fill is None:
+            return []
+        return [{"fill_id": "f1", "market_ticker": "KXBTC15M-1", "count_fp": str(self.rest_fill), "yes_price_dollars": "0.2900", "no_price_dollars": "0.7100", "fee_cost": "0",
+                 "ts": 1.0, "book_side": "ask", "is_taker": False, "order_id": "r1", "action": "buy", "side": "yes"}]
+
+
+def test_a_resting_bid_that_fills_nothing_falls_back_to_the_ask(setup, monkeypatch):
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    client = RestClient(fills=[1.5], asks=[0.30])
+    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
+    assert client.rested and got.filled == 1.5 and client.ids == ["k-take"]
+
+
+def test_a_resting_bid_that_fills_is_not_followed_by_a_buy(setup, monkeypatch):
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    client = RestClient(fills=[1.5], asks=[0.30], rest_fill=1.5)
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert got.filled == 1.5 and client.sent == []
+
+
+def test_without_the_setting_a_missed_resting_bid_stays_a_miss(setup, monkeypatch):
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_retries=0)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    client = RestClient(fills=[1.5], asks=[0.30])
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert got.filled == 0 and client.sent == []
+
+
+def test_the_fallback_does_not_chase_a_market_that_ran_away(setup, monkeypatch):
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    client = RestClient(fills=[1.5], asks=[0.30, 0.40])  # place() reads 0.30; the fresh read is 0.40, past the first limit
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert got.filled == 0 and client.sent == []
