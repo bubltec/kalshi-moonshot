@@ -1,0 +1,9 @@
+Resting buy at b, resting sell at t, both legs post-only (no fee), hold to settlement if the sell does not fill (scripts/resting_pair_study.py, resting_pair_regime_study.py; host tapes 2026-10-27 to 11-04, 900 windows per group, minutes 2 to 14; the buy rests only while the ask is above it and fills when the ask comes down to it; the sell fills when the side's bid reaches it).
+
+  pair        crypto                  treasury                commodity
+  0.20->0.40  -4.1c +-0.6 (hit 40%)   -5.1c +-1.1             -5.7c +-0.7
+  0.30->0.60  -4.1c +-1.0 (hit 43%)   -7.1c +-1.6             -7.4c +-1.0
+  0.40->0.80  -3.9c +-1.3 (hit 45%)   -8.5c +-2.0             -6.0c +-1.3
+  0.50->0.80  -3.3c +-1.3             -9.7c +-2.0             -4.5c +-1.3
+  0.60->0.90  -2.7c +-1.4             -10.7c +-2.2            -2.7c +-1.5
+Every pair loses with no fees: the side wins 2-3 points less than its price when the price falls through the bid (it keeps falling more often than it recovers). 0.40->0.80 on crypto by regime: wild -2.9c, mid -3.5c, calm -5.0c; by variety: G -2.6c, D -9.6c, E -5.9c; by time left at the fill: 540-780 s -1.1c +-1.2 (the best slice, about break-even), 300-540 s -9.3c, 120-300 s -12.3c. No regime or variety is positive. (A first version of this study let the buy fill in markets already under the bid, which overstated the losses; it was fixed before the table above.)
