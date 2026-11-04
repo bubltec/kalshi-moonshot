@@ -603,3 +603,45 @@ def test_a_lane_with_auto_vol_gate_follows_the_tuned_level(tmp_path, monkeypatch
     finally:
         volregime.regime = volregime.VolRegime()
         volregime.thresholds = volregime.Thresholds()
+
+
+def test_a_precious_lane_skips_a_bet_where_the_spot_and_the_corrected_center_disagree_about_the_strike(tmp_path, monkeypatch):
+    from kalshi_moonshot import commodities, config, regime, runner, ticks
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    pricing = commodities.Pricing(center=4059.52, spot=4060.95, basis=-0.0004, sigma=0.0011, sigma_market=None, points=6, r2=0.0, age_s=4.0, anchor="window")
+    assert commodities.parse_spot_center(pricing.note(0.2, 0.04)) == (4060.95, 4059.52)  # the note format and the parser stay in step
+    assert commodities.parse_spot_center("no model: priced at the 0.82 asked") is None
+
+    class Fixed:
+        def __init__(self, why):
+            self.why = why
+
+        def estimate(self, client, settings, shot):
+            return Estimate(0.2, self.why)
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXGOLD15M']\nrequire_spot_center_agree=true\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.strikes.clear()
+    ticks.strikes.note("KXGOLD15M-9", 4059.87)
+    no = LongShot("KXGOLD15M-9", "t", "", 0.79, 0.80, 160.0 / 3600.0, "2099-01-01T00:00:00Z", 160.0 / 3600.0, lane="guarded", series="KXGOLD15M", side="no")
+    try:
+        # spot 4060.95 is ABOVE the strike (a NO bet needs it below); the corrected center 4059.52 is below: the bet leans on the offset
+        why = pricing.note(0.2, 0.04)
+        out = runner.evaluate(s, None, None, store, no, estimators={"market": Fixed(why)})
+        assert out.action == "pass" and "do not both sit" in out.note
+        both = pricing.note(0.2, 0.04).replace("spot 4060.95", "spot 4059.40")  # spot and center both below the strike
+        ok = runner.evaluate(s, None, None, store, no, estimators={"market": Fixed(both)})
+        assert "do not both sit" not in ok.note
+        yes = LongShot("KXGOLD15M-9", "t", "", 0.79, 0.80, 160.0 / 3600.0, "2099-01-01T00:00:00Z", 160.0 / 3600.0, lane="guarded", series="KXGOLD15M", side="yes")
+        wrong = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed(why)})
+        assert wrong.action == "pass" and "do not both sit" in wrong.note  # spot above, center below: a YES bet disagrees too
+        plain = runner.evaluate(s, None, None, store, no, estimators={"market": Fixed("no model: priced at the 0.82 asked")})
+        assert "do not both sit" not in plain.note  # no pair in the note: unchanged
+    finally:
+        ticks.strikes.clear()

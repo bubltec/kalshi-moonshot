@@ -318,6 +318,15 @@ class Pricing:
         )
 
 
+_SPOT_CENTER = re.compile(r"spot ([0-9.]+) .*?center ([0-9.]+)")
+
+
+def parse_spot_center(why: str) -> tuple[float, float] | None:
+    """(spot, center) from a Pricing.note line, or None when the line has no such pair (a model that is not the commodity ladder)."""
+    m = _SPOT_CENTER.search(why or "")
+    return (float(m.group(1)), float(m.group(2))) if m else None
+
+
 WINDOW_POINTS = 6  # boundaries needed before a learned offset is trusted
 WINDOW_MAX_AGE = 3 * 3600.0
 WINDOW_REFRESH = 600.0

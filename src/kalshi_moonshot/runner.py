@@ -611,6 +611,18 @@ def evaluate(
             note = f"the favorite is variety {osnap['variety']} ({variants.NAMES[osnap['variety']]}): the lane does not buy against it. {note}"
         else:
             note = f"[favorite {osnap['variety']}] {note}"
+    if bet and spec.require_spot_center_agree:
+        from . import commodities
+        from . import ticks as ticks_mod
+
+        pair = commodities.parse_spot_center(why)
+        strike = ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker)
+        if pair is not None and strike:
+            side_yes = shot.side == "yes"
+            spot_on, center_on = ((x >= strike) if side_yes else (x < strike) for x in pair)
+            if not (spot_on and center_on):
+                bet = False
+                note = f"the spot {pair[0]:.6g} and the corrected center {pair[1]:.6g} do not both sit on the {shot.side.upper()} side of the {strike:.6g} strike. {note}"
     if bet and spec.max_crossings >= 0:
         from . import ticks as ticks_mod
 
