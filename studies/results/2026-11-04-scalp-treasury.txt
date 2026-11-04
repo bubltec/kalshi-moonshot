@@ -25,3 +25,8 @@ So buy-low-sell-high has a real signal, about 3c per 30 s.
 Trading those signals (scripts/treasury_scalp_signals_study.py; entry on a 6c drop and/or the lead-lag signal; exit by a resting sell 3c or 5c above, a hedge lock when the opposite side's ask makes 1 - cost - fees positive, or the bid after 90 s):
   taker in: -13.6c to -16.6c a trade, 32-43% won; maker in: -7.1c to -8.5c, 45-50% won; the lock fired on 1-17% of trades
 All-in cost of a taker round trip is about 7c (4c spread plus about 3.4c of fees at mid prices) against a 3c signal, and the losers (drift toward 0 or 1 late in a window) are far bigger than the winners. Not yet tried: entries limited to the first minutes, a stop, and resting both the buy and the sell so no spread or fee is paid.
+
+Two resting legs (scripts/treasury_two_legs_study.py): a resting bid for 20 s on the dip and/or lead-lag signal, entries only in minutes 1 to 8, a resting sell 3c/5c/8c above, an 8c stop, the bid after 90 s. Two fill models: quote (the ask must come down to our bid; our sell fills when the bid reaches it) and print (a real taker trade at or through our price, from flow_1s, also counts).
+  fills: 22% of dip bids (10% of lead bids) under the quote model, 26% (14%) with prints
+  mean -8.6c a trade (quote), -7.0c (print); 26-35% hit the target, 60-76% hit the 8c stop, 2-8% time out; every cell lost, about -40c a window
+The stop, not the spread, now does the damage: a filled resting bid is mostly a bid that the market then ran through. Adverse selection beats the fee saving.
