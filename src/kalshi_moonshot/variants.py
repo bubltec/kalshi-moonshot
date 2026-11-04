@@ -316,7 +316,7 @@ def favorites(s: Settings, start: float, end: float) -> Iterator[dict]:
         flip_contracts = 10.0 / other
         flip = ((1.0 - other) * flip_contracts if not won else -10.0) - fee_per_contract(other) * flip_contracts
         yield {"ticker": w["ticker"], "series": series, "cls": "crypto" if crypto else "commodity", "coin": COINS.get(series) or series[2:-3], "side": side, "ts": at, "close_ts": close,
-               "ask": ask, "bid": bid, "left": close - at, "won": bool(won), "pnl": pnl, "flip_pnl": flip, "flip_price": other, **snap}
+               "ask": ask, "bid": bid, "left_s": close - at, "won": bool(won), "pnl": pnl, "flip_pnl": flip, "flip_price": other, **snap}
 
 
 def market_scoreboard(s: Settings, days: float = 6.0, recent_days: float = 1.0, now: float | None = None) -> dict[tuple[str, str, str, str], dict]:
@@ -426,7 +426,7 @@ def skipped(varieties: Sequence[str], variety: str | None, side: str) -> bool:
     return variety is not None and (variety in varieties or f"{variety}-{side}" in varieties)
 
 
-CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety")
+CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left_s", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety")
 LEDGER_KEEP = 72 * 3600.0  # how much settled history the in-memory ledger holds
 LEDGER_WARM = 48 * 3600.0  # how far back a cold start computes when favorite_cases holds nothing
 
@@ -497,7 +497,7 @@ ledger = Ledger()
 
 def _ensure_cases(store: Store) -> None:
     store.db.execute(
-        "CREATE TABLE IF NOT EXISTS favorite_cases (ticker TEXT PRIMARY KEY, series TEXT, cls TEXT, coin TEXT, side TEXT, ts REAL, close_ts REAL, ask REAL, bid REAL, left REAL, won INTEGER, pnl REAL, "
+        "CREATE TABLE IF NOT EXISTS favorite_cases (ticker TEXT PRIMARY KEY, series TEXT, cls TEXT, coin TEXT, side TEXT, ts REAL, close_ts REAL, ask REAL, bid REAL, left_s REAL, won INTEGER, pnl REAL, "
         "flip_pnl REAL, z REAL, slope REAL, crosses INTEGER, vol_ratio REAL, since_cross REAL, variety TEXT)"
     )
     store.db.execute("CREATE INDEX IF NOT EXISTS idx_favorite_cases_close ON favorite_cases(close_ts)")
