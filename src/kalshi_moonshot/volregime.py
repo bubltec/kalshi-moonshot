@@ -25,14 +25,16 @@ LOOK = 6 * 3600.0
 BASE_LOOK = 72 * 3600.0
 BASE_EVERY = 3 * 3600.0
 BASE_STEP = 1800.0
-MIN_RETURNS = 200  # of the 360 one-minute returns in 6 hours: fewer than this and the figure is unknown
+MIN_SHARE = 0.55  # of the one-minute returns in the look-back: fewer than this and the figure is unknown
+GLITCH = 0.05  # a one-minute move over 5% is a bad tick, not volatility
 
 
-def hourly_vol_bp(values_by_minute: dict[int, float], end_minute: int) -> float | None:
-    """Hourly volatility in bp from the last-tick-of-each-minute values over the 6 hours ending at `end_minute`, or None when there are too few returns."""
-    pts = [values_by_minute.get(k) for k in range(end_minute - 360, end_minute + 1)]
-    rets = [math.log(b / a) for a, b in itertools.pairwise(pts) if a and b]
-    if len(rets) < MIN_RETURNS:
+def hourly_vol_bp(values_by_minute: dict[int, float], end_minute: int, look: float = LOOK) -> float | None:
+    """Hourly volatility in bp from the last-tick-of-each-minute values over the `look` seconds ending at `end_minute`, or None when there are too few returns."""
+    n = int(look // 60)
+    pts = [values_by_minute.get(k) for k in range(end_minute - n, end_minute + 1)]
+    rets = [math.log(b / a) for a, b in itertools.pairwise(pts) if a and b and abs(math.log(b / a)) < GLITCH]
+    if len(rets) < MIN_SHARE * n:
         return None
     return statistics.pstdev(rets) * math.sqrt(60) * 1e4
 
@@ -70,27 +72,28 @@ class VolRegime:
         with self._lock:
             return {c: (v, self._base.get(c, 0.0)) for c, v in self._now.items()}
 
-    def update(self, s, coins: dict[str, str], now: float | None = None) -> dict[str, float | None]:
-        """Redo the current figure of every coin ({coin: tape index id}) from the tick history, and the baseline from the tape when it is old. Returns {coin: ratio}."""
+    def update(self, s, coins: dict[str, str | tuple[str, float]], now: float | None = None) -> dict[str, float | None]:
+        """Redo the current figure of every market ({name: tape index id, or (index id, look-back seconds)}) from the tick history, and the baseline from the tape when it is old. Returns {name: ratio}."""
         now = time.time() if now is None else now
-        for coin, index in coins.items():
-            got = ticks_mod.history.window(index, now - LOOK - 120.0, now)
+        spec = {c: (v if isinstance(v, tuple) else (v, LOOK)) for c, v in coins.items()}
+        for coin, (index, look) in spec.items():
+            got = ticks_mod.history.window(index, now - look - 120.0, now)
             if got is not None:
-                self.set(coin, hourly_vol_bp(minute_values(got[0], got[1]), int(now // 60)), None)
+                self.set(coin, hourly_vol_bp(minute_values(got[0], got[1]), int(now // 60), look), None)
         if now - self._base_at >= BASE_EVERY:
             self._base_at = now
-            self._baseline(s, coins, now)
+            self._baseline(s, spec, now)
         return {c: self.rel(c) for c in coins}
 
-    def _baseline(self, s, coins: dict[str, str], now: float) -> None:
+    def _baseline(self, s, spec: dict[str, tuple[str, float]], now: float) -> None:
         from . import db
 
         if not db.tape_exists(s.tape_path):
             return
         tape = db.connect(s.tape_path, "tape", shared=True)
-        for coin, index in coins.items():
+        for coin, (index, look) in spec.items():
             try:
-                rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value>0 ORDER BY ts", (index, now - BASE_LOOK - LOOK, now)).fetchall()
+                rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value>0 ORDER BY ts", (index, now - BASE_LOOK - look, now)).fetchall()
             except Exception:
                 log.warning("volregime: could not read %s for its baseline", index, exc_info=True)
                 continue
@@ -98,13 +101,13 @@ class VolRegime:
             samples = []
             t = now - BASE_LOOK
             while t <= now:
-                v = hourly_vol_bp(by_min, int(t // 60))
+                v = hourly_vol_bp(by_min, int(t // 60), look)
                 if v:
                     samples.append(v)
                 t += BASE_STEP
             if len(samples) >= 12:
                 self.set(coin, None, statistics.median(samples))
-                log.info("volregime: %s normal hourly vol %.1f bp from %d samples", coin, statistics.median(samples), len(samples))
+                log.info("volregime: %s normal hourly vol %.1f bp from %d samples (%.0f h look-back)", coin, statistics.median(samples), len(samples), look / 3600.0)
 
 
 regime = VolRegime()

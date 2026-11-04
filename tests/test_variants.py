@@ -498,3 +498,53 @@ def test_a_gradual_erosion_is_its_own_variety_and_a_spike_or_a_steady_cushion_is
     assert snap["variety"] == "H" and "H" in variants.NAMES
     assert variants.classify_features({"z": 0.5, "slope": 0.0, "crosses": 0, "vol_ratio": 1.0, "since_cross": 300.0, "d60": -0.2, "d120": -0.1, "erosion": 0.1}) == "E"  # no erosion: stays E
     assert variants.classify_features({"z": 1.5, "slope": 0.0, "crosses": 0, "vol_ratio": 1.0, "since_cross": 300.0, "d60": -0.9, "d120": -0.9, "erosion": 0.9}) == "B"  # far and flat keeps its letter: H only subdivides E
+
+
+def test_a_commodity_lane_stands_aside_in_a_wild_regime_and_a_commodity_has_its_own_look_back(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants, volregime
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    # a four-hour look-back is enough for a commodity; the same history is too short for a six-hour crypto reading
+    ticks.history.clear()
+    now = 3_000_000.0
+    rows, px = [], 100.0
+    for k in range(5 * 3600):
+        if k % 60 == 0:
+            px *= 1.0005 if (k // 60) % 2 else 0.9995
+        rows.append((now - 5 * 3600 + k, px))
+    ticks.history.warm("BQ_X", rows, now - 5 * 3600)
+    reg = volregime.VolRegime()
+    reg._base_at = now
+    reg.set("GOLD", None, 20.0)
+    reg.set("BTC", None, 20.0)
+    got = reg.update(SimpleNamespace(), {"GOLD": ("BQ_X", 4 * 3600.0), "BTC": "BQ_X"}, now)
+    assert got["GOLD"] is not None and got["BTC"] is None
+    ticks.history.clear()
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXGOLD15M']\nmax_vol_rel=1.3\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    volregime.regime = volregime.VolRegime()
+    shot = LongShot("KXGOLD15M-9", "t", "", 0.85, 0.86, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="guarded", series="KXGOLD15M", side="yes")
+    try:
+        assert variants.coin_of("KXGOLD15M") == "GOLD"
+        unknown = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert unknown.action == "pass" and "regime unknown" in unknown.note
+        volregime.regime.set("GOLD", 30.0, 20.0)  # 1.5x
+        wild = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert wild.action == "pass" and "outside the lane" in wild.note
+        volregime.regime.set("GOLD", 22.0, 20.0)  # 1.1x
+        calm = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert "[vol 1.10x]" in calm.note and "outside the lane" not in calm.note
+    finally:
+        volregime.regime = volregime.VolRegime()

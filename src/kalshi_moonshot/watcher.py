@@ -1556,9 +1556,11 @@ class ProfitWatcher:
                 self._ticks_warm = True
                 log.info("watcher: warmed %d ticks of history", ticks_mod.warm_from_tape(s, indexes, time.time()))
             from . import volregime
+            from .biquotefeed import SERIES_INDEX
             from .kalshiws import INDEX_FOR
 
-            coins = {variants.COINS[f"{prefix}15M"]: ix for prefix, ix in INDEX_FOR.items() if f"{prefix}15M" in variants.COINS}
+            coins: dict[str, str | tuple[str, float]] = {variants.COINS[f"{prefix}15M"]: ix for prefix, ix in INDEX_FOR.items() if f"{prefix}15M" in variants.COINS}  # crypto: 6 h look-back
+            coins.update({prefix[2:]: (ix, 4 * 3600.0) for prefix, ix in SERIES_INDEX.items()})  # commodities: 4 h (their feed is shorter), the figure the study used
             ratios = volregime.regime.update(s, coins)
             log.info("watcher: volatility regime %s", {c: (round(r, 2) if r else None) for c, r in ratios.items()})
             added = variants.refresh_ledger(s)
