@@ -1,4 +1,4 @@
-# shock, 14 days of held bets to 2026-11-04 (173 energy bets, 22 would have lost)
+# shock, since 11-02 13:45 UTC, about 2.5 days (the spot feed started then) (173 energy bets, 22 would have lost)
                           bets  sales  on_losers  stuck  delta   hold
 shock_bp shock_margin_bp                                             
 0        0                 173     16         13      0  13.56  43.84

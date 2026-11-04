@@ -1,4 +1,4 @@
-# brent-wrong-side, 53 Brent bets over 14 days to 2026-11-04 (hold +30.93), replayed with the live lane file
+# brent-wrong-side, 53 Brent bets over since 11-02 13:45 UTC, about 2.5 days (the spot feed started then) (hold +30.93), replayed with the live lane file
                                                     bets  sales  on_losers  stuck  delta   hold
 wrong_side_series wrong_side_bp wrong_side_seconds                                             
 KXBRENT15M        1             10                    53      7          4      0 -12.84  30.93

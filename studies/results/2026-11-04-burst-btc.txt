@@ -1,4 +1,4 @@
-# burst-btc, 14 days of held bets to 2026-11-04, replayed through the watcher with the live lane file
+# burst-btc, 10-31 to 11-03, about 4 days of held bets, replayed through the watcher with the live lane file
                             bets  sales  on_losers  stuck  delta    hold
 burst_ratio burst_favorite                                              
 0           0.80             130     11          0      0  -6.56  136.48

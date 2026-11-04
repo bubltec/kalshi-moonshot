@@ -1,4 +1,4 @@
-# wrong-side, 14 days of held bets to 2026-11-04, replayed through the watcher with the live lane file
+# wrong-side, since 11-02 13:45 UTC, about 2.5 days (the spot feed started then), replayed through the watcher with the live lane file
                                   bets  sales  on_losers  stuck  delta   hold
 wrong_side_bp wrong_side_seconds                                             
 0             5                    173     26         11      0  -7.88  43.84

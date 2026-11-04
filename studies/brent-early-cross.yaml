@@ -1,0 +1,9 @@
+description: "whether selling Brent earlier on a cross of the window-open price helps: the wrong-side exit with its last-seconds window widened (0 = any time left) and a range of sizes and holds"
+lane: commodity_energy
+bets: {lane: commodity_energy, series: [KXBRENT15M]}
+since_days: 14
+fixed: {wrong_side_series: ["KXBRENT15M"]}
+grid:
+  wrong_side_last: [120, 240, 420, 0]
+  wrong_side_bp: [1, 3, 5, 10]
+  wrong_side_seconds: [5, 15, 30, 60]

@@ -1,4 +1,4 @@
-# shock-memory, 14 days of held bets to 2026-11-04, replayed through the watcher with the live lane file
+# shock-memory, since 11-02 13:45 UTC, about 2.5 days (the spot feed started then), replayed through the watcher with the live lane file
                          bets  sales  on_losers  stuck  delta   hold
 shock_memory shock_last                                             
 0            60           173     21         14      0   6.13  43.84
