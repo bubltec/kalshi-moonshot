@@ -113,6 +113,8 @@ def _run(tape: Tape) -> Outcome:
         events = heapq.merge(
             ((ts, 0, {"kind": "quote", "ticker": tape.ticker, "bid": bid, "ask": ask, "ts": ts}) for ts, bid, ask in tape.quotes),
             ((ts, 1, {"kind": "index", "index_id": tape.index_id, "value": v, "ts": ts}) for ts, v in tape.ticks),
+            ((ts + 0.5, 2, {"kind": "trade", "ticker": tape.ticker, "taker": taker, "count": n, "price": px, "ts": ts + 0.5})  # a second's volume, placed mid-second
+             for ts, yes_n, no_n, px in tape.flow for taker, n in (("yes", yes_n), ("no", no_n)) if n > 0),
             key=lambda x: (x[0], x[1]),
         )
         for ts, _order, e in events:

@@ -29,6 +29,7 @@ class Tape:
     result: str  # "yes" | "no" | "" while unsettled
     quotes: list[list[float]] = field(default_factory=list)  # [ts, yes_bid, yes_ask]
     ticks: list[list[float]] = field(default_factory=list)  # [ts, value]
+    flow: list[list[float]] = field(default_factory=list)  # [ts, yes_taker_contracts, no_taker_contracts, vwap_yes_price] per second: what the burst exit reads
     bought_ts: float = 0.0
     variety: str = ""  # variants.py letter at the buy, "" when unknown
     note: str = ""  # what happened live, in a line
@@ -81,7 +82,9 @@ def capture(store: Any, tape_db: Any, ticker: str, lane: str, name: str = "", no
     bought = float(d["ts"])
     q = tape_db.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid>0 AND ask>0 ORDER BY ts", (ticker, max(bought, close - QUOTES_BEFORE_CLOSE), close)).fetchall()
     k = tape_db.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index_id, close - TICKS_BEFORE_CLOSE, close)).fetchall()
+    fl = tape_db.execute("SELECT ts, yes_vol, no_vol, vwap FROM flow_1s WHERE ticker=? AND ts BETWEEN ? AND ? ORDER BY ts", (ticker, close - TICKS_BEFORE_CLOSE, close)).fetchall()
     return Tape(
+        flow=[[float(x[0]), float(x[1]), float(x[2]), float(x[3] or 0.0)] for x in fl],
         name=name or f"{ticker}-{lane}", ticker=ticker, lane=lane, side=d["side"] or "yes", entry=float(d["ask"]), stake_usd=float(d["stake_usd"]),
         close_ts=close, index_id=index_id, ref=ref, result=(w["result"] or "") if w else "", bought_ts=bought,
         quotes=[[round(float(x[0]), 3), float(x[1]), float(x[2])] for x in q], ticks=[[round(float(x[0]), 3), float(x[1])] for x in k], note=note,

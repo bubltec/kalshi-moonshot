@@ -16,11 +16,16 @@ class Study:
     lane: str
     since_days: float
     grid: dict[str, list[Any]]
+    fixed: dict[str, Any]  # settings held at one value for every point, to isolate the rule under study
+    bets_lane: str  # the lane whose settled, held bets are replayed (they are replayed as `lane`)
+    series: list[str]  # only these series, [] for all
 
 
 def load(path: Path) -> Study:
     d = yaml.safe_load(path.read_text())
-    return Study(path.stem, str(d.get("description", "")), d["lane"], float(d.get("since_days", 14)), {k: list(v) for k, v in d["grid"].items()})
+    bets = d.get("bets", {})
+    return Study(path.stem, str(d.get("description", "")), d["lane"], float(d.get("since_days", 14)), {k: list(v) for k, v in d["grid"].items()},
+                 dict(d.get("fixed", {})), bets.get("lane", d["lane"]), list(bets.get("series", [])))
 
 
 STATUSES = ("promising", "needs_work", "untested", "dead")

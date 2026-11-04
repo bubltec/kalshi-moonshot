@@ -1,0 +1,8 @@
+description: how far through the strike the BTC index goes before the strike-through sale fires, and how close to the close it looks (burst off, to isolate the rule)
+lane: crypto_btc
+bets: {lane: crypto_favorite, series: [KXBTC15M]}
+since_days: 14
+fixed: {burst_exit: false}
+grid:
+  strike_through_sale: [0, 0.002, 0.005, 0.01, 0.02]
+  strike_through_seconds: [30, 60, 90]

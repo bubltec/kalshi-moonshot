@@ -9,8 +9,8 @@ from . import harness
 from .tape import Tape, capture
 
 
-def _from_db(days: float, lane: str) -> list[Tape]:
-    """Every settled bet of `lane` in the last `days` days that was held to the close, as a tape."""
+def _from_db(days: float, lane: str, series: list[str] | None = None, as_lane: str = "") -> list[Tape]:
+    """Every settled bet of `lane` (of `series`, if given) in the last `days` days that was held to the close, as a tape of lane `as_lane`."""
     import time
 
     from .. import config, db
@@ -28,6 +28,10 @@ def _from_db(days: float, lane: str) -> list[Tape]:
             t = capture(store, tape_db, r["ticker"], lane)
         except SystemExit:
             continue
+        if series and r["ticker"].split("-")[0] not in series:
+            continue
+        if as_lane:
+            t.lane = as_lane
         if t.ref > 0 and len(t.ticks) >= 60 and len(t.quotes) >= 20:  # a bet from before the spot feed was recorded cannot be replayed
             out.append(t)
     return out
@@ -89,8 +93,8 @@ def main() -> None:
 
         study = studies.load(a.file)
         grid = study.grid
-        tapes = _from_db(study.since_days, study.lane) if a.since else [Tape.load(p) for p in sorted(a.tapes.glob("*.json"))]
-        rows = sweep(tapes, a.lanes.read_text(), grid, study.lane)
+        tapes = _from_db(study.since_days, study.bets_lane, study.series, study.lane) if a.since else [Tape.load(p) for p in sorted(a.tapes.glob("*.json"))]
+        rows = sweep(tapes, a.lanes.read_text(), grid, study.lane, study.fixed)
         if a.csv:
             import csv
             import sys

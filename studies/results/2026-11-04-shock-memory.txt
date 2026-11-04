@@ -1,0 +1,12 @@
+# shock-memory, 14 days of held bets to 2026-11-04, replayed through the watcher with the live lane file
+                         bets  sales  on_losers  stuck  delta   hold
+shock_memory shock_last                                             
+0            60           173     21         14      0   6.13  43.84
+             90           173     25         15      0   6.48  43.84
+             120          173     27         16      0  16.02  43.84
+60           60           173     26         16      0   8.87  43.84
+             90           173     28         16      0  12.28  43.84
+             120          173     31         16      0   7.35  43.84
+120          60           173     28         16      0   2.10  43.84
+             90           173     29         16      0   5.36  43.84
+             120          173     33         16      0  -1.22  43.84

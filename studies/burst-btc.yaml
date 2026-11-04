@@ -1,0 +1,8 @@
+description: "BTC's own burst bar and favorite floor, over the BTC bets the crypto favorite lane held before crypto_btc existed. Total losses count; delta is against holding to the close"
+lane: crypto_btc
+bets: {lane: crypto_favorite, series: [KXBTC15M]}
+since_days: 14
+fixed: {burst_exit: true, strike_through_sale: 0}
+grid:
+  burst_ratio: [0, 6, 10, 20, 40]
+  burst_favorite: [0.80, 0.85, 0.89]
