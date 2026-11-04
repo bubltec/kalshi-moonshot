@@ -111,6 +111,11 @@ class LaneSpec:
     max_crossings: int = -1  # buy only when the market's mid crossed 50c at most this many times in the last crossings_seconds (a yield or price crossing its target), read from the quotes held in memory (ticks.MidHistory). 0 = a calm chart only; -1 = off. History too short to say = no buy. 2026-11-04: 88 treasury favorites with no crossing won 93%, those with two or more 74-83%
     crossings_seconds: float = 300.0
     skip_varieties_auto: bool = False  # also skip the varieties the in-memory ledger (variants.Ledger) shows losing right now for the asset class of the series: the last auto_hours of settled favorites, blended with the older ledger as a prior. The ledger is refreshed every few minutes by the watcher and read without a query; crypto reads its settlement index against the window strike
+    skip_markets_auto: bool = False  # also skip a market (gold, palladium, ETH...) or a market's price band that the ledger shows losing over auto_market_hours, judged against its asset class (variants.Ledger.market_skip). Varieties pool every market of a class; the markets differ
+    auto_market_hours: float = 48.0  # the stretch a market is judged over: its quality moves slowly, so this is longer than auto_hours
+    auto_market_prior: float = 30.0  # bets of the class mean a market's record is blended with
+    auto_market_min_loss: float = 0.30  # dollars lost per $10 favorite (after the blend) before a whole market is skipped
+    auto_market_min_n: int = 20  # favorites of the market needed in the stretch before it can be skipped
     auto_hours: float = 6.0  # the recent stretch the auto skip judges, in hours: the markets shift in 3-6 hour periods
     auto_prior_weight: float = 15.0  # how many bets of the older record the recent stretch is blended with (higher = slower to change its mind)
     auto_min_loss: float = 0.10  # dollars lost per $10 bet (after the blend) before a variety is skipped

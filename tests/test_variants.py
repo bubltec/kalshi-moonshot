@@ -271,3 +271,27 @@ def test_a_lane_with_max_crossings_buys_only_a_calm_chart_and_a_named_paper_lane
         assert chop.action == "pass" and "choppy chart" in chop.note
     finally:
         ticks.mids.clear()
+
+
+def _fav(close, coin, ask, pnl, cls="commodity"):
+    return {"ticker": f"{coin}{close}{ask}", "cls": cls, "coin": coin, "side": "yes", "variety": "E", "close_ts": close, "ask": ask, "pnl": pnl}
+
+
+def test_the_ledger_skips_a_market_that_loses_against_its_class_and_a_losing_price_band():
+    led = variants.Ledger()
+    now = 100 * 3600.0
+    for k in range(40):  # Brent pays, palladium loses, gold sits at the class mean
+        led.add([_fav(now - 3600 - k * 60, "BRENT", 0.83, +0.6), _fav(now - 3600 - k * 60 - 7, "PALLADIUM", 0.83, -1.0), _fav(now - 3600 - k * 60 - 13, "GOLD", 0.83, -0.2)])
+    why = led.market_skip("commodity", "PALLADIUM", 0.83, now)
+    assert why is not None and "PALLADIUM" in why and "lost" in why
+    assert led.market_skip("commodity", "BRENT", 0.83, now) is None and led.market_skip("commodity", "GOLD", 0.83, now) is None
+    assert led.market_skip("crypto", "PALLADIUM", 0.83, now) is None  # judged inside its own class
+    assert led.market_skip("commodity", "NATGAS", 0.83, now) is None  # an unseen market is not skipped
+    assert led.market_skip("commodity", "PALLADIUM", 0.83, now + 100 * 3600.0) is None  # nothing left in the stretch: no verdict
+    band = variants.Ledger()  # a market that is fine overall but loses in one price band
+    for k in range(30):
+        band.add([_fav(now - 3600 - k * 60, "SILVER", 0.80, -1.5), _fav(now - 3600 - k * 60 - 7, "SILVER", 0.85, +1.5), _fav(now - 3600 - k * 60 - 13, "SILVER", 0.90, +1.5)])
+    assert band.market_skip("commodity", "SILVER", 0.80, now, min_loss=5.0) is not None and "priced .78-.82" in band.market_skip("commodity", "SILVER", 0.80, now, min_loss=5.0)
+    assert band.market_skip("commodity", "SILVER", 0.85, now, min_loss=5.0) is None
+    assert variants.coin_of("KXPALLADIUM15M") == "PALLADIUM" and variants.coin_of("KXBTC15M") == "BTC" and variants.coin_of("KX30YRRATE15M") == "30YRRATE"
+    assert [variants.market_band(a) for a in (0.78, 0.82, 0.86, 0.87, 0.92)] == [".78-.82", ".82-.87", ".82-.87", ".87+", ".87+"]

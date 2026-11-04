@@ -549,6 +549,15 @@ def evaluate(
         if kind is not None and variants.skipped(skips, kind, shot.side):
             bet = False
             note = f"variety {kind} ({variants.NAMES[kind]}): this lane does not buy it. {note}"
+    if bet and spec.skip_markets_auto:
+        from . import variants
+
+        mcls = "crypto" if variants.crypto_index(shot.series) else "commodity" if variants.biquote_index(shot.series) else None
+        if mcls is not None:
+            why_not = variants.ledger.market_skip(mcls, variants.coin_of(shot.series), shot.ask, time.time(), spec.auto_market_hours, spec.auto_market_prior, spec.auto_market_min_loss, spec.auto_market_min_n)
+            if why_not:
+                bet = False
+                note = f"market skipped: {why_not}. {note}"
     if bet and spec.max_crossings >= 0:
         from . import ticks as ticks_mod
 

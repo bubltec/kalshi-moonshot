@@ -488,11 +488,47 @@ class Ledger:
                 out.append(f"{key[2]}-{key[1]}")
         return tuple(out)
 
+    def market_skip(self, cls: str, coin: str, ask: float, now: float, hours: float = 48.0, prior_weight: float = 30.0, min_loss: float = 0.30, min_n: int = 20, cell_min_n: int = 12, cell_min_loss: float = 0.40) -> str | None:
+        """Why a favorite of this market at this price should not be bought right now, or None.
+
+        Varieties pool every market of a class, but the markets differ: over 2026-11-02/04 Brent favorites beat their price by 5.8 points and palladium's lost to it by 6.3. So the ledger is also read per market, over a longer
+        stretch (`hours`, a market's quality moves slowly): the market's mean result a $10 bet is blended with its class's as a prior worth `prior_weight` bets, and the market is skipped when that blend loses `min_loss` or more
+        (and it has `min_n` favorites). Then the same is done for the market's price band (market_band), blended toward the market's own blend: a band that loses `cell_min_loss` or more is skipped even when the market is not."""
+        start = now - hours * 3600.0
+        with self._lock:
+            rows = [r for r in self.rows if start < r["close_ts"] <= now and r["cls"] == cls and "coin" in r and "ask" in r]
+        if len(rows) < min_n:
+            return None
+        class_mean = sum(r["pnl"] for r in rows) / len(rows)
+        mine = [r for r in rows if r["coin"] == coin]
+        coin_post = class_mean
+        if mine:
+            coin_post = (sum(r["pnl"] for r in mine) + prior_weight * class_mean) / (len(mine) + prior_weight)
+            if len(mine) >= min_n and coin_post <= -min_loss:
+                return f"{coin} has lost {coin_post:+.2f} a $10 favorite over the last {hours:g}h ({len(mine)} favorites, class mean {class_mean:+.2f})"
+        band = market_band(ask)
+        cell = [r for r in mine if market_band(r["ask"]) == band]
+        if len(cell) >= cell_min_n:
+            cell_post = (sum(r["pnl"] for r in cell) + prior_weight * coin_post) / (len(cell) + prior_weight)
+            if cell_post <= -cell_min_loss:
+                return f"{coin} favorites priced {band} have lost {cell_post:+.2f} a $10 bet over the last {hours:g}h ({len(cell)} favorites)"
+        return None
+
     def __len__(self) -> int:
         return len(self.rows)
 
 
 ledger = Ledger()
+
+
+def market_band(ask: float) -> str:
+    """The price band a favorite's cell is judged in."""
+    return ".78-.82" if ask < 0.82 else ".82-.87" if ask < 0.87 else ".87+"
+
+
+def coin_of(series: str) -> str:
+    """The market name the ledger files a series under (BTC, GOLD, 30YRRATE...)."""
+    return COINS.get(series) or series[2:-3]
 
 
 def _ensure_cases(store: Store) -> None:

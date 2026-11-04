@@ -1532,7 +1532,7 @@ class ProfitWatcher:
         if follow and self.follow is not None:
             self.follow(follow)
         self._book_resting(store, s)
-        if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties_auto or sp.skip_varieties for sp in lane_specs(s).values()):
+        if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties_auto or sp.skip_varieties or sp.skip_markets_auto for sp in lane_specs(s).values()):
             self._ledger_at = time.time()
             threading.Thread(target=self._refresh_ledger, args=(s,), daemon=True, name="variety-ledger").start()  # the scoreboard reads days of ticks: off the refresh cycle and at low priority
         if time.time() - self._paper_rest_at >= 10.0:
