@@ -386,10 +386,10 @@ def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_
     return out
 
 
-def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None, strike: float | None = None) -> str | None:
-    """The variety a bet would be at this moment, from the index ticks of the last five minutes, which are read from memory (ticks.history) and only from the tape when the history does not reach back that far.
-    A commodity reads BiQuote against its own price when the window opened; a crypto coin reads its settlement index against the window's `strike`. None when the series has no index, the reference is missing
-    (no BiQuote tick near the open, or no strike for a coin), or there are too few recent ticks: a caller that skips on a variety must not skip on None."""
+def snapshot_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None, strike: float | None = None) -> dict | None:
+    """The shape of a bet at this moment (snapshot(): z, slope, crosses, vol_ratio, since_cross and the variety letter), from the index ticks of the last five minutes, which are read from memory (ticks.history) and only
+    from the tape when the history does not reach back that far. A commodity reads BiQuote against its own price when the window opened; a crypto coin reads its settlement index against the window's `strike`. None when
+    the series has no index, the reference is missing (no BiQuote tick near the open, or no strike for a coin), or there are too few recent ticks: a caller that skips on a shape must not skip on None."""
     crypto = crypto_index(series)
     index = crypto or biquote_index(series)
     if not index or left_seconds <= 0:
@@ -417,7 +417,12 @@ def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: f
         tape = db.connect(s.tape_path, "tape", shared=True)
         rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index, now - LOOK - 40.0, now)).fetchall()
         got = ([float(r[0]) for r in rows], [float(r[1]) for r in rows])
-    snap = snapshot(got[0], got[1], ref, side, now, close)
+    return snapshot(got[0], got[1], ref, side, now, close)
+
+
+def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None, strike: float | None = None) -> str | None:
+    """The variety letter of snapshot_now, or None."""
+    snap = snapshot_now(s, series, side, left_seconds, now, strike)
     return snap["variety"] if snap else None
 
 

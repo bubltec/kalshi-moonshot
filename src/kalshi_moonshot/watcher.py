@@ -1534,7 +1534,7 @@ class ProfitWatcher:
         if follow and self.follow is not None:
             self.follow(follow)
         self._book_resting(store, s)
-        if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties_auto or sp.skip_varieties or sp.skip_markets_auto for sp in lane_specs(s).values()):
+        if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties_auto or sp.skip_varieties or sp.skip_markets_auto or sp.min_vol_rel > 0 or sp.max_vol_rel > 0 for sp in lane_specs(s).values()):
             self._ledger_at = time.time()
             threading.Thread(target=self._refresh_ledger, args=(s,), daemon=True, name="variety-ledger").start()  # the scoreboard reads days of ticks: off the refresh cycle and at low priority
         if time.time() - self._paper_rest_at >= 10.0:
@@ -1555,6 +1555,12 @@ class ProfitWatcher:
             if not self._ticks_warm:
                 self._ticks_warm = True
                 log.info("watcher: warmed %d ticks of history", ticks_mod.warm_from_tape(s, indexes, time.time()))
+            from . import volregime
+            from .kalshiws import INDEX_FOR
+
+            coins = {variants.COINS[f"{prefix}15M"]: ix for prefix, ix in INDEX_FOR.items() if f"{prefix}15M" in variants.COINS}
+            ratios = volregime.regime.update(s, coins)
+            log.info("watcher: volatility regime %s", {c: (round(r, 2) if r else None) for c, r in ratios.items()})
             added = variants.refresh_ledger(s)
             if added:
                 log.info("watcher: variety ledger +%d favorites (%d held)", added, len(variants.ledger))

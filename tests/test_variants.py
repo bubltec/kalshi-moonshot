@@ -295,3 +295,70 @@ def test_the_ledger_skips_a_market_that_loses_against_its_class_and_a_losing_pri
     assert band.market_skip("commodity", "SILVER", 0.85, now, min_loss=5.0) is None
     assert variants.coin_of("KXPALLADIUM15M") == "PALLADIUM" and variants.coin_of("KXBTC15M") == "BTC" and variants.coin_of("KX30YRRATE15M") == "30YRRATE"
     assert [variants.market_band(a) for a in (0.78, 0.82, 0.86, 0.87, 0.92)] == [".78-.82", ".82-.87", ".82-.87", ".87+", ".87+"]
+
+
+def test_the_volatility_regime_is_read_from_memory_and_compared_with_the_coin_normal():
+    from kalshi_moonshot import ticks, volregime
+
+    ticks.history.clear()
+    reg = volregime.VolRegime()
+    now = 1_000_000.0
+    calm, wild = 0.0002, 0.0008  # one-minute returns
+    px = 100.0
+    for k in range(0, 7 * 3600, 1):  # 7 h of 1 Hz ticks: the first hour calm, then the last 6 h wild
+        t = now - 7 * 3600 + k
+        if k % 60 == 0:
+            px *= 1 + (wild if (k // 60) % 2 else -wild) * (1 if k >= 3600 else calm / wild)
+        ticks.history.note("IX", t, px)
+    got = ticks.history.window("IX", now - 6 * 3600 - 120, now)
+    vol = volregime.hourly_vol_bp(volregime.minute_values(got[0], got[1]), int(now // 60))
+    assert vol is not None and 40 < vol < 90  # about 0.0008 a minute -> 0.0008 * sqrt(60) = 62 bp an hour
+    reg.set("TEST", vol, vol / 1.5)
+    assert reg.rel("TEST") == pytest.approx(1.5) and reg.rel("NONE") is None
+    assert volregime.hourly_vol_bp({}, 100) is None  # no history: unknown, never zero
+    ticks.history.clear()
+
+
+def test_a_lane_buys_only_in_its_volatility_regime_and_behind_the_strike(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants, volregime
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.05,0.5]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmin_vol_rel=1.3\nmax_cushion_z=-1.0\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    volregime.regime = volregime.VolRegime()
+    monkeypatch.setattr(runner, "volregime", volregime, raising=False)
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    index = variants.crypto_index("KXBTC15M")
+    for k in range(176):  # the index sits 20 bp ABOVE the strike, steady: a NO bet is 'behind' by many typical moves
+        ticks.history.note(index, now - 350.0 + k * 2.0, 100.20 + 0.0004 * (k % 2))
+    shot = LongShot("KXBTC15M-9", "t", "", 0.11, 0.12, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="guarded", series="KXBTC15M", side="no")
+    try:
+        out = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert out.action == "pass" and "volatility regime unknown" in out.note  # no reading: no buy
+        volregime.regime.set("BTC", 70.0, 50.0)  # 1.4x its normal
+        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert "[vol 1.40x]" in ok.note and "[z -" in ok.note and "above the lane" not in ok.note
+        volregime.regime.set("BTC", 55.0, 50.0)  # 1.1x: not wild
+        calm = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert calm.action == "pass" and "outside the lane" in calm.note
+        volregime.regime.set("BTC", 70.0, 50.0)
+        yes = LongShot("KXBTC15M-9", "t", "", 0.88, 0.89, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="guarded", series="KXBTC15M", side="yes")
+        ahead = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert ahead.action == "pass" and "above the lane" in ahead.note  # the side that leads is not the underdog
+    finally:
+        ticks.history.clear()
+        volregime.regime = volregime.VolRegime()

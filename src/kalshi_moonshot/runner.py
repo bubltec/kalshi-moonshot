@@ -558,6 +558,34 @@ def evaluate(
             if why_not:
                 bet = False
                 note = f"market skipped: {why_not}. {note}"
+    if bet and (spec.min_vol_rel > 0 or spec.max_vol_rel > 0):
+        from . import variants, volregime
+
+        vrel = volregime.regime.rel(variants.coin_of(shot.series))
+        if vrel is None:
+            bet = False
+            note = f"volatility regime unknown for {variants.coin_of(shot.series)}. {note}"
+        elif (spec.min_vol_rel > 0 and vrel < spec.min_vol_rel) or (spec.max_vol_rel > 0 and vrel > spec.max_vol_rel):
+            bet = False
+            note = f"volatility regime {vrel:.2f}x its normal is outside the lane's {spec.min_vol_rel:g}-{spec.max_vol_rel:g}. {note}"
+        else:
+            note = f"[vol {vrel:.2f}x] {note}"
+    if bet and spec.max_cushion_z < 90:
+        from . import variants
+
+        try:
+            snap = variants.snapshot_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=store.window_strike(shot.ticker))
+        except Exception as exc:
+            snap = None
+            log.warning("cushion unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if snap is None:
+            bet = False
+            note = f"cushion unreadable for {shot.ticker}. {note}"
+        elif snap["z"] > spec.max_cushion_z:
+            bet = False
+            note = f"cushion z {snap['z']:+.2f} is above the lane's {spec.max_cushion_z:g}. {note}"
+        else:
+            note = f"[z {snap['z']:+.2f}] {note}"
     if bet and spec.max_crossings >= 0:
         from . import ticks as ticks_mod
 
