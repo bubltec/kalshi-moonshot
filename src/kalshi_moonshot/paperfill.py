@@ -20,6 +20,7 @@ from .strategy import fee_per_contract
 
 FLOOR_MARK = "[floor-bid"  # runner.evaluate puts this at the front of a paper buy that a live lane would have rested at its floor
 MARK = "[rest-v2"
+FOLLOW_UP = 8.0  # seconds after the rest window in which the live lane's fallback buy lands (the order, its retry and the fill)
 MARK_FM = "[fill-model"  # a taker paper bet judged on the tape (settle_taker)
 OLD_MARK = "[rest-checked"  # the first version judged by the ask alone; it threw out bets a resting bid does fill, by a trade at its price while the ask stayed higher
 GRACE = 5.0  # seconds after the window before a bet is judged, so the last quotes are on the tape
@@ -53,7 +54,7 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                 continue  # its window is still open
             quotes = tape.execute(
                 "SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts > ? AND ts <= ? AND bid > 0 AND ask > 0 ORDER BY ts",
-                (r["ticker"], r["ts"] - 10.0, r["ts"] + window),
+                (r["ticker"], r["ts"] - 10.0, r["ts"] + window + FOLLOW_UP),
             ).fetchall()
             if not quotes:
                 continue  # no quotes yet: look again later
@@ -63,7 +64,7 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
 
             at_order = [q for q in quotes if q[0] <= r["ts"]]
             crossed = bool(at_order) and side_ask(at_order[-1]) <= price + 1e-9
-            later = [q for q in quotes if q[0] > r["ts"]]
+            later = [q for q in quotes if r["ts"] < q[0] <= r["ts"] + window]
             came = any(side_ask(q) <= price + 1e-9 for q in later)
             if not came:  # a seller can hit our bid while the ask stays above it: a trade by a taker against our side at our price or better
                 for fl in tape.execute("SELECT ts, yes_vol, no_vol, vwap FROM flow_1s WHERE ticker=? AND ts > ? AND ts <= ?", (r["ticker"], int(r["ts"]), int(r["ts"] + window))).fetchall():
@@ -84,6 +85,14 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                     (price, n, round(stake, 4) if n is not None else None, f"{reason} {MARK}: a resting bid at {price:.2f} would have filled]", r["id"]),
                 )
                 out["filled"] += 1
+            elif spec.buy_rest_then_take and not crossed and (follow := _take_after_rest(spec, r, quotes, window)) is not None:
+                stake = spec.fixed_stake or float(r["stake_usd"] or 0.0)
+                n = round(stake / (follow + fee_per_contract(follow)), 2) if r["action"] == "pass" and stake > 0 else None
+                store.db.execute(
+                    "UPDATE decisions SET action='bet', ask=?, contracts=COALESCE(?, contracts), stake_usd=COALESCE(?, stake_usd), reason=? WHERE id=?",
+                    (follow, n, round(stake, 4) if n is not None else None, f"{reason} {MARK}: the resting bid at {price:.2f} did not fill, the live lane then takes the ask: bought at {follow:.3f}]", r["id"]),
+                )
+                out["filled"] += 1
             else:
                 why = "the ask was already at our bid (post only cross)" if crossed else "nothing traded at our bid and the ask never came down to it"
                 store.db.execute(
@@ -94,6 +103,19 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
         store.db.commit()
         store.touch("bets")
     return out
+
+
+def _take_after_rest(spec: Any, r: Any, quotes: Any, window: float) -> float | None:
+    """The price the live lane's fallback buy would have got (buy_rest_then_take): after the rest window the ask is read again and bought if it is inside the lane's price band and not more than buy_retry_chase over the ask
+    the bet was decided at. None when it would not have been (the market ran away, or no quote came)."""
+    after = [q for q in quotes if q[0] >= r["ts"] + window]
+    if not after:
+        return None
+    q = after[0]
+    a = float(q[2]) if r["side"] == "yes" else 1.0 - float(q[1])
+    if a < spec.price[0] - 1e-9 or a > spec.price[1] + 1e-9 or a > float(r["ask"]) + max(0.0, spec.buy_retry_chase) + 1e-9:
+        return None
+    return round(a, 4)
 
 
 def settle_taker(s: Settings, store: Store, tape: Any, now: float | None = None) -> dict[str, int]:

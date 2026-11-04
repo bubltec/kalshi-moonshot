@@ -60,3 +60,31 @@ def test_a_taker_paper_bet_is_refilled_or_turned_into_a_pass_on_the_tape(tmp_pat
     assert a["action"] == "bet" and a["ask"] == pytest.approx(0.83) and "filled at 0.830" in a["reason"]
     assert b["action"] == "pass" and "not filled" in b["reason"]
     assert paperfill.settle_taker(s, store, tape, now=1000.0) == {"filled": 0, "missed": 0}  # each bet is judged once
+
+
+def test_a_paper_resting_bid_that_misses_falls_back_to_the_ask_the_way_the_live_lane_does(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.restlane]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=3.0\nseries=['KXBTC15M']\nbuy_rest_seconds=6\nbuy_rest_below=0.01\nbuy_rest_then_take=true\nbuy_retry_chase=0.05\n"
+        "[lane.restplain]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=3.0\nseries=['KXBTC15M']\nbuy_rest_seconds=6\nbuy_rest_below=0.01\n")
+    monkeypatch.setenv("LIVE_LANES", "none")
+    s = config.load()
+    store = Store(s.db_path)
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape.execute("CREATE TABLE IF NOT EXISTS quotes (ts REAL NOT NULL, ticker TEXT NOT NULL, bid REAL, ask REAL, last REAL, sts INTEGER, bid_size REAL, ask_size REAL)")
+    tape.execute("CREATE TABLE IF NOT EXISTS flow_1s (ts INTEGER NOT NULL, ticker TEXT NOT NULL, yes_vol REAL NOT NULL, no_vol REAL NOT NULL, n INTEGER NOT NULL, vwap REAL)")
+    for tk in ("KXBTC15M-A", "KXBTC15M-B"):  # the ask stays at 0.83 (the bid at 0.82 never fills: it was decided at ask 0.83 and rests at 0.82), then the market runs to 0.86 and 0.90
+        tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (99.0, ?, 0.81, 0.83)", (tk,))
+        tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (103.0, ?, 0.82, 0.84)", (tk,))
+    tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (107.0, 'KXBTC15M-A', 0.84, 0.86)")  # 0.86 is within 0.83 + 0.05
+    tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (107.0, 'KXBTC15M-B', 0.88, 0.90)")  # 0.90 is over it
+    tape.commit()
+    for lane, tk in (("restlane", "KXBTC15M-A"), ("restlane", "KXBTC15M-B"), ("restplain", "KXBTC15M-A")):
+        store.add_decision(ticker=tk, title="", bid=0.0, ask=0.83, model_p=0.0, edge=0.0, action="bet", mode="observe", lane=lane, side="yes", contracts=3, stake_usd=3.0, close_time="2099-01-01T00:00:00Z", ts=100.0)
+    got = paperfill.settle(s, store, tape, now=1000.0)
+    rows = {(r["lane"], r["ticker"]): r for r in store.db.execute("SELECT lane, ticker, action, ask, reason FROM decisions").fetchall()}
+    a, b, plain = rows[("restlane", "KXBTC15M-A")], rows[("restlane", "KXBTC15M-B")], rows[("restplain", "KXBTC15M-A")]
+    assert a["action"] == "bet" and a["ask"] == pytest.approx(0.86) and "then takes the ask" in a["reason"]  # the fallback buys at the fresh ask, inside the chase
+    assert b["action"] == "pass"  # the market ran 7c past the decision: the live lane would not chase it
+    assert plain["action"] == "pass"  # without buy_rest_then_take a missed resting bid is a miss
+    assert got["filled"] == 1 and got["missed"] == 2
