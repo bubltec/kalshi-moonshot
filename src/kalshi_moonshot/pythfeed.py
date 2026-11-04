@@ -1,4 +1,4 @@
-"""Pyth prices for the commodity markets, from the Pyth Core (Hermes) stream. Kalshi settles these 15-minute markets on Pyth, and its strike is the Pyth value at the open, so a Pyth tick and the strike are on the same scale.
+"""Pyth prices for the commodity and Treasury-yield markets, from the Pyth Core (Hermes) stream. Kalshi settles these 15-minute markets on Pyth, and its strike is the Pyth value at the open, so a Pyth tick and the strike are on the same scale.
 
 Needs an API key (PYTH_API_KEY, or PYTH_API_KEY_PATH naming a file that holds it). Without one nothing starts. Each feed becomes a tape index named in FEEDS, one tick a second like the crypto indexes, so the tape can replay a strike-through
 and the watcher can run it. Read-only; places nothing.
@@ -31,6 +31,11 @@ FEEDS: dict[str, tuple[str, str]] = {
     "PYTH_COPPER": ("KXCOPPER", "b2b238aeb6ef5a722c5cf278595bf40434e174cac4f88c8ad5b6f5009b548c59"),
     "PYTH_PLATINUM": ("KXPLATINUM", "398e4bbc7cbf89d6648c21e08019d878967677753b3096799595c78f805a34e5"),
     "PYTH_PALLADIUM": ("KXPALLADIUM", "80367e9664197f37d89a07a804dffd2101c479c7c4e8490501bc9d9e1e7f9021"),
+    # 2026-11-04: the Treasury yield markets settle on these (percent, five decimals). Public Hermes now answers 401, so they record only with a key.
+    "PYTH_US2Y": ("KX2YRRATE", "7d01ec0cb9d38918cd497f97b24cb6cea5552993f5da05863886e6a2d33ee0aa"),
+    "PYTH_US5Y": ("KX5YRRATE", "7d220b081152db0d74a93d3ce383c61d0ec5250c6dd2b2cdb2d1e4b8919e1a6e"),
+    "PYTH_US10Y": ("KX10YRRATE", "9c196541230ba421baa2a499214564312a46bb47fb6b61ef63db2f70d3ce34c1"),
+    "PYTH_US30Y": ("KX30YRRATE", "424c69939fc52a459f6dde758d80f74a3628c0e9b48bfc142df1270c9b9131be"),
 }
 INDEX_FOR_PREFIX = {prefix: index for index, (prefix, _) in FEEDS.items()}
 _BY_FEED = {fid: index for index, (_, fid) in FEEDS.items()}

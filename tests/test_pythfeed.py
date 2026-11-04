@@ -39,3 +39,11 @@ def test_no_key_no_feed(monkeypatch):
     monkeypatch.delenv("PYTH_API_KEY", raising=False)
     monkeypatch.delenv("PYTH_API_KEY_PATH", raising=False)
     assert pythfeed.api_key() == ""
+
+
+def test_the_treasury_yield_feeds_map_to_their_series_and_parse():
+    assert pythfeed.index_for_series("KX30YRRATE15M") == "PYTH_US30Y" and pythfeed.index_for_series("KX2YRRATE15M") == "PYTH_US2Y"
+    assert pythfeed.index_for_series("KX10YRRATE15M") == "PYTH_US10Y" and pythfeed.index_for_series("KX5YRRATE15M") == "PYTH_US5Y"
+    frame = {"parsed": [{"id": pythfeed.FEEDS["PYTH_US30Y"][1], "price": {"price": "530017", "expo": -5, "publish_time": 1_800_000_000}}]}
+    [e] = pythfeed.parse_update(frame, 1_800_000_000.5)
+    assert e["index_id"] == "PYTH_US30Y" and abs(e["value"] - 5.30017) < 1e-9

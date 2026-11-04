@@ -11,3 +11,7 @@ Round trips, per trade, net of fees (taker in = buy at the ask; maker in = rest 
   Waiting for a 4c dip first, or a bigger target (8c), changed little. Every cell lost; treasury lost the most.
 
 Reading: the mean reversion is real in the quotes but it is mostly the thin book flickering around a 4c spread, which a trader cannot collect: the price has to move 8c from the mid before a taker scalp breaks even. What is missing is a spot yield to say which flicker is noise and which is a move: Pyth is not on the tape (no US30Y index ticks), so no variety can be read for these markets. Untested: only entering when the book is a 2c spread, a maker bid and a maker sell on both sides at once, and a Pyth reference.
+
+Maker only, no stop (rest a bid 20 s, then a resting sell k above, holding up to 2/5/10 minutes, then the bid): treasury k 4c: 10 min hold won 73% but still -6.6c a trade; 5 min 66% won, -6.7c; 2 min 48%, -8.5c. Crypto -6.3c at 10 minutes. A tighter 2c target is no better. The winners are small (a few cents), the timeouts and drops are large, and the 4c spread is paid on every exit that is not a fill.
+
+Spot yield: Kalshi settles these on Pyth (the 1-minute candle close of InterestRate.US30Y etc.; the market lists floor_strike, and expiration_value once settled), but Pyth's public Hermes answers 401 and its benchmarks API 404 today, so the yields need an API key (PYTH_API_KEY). The four feed ids are in pythfeed.FEEDS (PYTH_US2Y/5Y/10Y/30Y) and record to the tape as soon as a key is set.
