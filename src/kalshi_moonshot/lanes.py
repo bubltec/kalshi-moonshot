@@ -108,6 +108,8 @@ class LaneSpec:
     shock_log_only: bool = False  # the shock watch runs and writes shock_log (a would-fire row is fired=2) but never sells, so a lane can collect the data without trading on it. Not part of the lane version
     shock_off_series: tuple[str, ...] = ()  # series the shock exit does not act on, e.g. KXBRENT15M: its spot makes sharp 8 bp moves that reverse, so a 2026-11-03 replay sold 8 times for 3 losers saved and 5 winners cut, -$17.9 vs holding at every cushion
     skip_varieties: tuple[str, ...] = ()  # varieties (variants.py letters) this lane does not buy: "G" on either side, "A-yes" on one side. Read at the decision from BiQuote against its window-open price, so commodities only; an unreadable one is not skipped. 2026-11-03 walk-forward on the lanes' live bets: the cells that paid in training were the same in three folds and left out G and A-yes, which then lost $49, $19 and $9 in the test period
+    max_crossings: int = -1  # buy only when the market's mid crossed 50c at most this many times in the last crossings_seconds (a yield or price crossing its target), read from the quotes held in memory (ticks.MidHistory). 0 = a calm chart only; -1 = off. History too short to say = no buy. 2026-11-04: 88 treasury favorites with no crossing won 93%, those with two or more 74-83%
+    crossings_seconds: float = 300.0
     skip_varieties_auto: bool = False  # also skip the varieties the in-memory ledger (variants.Ledger) shows losing right now for the asset class of the series: the last auto_hours of settled favorites, blended with the older ledger as a prior. The ledger is refreshed every few minutes by the watcher and read without a query; crypto reads its settlement index against the window strike
     auto_hours: float = 6.0  # the recent stretch the auto skip judges, in hours: the markets shift in 3-6 hour periods
     auto_prior_weight: float = 15.0  # how many bets of the older record the recent stretch is blended with (higher = slower to change its mind)
@@ -379,7 +381,7 @@ def lane_specs_from(s: Settings, strategies_toml: str | None, overrides_json: st
             raise ValueError(f"lane {spec.name!r}: entry_socket needs review_minutes, because it re-runs that lane's review")
     if not s.paper_lanes and s.live_lanes is not None:
         # The live host runs only what is live. A switched-off lane keeps its spec, so a bet it left open is still stopped and sold.
-        lanes = {name: spec if name in s.live_lanes else replace(spec, enabled=False) for name, spec in lanes.items()}
+        lanes = {name: spec if name in s.live_lanes or name in s.paper_named else replace(spec, enabled=False) for name, spec in lanes.items()}
     return lanes
 
 

@@ -530,7 +530,9 @@ def evaluate(
     if bet and spec.skip_varieties_auto:
         from . import variants
 
-        skips = tuple(dict.fromkeys((*skips, *variants.ledger.skips("crypto" if variants.crypto_index(shot.series) else "commodity", time.time(), spec.auto_hours, spec.auto_prior_weight, spec.auto_min_loss, spec.auto_min_n))))
+        cls = "crypto" if variants.crypto_index(shot.series) else "commodity" if variants.biquote_index(shot.series) else None  # a market with no index (a Treasury yield) has no class in the ledger
+        if cls is not None:
+            skips = tuple(dict.fromkeys((*skips, *variants.ledger.skips(cls, time.time(), spec.auto_hours, spec.auto_prior_weight, spec.auto_min_loss, spec.auto_min_n))))
     if bet and skips:
         from . import variants
 
@@ -547,6 +549,18 @@ def evaluate(
         if kind is not None and variants.skipped(skips, kind, shot.side):
             bet = False
             note = f"variety {kind} ({variants.NAMES[kind]}): this lane does not buy it. {note}"
+    if bet and spec.max_crossings >= 0:
+        from . import ticks as ticks_mod
+
+        crossed = ticks_mod.mids.crossings(shot.ticker, time.time(), spec.crossings_seconds)
+        if crossed is None:
+            bet = False
+            note = f"crossings unknown: not enough quote history for {shot.ticker} in the last {spec.crossings_seconds:.0f}s. {note}"
+        elif crossed > spec.max_crossings:
+            bet = False
+            note = f"choppy chart: the price crossed 50c {crossed} times in the last {spec.crossings_seconds:.0f}s (the lane allows {spec.max_crossings}). {note}"
+        else:
+            note = f"[{crossed} crossings] {note}"
     if bet and spec.choppy_floor > 0:
         from . import regime
 

@@ -7,9 +7,11 @@ process started, once, from the tape. A read is two bisects and a slice. Nothing
 from __future__ import annotations
 
 import bisect
+import itertools
 import logging
 import threading
 from array import array
+from collections import deque
 from collections.abc import Sequence
 
 log = logging.getLogger("kalshi_moonshot.ticks")
@@ -100,6 +102,55 @@ class TickHistory:
 
 
 history = TickHistory()
+
+
+class MidHistory:
+    """The last few minutes of every market's quote mid (yes side), in memory, so a buy can ask how choppy the price has been without a query. Fed by tape.Recent.note_quote."""
+
+    def __init__(self, keep: float = 900.0) -> None:
+        self.keep = keep
+        self._lock = threading.Lock()
+        self._rows: dict[str, deque[tuple[float, float]]] = {}
+
+    def note(self, ticker: str, ts: float, bid: float, ask: float) -> None:
+        if bid <= 0 or ask <= 0:
+            return
+        with self._lock:
+            rows = self._rows.get(ticker)
+            if rows is None:
+                rows = self._rows[ticker] = deque()
+            rows.append((ts, (bid + ask) / 2.0))
+            cut = ts - self.keep
+            while rows and rows[0][0] < cut:
+                rows.popleft()
+
+    def crossings(self, ticker: str, now: float, seconds: float = 300.0, level: float = 0.5, step: float = 5.0) -> int | None:
+        """How many times the mid crossed `level` in the last `seconds`, on a `step` grid that carries the last quote forward (the way the study counted it). None when the history is too thin to say:
+        under 40 of the 60 grid points have a quote within 20 s, or the first quote is later than the start of the span."""
+        with self._lock:
+            rows = list(self._rows.get(ticker, ()))
+        if not rows:
+            return None
+        times = [r[0] for r in rows]
+        if times[0] > now - seconds + 20.0:
+            return None
+        grid = []
+        n = int(seconds / step)
+        for i in range(n + 1):
+            t = now - seconds + i * step
+            k = bisect.bisect_right(times, t) - 1
+            if k >= 0 and t - times[k] <= 20.0:
+                grid.append(rows[k][1])
+        if len(grid) < int(n * 2 / 3):
+            return None
+        return sum(1 for a, b in itertools.pairwise(grid) if (a - level) * (b - level) < 0)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._rows.clear()
+
+
+mids = MidHistory()
 
 
 def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 6.0) -> int:

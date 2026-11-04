@@ -210,3 +210,64 @@ def test_the_ledger_scores_settled_favorites_saves_them_and_reloads_after_a_rest
     variants.ledger.__init__()  # a restart: the table is reloaded, nothing is scored twice
     assert variants.refresh_ledger(s, now) == 0 and len(variants.ledger) == 1
     variants.ledger.__init__()
+
+
+def test_the_mid_history_counts_crossings_of_50c_and_says_when_it_cannot():
+    from kalshi_moonshot import ticks
+
+    h = ticks.MidHistory()
+    now = 10_000.0
+    for k in range(0, 320, 2):  # a mid that sits at 0.70 the whole time
+        h.note("KX-CALM", now - 320 + k, 0.69, 0.71)
+    assert h.crossings("KX-CALM", now) == 0
+    for k in range(0, 320, 2):  # a mid that swings across 50c every 40 s
+        up = (k // 40) % 2 == 0
+        h.note("KX-CHOP", now - 320 + k, 0.55 if up else 0.40, 0.59 if up else 0.44)
+    assert h.crossings("KX-CHOP", now) >= 6
+    for k in range(0, 60, 2):  # only a minute of history
+        h.note("KX-NEW", now - 60 + k, 0.69, 0.71)
+    assert h.crossings("KX-NEW", now) is None and h.crossings("KX-NONE", now) is None
+    h.note("KX-ZERO", now - 400, 0.0, 0.0)
+    assert h.crossings("KX-ZERO", now) is None
+
+
+def test_a_lane_with_max_crossings_buys_only_a_calm_chart_and_a_named_paper_lane_runs_on_a_paper_host(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, lanes, regime, runner, ticks
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("PAPER_LANES", "false")
+    monkeypatch.setenv("LIVE_LANES", "commodity_energy")
+    monkeypatch.setenv("PAPER_LANE_NAMES", "guarded")
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KX30YRRATE15M']\nmax_crossings=0\n[lane.other]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\n")
+    s = config.load()
+    specs = lanes.lane_specs(s)
+    assert specs["guarded"].enabled and not specs["other"].enabled and not s.is_live("guarded", "KX30YRRATE15M")  # named: runs, on paper; the other lane stays off
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.mids.clear()
+    now = _time.time()
+    shot = LongShot("KX30YRRATE15M-9", "t", "", 0.80, 0.82, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="guarded", series="KX30YRRATE15M", side="yes")
+    try:
+        out = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert out.action == "pass" and "crossings unknown" in out.note  # no history: no buy
+        for k in range(0, 320, 2):
+            ticks.mids.note("KX30YRRATE15M-9", now - 320 + k, 0.79, 0.81)
+        calm = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert "choppy chart" not in calm.note and "crossings unknown" not in calm.note and "[0 crossings]" in calm.note
+        ticks.mids.clear()
+        for k in range(0, 320, 2):
+            up = (k // 40) % 2 == 0
+            ticks.mids.note("KX30YRRATE15M-9", now - 320 + k, 0.62 if up else 0.40, 0.66 if up else 0.44)
+        chop = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert chop.action == "pass" and "choppy chart" in chop.note
+    finally:
+        ticks.mids.clear()

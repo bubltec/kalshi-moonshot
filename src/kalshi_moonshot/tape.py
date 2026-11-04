@@ -94,6 +94,7 @@ class Recent:
 
     def note_quote(self, ticker: str, ts: float, bid: float, ask: float) -> None:
         row = (float(ts), float(bid), float(ask))
+        ticks_mod.mids.note(ticker, row[0], row[1], row[2])  # the quote mids of the last 15 minutes, for the crossings check (ticks.py)
         self._note(self._quotes, ticker, row, row[0])
         self._extend_stop(ticker, row)
 
