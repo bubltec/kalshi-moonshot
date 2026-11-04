@@ -1,0 +1,12 @@
+Treasury favorites, hypothetical (no live or paper bets exist: the lane is paper-only and paper lanes are off on the host). scripts/treasury_favorites_study.py, all 4 yield series, 2026-11-02 to 11-04 (about 2.5 days), the first moment a side asks 0.78-0.92 with a spread of 3c or under 8 to 2 minutes before the close, held to the result on a $10 ticket with the taker fee. Features come from Kalshi's own quotes only (no yield feed): "crossings" counts how often the mid crossed 50c, which is the yield crossing its target, in the 5 minutes before the buy.
+
+All favorites: 177, 87% won (95% interval 82-92%), net +$8.2, average ask 0.857 (break-even about 88%). 30Y +$23.9 (92%), 5Y +$1.5, 2Y -$2.2, 10Y -$15.1. By day: 11-03 +$52 (93%), 11-04 -$46 (79%).
+
+By crossings of 50c in the last 5 minutes:
+  0 crossings   88 favorites  93% won  +$56.6  (+$0.64 a bet)
+  1             27            85%       -$0.7
+  2             27            74%       -$33.5
+  3 or more     35            83%       -$14.3
+The setup in the 2026-11-04 07:38 screenshot (30Y priced 81c, yield back over its target after crossing it about three times, 6 minutes left): ask 0.78-0.84 with 2+ crossings and 300-420 s left: 13 favorites, 62% won, -$32.2 (-$2.48 a bet). Everything else: 164, 89%, +$40.4.
+
+Reading: a treasury favorite pays when the price has sat on one side (a calm chart), and loses when the yield is oscillating across its target, the same as the oscillating variety G in crypto and commodities. Small samples (88, 27, 27, 35); one 2.5-day stretch.
