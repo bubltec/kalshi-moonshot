@@ -643,5 +643,9 @@ def test_a_precious_lane_skips_a_bet_where_the_spot_and_the_corrected_center_dis
         assert wrong.action == "pass" and "do not both sit" in wrong.note  # spot above, center below: a YES bet disagrees too
         plain = runner.evaluate(s, None, None, store, no, estimators={"market": Fixed("no model: priced at the 0.82 asked")})
         assert "do not both sit" not in plain.note  # no pair in the note: unchanged
+        (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=8.0\nseries=['KXGOLD15M']\nrequire_spot_center_agree=true\ndisagree_stake_factor=0.25\nmax_bet_pct=1.0\nmax_exposure_pct=1.0\n")
+        quarter = runner.evaluate(config.load(), None, None, store, no, estimators={"market": Fixed(why)})
+        assert "[stake x0.25:" in quarter.note and "the bet is skipped" not in quarter.note  # the bet is played at a quarter of the stake: the note says so and the gate did not turn it into a pass for that reason
+        assert not ("do not both sit" in quarter.note and quarter.note.startswith("the spot"))  # the skip wording is only for the skip mode
     finally:
         ticks.strikes.clear()

@@ -611,6 +611,7 @@ def evaluate(
             note = f"the favorite is variety {osnap['variety']} ({variants.NAMES[osnap['variety']]}): the lane does not buy against it. {note}"
         else:
             note = f"[favorite {osnap['variety']}] {note}"
+    stake_factor = 1.0
     if bet and spec.require_spot_center_agree:
         from . import commodities
         from . import ticks as ticks_mod
@@ -621,8 +622,12 @@ def evaluate(
             side_yes = shot.side == "yes"
             spot_on, center_on = ((x >= strike) if side_yes else (x < strike) for x in pair)
             if not (spot_on and center_on):
-                bet = False
-                note = f"the spot {pair[0]:.6g} and the corrected center {pair[1]:.6g} do not both sit on the {shot.side.upper()} side of the {strike:.6g} strike. {note}"
+                if spec.disagree_stake_factor > 0:
+                    stake_factor = spec.disagree_stake_factor
+                    note = f"[stake x{stake_factor:g}: the spot {pair[0]:.6g} and the corrected center {pair[1]:.6g} do not both sit on the {shot.side.upper()} side of the {strike:.6g} strike] {note}"
+                else:
+                    bet = False
+                    note = f"the spot {pair[0]:.6g} and the corrected center {pair[1]:.6g} do not both sit on the {shot.side.upper()} side of the {strike:.6g} strike. {note}"
     if bet and spec.max_crossings >= 0:
         from . import ticks as ticks_mod
 
@@ -705,7 +710,7 @@ def evaluate(
         grown = scale_mod.for_lane(store, spec, balance.equity, s=s)
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
-            balance.open_by_lane.get(shot.lane, 0.0), grown.mult, fractional=s.fractional_stake and not _NO_FRACTION,
+            balance.open_by_lane.get(shot.lane, 0.0), grown.mult * stake_factor, fractional=s.fractional_stake and not _NO_FRACTION,
             maker_price=shot.ask if rest_seconds > 0 else (round(max(0.01, shot.ask - spec.buy_rest_below), 4) if spec.buy_rest_seconds > 0 else None),
         )
         if grown.note:
