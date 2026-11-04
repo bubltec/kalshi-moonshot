@@ -534,10 +534,11 @@ def evaluate(
         if cls is not None:
             skips = tuple(dict.fromkeys((*skips, *variants.ledger.skips(cls, time.time(), spec.auto_hours, spec.auto_prior_weight, spec.auto_min_loss, spec.auto_min_n))))
     if bet and skips:
+        from . import ticks as ticks_mod
         from . import variants
 
         try:
-            kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=store.window_strike(shot.ticker))
+            kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
         except Exception as exc:  # a tape that cannot say is no reason to skip
             kind = None
             log.warning("variety unreadable for %s %s: %s", shot.ticker, shot.side, exc)
@@ -571,10 +572,11 @@ def evaluate(
         else:
             note = f"[vol {vrel:.2f}x] {note}"
     if bet and spec.max_cushion_z < 90:
+        from . import ticks as ticks_mod
         from . import variants
 
         try:
-            snap = variants.snapshot_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=store.window_strike(shot.ticker))
+            snap = variants.snapshot_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
         except Exception as exc:
             snap = None
             log.warning("cushion unreadable for %s %s: %s", shot.ticker, shot.side, exc)

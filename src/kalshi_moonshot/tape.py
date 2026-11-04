@@ -472,7 +472,14 @@ class TapeRecorder:
         if seen is not None and now - seen[0] < (every_open if seen[1] else every_idle):
             return seen[1]
         try:
-            found = {m["ticker"] for m in self.client.series_markets(series) if m.get("status") in {"active", "open"}}
+            listed = [m for m in self.client.series_markets(series) if m.get("status") in {"active", "open"}]
+            found = {m["ticker"] for m in listed}
+            for m in listed:
+                try:
+                    if m.get("floor_strike") is not None:
+                        ticks_mod.strikes.note(m["ticker"], float(m["floor_strike"]))  # a live market's strike, for the variety and cushion reads (ticks.Strikes)
+                except (TypeError, ValueError):
+                    pass
         except KalshiError as exc:
             log.debug("tape: could not list %s (%s)", series, exc)
             return seen[1] if seen else set()

@@ -153,6 +153,36 @@ class MidHistory:
 mids = MidHistory()
 
 
+class Strikes:
+    """The strike (floor_strike) of every open market the tape has listed, in memory. A live market's strike is not in the windows table until it settles, so a buy that needs the strike (a crypto variety, the cushion)
+    reads it here. Filled by tape.refresh from the 15-minute listings every 20 s; the oldest entries are dropped past `keep`."""
+
+    def __init__(self, keep: int = 1500) -> None:
+        self.keep = keep
+        self._lock = threading.Lock()
+        self._v: dict[str, float] = {}
+
+    def note(self, ticker: str, strike: float) -> None:
+        if strike <= 0:
+            return
+        with self._lock:
+            self._v.pop(ticker, None)
+            self._v[ticker] = strike
+            while len(self._v) > self.keep:
+                self._v.pop(next(iter(self._v)))
+
+    def get(self, ticker: str) -> float | None:
+        with self._lock:
+            return self._v.get(ticker)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._v.clear()
+
+
+strikes = Strikes()
+
+
 def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 8.0) -> int:
     """Load the last `hours` of each index from the tape into `history` (8 by default: the volatility regime reads the last 6 hours and 2 minutes, so a 6-hour load would never cover it). Meant for a background thread at start-up; returns how many ticks were loaded."""
     from . import db

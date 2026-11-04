@@ -400,3 +400,48 @@ def test_the_volatility_regime_updates_from_a_history_warmed_for_eight_hours(tmp
     reg2.set("BTC", None, 40.0)
     assert reg2.update(SimpleNamespace(), {"BTC": "IX"}, now)["BTC"] is None
     ticks.history.clear()
+
+
+def test_a_live_markets_strike_comes_from_the_listing_in_memory_not_from_the_windows_table(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants, volregime
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    st_ = ticks.Strikes(keep=2)
+    st_.note("A", 1.0)
+    st_.note("B", 2.0)
+    st_.note("C", 3.0)
+    st_.note("Z", 0.0)  # no strike
+    assert st_.get("A") is None and st_.get("B") == 2.0 and st_.get("C") == 3.0 and st_.get("Z") is None
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.05,0.5]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmin_vol_rel=1.3\nmax_cushion_z=-1.0\n")
+    s = config.load()
+    store = Store(s.db_path)  # no windows row at all: the market has not settled
+    regime.reset()
+    ticks.history.clear()
+    ticks.strikes.clear()
+    volregime.regime = volregime.VolRegime()
+    volregime.regime.set("BTC", 70.0, 50.0)
+    now = _time.time()
+    index = variants.crypto_index("KXBTC15M")
+    for k in range(176):
+        ticks.history.note(index, now - 350.0 + k * 2.0, 100.20 + 0.0004 * (k % 2))
+    shot = LongShot("KXBTC15M-9", "t", "", 0.11, 0.12, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="guarded", series="KXBTC15M", side="no")
+    try:
+        out = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert out.action == "pass" and "cushion unreadable" in out.note
+        ticks.strikes.note("KXBTC15M-9", 100.0)
+        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert "[z -" in ok.note and "unreadable" not in ok.note
+    finally:
+        ticks.history.clear()
+        ticks.strikes.clear()
+        volregime.regime = volregime.VolRegime()
