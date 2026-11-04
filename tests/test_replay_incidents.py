@@ -21,3 +21,13 @@ def test_replay_outcome(path, data_regression):
     o = run(Tape.load(path), LANES)
     assert not o.stuck, f"the watcher raised {o.signals} sale signals and nothing sold"
     data_regression.check({k: (round(v, 3) if isinstance(v, float) else v) for k, v in asdict(o).items()})
+
+
+def test_a_shock_bid_ceiling_keeps_a_position_the_market_still_prices_as_a_winner():
+    """2026-11-04 silver NO: sold at 0.89 with 36 s left and won. With shock_bid_max 0.85 the shock exit leaves it alone."""
+    from kalshi_moonshot.replay.sweep import override
+
+    tape = Tape.load(DIR / "silver-0830-no-shock-sold-a-winner.json")
+    assert run(tape, LANES).sold
+    kept = run(tape, override(LANES, "commodity_energy", shock_bid_max=0.85))
+    assert not kept.sold and kept.hold_pnl > 0

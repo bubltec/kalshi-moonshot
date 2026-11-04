@@ -1,0 +1,8 @@
+description: "how far through the strike the index goes and for how long before the strike-through sale fires, on ETH and DOGE (2026-11-04 both sold winners at 63 and 57 s left)"
+lane: crypto_favorite
+bets: {lane: crypto_favorite, series: [KXETH15M, KXDOGE15M]}
+since_days: 14
+fixed: {burst_exit: false}
+grid:
+  strike_through_sale: [0, 0.002, 0.005, 0.01]
+  strike_through_seconds: [30, 60, 90, 120]

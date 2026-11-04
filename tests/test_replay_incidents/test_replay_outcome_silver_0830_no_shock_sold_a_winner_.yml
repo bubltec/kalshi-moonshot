@@ -1,0 +1,10 @@
+delta: -0.778
+exit_left: 35.7
+exit_price: 0.89
+hold_pnl: 0.666
+signals: 1
+sold: true
+sold_pnl: -0.112
+tape: silver-0830-no-shock-sold-a-winner
+why: 'shock exit: spot moved 20.5 bp against us in 60s (now -9.6) and is +4.4 bp from
+  the strike, 36s left, bid 0.89 [socket]'

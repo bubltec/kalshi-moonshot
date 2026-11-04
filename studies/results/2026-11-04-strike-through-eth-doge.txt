@@ -1,0 +1,5 @@
+Strike-through sale on ETH and DOGE (studies/strike-through-eth-doge.yaml; 332 bets from the host tapes, burst off; hold = +$32.7):
+  threshold 0.5% through the strike, 60 s (today): 66 sales, 49 on losers, +$8.1 against holding  <- the best cell
+  0.5% / 90 s +$2.2; 0.5% / 30 s -$2.8; 0.5% / 120 s -$3.9
+  0.2% through: -$6.8 to -$16.7 for every time;   1.0% through: -$5.9 to -$19.5
+The live setting is the best of the grid, so ETH and DOGE keep it (BTC stays at 90 s). The 2026-11-04 ETH and DOGE sales that went on to win are among the 17 of 66 sales that did: the rule nets +$8 against holding, not zero misses.

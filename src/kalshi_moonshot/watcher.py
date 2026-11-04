@@ -165,6 +165,7 @@ class Target:
     shock_bp: float = 0.0  # lane shock_bp (0 = off), with its seconds, cushion and last-seconds window
     shock_seconds: float = 60.0
     shock_margin_bp: float = 5.0
+    shock_bid_max: float = 0.0  # the highest bid the shock exit sells into (0 = SHOCK_BID[1])
     shock_last: float = 120.0
     shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
     shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
@@ -953,7 +954,7 @@ class ProfitWatcher:
         if left > t.shock_last:
             return None
         self._shock_log(t, now, margin, move, worst, bid, 0)
-        if bid < SHOCK_BID[0] or bid > SHOCK_BID[1] or quote_ts < spot_ts - THROUGH_QUOTE:
+        if bid < SHOCK_BID[0] or bid > (t.shock_bid_max or SHOCK_BID[1]) or quote_ts < spot_ts - THROUGH_QUOTE:
             self._shock_note(t, now, f"not usable: bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick; cushion {margin:+.1f} bp, worst move {worst:+.1f} bp")
             return None
         self._shock_note(t, now, f"cushion {margin:+.1f} bp, {t.shock_seconds:.0f}s move {move:+.1f} bp (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{t.shock_bp:.0f} bp or worse with a cushion of {t.shock_margin_bp:.0f} bp or less)")
@@ -1478,6 +1479,7 @@ class ProfitWatcher:
                     self._shock_hist.setdefault(sid, deque())
                     if spec.shock_bp > 0 and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
                         held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
+                        held.shock_bid_max = spec.shock_bid_max
                         held.shock_log_only = spec.shock_log_only
                     if spec.wrong_side_bp > 0 and spec.wrong_side_seconds > 0 and (not spec.wrong_side_series or ticker.split("-")[0] in spec.wrong_side_series):
                         if spec.wrong_side_varieties:

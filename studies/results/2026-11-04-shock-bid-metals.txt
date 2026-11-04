@@ -1,0 +1,5 @@
+shock_bid_max on the metal bets (studies/shock-bid-metals.yaml; 297 precious and industrial bets from the host tapes, 2026-11-02 to 11-04, replayed through the real watcher; hold = -$19.5):
+  shock exit off: 0
+  shock exit on (8 bp), ceiling 0.89 (today): 58 sales, 28 on bets that went on to lose, +$45.8 against holding
+  ceiling 0.85: 55 sales, +$47.3     0.80: 54 sales, +$45.0     0.70: 50 sales, +$38.1     0.60: 44 sales, +$43.3
+The shock exit is worth about +$46 on 297 metal bets, so the silver 08:30 NO sold at 0.89 is one of the misses of a rule that nets well. A ceiling of 0.85 gains $1.5: not enough to change a live setting. The setting is in the code (shock_bid_max, 0 = 0.89) and the silver incident is a replay golden.
