@@ -1,0 +1,67 @@
+
+=== crypto: 16452 moments in 1314 windows; every moment's buy: -0.51/bet
+by cushion x slope:
+  z0.5-1 / away                n= 4108 win 80%  all -0.46  H1 -0.25  H2 -0.66
+  z0.5-1 / flat                n= 4850 win 78%  all -0.70  H1 -0.61  H2 -0.79
+  z0.5-1 / toward              n= 1422 win 76%  all -0.97  H1 -1.15  H2 -0.74
+  z1-1.5 / away                n= 2669 win 84%  all -0.59  H1 -0.45  H2 -0.73
+  z1-1.5 / flat                n= 1893 win 89%  all -0.02  H1 -0.14  H2 +0.08
+  z1-1.5 / toward              n=  463 win 87%  all -0.32  H1 -0.52  H2 -0.12
+  z1.5-2.5 / away              n=  287 win 88%  all -0.27  H1 +0.07  H2 -0.52
+  z<0.5 / away                 n=  189 win 82%  all +0.38  H1 +0.12  H2 +0.56
+  z<0.5 / flat                 n=  295 win 78%  all -0.15  H1 -0.04  H2 -0.25
+by crossings:
+  x0-1                         n=10388 win 83%  all -0.40  H1 -0.43  H2 -0.36
+  x2-3                         n= 1756 win 77%  all -0.92  H1 +0.03  H2 -1.75
+  x4+                          n= 4308 win 79%  all -0.61  H1 -0.65  H2 -0.55
+by time left:
+  L120-240                     n= 3986 win 81%  all -0.57  H1 -0.41  H2 -0.72
+  L240-360                     n= 5447 win 81%  all -0.61  H1 -0.50  H2 -0.72
+  L360-480                     n= 7019 win 82%  all -0.39  H1 -0.43  H2 -0.36
+by cushion x time left:
+  z0.5-1 / L120-240            n= 2679 win 80%  all -0.64  H1 -0.45  H2 -0.83
+  z0.5-1 / L240-360            n= 3419 win 78%  all -0.70  H1 -0.50  H2 -0.89
+  z0.5-1 / L360-480            n= 4282 win 79%  all -0.60  H1 -0.65  H2 -0.54
+  z1-1.5 / L120-240            n=  986 win 86%  all -0.47  H1 -0.27  H2 -0.65
+  z1-1.5 / L240-360            n= 1704 win 84%  all -0.60  H1 -0.77  H2 -0.43
+  z1-1.5 / L360-480            n= 2335 win 88%  all -0.12  H1 -0.07  H2 -0.17
+  z1.5-2.5 / L360-480          n=  222 win 90%  all -0.11  H1 -0.19  H2 -0.03
+  z<0.5 / L120-240             n=  232 win 76%  all -0.45  H1 -0.92  H2 +0.04
+  z<0.5 / L240-360             n=  185 win 82%  all +0.35  H1 +1.34  H2 -0.51
+  z<0.5 / L360-480             n=  180 win 83%  all +0.47  H1 +0.04  H2 +0.79
+
+=== commodity: 17900 moments in 1724 windows; every moment's buy: -0.15/bet
+by cushion x slope:
+  z0.5-1 / away                n= 3938 win 82%  all -0.27  H1 -0.17  H2 -0.36
+  z0.5-1 / flat                n= 4464 win 84%  all -0.11  H1 +0.28  H2 -0.50
+  z0.5-1 / toward              n=  840 win 80%  all -0.52  H1 -0.31  H2 -0.67
+  z1-1.5 / away                n= 2839 win 88%  all -0.10  H1 -0.36  H2 +0.14
+  z1-1.5 / flat                n= 1892 win 91%  all +0.24  H1 +0.62  H2 -0.28
+  z1-1.5 / toward              n=  376 win 91%  all +0.35  H1 +0.50  H2 +0.18
+  z1.5-2.5 / away              n=  516 win 90%  all +0.01  H1 -0.47  H2 +0.49
+  z1.5-2.5 / flat              n=  349 win 95%  all +0.53  H1 +0.27  H2 +1.03
+  z<0.5 / away                 n=  647 win 70%  all -1.45  H1 -0.80  H2 -1.87
+  z<0.5 / flat                 n= 1499 win 79%  all -0.43  H1 -0.32  H2 -0.54
+  z<0.5 / toward               n=  309 win 83%  all +0.09  H1 +0.38  H2 -0.28
+by crossings:
+  x0-1                         n=11394 win 87%  all +0.02  H1 +0.28  H2 -0.26
+  x2-3                         n= 2115 win 84%  all -0.20  H1 -0.24  H2 -0.16
+  x4+                          n= 4391 win 80%  all -0.59  H1 -0.59  H2 -0.58
+by time left:
+  L120-240                     n= 4518 win 84%  all -0.30  H1 -0.10  H2 -0.53
+  L240-360                     n= 6050 win 84%  all -0.19  H1 -0.13  H2 -0.25
+  L360-480                     n= 7332 win 85%  all -0.03  H1 +0.24  H2 -0.29
+by cushion x time left:
+  z0.5-1 / L120-240            n= 2169 win 82%  all -0.36  H1 -0.00  H2 -0.68
+  z0.5-1 / L240-360            n= 3033 win 83%  all -0.25  H1 -0.24  H2 -0.26
+  z0.5-1 / L360-480            n= 4040 win 83%  all -0.10  H1 +0.28  H2 -0.49
+  z1-1.5 / L120-240            n= 1202 win 87%  all -0.22  H1 +0.04  H2 -0.53
+  z1-1.5 / L240-360            n= 1810 win 88%  all -0.02  H1 +0.10  H2 -0.16
+  z1-1.5 / L360-480            n= 2095 win 91%  all +0.28  H1 +0.14  H2 +0.44
+  z1.5-2.5 / L120-240          n=  333 win 92%  all +0.31  H1 +0.16  H2 +0.63
+  z1.5-2.5 / L240-360          n=  326 win 92%  all +0.31  H1 +0.17  H2 +0.48
+  z1.5-2.5 / L360-480          n=  268 win 92%  all +0.26  H1 -0.58  H2 +0.94
+  z<0.5 / L120-240             n=  759 win 78%  all -0.66  H1 -0.77  H2 -0.53
+  z<0.5 / L240-360             n=  804 win 77%  all -0.68  H1 -0.53  H2 -0.81
+  z<0.5 / L360-480             n=  892 win 78%  all -0.57  H1 +0.44  H2 -1.22
+DONE
