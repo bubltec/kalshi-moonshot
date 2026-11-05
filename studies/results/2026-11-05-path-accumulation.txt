@@ -1,0 +1,10 @@
+
+=== commodity: 17729 moments. held-out log-loss (lower is better); the price alone scores:
+  H1->H2: price 0.4442 | base (z, price, time, side, crossings): 0.4513 (340 bets -0.12/bet) | base + accumulation/differential features: 0.4634 (454 bets -0.44/bet)
+  H2->H1: price 0.3897 | base (z, price, time, side, crossings): 0.3950 (73 bets +0.35/bet) | base + accumulation/differential features: 0.3979 (144 bets +0.29/bet)
+  strongest weights (standardized): z5 +0.44, price +0.32, time left +0.16, area (mean cushion) -0.14, level now -0.13
+
+=== crypto: 16549 moments. held-out log-loss (lower is better); the price alone scores:
+  H1->H2: price 0.4801 | base (z, price, time, side, crossings): 0.4828 (39 bets -1.75/bet) | base + accumulation/differential features: 0.4861 (165 bets -0.71/bet)
+  H2->H1: price 0.4702 | base (z, price, time, side, crossings): 0.4708 (0 bets) | base + accumulation/differential features: 0.4725 (86 bets -0.76/bet)
+  strongest weights (standardized): level now -0.40, z5 +0.35, price +0.33, time left +0.25, share of time on side -0.22
