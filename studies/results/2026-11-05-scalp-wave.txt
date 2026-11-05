@@ -1,0 +1,18 @@
+entries 241
+  all entries                                    n 241 good  85% sold-early  80%  net/$10 -0.19 (hold-only -0.57) | halves -0.68 +0.31
+  d30 toward the bet in [-9,-0.5)                n  29 good  76% sold-early  69%  net/$10 -1.12 (hold-only -0.54) | halves -2.14 -0.17
+  d30 toward the bet in [-0.5,0)                 n  37 good  86% sold-early  73%  net/$10 +0.47 (hold-only +0.26) | halves +0.23 +0.71
+  d30 toward the bet in [0,0.5)                  n  56 good  86% sold-early  84%  net/$10 -0.23 (hold-only +0.91) | halves -0.66 +0.19
+  d30 toward the bet in [0.5,1)                  n  59 good  90% sold-early  85%  net/$10 +0.42 (hold-only -1.15) | halves +0.96 -0.10
+  d30 toward the bet in [1,9)                    n  60 good  83% sold-early  83%  net/$10 -0.70 (hold-only -1.92) | halves -1.49 +0.10
+  prior in [-9,-0.5)                             n  48 good  73% sold-early  71%  net/$10 -1.79 (hold-only -4.08) | halves -2.58 -0.99
+  prior in [-0.5,0.5)                            n  95 good  92% sold-early  89%  net/$10 +0.52 (hold-only +0.85) | halves +0.18 +0.86
+  prior in [0.5,9)                               n  98 good  85% sold-early  77%  net/$10 -0.09 (hold-only -0.24) | halves -0.11 -0.07
+  dip then turn: prior<-0.3 and d30>0.3          n  51 good  76% sold-early  76%  net/$10 -1.45 (hold-only -3.78) | halves -2.46 -0.48
+  moving with the bet: prior>0.3 and d30>0.3     n  42 good  93% sold-early  86%  net/$10 +0.76 (hold-only -0.21) | halves +1.41 +0.12
+  moving against: prior<-0.3 and d30<-0.3        n2
+  rise from 4-min low in [0,0.5)                 n7
+  rise from 4-min low in [0.5,1)                 n  20 good  80% sold-early  80%  net/$10 -0.92 (hold-only -0.91) | halves +0.30 -2.13
+  rise from 4-min low in [1,2)                   n 106 good  84% sold-early  79%  net/$10 -0.28 (hold-only -1.19) | halves -1.20 +0.64
+  rise from 4-min low in [2,99)                  n 108 good  86% sold-early  81%  net/$10 -0.06 (hold-only -0.17) | halves +0.20 -0.33
+DONE
