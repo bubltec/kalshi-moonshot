@@ -179,7 +179,7 @@ thresholds = Thresholds()
 
 
 def tune_thresholds(rows: list[dict], previous_max: dict[str, float] | None = None, previous_min: dict[str, float] | None = None, blend: float = 0.5,
-                    min_n: int = 40, max_loss: float = 0.15, min_gain: float = 0.8) -> tuple[dict[str, float], dict[str, float]]:
+                    min_n: int = 40, max_loss: float = 0.15, min_gain: float = 0.8, min_keep: float = 0.4) -> tuple[dict[str, float], dict[str, float]]:
     """The two levels per class from favorites that carry a volatility ratio (rows: cls, ask, pnl, flip_pnl, vol_rel).
 
     stand_aside: among the candidate levels, the one whose favorites ABOVE it avoided the most loss, provided they lost at least `max_loss` a $10 bet on average with `min_n` of them: skipping them is what the record
@@ -192,7 +192,10 @@ def tune_thresholds(rows: list[dict], previous_max: dict[str, float] | None = No
         scored = []
         for t in _CANDIDATES:
             above = [r["pnl"] for r in mine if r["vol_rel"] > t]
-            if len(above) >= min_n and sum(above) / len(above) <= -max_loss:
+            below = [r["pnl"] for r in mine if r["vol_rel"] <= t]
+            # 2026-11-05: a ceiling must also be where the wild favorites did WORSE than the rest and must leave most of the favorites to buy. When every favorite had lost lately, "skip the most losers" picked
+            # the lowest level (0.8x) for both classes and the lanes stopped buying: skipping then saves no more than skipping any bet would.
+            if len(above) >= min_n and sum(above) / len(above) <= -max_loss and len(below) >= max(min_n, min_keep * len(mine)) and sum(above) / len(above) - sum(below) / len(below) <= -max_loss:
                 scored.append((t, -sum(above)))
         if scored:
             top = max(loss for _, loss in scored)
@@ -230,6 +233,8 @@ def retune(s, now: float | None = None) -> dict:
         prev_max, prev_min = dict(thresholds.stand_aside), dict(thresholds.wild_min)
     new_max, new_min = tune_thresholds(rows, prev_max, prev_min)
     with thresholds._lock:
+        thresholds.stand_aside.clear()  # a class with no qualifying level drops its tuned value: the lane's static setting stands (2026-11-05: a stale 0.8x ceiling had outlived its evidence)
+        thresholds.wild_min.clear()
         thresholds.stand_aside.update(new_max)
         thresholds.wild_min.update(new_min)
         thresholds.tuned_at = now

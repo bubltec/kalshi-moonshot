@@ -571,6 +571,17 @@ def test_the_tuner_finds_the_level_above_which_favorites_lost_and_the_level_from
     assert volregime.tune_thresholds([_vrow("crypto", 1.6, -0.9) for _ in range(10)]) == ({}, {})  # too few favorites: no tuned level
 
 
+def test_the_tuner_sets_no_ceiling_when_every_favorite_lost_alike():
+    from kalshi_moonshot import volregime
+
+    # 2026-11-05: every favorite lost about the same whatever the volatility; the old rule picked the lowest level (0.8) and the lanes stopped buying
+    rows = [_vrow(cls, 0.5 + 0.05 * k, -0.4) for cls in ("crypto", "commodity") for k in range(30) for _ in range(5)]
+    assert volregime.tune_thresholds(rows)[0] == {}
+    # a ceiling that would leave under 40% of the favorites to buy is refused too, even when the ones above it lost more
+    rows = [_vrow("crypto", 0.9, -0.1) for _ in range(40)] + [_vrow("crypto", 1.2, -0.9) for _ in range(120)]
+    assert volregime.tune_thresholds(rows)[0] == {}
+
+
 def test_a_lane_with_auto_vol_gate_follows_the_tuned_level(tmp_path, monkeypatch):
     from kalshi_moonshot import config, regime, runner, variants, volregime
     from kalshi_moonshot.estimators import Estimate

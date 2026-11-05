@@ -1,0 +1,12 @@
+
+=== commodity: 17729 moments; nearest-neighbour on the last 7 minutes of cushion path (15 points) + time left
+  k= 30 H1->H2: held-out log-loss kNN 0.5194 vs price 0.4442; first-moment edge>0.03 bets n=706 win 81% -0.22/bet; moments with forecast>=0.8 and edge>0.03: 3965 win 82%
+  k= 30 H2->H1: held-out log-loss kNN 0.4359 vs price 0.3897; first-moment edge>0.03 bets n=624 win 83% -0.05/bet; moments with forecast>=0.8 and edge>0.03: 3424 win 86%
+  k=100 H1->H2: held-out log-loss kNN 0.4772 vs price 0.4442; first-moment edge>0.03 bets n=602 win 79% -0.32/bet; moments with forecast>=0.8 and edge>0.03: 3246 win 81%
+  k=100 H2->H1: held-out log-loss kNN 0.4103 vs price 0.3897; first-moment edge>0.03 bets n=508 win 81% -0.10/bet; moments with forecast>=0.8 and edge>0.03: 2585 win 86%
+
+=== crypto: 16549 moments; nearest-neighbour on the last 7 minutes of cushion path (15 points) + time left
+  k= 30 H1->H2: held-out log-loss kNN 0.5602 vs price 0.4801; first-moment edge>0.03 bets n=520 win 78% -0.60/bet; moments with forecast>=0.8 and edge>0.03: 2739 win 78%
+  k= 30 H2->H1: held-out log-loss kNN 0.5584 vs price 0.4702; first-moment edge>0.03 bets n=544 win 78% -0.57/bet; moments with forecast>=0.8 and edge>0.03: 3505 win 79%
+  k=100 H1->H2: held-out log-loss kNN 0.5118 vs price 0.4801; first-moment edge>0.03 bets n=394 win 76% -0.67/bet; moments with forecast>=0.8 and edge>0.03: 1766 win 77%
+  k=100 H2->H1: held-out log-loss kNN 0.5097 vs price 0.4702; first-moment edge>0.03 bets n=473 win 78% -0.47/bet; moments with forecast>=0.8 and edge>0.03: 2700 win 79%
