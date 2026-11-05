@@ -1,0 +1,18 @@
+
+=== crypto: 532 out-of-sample favorites (trained only on earlier ones)
+  win rate 0.799; mean ask 0.822; log-loss: model 0.5324 | price-as-probability 0.5041 | base rate 0.5020
+  buy everything: -212.3 (-0.40/bet)
+  buy when model - price - fee > 0.00: n= 153 win 0.75 net  -133.0 (-0.87/bet) | H1 n=  93   +38.0 (+0.41) | H2 n=  60  -171.0 (-2.85)
+  buy when model - price - fee > 0.02: n= 101 win 0.76 net   -59.6 (-0.59/bet) | H1 n=  65   +52.9 (+0.81) | H2 n=  36  -112.6 (-3.13)
+  buy when model - price - fee > 0.04: n=  67 win 0.79 net   -10.4 (-0.15/bet) | H1 n=  46   +50.2 (+1.09) | H2 n=  21   -60.5 (-2.88)
+  buy when model - price - fee > 0.06: n=  38 win 0.79 net    -6.5 (-0.17/bet) | H1 n=  28   +19.0 (+0.68) | H2 n=  10   -25.5 (-2.55)
+  buy when model - price - fee > 0.08: n=  12 win 0.83 net    +5.3 (+0.44/bet) | H1 n=  12    +5.3 (+0.44) | H2 n=   0    +0.0 (+0.00)
+
+=== commodity: 765 out-of-sample favorites (trained only on earlier ones)
+  win rate 0.808; mean ask 0.826; log-loss: model 0.5099 | price-as-probability 0.4851 | base rate 0.4893
+  buy everything: -258.1 (-0.34/bet)
+  buy when model - price - fee > 0.00: n= 230 win 0.82 net   -56.2 (-0.24/bet) | H1 n= 140   -30.9 (-0.22) | H2 n=  90   -25.3 (-0.28)
+  buy when model - price - fee > 0.02: n= 150 win 0.83 net    +1.8 (+0.01/bet) | H1 n=  94    +3.3 (+0.03) | H2 n=  56    -1.5 (-0.03)
+  buy when model - price - fee > 0.04: n=  86 win 0.84 net   +22.0 (+0.26/bet) | H1 n=  57    +4.1 (+0.07) | H2 n=  29   +17.9 (+0.62)
+  buy when model - price - fee > 0.06: n=  50 win 0.80 net   -10.8 (-0.22/bet) | H1 n=  33    -0.3 (-0.01) | H2 n=  17   -10.6 (-0.62)
+  buy when model - price - fee > 0.08: n=  21 win 0.81 net    +0.1 (+0.01/bet) | H1 n=  11    +1.1 (+0.10) | H2 n=  10    -0.9 (-0.09)
