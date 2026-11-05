@@ -1,0 +1,22 @@
+
+=== commodity: 17729 moments
+ log-loss by single horizon (all data; scale fit): 2m 0.4465 (x1.0)  5m 0.4382 (x1.0)  15m 0.4416 (x0.8)  1h 0.4488 (x0.8)  | price 0.4172
+ fit H1 -> test H2: weights {'2m': np.float64(0.25), '5m': np.float64(0.5), '15m': np.float64(0.0), '1h': np.float64(0.25)} scale 0.8; held-out log-loss 0.4583 vs plain 5-min 0.4532 vs price 0.4442
+     simulated one-bet-per-window (edge>0.03): blend n=279 win 84% -0.08/bet | plain 5-min n=140 win 85% +0.07/bet
+ fit H2 -> test H1: weights {'2m': np.float64(0.0), '5m': np.float64(1.0), '15m': np.float64(0.0), '1h': np.float64(0.0)} scale 1.0; held-out log-loss 0.4229 vs plain 5-min 0.4229 vs price 0.3897
+     simulated one-bet-per-window (edge>0.03): blend n=172 win 87% +0.35/bet | plain 5-min n=172 win 87% +0.35/bet
+
+=== crypto: 16549 moments
+ log-loss by single horizon (all data; scale fit): 2m 0.4765 (x1.0)  5m 0.4744 (x1.0)  15m 0.4798 (x1.0)  1h 0.4778 (x1.0)  | price 0.4751
+ fit H1 -> test H2: weights {'2m': np.float64(0.5), '5m': np.float64(0.5), '15m': np.float64(0.0), '1h': np.float64(0.0)} scale 1.0; held-out log-loss 0.4814 vs plain 5-min 0.4818 vs price 0.4801
+     simulated one-bet-per-window (edge>0.03): blend n= 79 win 84% -0.25/bet | plain 5-min n= 63 win 76% -1.16/bet
+ fit H2 -> test H1: weights {'2m': np.float64(0.25), '5m': np.float64(0.5), '15m': np.float64(0.0), '1h': np.float64(0.25)} scale 1.0; held-out log-loss 0.4669 vs plain 5-min 0.4670 vs price 0.4702
+     simulated one-bet-per-window (edge>0.03): blend n= 26 win 96% +1.28/bet | plain 5-min n= 59 win 90% +0.58/bet
+
+=== commodity: logistic on the four-horizon cushions, vol ratios, crossings, price, time left, side
+ fit H1 -> test H2: held-out log-loss model 0.4541 vs price 0.4442; one bet per window at first edge>0.03: n=390 win 79% -0.46/bet
+ fit H2 -> test H1: held-out log-loss model 0.3987 vs price 0.3897; one bet per window at first edge>0.03: n=178 win 87% +0.17/bet
+
+=== crypto: logistic on the four-horizon cushions, vol ratios, crossings, price, time left, side
+ fit H1 -> test H2: held-out log-loss model 0.4817 vs price 0.4801; one bet per window at first edge>0.03: n=125 win 79% -0.35/bet
+ fit H2 -> test H1: held-out log-loss model 0.4685 vs price 0.4702; one bet per window at first edge>0.03: n= 31 win 94% +0.48/bet
