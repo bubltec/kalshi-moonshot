@@ -1,0 +1,16 @@
+Variety auto-skip window replay (scripts/skip_window_replay.py), run on the host 2026-11-05.
+4,589 favorites from 10-28 23:45; judged from 11-01 23:45 so every window has its history. Real Ledger.skips code (prior weight 15, min loss 0.10, min n 5), a $10 ticket each, taker fee, no other gate.
+Per window: "bought" = favorites the skip let through, net $ and per bet (all / first half / second half of the judged period).
+
+crypto: 1,358 judged, no skipping -468.2 (-0.34/bet)
+   2h  bought -492.0 (-0.44)   H1 -310.2  H2 -181.9   worse than no skipping
+   4h  bought -131.3 (-0.14)   H1 -176.9  H2  +45.6   skipped -336.9
+   6h  bought -162.1 (-0.19)   H1 -185.0  H2  +22.9   skipped -306.2
+  12h  bought -293.4 (-0.35)   H1 -193.6  H2  -99.7
+  24h  bought -392.8 (-0.53)   worse than no skipping
+  48h  bought -292.5 (-0.34)   no better
+  92h  bought -349.2 (-0.35)   no better
+commodity: 1,578 judged, no skipping -393.8 (-0.25/bet)
+   2h -369.0 (-0.34)   4h -236.2 (-0.25)   6h -65.2 (-0.07) [H1 -59.6, H2 -5.7]   12h -152.0 (-0.17)   24h -246.6   48h -334.6   92h -393.8 (never skips)
+Reading: 6h is the best for commodities and within noise of the best (4h) for crypto; 2h flip-flops and loses; 24h+ barely acts. The window was picked on the same data it is judged on.
+Even the best skip leaves crypto favorites at -0.14/bet here: the losses come mostly from the favorites themselves, not from a window that is too slow.
