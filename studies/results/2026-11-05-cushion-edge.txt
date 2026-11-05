@@ -1,0 +1,28 @@
+
+=== crypto: 16452 moments. Model chance = Phi(z); edge = Phi(z) - ask - fee
+ model chance vs real win rate:
+  model <0.65      n=   76 real win 72%  mean ask 0.78  pnl -0.82
+  model 0.65-0.75  n= 3431 real win 76%  mean ask 0.80  pnl -0.65
+  model 0.75-0.85  n= 8224 real win 81%  mean ask 0.85  pnl -0.55
+  model 0.85-0.93  n= 4215 real win 86%  mean ask 0.89  pnl -0.36
+  model 0.93+      n=  506 real win 91%  mean ask 0.90  pnl +0.01
+ buy only when edge exceeds:
+  edge > -0.05: n= 7461 windows  954 win 83%  all -0.41  H1 -0.24 (n=3583)  H2 -0.57 (n=3878)
+  edge > +0.00: n= 2089 windows  354 win 85%  all -0.20  H1 +0.08 (n=1022)  H2 -0.46 (n=1067)
+  edge > +0.03: n=  639 windows  133 win 86%  all +0.05  H1 +0.45 (n=300)  H2 -0.30 (n=339)
+  edge > +0.06: n=  159 windows   43 win 81%  all -0.43  H1 -0.02 (n=64)  H2 -0.70 (n=95)
+  edge > +0.10: n=   22 windows    6 win 91%  all  n/a   H1  n/a  (n=7)  H2  n/a  (n=15)
+
+=== commodity: 17900 moments. Model chance = Phi(z); edge = Phi(z) - ask - fee
+ model chance vs real win rate:
+  model <0.65      n= 1341 real win 77%  mean ask 0.82  pnl -0.73
+  model 0.65-0.75  n= 4018 real win 80%  mean ask 0.82  pnl -0.39
+  model 0.75-0.85  n= 6923 real win 84%  mean ask 0.85  pnl -0.16
+  model 0.85-0.93  n= 4425 real win 90%  mean ask 0.88  pnl +0.09
+  model 0.93+      n= 1193 real win 93%  mean ask 0.89  pnl +0.43
+ buy only when edge exceeds:
+  edge > -0.05: n= 8056 windows 1102 win 87%  all +0.10  H1 +0.14 (n=4256)  H2 +0.05 (n=3800)
+  edge > +0.00: n= 3456 windows  621 win 88%  all +0.29  H1 +0.32 (n=1961)  H2 +0.26 (n=1495)
+  edge > +0.03: n= 1718 windows  366 win 90%  all +0.52  H1 +0.62 (n=980)  H2 +0.39 (n=738)
+  edge > +0.06: n=  777 windows  183 win 89%  all +0.48  H1 +0.52 (n=419)  H2 +0.43 (n=358)
+  edge > +0.10: n=  265 windows   79 win 88%  all +0.54  H1 +0.48 (n=145)  H2 +0.62 (n=120)
