@@ -916,3 +916,59 @@ def test_a_two_way_trend_lane_buys_no_in_a_downtrend_and_yes_in_an_uptrend(tmp_p
     finally:
         ticks.history.clear()
         variants._broad_memo = (0, None)
+
+
+def test_wave_features_read_the_swing_range_and_where_the_buy_sits_in_it():
+    import math
+
+    ts = [1000.0 + k for k in range(500)]
+    vals = [100.0 * math.exp(0.0003 * math.sin(k / 20.0)) for k in range(500)]  # a steady swing, trough at k = 345
+    at = ts[345]
+    yes = variants.wave_features(ts, vals, "yes", at)
+    no = variants.wave_features(ts, vals, "no", at)
+    assert yes is not None and no is not None
+    assert yes["amp"] > 2.0 and yes["pos"] < 0.1  # YES is at the low of its swing
+    assert no["pos"] > 0.9  # the same moment is NO's high
+    assert variants.wave_features(ts[:200], vals[:200], "yes", ts[199]) is None  # not five minutes of history
+    assert variants.wave_features(ts, [100.0] * 500, "yes", at) is None  # no movement at all
+
+
+def test_a_lane_with_a_wave_rule_buys_the_low_of_a_swing_and_shows_it(tmp_path, monkeypatch):
+    import math
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.wavy]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nwave_amp_min=2.0\nwave_pos_max=0.5\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    index = variants.crypto_index("KXBTC15M")
+    yes = LongShot("KXBTC15M-9", "t", "", 0.12, 0.13, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="wavy", series="KXBTC15M", side="yes")
+    try:
+        for phase, expect in ((-math.pi / 2, "bet"), (math.pi / 2, "pass")):  # trough now, then peak now
+            ticks.history.clear()
+            for k in range(176):
+                t = now - 350.0 + k * 2.0
+                ticks.history.note(index, t, 100.0 * math.exp(0.0003 * math.sin((t - now) / 20.0 + phase)))
+            d = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+            assert d.action == expect and "[wave amp" in d.note
+            if expect == "pass":
+                assert "waits for the low" in d.note
+        ticks.history.clear()
+        d = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert d.action == "pass" and "unreadable" in d.note  # no history: no buy
+    finally:
+        ticks.history.clear()

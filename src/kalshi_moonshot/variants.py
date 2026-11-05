@@ -532,6 +532,39 @@ def scale_letter(ts: Sequence[float], values: Sequence[float], strike: float, si
     return {"variety": letter, "z": z, "slope": slope, "crosses": crosses}
 
 
+def wave_features(ts: Sequence[float], values: Sequence[float], side: str, at: float) -> dict | None:
+    """The swing shape of the last five minutes toward the bet's side (2026-11-05, user: test the wave on the underdog): the index on a 1 s grid for 300 s, the bet side's price path in typical minutes (the 300 s
+    root-mean-square move per minute). amp = how far that path ranged over the last 180 s; pos = where the buy sits in that range (0 = at the bet side's low, 1 = at its high). Wild-regime underdogs bought at
+    the low of a swing of 2+ typical minutes won 21% against 17.3% for all (studies/results/2026-11-05-swing-shape-wave.txt). None when the history does not cover the five minutes."""
+    i = bisect.bisect_right(ts, at) - 1
+    if i < 0 or ts[i] < at - 10.0 or ts[0] > at - 320.0:
+        return None
+    seq = []
+    for k in range(301):
+        idx = bisect.bisect_right(ts, at - 300.0 + k) - 1
+        if idx < 0:
+            return None
+        seq.append(math.log(values[idx]))
+    sq = sum((b - a) ** 2 for a, b in itertools.pairwise(seq))
+    if sq <= 0:
+        return None
+    unit = math.sqrt(sq / 300.0) * math.sqrt(60.0)
+    sign = 1.0 if side == "yes" else -1.0
+    path = [sign * (x - seq[0]) / unit for x in seq[-180:]]
+    hi, lo = max(path), min(path)
+    return {"amp": hi - lo, "pos": (path[-1] - lo) / (hi - lo) if hi > lo else 0.5}
+
+
+def wave_now(series: str, side: str, now: float | None = None) -> dict | None:
+    """wave_features from the in-memory index ticks of a coin, or None."""
+    index = crypto_index(series)
+    if not index:
+        return None
+    now = time.time() if now is None else now
+    got = ticks_mod.history.window(index, now - 340.0, now)
+    return wave_features(got[0], got[1], side, now) if got else None
+
+
 MS_LOOKS = {"1m": 60.0, "2m": 120.0, "5m": 300.0, "15m": 900.0, "60m": 3600.0}
 
 

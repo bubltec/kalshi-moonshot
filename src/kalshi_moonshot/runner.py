@@ -609,6 +609,25 @@ def evaluate(
             note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
+    if bet and (spec.wave_amp_min > 0 or spec.wave_pos_max < 1.0):
+        from . import variants as _variants
+
+        try:
+            wave = _variants.wave_now(shot.series, shot.side)
+        except Exception as exc:
+            wave = None
+            log.warning("wave unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if wave is None:
+            bet = False
+            note = f"the last five minutes of the index are unreadable for the wave rule. {note}"
+        elif wave["amp"] < spec.wave_amp_min:
+            bet = False
+            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the swing is under the lane's {spec.wave_amp_min:g} typical minutes. {note}"
+        elif wave["pos"] > spec.wave_pos_max:
+            bet = False
+            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the buy is above {spec.wave_pos_max:g} of the swing's range (waits for the low). {note}"
+        else:
+            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] {note}"
     if variants_crypto(shot.series):
         from . import variants as _variants
 
