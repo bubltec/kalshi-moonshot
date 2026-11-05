@@ -8,3 +8,10 @@ Pre-specified rules, one buy per market side at the first point 2:00-10:00 in wi
  commodities: every version negative (60m D and 5m F: 262 markets, -1.12/bet).
 Reading: the near-and-approaching hour with a recovering last 5 minutes is the only crypto rule positive in all three thirds; the broader versions are not. Selected after looking at the scans, so it needs a forward (paper) test.
 SVM walk-forward (scripts/svm_walk_forward.py, derivative features): the top-5% picks were +0.38 then -1.20 (crypto) and -1.10 then +0.99 (commodities): no stable edge on 826-2144 training rows.
+
+Whole market and the last 5 minutes (scripts/multiscale_late.py; the first tests stopped at 10:00 in, which was my limit, not a market reason). One buy per market side at the first point in the range, held to the result, by time thirds.
+Crypto 60m D and 5m F: 2:00-10:00 128 markets +2.09/bet (+1.86/+0.82/+3.79); 10:00-14:00 70 markets won 51% vs price 0.36 +4.18/bet (+6.77/+2.00/+5.50); whole market 169 markets won 54% vs 0.42 +3.09 (+3.07/+2.30/+4.11).
+Crypto 60m D, 15m G, 5m F: 10:00-14:00 45 markets won 64% vs 0.40 +5.98 (+7.15/+5.51/+5.63); whole market 109 markets +4.22 (+4.95/+4.21/+3.59).
+Commodities 60m D and 5m F: 2:00-10:00 -1.12/bet; 10:00-14:00 83 markets won 52% vs 0.42 +2.96 (+2.68/+2.98/+3.13); whole market -0.71: the same pattern pays late and loses early.
+Cheap-side cushion edge by scale (crypto, ask .30-.50, edge>.05): z from 5m whole market +0.31 (+2.03/+0.24/-1.02), from 60m +0.37 (+1.12/-0.09/+0.14), from 1m -2.12, from 2m -1.47: it flips with the scale, so treat as noise.
+Last 5 minutes, short scales 1m+2m+5m, every row: crypto FFE won 37% vs 0.30 +3.30 (H1 +2.52, H2 +3.88), FFF 46% vs 0.40 +2.08 (+2.70/+1.46); commodities none holds.
