@@ -8,3 +8,5 @@ Scalp patterns (scripts/scalp_pattern_test.py, tape quote resolution, take profi
 P1 trend up on 15 m and 1 h, buy .45-.62 early: commodities -1.1 to -1.45/bet (H1 -0.13..+0.34, H2 -2.0..-2.7); crypto -0.22..-0.75 (H1 -0.6..-1.0, H2 +0.18/+0.34 at TP .20/.25). Without the trend condition: -0.5 to -0.96.
 P2 swinging low price (.25-.45, range >= .15, >= 2 swings): -1.1 to -1.7/bet in both halves, both classes.
 Take-profit hit rates are 57-77%, but the misses lose the whole stake and a hit pays 15-30c on a 25-60c ticket.
+
+Exit grid (scripts/scalp_exit_grid.py): 37 exits (hold, take profit +.15/.20/.30, stops -.10/-.15/-.20 with a target, trailing exits after +.10/.15/.20 giving back .05/.08/.12 with or without a -.15/-.25 stop) on 8 entry sets (commodity and crypto x: ask .45-.62 early; same with 15 m and 1 h trend up; ask .25-.45 swinging; ask .25-.45 early). Not one exit is positive in both halves for any entry set. Stops hurt (the bid gaps through them); hold to the result beats most exits for the low-priced entries. The best crypto result is a trailing exit after +.20 on the early .45-.62 entries: -0.33/bet (H1 -0.32, H2 -0.34), against -0.53 for holding.
