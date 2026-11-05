@@ -532,11 +532,7 @@ def evaluate(
 
         cls = "crypto" if variants.crypto_index(shot.series) else "commodity" if variants.biquote_index(shot.series) else None  # a market with no index (a Treasury yield) has no class in the ledger
         if cls is not None:
-            if spec.auto_ladder:
-                found = variants.ledger.skips_ladder(cls, time.time(), variants.coin_of(shot.series) if spec.auto_by_coin else None, prior_weight=spec.auto_prior_weight, min_loss=spec.auto_min_loss, min_n=spec.auto_min_n)
-            else:
-                found = variants.ledger.skips(cls, time.time(), spec.auto_hours, spec.auto_prior_weight, spec.auto_min_loss, spec.auto_min_n)
-            skips = tuple(dict.fromkeys((*skips, *found)))
+            skips = tuple(dict.fromkeys((*skips, *variants.ledger.skips(cls, time.time(), spec.auto_hours, spec.auto_prior_weight, spec.auto_min_loss, spec.auto_min_n))))
     if bet and skips:
         from . import ticks as ticks_mod
         from . import variants

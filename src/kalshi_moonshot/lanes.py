@@ -129,8 +129,6 @@ class LaneSpec:
     auto_prior_weight: float = 15.0  # how many bets of the older record the recent stretch is blended with (higher = slower to change its mind)
     auto_min_loss: float = 0.10  # dollars lost per $10 bet (after the blend) before a variety is skipped
     auto_min_n: int = 5  # recent favorites of the variety needed before it can be skipped
-    auto_ladder: bool = False  # 2026-11-05 (user): review the ledger on a ladder of stretches (0-2 h, 2-4, 4-6, 6-12, 12-24, 24-48, 48-96 h back, compounded oldest to newest) instead of one auto_hours stretch: variants.Ledger.skips_ladder
-    auto_by_coin: bool = False  # with auto_ladder: the lane's own coin learns its varieties on top of the class's record (ETH apart from DOGE)
     choppy_floor: float = 0.0  # a choppy market: the favorites (the side with an ask in 0.78-0.92 from minute 7) of choppy_series settled in the last choppy_hours have won less often than this (regime.py). 0 = no choppy rules. While choppy the next three settings apply
     choppy_hours: float = 12.0
     choppy_series: tuple[str, ...] = ()  # whose favorites are counted; empty = this lane's own series. The crypto lanes count all five coins together: one coin's 2 hours alone is too few windows
