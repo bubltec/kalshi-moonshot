@@ -510,10 +510,11 @@ def skipped(varieties: Sequence[str], variety: str | None, side: str) -> bool:
     return variety is not None and (variety in varieties or f"{variety}-{side}" in varieties)
 
 
+LADDER_HOURS = (2.0, 4.0, 6.0, 12.0, 24.0, 48.0, 96.0)
 CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left_s", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety", "vol_rel", *SWING_FEATURES)
 SWING_INT = ("sw_legs", "sw_cross", "sw_relapse", "sw_last_dir")
 MIN_PRIOR = 10  # older favorites a variety needs before the auto skip may act on it
-LEDGER_KEEP = 72 * 3600.0  # how much settled history the in-memory ledger holds
+LEDGER_KEEP = 120 * 3600.0  # how much settled history the in-memory ledger holds (the review ladder reads 96 h and what is older as its prior)
 LEDGER_WARM = 48 * 3600.0  # how far back a cold start computes when favorite_cases holds nothing
 
 
@@ -528,6 +529,7 @@ class Ledger:
         self.rows: deque[dict] = deque()
         self.seen: set[str] = set()
         self.last_close = 0.0
+        self._ladder_memo: tuple[tuple | None, tuple[str, ...]] = (None, ())
 
     def add(self, recs: Sequence[dict]) -> list[dict]:
         new = []
@@ -574,6 +576,49 @@ class Ledger:
             post = (n * m_recent + prior_weight * (net_old / n_old)) / (n + prior_weight)
             if post <= -min_loss:
                 out.append(f"{key[2]}-{key[1]}")
+        return tuple(out)
+
+    def skips_ladder(self, cls: str, now: float, coin: str | None = None, edges: Sequence[float] = LADDER_HOURS, prior_weight: float = 15.0, coin_weight: float = 8.0,
+                     min_loss: float = 0.10, min_n: int = 5) -> tuple[str, ...]:
+        """The "variety-side" cells to skip, reviewed on a ladder of stretches: 0-2 h, 2-4, 4-6, 6-12, 12-24, 24-48, 48-96 hours back, and what is older (2026-11-05, user: review every 2 hours, compounded to 4, 6, 12, 24, 48, 96).
+
+        The stretches are disjoint, so no bet counts twice. A cell's record is built from the oldest stretch to the newest: each stretch's mean a $10 bet is blended into what is known so far as a prior worth `prior_weight` bets,
+        so the newest 2 hours can move the figure at once but cannot flip it on a handful of bets, and a stretch that agrees with the longer record only confirms it. With `coin` the class's record is built first, then that
+        coin's own stretches are blended on top at `coin_weight`, so ETH learns its own varieties without needing a class-sized sample. A cell is skipped when the result loses `min_loss` or more a $10 bet, the class has at
+        least `min_n` favorites of the cell in the last 12 hours, and at least MIN_PRIOR older ones exist (a new or rare variety is never skipped on a few bets)."""
+        key = (cls, coin, int(now // 30), tuple(edges), prior_weight, coin_weight, min_loss, min_n, len(self.rows))
+        if self._ladder_memo[0] == key:  # the ledger changes every few minutes and a lane asks on every decision: one pass in 30 s is enough
+            return self._ladder_memo[1]
+        bounds = [now - h * 3600.0 for h in edges]  # newest first: bounds[0] is 2 h ago
+        buckets: dict[tuple[str, int, str, str], list[float]] = defaultdict(lambda: [0, 0.0])
+        with self._lock:
+            rows = [r for r in self.rows if r["cls"] == cls and r["close_ts"] <= now]
+        for r in rows:
+            k = next((i for i, b in enumerate(bounds) if r["close_ts"] > b), len(bounds))  # 0 = newest stretch ... len(bounds) = older than the ladder
+            for scope in ("class", "coin") if coin and r.get("coin") == coin else ("class",):
+                c = buckets[(scope, k, r["side"], r["variety"])]
+                c[0] += 1
+                c[1] += r["pnl"]
+        cells = {(side, variety) for _, _, side, variety in buckets}
+        out = []
+        for side, variety in sorted(cells):
+            older_n = sum(buckets[("class", k, side, variety)][0] for k in range(2, len(bounds) + 1) if ("class", k, side, variety) in buckets)
+            recent_n = sum(buckets[("class", k, side, variety)][0] for k in range(4) if ("class", k, side, variety) in buckets)  # the first four stretches: 12 h
+            if older_n < MIN_PRIOR or recent_n < min_n:
+                continue
+            post = None
+            for scope, weight in (("class", prior_weight), ("coin", coin_weight)):
+                if scope == "coin" and not coin:
+                    continue
+                for k in range(len(bounds), -1, -1):  # oldest first
+                    n, net = buckets.get((scope, k, side, variety), (0, 0.0))
+                    if n == 0:
+                        continue
+                    m = net / n
+                    post = m if post is None else (n * m + weight * post) / (n + weight)
+            if post is not None and post <= -min_loss:
+                out.append(f"{variety}-{side}")
+        self._ladder_memo = (key, tuple(out))
         return tuple(out)
 
     def market_skip(self, cls: str, coin: str, ask: float, now: float, hours: float = 48.0, prior_weight: float = 30.0, min_loss: float = 0.30, min_n: int = 20, cell_min_n: int = 12, cell_min_loss: float = 0.40) -> str | None:
