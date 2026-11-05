@@ -844,3 +844,26 @@ def test_a_trend_lane_buys_the_trend_side_only_in_a_market_wide_move(tmp_path, m
     finally:
         ticks.history.clear()
         variants._broad_memo = (0, None)
+
+
+def test_a_lane_refuses_a_bet_when_its_own_model_chance_is_far_under_the_price(tmp_path, monkeypatch):
+    from kalshi_moonshot import config, regime, runner
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.90, "fixed")  # the model says the YES pays 90% of the time
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.edge]\nestimator='market'\nprice=[0.05,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmin_model_edge=-0.05\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    near = LongShot("KXBTC15M-5", "t", "", 0.91, 0.92, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="edge", series="KXBTC15M", side="yes")
+    far = LongShot("KXBTC15M-5", "t", "", 0.96, 0.97, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="edge", series="KXBTC15M", side="yes")
+    ok = runner.evaluate(s, None, None, store, near, estimators={"market": Fixed()})
+    assert ok.action == "bet"  # the model (0.90) is 2 cents under 0.92: inside the 5 cents allowed
+    no = runner.evaluate(s, None, None, store, far, estimators={"market": Fixed()})
+    assert no.action == "pass" and "under the price" in no.note  # 0.90 against 0.97: 7 cents under

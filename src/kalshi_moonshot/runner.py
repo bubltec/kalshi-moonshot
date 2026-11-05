@@ -520,6 +520,9 @@ def evaluate(
     if bet and not chance_ok(spec, p):
         bet = False
         note = f"chance {p:.0%} outside the lane's {spec.min_chance:.0%}-{spec.max_chance:.0%}. {note}"
+    if bet and spec.min_model_edge > -90 and p - shot.ask < spec.min_model_edge:
+        bet = False
+        note = f"the model's chance {p:.2f} is {shot.ask - p:.2f} under the price {shot.ask:.2f} (the lane needs it within {-spec.min_model_edge:.2f}). {note}"
     if bet and shot.mutually_exclusive:
         others = store.bet_tickers_in_event(shot.event_ticker) - {shot.ticker}
         if others:
