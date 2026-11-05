@@ -1,0 +1,10 @@
+Multi-scale varieties (scripts/multiscale_scan.py): the letter A-G read at 1, 2, 5, 15 and 60 minutes at once, every 30 s, both sides, every market since 11-02 (50,273 crypto and 61,952 commodity rows). Crossing threshold scales with the look-back (0.8 a minute, at least 2).
+Held to the result, $10 ticket. Single scale: crypto 60m D (near, approaching the strike) 9,427 rows won 48% vs a 0.44 price, +0.77/bet (+0.69 / +0.84 by half); 5m F won 63% vs 0.62 +0.40.
+Combinations positive in both halves: crypto 15 of 89 (all five scales, n>=100) and 8 of 44 (5m+15m+60m); commodities 15 of 125 and 8 of 62. With this many combinations, a share of about a quarter is expected by chance.
+Pre-specified rules, one buy per market side at the first point 2:00-10:00 in with ask .20-.70 (scripts/multiscale_rules.py), by time thirds:
+ crypto 60m D and 5m F: 128 markets, won 54% vs price 0.45, +2.09/bet (+1.86 / +0.82 / +3.79)
+ crypto 60m D, 15m G and 5m F: 81 markets, won 59% vs 0.46, +3.56/bet (+4.80 / +1.72 / +3.54)
+ crypto 60m D and 5m E or F: 349 markets +0.18/bet (+1.69 / -1.04 / -0.25); 60m D alone: 785 markets +0.01
+ commodities: every version negative (60m D and 5m F: 262 markets, -1.12/bet).
+Reading: the near-and-approaching hour with a recovering last 5 minutes is the only crypto rule positive in all three thirds; the broader versions are not. Selected after looking at the scans, so it needs a forward (paper) test.
+SVM walk-forward (scripts/svm_walk_forward.py, derivative features): the top-5% picks were +0.38 then -1.20 (crypto) and -1.10 then +0.99 (commodities): no stable edge on 826-2144 training rows.
