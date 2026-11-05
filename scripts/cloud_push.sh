@@ -37,7 +37,11 @@ put() {
 }
 
 [ -f .env ] || { echo "no .env in $(pwd)" >&2; exit 1; }
-put /kalshi-moonshot/dotenv .env
+# The host reads the parameter as its .env; comment and blank lines are dropped so the file stays under the 4,096-character limit of a standard parameter (2026-11-05: it had reached 4,037).
+dotenv_tmp="$(mktemp)"
+grep -v '^[[:space:]]*#' .env | grep -v '^[[:space:]]*$' > "$dotenv_tmp"
+put /kalshi-moonshot/dotenv "$dotenv_tmp"
+rm -f "$dotenv_tmp"
 if [ -f data/strategies.toml ]; then
   # A standard parameter holds 4 KB. The lane file is larger, so it is stored as base64 pieces under that limit.
   chunk_dir=$(mktemp -d)
