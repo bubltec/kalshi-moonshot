@@ -1,0 +1,10 @@
+Manual scalps (2026-11-05, hand-placed on the account; found with scripts/manual_fills.py): SILVER 09:00 ET: YES 17.03 @0.57 sold 60 s later @0.80 (+$3.4 after fees; the market went on to 0.99). WTI 09:00 ET: YES 6.57 @0.29 sold 8.5 min later @0.49 (+$1.1; it then fell to 0.24). GOLD 08:45 ET: NO 458 @0.002 with 75 s left, a $0.92 lottery ticket; YES sat at 1.00, so it almost certainly lost.
+The bot passed on both scalped markets: silver as variety A on YES (static skip), WTI for cushion z under 1 and for a price spike.
+
+Strike formula (scripts/strike_formula_fit.py): crypto strike = the mean of the index over the 60 s ending at the open (median error 0.01 bp, 99% within 0.5 bp over 1,540 markets); spot at open 1.4 bp, first 30 s after open 2.4-3.2 bp, previous 15 min 6.5 bp. Commodity strikes match no spot formula (about 6 bp median, BiQuote differs from the settlement source).
+Settlement tau-40 s correction to the win chance (60 s average): no gain (crypto log-loss 0.4771 vs 0.4758; commodity unchanged).
+
+Scalp patterns (scripts/scalp_pattern_test.py, tape quote resolution, take profit at the bid, else held to the result; $10 ticket): neither of the two patterns holds in both halves.
+P1 trend up on 15 m and 1 h, buy .45-.62 early: commodities -1.1 to -1.45/bet (H1 -0.13..+0.34, H2 -2.0..-2.7); crypto -0.22..-0.75 (H1 -0.6..-1.0, H2 +0.18/+0.34 at TP .20/.25). Without the trend condition: -0.5 to -0.96.
+P2 swinging low price (.25-.45, range >= .15, >= 2 swings): -1.1 to -1.7/bet in both halves, both classes.
+Take-profit hit rates are 57-77%, but the misses lose the whole stake and a hit pays 15-30c on a 25-60c ticket.
