@@ -678,3 +678,45 @@ def test_swing_features_see_the_whole_window_and_the_relapse_shape():
 def test_swing_features_are_none_when_the_history_does_not_cover_the_window():
     ts, vs = _path([(101.0, 100), (102.0, 100), (101.0, 0)])
     assert variants.swing_features(ts, vs, 100.0, "yes", ts[0] - 500.0, ts[-1]) is None
+
+
+def test_a_lane_waits_for_a_cushion_and_refuses_an_oscillating_spot(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.cushioned]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmin_cushion_z=1.0\nmax_spot_crosses=4\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-8", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    index = variants.crypto_index("KXBTC15M")
+    yes = LongShot("KXBTC15M-8", "t", "", 0.88, 0.89, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="cushioned", series="KXBTC15M", side="yes")
+    try:
+        for k in range(176):  # steady, 20 bp above the strike: a big cushion for YES
+            ticks.history.note(index, now - 350.0 + k * 2.0, 100.20 + 0.0004 * (k % 2))
+        far = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert far.action == "bet" and "[z +" in far.note
+        ticks.history.clear()
+        for k in range(176):  # barely above the strike, flat: a cushion under one typical move
+            ticks.history.note(index, now - 350.0 + k * 2.0, 100.0005 + 0.0004 * (k % 2))
+        near = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert near.action == "pass" and "waits for a bigger cushion" in near.note
+        ticks.history.clear()
+        for k in range(176):  # weaving across the strike every few seconds
+            ticks.history.note(index, now - 350.0 + k * 2.0, 100.20 if (k // 8) % 2 == 0 else 99.80)
+        weave = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert weave.action == "pass" and ("crossed the strike" in weave.note or "waits for a bigger cushion" in weave.note)
+    finally:
+        ticks.history.clear()

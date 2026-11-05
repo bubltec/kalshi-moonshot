@@ -576,7 +576,7 @@ def evaluate(
             note = f"volatility regime {vrel:.2f}x its normal is outside the lane's {lo:g}-{hi:g}. {note}"
         else:
             note = f"[vol {vrel:.2f}x] {note}"
-    if bet and spec.max_cushion_z < 90:
+    if bet and (spec.max_cushion_z < 90 or spec.min_cushion_z > -90 or spec.max_spot_crosses > 0):
         from . import ticks as ticks_mod
         from . import variants
 
@@ -591,6 +591,12 @@ def evaluate(
         elif snap["z"] > spec.max_cushion_z:
             bet = False
             note = f"cushion z {snap['z']:+.2f} is above the lane's {spec.max_cushion_z:g}. {note}"
+        elif snap["z"] < spec.min_cushion_z:
+            bet = False
+            note = f"cushion z {snap['z']:+.2f} is under the lane's {spec.min_cushion_z:g} (waits for a bigger cushion). {note}"
+        elif spec.max_spot_crosses > 0 and snap["crosses"] >= spec.max_spot_crosses:
+            bet = False
+            note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
     if bet and spec.skip_other_varieties:
