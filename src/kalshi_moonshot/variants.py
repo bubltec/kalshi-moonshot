@@ -187,6 +187,61 @@ def snapshot(ts: Sequence[float], values: Sequence[float], strike: float, side: 
     return {**f, "variety": classify_features(f)}
 
 
+SWING_FEATURES = ("sw_legs", "sw_retrace", "sw_onside", "sw_cross", "sw_relapse", "sw_last_dir", "sw_last_size")
+SWING_GRID = 5.0
+
+
+def _zigzag(vals: Sequence[float], th: float) -> list[tuple[int, float]]:
+    """The legs of a path: moves of at least `th` against the running extreme, oldest first, as (direction +1/-1, size). The last leg is the one still running."""
+    if len(vals) < 3:
+        return []
+    legs: list[tuple[int, float]] = []
+    direction, ext, start = 0, vals[0], vals[0]
+    for x in vals[1:]:
+        if direction >= 0 and x > ext:
+            ext = x
+            direction = 1 if x - start >= th or direction == 1 else direction
+        elif direction <= 0 and x < ext:
+            ext = x
+            direction = -1 if start - x >= th or direction == -1 else direction
+        if direction == 1 and ext - x >= th:
+            legs.append((1, ext - start))
+            start, ext, direction = ext, x, -1
+        elif direction == -1 and x - ext >= th:
+            legs.append((-1, start - ext))
+            start, ext, direction = ext, x, 1
+        elif direction == 0 and abs(x - start) >= th:
+            direction, ext = (1 if x > start else -1), x
+    if direction != 0:
+        legs.append((direction, abs(ext - start)))
+    return legs
+
+
+def swing_features(ts: Sequence[float], values: Sequence[float], strike: float, side: str, open_ts: float, at: float) -> dict | None:
+    """The whole path from the window open to `at` (2026-11-04, user: look at the 15 minutes behind the spot, not five): the cushion in the bet's favor every fifth tick (about 5 s), cut into swing legs of at least a typical
+    one-minute move. sw_legs: how many; sw_retrace: how far it has pulled back from its best point (0-1 of its range); sw_onside: share of the time on the bet's side; sw_cross: strike crossings; sw_relapse: 1 when the
+    last three legs are down, up, down (eroded, recovered, eroding again); sw_last_dir / sw_last_size: the running leg's direction and its size in typical minutes. Recorded only, no lane reads them: the study over
+    8,016 favorites found no feature that held in both halves (studies/results/2026-11-04-full-window-swings.txt). None when the history does not cover the window."""
+    a = bisect.bisect_left(ts, open_ts)
+    b = bisect.bisect_right(ts, at)
+    if strike <= 0 or b - a < 120 or ts[a] - open_ts > 30.0 or at - ts[b - 1] > 10.0:
+        return None
+    sign = 1.0 if side == "yes" else -1.0
+    seg = values[a:b]
+    sq = sum(math.log(y / x) ** 2 for x, y in itertools.pairwise(seg))
+    dt = ts[b - 1] - ts[a]
+    if sq <= 0 or dt <= 0:
+        return None
+    unit = math.sqrt(sq / dt) * math.sqrt(60.0)
+    cush = [math.log(x / strike) * sign for x in seg[:: int(SWING_GRID)]]
+    legs = _zigzag(cush, unit)
+    hi, lo = max(cush), min(cush)
+    dirs = [d for d, _ in legs]
+    return {"sw_legs": len(legs), "sw_retrace": (hi - cush[-1]) / (hi - lo) if hi > lo else 0.0, "sw_onside": sum(1 for c in cush if c > 0) / len(cush),
+            "sw_cross": sum(1 for x, y in itertools.pairwise(cush) if (x > 0) != (y > 0)), "sw_relapse": int(len(legs) >= 3 and dirs[-3:] == [-1, 1, -1]),
+            "sw_last_dir": dirs[-1] if dirs else 0, "sw_last_size": legs[-1][1] / unit if legs else 0.0}
+
+
 def _pnl(row, held_fee: bool = True) -> float:
     contracts = row["stake_usd"] / row["ask"]
     if row["exit_price"] is not None:
@@ -335,7 +390,7 @@ def favorites(s: Settings, start: float, end: float) -> Iterator[dict]:
         cls_name = "crypto" if crypto else "commodity"
         yield {"ticker": w["ticker"], "series": series, "cls": cls_name, "coin": coin_name, "side": side, "ts": at, "close_ts": close,
                "ask": ask, "bid": bid, "left_s": close - at, "won": bool(won), "pnl": pnl, "flip_pnl": flip, "flip_price": other,
-               "vol_rel": volregime.vol_rel_at(coin_name, index, at, volregime.LOOKS[cls_name]), **snap}
+               "vol_rel": volregime.vol_rel_at(coin_name, index, at, volregime.LOOKS[cls_name]), **snap, **(swing_features(ts, values, strike, side, close - 900.0, at) or {})}
 
 
 def market_scoreboard(s: Settings, days: float = 6.0, recent_days: float = 1.0, now: float | None = None) -> dict[tuple[str, str, str, str], dict]:
@@ -436,7 +491,12 @@ def snapshot_now(s: Settings, series: str, side: str, left_seconds: float, now: 
         tape = db.connect(s.tape_path, "tape", shared=True)
         rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index, now - LOOK - 40.0, now)).fetchall()
         got = ([float(r[0]) for r in rows], [float(r[1]) for r in rows])
-    return snapshot(got[0], got[1], ref, side, now, close)
+    snap = snapshot(got[0], got[1], ref, side, now, close)
+    if snap is not None:  # the whole window behind the spot, recorded with the bet (nothing reads it yet)
+        full = ticks_mod.history.window(index, close - 900.0 - 40.0, now)
+        if full is not None:
+            snap.update(swing_features(full[0], full[1], ref, side, close - 900.0, now) or {})
+    return snap
 
 
 def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None, strike: float | None = None) -> str | None:
@@ -450,7 +510,8 @@ def skipped(varieties: Sequence[str], variety: str | None, side: str) -> bool:
     return variety is not None and (variety in varieties or f"{variety}-{side}" in varieties)
 
 
-CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left_s", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety", "vol_rel")
+CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left_s", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety", "vol_rel", *SWING_FEATURES)
+SWING_INT = ("sw_legs", "sw_cross", "sw_relapse", "sw_last_dir")
 MIN_PRIOR = 10  # older favorites a variety needs before the auto skip may act on it
 LEDGER_KEEP = 72 * 3600.0  # how much settled history the in-memory ledger holds
 LEDGER_WARM = 48 * 3600.0  # how far back a cold start computes when favorite_cases holds nothing
@@ -563,12 +624,13 @@ def _ensure_cases(store: Store) -> None:
         "CREATE TABLE IF NOT EXISTS favorite_cases (ticker TEXT PRIMARY KEY, series TEXT, cls TEXT, coin TEXT, side TEXT, ts REAL, close_ts REAL, ask REAL, bid REAL, left_s REAL, won INTEGER, pnl REAL, "
         "flip_pnl REAL, z REAL, slope REAL, crosses INTEGER, vol_ratio REAL, since_cross REAL, variety TEXT, vol_rel REAL)"
     )
-    try:  # a table made before vol_rel existed gets the column (the statement fails harmlessly when it is already there)
-        store.db.execute("ALTER TABLE favorite_cases ADD COLUMN vol_rel REAL")
-        store.db.commit()
-    except Exception:
-        with contextlib.suppress(Exception):
-            store.db.rollback()
+    for col, kind in (("vol_rel", "REAL"), *((c, "INTEGER" if c in SWING_INT else "REAL") for c in SWING_FEATURES)):
+        try:  # a table made before a column existed gets it (the statement fails harmlessly when it is already there)
+            store.db.execute(f"ALTER TABLE favorite_cases ADD COLUMN {col} {kind}")
+            store.db.commit()
+        except Exception:
+            with contextlib.suppress(Exception):
+                store.db.rollback()
     store.db.execute("CREATE INDEX IF NOT EXISTS idx_favorite_cases_close ON favorite_cases(close_ts)")
 
 
@@ -584,7 +646,7 @@ def refresh_ledger(s: Settings, now: float | None = None) -> int:
     start = (ledger.last_close - 1800.0) if ledger.last_close else now - LEDGER_WARM
     added = ledger.add(list(favorites(s, start, now - 600.0)))
     for r in added:
-        store.db.execute(f"INSERT OR IGNORE INTO favorite_cases ({', '.join(CASE_FIELDS)}) VALUES ({', '.join('?' * len(CASE_FIELDS))})", tuple(int(r[k]) if k in ("won", "crosses") else r[k] for k in CASE_FIELDS))
+        store.db.execute(f"INSERT OR IGNORE INTO favorite_cases ({', '.join(CASE_FIELDS)}) VALUES ({', '.join('?' * len(CASE_FIELDS))})", tuple(None if r.get(k) is None else int(r[k]) if k in ("won", "crosses", *SWING_INT) else r[k] for k in CASE_FIELDS))
     if added:
         store.db.commit()
     return len(added)

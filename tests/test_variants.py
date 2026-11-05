@@ -1,3 +1,4 @@
+import itertools
 import math
 
 import pytest
@@ -649,3 +650,31 @@ def test_a_precious_lane_skips_a_bet_where_the_spot_and_the_corrected_center_dis
         assert not ("do not both sit" in quarter.note and quarter.note.startswith("the spot"))  # the skip wording is only for the skip mode
     finally:
         ticks.strikes.clear()
+
+
+def _path(points, step=1.0, start=1000.0):
+    """A price path through the (price, seconds) waypoints, one tick a second."""
+    ts, vs = [], []
+    t = start
+    for (p0, n), (p1, _) in itertools.pairwise(points):
+        for k in range(int(n)):
+            ts.append(t)
+            vs.append(p0 + (p1 - p0) * k / n + (0.01 if k % 2 else -0.01))
+            t += step
+    return ts, vs
+
+
+def test_swing_features_see_the_whole_window_and_the_relapse_shape():
+    # up, down, up, down over 600 s above a strike of 100: the last three legs are down, up, down
+    ts, vs = _path([(101.0, 150), (103.0, 150), (101.5, 150), (103.0, 150), (101.2, 0)])
+    f = variants.swing_features(ts, vs, 100.0, "yes", ts[0], ts[-1] + 1.0)
+    assert f is not None
+    assert f["sw_relapse"] == 1 and f["sw_last_dir"] == -1 and f["sw_cross"] == 0 and f["sw_onside"] == 1.0
+    assert f["sw_legs"] >= 3 and 0.0 < f["sw_retrace"] < 1.0
+    no = variants.swing_features(ts, vs, 100.0, "no", ts[0], ts[-1] + 1.0)
+    assert no is not None and no["sw_onside"] == 0.0
+
+
+def test_swing_features_are_none_when_the_history_does_not_cover_the_window():
+    ts, vs = _path([(101.0, 100), (102.0, 100), (101.0, 0)])
+    assert variants.swing_features(ts, vs, 100.0, "yes", ts[0] - 500.0, ts[-1]) is None
