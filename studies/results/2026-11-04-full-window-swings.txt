@@ -1,0 +1,46 @@
+== crypto 2940
+baseline                    all: n=2940 win 82.6% $-0.09 | H1: n=2014 win 83.3% $+0.00 | H2: n=926 win 80.9% $-0.29
+relapse (down,up,down)      all: n=621 win 85.0% $+0.12 | H1: n=422 win 86.7% $+0.31 | H2: n=199 win 81.4% $-0.29
+no relapse                  all: n=2319 win 81.9% $-0.14 | H1: n=1592 win 82.4% $-0.08 | H2: n=727 win 80.7% $-0.29
+lower_high relapse          all: n=157 win 84.1% $+0.12 | H1: n=101 win 85.1% $+0.26 | H2: n=56 win 82.1% $-0.12
+retrace 0.00-0.34           all: n=2171 win 82.5% $-0.13 | H1: n=1485 win 83.2% $-0.05 | H2: n=686 win 81.0% $-0.29
+retrace 0.34-0.67           all: n=692 win 82.1% $-0.08 | H1: n=467 win 83.3% $+0.08 | H2: n=225 win 79.6% $-0.42
+retrace 0.67-1.01           all: n=77 win 88.3% $+0.87 | H1: n=62 win 87.1% $+0.69 | H2: n=15 win 93.3% $+1.59
+onside 0-0.5                all: n=615 win 82.4% $+0.22 | H1: n=452 win 82.3% $+0.19 | H2: n=163 win 82.8% $+0.29
+onside 0.5-0.8              all: n=735 win 81.9% $-0.07 | H1: n=509 win 82.1% $-0.06 | H2: n=226 win 81.4% $-0.10
+onside 0.8-0.95             all: n=698 win 84.4% $+0.06 | H1: n=444 win 85.1% $+0.19 | H2: n=254 win 83.1% $-0.15
+onside 0.95-1.01            all: n=892 win 81.7% $-0.43 | H1: n=609 win 83.7% $-0.22 | H2: n=283 win 77.4% $-0.89
+crossings 0                 all: n=472 win 82.8% $-0.40 | H1: n=336 win 85.7% $-0.05 | H2: n=136 win 75.7% $-1.24
+crossings 1                 all: n=355 win 82.5% $-0.28 | H1: n=235 win 85.1% $+0.01 | H2: n=120 win 77.5% $-0.84
+crossings 2                 all: n=326 win 81.6% $-0.24 | H1: n=228 win 82.5% $-0.13 | H2: n=98 win 79.6% $-0.47
+crossings 3+                all: n=1787 win 82.7% $+0.06 | H1: n=1215 win 82.5% $+0.04 | H2: n=572 win 83.0% $+0.09
+legs 0                      all: n=3 | H1: n=2 | H2: n=1
+legs 1                      all: n=137 win 87.6% $+0.15 | H1: n=96 win 86.5% $+0.02 | H2: n=41 win 90.2% $+0.45
+legs 2                      all: n=488 win 84.8% $+0.13 | H1: n=354 win 84.7% $+0.13 | H2: n=134 win 85.1% $+0.12
+legs 3                      all: n=626 win 82.3% $-0.23 | H1: n=415 win 83.1% $-0.12 | H2: n=211 win 80.6% $-0.44
+legs 4+                     all: n=1686 win 81.6% $-0.12 | H1: n=1147 win 82.7% $+0.00 | H2: n=539 win 79.2% $-0.39
+last leg down & big(>=2)    all: n=277 win 88.8% $+0.52 | H1: n=189 win 91.0% $+0.83 | H2: n=88 win 84.1% $-0.16
+last leg up                 all: n=2069 win 81.4% $-0.18 | H1: n=1428 win 81.9% $-0.11 | H2: n=641 win 80.2% $-0.33
+== commodity 1442
+baseline                    all: n=1442 win 81.9% $-0.20 | H1: n=173 win 83.8% $+0.01 | H2: n=1269 win 81.6% $-0.22
+relapse (down,up,down)      all: n=279 win 82.8% $-0.19 | H1: n=38 win 84.2% $+0.21 | H2: n=241 win 82.6% $-0.25
+no relapse                  all: n=1163 win 81.7% $-0.20 | H1: n=135 win 83.7% $-0.05 | H2: n=1028 win 81.4% $-0.22
+lower_high relapse          all: n=52 win 86.5% $+0.35 | H1: n=8 | H2: n=44 win 86.4% $+0.27
+retrace 0.00-0.34           all: n=1069 win 82.2% $-0.18 | H1: n=126 win 82.5% $-0.21 | H2: n=943 win 82.2% $-0.17
+retrace 0.34-0.67           all: n=336 win 81.8% $-0.13 | H1: n=41 win 85.4% $+0.36 | H2: n=295 win 81.4% $-0.20
+retrace 0.67-1.01           all: n=37 win 73.0% $-1.33 | H1: n=6 | H2: n=31 win 67.7% $-2.02
+onside 0-0.5                all: n=327 win 78.3% $-0.45 | H1: n=34 win 64.7% $-2.11 | H2: n=293 win 79.9% $-0.26
+onside 0.5-0.8              all: n=427 win 79.6% $-0.36 | H1: n=48 win 83.3% $+0.09 | H2: n=379 win 79.2% $-0.42
+onside 0.8-0.95             all: n=355 win 83.1% $-0.11 | H1: n=41 win 90.2% $+0.64 | H2: n=314 win 82.2% $-0.21
+onside 0.95-1.01            all: n=333 win 87.1% $+0.18 | H1: n=50 win 92.0% $+0.85 | H2: n=283 win 86.2% $+0.06
+crossings 0                 all: n=12 | H1: n=0 | H2: n=12
+crossings 1                 all: n=430 win 84.4% $-0.09 | H1: n=52 win 86.5% $+0.18 | H2: n=378 win 84.1% $-0.13
+crossings 2                 all: n=23 win 65.2% $-2.12 | H1: n=1 | H2: n=22 win 68.2% $-1.75
+crossings 3+                all: n=977 win 81.4% $-0.17 | H1: n=120 win 83.3% $+0.02 | H2: n=857 win 81.1% $-0.20
+legs 0                      all: n=39 win 79.5% $-0.15 | H1: n=2 | H2: n=37 win 78.4% $-0.26
+legs 1                      all: n=141 win 80.9% $-0.57 | H1: n=12 | H2: n=129 win 79.1% $-0.76
+legs 2                      all: n=254 win 81.9% $-0.21 | H1: n=27 win 74.1% $-1.11 | H2: n=227 win 82.8% $-0.11
+legs 3                      all: n=317 win 82.3% $-0.20 | H1: n=39 win 87.2% $+0.18 | H2: n=278 win 81.7% $-0.25
+legs 4+                     all: n=691 win 82.1% $-0.11 | H1: n=93 win 82.8% $+0.03 | H2: n=598 win 81.9% $-0.14
+last leg down & big(>=2)    all: n=122 win 85.2% $-0.02 | H1: n=16 win 100.0% $+1.90 | H2: n=106 win 83.0% $-0.31
+last leg up                 all: n=969 win 81.9% $-0.15 | H1: n=117 win 82.1% $-0.26 | H2: n=852 win 81.9% $-0.14
