@@ -840,7 +840,7 @@ def test_a_trend_lane_buys_the_trend_side_only_in_a_market_wide_move(tmp_path, m
         ok = runner.evaluate(s, None, None, store, no, estimators={"market": Fixed()})
         assert ok.action == "bet" and "[trend60 -3.0%]" in ok.note
         wrong = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
-        assert wrong.action == "pass" and "buys NO only" in wrong.note
+        assert wrong.action == "pass" and "buys NO while" in wrong.note
     finally:
         ticks.history.clear()
         variants._broad_memo = (0, None)
@@ -867,3 +867,52 @@ def test_a_lane_refuses_a_bet_when_its_own_model_chance_is_far_under_the_price(t
     assert ok.action == "bet"  # the model (0.90) is 2 cents under 0.92: inside the 5 cents allowed
     no = runner.evaluate(s, None, None, store, far, estimators={"market": Fixed()})
     assert no.action == "pass" and "under the price" in no.note  # 0.90 against 0.97: 7 cents under
+
+
+def test_a_two_way_trend_lane_buys_no_in_a_downtrend_and_yes_in_an_uptrend(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.two]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\ntrend_down_max=-0.5\ntrend_up_min=0.5\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-4", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    def mk(side):
+        return LongShot("KXBTC15M-4", "t", "", 0.55, 0.56, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="two", series="KXBTC15M", side=side)
+
+
+    def fill(frac_move):
+        ticks.history.clear()
+        variants._broad_memo = (0, None)
+        for ser in variants.BROAD_SERIES:
+            index = variants.crypto_index(ser)
+            for j in range(1900):
+                tt = now - 3800.0 + j * 2.0
+                frac = max(0.0, (tt - (now - 3600.0)) / 3600.0)
+                ticks.history.note(index, tt, 100.0 * (1.0 + frac_move * frac))
+
+    try:
+        fill(-0.012)  # down 1.2% over the hour
+        assert runner.evaluate(s, None, None, store, mk("no"), estimators={"market": Fixed()}).action == "bet"
+        assert runner.evaluate(s, None, None, store, mk("yes"), estimators={"market": Fixed()}).action == "pass"
+        fill(0.012)  # up 1.2%
+        assert runner.evaluate(s, None, None, store, mk("yes"), estimators={"market": Fixed()}).action == "bet"
+        assert runner.evaluate(s, None, None, store, mk("no"), estimators={"market": Fixed()}).action == "pass"
+        fill(0.001)  # flat: neither side
+        flat = runner.evaluate(s, None, None, store, mk("yes"), estimators={"market": Fixed()})
+        assert flat.action == "pass" and "buys NO while" in flat.note and "YES while" in flat.note
+    finally:
+        ticks.history.clear()
+        variants._broad_memo = (0, None)

@@ -628,12 +628,17 @@ def evaluate(
         if trend is None:
             bet = False
             note = f"the market-wide 60-minute trend is unreadable. {note}"
-        elif spec.trend_down_max < 0 and not (shot.side == "no" and trend <= spec.trend_down_max):
-            bet = False
-            note = f"the lane buys NO only while the market-wide 60-minute move is {spec.trend_down_max:g}% or lower (it is {trend:+.1f}%, this is {shot.side.upper()}). {note}"
-        elif spec.trend_up_min > 0 and not (shot.side == "yes" and trend >= spec.trend_up_min):
-            bet = False
-            note = f"the lane buys YES only while the market-wide 60-minute move is {spec.trend_up_min:g}% or higher (it is {trend:+.1f}%, this is {shot.side.upper()}). {note}"
+        else:
+            down_ok = spec.trend_down_max < 0 and shot.side == "no" and trend <= spec.trend_down_max
+            up_ok = spec.trend_up_min > 0 and shot.side == "yes" and trend >= spec.trend_up_min
+            if not (down_ok or up_ok):
+                bet = False
+                rules = []
+                if spec.trend_down_max < 0:
+                    rules.append(f"NO while the market-wide 60-minute move is {spec.trend_down_max:g}% or lower")
+                if spec.trend_up_min > 0:
+                    rules.append(f"YES while it is {spec.trend_up_min:g}% or higher")
+                note = f"the lane buys {' and '.join(rules)} (it is {trend:+.1f}%, this is {shot.side.upper()}). {note}"
     if bet and spec.ms_rule:
         from . import ticks as ticks_mod
         from . import variants
