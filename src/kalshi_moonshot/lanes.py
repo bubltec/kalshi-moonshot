@@ -121,6 +121,7 @@ class LaneSpec:
     skip_other_varieties: tuple[str, ...] = ()  # skip when the OTHER side (the favorite, for an underdog buy) is one of these varieties at the buy. "B" = far from the strike and flat: 2026-11-04 study of wild-regime underdogs, a far-and-flat favorite saw 1 underdog win in 42 (none on 5 of 6 days, none in the first half), the rest 30 in 157. Unreadable = no buy
     max_cushion_z: float = 99.0  # buy only when the bet's side has a cushion of at most this many typical moves (variants snapshot z, the bet's side: negative = the side is behind the strike). -1 = the other side leads by one or more. 99 = off. Unreadable = no buy
     min_cushion_z: float = -99.0  # 2026-11-05 (user): buy only when the bet's side has a cushion of at least this many typical moves left (variants.snapshot z). -99 = off. Commodity states since 11-02 (17,900 moments): cushion under 0.5 lost -$0.4 to -$1.45 a $10 bet in both halves, 1.0-1.5 made +$0.24, 1.5+ made +$0.26 to +$0.53 (studies/results/2026-11-05-entry-state-map.txt)
+    ms_rule: tuple[str, ...] = ()  # 2026-11-05 (user): buy only when the variety at each named scale is one of the letters given: ("60m:D", "5m:F") = the 60-minute variety is D and the 5-minute variety is F (scales 1m 2m 5m 15m 60m). studies/results/2026-11-05-multiscale-varieties.txt. Unreadable = no buy
     max_spot_crosses: int = 0  # buy only when the spot crossed the strike fewer than this many times in the last five minutes (4 = the oscillating variety G). 0 = off. Commodity states: 4+ crossings lost $0.59 a bet in both halves
     skip_markets_auto: bool = False  # also skip a market (gold, palladium, ETH...) or a market's price band that the ledger shows losing over auto_market_hours, judged against its asset class (variants.Ledger.market_skip). Varieties pool every market of a class; the markets differ
     auto_market_hours: float = 48.0  # the stretch a market is judged over: its quality moves slowly, so this is longer than auto_hours
@@ -339,7 +340,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series"):
+    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series", "ms_rule"):
         if key in row:
             row[key] = tuple(row[key])
     if "hunt_contracts_by" in row:

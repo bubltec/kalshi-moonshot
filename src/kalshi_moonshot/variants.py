@@ -499,6 +499,79 @@ def snapshot_now(s: Settings, series: str, side: str, left_seconds: float, now: 
     return snap
 
 
+def scale_letter(ts: Sequence[float], values: Sequence[float], strike: float, side: str, at: float, close_ts: float, look: float) -> dict | None:
+    """The variety at one look-back (2026-11-05, user: read the variety at 1, 2, 5, 15 and 60 minutes at once and link them): the same z, slope and crossings as snapshot(), over the last `look` seconds on a 1 s grid, with
+    the oscillation threshold scaled to the look-back (0.8 crossings a minute, at least 2: 4 at five minutes, as before). The typical move is the look-back's own. None when the history does not cover the look-back."""
+    i = bisect.bisect_right(ts, at) - 1
+    if i < 0 or strike <= 0 or ts[i] < at - 10.0 or close_ts - at <= 0 or ts[0] > at - look - 20.0:
+        return None
+    steps = int(look)
+    seq = []
+    for k in range(steps + 1):
+        idx = bisect.bisect_right(ts, at - look + k) - 1
+        if idx < 0:
+            return None
+        seq.append(values[idx])
+    sq = sum(math.log(b / a) ** 2 for a, b in itertools.pairwise(seq))
+    if sq <= 0:
+        return None
+    rate = math.sqrt(sq / steps)
+    sign = 1.0 if side == "yes" else -1.0
+    cush = math.log(seq[-1] / strike) * sign
+    z = cush / (rate * math.sqrt(close_ts - at))
+    slope = (cush - math.log(seq[0] / strike) * sign) / (rate * math.sqrt(look))
+    sides = [x > strike for x in seq]
+    crosses = sum(1 for a, b in itertools.pairwise(sides) if a != b)
+    threshold = max(2, round(0.8 * look / 60.0))
+    if crosses >= threshold:
+        letter = "G"
+    elif z >= FAR:
+        letter = "A" if slope >= SLOPE else "C" if slope <= -SLOPE else "B"
+    else:
+        letter = "D" if slope <= -SLOPE else "F" if slope >= SLOPE else "E"
+    return {"variety": letter, "z": z, "slope": slope, "crosses": crosses}
+
+
+MS_LOOKS = {"1m": 60.0, "2m": 120.0, "5m": 300.0, "15m": 900.0, "60m": 3600.0}
+
+
+def ms_rule_ok(rule: Sequence[str], letters: dict[str, str]) -> bool:
+    """Whether every "scale:letters" term of a lane's ms_rule holds ("60m:D", "5m:EF" = the 5-minute variety is E or F)."""
+    for term in rule:
+        scale, _, allowed = term.partition(":")
+        if letters.get(scale) is None or letters[scale] not in allowed:
+            return False
+    return True
+
+
+def multiscale_now(s: Settings, series: str, side: str, left_seconds: float, scales: Sequence[str], now: float | None = None, strike: float | None = None) -> dict[str, dict] | None:
+    """The variety of a bet at this moment at each named scale ({"60m": {"variety": "D", "z": ..}, ...}), from the in-memory index ticks only. A commodity reads BiQuote against its own price when the window opened, a crypto
+    coin its settlement index against the window's `strike`. None when any scale cannot be read: a caller that requires a shape must not buy on None."""
+    crypto = crypto_index(series)
+    index = crypto or biquote_index(series)
+    if not index or left_seconds <= 0:
+        return None
+    now = time.time() if now is None else now
+    close = now + left_seconds
+    if crypto:
+        ref = strike if strike and strike > 0 else None
+    else:
+        ref = ticks_mod.history.first_at_or_after(index, close - 900.0 - 5.0, 25.0)
+    if ref is None:
+        return None
+    look_max = max(MS_LOOKS[sc] for sc in scales)
+    got = ticks_mod.history.window(index, now - look_max - 40.0, now)
+    if got is None:
+        return None
+    out = {}
+    for sc in scales:
+        snap = scale_letter(got[0], got[1], ref, side, now, close, MS_LOOKS[sc])
+        if snap is None:
+            return None
+        out[sc] = snap
+    return out
+
+
 def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None, strike: float | None = None) -> str | None:
     """The variety letter of snapshot_now, or None."""
     snap = snapshot_now(s, series, side, left_seconds, now, strike)

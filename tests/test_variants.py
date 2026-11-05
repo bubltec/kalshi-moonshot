@@ -731,3 +731,52 @@ def test_a_lane_waits_for_a_cushion_and_refuses_an_oscillating_spot(tmp_path, mo
         assert weave.action == "pass" and ("crossed the strike" in weave.note or "waits for a bigger cushion" in weave.note)
     finally:
         ticks.history.clear()
+
+
+def test_scale_letter_reads_the_variety_at_a_look_back_and_needs_the_history():
+    ts = [1000.0 + k for k in range(4000)]
+    flat_above = [100.20 + 0.0004 * (k % 2) for k in range(4000)]
+    sn = variants.scale_letter(ts, flat_above, 100.0, "yes", ts[-1], ts[-1] + 400.0, 300.0)
+    assert sn is not None and sn["variety"] == "B" and sn["z"] > 1.0 and sn["crosses"] == 0  # far and flat
+    weave = [100.20 if (k // 20) % 2 == 0 else 99.80 for k in range(4000)]
+    sn = variants.scale_letter(ts, weave, 100.0, "yes", ts[-1], ts[-1] + 400.0, 300.0)
+    assert sn is not None and sn["variety"] == "G"  # crossing every 20 s: oscillating at five minutes
+    assert variants.scale_letter(ts[:200], flat_above[:200], 100.0, "yes", ts[199], ts[199] + 400.0, 3600.0) is None  # not an hour of history
+
+
+def test_a_lane_with_an_ms_rule_buys_only_when_every_scale_matches(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.ms]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nms_rule=['60m:B','5m:B']\n[lane.ms_no]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nms_rule=['60m:D']\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-7", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    index = variants.crypto_index("KXBTC15M")
+    for k in range(1950):  # 3900 s of a steady price 20 bp above the strike
+        ticks.history.note(index, now - 3900.0 + k * 2.0, 100.20 + 0.0004 * (k % 2))
+    yes = LongShot("KXBTC15M-7", "t", "", 0.88, 0.89, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="ms", series="KXBTC15M", side="yes")
+    no = LongShot("KXBTC15M-7", "t", "", 0.88, 0.89, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="ms_no", series="KXBTC15M", side="yes")
+    try:
+        ok = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert ok.action == "bet" and "[ms 60m B 5m B]" in ok.note
+        miss = runner.evaluate(s, None, None, store, no, estimators={"market": Fixed()})
+        assert miss.action == "pass" and "do not match" in miss.note
+        ticks.history.clear()
+        none = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert none.action == "pass" and "unreadable" in none.note  # no history: never a buy
+    finally:
+        ticks.history.clear()

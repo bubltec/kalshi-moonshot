@@ -599,6 +599,27 @@ def evaluate(
             note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
+    if bet and spec.ms_rule:
+        from . import ticks as ticks_mod
+        from . import variants
+
+        scales = tuple(dict.fromkeys(term.partition(":")[0] for term in spec.ms_rule))
+        try:
+            ms = variants.multiscale_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, scales, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
+        except Exception as exc:
+            ms = None
+            log.warning("multi-scale varieties unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if ms is None:
+            bet = False
+            note = f"multi-scale varieties unreadable for {shot.ticker}. {note}"
+        else:
+            letters = {sc: v["variety"] for sc, v in ms.items()}
+            tag = " ".join(f"{sc} {letters[sc]}" for sc in scales)
+            if variants.ms_rule_ok(spec.ms_rule, letters):
+                note = f"[ms {tag}] {note}"
+            else:
+                bet = False
+                note = f"multi-scale varieties {tag} do not match the lane's {', '.join(spec.ms_rule)}. {note}"
     if bet and spec.skip_other_varieties:
         from . import ticks as ticks_mod
         from . import variants
