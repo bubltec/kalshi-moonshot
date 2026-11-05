@@ -260,3 +260,28 @@ def test_the_socket_covers_a_position_only_while_its_quotes_are_arriving(setup):
     assert not w.covers(*key, now=1000.0 + watcher.SOCKET_QUIET + 1)  # quiet for too long: the sweep takes over
     assert w.covers(*key, beat=1000.0 + watcher.SOCKET_QUIET, now=1000.0 + watcher.SOCKET_QUIET + 1)  # a quiet market on a live stream stays covered
     assert not w.covers("KXBTC15M-2", "late_ticket", now=1010.0)
+
+
+def test_an_armed_position_gets_its_spot_history_from_the_tape_so_a_restart_does_not_blind_the_shock_exit():
+    import time as _time
+    from collections import deque
+    from types import SimpleNamespace
+
+    from kalshi_moonshot import watcher
+
+    now = _time.time()
+
+    class Tape:
+        def execute(self, sql, params):
+            assert params[0] == "BQ_GOLD" and params[1] < now  # the last SHOCK_KEEP seconds of that index
+            return SimpleNamespace(fetchall=lambda: [(now - 100.0 + k, 4100.0 + k * 0.01) for k in range(100)])
+
+    fake = SimpleNamespace(_shock_hist={"BQ_GOLD": deque()}, _tape_db=lambda: Tape())
+    watcher.ProfitWatcher._seed_shock_history(fake, "BQ_GOLD")
+    hist = fake._shock_hist["BQ_GOLD"]
+    assert len(hist) == 100 and now - hist[0][0] > 60.0  # more than the 60 s the shock exit looks back over
+    watcher.ProfitWatcher._seed_shock_history(fake, "BQ_GOLD")  # a history that has ticks is left alone
+    assert len(hist) == 100
+    none = SimpleNamespace(_shock_hist={"BQ_GOLD": deque()}, _tape_db=lambda: None)
+    watcher.ProfitWatcher._seed_shock_history(none, "BQ_GOLD")
+    assert not none._shock_hist["BQ_GOLD"]  # no tape: nothing seeded, no error

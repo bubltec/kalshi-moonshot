@@ -816,6 +816,23 @@ class ProfitWatcher:
                 self._inflight.add(key)
                 self._queue_sell(SellSignal(t.ticker, t.lane, reason))
 
+    def _seed_shock_history(self, index_id: str) -> None:
+        """Fill an empty shock history from the tape (2026-11-05): the history was built only from live ticks, so a restart left every open position with no spot history and the shock exit unusable for the first minute
+        ("not usable: 17s of history" on a gold NO that then lost 0.92 -> 0). The last SHOCK_KEEP seconds of the index are read once, on the thread that arms the position. A history that already has ticks is left alone."""
+        hist = self._shock_hist.get(index_id)
+        if hist is None or hist:
+            return
+        tape = self._tape_db()
+        if tape is None:
+            return
+        try:
+            rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND value>0 ORDER BY ts", (index_id, time.time() - SHOCK_KEEP)).fetchall()
+        except Exception:
+            log.debug("watcher: could not seed the shock history for %s", index_id, exc_info=True)
+            return
+        for ts, value in rows:
+            hist.append((float(ts), float(value)))
+
     def _shock_reference(self, t: Target, index_id: str) -> float:
         """What the shock exit measures the cushion from. A BiQuote commodity price differs from Kalshi's strike by a dollar or two, so it is read against the same index's own price when the window opened (the tape); a crypto settlement index is read against the strike itself."""
         if not index_id.startswith("BQ_"):
@@ -1477,6 +1494,7 @@ class ProfitWatcher:
                 if ref > 0:
                     held.shock_index, held.shock_ref = sid, ref
                     self._shock_hist.setdefault(sid, deque())
+                    self._seed_shock_history(sid)
                     if spec.shock_bp > 0 and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
                         held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
                         held.shock_bid_max = spec.shock_bid_max
