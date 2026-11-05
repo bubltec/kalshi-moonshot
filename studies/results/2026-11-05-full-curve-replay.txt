@@ -1,0 +1,7 @@
+Full 15-minute replay (scripts/curve_replay_scan.py): every market since 11-02 06:00 UTC, the spot read every 30 s from the open, both sides, every price, no band / window / spread limits. 2,135 commodity and 1,540 crypto markets.
+
+Win map (buy at the ask at that point; $ per $10 ticket): almost every cell is at or under zero in both classes. The only positive commodity cells (0-3 min at .65-.76 +0.37, .76-.85 +0.12) flip sign between halves (+1.0/-0.2, +0.7/-0.3). Crypto: no cell positive in both halves.
+Cost of a correct buy (median ask of the side that won): 0:58/0.56 at 2 min, 0.64 at 4, 0.70 at 6, 0.77/0.79 at 8, 0.86 at 10, 0.93/0.95 at 12, 0.99 at 14.
+Variety at the buy (7:00) -> at 14:30: markets that end as B/A/C (far from the strike) won 100%; ending as G/D (oscillating / near-approaching) won 20-62%. Bought as A: won 90% (commodity), 82% (crypto); bought as E/F/G: 74-79%.
+Cushion z, same bets: winners +0.84 at 7:00 -> +3.58 at 14:30; losers +0.71 -> -1.18 (commodity). Crypto: +0.88 -> +3.54 vs +0.86 -> -1.51. Winners and losers look alike at the buy; the path afterwards separates them.
+Exit test (scripts/curve_replay_exit.py): selling when z falls under a level helps crypto a little (hold -0.32; z<-0.5 -0.20, H1 +0.04 / H2 -0.44) and commodities not at all (hold -0.07; best -0.02).
