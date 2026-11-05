@@ -182,6 +182,10 @@ class Target:
     shock_ref: float = 0.0  # the price the cushion is measured from: the strike (crypto) or the index's own price at the window open (commodities)
     strike_through_rearm: bool = False  # lane strike_through_rearm: a return to the winning side restarts the watch instead of holding to the close
     through_kept: bool = False  # the index came back to the winning side after a cross: hold this position to the close
+    cross_take: float = 0.0  # lane cross_take: sell a gain once the bid is this many dollars over the price paid AND the index has crossed the strike cross_min times in this window; otherwise hold (0 = off)
+    cross_min: int = 1
+    cross_n: int = 0  # strike crossings of the index since the window opened
+    cross_sign: int = 0  # which side of the strike the last index reading was on (+1 above, -1 below)
     through_on: bool = False  # a cross has armed the watch and the index is still through
     through_worst: float = 0.0  # the deepest through-fraction of this visit
     through_best: float = 0.0  # the closest the index has come back toward the strike since that low
@@ -476,6 +480,7 @@ class ProfitWatcher:
                 while hist and now - hist[0][0] > SHOCK_KEEP:
                     hist.popleft()
                 self._shock_on_index(idx, now)
+            self._cross_on_index(idx, now)
             self._strike_through_on_index(idx, now)  # the watch follows the index tick: a long stay through sells at any time, and the last minute still sells a failed bounce
             return
         if e.get("kind") == "trade" and e.get("ticker") and e.get("count"):
@@ -510,7 +515,7 @@ class ProfitWatcher:
             )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
+            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._cross_take_hit(t, bid) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
             if t.drop_buy and not t.burst_logged and t.burst_buy > 0 and (t.drop_armed_at == now or ((reason or "").startswith("drop: bid") and t.drop_confirm <= 0)):
                 self._drop_hedge(t, bid, now)  # the other side is bought when the fall is found, before the sale: after the confirmed fall it costs far more
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
@@ -811,6 +816,50 @@ class ProfitWatcher:
             if t.last_ts <= 0 or t.cur_bid <= 0:
                 continue
             reason = self._strike_through_hit(t, t.cur_bid, now, t.last_ts)
+            key = (t.ticker, t.lane)
+            if reason and key not in self._inflight:
+                self._inflight.add(key)
+                self._queue_sell(SellSignal(t.ticker, t.lane, reason))
+
+    def _seed_crossings(self, t: Target) -> None:
+        """Count the strike crossings of the index since the window opened, from the tape, so a position armed mid-window (or after a restart) knows how choppy the market has been (2026-11-05, user: take the profit in a market that keeps crossing)."""
+        tape = self._tape_db()
+        if tape is None or t.strike <= 0 or t.close_ts <= 0 or not t.index_id:
+            return
+        try:
+            rows = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts>=? AND ts<=? AND value>0 ORDER BY ts", (t.index_id, t.close_ts - 900.0, time.time())).fetchall()
+        except Exception:
+            log.debug("watcher: could not seed the crossings for %s", t.ticker, exc_info=True)
+            return
+        sign = 0
+        for (value,) in rows:
+            s_ = 1 if float(value) > t.strike else -1
+            if sign and s_ != sign:
+                t.cross_n += 1
+            sign = s_
+        t.cross_sign = sign
+
+    def _cross_take_hit(self, t: Target, bid: float) -> str | None:
+        """Sell a gain once the market has been crossing: the bid is cross_take over the price paid and the index has crossed the strike cross_min times. With no crossing yet the position is held (the study of 121 crypto gains
+        sold early: 0 crossings, holding paid +7.3c a contract more; 1-2 crossings, selling paid +8.2c more)."""
+        if t.cross_take <= 0 or t.cross_n < t.cross_min or bid <= 0 or t.entry <= 0 or bid < t.entry + t.cross_take - 1e-9:
+            return None
+        return f"cross take: bid {bid:.2f} is {bid - t.entry:.2f} over the {t.entry:.2f} paid and the index has crossed the strike {t.cross_n} times"
+
+    def _cross_on_index(self, index_id: str, now: float) -> None:
+        with self._lock:
+            hits = [t for t in self.targets.values() if t.index_id == index_id and t.cross_take > 0 and t.strike > 0]
+        spot = self._spot.get(index_id)
+        if spot is None:
+            return
+        for t in hits:
+            sign = 1 if spot[1] > t.strike else -1
+            if t.cross_sign and sign != t.cross_sign:
+                t.cross_n += 1
+            t.cross_sign = sign
+            if t.last_ts <= 0 or t.cur_bid <= 0:
+                continue
+            reason = self._cross_take_hit(t, t.cur_bid)
             key = (t.ticker, t.lane)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
@@ -1466,6 +1515,18 @@ class ProfitWatcher:
             held.strike_through = spec.strike_through_sale
             held.strike_through_seconds = spec.strike_through_seconds
             held.strike_through_rearm = spec.strike_through_rearm
+            if spec.cross_take > 0 and ticker.split("-")[0].endswith("15M"):
+                held.cross_take, held.cross_min = spec.cross_take, spec.cross_min
+                held.index_id = held.index_id or (strike_index_for(ticker.split("-")[0]) or "")
+                if held.index_id and (held.strike <= 0 or held.close_ts <= 0):
+                    try:
+                        mk = self._market_static(ticker)
+                        held.strike = float(mk.get("floor_strike") or 0.0)
+                        held.close_ts = datetime.fromisoformat(str(mk.get("close_time"))).timestamp()
+                    except (TypeError, ValueError, KalshiError):
+                        held.cross_take = 0.0  # no strike: the sale stays off rather than guessing
+                if held.cross_take > 0 and not held.cross_n:
+                    self._seed_crossings(held)
             if spec.strike_through_sale > 0 and spec.strike_through_seconds > 0 and ticker.split("-")[0].endswith("15M"):
                 held.index_id = held.index_id or (strike_index_for(ticker.split("-")[0]) or "")
                 if held.index_id and (held.strike <= 0 or held.close_ts <= 0):

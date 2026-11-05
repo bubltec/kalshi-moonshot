@@ -285,3 +285,33 @@ def test_an_armed_position_gets_its_spot_history_from_the_tape_so_a_restart_does
     none = SimpleNamespace(_shock_hist={"BQ_GOLD": deque()}, _tape_db=lambda: None)
     watcher.ProfitWatcher._seed_shock_history(none, "BQ_GOLD")
     assert not none._shock_hist["BQ_GOLD"]  # no tape: nothing seeded, no error
+
+
+def test_the_crossing_take_sells_a_gain_only_in_a_market_that_has_crossed_the_strike():
+    import time as _time
+    from types import SimpleNamespace
+
+    from kalshi_moonshot import watcher
+
+    now = _time.time()
+    t = watcher.Target.__new__(watcher.Target)
+    for k, v in {"cross_take": 0.10, "cross_min": 1, "cross_n": 0, "cross_sign": 0, "entry": 0.60, "strike": 100.0, "close_ts": now + 300.0, "index_id": "IDX"}.items():
+        setattr(t, k, v)
+    me = SimpleNamespace()
+    assert watcher.ProfitWatcher._cross_take_hit(me, t, 0.75) is None  # up 15c, but the market has not crossed: hold
+    t.cross_n = 1
+    assert watcher.ProfitWatcher._cross_take_hit(me, t, 0.65) is None  # crossed, but the gain is only 5c
+    got = watcher.ProfitWatcher._cross_take_hit(me, t, 0.71)
+    assert got and "crossed the strike 1 times" in got
+
+    class Tape:
+        def execute(self, sql, params):
+            vals = [(100.5,), (100.2,), (99.8,), (99.6,), (100.3,), (100.4,)]  # above, above, below, below, above, above: two crossings
+            return SimpleNamespace(fetchall=lambda: vals)
+
+    t2 = watcher.Target.__new__(watcher.Target)
+    for k, v in {"cross_take": 0.10, "cross_min": 1, "cross_n": 0, "cross_sign": 0, "entry": 0.60, "strike": 100.0, "close_ts": now + 300.0, "index_id": "IDX", "ticker": "X"}.items():
+        setattr(t2, k, v)
+    fake = SimpleNamespace(_tape_db=lambda: Tape())
+    watcher.ProfitWatcher._seed_crossings(fake, t2)
+    assert t2.cross_n == 2 and t2.cross_sign == 1
