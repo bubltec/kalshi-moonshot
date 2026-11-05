@@ -780,3 +780,67 @@ def test_a_lane_with_an_ms_rule_buys_only_when_every_scale_matches(tmp_path, mon
         assert none.action == "pass" and "unreadable" in none.note  # no history: never a buy
     finally:
         ticks.history.clear()
+
+
+def test_broad_trend_is_the_average_hour_move_of_the_five_coins_and_unknown_without_history():
+    import time as _time
+
+    from kalshi_moonshot import ticks
+
+    ticks.history.clear()
+    variants._broad_memo = (0, None)
+    now = _time.time()
+    assert variants.broad_trend_now(now) is None  # no history: unknown, never zero
+    for k, ser in enumerate(variants.BROAD_SERIES):
+        index = variants.crypto_index(ser)
+        for j in range(1900):  # about 3,800 s: this coin falls (2 + k) percent over the last hour
+            tt = now - 3800.0 + j * 2.0
+            frac = max(0.0, (tt - (now - 3600.0)) / 3600.0)
+            ticks.history.note(index, tt, 100.0 * (1.0 - (0.02 + 0.01 * k) * frac))
+    variants._broad_memo = (0, None)
+    got = variants.broad_trend_now(now)
+    assert got is not None and got == pytest.approx(-4.0, abs=0.3)  # (2+3+4+5+6)/5
+    ticks.history.clear()
+    variants._broad_memo = (0, None)
+
+
+def test_a_trend_lane_buys_the_trend_side_only_in_a_market_wide_move(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.trend]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\ntrend_down_max=-1.0\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    variants._broad_memo = (0, None)
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-6", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    no = LongShot("KXBTC15M-6", "t", "", 0.55, 0.56, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="trend", series="KXBTC15M", side="no")
+    yes = LongShot("KXBTC15M-6", "t", "", 0.55, 0.56, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="trend", series="KXBTC15M", side="yes")
+    try:
+        assert runner.evaluate(s, None, None, store, no, estimators={"market": Fixed()}).action == "pass"  # no history: unreadable, never a buy
+        for ser in variants.BROAD_SERIES:  # every coin down 3% over the last hour
+            index = variants.crypto_index(ser)
+            for j in range(1900):
+                tt = now - 3800.0 + j * 2.0
+                frac = max(0.0, (tt - (now - 3600.0)) / 3600.0)
+                ticks.history.note(index, tt, 100.0 * (1.0 - 0.03 * frac))
+        variants._broad_memo = (0, None)
+        ok = runner.evaluate(s, None, None, store, no, estimators={"market": Fixed()})
+        assert ok.action == "bet" and "[trend60 -3.0%]" in ok.note
+        wrong = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert wrong.action == "pass" and "buys NO only" in wrong.note
+    finally:
+        ticks.history.clear()
+        variants._broad_memo = (0, None)

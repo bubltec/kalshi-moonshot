@@ -535,6 +535,32 @@ def scale_letter(ts: Sequence[float], values: Sequence[float], strike: float, si
 MS_LOOKS = {"1m": 60.0, "2m": 120.0, "5m": 300.0, "15m": 900.0, "60m": 3600.0}
 
 
+BROAD_SERIES = ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M")
+_broad_memo: tuple[int, float | None] = (0, None)
+
+
+def broad_trend_now(now: float | None = None) -> float | None:
+    """The market-wide 60-minute move, in percent: the average of the five traded coins' change over the last hour, from the in-memory index ticks only (2026-11-05, user: every coin was trending down together, and a regime like that
+    can shift, so it is read on every decision and recorded). Over 11-02 to 11-05 it stayed within +-1% in 94% of the 15-minute market times, so a move of several percent is outside what the rules were fitted on.
+    Cached for 30 s. None when any coin's history does not cover the hour."""
+    global _broad_memo
+    now = time.time() if now is None else now
+    if _broad_memo[0] == int(now // 30):
+        return _broad_memo[1]
+    moves = []
+    for ser in BROAD_SERIES:
+        index = crypto_index(ser)
+        got = ticks_mod.history.window(index, now - 3700.0, now) if index else None
+        if got is None or not got[0] or got[0][0] > now - 3500.0 or got[0][-1] < now - 30.0:
+            _broad_memo = (int(now // 30), None)
+            return None
+        i = bisect.bisect_left(got[0], now - 3600.0)
+        moves.append(100.0 * (got[1][-1] / got[1][min(i, len(got[1]) - 1)] - 1.0))
+    out = sum(moves) / len(moves)
+    _broad_memo = (int(now // 30), out)
+    return out
+
+
 def ms_rule_ok(rule: Sequence[str], letters: dict[str, str]) -> bool:
     """Whether every "scale:letters" term of a lane's ms_rule holds ("60m:D", "5m:EF" = the 5-minute variety is E or F)."""
     for term in rule:

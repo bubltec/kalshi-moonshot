@@ -73,6 +73,13 @@ from .strategy import (
     watch_trend,
 )
 
+
+def variants_crypto(series: str) -> bool:
+    from . import variants
+
+    return bool(variants.crypto_index(series))
+
+
 log = logging.getLogger("moonshot")
 
 
@@ -599,6 +606,31 @@ def evaluate(
             note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
+    if variants_crypto(shot.series):
+        from . import variants as _variants
+
+        try:
+            trend = _variants.broad_trend_now()
+        except Exception:
+            trend = None
+        if trend is not None:
+            note = f"[trend60 {trend:+.1f}%] {note}"
+    if bet and (spec.trend_down_max < 0 or spec.trend_up_min > 0):
+        from . import variants as _variants
+
+        try:
+            trend = _variants.broad_trend_now()
+        except Exception:
+            trend = None
+        if trend is None:
+            bet = False
+            note = f"the market-wide 60-minute trend is unreadable. {note}"
+        elif spec.trend_down_max < 0 and not (shot.side == "no" and trend <= spec.trend_down_max):
+            bet = False
+            note = f"the lane buys NO only while the market-wide 60-minute move is {spec.trend_down_max:g}% or lower (it is {trend:+.1f}%, this is {shot.side.upper()}). {note}"
+        elif spec.trend_up_min > 0 and not (shot.side == "yes" and trend >= spec.trend_up_min):
+            bet = False
+            note = f"the lane buys YES only while the market-wide 60-minute move is {spec.trend_up_min:g}% or higher (it is {trend:+.1f}%, this is {shot.side.upper()}). {note}"
     if bet and spec.ms_rule:
         from . import ticks as ticks_mod
         from . import variants
