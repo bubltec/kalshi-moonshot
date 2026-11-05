@@ -579,14 +579,13 @@ class Ledger:
         return tuple(out)
 
     def skips_ladder(self, cls: str, now: float, coin: str | None = None, edges: Sequence[float] = LADDER_HOURS, prior_weight: float = 15.0, coin_weight: float = 8.0,
-                     min_loss: float = 0.10, min_n: int = 5) -> tuple[str, ...]:
+                     min_loss: float = 0.10, min_n: int = 5, coin_min_n: int = 8) -> tuple[str, ...]:
         """The "variety-side" cells to skip, reviewed on a ladder of stretches: 0-2 h, 2-4, 4-6, 6-12, 12-24, 24-48, 48-96 hours back, and what is older (2026-11-05, user: review every 2 hours, compounded to 4, 6, 12, 24, 48, 96).
 
         The stretches are disjoint, so no bet counts twice. A cell's record is built from the oldest stretch to the newest: each stretch's mean a $10 bet is blended into what is known so far as a prior worth `prior_weight` bets,
-        so the newest 2 hours can move the figure at once but cannot flip it on a handful of bets, and a stretch that agrees with the longer record only confirms it. With `coin` the class's record is built first, then that
-        coin's own stretches are blended on top at `coin_weight`, so ETH learns its own varieties without needing a class-sized sample. A cell is skipped when the result loses `min_loss` or more a $10 bet, the class has at
+        so the newest 2 hours can move the figure at once but cannot flip it on a handful of bets, and a stretch that agrees with the longer record only confirms it. With `coin` and at least `coin_min_n` of that coin's own favorites of the cell in the last 12 hours, the coin is judged on its own record (the class's record from before the last 12 hours is the prior, the coin's stretches are blended on top at `coin_weight`); with fewer, the class verdict stands (2026-11-05: two or three lucky ETH bets had overridden a class-wide skip). A cell is skipped when the result loses `min_loss` or more a $10 bet, the class has at
         least `min_n` favorites of the cell in the last 12 hours, and at least MIN_PRIOR older ones exist (a new or rare variety is never skipped on a few bets)."""
-        key = (cls, coin, int(now // 30), tuple(edges), prior_weight, coin_weight, min_loss, min_n, len(self.rows))
+        key = (cls, coin, int(now // 30), tuple(edges), prior_weight, coin_weight, min_loss, min_n, coin_min_n, len(self.rows))
         if self._ladder_memo[0] == key:  # the ledger changes every few minutes and a lane asks on every decision: one pass in 30 s is enough
             return self._ladder_memo[1]
         bounds = [now - h * 3600.0 for h in edges]  # newest first: bounds[0] is 2 h ago
@@ -606,11 +605,13 @@ class Ledger:
             recent_n = sum(buckets[("class", k, side, variety)][0] for k in range(4) if ("class", k, side, variety) in buckets)  # the first four stretches: 12 h
             if older_n < MIN_PRIOR or recent_n < min_n:
                 continue
+            coin_recent = sum(buckets[("coin", k, side, variety)][0] for k in range(4) if ("coin", k, side, variety) in buckets) if coin else 0
+            own = coin_recent >= coin_min_n  # the coin has enough of its own favorites of this cell in the last 12 h to be judged on them
             post = None
-            for scope, weight in (("class", prior_weight), ("coin", coin_weight)):
-                if scope == "coin" and not coin:
+            for scope, weight, first in (("class", prior_weight, 4 if own else 0), ("coin", coin_weight, 0)):  # a coin judged on its own uses the class only as the prior from before the last 12 h
+                if scope == "coin" and not own:
                     continue
-                for k in range(len(bounds), -1, -1):  # oldest first
+                for k in range(len(bounds), first - 1, -1):  # oldest first
                     n, net = buckets.get((scope, k, side, variety), (0, 0.0))
                     if n == 0:
                         continue

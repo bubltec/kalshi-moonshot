@@ -1,0 +1,26 @@
+=== crypto
+  none         all: bought  636  -186.3 (-0.29/bet) skipped    0    +0.0
+               H1: bought  316    +5.6 (+0.02/bet) skipped    0    +0.0
+               H2: bought  320  -191.9 (-0.60/bet) skipped    0    +0.0
+  single6h     all: bought  353   -70.8 (-0.20/bet) skipped  283  -115.5
+               H1: bought  182   -18.7 (-0.10/bet) skipped  134   +24.3
+               H2: bought  171   -52.1 (-0.30/bet) skipped  149  -139.8
+  ladder       all: bought  348  -157.3 (-0.45/bet) skipped  288   -29.0
+               H1: bought  178   -64.9 (-0.36/bet) skipped  138   +70.5
+               H2: bought  170   -92.4 (-0.54/bet) skipped  150   -99.5
+  ladder-coin  all: bought  351  -163.2 (-0.46/bet) skipped  285   -23.2
+               H1: bought  180   -35.8 (-0.20/bet) skipped  136   +41.4
+               H2: bought  171  -127.3 (-0.74/bet) skipped  149   -64.6
+=== commodity
+  none         all: bought  944  -206.2 (-0.22/bet) skipped    0    +0.0
+               H1: bought  472   -92.5 (-0.20/bet) skipped    0    +0.0
+               H2: bought  472  -113.7 (-0.24/bet) skipped    0    +0.0
+  single6h     all: bought  497   -14.4 (-0.03/bet) skipped  447  -191.7
+               H1: bought  230   -33.7 (-0.15/bet) skipped  242   -58.8
+               H2: bought  267   +19.3 (+0.07/bet) skipped  205  -133.0
+  ladder       all: bought  480  -122.4 (-0.26/bet) skipped  464   -83.8
+               H1: bought  220  -126.0 (-0.57/bet) skipped  252   +33.5
+               H2: bought  260    +3.6 (+0.01/bet) skipped  212  -117.3
+  ladder-coin  all: bought  487  -159.1 (-0.33/bet) skipped  457   -47.0
+               H1: bought  236  -134.6 (-0.57/bet) skipped  236   +42.1
+               H2: bought  251   -24.6 (-0.10/bet) skipped  221   -89.1

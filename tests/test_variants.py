@@ -712,19 +712,28 @@ def test_ladder_needs_an_older_record_and_enough_recent_favorites():
     assert led.skips_ladder("crypto", now) == ()
 
 
-def test_ladder_with_a_coin_reads_the_coins_own_stretches_on_top_of_the_class():
+def test_ladder_class_verdict_stands_until_the_coin_has_enough_of_its_own():
     now = 1_000_000.0
     h = 3600.0
-    rows, n = [], 0
-    for k in range(40):  # DOGE and ETH both pay at first
-        for coin in ("ETH", "DOGE"):
+
+    def build(doge_recent):
+        rows, n = [], 0
+        for k in range(40):  # DOGE and ETH both pay at first
+            for coin in ("ETH", "DOGE"):
+                n += 1
+                rows.append(_case(n, now - 90 * h + k * 2 * h, "E", "no", 0.4, coin=coin))
+        for k in range(10):  # the last 10 hours: ETH loses every time
             n += 1
-            rows.append(_case(n, now - 90 * h + k * 2 * h, "E", "no", 0.4, coin=coin))
-    for k in range(6):  # the last 8 hours: DOGE keeps paying, ETH loses
-        for coin, pnl in (("ETH", -8.0), ("DOGE", 0.4)):
+            rows.append(_case(n, now - 10 * h + k * h, "E", "no", -8.0, coin="ETH"))
+        for k in range(doge_recent):  # DOGE wins
             n += 1
-            rows.append(_case(n, now - 8 * h + k * h, "E", "no", pnl, coin=coin))
-    led = variants.Ledger()
-    led.add(rows)
+            rows.append(_case(n, now - 10 * h + k * h, "E", "no", 0.4, coin="DOGE"))
+        led = variants.Ledger()
+        led.add(rows)
+        return led
+
+    led = build(10)  # both coins have 10 of their own in 12 h: each is judged on its own record
     assert "E-no" in led.skips_ladder("crypto", now, coin="ETH")
     assert "E-no" not in led.skips_ladder("crypto", now, coin="DOGE")
+    led = build(3)  # DOGE has only 3 of its own: the class verdict (ETH's losses drag the class down) stands
+    assert "E-no" in led.skips_ladder("crypto", now, coin="DOGE")
