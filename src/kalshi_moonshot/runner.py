@@ -1420,6 +1420,8 @@ def place(
         before_order()
     if lane_spec is not None and lane_spec.buy_rest_seconds > 0:
         placed = _place_resting(s, client, store, shot, why, count, lane_spec, order_key, book)
+        if 0 < placed.filled < count - 1e-9 and lane_spec.buy_rest_then_take and lane_spec.buy_rest_top_up:
+            placed = _top_up_rest(s, client, store, shot, lane_spec, placed, count, order_key)
         if placed.filled > 0:
             entry = placed.price or round(max(0.01, shot.ask - lane_spec.buy_rest_below), 4)  # a post-only buy fills at its own limit, so this is the price paid
             note = _rest_take_profit(s, client, store, shot, lane_spec, placed.filled, entry)
@@ -1482,6 +1484,34 @@ def place(
     return Placed(
         f"bought {shot.side.upper()} {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}" + (f" {rest_note}" if rest_note else ""), filled, spent
     )
+
+
+def _top_up_rest(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, placed: Placed, count: float, order_key: str | None) -> Placed:
+    """Buy what a resting bid left unfilled at the fresh ask, under the same guards as the fallback for a bid that filled nothing (price band, buy_retry_chase, the risk gate). If any guard refuses or the order fails,
+    the part that did fill stands as it was. The merged result carries the blended price, so the take-profit and the log read the whole position."""
+    left = count - placed.filled
+    limit = _requote(s, client, store, shot, spec, left)
+    if limit is None or left * limit < s.min_order_usd:
+        return Placed(f"{placed.note} (the other {left:g} not topped up: ask moved out of the lane's guards or under the minimum)", placed.filled, placed.cost, placed.price)
+    buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
+    try:
+        with steptime.step("order"):
+            resp = buy(shot.ticker, left, limit, client_order_id=f"{order_key}-top" if order_key else None)
+    except KalshiRateLimited:
+        raise
+    except KalshiError as exc:
+        log.warning("top-up of %s %s failed: %s", shot.ticker, shot.side, exc)
+        return placed
+    more = float(resp.get("fill_count") or 0.0)
+    avg = float(resp.get("average_fill_price") or limit)
+    fee = float(resp.get("average_fee_paid") or 0.0) * more
+    store.add_order(ticker=shot.ticker, env=s.env, count=left, price=limit, fill_count=more, cost_usd=avg * more + fee, fee_usd=fee, order_id=resp.get("order_id", ""), contract=shot.side)
+    if more <= 0:
+        return placed
+    spent = placed.cost + avg * more + fee
+    blended = (placed.price * placed.filled + avg * more) / (placed.filled + more) if placed.price else avg
+    log.info("buy %s %s: the resting bid filled %g of %g, topped up %g at %.2f", shot.ticker, shot.side, placed.filled, count, more, avg)
+    return Placed(f"{placed.note} Topped up {more:g} more at {avg:.4f}, fee ${fee:.4f}.", placed.filled + more, spent, blended)
 
 
 def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, count: float) -> float | None:

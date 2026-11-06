@@ -1654,6 +1654,13 @@ class ProfitWatcher:
             from . import marketprofile
 
             marketprofile.refresh(s, sorted({series for sp in lane_specs(s).values() if sp.enabled for series in sp.series if series.endswith("15M")}), tape=self._tape_db())
+            from . import lanehealth
+
+            live = {name for name, sp in lane_specs(s).items() if sp.enabled and any(s.is_live(name, series) for series in sp.series)}
+            lanehealth.check(s, Store(s.db_path, s.exclude_versions), live)
+            from . import marketreview
+
+            marketreview.run(s, Store(s.db_path, s.exclude_versions), marketprofile.snapshot())
             added = variants.refresh_ledger(s)
             if not volregime.thresholds.tuned_at:
                 volregime.thresholds.load(s.data_dir)

@@ -218,3 +218,31 @@ def test_the_fallback_does_not_chase_a_market_that_ran_away(setup, monkeypatch):
     client = RestClient(fills=[1.5], asks=[0.30, 0.40])  # place() reads 0.30; the fresh read is 0.40, past the first limit
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert got.filled == 0 and client.sent == []
+
+
+def test_a_partly_filled_resting_bid_is_topped_up_at_the_ask(setup, monkeypatch):
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_rest_top_up=True, buy_retries=0)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    client = RestClient(fills=[1.0], asks=[0.30], rest_fill=0.5)
+    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
+    assert got.filled == 1.5 and [c for c, _ in client.sent] == [1.0] and client.ids == ["k-top"]  # the rest of the 1.5, not the whole order again
+    assert "Topped up" in got.note
+
+
+def test_a_partial_fill_stands_when_the_lane_does_not_top_up(setup, monkeypatch):
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    client = RestClient(fills=[1.0], asks=[0.30], rest_fill=0.5)
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert got.filled == 0.5 and client.sent == []
+
+
+def test_the_top_up_does_not_chase_a_market_that_ran_away(setup, monkeypatch):
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_rest_top_up=True, buy_retries=0)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    client = RestClient(fills=[1.0], asks=[0.30, 0.40], rest_fill=0.5)
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert got.filled == 0.5 and client.sent == []
