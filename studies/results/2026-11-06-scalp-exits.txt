@@ -1,0 +1,16 @@
+entries 256
+exits on the early trend scalp replay (crossing >= 1 needed for every sale):
+  hold to the result                           win  58%  net/$10 -0.46 | halves -1.07 +0.15
+  fixed take +0.08                             win  86%  net/$10 -0.33 | halves -0.60 -0.06
+  fixed take +0.10                             win  86%  net/$10 -0.14 | halves -0.48 +0.21
+  fixed take +0.15                             win  80%  net/$10 -0.11 | halves -0.48 +0.25
+  fixed take +0.20                             win  75%  net/$10 -0.05 | halves -0.54 +0.45
+  fixed take +0.30                             win  66%  net/$10 -0.24 | halves -0.91 +0.43
+  trail 0.04 from the peak after +0.10         win  83%  net/$10 -0.06 | halves -0.41 +0.30
+  trail 0.06 from the peak after +0.10         win  77%  net/$10 -0.14 | halves -0.45 +0.18
+  trail 0.10 from the peak after +0.10         win  61%  net/$10 +0.06 | halves -0.24 +0.35
+  trail 0.05 after +0.15                       win  80%  net/$10 +0.05 | halves -0.24 +0.33
+  trail 0.08 after +0.15                       win  79%  net/$10 +0.08 | halves -0.27 +0.44
+  half at +0.10, half held to the result       win  58%  net/$10 -0.30 | halves -0.78 +0.18
+  half at +0.15, half held to the result       win  58%  net/$10 -0.29 | halves -0.77 +0.20
+DONE
