@@ -1031,3 +1031,30 @@ def test_a_lane_with_a_pretrend_rule_only_buys_with_the_trend_and_shows_it(tmp_p
         assert d.action == "pass" and "too short" in d.note  # no history: no buy
     finally:
         ticks.history.clear()
+
+
+def test_market_profiles_measure_each_markets_own_curve_and_label_the_odd_ones():
+    import math
+    import random
+
+    from kalshi_moonshot import marketprofile
+
+    rng = random.Random(1)
+    at = 1_000_000.0 * 900 / 900  # on a quarter hour
+    at = float(int(at // 900) * 900)
+    ts = [at - 6 * 3600.0 + k for k in range(6 * 3600 + 1)]
+
+    def walk(step, drift=0.0):
+        v, out = 100.0, []
+        for _ in ts:
+            v *= math.exp(rng.gauss(drift, step))
+            out.append(v)
+        return out
+
+    choppy = marketprofile.profile_from(ts, walk(0.0003), at, 6.0)
+    runner = marketprofile.profile_from(ts, walk(0.0001, 0.0001), at, 6.0)
+    assert choppy and runner and choppy["n"] >= 20
+    assert choppy["cross"] > runner["cross"] and runner["eff"] > choppy["eff"]
+    labels = marketprofile.classify({"A": choppy, "B": runner, "C": dict(choppy), "D": dict(choppy), "E": dict(choppy)})
+    assert "trending" in labels["B"] and labels["A"] != labels["B"]
+    assert marketprofile.classify({"A": choppy}) == {"A": "typical"}

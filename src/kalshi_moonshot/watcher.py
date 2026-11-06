@@ -1644,6 +1644,9 @@ class ProfitWatcher:
             coins.update({prefix[2:]: (ix, 4 * 3600.0) for prefix, ix in SERIES_INDEX.items()})  # commodities: 4 h (their feed is shorter), the figure the study used
             ratios = volregime.regime.update(s, coins)
             log.info("watcher: volatility regime %s", {c: (round(r, 2) if r else None) for c, r in ratios.items()})
+            from . import marketprofile
+
+            marketprofile.refresh(s, sorted({series for sp in lane_specs(s).values() if sp.enabled for series in sp.series if series.endswith("15M")}), tape=self._tape_db())
             added = variants.refresh_ledger(s)
             if not volregime.thresholds.tuned_at:
                 volregime.thresholds.load(s.data_dir)

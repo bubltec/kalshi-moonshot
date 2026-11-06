@@ -628,6 +628,12 @@ def evaluate(
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the buy is above {spec.wave_pos_max:g} of the swing's range (waits for the low). {note}"
         else:
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] {note}"
+    if shot.series:
+        from . import marketprofile as _marketprofile
+
+        mtype = _marketprofile.type_of(shot.series)
+        if mtype:
+            note = f"[mtype {mtype}] {note}"
     if bet and spec.pretrend_min > -50:
         from . import variants as _variants
 
