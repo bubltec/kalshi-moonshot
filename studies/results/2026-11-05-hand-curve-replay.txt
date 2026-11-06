@@ -1,0 +1,51 @@
+manual 15-minute trips to study: 1649
+markets 1550
+moments 10556 markets 1476
+block 1: train 4406 moments / test 1880 moments, markets 295
+block 2: train 6286 moments / test 2121 moments, markets 295
+block 3: train 8407 moments / test 2149 moments, markets 296
+
+test block 1 (later markets than the training days)
+  every moment in the band                       n 1880  win  59%  net/$10 conservative -0.56  optimistic -0.77
+  top-third model score                          n  573  win  62%  net/$10 conservative -0.34  optimistic -0.64
+  the rest                                       n 1307  win  58%  net/$10 conservative -0.66  optimistic -0.82
+  first selected moment per market+side          n  284  win  60%  net/$10 conservative -0.51  optimistic -0.78
+
+test block 2 (later markets than the training days)
+  every moment in the band                       n 2121  win  54%  net/$10 conservative -0.65  optimistic -0.86
+  top-third model score                          n  689  win  61%  net/$10 conservative -0.46  optimistic -0.69
+  the rest                                       n 1432  win  50%  net/$10 conservative -0.74  optimistic -0.93
+  first selected moment per market+side          n  305  win  62%  net/$10 conservative -0.37  optimistic -0.64
+
+test block 3 (later markets than the training days)
+  every moment in the band                       n 2149  win  53%  net/$10 conservative -0.75  optimistic -0.90
+  top-third model score                          n  675  win  63%  net/$10 conservative -0.33  optimistic -0.50
+  the rest                                       n 1474  win  49%  net/$10 conservative -0.94  optimistic -1.08
+  first selected moment per market+side          n  301  win  63%  net/$10 conservative -0.08  optimistic -0.32
+
+ALL TEST BLOCKS (later markets than the training days)
+  every moment in the band                       n 6150  win  55%  net/$10 conservative -0.66  optimistic -0.84
+  top-third model score                          n 1937  win  62%  net/$10 conservative -0.38  optimistic -0.61
+  the rest                                       n 4213  win  52%  net/$10 conservative -0.78  optimistic -0.95
+  first selected moment per market+side          n  890  win  61%  net/$10 conservative -0.32  optimistic -0.58
+
+BY SERIES (all test blocks): top-third vs every moment
+  KXBTC15M every moment                          n  646  win  55%  net/$10 conservative -0.61  optimistic -0.83
+  KXBTC15M top third                             n  210  win  60%  net/$10 conservative -0.60  optimistic -0.97
+  KXETH15M every moment                          n  620  win  56%  net/$10 conservative -0.74  optimistic -0.85
+  KXETH15M top third                             n  163  win  60%  net/$10 conservative -0.75  optimistic -0.68
+  KXSOL15M every moment                          n  545  win  55%  net/$10 conservative -0.86  optimistic -0.93
+  KXSOL15M top third                             n  165  win  61%  net/$10 conservative -0.60  optimistic -0.66
+  KXXRP15M every moment                          n  626  win  57%  net/$10 conservative -0.57  optimistic -0.76
+  KXXRP15M top third                             n  227  win  58%  net/$10 conservative -0.68  optimistic -0.88
+  KXDOGE15M every moment                         n  601  win  56%  net/$10 conservative -0.59  optimistic -0.94
+  KXDOGE15M top third                            n  188  win  62%  net/$10 conservative -0.40  optimistic -0.87
+  KXGOLD15M every moment                         n  499  win  57%  net/$10 conservative -0.47  optimistic -0.51
+  KXGOLD15M top third                            n  159  win  69%  net/$10 conservative -0.07  optimistic -0.04
+  KXSILVER15M every moment                       n  404  win  55%  net/$10 conservative -0.45  optimistic -0.73
+  KXSILVER15M top third                          n  145  win  66%  net/$10 conservative +0.26  optimistic -0.11
+  KXCOPPER15M every moment                       n  223  win  50%  net/$10 conservative -0.83  optimistic -1.14
+  KXCOPPER15M top third                          n   72  win  61%  net/$10 conservative -0.22  optimistic -0.66
+  KXWTI15M every moment                          n  530  win  60%  net/$10 conservative -0.36  optimistic -0.53
+  KXWTI15M top third                             n  163  win  73%  net/$10 conservative +0.20  optimistic -0.14
+DONE
