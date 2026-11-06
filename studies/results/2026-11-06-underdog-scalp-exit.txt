@@ -1,0 +1,4 @@
+Underdog scalp exits on blind entries (scripts/wild_underdog_scalp_exit.py): every 15-minute crypto market where a 0.70+ favorite gave the underdog 5-30c, bought at the first moment, 3,530 setups, net per $1 after fees.
+hold to result -0.087 (1st half -0.177, 2nd +0.004)
+take +3c..+20c, no stop: -0.20 to -0.23 ; with a 4c stop: -0.17 to -0.18 ; 7c stop: -0.17 to -0.19 ; 10c stop: -0.18 to -0.21
+Every take and stop is worse than holding on a blind entry: the buy at the ask and sale at the bid pay the spread and two fees, and an unselected entry has no bounce to sell into. The exit only helps when the entry is chosen well.
