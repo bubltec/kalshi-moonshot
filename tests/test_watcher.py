@@ -315,3 +315,21 @@ def test_the_crossing_take_sells_a_gain_only_in_a_market_that_has_crossed_the_st
     fake = SimpleNamespace(_tape_db=lambda: Tape())
     watcher.ProfitWatcher._seed_crossings(fake, t2)
     assert t2.cross_n == 2 and t2.cross_sign == 1
+
+
+def test_a_lane_whose_only_exit_is_the_crossing_take_is_still_armed(setup):
+    import os
+    from pathlib import Path
+
+    s, store = setup
+    (Path(os.environ["DATA_DIR"]) / "strategies.toml").write_text("[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.4]\nhours=[0.0,1.0]\ncross_take=0.10\n")
+    assert lanes.takes_profit(lanes.lane_specs(s)["late_ticket"])  # 2026-11-05: it was False, so no position of such a lane was ever watched and the take never ran
+
+    class Client(FakeClient):
+        def market(self, ticker):
+            return {**super().market(ticker), "floor_strike": "100.0", "close_time": "2099-01-01T00:00:00Z"}
+
+    w = watcher.ProfitWatcher(lambda: s, Client(0.5), lambda: Store(s.db_path))
+    w.refresh()
+    t = w.targets[("KXBTC15M-1", "late_ticket")]
+    assert t.cross_take == 0.10 and t.strike == 100.0 and t.index_id
