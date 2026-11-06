@@ -68,6 +68,8 @@ def test_the_crypto_polymarket_lanes_are_paper():
     if not path.is_file():
         return  # the lane file is gitignored, so a checkout without it only checks that these lanes stay off live
     text = path.read_text()
+    if "[lane.crypto_poly]" not in text:
+        return  # the Polymarket paper lanes were removed from the lane file (2026-11-06: no bets for days)
     specs = lane_specs_from(s, text)
     fifteen, five = specs["crypto_poly"], specs["crypto_poly_5m"]
     assert fifteen.series == ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M")
