@@ -1051,7 +1051,7 @@ class ProfitWatcher:
                 self._shock_log(t, now, margin, move, worst, bid, 2)
             return None
         self._shock_log(t, now, margin, move, worst, bid, 1)
-        return f"shock exit: spot moved {-worst:.1f} bp against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f} (the lane sells at {bp:.1f} bp)"
+        return f"shock exit: spot moved {-worst:.1f} bp against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """A cross of strike_through percent starts a watch. It does not sell.
