@@ -321,7 +321,7 @@ def test_a_lane_whose_only_exit_is_the_crossing_take_is_still_armed(setup):
     import os
     from pathlib import Path
 
-    s, store = setup
+    s, _store = setup
     (Path(os.environ["DATA_DIR"]) / "strategies.toml").write_text("[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.4]\nhours=[0.0,1.0]\ncross_take=0.10\n")
     assert lanes.takes_profit(lanes.lane_specs(s)["late_ticket"])  # 2026-11-05: it was False, so no position of such a lane was ever watched and the take never ran
 
