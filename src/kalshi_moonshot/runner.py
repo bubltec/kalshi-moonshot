@@ -811,6 +811,13 @@ def evaluate(
         if moved_spot is not None and moved_spot <= 0:
             bet = False
             note = f"against the coin: its price moved {'down' if shot.side == 'yes' else 'up'} or stood still over the last {spec.entry_spot_seconds:.0f}s. {note}"
+    if bet and spec.stake_price_full > 0:
+        lo = spec.price[0]
+        if shot.ask < spec.stake_price_full and spec.stake_price_full > lo:
+            share = max(0.0, (shot.ask - lo) / (spec.stake_price_full - lo))
+            price_factor = spec.stake_price_min_factor + (1.0 - spec.stake_price_min_factor) * share
+            stake_factor *= price_factor
+            note = f"[stake x{price_factor:.2f} for a price of {shot.ask:.2f}, full at {spec.stake_price_full:.2f}] {note}"
     sized = Sizing(0, 0.0, "")
     if bet:
         with steptime.step("balance read"):

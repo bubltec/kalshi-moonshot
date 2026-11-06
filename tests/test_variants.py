@@ -1058,3 +1058,33 @@ def test_market_profiles_measure_each_markets_own_curve_and_label_the_odd_ones()
     labels = marketprofile.classify({"A": choppy, "B": runner, "C": dict(choppy), "D": dict(choppy), "E": dict(choppy)})
     assert "trending" in labels["B"] and labels["A"] != labels["B"]
     assert marketprofile.classify({"A": choppy}) == {"A": "typical"}
+
+
+def test_a_lane_with_a_price_scale_stakes_less_at_a_lower_price(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.scaled]\nestimator='market'\nprice=[0.20,0.80]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=10.0\nseries=['KXBTC15M']\nstake_price_full=0.70\nstake_price_min_factor=0.25\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    stakes = {}
+    for ask in (0.20, 0.45, 0.75):
+        shot = LongShot("KXBTC15M-9", "t", "", ask - 0.01, ask, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="scaled", series="KXBTC15M", side="yes")
+        d = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        stakes[ask] = d
+    assert stakes[0.75].action == "bet" and stakes[0.20].action == "bet"
+    assert "[stake x" not in stakes[0.75].note and "[stake x0.25" in stakes[0.20].note and "[stake x0.63" in stakes[0.45].note
