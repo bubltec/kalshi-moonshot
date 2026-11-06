@@ -597,6 +597,13 @@ def pretrend_now(series: str, side: str, span: float = 420.0, gap: float = 90.0,
     return pretrend_features(got[0], got[1], side, now, span, gap) if got else None
 
 
+def pretrend_index(index: str, side: str, span: float = 420.0, gap: float = 90.0, now: float | None = None) -> float | None:
+    """pretrend_features for an index id (a commodity's BiQuote index as well as a coin's), from the in-memory ticks, or None."""
+    now = time.time() if now is None else now
+    got = ticks_mod.history.window(index, now - 910.0, now)
+    return pretrend_features(got[0], got[1], side, now, span, gap) if got else None
+
+
 MS_LOOKS = {"1m": 60.0, "2m": 120.0, "5m": 300.0, "15m": 900.0, "60m": 3600.0}
 
 

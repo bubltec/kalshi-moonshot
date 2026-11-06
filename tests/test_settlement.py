@@ -2333,3 +2333,21 @@ def test_a_crypto_lane_skips_what_the_ledger_shows_losing_and_only_when_it_asks_
     finally:
         ticks.history.clear()
         variants.ledger.__init__()
+
+
+def test_a_shock_exit_holds_when_the_trend_before_the_spike_is_with_the_bet(tmp_path, monkeypatch):
+    from kalshi_moonshot import variants
+
+    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_trend_hold=0.5\n")
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert t.shock_trend_hold == 0.5
+    for k in range(125, 50, -5):
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
+    now = close - 50
+    w._spot["BRTI"] = (now, 100.01)
+    monkeypatch.setattr(variants, "pretrend_index", lambda *a, **k: 1.2)  # the hour line runs with the bet: the spike is noise
+    assert w._shock_hit(t, 0.62, now, now) is None
+    monkeypatch.setattr(variants, "pretrend_index", lambda *a, **k: 0.1)  # no trend: sell as before
+    assert w._shock_hit(t, 0.62, now, now) is not None
+    monkeypatch.setattr(variants, "pretrend_index", lambda *a, **k: None)  # unreadable history: sell as before
+    assert w._shock_hit(t, 0.62, now, now) is not None

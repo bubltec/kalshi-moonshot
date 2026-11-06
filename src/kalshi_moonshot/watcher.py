@@ -167,6 +167,7 @@ class Target:
     shock_margin_bp: float = 5.0
     shock_bid_max: float = 0.0  # the highest bid the shock exit sells into (0 = SHOCK_BID[1])
     shock_last: float = 120.0
+    shock_trend_hold: float = -99.0  # lane shock_trend_hold: no shock sale while the pre-spike trend is this far with the bet (-99 = off)
     shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
     shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
     shock_log_only: bool = False  # lane shock_log_only: write shock_log rows, never sell
@@ -1026,6 +1027,11 @@ class ProfitWatcher:
         self._shock_note(t, now, f"cushion {margin:+.1f} bp, {t.shock_seconds:.0f}s move {move:+.1f} bp (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{t.shock_bp:.0f} bp or worse with a cushion of {t.shock_margin_bp:.0f} bp or less)")
         if worst > -t.shock_bp or margin > t.shock_margin_bp:
             return None
+        if t.shock_trend_hold > -50:
+            trend = variants.pretrend_index(t.shock_index, t.side, 420.0, 90.0, now)
+            if trend is not None and trend >= t.shock_trend_hold:
+                self._shock_note(t, now, f"held: the spot's trend before the spike is {trend:+.2f} typical minutes with the bet (the lane holds at {t.shock_trend_hold:g} or more); {-worst:.1f} bp spike, bid {bid:.2f}")
+                return None
         if t.shock_log_only:
             if not t.shock_would:
                 t.shock_would = True
@@ -1554,6 +1560,7 @@ class ProfitWatcher:
                         log.warning("watcher: spot exits NOT armed on %s %s: no reference price for %s (%s)", ticker, lane, sid, "no tape" if self._tape_db() is None else "no tick near the window open")
                 if ref > 0:
                     held.shock_index, held.shock_ref = sid, ref
+                    held.shock_trend_hold = spec.shock_trend_hold
                     self._shock_hist.setdefault(sid, deque())
                     self._seed_shock_history(sid)
                     if spec.shock_bp > 0 and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
