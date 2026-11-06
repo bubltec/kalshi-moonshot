@@ -425,6 +425,8 @@ class ProfitWatcher:
         self._checks: queue.Queue[Any] = queue.Queue(maxsize=200)  # (target, mark, time, spot) waiting to be saved by checkins.py
         self.targets: dict[tuple[str, str], Target] = {}  # keyed by (ticker, lane)
         self._paper_rest_at = 0.0
+        self._curve_at = 0.0
+        self._curve_busy = False
         self._ledger_at = 0.0
         self._ticks_warm = False
         self._hunts: dict[str, Hunt] = {}  # ticker -> a burst_hunt watch (no position)
@@ -1623,6 +1625,10 @@ class ProfitWatcher:
         if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties_auto or sp.skip_varieties or sp.skip_markets_auto or sp.min_vol_rel > 0 or sp.max_vol_rel > 0 for sp in lane_specs(s).values()):
             self._ledger_at = time.time()
             threading.Thread(target=self._refresh_ledger, args=(s,), daemon=True, name="variety-ledger").start()  # the scoreboard reads days of ticks: off the refresh cycle and at low priority
+        if time.time() - self._curve_at >= 5.0 and not self._curve_busy:
+            self._curve_at = time.time()
+            self._curve_busy = True
+            threading.Thread(target=self._curve_shadow, args=(s, lane_specs(s)), daemon=True, name="curve-shadow").start()  # reads minutes of ticks per bet: off the refresh cycle
         if time.time() - self._paper_rest_at >= 10.0:
             self._paper_rest_at = time.time()
             try:
@@ -1633,6 +1639,20 @@ class ProfitWatcher:
                     log.info("watcher: paper resting buys judged: %d would have filled, %d would not", got["filled"], got["missed"])
             except Exception:
                 log.debug("watcher: paper resting judgement failed", exc_info=True)
+
+    def _curve_shadow(self, s: Settings, specs: dict[str, LaneSpec]) -> None:
+        """The curve-read sell-and-flip, shadow only (curveexit.py): log a signal on a curve_shadow lane's open bet, and once an hour score the signals that settled."""
+        try:
+            if any(sp.curve_shadow for sp in specs.values()):
+                from . import curveexit
+
+                store = self.store_factory()
+                curveexit.shadow_pass(s, store, self._tape_db(), specs)
+                curveexit.run_score(s, store)
+        except Exception:
+            log.warning("watcher: the curve shadow pass failed", exc_info=True)
+        finally:
+            self._curve_busy = False
 
     def _refresh_ledger(self, s: Settings) -> None:
         """Score the favorites that settled since the last pass and keep the tick history warm (variants.refresh_ledger, ticks.warm_from_tape). Background and low priority; a failure leaves what is there."""

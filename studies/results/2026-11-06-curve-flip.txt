@@ -1,0 +1,12 @@
+Sell on a bounce and buy the other side, by curve shape. 8 days of settled live bets with quote paths (1,465). Script: scripts/curve_flip_replay.py (A=3.0 typical minutes, 300 s span, last 300 s, equal-size other-side leg, fees on both legs). Cutoffs and A were chosen after seeing results.
+
+Net change vs what the bets actually returned, sell + flip, by the spot's path efficiency over the 5 minutes before the signal:
+  all             choppy: n=111 +152.06 | middle: n=112  +25.53 | straight: n=112  -71.63   (cuts: choppy < 0.067, straight >= 0.12)
+  crypto only     choppy: n= 77 +111.18 | middle: n= 77  +88.87 | straight: n= 72  -23.14
+  commodity only  choppy: n= 34  +40.88 | middle: n= 35  -63.34 | straight: n= 40  -48.49
+  first half      choppy: n= 61 +112.10 | middle: n= 51  +47.31 | straight: n= 56  -40.91
+  second half     choppy: n= 50  +39.96 | middle: n= 61  -21.78 | straight: n= 56  -30.72
+
+Earlier cuts of the same signal (crypto-class bets, 729): sell only +57 (A=3, 300 s window), sell + flip +172; halves +83 / +90 (flip), +30 / +27 (sell only).
+Quote-based sells tested before this and rejected (all lose or break even vs holding): a resting sell a few cents over cost on a bid swing; the old drop exit; a sell when a 0.95+ bid starts to drop.
+Shadow rule: src/kalshi_moonshot/curveexit.py, log DATA_DIR/curve_shadow.jsonl, lanes with curve_shadow = true.
