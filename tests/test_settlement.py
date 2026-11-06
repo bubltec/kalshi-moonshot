@@ -2351,3 +2351,38 @@ def test_a_shock_exit_holds_when_the_trend_before_the_spike_is_with_the_bet(tmp_
     assert w._shock_hit(t, 0.62, now, now) is not None
     monkeypatch.setattr(variants, "pretrend_index", lambda *a, **k: None)  # unreadable history: sell as before
     assert w._shock_hit(t, 0.62, now, now) is not None
+
+
+def test_a_shock_exit_in_typical_minutes_scales_with_the_markets_own_variance(tmp_path, monkeypatch):
+    from kalshi_moonshot import variants
+
+    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_units=1.0\nshock_margin_units=0.6\n")
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert t.shock_units == 1.0 and t.shock_margin_units == 0.6
+    for k in range(125, 50, -5):
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
+    now = close - 50
+    w._spot["BRTI"] = (now, 100.01)  # 9 bp down in 60 s, 1 bp above the strike
+    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0020)  # a 20 bp typical minute: 9 bp is under one of them
+    assert w._shock_hit(t, 0.62, now, now) is None
+    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0005)  # a 5 bp typical minute: 9 bp is nearly two
+    assert w._shock_hit(t, 0.62, now, now) is not None
+    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: None)  # variance unreadable: no assumption, no sale
+    assert w._shock_hit(t, 0.62, now, now) is None
+
+
+def test_the_typical_minute_is_read_from_the_ticks_on_a_one_second_grid(monkeypatch):
+    import math
+
+    from kalshi_moonshot import ticks, variants
+
+    now = 1_900_000_000.0
+    vals = [100.0 * math.exp(1e-4 * (1 if i % 2 else -1)) for i in range(1000)]  # each second steps 2 bp
+    ts = [now - len(vals) + 1 + i for i in range(len(vals))]
+    monkeypatch.setattr(ticks.history, "window", lambda idx, a, b: (ts, vals))
+    got = variants.unit_index("X", now)
+    assert got is not None and abs(got - 2e-4 * math.sqrt(60.0)) < 1e-5
+    monkeypatch.setattr(ticks.history, "window", lambda idx, a, b: (ts[-100:], vals[-100:]))
+    assert variants.unit_index("X", now) is None  # under 300 s of history
+    monkeypatch.setattr(ticks.history, "window", lambda idx, a, b: None)
+    assert variants.unit_index("X", now) is None

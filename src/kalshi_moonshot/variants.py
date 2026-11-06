@@ -597,6 +597,27 @@ def pretrend_now(series: str, side: str, span: float = 420.0, gap: float = 90.0,
     return pretrend_features(got[0], got[1], side, now, span, gap) if got else None
 
 
+def unit_index(index: str, now: float | None = None, span: float = 900.0) -> float | None:
+    """The market's typical minute right now, as a log move: the root-mean-square one-second move over the last `span` seconds times sqrt(60), from the in-memory ticks on a 1 s grid. None when the history is under 300 s or stale."""
+    now = time.time() if now is None else now
+    got = ticks_mod.history.window(index, now - span - 10.0, now)
+    if not got:
+        return None
+    ts, vs = got
+    i = bisect.bisect_right(ts, now) - 1
+    if i < 0 or ts[i] < now - 10.0 or ts[0] > now - 300.0:
+        return None
+    n = int(min(span, now - ts[0] - 1.0))
+    seq = []
+    for k in range(n + 1):
+        idx = bisect.bisect_right(ts, now - n + k) - 1
+        if idx < 0 or vs[idx] <= 0:
+            return None
+        seq.append(math.log(vs[idx]))
+    sq = sum((b - a) ** 2 for a, b in itertools.pairwise(seq))
+    return math.sqrt(sq / n) * math.sqrt(60.0) if sq > 0 and n >= 300 else None
+
+
 def pretrend_index(index: str, side: str, span: float = 420.0, gap: float = 90.0, now: float | None = None) -> float | None:
     """pretrend_features for an index id (a commodity's BiQuote index as well as a coin's), from the in-memory ticks, or None."""
     now = time.time() if now is None else now
