@@ -1,0 +1,512 @@
+=== RULE SEARCH (explore_rules.py): top rules ranked on blocks 1-3, scored on block 4
+pushed to i-0c9a816da43ec969d
+01:44:55
+
+[exited with code 0]
+rows 108187 markets 3784
+rules with n>=100 on blocks 1-3 and n>=15 on block 4: 835 of 1580
+  mean block-4 net over ALL of them -0.26; share positive 29%
+  the top 10 by blocks 1-3 mean: train mean +1.08 -> block-4 mean +1.23, positive 70%
+  the top 30 by blocks 1-3 mean: train mean +0.61 -> block-4 mean +0.65, positive 67%
+  the top 100 by blocks 1-3 mean: train mean +0.15 -> block-4 mean +0.24, positive 55%
+
+top 20 (train = blocks 1-3, test = block 4):
+  15m:F & hr:18-24                               train n 161 +1.52 (blocks +4.4, -1.0, +0.8) | test n 51 +2.44
+  15m:F & trend:with                             train n 163 +1.51 (blocks +3.3, -1.7, +0.2) | test n 67 +1.28
+  hr:6-12 & trend:against                        train n 313 +1.24 (blocks +0.3, +0.9, +2.3) | test n172 -0.93
+  15m:F & coin:BTC                               train n 131 +1.13 (blocks +1.4, -1.5, +4.0) | test n 40 +2.89
+  60m:F & hr:18-24                               train n 395 +1.11 (blocks +3.6, -0.7, +0.1) | test n143 +0.34
+  5m:F & trend:against                           train n 342 +0.91 (blocks +0.0, +3.7, +1.4) | test n135 +3.53
+  15m:F & 60m:F                                  train n 273 +0.91 (blocks +3.2, -0.5, -0.1) | test n 73 +2.82
+  hr:18-24 & trend:with                          train n 340 +0.85 (blocks +3.0, -0.8, -1.3) | test n159 -0.05
+  15m:F & hr:12-18                               train n 159 +0.82 (blocks +0.6, +0.0, +2.7) | test n 48 +0.85
+  15m:D & hr:0-6                                 train n 221 +0.80 (blocks +0.2, -0.6, +3.5) | test n 40 -0.85
+  60m:D & hr:6-12                                train n 398 +0.73 (blocks +0.4, -0.2, +2.2) | test n124 -1.48
+  15m:E & side:no                                train n 630 +0.68 (blocks +2.7, -1.2, +1.2) | test n144 -0.90
+  60m:E & trend:with                             train n 188 +0.64 (blocks +1.2, -3.3, +0.9) | test n106 -1.53
+  15m:E & trend:with                             train n 210 +0.61 (blocks +1.6, -0.3, -0.6) | test n 80 +0.08
+  15m:E & 60m:F                                  train n 356 +0.50 (blocks +2.1, -0.5, -0.1) | test n 81 +0.84
+  2m:F & trend:against                           train n 687 +0.48 (blocks -0.5, +2.8, +1.1) | test n322 +1.34
+  15m:F & coin:SOL                               train n 133 +0.43 (blocks +3.8, -0.3, -1.7) | test n 29 +2.18
+  5m:F & px:.35-.50                              train n 627 +0.37 (blocks -0.9, +0.7, +1.3) | test n211 +1.66
+  15m:F & side:no                                train n 311 +0.34 (blocks +2.5, -1.5, +0.3) | test n 79 +0.04
+  hr:0-6 & trend:against                         train n 274 +0.34 (blocks +0.1, +7.4, -0.8) | test n115 +0.20
+DONE
+01:49:47
+
+[exited with code 0]
+
+=== F THEME (explore_f.py)
+block means (n) per $10 ticket; block 4 = newest
+  BASELINE first moment .20-.35          n 4795 win-windows  755 all -0.63 | blocks  -0.2(1253)  -1.5(1144)  -0.6(1189)  -0.3(1209)
+  BASELINE .35-.50                       n 5116 win-windows  717 all -0.57 | blocks  -0.5(1295)  -0.6(1227)  -0.5(1303)  -0.6(1291)
+  BASELINE .50-.70                       n 5470 win-windows  729 all -0.33 | blocks  -0.4(1384)  -0.3(1330)  -0.4(1381)  -0.2(1375)
+
+F at one scale
+  1m:F                                   n 5500 win-windows  745 all -0.39 | blocks  -0.2(1382)  -0.8(1374)  -0.3(1364)  -0.3(1380)
+  2m:F                                   n 4393 win-windows  736 all -0.28 | blocks  -0.4(1126)  -0.8(1131)  +0.0(1067)  +0.1(1069)
+  5m:F                                   n 2437 win-windows  657 all -0.16 | blocks  -0.9(636)  -0.6(650)  +0.4(578)  +0.5(573)
+  15m:F                                  n  802 win-windows  430 all +0.04 | blocks  +0.6(214)  -1.0(257)  -0.2(167)  +1.2(164)
+  60m:F                                  n 2010 win-windows  676 all -0.35 | blocks  +1.0(524)  -1.2(532)  -1.1(483)  -0.1(471)
+
+F at several scales
+  15m:F & 5m:F                           n  313 win-windows  231 all +0.24 | blocks  +0.5( 92)  +0.4( 96)  -2.1( 65)  +2.3( 60)
+  15m:F & 2m:F                           n  386 win-windows  260 all -0.05 | blocks  +0.2(109)  -0.6(114)  -1.5( 88)  +2.2( 75)
+  60m:F & 15m:F                          n  346 win-windows  232 all +1.31 | blocks  +3.2( 97)  -0.5(109)  -0.1( 67)  +2.8( 73)
+  60m:F & 5m:F                           n  702 win-windows  386 all -0.57 | blocks  -0.7(174)  -0.5(203)  -0.4(154)  -0.7(171)
+  15m:F & 5m:F & 60m:F                   n  124 win-windows   99 all +0.91 | blocks  +1.2( 36)  +0.4( 44)  -0.9( 18)  +2.5( 26)
+  nF:>=2                                 n 4367 win-windows  734 all -0.21 | blocks  -0.1(1155)  -0.8(1130)  -0.0(1054)  +0.1(1028)
+  nF:>=3                                 n 2021 win-windows  646 all -0.02 | blocks  -0.1(529)  -1.0(535)  +0.1(488)  +1.1(469)
+  nF:>=4                                 n  484 win-windows  300 all +0.43 | blocks  +0.5(126)  +0.0(133)  -0.3(115)  +1.6(110)
+
+15m:F by price, minute, side, trend, coin
+  15m:F & px:.20-.35                     n  217 win-windows  149 all +0.26 | blocks  +3.4( 66)  -4.1( 69)  +0.9( 37)  +1.8( 45)
+  15m:F & px:.35-.50                     n  321 win-windows  217 all +0.14 | blocks  +1.0( 95)  -3.0( 90)  +0.7( 78)  +3.0( 58)
+  15m:F & px:.50-.70                     n  630 win-windows  369 all +0.24 | blocks  +0.5(165)  +0.2(202)  -0.6(132)  +0.8(131)
+  15m:F & min:2-5                        n  624 win-windows  366 all +0.27 | blocks  +0.9(160)  -1.1(199)  -0.3(133)  +2.1(132)
+  15m:F & min:5-9                        n  418 win-windows  279 all -0.16 | blocks  +0.0(115)  -1.3(140)  -0.1( 85)  +1.5( 78)
+  15m:F & min:9-14                       n  196 win-windows  147 all -0.09 | blocks  +0.9( 55)  -0.8( 65)  -2.7( 37)  +2.3( 39)
+  15m:F & side:yes                       n  412 win-windows  235 all -0.18 | blocks  -1.0(110)  -0.7(140)  -0.8( 77)  +2.3( 85)
+  15m:F & side:no                        n  390 win-windows  243 all +0.28 | blocks  +2.4(104)  -1.5(117)  +0.3( 90)  +0.0( 79)
+  15m:F & trend:with                     n  230 win-windows  142 all +1.45 | blocks  +3.3( 86)  -1.7( 27)  +0.2( 50)  +1.3( 67)
+  15m:F & trend:against                  n  123 win-windows   82 all -0.14 | blocks  -0.4( 45)  -4.5( 14)  +3.4( 23)  -0.3( 41)
+  15m:F & trend:flat                     n  539 win-windows  293 all -0.32 | blocks  -0.4(105)  -0.8(233)  -0.3(119)  +1.1( 82)
+  15m:F & coin:BTC                       n  171 win-windows  165 all +1.54 | blocks  +1.4( 42)  -1.5( 49)  +4.0( 40)  +2.9( 40)
+  15m:F & coin:ETH                       n  105 win-windows  101 all -1.63 | blocks  -0.4( 36)  -1.2( 28)  -5.0( 19)  -1.3( 22)
+  15m:F & coin:SOL                       n  162 win-windows  160 all +0.74 | blocks  +3.4( 38)  -0.2( 60)  -1.5( 36)  +2.1( 28)
+  15m:F & coin:XRP                       n  192 win-windows  188 all -0.80 | blocks  -0.6( 58)  -1.6( 60)  -0.3( 36)  -0.4( 38)
+  15m:F & coin:DOGE                      n  172 win-windows  170 all -0.14 | blocks  -0.1( 40)  -0.8( 60)  -0.9( 36)  +1.8( 36)
+  15m:F & hr:0-6                         n  209 win-windows  104 all -1.48 | blocks  -0.6( 56)  -2.1( 73)  -3.8( 46)  +1.6( 34)
+  15m:F & hr:6-12                        n  174 win-windows  103 all -1.14 | blocks  -2.6( 44)  -1.0( 62)  -0.0( 36)  -0.6( 32)
+  15m:F & hr:12-18                       n  207 win-windows  110 all +0.83 | blocks  +0.6( 53)  +0.0( 69)  +2.7( 37)  +0.9( 48)
+  15m:F & hr:18-24                       n  212 win-windows  113 all +1.74 | blocks  +4.1( 61)  -0.8( 53)  +0.9( 48)  +2.4( 50)
+
+nF>=3 by price, minute, trend
+  nF:>=3 & px:.20-.35                    n  701 win-windows  384 all -0.70 | blocks  -1.8(173)  -2.5(162)  +0.1(195)  +1.2(171)
+  nF:>=3 & px:.35-.50                    n  868 win-windows  450 all +0.38 | blocks  -0.2(226)  -0.1(207)  +0.4(232)  +1.5(203)
+  nF:>=3 & px:.50-.70                    n 1239 win-windows  523 all +0.07 | blocks  +0.5(326)  -0.6(363)  -0.3(280)  +0.8(270)
+  nF:>=3 & min:2-5                       n  667 win-windows  379 all +0.18 | blocks  +1.5(166)  -0.6(201)  -0.5(147)  +0.5(153)
+  nF:>=3 & min:5-9                       n 1056 win-windows  475 all -0.11 | blocks  +0.2(268)  -1.1(318)  +0.0(251)  +0.8(219)
+  nF:>=3 & min:9-14                      n  914 win-windows  449 all -0.20 | blocks  -1.6(244)  -0.8(206)  +0.8(242)  +0.9(222)
+  nF:>=3 & trend:with                    n  673 win-windows  276 all +0.08 | blocks  +1.0(209)  +1.1( 69)  -1.4(190)  +0.1(205)
+  nF:>=3 & trend:against                 n  287 win-windows  154 all +1.53 | blocks  -0.5(120)  +2.9( 15)  +2.5( 64)  +3.4( 88)
+  nF:>=3 & trend:flat                    n 1211 win-windows  445 all -0.29 | blocks  -0.7(239)  -1.2(478)  +0.7(286)  +1.0(208)
+
+the current lane rule and the "5m:F against the hour" rule
+  60m:D & 5m:F                           n  586 win-windows  347 all +0.32 | blocks  -2.1(169)  -0.4(169)  +1.4(127)  +3.5(121)
+  5m:F & trend:against                   n  477 win-windows  226 all +1.65 | blocks  +0.0(190)  +3.7( 38)  +1.4(114)  +3.5(135)
+  2m:F & trend:against                   n 1009 win-windows  337 all +0.75 | blocks  -0.5(367)  +2.7( 91)  +1.1(229)  +1.3(322)
+DONE
+
+=== BOUNCE FAMILY per coin, price, minute and per window (explore_bounce.py)
+
+5m:F & trend:against
+  all                                  n 477 +1.65 win  51% | blocks  +0.0(190)  +3.7(38)  +1.4(114)  +3.5(135)
+  per window: 226 windows, mean +0.58 (standard error 0.72, t = 0.8)
+  coin:BTC                             n 109 +1.31 win  50% | blocks  -0.3(48)  +7.9(8)  +1.3(20)  +2.1(33)
+  coin:ETH                             n  81 +2.55 win  54% | blocks  +0.6(31)  +1.9(8)  +3.2(20)  +5.0(22)
+  coin:SOL                             n  87 +1.60 win  51% | blocks  -0.9(35)  -1.7(8)  +4.0(22)  +4.3(22)
+  coin:XRP                             n 112 +2.25 win  57% | blocks  +0.6(45)  +5.9(8)  +0.5(31)  +5.8(28)
+  coin:DOGE                            n  88 +0.54 win  42% | blocks  +0.2(31)  +4.7(6)  -1.4(21)  +1.4(30)
+  px:.20-.35                           n 202 +3.06 win  37% | blocks  +0.3(83) +16.0(8)  +1.9(45)  +5.8(66)
+  px:.35-.50                           n 192 +1.99 win  51% | blocks  +0.1(68)  +2.9(13)  +1.2(47)  +4.4(64)
+  px:.50-.70                           n 284 +0.70 win  66% | blocks  -0.5(117)  +1.3(28)  +1.0(67)  +2.2(72)
+  min:2-5                              n  53 +0.15 win  64% | blocks  -1.8(20)  +3.3(8)  +2.9(10)  -0.8(15)
+  min:5-9                              n 251 +1.30 win  53% | blocks  -0.3(108)  +4.6(23)  +1.2(62)  +3.1(58)
+  min:9-14                             n 249 +2.67 win  48% | blocks  +0.6(96)  +5.8(11)  +2.2(62)  +5.1(80)
+  side:yes                             n 259 +0.40 win  46% | blocks  -0.5(119)  +2.0(23)  -1.1(45)  +2.4(72)
+  side:no                              n 218 +3.13 win  57% | blocks  +1.0(71)  +6.2(15)  +3.1(69)  +4.9(63)
+
+2m:F & trend:against
+  all                                  n1009 +0.75 win  47% | blocks  -0.5(367)  +2.7(91)  +1.1(229)  +1.3(322)
+  per window: 337 windows, mean -0.04 (standard error 0.59, t = -0.1)
+  coin:BTC                             n 230 -0.09 win  44% | blocks  -2.1(81)  +6.4(20)  -0.4(55)  +0.6(74)
+  coin:ETH                             n 194 +0.59 win  45% | blocks  -0.5(72)  +0.8(17)  +0.6(41)  +1.7(64)
+  coin:SOL                             n 191 +1.37 win  49% | blocks  -0.1(78)  +2.6(13)  +2.6(41)  +2.2(59)
+  coin:XRP                             n 204 +1.47 win  50% | blocks  +1.5(65)  +2.9(20)  +2.8(51)  -0.0(68)
+  coin:DOGE                            n 190 +0.57 win  45% | blocks  -0.8(71)  +0.5(21)  +0.0(41)  +2.7(57)
+  px:.20-.35                           n 487 +1.25 win  32% | blocks  -0.4(191)  +3.4(40)  +1.0(94)  +2.8(162)
+  px:.35-.50                           n 489 +0.55 win  45% | blocks  -0.3(185)  +4.4(36)  +0.5(116)  +0.6(152)
+  px:.50-.70                           n 493 +0.77 win  66% | blocks  -0.2(175)  +1.3(43)  +1.2(123)  +1.5(152)
+  min:2-5                              n 471 -0.61 win  49% | blocks  -2.3(177)  +4.8(38)  +0.3(101)  -0.7(155)
+  min:5-9                              n 573 +1.04 win  45% | blocks  -0.9(226)  +3.3(63)  +1.7(139)  +2.4(145)
+  min:9-14                             n 369 +1.40 win  43% | blocks  +0.4(133)  +0.2(14)  +0.2(89)  +3.4(133)
+  side:yes                             n 550 +0.60 win  46% | blocks  -0.6(218)  +2.4(53)  +1.0(104)  +1.4(175)
+  side:no                              n 459 +0.94 win  48% | blocks  -0.2(149)  +3.0(38)  +1.2(125)  +1.3(147)
+
+nF:>=3 & trend:against
+  all                                  n 287 +1.53 win  48% | blocks  -0.5(120)  +2.9(15)  +2.5(64)  +3.4(88)
+  per window: 154 windows, mean +0.22 (standard error 0.92, t = 0.2)
+  coin:BTC                             n  70 +1.82 win  51% | blocks  +0.5(26)  +9.2(3)  +3.6(14)  +1.4(27)
+  coin:ETH                             n  49 +2.09 win  49% | blocks  -1.9(19)  +0.9(3)  +4.8(12)  +5.3(15)
+  coin:SOL                             n  50 +1.18 win  46% | blocks  -0.7(24)  -1.9(2)  +3.8(10)  +2.9(14)
+  coin:XRP                             n  64 +2.49 win  50% | blocks  +1.3(28)  +8.3(3)  +0.9(16)  +4.9(17)
+  coin:DOGE                            n  54 -0.16 win  43% | blocks  -2.4(23)  -1.9(4)  -0.1(12)  +3.7(15)
+  px:.20-.35                           n 128 +2.73 win  36% | blocks  -0.4(54)  +6.7(2)  +4.3(24)  +5.3(48)
+  px:.35-.50                           n 131 +1.23 win  48% | blocks  -0.8(50)  +8.2(4)  +1.3(33)  +2.8(44)
+  px:.50-.70                           n 131 +1.46 win  68% | blocks  -0.0(58)  +1.3(10)  +1.8(31)  +3.9(32)
+  min:2-5                              n  30 +1.91 win  63% | blocks  +3.5(7)  +0.3(3)  +1.1(9)  +2.0(11)
+  min:5-9                              n 124 +2.28 win  53% | blocks  -0.8(62)  +6.4(11)  +3.2(25)  +7.1(26)
+  min:9-14                             n 171 +1.54 win  45% | blocks  -0.2(70)  -2.5(3)  +2.4(38)  +3.2(60)
+  side:yes                             n 158 +0.30 win  42% | blocks  -1.2(78)  +4.6(6)  +0.7(28)  +2.1(46)
+  side:no                              n 129 +3.04 win  56% | blocks  +0.8(42)  +1.8(9)  +3.9(36)  +4.8(42)
+
+the three rules together (any of them; first per market-side)
+DONE
+
+=== COMMODITY FAVORITES by cell (commodity_cells.py)
+commodity favorites 2073 | net per $10 -0.21 | win 82 %
+
+by market
+  BRENT                          n 277  +0.27 win  86% | thirds  +0.4(92)  +0.6(91)  -0.1(94)
+  COPPER                         n 237  -0.23 win  83% | thirds  +0.1(79)  -0.0(81)  -0.8(77)
+  GOLD                           n 268  -0.13 win  82% | thirds  -0.3(91)  +0.4(90)  -0.5(87)
+  NATGAS                         n 272  -0.55 win  79% | thirds  -0.9(91)  -0.4(89)  -0.3(92)
+  PALLADIUM                      n 209  -0.49 win  79% | thirds  -1.7(66)  +0.3(70)  -0.2(73)
+  PLATINUM                       n 255  -0.51 win  80% | thirds  -0.2(85)  -0.9(87)  -0.4(83)
+  SILVER                         n 259  -0.27 win  81% | thirds  +0.3(87)  -0.3(86)  -0.8(86)
+  WTI                            n 296  +0.11 win  84% | thirds  -0.1(100)  +0.5(97)  -0.1(99)
+
+by market x side
+  BRENT yes                      n 149  +0.13 win  85% | thirds  +0.0(46)  +0.5(48)  -0.1(55)
+  BRENT no                       n 128  +0.43 win  87% | thirds  +0.8(46)  +0.6(43)  -0.2(39)
+  COPPER yes                     n 113  -0.59 win  80% | thirds  -0.5(36)  -0.3(38)  -1.0(39)
+  COPPER no                      n 124  +0.09 win  85% | thirds  +0.6(43)  +0.1(43)  -0.5(38)
+  GOLD yes                       n 127  -0.12 win  82% | thirds  +0.1(39)  +0.0(45)  -0.5(43)
+  GOLD no                        n 141  -0.14 win  82% | thirds  -0.6(52)  +0.7(45)  -0.4(44)
+  NATGAS yes                     n 126  -0.07 win  83% | thirds  -0.6(42)  +0.3(43)  +0.1(41)
+  NATGAS no                      n 146  -0.96 win  76% | thirds  -1.2(49)  -1.1(46)  -0.6(51)
+  PALLADIUM yes                  n  90  -0.52 win  79% | thirds  -2.8(28)  +0.8(28)  +0.3(34)
+  PALLADIUM no                   n 119  -0.46 win  80% | thirds  -0.8(38)  +0.0(42)  -0.6(39)
+  PLATINUM yes                   n 114  -0.40 win  81% | thirds  -0.4(41)  -0.3(31)  -0.4(42)
+  PLATINUM no                    n 141  -0.59 win  79% | thirds  +0.1(44)  -1.3(56)  -0.4(41)
+  SILVER yes                     n 116  -0.19 win  81% | thirds  +0.4(43)  -1.0(39)  -0.1(34)
+  SILVER no                      n 143  -0.33 win  81% | thirds  +0.2(44)  +0.3(47)  -1.3(52)
+  WTI yes                        n 147  +0.21 win  84% | thirds  +0.0(49)  +0.6(47)  +0.1(51)
+  WTI no                         n 149  +0.02 win  84% | thirds  -0.2(51)  +0.4(50)  -0.2(48)
+
+by market x variety (n>=25)
+  BRENT A                        n  39  +0.65 win  92% | thirds  +1.5(13)  +0.3(9)  +0.2(17)
+  BRENT E                        n  42  +1.09 win  90% | thirds  +2.3(16)  +1.1(13)  -0.5(13)
+  BRENT F                        n  58  +0.35 win  84% | thirds  -0.7(17)  +1.9(22)  -0.4(19)
+  BRENT G                        n  97  -0.11 win  81% | thirds  -0.7(35)  +0.1(31)  +0.4(31)
+  COPPER A                       n  47  -0.17 win  85% | thirds  +0.6(12)  -1.5(15)  +0.3(20)
+  COPPER E                       n  43  +0.57 win  88% | thirds  +1.3(17)  -0.1(17)  +0.4(9)
+  COPPER F                       n  52  -0.14 win  83% | thirds  -0.2(17)  +1.3(16)  -1.3(19)
+  COPPER G                       n  40  -1.62 win  70% | thirds  -1.6(13)  -1.1(16)  -2.4(11)
+  GOLD E                         n  49  -1.20 win  73% | thirds  -1.0(21)  -1.3(14)  -1.4(14)
+  GOLD F                         n  47  -0.26 win  83% | thirds  -0.2(13)  +0.6(19)  -1.4(15)
+  GOLD G                         n 141  +0.15 win  82% | thirds  -0.3(49)  +0.7(50)  +0.0(42)
+  NATGAS A                       n  32  -1.61 win  75% | thirds  -2.1(10)  -1.7(8)  -1.3(14)
+  NATGAS E                       n  62  +0.98 win  90% | thirds  -0.1(21)  +1.7(19)  +1.4(22)
+  NATGAS F                       n  77  -0.75 win  78% | thirds  -0.5(26)  -1.2(23)  -0.6(28)
+  NATGAS G                       n  70  -1.02 win  74% | thirds  -1.6(21)  -0.9(31)  -0.5(18)
+  PALLADIUM E                    n  46  -0.11 win  83% | thirds  -1.2(18)  +0.5(15)  +0.7(13)
+  PALLADIUM F                    n  39  -0.56 win  79% | thirds  -2.9(15)  +0.7(10)  +1.0(14)
+  PALLADIUM G                    n  90  -1.21 win  72% | thirds  -2.1(20)  -0.3(35)  -1.7(35)
+  PLATINUM A                     n  33  -0.33 win  85% | thirds  +0.2(11)  +0.5(10)  -1.5(12)
+  PLATINUM E                     n  42  +0.05 win  83% | thirds  +0.7(18)  +0.0(12)  -0.9(12)
+  PLATINUM F                     n  35  -0.84 win  77% | thirds  -0.2(11)  -0.8(14)  -1.6(10)
+  PLATINUM G                     n 108  -0.53 win  78% | thirds  -1.1(34)  -1.6(41)  +1.4(33)
+  SILVER A                       n  45  -0.33 win  87% | thirds  +1.2(12)  -1.1(15)  -0.7(18)
+  SILVER E                       n  36  -0.96 win  75% | thirds  +0.9(13)  -2.3(11)  -1.8(12)
+  SILVER F                       n  37  -0.15 win  81% | thirds  -0.4(16)  -0.7(12)  +0.9(9)
+  SILVER G                       n 113  -0.00 win  81% | thirds  +0.4(37)  +0.8(38)  -1.2(38)
+  WTI A                          n  50  +0.04 win  88% | thirds  +0.7(16)  +1.2(14)  -1.3(20)
+  WTI E                          n  47  +0.52 win  85% | thirds  +1.5(16)  +0.1(16)  -0.0(15)
+  WTI F                          n  67  +0.41 win  85% | thirds  -0.6(27)  +0.8(17)  +1.3(23)
+  WTI G                          n 100  -0.36 win  79% | thirds  -1.4(31)  +0.3(39)  -0.1(30)
+
+by market x price band
+  BRENT .76-.84                  n 177  +0.47 win  84% | thirds  +0.4(56)  +0.7(58)  +0.3(63)
+  BRENT .84-.90                  n  63  +0.03 win  87% | thirds  +0.1(24)  +0.4(21)  -0.5(18)
+  BRENT .90+                     n  37  -0.28 win  89% | thirds  +0.9(12)  +0.0(12)  -1.6(13)
+  COPPER .76-.84                 n 127  +0.18 win  83% | thirds  +0.3(48)  +0.6(44)  -0.5(35)
+  COPPER .84-.90                 n  64  -1.03 win  78% | thirds  -0.4(18)  -0.9(24)  -1.7(22)
+  COPPER .90+                    n  46  -0.29 win  89% | thirds  +0.1(13)  -0.8(13)  -0.2(20)
+  GOLD .76-.84                   n 179  -0.02 win  80% | thirds  -0.1(53)  +0.3(68)  -0.3(58)
+  GOLD .84-.90                   n  45  -0.10 win  87% | thirds  +0.2(18)  +0.6(14)  -1.2(13)
+  GOLD .90+                      n  44  -0.58 win  86% | thirds  -1.3(20)  +0.9(8)  -0.5(16)
+  NATGAS .76-.84                 n 170  -0.85 win  74% | thirds  -1.6(57)  -0.2(57)  -0.7(56)
+  NATGAS .84-.90                 n  65  -0.09 win  86% | thirds  +0.3(21)  -0.9(24)  +0.4(20)
+  NATGAS .90+                    n  37  +0.01 win  92% | thirds  +0.1(13)  -0.5(8)  +0.2(16)
+  PALLADIUM .76-.84              n 141  -0.85 win  74% | thirds  -2.7(49)  +0.6(48)  -0.4(44)
+  PALLADIUM .84-.90              n  46  +0.22 win  89% | thirds  +1.5(12)  -0.1(15)  -0.3(19)
+  PLATINUM .76-.84               n 161  -0.68 win  75% | thirds  +0.1(53)  -1.5(61)  -0.5(47)
+  PLATINUM .84-.90               n  55  +0.02 win  87% | thirds  -1.0(19)  +0.1(17)  +1.0(19)
+  PLATINUM .90+                  n  39  -0.50 win  87% | thirds  +0.1(13)  +0.9(9)  -1.7(17)
+  SILVER .76-.84                 n 170  -0.12 win  79% | thirds  +0.1(54)  +0.2(61)  -0.7(55)
+  SILVER .84-.90                 n  45  -0.29 win  84% | thirds  +1.5(19)  -2.6(11)  -0.9(15)
+  SILVER .90+                    n  44  -0.83 win  84% | thirds  -0.6(14)  -0.7(14)  -1.2(16)
+  WTI .76-.84                    n 201  +0.09 win  81% | thirds  -0.2(67)  +0.6(62)  -0.1(72)
+  WTI .84-.90                    n  56  +0.24 win  89% | thirds  +0.2(19)  -0.1(21)  +0.8(16)
+  WTI .90+                       n  39  +0.06 win  92% | thirds  +0.1(14)  +0.9(14)  -1.1(11)
+
+the current skips, per market: what the skipped cells earned
+  BRENT G-no or A-yes (skipped)  n  67  +0.31 win  87% | thirds  +0.2(30)  +0.1(20)  +0.8(17)
+  BRENT everything else (taken)  n 210  +0.26 win  85% | thirds  +0.5(62)  +0.7(71)  -0.3(77)
+  COPPER G-no or A-yes (skipped) n  36  -1.61 win  72% | thirds  -1.4(11)  -2.6(11)  -1.0(14)
+  COPPER everything else (taken) n 201  +0.01 win  85% | thirds  +0.3(68)  +0.4(70)  -0.7(63)
+  GOLD G-no or A-yes (skipped)   n  75  +0.25 win  84% | thirds  -1.0(28)  +1.3(25)  +0.6(22)
+  GOLD everything else (taken)   n 193  -0.28 win  81% | thirds  -0.0(63)  +0.1(65)  -0.9(65)
+  NATGAS G-no or A-yes (skipped) n  40  -2.16 win  65% | thirds  -5.0(7)  -1.6(20)  -1.5(13)
+  NATGAS everything else (taken) n 232  -0.27 win  82% | thirds  -0.6(84)  -0.1(69)  -0.1(79)
+  PALLADIUM G-no or A-yes (skipped) n  53  -1.13 win  74% | thirds  -0.9(12)  -0.0(23)  -2.7(18)
+  PALLADIUM everything else (taken) n 156  -0.27 win  81% | thirds  -1.8(54)  +0.5(47)  +0.6(55)
+  PLATINUM G-no or A-yes (skipped) n  78  -0.80 win  77% | thirds  +0.3(22)  -2.2(34)  +0.3(22)
+  PLATINUM everything else (taken) n 177  -0.38 win  81% | thirds  -0.3(63)  -0.1(53)  -0.7(61)
+  SILVER G-no or A-yes (skipped) n  71  -1.52 win  70% | thirds  -0.3(16)  -0.3(24)  -3.1(31)
+  SILVER everything else (taken) n 188  +0.20 win  85% | thirds  +0.4(71)  -0.3(62)  +0.5(55)
+  WTI G-no or A-yes (skipped)    n  71  -0.60 win  79% | thirds  -1.3(26)  +0.4(25)  -1.0(20)
+  WTI everything else (taken)    n 225  +0.34 win  86% | thirds  +0.4(74)  +0.5(72)  +0.2(79)
+DONE
+
+=== CRYPTO FAVORITES by cell (crypto_cells.py)
+crypto favorites 3349 | net per $10 -0.16 | win 82 %
+
+by market
+  BTC                            n 681  -0.26 win  81% | thirds  -0.3(226)  -0.2(227)  -0.3(228)
+  DOGE                           n 666  -0.18 win  82% | thirds  +0.0(219)  -0.0(228)  -0.5(219)
+  ETH                            n 671  -0.13 win  82% | thirds  +0.1(227)  -0.1(223)  -0.3(221)
+  SOL                            n 670  -0.02 win  83% | thirds  -0.1(223)  +0.3(221)  -0.3(226)
+  XRP                            n 661  -0.22 win  81% | thirds  -0.2(222)  -0.1(217)  -0.4(222)
+
+by market x side
+  BTC yes                        n 316  -0.53 win  79% | thirds  -0.5(102)  -0.8(101)  -0.4(113)
+  BTC no                         n 365  -0.02 win  83% | thirds  -0.1(124)  +0.3(126)  -0.3(115)
+  DOGE yes                       n 333  -0.38 win  80% | thirds  -0.1(99)  -0.7(116)  -0.3(118)
+  DOGE no                        n 333  +0.02 win  84% | thirds  +0.1(120)  +0.6(112)  -0.8(101)
+  ETH yes                        n 321  -0.10 win  82% | thirds  +0.4(104)  -0.3(112)  -0.4(105)
+  ETH no                         n 350  -0.16 win  82% | thirds  -0.2(123)  +0.0(111)  -0.3(116)
+  SOL yes                        n 328  -0.23 win  81% | thirds  -0.1(104)  -0.2(116)  -0.3(108)
+  SOL no                         n 342  +0.19 win  85% | thirds  -0.0(119)  +0.9(105)  -0.2(118)
+  XRP yes                        n 330  +0.04 win  83% | thirds  +0.2(104)  -0.2(111)  +0.1(115)
+  XRP no                         n 331  -0.48 win  79% | thirds  -0.4(118)  -0.0(106)  -0.9(107)
+
+by market x variety (n>=25)
+  BTC A                          n 133  -0.22 win  86% | thirds  -0.3(46)  -0.1(46)  -0.3(41)
+  BTC B                          n  36  +0.12 win  89% | thirds  -0.5(12)  +0.0(16)  +1.3(8)
+  BTC E                          n 100  -0.42 win  78% | thirds  +0.0(33)  -0.5(36)  -0.8(31)
+  BTC F                          n 117  -0.45 win  78% | thirds  -0.9(40)  -0.3(43)  -0.2(34)
+  BTC G                          n 253  -0.23 win  79% | thirds  -0.3(80)  -0.1(77)  -0.2(96)
+  DOGE A                         n  74  -0.08 win  89% | thirds  -1.1(21)  +0.5(33)  +0.1(20)
+  DOGE B                         n  43  +0.68 win  95% | thirds  +1.3(10)  +0.2(23)  +1.1(10)
+  DOGE D                         n  26  -0.28 win  81% | thirds  -0.3(9)  -0.3(11)  -0.1(6)
+  DOGE E                         n  97  -0.97 win  74% | thirds  -1.1(30)  -0.5(24)  -1.2(43)
+  DOGE F                         n 111  +0.13 win  84% | thirds  +1.6(34)  -0.2(48)  -1.0(29)
+  DOGE G                         n 267  -0.22 win  80% | thirds  -0.0(96)  -0.0(77)  -0.6(94)
+  ETH A                          n  69  +0.19 win  91% | thirds  +0.2(24)  +0.7(20)  -0.2(25)
+  ETH B                          n  32  -0.31 win  88% | thirds  +0.2(12)  -0.6(14)  -0.7(6)
+  ETH E                          n 106  -0.68 win  76% | thirds  -1.5(39)  +0.0(35)  -0.5(32)
+  ETH F                          n 139  -0.24 win  81% | thirds  -1.0(42)  +0.8(56)  -0.9(41)
+  ETH G                          n 269  -0.02 win  81% | thirds  +0.7(95)  -0.6(82)  -0.3(92)
+  SOL A                          n  75  -0.86 win  83% | thirds  -0.7(30)  -1.1(21)  -0.8(24)
+  SOL B                          n  38  +0.80 win  97% | thirds  +0.1(11)  +1.1(14)  +1.1(13)
+  SOL E                          n  97  -0.73 win  76% | thirds  -0.1(33)  -0.7(37)  -1.6(27)
+  SOL F                          n 139  +0.31 win  85% | thirds  +0.9(46)  +0.1(54)  -0.1(39)
+  SOL G                          n 254  +0.08 win  82% | thirds  -0.5(83)  +1.2(74)  -0.3(97)
+  XRP A                          n 120  -0.31 win  86% | thirds  -0.4(50)  -0.6(37)  +0.2(33)
+  XRP B                          n  59  +0.27 win  90% | thirds  +0.3(20)  +0.9(19)  -0.3(20)
+  XRP D                          n  31  +0.38 win  84% | thirds  +0.7(7)  +1.3(11)  -0.5(13)
+  XRP E                          n  67  -0.20 win  79% | thirds  +1.1(18)  -0.0(21)  -1.2(28)
+  XRP F                          n 113  -0.50 win  77% | thirds  +0.1(34)  -0.6(38)  -1.0(41)
+  XRP G                          n 245  -0.31 win  79% | thirds  -0.6(83)  -0.0(83)  -0.3(79)
+
+by market x price band
+  BTC .76-.84                    n 465  -0.19 win  79% | thirds  -0.1(144)  -0.2(153)  -0.2(168)
+  BTC .84-.90                    n 112  -0.91 win  79% | thirds  -1.1(41)  -0.7(38)  -1.0(33)
+  BTC .90+                       n 104  +0.18 win  93% | thirds  +0.1(41)  +0.3(36)  +0.1(27)
+  DOGE .76-.84                   n 433  -0.27 win  78% | thirds  +0.1(158)  -0.1(131)  -0.9(144)
+  DOGE .84-.90                   n 120  +0.13 win  88% | thirds  -0.8(36)  +0.1(41)  +0.9(43)
+  DOGE .90+                      n 113  -0.15 win  90% | thirds  +0.9(25)  -0.1(56)  -1.1(32)
+  ETH .76-.84                    n 454  -0.11 win  80% | thirds  +0.2(159)  -0.2(147)  -0.3(148)
+  ETH .84-.90                    n 126  +0.08 win  88% | thirds  -0.5(41)  +0.9(39)  -0.0(46)
+  ETH .90+                       n  91  -0.53 win  87% | thirds  +0.1(27)  -0.9(37)  -0.7(27)
+  SOL .76-.84                    n 434  +0.05 win  81% | thirds  +0.1(151)  +0.4(142)  -0.4(141)
+  SOL .84-.90                    n 117  -0.08 win  86% | thirds  -0.3(39)  -0.2(35)  +0.2(43)
+  SOL .90+                       n 119  -0.18 win  90% | thirds  -0.4(33)  +0.2(44)  -0.4(42)
+  XRP .76-.84                    n 449  -0.32 win  78% | thirds  -0.3(152)  -0.0(141)  -0.6(156)
+  XRP .84-.90                    n 109  +0.44 win  91% | thirds  +1.2(34)  -0.4(44)  +0.7(31)
+  XRP .90+                       n 103  -0.47 win  87% | thirds  -0.6(36)  -0.1(32)  -0.6(35)
+
+by market x minute left (seconds)
+  BTC left 150-300s              n  86  +0.24 win  83% | thirds  +0.7(28)  -0.3(32)  +0.5(26)
+  BTC left 300-480s              n 583  -0.36 win  81% | thirds  -0.4(194)  -0.2(189)  -0.4(200)
+  DOGE left 150-300s             n  91  +0.48 win  86% | thirds  +1.1(31)  -0.2(31)  +0.5(29)
+  DOGE left 300-480s             n 565  -0.26 win  82% | thirds  -0.1(184)  +0.0(194)  -0.7(187)
+  ETH left 150-300s              n  84  +0.14 win  82% | thirds  +1.5(28)  -0.2(30)  -0.9(26)
+  ETH left 300-480s              n 580  -0.18 win  82% | thirds  -0.2(197)  -0.1(189)  -0.3(194)
+  SOL left 150-300s              n  79  +0.58 win  86% | thirds  +0.3(29)  +1.2(25)  +0.3(25)
+  SOL left 300-480s              n 584  -0.08 win  83% | thirds  -0.1(192)  +0.3(193)  -0.4(199)
+  XRP left 150-300s              n  95  -1.35 win  71% | thirds  -2.7(35)  +0.1(29)  -1.2(31)
+  XRP left 300-480s              n 556  -0.01 win  83% | thirds  +0.3(185)  -0.1(183)  -0.2(188)
+
+the current skips, per market: what the skipped cells earned
+  BTC G-no or A-yes (skipped)    n 193  -0.07 win  83% | thirds  -0.1(59)  +0.4(66)  -0.5(68)
+  BTC everything else (taken)    n 488  -0.33 win  80% | thirds  -0.3(167)  -0.5(161)  -0.2(160)
+  DOGE G-no or A-yes (skipped)   n 170  +0.14 win  85% | thirds  +0.0(53)  +0.4(67)  -0.1(50)
+  DOGE everything else (taken)   n 496  -0.29 win  81% | thirds  +0.0(166)  -0.2(161)  -0.7(169)
+  ETH G-no or A-yes (skipped)    n 163  -0.34 win  80% | thirds  +0.6(62)  -1.0(46)  -0.8(55)
+  ETH everything else (taken)    n 508  -0.06 win  83% | thirds  -0.1(165)  +0.1(177)  -0.2(166)
+  SOL G-no or A-yes (skipped)    n 169  +0.13 win  84% | thirds  -0.1(50)  +0.8(57)  -0.3(62)
+  SOL everything else (taken)    n 501  -0.07 win  83% | thirds  -0.1(173)  +0.1(164)  -0.3(164)
+  XRP G-no or A-yes (skipped)    n 168  -0.39 win  80% | thirds  -0.3(62)  -0.8(54)  -0.1(52)
+  XRP everything else (taken)    n 493  -0.16 win  82% | thirds  -0.1(160)  +0.1(163)  -0.5(170)
+DONE
+
+=== FAVORITES BY NEW YORK HOUR (favorites_by_hour.py)
+
+all commodity: 2081 favorites over 4.1 days
+  ET hour: favorites per day / win% / net per $10
+  00h 18.1/89%/+0.7   01h 20.8/84%/-0.0   02h 19.1/81%/-0.2   03h 13.7/82%/-0.2
+  04h 14.2/79%/-0.4   05h 21.6/83%/+0.0   06h 18.9/78%/-0.8   07h 17.9/78%/-0.7
+  08h 23.0/85%/+0.1   09h 25.5/80%/-0.5   10h 28.4/83%/-0.1   11h 25.0/82%/-0.2
+  12h 26.5/87%/+0.4   13h 27.9/83%/+0.0   14h 22.3/87%/+0.5   15h 26.2/79%/-0.4
+  16h 25.5/80%/-0.4   17h  8.8/81%/-0.1   18h 22.3/86%/+0.3   19h 25.0/82%/-0.2
+  20h 21.6/80%/-0.6   21h 19.4/80%/-0.6   22h 21.1/76%/-1.0   23h 17.1/79%/-0.7
+
+WTI: 297 favorites over 4.1 days
+  ET hour: favorites per day / win% / net per $10
+  00h  2.7/82%/-0.3   01h  2.7/91%/+0.9   02h  2.4/100%/+2.3   03h  2.0/88%/+0.5
+  04h  2.0/62%/-2.7   05h  2.7/82%/-0.0   06h  1.5/83%/+0.1   07h  2.7/73%/-1.2
+  08h  3.2/85%/+0.1   09h  3.7/67%/-2.0   10h  3.9/88%/+0.6   11h  3.4/86%/+0.1
+  12h  3.4/93%/+1.1   13h  3.7/80%/-0.3   14h  3.2/100%/+2.2   15h  3.7/87%/+0.5
+  16h  3.4/93%/+0.9   17h  3.7/73%/-0.9   18h  3.9/94%/+1.5   19h  3.9/88%/+0.4
+  20h  2.9/75%/-1.1   21h  2.4/90%/+0.5   22h  2.9/75%/-1.1   23h  2.7/82%/-0.1
+
+BRENT: 280 favorites over 4.1 days
+  ET hour: favorites per day / win% / net per $10
+  00h  2.4/90%/+0.8   01h  2.4/90%/+0.9   02h  2.4/90%/+1.0   03h  1.7/86%/+0.3
+  04h  1.7/86%/+0.1   05h  2.9/100%/+2.2   06h  2.2/89%/+0.5   07h  2.7/82%/-0.2
+  08h  2.9/92%/+0.9   09h  3.2/77%/-0.6   10h  3.4/71%/-1.6   11h  3.2/77%/-0.9
+  12h  2.9/92%/+0.8   13h  3.7/80%/-0.5   14h  2.9/92%/+1.2   15h  3.4/93%/+1.4
+  16h  3.2/92%/+0.8   17h  3.2/100%/+2.2   18h  3.7/87%/+0.6   19h  3.9/88%/+0.5
+  20h  2.4/80%/-0.2   21h  2.2/89%/+0.4   22h  2.9/83%/+0.1   23h  2.7/55%/-3.7
+
+crypto: 3349 favorites over 9.1 days
+  ET hour: favorites per day / win% / net per $10
+  00h 15.4/77%/-0.8   01h 14.9/93%/+1.2   02h 14.0/80%/-0.4   03h 11.9/80%/-0.5
+  04h 14.0/83%/-0.1   05h 14.4/82%/-0.0   06h 16.3/87%/+0.6   07h 14.4/86%/+0.5
+  08h 16.7/78%/-0.7   09h 15.3/78%/-0.6   10h 15.1/82%/-0.1   11h 15.9/76%/-0.8
+  12h 16.2/87%/+0.5   13h 16.2/78%/-0.9   14h 15.2/82%/-0.1   15h 15.3/79%/-0.4
+  16h 16.3/80%/-0.4   17h 15.3/86%/+0.2   18h 17.0/83%/-0.0   19h 17.1/74%/-1.2
+  20h 15.6/89%/+0.6   21h 16.3/80%/-0.3   22h 15.1/86%/+0.4   23h 15.0/82%/-0.3
+DONE
+
+=== WILD UNDERDOG BY ENTRY MINUTE, blocks and per window (wild_early_minutes.py)
+wild-regime windows scanned; entries 3008
+wild-regime cheap side (8-20c), first moment per entry-minute bucket, held to the result; blocks are chronological quarters
+  minute 1-3                     n 161 won 23.6% net/$10 +3.94 | 4 blocks  -6.0  +4.6  +5.3 +11.7 | per window: 73 windows +4.26 t=1.5
+  minute 3-5                     n 438 won 19.4% net/$10 +1.23 | 4 blocks  -7.2  +6.0  +1.5  +4.6 | per window: 178 windows -0.22 t=-0.1
+  minute 5-7                     n 617 won 15.7% net/$10 -0.29 | 4 blocks  -0.8  -0.3  -0.3  +0.1 | per window: 234 windows -0.85 t=-0.6
+  minute 7-10                    n 780 won 17.3% net/$10 +0.85 | 4 blocks  -1.6  +3.4  +1.4  +0.2 | per window: 269 windows -0.12 t=-0.1
+  minute 10-13                   n 703 won 13.9% net/$10 -0.73 | 4 blocks  -1.9  -3.0  +0.9  +1.1 | per window: 245 windows -1.66 t=-1.3
+  minute 13-14.5                 n 309 won 15.2% net/$10 +0.63 | 4 blocks  -1.4  -1.4  +2.1  +3.2 | per window: 155 windows +0.10 t=0.1
+  minutes 1-5 (first moment)     n 599 won 20.5% net/$10 +1.96 | 4 blocks  -6.9  +5.8  +2.2  +6.6 | per window: 180 windows -0.06 t=-0.0
+  minutes 7-13 (the lane window) n1483 won 15.7% net/$10 +0.10 | 4 blocks  -1.8  +0.2  +1.1  +0.8 | per window: 288 windows -1.70 t=-1.6
+    minutes 1-5, BTC             n 121 won 18.2% net/$10 +0.84 | 4 blocks  -8.9  +1.9  -3.1 +13.0 | per window: 93 windows +0.41 t=0.2
+    minutes 1-5, ETH             n 117 won 21.4% net/$10 +2.40 | 4 blocks  -0.9  +3.5  +1.4  +5.5 | per window: 91 windows +1.69 t=0.7
+    minutes 1-5, SOL             n 103 won 19.4% net/$10 +0.95 | 4 blocks -10.6 +10.5  +5.6  -2.1 | per window: 74 windows +1.31 t=0.5
+    minutes 1-5, XRP             n 128 won 12.5% net/$10 -3.65 | 4 blocks  -7.1  -2.0  -5.7  +0.2 | per window: 100 windows -3.48 t=-1.9
+    minutes 1-5, DOGE            n 130 won 30.8% net/$10 +8.91 | 4 blocks  -7.2 +17.9 +13.7 +10.9 | per window: 94 windows +7.31 t=2.5
+DONE
+
+=== DO RULES PERSIST? switching test (regime_switch_test.py)
+blocks 33 rules with n>=150: 834
+(1) lag-1 correlation of block means: mean -0.043 over 655 rules; share positive 44%
+(2) switching over 31 blocks: best-of-trailing-12h next-block mean -0.29 | random eligible rule -0.11 | average of all eligible -0.52
+(3) rules whose trailing 12h mean was >= +1: next-block mean -0.65 over 31 blocks
+DONE
+
+=== LIVE BOOK BY LANE (live_book_by_lane.py)
+live settled bets 1914 net $ 63.52 staked $ 12450.3
+
+by lane  (n, net $, staked $, return %, win-or-sold-up %)
+  crypto_moonshot           129   +127.54    130.28  +97.9%   19%
+  commodity_energy          298    +56.74   2193.06   +2.6%   85%
+  commodity                 369    +24.92   2204.93   +1.1%   79%
+  commodity_precious        195    +23.37   1415.58   +1.7%   83%
+  treasury_favorite          27     -0.53     26.99   -2.0%   85%
+  energy_moonshot            14     -1.29      2.96  -43.7%    7%
+  crypto_wild_fade           38     -2.40     33.21   -7.2%   11%
+  crypto_btc                 24     -3.03     72.06   -4.2%   79%
+  fx_favorite                23     -4.40     42.99  -10.2%   35%
+  crypto_eth                  8     -6.10     23.69  -25.7%   62%
+  crypto_sol                 33     -7.62     98.96   -7.7%   73%
+  commodity_industrial      225    -60.95   1671.96   -3.6%   80%
+  crypto_favorite           531    -82.73   4533.63   -1.8%   79%
+
+by market  (n, net $, staked $, return %, win-or-sold-up %)
+  KXBTC                     227    +81.96   1584.12   +5.2%   68%
+  KXBRENT                    88    +34.37    618.30   +5.6%   86%
+  KXGOLD                    157    +33.30   1018.97   +3.3%   83%
+  KXNATGAS                  160    +31.46   1070.34   +2.9%   81%
+  KXCOPPER                  109    +10.24    741.28   +1.4%   86%
+  KXSILVER                  140     +8.50    982.68   +0.9%   79%
+  KXSOL                      77     +6.16    150.52   +4.1%   39%
+  KXXRP                      23     +4.42     16.84  +26.3%   22%
+  KX5YRRATE                   7     +0.79      7.04  +11.3%  100%
+  KXUSDCAD                    3     +0.39      6.00   +6.5%   33%
+  KX30YRRATE                  6     -0.36      6.04   -6.0%   83%
+  KX10YRRATE                  5     -0.46      4.91   -9.3%   80%
+  KX2YRRATE                   9     -0.50      9.01   -5.6%   78%
+  KXAUDUSD                   11     -2.01     19.73  -10.2%   36%
+  KXGBPUSD                    9     -2.78     17.27  -16.1%   33%
+  KXPLATINUM                 95     -5.69    691.77   -0.8%   83%
+  KXWTI                     216    -16.63   1445.85   -1.1%   77%
+  KXETH                     212    -26.84   1513.08   -1.8%   72%
+  KXDOGE                    224    -40.05   1627.27   -2.5%   68%
+  KXPALLADIUM               136    -52.76    919.29   -5.7%   76%
+
+by day (UTC)  (n, net $, staked $, return %, win-or-sold-up %)
+  11-02                     375   +128.11   3348.15   +3.8%   80%
+  10-31                     131    +72.18    607.74  +11.9%   60%
+  11-01                     165    +36.15   1551.87   +2.3%   78%
+  11-04                     347    +15.89   1442.27   +1.1%   68%
+  11-06                       1     +1.33      6.44  +20.7%  100%
+  10-28                       7     -1.22     12.53   -9.8%   71%
+  10-30                     178     -5.95   1113.06   -0.5%   78%
+  10-29                     136     -6.53    643.66   -1.0%   77%
+  11-05                      99    -55.04    326.49  -16.9%   56%
+  11-03                     475   -121.41   3398.08   -3.6%   77%
+
+exit reasons: {'held': 1680, 'strike-through: in': 105, 'shock exit: spot m': 44, 'stop-loss: bid 0.4': 5, 'stop-loss: bid 0.3': 4, 'stop-loss: bid 0.2': 3, 'burst: $52 bought ': 3, 'burst: $407 bought': 2}
+net by exit reason: {'strike-through: in': -552.8, 'shock exit: spot m': -88.2, 'cash-out: bid 0.07': -14.4, 'stop-loss: bid 0.4': -12.5, 'burst: $52 bought ': -8.0, 'stop-loss: bid 0.2': -8.0, 'burst: $414 bou
+DONE
+
+=== MOONSHOT RECORD AND EXITS VS HOLDING (moonshot_and_exits.py)
+crypto_moonshot: 129 bets, net $+127.54, staked $130.28, wins 24, mean per bet +0.99 (standard error 0.51)
+by day (UTC)
+  10-29          n   1 net    -0.40  wins   0 ( 0%)  mean -0.40
+  10-30          n   6 net    -0.41  wins   1 (17%)  mean -0.07
+  10-31          n  57 net   +28.56  wins  13 (23%)  mean +0.50
+  11-01          n  12 net    -1.56  wins   1 ( 8%)  mean -0.13
+  11-02          n  19 net   +77.30  wins   5 (26%)  mean +4.07
+  11-03          n  15 net   +16.77  wins   2 (13%)  mean +1.12
+  11-04          n  19 net    +7.28  wins   2 (11%)  mean +0.38
+by coin
+  KXBTC          n  39 net  +103.35  wins  10 (26%)  mean +2.65
+  KXDOGE         n  33 net    +5.62  wins   5 (15%)  mean +0.17
+  KXETH          n  11 net    -3.38  wins   0 ( 0%)  mean -0.31
+  KXSOL          n  39 net   +18.01  wins   6 (15%)  mean +0.46
+  KXXRP          n   7 net    +3.93  wins   3 (43%)  mean +0.56
+by price band
+  10-15c         n  18 net    -1.25  wins   4 (22%)  mean -0.07
+  15c+           n  26 net    +4.84  wins   7 (27%)  mean +0.19
+  5-10c          n  79 net  +125.18  wins  13 (16%)  mean +1.58
+  <5c            n   6 net    -1.24  wins   0 ( 0%)  mean -0.21
+by side
+  no             n  59 net   +65.14  wins  11 (19%)  mean +1.10
+  yes            n  70 net   +62.39  wins  13 (19%)  mean +0.89
+
+SOLD EARLY: exit net vs holding to the result (rows with an outcome)
+  strike-through:    n 105  sold   -552.85  would-have-held   -578.78  difference   +25.93
+  shock exit: spot   n  44  sold    -88.25  would-have-held    -96.35  difference    +8.10
+  stop-loss: bid 0   n  13  sold    -30.15  would-have-held    -18.76  difference   -11.38
+  cash-out: bid 0.   n  13  sold    -54.64  would-have-held    -42.13  difference   -12.51
+  burst: $52 bough   n   3  sold     -8.03  would-have-held     +3.69  difference   -11.73
+  burst: $407 boug   n   2  sold     -3.73  would-have-held     +1.47  difference    -5.20
+  burst: $414 boug   n   2  sold     -7.70  would-have-held    -11.73  difference    +4.03
+  burst: $402 boug   n   2  sold     -7.02  would-have-held     -4.47  difference    -2.56
+DONE
+
