@@ -1,0 +1,52 @@
+
+A. your entry (1) vs other minutes of the same market (0), no spread
+series        within (CV)  train BTC  train others
+KXBTC15M            0.595          -         0.597
+KXXRP15M            0.609      0.595         0.599
+KXDOGE15M           0.562      0.587         0.581
+KXETH15M            0.578      0.608         0.582
+KXWTI15M            0.543      0.546         0.564
+KXSOL15M            0.612      0.588         0.588
+KXGOLD15M           0.517      0.515         0.530
+KXNATGAS15M         0.593      0.552         0.530
+KXSILVER15M         0.449      0.557         0.558
+KXGBPUSD15M          n/a       0.716         0.735
+KXCOPPER15M          n/a       0.598         0.619
+KXUSDJPY15M          n/a       0.585         0.608
+KXUSDCAD15M          n/a       0.649         0.622
+KXEURUSD15M          n/a       0.560         0.572
+
+B. a +10c bid touch within 3 minutes, all moments (top third = the BTC/others model's highest scores)
+series        within (CV)  train BTC  train others  top-third hit vs all
+KXBTC15M            0.639          -         0.675    59% vs   43%
+KXXRP15M            0.628      0.624         0.637    50% vs   43%
+KXDOGE15M           0.708      0.696         0.709    57% vs   41%
+KXETH15M            0.584      0.605         0.631    54% vs   45%
+KXWTI15M            0.696      0.702         0.727    59% vs   39%
+KXSOL15M            0.656      0.667         0.687    52% vs   39%
+KXGOLD15M           0.611      0.623         0.650    62% vs   50%
+KXNATGAS15M         0.640      0.625         0.636    47% vs   34%
+KXSILVER15M         0.586      0.622         0.633    48% vs   39%
+KXGBPUSD15M         0.728      0.657         0.668    61% vs   42%
+KXCOPPER15M         0.557      0.640         0.640    38% vs   29%
+KXUSDJPY15M         0.710      0.707         0.702    60% vs   43%
+KXUSDCAD15M         0.533      0.556         0.586    47% vs   46%
+KXEURUSD15M          n/a       0.642         0.672    52% vs   43%
+
+C. your entries only: did the trip finish in profit?
+series        within (CV)  train BTC  train others  top-third hit vs all
+KXBTC15M             n/a           -         0.648    64% vs   54%
+KXXRP15M             n/a       0.634         0.662    69% vs   58%
+KXDOGE15M            n/a       0.572         0.611    62% vs   59%
+KXETH15M             n/a       0.591         0.577    65% vs   54%
+KXWTI15M             n/a       0.702         0.724    82% vs   66%
+KXSOL15M             n/a       0.642         0.609    75% vs   59%
+KXGOLD15M            n/a       0.540         0.593    65% vs   64%
+KXNATGAS15M          n/a       0.648         0.707    78% vs   66%
+KXSILVER15M          n/a        n/a           n/a     81% vs   70%
+KXGBPUSD15M          n/a        n/a           n/a 
+KXCOPPER15M          n/a        n/a           n/a 
+KXUSDJPY15M          n/a        n/a           n/a 
+KXUSDCAD15M          n/a        n/a           n/a 
+KXEURUSD15M          n/a        n/a           n/a 
+DONE
