@@ -628,6 +628,22 @@ def evaluate(
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the buy is above {spec.wave_pos_max:g} of the swing's range (waits for the low). {note}"
         else:
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] {note}"
+    if bet and spec.pretrend_min > -50:
+        from . import variants as _variants
+
+        try:
+            pre = _variants.pretrend_now(shot.series, shot.side, spec.pretrend_seconds, spec.pretrend_gap)
+        except Exception as exc:
+            pre = None
+            log.warning("pretrend unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if pre is None:
+            bet = False
+            note = f"the index history is too short to read the trend before the last {spec.pretrend_gap:g} s. {note}"
+        elif pre < spec.pretrend_min:
+            bet = False
+            note = f"[pretrend {pre:+.2f}] the spot's drift toward this side before the last {spec.pretrend_gap:g} s is under the lane's {spec.pretrend_min:g} typical minutes. {note}"
+        else:
+            note = f"[pretrend {pre:+.2f}] {note}"
     if variants_crypto(shot.series):
         from . import variants as _variants
 

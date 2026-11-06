@@ -565,6 +565,38 @@ def wave_now(series: str, side: str, now: float | None = None) -> dict | None:
     return wave_features(got[0], got[1], side, now) if got else None
 
 
+def pretrend_features(ts: Sequence[float], values: Sequence[float], side: str, at: float, span: float = 420.0, gap: float = 90.0) -> float | None:
+    """The bet side's drift over the span seconds that end gap seconds before the buy, in typical minutes (2026-11-06, user: a jumpy stretch is read by the trend before it). The index on a 1 s grid for 900 s; the unit is the root-mean-square one-second move times sqrt(60). Positive = the spot moved toward the bet's side. None when the history does not cover span + gap seconds."""
+    i = bisect.bisect_right(ts, at) - 1
+    if i < 0 or ts[i] < at - 10.0 or ts[0] > at - span - gap - 10.0:
+        return None
+    n = int(min(900.0, at - ts[0] - 1.0))
+    seq = []
+    for k in range(n + 1):
+        idx = bisect.bisect_right(ts, at - n + k) - 1
+        if idx < 0:
+            return None
+        seq.append(math.log(values[idx]))
+    sq = sum((b - a) ** 2 for a, b in itertools.pairwise(seq))
+    if sq <= 0 or n < 300:
+        return None
+    unit = math.sqrt(sq / n) * math.sqrt(60.0)
+    end, start = n - int(gap), n - int(gap) - int(span)
+    if start < 0:
+        return None
+    return (1.0 if side == "yes" else -1.0) * (seq[end] - seq[start]) / unit
+
+
+def pretrend_now(series: str, side: str, span: float = 420.0, gap: float = 90.0, now: float | None = None) -> float | None:
+    """pretrend_features from the in-memory index ticks of a coin, or None."""
+    index = crypto_index(series)
+    if not index:
+        return None
+    now = time.time() if now is None else now
+    got = ticks_mod.history.window(index, now - 910.0, now)
+    return pretrend_features(got[0], got[1], side, now, span, gap) if got else None
+
+
 MS_LOOKS = {"1m": 60.0, "2m": 120.0, "5m": 300.0, "15m": 900.0, "60m": 3600.0}
 
 

@@ -1,0 +1,7 @@
+Pre-jump trend gate, 613 settled live crypto bets (crypto_favorite/btc/eth/sol), 10-28..11-06. Trend = bet side's spot drift over 420 s ending 90 s before the buy, in typical minutes (scripts/pretrend_trend_test.py).
+all:        trend with us (>+1) n=314 +$64.62 (+2.6%) | flat n=231 -$93.09 (-5.2%) | against n=68 -$69.43 (-13.2%)
+first half: with us n=156 +$88.49 (+5.8%) | rest n=150 -$45.14 (-3.1%)
+second half:with us n=158 -$23.87 (-2.5%) | rest n=149 -$117.38 (-13.4%)
+Windows ending 90 s before the buy (scripts/pretrend_window_test.py), threshold +0.5, with us vs rest, all bets: 1m -2.8/-1.7%, 2m +1.2/-3.6%, 3m -3.9/-0.9%, 7m +1.2/-4.9% (not stable across lengths).
+Windows ending at the buy (1, 2, 3, 5 min) and the adaptive current-leg window did not separate.
+A filter that removes the worst bets; the with-trend group is still negative in the second half.

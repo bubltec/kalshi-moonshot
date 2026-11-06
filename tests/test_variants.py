@@ -972,3 +972,62 @@ def test_a_lane_with_a_wave_rule_buys_the_low_of_a_swing_and_shows_it(tmp_path, 
         assert d.action == "pass" and "unreadable" in d.note  # no history: no buy
     finally:
         ticks.history.clear()
+
+
+def test_pretrend_reads_the_drift_before_the_last_stretch_toward_the_bet_side():
+    import math
+
+    from kalshi_moonshot import variants
+
+    at = 10_000.0
+    ts = [at - 900.0 + k for k in range(901)]
+    # rising from 8 minutes to 90 s before the buy, flat in the last 90 s, with a little noise so the unit is not zero
+    vals = []
+    for k, t in enumerate(ts):
+        base = 100.0 * math.exp(0.0004 * min(max(t - (at - 510.0), 0.0), 420.0))
+        vals.append(base * (1.0 + 0.00002 * (-1) ** k))
+    up = variants.pretrend_features(ts, vals, "yes", at)
+    down = variants.pretrend_features(ts, vals, "no", at)
+    assert up is not None and up > 1.0 and down == pytest.approx(-up)
+    assert variants.pretrend_features(ts[-300:], vals[-300:], "yes", at) is None  # history too short
+
+
+def test_a_lane_with_a_pretrend_rule_only_buys_with_the_trend_and_shows_it(tmp_path, monkeypatch):
+    import math
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.trendy]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\npretrend_min=1.0\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    index = variants.crypto_index("KXBTC15M")
+    yes = LongShot("KXBTC15M-9", "t", "", 0.12, 0.13, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="trendy", series="KXBTC15M", side="yes")
+    no = LongShot("KXBTC15M-9", "t", "", 0.12, 0.13, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="trendy", series="KXBTC15M", side="no")
+    try:
+        for k in range(931):
+            t = now - 930.0 + k
+            drift = 0.0004 * min(max(t - (now - 510.0), 0.0), 420.0)
+            ticks.history.note(index, t, 100.0 * math.exp(drift) * (1.0 + 0.00002 * (-1) ** k))
+        d = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert d.action == "bet" and "[pretrend +" in d.note, d.note
+        d = runner.evaluate(s, None, None, store, no, estimators={"market": Fixed()})
+        assert d.action == "pass" and "[pretrend -" in d.note
+        ticks.history.clear()
+        d = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert d.action == "pass" and "too short" in d.note  # no history: no buy
+    finally:
+        ticks.history.clear()
