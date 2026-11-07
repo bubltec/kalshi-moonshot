@@ -1,0 +1,15 @@
+moments 52188 days [20759, 20760, 20761, 20762, 20763, 20764]
+scalp (+0.10 resting sell, 180 s, else the bid)
+  every candidate        n  25775 net -0.0345 ROI -13.0% | earlier test days -0.0288 (n=9140) / later -0.0376 (n=16635)
+  best 1 per slice       n   5822 net -0.0251 ROI -13.1% | earlier test days -0.0169 (n=2051) / later -0.0295 (n=3771)
+  best 2 per slice       n  11398 net -0.0272 ROI -12.8% | earlier test days -0.0207 (n=4004) / later -0.0307 (n=7394)
+  predicted net > 0      n    337 net -0.0268 ROI -45.6% | earlier test days +0.0000 (n=0) / later -0.0268 (n=337)
+  predicted net > 0.02   n      4 net -0.0345 ROI -11.4% | earlier test days +0.0000 (n=0) / later -0.0345 (n=4)
+bet to win (hold to the result)
+  every candidate        n  25775 net -0.0154 ROI  -5.8% | earlier test days -0.0017 (n=9140) / later -0.0230 (n=16635)
+  best 1 per slice       n   5822 net -0.0072 ROI  -3.1% | earlier test days -0.0283 (n=2051) / later +0.0042 (n=3771)
+  best 2 per slice       n  11398 net -0.0117 ROI  -4.8% | earlier test days -0.0133 (n=4004) / later -0.0108 (n=7394)
+  predicted net > 0      n   9846 net -0.0097 ROI  -4.2% | earlier test days -0.0281 (n=3792) / later +0.0019 (n=6054)
+  predicted net > 0.02   n   5508 net -0.0168 ROI  -7.9% | earlier test days -0.0436 (n=2322) / later +0.0028 (n=3186)
+DONE
+
