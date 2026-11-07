@@ -1,0 +1,19 @@
+60632 rows; windows 5740
+test days [20762, 20763, 20764]
+fixed 60m D + 5m F                       buys  225 won  52% vs price 0.43 net/$10 +2.45 | halves +3.00 (n=79) +2.16 (n=146) | crypto +2.89 (n=143) commodity +1.69 (n=82)
+state record 5m+60m, record >= 0.00      buys 1817 won  38% vs price 0.38 net/$10 -0.66 | halves -0.77 (n=797) -0.58 (n=1020) | crypto -0.05 (n=1211) commodity -1.88 (n=606)
+state record 5m+60m, record >= 0.05      buys  778 won  40% vs price 0.37 net/$10 +0.62 | halves -0.22 (n=318) +1.20 (n=460) | crypto +1.14 (n=529) commodity -0.49 (n=249)
+state record 5m+60m, record >= 0.10      buys  261 won  43% vs price 0.37 net/$10 +1.59 | halves +3.00 (n=79) +0.97 (n=182) | crypto +1.52 (n=186) commodity +1.75 (n=75)
+state record 5m+60m, record >= 0.20      buys  153 won  45% vs price 0.34 net/$10 +3.39 | halves +4.89 (n=52) +2.62 (n=101) | crypto +4.23 (n=92) commodity +2.12 (n=61)
+state record 5m+15m+60m directions, record >= 0.00 buys 1624 won  35% vs price 0.36 net/$10 -0.76 | halves +0.21 (n=460) -1.15 (n=1164) | crypto -0.21 (n=1080) commodity -1.86 (n=544)
+state record 5m+15m+60m directions, record >= 0.05 buys  815 won  37% vs price 0.39 net/$10 -0.48 | halves +0.30 (n=371) -1.13 (n=444) | crypto +0.22 (n=516) commodity -1.69 (n=299)
+state record 5m+15m+60m directions, record >= 0.10 buys  552 won  39% vs price 0.37 net/$10 +0.16 | halves +0.00 (n=0) +0.16 (n=552) | crypto +0.60 (n=349) commodity -0.60 (n=203)
+state record 5m+15m+60m directions, record >= 0.20 buys  228 won  36% vs price 0.31 net/$10 +1.62 | halves +5.31 (n=85) -0.57 (n=143) | crypto +1.41 (n=173) commodity +2.30 (n=55)
+state record 5m+60m directions, record >= 0.00 buys 1123 won  37% vs price 0.37 net/$10 -0.73 | halves +0.19 (n=429) -1.30 (n=694) | crypto -0.24 (n=767) commodity -1.78 (n=356)
+state record 5m+60m directions, record >= 0.05 buys  649 won  44% vs price 0.42 net/$10 +0.42 | halves +0.00 (n=0) +0.42 (n=649) | crypto +0.69 (n=445) commodity -0.16 (n=204)
+state record 5m+60m directions, record >= 0.10 buys  299 won  40% vs price 0.33 net/$10 +1.96 | halves +3.48 (n=117) +0.98 (n=182) | crypto +2.52 (n=199) commodity +0.84 (n=100)
+state record 5m+60m directions, record >= 0.20 buys  116 won  31% vs price 0.27 net/$10 +1.27 | halves +0.00 (n=0) +1.27 (n=116) | crypto +1.91 (n=79) commodity -0.09 (n=37)
+DONE
+261f904 Trend alignment: buying with all three curves rising is break-even; 5m up with the hour down pays
+4e59c80 Remove the hunt and burst-flip hedge code
+
