@@ -255,3 +255,16 @@ def test_the_top_up_does_not_chase_a_market_that_ran_away(setup, monkeypatch):
     client = RestClient(fills=[1.0], asks=[0.30, 0.40], rest_fill=0.5)
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert got.filled == 0.5 and client.sent == []
+
+
+def test_the_curve_is_checked_at_the_most_the_take_can_pay_not_at_the_bare_ask(setup, monkeypatch):
+    from kalshi_moonshot import curvemodel
+
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, model_buy=True, buy_slip=0.03, buy_retry_chase=0.05)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    seen = []
+    monkeypatch.setattr(curvemodel, "admits", lambda s_, st_, sh_, sp_, price, **k: (seen.append(price) or True, "ok"))
+    client = RestClient(fills=[1.5], asks=[0.30])
+    runner.place(s, client, store, shot, "why", 1.5, order_key="k")
+    assert seen and abs(seen[0] - 0.33) < 1e-9  # ask 0.30 + slip 0.03: the price the order may pay

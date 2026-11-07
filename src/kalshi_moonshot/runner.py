@@ -1534,7 +1534,7 @@ def _top_up_rest(s: Settings, client: KalshiClient, store: Store, shot: LongShot
 
 def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, count: float) -> float | None:
     """The limit for a second try after an immediate buy filled nothing, or None to give up. It reads the book again and prices the order off the fresh ask, but never above the first limit plus
-    `buy_retry_chase`, never outside the lane's price band, and only if the risk gate still agrees at that price: a market that ran away is not chased."""
+    `buy_retry_chase`, never outside the lane's price band, and only if the curve (model or record) and the risk gate still agree at the limit, the most the order can pay: a market that ran away is not chased."""
     try:
         ask = best_ask(client.orderbook(shot.ticker), shot.side)
     except KalshiError:
@@ -1547,16 +1547,16 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
     if spec.model_buy:  # the curve model must still say buy
         from . import curvemodel
 
-        ok_mod, why_mod = curvemodel.admits(s, store, shot, spec, ask, waited=float(spec.buy_rest_seconds))
+        ok_mod, why_mod = curvemodel.admits(s, store, shot, spec, limit, waited=float(spec.buy_rest_seconds))
         if not ok_mod:
-            log.info("buy %s %s: the resting bid did not fill and the curve model no longer says buy at %.2f (%s)", shot.ticker, shot.side, ask, why_mod)
+            log.info("buy %s %s: the resting bid did not fill and the curve model no longer says buy at %.2f (%s)", shot.ticker, shot.side, limit, why_mod)
             return None
     if spec.record_buy:  # the curve must still say buy: the spot may have moved out of the state that cleared the record while the bid rested
         from . import staterecord
 
-        ok_rec, why_rec = staterecord.admits(s, store, shot, spec, ask, waited=float(spec.buy_rest_seconds))
+        ok_rec, why_rec = staterecord.admits(s, store, shot, spec, limit, waited=float(spec.buy_rest_seconds))
         if not ok_rec:
-            log.info("buy %s %s: the resting bid did not fill and the curve no longer clears the record at %.2f (%s)", shot.ticker, shot.side, ask, why_rec)
+            log.info("buy %s %s: the resting bid did not fill and the curve no longer clears the record at %.2f (%s)", shot.ticker, shot.side, limit, why_rec)
             return None
     cost = limit * count + order_fee(limit, count)
     verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store))
