@@ -1,0 +1,28 @@
+live bets 670
+bets replayed 668 hold net $-123.19
+path-efficiency cutoffs (this bet set): 0.048 0.097 | halves split at 1793658397.439463
+SPOT cushion <= 0                  L=120: change  +26.75 sold 163 beat 110 helped 267.25 hurt 240.50 | total losers 118: hold -889.39 -> -622.14; winners sold 53 (-240.50)
+      halves: first half -20.68 (beat 47, lost 32) | second half +47.43 (beat 63, lost 21)
+      shapes: choppy +4.86 (beat 39, lost 19) | middle +47.92 (beat 44, lost 13) | straight -26.03 (beat 27, lost 21)
+AVG  cushion <= 0                  L=120: change  +31.89 sold 154 beat 109 helped 261.85 hurt 229.95 | total losers 118: hold -889.39 -> -627.54; winners sold 45 (-229.95)
+      halves: first half -14.50 (beat 47, lost 25) | second half +46.39 (beat 62, lost 20)
+      shapes: choppy +9.35 (beat 38, lost 16) | middle +47.33 (beat 44, lost 13) | straight -24.78 (beat 27, lost 16)
+10 s average cushion <= 0          L=120: change   +3.97 sold 147 beat 108 helped 203.45 hurt 199.48 | total losers 118: hold -889.39 -> -685.94; winners sold 39 (-199.48)
+      halves: first half -27.83 (beat 46, lost 22) | second half +31.79 (beat 62, lost 17)
+      shapes: choppy +1.52 (beat 39, lost 16) | middle +24.55 (beat 42, lost 9) | straight -22.10 (beat 27, lost 14)
+BLEND (10 s, then settlement avg) <= 0 L=120: change  +19.35 sold 147 beat 108 helped 224.43 hurt 205.07 | total losers 118: hold -889.39 -> -664.96; winners sold 39 (-205.07)
+      halves: first half -16.87 (beat 47, lost 22) | second half +36.23 (beat 61, lost 17)
+      shapes: choppy +13.14 (beat 38, lost 15) | middle +30.78 (beat 43, lost 10) | straight -24.56 (beat 27, lost 14)
+SPOT cushion <= 0                  L=180: change  +82.69 sold 181 beat 118 helped 371.10 hurt 288.41 | total losers 118: hold -889.39 -> -518.29; winners sold 63 (-288.41)
+      halves: first half +14.65 (beat 52, lost 36) | second half +68.05 (beat 66, lost 27)
+      shapes: choppy +34.30 (beat 40, lost 23) | middle +68.99 (beat 49, lost 18) | straight -20.60 (beat 29, lost 22)
+AVG  cushion <= 0                  L=180: change  +87.30 sold 173 beat 117 helped 365.69 hurt 278.39 | total losers 118: hold -889.39 -> -523.69; winners sold 56 (-278.39)
+      halves: first half +20.30 (beat 52, lost 30) | second half +67.01 (beat 65, lost 26)
+      shapes: choppy +38.79 (beat 39, lost 20) | middle +68.40 (beat 49, lost 18) | straight -19.88 (beat 29, lost 18)
+10 s average cushion <= 0          L=180: change  +36.15 sold 165 beat 116 helped 285.56 hurt 249.41 | total losers 118: hold -889.39 -> -603.82; winners sold 49 (-249.41)
+      halves: first half -3.19 (beat 51, lost 26) | second half +39.34 (beat 65, lost 23)
+      shapes: choppy +24.16 (beat 40, lost 20) | middle +30.95 (beat 47, lost 13) | straight -18.96 (beat 29, lost 16)
+BLEND (10 s, then settlement avg) <= 0 L=180: change  +51.54 sold 165 beat 116 helped 306.54 hurt 255.01 | total losers 118: hold -889.39 -> -582.84; winners sold 49 (-255.01)
+      halves: first half +7.77 (beat 52, lost 26) | second half +43.77 (beat 64, lost 23)
+      shapes: choppy +35.78 (beat 39, lost 19) | middle +37.18 (beat 48, lost 14) | straight -21.42 (beat 29, lost 16)
+DONE

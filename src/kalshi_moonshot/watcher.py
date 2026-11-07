@@ -745,7 +745,14 @@ class ProfitWatcher:
             return None
         self._shock_note(t, now, f"cushion {margin:+.1f} bp, {t.shock_seconds:.0f}s move {move:+.1f} bp (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{bp:.1f} bp or worse with a cushion of {margin_bp:.1f} bp or less)")
         moved = bp > 0 and worst <= -bp and margin <= margin_bp
-        crossed = t.cross_units >= 0 and margin <= t.cross_units * unit_bp
+        margin_x = margin
+        if left < 60.0 and t.cross_units >= 0:  # settlement is the 60 s average of the index: in the last minute part of it is known, the rest is taken at the spot now (the lane no longer sells a one-tick touch of the strike that the average would not carry)
+            known = [v for ts_, v in hist if t.close_ts - 60.0 <= ts_ <= now]
+            if known:
+                secs = min(60.0, max(1.0, 60.0 - left))
+                proj = (sum(known) / len(known) * secs + value * (60.0 - secs)) / 60.0
+                margin_x = math.log(proj / t.shock_ref) * sign * 1e4
+        crossed = t.cross_units >= 0 and margin_x <= t.cross_units * unit_bp
         if not (moved or crossed):
             return None
         if t.shock_trend_hold > -50:
@@ -760,7 +767,7 @@ class ProfitWatcher:
             return None
         self._shock_log(t, now, margin, move, worst, bid, 1)
         if crossed and not moved:  # the spot is on the wrong side of the strike, or within cross_units typical minutes of it, with the bid still worth selling into
-            return f"shock exit: the spot is {margin:+.1f} bp from the strike ({t.cross_units:g} typical minutes = {t.cross_units * unit_bp:.1f} bp), {left:.0f}s left, bid {bid:.2f}"
+            return f"shock exit: the settlement is {margin_x:+.1f} bp from the strike ({t.cross_units:g} typical minutes = {t.cross_units * unit_bp:.1f} bp; spot {margin:+.1f}), {left:.0f}s left, bid {bid:.2f}"
         return f"shock exit: spot moved {-worst:.1f} bp against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:

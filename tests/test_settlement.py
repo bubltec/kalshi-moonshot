@@ -1703,9 +1703,9 @@ def test_a_strike_cross_sells_a_spot_on_the_wrong_side_whatever_the_move_was(tmp
     w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_units=2.0\nshock_margin_units=0.6\ncross_units=0.0\n")
     t = w.targets[("KXBTC15M-1", "guarded")]
     assert t.cross_units == 0.0
-    for k in range(125, 50, -5):
+    for k in range(200, 100, -5):
         w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
-    now = close - 50
+    now = close - 100  # more than a minute left: the settlement average has not started, the cross reads the spot
     monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0010)  # a 10 bp typical minute: the shock needs a 20 bp move
     w._spot["BRTI"] = (now, 100.01)  # 9 bp down, 1 bp above the strike: no shock, no cross
     assert w._shock_hit(t, 0.62, now, now) is None
@@ -1715,6 +1715,24 @@ def test_a_strike_cross_sells_a_spot_on_the_wrong_side_whatever_the_move_was(tmp
     assert w._shock_hit(t, 0.03, now, now) is None  # the bid under the shock floor: nothing left to sell into
     monkeypatch.setattr(variants, "unit_index", lambda *a, **k: None)  # variance unreadable: no assumption, no sale
     assert w._shock_hit(t, 0.62, now, now) is None
+
+
+def test_in_the_last_minute_the_cross_reads_the_projected_settlement_average_not_one_tick(tmp_path, monkeypatch):
+    from kalshi_moonshot import variants
+
+    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_units=2.0\nshock_margin_units=0.6\ncross_units=0.0\n")
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0010)
+    for k in range(125, 47, -1):  # the last minute so far sat well above the strike (a YES bet is winning)
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
+    now = close - 47
+    w._spot["BRTI"] = (now, 99.99)  # one tick touches 1 bp under the strike: the settlement average is still above it
+    assert w._shock_hit(t, 0.62, now, now) is None
+    w._shock_hist["BRTI"].clear()  # the minute so far sat under the strike: the average agrees with the spot
+    for k in range(125, 47, -1):
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 99.90})
+    w._spot["BRTI"] = (now, 99.99)
+    assert w._shock_hit(t, 0.62, now, now) is not None
 
 
 def test_a_lane_without_cross_units_does_not_sell_a_cross(tmp_path, monkeypatch):
