@@ -701,6 +701,31 @@ def evaluate(
             else:
                 bet = False
                 note = f"multi-scale varieties {tag} do not match the lane's {', '.join(spec.ms_rule)}. {note}"
+    if bet and spec.record_buy:
+        from . import staterecord, variants
+        from . import ticks as ticks_mod
+
+        try:
+            ms = variants.multiscale_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, staterecord.SCALES, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
+        except Exception as exc:
+            ms = None
+            log.warning("state record: varieties unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        record = staterecord.load(s)
+        state = staterecord.state_key({sc: v["variety"] for sc, v in ms.items()}) if ms else None
+        if state is None:
+            bet = False
+            note = f"state record: the varieties are unreadable for {shot.ticker}. {note}"
+        elif record is None:
+            bet = False
+            note = f"state record: no record built yet (state {state}). {note}"
+        else:
+            n_state, net_state = staterecord.edge(record, state, shot.ask)
+            tag = f"state {state}, record {net_state:+.2f} per $1 over {n_state} markets"
+            if n_state >= spec.record_min_n and net_state >= spec.record_min:
+                note = f"[{tag}] {note}"
+            else:
+                bet = False
+                note = f"state record: {tag} is under the lane's {spec.record_min:g} over {spec.record_min_n} markets. {note}"
     if bet and spec.skip_other_varieties:
         from . import ticks as ticks_mod
         from . import variants

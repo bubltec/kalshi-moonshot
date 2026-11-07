@@ -9,6 +9,7 @@
 5. **Shadow first, then live.** A new rule logs "would do X" with its curve reading, is scored against the bets that followed, and runs for at least a week of live bets before anyone turns it on. The live switch is the user's. Paper before real money.
 6. **Rules retire.** Every shadow rule keeps a rolling score against what happened. A rule whose score turns negative over its window is flagged in the log and stops being proposed.
 7. **Keep the evidence.** Scripts in `scripts/`, results in `studies/results/` (dated), the question and the answer in the commit message. A claim made in chat is backed by a file here or it is marked as unverified.
+8. **The main strategy is the state record.** A lane buys a curve state because that state's own recorded result paid (the shrunk net per dollar staked, after the fee, over enough earlier markets at the buy's price band), not because a person picked it. States are curve readings (varieties at several scales), never a coin, a commodity or a market. The record is rebuilt from the tape on a schedule (`src/kalshi_moonshot/staterecord.py`, lane field `record_buy`). A lane that runs against this (a hand-picked variety or price rule, a long-shot scalp with no record behind it) is retired or changed unless it was positive over the last 36 hours. Code that serves only a retired rule is removed, not left dormant.
 
 ## Working rules
 
