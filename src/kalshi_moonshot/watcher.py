@@ -1661,6 +1661,13 @@ class ProfitWatcher:
                 store = self.store_factory()
                 curveexit.shadow_pass(s, store, self._tape_db(), specs)
                 curveexit.run_score(s, store)
+            if any(sp.confidence_shadow for sp in specs.values()):
+                from . import confidence
+
+                store = self.store_factory()
+                confidence.maybe_refit(s)
+                confidence.shadow_pass(s, store, self._tape_db(), specs, lambda tk: self._market_static(tk).get("floor_strike"))
+                confidence.run_score(s, store)
         except Exception:
             log.warning("watcher: the curve shadow pass failed", exc_info=True)
         finally:
