@@ -1,0 +1,36 @@
+rows 50346 markets 2427
+A. best 25 scale pairs (minutes) by net per $10 ticket on the later days
+ 3m+21m directions                     bar 0.20 buys   56 won  43% vs 0.33 net/$10 +3.76 | halves +1.05 (n=28) / +6.46 (n=28)
+ 1m+ 5m directions                     bar 0.20 buys   52 won  44% vs 0.31 net/$10 +3.74 | halves +1.51 (n=33) / +7.62 (n=19)
+ 1m+34m first-scale chop + directions  bar 0.20 buys   85 won  39% vs 0.27 net/$10 +3.72 | halves +4.50 (n=49) / +2.65 (n=36)
+ 1m+34m directions                     bar 0.20 buys   85 won  39% vs 0.27 net/$10 +3.72 | halves +4.50 (n=49) / +2.65 (n=36)
+ 8m+55m first-scale chop + directions  bar 0.20 buys  159 won  38% vs 0.29 net/$10 +3.46 | halves +4.45 (n=93) / +2.07 (n=66)
+ 2m+13m first-scale chop + directions  bar 0.20 buys  140 won  36% vs 0.27 net/$10 +2.77 | halves +4.83 (n=48) / +1.69 (n=92)
+ 3m+21m directions                     bar 0.10 buys  100 won  40% vs 0.31 net/$10 +2.66 | halves +1.05 (n=28) / +3.28 (n=72)
+ 1m+21m directions                     bar 0.20 buys  121 won  36% vs 0.27 net/$10 +2.44 | halves +2.17 (n=67) / +2.79 (n=54)
+34m+55m first-scale chop + directions  bar 0.20 buys  147 won  35% vs 0.28 net/$10 +2.43 | halves +3.12 (n=53) / +2.04 (n=94)
+34m+55m directions                     bar 0.20 buys  191 won  35% vs 0.28 net/$10 +2.33 | halves +3.51 (n=113) / +0.61 (n=78)
+ 2m+21m first-scale chop + directions  bar 0.20 buys   97 won  36% vs 0.28 net/$10 +2.28 | halves -0.74 (n=37) / +4.13 (n=60)
+13m+55m directions                     bar 0.10 buys  340 won  38% vs 0.31 net/$10 +2.19 | halves +2.75 (n=195) / +1.42 (n=145)
+ 1m+55m directions                     bar 0.10 buys  352 won  42% vs 0.35 net/$10 +2.06 | halves +2.15 (n=190) / +1.96 (n=162)
+21m+55m directions                     bar 0.20 buys  204 won  35% vs 0.28 net/$10 +1.98 | halves +4.62 (n=105) / -0.81 (n=99)
+21m+55m directions                     bar 0.10 buys  339 won  36% vs 0.29 net/$10 +1.98 | halves +1.94 (n=205) / +2.05 (n=134)
+ 2m+ 3m first-scale chop + directions  bar 0.20 buys   64 won  39% vs 0.31 net/$10 +1.95 | halves +0.36 (n=30) / +3.36 (n=34)
+ 2m+34m first-scale chop + directions  bar 0.10 buys  292 won  39% vs 0.33 net/$10 +1.95 | halves +1.56 (n=160) / +2.42 (n=132)
+ 1m+55m first-scale chop + directions  bar 0.20 buys  205 won  34% vs 0.28 net/$10 +1.83 | halves +1.98 (n=104) / +1.68 (n=101)
+ 1m+55m directions                     bar 0.20 buys  183 won  34% vs 0.28 net/$10 +1.82 | halves +2.69 (n=69) / +1.28 (n=114)
+ 3m+ 8m directions                     bar 0.10 buys  174 won  36% vs 0.30 net/$10 +1.71 | halves -0.57 (n=82) / +3.74 (n=92)
+ 2m+ 5m directions                     bar 0.20 buys   51 won  33% vs 0.28 net/$10 +1.70 | halves +0.59 (n=33) / +3.74 (n=18)
+21m+55m first-scale chop + directions  bar 0.10 buys  292 won  42% vs 0.35 net/$10 +1.68 | halves +2.57 (n=158) / +0.64 (n=134)
+21m+55m first-scale chop + directions  bar 0.20 buys  130 won  33% vs 0.28 net/$10 +1.68 | halves +3.26 (n=47) / +0.79 (n=83)
+ 1m+ 5m first-scale chop + directions  bar 0.20 buys  158 won  35% vs 0.30 net/$10 +1.67 | halves +1.15 (n=103) / +2.64 (n=55)
+ 3m+55m directions                     bar 0.10 buys  296 won  34% vs 0.29 net/$10 +1.65 | halves +1.86 (n=169) / +1.37 (n=127)
+pairs positive overall and in both halves: 47 of 125 (a quarter would be expected by chance)
+the old pair 5m+55m for comparison: ['directions bar 0.10: buys 308 net +0.93', 'first-scale chop + directions bar 0.10: buys 370 net +0.70', 'directions bar 0.20: buys 87 net -2.17', 'first-scale chop + directions bar 0.20: buys 78 net -2.78']
+B. ridge on the slope and variability at all nine scales + price + spread: realised bet-to-win net on the test days
+  top   5%: n  1284 net/$10 +1.53 ROI +37.8% | halves +2.73 (n=674) / +0.22 (n=610)
+  top  10%: n  2568 net/$10 +1.06 ROI +25.5% | halves +1.53 (n=1340) / +0.54 (n=1228)
+  top  20%: n  5137 net/$10 +0.71 ROI +16.8% | halves +0.83 (n=2674) / +0.57 (n=2463)
+  top 100%: n 25690 net/$10 -0.34 ROI  -7.5% | halves -0.11 (n=12877) / -0.57 (n=12813)
+DONE
+
