@@ -17,6 +17,7 @@ import statistics
 
 from kalshi_moonshot import config, db, variants
 from kalshi_moonshot.store import Store
+from kalshi_moonshot.strategy import fee_per_contract as fee
 
 os.nice(15)
 MOVE = 0.10
@@ -140,10 +141,22 @@ for ser in CRYPTO:
                 f["amp15_tm"] = (max(x for x in g[k - 900 : k + 1] if x) / min(x for x in g[k - 900 : k + 1] if x) - 1.0) and math.log(max(x for x in g[k - 900 : k + 1] if x) / min(x for x in g[k - 900 : k + 1] if x)) / unit
                 j0 = bisect.bisect_left(ts, t - 300.0)
                 steps = [ask[a + 1] - ask[a] for a in range(j0, i) if a + 1 <= i]
+                j120 = bisect.bisect_left(ts, t - 120.0)
+                j60 = bisect.bisect_left(ts, t - 60.0)
+                seg_hi = max(ask[j120 : i + 1])
+                seg_lo = min(ask[j60 : i + 1])
+                f["drop"] = seg_hi - seg_lo  # the dip: from the high of the last 120 s to the low of the last 60 s
+                f["bounce"] = ask[i] - seg_lo  # how far the ask has already come back up off that low
                 f["contract_vol"] = (sum(x * x for x in steps) / len(steps)) ** 0.5 if len(steps) > 5 else 0.0
                 f["waves_so_far"] = sum(1 for m, h in zz if ts[h] < t)
                 j1 = bisect.bisect_right(ts, t + FWD)
                 hit = any(ts[j] >= ts[i] + 3.0 and ts[j] <= close - 20.0 and bid[j] >= ask[i] + MOVE - 1e-9 for j in range(i + 1, min(j1, end_all + 1)))
+                # the scalp as a policy: buy at this ask (taker fee), a resting sell at +0.10 (no fee) for FWD seconds, else sell at the bid then (taker fee)
+                last = min(j1, end_all + 1) - 1
+                if hit:
+                    f["pnl"] = MOVE - fee(ask[i])
+                else:
+                    f["pnl"] = bid[last] - ask[i] - fee(ask[i]) - (fee(bid[last]) if bid[last] > 0 else 0.0)
                 moments.append((half, hit, f))
         census["markets_with_wave"] += 1 if market_waves else 0
         census["waves"] += market_waves
@@ -170,6 +183,8 @@ BINS = {
     "waves_so_far": [0.5, 1.5, 2.5],
     "amp15_tm": [2.0, 4.0, 6.0, 9.0],
     "spread": [0.011, 0.021, 0.041],
+    "drop": [0.03, 0.06, 0.10, 0.15],
+    "bounce": [0.005, 0.015, 0.03, 0.05],
 }
 print("\nlift = share of moments in the bin followed by a 10c wave / the base share; halves are the lift in the first and second half of the days")
 print(f"{'condition':14s} {'bin':18s} {'n':>7s} {'share':>6s} {'lift':>5s}   half1 lift (n) / half2 lift (n)")
@@ -188,4 +203,44 @@ for name, cuts in BINS.items():
             parts.append(f"{(sum(sub) / len(sub)) / b:4.2f} ({len(sub)})" if sub and b else "n/a")
         label = f"[{lo:g}, {hi:g})".replace("-1000000000", "-inf").replace("1000000000", "inf")
         print(f"{name:14s} {label:18s} {len(rs):7d} {100 * sh:5.1f}% {sh / base:5.2f}   {parts[0]} / {parts[1]}")
+
+print("\nthe scalp as a policy (buy the lowest-priced side at this ask, resting sell at +0.10, else sell at the bid after 180 s or 20 s before the close; both taker fees counted): net per contract and per dollar staked")
+print(f"{'condition':14s} {'bin':18s} {'n':>7s} {'hit%':>5s} {'net/contract':>12s} {'ROI':>7s}   half1 net (n) / half2 net (n)")
+allm = [(hf, f) for hf, _h, f in moments]
+print(f"{'every moment':14s} {'':18s} {len(allm):7d} {100 * base:4.0f}% {sum(f['pnl'] for _, f in allm) / len(allm):+12.4f} {100 * sum(f['pnl'] for _, f in allm) / sum(f['ask'] for _, f in allm):+6.1f}%")
+for name, cuts in BINS.items():
+    edges = [-1e9, *cuts, 1e9]
+    for lo, hi in itertools.pairwise(edges):
+        rs = [(hf, h, f) for hf, h, f in moments if lo <= f[name] < hi]
+        if len(rs) < 300:
+            continue
+        a = [f["pnl"] for hf, _h, f in rs if hf == 0]
+        b = [f["pnl"] for hf, _h, f in rs if hf == 1]
+        label = f"[{lo:g}, {hi:g})".replace("-1000000000", "-inf").replace("1000000000", "inf")
+        print(f"{name:14s} {label:18s} {len(rs):7d} {100 * sum(1 for _, h, _ in rs if h) / len(rs):4.0f}% {sum(f['pnl'] for _, _, f in rs) / len(rs):+12.4f} {100 * sum(f['pnl'] for _, _, f in rs) / sum(f['ask'] for _, _, f in rs):+6.1f}%   {sum(a) / max(len(a), 1):+.4f} ({len(a)}) / {sum(b) / max(len(b), 1):+.4f} ({len(b)})")
+print("\ncombinations chosen after reading the lifts above (so they are in-sample until a later day confirms them):")
+COMBOS = {
+    "z>=-1.5, eff5<0.10": lambda f: f["z_tm"] >= -1.5 and f["eff5"] < 0.10,
+    "z>=-1.5, eff5<0.10, ask 0.25-0.50": lambda f: f["z_tm"] >= -1.5 and f["eff5"] < 0.10 and 0.25 <= f["ask"] < 0.50,
+    "z>=-1.5, eff5<0.10, ask 0.25-0.50, contract_vol>=0.01": lambda f: f["z_tm"] >= -1.5 and f["eff5"] < 0.10 and 0.25 <= f["ask"] < 0.50 and f["contract_vol"] >= 0.01,
+    "z>=-1.5, eff5<0.10, ask 0.25-0.50, amp15<6": lambda f: f["z_tm"] >= -1.5 and f["eff5"] < 0.10 and 0.25 <= f["ask"] < 0.50 and f["amp15_tm"] < 6,
+}
+for name, fn in COMBOS.items():
+    rs = [(hf, h, f) for hf, h, f in moments if fn(f)]
+    if not rs:
+        continue
+    a = [f["pnl"] for hf, _h, f in rs if hf == 0]
+    b = [f["pnl"] for hf, _h, f in rs if hf == 1]
+    print(f"{name:56s} n {len(rs):6d} hit {100 * sum(1 for _, h, _ in rs if h) / len(rs):3.0f}% net/contract {sum(f['pnl'] for _, _, f in rs) / len(rs):+.4f} ROI {100 * sum(f['pnl'] for _, _, f in rs) / sum(f['ask'] for _, _, f in rs):+5.1f}% | halves {sum(a) / max(len(a), 1):+.4f} ({len(a)}) / {sum(b) / max(len(b), 1):+.4f} ({len(b)})")
+
+print("\nbuying the turn (a dip of at least D from the 120 s high to the 60 s low, and the ask already b above that low); the same policy, net per contract and ROI, in two halves. D and b are a grid, not a choice made after the fact:")
+print(f"{'dip D':>6s} {'bounce b':>9s} {'n':>7s} {'hit%':>5s} {'net/contract':>12s} {'ROI':>7s}   half1 net (n) / half2 net (n)")
+for D in (0.0, 0.05, 0.10, 0.15):
+    for b in (0.0, 0.01, 0.02, 0.04):
+        rs = [(hf, h, f) for hf, h, f in moments if f["drop"] >= D - 1e-9 and f["bounce"] >= b - 1e-9]
+        if len(rs) < 200:
+            continue
+        a = [f["pnl"] for hf, _h, f in rs if hf == 0]
+        c2 = [f["pnl"] for hf, _h, f in rs if hf == 1]
+        print(f"{D:6.2f} {b:9.2f} {len(rs):7d} {100 * sum(1 for _, h, _ in rs if h) / len(rs):4.0f}% {sum(f['pnl'] for _, _, f in rs) / len(rs):+12.4f} {100 * sum(f['pnl'] for _, _, f in rs) / sum(f['ask'] for _, _, f in rs):+6.1f}%   {sum(a) / max(len(a), 1):+.4f} ({len(a)}) / {sum(c2) / max(len(c2), 1):+.4f} ({len(c2)})")
 print("DONE")
