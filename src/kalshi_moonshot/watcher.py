@@ -161,6 +161,7 @@ class Target:
     shock_margin_bp: float = 5.0
     shock_units: float = 0.0  # lane shock_units: the move in typical minutes (replaces shock_bp)
     shock_margin_units: float = 0.0
+    cross_units: float = -1.0  # lane cross_units: sell when the cushion is at or under this many typical minutes (-1 = off)
     shock_bid_max: float = 0.0  # the highest bid the shock exit sells into (0 = SHOCK_BID[1])
     shock_last: float = 120.0
     shock_trend_hold: float = -99.0  # lane shock_trend_hold: no shock sale while the pre-spike trend is this far with the bet (-99 = off)
@@ -662,7 +663,7 @@ class ProfitWatcher:
 
     def _shock_on_index(self, index_id: str, now: float) -> None:
         with self._lock:
-            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.wrong_bp > 0)]
+            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0)]
         for t in hits:
             if t.last_ts <= 0 or t.cur_bid <= 0:
                 continue
@@ -695,7 +696,7 @@ class ProfitWatcher:
 
     def _shock_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """The shock exit: in the last shock_last seconds, the spot has moved shock_bp basis points against this bet over the last shock_seconds and sits within shock_margin_bp of the reference, so a sale is better than the close. Needs a bid in SHOCK_BID, a fresh spot and a quote that is not older than the tick."""
-        if (t.shock_bp <= 0 and t.shock_units <= 0) or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index:
+        if (t.shock_bp <= 0 and t.shock_units <= 0 and t.cross_units < 0) or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index:
             return None
         left = t.close_ts - now
         if left <= SETTLE_LAST or left > t.shock_last + max(t.shock_memory, 0.0):
@@ -727,20 +728,25 @@ class ProfitWatcher:
         if left > t.shock_last:
             return None
         bp, margin_bp = t.shock_bp, t.shock_margin_bp
-        if t.shock_units > 0:  # the lane reads the move in the market's own variance: the threshold is that many typical minutes right now
+        unit_bp = 0.0
+        if t.shock_units > 0 or t.cross_units >= 0:  # the lane reads the move in the market's own variance: the threshold is that many typical minutes right now
             unit = variants.unit_index(t.shock_index, now)
             if unit is None:
                 self._shock_note(t, now, f"not usable: the typical minute of {t.shock_index} cannot be read (history under 300 s or stale)")
                 return None
-            bp = t.shock_units * unit * 1e4
+            unit_bp = unit * 1e4
+            if t.shock_units > 0:
+                bp = t.shock_units * unit_bp
             if t.shock_margin_units > 0:
-                margin_bp = t.shock_margin_units * unit * 1e4
+                margin_bp = t.shock_margin_units * unit_bp
         self._shock_log(t, now, margin, move, worst, bid, 0)
         if bid < SHOCK_BID[0] or bid > (t.shock_bid_max or SHOCK_BID[1]) or quote_ts < spot_ts - THROUGH_QUOTE:
             self._shock_note(t, now, f"not usable: bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick; cushion {margin:+.1f} bp, worst move {worst:+.1f} bp")
             return None
         self._shock_note(t, now, f"cushion {margin:+.1f} bp, {t.shock_seconds:.0f}s move {move:+.1f} bp (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{bp:.1f} bp or worse with a cushion of {margin_bp:.1f} bp or less)")
-        if worst > -bp or margin > margin_bp:
+        moved = bp > 0 and worst <= -bp and margin <= margin_bp
+        crossed = t.cross_units >= 0 and margin <= t.cross_units * unit_bp
+        if not (moved or crossed):
             return None
         if t.shock_trend_hold > -50:
             trend = variants.pretrend_index(t.shock_index, t.side, 420.0, 90.0, now)
@@ -753,6 +759,8 @@ class ProfitWatcher:
                 self._shock_log(t, now, margin, move, worst, bid, 2)
             return None
         self._shock_log(t, now, margin, move, worst, bid, 1)
+        if crossed and not moved:  # the spot is on the wrong side of the strike, or within cross_units typical minutes of it, with the bid still worth selling into
+            return f"shock exit: the spot is {margin:+.1f} bp from the strike ({t.cross_units:g} typical minutes = {t.cross_units * unit_bp:.1f} bp), {left:.0f}s left, bid {bid:.2f}"
         return f"shock exit: spot moved {-worst:.1f} bp against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
@@ -1251,7 +1259,7 @@ class ProfitWatcher:
                     held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0
                     if held.close_ts <= 0:
                         held.close_ts = close
-            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.wrong_side_bp > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
+            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
                 sid = biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
@@ -1266,9 +1274,9 @@ class ProfitWatcher:
                     held.shock_trend_hold = spec.shock_trend_hold
                     self._shock_hist.setdefault(sid, deque())
                     self._seed_shock_history(sid)
-                    if (spec.shock_bp > 0 or spec.shock_units > 0) and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
+                    if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0) and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
                         held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
-                        held.shock_units, held.shock_margin_units = spec.shock_units, spec.shock_margin_units
+                        held.shock_units, held.shock_margin_units, held.cross_units = spec.shock_units, spec.shock_margin_units, spec.cross_units
                         held.shock_bid_max = spec.shock_bid_max
                         held.shock_log_only = spec.shock_log_only
                     if spec.wrong_side_bp > 0 and spec.wrong_side_seconds > 0 and (not spec.wrong_side_series or ticker.split("-")[0] in spec.wrong_side_series):

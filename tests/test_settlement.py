@@ -1697,6 +1697,40 @@ def test_a_shock_exit_in_typical_minutes_scales_with_the_markets_own_variance(tm
     assert w._shock_hit(t, 0.62, now, now) is None
 
 
+def test_a_strike_cross_sells_a_spot_on_the_wrong_side_whatever_the_move_was(tmp_path, monkeypatch):
+    from kalshi_moonshot import variants
+
+    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_units=2.0\nshock_margin_units=0.6\ncross_units=0.0\n")
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert t.cross_units == 0.0
+    for k in range(125, 50, -5):
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
+    now = close - 50
+    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0010)  # a 10 bp typical minute: the shock needs a 20 bp move
+    w._spot["BRTI"] = (now, 100.01)  # 9 bp down, 1 bp above the strike: no shock, no cross
+    assert w._shock_hit(t, 0.62, now, now) is None
+    w._spot["BRTI"] = (now, 99.99)  # 1 bp under the strike: the cross sells although the move is still under the shock bar
+    got = w._shock_hit(t, 0.62, now, now)
+    assert got is not None and "from the strike" in got
+    assert w._shock_hit(t, 0.03, now, now) is None  # the bid under the shock floor: nothing left to sell into
+    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: None)  # variance unreadable: no assumption, no sale
+    assert w._shock_hit(t, 0.62, now, now) is None
+
+
+def test_a_lane_without_cross_units_does_not_sell_a_cross(tmp_path, monkeypatch):
+    from kalshi_moonshot import variants
+
+    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_units=2.0\nshock_margin_units=0.6\n")
+    t = w.targets[("KXBTC15M-1", "guarded")]
+    assert t.cross_units == -1.0
+    for k in range(125, 50, -5):
+        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
+    now = close - 50
+    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0010)
+    w._spot["BRTI"] = (now, 99.99)
+    assert w._shock_hit(t, 0.62, now, now) is None
+
+
 def test_the_typical_minute_is_read_from_the_ticks_on_a_one_second_grid(monkeypatch):
     import math
 
