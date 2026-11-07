@@ -86,7 +86,7 @@ def test_a_model_buy_lane_buys_only_what_the_model_likes(tmp_path, monkeypatch):
         assert low.action == "pass" and "under the bar" in low.note
         ticks.history.clear()
         unread = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert unread.action == "pass" and "unreadable" in unread.note
+        assert unread.action == "pass" and "no tick history" in unread.note
     finally:
         ticks.history.clear()
         curvemodel._cache.update(mtime=None, data=None)

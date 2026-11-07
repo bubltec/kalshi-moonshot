@@ -34,19 +34,25 @@ _fitting: subprocess.Popen | None = None
 _cache: dict[str, Any] = {"mtime": None, "data": None}
 
 
-def features(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int) -> list[float] | None:
-    """The 18 curve readings at index k of a one-second log-price grid g (sq: running sum of squared one-second log steps). None when a look-back is not covered or has no spread."""
+def features(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None) -> list[float] | None:
+    """The 18 curve readings at index k of a one-second log-price grid g (sq: running sum of squared one-second log steps). None when a look-back is not covered or has no spread; `why` then gets the reason."""
     out: list[float] = []
     for m in FIB:
         look = 60 * m
         if k - look < 0 or g[k] is None or g[k - look] is None:
+            if why is not None:
+                why.append(f"no price {m} min ago")
             return None
         rate = math.sqrt((sq[k] - sq[k - look]) / look)
         if rate <= 0:
+            if why is not None:
+                why.append(f"the spot did not move at all over {m} min")
             return None
         unit = rate * math.sqrt(look)
         seg = [(x - strike_log) * sign for x in g[k - look : k + 1 : m] if x is not None]
         if len(seg) < 8:
+            if why is not None:
+                why.append(f"too few prices over {m} min")
             return None
         mean = sum(seg) / len(seg)
         sd = math.sqrt(sum((x - mean) ** 2 for x in seg) / len(seg))
@@ -157,13 +163,21 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
     strike = ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker)
     now = time.time()
     got = ticks_mod.history.window(index, now - 60 * FIB[-1] - 40.0, now) if index else None
-    grid = live_grid(got[0], got[1], now) if got else None
-    if grid is None or not strike or strike <= 0:
-        return False, f"curve model: the curve is unreadable for {shot.ticker}."
-    g, sq, k = grid
-    read = features(g, sq, k, math.log(strike), 1 if shot.side == "yes" else -1)
+    if not index:
+        return False, f"curve model: no settlement index is known for {shot.series}."
+    if not got or not got[0]:
+        return False, f"curve model: no tick history in memory for {index}."
+    if not strike or strike <= 0:
+        return False, f"curve model: no strike known yet for {shot.ticker}."
+    if got[0][0] > now - 60 * FIB[-1] - 20.0:
+        return False, f"curve model: only {now - got[0][0]:.0f}s of {index} history, the 55-minute look-back needs {60 * FIB[-1]}s."
+    if got[0][-1] < now - 10.0:
+        return False, f"curve model: the last {index} tick is {now - got[0][-1]:.0f}s old."
+    grid = live_grid(got[0], got[1], now)
+    why: list[str] = []
+    read = features(grid[0], grid[1], grid[2], math.log(strike), 1 if shot.side == "yes" else -1, why) if grid else None
     if read is None:
-        return False, f"curve model: the curve is unreadable for {shot.ticker}."
+        return False, f"curve model: the curve cannot be read for {shot.ticker} ({why[0] if why else 'unreadable history'})."
     net = predict(model, read, ask)
     cut = model["cuts"].get(f"{spec.model_top:g}")
     if cut is None:
