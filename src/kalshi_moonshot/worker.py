@@ -831,7 +831,9 @@ class Worker:
         s = self.s
         if not s.history_enabled:
             return "history off"
-        series = [f"{i.prefix}15M" for i in load_instruments(s.data_dir) if "15M" in i.suffixes]
+        from .kalshiws import crypto_15m_series
+
+        series = list(dict.fromkeys([f"{i.prefix}15M" for i in load_instruments(s.data_dir) if "15M" in i.suffixes] + crypto_15m_series()))
         added = history.ingest(
             self.client, self.store, series, windows=200, max_new=s.history_batch, refresh=True
         )

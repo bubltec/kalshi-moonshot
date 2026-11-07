@@ -365,14 +365,15 @@ def test_a_lane_buys_only_in_its_volatility_regime_and_behind_the_strike(tmp_pat
         volregime.regime = volregime.VolRegime()
 
 
-def test_the_record_only_crypto_series_have_an_index_but_never_reach_the_ledger_or_the_gates():
+def test_every_coin_with_an_index_is_traded_and_only_ton_is_record_only():
     from kalshi_moonshot import kalshiws
 
     for series, index in (("KXADA15M", "ADAUSD_RTI"), ("KXBCH15M", "BCHUSD_RTI"), ("KXBNB15M", "BNBUSD_RTI"), ("KXHYPE15M", "HYPEUSD_RTI"), ("KXNEAR15M", "NEARUSD_RTI"), ("KXZEC15M", "ZECUSD_RTI")):
-        assert kalshiws.index_for_series(series) == index and series in kalshiws.RECORD_ONLY
+        assert kalshiws.index_for_series(series) == index and series not in kalshiws.RECORD_ONLY and series in kalshiws.crypto_15m_series()
     assert kalshiws.index_for_series("KXTON15M") is None and "KXTON15M" in kalshiws.RECORD_ONLY  # no spot index: its quotes only
+    assert "KXTON15M" not in kalshiws.crypto_15m_series()
     assert not ({"KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M"} & kalshiws.RECORD_ONLY)
-    assert "ADA" not in variants.COINS.values()  # the volatility regime only measures the coins that are traded
+    assert "ADA" not in variants.COINS.values()  # the volatility regime still measures only the five coins it was fit on
 
 
 def test_the_volatility_regime_updates_from_a_history_warmed_for_eight_hours(tmp_path):

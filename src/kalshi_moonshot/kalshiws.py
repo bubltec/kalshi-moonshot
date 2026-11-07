@@ -37,7 +37,12 @@ INDEX_FOR = {
     # 2026-11-04: recorded to study, not traded or scored (RECORD_ONLY). The ids were checked against the stream (40 ticks in 40 s each); TON has no index id there, so its quotes are recorded without a spot.
     "KXADA": "ADAUSD_RTI", "KXBCH": "BCHUSD_RTI", "KXBNB": "BNBUSD_RTI", "KXHYPE": "HYPEUSD_RTI", "KXNEAR": "NEARUSD_RTI", "KXZEC": "ZECUSD_RTI",
 }
-RECORD_ONLY = frozenset({"KXADA15M", "KXBCH15M", "KXBNB15M", "KXHYPE15M", "KXNEAR15M", "KXTON15M", "KXZEC15M"})  # crypto 15-minute series that are only recorded: the ledger, the gates and the lanes leave them out until each has been studied
+RECORD_ONLY = frozenset({"KXTON15M"})  # crypto 15-minute series that are only recorded. 2026-11-07 (user: all the coins live): ADA, BCH, BNB, HYPE, NEAR and ZEC leave the list; TON has no spot index here, so its curve cannot be read and its quotes are only recorded
+
+
+def crypto_15m_series() -> list[str]:
+    """Every crypto 15-minute series whose settlement index we read: the history job stores their windows (strikes, results) for the state record."""
+    return [f"{prefix}15M" for prefix in INDEX_FOR]
 
 
 def index_for_series(series: str) -> str | None:

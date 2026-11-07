@@ -377,7 +377,9 @@ def cmd_history(s: config.Settings, args: argparse.Namespace) -> int:
     from .commodities import load_instruments
 
     store = Store(s.db_path, s.exclude_versions)
-    series = [f"{i.prefix}15M" for i in load_instruments(s.data_dir) if "15M" in i.suffixes]
+    from .kalshiws import crypto_15m_series
+
+    series = list(dict.fromkeys([f"{i.prefix}15M" for i in load_instruments(s.data_dir) if "15M" in i.suffixes] + crypto_15m_series()))
     if args.series:
         series = [x for x in series if x in args.series.split(",")]
     client = _client(s)
