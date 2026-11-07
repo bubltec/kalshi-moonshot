@@ -1,0 +1,36 @@
+rows 50375 markets 2427
+67th percentile cutoffs of the variability (typical moves of the look-back): {'5m-var': 0.361, '5m-res': 0.265, '60m-var': 0.384, '60m-res': 0.267}
+best 25 of the grid by net per $10 ticket on the later days (both halves shown); the shape, UP and DOWN degrees, the bar, buys, win rate vs price paid
+dir5+dir60+chop60            up 70 down 45 bar 0.20 buys  103 won  39% vs 0.26 net/$10 +4.51 | halves +3.14 (n=44) / +5.54 (n=59)
+dir5+dir60+chop60            up 60 down 45 bar 0.20 buys  103 won  39% vs 0.26 net/$10 +4.51 | halves +3.14 (n=44) / +5.54 (n=59)
+dir5+dir60+chop60            up 45 down 45 bar 0.20 buys  119 won  38% vs 0.26 net/$10 +4.09 | halves +2.09 (n=54) / +5.74 (n=65)
+dir5+dir60+chop60            up 30 down 45 bar 0.20 buys  199 won  39% vs 0.29 net/$10 +3.18 | halves +2.36 (n=107) / +4.14 (n=92)
+dir5+dir60+chop60            up 70 down 45 bar 0.10 buys  158 won  37% vs 0.29 net/$10 +2.50 | halves +3.99 (n=67) / +1.41 (n=91)
+dir5+dir60+chop60            up 60 down 45 bar 0.10 buys  164 won  37% vs 0.30 net/$10 +2.24 | halves +3.27 (n=73) / +1.41 (n=91)
+dir5+dir60                   up 70 down 45 bar 0.10 buys  305 won  40% vs 0.32 net/$10 +2.18 | halves +2.10 (n=151) / +2.25 (n=154)
+dir5+dir60                   up 60 down 45 bar 0.10 buys  308 won  40% vs 0.32 net/$10 +2.17 | halves +2.01 (n=152) / +2.32 (n=156)
+pos5+dir5+chop5+dir60        up 70 down 30 bar 0.10 buys  353 won  38% vs 0.30 net/$10 +2.05 | halves +1.59 (n=123) / +2.30 (n=230)
+dir5+chop5+dir60             up 70 down 30 bar 0.10 buys  354 won  38% vs 0.30 net/$10 +2.02 | halves +1.59 (n=123) / +2.24 (n=231)
+dir5+dir60+chop60            up 70 down 30 bar 0.10 buys  337 won  38% vs 0.30 net/$10 +2.00 | halves +1.31 (n=125) / +2.41 (n=212)
+dir5+detrended chop5+dir60   up 70 down 45 bar 0.10 buys  239 won  41% vs 0.32 net/$10 +1.94 | halves +1.04 (n=116) / +2.80 (n=123)
+dir5+detrended chop5+dir60   up 60 down 45 bar 0.10 buys  239 won  41% vs 0.32 net/$10 +1.94 | halves +1.04 (n=116) / +2.80 (n=123)
+dir5+dir60+chop60            up 60 down 30 bar 0.10 buys  344 won  38% vs 0.31 net/$10 +1.92 | halves +1.29 (n=129) / +2.30 (n=215)
+pos5+dir5+chop5+dir60        up 60 down 30 bar 0.10 buys  365 won  38% vs 0.31 net/$10 +1.85 | halves +1.58 (n=128) / +1.99 (n=237)
+dir5+dir60                   up 70 down 30 bar 0.10 buys  271 won  35% vs 0.28 net/$10 +1.83 | halves +0.59 (n=61) / +2.19 (n=210)
+dir5+chop5+dir60             up 60 down 30 bar 0.10 buys  366 won  38% vs 0.31 net/$10 +1.81 | halves +1.58 (n=128) / +1.94 (n=238)
+pos5+dir5+chop5+dir60        up 70 down 45 bar 0.10 buys  332 won  42% vs 0.35 net/$10 +1.80 | halves +0.91 (n=183) / +2.91 (n=149)
+pos5+dir5+chop5+dir60        up 60 down 45 bar 0.10 buys  335 won  41% vs 0.35 net/$10 +1.80 | halves +0.85 (n=184) / +2.96 (n=151)
+dir5+dir60                   up 60 down 30 bar 0.10 buys  281 won  36% vs 0.29 net/$10 +1.77 | halves +0.77 (n=68) / +2.09 (n=213)
+dir5+chop5+dir60             up 70 down 45 bar 0.10 buys  333 won  41% vs 0.35 net/$10 +1.77 | halves +0.91 (n=183) / +2.82 (n=150)
+dir5+chop5+dir60             up 60 down 45 bar 0.10 buys  336 won  41% vs 0.34 net/$10 +1.76 | halves +0.85 (n=184) / +2.88 (n=152)
+dir5+detrended chop5+dir60   up 70 down 30 bar 0.10 buys  427 won  41% vs 0.34 net/$10 +1.68 | halves +0.43 (n=173) / +2.53 (n=254)
+dir5+dir60                   up 30 down 30 bar 0.10 buys  500 won  49% vs 0.41 net/$10 +1.60 | halves +1.11 (n=220) / +1.98 (n=280)
+dir5+dir60                   up 30 down 30 bar 0.20 buys  185 won  41% vs 0.34 net/$10 +1.57 | halves +2.51 (n=74) / +0.94 (n=111)
+the same shapes at 45 degrees both ways and the 0.20 bar, for comparison with the letters:
+dir5+dir60+chop60            buys  119 won  38% vs 0.26 net/$10 +4.09 | halves +2.09 (n=54) / +5.74 (n=65)
+pos5+dir5+chop5+dir60        buys  164 won  35% vs 0.30 net/$10 +1.14 | halves +1.79 (n=61) / +0.75 (n=103)
+dir5+chop5+dir60             buys  165 won  35% vs 0.30 net/$10 +1.07 | halves +1.79 (n=61) / +0.65 (n=104)
+dir5+detrended chop5+dir60   buys  229 won  35% vs 0.33 net/$10 +0.48 | halves +0.13 (n=118) / +0.85 (n=111)
+dir5+dir60                   buys   81 won  20% vs 0.29 net/$10 -3.83 | halves -10.52 (n=2) / -3.67 (n=79)
+DONE
+
