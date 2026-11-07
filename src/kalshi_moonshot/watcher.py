@@ -1337,6 +1337,10 @@ class ProfitWatcher:
                 store = self.store_factory()
                 curveexit.shadow_pass(s, store, self._tape_db(), specs)
                 curveexit.run_score(s, store)
+            if any(sp.enabled and sp.model_buy for sp in specs.values()):
+                from . import curvemodel
+
+                curvemodel.maybe_refit(s)
             if any(sp.enabled and sp.record_buy for sp in specs.values()):
                 from . import staterecord
 

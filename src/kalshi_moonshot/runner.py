@@ -710,6 +710,15 @@ def evaluate(
         else:
             bet = False
             note = f"{why_rec} {note}"
+    if bet and spec.model_buy:
+        from . import curvemodel
+
+        ok_mod, why_mod = curvemodel.admits(s, store, shot, spec, shot.ask)
+        if ok_mod:
+            note = f"[{why_mod}] {note}"
+        else:
+            bet = False
+            note = f"{why_mod} {note}"
     if bet and spec.skip_other_varieties:
         from . import ticks as ticks_mod
         from . import variants
@@ -1535,6 +1544,13 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
     limit = round(min(0.99, ask + max(0.0, spec.buy_slip)), 4)
     if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
         return None
+    if spec.model_buy:  # the curve model must still say buy
+        from . import curvemodel
+
+        ok_mod, why_mod = curvemodel.admits(s, store, shot, spec, ask, waited=float(spec.buy_rest_seconds))
+        if not ok_mod:
+            log.info("buy %s %s: the resting bid did not fill and the curve model no longer says buy at %.2f (%s)", shot.ticker, shot.side, ask, why_mod)
+            return None
     if spec.record_buy:  # the curve must still say buy: the spot may have moved out of the state that cleared the record while the bid rested
         from . import staterecord
 
