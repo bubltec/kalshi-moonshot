@@ -1,0 +1,13 @@
+moments 51587 days [20759, 20760, 20761, 20762, 20763, 20764]
+per test day: day, moments, realised net of the top 10% predicted, net of every moment
+  20762   9140  top10 -0.0164  all -0.0288
+  20763  10128  top10 -0.0188  all -0.0322
+  20764   5906  top10 -0.0281  all -0.0470
+pooled over the test days (net per contract and ROI on the price paid):
+  top   5%: n   1258 net -0.0225 ROI -37.5% | earlier test days -0.0196 (n=457) / later -0.0241 (n=801)
+  top  10%: n   2516 net -0.0201 ROI -28.2% | earlier test days -0.0164 (n=914) / later -0.0222 (n=1602)
+  top  20%: n   5034 net -0.0200 ROI -19.6% | earlier test days -0.0160 (n=1828) / later -0.0223 (n=3206)
+  top 100%: n  25174 net -0.0344 ROI -13.0% | earlier test days -0.0288 (n=9140) / later -0.0376 (n=16034)
+coefficients of the last fit (standardised features): {'const': -0.0348, 'z_tm': -0.0036, 'slope_1m': -0.0009, 'slope_5m': 0.0059, 'slope_15m': 0.0046, 'slope_60m': -0.0001, 'eff5': -0.0006, 'amp15_tm': -0.0024, 'left_min': 0.006, 'ask': -0.017, 'spread': -0.0052, 'contract_vol': 0.0064, 'waves_so_far': -0.0091, 'drop': -0.0018,
+DONE
+
