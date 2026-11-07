@@ -1,0 +1,54 @@
+windows 9359 market sides {'commodity': 13156, 'crypto': 5020}
+A. the oracle (best buy and later bid per market side, taker fee on the buy):
+  commodity market sides with a +20% scalp: 11875 of 13156 (90%) | median entry 0.24, median wait 273s
+  commodity market sides with a +50% scalp: 10928 of 13156 (83%) | median entry 0.23, median wait 280s
+  commodity market sides with a +100% scalp:  7848 of 13156 (60%) | median entry 0.19, median wait 274s
+  crypto    market sides with a +20% scalp:  4772 of 5020 (95%) | median entry 0.22, median wait 253s
+  crypto    market sides with a +50% scalp:  4468 of 5020 (89%) | median entry 0.21, median wait 259s
+  crypto    market sides with a +100% scalp:  3421 of 5020 (68%) | median entry 0.18, median wait 255s
+B. the resting ladder (per level and gain; hold = unsold positions run to the result, cut = sold at the bid 90 s before the close):
+   level gain fill     fills  filled  sold-at-target | hold: net/contract  ROI | per side offered ($ per contract slot) | halves(net) | cut: net/contract ROI
+  0.08 +20% strict fills  6691 of 18176 ( 37%) sold  50% | hold -0.032 ROI -39.7% | per offered -0.0117 | halves -106.5 (3323) / -106.0 (3368) | cut -0.029 ROI -36.9%
+  0.08 +20% touch  fills  6992 of 18176 ( 38%) sold  58% | hold -0.024 ROI -30.1% | per offered -0.0093 | halves -83.5 (3460) / -84.8 (3532) | cut -0.022 ROI -27.7%
+  0.08 +30% strict fills  6691 of 18176 ( 37%) sold  44% | hold -0.034 ROI -42.0% | per offered -0.0124 | halves -111.6 (3323) / -113.1 (3368) | cut -0.031 ROI -38.7%
+  0.08 +30% touch  fills  6992 of 18176 ( 38%) sold  51% | hold -0.026 ROI -32.8% | per offered -0.0101 | halves -91.7 (3460) / -92.0 (3532) | cut -0.024 ROI -29.9%
+  0.08 +50% strict fills  6691 of 18176 ( 37%) sold  40% | hold -0.031 ROI -38.8% | per offered -0.0114 | halves -103.1 (3323) / -104.6 (3368) | cut -0.028 ROI -35.0%
+  0.08 +50% touch  fills  6992 of 18176 ( 38%) sold  47% | hold -0.023 ROI -29.1% | per offered -0.0090 | halves -82.3 (3460) / -80.6 (3532) | cut -0.021 ROI -25.6%
+  0.12 +20% strict fills  7704 of 18176 ( 42%) sold  54% | hold -0.041 ROI -34.4% | per offered -0.0175 | halves -158.1 (3811) / -160.3 (3893) | cut -0.039 ROI -32.2%
+  0.12 +20% touch  fills  7931 of 18176 ( 44%) sold  60% | hold -0.033 ROI -27.5% | per offered -0.0144 | halves -131.7 (3909) / -130.2 (4022) | cut -0.031 ROI -25.6%
+  0.12 +30% strict fills  7704 of 18176 ( 42%) sold  50% | hold -0.040 ROI -33.5% | per offered -0.0170 | halves -153.1 (3811) / -156.2 (3893) | cut -0.037 ROI -30.8%
+  0.12 +30% touch  fills  7931 of 18176 ( 44%) sold  56% | hold -0.032 ROI -26.6% | per offered -0.0139 | halves -127.7 (3909) / -125.5 (4022) | cut -0.029 ROI -24.3%
+  0.12 +50% strict fills  7704 of 18176 ( 42%) sold  45% | hold -0.038 ROI -31.4% | per offered -0.0160 | halves -145.6 (3811) / -144.9 (3893) | cut -0.034 ROI -28.1%
+  0.12 +50% touch  fills  7931 of 18176 ( 44%) sold  50% | hold -0.029 ROI -24.5% | per offered -0.0128 | halves -119.5 (3909) / -113.8 (4022) | cut -0.026 ROI -21.4%
+  0.16 +20% strict fills  8574 of 18176 ( 47%) sold  57% | hold -0.049 ROI -30.8% | per offered -0.0232 | halves -211.6 (4224) / -210.6 (4350) | cut -0.046 ROI -28.6%
+  0.16 +20% touch  fills  8813 of 18176 ( 48%) sold  61% | hold -0.041 ROI -25.8% | per offered -0.0200 | halves -183.2 (4326) / -180.0 (4487) | cut -0.038 ROI -23.7%
+  0.16 +30% strict fills  8574 of 18176 ( 47%) sold  55% | hold -0.045 ROI -28.2% | per offered -0.0213 | halves -193.9 (4224) / -193.3 (4350) | cut -0.041 ROI -25.9%
+  0.16 +30% touch  fills  8813 of 18176 ( 48%) sold  59% | hold -0.037 ROI -23.0% | per offered -0.0179 | halves -163.8 (4326) / -160.7 (4487) | cut -0.033 ROI -20.8%
+  0.16 +50% strict fills  8574 of 18176 ( 47%) sold  47% | hold -0.044 ROI -27.8% | per offered -0.0210 | halves -192.6 (4224) / -188.4 (4350) | cut -0.039 ROI -24.6%
+  0.16 +50% touch  fills  8813 of 18176 ( 48%) sold  51% | hold -0.036 ROI -22.5% | per offered -0.0174 | halves -163.4 (4326) / -153.7 (4487) | cut -0.031 ROI -19.5%
+  0.20 +20% strict fills  9393 of 18176 ( 52%) sold  62% | hold -0.050 ROI -25.2% | per offered -0.0260 | halves -239.7 (4608) / -233.7 (4785) | cut -0.047 ROI -23.3%
+  0.20 +20% touch  fills  9573 of 18176 ( 53%) sold  65% | hold -0.042 ROI -21.1% | per offered -0.0223 | halves -204.1 (4688) / -200.6 (4885) | cut -0.039 ROI -19.5%
+  0.20 +30% strict fills  9393 of 18176 ( 52%) sold  57% | hold -0.049 ROI -24.6% | per offered -0.0255 | halves -237.5 (4608) / -225.1 (4785) | cut -0.045 ROI -22.5%
+  0.20 +30% touch  fills  9573 of 18176 ( 53%) sold  60% | hold -0.041 ROI -20.6% | per offered -0.0217 | halves -202.2 (4688) / -191.8 (4885) | cut -0.037 ROI -18.7%
+  0.20 +50% strict fills  9393 of 18176 ( 52%) sold  50% | hold -0.048 ROI -24.2% | per offered -0.0250 | halves -239.0 (4608) / -216.3 (4785) | cut -0.043 ROI -21.4%
+  0.20 +50% touch  fills  9573 of 18176 ( 53%) sold  52% | hold -0.040 ROI -20.2% | per offered -0.0213 | halves -206.5 (4688) / -180.4 (4885) | cut -0.035 ROI -17.5%
+  0.25 +20% strict fills 10328 of 18176 ( 57%) sold  64% | hold -0.055 ROI -22.0% | per offered -0.0313 | halves -297.5 (5031) / -270.9 (5297) | cut -0.052 ROI -20.6%
+  0.25 +20% touch  fills 10486 of 18176 ( 58%) sold  66% | hold -0.048 ROI -19.4% | per offered -0.0279 | halves -265.4 (5103) / -242.0 (5383) | cut -0.045 ROI -18.1%
+  0.25 +30% strict fills 10328 of 18176 ( 57%) sold  58% | hold -0.058 ROI -23.0% | per offered -0.0327 | halves -307.1 (5031) / -286.9 (5297) | cut -0.053 ROI -21.0%
+  0.25 +30% touch  fills 10486 of 18176 ( 58%) sold  61% | hold -0.051 ROI -20.4% | per offered -0.0294 | halves -276.0 (5103) / -258.1 (5383) | cut -0.046 ROI -18.5%
+  0.25 +50% strict fills 10328 of 18176 ( 57%) sold  51% | hold -0.057 ROI -22.6% | per offered -0.0321 | halves -306.8 (5031) / -276.9 (5297) | cut -0.050 ROI -19.9%
+  0.25 +50% touch  fills 10486 of 18176 ( 58%) sold  52% | hold -0.050 ROI -19.8% | per offered -0.0286 | halves -276.8 (5103) / -243.4 (5383) | cut -0.043 ROI -17.3%
+  0.30 +20% strict fills 11277 of 18176 ( 62%) sold  65% | hold -0.063 ROI -21.0% | per offered -0.0390 | halves -366.3 (5481) / -343.3 (5796) | cut -0.059 ROI -19.5%
+  0.30 +20% touch  fills 11446 of 18176 ( 63%) sold  67% | hold -0.055 ROI -18.4% | per offered -0.0349 | halves -330.5 (5560) / -303.0 (5886) | cut -0.051 ROI -17.1%
+  0.30 +30% strict fills 11277 of 18176 ( 62%) sold  60% | hold -0.062 ROI -20.6% | per offered -0.0384 | halves -368.2 (5481) / -329.1 (5796) | cut -0.056 ROI -18.8%
+  0.30 +30% touch  fills 11446 of 18176 ( 63%) sold  62% | hold -0.054 ROI -18.1% | per offered -0.0343 | halves -334.0 (5560) / -288.6 (5886) | cut -0.049 ROI -16.5%
+  0.30 +50% strict fills 11277 of 18176 ( 62%) sold  52% | hold -0.061 ROI -20.3% | per offered -0.0378 | halves -368.6 (5481) / -318.8 (5796) | cut -0.052 ROI -17.4%
+  0.30 +50% touch  fills 11446 of 18176 ( 63%) sold  54% | hold -0.054 ROI -17.8% | per offered -0.0337 | halves -331.6 (5560) / -281.0 (5886) | cut -0.045 ROI -15.1%
+  0.40 +20% strict fills 13045 of 18176 ( 72%) sold  65% | hold -0.087 ROI -21.8% | per offered -0.0625 | halves -589.9 (6309) / -546.5 (6736) | cut -0.081 ROI -20.2%
+  0.40 +20% touch  fills 13217 of 18176 ( 73%) sold  66% | hold -0.080 ROI -20.1% | per offered -0.0584 | halves -549.9 (6395) / -512.3 (6822) | cut -0.075 ROI -18.6%
+  0.40 +30% strict fills 13045 of 18176 ( 72%) sold  59% | hold -0.089 ROI -22.2% | per offered -0.0639 | halves -610.4 (6309) / -550.4 (6736) | cut -0.080 ROI -20.1%
+  0.40 +30% touch  fills 13217 of 18176 ( 73%) sold  60% | hold -0.082 ROI -20.6% | per offered -0.0600 | halves -574.1 (6395) / -516.1 (6822) | cut -0.074 ROI -18.5%
+  0.40 +50% strict fills 13045 of 18176 ( 72%) sold  51% | hold -0.087 ROI -21.7% | per offered -0.0623 | halves -592.2 (6309) / -541.0 (6736) | cut -0.074 ROI -18.6%
+  0.40 +50% touch  fills 13217 of 18176 ( 73%) sold  52% | hold -0.080 ROI -20.1% | per offered -0.0585 | halves -557.4 (6395) / -505.4 (6822) | cut -0.068 ROI -17.1%
+DONE
+
