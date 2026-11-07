@@ -1,0 +1,86 @@
+model built 2026-11-07 17:04 UTC rows 92267 mean net -0.04 top-20% cut 0.02
+
+A. live model bets since the fit: 30
+   settled 30, won 11 (37%), staked $47.40, net $-0.84 (-2% of stake)
+
+B. forward test: 189 settled windows after the fit, 3912 moments scored
+   every moment vs the live rule (top-20% cut, above zero):
+   every moment                       n= 3912 win  44% vs ask 0.46 | pred -0.042 actual -0.117 per $1
+   pick, every moment                 n=  757 win  43% vs ask 0.44 | pred +0.070 actual -0.047 per $1
+   pick, first moment per market side n=  114 win  43% vs ask 0.46 | pred +0.055 actual -0.087 per $1
+   pick, first, first half            n=   47 win  47% vs ask 0.45 | pred +0.050 actual +0.027 per $1
+   pick, first, second half           n=   67 win  40% vs ask 0.47 | pred +0.059 actual -0.167 per $1
+   by predicted net (first moment per market side, any prediction over zero):
+   predicted +0.00 to +0.02           n=   74 win  41% vs ask 0.44 | pred +0.009 actual -0.161 per $1
+   predicted +0.02 to +0.05           n=   27 win  44% vs ask 0.50 | pred +0.032 actual -0.112 per $1
+   predicted +0.05 to +0.10           n=   32 win  44% vs ask 0.48 | pred +0.072 actual -0.139 per $1
+   predicted +0.10 to +9.00           n=   10 win  40% vs ask 0.53 | pred +0.163 actual -0.281 per $1
+   by curve shape (pick, first moment per market side):
+   down/tight                         n=   14 win  29% vs ask 0.47 | pred +0.049 actual -0.456 per $1
+   down/wide                          n=   46 win  52% vs ask 0.41 | pred +0.059 actual +0.200 per $1
+   flat/tight                         n=   29 win  55% vs ask 0.53 | pred +0.059 actual +0.092 per $1
+   flat/wide                          n=   16 win  12% vs ask 0.43 | pred +0.050 actual -0.669 per $1
+   up/tight                           n=    3 win  67% vs ask 0.65 | pred +0.043 actual -0.029 per $1
+   up/wide                            n=    6 win  17% vs ask 0.56 | pred +0.044 actual -0.762 per $1
+   by price paid (pick, first):
+   ask 0.20 to 0.35                   n=   31 win  29% vs ask 0.28 | pred +0.051 actual +0.016 per $1
+   ask 0.35 to 0.50                   n=   33 win  39% vs ask 0.42 | pred +0.043 actual -0.107 per $1
+   ask 0.50 to 0.71                   n=   50 win  54% vs ask 0.61 | pred +0.066 actual -0.137 per $1
+
+C. picks per window (pick, first moment per market side): windows with 3 or more picks
+   close 17:30: 3 picks, 2 yes / 1 no, won 2, net +2.34 per $1 each
+   close 17:45: 3 picks, 0 yes / 3 no, won 0, net -3.15 per $1 each
+   close 18:00: 8 picks, 0 yes / 8 no, won 4, net -0.07 per $1 each
+   close 18:15: 5 picks, 0 yes / 5 no, won 0, net -5.18 per $1 each
+   close 18:30: 8 picks, 0 yes / 8 no, won 5, net +6.91 per $1 each
+   close 18:45: 5 picks, 2 yes / 3 no, won 3, net +0.96 per $1 each
+   close 19:00: 4 picks, 1 yes / 3 no, won 1, net -2.56 per $1 each
+   close 19:30: 9 picks, 8 yes / 1 no, won 6, net +2.06 per $1 each
+   close 19:45: 3 picks, 2 yes / 1 no, won 1, net -1.64 per $1 each
+   close 20:00: 5 picks, 4 yes / 1 no, won 3, net +0.51 per $1 each
+   close 20:15: 6 picks, 5 yes / 1 no, won 1, net -1.93 per $1 each
+   close 20:45: 9 picks, 8 yes / 1 no, won 1, net -5.20 per $1 each
+   close 21:15: 10 picks, 9 yes / 1 no, won 2, net -6.72 per $1 each
+   close 21:30: 7 picks, 7 yes / 0 no, won 3, net -1.42 per $1 each
+   close 21:45: 9 picks, 8 yes / 1 no, won 8, net +8.12 per $1 each
+   close 22:00: 7 picks, 0 yes / 7 no, won 0, net -7.29 per $1 each
+   close 22:15: 7 picks, 0 yes / 7 no, won 6, net +5.17 per $1 each
+   windows by picks: {2: 3, 3: 3, 4: 1, 5: 3, 6: 1, 7: 3, 8: 2, 9: 3, 10: 1}
+   share of picks that point the same way inside a window with 2+ picks: 0.84 over 20 windows
+   windows with 2 picks: n=3, net per pick -0.137
+   windows with 3 picks: n=3, net per pick -0.272
+   windows with 4 picks: n=1, net per pick -0.641
+   windows with 5 picks: n=3, net per pick -0.247
+   windows with 6 picks: n=1, net per pick -0.321
+   windows with 7 picks: n=3, net per pick -0.168
+   windows with 8 picks: n=2, net per pick +0.427
+   windows with 9 picks: n=3, net per pick +0.185
+   windows with 10 picks: n=1, net per pick -0.672
+
+D. curve readings at each live bet (cushion slope in typical moves; var in typical moves; the live prediction is in the log)
+   LOST 17:42 no  ask 0.28 pred +0.125 | slope 3m +1.26 8m -0.05 21m -0.41 55m -0.94 | var 3m 0.61 13m 0.39 55m 0.34
+   LOST 18:06 no  ask 0.24 pred +0.033 | slope 3m -0.37 8m -0.31 21m -0.67 55m -1.04 | var 3m 0.28 13m 0.28 55m 0.29
+   WON  18:19 no  ask 0.25 pred +0.031 | slope 3m -0.26 8m -0.83 21m -1.00 55m -1.00 | var 3m 0.21 13m 0.45 55m 0.33
+   WON  18:21 no  ask 0.28 pred +0.112 | slope 3m +0.63 8m -0.56 21m -0.93 55m -1.61 | var 3m 0.28 13m 0.32 55m 0.44
+   WON  18:21 no  ask 0.28 pred +0.073 | slope 3m +0.37 8m -0.65 21m -0.68 55m -1.21 | var 3m 0.20 13m 0.31 55m 0.33
+   LOST 19:10 yes ask 0.20 pred +0.012 | slope 3m -0.78 8m +0.05 21m -0.48 55m -0.86 | var 3m 0.14 13m 0.26 55m 0.32
+   WON  19:17 yes ask 0.53 pred +0.034 | slope 3m -0.32 8m -0.22 21m -1.08 55m -0.55 | var 3m 0.36 13m 0.43 55m 0.28
+   WON  19:17 yes ask 0.56 pred +0.083 | slope 3m +0.17 8m -0.23 21m -1.47 55m -1.04 | var 3m 0.33 13m 0.24 55m 0.34
+   LOST 19:17 yes ask 0.37 pred +0.088 | slope 3m -0.68 8m -0.13 21m -1.53 55m -1.19 | var 3m 0.27 13m 0.38 55m 0.29
+   WON  19:17 yes ask 0.34 pred +0.064 | slope 3m -0.77 8m -0.28 21m -1.26 55m -1.26 | var 3m 0.38 13m 0.33 55m 0.32
+   LOST 19:36 yes ask 0.26 pred +0.033 | slope 3m +0.48 8m -0.69 21m -0.28 55m -0.92 | var 3m 0.25 13m 0.36 55m 0.45
+   LOST 20:10 yes ask 0.42 pred +0.066 | slope 3m +2.02 8m +0.51 21m +0.41 55m -0.08 | var 3m 0.39 13m 0.56 55m 0.26
+   LOST 21:02 yes ask 0.65 pred +0.145 | slope 3m +0.57 8m +0.78 21m -1.24 55m -1.63 | var 3m 0.44 13m 0.30 55m 0.74
+   LOST 21:02 yes ask 0.52 pred +0.075 | slope 3m +0.09 8m +0.85 21m -0.82 55m -0.97 | var 3m 0.23 13m 0.26 55m 0.44
+   LOST 21:04 yes ask 0.42 pred +0.071 | slope 3m -1.35 8m +0.12 21m -1.33 55m -1.78 | var 3m 0.32 13m 0.24 55m 0.64
+   LOST 21:06 yes ask 0.43 pred +0.055 | slope 3m -0.38 8m +0.27 21m -0.65 55m -1.86 | var 3m 0.35 13m 0.47 55m 0.83
+   LOST 21:10 yes ask 0.24 pred +0.036 | slope 3m +0.85 8m -0.68 21m -0.13 55m -1.21 | var 3m 0.25 13m 0.31 55m 0.45
+   LOST 21:21 yes ask 0.55 pred +0.045 | slope 3m -0.05 8m -1.03 21m -0.77 55m -1.54 | var 3m 0.18 13m 0.26 55m 0.58
+   WON  21:21 yes ask 0.60 pred +0.019 | slope 3m +0.45 8m -0.80 21m -0.72 55m -1.05 | var 3m 0.33 13m 0.28 55m 0.38
+   WON  21:24 yes ask 0.64 pred +0.035 | slope 3m -0.68 8m -0.67 21m -0.97 55m -1.70 | var 3m 0.34 13m 0.20 55m 0.59
+   WON  21:32 yes ask 0.44 pred +0.070 | slope 3m -0.36 8m -0.04 21m -0.91 55m -1.55 | var 3m 0.32 13m 0.32 55m 0.44
+   WON  21:32 yes ask 0.55 pred +0.022 | slope 3m +0.46 8m +0.87 21m +0.38 55m -0.98 | var 3m 0.39 13m 0.31 55m 0.39
+   WON  21:36 yes ask 0.58 pred +0.048 | slope 3m +0.93 8m +0.16 21m +0.03 55m -0.64 | var 3m 0.59 13m 0.22 55m 0.24
+   LOST 21:49 no  ask 0.30 pred +0.063 | slope 3m +0.31 8m -1.29 21m -1.93 55m -1.19 | var 3m 0.23 13m 0.68 55m 0.37
+   LOST 21:55 no  ask 0.28 pred +0.064 | slope 3m +0.22 8m +0.12 21m -1.35 55m -0.21 | var 3m 0.37 13m 0.35 55m 0.31
+DONE
