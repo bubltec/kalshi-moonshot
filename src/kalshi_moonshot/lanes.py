@@ -176,31 +176,8 @@ class LaneSpec:
     burst_exit: bool = False  # watch held 15-minute bets for a volume burst against the holder in the last 120 s and SELL the favorite (watcher.py: that is the peak-crash exit); also log the other side as a paper bet in burst_flip. A silent book cannot 5x itself (BURST_MIN_NORMAL)
     burst_ratio: float = 0.0  # the burst EXIT as a multiple of the market's own normal: sell when the dollars bought against the holder in 3 s are at least this many times this market's normal 3 s (the median second of the 120 s before, both sides, times 3). A bar that grows in a busy market and shrinks in a quiet one. 0 = off (burst_dollars, the flat bar, applies). When set it replaces burst_dollars
     burst_min_dollars: float = 50.0  # ...and at least this many dollars, so a dead market's ordinary print is not a crash
-    burst_buy_pct: float = 0.0  # the same hedge sized as a share of the held bet's own stake (0.17 on a $6 bet is about $1): it scales with the bet. When set it replaces burst_buy
-    burst_buy: float = 0.0  # dollars to put, for real, on the OTHER side (when it costs 5-25c) the first time that burst fires (0 = only log it). Needs burst_exit and a live lane
     burst_dollars: float = 0.0  # the burst EXIT of a lane with burst_exit, in dollars: sell the held 90c+ favorite in the last 120 s when at least this many dollars are bought against it in 3 s (0 = the older multiple-of-normal rule). Per family from burst_exit_study: crypto 400, currencies 50, metals/energy 400
     burst_dollars_btc: float = 0.0  # the same for BTC: a bar of its own, or -1 to keep the older rule (it beat holding by 5.3c on BTC; the dollar bar did not)
-    hunt_dollars: float = 0.0  # a burst_hunt lane's trigger in dollars: a 90c+ favorite and at least this many dollars bought AGAINST it (the cheap side's takers) in 3 s, in the last 120 s; buy the cheap side. 0 = the older multiple-of-normal burst
-    hunt_seconds: float = 3.0  # the window the bar counts over: the last this many seconds (3 = the original dollar bar; 2 = the contract spike)
-    hunt_contracts: float = 0.0  # buy the cheap side when this many contracts trade in hunt_seconds, either sold on the winning side (hunt_sell_over) or bought on the losing side (hunt_buy_under). 0 = off, and hunt_dollars or the older 5x applies. A coin named in hunt_contracts_by uses its own number instead. The 2026-10-26 ETH buy was 2,144 contracts in 3 s against a normal second of 132
-    hunt_contracts_by: tuple[tuple[str, float], ...] = ()  # (series, contracts) overrides of hunt_contracts. Each coin's book is a different size: the same 1,000 that is a spike on DOGE is an ordinary BTC second
-    hunt_sell_over: float = 0.0  # a sale counts toward hunt_contracts when the side sold is priced at least this high (the winning side). 0 = that bucket is off
-    hunt_buy_under: float = 0.0  # a buy counts toward hunt_contracts when the side bought is priced at or under this (the losing side). 0 = that bucket is off. A trade that is both (an 8c buy is a sale of the 92c side) is counted in each bucket, and either one clearing the bar buys once
-    hunt_dollars_btc: float = 0.0  # the same bar for BTC, whose volume is far larger (0 = the same bar as the others)
-    hunt_favorite: float = 0.0  # a burst_hunt dollar trigger buys the cheap side only when the OTHER side is at least this priced (0 = no requirement; 0.90 was the flip study's 90c+ favorite). price[1] is then the only band: a 20c side is an 80c favorite
-    hunt_spike: float = 0.0  # a dollar trigger also needs the last 3 s of dollars bought on the cheap side to be at least this multiple of that side's own normal 3 s (median second of the 2 minutes before). 0 = the dollar bar alone. On a market that is busy all the time (BTC) a fixed bar fires on ordinary trading; a multiple fires on a surge (scripts/spike_trigger_study.py)
-    hunt_cheap: float = 0.50  # the cheap side is a side priced under this
-    hunt_window: float = 120.0  # a hunt acts when this many seconds or fewer remain...
-    hunt_min_left: float = 10.0  # ...and at least this many (an order sent later lands after the close)
-    hunt_crash: float = 0.10  # skip a side whose ask has fallen this much...
-    hunt_crash_seconds: float = 12.0  # ...within this many seconds: a 60c favorite falling to 14c on the print is the crash, not a turn
-    hunt_park_seconds: float = 20.0  # the ask must have been on screen this long...
-    hunt_park_high: float = 0.10  # ...never above max(this, price[1])...
-    hunt_park_span: float = 0.06  # ...and within this of the ask we would pay, so the price is parked, not still arriving
-    hunt_allowance: float = 0.02  # how many dollars over the ask a hunt buy's limit may reach (it still fills at the best ask). The burst that triggers a hunt also eats the cheap offers, and the ask can jump more than 2c in the second before the order lands: two moonshot triggers today found "$0.00 offered at 0.17" against an ask of 0.15. The stake is sized with it
-    hunt_attempts: int = 3  # a hunt buys a market at most this many times when each try certainly bought nothing (buyer.SENT_NOTHING); every try re-checks the whole trigger
-    hunt_retry_seconds: float = 3.0  # seconds between those tries
-    hunt_stale_seconds: float = 10.0  # a queued buy that waited this long is dropped: its price was read at the burst and the ask has moved since
     burst_favorite: float = 0.90  # the burst EXIT of a lane with burst_exit and burst_dollars sells the held side only while its bid is at least this (a favorite)
     drop_cents: float = 0.0  # a held favorite whose bid falls this many dollars within drop_seconds, in the burst window, is SOLD whatever the taker flow (0 = off). A book that thins gives a fall with almost no taker dollars, which the burst exit cannot see (KXCOPPER15M-26OCT301000: 0.85 -> 0.55 in four seconds, then 0). scripts/drop_exit_study.py: 0.25 in 3 s sold better than holding by about 10c a contract; 0.10-0.15 did not beat holding
     bounce_fall: float = 0.0  # sell into the first bounce (0 = off): once the held bid has fallen this far under the price paid and then bounces bounce_up off its low, sell, any time up to burst_min_left before the close (scripts/exit_tradeoff.py: ~half the losing dollars cut at about zero net cost, at the price of selling most positions)
@@ -210,14 +187,10 @@ class LaneSpec:
     drop_confirm: float = 0.0  # a fall only ARMS the exit; it sells when the bid is still drop_stay under the fall's high this many seconds later (0 = sell at once). A spike bounces back inside seconds, a flip does not (scripts/drop_flip_vs_spike_study.py: waiting 4-6 s lifted selling over holding from about 0 to +0.05 a contract on both halves of the data)
     drop_stay: float = 0.0  # ...how far under the high the bid must still be at the check (0 = drop_cents)
     drop_window: float = 120.0  # the exit watches the last this many seconds before the close (burst_min_left is the other end). Falls before the last three minutes did not pay in the replay
-    drop_buy_max: float = 0.25  # ...the other side may cost up to this much (the burst hedge's own cap is 25c). Bought when the fall is FOUND, before the confirmed sale: by then the held side is near 0.55 and the other side near 0.45
-    drop_buy: bool = False  # a drop sale also buys the other side with the lane's burst_buy stake, when it costs 5-25c (the same hedge as a burst sale). Bought at the fall it broke even over 305 falls (+0.004 +-0.027 a contract)
     burst_share: float = 0.0  # the burst exit also needs this share of the last 3 s of dollars to have been bought AGAINST the held side (0 = the dollar bar alone). A burst where the held side is being bought as hard is two-way trading or a pump of the side we hold, not a crash (scripts/burst_floor_study.py)
     burst_spot_edge: float = 0.0  # a burst sells only when spot's own chance that the held side pays is NOT more than this many points over what the sale gets (the bid less its fee); over that the dip is a wick in the price and it holds (0 = off, order flow alone decides). commodity: a one-second spike in the reference price crashed a 0.96 bid to 0.43 and sold a bet that went on to win
     burst_window: float = 120.0  # ...in the last this many seconds. Past that, holding still paid (burst_flip record: last 120 s sold +6 to +8c vs holding -5 to -8c; at 2-5 min holding was still ahead)
     burst_min_left: float = 10.0  # ...and not in the last this many (a sale sent later lands after the close)
-    require_prior_win: bool = False  # a burst_hunt lane buys a series for real only once one of its own bets on that series (live or paper) has already won; until then the series is logged as paper bets only, so it can earn its way in
-    burst_hunt: bool = False  # watch this lane's 15-minute series in the last 120 s WITHOUT a position and buy a side in price[] when volume spikes (moonshot v2). Watcher-only; the main scan never sees it
     stop_from_seconds: float = 0.0  # the stop-loss acts only once this many seconds remain before the close (0 = whenever the hour rule allows). Replay of 6,299 favorites bets: holding through early dips until 3 minutes left helped commodity +1.2 and fx +1.1 points per dollar (within the error), cost crypto 1.1
     stop_loss: bool = True  # False = no stop-loss for this lane (a $1 ticket's loss is already capped; its spread alone can look like a 30% drop)
     take_profit_x: float = 0.0  # sell when the bid reaches this multiple of the price paid (0 = off); watched live on the socket
@@ -364,10 +337,6 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series", "ms_rule"):
         if key in row:
             row[key] = tuple(row[key])
-    if "hunt_contracts_by" in row:
-        raw = row["hunt_contracts_by"] or {}
-        pairs = raw.items() if isinstance(raw, dict) else raw
-        row["hunt_contracts_by"] = tuple((str(name), float(bar)) for name, bar in pairs)
     for window in row.get("blackout_et", ()):
         try:
             parse_window(window)
@@ -455,7 +424,7 @@ def tiered(spec: LaneSpec) -> bool:
 
 def main_lanes(s: Settings) -> list[LaneSpec]:
     """Enabled lanes served by the all-markets scan."""
-    return [lane for lane in enabled_lanes(s) if not tiered(lane) and not lane.burst_hunt]
+    return [lane for lane in enabled_lanes(s) if not tiered(lane)]
 
 
 def tiered_lanes(s: Settings) -> list[LaneSpec]:
@@ -477,7 +446,7 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "entry_socket", "entry_min_gap_seconds", "buy_rest_top_up", "curve_shadow", "confidence_shadow", "paper_fill_model", "buy_slip", "hunt_allowance", "hunt_seconds", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
+    "entry_socket", "entry_min_gap_seconds", "buy_rest_top_up", "curve_shadow", "confidence_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
     "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_units", "shock_margin_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "shock_memory", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
@@ -515,19 +484,10 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     if spec.choppy_floor:
         out["choppy_floor"], out["choppy_hours"], out["choppy_series"] = repr(spec.choppy_floor), repr(spec.choppy_hours), repr(spec.choppy_series)
         out["choppy_left_max"], out["choppy_price_min"], out["choppy_skip"] = repr(spec.choppy_left_max), repr(spec.choppy_price_min), repr(spec.choppy_skip)
-    if spec.burst_buy_pct:
-        out["burst_buy_pct"] = repr(spec.burst_buy_pct)
     if spec.drop_cents:
         out["drop_cents"], out["drop_seconds"], out["drop_was"] = repr(spec.drop_cents), repr(spec.drop_seconds), repr(spec.drop_was)
-        if spec.drop_confirm or spec.drop_stay or spec.drop_window != 120.0 or spec.drop_buy or spec.drop_buy_max != 0.25:
-            out["drop_confirm"], out["drop_stay"], out["drop_window"], out["drop_buy"], out["drop_buy_max"] = repr(spec.drop_confirm), repr(spec.drop_stay), repr(spec.drop_window), repr(spec.drop_buy), repr(spec.drop_buy_max)
-    if spec.hunt_seconds != 3.0:
-        out["hunt_seconds"] = repr(spec.hunt_seconds)
-    if spec.hunt_contracts > 0 or spec.hunt_contracts_by:
-        out["hunt_contracts"] = repr(spec.hunt_contracts)
-        if spec.hunt_contracts_by:
-            out["hunt_contracts_by"] = repr(spec.hunt_contracts_by)
-        out["hunt_sell_over"], out["hunt_buy_under"] = repr(spec.hunt_sell_over), repr(spec.hunt_buy_under)
+        if spec.drop_confirm or spec.drop_stay or spec.drop_window != 120.0:
+            out["drop_confirm"], out["drop_stay"], out["drop_window"] = repr(spec.drop_confirm), repr(spec.drop_stay), repr(spec.drop_window)
     if spec.entry_move:
         out["entry_move"], out["entry_move_seconds"], out["entry_move_below"] = repr(spec.entry_move), repr(spec.entry_move_seconds), repr(spec.entry_move_below)
     if spec.cash_out_at:

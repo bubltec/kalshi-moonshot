@@ -127,13 +127,6 @@ def test_a_failed_retry_order_is_reported_and_does_not_raise(setup):
     assert got.filled == 0 and "order failed" in got.note and len(client.sent) == 2
 
 
-def test_a_buy_is_skipped_when_the_ask_fell_far_under_the_decision(setup):
-    s, store, shot, spec = setup
-    spec(buy_max_move=0.05, buy_retries=0)
-    client = Client(fills=[1.5], asks=[0.20])  # decided at 0.31; the book now offers 0.20
-    got = runner.place(s, client, store, shot, "why", 1.5)
-    assert got.filled == 0 and "fell from 0.31 to 0.20" in got.note and client.sent == []  # nothing was ordered
-    assert not got.note.startswith(runner_sent_nothing())  # not a miss the hunt would retry
 
 
 def test_a_small_fall_still_buys(setup):

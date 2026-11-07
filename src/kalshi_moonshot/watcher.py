@@ -27,13 +27,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, NamedTuple
 
-from . import buyer, checkins, manual, paperfill, runner, settlement, variants
+from . import checkins, manual, paperfill, runner, settlement, variants
 from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series, strike_index_for
-from .lanes import LaneSpec, enabled_lanes, lane_specs, stop_drop_for, takes_profit
+from .lanes import LaneSpec, lane_specs, stop_drop_for, takes_profit
 from .store import Store
 from .strategy import (
     cash_if_losing,
@@ -57,13 +57,7 @@ SETTLE_WINDOW = 150.0  # the settlement guard looks at a 15-minute crypto bet in
 BURST_RATIO = 5.0  # this SIDE's last 3 seconds of taker buys vs this side's own median second (the 2 minutes before). A pile-on at 95c is not a 5c burst
 BURST_FLOOR = 300.0  # a burst must also be at least this many contracts on that side, so a handful of cheap prints never counts
 BURST_MIN_NORMAL = 10.0  # 5x of a silent side is not a burst. That side must trade this many contracts in a typical second
-HUNT_CLEAR_RATIO = 6.0  # a moonshot under this multiple is only a routine last-two-minutes print unless it also clears HUNT_CLEAR_FLOOR
-HUNT_CLEAR_FLOOR = 500.0  # 19 of 36 moonshot calls were 5.0-5.9x; the small ones (about 300 contracts) are the loose calls. The multiple stays 5 because that band made the profit
-HUNT_REPEAT_SECONDS = 8  # that many separate seconds of buying before the 3-second print
-HUNT_REPEAT_GAP = 17  # the seconds just before the print, where the repeat has to show
-HUNT_REPEAT_FLOOR = 20.0  # a second counts once it matches a normal second, and at least this many contracts
 BURST_BAND = (0.80, 0.97)  # the held side's bid must be in this band: a favorite
-BUY_BAND = (0.05, 0.25)  # the other side is bought for real only when it costs this much
 SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the close)
 THROUGH_QUOTE = 1.0  # a bid older than this, before the index tick that went through, is the quote from before the cross
 THROUGH_SPOT = 5.0  # an index tick older than this is not a reason to sell
@@ -202,7 +196,6 @@ class Target:
     settle_checked: float = 0.0  # the guard looks at most once a second
     cur_bid: float = 0.0  # the latest bid and the opposite side's ask, from the socket
     cur_other_ask: float = 0.0
-    burst_buy: float = 0.0  # dollars to buy the other side with, for real, on a burst (lane burst_buy)
     burst_logged: bool = False  # one burst log per held market
     burst_share: float = LaneSpec.burst_share  # the share of the 3 s of dollars that must be against the holder for a burst to sell it (lane burst_share; 0 = off)
     drop_cents: float = 0.0  # sell when the bid falls this far inside drop_seconds in the burst window (lane drop_cents; 0 = off)
@@ -211,8 +204,6 @@ class Target:
     drop_confirm: float = 0.0
     drop_stay: float = 0.0
     drop_window: float = LaneSpec.drop_window
-    drop_buy: bool = False
-    drop_buy_max: float = LaneSpec.drop_buy_max
     bounce_fall: float = 0.0  # sell into the first bounce: the bid fell this far under the price paid, then bounced bounce_up off its low (lane bounce_fall; 0 = off)
     bounce_up: float = LaneSpec.bounce_up
     drop_armed_at: float | None = None  # when a fall was found and is waiting out drop_confirm
@@ -260,7 +251,7 @@ def side_bid(side: str, yes_bid: float, yes_ask: float) -> float:
 
 
 def _burst_category(ticker: str) -> str:
-    return buyer.category(ticker)
+    return "Crypto" if ticker.split("-")[0][2:].startswith(("BTC", "ETH", "SOL", "XRP", "DOGE")) else "Other"
 
 
 def _side_burst(book: dict[int, list[float]], sec: int, idx: int) -> tuple[float, float, float]:
@@ -298,105 +289,8 @@ def _is_side_burst(vol: float, base: float, ratio: float) -> bool:
     return ratio >= BURST_RATIO and vol >= BURST_FLOOR and base >= BURST_MIN_NORMAL
 
 
-def _hunt_burst(vol: float, base: float, ratio: float) -> bool:
-    """The favorite-sell burst, plus a cushion when the multiple only just clears 5x."""
-    if not _is_side_burst(vol, base, ratio):
-        return False
-    return ratio >= HUNT_CLEAR_RATIO or vol >= HUNT_CLEAR_FLOOR
-
-
-def _hunt_contract_bar(spec: LaneSpec, ticker: str) -> float:
-    """The contract spike this market has to clear. A series named in hunt_contracts_by uses that coin's own number."""
-    series = ticker.split("-")[0]
-    for name, bar in spec.hunt_contracts_by:
-        if series == name:
-            return float(bar)
-    return spec.hunt_contracts
-
-
 def _side_ask(side: str, yes_bid: float, yes_ask: float) -> float:
     return yes_ask if side == "yes" else 1.0 - yes_bid
-
-
-def _hunt_crashing(quotes: deque[tuple[float, float, float]], side: str, now: float, ask: float, drop: float = LaneSpec.hunt_crash, lookback: float = LaneSpec.hunt_crash_seconds) -> tuple[bool, float]:
-    """True when this side's ask is `drop` below the highest ask seen in the last `lookback` seconds (the lane's hunt_crash and hunt_crash_seconds).
-    Returns the prior high, or 0 when there is no recent quote to compare."""
-    high = 0.0
-    seen = False
-    for ts, yes_bid, yes_ask in quotes:
-        age = now - ts
-        if age < 0 or age > lookback:
-            continue
-        seen = True
-        high = max(high, _side_ask(side, yes_bid, yes_ask))
-    if not seen or high <= 0:
-        return False, 0.0
-    return ask <= high - drop, high
-
-
-def _hunt_parked(
-    quotes: deque[tuple[float, float, float]], side: str, now: float, ask: float, cap: float = LaneSpec.hunt_park_high,
-    seconds: float = LaneSpec.hunt_park_seconds, floor: float = LaneSpec.hunt_park_high, span: float = LaneSpec.hunt_park_span,
-) -> bool:
-    """The side has been sitting cheap for the last `seconds` (the lane's hunt_park_seconds), not just printing cheap on this one quote. Parked means never above the lane's top price `cap`, or `floor` (hunt_park_high) if that is higher,
-    and within `span` (hunt_park_span) of the ask we would pay."""
-    high = 0.0
-    oldest = -1.0
-    for ts, yes_bid, yes_ask in quotes:
-        age = now - ts
-        if age < 0 or age > seconds:
-            continue
-        oldest = max(oldest, age)
-        high = max(high, _side_ask(side, yes_bid, yes_ask))
-    if oldest < seconds - 5.0 or high <= 0:
-        return False
-    return high <= max(cap, floor) and high <= ask + span
-
-
-def _hunt_repeating(book: dict[int, list[float]], sec: int, idx: int, base: float) -> bool:
-    """Buying already showed up in several separate seconds before this 3-second print."""
-    need = max(HUNT_REPEAT_FLOOR, base)
-    n = 0
-    for k in range(3, 3 + HUNT_REPEAT_GAP):
-        row = book.get(sec - k)
-        if row and row[idx] >= need:
-            n += 1
-    return n >= HUNT_REPEAT_SECONDS
-
-
-@dataclass
-class Hunt:
-    """A 15-minute market a burst_hunt lane is watching without a position."""
-    ticker: str
-    lane: str
-    close_ts: float = 0.0
-    yes_bid: float = 0.0
-    yes_ask: float = 0.0
-    fired: bool = False
-    attempts: int = 0  # live tries that bought nothing
-    retry_at: float = 0.0  # no new try before this time
-    miss_row: int | None = None  # the decision row of the first miss: a later fill upgrades it to a trade instead of adding a second bet
-    quotes: deque[tuple[float, float, float]] = field(default_factory=deque)  # (ts, yes bid, yes ask), last hunt_park_seconds and a bit
-
-
-@dataclass
-class BuySignal:
-    """A watcher's call to buy; the buy worker acts on it. `kind` says which buy:
-    hunt = the cheap side of a market with no position (a burst_hunt lane; `hunt` and `spec` are set, `ask` was read at the burst),
-    flip = the other side of a held favorite whose burst is selling it (`held` is the target; its lane's burst_buy sets the stake)."""
-    kind: str
-    side: str
-    ask: float
-    reason: str
-    ctx: dict[str, Any]
-    hunt: Hunt | None = None
-    spec: LaneSpec | None = None
-    held: Target | None = None
-    queued: float = field(default_factory=time.time)
-
-    @property
-    def ticker(self) -> str:
-        return (self.hunt or self.held).ticker  # type: ignore[union-attr]
 
 
 class ProfitWatcher:
@@ -431,11 +325,8 @@ class ProfitWatcher:
         self._curve_busy = False
         self._ledger_at = 0.0
         self._ticks_warm = False
-        self._hunts: dict[str, Hunt] = {}  # ticker -> a burst_hunt watch (no position)
-        self._hunt_by_series: dict[str, LaneSpec] = {}  # series -> LaneSpec for burst_hunt lanes
         self._lock = threading.Lock()
         self._jobs: queue.SimpleQueue[SellSignal] = queue.SimpleQueue()  # sells for the sell worker. The socket only enqueues
-        self._buys: queue.SimpleQueue[BuySignal] = queue.SimpleQueue()  # buys for the buy worker. The socket only enqueues
         self._inflight: set[tuple[str, str]] = set()
         self._signalled: dict[tuple[str, str], float] = {}  # when each sell signal was queued, to time the sale (queue, checks, order)
         self.follow: Callable[[set[str]], None] | None = None  # start streaming these tickers now (the tape recorder's follow)
@@ -493,7 +384,6 @@ class ProfitWatcher:
             return
         if e.get("kind") != "quote" or e.get("bid") is None or e.get("ask") is None:
             return
-        self._note_hunt_quote(e)
         with self._lock:
             hits = [t for (ticker, _), t in self.targets.items() if ticker == e["ticker"]]
         for t in hits:
@@ -521,8 +411,6 @@ class ProfitWatcher:
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
             reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._cross_take_hit(t, bid) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
-            if t.drop_buy and not t.burst_logged and t.burst_buy > 0 and (t.drop_armed_at == now or ((reason or "").startswith("drop: bid") and t.drop_confirm <= 0)):
-                self._drop_hedge(t, bid, now)  # the other side is bought when the fall is found, before the sale: after the confirmed fall it costs far more
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
                 reason = self._cross_checked(t, bid, now, reason)
             if reason and key not in self._inflight:
@@ -548,21 +436,6 @@ class ProfitWatcher:
             del book[old]
         with self._lock:
             held = [t for (ticker, _), t in self.targets.items() if ticker == tk and t.burst_exit and (not t.burst_logged or t.burst_resell)]
-            hunt = self._hunts.get(tk)
-            spec = self._hunt_by_series.get(tk.split("-")[0])
-        if spec is not None and _hunt_contract_bar(spec, tk) > 0:
-            sold_px = 1.0 - paid  # the side they sold into
-            if len(row) < 7:
-                row.extend([0.0] * (7 - len(row)))
-            flip = False
-            if spec.hunt_sell_over > 0 and sold_px + 1e-9 >= spec.hunt_sell_over:
-                row[4] += count  # contracts sold on the winning side
-                flip = True
-            if spec.hunt_buy_under > 0 and 0 < paid <= spec.hunt_buy_under + 1e-9:
-                row[5] += count  # contracts bought on the losing side
-                flip = True
-            if not flip and spec.hunt_sell_over > 0 and paid + 1e-9 >= spec.hunt_sell_over:
-                row[6] += count  # contracts bought on the winning side. A cheap buy is the other trade, already in the two buckets above
         for t in held:
             idx = 1 if t.side == "yes" else 0  # NO takers against a YES holder, YES takers against a NO holder
             if t.burst_ratio > 0:
@@ -591,7 +464,6 @@ class ProfitWatcher:
                 against, base, ratio = _side_burst(book, sec, idx)
                 hit = _is_side_burst(against, base, ratio)
             if hit:
-                first = not t.burst_logged
                 t.burst_logged = True
                 t.burst_resell = False
                 other = "no" if t.side == "yes" else "yes"
@@ -601,180 +473,10 @@ class ProfitWatcher:
                     reason = (f"burst: ${against:.0f} bought against the {t.side} holder in 3 s (bar ${t.burst_bar:.0f}), the favorite's bid {t.cur_bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}")
                 else:
                     reason = (f"burst: {ratio:.0f}x this side's normal volume against the {t.side} holder ({against:.0f} contracts in 3 s), the favorite's bid {t.cur_bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}")
-                ctx = {"ratio": round(ratio, 1), "against_3s": round(against, 1), "normal_second": round(base, 1), "bid": round(t.cur_bid, 4),
-                       "other_ask": round(t.cur_other_ask, 4), "left": round(t.close_ts - now, 1), "held_lane": t.lane}
                 key = (t.ticker, t.lane)
                 if key not in self._inflight:
                     self._inflight.add(key)
                     self._queue_sell(SellSignal(t.ticker, t.lane, reason))  # sell the favorite: the burst is the peak crashing in the last two minutes
-                if not first:
-                    continue  # a repeat burst after a sale that filled nothing only sells again
-                if t.burst_buy > 0 and BUY_BAND[0] <= t.cur_other_ask <= BUY_BAND[1]:
-                    self._buys.put(BuySignal("flip", other, round(t.cur_other_ask, 4), reason, ctx, held=t))
-                    continue
-                try:
-                    store = self.store_factory()
-                    store.add_decision(ticker=tk, title="", bid=0.0, ask=round(t.cur_other_ask, 4), model_p=0.0, edge=0.0, action="bet", mode="observe", lane="burst_flip", category=_burst_category(tk), side=other, contracts=1.0,
-                                       stake_usd=round(t.cur_other_ask, 4), reason=reason, context=json.dumps(ctx), close_time="")
-                except Exception:
-                    log.debug("burst flip: could not log for %s", tk, exc_info=True)
-        if hunt is not None and spec is not None:
-            self._on_hunt(hunt, spec, now, book, sec)
-
-    def _note_hunt_quote(self, e: dict[str, Any]) -> None:
-        """Remember the YES book on a market a burst_hunt lane named. Close time is filled in on refresh (not on this thread)."""
-        spec = self._hunt_by_series.get(str(e["ticker"]).split("-")[0])
-        if spec is None:
-            return
-        with self._lock:
-            h = self._hunts.get(e["ticker"])
-            if h is None:
-                h = Hunt(e["ticker"], spec.name)
-                self._hunts[e["ticker"]] = h
-            h.yes_bid = float(e["bid"])
-            h.yes_ask = float(e["ask"])
-            h.quotes.append((float(e["ts"]), h.yes_bid, h.yes_ask))
-            while h.quotes and float(e["ts"]) - h.quotes[0][0] > max(spec.hunt_park_seconds, spec.hunt_crash_seconds) + 5.0:
-                h.quotes.popleft()
-
-    def _on_hunt(self, h: Hunt, spec: LaneSpec, now: float, book: dict[int, list[float]], sec: int) -> None:
-        """No position: buy the cheap side if THAT side's own taker tape just 5x'd. A 95c YES pile-on is ignored; a 5c NO dump is the burst."""
-        if h.fired or h.close_ts <= 0 or now < h.retry_at or not (spec.hunt_min_left <= h.close_ts - now <= spec.hunt_window):
-            return
-        asks = {"yes": h.yes_ask, "no": 1.0 - h.yes_bid}
-        lo, hi = spec.price
-        for side in spec.sides:
-            ask = asks[side]
-            if ask <= 0 or ask >= spec.hunt_cheap:
-                continue
-            bar = _hunt_contract_bar(spec, h.ticker)
-            if bar > 0:
-                # A contract spike. Each coin has its own bar (hunt_contracts_by): 1,000 contracts is the ETH print from 2026-10-26, and a busier coin has to clear more. Either bucket clearing the bar buys the cheap side once, at the ask.
-                if not (lo <= ask <= hi):
-                    continue
-                window = max(1, round(spec.hunt_seconds))
-                sold_n = sum(r[4] for k in range(window) if len(r := book.get(sec - k) or []) > 4)
-                bought_n = sum(r[5] for k in range(window) if len(r := book.get(sec - k) or []) > 5)
-                won_n = sum(r[6] for k in range(window) if len(r := book.get(sec - k) or []) > 6)
-                if sold_n <= bar and bought_n <= bar:
-                    continue
-                if won_n > sold_n and won_n > bought_n:
-                    continue  # more contracts bought on the winning side than either side of the spike: the favorite is being accumulated, not flipped
-                crashing, _was = _hunt_crashing(h.quotes, side, now, ask, spec.hunt_crash, spec.hunt_crash_seconds)
-                if crashing or not _hunt_parked(h.quotes, side, now, ask, hi, spec.hunt_park_seconds, spec.hunt_park_high, spec.hunt_park_span):
-                    continue
-                h.fired = True
-                reason = (f"spike: {sold_n:.0f} contracts sold on the winning side, {bought_n:.0f} bought under {spec.hunt_buy_under * 100:.0f}c, {won_n:.0f} bought on the winning side in {window} s (bar {bar:.0f}), {side} costs {ask:.2f}")
-                ctx = {"sold": round(sold_n, 1), "bought": round(bought_n, 1), "won": round(won_n, 1), "bar": bar, "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name, "trigger_ts": round(now, 3)}
-                self._buys.put(BuySignal("hunt", side, ask, reason, ctx, hunt=h, spec=spec))
-                return
-            if spec.hunt_dollars > 0:
-                # The flip trigger (collapse_study / flip_trigger_study, 2026-10-27): a favorite if the lane sets hunt_favorite (it was 90c; 0 = off), and at least $X bought AGAINST it (this cheap side's takers) in the last 3 s, in the last hunt_window seconds. Absolute dollars, not a multiple of normal.
-                if not (lo <= ask <= hi):
-                    continue
-                cheap_mid = (h.yes_bid + h.yes_ask) / 2.0 if side == "yes" else 1.0 - (h.yes_bid + h.yes_ask) / 2.0
-                if 1.0 - cheap_mid < spec.hunt_favorite:
-                    continue
-                bar = spec.hunt_dollars_btc if spec.hunt_dollars_btc > 0 and h.ticker.split("-")[0].startswith("KXBTC") else spec.hunt_dollars
-                idx = 0 if side == "yes" else 1
-                window = max(1, round(spec.hunt_seconds))
-                d3 = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(window) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
-                if d3 < bar:
-                    continue
-                if spec.hunt_spike > 0 and _side_dollar_ratio(book, sec, idx) < spec.hunt_spike:
-                    continue  # the bar is met, but not as a surge on this side's own normal buying
-                # Dollars on a side that just fell into the band is the favorite winning, not a turn.
-                # The buy is a side that was already sitting cheap (the same parked and crash checks as the older hunt).
-                crashing, _was = _hunt_crashing(h.quotes, side, now, ask, spec.hunt_crash, spec.hunt_crash_seconds)
-                if crashing or not _hunt_parked(h.quotes, side, now, ask, hi, spec.hunt_park_seconds, spec.hunt_park_high, spec.hunt_park_span):
-                    continue
-                h.fired = True
-                reason = f"flip: ${d3:.0f} bought against the {'no' if side == 'yes' else 'yes'} favorite in {window} s (bar ${bar:.0f}), {side} costs {ask:.2f}"
-                ctx = {"dollars_3s": round(d3, 1), "bar": bar, "spike": round(_side_dollar_ratio(book, sec, idx), 1), "favorite": round(1.0 - cheap_mid, 3), "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name, "trigger_ts": round(now, 3)}
-                self._buys.put(BuySignal("hunt", side, ask, reason, ctx, hunt=h, spec=spec))
-                return
-            vol, base, ratio = _side_burst(book, sec, 0 if side == "yes" else 1)
-            if not (lo <= ask <= hi) or not _hunt_burst(vol, base, ratio):
-                continue
-            if _side_dollar_ratio(book, sec, 0 if side == "yes" else 1) < BURST_RATIO:
-                log.info("burst hunt skipped, %s %s: %.0fx in contracts but under %.0fx in dollars (the price falling, not more money)", h.ticker, side, ratio, BURST_RATIO)
-                continue
-            crashing, was = _hunt_crashing(h.quotes, side, now, ask, spec.hunt_crash, spec.hunt_crash_seconds)
-            if crashing:
-                log.info("burst hunt skipped, %s %s is crashing: %.2f, was %.2f within %.0fs", h.ticker, side, ask, was, spec.hunt_crash_seconds)
-                continue
-            if not _hunt_parked(h.quotes, side, now, ask, hi, spec.hunt_park_seconds, spec.hunt_park_high, spec.hunt_park_span):
-                log.info("burst hunt skipped, %s %s has not been sitting under %.0fc", h.ticker, side, max(hi, spec.hunt_park_high) * 100)
-                continue
-            if not _hunt_repeating(book, sec, 0 if side == "yes" else 1, base):
-                log.info("burst hunt skipped, %s %s volume is one print, not repeat buying", h.ticker, side)
-                continue
-            h.fired = True
-            reason = (f"burst hunt: {ratio:.0f}x {side}'s own normal volume ({vol:.0f} contracts in 3 s), {side} costs {ask:.2f}")
-            ctx = {"ratio": round(ratio, 1), "with_3s": round(vol, 1), "normal_second": round(base, 1),
-                   "ask": round(ask, 4), "left": round(h.close_ts - now, 1), "lane": spec.name, "trigger_ts": round(now, 3)}
-            self._buys.put(BuySignal("hunt", side, ask, reason, ctx, hunt=h, spec=spec))
-            return
-
-    def _run_buys(self) -> None:
-        """The buy worker: buys (hunt and flip) come off the queue one at a time, so a slow order never holds up the socket or a sale on the sell worker."""
-        while not self._stop.is_set():
-            try:
-                job = self._buys.get(timeout=1.0)
-            except queue.Empty:
-                continue
-            self._buy_job(job)
-
-    def _drain_buys(self) -> None:
-        """Run every queued buy now, on this thread (the worker does the same one at a time)."""
-        while True:
-            try:
-                job = self._buys.get_nowait()
-            except queue.Empty:
-                return
-            self._buy_job(job)
-
-    def _buy_job(self, sig: BuySignal) -> None:
-        waited = time.time() - sig.queued
-        spec = sig.spec or (lane_specs(self.get_settings()).get(sig.held.lane) if sig.held is not None else None)  # the lane's own limits; a flip buy takes the holding lane's
-        stale = spec.hunt_stale_seconds if spec is not None else LaneSpec.hunt_stale_seconds
-        if waited > stale:
-            log.info("%s buy skipped, %s %s: the buy waited %.0fs in the queue, the price it was read at is gone", sig.kind, sig.ticker, sig.side, waited)
-            if sig.hunt is not None:
-                sig.hunt.fired = False  # nothing was tried, so the market may fire again at a fresh price (no attempt used)
-            return
-        sig.ctx["queued_s"] = round(waited, 2)
-        if sig.kind == "flip" and sig.held is not None:
-            self._burst_buy(sig.held, sig.side, sig.reason, sig.ctx)
-        elif sig.hunt is not None and sig.spec is not None:
-            h = sig.hunt
-            res = self._hunt_buy(h, sig.spec, sig.side, sig.ask, sig.reason, sig.ctx)
-            if res is not None and res.outcome == "missed":
-                h.attempts += 1
-                h.miss_row = res.row_id
-                if res.retryable and h.attempts < sig.spec.hunt_attempts:
-                    h.retry_at = time.time() + sig.spec.hunt_retry_seconds
-                    h.fired = False
-
-    def _hunt_buy(self, h: Hunt, spec: LaneSpec, side: str, ask: float, reason: str, ctx: dict[str, Any]) -> buyer.BuyResult | None:
-        """Paper (or live) buy of the cheap side after a hunt burst, under the hunting lane's rules (buyer.hunt_plan). Runs on the buy worker, never on the socket.
-        A try after a miss carries the first try's row (h.miss_row), so a fill upgrades that bet instead of adding a second one."""
-        try:
-            plan = buyer.hunt_plan(spec, h.ticker, side, ask, h.close_ts, reason, ctx, self.client)
-            plan.retry_of = h.miss_row
-            ctx["attempt"] = h.attempts + 1
-            return buyer.buy(plan, self.get_settings(), self.store_factory())
-        except Exception:
-            log.exception("burst hunt: failed for %s", h.ticker)
-            return None
-
-    def _burst_buy(self, t: Target, other: str, reason: str, ctx: dict[str, Any]) -> None:
-        """A burst hit a held favorite: buy the other side, a fixed small stake, once per market (buyer.flip_plan). Real when the holding lane is live, a paper bet otherwise or when the order does not fill.
-        Runs on the buy worker, never on the socket."""
-        try:
-            buyer.buy(buyer.flip_plan(t, other, reason, ctx, self._book(t.lane)), self.get_settings(), self.store_factory())
-        except Exception:
-            log.exception("burst buy: failed for %s", t.ticker)
 
     def _cross_checked(self, t: Target, bid: float, now: float, reason: str) -> str | None:
         """A sale decided on a Polymarket bid is held back when Kalshi's bid for the same side and market is more than the lane's stop_cross_gap above it: Polymarket prints bids that are not real (exactly 0.15 on markets Kalshi has at 0.75), and a stop sold into one.
@@ -1368,15 +1070,6 @@ class ProfitWatcher:
         held = f" for {now - t.stop_since:.0f}s" if wait else ""
         return f"stop-loss: bid {bid:.2f} is {1 - bid / ref:.0%} under the {ref:.2f} {'mark' if t.stop_ref else 'paid'}{held} (socket)"
 
-    def _drop_hedge(self, t: Target, bid: float, now: float) -> None:
-        """Buy the other side of a held favorite whose bid has just fallen (the lane's burst_buy stake, once per market, the same buy as a burst sale's), while it still costs at most `drop_buy_max`."""
-        if not (BUY_BAND[0] <= t.cur_other_ask <= t.drop_buy_max):
-            return
-        t.burst_logged = True
-        other = "no" if t.side == "yes" else "yes"
-        ctx = {"bid": round(bid, 4), "other_ask": round(t.cur_other_ask, 4), "left": round(t.close_ts - now, 1), "held_lane": t.lane, "kind": "drop"}
-        self._buys.put(BuySignal("flip", other, round(t.cur_other_ask, 4), f"drop: the {t.side} bid fell to {bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}", ctx, held=t))
-
     def _bounce_hit(self, t: Target, bid: float, now: float) -> str | None:
         """Sell into the first bounce of a losing bet. The bid has fallen `bounce_fall` or more under the price paid (`t.low` is the lowest bid since the position opened) and has now bounced `bounce_up` or more off that low: the
         first recovery is the best price a falling bet gets back (scripts/exit_tradeoff.py). Not in the last `burst_min_left` seconds, where a sale has nothing left to catch."""
@@ -1494,9 +1187,6 @@ class ProfitWatcher:
             if guard or flip:
                 tg = fresh[(ticker, lane)]
                 tg.settle_guard, tg.burst_exit = (spec.settlement_guard if guard else 0.0), spec.burst_exit and flip
-                stake = float(row["stake_usd"] or 0.0)
-                hedge = round(spec.burst_buy_pct * stake, 2) if spec.burst_buy_pct > 0 else spec.burst_buy  # a share of the bet when the lane sets one, else its flat dollars
-                tg.burst_buy = hedge if tg.burst_exit else 0.0
                 btc = ticker.split("-")[0].startswith("KXBTC")
                 tg.burst_bar = 0.0 if (btc and spec.burst_dollars_btc < 0) else (spec.burst_dollars_btc if (btc and spec.burst_dollars_btc > 0) else spec.burst_dollars)
                 tg.burst_favorite, tg.burst_window, tg.burst_min_left, tg.burst_share = spec.burst_favorite, spec.burst_window, spec.burst_min_left, spec.burst_share
@@ -1523,7 +1213,7 @@ class ProfitWatcher:
             held.watch_at = spec.watch_at
             held.bounce_fall, held.bounce_up = spec.bounce_fall, spec.bounce_up
             held.drop_cents, held.drop_seconds, held.drop_was = spec.drop_cents, spec.drop_seconds, spec.drop_was
-            held.drop_confirm, held.drop_stay, held.drop_window, held.drop_buy, held.drop_buy_max = spec.drop_confirm, spec.drop_stay, spec.drop_window, spec.drop_buy, spec.drop_buy_max
+            held.drop_confirm, held.drop_stay, held.drop_window = spec.drop_confirm, spec.drop_stay, spec.drop_window
             held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
             held.watch_loss, held.watch_loss_seconds, held.watch_loss_lift = spec.watch_loss, spec.watch_loss_seconds, spec.watch_loss_lift
             held.cross_gap = spec.stop_cross_gap
@@ -1603,36 +1293,14 @@ class ProfitWatcher:
         for held in fresh.values():
             if held.index_id:
                 runner.arm_index_history(s, held.index_id)
-        hunt_by = {ser: spec for spec in enabled_lanes(s) if spec.burst_hunt for ser in spec.series}
         with self._lock:
             self.targets = fresh
             for k in [k for k in self._soft_holds if k not in fresh]:
                 self._soft_holds.pop(k, None)  # a bet that settled or was sold with a soft hold pending
             self._inflight.intersection_update(fresh)  # a sale signal for a market that has since ended
-            self._hunt_by_series = hunt_by
-            for tk in [tk for tk, h in self._hunts.items() if tk.split("-")[0] not in hunt_by]:
-                del self._hunts[tk]
-            hunts = list(self._hunts.values())
         now = time.time()
         for tk in [tk for tk, b in list(self._flow.items()) if max(list(b), default=0) < now - 300.0]:
             self._flow.pop(tk, None)  # a market that stopped trading five minutes ago: the ledger only trims itself when a trade arrives, so a closed window's rows would stay for good
-        follow: set[str] = set()
-        for h in hunts:
-            if h.close_ts <= 0:
-                try:
-                    mk = self._market_static(h.ticker)
-                    h.close_ts = datetime.fromisoformat(str(mk.get("close_time"))).timestamp()
-                except (TypeError, ValueError, KalshiError):
-                    h.close_ts = 0.0
-            if h.close_ts and now - 7 * 86400 < h.close_ts < now - 5:
-                with self._lock:
-                    self._hunts.pop(h.ticker, None)
-                continue
-            hs = hunt_by.get(h.ticker.split("-")[0])
-            if h.close_ts and 0 < h.close_ts - now <= (hs.hunt_window if hs is not None else LaneSpec.hunt_window) + 30:
-                follow.add(h.ticker)
-        if follow and self.follow is not None:
-            self.follow(follow)
         self._book_resting(store, s)
         if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties_auto or sp.skip_varieties or sp.skip_markets_auto or sp.min_vol_rel > 0 or sp.max_vol_rel > 0 for sp in lane_specs(s).values()):
             self._ledger_at = time.time()
@@ -2089,7 +1757,7 @@ class ProfitWatcher:
         if self._threads:
             return
         for fn, name in (
-            (self._run_refresh, "watch-refresh"), (self._run_sells, "watch-sell"), (self._run_buys, "watch-buy"), (self._run_timers, "watch-timer"),
+            (self._run_refresh, "watch-refresh"), (self._run_sells, "watch-sell"), (self._run_timers, "watch-timer"),
             (self._run_fills, "watch-fills"), (self._run_checks, "watch-checks"),
         ):
             th = threading.Thread(target=fn, name=name, daemon=True)

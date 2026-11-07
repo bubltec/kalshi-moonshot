@@ -6,7 +6,6 @@ from kalshi_moonshot.sizing import size_bet
 from kalshi_moonshot.store import Store
 from tests.test_buy_retry import setup  # noqa: F401  (the buy fixture)
 from tests.test_risk import lose
-from tests.test_settlement import _watcher
 
 
 def _settings(tmp_path, monkeypatch, **env):
@@ -18,30 +17,10 @@ def _settings(tmp_path, monkeypatch, **env):
     return config.load()
 
 
-def test_the_hedge_is_a_share_of_the_held_bets_stake(tmp_path, monkeypatch):
-    w, _s, _store, _close = _watcher(tmp_path, monkeypatch)  # the held bet staked $2.70
-    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nburst_exit=true\nburst_buy_pct=0.5\nseries=['KXBTC15M']\nalways=true\n")
-    w.targets.clear()
-    w.refresh()
-    assert w.targets[("KXBTC15M-1", "guarded")].burst_buy == 1.35  # half of $2.70, so a bigger bet hedges with more
 
 
-def test_a_flat_hedge_still_works_when_no_share_is_set(tmp_path, monkeypatch):
-    w, _s, _store, _close = _watcher(tmp_path, monkeypatch)
-    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nburst_exit=true\nburst_buy=1.0\nseries=['KXBTC15M']\nalways=true\n")
-    w.targets.clear()
-    w.refresh()
-    assert w.targets[("KXBTC15M-1", "guarded")].burst_buy == 1.0
 
 
-def test_a_share_hedge_changes_the_lane_version_and_an_unset_one_does_not(tmp_path, monkeypatch):
-    s = _settings(tmp_path, monkeypatch)
-    spec = lanes.spec_for(s, "moonshot")
-    plain = lanes.settings_of(spec, s)
-    assert "burst_buy_pct" not in plain  # a lane that does not use it keeps the version it had
-    import dataclasses
-
-    assert "burst_buy_pct" in lanes.settings_of(dataclasses.replace(spec, burst_buy_pct=0.2), s)
 
 
 def test_the_per_trade_ceiling_is_a_share_of_equity_when_set(tmp_path, monkeypatch):

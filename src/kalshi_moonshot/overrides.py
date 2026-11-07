@@ -53,7 +53,6 @@ TUNABLES: dict[str, Tunable] = {
     "cash_out_at": Tunable("float", 0.0, 1.0, "Sell when the bid falls to this price (0 = off)", "$", "neutral"),
     "drop_cents": Tunable("float", 0.0, 0.5, "Sell a favorite whose bid falls this many dollars (0 = off)", "$", "neutral"),
     "burst_dollars": Tunable("float", 0.0, 5000.0, "Burst exit bar, dollars bought against in 3 s (0 = off)", "$", "neutral"),
-    "burst_buy": Tunable("float", 0.0, 10.0, "Dollars hedged on the other side at a burst", "$", "up"),
     "strike_through_sale": Tunable("float", 0.0, 1.0, "Strike-through sale, percent of the strike (0 = off)", "%", "neutral"),
     "scalp_dip": Tunable("float", 0.0, 0.2, "Scalp exit, dollars under the high", "$", "neutral"),
 }

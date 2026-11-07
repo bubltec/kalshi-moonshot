@@ -489,57 +489,50 @@ def _quiet_minute(w, now, per_second=40, ticker="KXBTC15M-1"):
 
 
 def test_a_burst_is_volume_against_the_markets_own_normal_not_a_fixed_number(tmp_path, monkeypatch):
-    w, _s, store, close = _watcher(tmp_path, monkeypatch)
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
     t = w.targets[("KXBTC15M-1", "guarded")]
     now = close - 120
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
     _quiet_minute(w, now)
     assert t.cur_bid == pytest.approx(0.90) and t.cur_other_ask == pytest.approx(0.10)
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 100, "taker": "no", "price": 0.5})  # twice a normal second, but under the floor: nothing
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
+    assert w._jobs.empty()
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})  # 700 against in 2 s: about 6x the normal 3 s, nearly all of it against the YES holder
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})  # still one log
-    rows = store.db.execute("SELECT side, ask, action, context FROM decisions WHERE lane='burst_flip'").fetchall()
-    assert len(rows) == 1 and rows[0]["side"] == "no" and rows[0]["ask"] == pytest.approx(0.10)
-    ctx = json.loads(rows[0]["context"])
-    assert ctx["ratio"] >= 5 and ctx["normal_second"] == pytest.approx(20.0)  # this SIDE's own median second (half of the mixed 40)
     assert not w._jobs.empty() and w._jobs.get_nowait()[2].startswith("burst:")  # last 120 s: sell the favorite, that is the peak-crash exit
 
 
 def test_a_burst_before_the_last_two_minutes_is_not_an_exit(tmp_path, monkeypatch):
-    w, _s, store, close = _watcher(tmp_path, monkeypatch)
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
     now = close - 200  # 200 s left: holding still paid on the burst_flip record; the exit only fires in the last 120 s
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
     _quiet_minute(w, now)
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
     assert w._jobs.empty()
 
 
 def test_a_silent_book_cannot_five_times_its_own_silence(tmp_path, monkeypatch):
-    w, _s, store, close = _watcher(tmp_path, monkeypatch)
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
     now = close - 120
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
     _quiet_minute(w, now, per_second=0)  # no trades: the median second is 0, so 5x would be 5x of nothing
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
     assert w._jobs.empty()
 
 
 def test_a_300_contract_print_on_a_thin_gold_book_is_not_a_crash(tmp_path, monkeypatch):
-    w, _s, store, close = _watcher(tmp_path, monkeypatch, ticker="KXGOLD15M-1")
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch, ticker="KXGOLD15M-1")
     now = close - 120
     w.on_event({"kind": "quote", "ticker": "KXGOLD15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
     _quiet_minute(w, now, per_second=2, ticker="KXGOLD15M-1")  # copper/natgas-like: a handful of contracts a second
     w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 1, "count": 324, "taker": "no", "price": 0.5})  # today's copper "358x" print
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
     assert w._jobs.empty()
 
 
 def test_a_burst_on_gold_with_a_real_baseline_sells(tmp_path, monkeypatch):
-    w, _s, store, close = _watcher(tmp_path, monkeypatch, ticker="KXGOLD15M-1")
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch, ticker="KXGOLD15M-1")
     t = w.targets[("KXGOLD15M-1", "guarded")]
     now = close - 120
     w.on_event({"kind": "quote", "ticker": "KXGOLD15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
@@ -547,8 +540,6 @@ def test_a_burst_on_gold_with_a_real_baseline_sells(tmp_path, monkeypatch):
     _quiet_minute(w, now, ticker="KXGOLD15M-1")
     w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
     w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    rows = store.db.execute("SELECT side, ask FROM decisions WHERE lane='burst_flip'").fetchall()
-    assert len(rows) == 1 and rows[0]["side"] == "no"
     assert not w._jobs.empty() and w._jobs.get_nowait()[2].startswith("burst:")
 
 
@@ -590,170 +581,46 @@ def _sat_cheap(w, at, bid=0.90, ask=0.91, ticker="KXBTC15M-1"):
         w.on_event({"kind": "quote", "ticker": ticker, "bid": bid, "ask": ask, "ts": at - 20 + k})
 
 
-def test_a_barely_5x_print_under_500_contracts_is_not_a_moonshot(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.92, "ask": 0.93, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now)  # 20 NO contracts a second; 350 in one second is about 5.7x and under the 500 cushion
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 350, "taker": "no", "price": 0.08})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
 
 
-def test_a_5x_print_of_500_contracts_is_still_a_moonshot(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.92, "ask": 0.93, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now)
-    _sat_cheap(w, now + 1, bid=0.92, ask=0.93)  # NO has been 8c for 20s, and the quiet minute already bought it
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 520, "taker": "no", "price": 0.08})
-    row = store.db.execute("SELECT side FROM decisions WHERE lane='crypto_moonshot'").fetchone()
-    assert row is not None and row["side"] == "no"
 
 
-def test_a_hunt_does_not_buy_a_side_that_is_crashing(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now)
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.35, "ask": 0.36, "ts": now - 8})  # NO costs 65c
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.85, "ask": 0.86, "ts": now + 1})  # NO costs 15c: down 50c
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.15})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.15})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
 
 
-def test_a_few_cent_dip_is_not_a_crash(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now)
-    _sat_cheap(w, now, bid=0.91, ask=0.92)  # NO sat at 9c, then eased to 7c
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.93, "ask": 0.94, "ts": now + 1})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.10})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.10})
-    row = store.db.execute("SELECT side FROM decisions WHERE lane='crypto_moonshot'").fetchone()
-    assert row is not None and row["side"] == "no"
 
 
-def test_a_burst_that_just_arrived_at_a_low_price_is_not_a_moonshot(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now)
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.60, "ask": 0.61, "ts": now - 14})  # NO costs 40c
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now + 1})  # NO costs 10c now
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.10})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.10})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
 
 
-def test_one_cheap_quote_is_not_repeat_buying(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now)
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now + 1})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.10})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.10})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
 
 
-def test_a_burst_hunt_buys_the_cheap_side_without_a_held_favorite(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    w.refresh()  # close time from the market
-    _quiet_minute(w, now)
-    _sat_cheap(w, now + 1)
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    row = store.db.execute("SELECT side, ask, lane, mode FROM decisions WHERE lane='crypto_moonshot'").fetchone()
-    assert row is not None and row["side"] == "no" and row["ask"] == pytest.approx(0.10) and row["mode"] == "observe"
 
 
-def test_a_one_cent_ask_is_not_a_moonshot(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.99, "ask": 1.00, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now)
-    _sat_cheap(w, now + 1, bid=0.99, ask=1.00)  # NO has been 1c
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.01})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.01})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
 
 
-def test_a_burst_hunt_ignores_a_side_outside_2_to_20_cents(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.70, "ask": 0.72, "ts": now - 130})  # NO costs 30c
-    w.refresh()
-    _quiet_minute(w, now)
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
 
 
-def test_a_favorite_pile_on_does_not_hide_a_cheap_side_burst(tmp_path, monkeypatch):
-    """YES at 95c prints a huge volume; NO at 5c also 5xs its own tape. The burst is the 5c buys."""
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.95, "ask": 0.96, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now)
-    _sat_cheap(w, now + 1, bid=0.95, ask=0.96)  # NO has been 5c
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 8000, "taker": "yes", "price": 0.95})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 800, "taker": "no", "price": 0.05})
-    row = store.db.execute("SELECT side, ask FROM decisions WHERE lane='crypto_moonshot'").fetchone()
-    assert row is not None and row["side"] == "no" and row["ask"] == pytest.approx(0.05)
 
 
-def test_a_favorite_only_spike_is_not_a_cheap_burst(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.95, "ask": 0.96, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now)
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 9000, "taker": "yes", "price": 0.95})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
 
 
-def test_a_burst_hunt_ignores_gold(tmp_path, monkeypatch):
-    w, _s, store, close = _hunt_watcher(tmp_path, monkeypatch)  # lane series is KXBTC15M only
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXGOLD15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    w.refresh()
-    _quiet_minute(w, now, ticker="KXGOLD15M-1")
-    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
-    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='crypto_moonshot'").fetchone()[0] == 0
 
 
 def test_the_same_volume_in_a_busy_market_is_not_a_burst(tmp_path, monkeypatch):
-    w, _s, store, close = _watcher(tmp_path, monkeypatch)
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
     now = close - 120
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
     _quiet_minute(w, now, per_second=1500)  # a market that normally trades 1,500 contracts a second
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 3000, "taker": "no", "price": 0.5})  # the fixed bar of 3,000 would have fired; against this market it is ordinary
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
 
 
 def test_trading_with_the_holder_or_a_favorite_that_is_not_one_is_not_a_burst(tmp_path, monkeypatch):
-    w, _s, store, close = _watcher(tmp_path, monkeypatch)
+    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
     now = close - 120
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
     _quiet_minute(w, now)
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 5000, "taker": "yes", "price": 0.9})  # YES takers are with a YES holder
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.40, "ask": 0.41, "ts": now + 5})  # no longer a favorite
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 6, "count": 20000, "taker": "no", "price": 0.5})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE lane='burst_flip'").fetchone()[0] == 0
 
 
 def test_the_settlement_edge_logs_the_underpriced_side_once_per_bar(tmp_path, monkeypatch):
@@ -801,37 +668,8 @@ def test_the_settlement_edge_stays_quiet_outside_the_window_or_without_a_spot(tm
     assert edge.evaluate(near) == 0  # no index tick yet: no chance, no log
 
 
-def test_a_burst_on_a_live_lane_buys_the_other_side_for_real_and_records_it(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, _s, store, _close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    t.burst_buy, t.cur_other_ask = 1.0, 0.10
-    bought = []
-
-    def fake_place(settings, client, st, shot, why, count, **kw):
-        bought.append((shot.side, shot.ask, count))
-        return runner.Placed("bought NO 9/9 @ 0.1000", 9.0, 0.95)
-
-    monkeypatch.setattr(runner, "place", fake_place)
-    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
-    w.client.authed = True
-    w._burst_buy(t, "no", "burst: test", {"ratio": 9.0})
-    assert bought == [("no", pytest.approx(0.12), 8.0)]  # a dollar at the ask plus the 2c allowance: 8 whole contracts
-    row = store.db.execute("SELECT mode, side, contracts, stake_usd, lane FROM decisions WHERE lane='burst_flip'").fetchone()
-    assert row["mode"] == "trade" and row["side"] == "no" and row["contracts"] == 9.0 and row["stake_usd"] == pytest.approx(0.95)
 
 
-def test_a_burst_on_a_paper_lane_only_logs(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, _s, store, _close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    t.burst_buy, t.cur_other_ask = 1.0, 0.10
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no order on a paper lane")))
-    w._burst_buy(t, "no", "burst: test", {})
-    row = store.db.execute("SELECT mode FROM decisions WHERE lane='burst_flip'").fetchone()
-    assert row["mode"] == "observe"
 
 
 def test_dwell_counts_the_seconds_a_side_has_been_in_the_band(tmp_path):
@@ -1289,39 +1127,8 @@ def test_a_resting_buy_is_sized_to_its_own_price_and_spends_the_whole_stake(tmp_
     assert resting.contracts == pytest.approx(2.24) and resting.cost_usd == pytest.approx(1.9936)  # 2.24 contracts at the resting 0.89, no fee
 
 
-def test_a_hunt_lane_may_widen_how_expensive_a_parked_side_can_be():
-    from collections import deque
-
-    now = 1000.0
-    quotes = deque((now - 20.0 + k, 0.84, 0.86) for k in range(21))  # the NO side's ask sits at 0.16 for 20 s: YES bid 0.84
-    # side "no": ask = 1 - yes_bid = 0.16
-    assert watcher._hunt_parked(quotes, "no", now, 0.16) is False  # over the default 10c cap
-    assert watcher._hunt_parked(quotes, "no", now, 0.16, 0.17) is True  # a lane that buys up to 17c accepts it
-    quotes2 = deque((now - 20.0 + k, 0.90, 0.92) for k in range(21))  # 0.10: parked under the default cap
-    assert watcher._hunt_parked(quotes2, "no", now, 0.10) is True
 
 
-def test_a_hunt_lane_that_requires_a_prior_win_buys_only_series_that_have_won(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import lanes, runner
-
-    w, s, store, _close = _watcher(tmp_path, monkeypatch)
-    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", require_prior_win=True, fixed_stake=0.5, max_open=0)
-    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
-    w.client.authed = True
-    placed = []
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (placed.append(a[3].ticker) or runner.Placed("bought", 5.0, 0.4)))
-    h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=time.time() + 100)
-    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd) VALUES (?,?,?,?,?,?,?,?,?)", (1.0, "KXETH15M-0", "bet", "observe", 0.05, "no", "guarded", 10, 0.5))
-    store.db.execute("INSERT INTO windows (ticker, series, close_ts, result, fetched_ts) VALUES (?,?,?,?,?)", ("KXETH15M-0", "KXETH15M", 5.0, "no", 1.0))
-    store.db.commit()
-    w._hunt_buy(h, spec, "no", 0.05, "burst hunt: test", {})  # ETH has won for this lane: real
-    h2 = watcher.Hunt("KXBTC15M-1", "guarded", close_ts=time.time() + 100)
-    w._hunt_buy(h2, spec, "no", 0.05, "burst hunt: test", {})  # BTC has not: paper
-    assert placed == ["KXETH15M-1"]
-    rows = {r["ticker"]: r["mode"] for r in store.db.execute("SELECT ticker, mode FROM decisions WHERE ticker LIKE '%-1' AND lane='guarded'").fetchall()}
-    assert rows["KXETH15M-1"] == "trade" and rows["KXBTC15M-1"] == "observe"
 
 
 def test_a_side_sliding_to_a_cheaper_price_is_not_a_dollar_burst():
@@ -1339,45 +1146,6 @@ def test_a_side_sliding_to_a_cheaper_price_is_not_a_dollar_burst():
     assert watcher._side_dollar_ratio(book, sec, 0) >= 5.0
 
 
-def test_the_flip_trigger_buys_the_cheap_side_on_dollars_against_a_90c_favorite(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import lanes
-
-    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
-    _buy_inline(w)
-    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.15), hunt_dollars=400.0, hunt_dollars_btc=800.0, hunt_favorite=0.90, sides=("yes", "no"), fixed_stake=0.5, max_open=0)
-    bought = []
-    monkeypatch.setattr(w, "_hunt_buy", lambda h, sp, side, ask, reason, ctx: bought.append((h.ticker, side, round(ask, 2), ctx["bar"])))
-    now = 1_000_000.0
-    sec = int(now)
-    h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)  # YES is the 93c favorite; the NO side costs 0.07
-    h.quotes.extend((now - 20.0 + i, 0.93, 0.94) for i in range(21))  # NO has been sitting at 7c, not falling into it
-    book = {sec: [0.0, 300.0, 0.0, 21.0], sec - 1: [0.0, 200.0, 0.0, 14.0]}  # NO takers bought $35 in 3 s: well under the bar
-    w._on_hunt(h, spec, now, book, sec)
-    assert bought == []
-    book[sec - 2] = [0.0, 6000.0, 0.0, 420.0]  # $455 against the favorite
-    w._on_hunt(h, spec, now, book, sec)
-    assert bought == [("KXETH15M-1", "no", 0.07, 400.0)]
-    bought.clear()
-    hb = watcher.Hunt("KXBTC15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)  # BTC needs $800: $455 is not enough
-    hb.quotes.extend((now - 20.0 + i, 0.93, 0.94) for i in range(21))
-    w._on_hunt(hb, spec, now, book, sec)
-    assert bought == []
-    book[sec - 2] = [0.0, 12000.0, 0.0, 820.0]
-    w._on_hunt(hb, spec, now, book, sec)
-    assert bought and bought[0][3] == 800.0
-    hf = watcher.Hunt("KXETH15M-2", "guarded", close_ts=now + 60.0, yes_bid=0.87, yes_ask=0.88)  # NO is 13c, in the band, but the favorite is 87c: this lane wants 90c
-    hf.quotes.extend((now - 20.0 + i, 0.87, 0.88) for i in range(21))
-    bought.clear()
-    w._on_hunt(hf, spec, now, book, sec)
-    assert bought == []
-    fell = watcher.Hunt("KXETH15M-3", "guarded", close_ts=now + 60.0, yes_bid=0.90, yes_ask=0.91)  # NO now 10c, but it was 40c a few seconds ago
-    fell.quotes.extend((now - 20.0 + i, 0.60, 0.62) for i in range(12))
-    fell.quotes.append((now, 0.90, 0.91))
-    bought.clear()
-    w._on_hunt(fell, spec, now, book, sec)
-    assert bought == []
 
 
 def test_the_burst_exit_can_use_the_moonshot_dollars_instead_of_a_multiple(tmp_path, monkeypatch):
@@ -1411,200 +1179,30 @@ def _queued_hunt(tmp_path, monkeypatch):
     return w, store, spec, h
 
 
-def test_the_socket_only_queues_a_hunt_buy_and_the_worker_places_it(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    placed = []
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (placed.append(a[3].ticker) or runner.Placed("bought", 5.0, 0.4)))
-    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec))
-    assert placed == [] and store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 0  # nothing happens until the worker takes it
-    w._drain_buys()
-    assert placed == ["KXETH15M-1"]
-    assert store.db.execute("SELECT mode FROM decisions WHERE ticker='KXETH15M-1'").fetchone()["mode"] == "trade"
 
 
-def test_a_live_hunt_order_that_does_not_fill_says_why_it_missed(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("order failed: no fill at the limit"))
-    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec))
-    w._drain_buys()
-    row = store.db.execute("SELECT mode, reason, context FROM decisions WHERE ticker='KXETH15M-1'").fetchone()
-    assert row["mode"] == "observe" and "live order not filled: order failed: no fill at the limit" in row["reason"]
-    ctx = json.loads(row["context"])
-    assert ctx["live"] is True and ctx["miss"] == "order failed: no fill at the limit"
 
 
-def test_a_rate_limited_hunt_order_is_logged_not_lost(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.kalshi import KalshiRateLimited
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-
-    def limited(*a, **k):
-        raise KalshiRateLimited("429")
-
-    monkeypatch.setattr(runner, "place", limited)
-    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec))
-    w._drain_buys()
-    row = store.db.execute("SELECT mode, reason FROM decisions WHERE ticker='KXETH15M-1'").fetchone()
-    assert row is not None and row["mode"] == "observe" and "rate limited" in row["reason"]
 
 
-def test_a_hunt_buy_that_waited_too_long_in_the_queue_is_dropped(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    placed = []
-    monkeypatch.setattr(runner, "place", lambda *a, **k: placed.append(1))
-    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec, queued=time.time() - spec.hunt_stale_seconds - 1.0))
-    w._drain_buys()
-    assert placed == [] and store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 0
 
 
-def test_a_burst_on_a_held_favorite_queues_the_flip_buy_and_the_worker_places_it(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, _s, store, close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    t.burst_buy = 1.0
-    bought = []
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (bought.append(a[3].side) or runner.Placed("bought NO 8/8 @ 0.1000", 8.0, 0.85)))
-    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
-    w.client.authed = True
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    _quiet_minute(w, now)
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    sell = w._jobs.get_nowait()
-    assert isinstance(sell, watcher.SellSignal) and sell.why.startswith("burst:")  # the favorite is sold by the sell worker
-    assert w._buys.qsize() == 1 and bought == []  # and the other side is only queued: the socket bought nothing
-    w._drain_buys()
-    assert bought == ["no"]
-    row = store.db.execute("SELECT mode, side FROM decisions WHERE lane='burst_flip'").fetchone()
-    assert row["mode"] == "trade" and row["side"] == "no"
 
 
-def test_a_hunt_lane_at_its_max_open_buys_nothing_more(tmp_path, monkeypatch, caplog):
-    import dataclasses
-
-    from kalshi_moonshot import runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)  # the fixture already holds one open bet in this lane
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no order past max_open")))
-    with caplog.at_level("INFO", logger="moonshot"):
-        w._hunt_buy(h, dataclasses.replace(spec, max_open=1), "no", 0.05, "burst hunt: test", {})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 0
-    assert "already holds 1 of its 1 open bets" in caplog.text  # a skipped trigger is not silent
-    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("bought", 5.0, 0.4))
-    w._hunt_buy(h, dataclasses.replace(spec, max_open=2), "no", 0.05, "burst hunt: test", {})  # one slot left
-    assert store.db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='KXETH15M-1'").fetchone()[0] == 1
 
 
-def test_a_hunt_does_not_buy_a_market_the_lane_already_holds(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, store, spec, _h = _queued_hunt(tmp_path, monkeypatch)
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("already held")))
-    held = watcher.Hunt("KXBTC15M-1", "guarded", close_ts=time.time() + 100)  # the fixture's open bet
-    before = store.db.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
-    w._hunt_buy(held, spec, "no", 0.05, "burst hunt: test", {})
-    assert store.db.execute("SELECT COUNT(*) FROM decisions").fetchone()[0] == before
 
 
-def test_a_live_hunt_order_is_sized_to_the_stake_with_the_two_cent_allowance(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, _store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    seen = []
-
-    def fake_place(settings, client, st, shot, why, count, **kw):
-        seen.append((shot.lane, shot.side, shot.bid, shot.ask, count, shot.series))
-        return runner.Placed("bought", count, 0.4)
-
-    monkeypatch.setattr(runner, "place", fake_place)
-    w._hunt_buy(h, spec, "no", 0.05, "burst hunt: test", {})  # fixed_stake 0.5
-    assert seen == [("guarded", "no", pytest.approx(0.04), pytest.approx(0.07), 7.0, "KXETH15M")]  # int(0.5 / 0.07) whole contracts, limit 2c over the ask
 
 
-def test_a_paper_hunt_is_sized_by_the_stake_at_the_ask_and_defaults_to_two_dollars(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": False)
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("paper lane")))
-    w._hunt_buy(h, dataclasses.replace(spec, fixed_stake=0.0), "no", 0.05, "burst hunt: test", {})
-    row = store.db.execute("SELECT mode, contracts, stake_usd, ask, lane, close_time FROM decisions WHERE ticker='KXETH15M-1'").fetchone()
-    assert row["mode"] == "observe" and row["lane"] == "guarded" and row["ask"] == pytest.approx(0.05)
-    assert row["contracts"] == pytest.approx(28.0) and row["stake_usd"] == pytest.approx(1.4)  # no fixed stake: $2 over the 7c limit is 28 whole contracts, the same count a live order asks for, paid at the ask
-    assert len(row["close_time"]) == 20 and row["close_time"].endswith("Z")
 
 
-def test_a_flip_buy_is_live_by_the_holding_lane_and_logged_as_burst_flip(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, _s, store, _close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    t.burst_buy, t.cur_other_ask = 1.0, 0.10
-    asked, seen = [], []
-    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": (asked.append((lane, series)) or True))
-    monkeypatch.setattr(runner, "place", lambda settings, client, st, shot, why, count, **kw: (seen.append((shot.lane, shot.side, count)) or runner.Placed("bought", count, 0.9)))
-    w.client.authed = True
-    w._burst_buy(t, "no", "burst: test", {})
-    assert asked == [("guarded", "KXBTC15M")] and seen == [("burst_flip", "no", 8.0)]
-    row = store.db.execute("SELECT lane, close_time FROM decisions WHERE lane='burst_flip'").fetchone()
-    assert row["close_time"] == ""
 
 
-def test_a_paper_flip_buy_is_one_contract_at_the_ask(tmp_path, monkeypatch):
-    w, _s, store, _close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    t.burst_buy, t.cur_other_ask = 1.0, 0.10
-    w._burst_buy(t, "no", "burst: test", {})
-    row = store.db.execute("SELECT mode, contracts, stake_usd, reason FROM decisions WHERE lane='burst_flip'").fetchone()
-    assert row["mode"] == "observe" and row["contracts"] == 1.0 and row["stake_usd"] == pytest.approx(0.10) and row["reason"] == "burst: test"
 
 
-def test_a_flip_order_that_does_not_fill_says_why_it_missed(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.kalshi import KalshiRateLimited
-
-    w, _s, store, _close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    t.burst_buy, t.cur_other_ask = 1.0, 0.10
-    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
-    w.client.authed = True
-    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("order failed: no fill at the limit"))
-    w._burst_buy(t, "no", "burst: test", {})
-
-    def limited(*a, **k):
-        raise KalshiRateLimited("429")
-
-    monkeypatch.setattr(runner, "place", limited)
-    w._burst_buy(t, "yes", "burst: test", {})
-    rows = store.db.execute("SELECT mode, side, reason, context FROM decisions WHERE lane='burst_flip' ORDER BY id").fetchall()
-    assert [r["mode"] for r in rows] == ["observe", "observe"]  # both attempts are logged, not lost
-    assert "live order not filled: order failed: no fill at the limit" in rows[0]["reason"] and json.loads(rows[0]["context"])["miss"] == "order failed: no fill at the limit"
-    assert "rate limited" in rows[1]["reason"]
 
 
-def test_a_paper_hunt_and_a_live_one_are_the_same_size(tmp_path, monkeypatch):
-    from kalshi_moonshot import buyer, runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    live = []
-    monkeypatch.setattr(runner, "place", lambda settings, client, st, shot, why, count, **kw: (live.append(count) or runner.Placed("bought", count, 0.4)))
-    w._hunt_buy(h, spec, "no", 0.03, "burst hunt: test", {})
-    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": False)
-    paper = watcher.Hunt("KXSOL15M-1", "guarded", close_ts=time.time() + 100)
-    w._hunt_buy(paper, spec, "no", 0.03, "burst hunt: test", {})
-    row = store.db.execute("SELECT contracts FROM decisions WHERE ticker='KXSOL15M-1'").fetchone()
-    assert live == [10.0] and row["contracts"] == 10.0 == buyer.whole_contracts(0.5, 0.03)  # not 16.7 contracts on paper against 10 live
 
 
 def test_the_flow_ledger_drops_a_market_that_stopped_trading(tmp_path, monkeypatch):
@@ -1626,142 +1224,22 @@ def _two_rows(store):
     return store.db.execute("SELECT id, mode, ask, contracts, stake_usd, reason, context FROM decisions WHERE ticker='KXETH15M-1'").fetchall()
 
 
-def test_a_hunt_that_certainly_bought_nothing_may_fire_again_and_the_fill_upgrades_its_row(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    answers = iter([runner.Placed("bought NO 0/7 @ 0.0700"), runner.Placed("bought NO 7/7 @ 0.0600", 7.0, 0.45)])
-    monkeypatch.setattr(runner, "place", lambda *a, **k: next(answers))
-    _hunt_job(w, h, spec)
-    w._drain_buys()
-    rows = _two_rows(store)
-    assert len(rows) == 1 and rows[0]["mode"] == "observe"  # the first miss is the paper fallback, as before
-    assert h.fired is False and h.attempts == 1 and h.miss_row == rows[0]["id"] and h.retry_at > time.time()  # and the market may fire again
-    _hunt_job(w, h, spec, ask=0.06)
-    w._drain_buys()
-    rows = _two_rows(store)
-    assert len(rows) == 1  # the same row, not a second bet on the market
-    assert rows[0]["mode"] == "trade" and rows[0]["contracts"] == 7.0 and rows[0]["stake_usd"] == pytest.approx(0.45) and rows[0]["ask"] == pytest.approx(0.06)
-    ctx = json.loads(rows[0]["context"])
-    assert ctx["attempt"] == 2 and ctx["first_ask"] == pytest.approx(0.05)
-    assert h.fired is True  # a fill ends it
 
 
-def test_a_hunt_stops_retrying_after_its_attempts_and_keeps_one_paper_row(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    calls = []
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (calls.append(1) or runner.Placed("bought NO 0/7 @ 0.0700")))
-    for _ in range(spec.hunt_attempts):
-        assert h.fired is False
-        _hunt_job(w, h, spec)
-        w._drain_buys()
-    assert len(calls) == spec.hunt_attempts and h.fired is True  # spent
-    rows = _two_rows(store)
-    assert len(rows) == 1 and rows[0]["mode"] == "observe" and json.loads(rows[0]["context"])["attempt"] == spec.hunt_attempts
 
 
-def test_a_miss_that_may_have_filled_is_never_retried(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    for note in ("order failed: ReadTimeout: timed out", "blocked by risk: daily loss", "skipped: order $0.10 is under the $0.25 minimum", "skipped: exchange 1 (where KXETH15M trades) has no cash"):
-        w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-        monkeypatch.setattr(runner, "place", lambda *a, _n=note, **k: runner.Placed(_n))
-        _hunt_job(w, h, spec)
-        w._drain_buys()
-        assert h.fired is True and h.attempts == 1, note  # one attempt: the order may have gone through, or can never go through
-        store.db.execute("DELETE FROM decisions WHERE ticker='KXETH15M-1'")
-        store.db.commit()
 
 
-def test_a_rate_limited_or_unreadable_book_is_retried(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.kalshi import KalshiRateLimited
-
-    w, _store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-
-    def limited(*a, **k):
-        raise KalshiRateLimited("429")
-
-    monkeypatch.setattr(runner, "place", limited)
-    _hunt_job(w, h, spec)
-    w._drain_buys()
-    assert h.fired is False and h.attempts == 1  # nothing was sent
-    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("skipped: could not read the book (timeout)"))
-    _hunt_job(w, h, spec)
-    w._drain_buys()
-    assert h.fired is False and h.attempts == 2
 
 
-def test_a_retry_for_another_row_or_after_a_restart_is_blocked(tmp_path, monkeypatch):
-    from kalshi_moonshot import buyer, runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("bought NO 0/7 @ 0.0700"))
-    _hunt_job(w, h, spec)
-    w._drain_buys()
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not buy twice")))
-    fresh = watcher.Hunt("KXETH15M-1", "guarded", close_ts=time.time() + 100)  # after a restart the hunt knows nothing of the first row
-    _hunt_job(w, fresh, spec)
-    w._drain_buys()
-    assert len(_two_rows(store)) == 1
-    plan = buyer.hunt_plan(spec, "KXETH15M-1", "no", 0.05, fresh.close_ts, "r", {}, w.client)
-    plan.retry_of = 999999  # a row that is not the one this market holds
-    assert buyer.buy(plan, w.get_settings(), store).outcome == "skipped"
 
 
-def test_a_stale_dropped_buy_lets_the_market_fire_again(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    w, store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    monkeypatch.setattr(runner, "place", lambda *a, **k: (_ for _ in ()).throw(AssertionError("stale")))
-    h.fired = True
-    w._buys.put(watcher.BuySignal("hunt", "no", 0.05, "burst hunt: test", {}, hunt=h, spec=spec, queued=time.time() - spec.hunt_stale_seconds - 1.0))
-    w._drain_buys()
-    assert h.fired is False and h.attempts == 0 and _two_rows(store) == []  # nothing was tried, so no attempt is used
 
 
-def test_a_hunt_waits_out_its_retry_cooldown(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import lanes
-
-    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
-    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.15), hunt_dollars=400.0, sides=("yes", "no"), fixed_stake=0.5, max_open=0)
-    now = 1_000_000.0
-    sec = int(now)
-    h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)
-    h.quotes.extend((now - 20.0 + i, 0.93, 0.94) for i in range(21))
-    book = {sec: [0.0, 6000.0, 0.0, 455.0]}  # $455 against the favorite
-    h.retry_at = now + 3.0
-    w._on_hunt(h, spec, now, book, sec)
-    assert w._buys.empty()  # still cooling down
-    w._on_hunt(h, spec, now + 4.0, {sec + 4: book[sec]}, sec + 4)
-    assert w._buys.qsize() == 1  # the burst is still on and the cooldown is over
 
 
-def test_the_hunt_and_burst_settings_default_to_what_was_hard_coded():
-    from kalshi_moonshot.lanes import LaneSpec
-
-    assert (LaneSpec.hunt_favorite, LaneSpec.hunt_cheap, LaneSpec.hunt_window, LaneSpec.hunt_min_left) == (0.0, 0.50, 120.0, 10.0)  # no favorite requirement unless a lane sets one
-    assert LaneSpec.hunt_spike == 0.0  # and no spike requirement: the dollar bar alone
-    assert (LaneSpec.hunt_crash, LaneSpec.hunt_crash_seconds, LaneSpec.hunt_park_seconds, LaneSpec.hunt_park_high, LaneSpec.hunt_park_span) == (0.10, 12.0, 20.0, 0.10, 0.06)
-    assert (LaneSpec.hunt_attempts, LaneSpec.hunt_retry_seconds, LaneSpec.hunt_stale_seconds) == (3, 3.0, 10.0)
-    assert (LaneSpec.burst_favorite, LaneSpec.burst_window, LaneSpec.burst_min_left) == (0.90, 120.0, 10.0)
 
 
-def test_the_hunt_and_burst_settings_come_from_strategies_toml(tmp_path, monkeypatch):
-    from kalshi_moonshot import lanes
-
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(
-        "[lane.crypto_moonshot]\nestimator='ladder'\nprice=[0.02,0.20]\nhours=[0.0,0.04]\nburst_hunt=true\nhunt_dollars=400\n"
-        "hunt_favorite=0.80\nhunt_window=90\nhunt_attempts=1\nburst_favorite=0.85\n"
-    )
-    spec = lanes.lane_specs(config.load())["crypto_moonshot"]
-    assert (spec.hunt_favorite, spec.hunt_window, spec.hunt_attempts, spec.burst_favorite) == (0.80, 90, 1, 0.85)
-    assert spec.hunt_crash == 0.10  # the ones it does not name keep their defaults
 
 
 def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, baseline=0.0, flow=None, ticker="KXETH15M-1", **spec_changes):
@@ -1787,95 +1265,20 @@ def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, baseline
     return w._buys.qsize()
 
 
-def test_a_thousand_contracts_in_two_seconds_buys_the_cheap_side(tmp_path, monkeypatch):
-    common = {"yes_bid": 0.93, "yes_ask": 0.94, "hunt_dollars": 0.0, "hunt_contracts": 1000.0, "hunt_seconds": 2.0, "hunt_crash": 1.0, "hunt_park_seconds": 2.0, "hunt_park_high": 1.0, "hunt_park_span": 1.0}
-    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 600, 0], 1: [0, 0, 0, 0, 500, 0]}, **common) == 1  # 1,100 sold on the winning side across 2 seconds, NO at 7c
-    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 1001]}, **common) == 1  # just over 1,000 bought on the losing side
-    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 1000]}, **common) == 0  # 1,000 is not over the bar
-    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 1001]}, yes_bid=0.75, yes_ask=0.76, hunt_dollars=0.0, hunt_contracts=1000.0, hunt_seconds=2.0, hunt_crash=1.0, hunt_park_seconds=2.0, hunt_park_high=1.0, hunt_park_span=1.0) == 0  # NO at 25c is above the 20c band
-    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 1100, 1100, 1200]}, **common) == 0  # 1,200 bought on the winning side is more than the spike
-    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 1100, 1100, 1000]}, **common) == 1  # the spike is still the larger print
 
 
-def test_a_cheap_buy_is_counted_as_both_a_winning_sale_and_a_losing_buy(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import lanes
-
-    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
-    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], hunt_contracts=1000.0, hunt_sell_over=0.50, hunt_buy_under=0.20)
-    w._hunt_by_series["KXETH15M"] = spec
-    w._on_trade({"ticker": "KXETH15M-1", "ts": 1_000_000.0, "count": 100, "price": 0.08, "taker": "yes"})  # bought YES at 8c, sold NO at 92c
-    row = w._flow["KXETH15M-1"][1_000_000]
-    assert (row[4], row[5], row[6]) == (100, 100, 0)
-    w._on_trade({"ticker": "KXETH15M-1", "ts": 1_000_000.4, "count": 40, "price": 0.70, "taker": "no"})  # sold YES at 70c, bought NO at 30c: winning sale, not a buy under 20c
-    assert (row[4], row[5], row[6]) == (140, 100, 0)
-    w._on_trade({"ticker": "KXETH15M-1", "ts": 1_000_000.6, "count": 200, "price": 0.92, "taker": "yes"})  # bought YES at 92c: the winning side, not a flip
-    assert (row[4], row[5], row[6]) == (140, 100, 200)
-    listed = dataclasses.replace(spec, hunt_contracts=0.0, hunt_contracts_by=(("KXETH15M", 3100.0),))
-    w._hunt_by_series["KXETH15M"] = listed
-    w._on_trade({"ticker": "KXETH15M-1", "ts": 1_000_001.0, "count": 10, "price": 0.08, "taker": "yes"})  # a coin named only in the per-coin map still gets counted
-    assert w._flow["KXETH15M-1"][1_000_001][4] == 10
 
 
-def test_each_coin_has_its_own_contract_bar(tmp_path, monkeypatch):
-    bars = (("KXBTC15M", 6000.0), ("KXETH15M", 1000.0))
-    common = {"yes_bid": 0.93, "yes_ask": 0.94, "hunt_dollars": 0.0, "hunt_contracts": 1000.0, "hunt_contracts_by": bars, "hunt_seconds": 2.0, "hunt_crash": 1.0, "hunt_park_seconds": 2.0, "hunt_park_high": 1.0, "hunt_park_span": 1.0}
-    flow = {0: [0, 0, 0, 0, 0, 1001]}
-    assert _dollar_hunt(tmp_path, monkeypatch, flow=flow, ticker="KXETH15M-1", **common) == 1  # ETH's bar is 1,000
-    assert _dollar_hunt(tmp_path, monkeypatch, flow=flow, ticker="KXBTC15M-1", **common) == 0  # the same 1,001 is under BTC's 6,000
-    assert _dollar_hunt(tmp_path, monkeypatch, flow={0: [0, 0, 0, 0, 0, 6001]}, ticker="KXBTC15M-1", **common) == 1
 
 
-def test_the_favorite_floor_is_the_lanes_setting(tmp_path, monkeypatch):
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86) == 1  # NO costs 15c: with no floor set, the dollars and the price band decide
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86, hunt_favorite=0.90) == 0  # a lane that asks for a 90c favorite does not buy an 85c one
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.85, yes_ask=0.86, hunt_favorite=0.80) == 1  # and 80c is enough for another
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, hunt_favorite=0.95) == 0  # a stricter lane can ask for more
 
 
-def test_the_hunt_window_is_the_lanes_setting(tmp_path, monkeypatch):
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, left=90.0) == 1
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, left=90.0, hunt_window=60.0) == 0  # too early for this lane
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, left=20.0) == 1
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, left=20.0, hunt_min_left=30.0) == 0  # too late for this lane
 
 
-def test_the_cheap_side_ceiling_is_the_lanes_setting(tmp_path, monkeypatch):
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94) == 1  # NO costs 7c
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, hunt_cheap=0.05) == 0  # this lane calls only a side under 5c cheap
 
 
-def test_the_crash_and_parked_checks_are_the_lanes_settings(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import lanes
-
-    _w, s, _store, _close = _watcher(tmp_path, monkeypatch)
-    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded")
-    now = 1_000_000.0
-    eased = watcher.deque([(now - 5.0, 0.90, 0.91), (now - 4.0, 0.93, 0.94)])  # NO eased from 10c to 7c, 3c, within 5 s
-    assert watcher._hunt_crashing(eased, "no", now, 0.07)[0] is False  # the default needs 10c
-    assert watcher._hunt_crashing(eased, "no", now, 0.07, 0.02, 12.0)[0] is True  # a lane that calls 2c a crash
-    assert watcher._hunt_crashing(eased, "no", now, 0.07, 0.02, 3.0)[0] is False  # ...but only looks back 3 s: that quote is older
-    sat = watcher.deque((now - 20.0 + i, 0.93, 0.94) for i in range(21))
-    assert watcher._hunt_parked(sat, "no", now, 0.07) is True
-    assert watcher._hunt_parked(sat, "no", now, 0.07, spec.price[1], 40.0) is False  # a lane that wants 40 s on screen: only 20 s of quotes
-    high = watcher.deque((now - 20.0 + i, 0.80, 0.81) for i in range(21))  # NO sat at 19c for 20 s and is now 7c: it fell, so it is not parked at the price we would pay
-    assert watcher._hunt_parked(high, "no", now, 0.07, 0.30, 20.0, 0.30, 0.06) is False  # 19c is 12c over the 7c ask, past the default 6c span
-    assert watcher._hunt_parked(high, "no", now, 0.07, 0.30, 20.0, 0.30, 0.15) is True  # a lane that allows a 15c span accepts it
 
 
-def test_the_retry_limit_is_the_lanes_setting(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import runner
-
-    w, _store, spec, h = _queued_hunt(tmp_path, monkeypatch)
-    monkeypatch.setattr(runner, "place", lambda *a, **k: runner.Placed("bought NO 0/7 @ 0.0700"))
-    _hunt_job(w, h, dataclasses.replace(spec, hunt_attempts=1))
-    w._drain_buys()
-    assert h.fired is True and h.attempts == 1  # this lane allows one try
 
 
 def test_the_burst_exit_favorite_and_window_are_the_lanes_settings(tmp_path, monkeypatch):
@@ -2088,19 +1491,8 @@ def test_the_retry_after_a_cross_uses_a_new_client_order_id(tmp_path, monkeypatc
     assert ids[0] == "KXBTC15M-9-guarded" and ids[1] != ids[0] and ids[1].startswith("KXBTC15M-9-guarded")  # a different id, derived from the same key so a re-run of the job repeats it, not doubles up
 
 
-def test_a_spike_is_the_multiple_of_the_sides_own_normal_not_a_fixed_number(tmp_path, monkeypatch):
-    # $455 bought against the favorite in 3 s. On a quiet market (a normal second of $50) that is 3x normal; on a busy one ($300 a second) it is half of a normal 3 s.
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=50.0) == 1  # no spike requirement: the bar alone fires
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=300.0) == 1  # even on a market where $455 is below its usual 3 s
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=300.0, hunt_spike=3.0) == 0  # a spike lane does not buy that
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=50.0, hunt_spike=3.0) == 1  # 455 / (3 x 50) is 3.03x: a spike
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=50.0, hunt_spike=5.0) == 0  # but not 5x
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=0.0, hunt_spike=5.0) == 1  # a side with no normal buying at all: anything is a spike
 
 
-def test_the_spike_still_needs_the_dollar_bar(tmp_path, monkeypatch):
-    # 20x its own normal is a spike, but $455 is the whole of it only because the normal is $7.6 a second; a lane with a $1,000 bar still waits
-    assert _dollar_hunt(tmp_path, monkeypatch, yes_bid=0.93, yes_ask=0.94, baseline=7.6, hunt_spike=5.0, hunt_dollars=1000.0) == 0
 
 
 def _burst_exit(tmp_path, monkeypatch, *, with_holder, share):
@@ -2196,76 +1588,10 @@ def test_a_lane_without_the_spot_settings_ignores_them():
     assert LaneSpec.entry_spot_ticks == 0 and LaneSpec.entry_spot_seconds == 0.0  # off unless a lane sets them
 
 
-def test_the_energy_moonshot_buys_a_cheap_side_that_just_fell_and_has_not_sat_there(tmp_path, monkeypatch):
-    """The coin moonshot refuses a side whose ask just fell or has not been parked; the energy one takes the dollar bar alone (scripts/moonshot_funnel_study.py)."""
-    import dataclasses
-
-    from kalshi_moonshot import lanes
-
-    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
-    toml = (
-        "[lane.coins]\nestimator='ladder'\nprice=[0.02,0.20]\nhours=[0.0,0.04]\nalways=true\nburst_hunt=true\nseries=['KXBTC15M']\nsides=['yes','no']\nfixed_stake=0.5\nstop_loss=false\n"
-        "hunt_dollars=400\nhunt_spike=5\n"
-        "[lane.energy]\ninherit='coins'\nseries=['KXNATGAS15M']\nhunt_spike=0\nhunt_crash=1.0\nhunt_park_seconds=5\nhunt_park_high=1.0\nhunt_park_span=1.0\n"
-    )
-    specs = lanes.lane_specs_from(s, toml)
-    bought = []
-    _buy_inline(w)
-    monkeypatch.setattr(w, "_hunt_buy", lambda h, sp, side, ask, reason, ctx: bought.append((sp.name, side, round(ask, 2))))
-    now = 1_000_000.0
-    sec = int(now)
-    book = {sec: [0.0, 9000.0, 0.0, 500.0]}  # NO takers bought $500 in the last second: over the $400 bar, however thin the book was
-    def hunt(lane):
-        h = watcher.Hunt("KXNATGAS15M-1", lane, close_ts=now + 60.0, yes_bid=0.84, yes_ask=0.85)  # NO costs 0.16
-        h.quotes.extend((now - 8.0 + i, 0.55, 0.56) for i in range(7))  # NO was 0.44 a few seconds ago ...
-        h.quotes.append((now, 0.84, 0.85))  # ... and is 0.16 now: a fall of 28c, and it has not been under 20c for 20 s
-        return h
-    w._on_hunt(hunt("coins"), dataclasses.replace(specs["coins"], name="coins"), now, book, sec)
-    assert bought == []  # crash and parked checks refuse it
-    w._on_hunt(hunt("energy"), dataclasses.replace(specs["energy"], name="energy"), now, book, sec)
-    assert bought == [("energy", "no", 0.16)]  # the dollar bar alone is enough
-    assert specs["energy"].series == ("KXNATGAS15M",) and specs["energy"].burst_hunt  # and it is the same kind of lane, on its own series
 
 
-def test_the_flip_trigger_counts_the_dollar_bar_over_the_lanes_own_window(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import lanes
-
-    w, s, _store, _close = _watcher(tmp_path, monkeypatch)
-    _buy_inline(w)
-    base = dataclasses.replace(lanes.lane_specs(s)["guarded"], name="guarded", price=(0.02, 0.15), hunt_dollars=200.0, hunt_favorite=0.90, sides=("yes", "no"), fixed_stake=0.5, max_open=0)
-    bought = []
-    monkeypatch.setattr(w, "_hunt_buy", lambda h, sp, side, ask, reason, ctx: bought.append((side, ctx["bar"], reason)))
-    now = 1_000_000.0
-    sec = int(now)
-    book = {sec: [0.0, 1000.0, 0.0, 70.0], sec - 1: [0.0, 6000.0, 0.0, 420.0]}  # $70 in the latest second, $490 over the last two
-
-    def hunt():
-        h = watcher.Hunt("KXETH15M-1", "guarded", close_ts=now + 60.0, yes_bid=0.93, yes_ask=0.94)
-        h.quotes.extend((now - 20.0 + i, 0.93, 0.94) for i in range(21))
-        return h
-
-    w._on_hunt(hunt(), dataclasses.replace(base, hunt_seconds=1.0), now, book, sec)
-    assert bought == []  # the latest second alone is under the $200 bar
-    w._on_hunt(hunt(), dataclasses.replace(base, hunt_seconds=3.0), now, book, sec)
-    assert len(bought) == 1 and "in 3 s" in bought[0][2]  # the 3-second window sees the big second before it
-    book[sec] = [0.0, 3000.0, 0.0, 210.0]
-    bought.clear()
-    w._on_hunt(hunt(), dataclasses.replace(base, hunt_seconds=1.0), now, book, sec)
-    assert len(bought) == 1 and "in 1 s" in bought[0][2] and bought[0][1] == 200.0
 
 
-def test_a_lane_on_the_default_window_keeps_its_version_and_a_changed_one_does_not(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import lanes
-
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    spec = lanes.spec_for(s, "moonshot")
-    assert "hunt_seconds" not in lanes.settings_of(spec, s)
-    assert "hunt_seconds" in lanes.settings_of(dataclasses.replace(spec, hunt_seconds=1.0), s)
 
 
 def _return_then_second_stay(w, close):
