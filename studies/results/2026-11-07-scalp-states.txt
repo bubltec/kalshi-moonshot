@@ -1,0 +1,19 @@
+106289 rows; windows 5745
+test days [20762, 20763, 20764]
+target +0.05: every market side at its first moment, scalp net/$10 -1.12 vs hold -0.64 (n=10309), sell filled 83%
+target +0.10: every market side at its first moment, scalp net/$10 -1.09 vs hold -0.64 (n=10309), sell filled 75%
+target +0.20: every market side at its first moment, scalp net/$10 -1.06 vs hold -0.64 (n=10309), sell filled 64%
+scalp record 5m+60m +0.05, gain >= 0.05        buys  201 sell filled  87% scalp net/$10 -0.82 (hold the same buys -0.67) | halves -0.86 (n=66) -0.81 (n=135) | crypto -0.95 (n=79) commodity -0.74 (n=122)
+scalp record 5m+60m +0.05, gain >= 0.10        buys   25 sell filled 100% scalp net/$10 +0.53 (hold the same buys +0.88) | halves +0.53 (n=9) +0.53 (n=16) | crypto +0.55 (n=3) commodity +0.53 (n=22)
+scalp record 5m+60m +0.10, gain >= 0.05        buys  201 sell filled  83% scalp net/$10 -0.48 (hold the same buys -0.67) | halves -0.26 (n=66) -0.59 (n=135) | crypto -1.27 (n=79) commodity +0.03 (n=122)
+scalp record 5m+60m +0.10, gain >= 0.10        buys   21 sell filled 100% scalp net/$10 +1.31 (hold the same buys +1.56) | halves +1.28 (n=5) +1.32 (n=16) | crypto +1.37 (n=3) commodity +1.30 (n=18)
+scalp record 5m+60m +0.20, gain >= 0.05        buys   25 sell filled  88% scalp net/$10 +1.30 (hold the same buys +0.88) | halves +1.39 (n=9) +1.24 (n=16) | crypto +3.02 (n=3) commodity +1.06 (n=22)
+scalp record 5m+60m +0.20, gain >= 0.10        buys   25 sell filled  88% scalp net/$10 +1.30 (hold the same buys +0.88) | halves +1.39 (n=9) +1.24 (n=16) | crypto +3.02 (n=3) commodity +1.06 (n=22)
+scalp record 1m+5m+60m +0.05, gain >= 0.05     buys  752 sell filled  79% scalp net/$10 -1.42 (hold the same buys -1.21) | halves -1.31 (n=226) -1.47 (n=526) | crypto -1.39 (n=384) commodity -1.46 (n=368)
+scalp record 1m+5m+60m +0.05, gain >= 0.10     buys  153 sell filled  81% scalp net/$10 -1.40 (hold the same buys -1.20) | halves -0.73 (n=59) -1.83 (n=94) | crypto -1.54 (n=78) commodity -1.26 (n=75)
+scalp record 1m+5m+60m +0.10, gain >= 0.05     buys  713 sell filled  69% scalp net/$10 -1.58 (hold the same buys -1.95) | halves -1.42 (n=263) -1.68 (n=450) | crypto -1.72 (n=362) commodity -1.44 (n=351)
+scalp record 1m+5m+60m +0.10, gain >= 0.10     buys  104 sell filled  75% scalp net/$10 -1.22 (hold the same buys -0.03) | halves -0.80 (n=51) -1.62 (n=53) | crypto -1.80 (n=59) commodity -0.45 (n=45)
+scalp record 1m+5m+60m +0.20, gain >= 0.05     buys  480 sell filled  58% scalp net/$10 -1.45 (hold the same buys -1.01) | halves -1.16 (n=129) -1.56 (n=351) | crypto -1.70 (n=227) commodity -1.24 (n=253)
+scalp record 1m+5m+60m +0.20, gain >= 0.10     buys   41 sell filled  76% scalp net/$10 +0.42 (hold the same buys -0.00) | halves +3.95 (n=8) -0.43 (n=33) | crypto -2.13 (n=15) commodity +1.89 (n=26)
+DONE
+
