@@ -186,6 +186,22 @@ def test_a_resting_bid_that_fills_nothing_falls_back_to_the_ask(setup, monkeypat
     assert client.rested and got.filled == 1.5 and client.ids == ["k-take"]
 
 
+def test_a_record_lane_takes_the_ask_after_a_missed_bid_only_while_the_curve_still_clears_the_record(setup, monkeypatch):
+    from kalshi_moonshot import staterecord
+
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, record_buy=True)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    monkeypatch.setattr(staterecord, "admits", lambda *a, **k: (True, "state FD, record +0.30 per $1 over 286 markets"))
+    client = RestClient(fills=[1.5], asks=[0.30])
+    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
+    assert got.filled == 1.5 and client.ids == ["k-take"]  # the state still clears the bar: the ask is taken
+    monkeypatch.setattr(staterecord, "admits", lambda *a, **k: (False, "state record: state GD, record +0.02 per $1 over 1397 markets is under the lane's 0.2 over 15 markets."))
+    client = RestClient(fills=[1.5], asks=[0.30])
+    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k2")
+    assert got.filled == 0 and client.sent == []  # the spot moved out of the state while the bid rested: nothing is bought
+
+
 def test_a_resting_bid_that_fills_is_not_followed_by_a_buy(setup, monkeypatch):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0)

@@ -702,30 +702,14 @@ def evaluate(
                 bet = False
                 note = f"multi-scale varieties {tag} do not match the lane's {', '.join(spec.ms_rule)}. {note}"
     if bet and spec.record_buy:
-        from . import staterecord, variants
-        from . import ticks as ticks_mod
+        from . import staterecord
 
-        try:
-            ms = variants.multiscale_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, staterecord.SCALES, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
-        except Exception as exc:
-            ms = None
-            log.warning("state record: varieties unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        record = staterecord.load(s)
-        state = staterecord.state_key({sc: v["variety"] for sc, v in ms.items()}) if ms else None
-        if state is None:
-            bet = False
-            note = f"state record: the varieties are unreadable for {shot.ticker}. {note}"
-        elif record is None:
-            bet = False
-            note = f"state record: no record built yet (state {state}). {note}"
+        ok_rec, why_rec = staterecord.admits(s, store, shot, spec, shot.ask)
+        if ok_rec:
+            note = f"[{why_rec}] {note}"
         else:
-            n_state, net_state = staterecord.edge(record, state, shot.ask)
-            tag = f"state {state}, record {net_state:+.2f} per $1 over {n_state} markets"
-            if n_state >= spec.record_min_n and net_state >= spec.record_min:
-                note = f"[{tag}] {note}"
-            else:
-                bet = False
-                note = f"state record: {tag} is under the lane's {spec.record_min:g} over {spec.record_min_n} markets. {note}"
+            bet = False
+            note = f"{why_rec} {note}"
     if bet and spec.skip_other_varieties:
         from . import ticks as ticks_mod
         from . import variants
@@ -1551,6 +1535,13 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
     limit = round(min(0.99, ask + max(0.0, spec.buy_slip)), 4)
     if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
         return None
+    if spec.record_buy:  # the curve must still say buy: the spot may have moved out of the state that cleared the record while the bid rested
+        from . import staterecord
+
+        ok_rec, why_rec = staterecord.admits(s, store, shot, spec, ask, waited=float(spec.buy_rest_seconds))
+        if not ok_rec:
+            log.info("buy %s %s: the resting bid did not fill and the curve no longer clears the record at %.2f (%s)", shot.ticker, shot.side, ask, why_rec)
+            return None
     cost = limit * count + order_fee(limit, count)
     verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store))
     return limit if verdict.ok else None

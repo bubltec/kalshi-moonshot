@@ -72,6 +72,29 @@ def load(s: Any) -> dict[str, Any] | None:
     return _cache["data"]
 
 
+def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float = 0.0) -> tuple[bool, str]:
+    """Whether a record_buy lane would buy this market side at `ask` now: (True, the note tag) or (False, why not). The state is read again from the in-memory ticks (the spot may have moved since the decision, `waited` seconds ago) and looked up in the record at the price asked."""
+    from . import ticks as ticks_mod
+    from . import variants
+
+    try:
+        ms = variants.multiscale_now(s, shot.series, shot.side, max(1.0, shot.hours_to_close * 3600.0 - waited), SCALES, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
+    except Exception as exc:
+        log.warning("state record: varieties unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        ms = None
+    state = state_key({sc: v["variety"] for sc, v in ms.items()}) if ms else None
+    if state is None:
+        return False, f"state record: the varieties are unreadable for {shot.ticker}."
+    record = load(s)
+    if record is None:
+        return False, f"state record: no record built yet (state {state})."
+    n_state, net_state = edge(record, state, ask)
+    tag = f"state {state}, record {net_state:+.2f} per $1 over {n_state} markets"
+    if n_state >= spec.record_min_n and net_state >= spec.record_min:
+        return True, tag
+    return False, f"state record: {tag} is under the lane's {spec.record_min:g} over {spec.record_min_n} markets."
+
+
 def maybe_refit(s: Any, now: float | None = None) -> bool:
     """Start the daily rebuild as its own low-priority process. True when one was started."""
     global _fitting
