@@ -81,7 +81,7 @@ def test_a_mark_is_logged_once_and_scored_after_settlement(tmp_path, monkeypatch
     monkeypatch.setattr(confidence, "load_model", lambda s: model)
     confidence._ran_at = confidence._scored_at = 0.0
     confidence._seen.clear()
-    row = {"ticker": "KXTEST15M-X-00", "lane": "lane_a", "side": "yes", "close_time": close}
+    row = {"ticker": "KXTEST15M-X-00", "lane": "lane_a", "side": "yes", "close_time": close, "ts": now - 600.0}
     store = SimpleNamespace(open_bets=lambda: [row], db=Db(outcome={"outcome": "yes"}))
     tape = Db(quote=[{"bid": 0.80, "ask": 0.82, "ts": now - 1.0}])
     specs = {"lane_a": SimpleNamespace(confidence_shadow=True)}
@@ -104,7 +104,7 @@ def test_a_lane_without_the_flag_or_a_market_without_a_strike_is_skipped(tmp_pat
     monkeypatch.setattr(ticks.history, "window", lambda i, a, b: (ts, vs))
     model = {"fitted_at": 1.0, "n": 2000, "mu": dict.fromkeys(confidence.NAMES, 0.0), "sd": dict.fromkeys(confidence.NAMES, 1.0), "w": [0.0, 1.0] + [0.0] * len(confidence.NAMES)}
     monkeypatch.setattr(confidence, "load_model", lambda s: model)
-    row = {"ticker": "KXTEST15M-X-00", "lane": "lane_a", "side": "no", "close_time": close}
+    row = {"ticker": "KXTEST15M-X-00", "lane": "lane_a", "side": "no", "close_time": close, "ts": ts[-1] - 600.0}
     store = SimpleNamespace(open_bets=lambda: [row], db=Db())
     tape = Db(quote=[{"bid": 0.80, "ask": 0.82, "ts": ts[-1] - 1.0}])
     s = SimpleNamespace(data_dir=str(tmp_path))
@@ -113,3 +113,23 @@ def test_a_lane_without_the_flag_or_a_market_without_a_strike_is_skipped(tmp_pat
     assert confidence.shadow_pass(s, store, tape, {"lane_a": SimpleNamespace(confidence_shadow=False)}, lambda t: vs[-1], now=ts[-1]) == []
     confidence._ran_at = 0.0
     assert confidence.shadow_pass(s, store, tape, {"lane_a": SimpleNamespace(confidence_shadow=True)}, lambda t: None, now=ts[-1]) == []
+
+
+def test_a_fresh_buy_gets_an_entry_reading_as_well_as_the_mark(tmp_path, monkeypatch):
+    from kalshi_moonshot import marketprofile, ticks
+
+    ts, vs = series(4000)
+    now = ts[-1]
+    close = datetime.fromtimestamp(now + 180.0).astimezone().isoformat()
+    monkeypatch.setattr(marketprofile, "_index", lambda s: "IDX")
+    monkeypatch.setattr(ticks.history, "window", lambda i, a, b: (ts, vs))
+    model = {"fitted_at": now, "n": 2000, "mu": dict.fromkeys(confidence.NAMES, 0.0), "sd": dict.fromkeys(confidence.NAMES, 1.0), "w": [0.0, 1.0] + [0.0] * len(confidence.NAMES)}
+    monkeypatch.setattr(confidence, "load_model", lambda s: model)
+    confidence._ran_at = 0.0
+    confidence._seen.clear()
+    row = {"ticker": "KXTEST15M-X-00", "lane": "lane_a", "side": "yes", "close_time": close, "ts": now - 20.0}  # bought 20 s ago, 3 min before the close
+    store = SimpleNamespace(open_bets=lambda: [row], db=Db())
+    tape = Db(quote=[{"bid": 0.80, "ask": 0.82, "ts": now - 1.0}])
+    specs = {"lane_a": SimpleNamespace(confidence_shadow=True)}
+    got = confidence.shadow_pass(SimpleNamespace(data_dir=str(tmp_path)), store, tape, specs, lambda t: vs[-1], now=now)
+    assert sorted(r["mark"] for r in got) == [0, 180]

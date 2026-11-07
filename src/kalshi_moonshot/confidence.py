@@ -2,7 +2,7 @@
 
 scripts/confidence_study.py (studies/results/2026-11-06-confidence-study.txt): a logistic model on logit(mid) plus the curve (distance to the strike in typical minutes, 60 s drift, bounce off the 5-minute extremes, path efficiency, 15-minute range and position, the hour's move, where the strike and the spot sit in the hour's range, time left) beat the price by almost nothing on average, but its buys where it beat the ask by 3-6 cents were positive in both halves of three test days. Not established. This runs the same model live, in shadow, to find out.
 Every distance is in the market's own typical minutes (CLAUDE.md). The model is refit daily from the tape on the trailing days, in a separate low-priority process, so it follows the market's current behaviour.
-Per open bet of a lane with confidence_shadow set, at about 300, 180 and 90 s left, one row is logged: the model's chance for the bet's side against that side's ask and bid. When the market settles each row is scored: what buying more at the ask returned (after the fee), and what selling at the bid gained over holding. Rows go to DATA_DIR/confidence_shadow.jsonl; the model to DATA_DIR/confidence_model.json. Nothing here changes a lane, a stake or an order."""
+Per open bet of a lane with confidence_shadow set, at the buy (mark 0) and at about 300, 180 and 90 s left, one row is logged: the model's chance for the bet's side against that side's ask and bid. When the market settles each row is scored: what buying more at the ask returned (after the fee), and what selling at the bid gained over holding. Rows go to DATA_DIR/confidence_shadow.jsonl; the model to DATA_DIR/confidence_model.json. Nothing here changes a lane, a stake or an order."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ log = logging.getLogger("moonshot")
 
 MARKS = (300, 180, 90)
 MARK_SLACK = 6.0
+ENTRY_WITHIN = 90.0  # a bet seen within this many seconds of its buy gets an "entry" reading (mark 0)
 EVERY = 5.0
 SCORE_EVERY = 3600.0
 REFIT_EVERY = 86400.0
@@ -238,8 +239,13 @@ def shadow_pass(s: Any, store: Any, tape: Any, specs: dict[str, Any], strike_of:
             left = datetime.fromisoformat(str(row["close_time"])).timestamp() - now
         except (TypeError, ValueError):
             continue
-        mark = next((m for m in MARKS if abs(left - m) <= MARK_SLACK), None)
-        if mark is None or f"{ticker}|{lane}|{mark}" in _seen:
+        todo = []
+        if now - float(row["ts"] or 0.0) <= ENTRY_WITHIN and f"{ticker}|{lane}|0" not in _seen:
+            todo.append(0)  # the reading at the buy itself, to set against the readings after it
+        near = next((m for m in MARKS if abs(left - m) <= MARK_SLACK), None)
+        if near is not None and f"{ticker}|{lane}|{near}" not in _seen:
+            todo.append(near)
+        if not todo:
             continue
         idx = marketprofile._index(ticker.split("-")[0])
         got = ticks_mod.history.window(idx, now - 3750.0, now) if idx else None
@@ -257,11 +263,12 @@ def shadow_pass(s: Any, store: Any, tape: Any, specs: dict[str, Any], strike_of:
         side = row["side"] or "yes"
         yb, ya = float(q["bid"]), float(q["ask"])
         p_side, ask_side, bid_side = (p_yes, ya, yb) if side == "yes" else (1.0 - p_yes, 1.0 - yb, 1.0 - ya)
-        _seen.add(f"{ticker}|{lane}|{mark}")
-        out.append({
-            "kind": "signal", "ts": round(now, 1), "ticker": ticker, "lane": lane, "side": side, "mark": mark, "left": round(left, 1), "p_side": round(p_side, 4), "ask_side": round(ask_side, 4),
-            "bid_side": round(bid_side, 4), "edge_buy": round(p_side - ask_side, 4), "edge_sell": round(bid_side - p_side, 4), "model_at": model["fitted_at"], "z_tm": round(f["z_tm"], 2),
-        })
+        for mark in todo:
+            _seen.add(f"{ticker}|{lane}|{mark}")
+            out.append({
+                "kind": "signal", "ts": round(now, 1), "ticker": ticker, "lane": lane, "side": side, "mark": mark, "left": round(left, 1), "p_side": round(p_side, 4), "ask_side": round(ask_side, 4),
+                "bid_side": round(bid_side, 4), "edge_buy": round(p_side - ask_side, 4), "edge_sell": round(bid_side - p_side, 4), "model_at": model["fitted_at"], "z_tm": round(f["z_tm"], 2),
+            })
     if out:
         try:
             with path.open("a") as fh:
@@ -270,7 +277,7 @@ def shadow_pass(s: Any, store: Any, tape: Any, specs: dict[str, Any], strike_of:
         except OSError:
             log.debug("confidence: could not write %s", path, exc_info=True)
         for r in out:
-            log.info("confidence shadow: %s %s %s at %ds left: model %.2f for the side, ask %.2f, bid %.2f (buy edge %+.2f, sell edge %+.2f)", r["lane"], r["ticker"], r["side"], r["mark"], r["p_side"], r["ask_side"], r["bid_side"], r["edge_buy"], r["edge_sell"])
+            log.info("confidence shadow: %s %s %s %s: model %.2f for the side, ask %.2f, bid %.2f (buy edge %+.2f, sell edge %+.2f)", r["lane"], r["ticker"], r["side"], "at entry" if r["mark"] == 0 else f"at {r['mark']}s left", r["p_side"], r["ask_side"], r["bid_side"], r["edge_buy"], r["edge_sell"])
     return out
 
 
