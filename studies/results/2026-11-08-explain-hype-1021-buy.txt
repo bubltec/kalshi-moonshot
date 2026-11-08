@@ -1,0 +1,24 @@
+index HYPEUSD_RTI strike 77.3307 spot at the buy 77.31 cushion bp -2.68 model fitted 1794071060.9551172 n 92267
+predicted net per $1 +0.040 (the bar: top 20% from +0.020); intercept -0.040
+largest contributions (reading, in training standard deviations from the average, weight, adds to the prediction):
+   slope_3m     reading   +1.208  z  +1.57  weight  +0.0173  adds +0.0272
+   slope_21m    reading   -0.956  z  -1.08  weight  -0.0244  adds +0.0263
+   var_21m      reading   +0.599  z  +1.79  weight  +0.0133  adds +0.0239
+   var_8m       reading   +0.423  z  +0.81  weight  -0.0136  adds -0.0110
+   slope_55m    reading   +0.171  z  +0.25  weight  -0.0415  adds -0.0103
+   slope_13m    reading   -0.799  z  -0.95  weight  -0.0090  adds +0.0086
+   var_34m      reading   +0.500  z  +0.93  weight  -0.0086  adds -0.0079
+   slope_1m     reading   +1.498  z  +1.65  weight  +0.0040  adds +0.0066
+   var_5m       reading   +0.452  z  +0.87  weight  +0.0076  adds +0.0066
+   slope_2m     reading   +1.596  z  +1.86  weight  +0.0033  adds +0.0062
+by look-back (slope + variability added together):
+     1 min   +0.0073
+     2 min   +0.0037
+     3 min   +0.0289
+     5 min   +0.0021
+     8 min   -0.0156
+    13 min   +0.0086
+    21 min   +0.0502
+    34 min   -0.0019
+    55 min   -0.0079
+DONE
