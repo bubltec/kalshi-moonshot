@@ -34,6 +34,7 @@ from .estimators import Estimator
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series
 from .lanes import LaneSpec, in_blackout, lane_specs, tiered
+from .marketdata import shared_for
 from .store import Store
 from .strategy import LongShot
 
@@ -443,7 +444,9 @@ class EntryWatcher:
         store = self.store_factory()
         if lane_full(store, spec, {event}):
             return 0
-        shots = runner.review_lane(s, self._book(lane), store, spec, self.estimators(store), only={event})
+        book = self._book(lane)
+        with shared_for(book, s.discovery_max_age, s.discovery_enabled):  # the socket price that woke this review is in the cache's overlay; the listing itself (strike, status) is read from the shared cache, not asked of Kalshi on every price move (2026-11-07: entry-review was 55-88 GET /markets a minute and the 429s)
+            shots = runner.review_lane(s, book, store, spec, self.estimators(store), only={event})
         jobs = Jobs(store)
         every = (spec.review_minutes or 2.0) * 60
         queued = 0

@@ -370,3 +370,27 @@ def test_the_refresh_thread_prunes_every_pass():
     w.refresh = lambda: w._stop.set()  # type: ignore[method-assign]
     w._run_refresh()
     assert "GONE" not in w._hist
+
+
+def test_a_review_reads_the_listing_through_the_shared_cache(tmp_path):
+    """2026-11-07: entry-review was 55-88 uncached GET /markets a minute. A review runs inside client.shared(max_age) so a listing young enough comes from memory."""
+    from contextlib import contextmanager
+
+    s = socket_settings(tmp_path)
+    store = Store(s.db_path)
+    client = Client(live_event())
+    runner.scope_lane(s, client, store, lanes.spec_for(s, "commodity"))
+    seen = []
+
+    @contextmanager
+    def shared(max_age):
+        seen.append(("enter", max_age))
+        try:
+            yield
+        finally:
+            seen.append(("exit", max_age))
+
+    client.shared = shared
+    entrywatch.EntryWatcher(lambda: s, client, lambda: Store(s.db_path), lambda store: build_estimators(None, None, None, live_quant())).review("commodity", EVENT)
+    if s.discovery_enabled and s.discovery_max_age > 0:
+        assert seen == [("enter", s.discovery_max_age), ("exit", s.discovery_max_age)]
