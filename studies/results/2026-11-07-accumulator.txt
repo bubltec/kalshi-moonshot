@@ -1,0 +1,28 @@
+add-on candidates (first moment per market side with ask 0.85-0.99 inside the last 120 s, both look-backs readable): 1829 market sides 1829
+
+the bars (slope in typical moves of the look-back; 0.5 = 26.6 degrees):
+   price bar only (ask 0.85-0.99, last 120 s)   n=1829 won  91.4% vs break-even  92.1% | net per $1 -0.009 | halves -0.008 (n=916) / -0.009 (n=913) | losers 157
+   cushion rising 13m >= 0.0 and 55m >= 0.0     n= 944 won  92.2% vs break-even  93.0% | net per $1 -0.010 | halves -0.015 (n=496) / -0.004 (n=448) | losers 74
+   cushion rising 13m >= 0.5 and 55m >= 0.5     n= 228 won  96.1% vs break-even  96.5% | net per $1 -0.007 | halves -0.003 (n=123) / -0.010 (n=105) | losers 9
+   cushion rising 13m >= 0.5 and 55m >= 0.0     n= 393 won  95.9% vs break-even  96.2% | net per $1 -0.004 | halves -0.001 (n=209) / -0.006 (n=184) | losers 16
+   cushion rising 13m >= 1.0 and 55m >= 1.0     n=   6 won 100.0% vs break-even  98.6% | net per $1 +0.014 | halves +0.000 (n=0) / +0.014 (n=6) | losers 0
+   the user's rule (13m and 55m >= 0.5)         n= 228 won  96.1% vs break-even  96.5% | net per $1 -0.007 | halves -0.003 (n=123) / -0.010 (n=105) | losers 9
+   against: 13m or 55m falling (<= -0.5)        n= 391 won  91.3% vs break-even  90.8% | net per $1 +0.005 | halves -0.004 (n=193) / +0.014 (n=198) | losers 34
+
+by ask band (the user's rule):
+   ask 0.85 to 0.90                             n=  23 won  78.3% vs break-even  87.7% | net per $1 -0.111 | halves -0.005 (n=16) / -0.352 (n=7) | losers 5
+   ask 0.90 to 0.95                             n=  28 won  89.3% vs break-even  93.5% | net per $1 -0.045 | halves -0.062 (n=16) / -0.023 (n=12) | losers 3
+   ask 0.95 to 1.00                             n= 177 won  99.4% vs break-even  98.2% | net per $1 +0.013 | halves +0.007 (n=91) / +0.020 (n=86) | losers 1
+
+by cushion z (the user's rule; z = cushion over what the remaining seconds can move):
+   z -9 to 1                                    n=  30 won  80.0% vs break-even  89.4% | net per $1 -0.107 | halves -0.040 (n=21) / -0.262 (n=9) | losers 6
+   z 1 to 2                                     n= 154 won  98.1% vs break-even  97.4% | net per $1 +0.007 | halves +0.002 (n=83) / +0.012 (n=71) | losers 3
+   z 2 to 3                                     n=  39 won 100.0% vs break-even  98.5% | net per $1 +0.015 | halves +0.013 (n=19) / +0.017 (n=20) | losers 0
+   z 3 to 99                                    n=   5 won 100.0% vs break-even  98.4% | net per $1 +0.016 | halves +0.000 (n=0) / +0.016 (n=5) | losers 0
+
+the tail: the first stake S plus an add-on of k x S at the average price of the rule's picks; the add-on's net in units of S
+   2x: add-on total -2.97 S over 228 picks, one lost add-on costs 2 S + fee, a win pays 0.07 S; the first win rate 0.961 at 0.963
+   3x: add-on total -4.46 S over 228 picks, one lost add-on costs 3 S + fee, a win pays 0.11 S; the first win rate 0.961 at 0.963
+   4x: add-on total -5.94 S over 228 picks, one lost add-on costs 4 S + fee, a win pays 0.15 S; the first win rate 0.961 at 0.963
+   5x: add-on total -7.43 S over 228 picks, one lost add-on costs 5 S + fee, a win pays 0.19 S; the first win rate 0.961 at 0.963
+DONE
