@@ -1,0 +1,134 @@
+rows 115225 market sides 10617
+test days 8
+predicted edge at or over 0.02 per $1
+   ridge18, every moment              n=12646 net per $1 -0.003 won 46.9% | halves -0.054 (n=4540) / +0.026 (n=8106)
+   ridge18, first per market side     n= 2891 net per $1 -0.026 won 47.9% | halves -0.079 (n=1143) / +0.008 (n=1748)
+   ridge18, first, 0-4 min in         n= 1356 net per $1 -0.047 won 51.5% | halves -0.157 (n=618) / +0.046 (n=738)
+   ridge18, first, 4-8 min in         n=  896 net per $1 -0.005 won 46.3% | halves -0.071 (n=298) / +0.028 (n=598)
+   ridge18, first, 8-15 min in        n=  639 net per $1 -0.013 won 42.4% | halves +0.124 (n=227) / -0.088 (n=412)
+   phi_z, every moment                n=19278 net per $1 -0.053 won 34.8% | halves -0.049 (n=7074) / -0.055 (n=12204)
+   phi_z, first per market side       n= 5016 net per $1 -0.061 won 38.4% | halves -0.077 (n=1811) / -0.052 (n=3205)
+   phi_z, first, 0-4 min in           n= 1954 net per $1 -0.100 won 37.9% | halves -0.125 (n=724) / -0.085 (n=1230)
+   phi_z, first, 4-8 min in           n= 1682 net per $1 -0.022 won 41.2% | halves +0.011 (n=592) / -0.040 (n=1090)
+   phi_z, first, 8-15 min in          n= 1380 net per $1 -0.054 won 35.5% | halves -0.111 (n=495) / -0.023 (n=885)
+   phi_z34, every moment              n=20896 net per $1 -0.081 won 32.5% | halves -0.084 (n=7946) / -0.079 (n=12950)
+   phi_z34, first per market side     n= 5125 net per $1 -0.078 won 36.5% | halves -0.065 (n=1906) / -0.086 (n=3219)
+   phi_z34, first, 0-4 min in         n= 2063 net per $1 -0.136 won 34.6% | halves -0.111 (n=792) / -0.152 (n=1271)
+   phi_z34, first, 4-8 min in         n= 1728 net per $1 -0.058 won 39.1% | halves -0.032 (n=636) / -0.074 (n=1092)
+   phi_z34, first, 8-15 min in        n= 1334 net per $1 -0.014 won 36.4% | halves -0.034 (n=478) / -0.002 (n=856)
+   iso, every moment                  n=15899 net per $1 -0.075 won 32.3% | halves -0.059 (n=5484) / -0.083 (n=10415)
+   iso, first per market side         n= 4960 net per $1 -0.075 won 35.3% | halves -0.068 (n=1762) / -0.079 (n=3198)
+   iso, first, 0-4 min in             n= 1805 net per $1 -0.099 won 35.3% | halves -0.096 (n=629) / -0.100 (n=1176)
+   iso, first, 4-8 min in             n= 1803 net per $1 -0.074 won 36.6% | halves -0.003 (n=653) / -0.114 (n=1150)
+   iso, first, 8-15 min in            n= 1352 net per $1 -0.045 won 33.4% | halves -0.121 (n=480) / -0.004 (n=872)
+   probit, every moment               n= 8604 net per $1 -0.007 won 34.6% | halves -0.099 (n=2729) / +0.035 (n=5875)
+   probit, first per market side      n= 2692 net per $1 -0.012 won 34.3% | halves -0.143 (n=926) / +0.057 (n=1766)
+   probit, first, 0-4 min in          n= 1182 net per $1 -0.006 won 38.2% | halves -0.113 (n=464) / +0.063 (n=718)
+   probit, first, 4-8 min in          n=  648 net per $1 -0.015 won 34.3% | halves -0.200 (n=219) / +0.079 (n=429)
+   probit, first, 8-15 min in         n=  862 net per $1 -0.018 won 28.9% | halves -0.151 (n=243) / +0.034 (n=619)
+   probit_z, every moment             n= 4485 net per $1 -0.120 won 25.5% | halves -0.280 (n=1206) / -0.061 (n=3279)
+   probit_z, first per market side    n= 2030 net per $1 -0.067 won 26.5% | halves -0.203 (n=579) / -0.013 (n=1451)
+   probit_z, first, 0-4 min in        n=  293 net per $1 -0.187 won 24.2% | halves -0.364 (n=76) / -0.125 (n=217)
+   probit_z, first, 4-8 min in        n=  584 net per $1 -0.106 won 25.2% | halves -0.382 (n=162) / -0.000 (n=422)
+   probit_z, first, 8-15 min in       n= 1153 net per $1 -0.017 won 27.8% | halves -0.082 (n=341) / +0.010 (n=812)
+predicted edge at or over 0.05 per $1
+   ridge18, every moment              n= 7159 net per $1 -0.010 won 46.4% | halves -0.060 (n=2643) / +0.019 (n=4516)
+   ridge18, first per market side     n= 1778 net per $1 +0.020 won 48.5% | halves -0.013 (n=713) / +0.042 (n=1065)
+   ridge18, first, 0-4 min in         n=  822 net per $1 -0.024 won 52.4% | halves -0.110 (n=390) / +0.054 (n=432)
+   ridge18, first, 4-8 min in         n=  506 net per $1 -0.004 won 45.7% | halves -0.070 (n=186) / +0.034 (n=320)
+   ridge18, first, 8-15 min in        n=  450 net per $1 +0.127 won 44.7% | halves +0.340 (n=137) / +0.033 (n=313)
+   phi_z, every moment                n=13612 net per $1 -0.048 won 32.3% | halves -0.054 (n=5054) / -0.045 (n=8558)
+   phi_z, first per market side       n= 4138 net per $1 -0.051 won 34.5% | halves -0.078 (n=1515) / -0.036 (n=2623)
+   phi_z, first, 0-4 min in           n= 1247 net per $1 -0.101 won 34.5% | halves -0.101 (n=473) / -0.101 (n=774)
+   phi_z, first, 4-8 min in           n= 1364 net per $1 +0.008 won 37.8% | halves +0.022 (n=483) / +0.000 (n=881)
+   phi_z, first, 8-15 min in          n= 1527 net per $1 -0.064 won 31.6% | halves -0.145 (n=559) / -0.017 (n=968)
+   phi_z34, every moment              n=15277 net per $1 -0.084 won 30.2% | halves -0.105 (n=5907) / -0.070 (n=9370)
+   phi_z34, first per market side     n= 4333 net per $1 -0.074 won 33.0% | halves -0.088 (n=1618) / -0.065 (n=2715)
+   phi_z34, first, 0-4 min in         n= 1370 net per $1 -0.130 won 31.7% | halves -0.128 (n=541) / -0.131 (n=829)
+   phi_z34, first, 4-8 min in         n= 1440 net per $1 -0.068 won 35.1% | halves -0.079 (n=545) / -0.062 (n=895)
+   phi_z34, first, 8-15 min in        n= 1523 net per $1 -0.029 won 32.3% | halves -0.058 (n=532) / -0.013 (n=991)
+   iso, every moment                  n=11000 net per $1 -0.067 won 30.1% | halves -0.066 (n=3816) / -0.067 (n=7184)
+   iso, first per market side         n= 4033 net per $1 -0.051 won 32.4% | halves -0.072 (n=1451) / -0.039 (n=2582)
+   iso, first, 0-4 min in             n= 1098 net per $1 -0.064 won 32.5% | halves -0.047 (n=401) / -0.074 (n=697)
+   iso, first, 4-8 min in             n= 1414 net per $1 -0.076 won 32.9% | halves -0.059 (n=530) / -0.087 (n=884)
+   iso, first, 8-15 min in            n= 1521 net per $1 -0.019 won 32.0% | halves -0.105 (n=520) / +0.026 (n=1001)
+   probit, every moment               n= 4414 net per $1 +0.001 won 32.9% | halves -0.052 (n=1349) / +0.024 (n=3065)
+   probit, first per market side      n= 1672 net per $1 +0.044 won 33.3% | halves -0.099 (n=558) / +0.116 (n=1114)
+   probit, first, 0-4 min in          n=  656 net per $1 +0.014 won 36.4% | halves -0.057 (n=263) / +0.061 (n=393)
+   probit, first, 4-8 min in          n=  392 net per $1 +0.055 won 33.2% | halves -0.192 (n=128) / +0.174 (n=264)
+   probit, first, 8-15 min in         n=  624 net per $1 +0.070 won 30.1% | halves -0.095 (n=167) / +0.130 (n=457)
+   probit_z, every moment             n= 2137 net per $1 -0.211 won 23.1% | halves -0.380 (n=584) / -0.147 (n=1553)
+   probit_z, first per market side    n= 1166 net per $1 -0.089 won 24.9% | halves -0.240 (n=319) / -0.032 (n=847)
+   probit_z, first, 0-4 min in        n=  104 net per $1 -0.444 won 16.3% | halves -0.593 (n=30) / -0.383 (n=74)
+   probit_z, first, 4-8 min in        n=  268 net per $1 -0.030 won 26.9% | halves -0.427 (n=71) / +0.113 (n=197)
+   probit_z, first, 8-15 min in       n=  794 net per $1 -0.063 won 25.3% | halves -0.131 (n=218) / -0.037 (n=576)
+predicted edge at or over 0.10 per $1
+   ridge18, every moment              n= 2650 net per $1 -0.065 won 43.6% | halves -0.132 (n=1071) / -0.020 (n=1579)
+   ridge18, first per market side     n=  737 net per $1 -0.070 won 45.6% | halves -0.118 (n=305) / -0.036 (n=432)
+   ridge18, first, 0-4 min in         n=  322 net per $1 -0.020 won 52.8% | halves -0.052 (n=160) / +0.011 (n=162)
+   ridge18, first, 4-8 min in         n=  235 net per $1 -0.204 won 39.1% | halves -0.278 (n=94) / -0.155 (n=141)
+   ridge18, first, 8-15 min in        n=  180 net per $1 +0.017 won 41.1% | halves -0.031 (n=51) / +0.036 (n=129)
+   phi_z, every moment                n= 8241 net per $1 -0.052 won 29.6% | halves -0.061 (n=3079) / -0.047 (n=5162)
+   phi_z, first per market side       n= 3035 net per $1 -0.041 won 30.7% | halves -0.072 (n=1118) / -0.024 (n=1917)
+   phi_z, first, 0-4 min in           n=  616 net per $1 -0.102 won 30.5% | halves -0.077 (n=239) / -0.117 (n=377)
+   phi_z, first, 4-8 min in           n=  938 net per $1 -0.023 won 32.1% | halves -0.138 (n=360) / +0.048 (n=578)
+   phi_z, first, 8-15 min in          n= 1481 net per $1 -0.028 won 29.8% | halves -0.024 (n=519) / -0.030 (n=962)
+   phi_z34, every moment              n= 9648 net per $1 -0.096 won 27.7% | halves -0.132 (n=3792) / -0.072 (n=5856)
+   phi_z34, first per market side     n= 3331 net per $1 -0.061 won 29.5% | halves -0.081 (n=1271) / -0.049 (n=2060)
+   phi_z34, first, 0-4 min in         n=  732 net per $1 -0.113 won 29.1% | halves -0.174 (n=308) / -0.068 (n=424)
+   phi_z34, first, 4-8 min in         n= 1068 net per $1 -0.084 won 29.1% | halves -0.068 (n=434) / -0.095 (n=634)
+   phi_z34, first, 8-15 min in        n= 1531 net per $1 -0.021 won 29.8% | halves -0.038 (n=529) / -0.012 (n=1002)
+   iso, every moment                  n= 6370 net per $1 -0.078 won 27.3% | halves -0.106 (n=2120) / -0.064 (n=4250)
+   iso, first per market side         n= 2824 net per $1 -0.008 won 29.8% | halves -0.040 (n=952) / +0.008 (n=1872)
+   iso, first, 0-4 min in             n=  532 net per $1 -0.120 won 27.6% | halves -0.173 (n=184) / -0.093 (n=348)
+   iso, first, 4-8 min in             n=  884 net per $1 +0.032 won 31.3% | halves +0.045 (n=303) / +0.026 (n=581)
+   iso, first, 8-15 min in            n= 1408 net per $1 +0.008 won 29.7% | halves -0.043 (n=465) / +0.034 (n=943)
+   probit, every moment               n= 1511 net per $1 +0.000 won 31.6% | halves +0.048 (n=408) / -0.018 (n=1103)
+   probit, first per market side      n=  721 net per $1 +0.020 won 31.1% | halves -0.060 (n=224) / +0.057 (n=497)
+   probit, first, 0-4 min in          n=  238 net per $1 +0.029 won 34.0% | halves +0.035 (n=85) / +0.026 (n=153)
+   probit, first, 4-8 min in          n=  160 net per $1 -0.013 won 29.4% | halves -0.328 (n=59) / +0.171 (n=101)
+   probit, first, 8-15 min in         n=  323 net per $1 +0.030 won 29.7% | halves +0.036 (n=80) / +0.028 (n=243)
+   probit_z, every moment             n=  628 net per $1 -0.221 won 23.9% | halves -0.302 (n=180) / -0.189 (n=448)
+   probit_z, first per market side    n=  413 net per $1 -0.139 won 24.2% | halves -0.162 (n=119) / -0.129 (n=294)
+   probit_z, first, 0-4 min in        n=   18 net per $1 -0.675 won 11.1% | halves -0.549 (n=9) / -0.800 (n=9)
+   probit_z, first, 4-8 min in        n=   53 net per $1 -0.207 won 24.5% | halves -0.517 (n=17) / -0.061 (n=36)
+   probit_z, first, 8-15 min in       n=  342 net per $1 -0.100 won 24.9% | halves -0.060 (n=93) / -0.115 (n=249)
+ridge18 top 5% as the live bot reads it
+   ridge18, every moment              n= 4596 net per $1 +0.064 won 48.2% | halves -0.049 (n=1389) / +0.113 (n=3207)
+   ridge18, first per market side     n= 1368 net per $1 +0.041 won 49.0% | halves -0.050 (n=442) / +0.085 (n=926)
+   ridge18, first, 0-4 min in         n=  508 net per $1 +0.037 won 57.1% | halves -0.017 (n=215) / +0.077 (n=293)
+   ridge18, first, 4-8 min in         n=  455 net per $1 +0.021 won 45.5% | halves -0.349 (n=131) / +0.171 (n=324)
+   ridge18, first, 8-15 min in        n=  405 net per $1 +0.069 won 42.7% | halves +0.285 (n=96) / +0.002 (n=309)
+ridge18 top 10% as the live bot reads it
+   ridge18, every moment              n= 8858 net per $1 +0.042 won 48.3% | halves -0.051 (n=2825) / +0.085 (n=6033)
+   ridge18, first per market side     n= 2305 net per $1 +0.007 won 48.8% | halves -0.055 (n=798) / +0.040 (n=1507)
+   ridge18, first, 0-4 min in         n= 1023 net per $1 -0.040 won 52.7% | halves -0.133 (n=429) / +0.028 (n=594)
+   ridge18, first, 4-8 min in         n=  745 net per $1 +0.070 won 47.9% | halves -0.128 (n=213) / +0.150 (n=532)
+   ridge18, first, 8-15 min in        n=  537 net per $1 +0.008 won 42.6% | halves +0.257 (n=156) / -0.094 (n=381)
+ridge18 top 20% as the live bot reads it
+   ridge18, every moment              n=15733 net per $1 -0.005 won 46.8% | halves -0.060 (n=5592) / +0.025 (n=10141)
+   ridge18, first per market side     n= 3529 net per $1 -0.023 won 48.1% | halves -0.080 (n=1332) / +0.011 (n=2197)
+   ridge18, first, 0-4 min in         n= 1722 net per $1 -0.041 won 51.7% | halves -0.161 (n=744) / +0.050 (n=978)
+   ridge18, first, 4-8 min in         n= 1094 net per $1 -0.027 won 45.1% | halves -0.038 (n=337) / -0.022 (n=757)
+   ridge18, first, 8-15 min in        n=  713 net per $1 +0.026 won 44.2% | halves +0.106 (n=251) / -0.017 (n=462)
+calibration of probit's predicted edge on the test days (bucket: n, mean predicted, mean realized net per $1):
+   bucket 0: n=601 predicted -0.319 realized -0.294
+   bucket 1: n=1237 predicted -0.202 realized -0.198
+   bucket 2: n=5702 predicted -0.142 realized -0.109
+   bucket 3: n=31233 predicted -0.082 realized -0.072
+   bucket 4: n=35561 predicted -0.036 realized -0.031
+   bucket 5: n=9778 predicted +0.023 realized -0.021
+   bucket 6: n=2594 predicted +0.084 realized +0.024
+   bucket 7: n=697 predicted +0.144 realized -0.030
+   bucket 8: n=166 predicted +0.204 realized +0.186
+   bucket 9: n=121 predicted +0.389 realized -0.231
+fade: buy the other side where the plain normal curve beats this side's ask by D
+   scale 13 D 0.05 first per market side n= 3730 won 64.7% vs break-even 66.9% | net per $1 -0.037 | halves -0.036 / -0.039
+   scale 13 D 0.10 first per market side n=  929 won 67.4% vs break-even 69.8% | net per $1 -0.046 | halves -0.009 / -0.075
+   scale 13 D 0.15 first per market side n=  228 won 57.9% vs break-even 65.3% | net per $1 -0.153 | halves -0.134 / -0.163
+   scale 13 D 0.20 first per market side n=   92 won 44.6% vs break-even 60.2% | net per $1 -0.310 | halves -0.242 / -0.343
+   scale 34 D 0.05 first per market side n= 4050 won 66.1% vs break-even 68.4% | net per $1 -0.038 | halves -0.033 / -0.042
+   scale 34 D 0.10 first per market side n=  968 won 67.4% vs break-even 71.5% | net per $1 -0.074 | halves -0.030 / -0.111
+   scale 34 D 0.15 first per market side n=  244 won 61.9% vs break-even 67.3% | net per $1 -0.107 | halves -0.050 / -0.137
+   scale 34 D 0.20 first per market side n=   93 won 45.2% vs break-even 61.7% | net per $1 -0.306 | halves -0.244 / -0.337
+DONE
