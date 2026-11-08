@@ -90,3 +90,30 @@ def test_a_model_buy_lane_buys_only_what_the_model_likes(tmp_path, monkeypatch):
     finally:
         ticks.history.clear()
         curvemodel._cache.update(mtime=None, data=None)
+
+
+def test_the_time_left_readings_shrink_a_cushion_that_has_more_time_to_be_lost():
+    now = 1_900_000_000.0
+    ts, vs = _ticks(now)
+    g, sq, k = curvemodel.live_grid(ts, vs, now)
+    strike = math.log(vs[-1] * 0.999)  # the spot sits 0.1% over the strike on the yes side
+    far = curvemodel.features(g, sq, k, strike, 1, None, 800.0)
+    near = curvemodel.features(g, sq, k, strike, 1, None, 60.0)
+    no = curvemodel.features(g, sq, k, strike, -1, None, 60.0)
+    assert len(far) == len(near) == 18 + len(curvemodel.TIME_NAMES)
+    assert len(curvemodel.features(g, sq, k, strike, 1)) == 18  # without the seconds left, only the 18
+    assert far[18] == 800.0 / 60.0 and near[18] == 1.0
+    z_far, z_near = far[19], near[19]
+    assert z_near > z_far > 0  # the same cushion is worth more with less time left to lose it in
+    win_far, win_near, win_no = far[27], near[27], no[27]
+    assert win_near > win_far > 0.5 > win_no  # the chance it holds to the close rises as the time runs down; the other side is the mirror
+
+
+def test_a_model_fitted_with_the_time_readings_names_them_and_one_without_keeps_the_old_names():
+    random.seed(5)
+    n_new = 18 + len(curvemodel.TIME_NAMES)
+    rows = [([random.gauss(0, 1) for _ in range(n_new)], random.uniform(0.2, 0.7), random.gauss(0, 0.5)) for _ in range(3100)]
+    model = curvemodel.fit(rows)
+    assert model["names"][18:31] == curvemodel.TIME_NAMES and len(model["mu"]) == n_new + 1
+    old = curvemodel.fit([(r[0][:18], r[1], r[2]) for r in rows])
+    assert old["names"] == curvemodel.NAMES

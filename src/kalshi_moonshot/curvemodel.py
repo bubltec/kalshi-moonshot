@@ -1,6 +1,7 @@
 """The curve model: buy a market side because the spot's curve at nine Fibonacci look-backs says it pays (2026-11-07, user: go live).
 
 scripts/state_record_fibonacci.py (studies/results/2026-11-07-state-record-fibonacci.txt): a ridge regression of the bet-to-win net on the curve at 1, 2, 3, 5, 8, 13, 21, 34 and 55 minutes, fit on the earlier days and scored on the next, netted +1.53 per $10 ticket on its best 5% of moments, +1.06 on the best 10% and +0.71 on the best 20% (every moment -0.34), positive in both halves of three test days.
+2026-11-08 (user: "you absolutely need to build time left into the curve prediction ... it needs to figure out a further projection based on time remaining"): live bets bought in the first four minutes won 55% (+$15.48 on 31) and those bought after minute 8 won 14% (-$30.54 on 43), while the model read the same curve the same way at minute 3 and minute 12 (studies/results/2026-11-08-multiscale-by-elapsed.txt). The model now also reads the seconds left: the minutes left, and at four scales the cushion (the spot's distance to the strike on the side bought) over what the seconds left can move at that scale's one-second rate (z), and the same after carrying that scale's drift forward to the close (proj), and the normal chance that the cushion is still above zero at the close given proj (win), which the fit sets against the ask. Walk-forward (studies/results/2026-11-08-curve-time-left-walkforward.txt) it did NOT pay: the 18-reading model netted +0.058 per $1 on its best 5% (first per market side) and the timed one -0.024, and at 10% and 20% the timed model was lower in every row. The readings stay in `features` for studies and a model fitted with them is read correctly, but the daily refit does not use them (build_rows timed=False).
 Readings, per scale: the SLOPE (the change of the cushion over the look-back in that look-back's typical move; tan of the angle) and the VARIABILITY (the standard deviation of the cushion over the look-back in the same unit). The cushion is the spot's distance to the strike on the side bought, so one curve gives both sides' readings. Plus the price asked. No coin and no crossing count enters.
 The model is refit daily from the tape in a separate low-priority process (python -m kalshi_moonshot.curvemodel). A lane with model_buy buys a market side when its predicted net per dollar is in the top `model_top` share of the training moments and above zero.
 """
@@ -16,6 +17,7 @@ import os
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,15 +30,21 @@ RIDGE = 50.0
 MIN_ROWS = 3000
 MOMENT_STEP = 30
 QUANTS = (0.05, 0.10, 0.20, 0.30, 0.50)
-NAMES = [f"{kind}_{m}m" for m in FIB for kind in ("slope", "var")] + ["ask"]
+READ_NAMES = [f"{kind}_{m}m" for m in FIB for kind in ("slope", "var")]
+NAMES = [*READ_NAMES, "ask"]
+TIME_SCALES = (2, 5, 13, 34)
+TIME_NAMES = ["left_min", *(f"z_{m}m" for m in TIME_SCALES), *(f"proj_{m}m" for m in TIME_SCALES), *(f"win_{m}m" for m in TIME_SCALES)]
+CLIP = 9.0
 
 _fitting: subprocess.Popen | None = None
 _cache: dict[str, Any] = {"mtime": None, "data": None}
 
 
-def features(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None) -> list[float] | None:
-    """The 18 curve readings at index k of a one-second log-price grid g (sq: running sum of squared one-second log steps). None when a look-back is not covered or has no spread; `why` then gets the reason."""
+def features(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None, left: float | None = None) -> list[float] | None:
+    """The 18 curve readings at index k of a one-second log-price grid g (sq: running sum of squared one-second log steps), plus the 13 time-left readings when `left` (seconds to the close) is given. None when a look-back is not covered or has no spread; `why` then gets the reason."""
     out: list[float] = []
+    cushion = (g[k] - strike_log) * sign if g[k] is not None else 0.0
+    timed: dict[int, tuple[float, float]] = {}
     for m in FIB:
         look = 60 * m
         if k - look < 0 or g[k] is None or g[k - look] is None:
@@ -57,6 +65,16 @@ def features(g: list[float | None], sq: list[float], k: int, strike_log: float, 
         mean = sum(seg) / len(seg)
         sd = math.sqrt(sum((x - mean) ** 2 for x in seg) / len(seg))
         out += [((g[k] - g[k - look]) * sign) / unit, sd / unit]
+        if m in TIME_SCALES:
+            timed[m] = (rate, (g[k] - g[k - look]) * sign / look)
+    if left is not None:
+        span = max(left, 1.0)
+        spread = {m: r * math.sqrt(span) for m, (r, _) in timed.items()}
+        out.append(left / 60.0)
+        out += [max(-CLIP, min(CLIP, cushion / spread[m])) for m in TIME_SCALES]
+        proj = [max(-CLIP, min(CLIP, (cushion + timed[m][1] * span) / spread[m])) for m in TIME_SCALES]
+        out += proj
+        out += [0.5 * (1.0 + math.erf(p / math.sqrt(2.0))) for p in proj]
     return out
 
 
@@ -118,7 +136,8 @@ def fit(rows: list[tuple[list[float], float, float]]) -> dict[str, Any] | None:
     w = _ridge(z, ys)
     pred = sorted(sum(a * b for a, b in zip(w, row, strict=False)) for row in z)
     cuts = {f"{q:g}": pred[int((1.0 - q) * (n - 1))] for q in QUANTS}
-    return {"built_at": time.time(), "n": n, "names": NAMES, "mu": mu, "sd": sd, "w": w, "cuts": cuts, "mean_net": sum(ys) / n, "train_days": TRAIN_DAYS}
+    names = [*READ_NAMES, *TIME_NAMES, "ask"] if len(rows[0][0]) == len(READ_NAMES) + len(TIME_NAMES) else NAMES
+    return {"built_at": time.time(), "n": n, "names": names, "mu": mu, "sd": sd, "w": w, "cuts": cuts, "mean_net": sum(ys) / n, "train_days": TRAIN_DAYS}
 
 
 def predict(model: dict[str, Any], readings: list[float], ask: float) -> float:
@@ -175,7 +194,12 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
         return False, f"curve model: the last {index} tick is {now - got[0][-1]:.0f}s old."
     grid = live_grid(got[0], got[1], now)
     why: list[str] = []
-    read = features(grid[0], grid[1], grid[2], math.log(strike), 1 if shot.side == "yes" else -1, why) if grid else None
+    timed = len(model["mu"]) == len(READ_NAMES) + len(TIME_NAMES) + 1
+    try:
+        left = datetime.fromisoformat(str(shot.close_time)).timestamp() - now if timed else None
+    except (TypeError, ValueError):
+        return False, f"curve model: no close time known for {shot.ticker}, the model reads the time left."
+    read = features(grid[0], grid[1], grid[2], math.log(strike), 1 if shot.side == "yes" else -1, why, left) if grid else None
     if read is None:
         return False, f"curve model: the curve cannot be read for {shot.ticker} ({why[0] if why else 'unreadable history'})."
     net = predict(model, read, ask)
@@ -188,8 +212,8 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
     return False, f"curve model: {tag.replace('curve model ', '')} is under the bar."
 
 
-def build_rows(s: Any, now: float | None = None) -> list[tuple[list[float], float, float]]:
-    """The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
+def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str]] | None = None, timed: bool = False) -> list[tuple[list[float], float, float]]:
+    """(`meta`, when given, gets (close, seconds into the window, ticker, side) per row, for studies; `timed` adds the time-left readings, off because the walk-forward did not support them.) The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
     from . import db, variants
     from .kalshiws import RECORD_ONLY
     from .lanes import lane_specs
@@ -259,9 +283,11 @@ def build_rows(s: Any, now: float | None = None) -> list[tuple[list[float], floa
             for side, bid, ask in (("yes", yb, ya), ("no", 1 - ya, 1 - yb)):
                 if not (plo <= ask <= phi) or ask - bid > cap:
                     continue
-                read = features(g, sq, k, strike_log, 1 if side == "yes" else -1)
+                read = features(g, sq, k, strike_log, 1 if side == "yes" else -1, None, close - at if timed else None)
                 if read is None:
                     continue
+                if meta is not None:
+                    meta.append((close, float(e), w["ticker"], side))
                 won = w["result"] == side
                 contracts = 1.0 / ask
                 net = ((1 - ask) * contracts if won else -1.0) - fee(ask) * contracts

@@ -1,0 +1,36 @@
+rows 115225 market sides 10617
+test days 8
+top 5%
+   old, every moment              n= 4773 net per $1 +0.049 won 46.7% | halves -0.058 (n=1379) / +0.093 (n=3394)
+   old, first per market side     n= 1292 net per $1 +0.058 won 47.7% | halves -0.026 (n=400) / +0.096 (n=892)
+   old, first, 0-4 min in         n=  448 net per $1 -0.056 won 51.8% | halves -0.129 (n=212) / +0.010 (n=236)
+   old, first, 4-8 min in         n=  443 net per $1 +0.104 won 47.6% | halves -0.133 (n=97) / +0.171 (n=346)
+   old, first, 8-15 min in        n=  401 net per $1 +0.134 won 43.1% | halves +0.330 (n=91) / +0.077 (n=310)
+   new, every moment              n= 4644 net per $1 -0.021 won 45.8% | halves -0.189 (n=1520) / +0.061 (n=3124)
+   new, first per market side     n= 1481 net per $1 -0.024 won 47.7% | halves -0.119 (n=527) / +0.029 (n=954)
+   new, first, 0-4 min in         n=  837 net per $1 -0.077 won 51.5% | halves -0.182 (n=376) / +0.009 (n=461)
+   new, first, 4-8 min in         n=  367 net per $1 +0.019 won 43.9% | halves -0.074 (n=97) / +0.053 (n=270)
+   new, first, 8-15 min in        n=  277 net per $1 +0.078 won 41.5% | halves +0.238 (n=54) / +0.039 (n=223)
+top 10%
+   old, every moment              n= 8932 net per $1 +0.039 won 47.2% | halves -0.057 (n=2793) / +0.082 (n=6139)
+   old, first per market side     n= 2116 net per $1 +0.028 won 48.0% | halves -0.067 (n=726) / +0.077 (n=1390)
+   old, first, 0-4 min in         n=  863 net per $1 -0.044 won 53.2% | halves -0.150 (n=399) / +0.048 (n=464)
+   old, first, 4-8 min in         n=  720 net per $1 +0.067 won 47.2% | halves -0.129 (n=182) / +0.133 (n=538)
+   old, first, 8-15 min in        n=  533 net per $1 +0.091 won 40.5% | halves +0.241 (n=145) / +0.035 (n=388)
+   new, every moment              n= 8757 net per $1 +0.004 won 46.5% | halves -0.126 (n=2975) / +0.071 (n=5782)
+   new, first per market side     n= 2355 net per $1 -0.034 won 47.1% | halves -0.107 (n=878) / +0.009 (n=1477)
+   new, first, 0-4 min in         n= 1420 net per $1 -0.028 won 51.9% | halves -0.086 (n=645) / +0.021 (n=775)
+   new, first, 4-8 min in         n=  579 net per $1 -0.050 won 42.0% | halves -0.242 (n=160) / +0.023 (n=419)
+   new, first, 8-15 min in        n=  356 net per $1 -0.033 won 36.5% | halves +0.004 (n=73) / -0.042 (n=283)
+top 20%
+   old, every moment              n=15912 net per $1 +0.002 won 46.4% | halves -0.062 (n=5591) / +0.037 (n=10321)
+   old, first per market side     n= 3293 net per $1 -0.026 won 47.5% | halves -0.077 (n=1243) / +0.004 (n=2050)
+   old, first, 0-4 min in         n= 1540 net per $1 -0.043 won 52.6% | halves -0.138 (n=702) / +0.036 (n=838)
+   old, first, 4-8 min in         n= 1067 net per $1 -0.019 won 44.4% | halves -0.066 (n=312) / -0.000 (n=755)
+   old, first, 8-15 min in        n=  686 net per $1 +0.001 won 40.8% | halves +0.096 (n=229) / -0.047 (n=457)
+   new, every moment              n=17293 net per $1 -0.033 won 44.7% | halves -0.099 (n=5926) / +0.001 (n=11367)
+   new, first per market side     n= 3774 net per $1 -0.047 won 46.6% | halves -0.087 (n=1410) / -0.022 (n=2364)
+   new, first, 0-4 min in         n= 2443 net per $1 -0.040 won 50.6% | halves -0.096 (n=1013) / -0.000 (n=1430)
+   new, first, 4-8 min in         n=  875 net per $1 -0.045 won 40.9% | halves -0.137 (n=281) / -0.002 (n=594)
+   new, first, 8-15 min in        n=  456 net per $1 -0.085 won 36.0% | halves +0.111 (n=116) / -0.151 (n=340)
+DONE
