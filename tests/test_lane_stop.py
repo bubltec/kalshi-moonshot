@@ -158,3 +158,19 @@ def test_the_latest_sale_for_a_gain_is_reported_with_its_side_and_time(setup):
     )
     store.db.commit()
     assert store.last_gain_sale("KXBTC15M-1", "fav") == (other, 2000.0)  # the other side was sold for a gain after: the first side is not the one held back now
+
+
+def test_a_gain_sale_is_judged_against_what_the_buy_filled_at_not_the_decision_ask(setup):
+    _s, store = setup
+    store.db.execute("DELETE FROM decisions")
+    store.db.execute("INSERT INTO decisions (ts, ticker, side, action, mode, lane, ask, exit_ts, exit_price) VALUES (?,?,?,?,?,?,?,?,?)", (100.0, "KXBTC15M-9", "yes", "bet", "trade", "fav", 0.29, 400.0, 0.27))
+    store.db.commit()
+    assert store.last_gain_sale("KXBTC15M-9", "fav") is None  # no orders: against the ask 0.29 plus its fee, a sale at 0.27 is a loss
+    store.add_order(ts=101.0, ticker="KXBTC15M-9", env="prod", count=4.0, price=0.24, fill_count=4.0, cost_usd=0.96, fee_usd=0.0, order_id="o1", side="buy", contract="yes")  # the resting bid filled at 0.24
+    assert store.last_gain_sale("KXBTC15M-9", "fav") == ("yes", 400.0)  # against the 0.24 it filled at, 0.27 less its fee is a gain
+    store.add_order(ts=200.0, ticker="KXBTC15M-9", env="prod", count=4.0, price=0.27, fill_count=4.0, cost_usd=1.08, fee_usd=0.0, order_id="o2", side="sell", contract="yes")
+    assert store.last_gain_sale("KXBTC15M-9", "fav") == ("yes", 400.0)  # a sell order is not part of the cost
+    store.add_order(ts=300.0, ticker="KXBTC15M-9", env="prod", count=4.0, price=0.40, fill_count=4.0, cost_usd=1.68, fee_usd=0.08, order_id="o3", side="buy", contract="yes")  # a top-up at 0.40 incl. fee: the average cost is now 0.33
+    assert store.last_gain_sale("KXBTC15M-9", "fav") is None  # 0.27 less its fee is under that
+    store.add_order(ts=300.0, ticker="KXBTC15M-9", env="prod", count=4.0, price=0.99, fill_count=4.0, cost_usd=3.96, fee_usd=0.0, order_id="o4", side="buy", contract="no")  # the other contract is not this position's cost
+    assert store.last_gain_sale("KXBTC15M-9", "fav") is None
