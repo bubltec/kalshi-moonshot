@@ -1,0 +1,24 @@
+value exit sales since 07:00 ET with a settled window: 20
+bet                           sold    held held+shock
+KXZEC15M-26NOV080915-15      +0.27   +2.02      +2.02
+KXHYPE15M-26NOV080915-15     +0.32   -2.50      -2.06  (shock exit would have sold)
+KXNEAR15M-26NOV081030-30     +0.08   +0.56      -0.04  (shock exit would have sold)
+KXHYPE15M-26NOV081030-30     +0.11   -1.81      -0.76  (shock exit would have sold)
+KXZEC15M-26NOV081100-00      +0.39   -1.56      -0.32  (shock exit would have sold)
+KXNEAR15M-26NOV081100-00     -0.05   -2.88      -1.27  (shock exit would have sold)
+KXZEC15M-26NOV081130-30      +0.16   -1.76      -1.76
+KXHYPE15M-26NOV081200-00     +0.04   -0.76      -0.76
+KXSOL15M-26NOV081215-15      +0.12   -2.80      -1.27  (shock exit would have sold)
+KXZEC15M-26NOV081215-15      +0.41   -1.83      -1.63  (shock exit would have sold)
+KXDOGE15M-26NOV081215-15     +0.11   -2.73      -2.44  (shock exit would have sold)
+KXNEAR15M-26NOV081215-15     +0.24   -1.95      -1.62  (shock exit would have sold)
+KXSOL15M-26NOV081230-30      +0.02   +2.08      +0.07  (shock exit would have sold)
+KXBNB15M-26NOV081230-30      +0.32   -2.50      -0.33  (shock exit would have sold)
+KXBTC15M-26NOV081230-30      +0.15   -2.51      +0.06  (shock exit would have sold)
+KXDOGE15M-26NOV081230-30     +0.34   -2.62      -0.06  (shock exit would have sold)
+KXZEC15M-26NOV081230-30      +0.07   -1.72      -0.47  (shock exit would have sold)
+KXNEAR15M-26NOV081230-30     +0.50   +1.90      +1.90
+KXHYPE15M-26NOV081230-30     +0.17   -1.84      -0.78  (shock exit would have sold)
+KXZEC15M-26NOV081230-30      +0.16   -1.31      -0.08  (shock exit would have sold)
+totals over 20 bets: value exit sold +3.92 | held to the result -26.51 | held with the shock exit -11.61
+DONE
