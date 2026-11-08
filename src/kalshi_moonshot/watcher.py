@@ -166,6 +166,10 @@ class Target:
     shock_last: float = 120.0
     value_exit: float = 0.0  # lane value_exit (0 = off): sell while the bid after the fee is this far over the curve's chance that the side pays
     value_bid: tuple = (0.30, 0.70)
+    value_gain_x: float = 0.0  # lane value_exit_gain_x: the extreme-profit mode (the bid at this multiple of the price paid)
+    value_high: float = 0.0  # lane value_exit_high: ...or the bid at this price with more than value_high_left seconds left
+    value_high_left: float = 420.0
+    value_min_gain: float = 0.0  # lane value_exit_min_gain: dollars per contract the sale must clear after both fees
     value_at: float = 0.0  # the value check looks at most once a second
     value_noted: float = 0.0
     entry_filled: bool = False  # entry is the price the buy orders actually filled at (store.entry_fill), not the decision's ask
@@ -668,7 +672,7 @@ class ProfitWatcher:
 
     def _shock_on_index(self, index_id: str, now: float) -> None:
         with self._lock:
-            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0 or t.value_exit > 0)]
+            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0 or t.value_exit > 0 or t.value_gain_x > 0 or t.value_high > 0)]
         for t in hits:
             if t.last_ts <= 0 or t.cur_bid <= 0:
                 continue
@@ -682,9 +686,22 @@ class ProfitWatcher:
         """The value exit (2026-11-08, user: a fix, live at once): sell while the bid, after the sell fee, is over the curve's own chance that this side pays by the lane's margin. The chance is confidence.py's model (price, the spot's distance to the strike in typical minutes, 60 s drift, bounce, path efficiency, range, time left), read from the index history now. Never sells for a loss after both fees (the profit-take rule above). Without the model, the history or a fresh spot the exit does not fire."""
         from . import confidence
 
-        if t.value_exit <= 0 or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index or now - t.value_at < 1.0:
+        extreme = t.value_gain_x > 0 or t.value_high > 0
+        if (t.value_exit <= 0 and not extreme) or t.close_ts <= 0 or now - t.value_at < 1.0 or (not extreme and (t.shock_ref <= 0 or not t.shock_index)):
             return None
         left = t.close_ts - now
+        if extreme:  # 2026-11-08 (user): loose until an extreme profit. No curve chance here: the bid doubles, or sits at the high price early enough
+            if left <= SETTLE_LAST or now - quote_ts > 5.0 or bid <= 0 or t.entry <= 0:
+                return None
+            t.value_at = now
+            why = None
+            if t.value_gain_x > 0 and t.entry * t.value_gain_x < 1.0 and bid >= t.entry * t.value_gain_x - 1e-9:
+                why = f"value exit: bid {bid:.2f} is {bid / t.entry:.1f}x the {t.entry:.2f} paid (at {t.value_gain_x:.1f}x), {left:.0f}s left"
+            elif t.value_high > 0 and bid >= t.value_high - 1e-9 and left > t.value_high_left:
+                why = f"value exit: bid {bid:.2f} is at the {t.value_high:.2f} line with {left:.0f}s left (over {t.value_high_left:.0f}s)"
+            if why is None or bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry)) <= max(t.value_min_gain, 0.0):
+                return None  # not extreme yet, or not a gain worth the fees (never a loss after both fees; value_exit_min_gain over that)
+            return why
         if left <= SETTLE_LAST or not (t.value_bid[0] <= bid <= t.value_bid[1]) or now - quote_ts > 5.0:
             return None
         t.value_at = now
@@ -1307,7 +1324,7 @@ class ProfitWatcher:
                     held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0
                     if held.close_ts <= 0:
                         held.close_ts = close
-            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
+            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
                 sid = biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
@@ -1321,6 +1338,7 @@ class ProfitWatcher:
                     held.shock_index, held.shock_ref = sid, ref
                     held.shock_trend_hold = spec.shock_trend_hold
                     held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
+                    held.value_gain_x, held.value_high, held.value_high_left, held.value_min_gain = spec.value_exit_gain_x, spec.value_exit_high, spec.value_exit_high_left, spec.value_exit_min_gain
                     self._shock_hist.setdefault(sid, deque())
                     self._seed_shock_history(sid)
                     if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0) and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:

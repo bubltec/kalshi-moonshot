@@ -391,3 +391,49 @@ def test_the_store_reads_the_fill_price_without_the_fee_and_none_without_orders(
     store.add_order(ts=102.0, ticker="KXBTC15M-1", env="prod", count=4.0, price=0.50, fill_count=4.0, cost_usd=2.07, fee_usd=0.07, order_id="b", side="buy", contract="yes")  # a top-up
     assert abs(store.entry_fill("KXBTC15M-1", "yes", 100.0) - 0.45) < 1e-9  # (1.60 + 2.00) / 8
     assert store.entry_fill("KXBTC15M-1", "yes", 200.0) is None  # orders before the bet are not this position's
+
+
+def _extreme(entry, gain_x=2.0, high=0.95, high_left=420.0, min_gain=0.10):
+    import time
+
+    now = time.time()
+    t = watcher.Target(ticker="KXSOL15M-X", lane="crypto_multiscale", side="yes", entry=entry, x=0.0, at=0.0, spike_cents=0.0, spike_seconds=0.0)
+    t.value_gain_x, t.value_high, t.value_high_left, t.value_min_gain = gain_x, high, high_left, min_gain
+    return t, now
+
+
+def test_the_extreme_profit_value_exit_ignores_a_small_gain_and_sells_a_doubling():
+    from types import SimpleNamespace
+
+    fake = SimpleNamespace(get_settings=lambda: None)
+    for entry, bid, sells in ((0.20, 0.40, True), (0.30, 0.60, True), (0.40, 0.80, True), (0.20, 0.38, False), (0.50, 0.54, False), (0.31, 0.63, True)):
+        t, now = _extreme(entry)
+        t.close_ts = now + 600
+        why = watcher.ProfitWatcher._value_hit(fake, t, bid, now, now)
+        assert bool(why) == sells, (entry, bid, why)  # 0.50 bought and 0.54 a fortnight-second later is no profit worth a fee; 0.31 to 0.63 (ETH 07:30) is a doubling
+    t, now = _extreme(0.20)
+    t.close_ts = now + 600
+    why = watcher.ProfitWatcher._value_hit(fake, t, 0.40, now, now)
+    assert why.startswith("value exit") and "2.0x" in why
+
+
+def test_the_extreme_profit_value_exit_sells_a_95_bid_only_with_over_seven_minutes_left():
+    from types import SimpleNamespace
+
+    fake = SimpleNamespace(get_settings=lambda: None)
+    t, now = _extreme(0.60)  # a doubling is impossible from 0.60: only the high-price rule applies
+    t.close_ts = now + 500
+    assert watcher.ProfitWatcher._value_hit(fake, t, 0.95, now, now)
+    t.value_at = 0.0
+    assert watcher.ProfitWatcher._value_hit(fake, t, 0.94, now, now) is None  # under the line
+    t.value_at, t.close_ts = 0.0, now + 400
+    assert watcher.ProfitWatcher._value_hit(fake, t, 0.97, now, now) is None  # under seven minutes left: hold to the close
+    t2, now2 = _extreme(0.94)
+    t2.close_ts = now2 + 600
+    assert watcher.ProfitWatcher._value_hit(fake, t2, 0.96, now2, now2) is None  # bought at 0.94: a 2c gain before the fees is garbage, under the 10c floor
+    t4, now4 = _extreme(0.97)
+    t4.close_ts = now4 + 600
+    assert watcher.ProfitWatcher._value_hit(fake, t4, 0.97, now4, now4) is None  # bought at the line: no gain at all
+    t3, now3 = _extreme(0.60)
+    t3.close_ts = now3 + 600
+    assert watcher.ProfitWatcher._value_hit(fake, t3, 0.95, now3, now3 - 10.0) is None  # a quote ten seconds old is not a bid
