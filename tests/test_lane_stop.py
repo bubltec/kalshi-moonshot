@@ -138,14 +138,15 @@ def test_a_trend_check_with_no_quote_to_compare_does_not_buy(tmp_path):
     assert out.action == "pass" and "no reference" in out.note
 
 
-def test_a_market_sold_for_a_gain_is_bought_back_only_below_the_sale_price(setup):
+def test_a_side_sold_for_a_gain_is_not_bought_again_but_the_other_side_may_be(setup):
     _s, store = setup
     ask = store.db.execute("SELECT ask FROM decisions").fetchone()["ask"]
-    assert store.last_gain_sale("KXBTC15M-1", "fav") is None  # nothing sold yet
+    side = store.db.execute("SELECT side FROM decisions").fetchone()["side"] or "yes"
+    assert store.gain_sale_sides("KXBTC15M-1", "fav") == set()  # nothing sold yet
     store.db.execute("UPDATE decisions SET exit_ts=?, exit_price=?", (1000.0, ask + 0.20))
     store.db.commit()
-    assert store.last_gain_sale("KXBTC15M-1", "fav") == pytest.approx(ask + 0.20)
-    assert store.last_gain_sale("KXBTC15M-2", "fav") is None  # another market
+    assert store.gain_sale_sides("KXBTC15M-1", "fav") == {side}  # only the side that was sold
+    assert store.gain_sale_sides("KXBTC15M-2", "fav") == set()  # another market
     store.db.execute("UPDATE decisions SET exit_price=?", (ask - 0.20,))
     store.db.commit()
-    assert store.last_gain_sale("KXBTC15M-1", "fav") is None  # a sale at a loss sets no limit
+    assert store.gain_sale_sides("KXBTC15M-1", "fav") == set()  # a sale at a loss sets no limit

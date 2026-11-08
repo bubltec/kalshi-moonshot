@@ -56,7 +56,6 @@ from .strategy import (
     early_cash,
     edge,
     falling_reason,
-    fee_per_contract,
     flip,
     hard_loss,
     lane_candidates,
@@ -532,9 +531,9 @@ def evaluate(
     if bet and spec.reentry_cooldown_seconds and (left := store.exited_within(shot.ticker, shot.lane, spec.reentry_cooldown_seconds)) > 0:
         bet = False
         note = f"cooling down: this lane sold {shot.ticker} {spec.reentry_cooldown_seconds - left:.0f}s ago and waits {spec.reentry_cooldown_seconds:.0f}s before buying it again. {note}"
-    if bet and spec.rebuy_under_gain_sale and (sold := store.last_gain_sale(shot.ticker, shot.lane)) is not None and shot.ask + fee_per_contract(shot.ask) >= sold - fee_per_contract(sold):
+    if bet and spec.rebuy_opposite_after_gain and shot.side in store.gain_sale_sides(shot.ticker, shot.lane):
         bet = False
-        note = f"not buying back: this lane sold {shot.ticker} for a gain at {sold:.2f}, and the ask {shot.ask:.2f} is not under that after both fees. {note}"
+        note = f"not buying back: this lane sold {shot.side} of {shot.ticker} for a gain; only the other side may be bought now. {note}"
     if bet and spec.max_open > 0:
         open_now = sum(1 for r in store.open_bets() if (r["lane"] or "moonshot") == shot.lane and r["ticker"] != shot.ticker)
         if open_now >= spec.max_open:
