@@ -1,0 +1,38 @@
+
+         lane         |  mode   |     d      |  n  | staked  |  net   
+----------------------+---------+------------+-----+---------+--------
+ commodity            | observe | 2026-10-29 |  19 |  113.92 |   2.40
+ commodity            | observe | 2026-10-30 |  48 |  341.79 |   0.16
+ commodity            | observe | 2026-11-01 |   4 |   31.98 |   5.85
+ commodity            | trade   | 2026-10-29 | 111 |  657.78 |  20.02
+ commodity            | trade   | 2026-10-30 | 169 | 1139.91 |  -7.15
+ commodity            | trade   | 2026-11-01 |  29 |  233.68 |  20.73
+ commodity_energy     | observe | 2026-11-01 |   1 |    8.00 |   1.85
+ commodity_energy     | observe | 2026-11-02 |  15 |  123.96 | -35.48
+ commodity_energy     | trade   | 2026-11-01 |   5 |   40.39 |  -1.97
+ commodity_energy     | trade   | 2026-11-02 | 102 |  970.04 |  36.05
+ commodity_energy     | trade   | 2026-11-03 | 121 |  775.49 |   7.68
+ commodity_energy     | trade   | 2026-11-04 |  61 |  354.08 |  22.89
+ commodity_energy     | trade   | 2026-11-05 |  13 |   75.64 |  -7.25
+ commodity_energy     | trade   | 2026-11-06 |  39 |  305.46 |   8.48
+ commodity_industrial | trade   | 2026-11-01 |   3 |   23.89 |   2.61
+ commodity_industrial | trade   | 2026-11-02 |  78 |  741.73 |  -5.61
+ commodity_industrial | trade   | 2026-11-03 | 103 |  672.11 | -52.75
+ commodity_industrial | trade   | 2026-11-04 |  35 |  202.42 |   4.10
+ commodity_industrial | trade   | 2026-11-05 |   6 |   31.82 | -15.36
+ commodity_industrial | trade   | 2026-11-06 |  19 |  117.12 |   8.75
+ commodity_multiscale | observe | 2026-11-05 |   8 |   23.99 |  10.49
+ commodity_multiscale | trade   | 2026-11-06 |  26 |   19.75 |  -4.35
+ commodity_natgas     | trade   | 2026-11-06 |  17 |  170.78 |  21.15
+ commodity_precious   | trade   | 2026-11-01 |   3 |   24.08 | -14.23
+ commodity_precious   | trade   | 2026-11-02 |  62 |  585.07 |  23.27
+ commodity_precious   | trade   | 2026-11-03 |  75 |  476.91 |   9.45
+ commodity_precious   | trade   | 2026-11-04 |  45 |  267.60 |   2.80
+ commodity_precious   | trade   | 2026-11-05 |  14 |   86.14 |   4.50
+ commodity_precious   | trade   | 2026-11-06 |  27 |  197.75 |   8.87
+ commodity_wti        | trade   | 2026-11-06 |  23 |  231.51 |   9.63
+(30 rows)
+
+
+
+

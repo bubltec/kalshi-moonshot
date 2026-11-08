@@ -1,0 +1,26 @@
+
+commodity windows 3280
+moments 103106 UTC days [20759, 20760, 20761, 20762, 20763, 20764]
+days with a walk-forward model: 4 of 6
+live commodity bets 813
+bets replayed 375 what happened: net $43.36
+path-efficiency cutoffs: 0.05 0.136 | halves split at 1793848245.5613499
+value exit, margin 0.00            bets 375 sold   2 change   -2.68 (per bet -0.007, se 0.006) beat 0 lost 2.0
+      halves: first half +0.00 (beat 0, lost 0) | second half -2.68 (beat 0, lost 2)
+      shapes: choppy +0.00 (beat 0, lost 0) | middle +0.00 (beat 0, lost 0) | straight -2.68 (beat 0, lost 2)
+value exit, margin 0.02            bets 375 sold   2 change   -1.68 (per bet -0.004, se 0.003) beat 0 lost 2.0
+      halves: first half +0.00 (beat 0, lost 0) | second half -1.68 (beat 0, lost 2)
+      shapes: choppy +0.00 (beat 0, lost 0) | middle +0.00 (beat 0, lost 0) | straight -1.68 (beat 0, lost 2)
+value exit, margin 0.05            bets 375 sold   2 change   -2.33 (per bet -0.006, se 0.005) beat 0 lost 2.0
+      halves: first half +0.00 (beat 0, lost 0) | second half -2.33 (beat 0, lost 2)
+      shapes: choppy +0.00 (beat 0, lost 0) | middle +0.00 (beat 0, lost 0) | straight -2.33 (beat 0, lost 2)
+strike-cross exit, last 300 s      bets 375 sold  89 change   -3.98 (per bet -0.011, se 0.072) beat 47 lost 41.0
+      halves: first half +16.16 (beat 17, lost 15) | second half -20.14 (beat 30, lost 26)
+      shapes: choppy +16.07 (beat 17, lost 10) | middle -23.57 (beat 14, lost 17) | straight +3.53 (beat 16, lost 14)
+value 0.02 or strike-cross (first) bets 375 sold  89 change   -3.98 (per bet -0.011, se 0.072) beat 47 lost 41.0
+      halves: first half +16.16 (beat 17, lost 15) | second half -20.14 (beat 30, lost 26)
+      shapes: choppy +16.07 (beat 17, lost 10) | middle -23.57 (beat 14, lost 17) | straight +3.53 (beat 16, lost 14)
+DONE
+
+
+
