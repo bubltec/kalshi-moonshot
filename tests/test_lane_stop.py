@@ -138,18 +138,18 @@ def test_a_trend_check_with_no_quote_to_compare_does_not_buy(tmp_path):
     assert out.action == "pass" and "no reference" in out.note
 
 
-def test_after_a_gain_sale_the_lane_may_buy_only_the_other_side_and_back_again(setup):
+def test_the_latest_sale_for_a_gain_is_reported_with_its_side_and_time(setup):
     _s, store = setup
     row = store.db.execute("SELECT ask, side FROM decisions").fetchone()
     ask, side = row["ask"], row["side"] or "yes"
-    assert store.last_gain_sale_side("KXBTC15M-1", "fav") is None  # nothing sold yet
+    assert store.last_gain_sale("KXBTC15M-1", "fav") is None  # nothing sold yet
     store.db.execute("UPDATE decisions SET exit_ts=?, exit_price=?", (1000.0, ask + 0.20))
     store.db.commit()
-    assert store.last_gain_sale_side("KXBTC15M-1", "fav") == side  # the side that was sold: not that one next
-    assert store.last_gain_sale_side("KXBTC15M-2", "fav") is None  # another market
+    assert store.last_gain_sale("KXBTC15M-1", "fav") == (side, 1000.0)
+    assert store.last_gain_sale("KXBTC15M-2", "fav") is None  # another market
     store.db.execute("UPDATE decisions SET exit_price=?", (ask - 0.20,))
     store.db.commit()
-    assert store.last_gain_sale_side("KXBTC15M-1", "fav") is None  # a sale at a loss sets no limit
+    assert store.last_gain_sale("KXBTC15M-1", "fav") is None  # a sale at a loss sets no limit
     other = "no" if side == "yes" else "yes"
     store.db.execute("UPDATE decisions SET exit_price=?", (ask + 0.20,))
     store.db.execute(
@@ -157,4 +157,4 @@ def test_after_a_gain_sale_the_lane_may_buy_only_the_other_side_and_back_again(s
         (1500.0, "KXBTC15M-1", other, "bet", "trade", "fav", ask, 2000.0, ask + 0.20),
     )
     store.db.commit()
-    assert store.last_gain_sale_side("KXBTC15M-1", "fav") == other  # the other side then sold for a gain: the first side is open again
+    assert store.last_gain_sale("KXBTC15M-1", "fav") == (other, 2000.0)  # the other side was sold for a gain after: the first side is not the one held back now

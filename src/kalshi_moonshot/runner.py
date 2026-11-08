@@ -531,9 +531,9 @@ def evaluate(
     if bet and spec.reentry_cooldown_seconds and (left := store.exited_within(shot.ticker, shot.lane, spec.reentry_cooldown_seconds)) > 0:
         bet = False
         note = f"cooling down: this lane sold {shot.ticker} {spec.reentry_cooldown_seconds - left:.0f}s ago and waits {spec.reentry_cooldown_seconds:.0f}s before buying it again. {note}"
-    if bet and spec.rebuy_opposite_after_gain and shot.side == store.last_gain_sale_side(shot.ticker, shot.lane):
+    if bet and spec.rebuy_opposite_after_gain_seconds and (gain := store.last_gain_sale(shot.ticker, shot.lane)) is not None and shot.side == gain[0] and (wait := gain[1] + spec.rebuy_opposite_after_gain_seconds - time.time()) > 0:
         bet = False
-        note = f"not buying back: this lane sold {shot.side} of {shot.ticker} for a gain last; only the other side may be bought now. {note}"
+        note = f"not buying back yet: this lane sold {shot.side} of {shot.ticker} for a gain {spec.rebuy_opposite_after_gain_seconds - wait:.0f}s ago; only the other side may be bought for {wait:.0f}s more. {note}"
     if bet and spec.max_open > 0:
         open_now = sum(1 for r in store.open_bets() if (r["lane"] or "moonshot") == shot.lane and r["ticker"] != shot.ticker)
         if open_now >= spec.max_open:
