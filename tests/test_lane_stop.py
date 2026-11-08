@@ -138,15 +138,23 @@ def test_a_trend_check_with_no_quote_to_compare_does_not_buy(tmp_path):
     assert out.action == "pass" and "no reference" in out.note
 
 
-def test_a_side_sold_for_a_gain_is_not_bought_again_but_the_other_side_may_be(setup):
+def test_after_a_gain_sale_the_lane_may_buy_only_the_other_side_and_back_again(setup):
     _s, store = setup
-    ask = store.db.execute("SELECT ask FROM decisions").fetchone()["ask"]
-    side = store.db.execute("SELECT side FROM decisions").fetchone()["side"] or "yes"
-    assert store.gain_sale_sides("KXBTC15M-1", "fav") == set()  # nothing sold yet
+    row = store.db.execute("SELECT ask, side FROM decisions").fetchone()
+    ask, side = row["ask"], row["side"] or "yes"
+    assert store.last_gain_sale_side("KXBTC15M-1", "fav") is None  # nothing sold yet
     store.db.execute("UPDATE decisions SET exit_ts=?, exit_price=?", (1000.0, ask + 0.20))
     store.db.commit()
-    assert store.gain_sale_sides("KXBTC15M-1", "fav") == {side}  # only the side that was sold
-    assert store.gain_sale_sides("KXBTC15M-2", "fav") == set()  # another market
+    assert store.last_gain_sale_side("KXBTC15M-1", "fav") == side  # the side that was sold: not that one next
+    assert store.last_gain_sale_side("KXBTC15M-2", "fav") is None  # another market
     store.db.execute("UPDATE decisions SET exit_price=?", (ask - 0.20,))
     store.db.commit()
-    assert store.gain_sale_sides("KXBTC15M-1", "fav") == set()  # a sale at a loss sets no limit
+    assert store.last_gain_sale_side("KXBTC15M-1", "fav") is None  # a sale at a loss sets no limit
+    other = "no" if side == "yes" else "yes"
+    store.db.execute("UPDATE decisions SET exit_price=?", (ask + 0.20,))
+    store.db.execute(
+        "INSERT INTO decisions (ts, ticker, side, action, mode, lane, ask, exit_ts, exit_price) VALUES (?,?,?,?,?,?,?,?,?)",
+        (1500.0, "KXBTC15M-1", other, "bet", "trade", "fav", ask, 2000.0, ask + 0.20),
+    )
+    store.db.commit()
+    assert store.last_gain_sale_side("KXBTC15M-1", "fav") == other  # the other side then sold for a gain: the first side is open again

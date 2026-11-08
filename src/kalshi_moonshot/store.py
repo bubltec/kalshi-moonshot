@@ -856,16 +856,21 @@ class Store:
         last = self._last_exit(ticker, lane)
         return max(0.0, last + seconds - now) if last is not None else 0.0
 
-    def gain_sale_sides(self, ticker: str, lane: str) -> set[str]:
-        """The sides of this market this lane has sold for a gain (the sale after its fee over the price paid after its fee). A sale at a loss is not counted."""
+    def last_gain_sale_side(self, ticker: str, lane: str) -> str | None:
+        """The side of this market this lane last sold for a gain (the sale after its fee over the price paid after its fee), else None. A sale at a loss is not counted."""
         from .strategy import fee_per_contract as fee
 
         rows = self.db.execute(
             """SELECT side, exit_price, ask FROM decisions
-               WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL AND exit_price IS NOT NULL AND ask IS NOT NULL""",
+               WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL AND exit_price IS NOT NULL AND ask IS NOT NULL
+               ORDER BY exit_ts DESC""",
             (ticker, lane),
         ).fetchall()
-        return {r["side"] or "yes" for r in rows if float(r["exit_price"]) - fee(float(r["exit_price"])) > float(r["ask"]) + fee(float(r["ask"]))}
+        for r in rows:
+            sold, paid = float(r["exit_price"]), float(r["ask"])
+            if sold - fee(sold) > paid + fee(paid):
+                return r["side"] or "yes"
+        return None
 
     def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None, factors: str = "") -> None:
         self.db.execute(

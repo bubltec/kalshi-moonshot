@@ -88,7 +88,7 @@ class LaneSpec:
     unstable_range: float = 0.0  # ... the bid's high-low over unstable_seconds, in dollars
     unstable_seconds: float = 20.0
     hover_dip: float = 0.0  # sell at the first profit (after fees) once the bid has dipped to this price or lower since entry, i.e. hovered near the strike; 0 = off
-    rebuy_opposite_after_gain: bool = False  # 2026-11-08 (user, HYPE 09:15: the value exit sold YES at 0.67 for a gain and the lane bought YES again at 0.67 and lost $2.22): after this lane sells one side of a market for a gain (the sale after its fee over the price paid after its fee), that side is not bought again in the window; the opposite side goes through the lane's usual gate. A sale at a loss sets no limit
+    rebuy_opposite_after_gain: bool = False  # 2026-11-08 (user, HYPE 09:15: the value exit sold YES at 0.67 for a gain and the lane bought YES again at 0.67 and lost $2.22): after this lane sells one side of a market for a gain (the sale after its fee over the price paid after its fee), it may not buy that side next; the opposite side goes through the lane's usual gate, and if that is sold for a gain the first side is open again, so it follows the dip and the climb. A sale at a loss sets no limit
     reentry_cooldown_seconds: float = 0.0  # after this lane sells a market, wait this long before it may buy that market again (0 = no wait)
     buy_rest_seconds: float = 0.0  # buy with a post-only RESTING order instead of an immediate one: it waits this many seconds at buy_rest_below under the ask and is dropped if unfilled (no fallback). A resting order that fills pays no taker fee; replay says it mostly fills on dips (0 = buy at the ask)
     buy_rest_below: float = 0.01  # how far under the ask the resting buy sits, in dollars
