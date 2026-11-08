@@ -1,0 +1,67 @@
+
+commodity windows 3280
+grid built KXGOLD15M 0
+grid built KXSILVER15M 12397
+grid built KXPLATINUM15M 24556
+grid built KXPALLADIUM15M 36169
+grid built KXWTI15M 47788
+grid built KXBRENT15M 61960
+grid built KXNATGAS15M 75465
+grid built KXCOPPER15M 87161
+moments 96753 market sides 6272
+UTC days [20759, 20760, 20761, 20762, 20763, 20764]
+
+first moment per market side, test days only:
+   model top 5% (lane band)                       n=  346 net per $1 +0.001 (se 0.022) won 86.7% | halves +0.009 (n=113) / -0.003 (n=233)
+      2-7 min in                                  n=0
+      7-11 min in                                 n=  253 net per $1 +0.004 (se 0.025) won 86.6% | halves +0.007 (n=84) / +0.002 (n=169)
+      11-15 min in                                n=   93 net per $1 -0.008 (se 0.041) won 87.1% | halves +0.014 (n=29) / -0.018 (n=64)
+      curve shape choppy                          n=   75 net per $1 +0.081 (se 0.038) won 92.0% | halves +0.031 (n=34) / +0.123 (n=41)
+      curve shape middle                          n=  129 net per $1 -0.051 (se 0.039) won 82.9% | halves -0.049 (n=47) / -0.052 (n=82)
+      curve shape straight                        n=  142 net per $1 +0.005 (se 0.033) won 87.3% | halves +0.070 (n=32) / -0.014 (n=110)
+   model top 10% (lane band)                      n=  611 net per $1 -0.003 (se 0.016) won 86.6% | halves +0.006 (n=187) / -0.007 (n=424)
+      2-7 min in                                  n=0
+      7-11 min in                                 n=  439 net per $1 -0.008 (se 0.020) won 85.9% | halves +0.012 (n=132) / -0.016 (n=307)
+      11-15 min in                                n=  172 net per $1 +0.008 (se 0.029) won 88.4% | halves -0.010 (n=55) / +0.017 (n=117)
+      curve shape choppy                          n=  138 net per $1 +0.039 (se 0.032) won 89.1% | halves +0.017 (n=59) / +0.056 (n=79)
+      curve shape middle                          n=  217 net per $1 -0.036 (se 0.029) won 83.9% | halves -0.029 (n=72) / -0.039 (n=145)
+      curve shape straight                        n=  256 net per $1 +0.002 (se 0.024) won 87.5% | halves +0.038 (n=56) / -0.008 (n=200)
+   model top 20% (lane band)                      n=  968 net per $1 -0.023 (se 0.014) won 84.4% | halves -0.031 (n=300) / -0.019 (n=668)
+      2-7 min in                                  n=0
+      7-11 min in                                 n=  711 net per $1 -0.025 (se 0.016) won 84.0% | halves -0.034 (n=213) / -0.021 (n=498)
+      11-15 min in                                n=  257 net per $1 -0.016 (se 0.026) won 85.6% | halves -0.022 (n=87) / -0.013 (n=170)
+      curve shape choppy                          n=  222 net per $1 -0.005 (se 0.029) won 84.7% | halves -0.043 (n=99) / +0.025 (n=123)
+      curve shape middle                          n=  350 net per $1 -0.046 (se 0.024) won 82.6% | halves -0.058 (n=109) / -0.041 (n=241)
+      curve shape straight                        n=  396 net per $1 -0.012 (se 0.021) won 85.9% | halves +0.014 (n=92) / -0.019 (n=304)
+   model top 5% (any band)                        n=  922 net per $1 -0.010 (se 0.016) won 82.6% | halves -0.016 (n=290) / -0.008 (n=632)
+      2-7 min in                                  n=  424 net per $1 -0.040 (se 0.028) won 75.9% | halves -0.055 (n=115) / -0.034 (n=309)
+      7-11 min in                                 n=  285 net per $1 +0.043 (se 0.025) won 88.4% | halves +0.071 (n=90) / +0.029 (n=195)
+      11-15 min in                                n=  213 net per $1 -0.022 (se 0.026) won 88.3% | halves -0.053 (n=85) / -0.001 (n=128)
+      curve shape choppy                          n=  160 net per $1 +0.050 (se 0.041) won 83.8% | halves +0.049 (n=83) / +0.050 (n=77)
+      curve shape middle                          n=  268 net per $1 -0.061 (se 0.033) won 78.0% | halves -0.083 (n=92) / -0.049 (n=176)
+      curve shape straight                        n=  494 net per $1 -0.002 (se 0.021) won 84.8% | halves -0.009 (n=115) / -0.000 (n=379)
+   model top 10% (any band)                       n= 1503 net per $1 -0.033 (se 0.014) won 79.0% | halves -0.044 (n=454) / -0.028 (n=1049)
+      2-7 min in                                  n=  763 net per $1 -0.046 (se 0.023) won 73.5% | halves -0.094 (n=202) / -0.029 (n=561)
+      7-11 min in                                 n=  441 net per $1 -0.032 (se 0.024) won 81.9% | halves +0.038 (n=140) / -0.064 (n=301)
+      11-15 min in                                n=  299 net per $1 -0.002 (se 0.022) won 88.6% | halves -0.056 (n=112) / +0.030 (n=187)
+      curve shape choppy                          n=  269 net per $1 -0.034 (se 0.039) won 74.0% | halves -0.009 (n=124) / -0.056 (n=145)
+      curve shape middle                          n=  462 net per $1 -0.039 (se 0.026) won 77.1% | halves -0.070 (n=154) / -0.024 (n=308)
+      curve shape straight                        n=  772 net per $1 -0.029 (se 0.018) won 81.9% | halves -0.046 (n=176) / -0.024 (n=596)
+   model top 20% (any band)                       n= 2175 net per $1 -0.032 (se 0.013) won 75.1% | halves -0.046 (n=643) / -0.026 (n=1532)
+      2-7 min in                                  n= 1281 net per $1 -0.042 (se 0.019) won 70.6% | halves -0.102 (n=372) / -0.017 (n=909)
+      7-11 min in                                 n=  574 net per $1 -0.023 (se 0.023) won 79.1% | halves +0.069 (n=166) / -0.060 (n=408)
+      11-15 min in                                n=  320 net per $1 -0.006 (se 0.024) won 86.2% | halves -0.027 (n=105) / +0.004 (n=215)
+      curve shape choppy                          n=  440 net per $1 +0.000 (se 0.034) won 70.5% | halves -0.052 (n=172) / +0.034 (n=268)
+      curve shape middle                          n=  682 net per $1 -0.083 (se 0.025) won 69.8% | halves -0.091 (n=214) / -0.079 (n=468)
+      curve shape straight                        n= 1053 net per $1 -0.012 (se 0.017) won 80.5% | halves -0.004 (n=257) / -0.014 (n=796)
+   all (the lane's rule, band only)               n= 1775 net per $1 -0.011 (se 0.011) won 83.7% | halves -0.014 (n=468) / -0.010 (n=1307)
+      2-7 min in                                  n=0
+      7-11 min in                                 n= 1353 net per $1 -0.012 (se 0.012) won 83.4% | halves -0.008 (n=356) / -0.013 (n=997)
+      11-15 min in                                n=  422 net per $1 -0.007 (se 0.021) won 84.6% | halves -0.030 (n=112) / +0.001 (n=310)
+      curve shape choppy                          n=  432 net per $1 +0.006 (se 0.022) won 84.0% | halves -0.054 (n=122) / +0.029 (n=310)
+      curve shape middle                          n=  588 net per $1 -0.023 (se 0.019) won 82.5% | halves +0.003 (n=158) / -0.033 (n=430)
+      curve shape straight                        n=  755 net per $1 -0.011 (se 0.016) won 84.5% | halves -0.001 (n=188) / -0.014 (n=567)
+DONE
+
+
+
