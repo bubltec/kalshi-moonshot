@@ -164,6 +164,10 @@ class Target:
     cross_units: float = -1.0  # lane cross_units: sell when the cushion is at or under this many typical minutes (-1 = off)
     shock_bid_max: float = 0.0  # the highest bid the shock exit sells into (0 = SHOCK_BID[1])
     shock_last: float = 120.0
+    value_exit: float = 0.0  # lane value_exit (0 = off): sell while the bid after the fee is this far over the curve's chance that the side pays
+    value_bid: tuple = (0.30, 0.70)
+    value_at: float = 0.0  # the value check looks at most once a second
+    value_noted: float = 0.0
     shock_trend_hold: float = -99.0  # lane shock_trend_hold: no shock sale while the pre-spike trend is this far with the bet (-99 = off)
     shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
     shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
@@ -663,15 +667,44 @@ class ProfitWatcher:
 
     def _shock_on_index(self, index_id: str, now: float) -> None:
         with self._lock:
-            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0)]
+            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0 or t.value_exit > 0)]
         for t in hits:
             if t.last_ts <= 0 or t.cur_bid <= 0:
                 continue
-            reason = self._shock_hit(t, t.cur_bid, now, t.last_ts) or self._wrong_side_hit(t, t.cur_bid, now, t.last_ts)
+            reason = self._shock_hit(t, t.cur_bid, now, t.last_ts) or self._wrong_side_hit(t, t.cur_bid, now, t.last_ts) or self._value_hit(t, t.cur_bid, now, t.last_ts)
             key = (t.ticker, t.lane)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
                 self._queue_sell(SellSignal(t.ticker, t.lane, reason))
+
+    def _value_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
+        """The value exit (2026-11-08, user: a fix, live at once): sell while the bid, after the sell fee, is over the curve's own chance that this side pays by the lane's margin. The chance is confidence.py's model (price, the spot's distance to the strike in typical minutes, 60 s drift, bounce, path efficiency, range, time left), read from the index history now. Never sells for a loss after both fees (the profit-take rule above). Without the model, the history or a fresh spot the exit does not fire."""
+        from . import confidence
+
+        if t.value_exit <= 0 or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index or now - t.value_at < 1.0:
+            return None
+        left = t.close_ts - now
+        if left <= SETTLE_LAST or not (t.value_bid[0] <= bid <= t.value_bid[1]) or now - quote_ts > 5.0:
+            return None
+        t.value_at = now
+        model = confidence.load_model(self.get_settings())
+        got = ticks_mod.history.window(t.shock_index, now - 3750.0, now)
+        if model is None or not got:
+            return None
+        ask = min(0.99, bid + 0.01)
+        yes_bid, yes_ask = (bid, ask) if t.side == "yes" else (max(0.01, 1.0 - ask), 1.0 - bid)
+        f = confidence.features_at(got[0], got[1], now, t.shock_ref, left, yes_bid, yes_ask)
+        if f is None:
+            return None
+        p_yes = confidence.predict(model["w"], confidence.vector(f, model["mu"], model["sd"]))
+        p_side = p_yes if t.side == "yes" else 1.0 - p_yes
+        over = bid - fee_per_contract(bid) - p_side
+        if now - t.value_noted >= 10.0:
+            t.value_noted = now
+            log.info("watcher: value watch %s %s, %.0fs left: bid %.2f, curve chance %.2f, over by %+.3f (sells at %+.3f)", t.ticker, t.lane, left, bid, p_side, over, t.value_exit)
+        if over < t.value_exit:
+            return None
+        return f"value exit: bid {bid:.2f} after the fee is {over:.3f} over the curve's chance {p_side:.2f} that the {t.side} side pays, {left:.0f}s left"
 
     def _shock_note(self, t: Target, now: float, text: str) -> None:
         """One log line every 10 s while a shock watch is inside its last-seconds window: what it sees, so a position it did not sell can be explained afterwards."""
@@ -1266,7 +1299,7 @@ class ProfitWatcher:
                     held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0
                     if held.close_ts <= 0:
                         held.close_ts = close
-            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
+            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
                 sid = biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
@@ -1279,6 +1312,7 @@ class ProfitWatcher:
                 if ref > 0:
                     held.shock_index, held.shock_ref = sid, ref
                     held.shock_trend_hold = spec.shock_trend_hold
+                    held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
                     self._shock_hist.setdefault(sid, deque())
                     self._seed_shock_history(sid)
                     if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0) and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:

@@ -107,6 +107,8 @@ class LaneSpec:
     shock_margin_units: float = 0.0  # ...and the cushion in typical minutes (0 = use shock_margin_bp)
     cross_units: float = -1.0  # 2026-11-07 (user: SOL 09:30 had no exit): also sell, in the last shock_last seconds, when the cushion is at or under this many typical minutes from the strike (0 = the spot is on the wrong side of it) and the bid is in the shock band, whatever the move was. -1 = off. studies/results/2026-11-07-strike-cross-replay.txt
     shock_last: float = 120.0
+    value_exit: float = 0.0  # 2026-11-08 (user: ETH 07:30 YES bought at 0.31 was bid 0.63 seven seconds later and settled 0; "why isn't this built into our exit rule?"): sell a 15-minute crypto bet while the bid, after the sell fee, is this many dollars over the curve's own chance that the side pays (confidence.py: the same curve, time-left and price model the confidence shadow reads) and the bid is inside value_exit_bid. 0 = off. studies/results/2026-11-07-hold-value-exit.txt: margin 0.02 sold 809 times, +$30.0 against holding, halves +0.020/+0.054 per contract (bid 0.30-0.70 both halves positive, over 0.70 about zero)
+    value_exit_bid: tuple[float, float] = (0.30, 0.70)  # the bid band the value exit sells into: the study's band where it paid in both halves (chosen after seeing the results)
     shock_memory: float = 0.0  # seconds a shock is remembered: the worst shock_seconds move seen in this many seconds counts, not only the latest one (0 = only the latest). The shock can come just before the last-seconds window and fade (Brent, 2026-11-03: -12 bp at 125 s left, -8 by 120); with 120 s of memory the replay on 324 held commodity bets gave +$38 against +$15 for the latest move alone, and nothing on crypto
     wrong_side_bp: float = 0.0  # wrong-side exit: sell once the spot has sat this many basis points on the wrong side of its window-open price (the strike for crypto) for wrong_side_seconds straight (0 = off). Only for a position whose variety at the buy is in wrong_side_varieties (variants.py). 2026-11-03 replay of 76 held commodity bets read as G (oscillating): 5 bp for 15 s sold 15, 14 of them losers, +$20; the near varieties lost money on it and crypto gained nothing
     wrong_side_seconds: float = 15.0
@@ -338,7 +340,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     if unknown:
         raise ValueError(f"lane {name!r}: unknown field(s) {sorted(unknown)}")
     row = dict(row)
-    for key in ("price", "hours", "entry_elapsed"):
+    for key in ("price", "hours", "entry_elapsed", "value_exit_bid"):
         if key in row:
             row[key] = _pair(row[key])
     for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series", "ms_rule"):
@@ -455,7 +457,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_rest_top_up", "curve_shadow", "confidence_shadow", "accumulate_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
-    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "shock_memory", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "value_exit", "value_exit_bid", "shock_memory", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -554,7 +556,7 @@ def version_of(spec: LaneSpec, s: Any) -> str:
 
 
 def takes_profit(spec: LaneSpec) -> bool:
-    return spec.cash_out_at > 0 or spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.scalp_up > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0 or spec.cash_left_seconds > 0 or spec.drop_cents > 0 or spec.bounce_fall > 0 or spec.strike_through_sale > 0 or spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.cross_take > 0
+    return spec.cash_out_at > 0 or spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.scalp_up > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0 or spec.cash_left_seconds > 0 or spec.drop_cents > 0 or spec.bounce_fall > 0 or spec.strike_through_sale > 0 or spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.cross_take > 0 or spec.value_exit > 0
 
 
 def chance_ok(spec: LaneSpec, p: float) -> bool:

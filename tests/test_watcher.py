@@ -333,3 +333,30 @@ def test_a_lane_whose_only_exit_is_the_crossing_take_is_still_armed(setup):
     w.refresh()
     t = w.targets[("KXBTC15M-1", "late_ticket")]
     assert t.cross_take == 0.10 and t.strike == 100.0 and t.index_id
+
+
+def test_the_value_exit_sells_a_bid_that_is_over_the_curve_chance_and_holds_otherwise(monkeypatch):
+    import time
+    from types import SimpleNamespace
+
+    from kalshi_moonshot import confidence
+
+    now = time.time()
+    t = watcher.Target(ticker="KXETH15M-X", lane="crypto_multiscale", side="yes", entry=0.31, x=0.0, at=0.0, spike_cents=0.0, spike_seconds=0.0)
+    t.value_exit, t.shock_index, t.shock_ref, t.close_ts = 0.02, "ETHUSD_RTI", 2237.13, now + 80
+    fake = SimpleNamespace(get_settings=lambda: None)
+    monkeypatch.setattr(confidence, "load_model", lambda s: {"w": [0.0], "mu": {}, "sd": {}})
+    monkeypatch.setattr(watcher.ticks_mod.history, "window", lambda *a: ([1.0], [2237.3]))
+    monkeypatch.setattr(confidence, "features_at", lambda *a: {"x": 1.0})
+    monkeypatch.setattr(confidence, "vector", lambda f, mu, sd: [0.0])
+    monkeypatch.setattr(confidence, "predict", lambda w, x: 0.40)  # the curve says YES pays 40%
+    why = watcher.ProfitWatcher._value_hit(fake, t, 0.63, now, now)
+    assert why and why.startswith("value exit") and "0.63" in why
+    t.value_at = 0.0
+    assert watcher.ProfitWatcher._value_hit(fake, t, 0.41, now, now) is None  # a bid at the chance: nothing to give away
+    t.value_at = 0.0
+    assert watcher.ProfitWatcher._value_hit(fake, t, 0.80, now, now) is None  # above the band the study did not support
+    t.value_at = 0.0
+    t.side = "no"
+    monkeypatch.setattr(confidence, "predict", lambda w, x: 0.60)  # YES 60% = NO 40%
+    assert watcher.ProfitWatcher._value_hit(fake, t, 0.63, now, now)

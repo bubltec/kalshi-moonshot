@@ -163,7 +163,9 @@ def line(label, got):
     a = [x[2] for x in got if x[0][0] <= mid]
     b = [x[2] for x in got if x[0][0] > mid]
     beat = sum(1 for c in ch if c > 0)
-    print(f"   {label:40s} sells {n:5d} | change vs hold per contract {sum(ch) / n:+.3f} total {sum(ch):+.1f} | beat hold {beat} lost {n - beat} | halves {sum(a) / max(len(a), 1):+.3f} (n={len(a)}) / {sum(b) / max(len(b), 1):+.3f} (n={len(b)})")
+    mean = sum(ch) / n
+    se = (sum((c - mean) ** 2 for c in ch) / max(n - 1, 1)) ** 0.5 / n**0.5
+    print(f"   {label:40s} sells {n:5d} | change vs hold per contract {mean:+.3f} (se {se:.3f}) total {sum(ch):+.1f} | beat hold {beat} lost {n - beat} | halves {sum(a) / max(len(a), 1):+.3f} (n={len(a)}) / {sum(b) / max(len(b), 1):+.3f} (n={len(b)})")
 
 
 print("\nthe policy by margin (sale proceeds minus the hold payoff, first moment per market side where bid - fee - P(win) is over the margin):")
@@ -178,4 +180,12 @@ for M in (0.02, 0.05):
     for a in ("up", "flat", "down"):
         for b in ("up", "flat", "down"):
             line(f"13m {a} / 55m {b}", policy(M, shapefn=lambda r, a=a, b=b: dr(r[7]) == a and dr(r[8]) == b))
+print("\nby time left at the sale (2026-11-08, user: look at the hold-value sell especially before 300 s remaining; the margin and band were set earlier, this is a split of the same sales). Margin 0.02 and 0.05, bid 0.30-0.70 (the lane's band) and all bids:")
+for M in (0.02, 0.05):
+    for tag, bf in (("bid 0.30-0.70", lambda r: 0.30 <= r[4] <= 0.70), ("any bid", None)):
+        print(f"  margin {M:.2f}, {tag}:")
+        for lo, hi in ((120, 300), (300, 480), (480, 600), (600, 720), (720, 881)):
+            line(f"  {(900 - hi) // 60 if hi < 881 else 0}-{(900 - lo) // 60} min left ({900 - hi:.0f}-{900 - lo:.0f} s)", policy(M, bandfn=lambda r, lo=lo, hi=hi, bf=bf: lo <= r[3] < hi and (bf is None or bf(r))))
+        line("  before 300 s left (e under 600 s)", policy(M, bandfn=lambda r, bf=bf: r[3] < 600 and (bf is None or bf(r))))
+        line("  300 s or less left (e 600 s up)", policy(M, bandfn=lambda r, bf=bf: r[3] >= 600 and (bf is None or bf(r))))
 print("DONE")

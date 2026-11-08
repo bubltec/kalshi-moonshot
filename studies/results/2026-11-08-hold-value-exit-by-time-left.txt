@@ -1,0 +1,82 @@
+
+moments 81446 market sides 5476
+test moments 46700 test days 4
+calibration of the estimate on the test days (decile: n, mean estimate, actual win rate): {1: (1, 0.196, 0.0), 2: (541, 0.283, 0.255), 3: (5736, 0.357, 0.33), 4: (7468, 0.451, 0.439), 5: (7481, 0.549, 0.564), 6: (6985, 0.649, 0.678), 7: (7003, 0.75, 0.759), 8: (6780, 0.849, 0.868), 9: (4705, 0.933, 0.967)}
+
+the policy by margin (sale proceeds minus the hold payoff, first moment per market side where bid - fee - P(win) is over the margin):
+   margin 0.00                              sells  2023 | change vs hold per contract +0.001 (se 0.009) total +1.1 | beat hold 671 lost 1352 | halves +0.008 (n=1097) / -0.008 (n=926)
+   margin 0.02                              sells   873 | change vs hold per contract +0.038 (se 0.015) total +32.9 | beat hold 357 lost 516 | halves +0.049 (n=451) / +0.026 (n=422)
+   margin 0.05                              sells   192 | change vs hold per contract +0.022 (se 0.035) total +4.2 | beat hold 82 lost 110 | halves +0.140 (n=74) / -0.052 (n=118)
+   margin 0.10                              sells    10 | change vs hold per contract -0.056 (se 0.152) total -0.6 | beat hold 4 lost 6 | halves -0.467 (n=1) / -0.010 (n=9)
+
+by bid band (margin 0.02):
+   bid 0.30-0.50                            sells   303 | change vs hold per contract +0.062 (se 0.027) total +18.7 | beat hold 198 lost 105 | halves +0.121 (n=112) / +0.027 (n=191)
+   bid 0.50-0.70                            sells   517 | change vs hold per contract +0.050 (se 0.022) total +25.9 | beat hold 241 lost 276 | halves +0.075 (n=249) / +0.027 (n=268)
+   bid 0.70-0.85                            sells   533 | change vs hold per contract -0.002 (se 0.019) total -1.0 | beat hold 134 lost 399 | halves +0.038 (n=296) / -0.052 (n=237)
+   bid 0.85-0.98                            sells   398 | change vs hold per contract -0.009 (se 0.016) total -3.6 | beat hold 47 lost 351 | halves +0.014 (n=226) / -0.039 (n=172)
+
+by curve shape (margin 0.02; 13m / 55m cushion direction at the sale):
+   13m up / 55m up                          sells   411 | change vs hold per contract +0.022 (se 0.021) total +9.2 | beat hold 121 lost 290 | halves +0.017 (n=170) / +0.026 (n=241)
+   13m up / 55m flat                        sells     5 | change vs hold per contract +0.065 (se 0.200) total +0.3 | beat hold 1 lost 4 | halves +0.065 (n=5) / +0.000 (n=0)
+   13m up / 55m down                        n=0
+   13m flat / 55m up                        sells   580 | change vs hold per contract +0.028 (se 0.019) total +16.3 | beat hold 230 lost 350 | halves +0.080 (n=276) / -0.019 (n=304)
+   13m flat / 55m flat                      sells    97 | change vs hold per contract +0.011 (se 0.042) total +1.0 | beat hold 25 lost 72 | halves +0.003 (n=80) / +0.045 (n=17)
+   13m flat / 55m down                      sells     1 | change vs hold per contract -0.304 (se 0.000) total -0.3 | beat hold 0 lost 1 | halves +0.000 (n=0) / -0.304 (n=1)
+   13m down / 55m up                        sells   215 | change vs hold per contract +0.046 (se 0.033) total +10.0 | beat hold 116 lost 99 | halves +0.094 (n=119) / -0.013 (n=96)
+   13m down / 55m flat                      sells   130 | change vs hold per contract +0.083 (se 0.040) total +10.8 | beat hold 70 lost 60 | halves +0.045 (n=92) / +0.175 (n=38)
+   13m down / 55m down                      sells     9 | change vs hold per contract -0.286 (se 0.102) total -2.6 | beat hold 1 lost 8 | halves -0.360 (n=7) / -0.027 (n=2)
+
+by bid band (margin 0.05):
+   bid 0.30-0.50                            sells    62 | change vs hold per contract -0.021 (se 0.062) total -1.3 | beat hold 35 lost 27 | halves -0.043 (n=17) / -0.012 (n=45)
+   bid 0.50-0.70                            sells   128 | change vs hold per contract -0.015 (se 0.043) total -1.9 | beat hold 51 lost 77 | halves +0.167 (n=46) / -0.117 (n=82)
+   bid 0.70-0.85                            sells   104 | change vs hold per contract +0.023 (se 0.044) total +2.3 | beat hold 30 lost 74 | halves +0.227 (n=43) / -0.121 (n=61)
+   bid 0.85-0.98                            sells    35 | change vs hold per contract -0.083 (se 0.040) total -2.9 | beat hold 2 lost 33 | halves -0.024 (n=9) / -0.103 (n=26)
+
+by curve shape (margin 0.05; 13m / 55m cushion direction at the sale):
+   13m up / 55m up                          sells    53 | change vs hold per contract +0.021 (se 0.066) total +1.1 | beat hold 20 lost 33 | halves +0.293 (n=9) / -0.035 (n=44)
+   13m up / 55m flat                        n=0
+   13m up / 55m down                        n=0
+   13m flat / 55m up                        sells   128 | change vs hold per contract +0.003 (se 0.042) total +0.4 | beat hold 50 lost 78 | halves +0.193 (n=41) / -0.086 (n=87)
+   13m flat / 55m flat                      sells     1 | change vs hold per contract -0.447 (se 0.000) total -0.4 | beat hold 0 lost 1 | halves +0.000 (n=0) / -0.447 (n=1)
+   13m flat / 55m down                      n=0
+   13m down / 55m up                        sells    73 | change vs hold per contract -0.001 (se 0.058) total -0.1 | beat hold 33 lost 40 | halves +0.106 (n=40) / -0.132 (n=33)
+   13m down / 55m flat                      sells    11 | change vs hold per contract +0.226 (se 0.127) total +2.5 | beat hold 8 lost 3 | halves +0.260 (n=7) / +0.166 (n=4)
+   13m down / 55m down                      sells     1 | change vs hold per contract -0.537 (se 0.000) total -0.5 | beat hold 0 lost 1 | halves +0.000 (n=0) / -0.537 (n=1)
+
+by time left at the sale (2026-11-08, user: look at the hold-value sell especially before 300 s remaining; the margin and band were set earlier, this is a split of the same sales). Margin 0.02 and 0.05, bid 0.30-0.70 (the lane's band) and all bids:
+  margin 0.02, bid 0.30-0.70:
+     10-13 min left (600-780 s)             sells   431 | change vs hold per contract +0.058 (se 0.023) total +25.1 | beat hold 228 lost 203 | halves +0.059 (n=187) / +0.057 (n=244)
+     7-10 min left (420-600 s)              sells   325 | change vs hold per contract +0.020 (se 0.027) total +6.4 | beat hold 158 lost 167 | halves +0.068 (n=141) / -0.017 (n=184)
+     5-7 min left (300-420 s)               sells   204 | change vs hold per contract +0.035 (se 0.034) total +7.1 | beat hold 102 lost 102 | halves +0.118 (n=74) / -0.013 (n=130)
+     3-5 min left (180-300 s)               sells   138 | change vs hold per contract +0.051 (se 0.042) total +7.0 | beat hold 71 lost 67 | halves +0.155 (n=58) / -0.025 (n=80)
+     0-3 min left (19-180 s)                sells   109 | change vs hold per contract +0.055 (se 0.047) total +6.0 | beat hold 53 lost 56 | halves +0.226 (n=48) / -0.080 (n=61)
+     before 300 s left (e under 600 s)      sells   571 | change vs hold per contract +0.056 (se 0.020) total +32.2 | beat hold 297 lost 274 | halves +0.069 (n=264) / +0.046 (n=307)
+     300 s or less left (e 600 s up)        sells   188 | change vs hold per contract +0.063 (se 0.036) total +11.8 | beat hold 97 lost 91 | halves +0.171 (n=85) / -0.026 (n=103)
+  margin 0.02, any bid:
+     10-13 min left (600-780 s)             sells   556 | change vs hold per contract +0.035 (se 0.019) total +19.4 | beat hold 246 lost 310 | halves +0.040 (n=252) / +0.031 (n=304)
+     7-10 min left (420-600 s)              sells   493 | change vs hold per contract +0.003 (se 0.020) total +1.3 | beat hold 180 lost 313 | halves +0.029 (n=241) / -0.022 (n=252)
+     5-7 min left (300-420 s)               sells   417 | change vs hold per contract +0.031 (se 0.021) total +12.8 | beat hold 140 lost 277 | halves +0.078 (n=211) / -0.017 (n=206)
+     3-5 min left (180-300 s)               sells   333 | change vs hold per contract +0.035 (se 0.023) total +11.5 | beat hold 101 lost 232 | halves +0.120 (n=167) / -0.051 (n=166)
+     0-3 min left (19-180 s)                sells   259 | change vs hold per contract +0.019 (se 0.025) total +4.9 | beat hold 70 lost 189 | halves +0.098 (n=127) / -0.057 (n=132)
+     before 300 s left (e under 600 s)      sells   765 | change vs hold per contract +0.034 (se 0.016) total +25.9 | beat hold 323 lost 442 | halves +0.039 (n=388) / +0.029 (n=377)
+     300 s or less left (e 600 s up)        sells   411 | change vs hold per contract +0.044 (se 0.021) total +18.2 | beat hold 127 lost 284 | halves +0.114 (n=209) / -0.028 (n=202)
+  margin 0.05, bid 0.30-0.70:
+     10-13 min left (600-780 s)             sells   102 | change vs hold per contract +0.010 (se 0.050) total +1.1 | beat hold 47 lost 55 | halves +0.144 (n=37) / -0.066 (n=65)
+     7-10 min left (420-600 s)              sells    69 | change vs hold per contract -0.023 (se 0.060) total -1.6 | beat hold 30 lost 39 | halves +0.186 (n=23) / -0.128 (n=46)
+     5-7 min left (300-420 s)               sells    43 | change vs hold per contract -0.003 (se 0.072) total -0.1 | beat hold 19 lost 24 | halves +0.277 (n=12) / -0.111 (n=31)
+     3-5 min left (180-300 s)               sells    34 | change vs hold per contract +0.046 (se 0.080) total +1.6 | beat hold 17 lost 17 | halves +0.073 (n=8) / +0.038 (n=26)
+     0-3 min left (19-180 s)                sells    19 | change vs hold per contract -0.029 (se 0.107) total -0.6 | beat hold 8 lost 11 | halves -0.006 (n=5) / -0.037 (n=14)
+     before 300 s left (e under 600 s)      sells   133 | change vs hold per contract +0.039 (se 0.044) total +5.2 | beat hold 65 lost 68 | halves +0.212 (n=49) / -0.062 (n=84)
+     300 s or less left (e 600 s up)        sells    46 | change vs hold per contract +0.020 (se 0.069) total +0.9 | beat hold 22 lost 24 | halves +0.072 (n=12) / +0.002 (n=34)
+  margin 0.05, any bid:
+     10-13 min left (600-780 s)             sells   122 | change vs hold per contract +0.013 (se 0.045) total +1.5 | beat hold 52 lost 70 | halves +0.147 (n=45) / -0.066 (n=77)
+     7-10 min left (420-600 s)              sells    90 | change vs hold per contract +0.007 (se 0.052) total +0.6 | beat hold 36 lost 54 | halves +0.188 (n=31) / -0.088 (n=59)
+     5-7 min left (300-420 s)               sells    69 | change vs hold per contract +0.034 (se 0.054) total +2.4 | beat hold 26 lost 43 | halves +0.259 (n=21) / -0.064 (n=48)
+     3-5 min left (180-300 s)               sells    53 | change vs hold per contract +0.036 (se 0.062) total +1.9 | beat hold 21 lost 32 | halves +0.162 (n=14) / -0.010 (n=39)
+     0-3 min left (19-180 s)                sells    34 | change vs hold per contract -0.002 (se 0.073) total -0.1 | beat hold 11 lost 23 | halves +0.075 (n=14) / -0.056 (n=20)
+     before 300 s left (e under 600 s)      sells   161 | change vs hold per contract +0.027 (se 0.038) total +4.3 | beat hold 70 lost 91 | halves +0.177 (n=62) / -0.067 (n=99)
+     300 s or less left (e 600 s up)        sells    71 | change vs hold per contract +0.034 (se 0.054) total +2.4 | beat hold 28 lost 43 | halves +0.138 (n=24) / -0.019 (n=47)
+DONE
+
+
+
