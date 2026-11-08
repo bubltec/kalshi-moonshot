@@ -531,17 +531,9 @@ def evaluate(
     if bet and spec.reentry_cooldown_seconds and (left := store.exited_within(shot.ticker, shot.lane, spec.reentry_cooldown_seconds)) > 0:
         bet = False
         note = f"cooling down: this lane sold {shot.ticker} {spec.reentry_cooldown_seconds - left:.0f}s ago and waits {spec.reentry_cooldown_seconds:.0f}s before buying it again. {note}"
-    if bet and spec.rebuy_opposite_after_gain_seconds and (gain := store.last_gain_sale(shot.ticker, shot.lane)) is not None and shot.side == gain[0] and (wait := gain[1] + spec.rebuy_opposite_after_gain_seconds - time.time()) > 0:
+    if bet and (blocked := _buy_again_block(store, spec, shot)):
         bet = False
-        note = f"not buying back yet: this lane sold {shot.side} of {shot.ticker} for a gain {spec.rebuy_opposite_after_gain_seconds - wait:.0f}s ago; only the other side may be bought for {wait:.0f}s more. {note}"
-    if bet and spec.entry_checks_exit:
-        from . import ticks as ticks_mod
-        from . import variants
-
-        stuck = variants.spot_exit_now(spec, shot.series, shot.side, shot.hours_to_close * 3600.0, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
-        if stuck:
-            bet = False
-            note = f"not buying: {stuck}. {note}"
+        note = f"{blocked}. {note}"
     if bet and spec.max_open > 0:
         open_now = sum(1 for r in store.open_bets() if (r["lane"] or "moonshot") == shot.lane and r["ticker"] != shot.ticker)
         if open_now >= spec.max_open:
@@ -1551,6 +1543,24 @@ def _top_up_rest(s: Settings, client: KalshiClient, store: Store, shot: LongShot
     return Placed(f"{placed.note} Topped up {more:g} more at {avg:.4f}, fee ${fee:.4f}.", placed.filled + more, spent, blended)
 
 
+def _buy_again_block(store: Store, spec: LaneSpec, shot: LongShot) -> str | None:
+    """Why a buy that the other gates passed must still not go in, else None: the side this lane last sold for a gain waits out rebuy_opposite_after_gain_seconds (the other side goes through the usual gate at once), and with entry_checks_exit a buy is skipped while the lane's own spot exit (variants.spot_exit_now) would sell it at once. Called by evaluate and again by _requote, so a resting bid that is taken at the fresh ask some seconds later is held to the same two rules."""
+    if spec.rebuy_opposite_after_gain_seconds and (gain := store.last_gain_sale(shot.ticker, shot.lane)) is not None and shot.side == gain[0] and (wait := gain[1] + spec.rebuy_opposite_after_gain_seconds - time.time()) > 0:
+        return f"not buying back yet: this lane sold {shot.side} of {shot.ticker} for a gain {spec.rebuy_opposite_after_gain_seconds - wait:.0f}s ago; only the other side may be bought for {wait:.0f}s more"
+    if spec.entry_checks_exit:
+        from . import ticks as ticks_mod
+        from . import variants
+
+        try:
+            left = datetime.fromisoformat(str(shot.close_time)).timestamp() - time.time()
+        except (TypeError, ValueError):
+            left = shot.hours_to_close * 3600.0
+        stuck = variants.spot_exit_now(spec, shot.series, shot.side, left, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
+        if stuck:
+            return f"not buying: {stuck}"
+    return None
+
+
 def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, count: float) -> float | None:
     """The limit for a second try after an immediate buy filled nothing, or None to give up. It reads the book again and prices the order off the fresh ask, but never above the first limit plus
     `buy_retry_chase`, never outside the lane's price band, and only if the curve (model or record) and the risk gate still agree at the limit, the most the order can pay: a market that ran away is not chased."""
@@ -1583,6 +1593,9 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
         if not ok_rec:
             log.info("buy %s %s: the resting bid did not fill and the curve no longer clears the record at %.2f (%s)", shot.ticker, shot.side, limit, why_rec)
             return None
+    if blocked := _buy_again_block(store, spec, shot):
+        log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, blocked)
+        return None
     cost = limit * count + order_fee(limit, count)
     verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store))
     return limit if verdict.ok else None
