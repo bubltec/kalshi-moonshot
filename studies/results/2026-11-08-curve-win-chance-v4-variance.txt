@@ -1,0 +1,65 @@
+rows 116463 market sides 10721
+A. the variance ratio at 300 s against the curve shape of the same 3 hours (hourly samples, every coin)
+   samples 1611
+   eff (path efficiency)          mean VR by tercile low/mid/high: 0.99 (n=538) / 1.19 (n=537) / 1.32 (n=536) | rank correlation with VR +0.31
+   unit_bp (typical minute)       mean VR by tercile low/mid/high: 1.09 (n=538) / 1.13 (n=537) / 1.28 (n=536) | rank correlation with VR +0.20
+   cross (crossings of the open)  mean VR by tercile low/mid/high: 1.20 (n=545) / 1.21 (n=541) / 1.08 (n=525) | rank correlation with VR -0.12
+   per-coin label (mean VR, mean eff), a label and nothing more:
+     BNB1   VR 1.36  eff 0.066
+     BTC1   VR 1.09  eff 0.047
+     DOGE   VR 1.03  eff 0.048
+     ETH1   VR 0.85  eff 0.040
+     HYPE   VR 1.42  eff 0.053
+     NEAR   VR 1.42  eff 0.053
+     SOL1   VR 1.00  eff 0.053
+     XRP1   VR 1.46  eff 0.055
+     ZEC1   VR 1.61  eff 0.053
+moments with no usable variance ratio (treated as 1.0): 48 of 116463
+B/C. the one global k of phi_k_vr per test day: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.0]
+C. coefficients per test day (days after the first three):
+   off: raw coef on logit(Phi(z))                 [0.31, 0.19, 0.23, 0.22, 0.21, 0.22, 0.21, 0.23]
+   off_vr: raw coef on logit(Phi(z_vr))           [0.37, 0.23, 0.26, 0.23, 0.23, 0.26, 0.22, 0.24]
+   off_drift: raw coef on logit(Phi(z))           [0.36, 0.28, 0.3, 0.26, 0.24, 0.26, 0.29, 0.31]
+   off_drift: std coef drift_13m                  [-0.06, -0.111, -0.082, -0.058, -0.028, -0.008, -0.022, -0.033]
+   off_drift: std coef drift_34m                  [-0.003, -0.029, -0.013, -0.002, -0.011, -0.049, -0.096, -0.094]
+   off_vr_drift: raw coef on logit(Phi(z_vr))     [0.41, 0.33, 0.34, 0.28, 0.26, 0.3, 0.3, 0.33]
+   off_vr_drift: std coef drift_13m               [-0.051, -0.098, -0.081, -0.059, -0.031, -0.014, -0.034, -0.046]
+   off_vr_drift: std coef drift_34m               [-0.023, -0.04, -0.026, -0.011, -0.014, -0.051, -0.099, -0.098]
+D. picks at fixed edge bars, first per market side (net per $1 +/- one standard error, per half too)
+  bar 0.02
+   ridge18          net per $1 -0.022 +/- 0.022 (n=2930) won 47.8% vs price 47.7% | first half -0.078 +/- 0.031 (n=1157) | second half +0.014 +/- 0.030 (n=1773)
+   phi_z            net per $1 -0.056 +/- 0.019 (n=5095) won 38.5% vs price 39.3% | first half -0.072 +/- 0.033 (n=1851) | second half -0.047 +/- 0.024 (n=3244)
+   phi_vr           net per $1 -0.052 +/- 0.019 (n=5300) won 38.2% vs price 38.8% | first half -0.065 +/- 0.032 (n=1920) | second half -0.045 +/- 0.023 (n=3380)
+   phi_k_vr         net per $1 -0.051 +/- 0.019 (n=5316) won 37.9% vs price 38.5% | first half -0.065 +/- 0.032 (n=1920) | second half -0.043 +/- 0.024 (n=3396)
+   off              net per $1 -0.065 +/- 0.043 (n=1713) won 25.0% vs price 25.4% | first half -0.235 +/- 0.085 (n=396) | second half -0.014 +/- 0.049 (n=1317)
+   off_vr           net per $1 -0.018 +/- 0.040 (n=1961) won 26.3% vs price 25.6% | first half -0.135 +/- 0.076 (n=523) | second half +0.025 +/- 0.048 (n=1438)
+   off_drift        net per $1 +0.011 +/- 0.033 (n=2357) won 33.7% vs price 32.0% | first half -0.102 +/- 0.056 (n=733) | second half +0.062 +/- 0.041 (n=1624)
+   off_vr_drift     net per $1 +0.023 +/- 0.032 (n=2573) won 34.6% vs price 32.6% | first half -0.125 +/- 0.054 (n=766) | second half +0.085 +/- 0.039 (n=1807)
+  bar 0.05
+   ridge18          net per $1 +0.023 +/- 0.029 (n=1809) won 48.5% vs price 47.3% | first half -0.014 +/- 0.041 (n=718) | second half +0.046 +/- 0.040 (n=1091)
+   phi_z            net per $1 -0.050 +/- 0.023 (n=4205) won 34.6% vs price 35.0% | first half -0.073 +/- 0.038 (n=1550) | second half -0.036 +/- 0.028 (n=2655)
+   phi_vr           net per $1 -0.048 +/- 0.022 (n=4470) won 34.7% vs price 35.0% | first half -0.084 +/- 0.037 (n=1631) | second half -0.028 +/- 0.028 (n=2839)
+   phi_k_vr         net per $1 -0.051 +/- 0.022 (n=4486) won 34.2% vs price 34.7% | first half -0.084 +/- 0.037 (n=1631) | second half -0.033 +/- 0.028 (n=2855)
+   off              net per $1 -0.042 +/- 0.063 (n=830) won 24.7% vs price 24.6% | first half -0.183 +/- 0.138 (n=166) | second half -0.007 +/- 0.071 (n=664)
+   off_vr           net per $1 -0.104 +/- 0.057 (n=980) won 23.7% vs price 24.8% | first half -0.335 +/- 0.108 (n=231) | second half -0.033 +/- 0.066 (n=749)
+   off_drift        net per $1 +0.059 +/- 0.046 (n=1339) won 33.3% vs price 30.2% | first half -0.048 +/- 0.081 (n=374) | second half +0.100 +/- 0.055 (n=965)
+   off_vr_drift     net per $1 +0.062 +/- 0.042 (n=1529) won 34.2% vs price 30.9% | first half -0.057 +/- 0.076 (n=432) | second half +0.109 +/- 0.051 (n=1097)
+  bar 0.10
+   ridge18          net per $1 -0.058 +/- 0.044 (n=749) won 45.9% vs price 48.2% | first half -0.115 +/- 0.059 (n=306) | second half -0.019 +/- 0.062 (n=443)
+   phi_z            net per $1 -0.039 +/- 0.029 (n=3086) won 30.8% vs price 30.5% | first half -0.069 +/- 0.048 (n=1145) | second half -0.021 +/- 0.036 (n=1941)
+   phi_vr           net per $1 -0.035 +/- 0.027 (n=3415) won 31.0% vs price 30.7% | first half -0.080 +/- 0.045 (n=1258) | second half -0.008 +/- 0.035 (n=2157)
+   phi_k_vr         net per $1 -0.034 +/- 0.027 (n=3478) won 30.9% vs price 30.5% | first half -0.080 +/- 0.045 (n=1258) | second half -0.008 +/- 0.034 (n=2220)
+   off              net per $1 -0.181 +/- 0.119 (n=195) won 24.1% vs price 26.2% | first half -0.178 +/- 0.291 (n=36) | second half -0.182 +/- 0.130 (n=159)
+   off_vr           net per $1 -0.147 +/- 0.111 (n=242) won 24.0% vs price 25.7% | first half -0.213 +/- 0.226 (n=59) | second half -0.125 +/- 0.128 (n=183)
+   off_drift        net per $1 +0.133 +/- 0.078 (n=505) won 33.9% vs price 28.8% | first half +0.031 +/- 0.147 (n=127) | second half +0.167 +/- 0.092 (n=378)
+   off_vr_drift     net per $1 +0.103 +/- 0.071 (n=594) won 33.8% vs price 29.1% | first half +0.078 +/- 0.137 (n=157) | second half +0.112 +/- 0.082 (n=437)
+E. buying the side where Phi(z_vr) beats its ask by D (first per market side, every row, no fit; the D grid was chosen after the fade results)
+   D 0.05-0.10      net per $1 -0.047 +/- 0.024 (n=3912) won 35.3% vs price 35.4% | first half -0.059 +/- 0.034 (n=1967) | second half -0.036 +/- 0.033 (n=1945)
+   D 0.10-0.15      net per $1 -0.046 +/- 0.051 (n=959) won 33.0% vs price 32.5% | first half -0.033 +/- 0.078 (n=437) | second half -0.058 +/- 0.067 (n=522)
+   D 0.15-0.20      net per $1 -0.047 +/- 0.112 (n=189) won 35.4% vs price 35.7% | first half +0.039 +/- 0.198 (n=74) | second half -0.103 +/- 0.134 (n=115)
+                  ^ n under 300: not readable
+   D 0.20-0.30      net per $1 +0.264 +/- 0.150 (n=82) won 57.3% vs price 44.4% | first half +0.264 +/- 0.305 (n=28) | second half +0.264 +/- 0.166 (n=54)
+                  ^ n under 300: not readable
+   D 0.30-9.00      net per $1 -0.134 +/- 0.167 (n=32) won 50.0% vs price 44.2% | first half -0.085 +/- 0.343 (n=7) | second half -0.148 +/- 0.194 (n=25)
+                  ^ n under 300: not readable
+DONE
