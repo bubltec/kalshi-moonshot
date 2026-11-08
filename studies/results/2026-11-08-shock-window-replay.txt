@@ -1,0 +1,21 @@
+live crypto bets with a settled window: 739
+the exit replayed over the live crypto bets (change vs holding to the result):
+   shock_last 300                     sells 320 | net change $  +82.44 | beat hold 192 lost 128 | halves $+81.97 (n=148) / $+0.46 (n=172)
+   shock_last 900                     sells 363 | net change $  +44.94 | beat hold 211 lost 152 | halves $+71.02 (n=156) / $-26.07 (n=207)
+the sells that exist only with the whole window (not sold in the last 300 s either):
+   new sells                          sells  43 | net change $  -56.55 | beat hold 19 lost 24 | halves $-19.07 (n=8) / $-37.47 (n=35)
+   new, 5-8 min left                  sells  17 | net change $  -23.83 | beat hold 7 lost 10 | halves $-19.07 (n=8) / $-4.76 (n=9)
+   new, 8-11 min left                 sells  15 | net change $  -17.57 | beat hold 7 lost 8 | halves $+0.00 (n=0) / $-17.57 (n=15)
+   new, 11-15 min left                sells  11 | net change $  -15.14 | beat hold 5 lost 6 | halves $+0.00 (n=0) / $-15.14 (n=11)
+   new, sale bid 0.05-0.20            sells  17 | net change $   -6.74 | beat hold 13 lost 4 | halves $+1.51 (n=2) / $-8.25 (n=15)
+   new, sale bid 0.20-0.45            sells  13 | net change $  -15.25 | beat hold 6 lost 7 | halves $+0.00 (n=0) / $-15.25 (n=13)
+   new, sale bid 0.45-0.90            sells  13 | net change $  -34.56 | beat hold 0 lost 13 | halves $-20.59 (n=6) / $-13.97 (n=7)
+bets that the last-300 s window already sold, now sold earlier:
+   same bets, earlier sale            sells 320 | net change $ +101.49 | beat hold 192 lost 128 | halves $+90.09 (n=148) / $+11.40 (n=172)
+new sells by lane:
+   crypto_btc                         sells   1 | net change $   -1.64 | beat hold 0 lost 1 | halves $+0.00 (n=0) / $-1.64 (n=1)
+   crypto_favorite                    sells   7 | net change $  -22.02 | beat hold 0 lost 7 | halves $-20.59 (n=6) / $-1.43 (n=1)
+   crypto_multiscale                  sells  31 | net change $  -32.96 | beat hold 16 lost 15 | halves $+0.00 (n=0) / $-32.96 (n=31)
+   crypto_sol                         sells   1 | net change $   -1.59 | beat hold 0 lost 1 | halves $+0.00 (n=0) / $-1.59 (n=1)
+   crypto_wild_fade                   sells   3 | net change $   +1.67 | beat hold 3 lost 0 | halves $+1.51 (n=2) / $+0.16 (n=1)
+DONE
