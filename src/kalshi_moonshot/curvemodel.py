@@ -212,8 +212,8 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
     return False, f"curve model: {tag.replace('curve model ', '')} is under the bar."
 
 
-def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str]] | None = None, timed: bool = False) -> list[tuple[list[float], float, float]]:
-    """(`meta`, when given, gets (close, seconds into the window, ticker, side) per row, for studies; `timed` adds the time-left readings, off because the walk-forward did not support them.) The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
+def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str, float]] | None = None, timed: bool = False) -> list[tuple[list[float], float, float]]:
+    """(`meta`, when given, gets (close, seconds into the window, ticker, side, the side's bid) per row, for studies; `timed` adds the time-left readings, off because the walk-forward did not support them.) The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
     from . import db, variants
     from .kalshiws import RECORD_ONLY
     from .lanes import lane_specs
@@ -287,7 +287,7 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
                 if read is None:
                     continue
                 if meta is not None:
-                    meta.append((close, float(e), w["ticker"], side))
+                    meta.append((close, float(e), w["ticker"], side, bid))
                 won = w["result"] == side
                 contracts = 1.0 / ask
                 net = ((1 - ask) * contracts if won else -1.0) - fee(ask) * contracts
