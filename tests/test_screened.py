@@ -46,3 +46,19 @@ def test_screen_log_keeps_one_row_per_market_and_side_per_gap(tmp_path):
     assert store.log_screened("commodity", [row], now=1400.0) == 1  # after it
     store.prune_screened(days=1.0, now=1000.0 + 3 * 86400)
     assert store.db.execute("SELECT COUNT(*) FROM screen_log").fetchone()[0] == 0
+
+
+def test_an_always_lane_keeps_a_market_with_no_instrument_instead_of_dropping_it_for_no_feed():
+    import dataclasses
+
+    s = config.load()
+    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], always=True)
+
+    class NoFeed(FakePricer):
+        def price_markets(self, markets, s, now):
+            return {}
+
+    est = LadderEstimator(NoFeed(0.5))
+    sh = dataclasses.replace(shot("KXZEC15M-26NOV072015-15"), series="KXZEC15M", event_ticker="KXZEC15M-26NOV072015")
+    kept = est.screen([sh], [{"ticker": sh.ticker, "event_ticker": sh.event_ticker, "series_ticker": "KXZEC15M", "yes_ask_dollars": "0.77"}], spec, s, None)
+    assert [k.ticker for k in kept] == [sh.ticker] and est.dropped == []
