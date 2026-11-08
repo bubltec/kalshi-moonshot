@@ -1,0 +1,110 @@
+live crypto bets with a settled window: 739
+bets replayed: 739 | live exit sells: 320
+   live shock exit (last 300 s) vs holding  n=320 | net $  +82.44 | beat hold 192 lost 128 | halves $+81.97 (n=148) / $+0.46 (n=172)
+one coin jump >= 1.5 typical minutes in 15 s, sale 2 s later
+   alone vs holding                         n=103 | net $   +4.20 | beat hold 65 lost 38 | halves $+5.71 (n=48) / $-1.50 (n=55)
+   added to the live exit                   n= 73 | net $   -7.97 | beat hold 45 lost 28 | halves $-10.32 (n=31) / $+2.35 (n=42)
+     added, 15-300 s left                   n= 16 | net $   +3.49 | beat hold 9 lost 7 | halves $+4.98 (n=11) / $-1.49 (n=5)
+     added, 300-600 s left                  n= 52 | net $  -10.31 | beat hold 33 lost 19 | halves $-15.30 (n=20) / $+4.99 (n=32)
+     added, 600-900 s left                  n=  5 | net $   -1.16 | beat hold 3 lost 2 | halves $+0.00 (n=0) / $-1.16 (n=5)
+     added, crypto_btc                      n=  6 | net $   -0.09 | beat hold 4 lost 2 | halves $+1.07 (n=2) / $-1.16 (n=4)
+     added, crypto_eth                      n=  3 | net $   +0.84 | beat hold 3 lost 0 | halves $+0.00 (n=0) / $+0.84 (n=3)
+     added, crypto_favorite                 n= 31 | net $  -12.94 | beat hold 15 lost 16 | halves $-12.96 (n=26) / $+0.01 (n=5)
+     added, crypto_multiscale               n= 28 | net $   +2.39 | beat hold 18 lost 10 | halves $+0.00 (n=0) / $+2.39 (n=28)
+     added, crypto_wild_fade                n=  4 | net $   +1.00 | beat hold 4 lost 0 | halves $+0.74 (n=2) / $+0.26 (n=2)
+one coin jump >= 2.0 typical minutes in 15 s, sale 2 s later
+   alone vs holding                         n= 28 | net $   -1.41 | beat hold 18 lost 10 | halves $+0.67 (n=12) / $-2.07 (n=16)
+   added to the live exit                   n= 18 | net $   +0.70 | beat hold 13 lost 5 | halves $+0.43 (n=7) / $+0.27 (n=11)
+     added, 15-300 s left                   n=  4 | net $   +5.28 | beat hold 3 lost 1 | halves $+5.21 (n=2) / $+0.07 (n=2)
+     added, 300-600 s left                  n= 13 | net $   -4.78 | beat hold 9 lost 4 | halves $-4.78 (n=5) / $-0.01 (n=8)
+     added, 600-900 s left                  n=  1 | net $   +0.21 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.21 (n=1)
+     added, crypto_favorite                 n=  7 | net $   -0.43 | beat hold 4 lost 3 | halves $-0.82 (n=4) / $+0.39 (n=3)
+     added, crypto_multiscale               n=  7 | net $   -0.16 | beat hold 5 lost 2 | halves $+0.00 (n=0) / $-0.16 (n=7)
+one coin jump >= 3.0 typical minutes in 15 s, sale 2 s later
+   alone vs holding                         n=  3 | net $   -0.97 | beat hold 2 lost 1 | halves $+0.00 (n=0) / $-0.97 (n=3)
+   added to the live exit                   n=  2 | net $   +0.19 | beat hold 2 lost 0 | halves $+0.00 (n=0) / $+0.19 (n=2)
+     added, 15-300 s left                   n=  1 | net $   +0.08 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.08 (n=1)
+     added, 300-600 s left                  n=  1 | net $   +0.12 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.12 (n=1)
+     added, 600-900 s left                  n=0
+one coin jump >= 1.5 typical minutes in 30 s, sale 2 s later
+   alone vs holding                         n=183 | net $  +46.81 | beat hold 110 lost 73 | halves $+43.47 (n=83) / $+3.34 (n=100)
+   added to the live exit                   n=126 | net $   +2.87 | beat hold 76 lost 50 | halves $-3.93 (n=57) / $+6.80 (n=69)
+     added, 15-300 s left                   n= 35 | net $   +8.23 | beat hold 19 lost 16 | halves $+7.91 (n=23) / $+0.32 (n=12)
+     added, 300-600 s left                  n= 81 | net $   -5.67 | beat hold 51 lost 30 | halves $-11.83 (n=34) / $+6.17 (n=47)
+     added, 600-900 s left                  n= 10 | net $   +0.31 | beat hold 6 lost 4 | halves $+0.00 (n=0) / $+0.31 (n=10)
+     added, crypto_btc                      n=  9 | net $   +0.25 | beat hold 6 lost 3 | halves $+1.49 (n=3) / $-1.24 (n=6)
+     added, crypto_eth                      n=  3 | net $   +1.15 | beat hold 3 lost 0 | halves $+0.00 (n=0) / $+1.15 (n=3)
+     added, crypto_favorite                 n= 57 | net $   -3.62 | beat hold 32 lost 25 | halves $-6.80 (n=45) / $+3.18 (n=12)
+     added, crypto_multiscale               n= 40 | net $   +5.29 | beat hold 26 lost 14 | halves $+0.00 (n=0) / $+5.29 (n=40)
+     added, crypto_sol                      n= 11 | net $   -1.47 | beat hold 5 lost 6 | halves $+0.64 (n=7) / $-2.12 (n=4)
+     added, crypto_wild_fade                n=  6 | net $   +1.27 | beat hold 4 lost 2 | halves $+0.74 (n=2) / $+0.53 (n=4)
+one coin jump >= 2.0 typical minutes in 30 s, sale 2 s later
+   alone vs holding                         n= 72 | net $  -15.48 | beat hold 46 lost 26 | halves $-12.22 (n=34) / $-3.26 (n=38)
+   added to the live exit                   n= 45 | net $   -7.21 | beat hold 28 lost 17 | halves $-7.97 (n=20) / $+0.75 (n=25)
+     added, 15-300 s left                   n= 10 | net $   +8.28 | beat hold 8 lost 2 | halves $+7.74 (n=7) / $+0.54 (n=3)
+     added, 300-600 s left                  n= 32 | net $  -15.56 | beat hold 18 lost 14 | halves $-15.71 (n=13) / $+0.15 (n=19)
+     added, 600-900 s left                  n=  3 | net $   +0.07 | beat hold 2 lost 1 | halves $+0.00 (n=0) / $+0.07 (n=3)
+     added, crypto_btc                      n=  4 | net $   +0.06 | beat hold 3 lost 1 | halves $+0.45 (n=1) / $-0.39 (n=3)
+     added, crypto_favorite                 n= 21 | net $   -8.86 | beat hold 11 lost 10 | halves $-9.53 (n=17) / $+0.67 (n=4)
+     added, crypto_multiscale               n= 16 | net $   +1.83 | beat hold 11 lost 5 | halves $+0.00 (n=0) / $+1.83 (n=16)
+one coin jump >= 3.0 typical minutes in 30 s, sale 2 s later
+   alone vs holding                         n= 11 | net $   +2.18 | beat hold 9 lost 2 | halves $+2.84 (n=3) / $-0.67 (n=8)
+   added to the live exit                   n=  7 | net $   +0.20 | beat hold 5 lost 2 | halves $-0.01 (n=1) / $+0.21 (n=6)
+     added, 15-300 s left                   n=  1 | net $   +0.08 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.08 (n=1)
+     added, 300-600 s left                  n=  6 | net $   +0.13 | beat hold 4 lost 2 | halves $-0.01 (n=1) / $+0.14 (n=5)
+     added, 600-900 s left                  n=0
+     added, crypto_multiscale               n=  4 | net $   +0.03 | beat hold 3 lost 1 | halves $+0.00 (n=0) / $+0.03 (n=4)
+breadth (3+ coins) jump >= 1.5 typical minutes in 15 s, sale 2 s later
+   alone vs holding                         n= 78 | net $  -15.77 | beat hold 48 lost 30 | halves $-12.57 (n=35) / $-3.20 (n=43)
+   added to the live exit                   n= 55 | net $   -5.94 | beat hold 33 lost 22 | halves $-7.97 (n=23) / $+2.03 (n=32)
+     added, 15-300 s left                   n= 13 | net $   +3.96 | beat hold 7 lost 6 | halves $+5.57 (n=9) / $-1.61 (n=4)
+     added, 300-600 s left                  n= 38 | net $   -8.46 | beat hold 24 lost 14 | halves $-13.54 (n=14) / $+5.08 (n=24)
+     added, 600-900 s left                  n=  4 | net $   -1.44 | beat hold 2 lost 2 | halves $+0.00 (n=0) / $-1.44 (n=4)
+     added, crypto_btc                      n=  6 | net $   -0.16 | beat hold 4 lost 2 | halves $+1.07 (n=2) / $-1.23 (n=4)
+     added, crypto_eth                      n=  3 | net $   +0.84 | beat hold 3 lost 0 | halves $+0.00 (n=0) / $+0.84 (n=3)
+     added, crypto_favorite                 n= 23 | net $  -10.15 | beat hold 10 lost 13 | halves $-10.16 (n=18) / $+0.01 (n=5)
+     added, crypto_multiscale               n= 18 | net $   +2.14 | beat hold 12 lost 6 | halves $+0.00 (n=0) / $+2.14 (n=18)
+     added, crypto_wild_fade                n=  4 | net $   +0.56 | beat hold 3 lost 1 | halves $+0.30 (n=2) / $+0.26 (n=2)
+breadth (3+ coins) jump >= 2.0 typical minutes in 15 s, sale 2 s later
+   alone vs holding                         n= 22 | net $   +0.19 | beat hold 14 lost 8 | halves $+2.01 (n=10) / $-1.82 (n=12)
+   added to the live exit                   n= 14 | net $   +3.08 | beat hold 11 lost 3 | halves $+2.12 (n=5) / $+0.96 (n=9)
+     added, 15-300 s left                   n=  4 | net $   +5.28 | beat hold 3 lost 1 | halves $+5.21 (n=2) / $+0.07 (n=2)
+     added, 300-600 s left                  n= 10 | net $   -2.20 | beat hold 8 lost 2 | halves $-3.09 (n=3) / $+0.89 (n=7)
+     added, 600-900 s left                  n=0
+     added, crypto_favorite                 n=  6 | net $   +1.41 | beat hold 4 lost 2 | halves $+1.02 (n=3) / $+0.39 (n=3)
+     added, crypto_multiscale               n=  5 | net $   +0.53 | beat hold 4 lost 1 | halves $+0.00 (n=0) / $+0.53 (n=5)
+breadth (3+ coins) jump >= 3.0 typical minutes in 15 s, sale 2 s later
+   alone vs holding                         n=  2 | net $   -1.32 | beat hold 1 lost 1 | halves $+0.00 (n=0) / $-1.32 (n=2)
+   added to the live exit                   n=  1 | net $   +0.08 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.08 (n=1)
+     added, 15-300 s left                   n=  1 | net $   +0.08 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.08 (n=1)
+     added, 300-600 s left                  n=0
+     added, 600-900 s left                  n=0
+breadth (3+ coins) jump >= 1.5 typical minutes in 30 s, sale 2 s later
+   alone vs holding                         n=162 | net $  +60.98 | beat hold 95 lost 67 | halves $+64.99 (n=75) / $-4.01 (n=87)
+   added to the live exit                   n=116 | net $   +4.60 | beat hold 71 lost 45 | halves $-2.02 (n=54) / $+6.62 (n=62)
+     added, 15-300 s left                   n= 35 | net $   +8.23 | beat hold 20 lost 15 | halves $+7.87 (n=23) / $+0.36 (n=12)
+     added, 300-600 s left                  n= 71 | net $   -3.85 | beat hold 45 lost 26 | halves $-9.88 (n=31) / $+6.03 (n=40)
+     added, 600-900 s left                  n= 10 | net $   +0.23 | beat hold 6 lost 4 | halves $+0.00 (n=0) / $+0.23 (n=10)
+     added, crypto_btc                      n=  9 | net $   +0.25 | beat hold 6 lost 3 | halves $+1.49 (n=3) / $-1.24 (n=6)
+     added, crypto_eth                      n=  3 | net $   +1.15 | beat hold 3 lost 0 | halves $+0.00 (n=0) / $+1.15 (n=3)
+     added, crypto_favorite                 n= 54 | net $   -1.23 | beat hold 32 lost 22 | halves $-4.45 (n=42) / $+3.22 (n=12)
+     added, crypto_multiscale               n= 33 | net $   +5.07 | beat hold 22 lost 11 | halves $+0.00 (n=0) / $+5.07 (n=33)
+     added, crypto_sol                      n= 11 | net $   -1.47 | beat hold 5 lost 6 | halves $+0.64 (n=7) / $-2.12 (n=4)
+     added, crypto_wild_fade                n=  6 | net $   +0.83 | beat hold 3 lost 3 | halves $+0.30 (n=2) / $+0.53 (n=4)
+breadth (3+ coins) jump >= 2.0 typical minutes in 30 s, sale 2 s later
+   alone vs holding                         n= 63 | net $  -18.80 | beat hold 40 lost 23 | halves $-16.29 (n=29) / $-2.51 (n=34)
+   added to the live exit                   n= 39 | net $   -3.88 | beat hold 24 lost 15 | halves $-4.55 (n=17) / $+0.67 (n=22)
+     added, 15-300 s left                   n= 10 | net $   +8.24 | beat hold 8 lost 2 | halves $+7.71 (n=7) / $+0.54 (n=3)
+     added, 300-600 s left                  n= 27 | net $  -11.99 | beat hold 15 lost 12 | halves $-12.26 (n=10) / $+0.28 (n=17)
+     added, 600-900 s left                  n=  2 | net $   -0.14 | beat hold 1 lost 1 | halves $+0.00 (n=0) / $-0.14 (n=2)
+     added, crypto_btc                      n=  4 | net $   +0.06 | beat hold 3 lost 1 | halves $+0.45 (n=1) / $-0.39 (n=3)
+     added, crypto_favorite                 n= 18 | net $   -5.22 | beat hold 10 lost 8 | halves $-5.89 (n=14) / $+0.67 (n=4)
+     added, crypto_multiscale               n= 13 | net $   +1.75 | beat hold 9 lost 4 | halves $+0.00 (n=0) / $+1.75 (n=13)
+breadth (3+ coins) jump >= 3.0 typical minutes in 30 s, sale 2 s later
+   alone vs holding                         n= 10 | net $   +1.21 | beat hold 8 lost 2 | halves $+2.84 (n=3) / $-1.63 (n=7)
+   added to the live exit                   n=  7 | net $   +0.18 | beat hold 5 lost 2 | halves $-0.01 (n=1) / $+0.19 (n=6)
+     added, 15-300 s left                   n=  1 | net $   +0.08 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.08 (n=1)
+     added, 300-600 s left                  n=  6 | net $   +0.11 | beat hold 4 lost 2 | halves $-0.01 (n=1) / $+0.12 (n=5)
+     added, 600-900 s left                  n=0
+     added, crypto_multiscale               n=  4 | net $   +0.01 | beat hold 3 lost 1 | halves $+0.00 (n=0) / $+0.01 (n=4)
+DONE
