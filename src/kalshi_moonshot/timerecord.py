@@ -2,6 +2,7 @@
 
 studies/results/2026-11-08-multiscale-by-elapsed.txt and the 168 settled crypto_multiscale bets: bought 2-4 minutes in, 21 of 36 won and the bets netted +$23.41 (both halves positive); bought 9-15 minutes in, 8 of 46 won and they netted -$23.52 (both halves negative). A fixed minute cutoff would be a number picked by hand, so the lane keeps its own score by time instead (CLAUDE.md rules 2, 6, 8).
 Per lane and per two-minute bucket of the 15-minute window, from the lane's settled live bets of the last 7 days: the net in dollars over the dollars staked, shrunk toward zero by SHRINK dollars so a few bets cannot decide it. A bucket with at least MIN_N bets and a negative score is a bucket the lane sits out; a bucket without that evidence is open. Recomputed hourly.
+2026-11-08 (user: "things change hourly ... it needs to adapt and change otherwise no bets will be made"): the record now weights every reading by recency (HALF_LIFE, so the last hours count most and a week-old bet counts almost nothing), counts the lane's shadow-scored candidates as well as its live bets (a candidate the gate skipped is still scored hold-to-settle at its logged ask when its window settles, so a skipped bucket stays measured and can reopen), and sits a bucket out only when the recent evidence is both enough (weight of at least MIN_W bets) and clearly negative (t <= T_SKIP), so thin or old evidence leaves it open. It is recomputed every REFRESH seconds.
 Every model_buy lane runs this in shadow: each buy the lane's other rules clear is logged to DATA_DIR/timing_shadow.jsonl with the bucket's score and whether the record would have skipped it, and scored hourly against the settled window (net per $1 after the full taker fee, held to the result), kept against would-skip. The lane skips for real only with timing_gate = true (default off, the live switch is the user's). A would-skip subset that is positive over RETIRE_N signals in 7 days is flagged: the gate would have cost money (rule 6).
 """
 
@@ -18,10 +19,12 @@ from typing import Any
 log = logging.getLogger("moonshot")
 
 BUCKET = 120.0
-LOOKBACK = 7 * 86400.0
-SHRINK = 25.0
-MIN_N = 8
-REFRESH = 3600.0
+LOOKBACK = 3 * 86400.0  # readings older than this carry almost no weight anyway
+HALF_LIFE = 6 * 3600.0  # a reading's weight halves every 6 hours (a fixed number set 2026-11-08, with the T_SKIP and MIN_W below; the grid of what the data supports is in the commit message)
+SHRINK = 5.0  # the score is the weighted net per $1 shrunk toward zero by this many bets' worth of weight
+MIN_W = 4.0  # a bucket needs this much recent weight (about 4 bets from the last few hours) before it can sit out; less is no verdict, open
+T_SKIP = -1.0  # ...and the weighted mean must be at least this many standard errors under zero
+REFRESH = 600.0
 SCORE_EVERY = 3600.0
 RETIRE_N = 30
 
@@ -35,40 +38,61 @@ def bucket_of(elapsed: float) -> int:
     return max(0, min(int(900.0 // BUCKET) - 1, int(elapsed // BUCKET)))
 
 
-def record(store: Any, lane: str, now: float | None = None) -> dict[int, tuple[int, float]]:
-    """{bucket: (settled bets, shrunk net per dollar staked)} for the lane over the last 7 days. Cached for an hour."""
+def record(store: Any, lane: str, now: float | None = None, data_dir: Any = None) -> dict[int, tuple[float, float, float]]:
+    """{bucket: (weight in bets, shrunk weighted net per $1, t)} for the lane. The readings are the lane's settled live bets (net per $1 staked, held to the result) of the last LOOKBACK and, when `data_dir` is given, its shadow-scored candidates in that time (net per $1 after the fee at the logged ask, held to the result); a candidate that was also bought counts once. Each reading is weighted 0.5 ** (age / HALF_LIFE). Cached for REFRESH seconds."""
     now = time.time() if now is None else now
     with _lock:
         got = _cache.get(lane)
         if got and now - got[0] < REFRESH:
             return got[1]
     rows = store.db.execute(
-        "SELECT d.ts, d.side, d.outcome, d.contracts, d.stake_usd, w.close_ts FROM decisions d JOIN windows w ON w.ticker = d.ticker "
+        "SELECT d.ts, d.ticker, d.side, d.outcome, d.contracts, d.stake_usd, w.close_ts FROM decisions d JOIN windows w ON w.ticker = d.ticker "
         "WHERE d.action='bet' AND d.mode='trade' AND COALESCE(d.lane,'moonshot')=? AND d.ts>? AND d.outcome IN ('yes','no') AND d.contracts>0 AND d.stake_usd>0 AND w.close_ts>0",
         (lane, now - LOOKBACK),
     ).fetchall()
-    acc: dict[int, list[float]] = {}
+    readings: dict[tuple[str, str, int], tuple[float, int, float]] = {}  # (ticker, side, bucket) -> (time, bucket, net per $1)
     for r in rows:
         elapsed = float(r["ts"]) - (float(r["close_ts"]) - 900.0)
         if not 0.0 <= elapsed < 900.0:
             continue
         stake = float(r["stake_usd"])
-        net = (float(r["contracts"]) - stake) if r["outcome"] == r["side"] else -stake
-        a = acc.setdefault(bucket_of(elapsed), [0.0, 0.0, 0.0])
-        a[0] += 1
-        a[1] += net
-        a[2] += stake
-    out = {b: (int(a[0]), a[1] / (a[2] + SHRINK)) for b, a in acc.items()}
+        net = (float(r["contracts"]) - stake) / stake if r["outcome"] == r["side"] else -1.0
+        b = bucket_of(elapsed)
+        readings[(r["ticker"], r["side"], b)] = (float(r["ts"]), b, net)
+    if data_dir is not None:
+        try:
+            for line in (Path(data_dir) / "timing_shadow.jsonl").read_text().splitlines():
+                x = json.loads(line)
+                if x.get("kind") == "score" and x.get("lane") == lane and now - float(x["ts"]) <= LOOKBACK:
+                    readings.setdefault((x["ticker"], x["side"], int(x["bucket"])), (float(x["ts"]), int(x["bucket"]), float(x["net"])))
+        except (OSError, ValueError, KeyError):
+            pass
+    acc: dict[int, list[float]] = {}
+    for t, b, net in readings.values():
+        w = 0.5 ** (max(now - t, 0.0) / HALF_LIFE)
+        a = acc.setdefault(b, [0.0, 0.0, 0.0, 0.0])  # weight, weight*net, weight*net^2, weight^2
+        a[0] += w
+        a[1] += w * net
+        a[2] += w * net * net
+        a[3] += w * w
+    out: dict[int, tuple[float, float, float]] = {}
+    for b, (sw, swx, swx2, sw2) in acc.items():
+        mean = swx / sw
+        var = max(swx2 / sw - mean * mean, 0.0)
+        n_eff = sw * sw / sw2
+        se = (var / n_eff) ** 0.5 if n_eff > 0 else 0.0
+        t = mean / se if se > 0 else (0.0 if mean == 0 else (-9.0 if mean < 0 else 9.0))
+        out[b] = (sw, swx / (sw + SHRINK), t)
     with _lock:
         _cache[lane] = (now, out)
     return out
 
 
-def verdict(store: Any, lane: str, elapsed: float, now: float | None = None) -> tuple[bool, int, int, float]:
-    """(whether the lane sits this moment out, bucket, bets in it, its shrunk score). Open when the bucket has under MIN_N settled bets."""
+def verdict(store: Any, lane: str, elapsed: float, now: float | None = None, data_dir: Any = None) -> tuple[bool, int, int, float]:
+    """(whether the lane sits this moment out, bucket, bets' worth of recent weight in it, its shrunk score). Open unless the bucket has MIN_W of recent weight and a weighted mean at least |T_SKIP| standard errors under zero."""
     b = bucket_of(elapsed)
-    n, score = record(store, lane, now).get(b, (0, 0.0))
-    return (n >= MIN_N and score < 0.0), b, n, score
+    w, score, t = record(store, lane, now, data_dir).get(b, (0.0, 0.0, 0.0))
+    return (w >= MIN_W and score < 0.0 and t <= T_SKIP), b, round(w), score
 
 
 def _elapsed(shot: Any, now: float) -> float | None:
@@ -80,7 +104,7 @@ def _elapsed(shot: Any, now: float) -> float | None:
         return None
 
 
-def allows(store: Any, shot: Any, spec: Any, now: float | None = None) -> tuple[bool, str]:
+def allows(store: Any, shot: Any, spec: Any, now: float | None = None, s: Any = None) -> tuple[bool, str]:
     """The live gate: (True, "") unless the lane has timing_gate and the record says sit this moment out."""
     now = time.time() if now is None else now
     if not getattr(spec, "timing_gate", False):
@@ -88,9 +112,9 @@ def allows(store: Any, shot: Any, spec: Any, now: float | None = None) -> tuple[
     e = _elapsed(shot, now)
     if e is None:
         return True, ""
-    skip, b, n, score = verdict(store, shot.lane, e, now)
+    skip, b, n, score = verdict(store, shot.lane, e, now, getattr(s, "data_dir", None))
     if skip:
-        return False, f"timing: this lane's own record at {b * 2}-{b * 2 + 2} minutes into the window is {score:+.2f} per $ staked over {n} settled bets, so it sits this moment out."
+        return False, f"timing: this lane's own recent record at {b * 2}-{b * 2 + 2} minutes into the window is {score:+.2f} per $1 over about {n} bets (weighted to the last hours), so it sits this moment out."
     return True, ""
 
 
@@ -100,7 +124,7 @@ def shadow(s: Any, store: Any, shot: Any, spec: Any, ask: float, now: float | No
     e = _elapsed(shot, now)
     if e is None or not 0.0 <= e < 900.0:
         return
-    skip, b, n, score = verdict(store, shot.lane, e, now)
+    skip, b, n, score = verdict(store, shot.lane, e, now, s.data_dir)
     key = f"{shot.ticker}|{shot.side}|{shot.lane}|{b}"
     path = Path(s.data_dir) / "timing_shadow.jsonl"
     with _lock:

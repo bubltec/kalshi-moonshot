@@ -76,3 +76,44 @@ def test_the_shadow_buys_are_scored_against_the_settled_window(tmp_path, monkeyp
     assert len(new) == 1 and new[0]["ticker"] == "KXBTC15M-S1" and new[0]["net"] > 1.0 and new[0]["would_skip"] is True  # S2 has not settled
     timerecord._scored_at = 0.0
     assert timerecord.run_score(s, store, now=now + 4000) == []
+
+
+def _shadow_score(tmp_path, rows):
+    with (tmp_path / "timing_shadow.jsonl").open("a") as fh:
+        for r in rows:
+            fh.write(json.dumps({"kind": "score", "lane": "mod", **r}) + "\n")
+
+
+def test_old_losses_stop_counting_and_recent_ones_decide(tmp_path, monkeypatch):
+    s, store = _setup(tmp_path, monkeypatch)
+    now = time.time()
+    _shadow_score(tmp_path, [{"ts": now - 2 * 86400 - i, "ticker": f"KXBTC15M-O{i}", "side": "yes", "bucket": 5, "net": -1.0} for i in range(30)])
+    skip, _, n, _ = timerecord.verdict(store, "mod", 710.0, now, s.data_dir)
+    assert skip is False and n == 0  # thirty losses from two days ago weigh under a bet: the bucket is open again
+    timerecord._cache.clear()
+    _shadow_score(tmp_path, [{"ts": now - 1800 - i, "ticker": f"KXBTC15M-R{i}", "side": "yes", "bucket": 5, "net": -1.0 if i % 4 else 0.5} for i in range(12)])
+    skip, bucket, n, score = timerecord.verdict(store, "mod", 710.0, now, s.data_dir)
+    assert skip and bucket == 5 and n >= 4 and score < 0  # recent, enough and clearly negative: sat out
+
+
+def test_a_skipped_bucket_reopens_when_its_shadow_scores_turn_positive(tmp_path, monkeypatch):
+    s, store = _setup(tmp_path, monkeypatch)
+    now = time.time()
+    _shadow_score(tmp_path, [{"ts": now - 10 * 3600 - i, "ticker": f"KXBTC15M-A{i}", "side": "yes", "bucket": 4, "net": -1.0} for i in range(10)])
+    assert timerecord.verdict(store, "mod", 540.0, now, s.data_dir)[0] is False  # ten hours old: 10 x 0.32 = 3.2 of weight, under MIN_W
+    timerecord._cache.clear()
+    _shadow_score(tmp_path, [{"ts": now - 3600 - i, "ticker": f"KXBTC15M-B{i}", "side": "yes", "bucket": 4, "net": -1.0} for i in range(6)])
+    assert timerecord.verdict(store, "mod", 540.0, now, s.data_dir)[0] is True  # six recent losses on top: sat out
+    timerecord._cache.clear()
+    _shadow_score(tmp_path, [{"ts": now - 600 - i, "ticker": f"KXBTC15M-C{i}", "side": "yes", "bucket": 4, "net": 1.2} for i in range(10)])
+    assert timerecord.verdict(store, "mod", 540.0, now, s.data_dir)[0] is False  # ten fresh wins: open again, with no live bet in the bucket
+
+
+def test_a_candidate_that_was_also_bought_counts_once(tmp_path, monkeypatch):
+    s, store = _setup(tmp_path, monkeypatch)
+    _bet(store, 1, 700.0, won=False)
+    now = time.time()
+    close = now - 1000.0 - 1
+    _shadow_score(tmp_path, [{"ts": close - 900.0 + 700.0, "ticker": "KXBTC15M-T1", "side": "yes", "bucket": 5, "net": -1.0}])
+    w, _, _ = timerecord.record(store, "mod", now, s.data_dir)[5]
+    assert 0.9 < w <= 1.0

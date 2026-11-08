@@ -721,7 +721,7 @@ def evaluate(
             from . import timerecord
 
             timerecord.shadow(s, store, shot, spec, shot.ask)
-            ok_time, why_time = timerecord.allows(store, shot, spec)
+            ok_time, why_time = timerecord.allows(store, shot, spec, s=s)
             if ok_time:
                 note = f"[{why_mod}] {note}"
             else:
@@ -1582,7 +1582,7 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
             return None
         from . import timerecord
 
-        ok_time, why_time = timerecord.allows(store, shot, spec)
+        ok_time, why_time = timerecord.allows(store, shot, spec, s=s)
         if not ok_time:
             log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, why_time)
             return None
