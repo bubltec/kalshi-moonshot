@@ -1,0 +1,13 @@
+shock-exit sales: 131
+read: 131
+mean number of the nine coins moving a typical minute against a bet's direction in 60 s: at the shock sales 2.24 | at random seconds 1.08 (n=60)
+share of random seconds with 4 or more of the nine: 0.117 | share of shock sales with 4 or more: 0.229
+shock sales against holding, by the number of the nine coins moving against the bet's direction:
+   all                        net $  +15.79 | per sale +0.121 +/- 0.136 (n=131) | beat hold 99 lost 32 | first half +0.337 +/- 0.165 (n=66) | second half -0.099 +/- 0.214 (n=65)
+   0-1 coins                  net $   -9.36 | per sale -0.123 +/- 0.183 (n=76) | beat hold 54 lost 22 | first half +0.124 +/- 0.228 (n=37) | second half -0.358 +/- 0.283 (n=39)
+   2-3 coins                  net $   +7.04 | per sale +0.282 +/- 0.356 (n=25) | beat hold 18 lost 7 | first half +0.543 +/- 0.408 (n=16) | second half -0.183 +/- 0.680 (n=9)
+   4-6 coins                  net $  +14.25 | per sale +0.891 +/- 0.195 (n=16) | beat hold 16 lost 0 | first half +0.687 +/- 0.164 (n=9) | second half +1.153 +/- 0.389 (n=7)
+   7-9 coins                  net $   +3.86 | per sale +0.276 +/- 0.346 (n=14) | beat hold 11 lost 3 | first half +0.689 +/- 0.470 (n=4) | second half +0.111 +/- 0.450 (n=10)
+the SOL 12:30 sale:
+   coins moving against the bet: 1 of 9 | change -1.69
+DONE

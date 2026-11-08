@@ -1,0 +1,8 @@
+live crypto bets with a settled window: 858
+bets replayed: 858 | the current exit sells: 385
+the current exit (sell at the first second the shock conditions hold) vs holding: net +95.08 over 858 bets
+  K=2 (sell at once at 2+ coins), P=3 s (else wait): bets changed 128 (sold later 124, never 4) | net vs the current exit +9.25 | per changed bet +0.072 +/- 0.079 | first half +11.27 (n=430) / second half -2.02 (n=428)
+  K=2 (sell at once at 2+ coins), P=5 s (else wait): bets changed 130 (sold later 122, never 8) | net vs the current exit +6.13 | per changed bet +0.047 +/- 0.089 | first half +11.48 (n=430) / second half -5.35 (n=428)
+  K=4 (sell at once at 4+ coins), P=3 s (else wait): bets changed 211 (sold later 203, never 8) | net vs the current exit +6.43 | per changed bet +0.030 +/- 0.053 | first half +6.81 (n=430) / second half -0.38 (n=428)
+  K=4 (sell at once at 4+ coins), P=5 s (else wait): bets changed 213 (sold later 198, never 15) | net vs the current exit +2.48 | per changed bet +0.012 +/- 0.061 | first half +7.15 (n=430) / second half -4.67 (n=428)
+DONE
