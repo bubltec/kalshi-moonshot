@@ -1,0 +1,24 @@
+
+entry readings 180
+matched to bets 177
+
+the exit's test held at the buy (bid after fee - chance >= 0.00):
+   held at the buy (the exit would sell at once)        n= 102 staked $ 179.93 net $  -3.21 ( -1.8% of stake) won 42.2% | halves -1.87 (n=54) / -1.33 (n=48)
+   did not hold                                         n=  75 staked $  96.90 net $ -22.59 (-23.3% of stake) won 22.7% | halves -14.25 (n=35) / -8.35 (n=40)
+
+the exit's test held at the buy (bid after fee - chance >= 0.02):
+   held at the buy (the exit would sell at once)        n=  95 staked $ 168.16 net $  -1.08 ( -0.6% of stake) won 43.2% | halves -2.25 (n=51) / +1.17 (n=44)
+   did not hold                                         n=  82 staked $ 108.66 net $ -24.72 (-22.8% of stake) won 23.2% | halves -13.88 (n=38) / -10.84 (n=44)
+
+the exit's test held at the buy (bid after fee - chance >= 0.05):
+   held at the buy (the exit would sell at once)        n=  72 staked $ 135.77 net $  +8.00 ( +5.9% of stake) won 47.2% | halves +5.16 (n=38) / +2.84 (n=34)
+   did not hold                                         n= 105 staked $ 141.05 net $ -33.80 (-24.0% of stake) won 24.8% | halves -21.28 (n=51) / -12.52 (n=54)
+
+first buy of a side vs re-buy:
+   first buys                                           n= 177 staked $ 276.82 net $ -25.80 ( -9.3% of stake) won 33.9% | halves -16.12 (n=89) / -9.68 (n=88)
+   re-buys                                              n=0
+   re-buys where the exit's test held (>= 0.02)         n=0
+DONE
+
+
+
