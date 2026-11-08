@@ -819,6 +819,10 @@ class ProfitWatcher:
                 self._shock_log(t, now, margin, move, worst, bid, 2)
             return None
         self._shock_log(t, now, margin, move, worst, bid, 1)
+        if moved and t.ticker.split("-")[0].endswith("15M"):
+            from . import breadthcheck
+
+            breadthcheck.shadow_fire(self.get_settings(), t.ticker, t.lane, t.side, now, bid, left, margin, worst)  # shadow only: the breadth of the shock across the crypto indexes, logged
         if crossed and not moved:  # the spot is on the wrong side of the strike, or within cross_units typical minutes of it, with the bid still worth selling into
             return f"shock exit: the settlement is {margin_x:+.1f} bp from the strike ({t.cross_units:g} typical minutes = {t.cross_units * unit_bp:.1f} bp; spot {margin:+.1f}), {left:.0f}s left, bid {bid:.2f}"
         return f"shock exit: spot moved {-worst:.1f} bp against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
@@ -1419,6 +1423,10 @@ class ProfitWatcher:
                 from . import timerecord
 
                 timerecord.run_score(s, self.store_factory())
+
+                from . import breadthcheck
+
+                breadthcheck.run_score(s, self.store_factory())
             if any(sp.enabled and sp.record_buy for sp in specs.values()):
                 from . import staterecord
 
