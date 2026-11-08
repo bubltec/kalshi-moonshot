@@ -357,6 +357,10 @@ def test_the_value_exit_sells_a_bid_that_is_over_the_curve_chance_and_holds_othe
     t.value_at = 0.0
     assert watcher.ProfitWatcher._value_hit(fake, t, 0.80, now, now) is None  # above the band the study did not support
     t.value_at = 0.0
+    t.entry = 0.60  # bought dear: the bid is over the curve chance but under the price paid after both fees
+    assert watcher.ProfitWatcher._value_hit(fake, t, 0.45, now, now) is None
+    t.entry = 0.31
+    t.value_at = 0.0
     t.side = "no"
     monkeypatch.setattr(confidence, "predict", lambda w, x: 0.60)  # YES 60% = NO 40%
     assert watcher.ProfitWatcher._value_hit(fake, t, 0.63, now, now)

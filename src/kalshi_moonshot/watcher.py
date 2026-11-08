@@ -704,6 +704,8 @@ class ProfitWatcher:
             log.info("watcher: value watch %s %s, %.0fs left: bid %.2f, curve chance %.2f, over by %+.3f (sells at %+.3f)", t.ticker, t.lane, left, bid, p_side, over, t.value_exit)
         if over < t.value_exit:
             return None
+        if bid - fee_per_contract(bid) <= t.entry + fee_per_contract(t.entry):
+            return None  # a profit-take: never a sale for a loss after both fees (the sale path checks too, but this keeps a declined sale from being queued every second)
         return f"value exit: bid {bid:.2f} after the fee is {over:.3f} over the curve's chance {p_side:.2f} that the {t.side} side pays, {left:.0f}s left"
 
     def _shock_note(self, t: Target, now: float, text: str) -> None:
