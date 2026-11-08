@@ -1,0 +1,168 @@
+=== BTC ===
+KXBTC15M events so far 8687 15:12:22
+
+events 8687 spike 833 ordinary 7854
+
+spike events (Hyperliquid 10 s move >= 3x its own unit):
+   all                                n=  833 | already priced: quote +7.91c index +1.85u
+      Kalshi mid after, with the jump: 1s +2.18c  3s +3.03c  5s +3.03c  10s +3.15c  20s +3.44c
+      share moved 3c+ with the jump:   1s  22%  3s  31%  5s  32%  10s  38%  20s  41%
+      index after, units:               1s +1.99  3s +2.20  5s +1.77  10s +1.32  20s +1.00
+   first half                         n=  339 | already priced: quote +7.98c index +2.00u
+      Kalshi mid after, with the jump: 1s +2.26c  3s +3.32c  5s +3.45c  10s +3.52c  20s +3.71c
+      share moved 3c+ with the jump:   1s  22%  3s  35%  5s  37%  10s  41%  20s  41%
+      index after, units:               1s +1.79  3s +1.86  5s +1.52  10s +1.07  20s +0.83
+   second half                        n=  494 | already priced: quote +7.86c index +1.75u
+      Kalshi mid after, with the jump: 1s +2.13c  3s +2.84c  5s +2.74c  10s +2.91c  20s +3.25c
+      share moved 3c+ with the jump:   1s  22%  3s  28%  5s  29%  10s  37%  20s  41%
+      index after, units:               1s +2.13  3s +2.42  5s +1.94  10s +1.48  20s +1.11
+   last 300 s only                    n=  221 | already priced: quote +8.65c index +1.90u
+      Kalshi mid after, with the jump: 1s +2.30c  3s +3.87c  5s +3.65c  10s +4.20c  20s +4.76c
+      share moved 3c+ with the jump:   1s  22%  3s  28%  5s  29%  10s  31%  20s  37%
+      index after, units:               1s +1.70  3s +2.51  5s +1.99  10s +1.47  20s +1.08
+   curve shape choppy                 n=  239 | already priced: quote +9.33c index +1.68u
+      Kalshi mid after, with the jump: 1s +2.61c  3s +3.74c  5s +3.51c  10s +3.40c  20s +3.94c
+      share moved 3c+ with the jump:   1s  28%  3s  38%  5s  40%  10s  42%  20s  45%
+      index after, units:               1s +2.20  3s +2.44  5s +1.87  10s +1.37  20s +1.04
+   curve shape middle                 n=  257 | already priced: quote +9.05c index +1.71u
+      Kalshi mid after, with the jump: 1s +2.59c  3s +3.84c  5s +4.10c  10s +4.56c  20s +4.85c
+      share moved 3c+ with the jump:   1s  23%  3s  36%  5s  37%  10s  46%  20s  47%
+      index after, units:               1s +1.94  3s +2.22  5s +1.89  10s +1.49  20s +1.12
+=== ETH ===
+KXETH15M events so far 9329 15:12:51
+
+events 9329 spike 600 ordinary 8729
+
+spike events (Hyperliquid 10 s move >= 3x its own unit):
+   all                                n=  600 | already priced: quote +9.04c index +1.95u
+      Kalshi mid after, with the jump: 1s +1.69c  3s +2.03c  5s +1.77c  10s +1.47c  20s +1.40c
+      share moved 3c+ with the jump:   1s  19%  3s  24%  5s  26%  10s  27%  20s  31%
+      index after, units:               1s +1.55  3s +1.45  5s +1.07  10s +0.79  20s +0.52
+   first half                         n=  255 | already priced: quote +8.74c index +2.06u
+      Kalshi mid after, with the jump: 1s +1.52c  3s +2.36c  5s +2.05c  10s +1.78c  20s +2.00c
+      share moved 3c+ with the jump:   1s  18%  3s  26%  5s  27%  10s  28%  20s  32%
+      index after, units:               1s +1.50  3s +1.59  5s +1.15  10s +0.86  20s +0.53
+   second half                        n=  345 | already priced: quote +9.27c index +1.87u
+      Kalshi mid after, with the jump: 1s +1.82c  3s +1.79c  5s +1.57c  10s +1.24c  20s +0.95c
+      share moved 3c+ with the jump:   1s  20%  3s  23%  5s  26%  10s  27%  20s  31%
+      index after, units:               1s +1.59  3s +1.35  5s +1.01  10s +0.73  20s +0.51
+   last 300 s only                    n=  153 | already priced: quote +9.23c index +1.76u
+      Kalshi mid after, with the jump: 1s +1.77c  3s +2.24c  5s +2.24c  10s +1.21c  20s +1.20c
+      share moved 3c+ with the jump:   1s  18%  3s  21%  5s  24%  10s  21%  20s  23%
+      index after, units:               1s +1.70  3s +1.60  5s +1.21  10s +0.77  20s +0.54
+   curve shape choppy                 n=  163 | already priced: quote +11.05c index +1.80u
+      Kalshi mid after, with the jump: 1s +2.52c  3s +3.12c  5s +2.91c  10s +2.60c  20s +3.04c
+      share moved 3c+ with the jump:   1s  26%  3s  32%  5s  36%  10s  36%  20s  42%
+      index after, units:               1s +1.72  3s +1.60  5s +1.17  10s +0.75  20s +0.62
+   curve shape middle                 n=  164 | already priced: quote +10.65c index +1.75u
+      Kalshi mid after, with the jump: 1s +2.08c  3s +2.28c  5s +1.81c  10s +1.67c  20s +1.26c
+      share moved 3c+ with the jump:   1s  24%  3s  32%  5s  32%  10s  34%  20s  35%
+      index after, units:               1s +1.54  3s +1.31  5s +0.94  10s +0.65  20s +0.45
+   curve shape straight               n=  273 | already priced: quote +6.88c index +2.16u
+      Kalshi mid after, with the jump: 1s +0.95c  3s +1.24c  5s +1.08c  10s +0.67c  20s +0.50c
+      share moved 3c+ with the jump:   1s  12%  3s  15%  5s  16%  10s  18%  20s  23%
+      index after, units:               1s +1.46  3s +1.44  5s +1.09  10s +0.90  20s +0.50
+
+ordinary events (Hyperliquid 10 s move 1x-2x its own unit):
+=== SOL ===
+KXSOL15M events so far 9559 15:13:25
+
+events 9559 spike 628 ordinary 8931
+
+spike events (Hyperliquid 10 s move >= 3x its own unit):
+   all                                n=  628 | already priced: quote +8.88c index +1.84u
+      Kalshi mid after, with the jump: 1s +1.51c  3s +2.03c  5s +2.05c  10s +2.08c  20s +2.07c
+      share moved 3c+ with the jump:   1s  18%  3s  27%  5s  28%  10s  31%  20s  33%
+      index after, units:               1s +1.33  3s +1.44  5s +1.12  10s +0.85  20s +0.58
+   first half                         n=  277 | already priced: quote +8.37c index +2.02u
+      Kalshi mid after, with the jump: 1s +1.76c  3s +2.42c  5s +2.44c  10s +2.24c  20s +2.20c
+      share moved 3c+ with the jump:   1s  21%  3s  31%  5s  33%  10s  31%  20s  35%
+      index after, units:               1s +1.64  3s +1.60  5s +1.17  10s +0.86  20s +0.52
+   second half                        n=  351 | already priced: quote +9.29c index +1.70u
+      Kalshi mid after, with the jump: 1s +1.32c  3s +1.72c  5s +1.75c  10s +1.96c  20s +1.96c
+      share moved 3c+ with the jump:   1s  15%  3s  23%  5s  25%  10s  31%  20s  32%
+      index after, units:               1s +1.08  3s +1.31  5s +1.08  10s +0.85  20s +0.62
+   last 300 s only                    n=  151 | already priced: quote +9.61c index +1.67u
+      Kalshi mid after, with the jump: 1s +1.48c  3s +1.90c  5s +2.11c  10s +1.84c  20s +2.30c
+      share moved 3c+ with the jump:   1s  17%  3s  23%  5s  24%  10s  24%  20s  28%
+      index after, units:               1s +1.55  3s +1.60  5s +1.21  10s +0.83  20s +0.56
+   curve shape choppy                 n=  150 | already priced: quote +10.50c index +1.74u
+      Kalshi mid after, with the jump: 1s +1.75c  3s +2.02c  5s +1.93c  10s +1.99c  20s +1.82c
+      share moved 3c+ with the jump:   1s  21%  3s  29%  5s  31%  10s  35%  20s  37%
+      index after, units:               1s +1.10  3s +1.02  5s +0.73  10s +0.53  20s +0.37
+   curve shape middle                 n=  174 | already priced: quote +10.12c index +1.68u
+      Kalshi mid after, with the jump: 1s +2.21c  3s +2.82c  5s +2.98c  10s +3.26c  20s +3.53c
+      share moved 3c+ with the jump:   1s  25%  3s  34%  5s  36%  10s  38%  20s  40%
+      index after, units:               1s +1.45  3s +1.74  5s +1.37  10s +1.03  20s +0.76
+=== XRP ===
+KXXRP15M events so far 7931 15:14:16
+
+events 7931 spike 810 ordinary 7121
+
+spike events (Hyperliquid 10 s move >= 3x its own unit):
+   all                                n=  810 | already priced: quote +6.86c index +1.84u
+      Kalshi mid after, with the jump: 1s +1.52c  3s +2.11c  5s +1.99c  10s +1.95c  20s +2.32c
+      share moved 3c+ with the jump:   1s  19%  3s  28%  5s  29%  10s  33%  20s  36%
+      index after, units:               1s +1.19  3s +1.58  5s +1.24  10s +0.99  20s +0.83
+   first half                         n=  359 | already priced: quote +7.18c index +1.97u
+      Kalshi mid after, with the jump: 1s +1.28c  3s +1.93c  5s +1.85c  10s +1.72c  20s +1.97c
+      share moved 3c+ with the jump:   1s  18%  3s  27%  5s  30%  10s  32%  20s  33%
+      index after, units:               1s +1.07  3s +1.33  5s +1.07  10s +0.85  20s +0.73
+   second half                        n=  451 | already priced: quote +6.60c index +1.73u
+      Kalshi mid after, with the jump: 1s +1.71c  3s +2.25c  5s +2.10c  10s +2.14c  20s +2.59c
+      share moved 3c+ with the jump:   1s  20%  3s  28%  5s  29%  10s  33%  20s  38%
+      index after, units:               1s +1.29  3s +1.78  5s +1.38  10s +1.10  20s +0.91
+   last 300 s only                    n=  216 | already priced: quote +7.16c index +1.77u
+      Kalshi mid after, with the jump: 1s +1.22c  3s +1.61c  5s +1.42c  10s +1.47c  20s +1.74c
+      share moved 3c+ with the jump:   1s  16%  3s  20%  5s  23%  10s  26%  20s  30%
+      index after, units:               1s +1.08  3s +1.49  5s +1.16  10s +0.92  20s +0.79
+   curve shape choppy                 n=  272 | already priced: quote +8.06c index +1.61u
+      Kalshi mid after, with the jump: 1s +1.83c  3s +2.45c  5s +2.01c  10s +1.96c  20s +2.44c
+      share moved 3c+ with the jump:   1s  22%  3s  31%  5s  32%  10s  37%  20s  40%
+      index after, units:               1s +0.95  3s +1.43  5s +1.09  10s +0.83  20s +0.71
+   curve shape middle                 n=  259 | already priced: quote +6.98c index +1.67u
+      Kalshi mid after, with the jump: 1s +1.74c  3s +2.34c  5s +2.45c  10s +2.68c  20s +2.74c
+      share moved 3c+ with the jump:   1s  20%  3s  31%  5s  34%  10s  37%  20s  38%
+      index after, units:               1s +1.06  3s +1.40  5s +1.13  10s +0.93  20s +0.74
+   curve shape straight               n=  279 | already priced: quote +5.57c index +2.21u
+      Kalshi mid after, with the jump: 1s +1.02c  3s +1.56c  5s +1.54c  10s +1.27c  20s +1.80c
+      share moved 3c+ with the jump:   1s  14%  3s  23%  5s  22%  10s  25%  20s  29%
+      index after, units:               1s +1.55  3s +1.89  5s +1.49  10s +1.19  20s +1.03
+
+ordinary events (Hyperliquid 10 s move 1x-2x its own unit):
+=== DOGE ===
+KXDOGE15M events so far 6226 15:14:44
+
+events 6226 spike 1260 ordinary 4966
+
+spike events (Hyperliquid 10 s move >= 3x its own unit):
+   all                                n= 1260 | already priced: quote +4.45c index +1.04u
+      Kalshi mid after, with the jump: 1s +0.84c  3s +1.03c  5s +1.07c  10s +1.11c  20s +1.10c
+      share moved 3c+ with the jump:   1s  11%  3s  17%  5s  21%  10s  26%  20s  30%
+      index after, units:               1s +0.60  3s +0.67  5s +0.59  10s +0.44  20s +0.35
+   first half                         n=  649 | already priced: quote +4.25c index +1.02u
+      Kalshi mid after, with the jump: 1s +0.70c  3s +0.92c  5s +0.92c  10s +1.05c  20s +1.25c
+      share moved 3c+ with the jump:   1s  10%  3s  17%  5s  21%  10s  26%  20s  31%
+      index after, units:               1s +0.53  3s +0.52  5s +0.46  10s +0.35  20s +0.32
+   second half                        n=  611 | already priced: quote +4.66c index +1.06u
+      Kalshi mid after, with the jump: 1s +0.99c  3s +1.14c  5s +1.23c  10s +1.17c  20s +0.95c
+      share moved 3c+ with the jump:   1s  11%  3s  17%  5s  21%  10s  27%  20s  30%
+      index after, units:               1s +0.68  3s +0.84  5s +0.72  10s +0.53  20s +0.39
+   last 300 s only                    n=  355 | already priced: quote +4.69c index +0.99u
+      Kalshi mid after, with the jump: 1s +0.81c  3s +1.08c  5s +1.09c  10s +1.47c  20s +1.59c
+      share moved 3c+ with the jump:   1s   9%  3s  15%  5s  17%  10s  21%  20s  25%
+      index after, units:               1s +0.68  3s +0.78  5s +0.68  10s +0.49  20s +0.39
+   curve shape choppy                 n=  376 | already priced: quote +5.10c index +0.85u
+      Kalshi mid after, with the jump: 1s +0.65c  3s +0.73c  5s +0.75c  10s +0.64c  20s +0.37c
+      share moved 3c+ with the jump:   1s  12%  3s  19%  5s  24%  10s  31%  20s  32%
+      index after, units:               1s +0.43  3s +0.44  5s +0.43  10s +0.29  20s +0.25
+   curve shape middle                 n=  406 | already priced: quote +4.68c index +0.92u
+      Kalshi mid after, with the jump: 1s +1.03c  3s +1.34c  5s +1.37c  10s +1.32c  20s +1.32c
+      share moved 3c+ with the jump:   1s  12%  3s  18%  5s  24%  10s  28%  20s  33%
+      index after, units:               1s +0.53  3s +0.82  5s +0.66  10s +0.51  20s +0.36
+   curve shape straight               n=  478 | already priced: quote +3.74c index +1.28u
+      Kalshi mid after, with the jump: 1s +0.84c  3s +0.99c  5s +1.07c  10s +1.29c  20s +1.49c
+      share moved 3c+ with the jump:   1s   8%  3s  14%  5s  17%  10s  22%  20s  26%
+      index after, units:               1s +0.80  3s +0.73  5s +0.65  10s +0.49  20s +0.42
+
+ordinary events (Hyperliquid 10 s move 1x-2x its own unit):
