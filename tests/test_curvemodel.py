@@ -117,3 +117,99 @@ def test_a_model_fitted_with_the_time_readings_names_them_and_one_without_keeps_
     assert model["names"][18:31] == curvemodel.TIME_NAMES and len(model["mu"]) == n_new + 1
     old = curvemodel.fit([(r[0][:18], r[1], r[2]) for r in rows])
     assert old["names"] == curvemodel.NAMES
+
+
+def _readings(z13):
+    r = [0.0] * (18 + len(curvemodel.TIME_NAMES))
+    r[18 + curvemodel.TIME_NAMES.index("z_13m")] = z13
+    return r
+
+
+def test_the_probit_fit_rises_with_the_cushion_and_the_edge_is_chance_over_ask_less_the_fee():
+    random.seed(7)
+    rows = []
+    for _ in range(4500):
+        z = random.gauss(0, 1.5)
+        rows.append((_readings(z), 0.5, 1.0 if random.random() < 1.0 / (1.0 + math.exp(-1.5 * z)) else -1.0))
+    model = curvemodel.fit_probit(rows)
+    assert model is not None and curvemodel.fit_probit(rows[:100]) is None
+    lo, _ = curvemodel.predict_probit(model, _readings(-2.0), 0.5)
+    hi, edge = curvemodel.predict_probit(model, _readings(2.0), 0.5)
+    assert hi > 0.8 > 0.2 > lo  # steadily higher with the cushion
+    from kalshi_moonshot.strategy import fee_per_contract
+
+    assert abs(edge - (hi / 0.5 - 1.0 - fee_per_contract(0.5) / 0.5)) < 1e-9
+
+
+def _probit_lane(tmp_path, monkeypatch, kind, chance):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(f"[lane.mod]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_top=0.2\nmodel_kind='{kind}'\nprobit_bar=0.05\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    curvemodel._cache.update(mtime=None, data=None)
+    curvemodel._pcache.update(mtime=None, data=None)
+    curvemodel._pseen.clear()
+    now = time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-7", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    index = variants.crypto_index("KXBTC15M")
+    ts, vs = _ticks(now, drift=0.0)
+    for t, v in zip(ts, vs, strict=True):
+        ticks.history.note(index, t, v)
+    shot = LongShot("KXBTC15M-7", "t", "", 0.40, 0.41, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="mod", series="KXBTC15M", side="yes")
+    ridge = {"built_at": now, "n": 5000, "names": curvemodel.NAMES, "mu": [0.0] * 19, "sd": [1.0] * 19, "train_days": 9.0, "mean_net": -0.05, "w": [0.1] + [0.0] * 19, "cuts": {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}}  # +0.1: under the 0.2 bar, the ridge passes
+    (tmp_path / "curve_model.json").write_text(json.dumps(ridge))
+    probit = {"kind": "probit", "built_at": now, "n": 5000, "names": curvemodel.PROBIT_NAMES, "mu": [0.0] * 6, "sd": [1.0] * 6, "w": [math.log(chance / (1 - chance))] + [0.0] * 6}
+    (tmp_path / "curve_probit.json").write_text(json.dumps(probit))
+    return s, store, shot
+
+
+def test_the_probit_is_logged_in_shadow_while_the_ridge_decides(tmp_path, monkeypatch):
+    s, store, shot = _probit_lane(tmp_path, monkeypatch, "ridge", 0.8)  # a chance of 0.8 at a 0.41 ask: a big edge
+    try:
+        out = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert out.action == "pass" and "under the bar" in out.note  # the ridge still decides
+        rows = [json.loads(x) for x in (tmp_path / "probit_shadow.jsonl").read_text().splitlines()]
+        assert len(rows) == 1 and rows[0]["ticker"] == "KXBTC15M-7" and rows[0]["ridge_buys"] is False and rows[0]["edge"] > 0.5
+        runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert len((tmp_path / "probit_shadow.jsonl").read_text().splitlines()) == 1  # once per market side
+    finally:
+        ticks.history.clear()
+        curvemodel._cache.update(mtime=None, data=None)
+        curvemodel._pcache.update(mtime=None, data=None)
+        curvemodel._pseen.clear()
+
+
+def test_a_probit_lane_buys_on_the_probit_and_passes_under_its_bar(tmp_path, monkeypatch):
+    s, store, shot = _probit_lane(tmp_path, monkeypatch, "probit", 0.8)
+    try:
+        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert ok.action == "bet" and "curve probit" in ok.note
+        (tmp_path / "curve_probit.json").write_text(json.dumps({"kind": "probit", "built_at": 1.0, "n": 5000, "names": curvemodel.PROBIT_NAMES, "mu": [0.0] * 6, "sd": [1.0] * 6, "w": [math.log(0.41 / 0.59)] + [0.0] * 6}))
+        curvemodel._pcache.update(mtime=None, data=None)
+        low = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert low.action == "pass" and "under the bar" in low.note  # a fair chance at the ask is a negative edge after the fee
+    finally:
+        ticks.history.clear()
+        curvemodel._cache.update(mtime=None, data=None)
+        curvemodel._pcache.update(mtime=None, data=None)
+        curvemodel._pseen.clear()
+
+
+def test_the_probit_signals_are_scored_against_the_settled_window(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    store = Store(s.db_path)
+    now = time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, result, fetched_ts) VALUES (?,?,?,?,?,?)", ("KXBTC15M-8", "KXBTC15M", now - 600.0, 100.0, "yes", now))
+    store.db.commit()
+    sig = {"kind": "signal", "ts": now - 900.0, "ticker": "KXBTC15M-8", "lane": "mod", "side": "yes", "ask": 0.5, "left": 300.0, "chance": 0.6, "edge": 0.1, "bar": 0.05, "ridge_buys": True}
+    (tmp_path / "probit_shadow.jsonl").write_text(json.dumps(sig) + "\n")
+    curvemodel._pscored_at = 0.0
+    new = curvemodel.run_probit_score(s, store, now=now)
+    assert len(new) == 1 and new[0]["net"] > 0.9  # a yes at 0.50 that won: about +1.0 per $1 less the fee
+    assert curvemodel.run_probit_score(s, store, now=now + 10) == []  # hourly
+    curvemodel._pscored_at = 0.0
+    assert curvemodel.run_probit_score(s, store, now=now + 4000) == []  # already scored
