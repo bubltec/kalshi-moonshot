@@ -1,0 +1,26 @@
+shock-exit sales of crypto lanes with a settled window: 130
+read: 130 | with no flow rows at all: 0
+   all shock sales                      net $  +18.07 | per sale +0.139 +/- 0.136 (n=130) | beat hold 99 lost 31 | first half +0.337 +/- 0.165 (n=66) | second half -0.065 +/- 0.214 (n=64)
+adverse taker volume in the last 10 s, as a multiple of the market's own normal second:
+   ratio 0 to 1.5                       net $   +3.53 | per sale +0.505 +/- 0.366 (n=7) | beat hold 6 lost 1 | first half +0.274 +/- 0.480 (n=4) | second half +0.811 +/- 0.627 (n=3)
+   ratio 1.5 to 3                       net $   +4.44 | per sale +0.740 +/- 0.125 (n=6) | beat hold 6 lost 0 | first half +0.722 +/- 0.137 (n=2) | second half +0.749 +/- 0.189 (n=4)
+   ratio 3 to 6                         net $   -9.82 | per sale -0.655 +/- 0.503 (n=15) | beat hold 10 lost 5 | first half +0.232 +/- 0.601 (n=6) | second half -1.246 +/- 0.692 (n=9)
+   ratio 6 to 1e+09                     net $  +19.93 | per sale +0.195 +/- 0.151 (n=102) | beat hold 77 lost 25 | first half +0.339 +/- 0.190 (n=54) | second half +0.034 +/- 0.240 (n=48)
+adverse contracts in the last 10 s (raw):
+   0 to 20 contracts                    net $   -2.39 | per sale -0.597 +/- 0.887 (n=4) | beat hold 3 lost 1 | first half +0.333 +/- 0.035 (n=2) | second half -1.526 +/- 1.729 (n=2)
+   20 to 100 contracts                  net $   +6.28 | per sale +0.418 +/- 0.238 (n=15) | beat hold 14 lost 1 | first half +0.000 +/- 0.599 (n=5) | second half +0.627 +/- 0.193 (n=10)
+   100 to 400 contracts                 net $   -4.09 | per sale -0.132 +/- 0.341 (n=31) | beat hold 21 lost 10 | first half +0.303 +/- 0.371 (n=14) | second half -0.490 +/- 0.537 (n=17)
+   400 to 1e+09 contracts               net $  +18.28 | per sale +0.228 +/- 0.165 (n=80) | beat hold 61 lost 19 | first half +0.385 +/- 0.207 (n=45) | second half +0.028 +/- 0.268 (n=35)
+adverse taker volume in the last 30 s, as a multiple of the market's own normal second:
+   ratio 0 to 1.5                       net $   +3.95 | per sale +1.316 +/- 0.425 (n=3) | beat hold 3 lost 0 | first half +0.941 +/- 0.348 (n=2) | second half +2.065 +/- 0.000 (n=1)
+   ratio 1.5 to 3                       net $   +2.64 | per sale +0.330 +/- 0.632 (n=8) | beat hold 7 lost 1 | first half +1.153 +/- 0.475 (n=4) | second half -0.493 +/- 1.088 (n=4)
+   ratio 3 to 6                         net $   -0.73 | per sale -0.043 +/- 0.347 (n=17) | beat hold 12 lost 5 | first half -0.293 +/- 0.494 (n=8) | second half +0.180 +/- 0.501 (n=9)
+   ratio 6 to 1e+09                     net $  +12.22 | per sale +0.120 +/- 0.155 (n=102) | beat hold 77 lost 25 | first half +0.348 +/- 0.188 (n=52) | second half -0.117 +/- 0.245 (n=50)
+adverse contracts in the last 30 s (raw):
+   0 to 20 contracts                    n=0
+   20 to 100 contracts                  net $   -3.37 | per sale -1.124 +/- 1.684 (n=3) | beat hold 1 lost 2 | first half -2.316 +/- 0.000 (n=1) | second half -0.528 +/- 2.728 (n=2)
+   100 to 400 contracts                 net $   -1.77 | per sale -0.196 +/- 0.519 (n=9) | beat hold 7 lost 2 | first half +0.321 +/- 0.056 (n=3) | second half -0.455 +/- 0.778 (n=6)
+   400 to 1e+09 contracts               net $  +23.21 | per sale +0.197 +/- 0.139 (n=118) | beat hold 91 lost 27 | first half +0.380 +/- 0.171 (n=62) | second half -0.006 +/- 0.221 (n=56)
+the SOL 12:30 sale:
+    {10: (23.84, 4206.2, 0.76), 30: (10.07, 5257.9, 0.69)} (ratio, adverse contracts, adverse share); change -1.69
+DONE
