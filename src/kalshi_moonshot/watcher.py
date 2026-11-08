@@ -1344,6 +1344,13 @@ class ProfitWatcher:
                 store = self.store_factory()
                 curveexit.shadow_pass(s, store, self._tape_db(), specs)
                 curveexit.run_score(s, store)
+            if any(sp.enabled and sp.accumulate_shadow for sp in specs.values()):
+                from . import accumulator
+
+                store = self.store_factory()
+                strike_of = lambda tk: self._market_static(tk).get("floor_strike")  # noqa: E731
+                accumulator.shadow_pass(s, store, self._tape_db(), specs, strike_of)
+                accumulator.run_score(s, store)
             if any(sp.enabled and sp.model_buy for sp in specs.values()):
                 from . import curvemodel
 
