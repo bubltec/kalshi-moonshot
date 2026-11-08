@@ -1,0 +1,12 @@
+bets 144
+by minutes into the window at the buy
+  0-2 min              n=0
+  2-4 min              n= 31 won  17 ( 55%) avg ask 0.44 stake $ 56.31 net $+15.48 (  +27%) halves $+23.09/$-7.61
+  4-6 min              n= 27 won   9 ( 33%) avg ask 0.37 stake $ 41.68 net $ -3.84 (   -9%) halves $-8.34/$+4.50
+  6-8 min              n= 43 won  12 ( 28%) avg ask 0.38 stake $ 64.33 net $-13.93 (  -22%) halves $+5.45/$-19.39
+  8-11 min             n= 21 won   4 ( 19%) avg ask 0.34 stake $ 27.38 net $-10.48 (  -38%) halves $-3.18/$-7.30
+  11-15 min            n= 22 won   2 (  9%) avg ask 0.35 stake $ 28.67 net $-20.06 (  -70%) halves $-7.99/$-12.07
+early (<4 min) by ask
+  <4min ask 0-0.35     n=  9 won   5 ( 56%) avg ask 0.26 stake $  8.86 net $+11.44 (+129%) halves $+10.20/$+1.25
+  <4min ask 0.35-0.7   n= 22 won  12 ( 55%) avg ask 0.52 stake $ 47.45 net $ +4.04 (   +9%) halves $+12.90/$-8.86
+DONE
