@@ -1,0 +1,24 @@
+shock-exit sales: 131 | on the five coins the perp feed covers: 74
+read (perp rows present): 37
+   all covered shock sales        net $  +1.05 | per sale +0.028 +/- 0.265 (n=37) | beat hold 26 lost 11 | first half +0.033 +/- 0.318 (n=19) | second half +0.024 +/- 0.439 (n=18)
+the perp's move against the bet over 10 s, in its own units:
+   perp -99 to 0.5                net $  +0.41 | per sale +0.018 +/- 0.367 (n=22) | beat hold 16 lost 6 | first half -0.137 +/- 0.452 (n=11) | second half +0.174 +/- 0.598 (n=11)
+   perp 0.5 to 1                  net $  +0.51 | per sale +0.103 +/- 0.759 (n=5) | beat hold 3 lost 2 | first half -0.720 +/- 0.801 (n=3) | second half +1.336 +/- 1.138 (n=2)
+   perp 1 to 2                    net $  -0.30 | per sale -0.076 +/- 1.069 (n=4) | beat hold 2 lost 2 | first half +1.761 +/- 0.238 (n=2) | second half -1.913 +/- 0.226 (n=2)
+   perp 2 to 99                   net $  +0.43 | per sale +0.072 +/- 0.446 (n=6) | beat hold 5 lost 1 | first half +0.256 +/- 0.128 (n=3) | second half -0.112 +/- 0.972 (n=3)
+   mean perp / index in the same units: +0.67 / +0.98
+the perp's move against the bet over 30 s, in its own units:
+   perp -99 to 0.5                net $  +0.08 | per sale +0.004 +/- 0.382 (n=22) | beat hold 15 lost 7 | first half -0.327 +/- 0.437 (n=11) | second half +0.335 +/- 0.633 (n=11)
+   perp 0.5 to 1                  net $  +2.23 | per sale +1.113 +/- 0.409 (n=2) | beat hold 2 lost 0 | first half +1.523 +/- 0.000 (n=1) | second half +0.704 +/- 0.000 (n=1)
+   perp 1 to 2                    net $  -4.28 | per sale -0.534 +/- 0.580 (n=8) | beat hold 4 lost 4 | first half +0.318 +/- 0.672 (n=5) | second half -1.955 +/- 0.137 (n=3)
+   perp 2 to 99                   net $  +3.02 | per sale +0.603 +/- 0.139 (n=5) | beat hold 5 lost 0 | first half +0.555 +/- 0.047 (n=2) | second half +0.635 +/- 0.249 (n=3)
+   mean perp / index in the same units: +0.56 / +0.70
+the perp's move against the bet over 60 s, in its own units:
+   perp -99 to 0.5                net $  -2.58 | per sale -0.172 +/- 0.459 (n=15) | beat hold 10 lost 5 | first half -0.385 +/- 0.672 (n=7) | second half +0.015 +/- 0.665 (n=8)
+   perp 0.5 to 1                  net $  +5.75 | per sale +0.719 +/- 0.549 (n=8) | beat hold 6 lost 2 | first half +0.525 +/- 0.581 (n=4) | second half +0.913 +/- 1.022 (n=4)
+   perp 1 to 2                    net $  -3.39 | per sale -0.283 +/- 0.441 (n=12) | beat hold 8 lost 4 | first half +0.152 +/- 0.407 (n=8) | second half -1.153 +/- 0.994 (n=4)
+   perp 2 to 99                   net $  +1.27 | per sale +0.634 +/- 0.431 (n=2) | beat hold 2 lost 0 | first half n=0 | second half +0.634 +/- 0.431 (n=2)
+   mean perp / index in the same units: +0.63 / +0.61
+the SOL 12:30 sale (perp, index; units against the bet):
+    {10: (1.23, 0.5), 30: (1.08, 0.57), 60: (1.11, 0.81)} change -1.69
+DONE
