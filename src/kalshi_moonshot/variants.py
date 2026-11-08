@@ -663,6 +663,41 @@ def ms_rule_ok(rule: Sequence[str], letters: dict[str, str]) -> bool:
     return True
 
 
+def spot_exit_now(spec: Any, series: str, side: str, left_seconds: float, strike: float | None, now: float | None = None) -> str | None:
+    """Whether the lane's own spot exits (watcher._shock_hit: shock_units, cross_units) would sell a bet on `side` at this moment, as a reason, else None. Same reading: the typical minute from the last 15 minutes, the worst `shock_seconds` move over `shock_memory` seconds, the cushion to the strike on the bet's side, only inside the last `shock_last` seconds. None also when the lane has no such exit, the series is not a crypto coin, or the ticks cannot say (a caller that buys on None is making no claim)."""
+    index = crypto_index(series)
+    if not index or not strike or strike <= 0 or left_seconds <= 3 or left_seconds > spec.shock_last or (spec.shock_units <= 0 and spec.cross_units < 0):
+        return None
+    now = time.time() if now is None else now
+    unit = unit_index(index, now)
+    got = ticks_mod.history.window(index, now - spec.shock_seconds - max(spec.shock_memory, 0.0) - 10.0, now)
+    if unit is None or not got or now - got[0][-1] > 10.0:
+        return None
+    ts, vs = got
+
+    def at(t: float) -> float:
+        i = bisect.bisect_right(ts, t) - 1
+        return vs[i] if i >= 0 else 0.0
+
+    sign = 1.0 if side == "yes" else -1.0
+    spot = vs[-1]
+    if spot <= 0:
+        return None
+    unit_bp = unit * 1e4
+    margin = math.log(spot / strike) * sign * 1e4
+    worst = 0.0
+    for k in range(int(max(spec.shock_memory, 1.0)) + 1):
+        t = now - k
+        a, b = at(t), at(t - spec.shock_seconds)
+        if a > 0 and b > 0:
+            worst = min(worst, math.log(a / b) * sign * 1e4)
+    if spec.shock_units > 0 and worst <= -spec.shock_units * unit_bp and margin <= spec.shock_margin_units * unit_bp:
+        return f"the spike exit would sell it at once: {-worst:.1f} bp against the side in {spec.shock_seconds:.0f}s, {margin:+.1f} bp from the strike, {left_seconds:.0f}s left"
+    if spec.cross_units >= 0 and margin <= spec.cross_units * unit_bp:
+        return f"the cross exit would sell it at once: {margin:+.1f} bp from the strike, {left_seconds:.0f}s left"
+    return None
+
+
 def multiscale_now(s: Settings, series: str, side: str, left_seconds: float, scales: Sequence[str], now: float | None = None, strike: float | None = None) -> dict[str, dict] | None:
     """The variety of a bet at this moment at each named scale ({"60m": {"variety": "D", "z": ..}, ...}), from the in-memory index ticks only. A commodity reads BiQuote against its own price when the window opened, a crypto
     coin its settlement index against the window's `strike`. None when any scale cannot be read: a caller that requires a shape must not buy on None."""

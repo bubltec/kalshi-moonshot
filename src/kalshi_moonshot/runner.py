@@ -534,6 +534,14 @@ def evaluate(
     if bet and spec.rebuy_opposite_after_gain_seconds and (gain := store.last_gain_sale(shot.ticker, shot.lane)) is not None and shot.side == gain[0] and (wait := gain[1] + spec.rebuy_opposite_after_gain_seconds - time.time()) > 0:
         bet = False
         note = f"not buying back yet: this lane sold {shot.side} of {shot.ticker} for a gain {spec.rebuy_opposite_after_gain_seconds - wait:.0f}s ago; only the other side may be bought for {wait:.0f}s more. {note}"
+    if bet and spec.entry_checks_exit:
+        from . import ticks as ticks_mod
+        from . import variants
+
+        stuck = variants.spot_exit_now(spec, shot.series, shot.side, shot.hours_to_close * 3600.0, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
+        if stuck:
+            bet = False
+            note = f"not buying: {stuck}. {note}"
     if bet and spec.max_open > 0:
         open_now = sum(1 for r in store.open_bets() if (r["lane"] or "moonshot") == shot.lane and r["ticker"] != shot.ticker)
         if open_now >= spec.max_open:
