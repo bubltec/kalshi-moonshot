@@ -1,0 +1,69 @@
+live crypto bets with a settled window: 739
+bets replayed: 739 | live exit sells: 320
+the live exit alone vs holding:
+   live shock exit (last 300 s)           n=320 | net $  +82.44 | beat hold 192 lost 128 | halves $+81.97 (n=148) / $+0.46 (n=172)
+Z = 0.5  (sell the first second z <= -0.5)
+   cushion exit alone vs holding          n=308 | net $  +11.60 | beat hold 258 lost 50 | halves $+3.39 (n=114) / $+8.22 (n=194)
+   added to the live exit (sold earlier)  n=186 | net $  -20.36 | beat hold 143 lost 43 | halves $-20.94 (n=36) / $+0.58 (n=150)
+     added, 15-120 s left                 n= 32 | net $  -21.04 | beat hold 29 lost 3 | halves $-22.50 (n=28) / $+1.46 (n=4)
+     added, 120-300 s left                n= 35 | net $  +12.74 | beat hold 31 lost 4 | halves $+0.79 (n=1) / $+11.95 (n=34)
+     added, 300-600 s left                n= 86 | net $   +5.37 | beat hold 65 lost 21 | halves $+0.77 (n=7) / $+4.60 (n=79)
+     added, 600-900 s left                n= 33 | net $  -17.44 | beat hold 18 lost 15 | halves $+0.00 (n=0) / $-17.44 (n=33)
+     added, sale bid 0.05-0.20            n= 84 | net $   -1.59 | beat hold 74 lost 10 | halves $-20.94 (n=35) / $+19.35 (n=49)
+     added, sale bid 0.20-0.45            n=102 | net $  -18.77 | beat hold 69 lost 33 | halves $+0.00 (n=1) / $-18.77 (n=101)
+     added, sale bid 0.45-0.90            n=0
+     added, crypto_btc                    n=  1 | net $   +0.00 | beat hold 0 lost 1 | halves $+0.00 (n=1) / $+0.00 (n=0)
+     added, crypto_eth                    n=  2 | net $   +0.14 | beat hold 1 lost 1 | halves $+0.00 (n=0) / $+0.14 (n=2)
+     added, crypto_favorite               n=  1 | net $   +0.79 | beat hold 1 lost 0 | halves $+0.79 (n=1) / $+0.00 (n=0)
+     added, crypto_moonshot               n= 28 | net $  -22.50 | beat hold 25 lost 3 | halves $-22.50 (n=28) / $+0.00 (n=0)
+     added, crypto_multiscale             n=119 | net $  -10.14 | beat hold 86 lost 33 | halves $+0.00 (n=0) / $-10.14 (n=119)
+     added, crypto_sol                    n=  1 | net $   +0.52 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.52 (n=1)
+     added, crypto_wild_fade              n= 34 | net $  +10.83 | beat hold 29 lost 5 | halves $+0.77 (n=6) / $+10.06 (n=28)
+Z = 1.0  (sell the first second z <= -1.0)
+   cushion exit alone vs holding          n=174 | net $  +28.79 | beat hold 158 lost 16 | halves $+29.64 (n=43) / $-0.85 (n=131)
+   added to the live exit (sold earlier)  n=102 | net $  +17.71 | beat hold 82 lost 20 | halves $+11.39 (n=13) / $+6.32 (n=89)
+     added, 15-120 s left                 n= 11 | net $  +11.58 | beat hold 11 lost 0 | halves $+10.61 (n=7) / $+0.96 (n=4)
+     added, 120-300 s left                n= 18 | net $   +7.56 | beat hold 16 lost 2 | halves $+0.00 (n=0) / $+7.56 (n=18)
+     added, 300-600 s left                n= 60 | net $  +10.05 | beat hold 48 lost 12 | halves $+0.77 (n=6) / $+9.28 (n=54)
+     added, 600-900 s left                n= 13 | net $  -11.48 | beat hold 7 lost 6 | halves $+0.00 (n=0) / $-11.48 (n=13)
+     added, sale bid 0.05-0.20            n= 95 | net $  +18.95 | beat hold 78 lost 17 | halves $+11.39 (n=13) / $+7.56 (n=82)
+     added, sale bid 0.20-0.45            n=  7 | net $   -1.24 | beat hold 4 lost 3 | halves $+0.00 (n=0) / $-1.24 (n=7)
+     added, sale bid 0.45-0.90            n=0
+     added, crypto_moonshot               n=  7 | net $  +10.61 | beat hold 7 lost 0 | halves $+10.61 (n=7) / $+0.00 (n=0)
+     added, crypto_multiscale             n= 62 | net $   -4.09 | beat hold 47 lost 15 | halves $+0.00 (n=0) / $-4.09 (n=62)
+     added, crypto_wild_fade              n= 33 | net $  +11.19 | beat hold 28 lost 5 | halves $+0.77 (n=6) / $+10.41 (n=27)
+Z = 1.5  (sell the first second z <= -1.5)
+   cushion exit alone vs holding          n= 71 | net $  -10.29 | beat hold 65 lost 6 | halves $-4.16 (n=9) / $-6.13 (n=62)
+   added to the live exit (sold earlier)  n= 44 | net $   +5.47 | beat hold 40 lost 4 | halves $+1.71 (n=4) / $+3.75 (n=40)
+     added, 15-120 s left                 n=0
+     added, 120-300 s left                n= 12 | net $   +3.42 | beat hold 11 lost 1 | halves $+0.00 (n=0) / $+3.42 (n=12)
+     added, 300-600 s left                n= 31 | net $   +1.88 | beat hold 28 lost 3 | halves $+1.71 (n=4) / $+0.16 (n=27)
+     added, 600-900 s left                n=  1 | net $   +0.17 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.17 (n=1)
+     added, sale bid 0.05-0.20            n= 43 | net $   +5.28 | beat hold 39 lost 4 | halves $+1.71 (n=4) / $+3.56 (n=39)
+     added, sale bid 0.20-0.45            n=  1 | net $   +0.19 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.19 (n=1)
+     added, sale bid 0.45-0.90            n=0
+     added, crypto_multiscale             n= 22 | net $   +0.33 | beat hold 20 lost 2 | halves $+0.00 (n=0) / $+0.33 (n=22)
+     added, crypto_wild_fade              n= 22 | net $   +5.13 | beat hold 20 lost 2 | halves $+1.71 (n=4) / $+3.42 (n=18)
+Z = 2.0  (sell the first second z <= -2.0)
+   cushion exit alone vs holding          n= 14 | net $   +4.95 | beat hold 14 lost 0 | halves $+1.24 (n=3) / $+3.71 (n=11)
+   added to the live exit (sold earlier)  n= 10 | net $   +1.37 | beat hold 6 lost 4 | halves $+0.32 (n=2) / $+1.05 (n=8)
+     added, 15-120 s left                 n=0
+     added, 120-300 s left                n=  2 | net $   +0.29 | beat hold 2 lost 0 | halves $+0.00 (n=0) / $+0.29 (n=2)
+     added, 300-600 s left                n=  8 | net $   +1.08 | beat hold 4 lost 4 | halves $+0.32 (n=2) / $+0.76 (n=6)
+     added, 600-900 s left                n=0
+     added, sale bid 0.05-0.20            n=  9 | net $   +1.18 | beat hold 5 lost 4 | halves $+0.32 (n=2) / $+0.86 (n=7)
+     added, sale bid 0.20-0.45            n=  1 | net $   +0.19 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.19 (n=1)
+     added, sale bid 0.45-0.90            n=0
+     added, crypto_multiscale             n=  7 | net $   +1.07 | beat hold 5 lost 2 | halves $+0.00 (n=0) / $+1.07 (n=7)
+     added, crypto_wild_fade              n=  3 | net $   +0.30 | beat hold 1 lost 2 | halves $+0.32 (n=2) / $-0.02 (n=1)
+Z = 3.0  (sell the first second z <= -3.0)
+   cushion exit alone vs holding          n=  1 | net $   +0.60 | beat hold 1 lost 0 | halves $+0.00 (n=0) / $+0.60 (n=1)
+   added to the live exit (sold earlier)  n=0
+     added, 15-120 s left                 n=0
+     added, 120-300 s left                n=0
+     added, 300-600 s left                n=0
+     added, 600-900 s left                n=0
+     added, sale bid 0.05-0.20            n=0
+     added, sale bid 0.20-0.45            n=0
+     added, sale bid 0.45-0.90            n=0
+DONE
