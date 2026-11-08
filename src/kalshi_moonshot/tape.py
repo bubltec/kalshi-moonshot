@@ -12,6 +12,7 @@ Nothing here places an order.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from collections import deque
@@ -64,8 +65,15 @@ CREATE TABLE IF NOT EXISTS fut_1s (
   buy_n INTEGER NOT NULL, sell_n INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_fut_1s ON fut_1s(symbol, ts);
+CREATE TABLE IF NOT EXISTS fut_ticks (
+  ts REAL NOT NULL, symbol TEXT NOT NULL,          -- the exchange's trade time in seconds, millisecond resolution
+  px REAL NOT NULL, size REAL NOT NULL, bought INTEGER NOT NULL  -- a perpetual-future trade whose price differs from the symbol's previous one; bought 1 = the aggressor bought
+);
+CREATE INDEX IF NOT EXISTS idx_fut_ticks ON fut_ticks(symbol, ts);
 """
 
+FUT_TICKS_KEEP_DAYS = 3.0  # the millisecond perp trades are a study record, not history: three days
+FUT_TICKS_BUFFER = 200_000  # rows waiting for a flush; past this the newest are dropped (a stalled database must never grow the process)
 FLUSH_EVERY = 5.0
 RECENT_SECONDS = 60.0  # the live snapshot: every quote and feed price still in this window, kept after the database flush
 STOP_SECONDS = 900.0  # a market being watched keeps this much quote history, loaded once when the watch starts
@@ -325,6 +333,9 @@ class Tape:
         self._feed: list[tuple] = []
         self._flow: dict[tuple[int, str], list[float]] = {}  # (second, ticker) -> [yes_vol, no_vol, n, price*count]
         self._fut: dict[tuple[int, str], list[float]] = {}  # (second, coin) -> [last px, buy usd, sell usd, buy n, sell n]
+        self._fut_ticks: list[tuple] = []
+        self._last_fut_px: dict[str, float] = {}
+        self.fut_ticks_on = os.environ.get("FUT_TICKS", "1").strip().lower() not in {"0", "off", "false", "no"}
         self._last_quote: dict[str, tuple] = {}
         self._last_feed: dict[str, tuple[float, float]] = {}
 
@@ -353,12 +364,16 @@ class Tape:
                 self._fast.append((e["ts"], e["index_id"], e["value"], e.get("src_ms")))
 
     def add_fut(self, coin: str, ts: float, px: float, size: float, bought: bool) -> None:
-        """One live perpetual-futures trade: folded into its second's row (see futflow.py)."""
+        """One live perpetual-futures trade: folded into its second's row (see futflow.py), put in memory at once under "hl:<coin>" (ticks.py, the same store the index ticks are in, for the spike read; a few microseconds on this socket thread, no database and no request), and, when its price differs from the coin's previous trade, queued for the millisecond fut_ticks record."""
+        ticks_mod.history.note("hl:" + coin, ts, px)
         with self._lock:
             row = self._fut.setdefault((int(ts), coin), [px, 0.0, 0.0, 0.0, 0.0])
             row[0] = px
             row[1 if bought else 2] += px * size
             row[3 if bought else 4] += 1
+            if self.fut_ticks_on and self._last_fut_px.get(coin) != px and len(self._fut_ticks) < FUT_TICKS_BUFFER:
+                self._last_fut_px[coin] = px
+                self._fut_ticks.append((ts, coin, px, size, 1 if bought else 0))
 
     def add_feed(self, symbol: str, px: float, ts: float, min_gap: float = FEED_MIN_GAP) -> None:
         with self._lock:
@@ -374,11 +389,12 @@ class Tape:
         with self._lock:
             q, i, f, fl, fast = self._quotes, self._index, self._feed, self._flow, self._fast
             self._quotes, self._index, self._feed, self._flow, self._fast = [], [], [], {}, []
+            ticks_out, self._fut_ticks = self._fut_ticks, []
             done = {k: v for k, v in self._fut.items() if k[0] <= cutoff}
             for finished in done:
                 del self._fut[finished]
         ft = [(sec, coin, v[0], v[1], v[2], int(v[3]), int(v[4])) for (sec, coin), v in done.items()]
-        if not (q or i or f or fl or ft or fast):
+        if not (q or i or f or fl or ft or fast or ticks_out):
             return 0
         try:
             self.db.executemany("INSERT INTO quotes (ts, ticker, bid, ask, last, sts, bid_size, ask_size) VALUES (?,?,?,?,?,?,?,?)", q)
@@ -390,6 +406,8 @@ class Tape:
             self.db.executemany("INSERT INTO index_fast VALUES (?,?,?,?)", fast)
             self.db.executemany("INSERT INTO feed_ticks VALUES (?,?,?)", f)
             self.db.executemany("INSERT INTO fut_1s VALUES (?,?,?,?,?,?,?)", ft)
+            if ticks_out:
+                self.db.executemany("INSERT INTO fut_ticks VALUES (?,?,?,?,?)", ticks_out)
             self.db.commit()
             recent.prune(now if now is not None else time.time())
         except Exception:
@@ -399,6 +417,7 @@ class Tape:
                 self._index = i + self._index
                 self._fast = fast + self._fast
                 self._feed = f + self._feed
+                self._fut_ticks = (ticks_out + self._fut_ticks)[:FUT_TICKS_BUFFER]
                 for sec, coin, px, bu, su, bn, sn in ft:  # put the futures seconds back, merging with any trades that arrived since
                     mine = self._fut.setdefault((sec, coin), [px, 0.0, 0.0, 0.0, 0.0])
                     mine[1] += bu
@@ -410,12 +429,13 @@ class Tape:
                     for k in range(4):
                         mine[k] += v[k]
             raise
-        return len(q) + len(i) + len(f) + len(fl) + len(ft) + len(fast)
+        return len(q) + len(i) + len(f) + len(fl) + len(ft) + len(fast) + len(ticks_out)
 
     def prune(self, keep_days: float, now: float | None = None) -> None:
         cutoff = (now if now is not None else time.time()) - keep_days * 86400
         for table in ("quotes", "index_ticks", "feed_ticks", "flow_1s", "fut_1s"):
             self.db.execute(f"DELETE FROM {table} WHERE ts < ?", (cutoff,))
+        self.db.execute("DELETE FROM fut_ticks WHERE ts < ?", ((now if now is not None else time.time()) - FUT_TICKS_KEEP_DAYS * 86400,))
         self.db.commit()
 
 

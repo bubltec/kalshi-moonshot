@@ -17,6 +17,7 @@ from collections.abc import Sequence
 log = logging.getLogger("kalshi_moonshot.ticks")
 
 KEEP_SECONDS = 12 * 3600.0  # how much of each index is kept; older ticks are dropped in chunks
+KEEP_BY_PREFIX = {"hl:": 3600.0}  # 2026-11-08: Hyperliquid perp trades (futflow.py) arrive many times a second, so a symbol with this prefix keeps an hour, enough for a rolling typical minute and a spike read
 TRIM_SLACK = 1800.0  # trim only when this much extra has piled up, so a trim is rare and cheap per tick
 
 
@@ -24,6 +25,7 @@ class TickHistory:
     def __init__(self, keep: float = KEEP_SECONDS) -> None:
         self.keep = keep
         self.slack = min(TRIM_SLACK, keep)
+        self.keep_by_prefix = dict(KEEP_BY_PREFIX)
         self._lock = threading.Lock()
         self._ts: dict[str, array] = {}
         self._val: dict[str, array] = {}
@@ -42,8 +44,9 @@ class TickHistory:
                 return  # a late or duplicate tick: the series stays ordered
             t.append(ts)
             self._val[index_id].append(value)
-            if ts - t[0] > self.keep + self.slack:
-                cut = bisect.bisect_left(t, ts - self.keep)
+            keep = next((k for p, k in self.keep_by_prefix.items() if index_id.startswith(p)), self.keep)
+            if ts - t[0] > keep + min(self.slack, keep):
+                cut = bisect.bisect_left(t, ts - keep)
                 del t[:cut]
                 del self._val[index_id][:cut]
                 self._from[index_id] = max(self._from[index_id], t[0])

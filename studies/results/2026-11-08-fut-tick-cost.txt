@@ -1,0 +1,16 @@
+1. one trade on the socket thread:
+   Tape.add_fut                                               p50      0.9 us  p99      2.1 us  max    4011.6 us  (n=100000)
+2. the exits' reads of the shared store:
+   variants.unit_index (15 minutes), nothing feeding          p50    163.3 us  p99    262.2 us  max     292.5 us  (n=300)
+   ticks.history.window (55 minutes), nothing feeding         p50      0.1 us  p99      0.3 us  max       1.3 us  (n=300)
+   variants.unit_index, 300 trades/s (about the busiest second of a day: BTC 258) p50    227.4 us  p99   1030.1 us  max    4145.9 us  (n=300)
+3. a Kalshi quote on its socket thread, feed at 300/s:
+   Tape.add (quote), feed running                             p50      0.9 us  p99      4.0 us  max      50.2 us  (n=5000)
+   trades fed while measuring: 500
+   variants.unit_index, 5,000 trades/s (twenty times that)    p50    225.8 us  p99    673.5 us  max    1085.0 us  (n=300)
+3. a Kalshi quote on its socket thread, feed at 5000/s:
+   Tape.add (quote), feed running                             p50      0.9 us  p99      2.7 us  max      36.8 us  (n=5000)
+   trades fed while measuring: 5500
+3b. a Kalshi quote on its socket thread, nothing feeding:
+   Tape.add (quote), feed stopped                             p50      1.3 us  p99      5.2 us  max      41.8 us  (n=5000)
+DONE
