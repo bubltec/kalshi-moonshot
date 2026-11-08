@@ -1355,7 +1355,7 @@ class ProfitWatcher:
                 from . import curvemodel
 
                 curvemodel.maybe_refit(s)
-                curvemodel.run_probit_score(s, self.store_factory())
+                curvemodel.run_logit_z_drift_score(s, self.store_factory())
                 from . import timerecord
 
                 timerecord.run_score(s, self.store_factory())

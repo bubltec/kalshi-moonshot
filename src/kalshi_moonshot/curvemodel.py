@@ -1,8 +1,8 @@
 """The curve model: buy a market side because the spot's curve at nine Fibonacci look-backs says it pays (2026-11-07, user: go live).
 
 scripts/state_record_fibonacci.py (studies/results/2026-11-07-state-record-fibonacci.txt): a ridge regression of the bet-to-win net on the curve at 1, 2, 3, 5, 8, 13, 21, 34 and 55 minutes, fit on the earlier days and scored on the next, netted +1.53 per $10 ticket on its best 5% of moments, +1.06 on the best 10% and +0.71 on the best 20% (every moment -0.34), positive in both halves of three test days.
-2026-11-08 (user: "you absolutely need to build time left into the curve prediction ... it needs to figure out a further projection based on time remaining"): live bets bought in the first four minutes won 55% (+$15.48 on 31) and those bought after minute 8 won 14% (-$30.54 on 43), while the model read the same curve the same way at minute 3 and minute 12 (studies/results/2026-11-08-multiscale-by-elapsed.txt). The model now also reads the seconds left: the minutes left, and at four scales the cushion (the spot's distance to the strike on the side bought) over what the seconds left can move at that scale's one-second rate (z), and the same after carrying that scale's drift forward to the close (proj), and the normal chance that the cushion is still above zero at the close given proj (win), which the fit sets against the ask. Walk-forward (studies/results/2026-11-08-curve-time-left-walkforward.txt) it did NOT pay: the 18-reading model netted +0.058 per $1 on its best 5% (first per market side) and the timed one -0.024, and at 10% and 20% the timed model was lower in every row. The ridge is fitted on the first 18 readings only; the time-left readings feed the probit below.
-2026-11-08 (user: the probit sounds promising; build it with the live switch off): a second model reads the same curve through a win chance that rises steadily with the cushion: a logistic regression on the cushion over what the seconds left can move at the 5, 13 and 34 minute rates, the drift terms of the 13 and 34 minute projections, and logit(ask), fit daily with a ridge of 0.01 per row (studies/results/2026-11-08-curve-win-chance-v2.txt: first per market side +0.044 per $1 at an edge bar of 0.05 against the ridge's +0.020, halves -0.099 / +0.116, overfit and miscalibrated at the top). It buys where chance / ask - 1 - fee / ask is at or over the lane's probit_bar. Every model_buy lane logs a "would buy" for it in DATA_DIR/probit_shadow.jsonl and scores it hourly against the settled result; a lane buys on it only with model_kind = "probit" (default "ridge", the live switch is the user's).
+2026-11-08 (user: "you absolutely need to build time left into the curve prediction ... it needs to figure out a further projection based on time remaining"): live bets bought in the first four minutes won 55% (+$15.48 on 31) and those bought after minute 8 won 14% (-$30.54 on 43), while the model read the same curve the same way at minute 3 and minute 12 (studies/results/2026-11-08-multiscale-by-elapsed.txt). The model now also reads the seconds left: the minutes left, and at four scales the cushion (the spot's distance to the strike on the side bought) over what the seconds left can move at that scale's one-second rate (z), and the same after carrying that scale's drift forward to the close (proj), and the normal chance that the cushion is still above zero at the close given proj (win), which the fit sets against the ask. Walk-forward (studies/results/2026-11-08-curve-time-left-walkforward.txt) it did NOT pay: the 18-reading model netted +0.058 per $1 on its best 5% (first per market side) and the timed one -0.024, and at 10% and 20% the timed model was lower in every row. The ridge is fitted on the first 18 readings only; the time-left readings feed the logit_z_drift model below.
+2026-11-08 (user: build it with the live switch off; named logit_z_drift for what goes in, because it is a logistic regression and not a probit): a second model reads the same curve through a win chance that rises steadily with the cushion: a logistic regression on the cushion over what the seconds left can move at the 5, 13 and 34 minute rates, the drift terms of the 13 and 34 minute projections, and logit(ask), fit daily with a ridge of 0.01 per row (studies/results/2026-11-08-curve-win-chance-v2.txt: first per market side +0.044 per $1 at an edge bar of 0.05 against the ridge's +0.020, halves -0.099 / +0.116, overfit and miscalibrated at the top). It buys where chance / ask - 1 - fee / ask is at or over the lane's logit_bar. Every model_buy lane logs a "would buy" for it in DATA_DIR/logit_z_drift_shadow.jsonl and scores it hourly against the settled result; a lane buys on it only with model_kind = "logit_z_drift" (default "ridge", the live switch is the user's).
 Readings, per scale: the SLOPE (the change of the cushion over the look-back in that look-back's typical move; tan of the angle) and the VARIABILITY (the standard deviation of the cushion over the look-back in the same unit). The cushion is the spot's distance to the strike on the side bought, so one curve gives both sides' readings. Plus the price asked. No coin and no crossing count enters.
 The model is refit daily from the tape in a separate low-priority process (python -m kalshi_moonshot.curvemodel). A lane with model_buy buys a market side when its predicted net per dollar is in the top `model_top` share of the training moments and above zero.
 """
@@ -37,18 +37,18 @@ NAMES = [*READ_NAMES, "ask"]
 TIME_SCALES = (2, 5, 13, 34)
 TIME_NAMES = ["left_min", *(f"z_{m}m" for m in TIME_SCALES), *(f"proj_{m}m" for m in TIME_SCALES), *(f"win_{m}m" for m in TIME_SCALES)]
 CLIP = 9.0
-PROBIT_LAM = 0.01
-PROBIT_EVERY = 3
-PROBIT_NAMES = ["z_5m", "z_13m", "z_34m", "drift_13m", "drift_34m", "logit_ask"]
+LOGIT_LAM = 0.01
+LOGIT_EVERY = 3
+LOGIT_NAMES = ["z_5m", "z_13m", "z_34m", "drift_13m", "drift_34m", "logit_ask"]
 RETIRE_N = 30
 SCORE_EVERY = 3600.0
 
 _fitting: subprocess.Popen | None = None
 _cache: dict[str, Any] = {"mtime": None, "data": None}
-_pcache: dict[str, Any] = {"mtime": None, "data": None}
-_plock = threading.Lock()
-_pseen: set[str] = set()
-_pscored_at = 0.0
+_logit_cache: dict[str, Any] = {"mtime": None, "data": None}
+_logit_lock = threading.Lock()
+_logit_seen: set[str] = set()
+_logit_scored_at = 0.0
 
 
 def features(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None, left: float | None = None) -> list[float] | None:
@@ -176,25 +176,25 @@ def _logit(p: float) -> float:
     return math.log(p / (1 - p))
 
 
-def probit_inputs(read: list[float], ask: float) -> list[float]:
+def z_drift_inputs(read: list[float], ask: float) -> list[float]:
     """The six inputs of the win-chance model from the 31 readings (18 curve + 13 time-left) and the ask."""
     base = len(READ_NAMES)
     ix = {n: base + j for j, n in enumerate(TIME_NAMES)}
     return [read[ix["z_5m"]], read[ix["z_13m"]], read[ix["z_34m"]], read[ix["proj_13m"]] - read[ix["z_13m"]], read[ix["proj_34m"]] - read[ix["z_34m"]], _logit(ask)]
 
 
-def fit_probit(rows: list[tuple[list[float], float, float]], iters: int = 7) -> dict[str, Any] | None:
-    """rows: (the 31 readings, the ask, the net per dollar staked). A logistic regression of win (net above zero) on the six inputs, monotone in every cushion input, ridge PROBIT_LAM per row, on every PROBIT_EVERY-th row (moments in one window overlap). None with too few rows."""
+def fit_logit_z_drift(rows: list[tuple[list[float], float, float]], iters: int = 7) -> dict[str, Any] | None:
+    """rows: (the 31 readings, the ask, the net per dollar staked). A logistic regression of win (net above zero) on the six inputs, monotone in every cushion input, ridge LOGIT_LAM per row, on every LOGIT_EVERY-th row (moments in one window overlap). None with too few rows."""
     if len(rows) < MIN_ROWS or len(rows[0][0]) != len(READ_NAMES) + len(TIME_NAMES):
         return None
-    sub = rows[::PROBIT_EVERY]
-    xs = [probit_inputs(r[0], r[1]) for r in sub]
+    sub = rows[::LOGIT_EVERY]
+    xs = [z_drift_inputs(r[0], r[1]) for r in sub]
     ys = [1.0 if r[2] > 0 else 0.0 for r in sub]
     n, k = len(xs), len(xs[0])
     mu = [sum(x[j] for x in xs) / n for j in range(k)]
     sd = [(sum((x[j] - mu[j]) ** 2 for x in xs) / n) ** 0.5 or 1.0 for j in range(k)]
     z = [[1.0] + [(x[j] - mu[j]) / sd[j] for j in range(k)] for x in xs]
-    lam = PROBIT_LAM * n
+    lam = LOGIT_LAM * n
     m = k + 1
     w = [0.0] * m
     for _ in range(iters):
@@ -215,68 +215,68 @@ def fit_probit(rows: list[tuple[list[float], float, float]], iters: int = 7) -> 
                 g[a] -= lam * w[a]
         step = _solve(h, g)
         w = [w[a] + step[a] for a in range(m)]
-    return {"kind": "probit", "built_at": time.time(), "n": len(rows), "names": PROBIT_NAMES, "mu": mu, "sd": sd, "w": w, "train_days": TRAIN_DAYS}
+    return {"kind": "logit_z_drift", "built_at": time.time(), "n": len(rows), "names": LOGIT_NAMES, "mu": mu, "sd": sd, "w": w, "train_days": TRAIN_DAYS}
 
 
-def predict_probit(model: dict[str, Any], read: list[float], ask: float) -> tuple[float, float]:
+def predict_logit_z_drift(model: dict[str, Any], read: list[float], ask: float) -> tuple[float, float]:
     """(the win chance, the expected net per dollar staked after the full taker fee at this ask)."""
     from .strategy import fee_per_contract as fee
 
-    x = probit_inputs(read, ask)
+    x = z_drift_inputs(read, ask)
     t = model["w"][0] + sum(model["w"][j + 1] * (x[j] - model["mu"][j]) / model["sd"][j] for j in range(len(x)))
     p = 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, t))))
     return p, p / ask - 1.0 - fee(ask) / ask
 
 
-def load_probit(s: Any) -> dict[str, Any] | None:
-    p = Path(s.data_dir) / "curve_probit.json"
+def load_logit_z_drift(s: Any) -> dict[str, Any] | None:
+    p = Path(s.data_dir) / "curve_logit_z_drift.json"
     try:
         m = p.stat().st_mtime
-        if _pcache["data"] is None or m != _pcache["mtime"]:
-            _pcache["data"], _pcache["mtime"] = json.loads(p.read_text()), m
+        if _logit_cache["data"] is None or m != _logit_cache["mtime"]:
+            _logit_cache["data"], _logit_cache["mtime"] = json.loads(p.read_text()), m
     except (OSError, ValueError):
-        return _pcache["data"]
-    return _pcache["data"]
+        return _logit_cache["data"]
+    return _logit_cache["data"]
 
 
-def probit_signal(s: Any, shot: Any, spec: Any, ask: float, left: float, chance: float, edge: float, ridge_ok: bool, now: float | None = None) -> None:
-    """Shadow: the first time a market side's probit edge is at or over the lane's bar, log what the probit would buy and whether the ridge did."""
+def logit_z_drift_signal(s: Any, shot: Any, spec: Any, ask: float, left: float, chance: float, edge: float, ridge_ok: bool, now: float | None = None) -> None:
+    """Shadow: the first time a market side's logit_z_drift edge is at or over the lane's bar, log what that model would buy and whether the ridge did."""
     now = time.time() if now is None else now
-    if edge < spec.probit_bar or edge <= 0:
+    if edge < spec.logit_bar or edge <= 0:
         return
-    path = Path(s.data_dir) / "probit_shadow.jsonl"
+    path = Path(s.data_dir) / "logit_z_drift_shadow.jsonl"
     key = f"{shot.ticker}|{shot.side}|{shot.lane}"
-    with _plock:
-        if not _pseen:
+    with _logit_lock:
+        if not _logit_seen:
             try:
                 for line in path.read_text().splitlines():
                     r = json.loads(line)
                     if r.get("kind") == "signal" and now - r["ts"] < 86400.0:
-                        _pseen.add(f"{r['ticker']}|{r['side']}|{r['lane']}")
+                        _logit_seen.add(f"{r['ticker']}|{r['side']}|{r['lane']}")
             except (OSError, ValueError, KeyError):
                 pass
-        if key in _pseen:
+        if key in _logit_seen:
             return
-        _pseen.add(key)
-    row = {"kind": "signal", "ts": round(now, 1), "ticker": shot.ticker, "lane": shot.lane, "side": shot.side, "ask": round(ask, 4), "left": round(left, 1), "chance": round(chance, 4), "edge": round(edge, 4), "bar": spec.probit_bar, "ridge_buys": bool(ridge_ok)}
+        _logit_seen.add(key)
+    row = {"kind": "signal", "ts": round(now, 1), "ticker": shot.ticker, "lane": shot.lane, "side": shot.side, "ask": round(ask, 4), "left": round(left, 1), "chance": round(chance, 4), "edge": round(edge, 4), "bar": spec.logit_bar, "ridge_buys": bool(ridge_ok)}
     try:
         with path.open("a") as fh:
             fh.write(json.dumps(row) + "\n")
     except OSError:
-        log.debug("probit shadow: could not write %s", path, exc_info=True)
-    log.info("probit shadow: %s %s %s at %.2f, %.0fs left, chance %.2f, edge %+.2f per $1 (bar %.2f), ridge %s: would buy", shot.lane, shot.ticker, shot.side, ask, left, chance, edge, spec.probit_bar, "buys" if ridge_ok else "passes")
+        log.debug("logit_z_drift shadow: could not write %s", path, exc_info=True)
+    log.info("logit_z_drift shadow: %s %s %s at %.2f, %.0fs left, chance %.2f, edge %+.2f per $1 (bar %.2f), ridge %s: would buy", shot.lane, shot.ticker, shot.side, ask, left, chance, edge, spec.logit_bar, "buys" if ridge_ok else "passes")
 
 
-def run_probit_score(s: Any, store: Any, now: float | None = None) -> list[dict[str, Any]]:
-    """Hourly: score the shadow signals whose window has settled (net per $1 after the full taker fee, held to the result) and log the 7-day totals for the probit and for the subset the ridge also bought; warn when it is negative over RETIRE_N signals (CLAUDE.md rule 6)."""
-    global _pscored_at
+def run_logit_z_drift_score(s: Any, store: Any, now: float | None = None) -> list[dict[str, Any]]:
+    """Hourly: score the shadow signals whose window has settled (net per $1 after the full taker fee, held to the result) and log the 7-day totals for the logit_z_drift model and for the subset the ridge also bought; warn when it is negative over RETIRE_N signals (CLAUDE.md rule 6)."""
+    global _logit_scored_at
     from .strategy import fee_per_contract as fee
 
     now = time.time() if now is None else now
-    if now - _pscored_at < SCORE_EVERY:
+    if now - _logit_scored_at < SCORE_EVERY:
         return []
-    _pscored_at = now
-    path = Path(s.data_dir) / "probit_shadow.jsonl"
+    _logit_scored_at = now
+    path = Path(s.data_dir) / "logit_z_drift_shadow.jsonl"
     try:
         rows = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
     except (OSError, ValueError):
@@ -298,14 +298,14 @@ def run_probit_score(s: Any, store: Any, now: float | None = None) -> list[dict[
                 for line in new:
                     fh.write(json.dumps(line) + "\n")
         except OSError:
-            log.debug("probit shadow: could not write the scores", exc_info=True)
+            log.debug("logit_z_drift shadow: could not write the scores", exc_info=True)
     recent = [r for r in rows + new if r.get("kind") == "score" and now - r["ts"] <= 7 * 86400.0]
     both = [r for r in recent if r["ridge_buys"]]
     only = [r for r in recent if not r["ridge_buys"]]
     fmt = lambda xs: (len(xs), round(sum(r["net"] for r in xs) / len(xs), 3) if xs else 0.0)  # noqa: E731
-    log.info("probit shadow (7 d, signals and mean net per $1): all %s, ridge also bought %s, probit only %s", fmt(recent), fmt(both), fmt(only))
+    log.info("logit_z_drift shadow (7 d, signals and mean net per $1): all %s, ridge also bought %s, logit_z_drift only %s", fmt(recent), fmt(both), fmt(only))
     if len(recent) >= RETIRE_N and sum(r["net"] for r in recent) < 0:
-        log.warning("probit shadow: negative over %d signals in 7 days (%.3f per $1): do not turn it on", len(recent), sum(r["net"] for r in recent) / len(recent))
+        log.warning("logit_z_drift shadow: negative over %d signals in 7 days (%.3f per $1): do not turn it on", len(recent), sum(r["net"] for r in recent) / len(recent))
     return new
 
 
@@ -374,24 +374,24 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
         cut = min(model["cuts"].items(), key=lambda kv: abs(float(kv[0]) - spec.model_top))[1]
     tag = f"curve model {net:+.2f} per $1 (top {spec.model_top:.0%} from {max(cut, 0.0):+.2f})"
     ridge_ok = net > 0 and net >= cut
-    pm = load_probit(s)
+    pm = load_logit_z_drift(s)
     if pm is not None and left is not None and len(read) == len(READ_NAMES) + len(TIME_NAMES):
-        chance, pedge = predict_probit(pm, read, ask)
-        probit_signal(s, shot, spec, ask, left, chance, pedge, ridge_ok)
-        if spec.model_kind == "probit":
-            ptag = f"curve probit {pedge:+.2f} per $1 (chance {chance:.2f}, bar {spec.probit_bar:+.2f})"
-            if pedge > 0 and pedge >= spec.probit_bar:
+        chance, zedge = predict_logit_z_drift(pm, read, ask)
+        logit_z_drift_signal(s, shot, spec, ask, left, chance, zedge, ridge_ok)
+        if spec.model_kind == "logit_z_drift":
+            ptag = f"curve logit_z_drift {zedge:+.2f} per $1 (chance {chance:.2f}, bar {spec.logit_bar:+.2f})"
+            if zedge > 0 and zedge >= spec.logit_bar:
                 return True, ptag
-            return False, f"curve probit: {ptag.replace('curve probit ', '')} is under the bar."
-    elif spec.model_kind == "probit":
-        return False, "curve probit: no probit model fitted yet, or the time left is unknown."
+            return False, f"curve logit_z_drift: {ptag.replace('curve logit_z_drift ', '')} is under the bar."
+    elif spec.model_kind == "logit_z_drift":
+        return False, "curve logit_z_drift: no logit_z_drift model fitted yet, or the time left is unknown."
     if ridge_ok:
         return True, tag
     return False, f"curve model: {tag.replace('curve model ', '')} is under the bar."
 
 
 def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str, float]] | None = None, timed: bool = True) -> list[tuple[list[float], float, float]]:
-    """(`meta`, when given, gets (close, seconds into the window, ticker, side, the side's bid) per row, for studies; `timed` adds the 13 time-left readings the probit needs; the ridge is fitted on the first 18.) The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
+    """(`meta`, when given, gets (close, seconds into the window, ticker, side, the side's bid) per row, for studies; `timed` adds the 13 time-left readings the logit_z_drift model needs; the ridge is fitted on the first 18.) The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
     from . import db, variants
     from .kalshiws import RECORD_ONLY
     from .lanes import lane_specs
@@ -482,13 +482,13 @@ def main() -> None:
     if model is None:
         print("not fitted", len(rows), "rows")
         return
-    probit = fit_probit(rows)
-    if probit is not None:
-        pp = Path(s.data_dir) / "curve_probit.json"
-        ptmp = pp.with_suffix(".tmp")
-        ptmp.write_text(json.dumps(probit))
-        ptmp.replace(pp)
-        print("probit fitted", probit["n"], "rows; weights", [round(x, 3) for x in probit["w"]])
+    logit_model = fit_logit_z_drift(rows)
+    if logit_model is not None:
+        lp = Path(s.data_dir) / "curve_logit_z_drift.json"
+        ptmp = lp.with_suffix(".tmp")
+        ptmp.write_text(json.dumps(logit_model))
+        ptmp.replace(lp)
+        print("logit_z_drift fitted", logit_model["n"], "rows; weights", [round(x, 3) for x in logit_model["w"]])
     p = Path(s.data_dir) / "curve_model.json"
     tmp = p.with_suffix(".tmp")
     tmp.write_text(json.dumps(model))

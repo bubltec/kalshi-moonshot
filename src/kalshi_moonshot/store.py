@@ -1,4 +1,4 @@
-"""The bot's database (Postgres in production, SQLite for tests; see db.py). Every decision is logged so the model can be scored later.
+"""The bot's database (Postgres; see db.py). Every decision is logged so the model can be scored later.
 
 Settled decisions are also indexed in a local full-text table. The next estimate can
 retrieve similar past cases. Prices are not stored in that index.

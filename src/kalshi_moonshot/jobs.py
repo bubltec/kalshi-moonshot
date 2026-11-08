@@ -1,4 +1,4 @@
-"""A small persistent job queue in the same SQLite file.
+"""A small persistent job queue in the same database.
 
 Why: a scan is many slow steps (fetch pages, then one model call per market). If the bot is
 stopped or one step fails, the finished steps stay finished and the rest resume.
