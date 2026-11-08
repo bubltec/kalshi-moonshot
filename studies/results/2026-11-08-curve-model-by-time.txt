@@ -1,0 +1,29 @@
+rows 156548 market sides 11791
+UTC days [20755, 20756, 20757, 20758, 20759, 20760, 20761, 20762, 20763, 20764, 20765]
+every moment, by minutes into the window (two-minute buckets), test days only:
+   2- 4 min in (11-13 min left)
+     no model     n=29988 net -0.050 (se 0.006) halves -0.048 (12152) / -0.051 (17836)
+     top 20%      n= 5076 net -0.009 (se 0.013) halves -0.088 (2418) / +0.064 (2658)
+     top 10%      n= 2985 net -0.012 (se 0.017) halves -0.075 (1329) / +0.039 (1656)
+   4- 6 min in (9-11 min left)
+     no model     n=31417 net -0.043 (se 0.006) halves -0.037 (13441) / -0.048 (17976)
+     top 20%      n= 4991 net -0.031 (se 0.014) halves -0.112 (2364) / +0.042 (2627)
+     top 10%      n= 2862 net -0.015 (se 0.018) halves -0.101 (1253) / +0.052 (1609)
+   6- 8 min in (7-9 min left)
+     no model     n=26735 net -0.044 (se 0.007) halves -0.034 (11044) / -0.051 (15691)
+     top 20%      n= 4647 net -0.020 (se 0.016) halves -0.091 (1940) / +0.031 (2707)
+     top 10%      n= 2765 net -0.002 (se 0.021) halves -0.107 (936) / +0.051 (1829)
+   8-10 min in (5-7 min left)
+     no model     n=20795 net -0.043 (se 0.008) halves -0.051 (8644) / -0.037 (12151)
+     top 20%      n= 3668 net +0.018 (se 0.019) halves -0.014 (1521) / +0.040 (2147)
+     top 10%      n= 2239 net +0.074 (se 0.025) halves +0.027 (757) / +0.098 (1482)
+  10-12 min in (3-5 min left)
+     no model     n=15119 net -0.045 (se 0.009) halves -0.054 (6220) / -0.038 (8899)
+     top 20%      n= 2644 net +0.016 (se 0.022) halves +0.002 (1146) / +0.026 (1498)
+     top 10%      n= 1625 net +0.040 (se 0.030) halves +0.010 (612) / +0.058 (1013)
+  12-14 min in (1-3 min left)
+     no model     n= 8688 net -0.049 (se 0.012) halves -0.045 (3549) / -0.052 (5139)
+     top 20%      n= 1529 net -0.004 (se 0.029) halves +0.044 (684) / -0.044 (845)
+     top 10%      n=  907 net -0.005 (se 0.039) halves +0.029 (313) / -0.022 (594)
+DONE
+
