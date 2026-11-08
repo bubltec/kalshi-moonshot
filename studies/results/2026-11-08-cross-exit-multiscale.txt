@@ -1,0 +1,16 @@
+live crypto bets replayed: 764 | sold by the cross rule: 359
+
+the cross exit (cross_units = 0.0) replayed in the last 300 s vs holding:
+   crypto_multiscale                  sells 134 of 180 bets | net $   +3.30 | per sale +0.025 +/- 0.143 (n=134) | beat hold 103 lost 31 | first half n=0 | second half +0.025 +/- 0.143 (n=134)
+     bought behind its strike         sells 116 of 146 bets | net $   +6.22 | per sale +0.054 +/- 0.148 (n=116) | beat hold 91 lost 25 | first half n=0 | second half +0.054 +/- 0.148 (n=116)
+     bought ahead of its strike       sells  18 of  34 bets | net $   -2.92 | per sale -0.162 +/- 0.480 (n=18) | beat hold 12 lost 6 | first half n=0 | second half -0.162 +/- 0.480 (n=18)
+   the other crypto lanes             sells 225 of 584 bets | net $  +69.20 | per sale +0.308 +/- 0.306 (n=225) | beat hold 166 lost 59 | first half +0.319 +/- 0.442 (n=153) | second half +0.283 +/- 0.185 (n=72)
+     bought behind its strike         sells  75 of  83 bets | net $  -30.58 | per sale -0.408 +/- 0.588 (n=75) | beat hold 67 lost 8 | first half -0.847 +/- 0.852 (n=51) | second half +0.525 +/- 0.263 (n=24)
+     bought ahead of its strike       sells 150 of 501 bets | net $  +99.78 | per sale +0.665 +/- 0.350 (n=150) | beat hold 99 lost 51 | first half +0.902 +/- 0.500 (n=102) | second half +0.162 +/- 0.245 (n=48)
+
+crypto_multiscale sales by the bid at the sale:
+     bid 0.05-0.15                    sells  31 of  31 bets | net $   -0.02 | per sale -0.001 +/- 0.186 (n=31) | beat hold 28 lost 3 | first half n=0 | second half -0.001 +/- 0.186 (n=31)
+     bid 0.15-0.30                    sells  64 of  64 bets | net $   +2.04 | per sale +0.032 +/- 0.209 (n=64) | beat hold 51 lost 13 | first half n=0 | second half +0.032 +/- 0.209 (n=64)
+     bid 0.30-0.60                    sells  39 of  39 bets | net $   +1.29 | per sale +0.033 +/- 0.321 (n=39) | beat hold 24 lost 15 | first half n=0 | second half +0.033 +/- 0.321 (n=39)
+     bid 0.60-0.90                    sells 0 of 0 bets
+DONE
