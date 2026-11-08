@@ -17,7 +17,7 @@ class Clock:
 
 
 def row(ticker, event, bid="0.40", ask="0.42"):
-    return {"ticker": ticker, "event_ticker": event, "yes_bid_dollars": bid, "yes_ask_dollars": ask, "status": "active", "close_time": "2026-10-25T01:00:00Z"}
+    return {"ticker": ticker, "event_ticker": event, "yes_bid_dollars": bid, "yes_ask_dollars": ask, "status": "active", "close_time": "2099-10-25T01:00:00Z"}
 
 
 def test_a_listing_is_served_from_memory_while_young_and_as_independent_copies():
@@ -263,3 +263,44 @@ def test_the_worker_names_open_bets_first_then_live_lane_prospects(tmp_path, mon
     store.set_watch("crypto_favorite", {"KXBTC15M-Y": {"close": "2099-01-01T00:00:00Z", "series": "KXBTC15M"}})
     w = Worker(s, client()[0], None, store, None)
     assert w._hot_series(s)[:3] == ["KXSOL15M", "KXBTC15M", "KXEURUSD15M"]  # the held bet, then the live lane's prospect, then the paper lane's
+
+
+def test_a_series_whose_window_is_still_open_is_not_listed_again_before_the_backstop_but_a_closed_one_is(monkeypatch):
+    clock = Clock()
+    cache = MarketCache(clock=clock)
+    cache.put_series("KXBTC15M", [{**row("A", "EV"), "close_time": "1970-01-01T00:20:00Z"}])  # 1200 s epoch: open while the clock reads 1000
+    assert not cache.series_rolled("KXBTC15M")  # window open: current
+    clock.t = 1196.0
+    assert cache.series_rolled("KXBTC15M")  # inside the 5 s grace of the close: the next window is due
+    clock.t = 1300.0
+    assert cache.series_rolled("KXBTC15M")  # closed
+    cache.put_series("EMPTY", [])
+    assert not cache.series_rolled("EMPTY")  # a closed session lists nothing: not a roll
+    assert cache.get_series("KXBTC15M", 1e9) is None  # a reader never gets a rolled listing, however young
+
+    class C:
+        def __init__(self):
+            self.cache = cache
+            self.asked = []
+
+        def series_markets(self, series):
+            self.asked.append(series)
+            return []
+
+    c = C()
+    d = Discovery(lambda: c, lambda: config.load(), lambda s: set(), hot=lambda s: ["KXBTC15M"])
+    monkeypatch.setattr(d._stop, "wait", lambda t=None: False)
+    clock.t = 1000.0
+    cache.put_series("KXBTC15M", [{**row("A", "EV"), "close_time": "1970-01-01T00:20:00Z"}])
+    clock.t = 1050.0  # listed 50 s ago, window open until 1200: under the 90 s hot backstop
+    d.hot_cycle()
+    assert c.asked == []
+    clock.t = 1100.0  # past the backstop (100 s)
+    d.hot_cycle()
+    assert c.asked == ["KXBTC15M"]
+    c.asked.clear()
+    clock.t = 1190.0
+    cache.put_series("KXBTC15M", [{**row("A", "EV"), "close_time": "1970-01-01T00:20:00Z"}])
+    clock.t = 1204.0  # the window has closed: listed at once, however young the listing
+    d.hot_cycle()
+    assert c.asked == ["KXBTC15M"]

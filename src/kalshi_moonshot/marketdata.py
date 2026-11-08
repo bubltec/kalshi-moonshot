@@ -16,6 +16,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 log = logging.getLogger("moonshot")
@@ -89,10 +90,38 @@ class MarketCache:
             hit = self._series.get(series)
             return None if hit is None else self._clock() - hit[0]
 
+    def _rolled_rows(self, rows: list[dict[str, Any]], grace: float = 5.0) -> bool:
+        """series_rolled for rows already in hand (the caller holds the lock)."""
+        if not rows:
+            return False
+        now = self._clock()
+        for m in rows:
+            try:
+                if datetime.fromisoformat(str(m.get("close_time", ""))).timestamp() > now + grace:
+                    return False
+            except ValueError:
+                return False
+        return True
+
+    def series_rolled(self, series: str, grace: float = 5.0) -> bool:
+        """True when the cached listing of this series has markets and none of them closes later than `grace` seconds from now: its window has rolled and the next one is due. An empty listing (a closed session) has not rolled, and a listing with an open window is current: prices come from the stream."""
+        with self._lock:
+            hit = self._series.get(series)
+            if not hit or not hit[1]:
+                return False
+            now = self._clock()
+            for m in hit[1]:
+                try:
+                    if datetime.fromisoformat(str(m.get("close_time", ""))).timestamp() > now + grace:
+                        return False
+                except ValueError:
+                    return False  # a row with no readable close: do not call it rolled
+            return True
+
     def get_series(self, series: str, max_age: float) -> list[dict[str, Any]] | None:
         with self._lock:
             hit = self._series.get(series)
-            if hit and self._clock() - hit[0] <= max_age:
+            if hit and self._clock() - hit[0] <= max_age and not self._rolled_rows(hit[1]):
                 self.hits += 1
                 return [self._overlay(m, hit[0]) for m in hit[1]]
             self.misses += 1
@@ -172,16 +201,20 @@ class Discovery:
         self._stop.set()
 
     def _fresh(self, client: Any, series: str, within: float) -> bool:
+        """True when the series was listed less than `within` seconds ago and its listed window has not rolled. A window that has closed is not fresh: the next window must be seen the moment it opens."""
         cache = getattr(client, "cache", None)
         age = cache.series_age(series) if cache is not None and hasattr(cache, "series_age") else None
-        return age is not None and age < within
+        if age is None or age >= within:
+            return False
+        return not cache.series_rolled(series) if hasattr(cache, "series_rolled") else True
 
     def cycle(self) -> int:
         """List every wanted series once, except those listed within the last cycle by the fast tier. Returns how many succeeded."""
         s = self.get_settings()
         client = self.get_client()
         every = float(getattr(s, "discovery_seconds", 45.0))
-        wanted = [series for series in sorted(self.wanted(s)) if not self._fresh(client, series, every)]
+        backstop = float(getattr(s, "discovery_backstop", every))
+        wanted = [series for series in sorted(self.wanted(s)) if not self._fresh(client, series, backstop)]
         # Spread the requests over the cycle instead of firing them back to back: a burst of listings would hold the whole request budget for seconds and every other
         # caller (a live lane's order, a stop) would queue behind it.
         gap = every * 0.8 / max(1, len(wanted))
@@ -205,7 +238,8 @@ class Discovery:
         s = self.get_settings()
         client = self.get_client()
         every = float(getattr(s, "discovery_hot_seconds", 15.0))
-        series_list = list(dict.fromkeys(self.hot(s)))[:HOT_MAX]
+        backstop = float(getattr(s, "discovery_hot_backstop", every))
+        series_list = [x for x in dict.fromkeys(self.hot(s)) if not self._fresh(client, x, backstop)][:HOT_MAX]
         gap = every * 0.8 / max(1, len(series_list))
         done = 0
         for series in series_list:

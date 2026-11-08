@@ -138,6 +138,8 @@ class Settings:
     discovery_enabled: bool  # one thread lists every series the lanes use and fills a shared cache; lanes read it instead of asking Kalshi each (marketdata.py)
     discovery_seconds: float  # how often that thread lists each series again
     discovery_hot_seconds: float  # how often the series the bot is acting on (an open bet, a prospect on a lane's watchlist) are listed again, on a second thread
+    discovery_backstop: float  # a listing of a series whose current window is still open is not read again before this many seconds; a window that has closed is listed at once
+    discovery_hot_backstop: float  # the same for the series the bot is acting on (the fast tier)
     discovery_max_age: float  # a lane's scope and review accept cached listings this young (the live quote stream keeps their prices current)
     discovery_eval_age: float  # a PAPER lane's evaluation accepts a cached market this young; a live lane's evaluation always asks Kalshi
     estimate_share_seconds: float  # one lane's estimate of a market (model or ladder price) is reused by every other lane asking within this many seconds; 0 = each lane asks for itself
@@ -148,7 +150,7 @@ class Settings:
     manual_stop_model: bool  # a hand-placed buy's stop asks the model before selling (same wait; no answer in time = sell)
     fractional_stake: bool  # size a bet to the dollar stake in contracts to the hundredth (a $2 stake buys $2 worth), not the whole contracts that fit under it; falls back to whole contracts if Kalshi refuses a fractional order
     manual_exit_stop: float  # stop-loss on hand-placed positions: sell at this fraction under the price paid (0 = none); same hours rules as the bot's
-    tape_dir: Path  # where tape.db lives: a Docker-managed volume in compose, so SQLite's locking is not shared across the Mac/VM boundary
+    tape_dir: Path  # names the tape store; the data itself is the `tape` schema in Postgres (DB_SCHEMA_TAPE)
     backup_keep_days: int  # nightly consistent copies of the databases kept in DATA_DIR/backups
     tape_keep_days: float
     archive_bucket: str  # S3 bucket that old tape days and backups are shipped to ('' = no archive; see archive.py)
@@ -444,7 +446,9 @@ def load() -> Settings:
         discovery_enabled=_b("DISCOVERY_ENABLED", True),
         discovery_seconds=max(5.0, _f("DISCOVERY_SECONDS", 45.0)),
         discovery_hot_seconds=max(5.0, _f("DISCOVERY_HOT_SECONDS", 15.0)),
-        discovery_max_age=max(0.0, _f("DISCOVERY_MAX_AGE", 60.0)),
+        discovery_backstop=max(5.0, _f("DISCOVERY_BACKSTOP", 150.0)),
+        discovery_hot_backstop=max(5.0, _f("DISCOVERY_HOT_BACKSTOP", 90.0)),
+        discovery_max_age=max(0.0, _f("DISCOVERY_MAX_AGE", 180.0)),
         discovery_eval_age=max(0.0, _f("DISCOVERY_EVAL_AGE", 10.0)),
         estimate_share_seconds=max(0.0, _f("ESTIMATE_SHARE_SECONDS", 60.0)),
         flip_after_stop=_b("FLIP_AFTER_STOP", True),

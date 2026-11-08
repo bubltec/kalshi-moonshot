@@ -5,7 +5,7 @@ settlement index it tracks (BRTI and friends, straight from Kalshi) or, for comm
 Hyperliquid price. `leadlag.py` then asks whether the quote reacts to a move in the underlying
 instantly or a few seconds late, and whether that delay is large enough to trade.
 
-Rows go to their own schema (or file, for SQLite), so the busy stream never contends with the bot's own tables.
+Rows go to their own schema, so the busy stream never contends with the bot's own tables.
 Nothing here places an order.
 """
 
@@ -29,6 +29,7 @@ from .finnhubfeed import api_key as finnhub_key
 from .futflow import FuturesFlow
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import KalshiStream, index_for_series
+from .marketdata import shared_for
 from .pythfeed import PythFeed
 from .pythfeed import api_key as pyth_key
 from .store import Store
@@ -472,7 +473,8 @@ class TapeRecorder:
         if seen is not None and now - seen[0] < (every_open if seen[1] else every_idle):
             return seen[1]
         try:
-            listed = [m for m in self.client.series_markets(series) if m.get("status") in {"active", "open"}]
+            with shared_for(self.client, self.s.discovery_max_age, self.s.discovery_enabled):  # a listing the discovery threads read lately (and whose window has not rolled) is not asked of Kalshi again every 20 s (2026-11-07: tape-refresh was 15-58 GET /markets a minute)
+                listed = [m for m in self.client.series_markets(series) if m.get("status") in {"active", "open"}]
             found = {m["ticker"] for m in listed}
             for m in listed:
                 try:
