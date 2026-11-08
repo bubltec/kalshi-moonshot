@@ -1356,6 +1356,9 @@ class ProfitWatcher:
 
                 curvemodel.maybe_refit(s)
                 curvemodel.run_probit_score(s, self.store_factory())
+                from . import timerecord
+
+                timerecord.run_score(s, self.store_factory())
             if any(sp.enabled and sp.record_buy for sp in specs.values()):
                 from . import staterecord
 
