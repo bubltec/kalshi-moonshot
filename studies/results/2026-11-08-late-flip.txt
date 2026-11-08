@@ -1,0 +1,119 @@
+market sides at the first 30 s step with ask 0.85-0.97 (per step, so a side can appear once per start; here once per side): 3073
+
+A. by minutes left at the first moment the side's ask is 0.85-0.97:
+   0-2 min left                       n= 287 won  92.0% vs break-even  92.0% | net per $1 -0.001 | halves -0.003 (n=130) / +0.001 (n=157) | losers 23
+   2-4 min left                       n= 451 won  88.2% vs break-even  90.2% | net per $1 -0.022 | halves -0.023 (n=222) / -0.020 (n=229) | losers 53
+   4-6 min left                       n= 484 won  90.9% vs break-even  89.0% | net per $1 +0.021 | halves -0.013 (n=238) / +0.055 (n=246) | losers 44
+   6-9 min left                       n= 751 won  86.6% vs break-even  88.6% | net per $1 -0.024 | halves -0.034 (n=364) / -0.014 (n=387) | losers 101
+   9-12 min left                      n= 785 won  86.0% vs break-even  87.9% | net per $1 -0.022 | halves -0.023 (n=423) / -0.021 (n=362) | losers 110
+   12-15 min left                     n= 315 won  86.3% vs break-even  88.3% | net per $1 -0.023 | halves -0.037 (n=163) / -0.008 (n=152) | losers 43
+
+B. 3-9 min left, by z (cushion over what the time left can move):
+   z -9 to 0                          n=   1 won   0.0% vs break-even  87.8% | net per $1 -1.009 | halves +0.000 (n=0) / -1.009 (n=1) | losers 1
+   z 0 to 0.5                         n=   9 won 100.0% vs break-even  87.5% | net per $1 +0.145 | halves +0.116 (n=1) / +0.149 (n=8) | losers 0
+   z 0.5 to 1                         n= 733 won  86.6% vs break-even  87.8% | net per $1 -0.013 | halves -0.033 (n=353) / +0.005 (n=380) | losers 98
+   z 1 to 1.5                         n= 602 won  89.7% vs break-even  89.8% | net per $1 -0.001 | halves -0.022 (n=305) / +0.019 (n=297) | losers 62
+   z 1.5 to 2.5                       n=  97 won  93.8% vs break-even  92.6% | net per $1 +0.014 | halves +0.022 (n=41) / +0.007 (n=56) | losers 6
+   z 2.5 to 9.1                       n=   1 won 100.0% vs break-even  92.4% | net per $1 +0.082 | halves +0.000 (n=0) / +0.082 (n=1) | losers 0
+
+C. 3-9 min left, by 13 minute slope of the cushion (typical moves; 0.5 = 26.6 degrees):
+   slope -9 to -0.5                   n=   9 won  88.9% vs break-even  87.3% | net per $1 +0.017 | halves -0.077 (n=5) / +0.135 (n=4) | losers 1
+   slope -0.5 to 0.5                  n= 514 won  87.4% vs break-even  88.3% | net per $1 -0.011 | halves -0.034 (n=242) / +0.008 (n=272) | losers 65
+   slope 0.5 to 1.5                   n= 823 won  89.1% vs break-even  89.3% | net per $1 -0.003 | halves -0.020 (n=400) / +0.014 (n=423) | losers 90
+   slope 1.5 to 9.1                   n=  97 won  88.7% vs break-even  89.5% | net per $1 -0.009 | halves -0.010 (n=53) / -0.008 (n=44) | losers 11
+
+B2. 3-9 min left, z under 1 by slope:
+   z<1, slope -9 to -0.5              n=   7 won  85.7% vs break-even  87.7% | net per $1 -0.025 | halves -0.239 (n=3) / +0.135 (n=4) | losers 1
+   z<1, slope -0.5 to 0.5             n= 366 won  86.3% vs break-even  87.8% | net per $1 -0.017 | halves -0.051 (n=169) / +0.011 (n=197) | losers 50
+   z<1, slope 0.5 to 9.1              n= 370 won  87.0% vs break-even  87.7% | net per $1 -0.008 | halves -0.012 (n=182) / -0.004 (n=188) | losers 48
+
+D. live bets at ask 0.80 or more since 11-02 (cushion z and 13 minute slope at the buy):
+   bets read: 424 lost all: 82 stake lost $ 501.98 stake won on $ 1914.66
+   z -9 to 1: n=312 lost all 65 stake lost $415.73 stake on winners $1400.63
+   z 1 to 2: n=110 lost all 17 stake lost $86.25 stake on winners $508.05
+   z 2 to 3: n=2 lost all 0 stake lost $0.00 stake on winners $5.98
+   z 3 to 9.1: n=0 lost all 0 stake lost $0.00 stake on winners $0.00
+   the lost-all bets:
+     crypto_favorite      ask 0.90 left   340s z +0.89 slope13 +0.87 stake $10.05
+     crypto_favorite      ask 0.85 left   473s z +0.63 slope13 -0.22 stake $9.54
+     crypto_favorite      ask 0.81 left   472s z +0.76 slope13 +0.04 stake $9.87
+     crypto_favorite      ask 0.81 left   166s z +0.72 slope13 +0.37 stake $10.22
+     crypto_favorite      ask 0.85 left   123s z +0.66 slope13 +0.29 stake $9.99
+     crypto_favorite      ask 0.88 left   327s z +0.92 slope13 +0.74 stake $9.99
+     crypto_favorite      ask 0.85 left   188s z +0.76 slope13 +0.26 stake $9.99
+     crypto_favorite      ask 0.80 left   326s z +0.74 slope13 +0.36 stake $10.23
+     crypto_favorite      ask 0.80 left   449s z +0.57 slope13 +0.13 stake $10.35
+     crypto_favorite      ask 0.80 left   430s z +0.52 slope13 -0.61 stake $10.35
+     crypto_favorite      ask 0.82 left   457s z +0.59 slope13 -0.22 stake $9.99
+     crypto_favorite      ask 0.82 left   372s z +0.82 slope13 +0.01 stake $10.33
+     crypto_favorite      ask 0.84 left   358s z +0.69 slope13 -0.20 stake $9.65
+     crypto_favorite      ask 0.81 left   393s z +0.57 slope13 +0.63 stake $9.99
+     crypto_favorite      ask 0.83 left   359s z +0.81 slope13 +0.66 stake $9.90
+     crypto_favorite      ask 0.86 left   476s z +0.98 slope13 +0.66 stake $10.00
+     crypto_favorite      ask 0.82 left   475s z +1.24 slope13 +0.70 stake $9.99
+     crypto_favorite      ask 0.81 left   458s z +0.60 slope13 +0.44 stake $9.99
+     crypto_favorite      ask 0.83 left   472s z +1.02 slope13 +0.51 stake $10.22
+     crypto_favorite      ask 0.90 left   474s z +1.35 slope13 +1.18 stake $10.00
+     crypto_favorite      ask 0.90 left   470s z +1.11 slope13 +1.45 stake $9.89
+     crypto_favorite      ask 0.85 left   364s z +0.98 slope13 +0.35 stake $9.99
+     crypto_favorite      ask 0.87 left   302s z +1.01 slope13 +0.61 stake $9.98
+     crypto_favorite      ask 0.83 left   121s z +0.66 slope13 +0.24 stake $9.88
+     crypto_favorite      ask 0.84 left   344s z +0.83 slope13 +0.51 stake $9.88
+     crypto_favorite      ask 0.87 left   393s z +1.00 slope13 +1.65 stake $9.98
+     crypto_favorite      ask 0.86 left   319s z +0.79 slope13 +1.09 stake $10.10
+     crypto_favorite      ask 0.87 left   131s z +0.82 slope13 +0.38 stake $10.09
+     crypto_favorite      ask 0.81 left   268s z +0.80 slope13 +0.60 stake $9.99
+     crypto_favorite      ask 0.80 left   453s z +0.59 slope13 +0.22 stake $9.99
+     crypto_favorite      ask 0.82 left   452s z +0.83 slope13 +0.47 stake $10.33
+     crypto_favorite      ask 0.84 left   283s z +0.72 slope13 -0.27 stake $9.99
+     crypto_favorite      ask 0.81 left   438s z +0.76 slope13 +0.18 stake $10.34
+     crypto_favorite      ask 0.80 left   436s z +0.85 slope13 +0.20 stake $10.23
+     crypto_favorite      ask 0.81 left   438s z +0.78 slope13 +1.08 stake $10.22
+     crypto_favorite      ask 0.80 left   473s z +0.60 slope13 +0.63 stake $8.44
+     crypto_favorite      ask 0.81 left   155s z +0.49 slope13 +0.22 stake $9.52
+     crypto_favorite      ask 0.81 left   353s z +1.08 slope13 +0.61 stake $3.10
+     crypto_favorite      ask 0.88 left   477s z +0.82 slope13 +0.48 stake $3.02
+     crypto_sol           ask 0.90 left   476s z +1.01 slope13 +0.95 stake $3.03
+     crypto_favorite      ask 0.80 left   390s z +1.03 slope13 +0.58 stake $2.91
+     crypto_favorite      ask 0.82 left   449s z +1.27 slope13 +1.96 stake $2.95
+     crypto_favorite      ask 0.89 left    85s z +0.64 slope13 +0.48 stake $3.02
+     crypto_favorite      ask 0.83 left   392s z +0.63 slope13 -0.98 stake $2.82
+     crypto_sol           ask 0.82 left   391s z +0.50 slope13 -1.09 stake $3.02
+     crypto_btc           ask 0.89 left   475s z +1.38 slope13 +1.23 stake $3.02
+     crypto_favorite      ask 0.80 left    86s z +0.62 slope13 +0.59 stake $2.99
+     crypto_sol           ask 0.89 left   477s z +0.99 slope13 +1.30 stake $3.02
+     crypto_favorite      ask 0.90 left   475s z +0.95 slope13 +1.33 stake $2.96
+     crypto_sol           ask 0.80 left   475s z +0.77 slope13 -0.93 stake $2.99
+     crypto_btc           ask 0.85 left   412s z +1.19 slope13 +0.89 stake $3.09
+     crypto_sol           ask 0.82 left   189s z +0.65 slope13 +0.32 stake $2.89
+     crypto_btc           ask 0.85 left   470s z +1.01 slope13 +0.09 stake $3.02
+     crypto_favorite      ask 0.84 left   468s z +0.82 slope13 -0.31 stake $2.96
+     crypto_favorite      ask 0.86 left   347s z +1.04 slope13 +0.58 stake $2.83
+     crypto_btc           ask 0.85 left   471s z +0.93 slope13 +0.13 stake $3.02
+     crypto_btc           ask 0.90 left    64s z +0.77 slope13 -0.08 stake $3.03
+     crypto_favorite      ask 0.82 left   456s z +0.91 slope13 +1.81 stake $3.06
+     crypto_favorite      ask 0.83 left   196s z +0.61 slope13 +0.01 stake $3.02
+     crypto_favorite      ask 0.80 left   378s z +0.76 slope13 -0.01 stake $3.02
+     crypto_favorite      ask 0.83 left   374s z +0.84 slope13 +0.41 stake $3.06
+     crypto_favorite      ask 0.87 left   471s z +1.19 slope13 +1.80 stake $2.99
+     crypto_sol           ask 0.85 left   127s z +0.61 slope13 +0.26 stake $2.99
+     crypto_favorite      ask 0.82 left   475s z +0.56 slope13 +0.11 stake $2.95
+     crypto_eth           ask 0.88 left   474s z +1.06 slope13 +0.77 stake $3.02
+     crypto_sol           ask 0.81 left   145s z +0.39 slope13 +0.10 stake $2.97
+     crypto_eth           ask 0.84 left   348s z +0.74 slope13 +0.25 stake $2.89
+     crypto_eth           ask 0.81 left   114s z +0.29 slope13 -0.24 stake $2.85
+     crypto_sol           ask 0.88 left    99s z +0.60 slope13 -0.04 stake $2.99
+     crypto_favorite      ask 0.80 left   464s z +1.34 slope13 +2.00 stake $3.11
+     crypto_favorite      ask 0.89 left   363s z +0.90 slope13 +0.88 stake $3.05
+     crypto_eth           ask 0.83 left   398s z +0.95 slope13 +0.96 stake $3.10
+     crypto_sol           ask 0.84 left   295s z +0.63 slope13 +0.66 stake $3.00
+     crypto_btc           ask 0.90 left   451s z +1.61 slope13 +1.85 stake $3.09
+     crypto_sol           ask 0.90 left   448s z +0.85 slope13 +1.27 stake $3.05
+     crypto_sol           ask 0.87 left   358s z +0.99 slope13 +0.46 stake $2.99
+     crypto_sol           ask 0.90 left   475s z +0.98 slope13 +0.58 stake $2.97
+     crypto_sol           ask 0.89 left   350s z +0.77 slope13 +0.41 stake $0.80
+     crypto_favorite      ask 0.80 left   435s z +0.54 slope13 +0.36 stake $3.07
+     crypto_favorite      ask 0.87 left   433s z +0.46 slope13 -0.07 stake $2.72
+     crypto_sol           ask 0.90 left    99s z +0.66 slope13 -0.10 stake $2.93
+     crypto_eth           ask 0.88 left   379s z +0.98 slope13 +0.93 stake $3.12
+DONE
