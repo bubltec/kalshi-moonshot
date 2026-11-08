@@ -61,6 +61,24 @@ first moment per market side, test days only:
       curve shape choppy                          n=  432 net per $1 +0.006 (se 0.022) won 84.0% | halves -0.054 (n=122) / +0.029 (n=310)
       curve shape middle                          n=  588 net per $1 -0.023 (se 0.019) won 82.5% | halves +0.003 (n=158) / -0.033 (n=430)
       curve shape straight                        n=  755 net per $1 -0.011 (se 0.016) won 84.5% | halves -0.001 (n=188) / -0.014 (n=567)
+
+per test day (UTC day; 20763 = Friday 11-06), first moment per market side, lane band for 'all' and 'model (lane band)':
+   day 20761 model top 5% (lane band)             n=  135 net per $1 +0.009 (se 0.034) won 87.4% | halves +0.009 (n=113) / +0.008 (n=22)
+   day 20761 model top 10% (lane band)            n=  226 net per $1 +0.012 (se 0.025) won 88.1% | halves +0.006 (n=187) / +0.044 (n=39)
+   day 20761 model top 20% (lane band)            n=  359 net per $1 -0.033 (se 0.023) won 83.3% | halves -0.031 (n=300) / -0.044 (n=59)
+   day 20761 all (the lane's rule, band only)     n=  571 net per $1 -0.023 (se 0.019) won 82.7% | halves -0.014 (n=468) / -0.064 (n=103)
+   day 20762 model top 5% (lane band)             n=  112 net per $1 +0.027 (se 0.035) won 89.3% | halves +0.000 (n=0) / +0.027 (n=112)
+   day 20762 model top 10% (lane band)            n=  180 net per $1 -0.013 (se 0.031) won 85.6% | halves +0.000 (n=0) / -0.013 (n=180)
+   day 20762 model top 20% (lane band)            n=  277 net per $1 -0.022 (se 0.026) won 84.5% | halves +0.000 (n=0) / -0.022 (n=277)
+   day 20762 all (the lane's rule, band only)     n=  560 net per $1 -0.026 (se 0.019) won 82.5% | halves +0.000 (n=0) / -0.026 (n=560)
+   day 20763 model top 5% (lane band)             n=   88 net per $1 -0.064 (se 0.050) won 80.7% | halves +0.000 (n=0) / -0.064 (n=88)
+   day 20763 model top 10% (lane band)            n=  190 net per $1 -0.024 (se 0.031) won 84.7% | halves +0.000 (n=0) / -0.024 (n=190)
+   day 20763 model top 20% (lane band)            n=  303 net per $1 -0.024 (se 0.025) won 84.5% | halves +0.000 (n=0) / -0.024 (n=303)
+   day 20763 all (the lane's rule, band only)     n=  600 net per $1 +0.009 (se 0.017) won 85.3% | halves +0.000 (n=0) / +0.009 (n=600)
+   day 20764 model top 5% (lane band)             n=   11 net per $1 +0.155 (se 0.016) won 100.0% | halves +0.000 (n=0) / +0.155 (n=11)
+   day 20764 model top 10% (lane band)            n=   15 net per $1 +0.144 (se 0.012) won 100.0% | halves +0.000 (n=0) / +0.144 (n=15)
+   day 20764 model top 20% (lane band)            n=   29 net per $1 +0.113 (se 0.041) won 96.6% | halves +0.000 (n=0) / +0.113 (n=29)
+   day 20764 all (the lane's rule, band only)     n=   44 net per $1 +0.066 (se 0.053) won 90.9% | halves +0.000 (n=0) / +0.066 (n=44)
 DONE
 
 

@@ -142,4 +142,10 @@ for name, idx in sel.items():
         show(f"   {lo_ // 60}-{hi_ // 60} min in", [i for i in f if lo_ <= meta[i][1] < hi_])
     for sh in ("choppy", "middle", "straight"):
         show(f"   curve shape {sh}", [i for i in f if shape(meta[i][6]) == sh])
+print("\nper test day (UTC day; 20763 = Friday 11-06), first moment per market side, lane band for 'all' and 'model (lane band)':")
+for d in days[2:]:
+    for name, idx in sel.items():
+        if "any band" in name:
+            continue
+        show(f"day {d} {name}", first([i for i in idx if meta[i][7] == d]))
 print("DONE")
