@@ -62,3 +62,16 @@ def test_an_always_lane_keeps_a_market_with_no_instrument_instead_of_dropping_it
     sh = dataclasses.replace(shot("KXZEC15M-26NOV072015-15"), series="KXZEC15M", event_ticker="KXZEC15M-26NOV072015")
     kept = est.screen([sh], [{"ticker": sh.ticker, "event_ticker": sh.event_ticker, "series_ticker": "KXZEC15M", "yes_ask_dollars": "0.77"}], spec, s, None)
     assert [k.ticker for k in kept] == [sh.ticker] and est.dropped == []
+
+
+def test_the_pricer_estimate_for_an_always_lane_with_no_instrument_is_the_price_band(monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot.commodities import CommodityPricer
+
+    s = config.load()
+    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], always=True)
+    monkeypatch.setattr(lanes, "lane_specs", lambda _s: {"band": spec})
+    sh = dataclasses.replace(shot("KXZEC15M-26NOV072015-15", ask=0.43), series="KXZEC15M", lane="band")
+    p, why = CommodityPricer.__new__(CommodityPricer).estimate(None, sh, s)
+    assert abs(p - 0.43) < 1e-9 and why == "price band"

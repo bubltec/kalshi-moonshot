@@ -539,7 +539,14 @@ class CommodityPricer:
     def estimate(self, client: Any, shot: Any, s: Settings) -> tuple[float, str]:
         """Fresh P(yes) for a shortlisted market, re-reading its whole ladder."""
         inst = instrument_for(getattr(shot, "series", "") or "", load_instruments(s.data_dir))
-        if inst is not None and contract_priced(inst.symbol):
+        if inst is None:  # a series with no instrument (ZEC, HYPE, BNB, NEAR) has no feed to price from: a lane that bets the price band still takes it
+            from .lanes import lane_specs
+
+            spec = lane_specs(s).get(getattr(shot, "lane", "") or "")
+            band_only = spec is not None and spec.always
+        else:
+            band_only = contract_priced(inst.symbol)
+        if band_only:
             # These lanes bet the contract's own price. Kraken is not an input, so do not open it.
             ask = float(getattr(shot, "ask", 0.0) or 0.0)
             p_yes = 1.0 - ask if getattr(shot, "side", "yes") == "no" else ask
