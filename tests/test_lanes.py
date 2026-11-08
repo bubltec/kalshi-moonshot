@@ -78,3 +78,14 @@ def test_instruments_are_data_and_overridable(tmp_path):
     custom = load_instruments(tmp_path)
     assert symbol_for("KXCORNW", custom) == "ZC=F"
     assert symbol_for("KXGOLDD", custom) is None
+
+
+def test_a_lane_whose_only_exit_is_the_adaptive_shock_or_cross_is_watched():
+    import dataclasses
+
+    from kalshi_moonshot.lanes import LaneSpec, takes_profit
+
+    base = LaneSpec(name="x", estimator="e", label="l", price=(0.2, 0.7), hours=(0.0, 1.0), max_spread=0.05, min_volume=0)
+    assert not takes_profit(base)
+    assert takes_profit(dataclasses.replace(base, shock_units=1.0))  # shock_units replaced shock_bp on crypto_multiscale on 11-06; the watcher skipped lanes with no other exit
+    assert takes_profit(dataclasses.replace(base, cross_units=0.0))
