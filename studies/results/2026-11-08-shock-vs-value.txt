@@ -1,0 +1,18 @@
+shock-exit sales of crypto lanes with a settled window: 130 | confidence model: loaded
+read: 130
+shock-exit sales vs holding, by over = bid - fee - the curve's chance:
+   all                                net $  +18.07 | per sale +0.139 +/- 0.136 (n=130) | beat hold 99 lost 31 | first half +0.337 +/- 0.165 (n=66) | second half -0.065 +/- 0.214 (n=64)
+   over -9.00 to -0.05                net $   -8.13 | per sale -0.232 +/- 0.345 (n=35) | beat hold 19 lost 16 | first half +0.580 +/- 0.506 (n=14) | second half -0.774 +/- 0.436 (n=21)
+   over -0.05 to -0.02                net $   +8.40 | per sale +0.280 +/- 0.245 (n=30) | beat hold 25 lost 5 | first half +0.329 +/- 0.314 (n=11) | second half +0.251 +/- 0.348 (n=19)
+   over -0.02 to +0.00                net $   +5.29 | per sale +0.182 +/- 0.237 (n=29) | beat hold 26 lost 3 | first half -0.139 +/- 0.346 (n=18) | second half +0.709 +/- 0.195 (n=11)
+   over +0.00 to +0.02                net $   +2.75 | per sale +0.137 +/- 0.312 (n=20) | beat hold 16 lost 4 | first half +0.606 +/- 0.167 (n=13) | second half -0.733 +/- 0.762 (n=7)
+   over +0.02 to +0.05                net $   +7.83 | per sale +0.652 +/- 0.269 (n=12) | beat hold 11 lost 1 | first half +0.492 +/- 0.398 (n=8) | second half +0.973 +/- 0.096 (n=4)
+   over +0.05 to +9.00                net $   +1.94 | per sale +0.485 +/- 1.033 (n=4) | beat hold 2 lost 2 | first half +0.583 +/- 1.417 (n=2) | second half +0.388 +/- 2.092 (n=2)
+the sales a veto at over below 0 would have held (curve says hold):
+   over < 0                           net $   +5.56 | per sale +0.059 +/- 0.167 (n=94) | beat hold 70 lost 24 | first half +0.215 +/- 0.233 (n=43) | second half -0.072 +/- 0.238 (n=51)
+   over < -0.02                       net $   +0.27 | per sale +0.004 +/- 0.218 (n=65) | beat hold 44 lost 21 | first half +0.470 +/- 0.311 (n=25) | second half -0.287 +/- 0.290 (n=40)
+by time left at the sale:
+   0-120 s left, over < 0             net $   +7.01 | per sale +0.584 +/- 0.297 (n=12) | beat hold 9 lost 3 | first half +0.716 +/- 0.380 (n=9) | second half +0.191 +/- 0.325 (n=3)
+   120-240 s left, over < 0           net $  +16.25 | per sale +0.560 +/- 0.244 (n=29) | beat hold 25 lost 4 | first half +0.717 +/- 0.278 (n=18) | second half +0.303 +/- 0.464 (n=11)
+   240-301 s left, over < 0           net $  -17.71 | per sale -0.334 +/- 0.245 (n=53) | beat hold 36 lost 17 | first half -0.632 +/- 0.438 (n=16) | second half -0.205 +/- 0.297 (n=37)
+DONE
