@@ -856,6 +856,18 @@ class Store:
         last = self._last_exit(ticker, lane)
         return max(0.0, last + seconds - now) if last is not None else 0.0
 
+    def entry_fill(self, ticker: str, side: str, since_ts: float) -> float | None:
+        """The price per contract a position actually filled at, fee excluded (what the exits compare a bid with), from the buy orders on this market and contract from since_ts (a few seconds before the bet) on: (cost_usd - fee_usd) over fill_count, a top-up counted. None when there are no filled buy orders (a paper bet): the caller keeps the decision's ask. The decision's ask is not this: a take chases the ask by the lane's slip, and a resting bid fills under it."""
+        row = self.db.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(SUM(fee_usd), 0) AS fee, COALESCE(SUM(fill_count), 0) AS n FROM orders "
+            "WHERE ticker=? AND COALESCE(contract,'yes')=? AND COALESCE(side,'buy')='buy' AND ts>=?",
+            (ticker, side or "yes", float(since_ts) - 5.0),
+        ).fetchone()
+        if not row or float(row["n"]) <= 0:
+            return None
+        price = (float(row["cost"]) - float(row["fee"])) / float(row["n"])
+        return price if 0.0 < price < 1.0 else None
+
     def last_gain_sale(self, ticker: str, lane: str) -> tuple[str, float] | None:
         """(side, sale time) of this lane's latest sale of this market for a gain (the sale after its fee over what the position cost, fee included), else None. A sale at a loss is not counted. The cost is what the buy orders in the position's life actually filled at (orders: cost_usd over fill_count, resting bids fill under the ask), and falls back to the decision's ask plus its fee when there are no orders (a paper bet)."""
         from .strategy import fee_per_contract as fee

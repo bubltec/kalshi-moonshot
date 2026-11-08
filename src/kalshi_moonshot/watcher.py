@@ -168,6 +168,7 @@ class Target:
     value_bid: tuple = (0.30, 0.70)
     value_at: float = 0.0  # the value check looks at most once a second
     value_noted: float = 0.0
+    entry_filled: bool = False  # entry is the price the buy orders actually filled at (store.entry_fill), not the decision's ask
     shock_trend_hold: float = -99.0  # lane shock_trend_hold: no shock sale while the pre-spike trend is this far with the bet (-99 = off)
     shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
     shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
@@ -1229,6 +1230,11 @@ class ProfitWatcher:
                 spec.spike_cents, spec.spike_seconds, spec.spike_min_gain, spec.trail_activate, spec.trail_drop, spec.trail_confirm_seconds, spec.trail_fast_drop, spec.trail_hold_seconds,
                 float(row["ask"] or 0.0),
             )
+            tg0 = fresh[(ticker, lane)]
+            if not tg0.entry_filled:  # the price paid is what the buy filled at (a take chases the ask, a resting bid fills under it): the exits' "never a loss after both fees" is judged against it
+                filled_at = store.entry_fill(ticker, tg0.side, float(row["ts"] or 0.0))
+                if filled_at:
+                    tg0.entry, tg0.entry_filled = filled_at, True
             fresh[(ticker, lane)].unstable_gain = spec.unstable_gain
             if fresh[(ticker, lane)].close_ts <= 0 and row["close_time"]:
                 with contextlib.suppress(TypeError, ValueError):
@@ -1649,7 +1655,7 @@ class ProfitWatcher:
             bid = 0.0
             with contextlib.suppress(TypeError, ValueError):
                 bid = float(quoted.get("yes_bid_dollars") or 0.0)
-            entry = float(row["ask"] or 0.0)
+            entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
             resting_paper = (spec := lane_specs(s).get(lane)) is not None and spec.rest_sell and not s.is_live(lane, ticker.split("-")[0])
             cut = why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst", "strike-through", "shock exit", "wrong-side exit")) or (why.startswith("cash-out:") and " under the " in why)
             if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not resting_paper and not cut:  # a profit-take never sells for a loss after both fees; a peak-crash, a stop, the settlement guard, a last-two-minutes burst, a strike-through sale, a shock exit, a wrong-side exit, and a timed drop do (the point is to get out). A paper lane that rests its sale is not re-read at all: its order filled at the target when the bid touched it, so a dipped re-read cannot veto it

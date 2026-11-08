@@ -364,3 +364,30 @@ def test_the_value_exit_sells_a_bid_that_is_over_the_curve_chance_and_holds_othe
     t.side = "no"
     monkeypatch.setattr(confidence, "predict", lambda w, x: 0.60)  # YES 60% = NO 40%
     assert watcher.ProfitWatcher._value_hit(fake, t, 0.63, now, now)
+
+
+def test_a_position_is_watched_at_the_price_its_buy_filled_at_not_the_decision_ask(setup):
+    s, store = setup
+    store.db.execute("UPDATE decisions SET ask=0.63, ts=100.0")
+    store.db.commit()
+    w = watcher.ProfitWatcher(lambda: s, FakeClient(0.5), lambda: Store(s.db_path))
+    w.refresh()
+    t = w.targets[("KXBTC15M-1", "late_ticket")]
+    assert t.entry == 0.63 and not t.entry_filled  # no orders yet (a paper bet, or the order not recorded yet): the ask
+    store.add_order(ts=101.0, ticker="KXBTC15M-1", env="prod", count=4.33, price=0.68, fill_count=4.33, cost_usd=2.883347, fee_usd=0.068847, order_id="o1", side="buy", contract="yes")
+    w.refresh()
+    assert t.entry_filled and abs(t.entry - 0.65) < 1e-6  # the take chased 0.63 to a 0.68 limit and filled at 0.65 before the fee
+    store.add_order(ts=102.0, ticker="KXBTC15M-1", env="prod", count=4.33, price=0.67, fill_count=4.33, cost_usd=-2.834418, fee_usd=0.066682, order_id="o2", side="sell", contract="yes")
+    store.add_order(ts=103.0, ticker="KXBTC15M-1", env="prod", count=1.0, price=0.9, fill_count=1.0, cost_usd=0.9, fee_usd=0.0, order_id="o3", side="buy", contract="no")
+    t.entry_filled = False
+    w.refresh()
+    assert abs(t.entry - 0.65) < 1e-6  # a sell order and the other contract are not part of the cost
+
+
+def test_the_store_reads_the_fill_price_without_the_fee_and_none_without_orders(setup):
+    _s, store = setup
+    assert store.entry_fill("KXBTC15M-1", "yes", 100.0) is None
+    store.add_order(ts=101.0, ticker="KXBTC15M-1", env="prod", count=4.0, price=0.40, fill_count=4.0, cost_usd=1.68, fee_usd=0.08, order_id="a", side="buy", contract="yes")
+    store.add_order(ts=102.0, ticker="KXBTC15M-1", env="prod", count=4.0, price=0.50, fill_count=4.0, cost_usd=2.07, fee_usd=0.07, order_id="b", side="buy", contract="yes")  # a top-up
+    assert abs(store.entry_fill("KXBTC15M-1", "yes", 100.0) - 0.45) < 1e-9  # (1.60 + 2.00) / 8
+    assert store.entry_fill("KXBTC15M-1", "yes", 200.0) is None  # orders before the bet are not this position's

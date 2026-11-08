@@ -155,3 +155,23 @@ def test_a_stop_loss_is_hard_by_default_and_only_a_lane_that_asks_lets_the_model
         w.refresh()
         w._sell("KXBTC15M-1", "late_ticket", why)
         assert (Store(s.db_path).open_bets() == []) is sold, (guard, held)
+
+
+def _value_sale(setup, filled):
+    s, store = setup
+    store.db.execute("UPDATE decisions SET ask=0.63, ts=100.0")
+    if filled:
+        store.add_order(ts=101.0, ticker="KXBTC15M-1", env="prod", count=4.33, price=0.68, fill_count=4.33, cost_usd=2.883347, fee_usd=0.068847, order_id="o1", side="buy", contract="yes")  # the take chased 0.63 to 0.68 and filled at 0.65 before the fee
+    store.db.commit()
+    w = watcher.ProfitWatcher(lambda: s, FakeClient(0.68), lambda: Store(s.db_path))
+    w.refresh()
+    w._sell("KXBTC15M-1", "late_ticket", "value exit: bid 0.68 after the fee is 0.040 over the curve's chance 0.63 that the yes side pays, 300s left")
+    return len(Store(s.db_path).open_bets())
+
+
+def test_a_value_sale_is_judged_against_the_price_the_buy_filled_at(setup):
+    assert _value_sale(setup, filled=True) == 1  # 0.68 less its fee is 0.66, under the 0.65 paid plus its fee (0.67): a loss after both fees, declined
+
+
+def test_a_value_sale_over_the_decision_ask_still_sells_without_orders(setup):
+    assert _value_sale(setup, filled=False) == 0  # a paper bet: against the 0.63 ask plus its fee (0.65), 0.66 is a gain
