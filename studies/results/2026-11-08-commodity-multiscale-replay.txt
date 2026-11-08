@@ -1,0 +1,46 @@
+
+commodity windows 3280
+grid built KXGOLD15M 0
+grid built KXSILVER15M 7840
+grid built KXPLATINUM15M 15451
+grid built KXPALLADIUM15M 19810
+grid built KXWTI15M 24522
+grid built KXBRENT15M 33917
+grid built KXNATGAS15M 41902
+grid built KXCOPPER15M 46703
+buy moments 49941 value moments 101936
+UTC days [20759, 20760, 20761, 20762, 20763, 20764]
+bets 1883 staked $4734.38
+
+all 1883 bets, test days [20761, 20762, 20763, 20764]; path-efficiency cutoffs 0.038 0.093, halves split at 1793881050
+held to the result                           n=1883 staked $4734.38 net $ -183.31 ( -3.9% of stake) won 58.5% sold   0 | halves -139.91 / -43.41
++ shock exit                                 n=1883 staked $4734.38 net $ -320.99 ( -6.8% of stake) won 43.3% sold 1084 | halves -166.38 / -154.61
++ shock + cross                              n=1883 staked $4734.38 net $ -312.46 ( -6.6% of stake) won 39.1% sold 1231 | halves -154.05 / -158.41
++ shock + cross + value (the lane)           n=1883 staked $4734.38 net $ -312.44 ( -6.6% of stake) won 39.2% sold 1232 | halves -154.05 / -158.39
+
+by minutes in (the lane, all three exits):
+2-7 min                                      n=1423 staked $3569.47 net $ -241.19 ( -6.8% of stake) won 42.9% sold 875 | halves -109.33 / -131.85
+7-11 min                                     n= 302 staked $ 766.09 net $  -49.82 ( -6.5% of stake) won 29.5% sold 234 | halves -40.61 / -9.22
+11-15 min                                    n= 158 staked $ 398.81 net $  -21.43 ( -5.4% of stake) won 24.7% sold 123 | halves -4.11 / -17.33
+
+by curve shape (held / the lane):
+choppy, held                                 n= 628 staked $1562.29 net $ -108.61 ( -7.0% of stake) won 56.2% sold   0 | halves -79.58 / -29.03
+choppy, the lane                             n= 628 staked $1562.29 net $ -156.15 (-10.0% of stake) won 36.3% sold 426 | halves -74.53 / -81.62
+middle, held                                 n= 627 staked $1576.80 net $  -40.25 ( -2.6% of stake) won 59.3% sold   0 | halves -31.59 / -8.65
+middle, the lane                             n= 627 staked $1576.80 net $  -79.50 ( -5.0% of stake) won 40.5% sold 409 | halves -43.46 / -36.04
+straight, held                               n= 628 staked $1595.28 net $  -34.46 ( -2.2% of stake) won 60.0% sold   0 | halves -28.74 / -5.72
+straight, the lane                           n= 628 staked $1595.28 net $  -76.79 ( -4.8% of stake) won 40.8% sold 397 | halves -36.06 / -40.73
+
+per test day (UTC day 20763 = Friday 11-06; held / the lane):
+day 20761, held                              n= 682 staked $1728.30 net $ -118.25 ( -6.8% of stake) won 57.2% sold   0 | halves -118.25 / +0.00
+day 20761, the lane                          n= 682 staked $1728.30 net $ -124.04 ( -7.2% of stake) won 37.8% sold 455 | halves -124.04 / +0.00
+day 20762, held                              n= 552 staked $1384.11 net $  -29.87 ( -2.2% of stake) won 59.4% sold   0 | halves -21.65 / -8.22
+day 20762, the lane                          n= 552 staked $1384.11 net $  -90.24 ( -6.5% of stake) won 38.2% sold 360 | halves -30.01 / -60.23
+day 20763, held                              n= 598 staked $1487.28 net $  -37.55 ( -2.5% of stake) won 58.7% sold   0 | halves +0.00 / -37.55
+day 20763, the lane                          n= 598 staked $1487.28 net $ -115.92 ( -7.8% of stake) won 39.6% sold 395 | halves +0.00 / -115.92
+day 20764, held                              n=  51 staked $ 134.69 net $   +2.37 ( +1.8% of stake) won 64.7% sold   0 | halves +0.00 / +2.37
+day 20764, the lane                          n=  51 staked $ 134.69 net $  +17.76 (+13.2% of stake) won 62.7% sold  22 | halves +0.00 / +17.76
+DONE
+
+
+
