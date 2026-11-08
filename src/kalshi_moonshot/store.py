@@ -856,6 +856,22 @@ class Store:
         last = self._last_exit(ticker, lane)
         return max(0.0, last + seconds - now) if last is not None else 0.0
 
+    def last_gain_sale(self, ticker: str, lane: str) -> float | None:
+        """The price (bid) of this lane's latest sale of this market that was a gain (the sale after its fee over the price paid after its fee), else None. A sale at a loss is not looked at."""
+        from .strategy import fee_per_contract as fee
+
+        rows = self.db.execute(
+            """SELECT exit_price, ask FROM decisions
+               WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL AND exit_price IS NOT NULL AND ask IS NOT NULL
+               ORDER BY exit_ts DESC""",
+            (ticker, lane),
+        ).fetchall()
+        for r in rows:
+            sold, paid = float(r["exit_price"]), float(r["ask"])
+            if sold - fee(sold) > paid + fee(paid):
+                return sold
+        return None
+
     def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None, factors: str = "") -> None:
         self.db.execute(
             """UPDATE decisions SET exit_price=?, exit_ts=?, exit_reason=?, exit_factors=?

@@ -136,3 +136,16 @@ def test_a_trend_check_with_no_quote_to_compare_does_not_buy(tmp_path):
         "[lane.cool]\nestimator='llm'\nprice=[0.01,0.99]\nhours=[0.0,48.0]\nalways=true\nfixed_stake=2.0\nentry_trend_seconds=10\n")
     out = runner.evaluate(s, None, Est(0.5), Store(s.db_path), shot(ticker="KXA-1", lane="cool", ask=0.5))
     assert out.action == "pass" and "no reference" in out.note
+
+
+def test_a_market_sold_for_a_gain_is_bought_back_only_below_the_sale_price(setup):
+    _s, store = setup
+    ask = store.db.execute("SELECT ask FROM decisions").fetchone()["ask"]
+    assert store.last_gain_sale("KXBTC15M-1", "fav") is None  # nothing sold yet
+    store.db.execute("UPDATE decisions SET exit_ts=?, exit_price=?", (1000.0, ask + 0.20))
+    store.db.commit()
+    assert store.last_gain_sale("KXBTC15M-1", "fav") == pytest.approx(ask + 0.20)
+    assert store.last_gain_sale("KXBTC15M-2", "fav") is None  # another market
+    store.db.execute("UPDATE decisions SET exit_price=?", (ask - 0.20,))
+    store.db.commit()
+    assert store.last_gain_sale("KXBTC15M-1", "fav") is None  # a sale at a loss sets no limit
