@@ -1,0 +1,17 @@
+multiscale settled bets with a fill price: 168
+by how the buy filled:
+  resting  n=114 won  32% vs fill  34% | net per $1 -0.06 +/- 0.14 ($-11.06) | halves $+0.20/$-11.26
+  taker    n= 54 won  39% vs fill  38% | net per $1 -0.10 +/- 0.18 ($-1.19) | halves $-3.65/$+2.47
+resting fills by how far under the decision ask they filled (cents):
+  gap -100.0-1.5c  n= 50 won  34% vs fill  33% | net per $1 +0.06 +/- 0.24 ($+1.12) | halves $+0.88/$+0.24
+  gap 1.5-3.5c  n= 50 won  34% vs fill  36% | net per $1 -0.04 +/- 0.21 ($-3.01) | halves $+5.96/$-8.98
+  gap 3.5-6.0c  n= 11 won  18% vs fill  29% | net per $1 -0.48 +/- 0.39 ($-4.89) | halves $-3.54/$-1.34
+  gap 6.0-100.0c  n=  3 won   0% vs fill  34% | net per $1 -1.00 +/- 0.00 ($-4.27) | halves $-3.10/$-1.17
+resting vs taker by minutes into the window:
+  0-4 min resting  n= 27 won  59% vs fill  42% | net per $1 +0.66 +/- 0.33 ($+18.83) | halves $+17.72/$+1.11
+  0-4 min taker    n=  9 won  56% vs fill  41% | net per $1 +0.63 +/- 0.62 ($+4.58) | halves $-2.22/$+6.80
+  4-9 min resting  n= 53 won  28% vs fill  34% | net per $1 -0.13 +/- 0.21 ($-12.18) | halves $-7.63/$-4.55
+  4-9 min taker    n= 33 won  39% vs fill  38% | net per $1 -0.13 +/- 0.21 ($+0.05) | halves $+1.64/$-1.60
+  9-15 min resting  n= 34 won  15% vs fill  28% | net per $1 -0.54 +/- 0.20 ($-17.70) | halves $-9.89/$-7.81
+  9-15 min taker    n= 12 won  25% vs fill  36% | net per $1 -0.56 +/- 0.23 ($-5.82) | halves $-3.08/$-2.74
+DONE

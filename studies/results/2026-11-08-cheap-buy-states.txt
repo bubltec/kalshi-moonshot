@@ -1,0 +1,47 @@
+rows 116463 market sides 10721
+test days 8 | ridge picks (every moment): 16090
+the ridge's live rule, first pick per market side:
+   all picks                net per $1 -0.020 +/- 0.020 (n=3569) won 48.1% vs price 47.9% | first half -0.081 +/- 0.029 (n=1352) | second half +0.018 +/- 0.027 (n=2217)
+   cheap picks (ask < 0.35) net per $1 +0.079 +/- 0.059 (n=884) won 30.2% vs price 26.9% | first half -0.062 +/- 0.113 (n=215) | second half +0.124 +/- 0.069 (n=669)
+   other picks (ask >= 0.35) net per $1 -0.052 +/- 0.018 (n=2685) won 54.0% vs price 54.8% | first half -0.085 +/- 0.027 (n=1137) | second half -0.029 +/- 0.024 (n=1548)
+state record 'time': the first non-skipped pick per market side, and the picks it turned down
+   kept                     n=0
+   kept, cheap              n=0
+   kept, other              n=0
+   skipped (turned down)    net per $1 -0.020 +/- 0.020 (n=3569) won 48.1% vs price 47.9% | first half -0.081 +/- 0.029 (n=1352) | second half +0.018 +/- 0.027 (n=2217)
+state record 'z': the first non-skipped pick per market side, and the picks it turned down
+   kept                     net per $1 -0.603 +/- 0.447 (n=7) won 14.3% vs price 29.4% | first half -1.055 +/- 0.000 (n=1) | second half -0.528 +/- 0.521 (n=6)
+   kept, cheap              net per $1 -0.529 +/- 0.521 (n=6) won 16.7% vs price 28.2% | first half -1.055 +/- 0.000 (n=1) | second half -0.424 +/- 0.625 (n=5)
+   kept, other              net per $1 -1.044 +/- 0.000 (n=1) won  0.0% vs price 37.0% | first half n=0 | second half -1.044 +/- 0.000 (n=1)
+   skipped (turned down)    net per $1 -0.019 +/- 0.020 (n=3566) won 48.1% vs price 47.9% | first half -0.081 +/- 0.029 (n=1352) | second half +0.019 +/- 0.027 (n=2214)
+state record 'time_z': the first non-skipped pick per market side, and the picks it turned down
+   kept                     net per $1 +0.056 +/- 0.092 (n=347) won 32.3% vs price 31.3% | first half -0.082 +/- 0.123 (n=130) | second half +0.138 +/- 0.127 (n=217)
+   kept, cheap              net per $1 +0.155 +/- 0.116 (n=263) won 30.0% vs price 25.4% | first half +0.087 +/- 0.236 (n=57) | second half +0.174 +/- 0.132 (n=206)
+   kept, other              net per $1 -0.256 +/- 0.110 (n=84) won 39.3% vs price 49.8% | first half -0.215 +/- 0.116 (n=73) | second half -0.525 +/- 0.343 (n=11)
+   skipped (turned down)    net per $1 -0.019 +/- 0.020 (n=3530) won 48.5% vs price 48.2% | first half -0.082 +/- 0.029 (n=1338) | second half +0.019 +/- 0.027 (n=2192)
+state record 'time_z_price': the first non-skipped pick per market side, and the picks it turned down
+   kept                     net per $1 -0.017 +/- 0.053 (n=859) won 33.2% vs price 33.1% | first half -0.169 +/- 0.079 (n=278) | second half +0.056 +/- 0.068 (n=581)
+   kept, cheap              net per $1 +0.016 +/- 0.062 (n=693) won 30.3% vs price 28.8% | first half -0.215 +/- 0.110 (n=183) | second half +0.099 +/- 0.075 (n=510)
+   kept, other              net per $1 -0.153 +/- 0.079 (n=166) won 45.2% vs price 51.1% | first half -0.081 +/- 0.095 (n=95) | second half -0.249 +/- 0.134 (n=71)
+   skipped (turned down)    net per $1 -0.017 +/- 0.020 (n=3476) won 49.0% vs price 48.6% | first half -0.078 +/- 0.029 (n=1325) | second half +0.020 +/- 0.027 (n=2151)
+cell table (all test days, ridge picks, first per market side and cell; cells with n >= 100):
+   2-4 min, -1..-.5         net per $1 +0.077 +/- 0.113 (n=239) won 30.1% vs price 27.3% | first half -0.185 +/- 0.165 (n=94) | second half +0.247 +/- 0.152 (n=145)
+   2-4 min, -.5..0          net per $1 -0.056 +/- 0.044 (n=731) won 41.6% vs price 42.8% | first half -0.155 +/- 0.068 (n=296) | second half +0.011 +/- 0.058 (n=435)
+   2-4 min, 0..0.5          net per $1 -0.024 +/- 0.025 (n=1085) won 60.6% vs price 60.3% | first half -0.099 +/- 0.038 (n=475) | second half +0.034 +/- 0.033 (n=610)
+   2-4 min, >0.5            net per $1 +0.015 +/- 0.065 (n=106) won 70.8% vs price 68.4% | first half -0.091 +/- 0.100 (n=50) | second half +0.110 +/- 0.084 (n=56)
+   4-6 min, -1..-.5         net per $1 -0.055 +/- 0.087 (n=371) won 27.0% vs price 26.7% | first half -0.115 +/- 0.151 (n=120) | second half -0.027 +/- 0.106 (n=251)
+   4-6 min, -.5..0          net per $1 -0.028 +/- 0.047 (n=686) won 41.4% vs price 41.2% | first half -0.251 +/- 0.077 (n=227) | second half +0.082 +/- 0.059 (n=459)
+   4-6 min, 0..0.5          net per $1 -0.072 +/- 0.030 (n=766) won 57.3% vs price 60.2% | first half -0.094 +/- 0.043 (n=360) | second half -0.052 +/- 0.042 (n=406)
+   6-8 min, -1..-.5         net per $1 +0.108 +/- 0.088 (n=423) won 29.8% vs price 26.0% | first half +0.068 +/- 0.174 (n=109) | second half +0.122 +/- 0.102 (n=314)
+   6-8 min, -.5..0          net per $1 -0.011 +/- 0.046 (n=755) won 41.7% vs price 40.6% | first half -0.148 +/- 0.081 (n=217) | second half +0.044 +/- 0.055 (n=538)
+   6-8 min, 0..0.5          net per $1 -0.084 +/- 0.030 (n=768) won 56.9% vs price 60.2% | first half -0.129 +/- 0.048 (n=299) | second half -0.056 +/- 0.039 (n=469)
+   8-10 min, -1..-.5        net per $1 +0.101 +/- 0.091 (n=393) won 29.5% vs price 25.5% | first half +0.152 +/- 0.189 (n=93) | second half +0.085 +/- 0.104 (n=300)
+   8-10 min, -.5..0         net per $1 +0.038 +/- 0.052 (n=645) won 42.3% vs price 39.3% | first half +0.072 +/- 0.093 (n=192) | second half +0.024 +/- 0.062 (n=453)
+   8-10 min, 0..0.5         net per $1 -0.014 +/- 0.035 (n=554) won 61.2% vs price 60.0% | first half +0.031 +/- 0.053 (n=232) | second half -0.046 +/- 0.046 (n=322)
+   10-12 min, -1..-.5       net per $1 +0.208 +/- 0.109 (n=302) won 31.5% vs price 25.3% | first half +0.280 +/- 0.280 (n=50) | second half +0.193 +/- 0.118 (n=252)
+   10-12 min, -.5..0        net per $1 +0.034 +/- 0.058 (n=505) won 42.0% vs price 39.2% | first half +0.036 +/- 0.109 (n=146) | second half +0.033 +/- 0.069 (n=359)
+   10-12 min, 0..0.5        net per $1 -0.033 +/- 0.041 (n=414) won 59.2% vs price 59.4% | first half -0.035 +/- 0.062 (n=174) | second half -0.032 +/- 0.055 (n=240)
+   12-14 min, -1..-.5       net per $1 +0.167 +/- 0.169 (n=128) won 29.7% vs price 24.8% | first half +0.777 +/- 0.467 (n=20) | second half +0.053 +/- 0.179 (n=108)
+   12-14 min, -.5..0        net per $1 -0.061 +/- 0.071 (n=377) won 35.5% vs price 36.9% | first half +0.078 +/- 0.141 (n=94) | second half -0.108 +/- 0.083 (n=283)
+   12-14 min, 0..0.5        net per $1 +0.027 +/- 0.048 (n=290) won 63.8% vs price 60.6% | first half +0.096 +/- 0.066 (n=138) | second half -0.035 +/- 0.068 (n=152)
+DONE
