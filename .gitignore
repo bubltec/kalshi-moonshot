@@ -19,3 +19,4 @@ cdk.out/
 site-data/
 
 scripts/_tmp/
+job-results/

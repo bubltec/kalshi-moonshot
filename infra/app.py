@@ -14,6 +14,7 @@ import os
 import aws_cdk as cdk
 from archive_stack import ArchiveStack
 from bot_stack import BotStack
+from jobs_stack import JobsStack
 from site_stack import SiteStack
 
 app = cdk.App()
@@ -27,11 +28,20 @@ ArchiveStack(
     ),
     description="Cold storage for the bot's tape and backups: an S3 bucket, a write-only-ish user for the archiver, and Athena over the Parquet files.",
 )
-BotStack(
+bot = BotStack(
     app,
     "KalshiMoonshotBot",
     env=cdk.Environment(account=account, region=app.node.try_get_context("bot_region") or "us-east-2"),
     description="One host in Ohio that runs the bot and its database. The model stays on the Mac.",
+)
+JobsStack(
+    app,
+    "KalshiMoonshotJobs",
+    env=cdk.Environment(account=account, region=app.node.try_get_context("bot_region") or "us-east-2"),
+    vpc=bot.vpc,
+    bot_repo=bot.bot_repo,
+    db_repo=bot.db_repo,
+    description="Throwaway Fargate tasks for heavy jobs (refits, walk-forwards): restore the newest backups, run one script, write the result to the archive bucket. Start one with scripts/cloud_job.sh.",
 )
 SiteStack(
     app,
