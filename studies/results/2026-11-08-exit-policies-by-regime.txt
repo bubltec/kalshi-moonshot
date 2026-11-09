@@ -1,0 +1,8 @@
+live crypto_multiscale bets with a settled window since 11-05: 334
+replayed: 334
+by how many of the nine crypto indexes ran at 1.5x or more of their normal volatility at the buy (curve rule M=0.02):
+   0-1 hot (calm)               203 bets | hold   -42.11 | lane actual   -29.12 | shock alone   -33.74 | curve alone   -29.17 | first of the two   -28.05
+   2-4 hot                       57 bets | hold   +31.38 | lane actual   +23.37 | shock alone   +22.84 | curve alone    +5.78 | first of the two    +3.09
+   5-9 hot (the whole market)    74 bets | hold   -68.59 | lane actual   -26.73 | shock alone   -33.17 | curve alone   -22.99 | first of the two   -15.25
+   all                          334 bets | hold   -79.32 | lane actual   -32.48 | shock alone   -44.07 | curve alone   -46.37 | first of the two   -40.21
+DONE
