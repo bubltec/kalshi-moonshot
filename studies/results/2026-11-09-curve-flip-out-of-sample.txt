@@ -1,0 +1,16 @@
+Question: does the 11-06 sell-and-flip result (+$152 on choppy curves, n=111, straight -$72) hold on the live bets since then? Out-of-sample rerun of scripts/curve_flip_replay.py (same rule, A=3 typical minutes, 300 s) on the last 3 days, Fargate job 20261109-124705-9997 (data: the last nightly backups). Plus the live shadow (curve_shadow.jsonl, 11-06 17:25 to 11-09 12:46 ET).
+
+all bets with quote paths 185 actual total 28.77
+cuts: choppy < 0.058  straight >= 0.208
+sell+flip change by curve shape, split by asset class and by half of the 8 days
+ all             choppy: n= 11   -0.06 | middle: n= 11   +4.65 | straight: n= 12  +15.93
+ crypto only     choppy: n=  9   +1.68 | middle: n=  8   +7.05 | straight: n=  4   -2.47
+ commodity only  choppy: n=  2   -1.74 | middle: n=  3   -2.40 | straight: n=  8  +18.41
+ first half      choppy: n=  4   -0.74 | middle: n=  6   +2.17 | straight: n=  8  +18.41
+ second half     choppy: n=  7   +0.68 | middle: n=  5   +2.48 | straight: n=  4   -2.47
+
+Live shadow, 107 scored signals, sell+flip change vs what the bets returned:
+  by state: anomaly n=5 +2.78 | choppy n=16 +4.62 (halves +6.36 / -1.74) | middle n=35 +29.40 (+25.29 / +4.11) | straight n=51 +37.06 (+22.63 / +14.43)
+  by lane: crypto_multiscale n=51 -7.00 | crypto_underdog_scalp n=21 +22.63 | crypto_favorite n=11 +11.23 | crypto_btc n=5 +4.13 | crypto_eth n=4 +2.89 | crypto_sol n=3 +7.25 | crypto_trend_scalp_loose n=5 +2.36; total +73.86, 63 of 107 positive
+
+Read: the choppy edge did not replicate (n=11 -0.06 out of sample, n=16 +4.62 live); straight and middle, which lost in the original replay, are positive in both new views on small n; crypto_multiscale itself is -7.00 on 51 signals. The original cutoffs and A were chosen after seeing the results.
