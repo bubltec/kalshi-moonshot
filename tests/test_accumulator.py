@@ -13,7 +13,7 @@ def test_score_is_the_add_on_net_per_dollar_after_the_fee():
 
 def test_picks_follow_the_variants():
     base = {"s13": 0.6, "s55": 0.7, "z": 1.4}
-    assert accumulator.picks(base) == {"price only": True, "slopes 13m+55m >= 0.5": True, "z >= 1": True, "slopes and z": True}
+    assert accumulator.picks(base) == {"slopes 13m+55m >= 0.5": True, "z >= 1": True, "slopes and z": True}
     low = accumulator.picks({"s13": 0.6, "s55": 0.1, "z": 2.0})
     assert not low["slopes 13m+55m >= 0.5"] and low["z >= 1"] and not low["slopes and z"]
 

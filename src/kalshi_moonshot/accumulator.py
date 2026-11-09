@@ -2,7 +2,7 @@
 
 scripts/accumulator_study.py (studies/results/2026-11-07-accumulator.txt): on 1,829 settled crypto market sides, a buy at an ask of 0.85-0.99 inside the last 120 s paid -0.009 per $1 after the fee; with the cushion rising over both the 13 and the 55 minute look-backs (slope at least 0.5 typical moves) -0.007 (n=228, 9 losers); only a cushion over 1 typical move for the time left (z, n=198, about +0.009, 3 losers) was positive, a cut chosen after seeing the results.
 This module runs the same read in shadow on every open bet of a lane with accumulate_shadow. It places no order. Per bet it logs once, the first time the held side's ask is in 0.85-0.99 with 5-120 s left: the ask, the cushion's z for the seconds left, the 13 and the 55 minute slopes. Nothing here is a coin or a market name; the readings are the spot's own curve.
-The hourly score reads the settled bets and prints, per variant (price only, the user's slope rule, z over 1, both), the add-on's net per $1 after the full taker fee at 1x and 2x the first stake, and warns when a variant is negative over RETIRE_N signals in 7 days (CLAUDE.md rule 6).
+The hourly score reads the settled bets and prints, per variant (the user's slope rule, z over 1, both; the price-only variant was retired 2026-11-08), the add-on's net per $1 after the full taker fee at 1x and 2x the first stake, and warns when a variant is negative over RETIRE_N signals in 7 days (CLAUDE.md rule 6).
 Lines go to DATA_DIR/accumulator_shadow.jsonl: kind "signal" and kind "score"."""
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ Z_BAR = 1.0
 EVERY = 5.0
 SCORE_EVERY = 3600.0
 RETIRE_N = 30
-VARIANTS = ("price only", "slopes 13m+55m >= 0.5", "z >= 1", "slopes and z")
+VARIANTS = ("slopes 13m+55m >= 0.5", "z >= 1", "slopes and z")  # "price only" (every signal) was retired 2026-11-08: negative over 57 signals in 7 days (-3.26 per $1 summed), flagged by this module's own score (rule 6)
 
 _lock = threading.Lock()
 _seen: set[str] = set()
@@ -59,7 +59,7 @@ def readings(ts: list[float], vs: list[float], strike: float, sign: int, now: fl
 def picks(sig: dict[str, Any]) -> dict[str, bool]:
     slopes = sig["s13"] >= SLOPE_BAR and sig["s55"] >= SLOPE_BAR
     z = sig["z"] >= Z_BAR
-    return {"price only": True, "slopes 13m+55m >= 0.5": slopes, "z >= 1": z, "slopes and z": slopes and z}
+    return {"slopes 13m+55m >= 0.5": slopes, "z >= 1": z, "slopes and z": slopes and z}
 
 
 def shadow_pass(s: Any, store: Any, tape: Any, specs: dict[str, Any], strike_of: Any, now: float | None = None) -> list[dict[str, Any]]:
