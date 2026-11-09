@@ -278,6 +278,7 @@ class LaneSpec:
     buy_retries: int = 0  # when an immediate buy fills nothing, read the book again and send it once more, up to this many times, right away (0 = no retry). The next signal on the market comes a median 108 s later and about 3.7c dearer
     buy_retry_chase: float = 0.0  # how many dollars over the first limit a retry may pay (0 = never above it). The lane's price band and the risk gate still apply
     buy_slip: float = 0.0  # the buy order is limited this many dollars above the ask the bot read: it still fills at the best ask, and pays up to the allowance only if the book has moved (0 = limit at the ask)
+    buy_tick_ahead: bool = False  # 2026-11-08 (user: "just put the buy order at whatever the difference between the last 2 ticks is ahead of the current price"; the buys skipped with "$0.00 offered at 0.42" because the ask had run to 0.44): build the buy limit from the newest ask the quote stream shows, plus the size of the last tick up when the ask is rising (the last two distinct ask values), never under that ask, and never over the decision ask + buy_slip + buy_retry_chase. A falling ask is bought at its new, lower level. 0 = the old limit (the decision ask + buy_slip)
     watch_max: int = 40
     priority: int = 0  # queue priority of this lane's jobs; higher runs first
     trust: float = 1.0  # prior weight on the estimator before our record has any say (0 to 1)

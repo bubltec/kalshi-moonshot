@@ -1398,6 +1398,38 @@ def _cap_equity(s: Settings, client: KalshiClient, store: Store) -> float:
         return 0.0
 
 
+def side_ask_ticks(ticker: str, side: str, now: float | None = None, span: float = 30.0) -> tuple[float, float] | None:
+    """(the newest ask of the side from the live quote stream, the signed change between its last two distinct values) over the last `span` seconds, or None when the stream has none. YES ask = the quote's ask, NO ask = 1 - the YES bid."""
+    from . import tape as tape_mod
+
+    now = time.time() if now is None else now
+    rows = tape_mod.recent.quote_tail(ticker, now - span, now + 1.0)
+    asks: list[float] = []
+    for row in rows:
+        if row[1] <= 0 or row[2] <= 0:
+            continue
+        a = round(float(row[2]) if side == "yes" else 1.0 - float(row[1]), 4)  # the exchange's scale
+        if not asks or abs(a - asks[-1]) > 1e-9:
+            asks.append(a)
+    if not asks:
+        return None
+    return asks[-1], round(asks[-1] - asks[-2], 4) if len(asks) >= 2 else 0.0
+
+
+def buy_limit(spec: LaneSpec | None, ticker: str, side: str, decision_ask: float, base_ask: float, now: float | None = None) -> float:
+    """The limit of an immediate buy. The old rule: the ask the order is built from plus buy_slip. With buy_tick_ahead: the newest streamed ask (or `base_ask`, whichever is higher when the stream is silent or behind the book) plus the last tick up, capped at the decision ask + buy_slip + buy_retry_chase; a falling ask is bought at its new level, never over the cap."""
+    slip = max(0.0, spec.buy_slip) if spec is not None else 0.0
+    if spec is None or not getattr(spec, "buy_tick_ahead", False):
+        return round(max(base_ask, min(0.99, base_ask + slip)), 4)
+    got = side_ask_ticks(ticker, side, now)
+    cap = decision_ask + slip + max(0.0, spec.buy_retry_chase)
+    if got is None:
+        return round(min(0.99, max(base_ask, min(base_ask + slip, cap))), 4)
+    fresh, delta = got
+    base = fresh if fresh < base_ask - 1e-9 and delta < 0 else max(fresh, base_ask)  # a falling ask is bought where it is now
+    return round(min(0.99, max(base, min(base + max(delta, 0.0), cap))), 4)
+
+
 def place(
     s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float,
     order_key: str | None = None, before_order: Callable[[], None] | None = None,
@@ -1414,7 +1446,10 @@ def place(
     # The order is immediate-or-cancel at a limit. At the ask it fails whenever the ask has ticked up since it was read (13% of real buys did); a lane may allow a few cents
     # more. The order still fills at the best ask and pays the allowance only if the book has moved, so the most it can cost is the limit times the count: that is what is checked.
     lane_spec = lane_specs(s).get(shot.lane)
-    limit = round(max(shot.ask, min(0.99, shot.ask + max(0.0, lane_spec.buy_slip if lane_spec is not None else 0.0))), 4)  # four decimals, the exchange's scale: rounding to cents could land under a sub-cent ask; never under the ask, never allowance past 99c
+    limit = buy_limit(lane_spec, shot.ticker, shot.side, shot.ask, shot.ask)  # four decimals, the exchange's scale: rounding to cents could land under a sub-cent ask; never under the ask
+    if lane_spec is not None and getattr(lane_spec, "buy_tick_ahead", False):
+        seen = side_ask_ticks(shot.ticker, shot.side)
+        log.info("buy limit %s %s %s: decided at %.2f, the stream's ask %s (last tick %s), limit %.4f", shot.lane, shot.ticker, shot.side, shot.ask, f"{seen[0]:.2f}" if seen else "silent", f"{seen[1]:+.2f}" if seen else "-", limit)
     cost = limit * count + order_fee(limit, count)
     cap = cost  # already sized under every ceiling; the gate re-checks the global ones
     try:
@@ -1576,7 +1611,7 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
         return None
     if ask is None or ask < spec.price[0] - 1e-9 or ask > spec.price[1] + 1e-9:
         return None
-    limit = round(min(0.99, ask + max(0.0, spec.buy_slip)), 4)
+    limit = buy_limit(spec, shot.ticker, shot.side, shot.ask, ask)
     if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
         return None
     if spec.model_buy:  # the curve model must still say buy

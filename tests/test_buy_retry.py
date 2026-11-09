@@ -268,3 +268,45 @@ def test_the_curve_is_checked_at_the_most_the_take_can_pay_not_at_the_bare_ask(s
     client = RestClient(fills=[1.5], asks=[0.30])
     runner.place(s, client, store, shot, "why", 1.5, order_key="k")
     assert seen and abs(seen[0] - 0.33) < 1e-9  # ask 0.30 + slip 0.03: the price the order may pay
+
+
+def _spec(tmp_path, monkeypatch, **kw):
+    import dataclasses
+
+    from kalshi_moonshot import config, lanes
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    base = next(iter(lanes.lane_specs(config.load()).values()))
+    return dataclasses.replace(base, **kw)
+
+
+def _stream(monkeypatch, rows):
+    from kalshi_moonshot import tape as tape_mod
+
+    monkeypatch.setattr(tape_mod.recent, "quote_tail", lambda ticker, start, end: rows)
+
+
+def test_the_tick_ahead_limit_follows_the_streamed_ask_and_the_last_tick_up_within_the_cap(tmp_path, monkeypatch):
+    now = 1000.0
+    spec = _spec(tmp_path, monkeypatch, buy_tick_ahead=True, buy_slip=0.03, buy_retry_chase=0.02)
+    _stream(monkeypatch, [(990.0, 0.37, 0.38), (995.0, 0.38, 0.40), (999.0, 0.40, 0.42)])  # YES ask 0.38 -> 0.40 -> 0.42
+    assert runner.side_ask_ticks("T", "yes", now) == (0.42, 0.02)
+    # decided at 0.39: the ask is 0.42 now and the last tick was +0.02: 0.44, which is the cap (0.39 + 0.03 + 0.02)
+    assert runner.buy_limit(spec, "T", "yes", 0.39, 0.39, now) == 0.44
+    _stream(monkeypatch, [(990.0, 0.37, 0.38), (999.0, 0.41, 0.43)])  # one tick of +0.05: the cap holds it at 0.44
+    assert runner.buy_limit(spec, "T", "yes", 0.39, 0.39, now) == 0.44
+    _stream(monkeypatch, [(995.0, 0.39, 0.40), (999.0, 0.39, 0.40)])  # the ask has not moved: the limit is the ask
+    assert runner.buy_limit(spec, "T", "yes", 0.39, 0.39, now) == 0.40
+
+
+def test_the_tick_ahead_limit_buys_a_falling_ask_where_it_is_and_falls_back_without_a_stream(tmp_path, monkeypatch):
+    now = 1000.0
+    spec = _spec(tmp_path, monkeypatch, buy_tick_ahead=True, buy_slip=0.03, buy_retry_chase=0.02)
+    _stream(monkeypatch, [(995.0, 0.40, 0.42), (999.0, 0.36, 0.38)])  # the ask fell 0.42 -> 0.38, under the 0.40 decision
+    assert runner.buy_limit(spec, "T", "yes", 0.40, 0.40, now) == 0.38
+    _stream(monkeypatch, [])  # a silent stream: the decision ask plus the allowance, as before
+    assert runner.buy_limit(spec, "T", "yes", 0.40, 0.40, now) == 0.43
+    _stream(monkeypatch, [(995.0, 0.60, 0.62), (999.0, 0.57, 0.59)])  # NO side: the NO ask is 1 - the YES bid, 0.40 -> 0.43
+    assert runner.side_ask_ticks("T", "no", now) == (0.43, 0.03)
+    off = _spec(tmp_path, monkeypatch, buy_tick_ahead=False, buy_slip=0.03)
+    assert runner.buy_limit(off, "T", "yes", 0.40, 0.40, now) == 0.43  # the old rule when the lane does not ask for it
