@@ -1,0 +1,19 @@
+Question: do the sales on the commodity lanes and treasury_favorite beat holding? Live bets since 2026-11-01 (9 days), settled, sale net of both fees vs holding the same contracts to the result. Script: scripts/commodity_treasury_exit_review.py. Not a rule; a review. "halves" splits the period by bet count, first half / second half of the diff.
+
+lane                   exit              n  sale net  hold net     diff  halves diff
+commodity_energy       ALL             341    +63.95    +88.44   -24.49  -3.36 / -21.13
+commodity_energy       shock            21    -51.88    -32.17   -19.70  +1.43 / -21.13
+commodity_energy       burst             6     +4.54     +9.29    -4.75
+commodity_industrial   ALL             262    -46.38     -5.61   -40.76  -11.28 / -29.48
+commodity_industrial   shock            22    -54.85    -25.36   -29.48  +0.00 / -29.48
+commodity_industrial   burst             2     -7.63     +3.65   -11.28
+commodity_precious     ALL             248    +62.10    +53.38    +8.72  -2.26 / +10.98
+commodity_precious     shock            20    -28.43    -38.96   +10.53  -0.45 / +10.98
+commodity_precious     burst             4     +3.87     +5.68    -1.81
+commodity_multiscale   ALL              27     -3.85     -0.82    -3.03   shock 4: -3.03
+commodity_natgas       ALL              17    +21.03    +23.30    -2.27   shock 1
+commodity_wti          ALL              23     +9.18    +16.14    -6.96   shock 2: -8.25, wrong-side 1: +1.29
+commodity (old)        ALL              29    +20.17    +32.83   -12.66   burst 4 -7.69, drop 1 -4.97
+treasury_favorite      ALL              40     -1.18     -0.73    -0.45   one burst sale; 39 held -0.84
+
+Read: the shock exit cost more than holding on energy (-19.70), industrial (-29.48), wti, natgas and multiscale, and paid on precious (+10.53). Nearly all of the cost is in the second half (shock_units 1.0 / shock_last 300 from 11-06). Treasury: 40 bets, hold -0.73; no data for an exit to act on.
