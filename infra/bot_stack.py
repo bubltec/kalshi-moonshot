@@ -37,12 +37,10 @@ class BotStack(Stack):
         for repo in (bot_repo, db_repo):
             repo.add_lifecycle_rule(max_image_count=8)
 
-        self.bot_repo, self.db_repo = bot_repo, db_repo  # the jobs stack runs the same images
         vpc = ec2.Vpc(
             self, "Vpc", max_azs=2, nat_gateways=0,
             subnet_configuration=[ec2.SubnetConfiguration(name="public", subnet_type=ec2.SubnetType.PUBLIC, cidr_mask=24)],
         )
-        self.vpc = vpc
         sg = ec2.SecurityGroup(self, "HostSg", vpc=vpc, description="Bot host. No inbound; outbound only.", allow_all_outbound=True)
 
         role = iam.Role(self, "HostRole", assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"))

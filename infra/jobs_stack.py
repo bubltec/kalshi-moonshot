@@ -22,8 +22,12 @@ EPHEMERAL_GIB = 60  # the restored tape and the working files; gone when the tas
 
 
 class JobsStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, *, vpc: ec2.IVpc, bot_repo: ecr.IRepository, db_repo: ecr.IRepository, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+        # Self-contained on purpose: no reference to the bot stack, so deploying this one can never touch the live host's stack (whose template has drifted: a newer machine image would replace the instance).
+        bot_repo = ecr.Repository.from_repository_name(self, "BotRepo", "kalshi-moonshot-bot")
+        db_repo = ecr.Repository.from_repository_name(self, "DbRepo", "kalshi-moonshot-db")
+        vpc = ec2.Vpc(self, "Vpc", max_azs=2, nat_gateways=0, subnet_configuration=[ec2.SubnetConfiguration(name="public", subnet_type=ec2.SubnetType.PUBLIC, cidr_mask=24)])  # public subnets only, no NAT: nothing here costs anything while idle
         ctx = self.node.try_get_context
         bucket = str(ctx("archive_bucket") or "kalshi-moonshot-archive-placeholder")  # the archive stack's bucket name; pass -c archive_bucket=NAME to deploy
         archive_region = str(ctx("archive_region") or "us-east-1")
@@ -53,7 +57,7 @@ class JobsStack(Stack):
             "db", image=ecs.ContainerImage.from_ecr_repository(db_repo, "latest"), essential=False,
             environment={"POSTGRES_USER": "moonshot", "POSTGRES_PASSWORD": "moonshot", "POSTGRES_DB": "moonshot"},  # reachable only inside this task: no inbound rule exists
             command=["postgres", "-c", "shared_buffers=1GB", "-c", "synchronous_commit=off", "-c", "fsync=off", "-c", "max_connections=40"],  # a throwaway database: speed over durability
-            health_check=ecs.HealthCheck(command=["CMD-SHELL", "pg_isready -U moonshot -d moonshot"], interval=Duration.seconds(5), timeout=Duration.seconds(5), retries=20),
+            health_check=ecs.HealthCheck(command=["CMD-SHELL", "pg_isready -U moonshot -d moonshot"], interval=Duration.seconds(6), timeout=Duration.seconds(5), retries=10, start_period=Duration.seconds(60)),
             logging=ecs.LogDriver.aws_logs(stream_prefix="db", log_group=logs_group),
         )
         job = task.add_container(

@@ -1,6 +1,5 @@
 import aws_cdk as cdk
 from aws_cdk.assertions import Template
-from bot_stack import BotStack
 from jobs_stack import JobsStack
 
 ENV = cdk.Environment(account="123456789012", region="us-east-2")
@@ -8,8 +7,7 @@ ENV = cdk.Environment(account="123456789012", region="us-east-2")
 
 def template(context=None):
     app = cdk.App(context=context or {})
-    bot = BotStack(app, "Bot", env=ENV)
-    return Template.from_stack(JobsStack(app, "Jobs", env=ENV, vpc=bot.vpc, bot_repo=bot.bot_repo, db_repo=bot.db_repo))
+    return Template.from_stack(JobsStack(app, "Jobs", env=ENV))
 
 
 def test_a_job_is_one_arm_task_with_a_database_beside_the_job_and_big_enough_to_leave_the_host_alone():
@@ -43,3 +41,9 @@ def test_it_costs_nothing_while_idle_and_logs_for_a_week():
     t.has_resource_properties("AWS::Logs::LogGroup", {"RetentionInDays": 7})
     assert not t.find_resources("AWS::ECS::Service")  # a task is started on request, never kept running
     assert {"ClusterName", "TaskDefinition", "SecurityGroup", "Subnets"} <= set(t.find_outputs("*"))
+
+
+def test_the_jobs_stack_stands_alone_so_deploying_it_cannot_touch_the_bot_stack():
+    app = cdk.App()
+    jobs = JobsStack(app, "Jobs", env=ENV)
+    assert not jobs.dependencies  # no export from, and no dependency on, KalshiMoonshotBot

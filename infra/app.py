@@ -28,7 +28,7 @@ ArchiveStack(
     ),
     description="Cold storage for the bot's tape and backups: an S3 bucket, a write-only-ish user for the archiver, and Athena over the Parquet files.",
 )
-bot = BotStack(
+BotStack(
     app,
     "KalshiMoonshotBot",
     env=cdk.Environment(account=account, region=app.node.try_get_context("bot_region") or "us-east-2"),
@@ -38,9 +38,6 @@ JobsStack(
     app,
     "KalshiMoonshotJobs",
     env=cdk.Environment(account=account, region=app.node.try_get_context("bot_region") or "us-east-2"),
-    vpc=bot.vpc,
-    bot_repo=bot.bot_repo,
-    db_repo=bot.db_repo,
     description="Throwaway Fargate tasks for heavy jobs (refits, walk-forwards): restore the newest backups, run one script, write the result to the archive bucket. Start one with scripts/cloud_job.sh.",
 )
 SiteStack(
