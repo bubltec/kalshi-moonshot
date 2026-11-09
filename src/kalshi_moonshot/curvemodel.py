@@ -34,6 +34,31 @@ NAMES = [*READ_NAMES, "ask"]
 TIME_SCALES = (2, 5, 13, 34)
 TIME_NAMES = ["left_min", *(f"z_{m}m" for m in TIME_SCALES), *(f"proj_{m}m" for m in TIME_SCALES), *(f"win_{m}m" for m in TIME_SCALES)]
 CLIP = 9.0
+QUAD_WINDOWS = (5, 13, 34)  # minutes
+QUAD_SAMPLES = 25
+QUAD_NAMES = [f"{kind}_{m}m" for m in QUAD_WINDOWS for kind in ("level", "slope", "curv")]
+KINDS = {"fibonacci": READ_NAMES, "curvature": QUAD_NAMES}
+
+
+def _parabola_weights() -> list[list[float]]:
+    """(X'X)^-1 X' for the design [1, u, u^2] on QUAD_SAMPLES points u from -1 to 0: three rows of weights, level a, slope b and curvature c of the least-squares parabola."""
+    us = [-1.0 + i / (QUAD_SAMPLES - 1) for i in range(QUAD_SAMPLES)]
+    xtx = [[sum((1.0, u, u * u)[i] * (1.0, u, u * u)[j] for u in us) for j in range(3)] for i in range(3)]
+    a = [[*xtx[i], *(1.0 if i == j else 0.0 for j in range(3))] for i in range(3)]
+    for c in range(3):
+        p = max(range(c, 3), key=lambda r: abs(a[r][c]))
+        a[c], a[p] = a[p], a[c]
+        pv = a[c][c]
+        a[c] = [x / pv for x in a[c]]
+        for r in range(3):
+            if r != c:
+                f = a[r][c]
+                a[r] = [x - f * y for x, y in zip(a[r], a[c], strict=False)]
+    inv = [row[3:] for row in a]
+    return [[sum(inv[i][j] * (1.0, u, u * u)[j] for j in range(3)) for u in us] for i in range(3)]
+
+
+_PARABOLA = _parabola_weights()
 
 _fitting: subprocess.Popen | None = None
 _cache: dict[str, Any] = {"mtime": None, "data": None}
@@ -75,6 +100,37 @@ def features(g: list[float | None], sq: list[float], k: int, strike_log: float, 
         out += proj
         out += [0.5 * (1.0 + math.erf(p / math.sqrt(2.0))) for p in proj]
     return out
+
+
+def features_curvature(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None) -> list[float] | None:
+    """The curvature readings at index k: over the last 5, 13 and 34 minutes the cushion path (QUAD_SAMPLES points, in that window's typical move: the one-second root-mean-square log move times sqrt(window seconds)) is fitted with a parabola a + b u + c u^2, u from -1 (the window's start) to 0 (now); the readings are its level a (the cushion now, smoothed), slope b and curvature c, per window. One curve gives both sides' readings (all three flip sign with the side). None when a window is not covered or has no spread."""
+    out: list[float] = []
+    for m in QUAD_WINDOWS:
+        look = 60 * m
+        if k - look < 0:
+            if why is not None:
+                why.append(f"no price {m} min ago")
+            return None
+        rate = math.sqrt((sq[k] - sq[k - look]) / look)
+        if rate <= 0:
+            if why is not None:
+                why.append(f"the spot did not move at all over {m} min")
+            return None
+        unit = rate * math.sqrt(look)
+        ys: list[float] = []
+        for i in range(QUAD_SAMPLES):
+            x = g[k - look + round(i * look / (QUAD_SAMPLES - 1))]
+            if x is None:
+                if why is not None:
+                    why.append(f"a gap in the prices over {m} min")
+                return None
+            ys.append((x - strike_log) * sign / unit)
+        out += [sum(w[i] * ys[i] for i in range(QUAD_SAMPLES)) for w in _PARABOLA]
+    return out
+
+
+def readings_for(kind: str, g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None) -> list[float] | None:
+    return features_curvature(g, sq, k, strike_log, sign, why) if kind == "curvature" else features(g, sq, k, strike_log, sign, why)
 
 
 def live_grid(ts: list[float], vs: list[float], now: float) -> tuple[list[float | None], list[float], int] | None:
@@ -122,8 +178,8 @@ def _ridge(xs: list[list[float]], ys: list[float], lam: float = RIDGE) -> list[f
     return [m[i][k] for i in range(k)]
 
 
-def fit(rows: list[tuple[list[float], float, float]]) -> dict[str, Any] | None:
-    """rows: (the 18 curve readings, the ask, the net per dollar staked). Returns the model, or None with too few rows."""
+def fit(rows: list[tuple[list[float], float, float]], kind: str = "fibonacci") -> dict[str, Any] | None:
+    """rows: (the curve readings of `kind`, the ask, the net per dollar staked). Returns the model, or None with too few rows."""
     if len(rows) < MIN_ROWS:
         return None
     xs = [[*r[0], r[1]] for r in rows]
@@ -135,8 +191,8 @@ def fit(rows: list[tuple[list[float], float, float]]) -> dict[str, Any] | None:
     w = _ridge(z, ys)
     pred = sorted(sum(a * b for a, b in zip(w, row, strict=False)) for row in z)
     cuts = {f"{q:g}": pred[int((1.0 - q) * (n - 1))] for q in QUANTS}
-    names = [*READ_NAMES, *TIME_NAMES, "ask"] if len(rows[0][0]) == len(READ_NAMES) + len(TIME_NAMES) else NAMES
-    return {"built_at": time.time(), "n": n, "names": names, "mu": mu, "sd": sd, "w": w, "cuts": cuts, "mean_net": sum(ys) / n, "train_days": TRAIN_DAYS}
+    names = [*KINDS[kind], "ask"] if kind != "fibonacci" else ([*READ_NAMES, *TIME_NAMES, "ask"] if len(rows[0][0]) == len(READ_NAMES) + len(TIME_NAMES) else NAMES)
+    return {"kind": kind, "built_at": time.time(), "n": n, "names": names, "mu": mu, "sd": sd, "w": w, "cuts": cuts, "mean_net": sum(ys) / n, "train_days": TRAIN_DAYS}
 
 
 def predict(model: dict[str, Any], readings: list[float], ask: float) -> float:
@@ -193,7 +249,10 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
         return False, f"curve model: the last {index} tick is {now - got[0][-1]:.0f}s old."
     grid = live_grid(got[0], got[1], now)
     why: list[str] = []
-    read = features(grid[0], grid[1], grid[2], math.log(strike), 1 if shot.side == "yes" else -1, why) if grid else None
+    kind = model.get("kind", "fibonacci")
+    if kind != spec.model_features:
+        return False, f"curve model: the fitted model reads {kind} readings and this lane wants {spec.model_features}: waiting for the refit."
+    read = readings_for(kind, grid[0], grid[1], grid[2], math.log(strike), 1 if shot.side == "yes" else -1, why) if grid else None
     if read is None:
         return False, f"curve model: the curve cannot be read for {shot.ticker} ({why[0] if why else 'unreadable history'})."
     net = predict(model, read, ask)
@@ -206,7 +265,7 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
     return False, f"curve model: {tag.replace('curve model ', '')} is under the bar."
 
 
-def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str, float]] | None = None, timed: bool = False) -> list[tuple[list[float], float, float]]:
+def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str, float]] | None = None, timed: bool = False, kind: str = "fibonacci") -> list[tuple[list[float], float, float]]:
     """(`meta`, when given, gets (close, seconds into the window, ticker, side, the side's bid) per row, for studies; `timed` adds the 13 time-left readings for the studies; the ridge is fitted on the first 18.) The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
     from . import db, variants
     from .kalshiws import RECORD_ONLY
@@ -277,7 +336,10 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
             for side, bid, ask in (("yes", yb, ya), ("no", 1 - ya, 1 - yb)):
                 if not (plo <= ask <= phi) or ask - bid > cap:
                     continue
-                read = features(g, sq, k, strike_log, 1 if side == "yes" else -1, None, close - at if timed else None)
+                if kind == "curvature":
+                    read = features_curvature(g, sq, k, strike_log, 1 if side == "yes" else -1)
+                else:
+                    read = features(g, sq, k, strike_log, 1 if side == "yes" else -1, None, close - at if timed else None)
                 if read is None:
                     continue
                 if meta is not None:
@@ -293,8 +355,14 @@ def main() -> None:
     from . import config
 
     s = config.reload()
-    rows = build_rows(s)
-    model = fit([(r[0][: len(READ_NAMES)], r[1], r[2]) for r in rows])
+    from .lanes import lane_specs
+
+    kinds = [sp.model_features for sp in lane_specs(s).values() if sp.enabled and sp.model_buy]
+    kind = kinds[0] if kinds else "fibonacci"
+    if len(set(kinds)) > 1:
+        print("model_buy lanes disagree on model_features", sorted(set(kinds)), "-> fitting", kind)
+    rows = build_rows(s, kind=kind)
+    model = fit([(r[0][: len(KINDS[kind])], r[1], r[2]) for r in rows], kind=kind)
     if model is None:
         print("not fitted", len(rows), "rows")
         return
