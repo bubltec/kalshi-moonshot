@@ -1,0 +1,7 @@
+skipped buys (an ask that ran over the limit) with a settled window: 344
+read: 341
+   chase under 3c  n= 34 | net per $1 at the decision ask +0.189 +/- 0.420 | at the chase ask +0.239 +/- 0.457
+   chase 3 to 6c   n=155 | net per $1 at the decision ask -0.055 +/- 0.067 | at the chase ask -0.118 +/- 0.060
+   chase over 6c   n=152 | net per $1 at the decision ask +0.150 +/- 0.090 | at the chase ask -0.062 +/- 0.067
+   all           n=341 | at the decision ask +0.061 +/- 0.065 | at the chase ask -0.058 +/- 0.061
+DONE
