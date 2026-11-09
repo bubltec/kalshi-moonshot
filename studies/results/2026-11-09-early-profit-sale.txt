@@ -1,0 +1,17 @@
+Question: does selling a live bet the moment its held bid reaches H with at least L seconds left beat what the lane did (its own sale, or held to the result)? 1398 live 15-minute crypto and commodity bets since 11-05, sale net of the sell fee. Script: scripts/early_profit_sale.py. Re-buys not covered. Settings chosen before the results.
+
+family    bid>= left>=  bets touched then lost   diff $ sale beat/lost  halves diff (n)
+commodity  0.90    300   603     228        10   -64.64     24/204     -22.72 (171) / -41.92 (57)
+commodity  0.90    420   603      68         2   -31.91      6/62      -13.65 (51) / -18.26 (17)
+commodity  0.93    300   603     135         5   -26.76     10/125     -5.09 (101) / -21.67 (34)
+commodity  0.93    420   603      27         1    -9.34      2/25      -3.18 (19) / -6.16 (8)
+commodity  0.95    300   603      95         3    -4.56      6/89      +6.82 (70) / -11.39 (25)
+commodity  0.95    420   603      10         0    -2.88      0/10      -1.85 (8) / -1.03 (2)
+crypto     0.90    300   795     188        25    +5.25     32/156     +3.94 (83) / +1.31 (105)
+crypto     0.90    420   795      67        11    +7.90     14/53      +6.34 (33) / +1.56 (34)
+crypto     0.90    600   795       6         0    -2.42      0/6       +0.00 (0) / -2.42 (6)
+crypto     0.93    300   795     128         9    -5.39     12/116     +2.32 (60) / -7.71 (68)
+crypto     0.93    420   795      29         3    +1.18      4/25      +2.94 (13) / -1.76 (16)
+crypto     0.95    300   795      92         7    +5.75      9/83      +8.17 (42) / -2.42 (50)
+crypto     0.95    420   795      11         2    +4.00      3/8       +2.64 (4) / +1.36 (7)
+(rows with 600 s left: 0-6 bets; commodity none)
