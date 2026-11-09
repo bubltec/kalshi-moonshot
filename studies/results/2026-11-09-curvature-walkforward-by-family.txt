@@ -1,0 +1,34 @@
+Question: on the same moments the model lanes could buy (every settled window of the model_buy lanes' series since 11-02, both sides, every 30 s inside each lane's entry window, price and spread bands), fit the live model (curvature readings, curvemodel.fit, trained on crypto AND commodity rows together, as the live refit does) on the EARLIER days only and score each next day: buy the first moment per market side whose predicted net is at or over the training top-15% cut (cut_for) and above zero, held to the result, net per $1 after the fee. Reported: all picks, then by family (crypto; energy = WTI, Brent, natgas; metals = gold, silver, platinum, palladium; copper), each with n, net per $1, win rate, two halves of the test days, and by minutes in (1.5-5, 5-10, 10-14). The family labels are for this report only; the model reads curves, never names. The first three days only train.
+Settings: the live lanes' (model_top 0.15, curvature readings, the shared bands), not chosen after the results.
+Not covered: the lanes' other gates (volatility ceiling, hot market, spike check), exits, fills.
+
+Run on the Fargate job runner (job 20261109-123100-8692, data: the last nightly backups, about a day old), 4 minutes.
+
+rows 136696 market sides 15151
+day 20758 trained on 23188 rows, cut 0.019
+day 20759 trained on 30092 rows, cut 0.037
+day 20760 trained on 42082 rows, cut 0.02
+day 20761 trained on 59939 rows, cut 0.0
+day 20762 trained on 77363 rows, cut -0.01
+day 20763 trained on 94730 rows, cut -0.008
+day 20764 trained on 119956 rows, cut 0.001
+day 20765 trained on 136098 rows, cut 0.002
+
+first moment per market side, test days only:
+   all picks                          n= 4481 net per $1 -0.034 (se 0.013) won 59.1% | halves -0.054 (n=1930) / -0.019 (n=2551)
+   crypto                             n= 2704 net per $1 -0.028 (se 0.017) won 59.0% | halves -0.038 (n=1136) / -0.021 (n=1568)
+      crypto, 1.5-5 min in            n= 1529 net per $1 -0.047 (se 0.022) won 59.5% | halves -0.071 (n=721) / -0.025 (n=808)
+      crypto, 5.0-10 min in           n=  816 net per $1 +0.020 (se 0.033) won 59.3% | halves +0.046 (n=275) / +0.007 (n=541)
+      crypto, 10.0-15 min in          n=  359 net per $1 -0.061 (se 0.048) won 56.3% | halves -0.037 (n=140) / -0.076 (n=219)
+   energy                             n=  803 net per $1 -0.033 (se 0.031) won 58.9% | halves -0.079 (n=338) / +0.001 (n=465)
+      energy, 1.5-5 min in            n=  405 net per $1 +0.000 (se 0.042) won 61.5% | halves -0.057 (n=186) / +0.049 (n=219)
+      energy, 5.0-10 min in           n=  278 net per $1 -0.059 (se 0.054) won 56.1% | halves -0.115 (n=105) / -0.024 (n=173)
+      energy, 10.0-15 min in          n=  120 net per $1 -0.086 (se 0.080) won 56.7% | halves -0.090 (n=47) / -0.083 (n=73)
+   metals                             n=  760 net per $1 -0.012 (se 0.030) won 62.2% | halves -0.025 (n=365) / +0.000 (n=395)
+      metals, 1.5-5 min in            n=  424 net per $1 -0.009 (se 0.039) won 63.7% | halves -0.019 (n=222) / +0.001 (n=202)
+      metals, 5.0-10 min in           n=  233 net per $1 -0.003 (se 0.057) won 60.9% | halves -0.015 (n=95) / +0.006 (n=138)
+      metals, 10.0-15 min in          n=  103 net per $1 -0.044 (se 0.087) won 59.2% | halves -0.073 (n=48) / -0.019 (n=55)
+   copper                             n=  214 net per $1 -0.183 (se 0.061) won 50.0% | halves -0.266 (n=91) / -0.122 (n=123)
+      copper, 1.5-5 min in            n=  133 net per $1 -0.173 (se 0.076) won 51.1% | halves -0.242 (n=58) / -0.119 (n=75)
+      copper, 5.0-10 min in           n=   68 net per $1 -0.254 (se 0.109) won 45.6% | halves -0.346 (n=28) / -0.190 (n=40)
+      copper, 10.0-15 min in          n=   13 net per $1 +0.080 (se 0.275) won 61.5% | halves -0.106 (n=5) / +0.196 (n=8)
