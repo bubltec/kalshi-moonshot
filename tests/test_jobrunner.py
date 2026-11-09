@@ -33,6 +33,7 @@ def test_the_files_a_script_leaves_are_the_new_small_ones_and_not_the_inputs(tmp
 
 
 def test_an_overlay_archive_is_unpacked_to_plain_files_only(tmp_path):
+    import contextlib
     import io
     import tarfile
 
@@ -46,10 +47,8 @@ def test_an_overlay_archive_is_unpacked_to_plain_files_only(tmp_path):
         evil.size = 1
         tar.addfile(evil, io.BytesIO(b"x"))
     dest = tmp_path / "out"
-    try:
+    with contextlib.suppress(Exception):  # the data filter refuses a path outside the folder
         jobrunner.unpack_overlay(archive, dest)
-    except Exception:
-        pass  # the data filter refuses a path outside the folder
     assert not (tmp_path / "escape.txt").exists()
     clean = tmp_path / "clean.tgz"
     with tarfile.open(clean, "w:gz") as tar:
