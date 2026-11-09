@@ -297,6 +297,8 @@ def test_the_tick_ahead_limit_follows_the_streamed_ask_and_the_last_tick_up_with
     assert runner.buy_limit(spec, "T", "yes", 0.39, 0.39, now) == 0.44
     _stream(monkeypatch, [(995.0, 0.39, 0.40), (999.0, 0.39, 0.40)])  # the ask has not moved: the limit is the ask
     assert runner.buy_limit(spec, "T", "yes", 0.39, 0.39, now) == 0.40
+    _stream(monkeypatch, [(995.0, 0.44, 0.45), (999.0, 0.46, 0.47)])  # the ask ran to 0.47, over the cap 0.44: the limit stays at the cap, so the order finds nothing offered and is skipped
+    assert runner.buy_limit(spec, "T", "yes", 0.39, 0.39, now) == 0.44
 
 
 def test_the_tick_ahead_limit_buys_a_falling_ask_where_it_is_and_falls_back_without_a_stream(tmp_path, monkeypatch):
@@ -310,3 +312,9 @@ def test_the_tick_ahead_limit_buys_a_falling_ask_where_it_is_and_falls_back_with
     assert runner.side_ask_ticks("T", "no", now) == (0.43, 0.03)
     off = _spec(tmp_path, monkeypatch, buy_tick_ahead=False, buy_slip=0.03)
     assert runner.buy_limit(off, "T", "yes", 0.40, 0.40, now) == 0.43  # the old rule when the lane does not ask for it
+
+
+def test_the_tick_ahead_chase_is_held_to_two_cents_whatever_the_lanes_retry_chase(tmp_path, monkeypatch):
+    spec = _spec(tmp_path, monkeypatch, buy_tick_ahead=True, buy_slip=0.03, buy_retry_chase=0.05)  # a favourite lane: a 5c retry chase
+    _stream(monkeypatch, [(995.0, 0.80, 0.82), (999.0, 0.86, 0.88)])  # the ask ran from 0.82 to 0.88
+    assert runner.buy_limit(spec, "T", "yes", 0.80, 0.80, 1000.0) == 0.85  # 0.80 + 0.03 + 0.02, not 0.88

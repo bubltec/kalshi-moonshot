@@ -1398,6 +1398,9 @@ def _cap_equity(s: Settings, client: KalshiClient, store: Store) -> float:
         return 0.0
 
 
+TICK_CHASE_MAX = 0.02  # dollars over decision ask + buy_slip that a tick-ahead limit may reach (set by hand, not from a study)
+
+
 def side_ask_ticks(ticker: str, side: str, now: float | None = None, span: float = 30.0) -> tuple[float, float] | None:
     """(the newest ask of the side from the live quote stream, the signed change between its last two distinct values) over the last `span` seconds, or None when the stream has none. YES ask = the quote's ask, NO ask = 1 - the YES bid."""
     from . import tape as tape_mod
@@ -1422,12 +1425,12 @@ def buy_limit(spec: LaneSpec | None, ticker: str, side: str, decision_ask: float
     if spec is None or not getattr(spec, "buy_tick_ahead", False):
         return round(max(base_ask, min(0.99, base_ask + slip)), 4)
     got = side_ask_ticks(ticker, side, now)
-    cap = decision_ask + slip + max(0.0, spec.buy_retry_chase)
+    cap = decision_ask + slip + min(max(0.0, spec.buy_retry_chase), TICK_CHASE_MAX)  # the most the lane will pay: an ask that has run over it is not bought (the order then finds nothing offered and the buy is skipped). The chase part is held to TICK_CHASE_MAX whatever the lane's retry chase: a favourite's edge is a cent or two
     if got is None:
-        return round(min(0.99, max(base_ask, min(base_ask + slip, cap))), 4)
+        return round(min(0.99, cap, base_ask + slip), 4)
     fresh, delta = got
     base = fresh if fresh < base_ask - 1e-9 and delta < 0 else max(fresh, base_ask)  # a falling ask is bought where it is now
-    return round(min(0.99, max(base, min(base + max(delta, 0.0), cap))), 4)
+    return round(min(0.99, cap, base + max(delta, 0.0)), 4)
 
 
 def place(
@@ -1610,6 +1613,8 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
     except KalshiError:
         return None
     if ask is None or ask < spec.price[0] - 1e-9 or ask > spec.price[1] + 1e-9:
+        return None
+    if ask > shot.ask + max(0.0, spec.buy_retry_chase) + 1e-9:  # a market that ran away is not chased
         return None
     limit = buy_limit(spec, shot.ticker, shot.side, shot.ask, ask)
     if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
