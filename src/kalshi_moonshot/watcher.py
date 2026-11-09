@@ -1426,6 +1426,11 @@ class ProfitWatcher:
                 from . import breadthcheck
 
                 breadthcheck.run_score(s, self.store_factory())
+
+                from . import hotcheck
+
+                hotcheck.refresh(self._tape_db())
+                hotcheck.run_score(s, self.store_factory())
             if any(sp.enabled and sp.record_buy for sp in specs.values()):
                 from . import staterecord
 

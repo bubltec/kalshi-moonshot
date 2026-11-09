@@ -722,11 +722,15 @@ def evaluate(
 
             timerecord.shadow(s, store, shot, spec, shot.ask)
             ok_time, why_time = timerecord.allows(store, shot, spec, s=s)
-            if ok_time:
+            from . import hotcheck
+
+            hotcheck.shadow(s, shot, spec, shot.ask)
+            ok_hot, why_hot = hotcheck.allows(spec)
+            if ok_time and ok_hot:
                 note = f"[{why_mod}] {note}"
             else:
                 bet = False
-                note = f"{why_time} {note}"
+                note = f"{why_time or why_hot} {note}"
         else:
             bet = False
             note = f"{why_mod} {note}"
@@ -1585,6 +1589,12 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
         ok_time, why_time = timerecord.allows(store, shot, spec, s=s)
         if not ok_time:
             log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, why_time)
+            return None
+        from . import hotcheck
+
+        ok_hot, why_hot = hotcheck.allows(spec)
+        if not ok_hot:
+            log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, why_hot)
             return None
     if spec.record_buy:  # the curve must still say buy: the spot may have moved out of the state that cleared the record while the bid rested
         from . import staterecord
