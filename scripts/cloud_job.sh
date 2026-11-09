@@ -31,7 +31,7 @@ job_env="$*"
 aws "${profile[@]}" s3 cp --region "$archive_region" --only-show-errors "$work/script.py" "s3://$bucket/jobs/$id/script.py"
 aws "${profile[@]}" s3 cp --region "$archive_region" --only-show-errors data/strategies.toml "s3://$bucket/jobs/$id/strategies.toml"
 if [ "${CODE:-1}" != 0 ]; then  # run this Mac's src/ instead of the image's, so work in progress can be tested without a build and a push (CODE=0 to use the image as it is)
-  tar czf "$work/src.tgz" -C src kalshi_moonshot --exclude=__pycache__ --exclude='*.pyc'
+  tar czf "$work/src.tgz" --exclude=__pycache__ --exclude='*.pyc' -C src kalshi_moonshot
   aws "${profile[@]}" s3 cp --region "$archive_region" --only-show-errors "$work/src.tgz" "s3://$bucket/jobs/$id/src.tgz"
 fi
 rm -rf "$work"
