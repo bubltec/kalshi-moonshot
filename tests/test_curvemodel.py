@@ -182,3 +182,10 @@ def test_a_curvature_model_is_fitted_named_and_waited_for_by_a_lane_that_wants_i
     finally:
         ticks.history.clear()
         curvemodel._cache.update(mtime=None, data=None)
+
+
+def test_the_buy_bar_for_a_share_between_the_stored_quantiles_is_interpolated():
+    model = {"cuts": {"0.05": 0.09, "0.1": 0.06, "0.2": 0.02, "0.3": -0.006, "0.5": -0.047}}
+    assert curvemodel.cut_for(model, 0.10) == 0.06 and curvemodel.cut_for(model, 0.2) == 0.02  # a stored quantile is used as it is
+    assert abs(curvemodel.cut_for(model, 0.15) - 0.04) < 1e-9  # halfway between the 0.10 and 0.20 bars
+    assert curvemodel.cut_for(model, 0.01) == 0.09 and curvemodel.cut_for(model, 0.9) == -0.047  # clamped at the ends

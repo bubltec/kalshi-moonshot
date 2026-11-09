@@ -225,6 +225,22 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
     return True
 
 
+def cut_for(model: dict[str, Any], top: float) -> float:
+    """The predicted-net bar for buying the top `top` share of the training moments: the stored quantile when `top` is one of QUANTS, otherwise linear between the two stored quantiles either side of it (0.15 sits between the 0.10 and the 0.20 bars), clamped at the ends."""
+    pts = sorted((float(q), float(v)) for q, v in model["cuts"].items())
+    for q, v in pts:
+        if abs(q - top) < 1e-9:
+            return v
+    if top <= pts[0][0]:
+        return pts[0][1]
+    if top >= pts[-1][0]:
+        return pts[-1][1]
+    for (q0, v0), (q1, v1) in zip(pts, pts[1:], strict=False):
+        if q0 < top < q1:
+            return v0 + (v1 - v0) * (top - q0) / (q1 - q0)
+    return pts[-1][1]
+
+
 def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float = 0.0) -> tuple[bool, str]:
     """Whether a model_buy lane would buy this market side at `ask` now: (True, the note tag) or (False, why not)."""
     from . import ticks as ticks_mod
@@ -256,9 +272,7 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
     if read is None:
         return False, f"curve model: the curve cannot be read for {shot.ticker} ({why[0] if why else 'unreadable history'})."
     net = predict(model, read, ask)
-    cut = model["cuts"].get(f"{spec.model_top:g}")
-    if cut is None:
-        cut = min(model["cuts"].items(), key=lambda kv: abs(float(kv[0]) - spec.model_top))[1]
+    cut = cut_for(model, spec.model_top)
     tag = f"curve model {net:+.2f} per $1 (top {spec.model_top:.0%} from {max(cut, 0.0):+.2f})"
     if net > 0 and net >= cut:
         return True, tag
