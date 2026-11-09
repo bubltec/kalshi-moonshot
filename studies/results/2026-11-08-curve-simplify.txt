@@ -1,0 +1,27 @@
+rows 105712 market sides 11124
+test days 9
+top 5%, first per market side
+   F18    net per $1 -0.044 +/- 0.024 (n=1576) won 54.6% | first half -0.097 +/- 0.040 (n=580) | second half -0.013 +/- 0.030 (n=996)
+   F6     net per $1 -0.016 +/- 0.025 (n=1378) won 56.2% | first half -0.077 +/- 0.044 (n=481) | second half +0.016 +/- 0.031 (n=897)
+   F4     net per $1 -0.042 +/- 0.033 (n=739) won 58.1% | first half -0.175 +/- 0.106 (n=64) | second half -0.029 +/- 0.034 (n=675)
+   ASK    net per $1 n=0 won  0.0% | first half n=0 | second half n=0
+   Q9     net per $1 +0.008 +/- 0.024 (n=1447) won 58.7% | first half -0.013 +/- 0.037 (n=581) | second half +0.022 +/- 0.032 (n=866)
+   Q6     net per $1 +0.002 +/- 0.026 (n=1251) won 58.4% | first half -0.033 +/- 0.040 (n=508) | second half +0.026 +/- 0.034 (n=743)
+   F6Q9   net per $1 -0.013 +/- 0.025 (n=1430) won 56.3% | first half -0.087 +/- 0.041 (n=525) | second half +0.029 +/- 0.031 (n=905)
+top 10%, first per market side
+   F18    net per $1 -0.040 +/- 0.019 (n=2608) won 54.3% | first half -0.084 +/- 0.031 (n=963) | second half -0.015 +/- 0.024 (n=1645)
+   F6     net per $1 -0.012 +/- 0.021 (n=2075) won 56.7% | first half -0.032 +/- 0.032 (n=853) | second half +0.002 +/- 0.027 (n=1222)
+   F4     net per $1 -0.063 +/- 0.027 (n=1122) won 56.6% | first half -0.178 +/- 0.069 (n=150) | second half -0.045 +/- 0.029 (n=972)
+   ASK    net per $1 n=0 won  0.0% | first half n=0 | second half n=0
+   Q9     net per $1 -0.009 +/- 0.019 (n=2378) won 57.5% | first half -0.027 +/- 0.029 (n=992) | second half +0.005 +/- 0.026 (n=1386)
+   Q6     net per $1 -0.004 +/- 0.020 (n=2095) won 58.7% | first half -0.031 +/- 0.030 (n=868) | second half +0.015 +/- 0.027 (n=1227)
+   F6Q9   net per $1 -0.024 +/- 0.019 (n=2404) won 55.7% | first half -0.060 +/- 0.032 (n=909) | second half -0.002 +/- 0.025 (n=1495)
+top 20%, first per market side
+   F18    net per $1 -0.038 +/- 0.016 (n=3652) won 54.6% | first half -0.046 +/- 0.024 (n=1510) | second half -0.033 +/- 0.021 (n=2142)
+   F6     net per $1 -0.048 +/- 0.018 (n=2836) won 54.5% | first half -0.065 +/- 0.027 (n=1271) | second half -0.035 +/- 0.024 (n=1565)
+   F4     net per $1 -0.063 +/- 0.024 (n=1459) won 55.8% | first half -0.178 +/- 0.069 (n=150) | second half -0.049 +/- 0.025 (n=1309)
+   ASK    net per $1 n=0 won  0.0% | first half n=0 | second half n=0
+   Q9     net per $1 -0.022 +/- 0.016 (n=3228) won 56.6% | first half -0.031 +/- 0.024 (n=1471) | second half -0.015 +/- 0.023 (n=1757)
+   Q6     net per $1 -0.021 +/- 0.017 (n=2869) won 57.4% | first half -0.043 +/- 0.025 (n=1278) | second half -0.004 +/- 0.023 (n=1591)
+   F6Q9   net per $1 -0.042 +/- 0.016 (n=3346) won 54.5% | first half -0.054 +/- 0.025 (n=1433) | second half -0.033 +/- 0.022 (n=1913)
+DONE
