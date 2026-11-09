@@ -82,3 +82,28 @@ def test_a_thin_book_passes_the_flat_minimum_but_not_a_share_of_a_big_order(setu
     ratio = dataclasses.replace(s, min_offer_ratio=0.5)
     got = runner.place(ratio, _ThinBook(Client(fills=[3.0], asks=[0.30])), store, shot, "why", 3.0)
     assert got.filled == 0 and "needed" in got.note and "50%" in got.note  # a $0.93 order needs $0.47 offered
+
+
+class _RanAwayBook:
+    """A book whose cheapest YES offer (1 - the best NO bid of 0.56) is 0.44, over the 0.30 ask the lane decided on."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def orderbook(self, ticker):
+        return {"orderbook_fp": {"no_dollars": [["0.5600", "50.00"]]}}
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+def test_a_skip_for_nothing_offered_says_when_the_ask_ran_away(setup):  # noqa: F811
+    import dataclasses
+
+    from tests.test_buy_retry import Client
+
+    s, store, shot, spec = setup
+    spec()
+    ratio = dataclasses.replace(s, min_offer_ratio=0.5)
+    got = runner.place(ratio, _RanAwayBook(Client(fills=[3.0], asks=[0.30])), store, shot, "why", 3.0)
+    assert got.filled == 0 and "$0.00 offered" in got.note and "the yes ask is now 0.44" in got.note and "ran away" in got.note

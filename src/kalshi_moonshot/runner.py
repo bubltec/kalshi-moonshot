@@ -1429,11 +1429,13 @@ def place(
             return Placed(f"skipped: the {shot.side} ask fell from {shot.ask:.2f} to {fresh:.2f} while the order waited (the lane allows a fall of {lane_spec.buy_max_move:.2f})")
     need = s.min_offer_ratio * cost if s.min_offer_ratio > 0 else s.min_order_usd  # a share of our own order when the ratio is set, else the old flat dollars
     if offered + 1e-9 < need:
+        now_ask = best_ask(book, shot.side)
+        moved = f"; the {shot.side} ask is now {now_ask:.2f}, over the {limit:.2f} limit (it was {shot.ask:.2f} when the lane decided): the price ran away while the order waited" if now_ask is not None and now_ask > limit + 1e-9 else ""
         return Placed(
             f"skipped: ${offered:.2f} offered at {limit:.2f}, "
-            f"under the ${need:.2f} needed ({s.min_offer_ratio:.0%} of the ${cost:.2f} order)" if s.min_offer_ratio > 0 else
+            f"under the ${need:.2f} needed ({s.min_offer_ratio:.0%} of the ${cost:.2f} order){moved}" if s.min_offer_ratio > 0 else
             f"skipped: ${offered:.2f} offered at {limit:.2f}, "
-            f"under the ${s.min_order_usd:.2f} minimum"
+            f"under the ${s.min_order_usd:.2f} minimum{moved}"
         )
     with steptime.step("risk check"):
         verdict = risk.check(
