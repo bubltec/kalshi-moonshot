@@ -84,3 +84,43 @@ def test_the_logged_buys_are_scored_against_the_settled_window_in_the_kept_and_s
     assert got["KXSOL15M-B"]["would_skip"] is False and got["KXSOL15M-B"]["net"] < -1.0
     hotcheck._scored_at = 0.0
     assert hotcheck.run_score(s, store, now=now + 4000) == []
+
+
+def _feed_family(now, family, hot_series, step_hot=3e-4, step_calm=1e-4):
+    random.seed(7)
+    ticks.history.clear()
+    hotcheck._baseline.clear()
+    for ser in hotcheck.FAMILIES[family]:
+        ix = variants.crypto_index(ser) or variants.biquote_index(ser)
+        hotcheck._baseline[ix] = 1e-4
+        p = 100.0
+        for i in range(1200):
+            p *= math.exp(random.gauss(0, step_hot if ser in hot_series else step_calm))
+            ticks.history.note(ix, now - 1200 + i, p)
+
+
+def test_a_commodity_lane_is_judged_by_the_commodity_indexes_and_not_by_crypto(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    hotcheck._seen.clear()
+    now = time.time()
+    crypto_lane = SimpleNamespace(hot_gate=True, series=["KXBTC15M"])
+    commodity_lane = SimpleNamespace(hot_gate=True, series=["KXGOLD15M", "KXWTI15M"])
+    assert hotcheck.family_of(["KXBTC15M"]) == "crypto" and hotcheck.family_of("KXGOLD15M") == "commodity" and hotcheck.family_of("KX10YRRATE15M") is None
+    assert hotcheck.hot_min("crypto") == 5 and hotcheck.hot_min("commodity") == 4
+    try:
+        _feed_family(now, "crypto", set(hotcheck.FAMILIES["crypto"][:6]))  # crypto is hot, no commodity index has ticks
+        assert hotcheck.allows(crypto_lane, now)[0] is False
+        assert hotcheck.allows(commodity_lane, now)[0] is True  # the commodity indexes cannot be read: nothing to sit out for
+        hotcheck.shadow(s, SimpleNamespace(ticker="KXGOLD15M-X", lane="m", side="yes", series="KXGOLD15M"), commodity_lane, 0.4, now)
+        assert not (tmp_path / "hot_shadow.jsonl").exists()  # and no crypto reading is logged against a commodity buy
+        _feed_family(now, "commodity", set(hotcheck.FAMILIES["commodity"][:4]))  # four of the eight commodity indexes hot
+        ok, why = hotcheck.allows(commodity_lane, now)
+        assert not ok and "4 of 8 commodity indexes" in why
+        assert hotcheck.allows(crypto_lane, now)[0] is True  # and crypto, with no ticks, is not judged by it
+        _feed_family(now, "commodity", set(hotcheck.FAMILIES["commodity"][:3]))
+        assert hotcheck.allows(commodity_lane, now)[0] is True
+    finally:
+        ticks.history.clear()
+        hotcheck._baseline.clear()
+        hotcheck._seen.clear()
