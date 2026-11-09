@@ -1,0 +1,8 @@
+live crypto_multiscale bets with a settled window since 11-05: 334 | model: loaded
+replayed: 334
+held to the result: net $-79.32 over 334 bets
+  curve-only, sell when the bid is 0.02 over the chance: net $  -42.16 | against holding +37.17 (per bet +0.111 +/- 0.084; halves -13.08 / +50.25) | sells 210 of 334 bets
+  curve-only, sell when the bid is 0.03 over the chance: net $  -45.41 | against holding +33.92 (per bet +0.102 +/- 0.080; halves -21.48 / +55.40) | sells 188 of 334 bets
+  curve-only, sell when the bid is 0.05 over the chance: net $  -62.40 | against holding +16.92 (per bet +0.051 +/- 0.076; halves -29.74 / +46.66) | sells 165 of 334 bets
+  curve-only, sell when the bid is 0.08 over the chance: net $  -88.99 | against holding -9.67 (per bet -0.029 +/- 0.066; halves -27.22 / +17.55) | sells 122 of 334 bets
+DONE

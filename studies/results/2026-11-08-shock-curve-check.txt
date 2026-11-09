@@ -1,0 +1,7 @@
+live crypto_multiscale bets with a settled window since 11-05: 334 | model: loaded
+replayed: 334 | the current shock exit sells: 190
+held to the result -79.32 | the current shock exit -44.20
+  K=0.02: net -58.51 | against the current exit -14.30 on 113 changed bets (per changed bet -0.127 +/- 0.156 (n=113); sold later 21, never 92) | halves +5.28 (n=45) / -19.59 (n=68)
+  K=0.05: net -58.25 | against the current exit -14.05 on 71 changed bets (per changed bet -0.198 +/- 0.185 (n=71); sold later 51, never 20) | halves +6.93 (n=27) / -20.98 (n=44)
+  K=0.10: net -42.21 | against the current exit +2.00 on 12 changed bets (per changed bet +0.166 +/- 0.344 (n=12); sold later 11, never 1) | halves +3.40 (n=9) / -1.41 (n=3)
+DONE
