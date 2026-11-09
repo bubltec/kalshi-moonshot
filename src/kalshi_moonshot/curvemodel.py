@@ -235,7 +235,7 @@ def cut_for(model: dict[str, Any], top: float) -> float:
         return pts[0][1]
     if top >= pts[-1][0]:
         return pts[-1][1]
-    for (q0, v0), (q1, v1) in zip(pts, pts[1:], strict=False):
+    for (q0, v0), (q1, v1) in itertools.pairwise(pts):
         if q0 < top < q1:
             return v0 + (v1 - v0) * (top - q0) / (q1 - q0)
     return pts[-1][1]
