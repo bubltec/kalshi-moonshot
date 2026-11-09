@@ -148,6 +148,11 @@ class MidHistory:
             return None
         return sum(1 for a, b in itertools.pairwise(grid) if (a - level) * (b - level) < 0)
 
+    def rows(self, ticker: str) -> list[tuple[float, float]]:
+        """A copy of the market's (time, YES mid) rows held in memory, oldest first."""
+        with self._lock:
+            return list(self._rows.get(ticker, ()))
+
     def clear(self) -> None:
         with self._lock:
             self._rows.clear()

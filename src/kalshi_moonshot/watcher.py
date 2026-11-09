@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, NamedTuple
 
-from . import checkins, manual, paperfill, runner, settlement, variants
+from . import checkins, manual, paperfill, quoteshock, runner, settlement, variants
 from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
@@ -180,6 +180,7 @@ class Target:
     shock_would: bool = False  # the would-fire row of a log-only watch is written once
     shock_logged: float = 0.0  # lowest worst-move already written to shock_log for this bet
     shock_index: str = ""  # the index it reads
+    shock_source: str = "index"  # lane shock_source: "index" reads the spot index, "quote" reads the contract's own mid (quoteshock.py), for a market with no spot feed
     wrong_bp: float = 0.0  # lane wrong_side_bp (0 = off): sell once the spot sits this far on the wrong side of shock_ref for wrong_seconds, for a position whose variety at the buy is in wrong_varieties
     wrong_seconds: float = 15.0
     wrong_last: float = 0.0  # lane wrong_side_last: act only inside this many seconds before the close (0 = the whole window)
@@ -747,13 +748,15 @@ class ProfitWatcher:
         except Exception as exc:  # a log row must never stop an exit
             log.warning("watcher: shock_log write failed for %s: %s", t.ticker, exc)
 
-    def _shock_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
-        """The shock exit: in the last shock_last seconds, the spot has moved shock_bp basis points against this bet over the last shock_seconds and sits within shock_margin_bp of the reference, so a sale is better than the close. Needs a bid in SHOCK_BID, a fresh spot and a quote that is not older than the tick."""
-        if (t.shock_bp <= 0 and t.shock_units <= 0 and t.cross_units < 0) or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index:
-            return None
-        left = t.close_ts - now
-        if left <= SETTLE_LAST or left > t.shock_last + max(t.shock_memory, 0.0):
-            return None
+    def _shock_reading(self, t: Target, now: float, left: float) -> tuple[float, float, float, Callable[[], float | None], str] | None:
+        """What the shock exit reads, from the lane's source: (time of the newest reading, cushion, the shock_seconds move against the bet, a function giving the typical minute in the same units or None, the unit's name). "index": the spot index in basis points against shock_ref. "quote": the contract's own mid in per-mille of probability (quoteshock.py). None, with a note inside the last-seconds window, when it cannot be read."""
+        if t.shock_source == "quote":
+            r = quoteshock.read(ticks_mod.mids.rows(t.ticker), t.side, now, t.shock_seconds)
+            if isinstance(r, str):
+                if left <= t.shock_last:
+                    self._shock_note(t, now, f"not usable: {r}")
+                return None
+            return r.ts, r.margin, r.move, (lambda: r.unit), "pm"
         spot = self._spot.get(t.shock_index)
         hist = self._shock_hist.get(t.shock_index)
         if spot is None or not hist:
@@ -772,6 +775,23 @@ class ProfitWatcher:
         sign = 1.0 if t.side == "yes" else -1.0
         margin = math.log(value / t.shock_ref) * sign * 1e4
         move = math.log(value / past) * sign * 1e4
+        return spot_ts, margin, move, (lambda: (u * 1e4) if (u := variants.unit_index(t.shock_index, now)) is not None else None), "bp"
+
+    def _shock_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
+        """The shock exit: in the last shock_last seconds, the spot has moved shock_bp basis points against this bet over the last shock_seconds and sits within shock_margin_bp of the reference, so a sale is better than the close. Needs a bid in SHOCK_BID, a fresh spot and a quote that is not older than the tick."""
+        quote = t.shock_source == "quote"
+        if (t.shock_bp <= 0 and t.shock_units <= 0 and t.cross_units < 0) or t.close_ts <= 0 or (not quote and (t.shock_ref <= 0 or not t.shock_index)):
+            return None
+        left = t.close_ts - now
+        if left <= SETTLE_LAST or left > t.shock_last + max(t.shock_memory, 0.0):
+            return None
+        got = self._shock_reading(t, now, left)
+        if got is None:
+            return None
+        spot_ts, margin, move, unit_of, lab = got
+        hist = self._shock_hist.get(t.shock_index) if not quote else None
+        value = self._spot[t.shock_index][1] if not quote else 0.0
+        sign = 1.0 if t.side == "yes" else -1.0
         worst = move
         if t.shock_memory > 0:  # a shock before the last-seconds window still counts inside it
             t.shock_moves.append((now, move))
@@ -783,32 +803,31 @@ class ProfitWatcher:
         bp, margin_bp = t.shock_bp, t.shock_margin_bp
         unit_bp = 0.0
         if t.shock_units > 0 or t.cross_units >= 0:  # the lane reads the move in the market's own variance: the threshold is that many typical minutes right now
-            unit = variants.unit_index(t.shock_index, now)
-            if unit is None:
-                self._shock_note(t, now, f"not usable: the typical minute of {t.shock_index} cannot be read (history under 300 s or stale)")
+            unit_bp = unit_of()
+            if unit_bp is None:
+                self._shock_note(t, now, f"not usable: the typical minute of {t.shock_index if not quote else t.ticker} cannot be read (history under 300 s or stale)")
                 return None
-            unit_bp = unit * 1e4
             if t.shock_units > 0:
                 bp = t.shock_units * unit_bp
             if t.shock_margin_units > 0:
                 margin_bp = t.shock_margin_units * unit_bp
         self._shock_log(t, now, margin, move, worst, bid, 0)
         if bid < SHOCK_BID[0] or bid > (t.shock_bid_max or SHOCK_BID[1]) or quote_ts < spot_ts - THROUGH_QUOTE:
-            self._shock_note(t, now, f"not usable: bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick; cushion {margin:+.1f} bp, worst move {worst:+.1f} bp")
+            self._shock_note(t, now, f"not usable: bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick; cushion {margin:+.1f} {lab}, worst move {worst:+.1f} {lab}")
             return None
-        self._shock_note(t, now, f"cushion {margin:+.1f} bp, {t.shock_seconds:.0f}s move {move:+.1f} bp (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{bp:.1f} bp or worse with a cushion of {margin_bp:.1f} bp or less)")
+        self._shock_note(t, now, f"cushion {margin:+.1f} {lab}, {t.shock_seconds:.0f}s move {move:+.1f} {lab} (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{bp:.1f} {lab} or worse with a cushion of {margin_bp:.1f} {lab} or less)")
         moved = bp > 0 and worst <= -bp and margin <= margin_bp
         margin_x = margin
-        if left < 60.0 and t.cross_units >= 0:  # settlement is the 60 s average of the index: in the last minute part of it is known, the rest is taken at the spot now (the lane no longer sells a one-tick touch of the strike that the average would not carry)
+        if left < 60.0 and t.cross_units >= 0 and not quote:  # settlement is the 60 s average of the index: in the last minute part of it is known, the rest is taken at the spot now (the lane no longer sells a one-tick touch of the strike that the average would not carry)
             known = [v for ts_, v in hist if t.close_ts - 60.0 <= ts_ <= now]
             if known:
                 secs = min(60.0, max(1.0, 60.0 - left))
                 proj = (sum(known) / len(known) * secs + value * (60.0 - secs)) / 60.0
                 margin_x = math.log(proj / t.shock_ref) * sign * 1e4
-        crossed = t.cross_units >= 0 and margin_x <= t.cross_units * unit_bp
+        crossed = t.cross_units >= 0 and not quote and margin_x <= t.cross_units * unit_bp
         if not (moved or crossed):
             return None
-        if t.shock_trend_hold > -50:
+        if t.shock_trend_hold > -50 and not quote:
             trend = variants.pretrend_index(t.shock_index, t.side, 420.0, 90.0, now)
             if trend is not None and trend >= t.shock_trend_hold:
                 self._shock_note(t, now, f"held: the spot's trend before the spike is {trend:+.2f} typical minutes with the bet (the lane holds at {t.shock_trend_hold:g} or more); {-worst:.1f} bp spike, bid {bid:.2f}")
@@ -819,13 +838,14 @@ class ProfitWatcher:
                 self._shock_log(t, now, margin, move, worst, bid, 2)
             return None
         self._shock_log(t, now, margin, move, worst, bid, 1)
-        if moved and t.ticker.split("-")[0].endswith("15M"):
+        if moved and not quote and t.ticker.split("-")[0].endswith("15M"):
             from . import breadthcheck
 
             breadthcheck.shadow_fire(self.get_settings(), t.ticker, t.lane, t.side, now, bid, left, margin, worst)  # shadow only: the breadth of the shock across the crypto indexes, logged
         if crossed and not moved:  # the spot is on the wrong side of the strike, or within cross_units typical minutes of it, with the bid still worth selling into
             return f"shock exit: the settlement is {margin_x:+.1f} bp from the strike ({t.cross_units:g} typical minutes = {t.cross_units * unit_bp:.1f} bp; spot {margin:+.1f}), {left:.0f}s left, bid {bid:.2f}"
-        return f"shock exit: spot moved {-worst:.1f} bp against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} bp from the strike, {left:.0f}s left, bid {bid:.2f}"
+        what = "the contract's mid" if quote else "spot"
+        return f"shock exit: {what} moved {-worst:.1f} {lab} against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} {lab} from the {'even line' if quote else 'strike'}, {left:.0f}s left, bid {bid:.2f}"
 
     def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """A cross of strike_through percent starts a watch. It does not sell.
@@ -1328,6 +1348,14 @@ class ProfitWatcher:
                     held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0
                     if held.close_ts <= 0:
                         held.close_ts = close
+            if spec.shock_source == "quote" and spec.shock_units > 0 and spec.shock_seconds > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M") and ticker.split("-")[0] not in spec.shock_off_series:
+                held.shock_source = "quote"  # the contract's own mid is the spot (quoteshock.py): no index, no reference price to arm
+                held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = 0.0, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
+                held.shock_units, held.shock_margin_units, held.cross_units = spec.shock_units, spec.shock_margin_units, -1.0
+                held.shock_bid_max, held.shock_log_only = spec.shock_bid_max, spec.shock_log_only
+                if (ticker, lane) not in self._shock_logged:
+                    self._shock_logged.add((ticker, lane))
+                    log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
                 sid = biquote_index(series_name) or index_for_series(series_name) or ""
