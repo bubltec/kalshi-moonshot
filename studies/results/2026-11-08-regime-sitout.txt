@@ -1,0 +1,13 @@
+live crypto_multiscale bets with an outcome since 11-05: 323
+read: 323
+   all                    net $  -39.85 | per $ staked -0.082 +/- 0.057 (n=323) | won  40% | first half -0.001 +/- 0.098 (n=162) | second half -0.163 +/- 0.057 (n=161)
+this coin's volatility over its own 24 h median:
+   own ratio 0 to 0.8     net $  -15.84 | per $ staked -0.292 +/- 0.119 (n=55) | won  25% | first half -0.313 +/- 0.122 (n=52) | second half +0.063 +/- 0.581 (n=3)
+   own ratio 0.8 to 1.25  net $  +15.97 | per $ staked +0.068 +/- 0.099 (n=134) | won  40% | first half +0.158 +/- 0.142 (n=82) | second half -0.075 +/- 0.122 (n=52)
+   own ratio 1.25 to 2    net $  -33.23 | per $ staked -0.199 +/- 0.099 (n=94) | won  37% | first half -0.001 +/- 0.344 (n=21) | second half -0.256 +/- 0.083 (n=73)
+   own ratio 2 to 99      net $   -6.75 | per $ staked -0.020 +/- 0.122 (n=40) | won  62% | first half +0.441 +/- 0.632 (n=7) | second half -0.117 +/- 0.067 (n=33)
+how many of the nine coins are running at 1.5x or more:
+   hot count 0-1          net $  -29.12 | per $ staked -0.128 +/- 0.076 (n=203) | won  33% | first half -0.087 +/- 0.106 (n=130) | second half -0.202 +/- 0.094 (n=73)
+   hot count 2-4          net $  +23.37 | per $ staked +0.289 +/- 0.152 (n=57) | won  60% | first half +0.656 +/- 0.262 (n=25) | second half +0.003 +/- 0.164 (n=32)
+   hot count 5-9          net $  -34.10 | per $ staked -0.270 +/- 0.061 (n=63) | won  44% | first half -0.758 +/- 0.242 (n=7) | second half -0.209 +/- 0.057 (n=56)
+DONE

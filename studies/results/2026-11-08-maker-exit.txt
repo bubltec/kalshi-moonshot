@@ -1,0 +1,9 @@
+the value exit: 43 live sales since 11-05
+   W= 5 s: sales 43, filled as a maker 13, fell back to the taker 30 (25 of them for less than the live sale) | change per sale -0.016 +/- 0.016 dollars, total -0.69
+   W=10 s: sales 43, filled as a maker 20, fell back to the taker 23 (18 of them for less than the live sale) | change per sale -0.001 +/- 0.023 dollars, total -0.03
+   W=20 s: sales 43, filled as a maker 27, fell back to the taker 16 (15 of them for less than the live sale) | change per sale -0.002 +/- 0.032 dollars, total -0.07
+the shock exit: 147 live sales since 11-05
+   W= 5 s: sales 147, filled as a maker 47, fell back to the taker 100 (71 of them for less than the live sale) | change per sale -0.031 +/- 0.017 dollars, total -4.56
+   W=10 s: sales 147, filled as a maker 69, fell back to the taker 78 (68 of them for less than the live sale) | change per sale -0.035 +/- 0.020 dollars, total -5.14
+   W=20 s: sales 147, filled as a maker 79, fell back to the taker 68 (60 of them for less than the live sale) | change per sale -0.066 +/- 0.027 dollars, total -9.76
+DONE
