@@ -42,7 +42,7 @@ def run(kind, label):
             i = bisect.bisect_right(ts, t) - 1
             if i < 0:
                 continue
-            bid0, ask0 = side_prices(r["side"], *qs[i])
+            _bid0, ask0 = side_prices(r["side"], *qs[i])
             n = float(r["contracts"])
             live = n * (float(r["exit_price"]) - fee(float(r["exit_price"])))
             filled = None
