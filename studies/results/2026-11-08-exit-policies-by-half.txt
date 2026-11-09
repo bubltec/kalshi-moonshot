@@ -1,0 +1,15 @@
+live crypto_multiscale bets with a settled window since 11-05: 334
+replayed: 334
+first half: 168 bets
+   hold   -12.24 | actual (the lane's exits)    -1.11 | shock alone    -0.55 (against holding +11.69)
+   curve-only M=0.02:   -31.18 (against holding -18.93, against the lane's actual -30.07)
+   curve-only M=0.03:   -39.14 (against holding -26.89, against the lane's actual -38.03)
+second half: 166 bets
+   hold   -67.08 | actual (the lane's exits)   -31.37 | shock alone   -43.52 (against holding +23.56)
+   curve-only M=0.02:   -15.20 (against holding +51.88, against the lane's actual +16.17)
+   curve-only M=0.03:   -16.91 (against holding +50.17, against the lane's actual +14.46)
+all: 334 bets
+   hold   -79.32 | actual (the lane's exits)   -32.48 | shock alone   -44.07 (against holding +35.25)
+   curve-only M=0.02:   -46.37 (against holding +32.95, against the lane's actual -13.89)
+   curve-only M=0.03:   -56.05 (against holding +23.27, against the lane's actual -23.57)
+DONE
