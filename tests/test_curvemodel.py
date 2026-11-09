@@ -189,3 +189,34 @@ def test_the_buy_bar_for_a_share_between_the_stored_quantiles_is_interpolated():
     assert curvemodel.cut_for(model, 0.10) == 0.06 and curvemodel.cut_for(model, 0.2) == 0.02  # a stored quantile is used as it is
     assert abs(curvemodel.cut_for(model, 0.15) - 0.04) < 1e-9  # halfway between the 0.10 and 0.20 bars
     assert curvemodel.cut_for(model, 0.01) == 0.09 and curvemodel.cut_for(model, 0.9) == -0.047  # clamped at the ends
+
+
+def test_a_commodity_is_read_against_its_own_index_price_at_the_window_open(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.mod]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXGOLD15M']\nmodel_buy=true\nmodel_top=0.2\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    curvemodel._cache.update(mtime=None, data=None)
+    now = time.time()
+    index = variants.biquote_index("KXGOLD15M")
+    assert index and not variants.crypto_index("KXGOLD15M")
+    shot = LongShot("KXGOLD15M-7", "t", "", 0.40, 0.41, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="mod", series="KXGOLD15M", side="yes")
+    like = {"built_at": now, "n": 5000, "names": curvemodel.NAMES, "mu": [0.0] * 19, "sd": [1.0] * 19, "train_days": 9.0, "mean_net": -0.05, "w": [0.5] + [0.0] * 19, "cuts": {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}}
+    (tmp_path / "curve_model.json").write_text(json.dumps(like))
+    try:
+        ts, vs = _ticks(now, drift=0.0)
+        for t, v in zip(ts, vs, strict=True):
+            ticks.history.note(index, t, v)
+        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})  # no window row, no Kalshi strike: the index's own open price is the reference
+        assert ok.action == "bet" and "curve model +0.50 per $1" in ok.note
+        ticks.history.clear()
+        for t, v in zip(ts, vs, strict=True):
+            if not now - 540.0 < t < now - 440.0:  # a gap in the ticks around the window open (500 s in): the open price cannot be read
+                ticks.history.note(index, t, v)
+        no_open = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert no_open.action == "pass" and "known yet" in no_open.note
+    finally:
+        ticks.history.clear()
+        curvemodel._cache.update(mtime=None, data=None)

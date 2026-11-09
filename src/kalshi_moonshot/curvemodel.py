@@ -249,16 +249,20 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
     model = load(s)
     if model is None:
         return False, "curve model: no model fitted yet."
-    index = variants.crypto_index(shot.series)
-    strike = ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker)
+    crypto = variants.crypto_index(shot.series)
+    index = crypto or variants.biquote_index(shot.series)  # a commodity reads its BiQuote index against that index's own price when the window opened (the settlement is Pyth's, on another level), as the spot exits and the state record do
     now = time.time()
+    if crypto:
+        strike = ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker)
+    else:
+        strike = ticks_mod.history.first_at_or_after(index, now + shot.hours_to_close * 3600.0 - 905.0, 25.0) if index else None
     got = ticks_mod.history.window(index, now - 60 * FIB[-1] - 40.0, now) if index else None
     if not index:
         return False, f"curve model: no settlement index is known for {shot.series}."
     if not got or not got[0]:
         return False, f"curve model: no tick history in memory for {index}."
     if not strike or strike <= 0:
-        return False, f"curve model: no strike known yet for {shot.ticker}."
+        return False, f"curve model: no {'strike' if crypto else 'window-open price of ' + index} known yet for {shot.ticker}."
     if got[0][0] > now - 60 * FIB[-1] - 20.0:
         return False, f"curve model: only {now - got[0][0]:.0f}s of {index} history, the 55-minute look-back needs {60 * FIB[-1]}s."
     if got[0][-1] < now - 10.0:
@@ -311,7 +315,8 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
         ser = w["series"]
         if ser not in rules or ser in RECORD_ONLY:
             continue
-        ix = variants.crypto_index(ser)
+        crypto = variants.crypto_index(ser)
+        ix = crypto or variants.biquote_index(ser)
         if not ix:
             continue
         if ix != cur_ix:
@@ -331,7 +336,13 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
         lo, hi, plo, phi, cap = rules[ser]
         close = float(w["close_ts"])
         opened = close - 900.0
-        strike_log = math.log(float(w["strike"]))
+        if crypto:
+            strike_log = math.log(float(w["strike"]))
+        else:  # a commodity: the index's own price at the window open (the first tick from 5 s before to 20 s after), as the live lane reads it
+            a = bisect.bisect_left(ts, opened - 5.0)
+            if a >= len(ts) or ts[a] > opened + 20.0:
+                continue
+            strike_log = math.log(vs[a])
         q = tape.execute("SELECT ts,bid,ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid>0 AND ask>0 ORDER BY ts", (w["ticker"], opened - 20, close)).fetchall()
         if len(q) < 20:
             continue
