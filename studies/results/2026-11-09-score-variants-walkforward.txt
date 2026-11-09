@@ -1,0 +1,48 @@
+Question: does a better score (distance of the ask from 0.50, dip/peak position, market variables, a win-chance target) pick bets that pay after the fee? Walk-forward on the same moments and picks rule as the live lanes (top 15%, first moment per market side, held to the result), 112,710 rows with all extra readings. Script: scripts/score_variants_walkforward.py. Fargate job 20261109-124705-9996, data: the last nightly backups.
+
+fitted in 26 s
+
+first moment per market side, test days only (net per $1 after the fee, held to the result):
+   variant           picks   net/$1     se   won%   halves (n)
+   base      net      4245   -0.031  0.014   58.5   -0.039 (1684) / -0.026 (2561)
+   +dist     net      4443   -0.042  0.014   54.5   -0.045 (1749) / -0.040 (2694)
+   +dip      net      4240   -0.037  0.014   57.6   -0.062 (1761) / -0.019 (2479)
+   +market   net      4885   -0.031  0.013   57.7   -0.039 (2104) / -0.025 (2781)
+   all       net      4702   -0.036  0.013   55.6   -0.050 (2075) / -0.025 (2627)
+   base      edge     3799   -0.045  0.016   51.9   -0.061 (1572) / -0.034 (2227)
+   +dist     edge     4482   -0.045  0.015   51.1   -0.065 (1754) / -0.033 (2728)
+   +dip      edge     4028   -0.043  0.016   51.3   -0.072 (1663) / -0.022 (2365)
+   +market   edge     4767   -0.039  0.014   52.7   -0.046 (2100) / -0.033 (2667)
+   all       edge     4822   -0.045  0.014   51.7   -0.061 (2104) / -0.032 (2718)
+
+base / net: by the price paid and by family
+   ask 0.35-0.45  n=  805 net/$1 -0.076 won 38.1% halves -0.112 / -0.049
+   ask 0.45-0.55  n=  772 net/$1 -0.105 won 46.1% halves -0.073 / -0.131
+   ask 0.55-0.65  n= 1025 net/$1 -0.021 won 60.3% halves -0.018 / -0.023
+   ask 0.65-0.75  n= 1643 net/$1 +0.018 won 73.1% halves +0.008 / +0.024
+   crypto        n= 2513 net/$1 -0.024 won 58.2% halves -0.022 / -0.026
+   energy        n=  786 net/$1 -0.025 won 59.4% halves -0.055 / -0.007
+   metals        n=  757 net/$1 -0.030 won 60.4% halves -0.025 / -0.034
+   copper        n=  189 net/$1 -0.157 won 50.3% halves -0.227 / -0.095
+
++market / net: by the price paid and by family
+   ask 0.35-0.45  n=  993 net/$1 -0.087 won 37.7% halves -0.129 / -0.049
+   ask 0.45-0.55  n=  940 net/$1 -0.080 won 47.6% halves -0.034 / -0.119
+   ask 0.55-0.65  n= 1193 net/$1 +0.000 won 61.3% halves -0.002 / +0.002
+   ask 0.65-0.75  n= 1759 net/$1 +0.005 won 72.1% halves -0.007 / +0.013
+   crypto        n= 2746 net/$1 -0.022 won 57.6% halves -0.027 / -0.019
+   energy        n=  997 net/$1 -0.043 won 57.7% halves -0.051 / -0.037
+   metals        n=  967 net/$1 -0.023 won 59.6% halves -0.032 / -0.014
+   copper        n=  175 net/$1 -0.144 won 49.7% halves -0.146 / -0.142
+
+all / net: by the price paid and by family
+   ask 0.35-0.45  n=  574 net/$1 -0.096 won 38.7% halves -0.112 / -0.072
+   ask 0.45-0.55  n= 2065 net/$1 -0.052 won 49.2% halves -0.054 / -0.051
+   ask 0.55-0.65  n=  946 net/$1 -0.009 won 59.9% halves -0.039 / +0.013
+   ask 0.65-0.75  n= 1117 net/$1 +0.000 won 72.4% halves -0.017 / +0.018
+   crypto        n= 2670 net/$1 -0.027 won 55.8% halves -0.043 / -0.015
+   energy        n=  926 net/$1 -0.055 won 55.2% halves -0.049 / -0.060
+   metals        n=  957 net/$1 -0.036 won 56.2% halves -0.053 / -0.019
+   copper        n=  149 net/$1 -0.094 won 51.0% halves -0.133 / -0.037
+
+Read: no variant is above zero or clearly above the live model (base net -0.031, se 0.014); every one is -0.031 to -0.045. Prices under 0.55 lose in every variant (-0.05 to -0.11, both halves mostly); 0.65-0.75 is the only pocket at or above zero (base +0.018 on 1643, both halves positive) but the earlier price cut of the same picks showed -0.007 there, so it is noise-level. Copper is the one family that is clearly worse (-0.157, both halves).
