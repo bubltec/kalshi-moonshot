@@ -4,7 +4,7 @@
 #   scripts/cloud_job.sh -m kalshi_moonshot.curvemodel          # the refit; the model file comes back in jobs/<id>/files/
 #   scripts/cloud_job.sh scripts/some_study.py DAYS=5 HOURS=14  # NAME=value pairs are the script's environment
 # The task restores the newest nightly backups (up to about a day old), so it suits refits and walk-forwards, not a review of the last few hours.
-# It uses this Mac's data/strategies.toml and the archive bucket named in .env (ARCHIVE_BUCKET); results are copied to ./job-results/<id>/. SPOT=0 for on-demand capacity.
+# It also sends this Mac's src/ and runs that code (CODE=0 to use the image as built). It uses this Mac's data/strategies.toml and the archive bucket named in .env (ARCHIVE_BUCKET); results are copied to ./job-results/<id>/. SPOT=0 for on-demand capacity.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -30,6 +30,10 @@ fi
 job_env="$*"
 aws "${profile[@]}" s3 cp --region "$archive_region" --only-show-errors "$work/script.py" "s3://$bucket/jobs/$id/script.py"
 aws "${profile[@]}" s3 cp --region "$archive_region" --only-show-errors data/strategies.toml "s3://$bucket/jobs/$id/strategies.toml"
+if [ "${CODE:-1}" != 0 ]; then  # run this Mac's src/ instead of the image's, so work in progress can be tested without a build and a push (CODE=0 to use the image as it is)
+  tar czf "$work/src.tgz" -C src kalshi_moonshot --exclude=__pycache__ --exclude='*.pyc'
+  aws "${profile[@]}" s3 cp --region "$archive_region" --only-show-errors "$work/src.tgz" "s3://$bucket/jobs/$id/src.tgz"
+fi
 rm -rf "$work"
 
 out() { aws "${profile[@]}" cloudformation describe-stacks --region "$region" --stack-name "$stack" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
@@ -47,7 +51,7 @@ while [ "$status" != "STOPPED" ]; do
 done
 dest="job-results/$id"
 mkdir -p "$dest"
-aws "${profile[@]}" s3 sync --region "$archive_region" --only-show-errors "s3://$bucket/jobs/$id/" "$dest/" --exclude script.py --exclude strategies.toml || true
+aws "${profile[@]}" s3 sync --region "$archive_region" --only-show-errors "s3://$bucket/jobs/$id/" "$dest/" --exclude script.py --exclude strategies.toml --exclude src.tgz || true
 cat "$dest/out.txt" 2>/dev/null || echo "(no output: see the task's log group in CloudWatch)"
 code=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("exit", 1))' "$dest/done.json" 2>/dev/null || echo 1)
 echo "exit=$code  results in $dest/"

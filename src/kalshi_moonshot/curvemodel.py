@@ -63,7 +63,8 @@ def _parabola_weights() -> list[list[float]]:
 _PARABOLA = _parabola_weights()
 
 _fitting: subprocess.Popen | None = None
-_cache: dict[str, Any] = {"mtime": None, "data": None}
+_cache: dict[str, Any] = {"mtime": None, "data": None}  # the shared model (category "")
+_category_cache: dict[str, dict[str, Any]] = {}  # the other categories' models, by category name
 
 
 def features(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None, left: float | None = None) -> list[float] | None:
@@ -207,15 +208,28 @@ def predict(model: dict[str, Any], readings: list[float], ask: float) -> float:
     return model["w"][0] + sum(model["w"][j + 1] * (x[j] - model["mu"][j]) / model["sd"][j] for j in range(len(x)))
 
 
-def load(s: Any) -> dict[str, Any] | None:
-    p = Path(s.data_dir) / "curve_model.json"
+def model_path(s: Any, category: str = "") -> Path:
+    """The model file of a category: curve_model.json for the shared one, curve_model_<category>.json for a named category."""
+    return Path(s.data_dir) / ("curve_model.json" if not category else f"curve_model_{category}.json")
+
+
+def load(s: Any, category: str = "") -> dict[str, Any] | None:
+    cache = _cache if not category else _category_cache.setdefault(category, {"mtime": None, "data": None})
+    p = model_path(s, category)
     try:
         m = p.stat().st_mtime
-        if _cache["data"] is None or m != _cache["mtime"]:
-            _cache["data"], _cache["mtime"] = json.loads(p.read_text()), m
+        if cache["data"] is None or m != cache["mtime"]:
+            cache["data"], cache["mtime"] = json.loads(p.read_text()), m
     except (OSError, ValueError):
-        return _cache["data"]
-    return _cache["data"]
+        return cache["data"]
+    return cache["data"]
+
+
+def categories(s: Any) -> list[str]:
+    """The model categorys the enabled model_buy lanes use ("" is the shared one), sorted."""
+    from .lanes import lane_specs
+
+    return sorted({sp.model_category for sp in lane_specs(s).values() if sp.enabled and sp.model_buy})
 
 
 def maybe_refit(s: Any, now: float | None = None) -> bool:
@@ -224,8 +238,8 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
     now = time.time() if now is None else now
     if _fitting is not None and _fitting.poll() is None:
         return False
-    model = load(s)
-    if model and now - model["built_at"] < REFIT_EVERY:
+    models = [load(s, g) for g in categories(s)] or [load(s)]
+    if all(m and now - m["built_at"] < REFIT_EVERY for m in models):
         return False
     log.info("curve model: refitting from the tape (separate process)")
     _fitting = subprocess.Popen([sys.executable, "-m", "kalshi_moonshot.curvemodel"], preexec_fn=lambda: os.nice(15))  # lowers the child's priority only
@@ -253,9 +267,9 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
     from . import ticks as ticks_mod
     from . import variants
 
-    model = load(s)
+    model = load(s, getattr(spec, "model_category", ""))
     if model is None:
-        return False, "curve model: no model fitted yet."
+        return False, "curve model: no model fitted yet." if not getattr(spec, "model_category", "") else f"curve model: no model fitted yet for the {spec.model_category} category."
     crypto = variants.crypto_index(shot.series)
     index = crypto or variants.biquote_index(shot.series)  # a commodity reads its BiQuote index against that index's own price when the window opened (the settlement is Pyth's, on another level), as the spot exits and the state record do
     now = time.time()
@@ -304,7 +318,7 @@ class Pacer:
         self.mark = time.monotonic()
 
 
-def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str, float]] | None = None, timed: bool = False, kind: str = "fibonacci", duty: float = 1.0) -> list[tuple[list[float], float, float]]:
+def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str, float]] | None = None, timed: bool = False, kind: str = "fibonacci", duty: float = 1.0, category: str = "") -> list[tuple[list[float], float, float]]:
     """(`meta`, when given, gets (close, seconds into the window, ticker, side, the side's bid) per row, for studies; `timed` adds the 13 time-left readings for the studies; the ridge is fitted on the first 18.) The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
     from . import db, variants
     from .kalshiws import RECORD_ONLY
@@ -315,7 +329,7 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
     now = time.time() if now is None else now
     rules: dict[str, tuple[float, float, float, float, float]] = {}
     for sp in lane_specs(s).values():
-        if sp.enabled and sp.model_buy:
+        if sp.enabled and sp.model_buy and sp.model_category == category:
             for series in sp.series:
                 lo = max(sp.entry_elapsed[0] * 60.0, 900.0 - sp.hours[1] * 3600.0)
                 hi = min(sp.entry_elapsed[1] * 60.0, 900.0 - sp.hours[0] * 3600.0)
@@ -406,20 +420,22 @@ def main() -> None:
     s = config.reload()
     from .lanes import lane_specs
 
-    kinds = [sp.model_features for sp in lane_specs(s).values() if sp.enabled and sp.model_buy]
-    kind = kinds[0] if kinds else "fibonacci"
-    if len(set(kinds)) > 1:
-        print("model_buy lanes disagree on model_features", sorted(set(kinds)), "-> fitting", kind)
-    rows = build_rows(s, kind=kind, duty=PACE_DUTY)
-    model = fit([(r[0][: len(KINDS[kind])], r[1], r[2]) for r in rows], kind=kind)
-    if model is None:
-        print("not fitted", len(rows), "rows")
-        return
-    p = Path(s.data_dir) / "curve_model.json"
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(model))
-    tmp.replace(p)
-    print("fitted", model["n"], "rows; mean net per $1", round(model["mean_net"], 4), "cuts", {k: round(v, 3) for k, v in model["cuts"].items()})
+    specs = [sp for sp in lane_specs(s).values() if sp.enabled and sp.model_buy]
+    for category in sorted({sp.model_category for sp in specs}) or [""]:
+        kinds = [sp.model_features for sp in specs if sp.model_category == category]
+        kind = kinds[0] if kinds else "fibonacci"
+        if len(set(kinds)) > 1:
+            print(f"category {category!r}: model_buy lanes disagree on model_features", sorted(set(kinds)), "-> fitting", kind)
+        rows = build_rows(s, kind=kind, duty=PACE_DUTY, category=category)
+        model = fit([(r[0][: len(KINDS[kind])], r[1], r[2]) for r in rows], kind=kind)
+        if model is None:
+            print(f"category {category!r}: not fitted", len(rows), "rows")
+            continue
+        p = model_path(s, category)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(model))
+        tmp.replace(p)
+        print(f"category {category!r}: fitted", model["n"], "rows; mean net per $1", round(model["mean_net"], 4), "cuts", {k: round(v, 3) for k, v in model["cuts"].items()})
 
 
 if __name__ == "__main__":

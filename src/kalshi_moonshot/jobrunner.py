@@ -1,7 +1,7 @@
 """The job container's entry point (infra/jobs_stack.py, scripts/cloud_job.sh): restore the newest nightly backups into the task's own Postgres, run one script, send the output back to the archive bucket.
 
 Environment: JOB_ID, JOB_BUCKET, JOB_BUCKET_REGION (the archive bucket), JOB_ENV (space-separated NAME=value pairs the script should see), JOB_TIMEOUT (seconds, default 10800). DATABASE_URL, DB_SCHEMA_MAIN, DB_SCHEMA_TAPE and DATA_DIR come from the task definition.
-Reads s3://BUCKET/backups/moonshot-*.dump and tape-*.dump (the newest of each) and jobs/<id>/script.py and jobs/<id>/strategies.toml (put there by the launcher). Writes jobs/<id>/out.txt, jobs/<id>/done.json and jobs/<id>/files/<name> for each file the script left in DATA_DIR.
+Reads s3://BUCKET/backups/moonshot-*.dump and tape-*.dump (the newest of each) and jobs/<id>/script.py and jobs/<id>/strategies.toml (put there by the launcher), and jobs/<id>/src.tgz when the launcher sent its copy of the code. Writes jobs/<id>/out.txt, jobs/<id>/done.json and jobs/<id>/files/<name> for each file the script left in DATA_DIR.
 Nothing here knows a lane, a market or a model: it is a runner."""
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tarfile
 import time
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,14 @@ def new_files(folder: Path, since: float) -> list[Path]:
         p for p in folder.iterdir()
         if p.is_file() and p.name not in KEEP_OUT and p.stat().st_mtime >= since and p.stat().st_size <= COLLECT_MAX_BYTES
     )
+
+
+def unpack_overlay(archive: Path, dest: Path) -> Path:
+    """Unpack the launcher's copy of src/kalshi_moonshot into `dest` and return `dest`, which goes first on the script's PYTHONPATH: a job then runs the code on the launcher's disk, not the image's, so work in progress can be tested without a build and a push. Only plain files and folders are extracted."""
+    dest.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive) as tar:
+        tar.extractall(dest, filter="data")
+    return dest
 
 
 def _list_keys(s3: Any, bucket: str, prefix: str) -> list[str]:
@@ -106,11 +115,16 @@ def main() -> int:
         info["restored"] = restored
         s3.download_file(bucket, f"jobs/{job}/script.py", str(work / "script.py"))
         s3.download_file(bucket, f"jobs/{job}/strategies.toml", str(data / "strategies.toml"))
+        if _list_keys(s3, bucket, f"jobs/{job}/src.tgz"):
+            s3.download_file(bucket, f"jobs/{job}/src.tgz", str(work / "src.tgz"))
+            info["overlay"] = str(unpack_overlay(work / "src.tgz", work / "src"))
     except Exception as exc:
         log.exception("setup failed")
         return finish(3, f"setup failed: {exc}")
 
     env = {**os.environ, **parse_job_env(os.environ.get("JOB_ENV", ""))}
+    if info.get("overlay"):
+        env["PYTHONPATH"] = os.pathsep.join([info["overlay"], env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
     out = work / "out.txt"
     code = 0
     note = ""

@@ -30,3 +30,28 @@ def test_the_files_a_script_leaves_are_the_new_small_ones_and_not_the_inputs(tmp
     os.truncate(big, jobrunner.COLLECT_MAX_BYTES + 1)
     (tmp_path / "sub").mkdir()
     assert [p.name for p in jobrunner.new_files(tmp_path, start)] == ["curve_model.json"]
+
+
+def test_an_overlay_archive_is_unpacked_to_plain_files_only(tmp_path):
+    import io
+    import tarfile
+
+    src = tmp_path / "pkg"
+    (src / "kalshi_moonshot").mkdir(parents=True)
+    (src / "kalshi_moonshot" / "x.py").write_text("v = 1\n")
+    archive = tmp_path / "src.tgz"
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(src / "kalshi_moonshot", arcname="kalshi_moonshot")
+        evil = tarfile.TarInfo("../escape.txt")
+        evil.size = 1
+        tar.addfile(evil, io.BytesIO(b"x"))
+    dest = tmp_path / "out"
+    try:
+        jobrunner.unpack_overlay(archive, dest)
+    except Exception:
+        pass  # the data filter refuses a path outside the folder
+    assert not (tmp_path / "escape.txt").exists()
+    clean = tmp_path / "clean.tgz"
+    with tarfile.open(clean, "w:gz") as tar:
+        tar.add(src / "kalshi_moonshot", arcname="kalshi_moonshot")
+    assert (jobrunner.unpack_overlay(clean, tmp_path / "ok") / "kalshi_moonshot" / "x.py").read_text() == "v = 1\n"

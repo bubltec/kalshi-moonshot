@@ -287,3 +287,61 @@ def test_a_curvature_lane_needs_only_34_minutes_of_history_and_a_fibonacci_one_5
     finally:
         ticks.history.clear()
         curvemodel._cache.update(mtime=None, data=None)
+
+
+def test_a_lane_in_its_own_model_category_reads_its_own_model_file_and_never_the_shared_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.main]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_top=0.2\n"
+        "[lane.dog]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_top=0.2\nmodel_category='dog'\n"
+    )
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    curvemodel._cache.update(mtime=None, data=None)
+    curvemodel._category_cache.clear()
+    assert curvemodel.categories(s) == ["", "dog"]
+    assert curvemodel.model_path(s, "dog").name == "curve_model_dog.json" and curvemodel.model_path(s).name == "curve_model.json"
+    now = time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-7", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    index = variants.crypto_index("KXBTC15M")
+    ts, vs = _ticks(now, drift=0.0)
+    for t, v in zip(ts, vs, strict=True):
+        ticks.history.note(index, t, v)
+    shot = LongShot("KXBTC15M-7", "t", "", 0.40, 0.41, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="dog", series="KXBTC15M", side="yes")
+    cuts = {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}
+    base = {"built_at": now, "n": 5000, "names": curvemodel.NAMES, "mu": [0.0] * 19, "sd": [1.0] * 19, "train_days": 9.0, "mean_net": -0.05, "cuts": cuts}
+    try:
+        (tmp_path / "curve_model.json").write_text(json.dumps({**base, "w": [0.5] + [0.0] * 19}))  # the shared model likes everything
+        no_category = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert no_category.action == "pass" and "no model fitted yet for the dog category" in no_category.note  # the shared file is not the dog category's model
+        (tmp_path / "curve_model_dog.json").write_text(json.dumps({**base, "w": [0.5] + [0.0] * 19}))
+        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert ok.action == "bet" and "curve model +0.50 per $1" in ok.note
+    finally:
+        ticks.history.clear()
+        curvemodel._cache.update(mtime=None, data=None)
+        curvemodel._category_cache.clear()
+
+
+def test_the_refit_starts_when_any_category_has_no_model_or_an_old_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(
+        "[lane.main]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nseries=['KXBTC15M']\nmodel_buy=true\n[lane.dog]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_category='dog'\n"
+    )
+    s = config.load()
+    curvemodel._cache.update(mtime=None, data=None)
+    curvemodel._category_cache.clear()
+    started = []
+    monkeypatch.setattr(curvemodel.subprocess, "Popen", lambda *a, **k: started.append(a) or type("P", (), {"poll": lambda self: None})())
+    monkeypatch.setattr(curvemodel, "_fitting", None)
+    now = time.time()
+    (tmp_path / "curve_model.json").write_text(json.dumps({"built_at": now, "n": 1}))  # the shared model is fresh, the dog category has none
+    try:
+        assert curvemodel.maybe_refit(s, now) is True and len(started) == 1
+    finally:
+        curvemodel._cache.update(mtime=None, data=None)
+        curvemodel._category_cache.clear()
+        curvemodel._fitting = None
