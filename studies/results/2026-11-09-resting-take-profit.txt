@@ -1,0 +1,20 @@
+Question: a post-only sell at P placed when the buy fills (no fee): does it beat what the lane did? 1398 live crypto and commodity 15-minute bets since 11-05; the sale fills at P the first time the held bid is at or over P, at least 10 s before the close (best case: a touch fills, no queue). Compared with the lane's own sale or the result. Scripts: scripts/resting_take_profit.py, scripts/resting_take_profit_by_entry.py. Re-buy not covered.
+
+All buys:
+family    sell at  bets touched then lost   diff $   beat/lost  halves diff (n)
+commodity    0.90   603     535        31  -126.82    67/468    -46.99 (394) / -79.84 (141)
+commodity    0.93   603     510        19   -97.33    45/465    -50.23 (372) / -47.10 (138)
+commodity    0.95   603     497        14   -49.34    36/461    -30.30 (359) / -19.05 (138)
+commodity    0.98   603     451         6   -15.28    19/432    +1.03 (328) / -16.31 (123)
+crypto       0.90   795     427        54   +26.29    73/354    +35.60 (182) / -9.31 (245)
+crypto       0.93   795     387        22   -22.84    34/353    +6.50 (167) / -29.34 (220)
+crypto       0.95   795     377        15   -24.96    24/353    -3.82 (161) / -21.13 (216)
+crypto       0.98   795     359         5   -14.26    11/348    -1.22 (154) / -13.04 (205)
+
+By how early the buy was (minutes into the window), P 0.98:
+crypto    under 4 min in   120 bets, touched 31, avg 190 s left, then lost 0, diff -1.87
+crypto    4-8 min in       325 bets, touched 150, then lost 3, diff -2.73
+crypto    8+ min in        350 bets, touched 178, then lost 2, diff -9.66
+commodity 4-8 min in       207 bets, touched 156, then lost 2, diff -3.17
+commodity 8+ min in        392 bets, touched 294, then lost 4, diff -12.09
+commodity under 4 min in   4 bets
