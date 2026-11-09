@@ -252,3 +252,38 @@ def test_the_daily_refit_is_paced_and_a_study_is_not(monkeypatch, tmp_path):
     curvemodel.main()
     assert seen["duty"] == curvemodel.PACE_DUTY < 1.0
     assert default == 1.0
+
+
+def test_a_curvature_lane_needs_only_34_minutes_of_history_and_a_fibonacci_one_55(tmp_path, monkeypatch):
+    assert curvemodel.lookback_seconds("curvature") == 34 * 60 and curvemodel.lookback_seconds("fibonacci") == 55 * 60
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.mod]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_top=0.2\nmodel_features='curvature'\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    ticks.history.clear()
+    curvemodel._cache.update(mtime=None, data=None)
+    now = time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-7", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    index = variants.crypto_index("KXBTC15M")
+    ts, vs = _ticks(now, n=2300, drift=0.0)  # 38 minutes of ticks: enough for the curvature readings, short of the 55 minutes the old check demanded
+    for t, v in zip(ts, vs, strict=True):
+        ticks.history.note(index, t, v)
+    shot = LongShot("KXBTC15M-7", "t", "", 0.40, 0.41, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="mod", series="KXBTC15M", side="yes")
+    cuts = {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}
+    cur = {"kind": "curvature", "built_at": now, "n": 5000, "names": [*curvemodel.QUAD_NAMES, "ask"], "mu": [0.0] * 10, "sd": [1.0] * 10, "train_days": 9.0, "mean_net": -0.05, "w": [0.5] + [0.0] * 10, "cuts": cuts}
+    try:
+        (tmp_path / "curve_model.json").write_text(json.dumps(cur))
+        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert ok.action == "bet" and "curve model +0.50 per $1" in ok.note
+        fib = {"built_at": now, "n": 5000, "names": curvemodel.NAMES, "mu": [0.0] * 19, "sd": [1.0] * 19, "train_days": 9.0, "mean_net": -0.05, "w": [0.5] + [0.0] * 19, "cuts": cuts}
+        (tmp_path / "strategies.toml").write_text((tmp_path / "strategies.toml").read_text().replace("model_features='curvature'", "model_features='fibonacci'"))
+        (tmp_path / "curve_model.json").write_text(json.dumps(fib))
+        curvemodel._cache.update(mtime=None, data=None)
+        s = config.load()
+        short = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
+        assert short.action == "pass" and ("55-minute look-back" in short.note or "no tick history" in short.note)  # the Fibonacci readings still need the full 55 minutes
+    finally:
+        ticks.history.clear()
+        curvemodel._cache.update(mtime=None, data=None)

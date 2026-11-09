@@ -135,9 +135,14 @@ def readings_for(kind: str, g: list[float | None], sq: list[float], k: int, stri
     return features_curvature(g, sq, k, strike_log, sign, why) if kind == "curvature" else features(g, sq, k, strike_log, sign, why)
 
 
-def live_grid(ts: list[float], vs: list[float], now: float) -> tuple[list[float | None], list[float], int] | None:
-    """The one-second grid of the last 55 minutes from in-memory ticks: (g, sq, k) with k the index of `now`. None when the history does not cover it."""
-    span = 60 * FIB[-1]
+def lookback_seconds(kind: str) -> int:
+    """How much history a model's readings reach back over: 55 minutes for the Fibonacci readings, 34 for the curvature ones. A lane must not wait for more than its readings use (2026-11-09: a 5-minute tick gap from a host reboot kept both curvature lanes blind for 55 minutes when 34 were needed)."""
+    return 60 * (max(QUAD_WINDOWS) if kind == "curvature" else FIB[-1])
+
+
+def live_grid(ts: list[float], vs: list[float], now: float, span: int | None = None) -> tuple[list[float | None], list[float], int] | None:
+    """The one-second grid of the last `span` seconds (55 minutes by default) from in-memory ticks: (g, sq, k) with k the index of `now`. None when the history does not cover it."""
+    span = 60 * FIB[-1] if span is None else span
     if not ts or ts[0] > now - span - 20.0 or ts[-1] < now - 10.0:
         return None
     t_end = int(now)
@@ -254,24 +259,25 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
     crypto = variants.crypto_index(shot.series)
     index = crypto or variants.biquote_index(shot.series)  # a commodity reads its BiQuote index against that index's own price when the window opened (the settlement is Pyth's, on another level), as the spot exits and the state record do
     now = time.time()
+    kind = model.get("kind", "fibonacci")
+    span = lookback_seconds(kind)
     if crypto:
         strike = ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker)
     else:
         strike = ticks_mod.history.first_at_or_after(index, now + shot.hours_to_close * 3600.0 - 905.0, 25.0) if index else None
-    got = ticks_mod.history.window(index, now - 60 * FIB[-1] - 40.0, now) if index else None
+    got = ticks_mod.history.window(index, now - span - 40.0, now) if index else None
     if not index:
         return False, f"curve model: no settlement index is known for {shot.series}."
     if not got or not got[0]:
         return False, f"curve model: no tick history in memory for {index}."
     if not strike or strike <= 0:
         return False, f"curve model: no {'strike' if crypto else 'window-open price of ' + index} known yet for {shot.ticker}."
-    if got[0][0] > now - 60 * FIB[-1] - 20.0:
-        return False, f"curve model: only {now - got[0][0]:.0f}s of {index} history, the 55-minute look-back needs {60 * FIB[-1]}s."
+    if got[0][0] > now - span - 20.0:
+        return False, f"curve model: only {now - got[0][0]:.0f}s of {index} history, the {span // 60}-minute look-back needs {span}s."
     if got[0][-1] < now - 10.0:
         return False, f"curve model: the last {index} tick is {now - got[0][-1]:.0f}s old."
-    grid = live_grid(got[0], got[1], now)
+    grid = live_grid(got[0], got[1], now, span)
     why: list[str] = []
-    kind = model.get("kind", "fibonacci")
     if kind != spec.model_features:
         return False, f"curve model: the fitted model reads {kind} readings and this lane wants {spec.model_features}: waiting for the refit."
     read = readings_for(kind, grid[0], grid[1], grid[2], math.log(strike), 1 if shot.side == "yes" else -1, why) if grid else None
