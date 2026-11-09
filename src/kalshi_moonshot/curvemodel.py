@@ -426,7 +426,7 @@ def main() -> None:
         kind = kinds[0] if kinds else "fibonacci"
         if len(set(kinds)) > 1:
             print(f"category {category!r}: model_buy lanes disagree on model_features", sorted(set(kinds)), "-> fitting", kind)
-        rows = build_rows(s, kind=kind, duty=PACE_DUTY, category=category)
+        rows = build_rows(s, kind=kind, duty=float(os.environ.get("CURVE_PACE_DUTY", PACE_DUTY)), category=category)  # a job on its own machine sets CURVE_PACE_DUTY=1
         model = fit([(r[0][: len(KINDS[kind])], r[1], r[2]) for r in rows], kind=kind)
         if model is None:
             print(f"category {category!r}: not fitted", len(rows), "rows")
