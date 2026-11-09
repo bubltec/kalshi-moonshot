@@ -1,0 +1,11 @@
+Question: why do platinum and palladium wins look smaller than gold and silver? Live bets since 11-01 on the commodity favorite lanes (platinum and palladium are in commodity_industrial), net of the fee, held or sold. Script: scripts/precious_by_metal.py. Review only.
+
+series              n  won% avg ask  stake  contr avg win$ avg loss$ fee/bet     net  net/$1
+KXBRENT15M        107  88.8   0.844   7.51   8.79    1.259    -5.794   0.080  +50.04  +0.062
+KXCOPPER15M        75  88.0   0.858   7.16   8.24    1.061    -7.708   0.070   +0.64  +0.001
+KXGOLD15M         137  86.9   0.848   7.11   8.36    1.231    -5.677   0.076  +44.28  +0.045
+KXNATGAS15M       109  87.2   0.868   7.92   9.05    1.122    -5.562   0.072  +28.71  +0.033
+KXPALLADIUM15M    117  74.4   0.846   7.25   8.49    1.211    -4.987   0.079  -44.26  -0.052
+KXPLATINUM15M      71  84.5   0.865   8.15   9.31    1.145    -6.410   0.076   -1.83  -0.003
+KXSILVER15M       113  79.6   0.843   7.90   9.31    1.329    -4.512   0.086  +15.84  +0.018
+KXWTI15M          165  80.6   0.842   7.62   9.01    1.365    -5.194   0.084  +15.41  +0.012
