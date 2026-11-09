@@ -1,0 +1,18 @@
+live crypto_multiscale bets with a settled window since 11-05: 334
+replayed: 334
+first half: 168 bets | hold -12.24 | the lane's actual -1.11 | shock alone -0.55
+   curve + shock, M=0.02: -17.25 (against shock alone -16.70, against the lane's actual -16.14) | {'neither': 42, 'curve first': 89, 'shock first': 37}
+      when the curve rule fires first (89): the sale made -11.72, holding +11.19, the shock rule's own sale +4.97 | when the shock rule fires first (37): the sale made -15.48, holding -33.39
+   curve + shock, M=0.03: -20.48 (against shock alone -19.92, against the lane's actual -19.37) | {'neither': 53, 'shock first': 43, 'curve first': 72}
+      when the curve rule fires first (72): the sale made -8.20, holding +22.28, the shock rule's own sale +11.73 | when the shock rule fires first (43): the sale made -20.28, holding -42.52
+second half: 166 bets | hold -67.08 | the lane's actual -31.37 | shock alone -43.52
+   curve + shock, M=0.02: -22.96 (against shock alone +20.56, against the lane's actual +8.41) | {'shock first': 29, 'curve first': 114, 'neither': 23}
+      when the curve rule fires first (114): the sale made -17.75, holding -69.62, the shock rule's own sale -38.31 | when the shock rule fires first (29): the sale made -22.36, holding -14.61
+   curve + shock, M=0.03: -25.20 (against shock alone +18.33, against the lane's actual +6.18) | {'shock first': 33, 'curve first': 109, 'neither': 24}
+      when the curve rule fires first (109): the sale made -17.07, holding -66.01, the shock rule's own sale -35.39 | when the shock rule fires first (33): the sale made -24.19, holding -17.13
+all: 334 bets | hold -79.32 | the lane's actual -32.48 | shock alone -44.07
+   curve + shock, M=0.02: -40.21 (against shock alone +3.87, against the lane's actual -7.73) | {'neither': 65, 'curve first': 203, 'shock first': 66}
+      when the curve rule fires first (203): the sale made -29.47, holding -58.43, the shock rule's own sale -33.34 | when the shock rule fires first (66): the sale made -37.83, holding -48.00
+   curve + shock, M=0.03: -45.67 (against shock alone -1.60, against the lane's actual -13.19) | {'neither': 77, 'shock first': 76, 'curve first': 181}
+      when the curve rule fires first (181): the sale made -25.26, holding -43.74, the shock rule's own sale -23.67 | when the shock rule fires first (76): the sale made -44.47, holding -59.65
+DONE
