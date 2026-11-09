@@ -220,3 +220,35 @@ def test_a_commodity_is_read_against_its_own_index_price_at_the_window_open(tmp_
     finally:
         ticks.history.clear()
         curvemodel._cache.update(mtime=None, data=None)
+
+
+def test_a_paced_job_sleeps_for_the_share_of_time_it_may_not_use(monkeypatch):
+    naps = []
+    clock = [100.0]
+    monkeypatch.setattr(curvemodel.time, "sleep", naps.append)
+    monkeypatch.setattr(curvemodel.time, "monotonic", lambda: clock[0])
+    pace = curvemodel.Pacer(0.25)
+    clock[0] += 2.0  # two seconds of work
+    pace.tick()
+    assert naps == [6.0]  # a quarter of the time on the CPU: three times the work asleep
+    clock[0] += 1000.0
+    pace.tick()
+    assert naps[-1] == curvemodel.PACE_MAX_PAUSE  # never one long sleep
+    for duty in (1.0, 0.0):
+        before = len(naps)
+        clock[0] += 5.0
+        curvemodel.Pacer(duty).tick()
+        assert len(naps) == before  # full speed: no sleep
+
+
+def test_the_daily_refit_is_paced_and_a_study_is_not(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    import inspect
+
+    default = inspect.signature(curvemodel.build_rows).parameters["duty"].default
+    seen = {}
+    monkeypatch.setattr(config, "reload", config.load)  # main() reloads the settings: do not leave this test's data dir in the shared settings cache
+    monkeypatch.setattr(curvemodel, "build_rows", lambda s, **kw: seen.update(kw) or [])
+    curvemodel.main()
+    assert seen["duty"] == curvemodel.PACE_DUTY < 1.0
+    assert default == 1.0

@@ -28,6 +28,8 @@ TRAIN_DAYS = 9.0
 RIDGE = 50.0
 MIN_ROWS = 3000
 MOMENT_STEP = 30
+PACE_DUTY = 0.3  # 2026-11-09 (user: make sure it paces itself): the daily refit uses at most this share of the wall time. It sleeps after each stretch of work for the rest, so a refit that now trains on the commodity series as well as the crypto ones leaves the other 2-CPU host's bot and its remote-command agent the CPU (a manual refit pinned the host at 98% and cut the agent off on 11-09)
+PACE_MAX_PAUSE = 30.0  # ...and never sleeps longer than this at once
 QUANTS = (0.05, 0.10, 0.20, 0.30, 0.50)
 READ_NAMES = [f"{kind}_{m}m" for m in FIB for kind in ("slope", "var")]
 NAMES = [*READ_NAMES, "ask"]
@@ -283,7 +285,20 @@ def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float =
     return False, f"curve model: {tag.replace('curve model ', '')} is under the bar."
 
 
-def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str, float]] | None = None, timed: bool = False, kind: str = "fibonacci") -> list[tuple[list[float], float, float]]:
+class Pacer:
+    """Duty-cycle pacing for a long job: `tick()` sleeps for as long as the work since the last tick took times (1/duty - 1), so the job uses about `duty` of the wall time. duty of 1 (or 0) never sleeps."""
+
+    def __init__(self, duty: float = 1.0) -> None:
+        self.duty = duty
+        self.mark = time.monotonic()
+
+    def tick(self) -> None:
+        if 0.0 < self.duty < 1.0:
+            time.sleep(min(PACE_MAX_PAUSE, (time.monotonic() - self.mark) * (1.0 / self.duty - 1.0)))
+        self.mark = time.monotonic()
+
+
+def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str, float]] | None = None, timed: bool = False, kind: str = "fibonacci", duty: float = 1.0) -> list[tuple[list[float], float, float]]:
     """(`meta`, when given, gets (close, seconds into the window, ticker, side, the side's bid) per row, for studies; `timed` adds the 13 time-left readings for the studies; the ridge is fitted on the first 18.) The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
     from . import db, variants
     from .kalshiws import RECORD_ONLY
@@ -311,7 +326,9 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
     cur_ix = None
     g: list[float | None] = []
     sq: list[float] = []
+    pace = Pacer(duty)
     for w in wins:
+        pace.tick()
         ser = w["series"]
         if ser not in rules or ser in RECORD_ONLY:
             continue
@@ -333,6 +350,7 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
             sq = [0.0]
             for a, b in itertools.pairwise(g):
                 sq.append(sq[-1] + ((b - a) ** 2 if a is not None and b is not None else 0.0))
+            pace.tick()
         lo, hi, plo, phi, cap = rules[ser]
         close = float(w["close_ts"])
         opened = close - 900.0
@@ -386,7 +404,7 @@ def main() -> None:
     kind = kinds[0] if kinds else "fibonacci"
     if len(set(kinds)) > 1:
         print("model_buy lanes disagree on model_features", sorted(set(kinds)), "-> fitting", kind)
-    rows = build_rows(s, kind=kind)
+    rows = build_rows(s, kind=kind, duty=PACE_DUTY)
     model = fit([(r[0][: len(KINDS[kind])], r[1], r[2]) for r in rows], kind=kind)
     if model is None:
         print("not fitted", len(rows), "rows")
