@@ -1617,6 +1617,9 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
     if ask > shot.ask + max(0.0, spec.buy_retry_chase) + 1e-9:  # a market that ran away is not chased
         return None
     limit = buy_limit(spec, shot.ticker, shot.side, shot.ask, ask)
+    if getattr(spec, "buy_tick_ahead", False):
+        seen = side_ask_ticks(shot.ticker, shot.side)
+        log.info("buy limit %s %s %s (the take after a resting bid): decided at %.2f, the book's ask %.2f, the stream's ask %s (last tick %s), limit %.4f", shot.lane, shot.ticker, shot.side, shot.ask, ask, f"{seen[0]:.2f}" if seen else "silent", f"{seen[1]:+.2f}" if seen else "-", limit)
     if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
         return None
     if spec.model_buy:  # the curve model must still say buy
