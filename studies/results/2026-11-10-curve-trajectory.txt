@@ -1,0 +1,47 @@
+job 20261110-180831-25214 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/753af06594c34d739a30721646204af7
+
+=== crypto: lanes ('crypto_multiscale', 'crypto_multiscale_underdog') | settled live bets 523 | replayed 523 | value exit margin 0.15, scales 60s900
+  held to the result -13.35 | live (own sales, stacked exits) +5.43 | whole-stake losses held 264
+  value exit alone: net -6.35 (vs holding +7.01, vs live -11.77) on 64 sold | halves +7.66 / -0.65
+  best 12 by net (v = use_value, D, W, M, persist):
+    value + trajectory (1.5, 60, 0.5, 0): net +7.32 (vs holding +20.67, vs live +1.89) on 277 sold | losers saved 177, winners sold 100, zeros partial 177 of 264 | halves +40.42 / -19.74 | choppy +0.3 middle -5.6 straight +26.0
+    value + trajectory (1.5, 60, 1.0, 0): net +5.35 (vs holding +18.71, vs live -0.08) on 287 sold | losers saved 177, winners sold 110, zeros partial 177 of 264 | halves +44.37 / -25.66 | choppy +1.1 middle -5.1 straight +22.8
+    trajectory only (1.5, 60, 0.5, 0): net +4.76 (vs holding +18.11, vs live -0.67) on 248 sold | losers saved 175, winners sold 73, zeros partial 175 of 264 | halves +34.87 / -16.76 | choppy +4.5 middle -8.3 straight +21.8
+    trajectory only (1.5, 60, 1.0, 0): net +2.65 (vs holding +16.01, vs live -2.78) on 262 sold | losers saved 175, winners sold 87, zeros partial 175 of 264 | halves +38.78 / -22.78 | choppy +5.1 middle -7.5 straight +18.3
+    trajectory only (1.5, 60, 0.5, 5): net +2.04 (vs holding +15.39, vs live -3.39) on 189 sold | losers saved 141, winners sold 48, zeros partial 141 of 264 | halves +31.41 / -16.01 | choppy +3.2 middle +1.3 straight +10.9
+    value + trajectory (1.5, 60, 0.5, 5): net +1.06 (vs holding +14.41, vs live -4.37) on 225 sold | losers saved 144, winners sold 81, zeros partial 144 of 264 | halves +35.36 / -20.95 | choppy -2.9 middle +2.1 straight +15.2
+    value only (None, 0, 0, 0): net -6.35 (vs holding +7.01, vs live -11.77) on 64 sold | losers saved 10, winners sold 54, zeros partial 10 of 264 | halves +7.66 / -0.65 | choppy -3.0 middle +2.8 straight +7.2
+    trajectory only (1.5, 60, 1.0, 5): net -6.60 (vs holding +6.75, vs live -12.03) on 202 sold | losers saved 141, winners sold 61, zeros partial 141 of 264 | halves +32.47 / -25.72 | choppy +0.6 middle -4.8 straight +11.0
+    value + trajectory (1.5, 60, 1.0, 5): net -7.43 (vs holding +5.92, vs live -12.86) on 235 sold | losers saved 144, winners sold 91, zeros partial 144 of 264 | halves +36.44 / -30.52 | choppy -5.3 middle -4.0 straight +15.3
+    value + trajectory (2.0, 120, 0.5, 5): net -8.64 (vs holding +4.71, vs live -14.07) on 199 sold | losers saved 121, winners sold 78, zeros partial 121 of 264 | halves +33.83 / -29.12 | choppy -5.2 middle -4.1 straight +14.0
+    value + trajectory (1.0, 60, 0.5, 5): net -8.92 (vs holding +4.44, vs live -14.35) on 299 sold | losers saved 193, winners sold 106, zeros partial 193 of 264 | halves +41.52 / -37.08 | choppy -3.2 middle -10.1 straight +17.8
+    value + trajectory (1.0, 60, 1.0, 5): net -10.85 (vs holding +2.51, vs live -16.27) on 316 sold | losers saved 193, winners sold 123, zeros partial 193 of 264 | halves +49.33 / -46.82 | choppy -4.6 middle -11.2 straight +18.3
+  positive against holding in both halves: 0 of 49
+
+=== commodity_multiscale: lanes ('commodity_multiscale',) | settled live bets 52 | replayed 42 | value exit margin 0.06, scales 60s900+60s180
+  held to the result +0.93 | live (own sales, stacked exits) -1.82 | whole-stake losses held 14
+  value exit alone: net +5.72 (vs holding +4.79, vs live +7.54) on 19 sold | halves +1.33 / +3.46
+  best 12 by net (v = use_value, D, W, M, persist):
+    value + trajectory (2.0, 120, 0.5, 5): net +8.07 (vs holding +7.14, vs live +9.89) on 24 sold | losers saved 13, winners sold 11, zeros partial 13 of 14 | halves +2.52 / +4.62 | choppy +2.6 middle +0.5 straight +4.0
+    value + trajectory (2.0, 120, 1.0, 5): net +7.01 (vs holding +6.08, vs live +8.83) on 25 sold | losers saved 13, winners sold 12, zeros partial 13 of 14 | halves +3.00 / +3.08 | choppy +3.1 middle -1.0 straight +4.0
+    value only (None, 0, 0, 0): net +5.72 (vs holding +4.79, vs live +7.54) on 19 sold | losers saved 9, winners sold 10, zeros partial 9 of 14 | halves +1.33 / +3.46 | choppy +1.5 middle +0.5 straight +2.8
+    value + trajectory (2.0, 120, 0.5, 0): net +5.56 (vs holding +4.63, vs live +7.39) on 26 sold | losers saved 14, winners sold 12, zeros partial 14 of 14 | halves +3.23 / +1.40 | choppy +3.4 middle -2.6 straight +3.9
+    value + trajectory (2.0, 60, 1.0, 5): net +5.10 (vs holding +4.17, vs live +6.92) on 24 sold | losers saved 12, winners sold 12, zeros partial 12 of 14 | halves +1.19 / +2.98 | choppy +0.3 middle -1.4 straight +5.3
+    value + trajectory (2.0, 60, 0.5, 5): net +4.11 (vs holding +3.18, vs live +5.94) on 24 sold | losers saved 12, winners sold 12, zeros partial 12 of 14 | halves +0.20 / +2.98 | choppy +0.3 middle -1.4 straight +4.3
+    value + trajectory (2.0, 60, 1.0, 0): net +3.24 (vs holding +2.32, vs live +5.07) on 26 sold | losers saved 12, winners sold 14, zeros partial 12 of 14 | halves +3.08 / -0.76 | choppy -1.3 middle -1.7 straight +5.4
+    value + trajectory (1.5, 120, 0.5, 5): net +3.08 (vs holding +2.15, vs live +4.90) on 27 sold | losers saved 14, winners sold 13, zeros partial 14 of 14 | halves -3.41 / +5.56 | choppy +0.6 middle -0.8 straight +2.3
+    trajectory only (2.0, 60, 1.0, 5): net +3.04 (vs holding +2.11, vs live +4.86) on 8 sold | losers saved 5, winners sold 3, zeros partial 5 of 14 | halves +1.05 / +1.06 | choppy -1.1 middle -0.4 straight +3.7
+    value + trajectory (2.0, 120, 1.0, 0): net +2.98 (vs holding +2.05, vs live +4.81) on 28 sold | losers saved 14, winners sold 14, zeros partial 14 of 14 | halves +1.17 / +0.88 | choppy +0.9 middle -2.8 straight +3.9
+    value + trajectory (2.0, 60, 0.5, 0): net +2.27 (vs holding +1.34, vs live +4.09) on 26 sold | losers saved 12, winners sold 14, zeros partial 12 of 14 | halves +2.11 / -0.76 | choppy -2.1 middle -1.7 straight +5.2
+    trajectory only (2.0, 120, 0.5, 5): net +1.73 (vs holding +0.80, vs live +3.55) on 10 sold | losers saved 7, winners sold 3, zeros partial 7 of 14 | halves +1.39 / -0.59 | choppy +0.1 middle -0.6 straight +1.4
+  positive against holding in both halves: 8 of 49
+    value + trajectory (2.0, 120, 0.5, 5): vs holding +7.14, vs live +9.89 on 24 sold | winners sold 11, zeros partial 13 | halves +2.52 / +4.62 | choppy +2.6 middle +0.5 straight +4.0
+    value + trajectory (2.0, 120, 1.0, 5): vs holding +6.08, vs live +8.83 on 25 sold | winners sold 12, zeros partial 13 | halves +3.00 / +3.08 | choppy +3.1 middle -1.0 straight +4.0
+    value only (None, 0, 0, 0): vs holding +4.79, vs live +7.54 on 19 sold | winners sold 10, zeros partial 9 | halves +1.33 / +3.46 | choppy +1.5 middle +0.5 straight +2.8
+    value + trajectory (2.0, 120, 0.5, 0): vs holding +4.63, vs live +7.39 on 26 sold | winners sold 12, zeros partial 14 | halves +3.23 / +1.40 | choppy +3.4 middle -2.6 straight +3.9
+    value + trajectory (2.0, 60, 1.0, 5): vs holding +4.17, vs live +6.92 on 24 sold | winners sold 12, zeros partial 12 | halves +1.19 / +2.98 | choppy +0.3 middle -1.4 straight +5.3
+    value + trajectory (2.0, 60, 0.5, 5): vs holding +3.18, vs live +5.94 on 24 sold | winners sold 12, zeros partial 12 | halves +0.20 / +2.98 | choppy +0.3 middle -1.4 straight +4.3
+    trajectory only (2.0, 60, 1.0, 5): vs holding +2.11, vs live +4.86 on 8 sold | winners sold 3, zeros partial 5 | halves +1.05 / +1.06 | choppy -1.1 middle -0.4 straight +3.7
+    value + trajectory (2.0, 120, 1.0, 0): vs holding +2.05, vs live +4.81 on 28 sold | winners sold 14, zeros partial 14 | halves +1.17 / +0.88 | choppy +0.9 middle -2.8 straight +3.9
+DONE
+exit=0  results in job-results/20261110-180831-25214/
