@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, NamedTuple
 
-from . import checkins, manual, paperfill, quoteshock, runner, settlement, variants
+from . import checkins, curvevalue, manual, paperfill, quoteshock, runner, settlement, variants
 from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
@@ -65,6 +65,8 @@ THROUGH_SPOT = 5.0  # an index tick older than this is not a reason to sell
 SHOCK_BID = (0.05, 0.89)  # the shock exit sells only a bid in this range: below it the market has already priced the loss, above it the market is not worried
 SHOCK_LOG_MIN = 3.0  # bp of move against a held bet that is worth a shock_log row
 
+CURVE_MIN_LEFT = 8.0  # the curve exit does not act in the last 8 s (an order would land after the close)
+CURVE_MIN_BID = 0.05  # below this the market has priced the loss
 SHOCK_KEEP = 130.0  # seconds of index ticks kept for the shock exit to look back over
 THROUGH_STAY = 45.0  # outside the last minute, this long continuously through is a sale. A shorter dip is the one that comes back and pays
 LEDGER_EVERY = 300.0  # seconds between refreshes of the favorites ledger (variants.refresh_ledger)
@@ -178,6 +180,12 @@ class Target:
     shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
     shock_persist: float = 0.0  # lane shock_persist: seconds the shock condition must hold before the sale (0 = at once)
     late_units: float = 0.0  # lane late_drop_units (0 = off)
+    curve_margin: float = -1.0  # lane curve_exit (-1 = off): the margin over the curve's own value of holding (curvevalue.py)
+    curve_persist: float = 5.0
+    curve_last: float = 900.0
+    curve_since: float = 0.0  # when the curve condition began to hold without a break (0 = not holding)
+    curve_at: float = 0.0  # the curve check reads at most once a second
+    curve_noted: float = 0.0
     late_seconds: float = 30.0  # lane late_drop_seconds
     late_bids: deque = field(default_factory=lambda: deque(maxlen=400))  # (second, bid) one a second, forward-filled, for the late-drop exit
     shock_since: float = 0.0  # when the shock condition began to hold without a break (0 = not holding)
@@ -680,15 +688,43 @@ class ProfitWatcher:
 
     def _shock_on_index(self, index_id: str, now: float) -> None:
         with self._lock:
-            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0 or t.value_exit > 0 or t.value_gain_x > 0 or t.value_high > 0)]
+            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0 or t.value_exit > 0 or t.value_gain_x > 0 or t.value_high > 0 or t.curve_margin >= 0)]
         for t in hits:
             if t.last_ts <= 0 or t.cur_bid <= 0:
                 continue
-            reason = self._shock_hit(t, t.cur_bid, now, t.last_ts) or self._wrong_side_hit(t, t.cur_bid, now, t.last_ts) or self._value_hit(t, t.cur_bid, now, t.last_ts)
+            reason = self._shock_hit(t, t.cur_bid, now, t.last_ts) or self._wrong_side_hit(t, t.cur_bid, now, t.last_ts) or self._value_hit(t, t.cur_bid, now, t.last_ts) or self._curve_hit(t, t.cur_bid, now, t.last_ts)
             key = (t.ticker, t.lane)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
                 self._queue_sell(SellSignal(t.ticker, t.lane, reason))
+
+    def _curve_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
+        """The curve exit (2026-11-10, user: enable on commodity_multiscale; curvevalue.py): sell when the bid after the sell fee is at least the curve's own chance that this side pays plus the lane's margin, for curve_exit_persist seconds. Reads the in-memory index ticks once a second. Takes profit and cuts losses with the one rule; the lane's shock, late-drop and value exits are off. Each decision logs its curve reading."""
+        if t.curve_margin < 0 or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.curve_at < 1.0:
+            return None
+        left = t.close_ts - now
+        if left <= CURVE_MIN_LEFT or left > t.curve_last or bid < CURVE_MIN_BID or now - quote_ts > 5.0:
+            t.curve_since = 0.0
+            return None
+        t.curve_at = now
+        got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
+        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left) if got else None
+        if read is None:
+            t.curve_since = 0.0
+            return None
+        net = bid - fee_per_contract(bid)
+        over = net - read.p
+        if now - t.curve_noted >= 10.0:
+            t.curve_noted = now
+            log.info("curve exit watch %s %s, %.0fs left: bid %.2f (%.3f after the fee), curve chance %.3f, over by %+.3f (sells at %+.3f for %.0fs); cushion %+.2f typical minutes", t.ticker, t.lane, left, bid, net, read.p, over, t.curve_margin, t.curve_persist, read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0)
+        if over < t.curve_margin:
+            t.curve_since = 0.0
+            return None
+        if t.curve_since <= 0:
+            t.curve_since = now
+        if now - t.curve_since < t.curve_persist:
+            return None
+        return f"curve exit: bid {bid:.2f} ({net:.3f} after the fee) is {over:+.3f} over the curve's {read.p:.3f} chance that the side pays (margin {t.curve_margin:g}, held {now - t.curve_since:.0f}s); cushion {read.cushion * 1e4:+.1f} bp, rates {read.rate_long * 60**0.5 * 1e4:.1f} / {read.rate_short * 60**0.5 * 1e4:.1f} bp a typical minute (900 s / 180 s), {left:.0f}s left"
 
     def _late_drop_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The late-drop exit (2026-11-10, user: implement 30 s / 1 unit and push). Samples the held bid once a second (forward-filled) and, in the last late_drop_seconds, sells when the bid has fallen from its highest of the last 60 s by late_drop_units of its own typical minute (rms one-second bid change over up to 300 s, times sqrt(60)). Needs 20 seconds of the last 60 and 100 one-second changes, as in scripts/late_drop_exit_replay.py. Reads no model, no coin, no market."""
@@ -1417,7 +1453,7 @@ class ProfitWatcher:
                 if (ticker, lane) not in self._shock_logged:
                     self._shock_logged.add((ticker, lane))
                     log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
-            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
+            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
                 sid = biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
@@ -1430,6 +1466,8 @@ class ProfitWatcher:
                 if ref > 0:
                     held.shock_index, held.shock_ref = sid, ref
                     held.shock_trend_hold = spec.shock_trend_hold
+                    if spec.curve_exit >= 0:
+                        held.curve_margin, held.curve_persist, held.curve_last = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last
                     held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
                     held.value_gain_x, held.value_high, held.value_high_left, held.value_min_gain = spec.value_exit_gain_x, spec.value_exit_high, spec.value_exit_high_left, spec.value_exit_min_gain
                     self._shock_hist.setdefault(sid, deque())
