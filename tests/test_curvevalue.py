@@ -51,3 +51,13 @@ def test_the_long_scale_alone_ignores_a_spike():
     both = curvevalue.read(ts, vs, now, ref=99.95, side="yes", left=60.0)
     long_only = curvevalue.read(ts, vs, now, ref=99.95, side="yes", left=60.0, scales="900")
     assert both is not None and long_only is not None and both.p <= long_only.p
+
+
+def test_a_lane_with_only_the_curve_exit_is_watched():
+    from kalshi_moonshot.lanes import LaneSpec, takes_profit
+
+    def spec(**kw):
+        return LaneSpec("x", "ladder", "x", (0.70, 0.97), (0, 1), 0.05, 0.0, **kw)
+
+    assert not takes_profit(spec())
+    assert takes_profit(spec(curve_exit=0.15))
