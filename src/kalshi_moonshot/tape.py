@@ -27,6 +27,8 @@ from .commodities import instrument_for, load_instruments
 from .config import Settings
 from .finnhubfeed import FinnhubFeed
 from .finnhubfeed import api_key as finnhub_key
+from .itickfeed import ITickFeed
+from .itickfeed import api_key as itick_key
 from .futflow import FuturesFlow
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import KalshiStream, index_for_series
@@ -455,6 +457,8 @@ class TapeRecorder:
         key = pyth_key()
         self.biquote = BiQuoteFeed(self._on_event) if biquote_enabled() else None  # the commodity prices from BiQuote's free stream, recorded to test how well they call the settled direction (biquotefeed.py)
         fh = finnhub_key()
+        it = itick_key()
+        self.itick = ITickFeed(self._on_event, it) if it else None  # the S&P 500 index from iTick's free websocket, recorded next to BiQuote's US500 CFD (itickfeed.py)
         self.finnhub = FinnhubFeed(self._on_event, fh) if fh else None  # OANDA's commodity contracts from Finnhub's free websocket, recorded for the same direction test (finnhubfeed.py)
         self.pyth = PythFeed(self._on_event, key) if key else None  # the commodity markets' settlement prices, one tick a second on the tape (pythfeed.py)
         self._stop = threading.Event()
@@ -581,6 +585,8 @@ class TapeRecorder:
             self.biquote.start()
         if self.finnhub is not None:
             self.finnhub.start()
+        if self.itick is not None:
+            self.itick.start()
         if self.pyth is not None:
             self.pyth.start()
         self._thread = threading.Thread(target=self._run, name="tape", daemon=True)
@@ -599,6 +605,8 @@ class TapeRecorder:
             self.biquote.close()
         if self.finnhub is not None:
             self.finnhub.close()
+        if self.itick is not None:
+            self.itick.close()
         if self.pyth is not None:
             self.pyth.close()
 
