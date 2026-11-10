@@ -1,0 +1,30 @@
+
+
+=== commodity_multiscale: lanes ('commodity_multiscale',) | settled live bets 52 | replayed 42
+  held to the result +0.93 | live (own sales, stacked exits) -1.82 | whole-stake losses held 14 | shape cutoffs 0.029 0.072
+  variants (scales, margin, persist, L, phi), best 12 by net, then the ones positive against holding in both halves:
+    ('60s900+60s180', 0.1, 5, 900, 0.0): net +6.49 (vs holding +5.56, vs live +8.32) on 11 sold | losers saved 6, winners sold 5, zeros partial 6 of 14 | halves +3.39 / +2.17 | choppy -1.9 middle +3.0 straight +4.5
+    ('60s900+60s180', 0.06, 5, 300, 0.0): net +6.01 (vs holding +5.08, vs live +7.83) on 16 sold | losers saved 7, winners sold 9, zeros partial 7 of 14 | halves +2.30 / +2.78 | choppy +1.2 middle -0.2 straight +4.1
+    ('60s900+60s180', 0.06, 5, 900, 0.0): net +5.21 (vs holding +4.28, vs live +7.03) on 19 sold | losers saved 9, winners sold 10, zeros partial 9 of 14 | halves +1.05 / +3.23 | choppy +1.0 middle +0.5 straight +2.8
+    ('60s900+60s180', 0.1, 0, 300, 0.0): net +5.08 (vs holding +4.15, vs live +6.90) on 19 sold | losers saved 7, winners sold 12, zeros partial 7 of 14 | halves -1.22 / +5.37 | choppy +0.5 middle +1.3 straight +2.4
+    ('60s900', 0.06, 5, 900, 0.0): net +4.91 (vs holding +3.98, vs live +6.73) on 14 sold | losers saved 6, winners sold 8, zeros partial 6 of 14 | halves +0.80 / +3.18 | choppy +1.0 middle +0.7 straight +2.3
+    ('60s900+60s180', 0.1, 5, 300, 0.0): net +4.24 (vs holding +3.31, vs live +6.07) on 9 sold | losers saved 5, winners sold 4, zeros partial 5 of 14 | halves +3.08 / +0.23 | choppy -0.7 middle -0.2 straight +4.2
+    ('60s900+60s180', 0.03, 5, 900, 0.0): net +4.19 (vs holding +3.26, vs live +6.02) on 31 sold | losers saved 12, winners sold 19, zeros partial 12 of 14 | halves -0.10 / +3.37 | choppy +2.1 middle -0.8 straight +2.0
+    ('60s900', 0.1, 0, 300, 0.0): net +4.02 (vs holding +3.09, vs live +5.84) on 16 sold | losers saved 5, winners sold 11, zeros partial 5 of 14 | halves -2.08 / +5.17 | choppy -0.1 middle +1.5 straight +1.7
+    ('1s900', 0.06, 5, 300, 0.0): net +3.90 (vs holding +2.98, vs live +5.73) on 19 sold | losers saved 5, winners sold 14, zeros partial 5 of 14 | halves +0.81 / +2.17 | choppy +0.1 middle +0.4 straight +2.4
+    ('60s900', 0.06, 5, 300, 0.0): net +3.79 (vs holding +2.86, vs live +5.61) on 12 sold | losers saved 4, winners sold 8, zeros partial 4 of 14 | halves +0.94 / +1.92 | choppy +0.7 middle -0.3 straight +2.4
+    ('60s900', 0.06, 0, 300, 0.0): net +2.53 (vs holding +1.60, vs live +4.35) on 20 sold | losers saved 6, winners sold 14, zeros partial 6 of 14 | halves -1.88 / +3.48 | choppy +0.3 middle -0.7 straight +1.9
+    ('60s900+60s180', 0.1, 0, 900, 0.0): net +2.40 (vs holding +1.47, vs live +4.22) on 21 sold | losers saved 8, winners sold 13, zeros partial 8 of 14 | halves -1.49 / +2.96 | choppy +1.0 middle -1.7 straight +2.1
+  positive against holding in both halves: 8 of 192
+    ('60s900+60s180', 0.1, 5, 900, 0.0): vs holding +5.56, vs live +8.32 on 11 sold | winners sold 5, zeros partial 6 | halves +3.39 / +2.17 | choppy -1.9 middle +3.0 straight +4.5
+    ('60s900+60s180', 0.06, 5, 300, 0.0): vs holding +5.08, vs live +7.83 on 16 sold | winners sold 9, zeros partial 7 | halves +2.30 / +2.78 | choppy +1.2 middle -0.2 straight +4.1
+    ('60s900+60s180', 0.06, 5, 900, 0.0): vs holding +4.28, vs live +7.03 on 19 sold | winners sold 10, zeros partial 9 | halves +1.05 / +3.23 | choppy +1.0 middle +0.5 straight +2.8
+    ('60s900', 0.06, 5, 900, 0.0): vs holding +3.98, vs live +6.73 on 14 sold | winners sold 8, zeros partial 6 | halves +0.80 / +3.18 | choppy +1.0 middle +0.7 straight +2.3
+    ('60s900+60s180', 0.1, 5, 300, 0.0): vs holding +3.31, vs live +6.07 on 9 sold | winners sold 4, zeros partial 5 | halves +3.08 / +0.23 | choppy -0.7 middle -0.2 straight +4.2
+    ('1s900', 0.06, 5, 300, 0.0): vs holding +2.98, vs live +5.73 on 19 sold | winners sold 14, zeros partial 5 | halves +0.81 / +2.17 | choppy +0.1 middle +0.4 straight +2.4
+    ('60s900', 0.06, 5, 300, 0.0): vs holding +2.86, vs live +5.61 on 12 sold | winners sold 8, zeros partial 4 | halves +0.94 / +1.92 | choppy +0.7 middle -0.3 straight +2.4
+    ('1s900', 0.1, 5, 300, 0.0): vs holding +1.22, vs live +3.97 on 13 sold | winners sold 10, zeros partial 3 | halves +0.63 / +0.59 | choppy +1.4 middle -1.9 straight +1.7
+DONE
+
+
+
