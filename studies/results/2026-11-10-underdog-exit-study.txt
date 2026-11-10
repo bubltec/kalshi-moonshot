@@ -1,0 +1,63 @@
+job 20261110-123534-97886 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/35c8861e70444406abda0bc652b13cd0
+markets 7865 | coins ['BNB', 'BTC', 'DOGE', 'ETH', 'HYPE', 'NEAR', 'SOL', 'XRP', 'ZEC'] | seconds 1090906
+indexes loaded
+  0 markets, 2 states
+  1000 markets, 677 states
+  2000 markets, 1302 states
+  3000 markets, 1908 states
+  4000 markets, 2502 states
+  5000 markets, 3175 states
+  6000 markets, 3831 states
+  7000 markets, 4509 states
+
+states 4995 | win 0.368 | mean ask 0.381
+price thirds of the ask: low < 0.38, mid < 0.40, high above
+how often the bid, net of the sell fee, ever reaches the cost paid plus a margin after entry (all states / only the states that went on to lose):
+  all  low   (n=1080) +0.00: 80% | +0.01: 78% | +0.02: 76% | +0.03: 74% | +0.05: 70%
+  all  mid   (n=1727) +0.00: 83% | +0.01: 81% | +0.02: 79% | +0.03: 77% | +0.05: 74%
+  all  high  (n=2188) +0.00: 84% | +0.01: 82% | +0.02: 80% | +0.03: 78% | +0.05: 75%
+  lost low   (n=740) +0.00: 71% | +0.01: 68% | +0.02: 65% | +0.03: 62% | +0.05: 56%
+  lost mid   (n=1088) +0.00: 73% | +0.01: 70% | +0.02: 67% | +0.03: 64% | +0.05: 59%
+  lost high  (n=1331) +0.00: 73% | +0.01: 70% | +0.02: 67% | +0.03: 64% | +0.05: 59%
+
+=== ALL underdog states: 4995 states | held net per $ -0.0778
+  held, low ask third: n=1080 net/$ -0.1069
+  held, mid ask third: n=1727 net/$ -0.0819
+  held, high ask third: n=2188 net/$ -0.0603
+  (take-profit TP x u, stop SL x u): change in net per $ against holding, best 10 then worst 3
+    TP    3 SL    3: +0.0049 (net -0.0729) sold 4163 (2170 at a profit) | halves -0.0184 / +0.0282 | by price third low +0.0334 mid +0.0304 high -0.0293
+    TP    3 SL none: +0.0034 (net -0.0745) sold 2375 (2372 at a profit) | halves -0.0137 / +0.0205 | by price third low +0.0090 mid +0.0257 high -0.0170
+    TP none SL    3: +0.0021 (net -0.0757) sold 2433 (4 at a profit) | halves -0.0061 / +0.0104 | by price third low +0.0251 mid +0.0163 high -0.0204
+    TP    2 SL    3: +0.0002 (net -0.0777) sold 4315 (2595 at a profit) | halves -0.0227 / +0.0230 | by price third low +0.0264 mid +0.0220 high -0.0301
+    TP    2 SL none: -0.0063 (net -0.0842) sold 2788 (2782 at a profit) | halves -0.0281 / +0.0154 | by price third low +0.0007 mid +0.0165 high -0.0278
+    TP    3 SL    2: -0.0080 (net -0.0859) sold 4900 (1754 at a profit) | halves -0.0283 / +0.0122 | by price third low +0.0369 mid +0.0081 high -0.0430
+    TP none SL    2: -0.0101 (net -0.0879) sold 3621 (1 at a profit) | halves -0.0134 / -0.0067 | by price third low +0.0294 mid -0.0001 high -0.0374
+    TP    2 SL    2: -0.0127 (net -0.0905) sold 4947 (2157 at a profit) | halves -0.0319 / +0.0066 | by price third low +0.0240 mid +0.0040 high -0.0439
+    TP    3 SL    1: -0.0247 (net -0.1025) sold 4966 (1099 at a profit) | halves -0.0420 / -0.0074 | by price third low +0.0136 mid -0.0236 high -0.0444
+    TP    1 SL    3: -0.0266 (net -0.1045) sold 4482 (3084 at a profit) | halves -0.0527 / -0.0005 | by price third low -0.0034 mid -0.0168 high -0.0458
+    TP  0.5 SL    1: -0.0477 (net -0.1255) sold 4995 (2209 at a profit) | halves -0.0643 / -0.0310 | by price third low -0.0257 mid -0.0481 high -0.0582
+    TP    1 SL    1: -0.0494 (net -0.1273) sold 4994 (1802 at a profit) | halves -0.0630 / -0.0359 | by price third low -0.0323 mid -0.0488 high -0.0584
+    TP    0 SL    1: -0.0516 (net -0.1294) sold 4995 (2163 at a profit) | halves -0.0721 / -0.0311 | by price third low -0.0362 mid -0.0505 high -0.0601
+  positive in both halves: 0 of 23
+
+=== GATED (hour drift against the bet, at or under the sample's 25th percentile): 1240 states | held net per $ +0.0109
+  held, low ask third: n=304 net/$ -0.0224
+  held, mid ask third: n=403 net/$ +0.0217
+  held, high ask third: n=533 net/$ +0.0218
+  (take-profit TP x u, stop SL x u): change in net per $ against holding, best 10 then worst 3
+    TP    3 SL none: -0.0158 (net -0.0048) sold 636 (636 at a profit) | halves -0.0353 / +0.0062 | by price third low -0.0183 mid +0.0139 high -0.0367
+    TP none SL    3: -0.0206 (net -0.0096) sold 568 (1 at a profit) | halves -0.0404 / +0.0017 | by price third low -0.0231 mid -0.0051 high -0.0308
+    TP    3 SL    3: -0.0327 (net -0.0217) sold 1036 (579 at a profit) | halves -0.0671 / +0.0059 | by price third low -0.0201 mid -0.0051 high -0.0607
+    TP none SL    2: -0.0554 (net -0.0445) sold 872 (0 at a profit) | halves -0.0708 / -0.0382 | by price third low -0.0333 mid -0.0572 high -0.0667
+    TP    2 SL    3: -0.0603 (net -0.0494) sold 1064 (674 at a profit) | halves -0.0879 / -0.0293 | by price third low -0.0611 mid -0.0436 high -0.0724
+    TP    3 SL    2: -0.0608 (net -0.0499) sold 1218 (469 at a profit) | halves -0.0862 / -0.0324 | by price third low -0.0262 mid -0.0436 high -0.0936
+    TP    2 SL none: -0.0630 (net -0.0520) sold 718 (718 at a profit) | halves -0.0800 / -0.0439 | by price third low -0.0806 mid -0.0380 high -0.0718
+    TP    1 SL    3: -0.0806 (net -0.0696) sold 1109 (808 at a profit) | halves -0.1114 / -0.0460 | by price third low -0.0739 mid -0.0943 high -0.0739
+    TP    2 SL    2: -0.0827 (net -0.0718) sold 1227 (562 at a profit) | halves -0.1001 / -0.0632 | by price third low -0.0567 mid -0.0683 high -0.1084
+    TP    1 SL none: -0.0888 (net -0.0779) sold 846 (843 at a profit) | halves -0.1127 / -0.0621 | by price third low -0.1014 mid -0.0933 high -0.0783
+    TP  0.5 SL    1: -0.1328 (net -0.1219) sold 1240 (562 at a profit) | halves -0.1331 / -0.1325 | by price third low -0.1072 mid -0.1543 high -0.1312
+    TP    1 SL    1: -0.1349 (net -0.1240) sold 1239 (465 at a profit) | halves -0.1400 / -0.1293 | by price third low -0.1217 mid -0.1621 high -0.1219
+    TP    0 SL    1: -0.1420 (net -0.1311) sold 1240 (533 at a profit) | halves -0.1406 / -0.1437 | by price third low -0.1277 mid -0.1496 high -0.1445
+  positive in both halves: 0 of 23
+DONE
+exit=0  results in job-results/20261110-123534-97886/
