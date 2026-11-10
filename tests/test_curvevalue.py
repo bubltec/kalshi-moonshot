@@ -41,3 +41,13 @@ def test_short_history_or_stale_tick_is_unusable():
     ts, vs = _series(now)
     assert curvevalue.read(ts, vs, now + 30.0, 99.9, "yes", 120.0) is None
     assert curvevalue.read(ts, vs, now, 0.0, "yes", 120.0) is None
+
+
+def test_the_long_scale_alone_ignores_a_spike():
+    now = 1_000_000.0
+    ts, vs = _series(now, wiggle=1e-6)
+    for i in range(len(vs) - 120, len(vs)):  # a hard swing in the last two minutes
+        vs[i] *= math.exp(8e-4 * (1 if i % 2 else -1))
+    both = curvevalue.read(ts, vs, now, ref=99.95, side="yes", left=60.0)
+    long_only = curvevalue.read(ts, vs, now, ref=99.95, side="yes", left=60.0, scales="900")
+    assert both is not None and long_only is not None and both.p <= long_only.p

@@ -182,6 +182,7 @@ class Target:
     late_units: float = 0.0  # lane late_drop_units (0 = off)
     curve_margin: float = -1.0  # lane curve_exit (-1 = off): the margin over the curve's own value of holding (curvevalue.py)
     curve_persist: float = 5.0
+    curve_scales: str = "900+180"
     curve_last: float = 900.0
     curve_since: float = 0.0  # when the curve condition began to hold without a break (0 = not holding)
     curve_at: float = 0.0  # the curve check reads at most once a second
@@ -708,7 +709,7 @@ class ProfitWatcher:
             return None
         t.curve_at = now
         got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
-        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left) if got else None
+        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left, t.curve_scales) if got else None
         if read is None:
             t.curve_since = 0.0
             return None
@@ -1467,7 +1468,7 @@ class ProfitWatcher:
                     held.shock_index, held.shock_ref = sid, ref
                     held.shock_trend_hold = spec.shock_trend_hold
                     if spec.curve_exit >= 0:
-                        held.curve_margin, held.curve_persist, held.curve_last = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last
+                        held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
                     held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
                     held.value_gain_x, held.value_high, held.value_high_left, held.value_min_gain = spec.value_exit_gain_x, spec.value_exit_high, spec.value_exit_high_left, spec.value_exit_min_gain
                     self._shock_hist.setdefault(sid, deque())

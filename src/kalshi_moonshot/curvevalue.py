@@ -27,8 +27,8 @@ def phi(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
-def read(ts: list[float], vs: list[float], now: float, ref: float, side: str, left: float) -> Curve | None:
-    """The curve's value of holding at `now`, from the index ticks (ts ascending). None when the history is too short, a tick is stale, or the reference or time left is unusable."""
+def read(ts: list[float], vs: list[float], now: float, ref: float, side: str, left: float, scales: str = "900+180") -> Curve | None:
+    """The curve's value of holding at `now`, from the index ticks (ts ascending). `scales` "900+180" takes the lower chance of the 900 s and 180 s rates (commodity_multiscale), "900" the 900 s rate alone (the underdog lane: studies/results/2026-11-10-underdog-curve-exit.txt). None when the history is too short, a tick is stale, or the reference or time left is unusable."""
     if ref <= 0 or left <= 0 or not ts or len(ts) != len(vs):
         return None
     j = bisect.bisect_right(ts, now) - 1
@@ -47,5 +47,5 @@ def read(ts: list[float], vs: list[float], now: float, ref: float, side: str, le
     sign = 1.0 if side == "yes" else -1.0
     c = (grid[-1] - math.log(ref)) * sign
     root = math.sqrt(left)
-    ps = [phi(c / (r * root)) if r > 0 else (1.0 if c > 0 else 0.0) for r in (r_long, r_short)]
+    ps = [phi(c / (r * root)) if r > 0 else (1.0 if c > 0 else 0.0) for r in ((r_long,) if scales == "900" else (r_long, r_short))]
     return Curve(min(ps), c, r_long, r_short)
