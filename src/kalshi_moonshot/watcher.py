@@ -58,6 +58,7 @@ BURST_RATIO = 5.0  # this SIDE's last 3 seconds of taker buys vs this side's own
 BURST_FLOOR = 300.0  # a burst must also be at least this many contracts on that side, so a handful of cheap prints never counts
 BURST_MIN_NORMAL = 10.0  # 5x of a silent side is not a burst. That side must trade this many contracts in a typical second
 BURST_BAND = (0.80, 0.97)  # the held side's bid must be in this band: a favorite
+SHOCK_PERSIST_GAP = 15.0  # seconds without a reading that break a shock_persist run
 SETTLE_LAST = 3.0  # ... and not in the last 3 (an order would land after the close)
 THROUGH_QUOTE = 1.0  # a bid older than this, before the index tick that went through, is the quote from before the cross
 THROUGH_SPOT = 5.0  # an index tick older than this is not a reason to sell
@@ -175,6 +176,9 @@ class Target:
     entry_filled: bool = False  # entry is the price the buy orders actually filled at (store.entry_fill), not the decision's ask
     shock_trend_hold: float = -99.0  # lane shock_trend_hold: no shock sale while the pre-spike trend is this far with the bet (-99 = off)
     shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
+    shock_persist: float = 0.0  # lane shock_persist: seconds the shock condition must hold before the sale (0 = at once)
+    shock_since: float = 0.0  # when the shock condition began to hold without a break (0 = not holding)
+    shock_seen: float = 0.0  # when _shock_hit last read this bet
     shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
     shock_log_only: bool = False  # lane shock_log_only: write shock_log rows, never sell
     shock_would: bool = False  # the would-fire row of a log-only watch is written once
@@ -812,8 +816,12 @@ class ProfitWatcher:
             if t.shock_margin_units > 0:
                 margin_bp = t.shock_margin_units * unit_bp
         self._shock_log(t, now, margin, move, worst, bid, 0)
+        if now - t.shock_seen > SHOCK_PERSIST_GAP:  # a gap in the readings breaks a run
+            t.shock_since = 0.0
+        t.shock_seen = now
         if bid < SHOCK_BID[0] or bid > (t.shock_bid_max or SHOCK_BID[1]) or quote_ts < spot_ts - THROUGH_QUOTE:
             self._shock_note(t, now, f"not usable: bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick; cushion {margin:+.1f} {lab}, worst move {worst:+.1f} {lab}")
+            t.shock_since = 0.0
             return None
         self._shock_note(t, now, f"cushion {margin:+.1f} {lab}, {t.shock_seconds:.0f}s move {move:+.1f} {lab} (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{bp:.1f} {lab} or worse with a cushion of {margin_bp:.1f} {lab} or less)")
         moved = bp > 0 and worst <= -bp and margin <= margin_bp
@@ -826,11 +834,19 @@ class ProfitWatcher:
                 margin_x = math.log(proj / t.shock_ref) * sign * 1e4
         crossed = t.cross_units >= 0 and not quote and margin_x <= t.cross_units * unit_bp
         if not (moved or crossed):
+            t.shock_since = 0.0
             return None
         if t.shock_trend_hold > -50 and not quote:
             trend = variants.pretrend_index(t.shock_index, t.side, 420.0, 90.0, now)
             if trend is not None and trend >= t.shock_trend_hold:
                 self._shock_note(t, now, f"held: the spot's trend before the spike is {trend:+.2f} typical minutes with the bet (the lane holds at {t.shock_trend_hold:g} or more); {-worst:.1f} bp spike, bid {bid:.2f}")
+                t.shock_since = 0.0
+                return None
+        if t.shock_persist > 0:  # the whole condition must have held, unbroken, for shock_persist seconds
+            if t.shock_since <= 0:
+                t.shock_since = now
+            if now - t.shock_since < t.shock_persist:
+                self._shock_note(t, now, f"holding for {t.shock_persist:.0f}s before selling: the condition has held {now - t.shock_since:.0f}s, bid {bid:.2f}")
                 return None
         if t.shock_log_only:
             if not t.shock_would:
@@ -1351,6 +1367,7 @@ class ProfitWatcher:
             if spec.shock_source == "quote" and spec.shock_units > 0 and spec.shock_seconds > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M") and ticker.split("-")[0] not in spec.shock_off_series:
                 held.shock_source = "quote"  # the contract's own mid is the spot (quoteshock.py): no index, no reference price to arm
                 held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = 0.0, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
+                held.shock_persist = spec.shock_persist
                 held.shock_units, held.shock_margin_units, held.cross_units = spec.shock_units, spec.shock_margin_units, -1.0
                 held.shock_bid_max, held.shock_log_only = spec.shock_bid_max, spec.shock_log_only
                 if (ticker, lane) not in self._shock_logged:
@@ -1375,6 +1392,7 @@ class ProfitWatcher:
                     self._seed_shock_history(sid)
                     if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0) and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
                         held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
+                        held.shock_persist = spec.shock_persist
                         held.shock_units, held.shock_margin_units, held.cross_units = spec.shock_units, spec.shock_margin_units, spec.cross_units
                         held.shock_bid_max = spec.shock_bid_max
                         held.shock_log_only = spec.shock_log_only

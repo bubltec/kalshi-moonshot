@@ -119,3 +119,47 @@ def test_a_no_holder_sells_when_the_yes_mid_jumps_up(tmp_path, monkeypatch):
     now = CLOSE - 120
     _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.20)) + _rows(now - 59, now, lambda s: 0.50))
     assert (w._shock_hit(t, 0.49, now, now) or "").startswith("shock exit")
+
+
+def test_shock_persist_holds_the_sale_until_the_condition_has_lasted(tmp_path, monkeypatch):
+    w = _watcher(tmp_path, monkeypatch)
+    t = w.targets[("KX10YRRATE15M-1", "tq")]
+    t.shock_persist, t.shock_memory = 20.0, 120.0
+    now = CLOSE - 150
+    _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.80)) + _rows(now - 59, now, lambda s: 0.50))
+    assert w._shock_hit(t, 0.49, now, now) is None  # the run starts
+    _feed(t.ticker, _rows(now + 1, now + 10, lambda s: 0.50))
+    assert w._shock_hit(t, 0.49, now + 10, now + 10) is None  # 10 s: not yet
+    _feed(t.ticker, _rows(now + 11, now + 20, lambda s: 0.50))
+    why = w._shock_hit(t, 0.49, now + 20, now + 20)  # 20 s: sold
+    assert why and why.startswith("shock exit")
+
+
+def test_shock_persist_restarts_when_the_condition_breaks_or_the_readings_gap(tmp_path, monkeypatch):
+    w = _watcher(tmp_path, monkeypatch)
+    t = w.targets[("KX10YRRATE15M-1", "tq")]
+    t.shock_persist, t.shock_memory = 20.0, 120.0
+    now = CLOSE - 150
+    _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.80)) + _rows(now - 59, now, lambda s: 0.50))
+    assert w._shock_hit(t, 0.49, now, now) is None
+    _feed(t.ticker, _rows(now + 1, now + 10, lambda s: 0.50))
+    assert w._shock_hit(t, 0.49, now + 10, now + 10) is None
+    _feed(t.ticker, _rows(now + 11, now + 14, lambda s: 0.50))
+    assert w._shock_hit(t, 0.93, now + 14, now + 14) is None  # the bid left the band: the run is over
+    _feed(t.ticker, _rows(now + 15, now + 24, lambda s: 0.50))
+    assert w._shock_hit(t, 0.49, now + 24, now + 24) is None  # a new run began here, 0 s old
+    _feed(t.ticker, _rows(now + 25, now + 40, lambda s: 0.50))
+    assert w._shock_hit(t, 0.49, now + 40, now + 40) is None  # 16 s without a reading: the run restarted here
+    _feed(t.ticker, _rows(now + 41, now + 50, lambda s: 0.50))
+    assert w._shock_hit(t, 0.49, now + 50, now + 50) is None
+    _feed(t.ticker, _rows(now + 51, now + 60, lambda s: 0.50))
+    assert (w._shock_hit(t, 0.49, now + 60, now + 60) or "").startswith("shock exit")  # 20 s after that restart
+
+
+def test_a_lane_without_shock_persist_sells_on_the_first_reading(tmp_path, monkeypatch):
+    w = _watcher(tmp_path, monkeypatch)
+    t = w.targets[("KX10YRRATE15M-1", "tq")]
+    assert t.shock_persist == 0.0
+    now = CLOSE - 120
+    _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.80)) + _rows(now - 59, now, lambda s: 0.50))
+    assert (w._shock_hit(t, 0.49, now, now) or "").startswith("shock exit")
