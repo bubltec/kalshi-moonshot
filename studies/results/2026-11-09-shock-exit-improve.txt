@@ -1,0 +1,46 @@
+
+=== crypto: lanes ('crypto_multiscale', 'crypto_multiscale_underdog') | settled live bets 364 | replayed 364
+  held to the result -34.49 | shape cutoffs (path efficiency) 0.044 0.093
+  current rule (1.0 / 0.6 / L=300): net -12.92, sold 191, against holding +21.58
+  variants against the current rule (size, cushion, persist, shape_gate, cross, L), best 15 by change, then the ones positive in both halves:
+    (0.0, 0.0, 10, False, True, 300.0): net +2.90 | vs current +15.81 on 230 changed | losers saved 162, winners sold 42 | halves -1.52 / +17.33 | choppy -2.1 middle +16.8 straight +1.2
+    (0.0, 0.0, 0, False, True, 300.0): net +0.84 | vs current +13.75 on 141 changed | losers saved 174, winners sold 54 | halves -6.16 / +19.91 | choppy -1.9 middle +16.3 straight -0.6
+    (0.0, 0.0, 0, False, True, 180.0): net -5.18 | vs current +7.73 on 220 changed | losers saved 137, winners sold 38 | halves +10.29 / -2.55 | choppy -2.2 middle +14.2 straight -4.2
+    (1.0, 0.0, 20, False, False, 300.0): net -8.66 | vs current +4.26 on 184 changed | losers saved 105, winners sold 22 | halves +3.58 / +0.68 | choppy -0.5 middle +8.7 straight -4.0
+    (1.0, 0.0, 0, False, False, 300.0): net -8.91 | vs current +4.01 on 45 changed | losers saved 139, winners sold 39 | halves -0.60 / +4.60 | choppy +0.1 middle +7.3 straight -3.4
+    (1.0, 0.3, 10, False, False, 300.0): net -9.21 | vs current +3.71 on 181 changed | losers saved 121, winners sold 37 | halves -4.29 / +8.00 | choppy -0.7 middle +8.6 straight -4.3
+    (1.0, 0.0, 10, False, False, 300.0): net -9.36 | vs current +3.56 on 183 changed | losers saved 121, winners sold 28 | halves -2.40 / +5.96 | choppy -0.6 middle +7.9 straight -3.8
+    (0.0, 0.0, 10, False, True, 120.0): net -10.30 | vs current +2.62 on 217 changed | losers saved 85, winners sold 17 | halves +17.57 / -14.95 | choppy +6.7 middle +8.6 straight -12.7
+    (0.0, 0.0, 10, False, True, 180.0): net -11.08 | vs current +1.83 on 222 changed | losers saved 122, winners sold 30 | halves +7.00 / -5.17 | choppy -3.1 middle +12.3 straight -7.3
+    (1.0, 0.6, 10, False, False, 300.0): net -11.66 | vs current +1.26 on 181 changed | losers saved 122, winners sold 43 | halves -5.47 / +6.73 | choppy -2.1 middle +8.0 straight -4.7
+    (1.5, 0.0, 10, False, False, 300.0): net -11.85 | vs current +1.07 on 187 changed | losers saved 93, winners sold 17 | halves +4.59 / -3.53 | choppy +5.4 middle +1.9 straight -6.2
+    (2.0, 0.6, 0, False, False, 300.0): net -11.99 | vs current +0.93 on 139 changed | losers saved 68, winners sold 14 | halves +7.90 / -6.97 | choppy +15.5 middle -3.7 straight -10.9
+    (1.0, 0.3, 20, False, False, 300.0): net -12.04 | vs current +0.87 on 184 changed | losers saved 108, winners sold 30 | halves +2.50 / -1.63 | choppy +0.1 middle +1.7 straight -0.9
+    (1.0, 0.6, 20, False, False, 300.0): net -12.82 | vs current +0.10 on 183 changed | losers saved 109, winners sold 35 | halves +1.58 / -1.48 | choppy -1.5 middle +4.4 straight -2.9
+    (1.0, 0.3, 0, False, False, 300.0): net -12.94 | vs current -0.02 on 31 changed | losers saved 139, winners sold 47 | halves -0.90 / +0.88 | choppy -1.1 middle +2.5 straight -1.4
+  positive in both halves: 1 of 167 variants
+
+=== commodity_multiscale: lanes ('commodity_multiscale',) | settled live bets 12 | replayed 10
+  too few bets
+
+=== favorites: lanes ('commodity_energy', 'commodity_wti', 'commodity_precious', 'commodity_industrial') | settled live bets 716 | replayed 511
+  held to the result +95.63 | shape cutoffs (path efficiency) 0.041 0.094
+  current rule (1.0 / 0.6 / L=120): net +109.59, sold 126, against holding +13.96
+  variants against the current rule (size, cushion, persist, shape_gate, cross, L), best 15 by change, then the ones positive in both halves:
+    (2.0, 0.3, 10, False, False, 180.0): net +134.48 | vs current +24.89 on 128 changed | losers saved 26, winners sold 8 | halves -11.27 / +36.17 | choppy +2.0 middle +16.0 straight +6.8
+    (1.0, 0.3, 20, False, False, 180.0): net +134.43 | vs current +24.84 on 125 changed | losers saved 51, winners sold 24 | halves +3.75 / +21.10 | choppy +5.8 middle +15.0 straight +4.1
+    (1.5, 0.3, 20, False, False, 180.0): net +131.82 | vs current +22.23 on 124 changed | losers saved 38, winners sold 14 | halves +13.75 / +8.48 | choppy +0.2 middle +9.7 straight +12.3
+    (1.0, 0.3, 10, False, False, 180.0): net +125.09 | vs current +15.50 on 125 changed | losers saved 55, winners sold 33 | halves -12.60 / +28.10 | choppy +13.7 middle +2.9 straight -1.1
+    (1.5, 0.0, 20, False, False, 180.0): net +124.65 | vs current +15.07 on 125 changed | losers saved 35, winners sold 11 | halves +4.94 / +10.13 | choppy +2.4 middle +10.2 straight +2.5
+    (2.0, 0.3, 20, False, False, 180.0): net +123.79 | vs current +14.20 on 125 changed | losers saved 24, winners sold 7 | halves -15.74 / +29.94 | choppy -9.5 middle +15.1 straight +8.6
+    (1.5, 0.3, 10, False, False, 180.0): net +123.69 | vs current +14.10 on 127 changed | losers saved 45, winners sold 21 | halves +8.67 / +5.44 | choppy +11.2 middle +2.1 straight +0.8
+    (2.0, 0.0, 10, False, False, 180.0): net +123.42 | vs current +13.83 on 127 changed | losers saved 23, winners sold 5 | halves -18.76 / +32.59 | choppy -6.6 middle +14.7 straight +5.8
+    (2.0, 0.0, 20, False, False, 180.0): net +122.34 | vs current +12.75 on 126 changed | losers saved 21, winners sold 5 | halves -17.30 / +30.05 | choppy -7.7 middle +12.7 straight +7.6
+    (2.0, 0.6, 20, False, False, 180.0): net +120.56 | vs current +10.97 on 126 changed | losers saved 24, winners sold 11 | halves -17.48 / +28.45 | choppy -1.4 middle +8.8 straight +3.6
+    (1.5, 0.6, 20, False, False, 180.0): net +119.55 | vs current +9.96 on 127 changed | losers saved 42, winners sold 25 | halves +3.37 / +6.60 | choppy +2.7 middle +10.0 straight -2.7
+    (2.0, 0.0, 0, False, False, 180.0): net +118.78 | vs current +9.20 on 123 changed | losers saved 32, winners sold 17 | halves -22.13 / +31.32 | choppy +5.8 middle -8.1 straight +11.5
+    (1.5, 0.0, 10, False, False, 180.0): net +118.75 | vs current +9.17 on 127 changed | losers saved 40, winners sold 13 | halves -4.29 / +13.45 | choppy +4.2 middle +6.8 straight -1.8
+    (2.0, 0.3, 10, False, False, 120.0): net +116.41 | vs current +6.82 on 126 changed | losers saved 23, winners sold 7 | halves -16.42 / +23.24 | choppy -9.1 middle +13.4 straight +2.6
+    (1.5, 0.0, 0, False, False, 180.0): net +113.06 | vs current +3.48 on 123 changed | losers saved 48, winners sold 30 | halves -9.53 / +13.01 | choppy +13.4 middle -14.8 straight +4.9
+  positive in both halves: 5 of 111 variants
+DONE
