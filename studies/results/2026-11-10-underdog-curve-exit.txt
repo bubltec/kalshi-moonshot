@@ -1,0 +1,59 @@
+job 20261110-124413-98577 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/968f033dedf34fa3b0e520ba570bc9b4
+markets 7865 | coins ['BNB', 'BTC', 'DOGE', 'ETH', 'HYPE', 'NEAR', 'SOL', 'XRP', 'ZEC'] | seconds 1090906
+indexes loaded
+  0 markets, 2 states
+  1000 markets, 689 states
+  2000 markets, 1325 states
+  3000 markets, 1937 states
+  4000 markets, 2537 states
+  5000 markets, 3217 states
+  6000 markets, 3879 states
+  7000 markets, 4565 states
+
+states 5056 | win 0.367 | mean ask 0.381
+
+=== ALL underdog states: 5056 states | held net per $ -0.0799
+  held, low ask third: n=1093 net/$ -0.1111
+  held, mid ask third: n=1750 net/$ -0.0827
+  held, high ask third: n=2213 net/$ -0.0622
+  (scales, margin, persist): change in net per $ against holding, best 12 then worst 3
+            60s900 m 0.15 persist 0: +0.0069 (net -0.0730) sold 1298 (1007 at a profit, 846 would have won) | halves -0.0011 / +0.0149 | low +0.0113 mid +0.0115 high +0.0011
+     60s900+60s180 m 0.15 persist 5: +0.0041 (net -0.0757) sold 1187 (664 at a profit, 723 would have won) | halves -0.0040 / +0.0122 | low +0.0081 mid +0.0028 high +0.0033
+     60s900+60s180 m 0.15 persist 0: +0.0040 (net -0.0759) sold 2297 (973 at a profit, 1124 would have won) | halves -0.0129 / +0.0209 | low +0.0058 mid +0.0132 high -0.0042
+            60s900 m 0.10 persist 5: +0.0030 (net -0.0769) sold 1050 (915 at a profit, 811 would have won) | halves -0.0011 / +0.0071 | low +0.0191 mid -0.0022 high -0.0008
+            60s900 m 0.15 persist 5: +0.0023 (net -0.0776) sold 613 (574 at a profit, 518 would have won) | halves +0.0019 / +0.0027 | low +0.0144 mid -0.0052 high +0.0022
+             1s900 m 0.15 persist 0: +0.0013 (net -0.0785) sold 1191 (1040 at a profit, 841 would have won) | halves -0.0093 / +0.0120 | low +0.0082 mid -0.0076 high +0.0050
+     60s900+60s180 m 0.10 persist 5: +0.0013 (net -0.0786) sold 2334 (1026 at a profit, 1198 would have won) | halves -0.0201 / +0.0228 | low +0.0031 mid +0.0107 high -0.0069
+            60s900 m 0.10 persist 0: +0.0008 (net -0.0790) sold 2114 (1422 at a profit, 1210 would have won) | halves -0.0144 / +0.0161 | low -0.0063 mid +0.0110 high -0.0037
+             1s900 m 0.10 persist 5: +0.0008 (net -0.0791) sold 1030 (970 at a profit, 842 would have won) | halves -0.0116 / +0.0132 | low +0.0123 mid -0.0084 high +0.0023
+             1s900 m 0.15 persist 5: +0.0004 (net -0.0795) sold 623 (606 at a profit, 540 would have won) | halves -0.0030 / +0.0037 | low +0.0033 mid -0.0023 high +0.0010
+             1s900 m 0.10 persist 0: -0.0011 (net -0.0810) sold 1859 (1482 at a profit, 1180 would have won) | halves -0.0063 / +0.0041 | low -0.0078 mid +0.0088 high -0.0056
+            60s900 m 0.06 persist 5: -0.0026 (net -0.0825) sold 1785 (1358 at a profit, 1203 would have won) | halves -0.0118 / +0.0066 | low -0.0183 mid +0.0014 high +0.0020
+            60s900 m 0.00 persist 0: -0.0336 (net -0.1134) sold 4782 (1597 at a profit, 1852 would have won) | halves -0.0541 / -0.0130 | low -0.0196 mid -0.0142 high -0.0558
+     60s900+60s180 m 0.00 persist 0: -0.0338 (net -0.1137) sold 5041 (834 at a profit, 1854 would have won) | halves -0.0544 / -0.0132 | low -0.0094 mid -0.0276 high -0.0508
+             1s900 m 0.00 persist 0: -0.0362 (net -0.1161) sold 4777 (1685 at a profit, 1848 would have won) | halves -0.0578 / -0.0146 | low -0.0169 mid -0.0289 high -0.0515
+  positive against holding in both halves: 1 of 30
+
+=== GATED (hour drift against the bet, at or under the sample's 25th percentile): 1256 states | held net per $ +0.0060
+  held, low ask third: n=309 net/$ -0.0296
+  held, mid ask third: n=411 net/$ +0.0079
+  held, high ask third: n=536 net/$ +0.0250
+  (scales, margin, persist): change in net per $ against holding, best 12 then worst 3
+            60s900 m 0.15 persist 5: +0.0190 (net +0.0250) sold 162 (152 at a profit, 130 would have won) | halves +0.0147 / +0.0239 | low +0.0276 mid +0.0197 high +0.0135
+             1s900 m 0.15 persist 5: +0.0154 (net +0.0214) sold 159 (154 at a profit, 130 would have won) | halves +0.0089 / +0.0227 | low +0.0140 mid +0.0198 high +0.0129
+             1s900 m 0.10 persist 5: +0.0125 (net +0.0185) sold 280 (259 at a profit, 220 would have won) | halves -0.0042 / +0.0311 | low +0.0097 mid +0.0193 high +0.0088
+            60s900 m 0.15 persist 0: +0.0114 (net +0.0173) sold 357 (274 at a profit, 231 would have won) | halves -0.0018 / +0.0261 | low +0.0087 mid +0.0263 high +0.0015
+            60s900 m 0.10 persist 5: +0.0099 (net +0.0159) sold 297 (256 at a profit, 225 would have won) | halves -0.0012 / +0.0222 | low +0.0231 mid +0.0127 high +0.0001
+             1s900 m 0.15 persist 0: +0.0092 (net +0.0152) sold 315 (271 at a profit, 217 would have won) | halves -0.0102 / +0.0309 | low -0.0106 mid +0.0086 high +0.0210
+     60s900+60s180 m 0.15 persist 5: -0.0055 (net +0.0005) sold 320 (175 at a profit, 197 would have won) | halves -0.0128 / +0.0027 | low +0.0098 mid -0.0243 high +0.0002
+            60s900 m 0.10 persist 0: -0.0137 (net -0.0077) sold 578 (373 at a profit, 330 would have won) | halves -0.0319 / +0.0068 | low -0.0213 mid -0.0086 high -0.0132
+             1s900 m 0.06 persist 5: -0.0163 (net -0.0104) sold 452 (375 at a profit, 324 would have won) | halves -0.0424 / +0.0128 | low -0.0368 mid -0.0134 high -0.0068
+     60s900+60s180 m 0.15 persist 0: -0.0166 (net -0.0106) sold 601 (252 at a profit, 303 would have won) | halves -0.0462 / +0.0166 | low -0.0091 mid -0.0053 high -0.0295
+     60s900+60s180 m 0.10 persist 5: -0.0194 (net -0.0134) sold 622 (269 at a profit, 326 would have won) | halves -0.0577 / +0.0236 | low +0.0015 mid -0.0125 high -0.0367
+            60s900 m 0.03 persist 5: -0.0305 (net -0.0245) sold 772 (459 at a profit, 422 would have won) | halves -0.0309 / -0.0301 | low -0.0705 mid -0.0098 high -0.0233
+            60s900 m 0.00 persist 0: -0.1105 (net -0.1046) sold 1215 (364 at a profit, 500 would have won) | halves -0.1000 / -0.1224 | low -0.1012 mid -0.0889 high -0.1326
+     60s900+60s180 m 0.00 persist 0: -0.1195 (net -0.1135) sold 1254 (163 at a profit, 500 would have won) | halves -0.1096 / -0.1305 | low -0.0945 mid -0.1122 high -0.1394
+             1s900 m 0.00 persist 0: -0.1243 (net -0.1183) sold 1222 (347 at a profit, 500 would have won) | halves -0.1198 / -0.1293 | low -0.0803 mid -0.1260 high -0.1483
+  positive against holding in both halves: 2 of 30
+DONE
+exit=0  results in job-results/20261110-124413-98577/
