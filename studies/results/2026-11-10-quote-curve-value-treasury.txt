@@ -1,0 +1,7 @@
+treasury_favorite: settled bets replayed 65; held to settlement +1.29
+  window 300s margin 0.06: net -1.80 (vs holding -3.09) on 11 sold | beat holding 5, lost to holding 6 | halves -1.54 / -1.54
+  window 300s margin 0.15: net +1.18 (vs holding -0.11) on 6 sold | beat holding 4, lost to holding 2 | halves +0.02 / -0.13
+  window 300s margin 0.25: net +0.52 (vs holding -0.77) on 1 sold | beat holding 0, lost to holding 1 | halves +0.00 / -0.77
+  window 600s margin 0.06: net -1.67 (vs holding -2.96) on 12 sold | beat holding 6, lost to holding 6 | halves -1.42 / -1.54
+  window 600s margin 0.15: net +0.72 (vs holding -0.57) on 8 sold | beat holding 5, lost to holding 3 | halves +0.10 / -0.67
+  window 600s margin 0.25: net +0.52 (vs holding -0.77) on 1 sold | beat holding 0, lost to holding 1 | halves +0.00 / -0.77
