@@ -187,6 +187,12 @@ class Target:
     curve_since: float = 0.0  # when the curve condition began to hold without a break (0 = not holding)
     curve_at: float = 0.0  # the curve check reads at most once a second
     curve_noted: float = 0.0
+    curve_drop_units: float = -1.0  # lane curve_drop_units (-1 = off): the curve exit's trajectory sale
+    curve_drop_seconds: float = 120.0
+    curve_drop_margin: float = 0.5
+    curve_drop_persist: float = 5.0
+    curve_drop_since: float = 0.0
+    curve_cush: deque = field(default_factory=deque)  # (time, cushion in typical minutes), the last curve_drop_seconds of them
     late_seconds: float = 30.0  # lane late_drop_seconds
     late_bids: deque = field(default_factory=lambda: deque(maxlen=400))  # (second, bid) one a second, forward-filled, for the late-drop exit
     shock_since: float = 0.0  # when the shock condition began to hold without a break (0 = not holding)
@@ -718,6 +724,20 @@ class ProfitWatcher:
         if now - t.curve_noted >= 10.0:
             t.curve_noted = now
             log.info("curve exit watch %s %s, %.0fs left: bid %.2f (%.3f after the fee), curve chance %.3f, over by %+.3f (sells at %+.3f for %.0fs); cushion %+.2f typical minutes", t.ticker, t.lane, left, bid, net, read.p, over, t.curve_margin, t.curve_persist, read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0)
+        tm = read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0
+        if t.curve_drop_units > 0:
+            # the trajectory sale: the cushion fell curve_drop_units typical minutes over curve_drop_seconds and now sits at or under the margin
+            t.curve_cush.append((now, tm))
+            while t.curve_cush and now - t.curve_cush[0][0] > t.curve_drop_seconds + 1.0:
+                t.curve_cush.popleft()
+            first_ts, first_tm = t.curve_cush[0]
+            if now - first_ts >= t.curve_drop_seconds - 1.0 and tm <= t.curve_drop_margin and first_tm - tm >= t.curve_drop_units:
+                if t.curve_drop_since <= 0:
+                    t.curve_drop_since = now
+                if now - t.curve_drop_since >= t.curve_drop_persist:
+                    return f"curve exit (trajectory): the cushion fell {first_tm - tm:.2f} typical minutes over {now - first_ts:.0f}s to {tm:+.2f} (sells at a fall of {t.curve_drop_units:g} to {t.curve_drop_margin:g} or under, held {now - t.curve_drop_since:.0f}s); bid {bid:.2f}, curve chance {read.p:.3f}, {left:.0f}s left"
+            else:
+                t.curve_drop_since = 0.0
         if over < t.curve_margin:
             t.curve_since = 0.0
             return None
@@ -1469,6 +1489,7 @@ class ProfitWatcher:
                     held.shock_trend_hold = spec.shock_trend_hold
                     if spec.curve_exit >= 0:
                         held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
+                        held.curve_drop_units, held.curve_drop_seconds, held.curve_drop_margin, held.curve_drop_persist = spec.curve_drop_units, spec.curve_drop_seconds, spec.curve_drop_margin_units, spec.curve_drop_persist
                     held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
                     held.value_gain_x, held.value_high, held.value_high_left, held.value_min_gain = spec.value_exit_gain_x, spec.value_exit_high, spec.value_exit_high_left, spec.value_exit_min_gain
                     self._shock_hist.setdefault(sid, deque())
