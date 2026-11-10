@@ -1,0 +1,47 @@
+23:45:14 (+14.2s after the quarter) {"event_type": "metadata_updated", "market_ticker": "KXSILVER15M-26NOV101900-00", "strike_type": "greater_or_equal", "floor_strike": 51.551, "custom_strike": {"round_digits": "3"}, "yes_sub_title": "Target Price: $51.551"}
+23:45:14 (+14.3s after the quarter) {"event_type": "metadata_updated", "market_ticker": "KXEURUSD15M-26NOV101900-30", "strike_type": "greater_or_equal", "floor_strike": 1.11695, "custom_strike": {"round_digits": "5"}, "yes_sub_title": "Target price: 1.11695"}
+23:45:15 (+15.2s after the quarter) {"market_ticker": "KXUSDJPY15M-26NOV101845-30", "determination_ts": 1794354315, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:15 (+15.2s after the quarter) {"market_ticker": "KXUSDCAD15M-26NOV101845-30", "determination_ts": 1794354315, "result": "no", "settlement_value": "0.0000", "event_type": "determined"}
+23:45:15 (+15.2s after the quarter) {"market_ticker": "KXGBPUSD15M-26NOV101845-30", "determination_ts": 1794354315, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:15 (+15.2s after the quarter) {"market_ticker": "KXAUDUSD15M-26NOV101845-30", "determination_ts": 1794354315, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:15 (+15.3s after the quarter) {"market_ticker": "KXEURUSD15M-26NOV101845-30", "determination_ts": 1794354315, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:16 (+16.2s after the quarter) {"market_ticker": "KXGBPUSD15M-26NOV101845-30", "settled_ts": 1794354316, "event_type": "settled"}
+23:45:16 (+16.2s after the quarter) {"market_ticker": "KXEURUSD15M-26NOV101845-30", "settled_ts": 1794354316, "event_type": "settled"}
+23:45:16 (+16.2s after the quarter) {"market_ticker": "KXUSDJPY15M-26NOV101845-30", "settled_ts": 1794354316, "event_type": "settled"}
+23:45:16 (+16.2s after the quarter) {"market_ticker": "KXAUDUSD15M-26NOV101845-30", "settled_ts": 1794354316, "event_type": "settled"}
+23:45:16 (+16.2s after the quarter) {"market_ticker": "KXUSDCAD15M-26NOV101845-30", "settled_ts": 1794354316, "event_type": "settled"}
+23:45:16 (+16.2s after the quarter) {"event_type": "metadata_updated", "market_ticker": "KXCOPPER15M-26NOV101900-00", "strike_type": "greater_or_equal", "floor_strike": 6.36155, "custom_strike": {"round_digits": "5"}, "yes_sub_title": "Target Price: $6.36155"}
+23:45:16 (+16.3s after the quarter) {"event_type": "metadata_updated", "market_ticker": "KXBRENT15M-26NOV101900-00", "strike_type": "greater_or_equal", "floor_strike": 90.56, "custom_strike": {"round_digits": "2"}, "yes_sub_title": "Target Price: $90.56"}
+23:45:16 (+16.7s after the quarter) {"event_type": "metadata_updated", "market_ticker": "KXNATGAS15M-26NOV101900-00", "strike_type": "greater_or_equal", "floor_strike": 3.50977, "custom_strike": {"round_digits": "5"}, "yes_sub_title": "Target Price: $3.50977"}
+23:45:18 (+19.0s after the quarter) {"event_type": "metadata_updated", "market_ticker": "KXPALLADIUM15M-26NOV101900-00", "strike_type": "greater_or_equal", "floor_strike": 1031.121, "custom_strike": {"round_digits": "3"}, "yes_sub_title": "Target Price: $1,031.121"}
+23:45:19 (+19.3s after the quarter) {"event_type": "metadata_updated", "market_ticker": "KXPLATINUM15M-26NOV101900-00", "strike_type": "greater_or_equal", "floor_strike": 1546.302, "custom_strike": {"round_digits": "3"}, "yes_sub_title": "Target Price: $1,546.302"}
+23:45:20 (+20.3s after the quarter) {"market_ticker": "KXWTI15M-26NOV101845-45", "determination_ts": 1794354320, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:20 (+20.3s after the quarter) {"market_ticker": "KXGOLD15M-26NOV101845-45", "determination_ts": 1794354320, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:20 (+20.4s after the quarter) {"market_ticker": "KXSILVER15M-26NOV101845-45", "determination_ts": 1794354320, "result": "no", "settlement_value": "0.0000", "event_type": "determined"}
+23:45:20 (+20.4s after the quarter) {"market_ticker": "KXBRENT15M-26NOV101845-45", "determination_ts": 1794354320, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:20 (+20.5s after the quarter) {"market_ticker": "KXNATGAS15M-26NOV101845-45", "determination_ts": 1794354320, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:20 (+20.5s after the quarter) {"market_ticker": "KXCOPPER15M-26NOV101845-45", "determination_ts": 1794354320, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:20 (+20.6s after the quarter) {"market_ticker": "KXPALLADIUM15M-26NOV101845-45", "determination_ts": 1794354320, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:20 (+20.6s after the quarter) {"market_ticker": "KXPLATINUM15M-26NOV101845-45", "determination_ts": 1794354320, "result": "yes", "settlement_value": "1.0000", "event_type": "determined"}
+23:45:21 (+21.3s after the quarter) {"market_ticker": "KXBRENT15M-26NOV101845-45", "settled_ts": 1794354321, "event_type": "settled"}
+23:45:21 (+21.3s after the quarter) {"market_ticker": "KXCOPPER15M-26NOV101845-45", "settled_ts": 1794354321, "event_type": "settled"}
+23:45:21 (+21.3s after the quarter) {"market_ticker": "KXWTI15M-26NOV101845-45", "settled_ts": 1794354321, "event_type": "settled"}
+23:45:21 (+21.3s after the quarter) {"market_ticker": "KXSILVER15M-26NOV101845-45", "settled_ts": 1794354321, "event_type": "settled"}
+23:45:21 (+21.3s after the quarter) {"market_ticker": "KXGOLD15M-26NOV101845-45", "settled_ts": 1794354321, "event_type": "settled"}
+23:45:21 (+21.3s after the quarter) {"market_ticker": "KXNATGAS15M-26NOV101845-45", "settled_ts": 1794354321, "event_type": "settled"}
+23:45:21 (+21.3s after the quarter) {"market_ticker": "KXPALLADIUM15M-26NOV101845-45", "settled_ts": 1794354321, "event_type": "settled"}
+23:45:21 (+21.3s after the quarter) {"market_ticker": "KXPLATINUM15M-26NOV101845-45", "settled_ts": 1794354321, "event_type": "settled"}
+23:45:29 (+29.9s after the quarter) {"market_ticker": "KXCRYPTOLEAD15M-26NOV101845-BTC", "determination_ts": 1794354329, "result": "no", "settlement_value": "0.0000", "event_type": "determined"}
+23:45:29 (+29.9s after the quarter) {"market_ticker": "KXCRYPTOLEAD15M-26NOV101845-ETH", "determination_ts": 1794354329, "result": "no", "settlement_value": "0.0000", "event_type": "determined"}
+23:45:31 (+31.2s after the quarter) {"market_ticker": "KXCRYPTOLEAD15M-26NOV101845-BTC", "settled_ts": 1794354331, "event_type": "settled"}
+23:45:31 (+31.2s after the quarter) {"market_ticker": "KXCRYPTOLEAD15M-26NOV101845-ETH", "settled_ts": 1794354331, "event_type": "settled"}
+all lifecycle messages 214
+events by (series, type):
+  determined | KXAUDUSD15M 1, KXBNB15M 1, KXBRENT15M 1, KXBTC15M 1, KXCOPPER15M 1, KXCRYPTOLEAD15M 5, KXDOGE15M 1, KXETH15M 1, KXEURUSD15M 1, KXGBPUSD15M 1, KXGOLD15M 1, KXHYPE15M 1, KXNATGAS15M 1, KXNEAR15M 1, KXPALLADIUM15M 1, KXPLATINUM15M 1, KXSILVER15M 1, KXSOL15M 1, KXUSDCAD15M 1, KXUSDJPY15M 1, KXWTI15M 1, KXXRP15M 1, KXZEC15M 1
+  metadata_updated | KXAUDUSD15M 1, KXBNB15M 1, KXBRENT15M 1, KXBTC15M 1, KXCOPPER15M 1, KXDOGE15M 1, KXETH15M 1, KXEURUSD15M 1, KXGBPUSD15M 1, KXGOLD15M 1, KXHYPE15M 1, KXNATGAS15M 1, KXNEAR15M 1, KXPALLADIUM15M 1, KXPLATINUM15M 1, KXSILVER15M 1, KXSOL15M 1, KXUSDCAD15M 1, KXUSDJPY15M 1, KXWTI15M 1, KXXRP15M 1, KXZEC15M 1
+  settled | KXAUDUSD15M 1, KXBNB15M 1, KXBRENT15M 1, KXBTC15M 2, KXCOPPER15M 1, KXCRYPTOLEAD15M 5, KXDOGE15M 1, KXETH15M 1, KXEURUSD15M 1, KXGBPUSD15M 1, KXGOLD15M 1, KXHYPE15M 1, KXNATGAS15M 1, KXNEAR15M 1, KXPALLADIUM15M 1, KXPLATINUM15M 1, KXSILVER15M 1, KXSOL15M 1, KXUSDCAD15M 1, KXUSDJPY15M 1, KXWTI15M 1, KXXRP15M 1, KXZEC15M 1
+
+
+
+
+[exited with code 0]
