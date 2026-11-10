@@ -1,0 +1,39 @@
+job 20261110-072947-67985 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/5afc1755441643beb045c1380e795ad4
+
+=== crypto: settled live bets 364 | replayed 364
+  held: net -34.49, whole-stake losses 203 of 364 ($323.60 staked on them)
+  1. exit rules by zeros (W, K, HI): zeros turned partial | whole losses left | winners sold | net vs holding | worst loss left
+    (60, 1, 0.0): 45 of 203 | 158 left | 18 winners sold | +5.11 | worst bet -3.14
+    (45, 1, 0.0): 28 of 203 | 175 left | 12 winners sold | +4.79 | worst bet -3.14
+    (60, 2, 0.0): 25 of 203 | 178 left | 8 winners sold | -4.22 | worst bet -3.14
+    (45, 2, 0.0): 19 of 203 | 184 left | 3 winners sold | +5.72 | worst bet -3.14
+    (30, 1, 0.0): 18 of 203 | 185 left | 7 winners sold | +3.82 | worst bet -3.14
+    (60, 1, 0.75): 18 of 203 | 185 left | 14 winners sold | +1.66 | worst bet -3.14
+    (45, 1, 0.75): 13 of 203 | 190 left | 10 winners sold | +1.24 | worst bet -3.14
+    (60, 2, 0.75): 13 of 203 | 190 left | 8 winners sold | -8.85 | worst bet -3.14
+    (30, 2, 0.0): 12 of 203 | 191 left | 1 winners sold | +3.22 | worst bet -3.14
+    (30, 1, 0.75): 11 of 203 | 192 left | 5 winners sold | +4.18 | worst bet -3.14
+  2. whole-loss rate by curve state (price band, shape, time left): flagged cells
+  flagged cells: 0
+
+=== commodity_multiscale: settled live bets 12 | replayed 12
+  too few bets
+
+=== favorites: settled live bets 716 | replayed 716
+  held: net +80.83, whole-stake losses 90 of 716 ($642.94 staked on them)
+  1. exit rules by zeros (W, K, HI): zeros turned partial | whole losses left | winners sold | net vs holding | worst loss left
+    (60, 1, 0.0): 65 of 90 | 25 left | 90 winners sold | -60.66 | worst bet -10.74
+    (45, 1, 0.0): 60 of 90 | 30 left | 59 winners sold | -17.17 | worst bet -10.74
+    (30, 1, 0.0): 54 of 90 | 36 left | 43 winners sold | -1.80 | worst bet -10.74
+    (60, 2, 0.0): 47 of 90 | 43 left | 30 winners sold | -18.84 | worst bet -10.74
+    (45, 2, 0.0): 42 of 90 | 48 left | 19 winners sold | -3.72 | worst bet -10.74
+    (60, 1, 0.75): 38 of 90 | 52 left | 78 winners sold | -23.69 | worst bet -10.74
+    (45, 1, 0.75): 34 of 90 | 56 left | 50 winners sold | +5.93 | worst bet -10.74
+    (60, 2, 0.75): 34 of 90 | 56 left | 25 winners sold | -3.10 | worst bet -10.74
+    (30, 2, 0.0): 33 of 90 | 57 left | 13 winners sold | +0.63 | worst bet -10.74
+    (30, 1, 0.75): 30 of 90 | 60 left | 38 winners sold | -2.48 | worst bet -10.74
+  2. whole-loss rate by curve state (price band, shape, time left): flagged cells
+  flagged cells: 0
+DONE
+exit=0  results in job-results/20261110-072947-67985/
+exit=0
