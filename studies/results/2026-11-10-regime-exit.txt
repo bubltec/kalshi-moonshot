@@ -1,0 +1,58 @@
+job 20261110-084354-74970 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/087e6b218569448795a7a072ad5264a9
+
+=== crypto: settled live bets 364 | replayed 364
+  regime ratio ush/u60: 90th pct over decision seconds 1.27; 25th pct at the buy 0.72
+  held to the result -34.49 | actual live (own sales, no fee on sales) -5.41
+  live rule replayed ('u15', 2.0, 0.6, 0, False, 300.0): net -11.99, sold 82, against holding +22.51
+  exit variants (mode, size, cushion, persist, sit_out, L) against the live rule:
+    ('u15', 2.0, 0.6, 0, True, 300.0): net -15.33 | vs live -3.34 on 13 changed, 69 sold | losers saved 57, winners sold 12 | halves -1.24 / -2.10 | choppy +1.3 middle +0.5 straight -5.2
+    ('floor', 2.0, 0.6, 0, False, 300.0): net -16.23 | vs live -4.24 on 30 changed, 57 sold | losers saved 49, winners sold 8 | halves -3.49 / -0.75 | choppy -7.9 middle +5.6 straight -2.0
+    ('floor', 2.0, 0.6, 0, True, 300.0): net -19.57 | vs live -7.58 on 43 changed, 44 sold | losers saved 38, winners sold 6 | halves -4.73 / -2.85 | choppy -6.6 middle +6.1 straight -7.1
+    ('burst', 2.0, 0.6, 0, True, 300.0): net -19.68 | vs live -7.70 on 25 changed, 67 sold | losers saved 54, winners sold 13 | halves -3.11 / -4.58 | choppy +1.1 middle +0.7 straight -9.5
+    ('burst', 2.0, 0.6, 0, False, 300.0): net -20.31 | vs live -8.32 on 17 changed, 77 sold | losers saved 62, winners sold 15 | halves -3.93 / -4.39 | choppy -1.4 middle -0.7 straight -6.2
+    ('u15', 2.0, 0.6, 20, True, 300.0): net -22.02 | vs live -10.03 on 78 changed, 49 sold | losers saved 40, winners sold 9 | halves -7.66 / -2.37 | choppy -3.6 middle +4.2 straight -10.6
+    ('both', 2.0, 0.6, 0, True, 300.0): net -22.34 | vs live -10.35 on 48 changed, 43 sold | losers saved 36, winners sold 7 | halves -5.20 / -5.15 | choppy -7.0 middle +5.9 straight -9.3
+    ('burst', 2.0, 0.6, 20, True, 300.0): net -22.40 | vs live -10.42 on 78 changed, 44 sold | losers saved 36, winners sold 8 | halves -8.76 / -1.66 | choppy -5.1 middle +6.2 straight -11.5
+    ('both', 2.0, 0.6, 0, False, 300.0): net -22.96 | vs live -10.98 on 40 changed, 53 sold | losers saved 44, winners sold 9 | halves -6.02 / -4.96 | choppy -9.5 middle +4.5 straight -5.9
+    ('u15', 2.0, 0.6, 20, False, 300.0): net -23.35 | vs live -11.37 on 78 changed, 58 sold | losers saved 47, winners sold 11 | halves -10.23 / -1.14 | choppy -6.5 middle +1.0 straight -5.9
+    ('burst', 2.0, 0.6, 20, False, 300.0): net -23.43 | vs live -11.45 on 78 changed, 52 sold | losers saved 42, winners sold 10 | halves -11.65 / +0.20 | choppy -7.5 middle +3.0 straight -6.9
+    ('both', 2.0, 0.6, 20, True, 300.0): net -29.82 | vs live -17.84 on 80 changed, 24 sold | losers saved 19, winners sold 5 | halves -10.97 / -6.87 | choppy -13.0 middle +6.4 straight -11.2
+    ('floor', 2.0, 0.6, 20, True, 300.0): net -30.49 | vs live -18.50 on 80 changed, 25 sold | losers saved 20, winners sold 5 | halves -10.74 / -7.77 | choppy -11.9 middle +4.4 straight -11.0
+    ('both', 2.0, 0.6, 20, False, 300.0): net -30.86 | vs live -18.87 on 80 changed, 32 sold | losers saved 25, winners sold 7 | halves -13.87 / -5.00 | choppy -15.5 middle +3.2 straight -6.6
+    ('floor', 2.0, 0.6, 20, False, 300.0): net -31.82 | vs live -19.83 on 80 changed, 34 sold | losers saved 27, winners sold 7 | halves -13.30 / -6.53 | choppy -14.8 middle +1.2 straight -6.2
+  positive in both halves: 0 of 15
+  entry regime (ratio at the buy), held to the result, net per $ staked:
+    calm  (< 25th pct): +0.003/$ n=91 | halves -0.054/$ n=44 / +0.042/$ n=47 | whole-stake losses 50
+    normal: -0.099/$ n=230 | halves -0.027/$ n=109 / -0.144/$ n=121 | whole-stake losses 129
+    burst (>= 90th pct): +0.140/$ n=43 | halves +0.285/$ n=30 / -0.106/$ n=13 | whole-stake losses 24
+
+=== commodity_multiscale: settled live bets 12 | replayed 11
+  too few bets
+
+=== favorites: settled live bets 716 | replayed 550
+  regime ratio ush/u60: 90th pct over decision seconds 1.21; 25th pct at the buy 0.72
+  held to the result +119.25 | actual live (own sales, no fee on sales) +82.63
+  live rule replayed ('u15', 1.5, 0.3, 20, False, 180.0): net +147.86, sold 54, against holding +28.61
+  exit variants (mode, size, cushion, persist, sit_out, L) against the live rule:
+    ('both', 1.5, 0.3, 20, False, 180.0): net +172.00 | vs live +24.14 on 20 changed, 46 sold | losers saved 35, winners sold 11 | halves -6.60 / +30.74 | choppy +0.5 middle +26.6 straight -2.9
+    ('floor', 1.5, 0.3, 20, False, 180.0): net +163.53 | vs live +15.67 on 11 changed, 49 sold | losers saved 36, winners sold 13 | halves -1.60 / +17.28 | choppy -2.3 middle +19.3 straight -1.4
+    ('both', 1.5, 0.3, 20, True, 180.0): net +159.88 | vs live +12.03 on 25 changed, 38 sold | losers saved 28, winners sold 10 | halves -14.09 / +26.11 | choppy -0.0 middle +22.5 straight -10.5
+    ('burst', 1.5, 0.3, 20, False, 180.0): net +157.14 | vs live +9.28 on 10 changed, 51 sold | losers saved 37, winners sold 14 | halves -4.18 / +13.46 | choppy +2.7 middle +8.1 straight -1.6
+    ('floor', 1.5, 0.3, 20, True, 180.0): net +156.93 | vs live +9.07 on 21 changed, 40 sold | losers saved 29, winners sold 11 | halves -14.17 / +23.24 | choppy -2.8 middle +20.7 straight -8.9
+    ('floor', 1.5, 0.3, 0, True, 180.0): net +150.26 | vs live +2.40 on 85 changed, 75 sold | losers saved 42, winners sold 33 | halves -19.42 / +21.82 | choppy +4.8 middle +2.9 straight -5.3
+    ('burst', 1.5, 0.3, 20, True, 180.0): net +145.02 | vs live -2.83 on 15 changed, 43 sold | losers saved 30, winners sold 13 | halves -11.67 / +8.84 | choppy +2.2 middle +4.0 straight -9.1
+    ('floor', 1.5, 0.3, 0, False, 180.0): net +144.44 | vs live -3.42 on 90 changed, 86 sold | losers saved 47, winners sold 39 | halves -18.38 / +14.96 | choppy +4.8 middle -8.5 straight +0.3
+    ('both', 1.5, 0.3, 0, True, 180.0): net +143.65 | vs live -4.21 on 83 changed, 70 sold | losers saved 39, winners sold 31 | halves -27.59 / +23.39 | choppy +5.1 middle -0.3 straight -9.0
+    ('u15', 1.5, 0.3, 20, True, 180.0): net +142.07 | vs live -5.79 on 11 changed, 45 sold | losers saved 31, winners sold 14 | halves -11.75 / +5.96 | choppy -0.5 middle +2.3 straight -7.5
+    ('both', 1.5, 0.3, 0, False, 180.0): net +141.96 | vs live -5.90 on 89 changed, 83 sold | losers saved 46, winners sold 37 | halves -26.23 / +20.33 | choppy +5.1 middle -7.4 straight -3.7
+    ('burst', 1.5, 0.3, 0, True, 180.0): net +121.25 | vs live -26.60 on 89 changed, 82 sold | losers saved 42, winners sold 40 | halves -26.44 / -0.17 | choppy +5.0 middle -17.0 straight -14.6
+    ('burst', 1.5, 0.3, 0, False, 180.0): net +119.56 | vs live -28.30 on 95 changed, 95 sold | losers saved 49, winners sold 46 | halves -25.08 / -3.22 | choppy +5.0 middle -24.1 straight -9.2
+    ('u15', 1.5, 0.3, 0, True, 180.0): net +119.36 | vs live -28.50 on 91 changed, 86 sold | losers saved 44, winners sold 42 | halves -26.77 / -1.73 | choppy +4.6 middle -14.3 straight -18.9
+    ('u15', 1.5, 0.3, 0, False, 180.0): net +113.54 | vs live -34.32 on 96 changed, 97 sold | losers saved 49, winners sold 48 | halves -25.72 / -8.60 | choppy +4.6 middle -25.7 straight -13.3
+  positive in both halves: 0 of 15
+  entry regime (ratio at the buy), held to the result, net per $ staked:
+    calm  (< 25th pct): +0.005/$ n=137 | halves -0.014/$ n=70 / +0.021/$ n=67 | whole-stake losses 21
+    normal: +0.035/$ n=366 | halves -0.008/$ n=175 / +0.077/$ n=191 | whole-stake losses 39
+    burst (>= 90th pct): +0.055/$ n=45 | halves +0.006/$ n=30 / +0.159/$ n=15 | whole-stake losses 4
+DONE
+exit=0  results in job-results/20261110-084354-74970/
