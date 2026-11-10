@@ -1,0 +1,10 @@
+treasury_favorite: settled bets replayed 64; held to settlement +1.18
+  N 1.0 persist 0s: net -3.24 (vs holding -4.42) on 60 sold | beat holding 6, lost to holding 54 | halves -2.40 / -2.02
+  N 1.0 persist 5s: net -3.25 (vs holding -4.43) on 56 sold | beat holding 6, lost to holding 50 | halves -2.84 / -1.59
+  N 1.5 persist 0s: net -4.00 (vs holding -5.18) on 40 sold | beat holding 6, lost to holding 34 | halves -3.13 / -2.05
+  N 1.5 persist 5s: net -1.90 (vs holding -3.08) on 23 sold | beat holding 5, lost to holding 18 | halves -1.56 / -1.52
+  N 2.0 persist 0s: net -2.49 (vs holding -3.67) on 17 sold | beat holding 5, lost to holding 12 | halves -2.59 / -1.08
+  N 2.0 persist 5s: net -1.37 (vs holding -2.56) on 13 sold | beat holding 4, lost to holding 9 | halves -1.44 / -1.11
+  N 3.0 persist 0s: net -0.44 (vs holding -1.63) on 5 sold | beat holding 2, lost to holding 3 | halves -0.67 / -0.96
+  N 3.0 persist 5s: net +0.58 (vs holding -0.60) on 3 sold | beat holding 2, lost to holding 1 | halves +0.17 / -0.77
+(the lane's own live exits' result is in the decisions/orders tables; compare there)
