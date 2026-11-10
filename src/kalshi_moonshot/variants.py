@@ -618,6 +618,58 @@ def unit_index(index: str, now: float | None = None, span: float = 900.0) -> flo
     return math.sqrt(sq / n) * math.sqrt(60.0) if sq > 0 and n >= 300 else None
 
 
+HOUR = 3600
+DRIFT_STEP = 60  # one reading a minute
+DRIFT_MIN_SAMPLES = 240  # four hours of readings before the market's own cutoff is trusted
+
+
+def hour_drift_from(ts: Sequence[float], vs: Sequence[float], now: float, side: str, q: float) -> tuple[float, float, int] | None:
+    """(the hour's drift now, its q-th quantile over this market's own recent readings, how many readings), both signed with the bet (a YES bet wants up, a NO bet wants down) and in the typical minute of that hour (the rms one-second log move over the hour times sqrt(60)). One reading a minute over the history given. None when the history holds under DRIFT_MIN_SAMPLES readings plus the hour they look back over, or the newest tick is stale (2026-11-10: underdogs bought with the hour's drift against them paid +7.1% a dollar after the fee in a walk-forward, studies/results/2026-11-10-underdog-walkforward.txt)."""
+    if not ts or len(ts) != len(vs) or q < 0 or q > 1:
+        return None
+    j = bisect.bisect_right(ts, now) - 1
+    if j < 0 or now - ts[j] > 10.0 or ts[0] > now - (HOUR + DRIFT_MIN_SAMPLES * DRIFT_STEP):
+        return None
+    base = int(ts[0])
+    n = int(now) - base
+    g: list[float] = []
+    i = 0
+    last = None
+    for t in range(n + 1):
+        while i < len(ts) and ts[i] <= base + t:
+            last = vs[i]
+            i += 1
+        if last is None or last <= 0:
+            return None
+        g.append(math.log(last))
+    sq = [0.0]
+    for a, b in itertools.pairwise(g):
+        sq.append(sq[-1] + (b - a) ** 2)
+    sign = 1.0 if side == "yes" else -1.0
+    reads: list[float] = []
+    for t in range(n, HOUR - 1, -DRIFT_STEP):  # newest first, so the current reading is reads[0]
+        v = (sq[t] - sq[t - HOUR]) / HOUR
+        if v > 0:
+            reads.append((g[t] - g[t - HOUR]) * sign / (math.sqrt(v) * math.sqrt(60.0)))
+    if len(reads) < DRIFT_MIN_SAMPLES:
+        return None
+    ordered = sorted(reads)
+    return reads[0], ordered[min(len(ordered) - 1, int(q * len(ordered)))], len(reads)
+
+
+def hour_drift_now(series: str, side: str, q: float, now: float | None = None) -> tuple[float, float, int] | None:
+    """hour_drift_from for a series' index, from the in-memory ticks (warmed from the tape for 8 hours), or None."""
+    now = time.time() if now is None else now
+    index = crypto_index(series) or biquote_index(series)
+    if not index:
+        return None
+    for hours in (7.5, 5.5):
+        got = ticks_mod.history.window(index, now - hours * 3600.0, now)
+        if got:
+            return hour_drift_from(got[0], got[1], now, side, q)
+    return None
+
+
 def pretrend_index(index: str, side: str, span: float = 420.0, gap: float = 90.0, now: float | None = None) -> float | None:
     """pretrend_features for an index id (a commodity's BiQuote index as well as a coin's), from the in-memory ticks, or None."""
     now = time.time() if now is None else now

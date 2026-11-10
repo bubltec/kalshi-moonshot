@@ -631,6 +631,22 @@ def evaluate(
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the buy is above {spec.wave_pos_max:g} of the swing's range (waits for the low). {note}"
         else:
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] {note}"
+    if bet and spec.hour_drift_q >= 0:
+        from . import variants as _variants
+
+        try:
+            drift = _variants.hour_drift_now(shot.series, shot.side, spec.hour_drift_q)
+        except Exception as exc:
+            drift = None
+            log.warning("hour drift unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if drift is None:
+            bet = False
+            note = f"the hour's drift of {shot.series} cannot be read (history under five hours or a stale tick), so this lane buys nothing. {note}"
+        elif drift[0] > drift[1]:
+            bet = False
+            note = f"[hour drift {drift[0]:+.1f} typical minutes with the bet] it is above this market's own {spec.hour_drift_q:.0%} cutoff {drift[1]:+.1f} ({drift[2]} readings): the lane buys only when the hour has run against the bet. {note}"
+        else:
+            note = f"[hour drift {drift[0]:+.1f} typical minutes, cutoff {drift[1]:+.1f} at {spec.hour_drift_q:.0%} of {drift[2]} readings] {note}"
     if shot.series:
         from . import marketprofile as _marketprofile
 
