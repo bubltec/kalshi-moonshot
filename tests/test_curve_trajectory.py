@@ -9,7 +9,7 @@ UNIT = RATE * 60**0.5
 
 def target(**kw):
     base = dict(ticker="KXBTC15M-1", lane="x", side="yes", curve_margin=0.15, curve_persist=5.0, curve_scales="900", curve_last=900.0, curve_since=0.0, curve_at=0.0, curve_noted=0.0,
-                close_ts=9_850.0, shock_ref=100.0, shock_index="BRTI", curve_drop_units=1.5, curve_drop_seconds=60.0, curve_drop_margin=0.5, curve_drop_persist=0.0, curve_drop_since=0.0, curve_cush=deque())
+                close_ts=9_850.0, shock_ref=100.0, shock_index="BRTI", curve_drop_units=1.5, curve_drop_seconds=60.0, curve_drop_margin=0.5, curve_drop_persist=0.0, curve_drop_since=0.0, curve_cush=deque(), curve_gap=-1.0, curve_gap_persist=15.0, curve_gap_since=0.0)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -50,3 +50,11 @@ def test_the_trajectory_sale_is_off_by_default_and_waits_out_its_persistence(mon
 def test_the_value_sale_still_fires_on_its_own(monkeypatch):
     i, reason = run(monkeypatch, target(curve_drop_units=-1.0), [2.0] * 20, bid=0.80, p=0.50)
     assert reason and reason.startswith("curve exit: bid") and i >= 5
+
+
+def test_a_bid_far_under_the_curve_chance_is_sold_after_its_persistence(monkeypatch):
+    # our spot says 0.95, the market bids 0.55: the reading is in doubt
+    i, reason = run(monkeypatch, target(curve_drop_units=-1.0, curve_gap=0.35), [3.0] * 40, bid=0.55, p=0.95)
+    assert reason and reason.startswith("curve exit (market disagrees)") and 15 <= i <= 17
+    assert run(monkeypatch, target(curve_drop_units=-1.0, curve_gap=0.35), [3.0] * 40, bid=0.70, p=0.95)[1] is None  # a gap under the level is held
+    assert run(monkeypatch, target(curve_drop_units=-1.0), [3.0] * 40, bid=0.55, p=0.95)[1] is None  # off by default

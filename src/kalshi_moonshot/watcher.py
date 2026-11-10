@@ -192,6 +192,9 @@ class Target:
     curve_drop_margin: float = 0.5
     curve_drop_persist: float = 5.0
     curve_drop_since: float = 0.0
+    curve_gap: float = -1.0  # lane curve_gap (-1 = off): the curve exit's market-disagrees sale
+    curve_gap_persist: float = 15.0
+    curve_gap_since: float = 0.0
     curve_cush: deque = field(default_factory=deque)  # (time, cushion in typical minutes), the last curve_drop_seconds of them
     late_seconds: float = 30.0  # lane late_drop_seconds
     late_bids: deque = field(default_factory=lambda: deque(maxlen=400))  # (second, bid) one a second, forward-filled, for the late-drop exit
@@ -738,6 +741,15 @@ class ProfitWatcher:
                     return f"curve exit (trajectory): the cushion fell {first_tm - tm:.2f} typical minutes over {now - first_ts:.0f}s to {tm:+.2f} (sells at a fall of {t.curve_drop_units:g} to {t.curve_drop_margin:g} or under, held {now - t.curve_drop_since:.0f}s); bid {bid:.2f}, curve chance {read.p:.3f}, {left:.0f}s left"
             else:
                 t.curve_drop_since = 0.0
+        if t.curve_gap > 0:
+            # the market-disagrees sale: the bid sits far under the curve's chance, so the spot reading is the one in doubt
+            if -over >= t.curve_gap:
+                if t.curve_gap_since <= 0:
+                    t.curve_gap_since = now
+                if now - t.curve_gap_since >= t.curve_gap_persist:
+                    return f"curve exit (market disagrees): the curve's chance {read.p:.3f} is {-over:.3f} over the bid {bid:.2f} ({net:.3f} after the fee) for {now - t.curve_gap_since:.0f}s (sells at {t.curve_gap:g} for {t.curve_gap_persist:g}s); cushion {tm:+.2f} typical minutes, {left:.0f}s left"
+            else:
+                t.curve_gap_since = 0.0
         if over < t.curve_margin:
             t.curve_since = 0.0
             return None
@@ -1490,6 +1502,7 @@ class ProfitWatcher:
                     if spec.curve_exit >= 0:
                         held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
                         held.curve_drop_units, held.curve_drop_seconds, held.curve_drop_margin, held.curve_drop_persist = spec.curve_drop_units, spec.curve_drop_seconds, spec.curve_drop_margin_units, spec.curve_drop_persist
+                        held.curve_gap, held.curve_gap_persist = spec.curve_gap, spec.curve_gap_persist
                     held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
                     held.value_gain_x, held.value_high, held.value_high_left, held.value_min_gain = spec.value_exit_gain_x, spec.value_exit_high, spec.value_exit_high_left, spec.value_exit_min_gain
                     self._shock_hist.setdefault(sid, deque())
