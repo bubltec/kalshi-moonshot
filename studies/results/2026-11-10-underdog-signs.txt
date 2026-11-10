@@ -1,0 +1,113 @@
+job 20261110-111607-88418 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/c7cc8d32ef194812a8fb476f1384272d
+markets 7865 | coins ['BNB', 'BTC', 'DOGE', 'ETH', 'HYPE', 'NEAR', 'SOL', 'XRP', 'ZEC'] | seconds 1090906
+indexes loaded
+perps loaded
+  0 markets, 2 rows
+  1000 markets, 1354 rows
+  2000 markets, 2608 rows
+  3000 markets, 3879 rows
+  4000 markets, 5051 rows
+  5000 markets, 6366 rows
+  6000 markets, 7645 rows
+  7000 markets, 8992 rows
+
+underdog-priced states: 10065 | win rate 0.354 | mean ask 0.360 | net per $ -0.0655
+
+quartiles of each reading (Q1 lowest ... Q4 highest; positive = leans the bet's way):
+
+cushion  (cuts -1.41 -0.92 -0.67, n=10065)
+  Q1 n= 2517 win 0.265 net/$ -0.128 | halves -0.103 (n=1274) / -0.154 (n=1243)
+  Q2 n= 2516 win 0.381 net/$ -0.030 | halves -0.056 (n=1274) / -0.004 (n=1242)
+  Q3 n= 2516 win 0.380 net/$ -0.064 | halves -0.045 (n=1339) / -0.086 (n=1177)
+  Q4 n= 2516 win 0.389 net/$ -0.040 | halves -0.018 (n=1146) / -0.058 (n=1370)
+
+hour  (cuts -6.02 -0.93 +4.01, n=10050)
+  Q1 n= 2513 win 0.383 net/$ +0.033 | halves -0.031 (n=1250) / +0.096 (n=1263)
+  Q2 n= 2513 win 0.356 net/$ -0.061 | halves -0.106 (n=1257) / -0.016 (n=1256)
+  Q3 n= 2512 win 0.346 net/$ -0.087 | halves -0.010 (n=1255) / -0.163 (n=1257)
+  Q4 n= 2512 win 0.329 net/$ -0.147 | halves -0.078 (n=1256) / -0.216 (n=1256)
+
+ratio  (cuts +0.77 +0.92 +1.11, n=10065)
+  Q1 n= 2517 win 0.361 net/$ -0.063 | halves -0.021 (n=1202) / -0.101 (n=1315)
+  Q2 n= 2516 win 0.362 net/$ -0.057 | halves -0.029 (n=1256) / -0.086 (n=1260)
+  Q3 n= 2516 win 0.345 net/$ -0.082 | halves -0.089 (n=1264) / -0.076 (n=1252)
+  Q4 n= 2516 win 0.347 net/$ -0.060 | halves -0.083 (n=1311) / -0.034 (n=1205)
+
+eff  (cuts +0.03 +0.06 +0.11, n=10065)
+  Q1 n= 2517 win 0.392 net/$ -0.009 | halves +0.027 (n=1273) / -0.046 (n=1244)
+  Q2 n= 2516 win 0.376 net/$ -0.038 | halves -0.062 (n=1276) / -0.013 (n=1240)
+  Q3 n= 2516 win 0.327 net/$ -0.135 | halves -0.106 (n=1292) / -0.165 (n=1224)
+  Q4 n= 2516 win 0.320 net/$ -0.080 | halves -0.085 (n=1192) / -0.075 (n=1324)
+
+lead60  (cuts -1.29 -0.69 -0.13, n=10065)
+  Q1 n= 2517 win 0.371 net/$ -0.014 | halves +0.039 (n=1334) / -0.074 (n=1183)
+  Q2 n= 2516 win 0.359 net/$ -0.064 | halves -0.083 (n=1335) / -0.043 (n=1181)
+  Q3 n= 2516 win 0.351 net/$ -0.078 | halves -0.075 (n=1264) / -0.081 (n=1252)
+  Q4 n= 2516 win 0.334 net/$ -0.106 | halves -0.118 (n=1100) / -0.097 (n=1416)
+
+lead180  (cuts -1.84 -0.96 -0.11, n=10065)
+  Q1 n= 2517 win 0.333 net/$ -0.062 | halves -0.007 (n=1331) / -0.124 (n=1186)
+  Q2 n= 2516 win 0.350 net/$ -0.075 | halves -0.072 (n=1357) / -0.079 (n=1159)
+  Q3 n= 2516 win 0.373 net/$ -0.045 | halves -0.071 (n=1235) / -0.019 (n=1281)
+  Q4 n= 2516 win 0.359 net/$ -0.081 | halves -0.080 (n=1110) / -0.082 (n=1406)
+
+breadth60  (cuts -1.27 -0.73 -0.23, n=10065)
+  Q1 n= 2517 win 0.357 net/$ -0.048 | halves -0.013 (n=1313) / -0.086 (n=1204)
+  Q2 n= 2516 win 0.366 net/$ -0.048 | halves -0.089 (n=1330) / -0.002 (n=1186)
+  Q3 n= 2516 win 0.352 net/$ -0.076 | halves -0.054 (n=1254) / -0.098 (n=1262)
+  Q4 n= 2516 win 0.339 net/$ -0.090 | halves -0.070 (n=1136) / -0.107 (n=1380)
+
+n_with  (cuts +0.00 +0.00 +0.00, n=10065)
+  Q1 n= 8837 win 0.356 net/$ -0.061 | halves -0.045 (n=4669) / -0.079 (n=4168)
+  Q2 n=0
+  Q3 n=0
+  Q4 n= 1228 win 0.334 net/$ -0.098 | halves -0.200 (n=364) / -0.055 (n=864)
+
+gap60  (cuts -0.52 -0.14 +0.20, n=10065)
+  Q1 n= 2517 win 0.349 net/$ -0.069 | halves -0.063 (n=1025) / -0.073 (n=1492)
+  Q2 n= 2516 win 0.356 net/$ -0.065 | halves -0.059 (n=1336) / -0.073 (n=1180)
+  Q3 n= 2516 win 0.355 net/$ -0.066 | halves -0.062 (n=1369) / -0.071 (n=1147)
+  Q4 n= 2516 win 0.355 net/$ -0.062 | halves -0.043 (n=1303) / -0.082 (n=1213)
+
+perp_lead60  (cuts -0.18 +0.04 +0.30, n=7724)
+  Q1 n= 1932 win 0.337 net/$ -0.083 | halves -0.067 (n=1224) / -0.111 (n=708)
+  Q2 n= 1931 win 0.349 net/$ -0.079 | halves -0.064 (n=1241) / -0.108 (n=690)
+  Q3 n= 1931 win 0.359 net/$ -0.050 | halves -0.072 (n=1224) / -0.012 (n=707)
+  Q4 n= 1930 win 0.375 net/$ -0.031 | halves -0.024 (n=1241) / -0.044 (n=689)
+
+perp_lead180  (cuts -0.19 +0.04 +0.32, n=7724)
+  Q1 n= 1932 win 0.328 net/$ -0.106 | halves -0.118 (n=1220) / -0.086 (n=712)
+  Q2 n= 1931 win 0.368 net/$ -0.021 | halves +0.010 (n=1225) / -0.077 (n=706)
+  Q3 n= 1931 win 0.358 net/$ -0.060 | halves -0.066 (n=1248) / -0.049 (n=683)
+  Q4 n= 1930 win 0.365 net/$ -0.057 | halves -0.054 (n=1237) / -0.061 (n=693)
+
+perp_move60  (cuts -1.37 -0.79 -0.25, n=7724)
+  Q1 n= 1932 win 0.328 net/$ -0.112 | halves -0.081 (n=1283) / -0.173 (n=649)
+  Q2 n= 1931 win 0.379 net/$ -0.010 | halves -0.026 (n=1235) / +0.017 (n=696)
+  Q3 n= 1931 win 0.369 net/$ -0.044 | halves -0.043 (n=1207) / -0.046 (n=724)
+  Q4 n= 1930 win 0.344 net/$ -0.077 | halves -0.076 (n=1205) / -0.079 (n=725)
+
+flow10  (cuts -0.19 -0.01 +0.00, n=7724)
+  Q1 n= 1932 win 0.328 net/$ -0.135 | halves -0.111 (n=1252) / -0.180 (n=680)
+  Q2 n= 1931 win 0.370 net/$ -0.042 | halves -0.048 (n=1249) / -0.031 (n=682)
+  Q3 n= 1931 win 0.351 net/$ -0.077 | halves -0.070 (n=1207) / -0.087 (n=724)
+  Q4 n= 1930 win 0.370 net/$ +0.010 | halves +0.003 (n=1222) / +0.022 (n=708)
+
+flow30  (cuts -0.40 -0.05 +0.02, n=7724)
+  Q1 n= 1932 win 0.340 net/$ -0.083 | halves -0.047 (n=1227) / -0.147 (n=705)
+  Q2 n= 1931 win 0.355 net/$ -0.069 | halves -0.039 (n=1268) / -0.126 (n=663)
+  Q3 n= 1931 win 0.371 net/$ -0.035 | halves -0.058 (n=1240) / +0.008 (n=691)
+  Q4 n= 1930 win 0.353 net/$ -0.057 | halves -0.084 (n=1195) / -0.013 (n=735)
+
+flow60  (cuts -0.56 -0.08 +0.05, n=7724)
+  Q1 n= 1932 win 0.337 net/$ -0.088 | halves -0.087 (n=1252) / -0.089 (n=680)
+  Q2 n= 1931 win 0.347 net/$ -0.081 | halves -0.073 (n=1221) / -0.094 (n=710)
+  Q3 n= 1931 win 0.373 net/$ -0.028 | halves -0.008 (n=1247) / -0.064 (n=684)
+  Q4 n= 1930 win 0.361 net/$ -0.047 | halves -0.059 (n=1210) / -0.028 (n=720)
+
+pairs of top-quartile readings (both above their own 75th percentile), n >= 80, positive in both halves, best 12 by net per $:
+  cushion & perp_lead60: n=  453 win 0.442 net/$ +0.088 | halves +0.086 (n=253) / +0.089 (n=200)
+  ratio & perp_lead60: n=  479 win 0.401 net/$ +0.051 | halves +0.041 (n=308) / +0.071 (n=171)
+  (105 pairs tried, 2 positive in both halves)
+DONE
+exit=0  results in job-results/20261110-111607-88418/
