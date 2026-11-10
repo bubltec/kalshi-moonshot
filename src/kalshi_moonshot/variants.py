@@ -670,6 +670,120 @@ def hour_drift_now(series: str, side: str, q: float, now: float | None = None) -
     return None
 
 
+def _quantile(xs: Sequence[float], q: float) -> float:
+    ordered = sorted(xs)
+    return ordered[min(len(ordered) - 1, int(q * len(ordered)))]
+
+
+def perp_rule_from(ts: Sequence[float], vs: Sequence[float], pts: Sequence[float], pvs: Sequence[float], now: float, side: str, strike: float,
+                   q_lead: float = 0.75, q_cush: float = 0.75, q_eff: float = 0.50) -> dict[str, float] | None:
+    """The perp-lead underdog rule (2026-11-10, user: live, buy on either rule; studies/results/2026-11-10-underdog-walkforward.txt, 'perp_lead60>q75 & cushion>q75 & eff<q50': 217 tape states, +8.1% a dollar, se 8.4, both halves). Reads, signed with the bet and in the typical minute (rms one-second log move of the last 900 s times sqrt(60)) of the index: the perp's 60 s move minus the index's 60 s move (the perp running ahead of the settlement index), the cushion (spot to strike), and the path efficiency of the last 300 s. The rule passes when the lead is over the q_lead quantile of this market's own readings of the last 55 minutes, the cushion is over the q_cush quantile of this market's own wrong-side cushions at 0.5-7.5 minutes into its last windows (the strike taken as the index at each window open), and the path is under the q_eff quantile of its own efficiency readings of the last hours (choppy). Returns the readings and cutoffs with 'ok', or None when the perp or index history is too short or stale (then the rule does not pass)."""
+    if not ts or len(ts) != len(vs) or not pts or len(pts) != len(pvs) or strike <= 0:
+        return None
+    j = bisect.bisect_right(ts, now) - 1
+    jp = bisect.bisect_right(pts, now) - 1
+    if j < 0 or jp < 0 or now - ts[j] > 10.0 or now - pts[jp] > 60.0 or ts[0] > now - 7200.0:
+        return None
+    base = int(ts[0])
+    n = int(now) - base
+    g: list[float] = []
+    i = 0
+    last = None
+    for t in range(n + 1):
+        while i < len(ts) and ts[i] <= base + t:
+            last = vs[i]
+            i += 1
+        if last is None or last <= 0:
+            return None
+        g.append(math.log(last))
+    sq, ab = [0.0], [0.0]
+    for a, b in itertools.pairwise(g):
+        sq.append(sq[-1] + (b - a) ** 2)
+        ab.append(ab[-1] + abs(b - a))
+
+    def unit(t: int) -> float | None:
+        v = (sq[t] - sq[t - 900]) / 900.0 if t >= 900 else 0.0
+        return math.sqrt(v) * math.sqrt(60.0) if v > 0 else None
+
+    sign = 1.0 if side == "yes" else -1.0
+    span = int(min(3300.0, now - pts[0])) - 1
+    if span < 1100:
+        return None
+    pg: list[float] = []
+    i = 0
+    last = None
+    p0 = int(now) - span
+    for t in range(span + 1):
+        while i < len(pts) and pts[i] <= p0 + t:
+            last = pvs[i]
+            i += 1
+        if last is None or last <= 0:
+            return None
+        pg.append(math.log(last))
+    off = n - span  # pg[x] is the perp at index time off + x
+
+    def lead(t: int) -> float | None:
+        u = unit(t)
+        x = t - off
+        return ((pg[x] - pg[x - 60]) - (g[t] - g[t - 60])) * sign / u if u and x >= 60 else None
+
+    u_now = unit(n)
+    lead_now = lead(n)
+    if u_now is None or lead_now is None:
+        return None
+    leads = [v for t in range(off + 60, n - 9, 10) if (v := lead(t)) is not None]
+    cushions = []
+    first_open = ((base + 1800) // 900 + 1) * 900
+    for t_open in range(int(now) // 900 * 900 - 900, max(first_open, int(now) - 6 * 3600) - 1, -900):
+        k0 = t_open - base
+        if k0 < 1800 or k0 + 450 > n:
+            continue
+        for t in range(k0 + 30, k0 + 451, 30):
+            u = unit(t)
+            if u:
+                c = (g[t] - g[k0]) * sign / u
+                if c < 0:
+                    cushions.append(c)
+    effs = []
+    for t in range(max(900, n - 6 * 3600), n + 1, 30):
+        path = ab[t] - ab[t - 300]
+        if path > 0:
+            effs.append(abs(g[t] - g[t - 300]) / path)
+    path_now = ab[n] - ab[n - 300]
+    if len(leads) < 100 or len(cushions) < 60 or len(effs) < 120 or path_now <= 0:
+        return None
+    cush_now = (g[n] - math.log(strike)) * sign / u_now
+    eff_now = abs(g[n] - g[n - 300]) / path_now
+    lead_cut, cush_cut, eff_cut = _quantile(leads, q_lead), _quantile(cushions, q_cush), _quantile(effs, q_eff)
+    ok = lead_now > lead_cut and cush_now > cush_cut and eff_now < eff_cut
+    return {"ok": float(ok), "lead": lead_now, "lead_cut": lead_cut, "cushion": cush_now, "cushion_cut": cush_cut, "eff": eff_now, "eff_cut": eff_cut, "n_lead": float(len(leads)), "n_cushion": float(len(cushions)), "n_eff": float(len(effs))}
+
+
+PERP_COINS = ("BTC", "ETH", "SOL", "XRP", "DOGE")
+
+
+def perp_rule_now(series: str, side: str, strike: float, now: float | None = None) -> dict[str, float] | None:
+    """perp_rule_from for a crypto series with a Hyperliquid perp, from the in-memory ticks ("hl:<coin>" keeps an hour), or None."""
+    now = time.time() if now is None else now
+    index = crypto_index(series)
+    coin = coin_of(series)
+    if not index or coin not in PERP_COINS:
+        return None
+    got = None
+    for hours in (7.5, 5.5):
+        got = ticks_mod.history.window(index, now - hours * 3600.0, now)
+        if got:
+            break
+    perp = None
+    for secs in (3500.0, 2200.0, 1300.0):
+        perp = ticks_mod.history.window("hl:" + coin, now - secs, now)
+        if perp:
+            break
+    if not got or not perp:
+        return None
+    return perp_rule_from(got[0], got[1], perp[0], perp[1], now, side, strike)
+
+
 def pretrend_index(index: str, side: str, span: float = 420.0, gap: float = 90.0, now: float | None = None) -> float | None:
     """pretrend_features for an index id (a commodity's BiQuote index as well as a coin's), from the in-memory ticks, or None."""
     now = time.time() if now is None else now

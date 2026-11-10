@@ -632,6 +632,7 @@ def evaluate(
         else:
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] {note}"
     if bet and spec.hour_drift_q >= 0:
+        from . import ticks as ticks_mod
         from . import variants as _variants
 
         try:
@@ -639,14 +640,22 @@ def evaluate(
         except Exception as exc:
             drift = None
             log.warning("hour drift unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if drift is None:
-            bet = False
-            note = f"the hour's drift of {shot.series} cannot be read (history under five hours or a stale tick), so this lane buys nothing. {note}"
-        elif drift[0] > drift[1]:
-            bet = False
-            note = f"[hour drift {drift[0]:+.1f} typical minutes with the bet] it is above this market's own {spec.hour_drift_q:.0%} cutoff {drift[1]:+.1f} ({drift[2]} readings): the lane buys only when the hour has run against the bet. {note}"
+        drift_ok = drift is not None and drift[0] <= drift[1]
+        perp = None
+        if not drift_ok and spec.perp_lead_buy:
+            try:
+                perp = _variants.perp_rule_now(shot.series, shot.side, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker) or 0.0)
+            except Exception as exc:
+                log.warning("perp rule unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if drift_ok:
+            note = f"[rule hour-drift: {drift[0]:+.1f} typical minutes with the bet, cutoff {drift[1]:+.1f} at {spec.hour_drift_q:.0%} of {drift[2]} readings] {note}"
+        elif perp is not None and perp["ok"]:
+            note = f"[rule perp-lead: lead {perp['lead']:+.2f} (cutoff {perp['lead_cut']:+.2f}), cushion {perp['cushion']:+.2f} (cutoff {perp['cushion_cut']:+.2f}), efficiency {perp['eff']:.2f} (under {perp['eff_cut']:.2f}); hour drift {'unreadable' if drift is None else f'{drift[0]:+.1f} vs cutoff {drift[1]:+.1f}'}] {note}"
         else:
-            note = f"[hour drift {drift[0]:+.1f} typical minutes, cutoff {drift[1]:+.1f} at {spec.hour_drift_q:.0%} of {drift[2]} readings] {note}"
+            bet = False
+            why_drift = "cannot be read (history under five hours or a stale tick)" if drift is None else f"{drift[0]:+.1f} typical minutes with the bet is above this market's own {spec.hour_drift_q:.0%} cutoff {drift[1]:+.1f} ({drift[2]} readings)"
+            why_perp = "" if not spec.perp_lead_buy else (" The perp-lead rule cannot be read here." if perp is None else f" The perp-lead rule fails: lead {perp['lead']:+.2f} (needs over {perp['lead_cut']:+.2f}), cushion {perp['cushion']:+.2f} (over {perp['cushion_cut']:+.2f}), efficiency {perp['eff']:.2f} (under {perp['eff_cut']:.2f}).")
+            note = f"the hour's drift {why_drift}; the lane buys only when the hour has run against the bet{' or the perp leads' if spec.perp_lead_buy else ''}.{why_perp} {note}"
     if shot.series:
         from . import marketprofile as _marketprofile
 
