@@ -1,0 +1,62 @@
+
+favorites bets since 1794286800, settled and readable: 52 of 59
+  time    lane                  market          side  price  curveP  cushion(typ min)  actual   held
+  00:10  commodity_industrial  KXPLATINUM15M   no   0.89  0.814      +1.99          -9.99    -9.99
+  00:12  commodity_precious    KXGOLD15M       no   0.92  0.826      +1.93          -1.45    -2.62
+  00:22  commodity_precious    KXGOLD15M       yes  0.93  0.948      +4.54          +0.87    +0.87
+  00:42  commodity_precious    KXGOLD15M       no   0.82  0.730      +1.01          -2.67    -2.73
+  01:07  commodity_precious    KXSILVER15M     no   0.77  0.780      +2.15          +2.91    +2.91
+  01:09  commodity_wti         KXWTI15M        no   0.91  0.787      +2.21          +1.08    +1.08
+  01:14  commodity_industrial  KXPLATINUM15M   yes  0.77  0.939      +1.53          -2.19    -2.19
+  01:37  commodity_precious    KXGOLD15M       yes  0.82  0.788      +2.34          +2.19    +2.19
+  01:54  commodity_precious    KXSILVER15M     no   0.81  0.814      +2.14          +2.36    +2.36
+  02:10  commodity_precious    KXSILVER15M     no   0.90  0.862      +2.68          +1.23    +1.23
+  02:41  commodity_precious    KXGOLD15M       no   0.76  0.707      +1.05          +0.79    +0.79
+  02:57  commodity_industrial  KXPLATINUM15M   no   0.87  0.869      +1.70          +1.62    +1.62
+  02:57  commodity_precious    KXGOLD15M       no   0.83  0.845      +1.46          +0.26    +0.26
+  03:37  commodity_industrial  KXPLATINUM15M   yes  0.88  0.894      +3.38          +1.45    +1.45
+  03:40  commodity_precious    KXSILVER15M     yes  0.83  0.830      +2.10          -2.48    +2.05
+  04:25  commodity_precious    KXSILVER15M     yes  0.85  0.719      +1.25          +1.86    +1.86
+  04:37  commodity_precious    KXGOLD15M       no   0.88  0.880      +3.59          +1.47    +1.47
+  05:22  commodity_precious    KXGOLD15M       no   0.92  0.861      +4.53          +0.89    +0.89
+  05:53  commodity_precious    KXGOLD15M       no   0.83  0.863      +2.86          +2.12    +2.12
+  05:56  commodity_precious    KXSILVER15M     no   0.84  0.797      +1.66         -10.00   -10.00
+  05:58  commodity_industrial  KXPLATINUM15M   no   0.83  0.782      +1.03          +0.85    +0.85
+  06:12  commodity_precious    KXGOLD15M       no   0.83  0.686      +1.07          -2.50    -2.50
+  06:55  commodity_precious    KXGOLD15M       no   0.92  0.929      +3.03          +0.88    +0.88
+  07:07  commodity_precious    KXGOLD15M       yes  0.92  0.956      +4.57          +0.88    +0.88
+  07:40  commodity_precious    KXSILVER15M     no   0.84  0.899      +2.85          +2.05    +2.05
+  08:09  commodity_precious    KXSILVER15M     yes  0.83  0.724      +1.65          +2.05    +2.05
+  08:53  commodity_industrial  KXPALLADIUM15M  yes  0.79  0.822      +2.33          -0.51    -0.79
+  08:54  commodity_wti         KXWTI15M        yes  0.85  0.808      +2.11          +1.93    +1.93
+  09:09  commodity_wti         KXWTI15M        yes  0.87  0.926      +3.51          -4.25    +1.53
+  09:09  commodity_precious    KXGOLD15M       yes  0.75  0.641      +0.82          -5.75    -9.49
+  09:12  commodity_precious    KXSILVER15M     yes  0.86  0.713      +0.83          -2.82    +1.61
+  09:37  commodity_precious    KXSILVER15M     no   0.87  0.867      +3.12          +1.55    +1.55
+  09:39  commodity_industrial  KXPALLADIUM15M  no   0.92  0.918      +3.18          +0.94    +0.94
+  09:40  commodity_wti         KXWTI15M        yes  0.85  0.730      +1.30          +1.88    +1.88
+  10:09  commodity_wti         KXWTI15M        yes  0.92  0.666      +1.64          +0.95    +0.95
+  10:37  commodity_industrial  KXPALLADIUM15M  no   0.90  0.854      +3.62          +1.20    +1.20
+  12:42  commodity_industrial  KXPALLADIUM15M  no   0.89  0.840      +1.97          -6.68    -9.99
+  13:22  commodity_precious    KXGOLD15M       yes  0.79  0.852      +2.85          +2.66    +2.66
+  13:25  commodity_industrial  KXPLATINUM15M   no   0.92  0.882      +2.59          -0.63    +0.94
+  13:38  commodity_industrial  KXPALLADIUM15M  yes  0.90  0.890      +3.89          +0.20    +0.20
+  13:42  commodity_industrial  KXPLATINUM15M   yes  0.87  0.851      +1.55          +0.37    +0.37
+  14:07  commodity_energy      KXBRENT15M      no   0.87  0.754      +1.93          +1.46    +1.46
+  14:09  commodity_industrial  KXPLATINUM15M   yes  0.91  0.838      +2.69          +1.12    +1.12
+  14:27  commodity_industrial  KXPALLADIUM15M  yes  0.90  0.900      +1.91          -2.49    -2.49
+  14:37  commodity_precious    KXSILVER15M     no   0.87  0.818      +2.86          -2.35   -10.33
+  14:37  commodity_industrial  KXPLATINUM15M   no   0.86  0.786      +2.21          -0.58    -2.60
+  14:53  commodity_precious    KXGOLD15M       yes  0.90  0.791      +2.05          +1.21    +1.21
+  14:56  commodity_precious    KXSILVER15M     yes  0.85  0.811      +1.63          +1.71    +1.71
+  14:57  commodity_industrial  KXCOPPER15M     yes  0.86  0.344      -0.65          +0.41    +0.41
+  15:25  commodity_energy      KXBRENT15M      yes  0.89  0.918      +2.93          +1.24    +1.24
+  15:26  commodity_wti         KXWTI15M        yes  0.86  0.788      +1.56          -3.53    +1.74
+  15:39  commodity_wti         KXWTI15M        yes  0.88  0.865      +2.66          +1.36    +1.36
+
+margin 0.00: buys 17 of 52 | kept bets made +14.76 (held +20.25) | skipped bets made -27.64 (14 losers avoided, 21 winners missed) | gate vs all: +27.64 (halves +18.15 / +9.49)
+margin 0.03: buys 7 of 52 | kept bets made +0.76 (held +6.26) | skipped bets made -13.65 (14 losers avoided, 31 winners missed) | gate vs all: +13.65 (halves +6.33 / +7.32)
+margin 0.05: buys 4 of 52 | kept bets made -1.73 (held +4.04) | skipped bets made -11.15 (15 losers avoided, 33 winners missed) | gate vs all: +11.15 (halves +3.32 / +7.83)
+margin 0.08: buys 1 of 52 | kept bets made -2.19 (held -2.19) | skipped bets made -10.69 (16 losers avoided, 35 winners missed) | gate vs all: +10.69 (halves +1.27 / +9.42)
+all bets as played: -12.89 on 52 (stake $431.05)
+Cannot perform start session: EOF
