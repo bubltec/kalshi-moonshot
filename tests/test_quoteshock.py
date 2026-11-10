@@ -163,3 +163,32 @@ def test_a_lane_without_shock_persist_sells_on_the_first_reading(tmp_path, monke
     now = CLOSE - 120
     _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.80)) + _rows(now - 59, now, lambda s: 0.50))
     assert (w._shock_hit(t, 0.49, now, now) or "").startswith("shock exit")
+
+
+def _late(tmp_path, monkeypatch, bids, units=1.0):
+    w = _watcher(tmp_path, monkeypatch)
+    t = w.targets[("KX10YRRATE15M-1", "tq")]
+    t.late_units, t.late_seconds, t.close_ts = units, 30.0, CLOSE
+    t.history.clear()
+    hit = None
+    for sec, b in bids:
+        hit = w._late_drop_hit(t, b, float(sec))
+        if hit:
+            return hit, sec
+    return None, None
+
+
+def test_late_drop_sells_a_bid_that_falls_in_the_last_thirty_seconds(tmp_path, monkeypatch):
+    # KXSILVER15M-26NOV100600: 0.98 with 25 s left, 0.73 at 15 s, 0.40 at 4 s; held to zero.
+    calm = [(CLOSE - 400 + i, 0.90 + (0.004 if i % 2 else -0.004)) for i in range(0, 370)]
+    fall = [(CLOSE - 30 + i, 0.93) for i in range(0, 10)] + [(CLOSE - 20 + i, 0.60) for i in range(0, 20)]
+    why, sec = _late(tmp_path, monkeypatch, calm + fall)
+    assert why and why.startswith("late drop") and CLOSE - sec <= 30
+
+
+def test_late_drop_ignores_a_drop_earlier_than_the_window_and_a_calm_bid(tmp_path, monkeypatch):
+    early = [(CLOSE - 400 + i, 0.90 + (0.004 if i % 2 else -0.004)) for i in range(0, 300)] + [(CLOSE - 100 + i, 0.50) for i in range(0, 60)]
+    assert _late(tmp_path, monkeypatch, early)[0] is None
+    calm = [(CLOSE - 400 + i, 0.90 + (0.004 if i % 2 else -0.004)) for i in range(0, 399)]
+    assert _late(tmp_path, monkeypatch, calm)[0] is None
+    assert _late(tmp_path, monkeypatch, [(CLOSE - 400 + i, 0.90 + (0.004 if i % 2 else -0.004)) for i in range(0, 370)] + [(CLOSE - 20 + i, 0.50) for i in range(0, 15)], units=0.0)[0] is None

@@ -177,6 +177,9 @@ class Target:
     shock_trend_hold: float = -99.0  # lane shock_trend_hold: no shock sale while the pre-spike trend is this far with the bet (-99 = off)
     shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
     shock_persist: float = 0.0  # lane shock_persist: seconds the shock condition must hold before the sale (0 = at once)
+    late_units: float = 0.0  # lane late_drop_units (0 = off)
+    late_seconds: float = 30.0  # lane late_drop_seconds
+    late_bids: deque = field(default_factory=lambda: deque(maxlen=400))  # (second, bid) one a second, forward-filled, for the late-drop exit
     shock_since: float = 0.0  # when the shock condition began to hold without a break (0 = not holding)
     shock_seen: float = 0.0  # when _shock_hit last read this bet
     shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
@@ -425,7 +428,7 @@ class ProfitWatcher:
             )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._cross_take_hit(t, bid) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._settlement_hit(t, bid, now, e)
+            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._strike_through_hit(t, bid, now, now) or self._cross_take_hit(t, bid) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._late_drop_hit(t, bid, now) or self._settlement_hit(t, bid, now, e)
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
                 reason = self._cross_checked(t, bid, now, reason)
             if reason and key not in self._inflight:
@@ -686,6 +689,39 @@ class ProfitWatcher:
             if reason and key not in self._inflight:
                 self._inflight.add(key)
                 self._queue_sell(SellSignal(t.ticker, t.lane, reason))
+
+    def _late_drop_hit(self, t: Target, bid: float, now: float) -> str | None:
+        """The late-drop exit (2026-11-10, user: implement 30 s / 1 unit and push). Samples the held bid once a second (forward-filled) and, in the last late_drop_seconds, sells when the bid has fallen from its highest of the last 60 s by late_drop_units of its own typical minute (rms one-second bid change over up to 300 s, times sqrt(60)). Needs 20 seconds of the last 60 and 100 one-second changes, as in scripts/late_drop_exit_replay.py. Reads no model, no coin, no market."""
+        if t.late_units <= 0 or t.close_ts <= 0 or bid <= 0:
+            return None
+        sec = int(now)
+        if not t.late_bids:
+            for ts, b in t.history:
+                if b > 0 and (not t.late_bids or int(ts) > t.late_bids[-1][0]):
+                    t.late_bids.append((int(ts), b))
+        last = t.late_bids[-1] if t.late_bids else None
+        if last is not None and sec - last[0] > 300:
+            t.late_bids.clear()
+            last = None
+        if last is not None:
+            for k in range(last[0] + 1, sec):
+                t.late_bids.append((k, last[1]))
+        if last is None or sec > last[0]:
+            t.late_bids.append((sec, bid))
+        elif t.late_bids:
+            t.late_bids[-1] = (sec, bid)
+        left = t.close_ts - now
+        if left > t.late_seconds or left <= 0 or bid < SHOCK_BID[0] or time.time() < t.retry_after:
+            return None
+        series = [b for s_, b in t.late_bids if s_ >= sec - 300]
+        win = [b for s_, b in t.late_bids if sec - 60 <= s_ < sec]
+        if len(win) < 20 or len(series) < 100:
+            return None
+        unit = math.sqrt(sum((y - x) ** 2 for x, y in zip(series, series[1:], strict=False)) / (len(series) - 1) * 60.0)
+        high = max(win)
+        if unit <= 0 or high - bid < t.late_units * unit:
+            return None
+        return f"late drop: bid {bid:.2f} is {high - bid:.2f} under its {high:.2f} high of the last minute, {(high - bid) / unit:.1f} typical minutes of the bid ({unit:.3f}), {left:.0f}s left"
 
     def _value_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """The value exit (2026-11-08, user: a fix, live at once): sell while the bid, after the sell fee, is over the curve's own chance that this side pays by the lane's margin. The chance is confidence.py's model (price, the spot's distance to the strike in typical minutes, 60 s drift, bounce, path efficiency, range, time left), read from the index history now. Never sells for a loss after both fees (the profit-take rule above). Without the model, the history or a fresh spot the exit does not fire."""
@@ -1367,6 +1403,9 @@ class ProfitWatcher:
                 with contextlib.suppress(TypeError, ValueError):
                     close = datetime.fromisoformat(row["close_time"]).timestamp()
                     held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0
+                    held.late_units, held.late_seconds = spec.late_drop_units, spec.late_drop_seconds
+                    if held.close_ts <= 0:
+                        held.close_ts = close
                     if held.close_ts <= 0:
                         held.close_ts = close
             if spec.shock_source == "quote" and spec.shock_units > 0 and spec.shock_seconds > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M") and ticker.split("-")[0] not in spec.shock_off_series:
