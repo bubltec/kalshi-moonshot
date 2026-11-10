@@ -1,0 +1,29 @@
+
+... 0
+... 40
+... 80
+... 120
+... 160
+... 200
+... 240
+crypto shock sales with a settled result and ticks: 269 | sold vs hold -25.37 | winners sold 95
+
+eb: terciles cuts 0.039 0.089 (low = choppy, high = straight)
+  choppy   n= 90 sold vs hold  -20.64 | winners sold 36 of 90 | held -36.64 actual -57.28
+  middle   n= 89 sold vs hold  -15.27 | winners sold 29 of 89 | held -53.59 actual -68.87
+  straight n= 90 sold vs hold  +10.54 | winners sold 30 of 90 | held -61.30 actual -50.76
+
+ex5: terciles cuts 0.046 0.095 (low = choppy, high = straight)
+  choppy   n= 90 sold vs hold   -7.15 | winners sold 33 of 90 | held -46.43 actual -53.58
+  middle   n= 89 sold vs hold  -17.16 | winners sold 33 of 89 | held -37.12 actual -54.28
+  straight n= 90 sold vs hold   -1.07 | winners sold 29 of 90 | held -67.99 actual -69.05
+
+ex15: terciles cuts 0.017 0.044 (low = choppy, high = straight)
+  choppy   n= 90 sold vs hold  -12.40 | winners sold 40 of 90 | held -30.39 actual -42.78
+  middle   n= 89 sold vs hold  -20.06 | winners sold 37 of 89 | held -38.09 actual -58.15
+  straight n= 90 sold vs hold   +7.09 | winners sold 18 of 90 | held -83.06 actual -75.98
+
+the 13:18 ZEC bet: [(0.029, 0.032, 0.075, -1.74)]
+
+
+

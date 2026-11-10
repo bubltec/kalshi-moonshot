@@ -1,0 +1,26 @@
+job 20261110-140554-5619 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/c2a39cd3c9574e668958ba50c622fc0c
+
+=== crypto: lanes ('crypto_multiscale', 'crypto_multiscale_underdog') | settled live bets 523 | replayed 523
+  held to the result -13.35 | shape cutoffs (path efficiency) 0.044 0.093
+  live rule (120, 'off', 0): net +7.39, sold 122, against holding +20.74
+  variants (memory s, recovery filter, persist s) against the live rule:
+    (60, 'on', 5): net +14.50 | vs live +7.11 on 114 changed, 84 sold | losers saved 69, winners sold 15 | halves -0.21 / +7.32 | choppy -4.7 middle +12.9 straight -1.1
+    (60, 'off', 5): net +14.18 | vs live +6.79 on 113 changed, 90 sold | losers saved 74, winners sold 16 | halves +0.84 / +5.95 | choppy -4.5 middle +14.8 straight -3.5
+    (60, 'on', 0): net +14.16 | vs live +6.77 on 37 changed, 94 sold | losers saved 77, winners sold 17 | halves +0.52 / +6.25 | choppy -6.9 middle +16.4 straight -2.7
+    (60, 'off', 0): net +11.65 | vs live +4.26 on 31 changed, 99 sold | losers saved 81, winners sold 18 | halves -2.07 / +6.33 | choppy -6.6 middle +13.3 straight -2.4
+    (60, 'half', 0): net +10.92 | vs live +3.53 on 52 changed, 84 sold | losers saved 69, winners sold 15 | halves -0.51 / +4.04 | choppy -7.0 middle +11.9 straight -1.4
+    (120, 'half', 0): net +8.12 | vs live +0.73 on 50 changed, 87 sold | losers saved 70, winners sold 17 | halves -1.35 / +2.07 | choppy -6.1 middle +6.9 straight -0.1
+    (120, 'off', 5): net +5.78 | vs live -1.61 on 111 changed, 118 sold | losers saved 92, winners sold 26 | halves -3.40 / +1.79 | choppy -4.0 middle +3.2 straight -0.9
+    (120, 'on', 5): net +4.30 | vs live -3.09 on 113 changed, 98 sold | losers saved 75, winners sold 23 | halves -1.01 / -2.08 | choppy -6.8 middle +5.8 straight -2.2
+    (0, 'off', 0): net +4.28 | vs live -3.11 on 66 changed, 73 sold | losers saved 59, winners sold 14 | halves -2.70 / -0.41 | choppy -8.7 middle +9.3 straight -3.7
+    (0, 'on', 0): net +4.28 | vs live -3.11 on 66 changed, 73 sold | losers saved 59, winners sold 14 | halves -2.70 / -0.41 | choppy -8.7 middle +9.3 straight -3.7
+    (0, 'half', 0): net +4.28 | vs live -3.11 on 66 changed, 73 sold | losers saved 59, winners sold 14 | halves -2.70 / -0.41 | choppy -8.7 middle +9.3 straight -3.7
+    (60, 'half', 5): net +3.28 | vs live -4.10 on 114 changed, 74 sold | losers saved 60, winners sold 14 | halves -0.98 / -3.13 | choppy -8.8 middle +10.0 straight -5.3
+    (120, 'half', 5): net +3.25 | vs live -4.14 on 114 changed, 76 sold | losers saved 61, winners sold 15 | halves -2.18 / -1.95 | choppy -9.0 middle +8.7 straight -3.8
+    (120, 'on', 0): net +2.83 | vs live -4.56 on 23 changed, 108 sold | losers saved 83, winners sold 25 | halves -6.06 / +1.50 | choppy -5.3 middle +1.3 straight -0.6
+    (0, 'off', 5): net -12.19 | vs live -19.58 on 120 changed, 49 sold | losers saved 39, winners sold 10 | halves -11.42 / -8.16 | choppy -12.3 middle +2.9 straight -10.2
+    (0, 'on', 5): net -12.19 | vs live -19.58 on 120 changed, 49 sold | losers saved 39, winners sold 10 | halves -11.42 / -8.16 | choppy -12.3 middle +2.9 straight -10.2
+    (0, 'half', 5): net -12.19 | vs live -19.58 on 120 changed, 49 sold | losers saved 39, winners sold 10 | halves -11.42 / -8.16 | choppy -12.3 middle +2.9 straight -10.2
+  positive against live in both halves: 2 of 17
+DONE
+exit=0  results in job-results/20261110-140554-5619/
