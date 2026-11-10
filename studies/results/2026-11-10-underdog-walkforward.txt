@@ -1,0 +1,27 @@
+job 20261110-112350-89088 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/3e005e4467af4bc6bc6ba14de1448698
+markets 7865 | coins ['BNB', 'BTC', 'DOGE', 'ETH', 'HYPE', 'NEAR', 'SOL', 'XRP', 'ZEC'] | seconds 1090906
+indexes loaded
+perps loaded
+  0 markets, 2 rows
+  1000 markets, 1354 rows
+  2000 markets, 2608 rows
+  3000 markets, 3879 rows
+  4000 markets, 5051 rows
+  5000 markets, 6366 rows
+  6000 markets, 7645 rows
+  7000 markets, 8992 rows
+
+rows 10065 | days 13 | test days 8
+
+rule | test rows | win | mean ask | net per $ (se) | days positive / days with >= 5 rows | halves of the test period
+R1 perp_lead60>q75 & cushion>q75: n=303 win 0.426 ask 0.389 net/$ +0.052 (0.070) | days +5/8 | halves -0.024 (n=149) / +0.126 (n=154)
+R2 perp_lead60>q75 & ratio>q75: n=283 win 0.392 ask 0.355 net/$ +0.021 (0.077) | days +4/8 | halves -0.011 (n=146) / +0.056 (n=137)
+R3 perp_lead60>q75 & eff<q50: n=591 win 0.415 ask 0.381 net/$ +0.043 (0.051) | days +5/8 | halves +0.053 (n=345) / +0.028 (n=246)
+R4 R1 & hour<q50: n=134 win 0.425 ask 0.389 net/$ +0.053 (0.106) | days +5/8 | halves -0.134 (n=65) / +0.230 (n=69)
+R5 R1 & eff<q50: n=217 win 0.438 ask 0.389 net/$ +0.081 (0.084) | days +5/8 | halves +0.067 (n=113) / +0.096 (n=104)
+R6 hour<q25: n=1727 win 0.397 ask 0.353 net/$ +0.071 (0.033) | days +5/8 | halves +0.092 (n=787) / +0.053 (n=940)
+R7 perp_lead60>q75: n=1091 win 0.368 ask 0.367 net/$ -0.054 (0.038) | days +3/8 | halves -0.074 (n=593) / -0.031 (n=498)
+R8 eff<q25: n=1790 win 0.388 ask 0.379 net/$ -0.022 (0.029) | days +4/8 | halves +0.052 (n=945) / -0.103 (n=845)
+ALL (control): n=6980 win 0.353 ask 0.360 net/$ -0.070 (0.015) | days +1/8 | halves -0.042 (n=3416) / -0.098 (n=3564)
+DONE
+exit=0  results in job-results/20261110-112350-89088/
