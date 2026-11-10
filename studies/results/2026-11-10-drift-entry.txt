@@ -1,0 +1,85 @@
+job 20261110-101757-81254 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/3504974900e54340bb86675c9ba1f9dd
+settled live bets 2304 | with drift readings 1764
+
+=== crypto: 364 bets, $759 staked | actual -56.21 (-0.074/$), held -50.74 | shape cutoffs 0.20 0.42
+  variants (mode, w minutes, q) by change in actual net from not taking the skipped bets, best 12:
+    ('only_with', 60, 0.5): skipped 357 (202 lost, 155 won, 64 whole-stake) | actual +61.06, held +60.63 | halves +26.19 / +34.87 | choppy +30.4 middle +28.4 straight +2.3
+    ('only_with', 15, 0.5): skipped 349 (197 lost, 152 won, 63 whole-stake) | actual +60.03, held +54.47 | halves +22.70 / +37.33 | choppy +28.8 middle +30.2 straight +1.0
+    ('only_with', 120, 0.9): skipped 359 (201 lost, 158 won, 63 whole-stake) | actual +57.10, held +55.98 | halves +20.75 / +36.35 | choppy +27.9 middle +26.6 straight +2.5
+    ('only_with', 15, 0.75): skipped 362 (202 lost, 160 won, 64 whole-stake) | actual +56.93, held +50.16 | halves +23.26 / +33.67 | choppy +28.8 middle +28.3 straight -0.1
+    ('only_with', 30, 0.5): skipped 362 (202 lost, 160 won, 64 whole-stake) | actual +56.61, held +49.84 | halves +22.94 / +33.67 | choppy +30.1 middle +26.6 straight -0.1
+    ('only_with', 15, 0.9): skipped 364 (203 lost, 161 won, 64 whole-stake) | actual +56.21, held +50.74 | halves +21.62 / +34.60 | choppy +28.8 middle +26.6 straight +0.8
+    ('only_with', 30, 0.75): skipped 364 (203 lost, 161 won, 64 whole-stake) | actual +56.21, held +50.74 | halves +21.62 / +34.60 | choppy +28.8 middle +26.6 straight +0.8
+    ('only_with', 30, 0.9): skipped 364 (203 lost, 161 won, 64 whole-stake) | actual +56.21, held +50.74 | halves +21.62 / +34.60 | choppy +28.8 middle +26.6 straight +0.8
+    ('only_with', 60, 0.9): skipped 364 (203 lost, 161 won, 64 whole-stake) | actual +56.21, held +50.74 | halves +21.62 / +34.60 | choppy +28.8 middle +26.6 straight +0.8
+    ('only_with', 120, 0.75): skipped 350 (196 lost, 154 won, 60 whole-stake) | actual +55.19, held +47.65 | halves +19.06 / +36.13 | choppy +29.7 middle +25.5 straight -0.0
+    ('only_with', 60, 0.75): skipped 362 (202 lost, 160 won, 64 whole-stake) | actual +54.56, held +52.98 | halves +21.62 / +32.94 | choppy +29.8 middle +26.6 straight -1.9
+    ('only_with', 120, 0.5): skipped 322 (177 lost, 145 won, 54 whole-stake) | actual +40.33, held +33.25 | halves +12.10 / +28.23 | choppy +22.6 middle +28.5 straight -10.8
+  positive in both halves: 17 of 24
+    ('only_with', 60, 0.5): skipped 357 | actual +61.06 | halves +26.19 / +34.87 | choppy +30.4 middle +28.4 straight +2.3
+    ('only_with', 15, 0.5): skipped 349 | actual +60.03 | halves +22.70 / +37.33 | choppy +28.8 middle +30.2 straight +1.0
+    ('only_with', 120, 0.9): skipped 359 | actual +57.10 | halves +20.75 / +36.35 | choppy +27.9 middle +26.6 straight +2.5
+    ('only_with', 15, 0.75): skipped 362 | actual +56.93 | halves +23.26 / +33.67 | choppy +28.8 middle +28.3 straight -0.1
+    ('only_with', 30, 0.5): skipped 362 | actual +56.61 | halves +22.94 / +33.67 | choppy +30.1 middle +26.6 straight -0.1
+    ('only_with', 15, 0.9): skipped 364 | actual +56.21 | halves +21.62 / +34.60 | choppy +28.8 middle +26.6 straight +0.8
+
+=== favorites: 458 bets, $2786 staked | actual +66.89 (+0.024/$), held +96.02 | shape cutoffs 0.15 0.34
+  variants (mode, w minutes, q) by change in actual net from not taking the skipped bets, best 12:
+    ('skip_against', 60, 0.75): skipped 26 (8 lost, 18 won, 3 whole-stake) | actual +16.67, held +25.43 | halves +9.19 / +7.47 | choppy +2.0 middle +3.7 straight +10.9
+    ('skip_against', 60, 0.5): skipped 59 (13 lost, 46 won, 5 whole-stake) | actual +8.40, held +10.53 | halves -2.30 / +10.70 | choppy -8.0 middle +7.8 straight +8.6
+    ('skip_against', 60, 0.9): skipped 8 (3 lost, 5 won, 2 whole-stake) | actual +6.11, held +10.40 | halves +9.40 / -3.29 | choppy -1.2 middle +1.3 straight +6.0
+    ('skip_against', 15, 0.5): skipped 8 (2 lost, 6 won, 2 whole-stake) | actual +4.47, held +4.47 | halves +7.82 / -3.35 | middle -2.7 straight +7.2
+    ('skip_against', 30, 0.75): skipped 15 (5 lost, 10 won, 0 whole-stake) | actual +0.76, held -4.09 | halves -3.62 / +4.37 | choppy +3.5 middle -2.7
+    ('skip_against', 30, 0.9): skipped 5 (1 lost, 4 won, 0 whole-stake) | actual -0.34, held -6.41 | halves -5.09 / +4.75 | choppy +2.8 middle -3.1
+    ('skip_against', 120, 0.75): skipped 44 (10 lost, 34 won, 3 whole-stake) | actual -6.38, held -3.82 | halves +11.57 / -17.95 | choppy +0.7 middle -6.7 straight -0.4
+    ('skip_against', 120, 0.9): skipped 23 (5 lost, 18 won, 0 whole-stake) | actual -8.97, held -14.46 | halves -0.05 / -8.92 | choppy +4.6 middle -6.5 straight -7.1
+    ('skip_against', 120, 0.5): skipped 87 (15 lost, 72 won, 5 whole-stake) | actual -20.45, held -19.98 | halves -6.16 / -14.29 | choppy -17.2 middle -4.5 straight +1.3
+    ('skip_against', 30, 0.5): skipped 64 (9 lost, 55 won, 2 whole-stake) | actual -27.51, held -31.83 | halves -17.43 / -10.08 | choppy -15.8 middle -17.6 straight +5.9
+    ('only_with', 60, 0.5): skipped 307 (61 lost, 246 won, 16 whole-stake) | actual -43.68, held -67.44 | halves -15.45 / -28.23 | choppy +1.4 middle -33.4 straight -11.7
+    ('only_with', 15, 0.5): skipped 276 (57 lost, 219 won, 15 whole-stake) | actual -47.27, held -76.05 | halves -17.02 / -30.25 | choppy +0.1 middle -48.3 straight +0.9
+  positive in both halves: 1 of 22
+    ('skip_against', 60, 0.75): skipped 26 | actual +16.67 | halves +9.19 / +7.47 | choppy +2.0 middle +3.7 straight +10.9
+
+=== commodity_multiscale: 39 bets, $50 staked | actual -5.41 (-0.109/$), held -6.14 | shape cutoffs 0.14 0.30
+  variants (mode, w minutes, q) by change in actual net from not taking the skipped bets, best 12:
+    ('skip_against', 15, 0.5): skipped 10 (9 lost, 1 won, 5 whole-stake) | actual +7.21, held +9.23 | halves +2.67 / +4.54 | middle +3.5 straight +3.7
+    ('only_with', 120, 0.5): skipped 36 (24 lost, 12 won, 13 whole-stake) | actual +6.88, held +7.61 | halves +5.43 / +1.45 | choppy -1.0 middle +3.0 straight +4.9
+    ('only_with', 30, 0.9): skipped 39 (25 lost, 14 won, 14 whole-stake) | actual +5.41, held +6.14 | halves +4.54 / +0.86 | choppy -2.9 middle +3.4 straight +4.9
+    ('only_with', 60, 0.75): skipped 39 (25 lost, 14 won, 14 whole-stake) | actual +5.41, held +6.14 | halves +4.54 / +0.86 | choppy -2.9 middle +3.4 straight +4.9
+    ('only_with', 60, 0.9): skipped 39 (25 lost, 14 won, 14 whole-stake) | actual +5.41, held +6.14 | halves +4.54 / +0.86 | choppy -2.9 middle +3.4 straight +4.9
+    ('only_with', 120, 0.75): skipped 39 (25 lost, 14 won, 14 whole-stake) | actual +5.41, held +6.14 | halves +4.54 / +0.86 | choppy -2.9 middle +3.4 straight +4.9
+    ('only_with', 120, 0.9): skipped 39 (25 lost, 14 won, 14 whole-stake) | actual +5.41, held +6.14 | halves +4.54 / +0.86 | choppy -2.9 middle +3.4 straight +4.9
+    ('only_with', 60, 0.5): skipped 38 (24 lost, 14 won, 14 whole-stake) | actual +5.36, held +7.60 | halves +4.54 / +0.82 | choppy -2.9 middle +3.4 straight +4.9
+    ('only_with', 15, 0.75): skipped 38 (24 lost, 14 won, 14 whole-stake) | actual +5.16, held +7.09 | halves +4.54 / +0.62 | choppy -2.9 middle +3.4 straight +4.6
+    ('only_with', 15, 0.9): skipped 38 (24 lost, 14 won, 14 whole-stake) | actual +5.16, held +7.09 | halves +4.54 / +0.62 | choppy -2.9 middle +3.4 straight +4.6
+    ('only_with', 30, 0.5): skipped 38 (24 lost, 14 won, 14 whole-stake) | actual +5.16, held +7.09 | halves +4.54 / +0.62 | choppy -2.9 middle +3.4 straight +4.6
+    ('only_with', 30, 0.75): skipped 38 (24 lost, 14 won, 14 whole-stake) | actual +5.16, held +7.09 | halves +4.54 / +0.62 | choppy -2.9 middle +3.4 straight +4.6
+  positive in both halves: 16 of 24
+    ('skip_against', 15, 0.5): skipped 10 | actual +7.21 | halves +2.67 / +4.54 | middle +3.5 straight +3.7
+    ('only_with', 120, 0.5): skipped 36 | actual +6.88 | halves +5.43 / +1.45 | choppy -1.0 middle +3.0 straight +4.9
+    ('only_with', 30, 0.9): skipped 39 | actual +5.41 | halves +4.54 / +0.86 | choppy -2.9 middle +3.4 straight +4.9
+    ('only_with', 60, 0.75): skipped 39 | actual +5.41 | halves +4.54 / +0.86 | choppy -2.9 middle +3.4 straight +4.9
+    ('only_with', 60, 0.9): skipped 39 | actual +5.41 | halves +4.54 / +0.86 | choppy -2.9 middle +3.4 straight +4.9
+    ('only_with', 120, 0.75): skipped 39 | actual +5.41 | halves +4.54 / +0.86 | choppy -2.9 middle +3.4 straight +4.9
+
+=== all lanes: 1764 bets, $9131 staked | actual +68.63 (+0.008/$), held +50.23 | shape cutoffs 0.16 0.34
+  variants (mode, w minutes, q) by change in actual net from not taking the skipped bets, best 12:
+    ('skip_against', 60, 0.75): skipped 232 (114 lost, 118 won, 55 whole-stake) | actual +46.77, held +48.54 | halves +21.20 / +25.57 | choppy +23.4 middle +19.8 straight +3.6
+    ('skip_against', 120, 0.75): skipped 221 (87 lost, 134 won, 38 whole-stake) | actual +43.51, held +64.28 | halves +34.55 / +8.96 | choppy +46.7 middle -1.8 straight -1.4
+    ('skip_against', 15, 0.5): skipped 231 (127 lost, 104 won, 64 whole-stake) | actual +40.04, held +38.64 | halves +42.05 / -2.01 | middle +27.5 straight +12.5
+    ('skip_against', 120, 0.5): skipped 455 (170 lost, 285 won, 74 whole-stake) | actual +37.61, held +48.95 | halves +24.67 / +12.94 | choppy -5.3 middle +23.2 straight +19.8
+    ('skip_against', 120, 0.9): skipped 90 (39 lost, 51 won, 14 whole-stake) | actual +30.90, held +36.14 | halves +32.91 / -2.00 | choppy +31.5 middle +1.5 straight -2.0
+    ('skip_against', 60, 0.9): skipped 95 (45 lost, 50 won, 22 whole-stake) | actual +11.39, held +26.42 | halves +9.96 / +1.43 | choppy +2.3 middle +16.6 straight -7.5
+    ('skip_against', 30, 0.75): skipped 196 (97 lost, 99 won, 46 whole-stake) | actual +11.12, held +21.15 | halves -10.90 / +22.02 | choppy +7.1 middle -11.9 straight +15.9
+    ('skip_against', 15, 0.9): skipped 35 (23 lost, 12 won, 11 whole-stake) | actual +8.21, held -4.65 | halves +0.00 / +8.21 | straight +8.2
+    ('skip_against', 30, 0.9): skipped 73 (37 lost, 36 won, 15 whole-stake) | actual +3.54, held -3.04 | halves -6.08 / +9.62 | choppy +5.0 middle -4.2 straight +2.7
+    ('only_with', 120, 0.5): skipped 1319 (462 lost, 857 won, 199 whole-stake) | actual +3.39, held +10.19 | halves -6.24 / +9.63 | choppy +25.7 middle +14.6 straight -37.0
+    ('only_with', 60, 0.5): skipped 1324 (475 lost, 849 won, 198 whole-stake) | actual -1.81, held +35.30 | halves -18.77 / +16.96 | choppy +17.1 middle -2.5 straight -16.4
+    ('skip_against', 60, 0.5): skipped 456 (199 lost, 257 won, 86 whole-stake) | actual -9.53, held -10.12 | halves -43.26 / +33.73 | choppy -3.1 middle +10.0 straight -16.4
+  positive in both halves: 4 of 24
+    ('skip_against', 60, 0.75): skipped 232 | actual +46.77 | halves +21.20 / +25.57 | choppy +23.4 middle +19.8 straight +3.6
+    ('skip_against', 120, 0.75): skipped 221 | actual +43.51 | halves +34.55 / +8.96 | choppy +46.7 middle -1.8 straight -1.4
+    ('skip_against', 120, 0.5): skipped 455 | actual +37.61 | halves +24.67 / +12.94 | choppy -5.3 middle +23.2 straight +19.8
+    ('skip_against', 60, 0.9): skipped 95 | actual +11.39 | halves +9.96 / +1.43 | choppy +2.3 middle +16.6 straight -7.5
+DONE
+exit=0  results in job-results/20261110-101757-81254/
