@@ -58,3 +58,11 @@ def test_short_or_stale_history_is_unreadable():
     ts, vs, pts, pvs = _series(now)
     assert variants.perp_rule_from(ts, vs, pts, pvs, now + 120.0, "yes", strike=vs[-1]) is None
     assert variants.perp_rule_from(ts, vs, pts, pvs, now, "yes", strike=0.0) is None
+
+
+def test_real_ticks_have_fractional_seconds():
+    now = 3_000_000.0
+    ts, vs, pts, pvs = _series(now, perp_jump=0.003)
+    ts, pts = [t + 0.37 for t in ts], [t + 0.61 for t in pts]
+    got = variants.perp_rule_from(ts, vs, pts, pvs, now + 0.5, "yes", strike=vs[-1])
+    assert got is not None and got["ok"] == 1.0

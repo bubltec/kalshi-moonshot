@@ -38,3 +38,11 @@ def test_short_history_or_stale_tick_is_unreadable():
     assert variants.hour_drift_from(ts, vs, now, "yes", 0.25) is None
     ts, vs = _walk(now)
     assert variants.hour_drift_from(ts, vs, now + 60.0, "yes", 0.25) is None
+
+
+def test_real_ticks_have_fractional_seconds():
+    now = 2_000_000.0
+    ts, vs = _walk(now, drift_end=-0.02)
+    ts = [t + 0.37 for t in ts]  # the first tick is not on a whole second
+    got = variants.hour_drift_from(ts, vs, now + 0.5, "yes", 0.25)
+    assert got is not None and got[0] < got[1]

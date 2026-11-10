@@ -634,7 +634,7 @@ def hour_drift_from(ts: Sequence[float], vs: Sequence[float], now: float, side: 
     n = int(now) - base
     g: list[float] = []
     i = 0
-    last = None
+    last = vs[0]  # the first second before the first tick takes its value (real ticks carry fractional seconds, so ts[0] is rarely on a whole second)
     for t in range(n + 1):
         while i < len(ts) and ts[i] <= base + t:
             last = vs[i]
@@ -688,7 +688,7 @@ def perp_rule_from(ts: Sequence[float], vs: Sequence[float], pts: Sequence[float
     n = int(now) - base
     g: list[float] = []
     i = 0
-    last = None
+    last = vs[0]  # see hour_drift_from: the first second takes the first tick's value
     for t in range(n + 1):
         while i < len(ts) and ts[i] <= base + t:
             last = vs[i]
@@ -711,7 +711,7 @@ def perp_rule_from(ts: Sequence[float], vs: Sequence[float], pts: Sequence[float
         return None
     pg: list[float] = []
     i = 0
-    last = None
+    last = pvs[0]
     p0 = int(now) - span
     for t in range(span + 1):
         while i < len(pts) and pts[i] <= p0 + t:
