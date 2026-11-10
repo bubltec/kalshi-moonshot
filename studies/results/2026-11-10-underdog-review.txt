@@ -1,0 +1,31 @@
+
+underdog bets settled with readings: 41 | won at the result 9 | held net -8.40 | actual -12.05
+
+actual outcome by how it ended:
+  held           7 bets,  0 would have won, actual -7.03, held -7.03
+  shock exit    21 bets,  5 would have won, actual -8.40, held -2.58
+  value exit    13 bets,  4 would have won, actual +3.37, held +1.20
+
+winners (settled on the bet's side) vs losers, means (medians in brackets):
+  entry price                          wins   +0.30 [ +0.30]   losses   +0.28 [ +0.27]
+  model net per $1                     wins   +0.12 [ +0.12]   losses   +0.13 [ +0.12]
+  seconds left at the buy              wins +668.77 [+659.86]   losses +664.13 [+704.74]
+  cushion at the buy (typ. min)        wins   -1.56 [ -1.61]   losses   -1.78 [ -1.52]
+  hour drift with the bet              wins   -6.49 [ -7.50]   losses   -5.33 [ -3.39]
+  15 min drift with the bet            wins   -4.88 [ -4.73]   losses   -4.15 [ -4.64]
+  regime ratio 180s/3600s              wins   +1.04 [ +0.98]   losses   +1.09 [ +1.05]
+  path efficiency 5 min                wins   +0.10 [ +0.09]   losses   +0.07 [ +0.05]
+  best cushion reached after the buy   wins   +3.96 [ +2.43]   losses   -0.41 [ -0.65]
+  spot move over the bet's life        wins   +3.96 [ +3.38]   losses   -1.37 [ -1.10]
+  n wins 9, n losses 32
+
+win rate and held net by terciles of each reading at the buy (low / middle / high third):
+  cushion       [-2.02 .. -1.35]  low n=14 won 4 held +0.9 | mid n=13 won 1 held -8.0 | high n=14 won 4 held -1.3
+  hour drift    [-9.31 .. -2.49]  low n=14 won 3 held -0.8 | mid n=13 won 5 held +3.2 | high n=14 won 1 held -10.7
+  15 min drift  [-5.65 .. -2.10]  low n=14 won 4 held -0.5 | mid n=13 won 3 held -0.1 | high n=14 won 2 held -7.8
+  regime ratio  [+0.92 .. +1.14]  low n=14 won 4 held +1.7 | mid n=13 won 1 held -8.8 | high n=14 won 4 held -1.3
+  model net     [+0.10 .. +0.13]  low n=15 won 3 held -2.5 | mid n=10 won 3 held +0.8 | high n=16 won 3 held -6.7
+  price         [+0.25 .. +0.33]  low n=16 won 3 held -3.4 | mid n=11 won 2 held -4.2 | high n=14 won 4 held -0.8
+  seconds left  [+566.63 .. +786.24]  low n=14 won 4 held +1.4 | mid n=13 won 2 held -7.1 | high n=14 won 3 held -2.6
+DONE
+Cannot perform start session: EOF
