@@ -833,6 +833,11 @@ class ProfitWatcher:
                 proj = (sum(known) / len(known) * secs + value * (60.0 - secs)) / 60.0
                 margin_x = math.log(proj / t.shock_ref) * sign * 1e4
         crossed = t.cross_units >= 0 and not quote and margin_x <= t.cross_units * unit_bp
+        spiked = bp > 0 and worst <= -bp  # the move alone; the cushion may flicker around the strike without breaking the hold (KXSILVER15M-26NOV100600: cushion swung -0.4..+5 bp, the 20 s run never completed, the bet was lost whole where the old rule sold at 0.60)
+        if t.shock_persist > 0 and spiked and not (moved or crossed):
+            if t.shock_since <= 0:
+                t.shock_since = now
+            return None
         if not (moved or crossed):
             t.shock_since = 0.0
             return None
