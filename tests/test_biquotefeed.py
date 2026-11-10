@@ -42,3 +42,9 @@ def test_it_can_be_turned_off(monkeypatch):
     assert not biquotefeed.enabled()
     monkeypatch.delenv("BIQUOTE_FEED")
     assert biquotefeed.enabled()
+
+
+def test_the_sp500_series_follows_the_us500_index_cfd():
+    assert biquotefeed.index_for_series("KXINX15M") == "BQ_SPX" and biquotefeed.index_for_series("KXINX") is None
+    e = biquotefeed.parse_tick({"symbol": "US500", "mid": 7536.78, "timestamp": "2026-11-11T15:00:00Z"}, 1.0)
+    assert e["index_id"] == "BQ_SPX" and e["value"] == 7536.78

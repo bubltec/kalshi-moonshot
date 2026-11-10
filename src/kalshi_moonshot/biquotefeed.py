@@ -34,12 +34,13 @@ FEEDS: dict[str, str] = {
     "BQ_BRENT": "BZUSDT",
     "BQ_NATGAS": "NATGASUSDT",
     "BQ_COPPER": "COPPERUSDT",
+    "BQ_SPX": "US500",  # 2026-11-10 (user: add KXINX15M): the S&P 500 index CFD from the MT5 broker feed; Kalshi settles on the index itself, so this is a close read, not the settlement value
     "BQ_WTI_MT5": "USOIL",
     "BQ_BRENT_MT5": "UKOIL",
 }
 _BY_SYMBOL = {symbol: index for index, symbol in FEEDS.items()}
 
-SERIES_INDEX = {"KXGOLD": "BQ_GOLD", "KXSILVER": "BQ_SILVER", "KXPLATINUM": "BQ_PLATINUM", "KXPALLADIUM": "BQ_PALLADIUM", "KXWTI": "BQ_WTI", "KXBRENT": "BQ_BRENT", "KXNATGAS": "BQ_NATGAS", "KXCOPPER": "BQ_COPPER"}
+SERIES_INDEX = {"KXGOLD": "BQ_GOLD", "KXSILVER": "BQ_SILVER", "KXPLATINUM": "BQ_PLATINUM", "KXPALLADIUM": "BQ_PALLADIUM", "KXWTI": "BQ_WTI", "KXBRENT": "BQ_BRENT", "KXNATGAS": "BQ_NATGAS", "KXCOPPER": "BQ_COPPER", "KXINX": "BQ_SPX"}
 
 
 def index_for_series(series: str) -> str | None:

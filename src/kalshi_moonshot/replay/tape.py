@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-BQ = {"GOLD": "BQ_GOLD", "SILVER": "BQ_SILVER", "PLATINUM": "BQ_PLATINUM", "PALLADIUM": "BQ_PALLADIUM", "WTI": "BQ_WTI", "BRENT": "BQ_BRENT", "NATGAS": "BQ_NATGAS", "COPPER": "BQ_COPPER"}
+BQ = {"GOLD": "BQ_GOLD", "SILVER": "BQ_SILVER", "PLATINUM": "BQ_PLATINUM", "PALLADIUM": "BQ_PALLADIUM", "WTI": "BQ_WTI", "BRENT": "BQ_BRENT", "NATGAS": "BQ_NATGAS", "COPPER": "BQ_COPPER", "INX": "BQ_SPX"}
 QUOTES_BEFORE_CLOSE = 240.0  # seconds of quotes kept ahead of the close (and from the buy, if later)
 TICKS_BEFORE_CLOSE = 300.0  # seconds of index ticks kept: the shock lookback and its memory, and the variety's run-up are inside this
 
