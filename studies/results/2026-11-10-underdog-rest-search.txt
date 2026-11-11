@@ -1,0 +1,112 @@
+job 20261110-203251-38088 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/875f0f84609544658157874a5b1d659e
+
+=== the underdog lane's live bets (dollars): 41 positions | held -8.40 | total losses 32 | won 9
+    rest (0.15, 120, 'hold'): +3.93 vs holding | halves -3.61 / +7.53 | total losses left 20 of 32, winners sold 6 
+    rest (0.2, 120, 'hold'): +3.58 vs holding | halves -3.34 / +6.92 | total losses left 22 of 32, winners sold 6 
+    rest (0.3, 120, 'hold'): +2.84 vs holding | halves -3.57 / +6.40 | total losses left 25 of 32, winners sold 6 
+    rest (0.25, 120, 'hold'): +2.72 vs holding | halves -5.00 / +7.72 | total losses left 24 of 32, winners sold 6 
+    rest (0.15, 180, 'hold'): +2.46 vs holding | halves -5.08 / +7.53 | total losses left 21 of 32, winners sold 6 
+    rest (0.15, 240, 'hold'): +2.46 vs holding | halves -5.08 / +7.53 | total losses left 21 of 32, winners sold 6 
+    rest (0.2, 180, 'hold'): +1.92 vs holding | halves -5.00 / +6.92 | total losses left 23 of 32, winners sold 6 
+    rest (0.2, 240, 'hold'): +1.92 vs holding | halves -5.00 / +6.92 | total losses left 23 of 32, winners sold 6 
+    rest (0.4, 120, 'hold'): +1.24 vs holding | halves -0.67 / +1.91 | total losses left 28 of 32, winners sold 6 
+    rest (0.25, 180, 'hold'): +0.87 vs holding | halves -6.85 / +7.72 | total losses left 25 of 32, winners sold 6 
+    rest (0.25, 240, 'hold'): +0.87 vs holding | halves -6.85 / +7.72 | total losses left 25 of 32, winners sold 6 
+    rest (0.3, 180, 'hold'): +0.79 vs holding | halves -5.61 / +6.40 | total losses left 26 of 32, winners sold 6 
+    rest (0.3, 240, 'hold'): +0.79 vs holding | halves -5.61 / +6.40 | total losses left 26 of 32, winners sold 6 
+    rest (0.4, 180, 'hold'): -1.20 vs holding | halves -3.10 / +1.91 | total losses left 29 of 32, winners sold 6 
+    rest (0.4, 240, 'hold'): -1.20 vs holding | halves -3.10 / +1.91 | total losses left 29 of 32, winners sold 6 
+    rest (0.3, 240, 'sell'): -2.31 vs holding | halves -5.29 / +2.98 | total losses left 0 of 32, winners sold 9 
+    rest (0.3, 240, 'sell_if_under'): -2.31 vs holding | halves -5.29 / +2.98 | total losses left 0 of 32, winners sold 9 
+    deadline_only (240, 'sell_if_under'): -2.41 vs holding | halves +0.32 / -2.74 | total losses left 2 of 32, winners sold 3 
+    rest (0.2, 240, 'sell'): -2.55 vs holding | halves -5.71 / +3.16 | total losses left 0 of 32, winners sold 9 
+    rest (0.2, 240, 'sell_if_under'): -2.55 vs holding | halves -5.71 / +3.16 | total losses left 0 of 32, winners sold 9 
+    rest (0.25, 240, 'sell'): -2.56 vs holding | halves -6.53 / +3.96 | total losses left 0 of 32, winners sold 9 
+    rest (0.25, 240, 'sell_if_under'): -2.56 vs holding | halves -6.53 / +3.96 | total losses left 0 of 32, winners sold 9 
+    rest (0.15, 240, 'sell'): -3.05 vs holding | halves -6.53 / +3.49 | total losses left 0 of 32, winners sold 9 
+    rest (0.15, 240, 'sell_if_under'): -3.05 vs holding | halves -6.53 / +3.49 | total losses left 0 of 32, winners sold 9 
+    rest (0.3, 180, 'sell_if_under'): -3.23 vs holding | halves -5.89 / +2.66 | total losses left 0 of 32, winners sold 9 
+    rest (0.2, 180, 'sell_if_under'): -3.40 vs holding | halves -6.30 / +2.90 | total losses left 0 of 32, winners sold 9 
+    rest (0.2, 180, 'sell'): -3.56 vs holding | halves -6.75 / +3.19 | total losses left 0 of 32, winners sold 9 
+    rest (0.25, 180, 'sell_if_under'): -3.62 vs holding | halves -7.32 / +3.71 | total losses left 0 of 32, winners sold 9 
+    rest (0.4, 240, 'sell'): -3.77 vs holding | halves -2.78 / -0.99 | total losses left 0 of 32, winners sold 9 
+    rest (0.4, 240, 'sell_if_under'): -3.77 vs holding | halves -2.78 / -0.99 | total losses left 0 of 32, winners sold 9 
+    rest (0.3, 180, 'sell'): -3.78 vs holding | halves -6.73 / +2.94 | total losses left 0 of 32, winners sold 9 
+    rest (0.15, 180, 'sell'): -3.81 vs holding | halves -7.57 / +3.76 | total losses left 0 of 32, winners sold 9 
+    rest (0.15, 180, 'sell_if_under'): -3.84 vs holding | halves -7.31 / +3.47 | total losses left 0 of 32, winners sold 9 
+    deadline_only (240, 'sell'): -3.92 vs holding | halves -1.19 / -2.74 | total losses left 0 of 32, winners sold 9 
+    rest (0.25, 180, 'sell'): -3.97 vs holding | halves -7.97 / +3.99 | total losses left 0 of 32, winners sold 9 
+    rest (0.4, 180, 'sell_if_under'): -4.67 vs holding | halves -2.99 / -1.67 | total losses left 0 of 32, winners sold 9 
+    rest (0.15, 120, 'sell'): -5.38 vs holding | halves -7.67 / +2.29 | total losses left 1 of 32, winners sold 9 
+    rest (0.15, 120, 'sell_if_under'): -5.38 vs holding | halves -7.67 / +2.29 | total losses left 1 of 32, winners sold 9 
+    rest (0.2, 120, 'sell'): -5.53 vs holding | halves -7.27 / +1.74 | total losses left 1 of 32, winners sold 9 
+    rest (0.2, 120, 'sell_if_under'): -5.53 vs holding | halves -7.27 / +1.74 | total losses left 1 of 32, winners sold 9 
+    rest (0.4, 180, 'sell'): -5.61 vs holding | halves -4.22 / -1.39 | total losses left 0 of 32, winners sold 9 
+    rest (0.3, 120, 'sell'): -5.81 vs holding | halves -7.16 / +1.35 | total losses left 1 of 32, winners sold 9 
+    rest (0.3, 120, 'sell_if_under'): -5.81 vs holding | halves -7.16 / +1.35 | total losses left 1 of 32, winners sold 9 
+    rest (0.25, 120, 'sell'): -6.05 vs holding | halves -8.60 / +2.54 | total losses left 1 of 32, winners sold 9 
+    rest (0.25, 120, 'sell_if_under'): -6.05 vs holding | halves -8.60 / +2.54 | total losses left 1 of 32, winners sold 9 
+    rest (0.4, 120, 'sell'): -7.19 vs holding | halves -4.27 / -2.92 | total losses left 1 of 32, winners sold 9 
+    rest (0.4, 120, 'sell_if_under'): -7.19 vs holding | halves -4.27 / -2.92 | total losses left 1 of 32, winners sold 9 
+    deadline_only (180, 'sell'): -8.39 vs holding | halves -5.12 / -3.26 | total losses left 0 of 32, winners sold 9 
+    deadline_only (180, 'sell_if_under'): -10.46 vs holding | halves -6.16 / -4.30 | total losses left 4 of 32, winners sold 4 
+    deadline_only (120, 'sell'): -11.85 vs holding | halves -7.03 / -4.82 | total losses left 1 of 32, winners sold 9 
+    deadline_only (120, 'sell_if_under'): -15.23 vs holding | halves -10.41 / -4.82 | total losses left 3 of 32, winners sold 5 
+windows 3826 (1 in 4), underdog-style positions 3643
+
+=== underdog-style positions from the tape (dollars per contract): 3643 positions | held -103.46 | total losses 2374 | won 1269
+    deadline_only (180, 'sell_if_under'): -19.83 vs holding | halves +2.60 / -22.43 | total losses left 335 of 2374, winners sold 212 
+    deadline_only (240, 'sell_if_under'): -22.31 vs holding | halves -8.77 / -13.55 | total losses left 358 of 2374, winners sold 258 
+    deadline_only (120, 'sell_if_under'): -27.79 vs holding | halves +2.37 / -30.16 | total losses left 449 of 2374, winners sold 164 
+    rest (0.4, 240, 'hold'): -33.57 vs holding | halves -22.55 / -11.02 | total losses left 2189 of 2374, winners sold 763 
+    rest (0.4, 180, 'hold'): -42.08 vs holding | halves -27.78 / -14.30 | total losses left 2162 of 2374, winners sold 887 
+    rest (0.4, 120, 'hold'): -44.84 vs holding | halves -36.59 / -8.25 | total losses left 2132 of 2374, winners sold 1005 
+    deadline_only (120, 'sell'): -49.37 vs holding | halves -20.94 / -28.44 | total losses left 243 of 2374, winners sold 1246 
+    deadline_only (180, 'sell'): -52.34 vs holding | halves -21.82 / -30.52 | total losses left 61 of 2374, winners sold 1266 
+    deadline_only (240, 'sell'): -53.08 vs holding | halves -24.54 / -28.54 | total losses left 22 of 2374, winners sold 1267 
+    rest (0.3, 240, 'hold'): -56.49 vs holding | halves -30.77 / -25.72 | total losses left 1992 of 2374, winners sold 929 
+    rest (0.25, 240, 'hold'): -60.98 vs holding | halves -30.84 / -30.14 | total losses left 1852 of 2374, winners sold 989 
+    rest (0.3, 180, 'hold'): -62.37 vs holding | halves -32.72 / -29.66 | total losses left 1959 of 2374, winners sold 1013 
+    rest (0.3, 120, 'hold'): -63.05 vs holding | halves -40.43 / -22.62 | total losses left 1920 of 2374, winners sold 1096 
+    rest (0.4, 240, 'sell'): -66.75 vs holding | halves -38.45 / -28.31 | total losses left 22 of 2374, winners sold 1268 
+    rest (0.25, 180, 'hold'): -69.60 vs holding | halves -37.68 / -31.92 | total losses left 1817 of 2374, winners sold 1069 
+    rest (0.4, 180, 'sell'): -70.76 vs holding | halves -37.83 / -32.94 | total losses left 60 of 2374, winners sold 1268 
+    rest (0.25, 120, 'hold'): -72.88 vs holding | halves -44.33 / -28.55 | total losses left 1782 of 2374, winners sold 1136 
+    rest (0.4, 180, 'sell_if_under'): -73.34 vs holding | halves -38.49 / -34.85 | total losses left 60 of 2374, winners sold 1268 
+    rest (0.4, 240, 'sell_if_under'): -74.32 vs holding | halves -43.73 / -30.59 | total losses left 22 of 2374, winners sold 1268 
+    rest (0.4, 120, 'sell'): -76.41 vs holding | halves -39.73 / -36.68 | total losses left 242 of 2374, winners sold 1268 
+    rest (0.4, 120, 'sell_if_under'): -77.48 vs holding | halves -39.04 / -38.43 | total losses left 242 of 2374, winners sold 1268 
+    rest (0.3, 240, 'sell'): -78.88 vs holding | halves -42.37 / -36.52 | total losses left 22 of 2374, winners sold 1268 
+    rest (0.25, 240, 'sell'): -82.22 vs holding | halves -41.84 / -40.37 | total losses left 22 of 2374, winners sold 1269 
+    rest (0.3, 240, 'sell_if_under'): -82.90 vs holding | halves -45.11 / -37.79 | total losses left 22 of 2374, winners sold 1268 
+    rest (0.2, 240, 'hold'): -83.69 vs holding | halves -52.14 / -31.55 | total losses left 1705 of 2374, winners sold 1057 
+    rest (0.3, 180, 'sell'): -83.90 vs holding | halves -43.91 / -39.99 | total losses left 59 of 2374, winners sold 1268 
+    rest (0.25, 240, 'sell_if_under'): -85.52 vs holding | halves -43.11 / -42.41 | total losses left 22 of 2374, winners sold 1269 
+    rest (0.25, 180, 'sell'): -86.53 vs holding | halves -42.32 / -44.21 | total losses left 57 of 2374, winners sold 1269 
+    rest (0.2, 180, 'hold'): -86.62 vs holding | halves -57.17 / -29.45 | total losses left 1665 of 2374, winners sold 1115 
+    rest (0.3, 180, 'sell_if_under'): -86.85 vs holding | halves -44.67 / -42.18 | total losses left 59 of 2374, winners sold 1268 
+    rest (0.25, 180, 'sell_if_under'): -90.34 vs holding | halves -44.52 / -45.83 | total losses left 57 of 2374, winners sold 1269 
+    rest (0.2, 240, 'sell'): -94.25 vs holding | halves -56.83 / -37.42 | total losses left 22 of 2374, winners sold 1269 
+    rest (0.3, 120, 'sell'): -94.42 vs holding | halves -46.07 / -48.35 | total losses left 236 of 2374, winners sold 1268 
+    rest (0.2, 120, 'hold'): -94.91 vs holding | halves -63.61 / -31.30 | total losses left 1637 of 2374, winners sold 1173 
+    rest (0.2, 240, 'sell_if_under'): -95.61 vs holding | halves -57.90 / -37.70 | total losses left 22 of 2374, winners sold 1269 
+    rest (0.3, 120, 'sell_if_under'): -96.02 vs holding | halves -45.55 / -50.47 | total losses left 236 of 2374, winners sold 1268 
+    rest (0.25, 120, 'sell_if_under'): -97.52 vs holding | halves -45.11 / -52.41 | total losses left 231 of 2374, winners sold 1269 
+    rest (0.25, 120, 'sell'): -97.77 vs holding | halves -45.29 / -52.48 | total losses left 231 of 2374, winners sold 1269 
+    rest (0.2, 180, 'sell'): -102.32 vs holding | halves -59.17 / -43.15 | total losses left 57 of 2374, winners sold 1269 
+    rest (0.2, 180, 'sell_if_under'): -105.38 vs holding | halves -61.04 / -44.33 | total losses left 57 of 2374, winners sold 1269 
+    rest (0.15, 240, 'hold'): -105.78 vs holding | halves -61.08 / -44.70 | total losses left 1525 of 2374, winners sold 1112 
+    rest (0.15, 180, 'hold'): -107.74 vs holding | halves -63.17 / -44.56 | total losses left 1486 of 2374, winners sold 1158 
+    rest (0.15, 240, 'sell'): -110.97 vs holding | halves -62.61 / -48.36 | total losses left 21 of 2374, winners sold 1269 
+    rest (0.15, 240, 'sell_if_under'): -111.21 vs holding | halves -62.71 / -48.49 | total losses left 21 of 2374, winners sold 1269 
+    rest (0.2, 120, 'sell_if_under'): -111.29 vs holding | halves -60.81 / -50.48 | total losses left 228 of 2374, winners sold 1269 
+    rest (0.2, 120, 'sell'): -112.27 vs holding | halves -61.52 / -50.75 | total losses left 228 of 2374, winners sold 1269 
+    rest (0.15, 180, 'sell'): -116.72 vs holding | halves -64.81 / -51.91 | total losses left 56 of 2374, winners sold 1269 
+    rest (0.15, 120, 'hold'): -117.19 vs holding | halves -68.28 / -48.91 | total losses left 1460 of 2374, winners sold 1206 
+    rest (0.15, 180, 'sell_if_under'): -118.20 vs holding | halves -65.57 / -52.63 | total losses left 56 of 2374, winners sold 1269 
+    rest (0.15, 120, 'sell_if_under'): -125.24 vs holding | halves -65.39 / -59.85 | total losses left 217 of 2374, winners sold 1269 
+    rest (0.15, 120, 'sell'): -125.25 vs holding | halves -65.39 / -59.86 | total losses left 217 of 2374, winners sold 1269 
+  walk-forward (best earlier-days setting used the next day): -24.51 vs holding over 12 days | halves -18.81 / -5.70 | days won 2, lost 6
+     picked: deadline_only (120, 'sell_if_under') x4; deadline_only (240, 'sell_if_under') x3; rest (0.3, 240, 'hold') x1
+DONE
+exit=0  results in job-results/20261110-203251-38088/
