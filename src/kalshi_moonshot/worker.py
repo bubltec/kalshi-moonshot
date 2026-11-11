@@ -22,6 +22,7 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from typing import Any
 
+from . import jobs as jobs_mod
 from . import reqstats, runner, steptime
 from .commodities import CommodityPricer
 from .config import Settings
@@ -411,6 +412,7 @@ class Worker:
     def _buy_loop(self) -> None:
         """A buy worker: claims only evaluate jobs, so what holds up a buy is another buy, never a scan, review or scope."""
         while not self.stopping:
+            jobs_mod.WAKE.clear()  # cleared before the claim: a job enqueued after this sets it again, so the wait below returns at once (no lost wake-up)
             try:
                 job = self.jobs.claim(kinds=BUY_KINDS)
                 if job is not None:
@@ -418,7 +420,7 @@ class Worker:
                     continue
             except Exception:
                 log.exception("buy worker")
-            time.sleep(BUY_POLL)
+            jobs_mod.WAKE.wait(BUY_POLL)  # an enqueue wakes it in microseconds; BUY_POLL is only the fallback for a job another process queued
 
     def _sell_loop(self) -> None:
         """A sell worker: claims only the stop-loss sweep, so what holds up a sale is another sale, never a scan, review or scope."""
@@ -500,6 +502,10 @@ class Worker:
                 raise ValueError(f"unknown job kind {job.kind!r}")
             began = time.time()
             self.jobs.complete(job.id, handler(job) or "")
+            if job.kind == "evaluate":
+                shot = job.payload.get("shot") or {}
+                log.info("buy timing %s %s: %.0f ms from the queue to the start of the evaluation, %.1f ms evaluating and deciding", shot.get("lane", ""), shot.get("ticker", ""),
+                         max(0.0, began - job.created_ts) * 1000.0, (time.time() - began) * 1000.0)
             if time.time() - began > SLOW_JOB_SECONDS:
                 shot = job.payload.get("shot") or {}
                 log.info("slow job %d (%s%s): ran %.0fs, %.0fs after it was queued. %s", job.id, job.kind, f" {shot.get('lane', '')} {shot.get('ticker', '')}" if shot else "", time.time() - began, began - job.created_ts, steptime.summary())

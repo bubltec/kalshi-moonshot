@@ -41,6 +41,11 @@ class Job:
         return self.attempts >= self.max_attempts
 
 
+# A job enqueued in this process wakes the workers at once (2026-11-11, user: "everything needs to be under 5ms"). The buy workers used to poll the database queue every 0.5 s, so every entry waited up to
+# half a second (median 0.38 s measured from the entry trigger to the decision) before anything evaluated it. The poll stays as the fallback for a job another process enqueued.
+WAKE = threading.Event()
+
+
 class Jobs:
     def __init__(self, store: Store):
         self.db = store.db
@@ -76,6 +81,7 @@ class Jobs:
             ),
         )
         self.db.commit()
+        WAKE.set()
         return int(cur.lastrowid or 0)
 
     def ensure(self, kind: str, run_at: float, **kw: Any) -> int | None:
