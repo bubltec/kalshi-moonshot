@@ -155,8 +155,12 @@ def decide(r, reads, v, margin, sc):
     return hold, False
 
 
-GROUPS2 = {k: v for k, v in GROUPS.items() if k in ("crypto", "commodity_multiscale")}
-CONF = {"crypto": (0.15, "60s900"), "commodity_multiscale": (0.06, "60s900+60s180")}
+GROUPS2 = dict(GROUPS)
+GROUPS2["crypto_ms_alone"] = (("crypto_multiscale",), GROUPS["crypto"][1], GROUPS["crypto"][2])
+GROUPS2["underdog_alone"] = (("crypto_multiscale_underdog",), GROUPS["crypto"][1], GROUPS["crypto"][2])
+if os.environ.get("ONLY"):
+    GROUPS2 = {k: v for k, v in GROUPS2.items() if k in os.environ["ONLY"].split(",")}
+CONF = {"crypto": (0.15, "60s900"), "commodity_multiscale": (0.06, "60s900+60s180"), "favorites": (0.15, "60s900"), "crypto_ms_alone": (0.15, "60s900"), "underdog_alone": (0.15, "60s900")}
 VARIANTS = [("value only", (True, None, 0, 0, 0))] + [("trajectory only", (False, D, W, M, ps)) for D in (1.0, 1.5, 2.0) for W in (60, 120) for M in (0.5, 1.0) for ps in (0, 5)] + [("value + trajectory", (True, D, W, M, ps)) for D in (1.0, 1.5, 2.0) for W in (60, 120) for M in (0.5, 1.0) for ps in (0, 5)]
 
 for gname, (lanes, own_L, since) in GROUPS2.items():

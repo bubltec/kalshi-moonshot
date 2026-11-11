@@ -167,7 +167,13 @@ def decide(r, reads, v, margin, sc):
     return hold, False, None
 
 
-CONF = {"crypto": (0.15, "60s900"), "commodity_multiscale": (0.06, "60s900+60s180"), "favorites": (0.15, "60s900")}
+GROUPS = dict(GROUPS)
+GROUPS["crypto_ms_alone"] = (("crypto_multiscale",), GROUPS["crypto"][1], GROUPS["crypto"][2])
+GROUPS["underdog_alone"] = (("crypto_multiscale_underdog",), GROUPS["crypto"][1], GROUPS["crypto"][2])
+GROUPS["natgas_alone"] = (("commodity_natgas",), 120.0, GROUPS["favorites"][2])
+if os.environ.get("ONLY"):
+    GROUPS = {k: v for k, v in GROUPS.items() if k in os.environ["ONLY"].split(",")}
+CONF = {"crypto": (0.15, "60s900"), "commodity_multiscale": (0.06, "60s900+60s180"), "favorites": (0.15, "60s900"), "crypto_ms_alone": (0.15, "60s900"), "underdog_alone": (0.15, "60s900"), "natgas_alone": (0.15, "60s900")}
 VARIANTS = [("value only", (None, 0, None))] + [("value + gap", (G, gp, None)) for G in (0.15, 0.25, 0.35) for gp in (5, 15)] + [("value + drop", (None, 0, N)) for N in (1.0, 2.0, 3.0)] + [("value + gap + drop", (G, gp, N)) for G in (0.25, 0.35) for gp in (5, 15) for N in (2.0, 3.0)]
 
 for gname, (lanes, own_L, since) in GROUPS.items():

@@ -1,0 +1,21 @@
+job 20261110-185628-29935 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/374492e5daac433d9335ec97c3fd2c64
+
+=== favorites: lanes ('commodity_energy', 'commodity_wti', 'commodity_precious', 'commodity_industrial') | settled live bets 775 | replayed 548 | value exit margin 0.15, scales 60s900
+  held to the result +122.54 | live (own sales, stacked exits) +84.92 | whole-stake losses held 68
+  value exit alone: net +126.17 (vs holding +3.63, vs live +41.25) on 43 sold | halves +4.83 / -1.19
+  best 12 by net (v = use_value, D, W, M, persist):
+    trajectory only (2.0, 60, 0.5, 5): net +133.16 (vs holding +10.62, vs live +48.23) on 38 sold | losers saved 19, winners sold 19, zeros partial 19 of 68 | halves +11.26 / -0.64 | choppy +30.1 middle -22.2 straight +2.7
+    value only (None, 0, 0, 0): net +126.17 (vs holding +3.63, vs live +41.25) on 43 sold | losers saved 11, winners sold 32, zeros partial 11 of 68 | halves +4.83 / -1.19 | choppy +13.7 middle -3.6 straight -6.5
+    value + trajectory (2.0, 60, 0.5, 5): net +117.48 (vs holding -5.06, vs live +32.56) on 72 sold | losers saved 24, winners sold 48, zeros partial 24 of 68 | halves +9.04 / -14.10 | choppy +27.5 middle -23.7 straight -8.9
+    trajectory only (2.0, 60, 0.5, 0): net +116.89 (vs holding -5.65, vs live +31.97) on 69 sold | losers saved 33, winners sold 36, zeros partial 33 of 68 | halves +4.78 / -10.42 | choppy +26.5 middle -36.1 straight +3.9
+    trajectory only (1.5, 60, 0.5, 5): net +105.25 (vs holding -17.29, vs live +20.32) on 78 sold | losers saved 37, winners sold 41, zeros partial 37 of 68 | halves -1.03 / -16.26 | choppy +22.5 middle -38.9 straight -1.0
+    trajectory only (2.0, 60, 1.0, 5): net +102.73 (vs holding -19.81, vs live +17.80) on 51 sold | losers saved 19, winners sold 32, zeros partial 19 of 68 | halves +1.79 / -21.61 | choppy +22.4 middle -35.9 straight -6.3
+    trajectory only (1.5, 120, 0.5, 5): net +98.68 (vs holding -23.86, vs live +13.75) on 104 sold | losers saved 50, winners sold 54, zeros partial 50 of 68 | halves -0.99 / -22.87 | choppy +27.3 middle -60.8 straight +9.6
+    value + trajectory (2.0, 60, 0.5, 0): net +98.25 (vs holding -24.29, vs live +13.32) on 100 sold | losers saved 36, winners sold 64, zeros partial 36 of 68 | halves -1.53 / -22.76 | choppy +22.3 middle -40.0 straight -6.6
+    trajectory only (2.0, 60, 1.0, 0): net +97.01 (vs holding -25.53, vs live +12.09) on 82 sold | losers saved 33, winners sold 49, zeros partial 33 of 68 | halves +3.84 / -29.37 | choppy +23.2 middle -50.8 straight +2.1
+    trajectory only (2.0, 120, 0.5, 5): net +95.45 (vs holding -27.09, vs live +10.52) on 68 sold | losers saved 33, winners sold 35, zeros partial 33 of 68 | halves -12.08 / -15.01 | choppy +6.8 middle -35.3 straight +1.4
+    value + trajectory (2.0, 60, 1.0, 5): net +87.82 (vs holding -34.72, vs live +2.90) on 84 sold | losers saved 24, winners sold 60, zeros partial 24 of 68 | halves -0.43 / -34.29 | choppy +19.8 middle -36.6 straight -17.9
+    value + trajectory (1.5, 120, 0.5, 5): net +85.47 (vs holding -37.07, vs live +0.54) on 130 sold | losers saved 52, winners sold 78, zeros partial 52 of 68 | halves -2.63 / -34.45 | choppy +24.5 middle -57.1 straight -4.5
+  positive against holding in both halves: 0 of 49
+DONE
+exit=0  results in job-results/20261110-185628-29935/
