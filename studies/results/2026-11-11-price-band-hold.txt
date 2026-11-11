@@ -1,0 +1,114 @@
+
+positions 25121 from 1 in 3 windows
+
+=== feed kind settlement, 600 s left: 5466 positions
+    paid 0.0 to 0.1: n   260 | avg price 0.070 | won 0.054 | net per $ staked -28.1% | halves -43.9% / -14.9%
+    paid 0.1 to 0.2: n   543 | avg price 0.155 | won 0.151 | net per $ staked -7.8% | halves -6.1% / -8.8%
+    paid 0.2 to 0.3: n   635 | avg price 0.248 | won 0.227 | net per $ staked -13.1% | halves -0.6% / -23.2%
+    paid 0.3 to 0.4: n   629 | avg price 0.344 | won 0.374 | net per $ staked +3.8% | halves -0.9% / +7.6%
+    paid 0.4 to 0.5: n   609 | avg price 0.444 | won 0.450 | net per $ staked -2.4% | halves +1.7% / -5.6%
+    paid 0.5 to 0.6: n   568 | avg price 0.546 | won 0.518 | net per $ staked -8.2% | halves -10.8% / -6.2%
+    paid 0.6 to 0.7: n   633 | avg price 0.645 | won 0.616 | net per $ staked -6.7% | halves -5.3% / -7.9%
+    paid 0.7 to 0.8: n   680 | avg price 0.745 | won 0.746 | net per $ staked -1.7% | halves -5.0% / +1.0%
+    paid 0.8 to 0.9: n   604 | avg price 0.845 | won 0.841 | net per $ staked -1.5% | halves -0.9% / -1.8%
+    paid 0.9 to 1.0: n   305 | avg price 0.927 | won 0.931 | net per $ staked -0.1% | halves -0.2% / +0.0%
+
+=== feed kind settlement, 300 s left: 4819 positions
+    paid 0.0 to 0.1: n   838 | avg price 0.052 | won 0.048 | net per $ staked -14.1% | halves +14.4% / -32.6%
+    paid 0.1 to 0.2: n   522 | avg price 0.150 | won 0.161 | net per $ staked +1.0% | halves +1.0% / +1.0%
+    paid 0.2 to 0.3: n   369 | avg price 0.243 | won 0.233 | net per $ staked -9.0% | halves -24.7% / +4.5%
+    paid 0.3 to 0.4: n   340 | avg price 0.342 | won 0.379 | net per $ staked +6.0% | halves -8.3% / +14.9%
+    paid 0.4 to 0.5: n   316 | avg price 0.446 | won 0.440 | net per $ staked -5.0% | halves -2.8% / -6.6%
+    paid 0.5 to 0.6: n   330 | avg price 0.542 | won 0.548 | net per $ staked -2.0% | halves -3.7% / -0.5%
+    paid 0.6 to 0.7: n   322 | avg price 0.646 | won 0.578 | net per $ staked -12.7% | halves -8.7% / -15.0%
+    paid 0.7 to 0.8: n   375 | avg price 0.745 | won 0.736 | net per $ staked -3.0% | halves +4.5% / -9.0%
+    paid 0.8 to 0.9: n   525 | avg price 0.845 | won 0.827 | net per $ staked -3.3% | halves -2.1% / -4.1%
+    paid 0.9 to 1.0: n   882 | avg price 0.945 | won 0.944 | net per $ staked -0.4% | halves -2.1% / +0.7%
+
+=== feed kind settlement, 120 s left: 2746 positions
+    paid 0.0 to 0.1: n   659 | avg price 0.051 | won 0.047 | net per $ staked -14.2% | halves +17.3% / -35.3%
+    paid 0.1 to 0.2: n   276 | avg price 0.150 | won 0.163 | net per $ staked +2.8% | halves +14.4% / -7.0%
+    paid 0.2 to 0.3: n   167 | avg price 0.245 | won 0.246 | net per $ staked -4.7% | halves -16.3% / +2.7%
+    paid 0.3 to 0.4: n   149 | avg price 0.343 | won 0.356 | net per $ staked -1.0% | halves -5.8% / +3.5%
+    paid 0.4 to 0.5: n   132 | avg price 0.445 | won 0.455 | net per $ staked -1.6% | halves -2.9% / -0.9%
+    paid 0.5 to 0.6: n   137 | avg price 0.544 | won 0.489 | net per $ staked -12.8% | halves -13.3% / -12.5%
+    paid 0.6 to 0.7: n   142 | avg price 0.648 | won 0.669 | net per $ staked +0.7% | halves +9.7% / -6.7%
+    paid 0.7 to 0.8: n   156 | avg price 0.745 | won 0.686 | net per $ staked -9.5% | halves -9.6% / -9.5%
+    paid 0.8 to 0.9: n   281 | avg price 0.848 | won 0.833 | net per $ staked -2.8% | halves -5.3% / -0.9%
+    paid 0.9 to 1.0: n   647 | avg price 0.947 | won 0.943 | net per $ staked -0.8% | halves -2.3% / +0.2%
+
+=== feed kind proxy, 600 s left: 4686 positions
+    paid 0.0 to 0.1: n   188 | avg price 0.070 | won 0.074 | net per $ staked -0.4% | halves -9.1% / +10.1%
+    paid 0.1 to 0.2: n   397 | avg price 0.153 | won 0.136 | net per $ staked -16.2% | halves -12.2% / -21.8%
+    paid 0.2 to 0.3: n   456 | avg price 0.247 | won 0.206 | net per $ staked -20.6% | halves -16.9% / -26.0%
+    paid 0.3 to 0.4: n   587 | avg price 0.346 | won 0.330 | net per $ staked -8.5% | halves -3.1% / -16.4%
+    paid 0.4 to 0.5: n   607 | avg price 0.444 | won 0.433 | net per $ staked -6.1% | halves -5.4% / -7.2%
+    paid 0.5 to 0.6: n   613 | avg price 0.545 | won 0.517 | net per $ staked -8.1% | halves -8.9% / -7.0%
+    paid 0.6 to 0.7: n   592 | avg price 0.644 | won 0.647 | net per $ staked -2.0% | halves -2.7% / -0.9%
+    paid 0.7 to 0.8: n   548 | avg price 0.743 | won 0.750 | net per $ staked -0.8% | halves -3.0% / +2.1%
+    paid 0.8 to 0.9: n   441 | avg price 0.844 | won 0.844 | net per $ staked -1.1% | halves -1.8% / -0.1%
+    paid 0.9 to 1.0: n   257 | avg price 0.930 | won 0.926 | net per $ staked -0.9% | halves -0.5% / -1.3%
+
+=== feed kind proxy, 300 s left: 4265 positions
+    paid 0.0 to 0.1: n   748 | avg price 0.050 | won 0.045 | net per $ staked -14.4% | halves +4.1% / -40.0%
+    paid 0.1 to 0.2: n   480 | avg price 0.150 | won 0.115 | net per $ staked -27.9% | halves -29.3% / -25.7%
+    paid 0.2 to 0.3: n   335 | avg price 0.246 | won 0.212 | net per $ staked -18.2% | halves -22.8% / -11.5%
+    paid 0.3 to 0.4: n   321 | avg price 0.343 | won 0.358 | net per $ staked -0.0% | halves +15.2% / -23.3%
+    paid 0.4 to 0.5: n   291 | avg price 0.445 | won 0.430 | net per $ staked -7.1% | halves -8.1% / -6.0%
+    paid 0.5 to 0.6: n   271 | avg price 0.546 | won 0.517 | net per $ staked -8.2% | halves -5.4% / -12.0%
+    paid 0.6 to 0.7: n   299 | avg price 0.646 | won 0.625 | net per $ staked -5.5% | halves -11.7% / +3.1%
+    paid 0.7 to 0.8: n   367 | avg price 0.746 | won 0.738 | net per $ staked -2.7% | halves -3.4% / -1.7%
+    paid 0.8 to 0.9: n   470 | avg price 0.848 | won 0.864 | net per $ staked +0.8% | halves -0.5% / +2.6%
+    paid 0.9 to 1.0: n   683 | avg price 0.945 | won 0.940 | net per $ staked -0.9% | halves -1.1% / -0.6%
+
+=== feed kind proxy, 120 s left: 3139 positions
+    paid 0.0 to 0.1: n   907 | avg price 0.044 | won 0.025 | net per $ staked -45.8% | halves -59.2% / -27.4%
+    paid 0.1 to 0.2: n   310 | avg price 0.150 | won 0.129 | net per $ staked -18.9% | halves -13.8% / -24.9%
+    paid 0.2 to 0.3: n   187 | avg price 0.246 | won 0.241 | net per $ staked -7.0% | halves +3.1% / -23.5%
+    paid 0.3 to 0.4: n   151 | avg price 0.344 | won 0.411 | net per $ staked +14.3% | halves +8.7% / +24.4%
+    paid 0.4 to 0.5: n   141 | avg price 0.449 | won 0.518 | net per $ staked +11.1% | halves +15.3% / +3.7%
+    paid 0.5 to 0.6: n   157 | avg price 0.546 | won 0.522 | net per $ staked -7.3% | halves -12.9% / +5.9%
+    paid 0.6 to 0.7: n   129 | avg price 0.644 | won 0.504 | net per $ staked -23.7% | halves -20.6% / -28.4%
+    paid 0.7 to 0.8: n   180 | avg price 0.746 | won 0.672 | net per $ staked -11.5% | halves -15.6% / -4.3%
+    paid 0.8 to 0.9: n   301 | avg price 0.847 | won 0.837 | net per $ staked -2.2% | halves -0.8% / -4.1%
+    paid 0.9 to 1.0: n   676 | avg price 0.950 | won 0.962 | net per $ staked +0.9% | halves +1.7% / -0.2%
+
+=== feed kind both, 600 s left: 10152 positions
+    paid 0.0 to 0.1: n   448 | avg price 0.070 | won 0.062 | net per $ staked -16.5% | halves -27.7% / -5.5%
+    paid 0.1 to 0.2: n   940 | avg price 0.154 | won 0.145 | net per $ staked -11.3% | halves -9.3% / -13.1%
+    paid 0.2 to 0.3: n  1091 | avg price 0.247 | won 0.218 | net per $ staked -16.2% | halves -8.5% / -24.2%
+    paid 0.3 to 0.4: n  1216 | avg price 0.345 | won 0.353 | net per $ staked -2.2% | halves -2.1% / -2.3%
+    paid 0.4 to 0.5: n  1216 | avg price 0.444 | won 0.442 | net per $ staked -4.3% | halves -2.4% / -6.2%
+    paid 0.5 to 0.6: n  1181 | avg price 0.546 | won 0.517 | net per $ staked -8.1% | halves -9.7% / -6.5%
+    paid 0.6 to 0.7: n  1225 | avg price 0.644 | won 0.631 | net per $ staked -4.4% | halves -3.8% / -5.0%
+    paid 0.7 to 0.8: n  1228 | avg price 0.744 | won 0.748 | net per $ staked -1.3% | halves -4.0% / +1.4%
+    paid 0.8 to 0.9: n  1045 | avg price 0.844 | won 0.842 | net per $ staked -1.3% | halves -1.4% / -1.3%
+    paid 0.9 to 1.0: n   562 | avg price 0.928 | won 0.929 | net per $ staked -0.4% | halves -0.4% / -0.5%
+
+=== feed kind both, 300 s left: 9084 positions
+    paid 0.0 to 0.1: n  1586 | avg price 0.051 | won 0.047 | net per $ staked -14.2% | halves +8.7% / -35.4%
+    paid 0.1 to 0.2: n  1002 | avg price 0.150 | won 0.139 | net per $ staked -12.8% | halves -16.4% / -9.3%
+    paid 0.2 to 0.3: n   704 | avg price 0.245 | won 0.223 | net per $ staked -13.4% | halves -23.6% / -2.1%
+    paid 0.3 to 0.4: n   661 | avg price 0.343 | won 0.369 | net per $ staked +3.0% | halves +5.8% / +0.4%
+    paid 0.4 to 0.5: n   607 | avg price 0.446 | won 0.435 | net per $ staked -6.0% | halves -5.7% / -6.4%
+    paid 0.5 to 0.6: n   601 | avg price 0.544 | won 0.534 | net per $ staked -4.8% | halves -4.6% / -5.1%
+    paid 0.6 to 0.7: n   621 | avg price 0.646 | won 0.601 | net per $ staked -9.2% | halves -10.5% / -8.1%
+    paid 0.7 to 0.8: n   742 | avg price 0.745 | won 0.737 | net per $ staked -2.8% | halves +0.0% / -6.0%
+    paid 0.8 to 0.9: n   995 | avg price 0.847 | won 0.844 | net per $ staked -1.3% | halves -1.2% / -1.5%
+    paid 0.9 to 1.0: n  1565 | avg price 0.945 | won 0.942 | net per $ staked -0.6% | halves -1.6% / +0.3%
+
+=== feed kind both, 120 s left: 5885 positions
+    paid 0.0 to 0.1: n  1566 | avg price 0.047 | won 0.034 | net per $ staked -31.3% | halves -30.8% / -31.8%
+    paid 0.1 to 0.2: n   586 | avg price 0.150 | won 0.145 | net per $ staked -8.7% | halves -1.7% / -15.8%
+    paid 0.2 to 0.3: n   354 | avg price 0.245 | won 0.243 | net per $ staked -5.9% | halves -3.8% / -8.1%
+    paid 0.3 to 0.4: n   300 | avg price 0.343 | won 0.383 | net per $ staked +6.7% | halves +2.6% / +12.0%
+    paid 0.4 to 0.5: n   273 | avg price 0.447 | won 0.487 | net per $ staked +5.0% | halves +8.9% / +0.9%
+    paid 0.5 to 0.6: n   294 | avg price 0.545 | won 0.507 | net per $ staked -9.9% | halves -13.1% / -5.8%
+    paid 0.6 to 0.7: n   271 | avg price 0.646 | won 0.590 | net per $ staked -10.8% | halves -6.9% / -15.3%
+    paid 0.7 to 0.8: n   336 | avg price 0.746 | won 0.679 | net per $ staked -10.6% | halves -13.3% / -7.2%
+    paid 0.8 to 0.9: n   582 | avg price 0.848 | won 0.835 | net per $ staked -2.5% | halves -2.7% / -2.3%
+    paid 0.9 to 1.0: n  1323 | avg price 0.949 | won 0.952 | net per $ staked +0.0% | halves +0.1% / +0.0%
+DONE
+
+
+
