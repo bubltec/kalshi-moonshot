@@ -1,0 +1,68 @@
+job 20261110-195438-34893 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/3aba73bd203c44eca04acbd1d14ed0d4
+windows 2580 (1 in 6), positions 4927
+
+=== entry class mid: 2952 positions | held to the result -57.70 per-contract dollars | by cushion: thin 1985 (-38.1), medium 571 (-6.6), thick 396 (-13.0)
+  A. always on, best 14 and every setting positive in both halves:
+    trajectory (2.0, 60, 1.0): +9.50 vs holding on 868 sold | halves +5.53 / +3.97 | thin +4.6 medium -2.5 thick +7.4 BOTH HALVES + 
+    trajectory (2.0, 60, 0.5): +7.04 vs holding on 825 sold | halves +1.47 / +5.58 | thin +4.1 medium -4.5 thick +7.5 BOTH HALVES + 
+    trajectory (3.0, 60, 1.0): +3.70 vs holding on 217 sold | halves -1.22 / +4.92 | thin +1.3 medium -4.3 thick +6.6 
+    trajectory (3.0, 60, 0.5): +2.74 vs holding on 214 sold | halves -1.17 / +3.91 | thin +1.1 medium -4.3 thick +6.0 
+    gap (0.35, 30): +2.63 vs holding on 28 sold | halves +0.08 / +2.54 | thin +1.1 medium -0.6 thick +2.1 BOTH HALVES + 
+    trajectory (3.0, 60, 0.0): +2.27 vs holding on 209 sold | halves -1.40 / +3.67 | thin +1.3 medium -5.3 thick +6.2 
+    trajectory (2.0, 60, 0.0): +1.95 vs holding on 766 sold | halves -0.50 / +2.44 | thin +1.4 medium -5.7 thick +6.2 
+    gap (0.35, 15): +1.73 vs holding on 44 sold | halves -1.57 / +3.30 | thin +0.4 medium -1.5 thick +2.8 
+    trajectory (3.0, 120, 0.0): +1.70 vs holding on 470 sold | halves +1.99 / -0.29 | thin +2.0 medium -8.3 thick +8.0 
+    gap (0.45, 30): +1.69 vs holding on 19 sold | halves +0.59 / +1.09 | thin +0.3 medium +0.3 thick +1.1 BOTH HALVES + ALL CUSHIONS +
+    value ('900', 0.25, 5): +1.55 vs holding on 202 sold | halves +2.63 / -1.08 | thin -2.7 medium +2.2 thick +2.1 
+    trajectory (3.0, 120, 0.5): +1.27 vs holding on 498 sold | halves -0.39 / +1.67 | thin +2.6 medium -8.6 thick +7.3 
+    gap (0.25, 30): +1.05 vs holding on 49 sold | halves +0.39 / +0.66 | thin +2.0 medium -3.8 thick +2.8 BOTH HALVES + 
+    gap (0.25, 15): +0.73 vs holding on 80 sold | halves +0.71 / +0.02 | thin -0.8 medium -2.4 thick +4.0 BOTH HALVES + 
+  B. walk-forward (the best earlier-days setting, used the next day): -8.15 vs holding over 12 days | halves -5.91 / -2.24 | days won 6, lost 6, stood down 0
+     settings it picked: go (120, 0.3) x5; value ('900+180', 0.25, 5) x2; trajectory (2.0, 60, 1.0) x2; value ('900+180', 0.1, 5) x1; trajectory (1.5, 60, 0.0) x1
+     cushion thin: walk-forward -12.41 | halves -9.11 / -3.30
+     cushion medium: walk-forward -2.28 | halves -1.88 / -0.40
+     cushion thick: walk-forward +1.49 | halves +3.03 / -1.54
+
+=== entry class fav: 1975 positions | held to the result -42.71 per-contract dollars | by cushion: thin 429 (-2.3), medium 844 (-28.7), thick 702 (-11.7)
+  A. always on, best 14 and every setting positive in both halves:
+    trajectory (2.0, 120, 1.0): +18.01 vs holding on 428 sold | halves +12.90 / +5.11 | thin -0.1 medium +12.4 thick +5.6 BOTH HALVES + 
+    trajectory (1.5, 120, 1.0): +14.59 vs holding on 606 sold | halves +6.74 / +7.85 | thin +2.1 medium +10.5 thick +1.9 BOTH HALVES + ALL CUSHIONS +
+    go (240, 0.5): +13.75 vs holding on 668 sold | halves +5.57 / +8.18 | thin +2.8 medium +7.3 thick +3.6 BOTH HALVES + ALL CUSHIONS +
+    go (120, 0.5): +13.24 vs holding on 594 sold | halves +7.45 / +5.79 | thin +4.3 medium +7.5 thick +1.4 BOTH HALVES + ALL CUSHIONS +
+    trajectory (2.0, 60, 1.0): +11.54 vs holding on 257 sold | halves +8.77 / +2.77 | thin +1.0 medium +7.3 thick +3.3 BOTH HALVES + ALL CUSHIONS +
+    go (240, 0.3): +11.10 vs holding on 486 sold | halves +9.46 / +1.64 | thin +2.9 medium +9.1 thick -0.9 BOTH HALVES + 
+    go (120, 0.3): +10.33 vs holding on 458 sold | halves +9.25 / +1.08 | thin +5.6 medium +3.5 thick +1.2 BOTH HALVES + ALL CUSHIONS +
+    trajectory (1.5, 60, 1.0): +10.27 vs holding on 495 sold | halves +6.94 / +3.33 | thin +3.3 medium +8.9 thick -1.9 BOTH HALVES + 
+    trajectory (1.5, 120, 0.5): +9.81 vs holding on 522 sold | halves +4.01 / +5.80 | thin +2.5 medium +9.6 thick -2.3 BOTH HALVES + 
+    trajectory (1.0, 120, 0.0): +9.64 vs holding on 500 sold | halves +5.97 / +3.66 | thin +2.9 medium +8.2 thick -1.4 BOTH HALVES + 
+    trajectory (1.0, 60, 0.5): +8.86 vs holding on 638 sold | halves +3.80 / +5.06 | thin -1.7 medium +6.8 thick +3.8 BOTH HALVES + 
+    trajectory (2.0, 120, 0.5): +8.25 vs holding on 376 sold | halves +4.90 / +3.35 | thin +0.1 medium +11.2 thick -3.1 BOTH HALVES + 
+    trajectory (2.0, 60, 0.5): +8.08 vs holding on 225 sold | halves +5.70 / +2.38 | thin +1.0 medium +6.0 thick +1.0 BOTH HALVES + ALL CUSHIONS +
+    value ('900+180', 0.25, 5): +7.49 vs holding on 181 sold | halves +4.89 / +2.60 | thin +0.6 medium +2.3 thick +4.6 BOTH HALVES + ALL CUSHIONS +
+    trajectory (1.0, 120, 0.5): +7.37 vs holding on 639 sold | halves +1.78 / +5.59 | thin +3.9 medium +4.6 thick -1.2 BOTH HALVES + 
+    trajectory (1.5, 120, 0.0): +7.07 vs holding on 420 sold | halves +5.59 / +1.48 | thin +2.0 medium +9.5 thick -4.4 BOTH HALVES + 
+    trajectory (1.5, 60, 0.5): +6.08 vs holding on 419 sold | halves +3.82 / +2.26 | thin +3.1 medium +5.8 thick -2.7 BOTH HALVES + 
+    go (60, 0.3): +5.84 vs holding on 408 sold | halves +2.54 / +3.30 | thin +3.2 medium +1.5 thick +1.2 BOTH HALVES + ALL CUSHIONS +
+    trajectory (1.0, 60, 0.0): +5.83 vs holding on 479 sold | halves +5.52 / +0.31 | thin -0.9 medium +9.6 thick -2.9 BOTH HALVES + 
+    value ('900', 0.25, 5): +5.72 vs holding on 172 sold | halves +4.81 / +0.91 | thin +0.6 medium +1.4 thick +3.7 BOTH HALVES + ALL CUSHIONS +
+    trajectory (2.0, 120, 0.0): +5.43 vs holding on 304 sold | halves +4.85 / +0.57 | thin -0.4 medium +11.3 thick -5.4 BOTH HALVES + 
+    go (60, 0.5): +4.50 vs holding on 494 sold | halves +3.10 / +1.40 | thin +2.8 medium -0.4 thick +2.1 BOTH HALVES + 
+    value ('900+180', 0.25, 15): +4.38 vs holding on 110 sold | halves +3.71 / +0.68 | thin +2.3 medium +0.6 thick +1.5 BOTH HALVES + ALL CUSHIONS +
+    go (30, 0.3): +4.27 vs holding on 298 sold | halves +1.20 / +3.07 | thin +1.3 medium +1.1 thick +1.8 BOTH HALVES + ALL CUSHIONS +
+    go (30, 0.5): +3.69 vs holding on 368 sold | halves +2.35 / +1.34 | thin +3.1 medium +0.5 thick +0.1 BOTH HALVES + ALL CUSHIONS +
+    value ('900', 0.2, 5): +3.58 vs holding on 236 sold | halves +2.76 / +0.81 | thin -0.4 medium -0.6 thick +4.6 BOTH HALVES + 
+    value ('900', 0.15, 5): +3.51 vs holding on 377 sold | halves +1.51 / +1.99 | thin -2.3 medium -0.8 thick +6.6 BOTH HALVES + 
+    gap (0.25, 15): +2.92 vs holding on 35 sold | halves +0.91 / +2.00 | thin +0.9 medium +0.6 thick +1.4 BOTH HALVES + ALL CUSHIONS +
+    value ('900', 0.1, 15): +2.77 vs holding on 434 sold | halves +0.34 / +2.42 | thin -4.4 medium +1.2 thick +6.0 BOTH HALVES + 
+    gap (0.25, 30): +2.64 vs holding on 19 sold | halves +1.54 / +1.11 | thin +0.0 medium +0.1 thick +2.5 BOTH HALVES + 
+    value ('900+180', 0.1, 15): +2.45 vs holding on 626 sold | halves +0.79 / +1.65 | thin -8.4 medium +5.7 thick +5.2 BOTH HALVES + 
+    gap (0.35, 15): +1.36 vs holding on 20 sold | halves +0.33 / +1.03 | thin +0.8 medium +0.2 thick +0.3 BOTH HALVES + ALL CUSHIONS +
+    gap (0.35, 30): +1.31 vs holding on 10 sold | halves +0.75 / +0.57 | thin +0.0 medium +0.3 thick +1.1 BOTH HALVES + 
+    go (15, 0.3): +0.87 vs holding on 211 sold | halves +0.23 / +0.65 | thin -0.7 medium -0.7 thick +2.2 BOTH HALVES + 
+  B. walk-forward (the best earlier-days setting, used the next day): +6.86 vs holding over 11 days | halves +5.23 / +1.63 | days won 6, lost 5, stood down 0
+     settings it picked: trajectory (2.0, 120, 1.0) x7; trajectory (1.0, 60, 0.0) x2; trajectory (1.0, 60, 1.0) x1; go (240, 0.5) x1
+     cushion thin: walk-forward -2.93 | halves -3.23 / +0.30
+     cushion medium: walk-forward +3.74 | halves -3.32 / +7.06
+     cushion thick: walk-forward -0.62 | halves +2.92 / -3.54
+DONE
+exit=0  results in job-results/20261110-195438-34893/
