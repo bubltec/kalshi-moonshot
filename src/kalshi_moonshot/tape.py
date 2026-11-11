@@ -29,6 +29,8 @@ from .finnhubfeed import FinnhubFeed
 from .finnhubfeed import api_key as finnhub_key
 from .itickfeed import ITickFeed
 from .itickfeed import api_key as itick_key
+from .perpref import PerpRefFeed
+from .perpref import enabled as perpref_enabled
 from .futflow import FuturesFlow
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import KalshiStream, index_for_series
@@ -457,6 +459,7 @@ class TapeRecorder:
         key = pyth_key()
         self.biquote = BiQuoteFeed(self._on_event) if biquote_enabled() else None  # the commodity prices from BiQuote's free stream, recorded to test how well they call the settled direction (biquotefeed.py)
         fh = finnhub_key()
+        self.perpref = PerpRefFeed(self._on_event) if perpref_enabled() else None  # the reference price on Kalshi's own perps, one reading a second, recorded beside the feeds the curve reads (perpref.py)
         it = itick_key()
         self.itick = ITickFeed(self._on_event, it) if it else None  # the S&P 500 index from iTick's free websocket, recorded next to BiQuote's US500 CFD (itickfeed.py)
         self.finnhub = FinnhubFeed(self._on_event, fh) if fh else None  # OANDA's commodity contracts from Finnhub's free websocket, recorded for the same direction test (finnhubfeed.py)
@@ -587,6 +590,8 @@ class TapeRecorder:
             self.finnhub.start()
         if self.itick is not None:
             self.itick.start()
+        if self.perpref is not None:
+            self.perpref.start()
         if self.pyth is not None:
             self.pyth.start()
         self._thread = threading.Thread(target=self._run, name="tape", daemon=True)
@@ -607,6 +612,8 @@ class TapeRecorder:
             self.finnhub.close()
         if self.itick is not None:
             self.itick.close()
+        if self.perpref is not None:
+            self.perpref.close()
         if self.pyth is not None:
             self.pyth.close()
 

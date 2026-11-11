@@ -1,0 +1,12 @@
+Kalshi perps reference price (public REST, https://external-api.kalshi.com/trade-api/v2/margin/markets, reference_price / contract_size) at 07:30:00 ET 2026-11-11, against the 15-minute markets' own numbers (the 7:30 window's expiration_value, which is also the 7:45 window's floor_strike). 49 distinct readings in the 50 s around the boundary (about one a second).
+KXGOLD15M       perp reference 4044.9   | final 4044.91   (-0.0 bp)
+KXSILVER15M     perp reference 52.88    | final 52.880    (+0.0 bp)
+KXPLATINUM15M   perp reference 1562.7   | final 1562.705  (-0.0 bp)
+KXPALLADIUM15M  perp reference 1080.6   | final 1080.631  (-0.3 bp)
+KXCOPPER15M     perp reference 6.3963   | final 6.38971   (+10.3 bp)
+KXWTI15M        perp reference 86.42    | final 86.48     (-6.9 bp)
+KXBRENT15M      perp reference 92.39    | final 91.77     (+67.6 bp)
+KXNATGAS15M     perp reference 3.483    | final 3.54385   (-171.7 bp)
+KXBTC15M        perp reference 73876.0  | final 73873.32  (+0.4 bp)
+KXETH15M        perp reference 2052.5   | final 2051.98   (+2.5 bp)
+One boundary only. The four spot metals match to the perp's rounding; copper and the energy contracts are a different instrument (a level offset, to be measured over many windows); the coins settle on a 60 s average of another index.
