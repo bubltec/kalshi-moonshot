@@ -8,7 +8,7 @@ UNIT = RATE * 60**0.5
 
 
 def target(**kw):
-    base = dict(ticker="KXBTC15M-1", lane="x", side="yes", curve_rest=-1.0, curve_margin=0.15, curve_persist=5.0, curve_scales="900", curve_last=900.0, curve_since=0.0, curve_at=0.0, curve_noted=0.0,
+    base = dict(ticker="KXBTC15M-1", lane="x", side="yes", curve_rest=-1.0, curve_comeback=-1.0, curve_comeback_min=5, curve_comeback_hold=240.0, comeback_noted=0.0, curve_margin=0.15, curve_persist=5.0, curve_scales="900", curve_last=900.0, curve_since=0.0, curve_at=0.0, curve_noted=0.0,
                 close_ts=9_850.0, shock_ref=100.0, shock_index="BRTI", curve_drop_units=1.5, curve_drop_seconds=60.0, curve_drop_margin=0.5, curve_drop_persist=0.0, curve_drop_since=0.0, curve_cush=deque(), curve_gap=-1.0, curve_gap_persist=15.0, curve_gap_since=0.0, curve_behind_last=-1.0, curve_behind_chance=0.5, curve_near=-1.0)
     base.update(kw)
     return SimpleNamespace(**base)
@@ -86,3 +86,30 @@ def test_the_curve_sale_margin_shrinks_toward_the_close(monkeypatch):
     assert 150 < left < 230  # 0.15 * sqrt(left / 900) falls to about 0.07 near 200 s left, then 5 s of persistence
     i2, _ = run(monkeypatch, target(curve_drop_units=-1.0, curve_near=0.05), path, bid=0.90, p=0.82)
     assert i2 > i  # a floor of 0.05 at the close waits longer
+
+
+def test_the_trajectory_sale_is_held_while_the_coins_own_hour_says_its_falls_come_back(monkeypatch):
+    """The XRP sale of 2026-11-11 12:08: a one-minute dip to the strike, sold at 0.46, back to 0.70 thirty seconds later and the market won."""
+    path = [2.5] * 30 + [2.5 - 2.3 * k / 60 for k in range(61)] + [0.2] * 20
+    me = SimpleNamespace(_comeback_holds=lambda *a: watcher.ProfitWatcher._comeback_holds(None, *a))
+    monkeypatch.setattr(watcher.log, "info", lambda *a, **k: None)
+
+    def run_with(rate, **kw):
+        monkeypatch.setattr(watcher.variants, "comeback_rate", lambda *a, **k: rate)
+        t = target(curve_comeback=0.5, **kw)
+        monkeypatch.setattr(watcher.ticks_mod.history, "window", lambda *a, **k: ([0.0], [1.0]))
+        state = {}
+        monkeypatch.setattr(curvevalue, "read", lambda *a, **k: curvevalue.Curve(0.45, state["tm"] * UNIT, RATE, RATE))
+        for i, tm in enumerate(path):
+            state["tm"] = tm
+            now = 9_000.0 + i
+            reason = watcher.ProfitWatcher._curve_hit(me, t, 0.40, now, now)
+            if reason:
+                return reason
+        return None
+
+    assert run_with((0.6, 10)) is None  # held: 6 of 10 falls came back
+    assert run_with((0.25, 4)) is not None  # too few falls to trust the rate: sold
+    assert run_with((0.25, 8)) is not None  # this coin's falls do not come back: sold
+    assert run_with(None) is not None  # no hour of history: sold
+    assert run_with((0.6, 10), close_ts=9_150.0) is not None  # 60 s left of the window after the dip: no time to come back, sold

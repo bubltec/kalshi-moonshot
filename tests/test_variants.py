@@ -1229,3 +1229,42 @@ def test_the_wave_buy_waits_while_the_whole_market_is_still_running_against_the_
         assert d.action == "bet" and "[market-wide amp" in d.note
     finally:
         ticks.history.clear()
+
+
+def test_comeback_rate_counts_the_falls_in_the_hour_and_how_many_came_back():
+    import math
+    import time as _time
+
+    from kalshi_moonshot import ticks
+
+    now = _time.time()
+    index = "TESTCOMEBACK"
+
+    def load(bounce):
+        ticks.history.clear()
+        variants._comeback_memo.clear()
+        base = now - 4600.0
+        px = 0.0
+        for k in range(4601):
+            t = base + k
+            noise = 0.00001 * math.sin(k / 7.0)
+            ph = k % 600  # a sharp 20 s fall every ten minutes, then either a rebound or a flat stay
+            if 300 <= ph < 320:
+                px -= 0.0003
+            elif 320 <= ph < 340 and bounce:
+                px += 0.0003
+            ticks.history.note(index, t, 100.0 * math.exp(px + noise))
+
+    try:
+        load(True)
+        rate, n = variants.comeback_rate(index, now)
+        assert n >= 4 and rate > 0.9  # every fall came back by half
+        load(False)
+        rate, n = variants.comeback_rate(index, now)
+        assert n >= 4 and rate < 0.1  # none did
+        ticks.history.clear()
+        variants._comeback_memo.clear()
+        assert variants.comeback_rate("NOHISTORY", now) is None
+    finally:
+        ticks.history.clear()
+        variants._comeback_memo.clear()
