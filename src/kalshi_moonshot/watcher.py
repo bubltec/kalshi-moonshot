@@ -65,6 +65,7 @@ THROUGH_SPOT = 5.0  # an index tick older than this is not a reason to sell
 SHOCK_BID = (0.05, 0.89)  # the shock exit sells only a bid in this range: below it the market has already priced the loss, above it the market is not worried
 SHOCK_LOG_MIN = 3.0  # bp of move against a held bet that is worth a shock_log row
 
+CURVE_GO_MIN_LEFT = 8.0  # the time-to-go sale keeps the same last-seconds guard (an order would land after the close)
 CURVE_MIN_LEFT = 8.0  # the curve exit does not act in the last 8 s (an order would land after the close)
 CURVE_MIN_BID = 0.05  # below this the market has priced the loss
 SHOCK_KEEP = 130.0  # seconds of index ticks kept for the shock exit to look back over
@@ -195,6 +196,7 @@ class Target:
     curve_gap: float = -1.0  # lane curve_gap (-1 = off): the curve exit's market-disagrees sale
     curve_gap_persist: float = 15.0
     curve_gap_since: float = 0.0
+    curve_behind_last: float = -1.0  # lane curve_behind_last (-1 = off): the curve exit's time-to-go sale
     curve_cush: deque = field(default_factory=deque)  # (time, cushion in typical minutes), the last curve_drop_seconds of them
     late_seconds: float = 30.0  # lane late_drop_seconds
     late_bids: deque = field(default_factory=lambda: deque(maxlen=400))  # (second, bid) one a second, forward-filled, for the late-drop exit
@@ -713,13 +715,20 @@ class ProfitWatcher:
         if t.curve_margin < 0 or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.curve_at < 1.0:
             return None
         left = t.close_ts - now
-        if left <= CURVE_MIN_LEFT or left > t.curve_last or bid < CURVE_MIN_BID or now - quote_ts > 5.0:
+        go = t.curve_behind_last > 0 and CURVE_GO_MIN_LEFT <= left <= t.curve_behind_last and bid > 0 and now - quote_ts <= 5.0  # the time-to-go sale acts later and at lower bids than the other sales
+        quiet = left <= CURVE_MIN_LEFT or left > t.curve_last or bid < CURVE_MIN_BID or now - quote_ts > 5.0
+        if quiet and not go:
             t.curve_since = 0.0
             return None
         t.curve_at = now
         got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
         read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left, t.curve_scales) if got else None
         if read is None:
+            t.curve_since = 0.0
+            return None
+        if go and read.p < 0.5:
+            return f"curve exit (time to go): the curve's chance is {read.p:.3f}, under one half, with {left:.0f}s left (sells in the last {t.curve_behind_last:g}s); bid {bid:.2f}, cushion {read.cushion * 1e4:+.1f} bp"
+        if quiet:
             t.curve_since = 0.0
             return None
         net = bid - fee_per_contract(bid)
@@ -1502,7 +1511,7 @@ class ProfitWatcher:
                     if spec.curve_exit >= 0:
                         held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
                         held.curve_drop_units, held.curve_drop_seconds, held.curve_drop_margin, held.curve_drop_persist = spec.curve_drop_units, spec.curve_drop_seconds, spec.curve_drop_margin_units, spec.curve_drop_persist
-                        held.curve_gap, held.curve_gap_persist = spec.curve_gap, spec.curve_gap_persist
+                        held.curve_gap, held.curve_gap_persist, held.curve_behind_last = spec.curve_gap, spec.curve_gap_persist, spec.curve_behind_last
                     held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
                     held.value_gain_x, held.value_high, held.value_high_left, held.value_min_gain = spec.value_exit_gain_x, spec.value_exit_high, spec.value_exit_high_left, spec.value_exit_min_gain
                     self._shock_hist.setdefault(sid, deque())

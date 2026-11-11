@@ -9,7 +9,7 @@ UNIT = RATE * 60**0.5
 
 def target(**kw):
     base = dict(ticker="KXBTC15M-1", lane="x", side="yes", curve_margin=0.15, curve_persist=5.0, curve_scales="900", curve_last=900.0, curve_since=0.0, curve_at=0.0, curve_noted=0.0,
-                close_ts=9_850.0, shock_ref=100.0, shock_index="BRTI", curve_drop_units=1.5, curve_drop_seconds=60.0, curve_drop_margin=0.5, curve_drop_persist=0.0, curve_drop_since=0.0, curve_cush=deque(), curve_gap=-1.0, curve_gap_persist=15.0, curve_gap_since=0.0)
+                close_ts=9_850.0, shock_ref=100.0, shock_index="BRTI", curve_drop_units=1.5, curve_drop_seconds=60.0, curve_drop_margin=0.5, curve_drop_persist=0.0, curve_drop_since=0.0, curve_cush=deque(), curve_gap=-1.0, curve_gap_persist=15.0, curve_gap_since=0.0, curve_behind_last=-1.0)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -58,3 +58,12 @@ def test_a_bid_far_under_the_curve_chance_is_sold_after_its_persistence(monkeypa
     assert reason and reason.startswith("curve exit (market disagrees)") and 15 <= i <= 17
     assert run(monkeypatch, target(curve_drop_units=-1.0, curve_gap=0.35), [3.0] * 40, bid=0.70, p=0.95)[1] is None  # a gap under the level is held
     assert run(monkeypatch, target(curve_drop_units=-1.0), [3.0] * 40, bid=0.55, p=0.95)[1] is None  # off by default
+
+
+def test_time_to_go_sells_a_position_behind_the_strike_only_in_its_last_seconds(monkeypatch):
+    # close_ts 9850, readings start at 9000: 850 s left falling a second at a time
+    path = [-1.0] * 846
+    i, reason = run(monkeypatch, target(curve_drop_units=-1.0, curve_behind_last=240.0), path, bid=0.03, p=0.20)
+    assert reason and reason.startswith("curve exit (time to go)") and i == 610  # 240 s left, though the bid is under the other sales' floor
+    assert run(monkeypatch, target(curve_drop_units=-1.0, curve_behind_last=240.0), path, bid=0.60, p=0.70)[1] is None  # ahead of the strike: held
+    assert run(monkeypatch, target(curve_drop_units=-1.0), path, bid=0.03, p=0.20)[1] is None  # off by default
