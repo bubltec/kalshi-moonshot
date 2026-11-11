@@ -1,0 +1,43 @@
+
+
+=== crypto_multiscale: 312 settled bets at 0.55 or over with an hour of index before the buy | held +26.22 on 790.72 | the lane's own efficiency terciles cut at 0.031 and 0.067
+  position in the hour's range, toward the bet's side
+    lower third of the hour's range                      n  183 | won 127 (69%) | staked  450.64 | held  +19.35 (+4.3% per $) | halves +6.74 / +12.61
+    middle third                                         n  105 | won  71 (68%) | staked  276.18 | held   -3.53 (-1.3% per $) | halves -0.08 / -3.45
+    upper third, under 0.9                               n   21 | won  17 (81%) | staked   55.64 | held   +6.50 (+11.7% per $) | halves +3.16 / +3.34
+    top tenth (0.9 and up)                               n    3 | won   3 (100%) | staked    8.25 | held   +3.91 (+47.4% per $) | halves +2.96 / +0.95
+  how the hour moved
+    back and forth                                       n  105 | won  72 (69%) | staked  269.98 | held   +2.91 (+1.1% per $) | halves +7.18 / -4.27
+    in between                                           n  103 | won  70 (68%) | staked  265.72 | held   -1.51 (-0.6% per $) | halves +1.31 / -2.82
+    trending                                             n  104 | won  76 (73%) | staked  255.02 | held  +24.82 (+9.7% per $) | halves +4.29 / +20.53
+  the two together
+    back and forth, upper third or higher                n    8 | won   7 (88%) | staked   21.11 | held   +5.27 (+24.9% per $) | halves +1.55 / +3.72
+    back and forth, lower two thirds                     n   97 | won  65 (67%) | staked  248.87 | held   -2.36 (-0.9% per $) | halves +5.63 / -7.99
+    in between, upper third or higher                    n   11 | won   9 (82%) | staked   29.77 | held   +3.46 (+11.6% per $) | halves +1.27 / +2.19
+    in between, lower two thirds                         n   92 | won  61 (66%) | staked  235.95 | held   -4.97 (-2.1% per $) | halves +0.04 / -5.00
+    trending, upper third or higher                      n    5 | won   4 (80%) | staked   13.01 | held   +1.68 (+12.9% per $) | halves +3.30 / -1.61
+    trending, lower two thirds                           n   99 | won  72 (73%) | staked  242.01 | held  +23.14 (+9.6% per $) | halves +0.99 / +22.15
+    KXXRP15M-26NOV110730-30: position 0.32, hour efficiency 0.049 (in between), held -2.91
+    KXHYPE15M-26NOV110730-30: position 0.31, hour efficiency 0.062 (in between), held -2.91
+
+=== commodity_multiscale: 131 settled bets at 0.55 or over with an hour of index before the buy | held -0.32 on 294.47 | the lane's own efficiency terciles cut at 0.033 and 0.078
+  position in the hour's range, toward the bet's side
+    lower third of the hour's range                      n   75 | won  48 (64%) | staked  157.82 | held   -1.63 (-1.0% per $) | halves -3.07 / +1.44
+    middle third                                         n   44 | won  30 (68%) | staked  103.85 | held   -3.32 (-3.2% per $) | halves -9.86 / +6.54
+    upper third, under 0.9                               n    9 | won   8 (89%) | staked   24.02 | held   +5.13 (+21.3% per $) | halves +5.01 / +0.11
+    top tenth (0.9 and up)                               n    3 | won   2 (67%) | staked    8.78 | held   -0.50 (-5.7% per $) | halves +0.00 / -0.50
+  how the hour moved
+    back and forth                                       n   44 | won  31 (70%) | staked   97.28 | held   +1.38 (+1.4% per $) | halves -1.28 / +2.66
+    in between                                           n   43 | won  30 (70%) | staked  101.05 | held   +5.30 (+5.2% per $) | halves -6.35 / +11.65
+    trending                                             n   44 | won  27 (61%) | staked   96.13 | held   -6.99 (-7.3% per $) | halves -0.28 / -6.71
+  the two together
+    back and forth, upper third or higher                n    4 | won   4 (100%) | staked    9.16 | held   +4.07 (+44.4% per $) | halves +2.14 / +1.93
+    back and forth, lower two thirds                     n   40 | won  27 (68%) | staked   88.12 | held   -2.69 (-3.0% per $) | halves -3.42 / +0.74
+    in between, upper third or higher                    n    4 | won   4 (100%) | staked   11.99 | held   +3.82 (+31.8% per $) | halves +2.87 / +0.95
+    in between, lower two thirds                         n   39 | won  26 (67%) | staked   89.06 | held   +1.48 (+1.7% per $) | halves -9.22 / +10.70
+    trending, upper third or higher                      n    4 | won   2 (50%) | staked   11.65 | held   -3.26 (-28.0% per $) | halves +0.00 / -3.26
+    trending, lower two thirds                           n   40 | won  25 (62%) | staked   84.48 | held   -3.73 (-4.4% per $) | halves -0.28 / -3.45
+DONE
+
+
+
