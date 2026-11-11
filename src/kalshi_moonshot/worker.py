@@ -504,8 +504,8 @@ class Worker:
             self.jobs.complete(job.id, handler(job) or "")
             if job.kind == "evaluate":
                 shot = job.payload.get("shot") or {}
-                log.info("buy timing %s %s: %.0f ms from the queue to the start of the evaluation, %.1f ms evaluating and deciding", shot.get("lane", ""), shot.get("ticker", ""),
-                         max(0.0, began - job.created_ts) * 1000.0, (time.time() - began) * 1000.0)
+                log.info("buy timing %s %s: %.0f ms from the queue to the start of the evaluation, %.1f ms evaluating and deciding. %s", shot.get("lane", ""), shot.get("ticker", ""),
+                         max(0.0, began - job.created_ts) * 1000.0, (time.time() - began) * 1000.0, steptime.breakdown_ms())
             if time.time() - began > SLOW_JOB_SECONDS:
                 shot = job.payload.get("shot") or {}
                 log.info("slow job %d (%s%s): ran %.0fs, %.0fs after it was queued. %s", job.id, job.kind, f" {shot.get('lane', '')} {shot.get('ticker', '')}" if shot else "", time.time() - began, began - job.created_ts, steptime.summary())

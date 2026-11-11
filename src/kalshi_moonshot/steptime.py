@@ -54,3 +54,10 @@ def summary() -> str:
     if costs:
         parts.append("time in: " + ", ".join(costs))
     return "; ".join(parts)
+
+
+def breakdown_ms(min_ms: float = 1.0) -> str:
+    """The job's steps and running costs in milliseconds (every one of at least `min_ms`), for the per-entry timing line: where the time of one evaluation goes, not only of a slow one."""
+    steps = [f"{n} {s * 1000.0:.0f}" for n, s in (getattr(_tl, "steps", None) or []) if s * 1000.0 >= min_ms]
+    costs = [f"{n} {s * 1000.0:.0f}" for n, s in sorted((getattr(_tl, "costs", None) or {}).items(), key=lambda kv: -kv[1]) if s * 1000.0 >= min_ms]
+    return "; ".join(p for p in (("steps ms: " + ", ".join(steps)) if steps else "", ("time in ms: " + ", ".join(costs)) if costs else "") if p)

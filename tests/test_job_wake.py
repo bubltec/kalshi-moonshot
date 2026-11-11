@@ -71,3 +71,20 @@ def test_a_job_enqueued_while_the_worker_is_busy_is_not_lost(tmp_path, monkeypat
     jobs_mod.WAKE.set()
     th.join(2.0)
     assert len(seen) == 2
+
+
+def test_the_timing_breakdown_lists_every_step_and_cost_in_milliseconds():
+    from kalshi_moonshot import steptime
+
+    steptime.begin()
+    try:
+        steptime.add("kalshi requests", 0.120)
+        steptime.add("database", 0.004)
+        steptime.add("tiny", 0.0001)
+        with steptime.step("risk check"):
+            time.sleep(0.003)
+        out = steptime.breakdown_ms()
+    finally:
+        steptime.end()
+    assert "kalshi requests 120" in out and "database 4" in out and "risk check" in out and "tiny" not in out
+    assert steptime.breakdown_ms() == ""  # nothing recorded outside a timed job
