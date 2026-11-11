@@ -1,0 +1,46 @@
+job 20261111-085444-82175 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/6a7c4976919d4f63ae2f31eeaa7f0acc
+windows 3945 (1 in 3)
+
+=== feed kind settlement: WAVE TRADES (dollars per contract)
+    slope 0.3, wave amplitude 0+, rest : 2062 signals, 1590 filled (77%) at 0.26 avg | won 22% | net  -43.24 (-2.7 cents a trade) | halves -20.57 / -22.67 | troughs -27.68 on 795, peaks -15.56 on 795 | exits {'peak': 1426, 'give-up': 164} 
+    slope 0.3, wave amplitude 0+, touch: 2062 signals, 2062 filled (100%) at 0.26 avg | won 28% | net  -15.13 (-0.7 cents a trade) | halves -4.77 / -10.36 | troughs -11.79 on 1029, peaks -3.34 on 1033 | exits {'peak': 1940, 'give-up': 122} 
+    slope 0.3, wave amplitude 3+, rest : 2024 signals, 1564 filled (77%) at 0.26 avg | won 22% | net  -41.73 (-2.7 cents a trade) | halves -20.02 / -21.71 | troughs -26.84 on 783, peaks -14.89 on 781 | exits {'peak': 1402, 'give-up': 162} 
+    slope 0.3, wave amplitude 3+, touch: 2024 signals, 2024 filled (100%) at 0.26 avg | won 28% | net  -13.96 (-0.7 cents a trade) | halves -4.05 / -9.91 | troughs -10.91 on 1014, peaks -3.06 on 1010 | exits {'peak': 1904, 'give-up': 120} 
+    slope 0.3, wave amplitude 5+, rest : 1689 signals, 1321 filled (78%) at 0.26 avg | won 22% | net  -35.42 (-2.7 cents a trade) | halves -16.75 / -18.68 | troughs -22.37 on 659, peaks -13.05 on 662 | exits {'peak': 1181, 'give-up': 140} 
+    slope 0.3, wave amplitude 5+, touch: 1689 signals, 1689 filled (100%) at 0.26 avg | won 28% | net  -11.73 (-0.7 cents a trade) | halves -2.83 / -8.91 | troughs -8.79 on 844, peaks -2.95 on 845 | exits {'peak': 1587, 'give-up': 102} 
+    slope 0.6, wave amplitude 0+, rest : 1275 signals,  975 filled (76%) at 0.19 avg | won 23% | net  -15.37 (-1.6 cents a trade) | halves -3.25 / -12.12 | troughs -8.25 on 503, peaks -7.12 on 472 | exits {'give-up': 141, 'peak': 832, 'close': 2} 
+    slope 0.6, wave amplitude 0+, touch: 1275 signals, 1275 filled (100%) at 0.19 avg | won 29% | net   +1.43 (+0.1 cents a trade) | halves +7.76 / -6.33 | troughs -0.61 on 662, peaks +2.03 on 613 | exits {'give-up': 133, 'peak': 1140, 'close': 2} 
+    slope 0.6, wave amplitude 3+, rest : 1258 signals,  966 filled (77%) at 0.19 avg | won 23% | net  -15.01 (-1.6 cents a trade) | halves -3.21 / -11.80 | troughs -8.04 on 500, peaks -6.97 on 466 | exits {'give-up': 139, 'peak': 825, 'close': 2} 
+    slope 0.6, wave amplitude 3+, touch: 1258 signals, 1258 filled (100%) at 0.19 avg | won 29% | net   +1.53 (+0.1 cents a trade) | halves +7.70 / -6.17 | troughs -0.43 on 656, peaks +1.96 on 602 | exits {'give-up': 131, 'peak': 1125, 'close': 2} 
+    slope 0.6, wave amplitude 5+, rest : 1161 signals,  887 filled (76%) at 0.18 avg | won 23% | net  -11.74 (-1.3 cents a trade) | halves -1.67 / -10.06 | troughs -6.42 on 457, peaks -5.32 on 430 | exits {'peak': 761, 'give-up': 124, 'close': 2} 
+    slope 0.6, wave amplitude 5+, touch: 1161 signals, 1161 filled (100%) at 0.19 avg | won 29% | net   +4.04 (+0.3 cents a trade) | halves +8.58 / -4.55 | troughs +1.04 on 603, peaks +2.99 on 558 | exits {'peak': 1044, 'give-up': 115, 'close': 2} 
+=== feed kind settlement: FAVORITES (0.70-0.85 with 5 to 3 minutes left, dollars per contract)
+    stability any               , hold to settlement:  775 buys | won 76% | net  -36.62 (-4.7 cents a buy) | halves -15.96 / -20.67 
+    stability any               , cash out at 0.90  :  775 buys | won 82% | net  -47.18 (-6.1 cents a buy) | halves -21.97 / -25.21 
+    stability range at most 4   , hold to settlement:  203 buys | won 78% | net   -4.68 (-2.3 cents a buy) | halves -0.94 / -3.74 
+    stability range at most 4   , cash out at 0.90  :  203 buys | won 83% | net   -9.80 (-4.8 cents a buy) | halves -3.43 / -6.37 
+    stability range at most 8   , hold to settlement:  684 buys | won 76% | net  -30.53 (-4.5 cents a buy) | halves -13.52 / -17.01 
+    stability range at most 8   , cash out at 0.90  :  684 buys | won 82% | net  -42.71 (-6.2 cents a buy) | halves -19.81 / -22.90 
+
+=== feed kind proxy: WAVE TRADES (dollars per contract)
+    slope 0.3, wave amplitude 0+, rest :  781 signals,  545 filled (70%) at 0.25 avg | won 20% | net  -17.63 (-3.2 cents a trade) | halves -10.39 / -7.23 | troughs -6.56 on 281, peaks -11.07 on 264 | exits {'peak': 502, 'give-up': 43} 
+    slope 0.3, wave amplitude 0+, touch:  781 signals,  781 filled (100%) at 0.25 avg | won 27% | net   -6.50 (-0.8 cents a trade) | halves -6.47 / -0.03 | troughs -1.77 on 406, peaks -4.73 on 375 | exits {'peak': 745, 'give-up': 36} 
+    slope 0.3, wave amplitude 3+, rest :  759 signals,  535 filled (70%) at 0.25 avg | won 20% | net  -17.54 (-3.3 cents a trade) | halves -10.26 / -7.28 | troughs -6.43 on 279, peaks -11.12 on 256 | exits {'peak': 492, 'give-up': 43} 
+    slope 0.3, wave amplitude 3+, touch:  759 signals,  759 filled (100%) at 0.25 avg | won 27% | net   -6.39 (-0.8 cents a trade) | halves -6.79 / +0.40 | troughs -2.22 on 398, peaks -4.17 on 361 | exits {'peak': 723, 'give-up': 36} 
+    slope 0.3, wave amplitude 5+, rest :  530 signals,  371 filled (70%) at 0.26 avg | won 20% | net  -12.45 (-3.4 cents a trade) | halves -6.57 / -5.88 | troughs -3.37 on 192, peaks -9.08 on 179 | exits {'peak': 341, 'give-up': 30} 
+    slope 0.3, wave amplitude 5+, touch:  530 signals,  530 filled (100%) at 0.25 avg | won 28% | net   -5.04 (-1.0 cents a trade) | halves -4.64 / -0.40 | troughs -0.47 on 275, peaks -4.57 on 255 | exits {'peak': 506, 'give-up': 24} 
+    slope 0.6, wave amplitude 0+, rest :  388 signals,  256 filled (66%) at 0.17 avg | won 20% | net   -6.93 (-2.7 cents a trade) | halves -2.58 / -4.35 | troughs -3.82 on 127, peaks -3.11 on 129 | exits {'peak': 232, 'give-up': 24} 
+    slope 0.6, wave amplitude 0+, touch:  388 signals,  388 filled (100%) at 0.17 avg | won 30% | net   -1.46 (-0.4 cents a trade) | halves -1.12 / -0.34 | troughs -1.01 on 201, peaks -0.45 on 187 | exits {'peak': 366, 'give-up': 22} 
+    slope 0.6, wave amplitude 3+, rest :  387 signals,  256 filled (66%) at 0.17 avg | won 20% | net   -6.93 (-2.7 cents a trade) | halves -2.58 / -4.35 | troughs -3.82 on 127, peaks -3.11 on 129 | exits {'peak': 232, 'give-up': 24} 
+    slope 0.6, wave amplitude 3+, touch:  387 signals,  387 filled (100%) at 0.17 avg | won 30% | net   -1.57 (-0.4 cents a trade) | halves -1.16 / -0.42 | troughs -1.12 on 200, peaks -0.45 on 187 | exits {'peak': 365, 'give-up': 22} 
+    slope 0.6, wave amplitude 5+, rest :  328 signals,  213 filled (65%) at 0.18 avg | won 19% | net   -6.10 (-2.9 cents a trade) | halves -2.64 / -3.46 | troughs -3.12 on 112, peaks -2.98 on 101 | exits {'peak': 194, 'give-up': 19} 
+    slope 0.6, wave amplitude 5+, touch:  328 signals,  328 filled (100%) at 0.18 avg | won 29% | net   -1.80 (-0.5 cents a trade) | halves -2.06 / +0.26 | troughs -1.22 on 172, peaks -0.58 on 156 | exits {'peak': 310, 'give-up': 18} 
+=== feed kind proxy: FAVORITES (0.70-0.85 with 5 to 3 minutes left, dollars per contract)
+    stability any               , hold to settlement:  383 buys | won 81% | net   +4.32 (+1.1 cents a buy) | halves -0.96 / +5.28 
+    stability any               , cash out at 0.90  :  383 buys | won 87% | net   -1.91 (-0.5 cents a buy) | halves -2.43 / +0.52 
+    stability range at most 4   , hold to settlement:  156 buys | won 85% | net   +7.46 (+4.8 cents a buy) | halves +5.98 / +1.48 BOTH HALVES +
+    stability range at most 4   , cash out at 0.90  :  156 buys | won 90% | net   +4.11 (+2.6 cents a buy) | halves +4.33 / -0.22 
+    stability range at most 8   , hold to settlement:  359 buys | won 81% | net   +3.77 (+1.0 cents a buy) | halves -0.03 / +3.80 
+    stability range at most 8   , cash out at 0.90  :  359 buys | won 87% | net   -1.50 (-0.4 cents a buy) | halves -1.56 / +0.05 
+DONE
+exit=0  results in job-results/20261111-085444-82175/
