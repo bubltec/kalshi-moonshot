@@ -1,0 +1,25 @@
+job 20261111-070846-72499 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/d88c8d7032dd431a9d6b5508561d20a7
+windows 3826 (1 in 4), positions 4419 | held -93.74 on 2804.74 staked (-3.3% per $)
+  curve chance minus price paid
+    under -0.10        n   426 | won 63% | held    -5.79 (-2.1% per $) | halves -1.6% / -2.5%
+    -0.10 to -0.05     n  1512 | won 60% | held   -39.73 (-4.2% per $) | halves -4.0% / -4.3%
+    -0.05 to 0         n  1906 | won 61% | held   -34.71 (-2.9% per $) | halves -4.3% / -1.3%
+    0 to +0.05         n   449 | won 64% | held    -8.57 (-2.9% per $) | halves -2.3% / -3.5%
+    +0.05 to +0.10     n    82 | won 63% | held    -4.22 (-7.5% per $) | halves -4.1% / -10.7%
+    +0.10 and up       n    44 | won 61% | held    -0.72 (-2.6% per $) | halves +14.9% / -14.7%
+  cushion at the buy, typical minutes
+    behind (under 0)   n   485 | won 55% | held   -17.20 (-6.0% per $) | halves -1.0% / -9.0%
+    0 to 0.5           n  1704 | won 56% | held   -31.73 (-3.2% per $) | halves -4.8% / -1.4%
+    0.5 to 1           n   807 | won 60% | held   -13.52 (-2.7% per $) | halves +1.8% / -7.9%
+    1 to 2             n   860 | won 68% | held    -9.43 (-1.6% per $) | halves -4.5% / +1.5%
+    2 and up           n   563 | won 73% | held   -21.85 (-5.0% per $) | halves -7.6% / -2.7%
+  minutes elapsed at the buy
+    under 4            n  3433 | won 62% | held   -78.52 (-3.6% per $) | halves -3.7% / -3.4%
+    4 to 8             n   654 | won 57% | held   -26.44 (-6.7% per $) | halves -7.9% / -5.5%
+    8 to 11            n   210 | won 63% | held    +6.93 (+5.5% per $) | halves +0.8% / +10.6%
+    11 and up          n   122 | won 65% | held    +4.29 (+5.7% per $) | halves +12.9% / -1.7%
+  filter edge >= -0.05: kept 2481 of 4419 | held -48.22 (-3.0% per $) | halves -3.7% / -2.4% | days the kept set beat buying all per $: 7, lost: 7 of 14
+  filter edge >= 0: kept 575 of 4419 | held -13.52 (-3.6% per $) | halves -1.5% / -5.6% | days the kept set beat buying all per $: 7, lost: 6 of 14
+  filter edge >= +0.05: kept 126 of 4419 | held -4.95 (-5.9% per $) | halves +1.5% / -12.1% | days the kept set beat buying all per $: 7, lost: 6 of 14
+DONE
+exit=0  results in job-results/20261111-070846-72499/
