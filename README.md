@@ -32,7 +32,7 @@ docker compose -p moonshot-local exec bot python -m kalshi_moonshot doctor
 docker compose -p moonshot-local logs -f bot
 ```
 
-Postgres is on `127.0.0.1:5433` (`moonshot` / `moonshot`, database `moonshot`). The bot's tables are in the `moonshot` schema. The tape (quotes, trades, index ticks) is in the `tape` schema. Tests use SQLite and do not need this database.
+Postgres is on `127.0.0.1:5433` (`moonshot` / `moonshot`, database `moonshot`). The bot's tables are in the `moonshot` schema. The tape (quotes, trades, index ticks) is in the `tape` schema. The test suite does not use this database: it runs against a throwaway Postgres (`KM_TEST_DATABASE_URL`, see `tests/conftest.py`), where every test gets schemas of its own.
 
 `.env` on a machine that already trades is the **live** file (`MODE=trade`). `docker compose up` without the local override reads that file. Do not start it while the Ohio bot is trading the same account.
 
@@ -171,7 +171,7 @@ These read the database and place no orders.
 
 ```
 src/kalshi_moonshot/     the bot
-tests/                   pytest, SQLite, no network
+tests/                   pytest on a throwaway Postgres, no network
 data/strategies.toml     lane config, gitignored, present on each machine
 .env / .env.local        live and paper settings, gitignored
 .secrets/                API keys, gitignored
