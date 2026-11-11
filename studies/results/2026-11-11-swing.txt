@@ -1,0 +1,82 @@
+job 20261111-082931-80275 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/5ef23e1ee5f847518a36291d6fb8c34d
+windows 3925 (1 in 3)
+
+=== feed kind settlement: 72 settings | dollars per contract; one contract an entry
+  best 14 by net per entry, then every setting positive in both halves:
+    move 3.0 over  60s, target +0.15, out after 4 min:  768 entries at 0.26 avg | target reached 41% | net  -21.91 (-2.9 cents an entry) | halves -8.78 / -13.13 | held to settlement instead -10.87 
+    move 3.0 over  60s, target +0.10, out after 4 min:  768 entries at 0.26 avg | target reached 51% | net  -24.61 (-3.2 cents an entry) | halves -9.35 / -15.26 | held to settlement instead -10.87 
+    move 3.0 over  60s, target +0.15, out after 2 min:  768 entries at 0.26 avg | target reached 28% | net  -24.74 (-3.2 cents an entry) | halves -12.19 / -12.55 | held to settlement instead -10.87 
+    move 3.0 over  60s, target +0.15, out after 8 min:  768 entries at 0.26 avg | target reached 51% | net  -26.53 (-3.5 cents an entry) | halves -9.36 / -17.16 | held to settlement instead -10.87 
+    move 3.0 over  60s, target +0.10, out after 2 min:  768 entries at 0.26 avg | target reached 39% | net  -27.00 (-3.5 cents an entry) | halves -12.76 / -14.24 | held to settlement instead -10.87 
+    move 3.0 over  60s, target +0.05, out after 4 min:  768 entries at 0.26 avg | target reached 66% | net  -27.23 (-3.5 cents an entry) | halves -10.06 / -17.17 | held to settlement instead -10.87 
+    move 3.0 over  60s, target +0.10, out after 8 min:  768 entries at 0.26 avg | target reached 60% | net  -27.52 (-3.6 cents an entry) | halves -9.36 / -18.16 | held to settlement instead -10.87 
+    move 2.0 over  60s, target +0.15, out after 4 min: 2079 entries at 0.31 avg | target reached 43% | net  -74.85 (-3.6 cents an entry) | halves -32.11 / -42.73 | held to settlement instead -27.34 
+    move 3.0 over  60s, target +0.05, out after 8 min:  768 entries at 0.26 avg | target reached 72% | net  -27.86 (-3.6 cents an entry) | halves -9.13 / -18.73 | held to settlement instead -10.87 
+    move 3.0 over 120s, target +0.15, out after 4 min: 1550 entries at 0.26 avg | target reached 39% | net  -56.81 (-3.7 cents an entry) | halves -29.23 / -27.59 | held to settlement instead -29.81 
+    move 3.0 over  60s, target +0.05, out after 2 min:  768 entries at 0.26 avg | target reached 56% | net  -28.78 (-3.7 cents an entry) | halves -12.64 / -16.14 | held to settlement instead -10.87 
+    move 3.0 over 120s, target +0.05, out after 2 min: 1550 entries at 0.26 avg | target reached 55% | net  -58.19 (-3.8 cents an entry) | halves -28.31 / -29.88 | held to settlement instead -29.81 
+    move 1.0 over  60s, target +0.15, out after 4 min: 2740 entries at 0.36 avg | target reached 43% | net -103.01 (-3.8 cents an entry) | halves -44.60 / -58.42 | held to settlement instead -46.29 
+    move 2.0 over  60s, target +0.15, out after 2 min: 2079 entries at 0.31 avg | target reached 28% | net  -78.54 (-3.8 cents an entry) | halves -37.00 / -41.54 | held to settlement instead -27.34 
+  walk-forward (the best earlier-days setting, used the next day): net +0.00 on 0 entries over 11 days | halves +0.00 / +0.00 | days won 0, lost 0, stood down 11
+     picked: 
+  breakdown, move 1.5 over 60s, target +0.10, out after 4 min (2586 entries):
+      hour back and forth  n  863 | target reached 53% | net  -35.91 (-4.2 cents an entry) | held instead -16.11
+      hour in between      n  861 | target reached 55% | net  -33.51 (-3.9 cents an entry) | held instead -37.41
+      hour trending        n  862 | target reached 54% | net  -32.13 (-3.7 cents an entry) | held instead +13.85
+      paid under 0.25      n  625 | target reached 44% | net  -18.14 (-2.9 cents an entry) | held instead -14.47
+      paid 0.25 to 0.45    n 1523 | target reached 55% | net  -63.15 (-4.1 cents an entry) | held instead -5.46
+      paid 0.45 to 0.60    n  438 | target reached 64% | net  -20.26 (-4.6 cents an entry) | held instead -19.74
+      over 8 min left      n 2384 | target reached 54% | net  -86.21 (-3.6 cents an entry) | held instead -29.87
+      4 to 8 min left      n  185 | target reached 53% | net  -13.76 (-7.4 cents an entry) | held instead -8.73
+      under 4 min left     n   17 | target reached 47% | net   -1.58 (-9.3 cents an entry) | held instead -1.06
+  breakdown, move 2.0 over 120s, target +0.10, out after 4 min (2535 entries):
+      hour back and forth  n  846 | target reached 54% | net  -33.01 (-3.9 cents an entry) | held instead -12.01
+      hour in between      n  844 | target reached 51% | net  -36.08 (-4.3 cents an entry) | held instead -51.29
+      hour trending        n  845 | target reached 54% | net  -28.29 (-3.3 cents an entry) | held instead +18.73
+      paid under 0.25      n  751 | target reached 44% | net  -20.53 (-2.7 cents an entry) | held instead -15.14
+      paid 0.25 to 0.45    n 1562 | target reached 55% | net  -65.23 (-4.2 cents an entry) | held instead -14.86
+      paid 0.45 to 0.60    n  222 | target reached 65% | net  -11.61 (-5.2 cents an entry) | held instead -14.58
+      over 8 min left      n 2283 | target reached 52% | net  -85.63 (-3.8 cents an entry) | held instead -33.11
+      4 to 8 min left      n  239 | target reached 58% | net  -11.38 (-4.8 cents an entry) | held instead -10.81
+      under 4 min left     n   13 | target reached 54% | net   -0.36 (-2.8 cents an entry) | held instead -0.66
+
+=== feed kind proxy: 72 settings | dollars per contract; one contract an entry
+  best 14 by net per entry, then every setting positive in both halves:
+    move 2.0 over  60s, target +0.15, out after 4 min:  702 entries at 0.31 avg | target reached 41% | net  -32.35 (-4.6 cents an entry) | halves -14.47 / -17.88 | held to settlement instead -28.32 
+    move 3.0 over  60s, target +0.15, out after 4 min:  205 entries at 0.26 avg | target reached 36% | net   -9.50 (-4.6 cents an entry) | halves -4.22 / -5.28 | held to settlement instead -16.79 
+    move 3.0 over  60s, target +0.15, out after 2 min:  205 entries at 0.26 avg | target reached 24% | net   -9.76 (-4.8 cents an entry) | halves -4.73 / -5.02 | held to settlement instead -16.79 
+    move 2.0 over  60s, target +0.10, out after 2 min:  702 entries at 0.31 avg | target reached 40% | net  -33.47 (-4.8 cents an entry) | halves -12.95 / -20.53 | held to settlement instead -28.32 
+    move 3.0 over  60s, target +0.05, out after 4 min:  205 entries at 0.26 avg | target reached 56% | net   -9.94 (-4.8 cents an entry) | halves -4.39 / -5.54 | held to settlement instead -16.79 
+    move 2.0 over  60s, target +0.15, out after 2 min:  702 entries at 0.31 avg | target reached 26% | net  -34.13 (-4.9 cents an entry) | halves -14.33 / -19.81 | held to settlement instead -28.32 
+    move 2.0 over  60s, target +0.10, out after 4 min:  702 entries at 0.31 avg | target reached 50% | net  -34.21 (-4.9 cents an entry) | halves -14.18 / -20.03 | held to settlement instead -28.32 
+    move 3.0 over  60s, target +0.10, out after 2 min:  205 entries at 0.26 avg | target reached 34% | net  -10.06 (-4.9 cents an entry) | halves -5.51 / -4.55 | held to settlement instead -16.79 
+    move 3.0 over  60s, target +0.10, out after 4 min:  205 entries at 0.26 avg | target reached 43% | net  -10.13 (-4.9 cents an entry) | halves -5.43 / -4.71 | held to settlement instead -16.79 
+    move 2.0 over  60s, target +0.05, out after 2 min:  702 entries at 0.31 avg | target reached 55% | net  -35.02 (-5.0 cents an entry) | halves -15.68 / -19.34 | held to settlement instead -28.32 
+    move 2.0 over  60s, target +0.05, out after 4 min:  702 entries at 0.31 avg | target reached 62% | net  -36.24 (-5.2 cents an entry) | halves -16.86 / -19.38 | held to settlement instead -28.32 
+    move 3.0 over  60s, target +0.05, out after 2 min:  205 entries at 0.26 avg | target reached 47% | net  -10.62 (-5.2 cents an entry) | halves -5.39 / -5.22 | held to settlement instead -16.79 
+    move 2.0 over  60s, target +0.15, out after 8 min:  702 entries at 0.31 avg | target reached 50% | net  -36.35 (-5.2 cents an entry) | halves -16.08 / -20.27 | held to settlement instead -28.32 
+    move 1.0 over  60s, target +0.10, out after 4 min: 1109 entries at 0.37 avg | target reached 50% | net  -58.00 (-5.2 cents an entry) | halves -24.28 / -33.71 | held to settlement instead -52.12 
+  walk-forward (the best earlier-days setting, used the next day): net +0.00 on 0 entries over 7 days | halves +0.00 / +0.00 | days won 0, lost 0, stood down 7
+     picked: 
+  breakdown, move 1.5 over 60s, target +0.10, out after 4 min (997 entries):
+      hour back and forth  n  333 | target reached 52% | net  -15.01 (-4.5 cents an entry) | held instead -13.48
+      hour in between      n  331 | target reached 47% | net  -19.48 (-5.9 cents an entry) | held instead -16.78
+      hour trending        n  333 | target reached 49% | net  -18.85 (-5.7 cents an entry) | held instead -24.86
+      paid under 0.25      n  255 | target reached 36% | net  -11.82 (-4.6 cents an entry) | held instead -19.48
+      paid 0.25 to 0.45    n  530 | target reached 52% | net  -28.88 (-5.4 cents an entry) | held instead -24.82
+      paid 0.45 to 0.60    n  212 | target reached 58% | net  -12.64 (-6.0 cents an entry) | held instead -10.82
+      over 8 min left      n  895 | target reached 48% | net  -49.18 (-5.5 cents an entry) | held instead -49.60
+      4 to 8 min left      n   93 | target reached 62% | net   -3.80 (-4.1 cents an entry) | held instead -5.71
+      under 4 min left     n    9 | target reached 67% | net   -0.36 (-4.0 cents an entry) | held instead +0.19
+  breakdown, move 2.0 over 120s, target +0.10, out after 4 min (920 entries):
+      hour back and forth  n  307 | target reached 49% | net  -17.60 (-5.7 cents an entry) | held instead -21.03
+      hour in between      n  306 | target reached 46% | net  -16.23 (-5.3 cents an entry) | held instead -9.64
+      hour trending        n  307 | target reached 48% | net  -15.92 (-5.2 cents an entry) | held instead -18.43
+      paid under 0.25      n  303 | target reached 34% | net  -16.18 (-5.3 cents an entry) | held instead -25.72
+      paid 0.25 to 0.45    n  491 | target reached 52% | net  -26.80 (-5.5 cents an entry) | held instead -22.00
+      paid 0.45 to 0.60    n  126 | target reached 61% | net   -6.78 (-5.4 cents an entry) | held instead -1.37
+      over 8 min left      n  804 | target reached 48% | net  -41.12 (-5.1 cents an entry) | held instead -42.96
+      4 to 8 min left      n  106 | target reached 44% | net   -8.70 (-8.2 cents an entry) | held instead -7.87
+      under 4 min left     n   10 | target reached 70% | net   +0.05 (+0.5 cents an entry) | held instead +1.74
+DONE
+exit=0  results in job-results/20261111-082931-80275/
