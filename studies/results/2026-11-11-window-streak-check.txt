@@ -1,0 +1,20 @@
+both lanes
+  against a run of 3+          n= 94 | as happened   -7.46 ( -3.6%) | held  +14.81 | total losses  5 ($12.37) | halves +6.92 / -14.38
+  against a run of 1-2         n=297 | as happened  -47.31 ( -7.1%) | held   -4.25 | total losses 26 ($48.31) | halves -18.38 / -28.93
+  with a run of 1-2            n= 47 | as happened   -8.06 ( -7.3%) | held   +7.71 | total losses  4 ($ 6.64) | halves -8.25 / +0.18
+  with a run of 3+             n=  2 | as happened   -1.54 (-26.5%) | held   -1.54 | total losses  1 ($ 2.79) | halves +1.25 / -2.79
+  no clean history             n=0
+crypto_multiscale
+  against a run of 3+          n= 46 | as happened   +2.39 ( +2.4%) | held  +14.90 | total losses  2 ($ 5.40) | halves +10.17 / -7.78
+  against a run of 1-2         n=210 | as happened  -31.22 ( -6.5%) | held   +3.56 | total losses 15 ($28.87) | halves -15.07 / -16.15
+  with a run of 1-2            n= 35 | as happened  -10.75 (-13.1%) | held   +0.91 | total losses  4 ($ 6.64) | halves -5.85 / -4.89
+  with a run of 3+             n=  1 | as happened   +1.25 (+41.8%) | held   +1.25 | total losses  0 ($ 0.00) | halves +0.00 / +1.25
+  no clean history             n=0
+commodity_multiscale
+  against a run of 3+          n= 48 | as happened   -9.86 ( -9.0%) | held   -0.08 | total losses  3 ($ 6.97) | halves +0.46 / -10.32
+  against a run of 1-2         n= 87 | as happened  -16.09 ( -8.4%) | held   -7.81 | total losses 11 ($19.44) | halves -9.06 / -7.03
+  with a run of 1-2            n= 12 | as happened   +2.68 ( +9.6%) | held   +6.81 | total losses  0 ($ 0.00) | halves +3.99 / -1.31
+  with a run of 3+             n=  1 | as happened   -2.79 (-100.0%) | held   -2.79 | total losses  1 ($ 2.79) | halves +0.00 / -2.79
+  no clean history             n=0
+DONE
+	
