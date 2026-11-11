@@ -1,0 +1,70 @@
+job 20261111-081648-78992 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/6c91b6d94be44b8bb2a5827ed437ccd4
+windows 3875 (1 in 3), readings 22293
+=== feed kind settlement: 16008 readings, 16008 scored out of sample over 14 days
+  Brier by time left: n | the contract's mid | M0 cushion | MA cushion + linear | MB cushion + quadratic | MP mid recalibrated | MC mid + cushion + linear
+    600s  n  2673 | 0.1873 | 0.1890 | 0.1894 | 0.1896 | 0.1875 | 0.1881
+    420s  n  2782 | 0.1519 | 0.1528 | 0.1539 | 0.1540 | 0.1524 | 0.1537
+    300s  n  2788 | 0.1187 | 0.1210 | 0.1226 | 0.1225 | 0.1193 | 0.1209
+    180s  n  2786 | 0.0847 | 0.0866 | 0.0874 | 0.0876 | 0.0853 | 0.0863
+    120s  n  2694 | 0.0645 | 0.0667 | 0.0672 | 0.0672 | 0.0647 | 0.0654
+    60s   n  2285 | 0.0416 | 0.0426 | 0.0428 | 0.0427 | 0.0414 | 0.0416
+    all   n 16008 | 0.1099 | 0.1116 | 0.1124 | 0.1124 | 0.1102 | 0.1111
+  Brier by cushion band (all times left): the mid | M0 cushion | MA cushion + linear | MB cushion + quadratic | MP mid recalibrated | MC mid + cushion + linear
+    thin (under 0.5)     n  3961 | 0.2318 | 0.2357 | 0.2370 | 0.2372 | 0.2330 | 0.2346
+    medium (0.5 to 1.5)  n  5908 | 0.1277 | 0.1295 | 0.1306 | 0.1306 | 0.1278 | 0.1289
+    thick (1.5 and up)   n  6139 | 0.0141 | 0.0142 | 0.0143 | 0.0144 | 0.0141 | 0.0143
+  first half of the days: n 6340 | mid 0.1082 | M0 0.1098 | MA 0.1108 | MB 0.1109 | MP 0.1086 | MC 0.1095
+  second half: n 9668 | mid 0.1110 | M0 0.1127 | MA 0.1134 | MB 0.1135 | MP 0.1112 | MC 0.1122
+  the weights of the last fit of MA (cushion, then the linear projection of each stage 2m, 5m, 13m, 34m, 60m):
+    600s left, cushion thin (under 0.5)     (n 1149): cushion +1.42 | 2m +0.10 5m -0.03 13m +0.07 34m -0.04 60m -0.08
+    600s left, cushion medium (0.5 to 1.5)  (n 1182): cushion +1.18 | 2m +0.07 5m +0.03 13m +0.15 34m -0.09 60m +0.03
+    600s left, cushion thick (1.5 and up)   (n  226): cushion +0.49 | 2m -0.18 5m +0.04 13m +0.54 34m -0.23 60m -0.29
+    420s left, cushion thin (under 0.5)     (n  843): cushion +1.10 | 2m -0.05 5m +0.02 13m +0.18 34m +0.09 60m -0.09
+    420s left, cushion medium (0.5 to 1.5)  (n 1215): cushion +1.70 | 2m -0.14 5m +0.11 13m +0.02 34m -0.09 60m -0.06
+    420s left, cushion thick (1.5 and up)   (n  599): cushion +1.77 | 2m +0.19 5m -0.07 13m -0.09 34m +0.11 60m -0.43
+    300s left, cushion thin (under 0.5)     (n  653): cushion +1.22 | 2m +0.00 5m +0.01 13m +0.17 34m +0.03 60m -0.16
+    300s left, cushion medium (0.5 to 1.5)  (n 1146): cushion +1.68 | 2m +0.08 5m +0.05 13m +0.06 34m +0.18 60m -0.11
+    300s left, cushion thick (1.5 and up)   (n  864): cushion +1.86 | 2m +0.09 5m -0.09 13m -0.05 34m +0.52 60m -0.40
+    180s left, cushion thin (under 0.5)     (n  490): cushion +1.52 | 2m +0.09 5m +0.08 13m +0.19 34m -0.08 60m +0.00
+    180s left, cushion medium (0.5 to 1.5)  (n  875): cushion +1.72 | 2m -0.10 5m +0.11 13m +0.21 34m +0.32 60m +0.25
+    180s left, cushion thick (1.5 and up)   (n 1296): cushion +2.35 | 2m -0.14 5m -0.07 13m -0.26 34m +0.13 60m -0.03
+    120s left, cushion thin (under 0.5)     (n  408): cushion +1.91 | 2m -0.04 5m +0.16 13m +0.29 34m +0.10 60m +0.06
+    120s left, cushion medium (0.5 to 1.5)  (n  717): cushion +2.04 | 2m +0.02 5m -0.15 13m +0.18 34m +0.14 60m +0.43
+    120s left, cushion thick (1.5 and up)   (n 1452): cushion +2.07 | 2m +0.07 5m -0.02 13m -0.43 34m +0.63 60m +0.28
+     60s left, cushion thin (under 0.5)     (n  264): cushion +2.05 | 2m +0.12 5m -0.19 13m +0.22 34m +0.58 60m +0.01
+     60s left, cushion medium (0.5 to 1.5)  (n  529): cushion +2.63 | 2m +0.41 5m -0.21 13m +0.28 34m +0.29 60m +0.56
+     60s left, cushion thick (1.5 and up)   (n 1393): cushion +2.63 | 2m +0.00 5m +0.06 13m +0.11 34m +0.24 60m +0.14
+=== feed kind proxy: 6285 readings, 6285 scored out of sample over 10 days
+  Brier by time left: n | the contract's mid | M0 cushion | MA cushion + linear | MB cushion + quadratic | MP mid recalibrated | MC mid + cushion + linear
+    600s  n  1078 | 0.1701 | 0.1745 | 0.1784 | 0.1781 | 0.1702 | 0.1729
+    420s  n  1085 | 0.1324 | 0.1349 | 0.1371 | 0.1370 | 0.1323 | 0.1344
+    300s  n  1076 | 0.1152 | 0.1184 | 0.1191 | 0.1194 | 0.1153 | 0.1172
+    180s  n  1056 | 0.0873 | 0.0907 | 0.0905 | 0.0905 | 0.0874 | 0.0877
+    120s  n  1032 | 0.0788 | 0.0844 | 0.0852 | 0.0852 | 0.0796 | 0.0802
+    60s   n   958 | 0.0564 | 0.0593 | 0.0588 | 0.0589 | 0.0561 | 0.0565
+    all   n  6285 | 0.1080 | 0.1116 | 0.1128 | 0.1128 | 0.1081 | 0.1094
+  Brier by cushion band (all times left): the mid | M0 cushion | MA cushion + linear | MB cushion + quadratic | MP mid recalibrated | MC mid + cushion + linear
+    thin (under 0.5)     n  1786 | 0.2186 | 0.2234 | 0.2266 | 0.2265 | 0.2193 | 0.2222
+    medium (0.5 to 1.5)  n  2365 | 0.1043 | 0.1101 | 0.1107 | 0.1108 | 0.1039 | 0.1050
+    thick (1.5 and up)   n  2134 | 0.0194 | 0.0198 | 0.0199 | 0.0199 | 0.0196 | 0.0200
+  first half of the days: n 3922 | mid 0.1032 | M0 0.1072 | MA 0.1081 | MB 0.1080 | MP 0.1030 | MC 0.1042
+  second half: n 2363 | mid 0.1159 | M0 0.1191 | MA 0.1207 | MB 0.1207 | MP 0.1166 | MC 0.1181
+  the weights of the last fit of MA (cushion, then the linear projection of each stage 2m, 5m, 13m, 34m, 60m):
+    600s left, cushion thin (under 0.5)     (n  539): cushion +1.81 | 2m -0.17 5m +0.10 13m -0.00 34m +0.06 60m +0.14
+    600s left, cushion medium (0.5 to 1.5)  (n  416): cushion +1.77 | 2m +0.24 5m +0.08 13m +0.05 34m +0.33 60m -0.07
+    420s left, cushion thin (under 0.5)     (n  376): cushion +2.06 | 2m -0.03 5m +0.03 13m +0.12 34m +0.22 60m +0.23
+    420s left, cushion medium (0.5 to 1.5)  (n  464): cushion +1.57 | 2m +0.12 5m +0.00 13m +0.32 34m +0.27 60m -0.01
+    420s left, cushion thick (1.5 and up)   (n  177): cushion +0.74 | 2m -0.02 5m -0.06 13m +0.91 34m +0.48 60m -0.05
+    300s left, cushion thin (under 0.5)     (n  285): cushion +1.21 | 2m -0.27 5m -0.14 13m +0.06 34m -0.03 60m +0.10
+    300s left, cushion medium (0.5 to 1.5)  (n  447): cushion +1.89 | 2m -0.06 5m -0.05 13m +0.17 34m +0.65 60m +0.26
+    300s left, cushion thick (1.5 and up)   (n  276): cushion +1.40 | 2m +0.25 5m -0.17 13m +0.24 34m +0.38 60m -0.26
+    180s left, cushion thin (under 0.5)     (n  210): cushion +1.53 | 2m +0.08 5m +0.10 13m +0.06 34m +0.50 60m +0.27
+    180s left, cushion medium (0.5 to 1.5)  (n  367): cushion +1.95 | 2m +0.09 5m -0.20 13m +0.05 34m +0.61 60m +0.25
+    180s left, cushion thick (1.5 and up)   (n  412): cushion +1.73 | 2m -0.26 5m +0.08 13m -0.50 34m +0.42 60m +0.11
+    120s left, cushion thin (under 0.5)     (n  150): cushion +0.77 | 2m -0.10 5m +0.38 13m +0.12 34m +0.62 60m +0.39
+    120s left, cushion medium (0.5 to 1.5)  (n  310): cushion +1.82 | 2m -0.11 5m -0.19 13m -0.16 34m +0.43 60m +0.32
+    120s left, cushion thick (1.5 and up)   (n  507): cushion +1.55 | 2m +0.14 5m +0.32 13m -0.29 34m +0.60 60m +0.10
+     60s left, cushion medium (0.5 to 1.5)  (n  218): cushion +1.59 | 2m +0.52 5m +0.06 13m +0.07 34m +0.95 60m +0.22
+     60s left, cushion thick (1.5 and up)   (n  578): cushion +1.64 | 2m +0.16 5m -0.07 13m -0.04 34m +0.34 60m -0.05
+DONE
+exit=0  results in job-results/20261111-081648-78992/
