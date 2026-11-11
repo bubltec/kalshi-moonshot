@@ -79,6 +79,10 @@ def test_a_profit_take_still_refuses_to_sell_below_cost(setup):
 @pytest.mark.parametrize("why", [
     "shock exit: spot moved 11.4 bp against us in 60s (now -11.4) and is +3.1 bp from the strike, 120s left, bid 0.62",
     "wrong-side exit: spot 2.0 bp on the wrong side of its window-open price for 10s (variety D), 100s left, bid 0.62",
+    "curve exit (time to go): the curve's chance is 0.232, under 0.5, with 240s left (sells in the last 240s); bid 0.25, cushion -1.6 bp",  # 2026-11-10 Brent and WTI 21:00 ET: signalled every second for 240 s, never sold
+    "curve exit (trajectory): the cushion fell 2.32 typical minutes over 61s to +0.44 (sells at a fall of 1.5 to 0.5 or under, held 0s); bid 0.47, curve chance 0.578, 297s left",
+    "curve exit (market disagrees): the curve's chance 0.700 is 0.200 over the bid 0.52 (0.503 after the fee) for 15s",
+    "curve exit: bid 0.56 (0.543 after the fee) is +0.229 over the curve's 0.314 chance that the side pays (margin 0.15, held 6s)",
 ])
 def test_a_shock_or_wrong_side_exit_sells_below_cost(setup, why):
     s, _store = setup

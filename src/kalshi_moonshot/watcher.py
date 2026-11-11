@@ -1860,8 +1860,8 @@ class ProfitWatcher:
                 bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
             resting_paper = (spec := lane_specs(s).get(lane)) is not None and spec.rest_sell and not s.is_live(lane, ticker.split("-")[0])
-            cut = why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst", "strike-through", "shock exit", "wrong-side exit")) or (why.startswith("cash-out:") and " under the " in why)
-            if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not resting_paper and not cut:  # a profit-take never sells for a loss after both fees; a peak-crash, a stop, the settlement guard, a last-two-minutes burst, a strike-through sale, a shock exit, a wrong-side exit, and a timed drop do (the point is to get out). A paper lane that rests its sale is not re-read at all: its order filled at the target when the bid touched it, so a dipped re-read cannot veto it
+            cut = why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst", "strike-through", "shock exit", "wrong-side exit", "curve exit")) or (why.startswith("cash-out:") and " under the " in why)
+            if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not resting_paper and not cut:  # a profit-take never sells for a loss after both fees; a peak-crash, a stop, the settlement guard, a last-two-minutes burst, a strike-through sale, a shock exit, a wrong-side exit, the curve exit (all four of its sales: it cuts losses by design, and until 2026-11-10 this veto declined every one below cost, so the time-to-go sale never sold), and a timed drop do (the point is to get out). A paper lane that rests its sale is not re-read at all: its order filled at the target when the bid touched it, so a dipped re-read cannot veto it
                 self._back_off(ticker, lane)
                 return
             if bid <= 0:
