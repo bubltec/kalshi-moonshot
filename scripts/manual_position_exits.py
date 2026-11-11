@@ -165,7 +165,39 @@ def rule_curve(p):
     return hold(p)
 
 
+def rule_step(p, G, floor):
+    """A sell resting from the buy on, repriced every 15 s: the price paid + G * sqrt(seconds left / seconds left at the buy), so the ask steps down as the clock runs (user, 2026-11-11: "set sell orders and adjust them as time runs out"). floor "paid": never under the price paid, then held; floor "none": it keeps stepping down under the price paid in the last L0/4 seconds toward the bid."""
+    left0 = p["bids"][0][1]
+    price = None
+    for t, left, bid in p["bids"]:
+        if left < 8:
+            break
+        if price is None or t % 15 == 0:
+            price = p["paid"] + G * math.sqrt(max(left, 0.0) / left0)
+            if floor == "none" and left <= left0 / 4.0:
+                price = min(price, bid + 0.02)  # in the last quarter the order follows the bid down, two cents over it
+        if bid >= price:
+            return p["n"] * price - p["cost"]
+    return hold(p)
+
+
+def rule_curve_rest(p, far):
+    """The time-scaled curve sale as a RESTING order: an ask at the curve's chance + far * sqrt(seconds left / 900), repriced every 15 s, filled when the bid reaches it (no fee, no 5 s wait)."""
+    price = None
+    for t, left, bid in p["bids"]:
+        ch = p["chance"].get(t)
+        if left < 8 or ch is None:
+            continue
+        if price is None or t % 15 == 0:
+            price = min(0.99, ch + far * math.sqrt(min(left, 900.0) / 900.0))
+        if bid >= price and price >= 0.05:
+            return p["n"] * price - p["cost"]
+    return hold(p)
+
+
 RULES = [("as traded", lambda p: p["actual"]), ("held to settlement", hold)]
+RULES += [(f"stepping ask from +{G:.2f}, floor {fl}", lambda p, G=G, fl=fl: rule_step(p, G, fl)) for G in (0.18, 0.30, 0.45) for fl in ("paid", "none")]
+RULES += [(f"resting ask at chance + {far:.2f} scaled", lambda p, far=far: rule_curve_rest(p, far)) for far in (0.10, 0.15, 0.25)]
 RULES += [(f"target +{G:.2f}, else held", lambda p, G=G: rule_target(p, G)) for G in (0.10, 0.18, 0.25)]
 RULES += [(f"target +{G:.2f} + time-to-go {L}s", lambda p, G=G, L=L: rule_target(p, G, L)) for G in (0.10, 0.18, 0.25) for L in (240, 120, 60)]
 RULES += [("target +0.18 + give-up at half", lambda p: rule_target(p, 0.18, None, True)), ("lock (+0.10 then back to +0.03)", rule_lock)]
@@ -182,10 +214,10 @@ for name, fn in RULES:
     tot = sum(x for _, x in res)
     out.append((tot, name, res))
 out.sort(key=lambda o: -o[0])
-print(f"{'rule':36s} | made (all) | ahead / behind | lost 90%+ | without the biggest swing | on the {sum(1 for p in P if p['hand'])} sold by hand | on the {sum(1 for p in P if not p['hand'])} left to run")
+print(f"{'rule':38s} | made (all) | ahead / behind | lost 90%+ | without the biggest swing | on the {sum(1 for p in P if p['hand'])} sold by hand | on the {sum(1 for p in P if not p['hand'])} left to run")
 for tot, name, res in out:
     ahead = sum(1 for _, x in res if x > 0)
     behind = sum(1 for _, x in res if x < 0)
     wiped = sum(1 for p, x in res if x <= -0.9 * p["cost"])
-    print(f"{name:36s} | {tot:+9.2f} | {ahead:3d} / {behind:3d}     | {wiped:3d}       | {sum(x for p, x in res if p is not bigwin):+9.2f}                | {sum(x for p, x in res if p['hand']):+9.2f}           | {sum(x for p, x in res if not p['hand']):+9.2f}")
+    print(f"{name:38s} | {tot:+9.2f} | {ahead:3d} / {behind:3d}     | {wiped:3d}       | {sum(x for p, x in res if p is not bigwin):+9.2f}                | {sum(x for p, x in res if p['hand']):+9.2f}           | {sum(x for p, x in res if not p['hand']):+9.2f}")
 print("DONE")
