@@ -127,6 +127,8 @@ class Settings:
     manual_exit_drop: float  # sell when the bid is this many dollars under a peak that held a few seconds
     manual_exit_fast: float  # ... or at once when it falls this far
     manual_exit_min_profit: float  # never sell for less than this fraction over the price paid, after the sell fee
+    manual_rest_far: float  # hand-opened 15-minute positions: rest an ask at the curve's chance + this * sqrt(seconds left / 900), repriced every 15 s (manualrest.py); 0 = off
+    manual_rest_guard: float  # ... and with this many seconds or less left, sell at the bid when the curve's chance is under one half (0 = no guard)
     manual_exit_stop_confirm: float  # seconds the bid must stay past the stop line before a hand-placed position is sold
     manual_exit_unstable_gain: float  # sell a hand-placed position that is up this fraction while the bid is swinging (0 = off)
     manual_exit_unstable_range: float  # ... the bid's high-low in dollars over manual_exit_unstable_seconds
@@ -458,6 +460,8 @@ def load() -> Settings:
         manual_stop_model=_b("MANUAL_EXIT_STOP_MODEL", False),
         fractional_stake=_b("FRACTIONAL_STAKE", True),
         manual_exit_stop=_f("MANUAL_EXIT_STOP_LOSS", 0.30),
+        manual_rest_far=_f("MANUAL_REST_CURVE", 0.0),
+        manual_rest_guard=_f("MANUAL_REST_GUARD_SECONDS", 120.0),
         manual_exit_stop_confirm=_f("MANUAL_EXIT_STOP_CONFIRM", 20.0),
         skip_categories=_csv("SKIP_CATEGORIES", "Sports"),
         skip_numeric=_b("SKIP_NUMERIC", True),

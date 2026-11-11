@@ -27,7 +27,17 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, NamedTuple
 
-from . import checkins, curvevalue, manual, paperfill, quoteshock, runner, settlement, variants
+from . import (
+    checkins,
+    curvevalue,
+    manual,
+    manualrest,
+    paperfill,
+    quoteshock,
+    runner,
+    settlement,
+    variants,
+)
 from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
@@ -115,6 +125,7 @@ class Target:
     last_ts: float = 0.0
     bid_since: float = 0.0  # when the bid first showed its current value (a repeated quote at the same bid does not restart this)
     below_since: float | None = None  # when the bid first fell trail_drop below the peak and has stayed there
+    rest_rule: bool = False  # a hand-placed position the resting curve sell is working (manualrest.py)
     retry_after: float = 0.0  # after a sale was checked and declined, do not look again before this time
     stop_drop: float = 0.0  # stop-loss: sell at once when the bid is this fraction under the price paid (0 = this position has none)
     unstable_gain: float = 0.0  # sell when up this fraction after fees and the bid is swinging (0 = off)
@@ -357,6 +368,7 @@ class ProfitWatcher:
         self.client = client
         self.client_for: Callable[[str], Any] | None = None  # lane -> the venue that holds it; Kalshi when unset
         self.manual = manual.ManualPositions(client)
+        self.manual_rest = manualrest.ManualRest(client)
         self.store_factory = store_factory
         self._checks: queue.Queue[Any] = queue.Queue(maxsize=200)  # (target, mark, time, spot) waiting to be saved by checkins.py
         self.targets: dict[tuple[str, str], Target] = {}  # keyed by (ticker, lane)
@@ -1543,6 +1555,10 @@ class ProfitWatcher:
                     fresh[(ticker, lane)].stop_from = 0.0
         if s.manual_exit and getattr(self.client, "authed", False):
             self._add_manual(s, store, fresh)
+            try:
+                self._rest_manual(s, store, fresh)
+            except Exception:
+                log.warning("watcher: the resting sell on hand-placed positions failed this cycle", exc_info=True)
         for ticker, _lane in fresh:
             runner.arm_stop_history(s, ticker)  # one read of the last 15 minutes; live quotes extend it
         for held in fresh.values():
@@ -1681,6 +1697,48 @@ class ProfitWatcher:
                 line = f"sold {total:g} {row['ticker']} resting @ {avg:.4f} (no taker fee)"
                 log.info("watcher: %s", line)
                 self.sold.append(line)
+
+    def _rest_manual(self, s: Settings, store: Store, fresh: dict[tuple[str, str], Target]) -> None:
+        """The resting curve sell on hand-opened 15-minute positions (manualrest.py; MANUAL_REST_CURVE, 0 = off): an ask at the curve's chance plus a margin that
+        shrinks with the time left, repriced every 15 s, and the time-to-go sale at the bid in the last MANUAL_REST_GUARD_SECONDS. While a position is on this rule
+        the older profit-taking sales (the peak-crash trail) are declined in _sell_manual, since they would sell it at the bid first; a position whose curve cannot be read keeps the older rules."""
+        rest = self.manual_rest
+        held = {tk for (tk, lane) in fresh if lane == manual.LANE}
+        rest.forget_gone(held)
+        if s.manual_rest_far <= 0:
+            for tk in list(rest.working):
+                rest.cancel(tk)
+            for (_tk, lane), t in fresh.items():
+                if lane == manual.LANE:
+                    t.rest_rule = False
+            return
+        live = s.mode == "trade" and (s.env != "prod" or s.allow_real_money)
+        now = time.time()
+        for p in self.manual.positions(s, store):
+            t = fresh.get((p.ticker, manual.LANE))
+            series = p.ticker.split("-")[0]
+            if t is None or not series.endswith("15M"):
+                continue
+            try:
+                left = datetime.fromisoformat(str(self._market_static(p.ticker).get("close_time", ""))).timestamp() - now
+            except (TypeError, ValueError, KalshiError):
+                continue
+            bid = t.last_bid if t.last_ts and now - t.last_ts < 30.0 else 0.0
+            read = variants.curve_edge_now(series, p.side, left, bid, ticks_mod.strikes.get(p.ticker) or store.window_strike(p.ticker), now)
+            if read is None:
+                t.rest_rule = False
+                if p.ticker in rest.working:
+                    rest.cancel(p.ticker)
+                continue  # no curve, no rule: the older hand-placed rules stand
+            t.rest_rule = True
+            action, price = manualrest.plan(read[0], left, bid, s.manual_rest_far, s.manual_rest_guard)
+            note = rest.step(p.ticker, p.side, p.count, action, price, left, live, now)
+            if note:
+                log.info("watcher: hand-placed %s %s: %s [curve chance %.2f, %.0f s left, bid %.2f]", p.ticker, p.side, note, read[0], left, bid)
+            key = (p.ticker, manual.LANE)
+            if action == "go" and now >= t.retry_after and key not in self._inflight:
+                self._inflight.add(key)
+                self._queue_sell(SellSignal(p.ticker, manual.LANE, f"{manualrest.GO_PREFIX}: {left:.0f} s left and the curve's chance {read[0]:.2f} is under one half; sold at the bid rather than held to a total loss."))
 
     def _add_manual(self, s: Settings, store: Store, fresh: dict[tuple[str, str], Target]) -> None:
         """Positions you opened by hand get the peak-crash exit, with no stop-loss (see manual.py)."""
@@ -1941,8 +1999,13 @@ class ProfitWatcher:
             t = self.targets.get((ticker, manual.LANE))
         if t is not None and t.last_ts and time.time() - t.last_ts < 5.0 and t.last_bid > 0:
             bid = min(bid, t.last_bid)  # the socket is the freshest price
-        stop = why.startswith("stop-loss")
-        if self._spot_holds(t, ticker, pos.side, why):
+        go = why.startswith(manualrest.GO_PREFIX)  # the resting rule's late guard: a sale under cost, like a stop, but with no model to ask and no reverse bet
+        stop = why.startswith("stop-loss") or go
+        if t is not None and t.rest_rule and not stop:
+            self._back_off(ticker, manual.LANE)
+            return  # the resting curve sell is working this position (manualrest.py): the older profit-taking sales stand down
+        self.manual_rest.cancel(ticker)  # the ask holds these contracts: take it off the book before selling them another way
+        if not go and self._spot_holds(t, ticker, pos.side, why):
             return
         floor = (pos.entry + fee_per_contract(pos.entry)) * (1 + s.manual_exit_min_profit) + fee_per_contract(bid)  # the cost includes the entry fee; the sale pays its own
         if not stop and bid <= floor:  # a profit-take waits for at least the minimum profit
@@ -1954,7 +2017,7 @@ class ProfitWatcher:
             return
         # A stop is a hard rule: it sells whatever a model thinks the position is worth. (A model's value for a collapsed contract has been wrong,
         # for example 37c against a 17c bid on a contract that expired worthless; only the crash exit above, which protects a profit, still asks it.)
-        if stop and s.manual_stop_model and self._model_holds_stop(s, ticker, manual.LANE, pos.side, pos.entry, bid, str(m.get("close_time", ""))):
+        if stop and not go and s.manual_stop_model and self._model_holds_stop(s, ticker, manual.LANE, pos.side, pos.entry, bid, str(m.get("close_time", ""))):
             return
         slip = runner.EXIT_SLIP + (0.02 if "fast exit" in why else 0.0) + (0.03 if stop else 0.0)
         price = max(0.01, round(bid - slip, 2)) if stop else max(floor, round(bid - slip, 2))
@@ -1971,7 +2034,7 @@ class ProfitWatcher:
         self.sold.append(line)
         if filled >= pos.count - 0.005:
             store.mark_exited(ticker, avg, why, manual.LANE)
-        if filled > 0 and stop:
+        if filled > 0 and stop and not go:
             from . import reverse
 
             with contextlib.suppress(Exception):
