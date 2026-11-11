@@ -1,0 +1,27 @@
+
+hand-opened 15-minute positions, settled, with quotes on the tape: 100 | staked 1129.50 | with a curve reading 88 | sold by hand 25, left to run 75
+the position that swings the totals most: KXZEC15M-26NOV082015-15 cost 23.36, held result +428.93
+rule                                 | made (all) | ahead / behind | lost 90%+ | without the biggest swing | on the 25 sold by hand | on the 75 left to run
+held to settlement                   |   +544.67 |  61 /  39     |  39       |   +115.75                |   +658.16           |   -113.49
+time-scaled curve sale               |   +541.97 |  63 /  37     |  30       |   +236.73                |   +584.49           |    -42.52
+lock (+0.10 then back to +0.03)      |   +294.32 |  53 /  47     |  23       |   -134.61                |   +439.16           |   -144.84
+target +0.18, else held              |   +152.31 |  72 /  28     |  28       |    +70.89                |   +288.42           |   -136.11
+target +0.25, else held              |   +152.28 |  70 /  30     |  30       |    +39.21                |   +277.70           |   -125.42
+target +0.18 + time-to-go 120s       |    +96.54 |  58 /  42     |  16       |    +15.13                |   +241.10           |   -144.56
+target +0.18 + time-to-go 60s        |    +90.68 |  67 /  33     |  23       |     +9.27                |   +263.62           |   -172.94
+target +0.25 + time-to-go 60s        |    +82.78 |  63 /  37     |  26       |    -30.29                |   +247.75           |   -164.97
+target +0.25 + time-to-go 120s       |    +81.73 |  52 /  48     |  17       |    -31.34                |   +221.05           |   -139.32
+as traded                            |    +76.47 |  67 /  33     |  32       |    +45.99                |   +189.96           |   -113.49
+target +0.18 + time-to-go 240s       |    +66.56 |  43 /  57     |   7       |    -14.85                |   +146.34           |    -79.78
+target +0.25 + time-to-go 240s       |    +61.47 |  34 /  66     |   7       |    -51.60                |   +136.87           |    -75.40
+trail 0.15 from the high             |    +25.25 |  47 /  53     |  21       |   -111.36                |   +163.48           |   -138.23
+target +0.18 + give-up at half       |    +24.49 |  59 /  41     |   1       |    +37.32                |   +107.02           |    -82.53
+target +0.10, else held              |     +7.96 |  77 /  23     |  23       |    -37.27                |   +166.17           |   -158.21
+target +0.10 + time-to-go 120s       |    -14.86 |  67 /  33     |  15       |    -60.09                |   +140.58           |   -155.43
+target +0.10 + time-to-go 240s       |    -33.00 |  52 /  48     |   7       |    -78.23                |    +61.78           |    -94.77
+target +0.10 + time-to-go 60s        |    -36.80 |  74 /  26     |  20       |    -82.03                |   +144.73           |   -181.54
+trail 0.08 from the high             |    -48.83 |  53 /  47     |  19       |    -89.27                |    +92.81           |   -141.64
+DONE
+
+
+
