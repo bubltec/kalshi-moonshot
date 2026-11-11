@@ -1,0 +1,41 @@
+
+the rule: ask >= 0.65 and bought from minute 4
+  all bets (as it is today)          n=150 | as happened  -28.87 ( -8.5%) | held   -7.37 | total losses 15 ($29.20) | halves -8.34 / -20.53
+  kept by the rule                   n= 73 | as happened   -4.58 ( -2.3%) | held  +12.31 | total losses  5 ($12.81) | halves +1.04 / -5.62
+  refused by the rule                n= 77 | as happened  -24.29 (-17.2%) | held  -19.68 | total losses 10 ($16.38) | halves -9.82 / -14.48
+
+context, one cut at a time
+  ask >= 0.65                        n= 99 | as happened  -14.03 ( -5.2%) | held   +0.09 | total losses  7 ($18.19) | halves -7.83 / -6.20
+  ask < 0.65                         n= 51 | as happened  -14.84 (-20.9%) | held   -7.46 | total losses  8 ($11.01) | halves -5.28 / -9.56
+  minute >= 4                        n=104 | as happened   -6.58 ( -2.8%) | held  +18.35 | total losses  6 ($14.26) | halves -0.92 / -5.66
+  minute < 4                         n= 46 | as happened  -22.29 (-22.1%) | held  -25.72 | total losses  9 ($14.93) | halves -12.77 / -9.52
+
+entry from minute 7 (user, 2026-11-11: 'these early bets are killing me and they do a horrible job selling for a profit')
+  minute >= 7                        n= 46 | as happened   -7.00 ( -7.1%) | held   +7.52 | total losses  3 ($ 7.03) | halves +0.38 / -7.38
+  minute < 7                         n=104 | as happened  -21.87 ( -9.1%) | held  -14.89 | total losses 12 ($22.17) | halves -8.64 / -13.22
+how the minute < 7 bets ended
+  curve exit                         n= 24 | as happened   -1.53 ( -2.8%) | held   -4.99 | total losses  0 ($ 0.00) | halves +1.02 / -2.55
+  curve exit (time to go)            n=  3 | as happened   -3.07 (-88.5%) | held   -3.47 | total losses  0 ($ 0.00) | halves -0.01 / -3.06
+  curve exit (trajectory)            n=  8 | as happened   -8.83 (-56.7%) | held   -3.01 | total losses  0 ($ 0.00) | halves -5.05 / -3.78
+  held to settlement                 n= 47 | as happened  +11.51 (+10.1%) | held  +11.51 | total losses 12 ($22.17) | halves +12.19 / -0.68
+  shock exit                         n= 22 | as happened  -19.94 (-38.2%) | held  -14.92 | total losses  0 ($ 0.00) | halves -10.85 / -9.09
+
+price buckets
+  ask 0.55-0.60                      n= 23 | as happened   -5.90 (-22.2%) | held   -3.76 | total losses  4 ($ 4.63) | halves -2.97 / -2.93
+  ask 0.60-0.65                      n= 26 | as happened   -7.51 (-17.6%) | held   -2.05 | total losses  4 ($ 6.38) | halves -2.31 / -5.20
+  ask 0.65-0.70                      n= 25 | as happened  -10.42 (-17.3%) | held   -6.44 | total losses  3 ($ 8.16) | halves -9.62 / -0.80
+  ask 0.70-0.76                      n= 40 | as happened   -0.23 ( -0.2%) | held   +0.41 | total losses  2 ($ 5.86) | halves +2.80 / -3.03
+elapsed buckets
+  minute 0-4                         n= 46 | as happened  -22.29 (-22.1%) | held  -25.72 | total losses  9 ($14.93) | halves -12.77 / -9.52
+  minute 4-8                         n= 67 | as happened   -1.47 ( -0.9%) | held  +11.33 | total losses  3 ($ 7.23) | halves +0.07 / -1.54
+  minute 8-12                        n= 31 | as happened   -8.55 (-13.1%) | held   +0.61 | total losses  3 ($ 7.03) | halves -1.18 / -7.37
+  minute 12-15                       n=  6 | as happened   +3.45 (+23.3%) | held   +6.40 | total losses  0 ($ 0.00) | halves +1.81 / +1.64
+
+how each bet ended (as it happened against holding the same bets)
+  held to settlement                 n= 67 | as happened  +20.93 (+13.1%) | held  +20.93 | total losses 15 ($29.20) | halves +15.26 / +5.67
+  shock exit                         n= 33 | as happened  -27.34 (-37.1%) | held  -15.37 | total losses  0 ($ 0.00) | halves -14.36 / -12.99
+  curve exit                         n= 32 | as happened   -4.81 ( -6.4%) | held   -4.17 | total losses  0 ($ 0.00) | halves -0.12 / -4.70
+  curve exit (time to go)            n= 10 | as happened   -8.81 (-60.8%) | held   -5.75 | total losses  0 ($ 0.00) | halves -5.87 / -2.94
+  curve exit (trajectory)            n=  8 | as happened   -8.83 (-56.7%) | held   -3.01 | total losses  0 ($ 0.00) | halves -5.05 / -3.78
+DONE
+	

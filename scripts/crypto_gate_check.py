@@ -33,8 +33,8 @@ HOURS = float(os.environ.get("HOURS", "0"))  # 0 = every settled live bet since 
 SINCE = os.environ.get("SINCE", "")  # YYYY-MM-DD (ET midnight): only bets from that day on. The user, 2026-11-11: the logic was rewritten Monday 2026-11-09, so nothing before it counts (SINCE=2026-11-09)
 FROM = dt.datetime.fromisoformat(SINCE).replace(tzinfo=ET).timestamp() if SINCE else 0.0
 rows = st.db.execute(
-    "SELECT ts, ticker, side, ask, stake_usd, outcome, exit_price, exit_ts, exit_reason FROM decisions WHERE action='bet' AND lane='crypto_multiscale' AND mode='trade' AND outcome IN ('yes','no') AND stake_usd>0 AND ask>0 AND ts>? ORDER BY ts",
-    (max(time.time() - HOURS * 3600.0 if HOURS else 0.0, FROM),),
+    "SELECT ts, ticker, side, ask, stake_usd, outcome, exit_price, exit_ts, exit_reason FROM decisions WHERE action='bet' AND lane=? AND mode='trade' AND outcome IN ('yes','no') AND stake_usd>0 AND ask>0 AND ts>? ORDER BY ts",
+    (os.environ.get("LANE", "crypto_multiscale"), max(time.time() - HOURS * 3600.0 if HOURS else 0.0, FROM)),
 ).fetchall()
 bets = []
 for r in rows:
@@ -79,6 +79,12 @@ print(line("ask >= 0.65", [x for x in bets if x["ask"] >= 0.65]))
 print(line("ask < 0.65", [x for x in bets if x["ask"] < 0.65]))
 print(line("minute >= 4", [x for x in bets if x["el"] >= 4.0]))
 print(line("minute < 4", [x for x in bets if x["el"] < 4.0]))
+print("\nentry from minute 7 (user, 2026-11-11: 'these early bets are killing me and they do a horrible job selling for a profit')")
+print(line("minute >= 7", [x for x in bets if x["el"] >= 7.0]))
+print(line("minute < 7", [x for x in bets if x["el"] < 7.0]))
+print("how the minute < 7 bets ended")
+for k in sorted({x["kind"] for x in bets if x["el"] < 7.0}):
+    print(line(k, [x for x in bets if x["el"] < 7.0 and x["kind"] == k]))
 print("\nprice buckets")
 for lo, hi in ((0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 0.76)):
     print(line(f"ask {lo:.2f}-{hi:.2f}", [x for x in bets if lo <= x["ask"] < hi]))
