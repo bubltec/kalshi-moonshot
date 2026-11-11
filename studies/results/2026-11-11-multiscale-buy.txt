@@ -1,0 +1,116 @@
+
+
+--- crypto_multiscale: 548 settled bets in all; 240 bought under 0.55 (won 76, held -36.56) are left out below
+
+=== crypto_multiscale: 308 settled bets | won 216 | staked 779.03 | held +29.79 | with a curve reading at the buy 308
+  A. curve chance minus price paid
+    under -0.10              n    8 | won    5 (62%) | staked    23.65 | held    -3.38 (-14.3% per $) | halves -3.00 / -0.38
+    -0.10 to -0.05           n   60 | won   40 (67%) | staked   162.10 | held    -4.25 (-2.6% per $) | halves -20.06 / +15.81
+    -0.05 to 0               n  156 | won  109 (70%) | staked   384.74 | held   +13.84 (+3.6% per $) | halves +19.96 / -6.12
+    0 to +0.05               n   74 | won   56 (76%) | staked   183.94 | held   +26.09 (+14.2% per $) | halves +16.24 / +9.86
+    +0.05 to +0.10           n    8 | won    5 (62%) | staked    18.77 | held    -0.84 (-4.5% per $) | halves +4.26 / -5.10
+    +0.10 and up             n    2 | won    1 (50%) | staked     5.83 | held    -1.67 (-28.6% per $) | halves -3.00 / +1.33
+  B. cushion at the buy, typical minutes
+    behind (under 0)         n    2 | won    0 (0%) | staked     3.29 | held    -3.29 (-100.0% per $) | halves -2.39 / -0.90
+    0 to 0.5                 n   43 | won   30 (70%) | staked    86.57 | held    +8.48 (+9.8% per $) | halves -3.02 / +11.50
+    0.5 to 1                 n   85 | won   56 (66%) | staked   194.96 | held    +6.70 (+3.4% per $) | halves -2.18 / +8.88
+    1 to 2                   n  140 | won   97 (69%) | staked   386.72 | held    -1.17 (-0.3% per $) | halves +11.09 / -12.26
+    2 and up                 n   38 | won   33 (87%) | staked   107.49 | held   +19.07 (+17.7% per $) | halves +10.90 / +8.17
+  C. minutes elapsed at the buy
+    under 4                  n   99 | won   71 (72%) | staked   243.10 | held   +22.97 (+9.5% per $) | halves +11.63 / +11.34
+    4 to 8                   n  118 | won   79 (67%) | staked   299.74 | held    -8.31 (-2.8% per $) | halves -15.37 / +7.06
+    8 to 11                  n   50 | won   34 (68%) | staked   133.65 | held    -2.87 (-2.1% per $) | halves +7.11 / -9.98
+    11 and up                n   30 | won   23 (77%) | staked    73.97 | held   +12.57 (+17.0% per $) | halves +10.20 / +2.37
+  D. price paid
+    0.55 to 0.60             n   55 | won   36 (65%) | staked    98.66 | held   +10.95 (+11.1% per $) | halves -2.05 / +13.00
+    0.60 to 0.65             n   67 | won   43 (64%) | staked   151.97 | held    +1.06 (+0.7% per $) | halves -9.32 / +10.38
+    0.65 to 0.70             n   82 | won   63 (77%) | staked   222.71 | held   +27.19 (+12.2% per $) | halves +23.57 / +3.62
+    0.70 to 0.75             n   86 | won   63 (73%) | staked   251.60 | held    +3.00 (+1.2% per $) | halves +11.49 / -8.49
+    0.75 and up              n   18 | won   11 (61%) | staked    54.09 | held   -12.41 (-22.9% per $) | halves -9.29 / -3.13
+  E. curve model score, per $1
+    under +0.03              n   60 | won   48 (80%) | staked   142.96 | held   +24.87 (+17.4% per $) | halves +10.05 / +14.82
+    +0.03 to +0.05           n  107 | won   72 (67%) | staked   267.02 | held    -1.56 (-0.6% per $) | halves +4.09 / -5.66
+    +0.05 to +0.08           n   81 | won   51 (63%) | staked   208.87 | held    -8.30 (-4.0% per $) | halves -0.43 / -7.87
+    +0.08 and up             n   57 | won   43 (75%) | staked   152.64 | held   +14.06 (+9.2% per $) | halves -0.04 / +14.10
+  F. market type tag
+    choppy                   n   81 | won   59 (73%) | staked   215.09 | held   +10.79 (+5.0% per $) | halves +12.99 / -2.21
+    typical                  n  177 | won  118 (67%) | staked   440.92 | held    -7.38 (-1.7% per $) | halves -15.72 / +8.34
+  G. 60-minute trend
+    against the bet          n  198 | won  142 (72%) | staked   497.80 | held   +32.21 (+6.5% per $) | halves +9.28 / +22.93
+    flat                     n   37 | won   21 (57%) | staked    92.96 | held   -14.90 (-16.0% per $) | halves -1.23 / -13.67
+    with the bet             n   73 | won   53 (73%) | staked   188.27 | held   +12.48 (+6.6% per $) | halves +6.34 / +6.13
+  H. side
+    no                       n  112 | won   86 (77%) | staked   279.04 | held   +28.94 (+10.4% per $) | halves +27.78 / +1.17
+    yes                      n  196 | won  130 (66%) | staked   499.99 | held    +0.85 (+0.2% per $) | halves -13.38 / +14.23
+  I. same-direction bets in the same window (group size)
+    1 alone                  n   85 | won   54 (64%) | staked   208.80 | held   -13.13 (-6.3% per $) | halves -17.74 / +4.61
+    2                        n   74 | won   53 (72%) | staked   182.83 | held   +17.34 (+9.5% per $) | halves +9.14 / +8.19
+    3 to 4                   n   94 | won   68 (72%) | staked   248.67 | held    +9.47 (+3.8% per $) | halves +15.26 / -5.80
+    5 and up                 n   55 | won   41 (75%) | staked   138.72 | held   +16.12 (+11.6% per $) | halves +7.73 / +8.39
+    the five worst windows: 7 bets -11.43; 4 bets -11.43; 3 bets -8.91; 3 bets -8.78; 3 bets -8.73 | the five best: 5 bets +5.57; 5 bets +5.62; 4 bets +6.01; 5 bets +7.03; 5 bets +7.12
+    cap of 1 a window and side (the earliest kept): 160 bets | held +1.37 on 390.82 staked (+0.4% per $) | halves -8.90 / +10.27
+    cap of 2 a window and side (the earliest kept): 235 bets | held +18.28 on 586.62 staked (+3.1% per $) | halves +4.75 / +13.53
+    cap of 3 a window and side (the earliest kept): 273 bets | held +19.94 on 686.99 staked (+2.9% per $) | halves +8.92 / +11.02
+  J. edge sign and cushion
+    edge 0 or more, cushion 1+ n   59 | won   46 (78%) | staked   157.74 | held   +21.08 (+13.4% per $) | halves +25.44 / -4.36
+    edge 0 or more, cushion under 1 n   25 | won   16 (64%) | staked    50.79 | held    +2.51 (+4.9% per $) | halves -7.94 / +10.45
+    edge under 0, cushion 1+ n  119 | won   84 (71%) | staked   336.47 | held    -3.18 (-0.9% per $) | halves -3.45 / +0.27
+    edge under 0, cushion under 1 n  105 | won   70 (67%) | staked   234.03 | held    +9.38 (+4.0% per $) | halves +0.35 / +9.04
+
+--- commodity_multiscale: 154 settled bets in all; 27 bought under 0.55 (won 8, held -3.71) are left out below
+
+=== commodity_multiscale: 127 settled bets | won 87 | staked 285.48 | held +5.23 | with a curve reading at the buy 102
+  A. curve chance minus price paid
+    under -0.10              n   10 | won    6 (60%) | staked    23.58 | held    -4.96 (-21.0% per $) | halves -5.15 / +0.18
+    -0.10 to -0.05           n   18 | won   10 (56%) | staked    40.17 | held    -5.72 (-14.2% per $) | halves +2.74 / -8.46
+    -0.05 to 0               n   34 | won   25 (74%) | staked    84.73 | held   +10.80 (+12.7% per $) | halves +0.10 / +10.70
+    0 to +0.05               n   19 | won   12 (63%) | staked    38.47 | held    -3.21 (-8.3% per $) | halves +1.07 / -4.28
+    +0.05 to +0.10           n   11 | won    9 (82%) | staked    25.66 | held    +2.91 (+11.3% per $) | halves +1.49 / +1.42
+    +0.10 and up             n   10 | won    6 (60%) | staked    16.46 | held    +0.78 (+4.7% per $) | halves -0.91 / +1.69
+  B. cushion at the buy, typical minutes
+    behind (under 0)         n    3 | won    0 (0%) | staked     5.32 | held    -5.32 (-100.0% per $) | halves -5.32 / +0.00
+    0 to 0.5                 n   13 | won    6 (46%) | staked    21.42 | held    -5.21 (-24.3% per $) | halves -0.87 / -4.34
+    0.5 to 1                 n   30 | won   21 (70%) | staked    63.39 | held    +5.61 (+8.8% per $) | halves +5.25 / +0.35
+    1 to 2                   n   33 | won   22 (67%) | staked    78.52 | held    -3.33 (-4.2% per $) | halves +1.52 / -4.85
+    2 and up                 n   23 | won   19 (83%) | staked    60.42 | held    +8.85 (+14.7% per $) | halves -1.23 / +10.09
+  C. minutes elapsed at the buy
+    under 4                  n   28 | won   16 (57%) | staked    65.07 | held    -9.74 (-15.0% per $) | halves -6.07 / -3.66
+    4 to 8                   n   56 | won   42 (75%) | staked   131.87 | held   +15.27 (+11.6% per $) | halves +3.60 / +11.67
+    8 to 11                  n   20 | won   16 (80%) | staked    40.97 | held    +3.47 (+8.5% per $) | halves +4.03 / -0.56
+    11 and up                n   10 | won    9 (90%) | staked    21.41 | held    +8.96 (+41.8% per $) | halves +2.99 / +5.97
+  D. price paid
+    0.55 to 0.60             n   20 | won   11 (55%) | staked    22.87 | held    +0.89 (+3.9% per $) | halves +1.46 / -0.57
+    0.60 to 0.65             n   20 | won   11 (55%) | staked    35.82 | held    -1.06 (-3.0% per $) | halves +4.52 / -5.58
+    0.65 to 0.70             n   39 | won   23 (59%) | staked    92.89 | held   -16.94 (-18.2% per $) | halves -9.61 / -7.33
+    0.70 to 0.75             n   21 | won   18 (86%) | staked    57.67 | held   +11.91 (+20.6% per $) | halves +4.66 / +7.25
+    0.75 and up              n   27 | won   24 (89%) | staked    76.22 | held   +10.44 (+13.7% per $) | halves +0.45 / +9.98
+  E. curve model score, per $1
+    under +0.03              n   35 | won   30 (86%) | staked    88.40 | held   +22.28 (+25.2% per $) | halves +14.62 / +7.66
+    +0.03 to +0.05           n   58 | won   33 (57%) | staked   126.28 | held   -19.21 (-15.2% per $) | halves -10.99 / -8.22
+    +0.05 to +0.08           n   24 | won   17 (71%) | staked    54.54 | held    +1.98 (+3.6% per $) | halves -2.80 / +4.77
+    +0.08 and up             n    5 | won    3 (60%) | staked    11.69 | held    -0.79 (-6.7% per $) | halves -0.31 / -0.48
+  F. market type tag
+    quiet                    n   17 | won   13 (76%) | staked    46.62 | held    +4.31 (+9.3% per $) | halves +4.91 / -0.60
+    sticky                   n    2 | won    1 (50%) | staked     5.44 | held    -1.75 (-32.2% per $) | halves -1.75 / +0.00
+    typical                  n   26 | won   14 (54%) | staked    56.38 | held    -7.80 (-13.8% per $) | halves -3.94 / -3.86
+  G. 60-minute trend
+  H. side
+    no                       n   76 | won   49 (64%) | staked   176.19 | held    -5.86 (-3.3% per $) | halves -0.08 / -5.78
+    yes                      n   51 | won   38 (75%) | staked   109.30 | held   +11.08 (+10.1% per $) | halves +1.56 / +9.52
+  I. same-direction bets in the same window (group size)
+    1 alone                  n   67 | won   47 (70%) | staked   152.64 | held    +3.80 (+2.5% per $) | halves -1.72 / +5.53
+    2                        n   38 | won   24 (63%) | staked    84.72 | held    -2.43 (-2.9% per $) | halves -5.87 / +3.43
+    3 to 4                   n   22 | won   16 (73%) | staked    48.12 | held    +3.86 (+8.0% per $) | halves +9.07 / -5.22
+    the five worst windows: 3 bets -7.12; 2 bets -5.78; 3 bets -4.73; 2 bets -3.81; 1 bets -3.12 | the five best: 3 bets +2.86; 2 bets +2.96; 3 bets +3.00; 3 bets +3.21; 4 bets +4.17
+    cap of 1 a window and side (the earliest kept): 93 bets | held +4.67 on 210.39 staked (+2.2% per $) | halves -3.06 / +7.74
+    cap of 2 a window and side (the earliest kept): 119 bets | held +2.75 on 269.19 staked (+1.0% per $) | halves -1.90 / +4.65
+    cap of 3 a window and side (the earliest kept): 126 bets | held +4.35 on 282.52 staked (+1.5% per $) | halves +1.49 / +2.86
+  J. edge sign and cushion
+    edge 0 or more, cushion 1+ n   29 | won   19 (66%) | staked    65.19 | held    -4.08 (-6.3% per $) | halves -3.00 / -1.08
+    edge 0 or more, cushion under 1 n   11 | won    8 (73%) | staked    15.39 | held    +4.57 (+29.7% per $) | halves +4.65 / -0.09
+    edge under 0, cushion 1+ n   27 | won   22 (81%) | staked    73.74 | held    +9.61 (+13.0% per $) | halves +3.29 / +6.32
+    edge under 0, cushion under 1 n   35 | won   19 (54%) | staked    74.75 | held    -9.50 (-12.7% per $) | halves -5.60 / -3.90
+DONE
+
+
+
