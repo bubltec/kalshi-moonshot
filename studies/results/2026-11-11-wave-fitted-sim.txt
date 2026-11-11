@@ -1,0 +1,68 @@
+job 20261111-090951-83445 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/cc3aab4cd5244216bcb9f350ab09dd8a
+windows 6235 (1 in 2)
+
+=== feed kind settlement (dollars per contract)
+  fill rest : 2929 signals, 2283 filled (78%) at 0.33 avg | simply held to settlement: won 32%, net -33.97 (-1.5 cents a trade), halves -7.45 / -26.53 
+      target +0.10, then sell after 150 s  : target reached 42% | net  -92.91 (-4.1 cents a trade) | halves -41.35 / -51.56 | {'give-up': 574, 'time-out': 756, 'target': 953} 
+      target +0.10, then sell after 300 s  : target reached 52% | net  -96.80 (-4.2 cents a trade) | halves -42.34 / -54.46 | {'give-up': 792, 'target': 1182, 'time-out': 309} 
+      target +0.10, then hold to settlement: target reached 56% | net -101.38 (-4.4 cents a trade) | halves -44.47 / -56.91 | {'give-up': 910, 'target': 1270, 'settled': 103} 
+      target +0.18, then sell after 150 s  : target reached 26% | net  -90.85 (-4.0 cents a trade) | halves -43.00 / -47.85 | {'give-up': 603, 'time-out': 1084, 'target': 596} 
+      target +0.18, then sell after 300 s  : target reached 40% | net  -90.11 (-3.9 cents a trade) | halves -40.07 / -50.04 | {'give-up': 883, 'time-out': 497, 'target': 903} 
+      target +0.18, then hold to settlement: target reached 46% | net  -98.50 (-4.3 cents a trade) | halves -43.31 / -55.20 | {'give-up': 1053, 'settled': 181, 'target': 1049} 
+      target +0.25, then sell after 150 s  : target reached 17% | net  -84.87 (-3.7 cents a trade) | halves -38.57 / -46.30 | {'give-up': 605, 'time-out': 1292, 'target': 386} 
+      target +0.25, then sell after 300 s  : target reached 32% | net  -79.09 (-3.5 cents a trade) | halves -31.77 / -47.32 | {'give-up': 900, 'time-out': 657, 'target': 726} 
+      target +0.25, then hold to settlement: target reached 41% | net  -83.57 (-3.7 cents a trade) | halves -31.32 / -52.25 | {'give-up': 1103, 'settled': 238, 'target': 942} 
+  fill touch: 2929 signals, 2929 filled (100%) at 0.33 avg | simply held to settlement: won 34%, net +22.39 (+0.8 cents a trade), halves +22.23 / +0.15 BOTH HALVES +
+      target +0.10, then sell after 150 s  : target reached 50% | net  -50.09 (-1.7 cents a trade) | halves -19.96 / -30.12 | {'give-up': 576, 'target': 1468, 'time-out': 885} 
+      target +0.10, then sell after 300 s  : target reached 60% | net  -52.41 (-1.8 cents a trade) | halves -19.51 / -32.90 | {'give-up': 832, 'target': 1749, 'time-out': 348} 
+      target +0.10, then hold to settlement: target reached 63% | net  -55.99 (-1.9 cents a trade) | halves -22.28 / -33.72 | {'give-up': 964, 'target': 1852, 'settled': 113} 
+      target +0.18, then sell after 150 s  : target reached 31% | net  -48.87 (-1.7 cents a trade) | halves -20.24 / -28.62 | {'give-up': 621, 'target': 917, 'time-out': 1391} 
+      target +0.18, then sell after 300 s  : target reached 45% | net  -46.34 (-1.6 cents a trade) | halves -13.98 / -32.36 | {'give-up': 973, 'target': 1318, 'time-out': 638} 
+      target +0.18, then hold to settlement: target reached 52% | net  -52.87 (-1.8 cents a trade) | halves -17.96 / -34.90 | {'give-up': 1185, 'target': 1524, 'settled': 220} 
+      target +0.25, then sell after 150 s  : target reached 20% | net  -41.89 (-1.4 cents a trade) | halves -14.19 / -27.71 | {'give-up': 626, 'target': 597, 'time-out': 1706} 
+      target +0.25, then sell after 300 s  : target reached 36% | net  -32.37 (-1.1 cents a trade) | halves -4.84 / -27.53 | {'give-up': 1009, 'target': 1055, 'time-out': 865} 
+      target +0.25, then hold to settlement: target reached 47% | net  -33.67 (-1.1 cents a trade) | halves -5.19 / -28.48 | {'give-up': 1271, 'target': 1363, 'settled': 295} 
+  fill take : 2929 signals, 2929 filled (100%) at 0.35 avg | simply held to settlement: won 34%, net -61.62 (-2.1 cents a trade), halves -17.99 / -43.62 
+      target +0.10, then sell after 150 s  : target reached 47% | net -133.85 (-4.6 cents a trade) | halves -61.37 / -72.48 | {'give-up': 589, 'target': 1369, 'time-out': 971} 
+      target +0.10, then sell after 300 s  : target reached 57% | net -134.08 (-4.6 cents a trade) | halves -58.65 / -75.43 | {'give-up': 868, 'target': 1672, 'time-out': 389} 
+      target +0.10, then hold to settlement: target reached 61% | net -138.55 (-4.7 cents a trade) | halves -61.47 / -77.07 | {'give-up': 1012, 'target': 1788, 'settled': 129} 
+      target +0.18, then sell after 150 s  : target reached 29% | net -130.23 (-4.4 cents a trade) | halves -58.95 / -71.28 | {'give-up': 622, 'target': 855, 'time-out': 1452} 
+      target +0.18, then sell after 300 s  : target reached 43% | net -127.41 (-4.4 cents a trade) | halves -53.06 / -74.36 | {'give-up': 981, 'target': 1260, 'time-out': 688} 
+      target +0.18, then hold to settlement: target reached 51% | net -130.98 (-4.5 cents a trade) | halves -55.13 / -75.85 | {'give-up': 1202, 'target': 1494, 'settled': 233} 
+      target +0.25, then sell after 150 s  : target reached 19% | net -124.56 (-4.3 cents a trade) | halves -53.38 / -71.18 | {'give-up': 626, 'target': 549, 'time-out': 1754} 
+      target +0.25, then sell after 300 s  : target reached 34% | net -114.89 (-3.9 cents a trade) | halves -42.91 / -71.98 | {'give-up': 1014, 'target': 1004, 'time-out': 911} 
+      target +0.25, then hold to settlement: target reached 46% | net -113.80 (-3.9 cents a trade) | halves -43.37 / -70.42 | {'give-up': 1285, 'target': 1336, 'settled': 308} 
+
+=== feed kind proxy (dollars per contract)
+  fill rest : 1534 signals, 1024 filled (67%) at 0.33 avg | simply held to settlement: won 28%, net -51.18 (-5.0 cents a trade), halves -20.40 / -30.78 
+      target +0.10, then sell after 150 s  : target reached 38% | net  -46.26 (-4.5 cents a trade) | halves -20.70 / -25.56 | {'time-out': 421, 'target': 393, 'give-up': 210} 
+      target +0.10, then sell after 300 s  : target reached 49% | net  -48.84 (-4.8 cents a trade) | halves -19.85 / -28.99 | {'time-out': 203, 'target': 506, 'give-up': 315} 
+      target +0.10, then hold to settlement: target reached 54% | net  -52.33 (-5.1 cents a trade) | halves -21.92 / -30.41 | {'give-up': 391, 'target': 555, 'settled': 78} 
+      target +0.18, then sell after 150 s  : target reached 21% | net  -49.71 (-4.9 cents a trade) | halves -23.96 / -25.75 | {'time-out': 583, 'target': 218, 'give-up': 223} 
+      target +0.18, then sell after 300 s  : target reached 34% | net  -55.11 (-5.4 cents a trade) | halves -23.51 / -31.60 | {'time-out': 325, 'target': 347, 'give-up': 352} 
+      target +0.18, then hold to settlement: target reached 42% | net  -64.22 (-6.3 cents a trade) | halves -28.89 / -35.33 | {'give-up': 462, 'target': 425, 'settled': 137} 
+      target +0.25, then sell after 150 s  : target reached 14% | net  -45.85 (-4.5 cents a trade) | halves -22.06 / -23.79 | {'time-out': 658, 'target': 142, 'give-up': 224} 
+      target +0.25, then sell after 300 s  : target reached 26% | net  -51.61 (-5.0 cents a trade) | halves -22.55 / -29.06 | {'time-out': 402, 'target': 262, 'give-up': 360} 
+      target +0.25, then hold to settlement: target reached 36% | net  -56.73 (-5.5 cents a trade) | halves -24.85 / -31.88 | {'give-up': 486, 'target': 373, 'settled': 165} 
+  fill touch: 1534 signals, 1534 filled (100%) at 0.32 avg | simply held to settlement: won 30%, net -32.05 (-2.1 cents a trade), halves -11.91 / -20.14 
+      target +0.10, then sell after 150 s  : target reached 49% | net  -23.18 (-1.5 cents a trade) | halves -9.61 / -13.57 | {'time-out': 540, 'target': 755, 'give-up': 239} 
+      target +0.10, then sell after 300 s  : target reached 58% | net  -30.36 (-2.0 cents a trade) | halves -9.54 / -20.82 | {'time-out': 261, 'target': 895, 'give-up': 378} 
+      target +0.10, then hold to settlement: target reached 63% | net  -34.30 (-2.2 cents a trade) | halves -13.21 / -21.09 | {'give-up': 474, 'target': 961, 'settled': 99} 
+      target +0.18, then sell after 150 s  : target reached 28% | net  -29.18 (-1.9 cents a trade) | halves -12.49 / -16.69 | {'time-out': 836, 'target': 431, 'give-up': 267} 
+      target +0.18, then sell after 300 s  : target reached 41% | net  -39.82 (-2.6 cents a trade) | halves -13.92 / -25.90 | {'time-out': 453, 'target': 623, 'give-up': 458} 
+      target +0.18, then hold to settlement: target reached 48% | net  -50.05 (-3.3 cents a trade) | halves -21.34 / -28.70 | {'give-up': 607, 'target': 743, 'settled': 184} 
+      target +0.25, then sell after 150 s  : target reached 18% | net  -25.39 (-1.7 cents a trade) | halves -11.29 / -14.09 | {'time-out': 989, 'target': 275, 'give-up': 270} 
+      target +0.25, then sell after 300 s  : target reached 31% | net  -35.65 (-2.3 cents a trade) | halves -12.88 / -22.76 | {'time-out': 580, 'target': 475, 'give-up': 479} 
+      target +0.25, then hold to settlement: target reached 42% | net  -45.43 (-3.0 cents a trade) | halves -19.48 / -25.96 | {'give-up': 657, 'target': 644, 'settled': 233} 
+  fill take : 1534 signals, 1534 filled (100%) at 0.35 avg | simply held to settlement: won 30%, net -90.77 (-5.9 cents a trade), halves -40.97 / -49.80 
+      target +0.10, then sell after 150 s  : target reached 42% | net  -83.88 (-5.5 cents a trade) | halves -39.61 / -44.27 | {'time-out': 634, 'target': 647, 'give-up': 253} 
+      target +0.10, then sell after 300 s  : target reached 52% | net  -93.23 (-6.1 cents a trade) | halves -39.76 / -53.48 | {'time-out': 321, 'target': 802, 'give-up': 411} 
+      target +0.10, then hold to settlement: target reached 57% | net  -99.39 (-6.5 cents a trade) | halves -44.45 / -54.94 | {'give-up': 525, 'target': 882, 'settled': 127} 
+      target +0.18, then sell after 150 s  : target reached 24% | net  -86.52 (-5.6 cents a trade) | halves -41.09 / -45.43 | {'time-out': 892, 'target': 374, 'give-up': 268} 
+      target +0.18, then sell after 300 s  : target reached 37% | net  -97.94 (-6.4 cents a trade) | halves -43.10 / -54.84 | {'time-out': 495, 'target': 570, 'give-up': 469} 
+      target +0.18, then hold to settlement: target reached 46% | net -107.15 (-7.0 cents a trade) | halves -50.56 / -56.60 | {'give-up': 631, 'target': 710, 'settled': 193} 
+      target +0.25, then sell after 150 s  : target reached 15% | net  -85.71 (-5.6 cents a trade) | halves -41.87 / -43.84 | {'time-out': 1041, 'target': 223, 'give-up': 270} 
+      target +0.25, then sell after 300 s  : target reached 28% | net  -94.63 (-6.2 cents a trade) | halves -42.49 / -52.14 | {'time-out': 626, 'target': 428, 'give-up': 480} 
+      target +0.25, then hold to settlement: target reached 40% | net -100.08 (-6.5 cents a trade) | halves -46.51 / -53.56 | {'give-up': 664, 'target': 621, 'settled': 249} 
+DONE
+exit=0  results in job-results/20261111-090951-83445/
