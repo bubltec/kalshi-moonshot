@@ -1,0 +1,17 @@
+
+settled commodity windows with our feed at the open and the close: 4993 | our feed's direction matched the result on 4721 (94.6%)
+  KXBRENT15M       n   672 | matched 95.8% | wrong 28
+  KXCOPPER15M      n   610 | matched 87.0% | wrong 79
+  KXGOLD15M        n   606 | matched 97.4% | wrong 16
+  KXNATGAS15M      n   672 | matched 89.6% | wrong 70
+  KXPALLADIUM15M   n   550 | matched 94.7% | wrong 29
+  KXPLATINUM15M    n   606 | matched 97.5% | wrong 15
+  KXSILVER15M      n   605 | matched 96.7% | wrong 20
+  KXWTI15M         n   672 | matched 97.8% | wrong 15
+by the size of our feed's own move over the window:
+  under 2 bp     n   449 | matched 68.2% | wrong 143
+  2 to 5 bp      n   674 | matched 88.7% | wrong 76
+  5 to 10 bp     n   907 | matched 96.4% | wrong 33
+  10 bp and up   n  2963 | matched 99.3% | wrong 20
+DONE
+Cannot perform start session: EOF
