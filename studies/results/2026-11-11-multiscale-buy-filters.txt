@@ -1,0 +1,35 @@
+
+
+=== crypto_multiscale: 308 settled bets at 0.55 or over with a curve reading | held +29.79 on 779.03 | flat-trend tag read on 308
+  buy all: 308 bets, held +29.79 (+3.8% per $)
+  edge >= -0.05               : kept 240 bets, held +37.42 (+6.3% per $) | skipped 68 bets that made -7.63 | days the kept set beat buying all per $: 3, lost: 2
+      by day (kept/all, kept net vs all net): 1/1 +1.7 vs +1.7; 4/7 +2.5 vs -1.0; 41/63 -16.5 vs -34.9; 76/89 +50.9 vs +51.4; 99/123 -4.1 vs +2.8; 19/25 +2.9 vs +9.9
+  edge >= 0                   : kept 84 bets, held +23.59 (+11.3% per $) | skipped 224 bets that made +6.21 | days the kept set beat buying all per $: 2, lost: 3
+      by day (kept/all, kept net vs all net): 0/1 +0.0 vs +1.7; 2/7 -0.6 vs -1.0; 13/63 -0.1 vs -34.9; 33/89 +18.0 vs +51.4; 28/123 +0.3 vs +2.8; 8/25 +6.0 vs +9.9
+  trend not flat              : kept 271 bets, held +44.69 (+6.5% per $) | skipped 37 bets that made -14.90 | days the kept set beat buying all per $: 3, lost: 1
+      by day (kept/all, kept net vs all net): 1/1 +1.7 vs +1.7; 7/7 -1.0 vs -1.0; 51/63 -32.0 vs -34.9; 81/89 +49.6 vs +51.4; 109/123 +13.1 vs +2.8; 22/25 +13.2 vs +9.9
+  edge >= -0.05 and not flat  : kept 212 bets, held +56.43 (+10.8% per $) | skipped 96 bets that made -26.64 | days the kept set beat buying all per $: 5, lost: 0
+      by day (kept/all, kept net vs all net): 1/1 +1.7 vs +1.7; 4/7 +2.5 vs -1.0; 32/63 -9.1 vs -34.9; 69/89 +50.3 vs +51.4; 89/123 +3.7 vs +2.8; 17/25 +7.4 vs +9.9
+  edge >= 0 and not flat      : kept 70 bets, held +29.46 (+16.7% per $) | skipped 238 bets that made +0.33 | days the kept set beat buying all per $: 4, lost: 1
+      by day (kept/all, kept net vs all net): 0/1 +0.0 vs +1.7; 2/7 -0.6 vs -1.0; 10/63 +4.0 vs -34.9; 27/89 +18.6 vs +51.4; 23/123 +1.5 vs +2.8; 8/25 +6.0 vs +9.9
+  walk-forward edge cutoff: kept 189 bets, held -8.57 (-1.9% per $) against buying all +29.79 (+3.8%)
+      cutoff used each day: None (1/1 +1.7 vs +1.7); None (7/7 -1.0 vs -1.0); -0.05 (41/63 -16.5 vs -34.9); 0.02 (22/89 +8.4 vs +51.4); -0.05 (99/123 -4.1 vs +2.8); -0.05 (19/25 +2.9 vs +9.9)
+
+=== commodity_multiscale: 102 settled bets at 0.55 or over with a curve reading | held +0.59 on 229.08 | flat-trend tag read on 0
+  buy all: 102 bets, held +0.59 (+0.3% per $)
+  edge >= -0.05               : kept 74 bets, held +11.28 (+6.8% per $) | skipped 28 bets that made -10.69 | days the kept set beat buying all per $: 2, lost: 2
+      by day (kept/all, kept net vs all net): 1/3 -0.9 vs -0.0; 11/17 +0.6 vs +1.2; 37/45 +2.1 vs -4.7; 25/37 +9.5 vs +4.1
+  edge >= 0                   : kept 40 bets, held +0.48 (+0.6% per $) | skipped 62 bets that made +0.11 | days the kept set beat buying all per $: 2, lost: 2
+      by day (kept/all, kept net vs all net): 1/3 -0.9 vs -0.0; 6/17 +2.1 vs +1.2; 23/45 -3.8 vs -4.7; 10/37 +3.1 vs +4.1
+  trend not flat              : kept 102 bets, held +0.59 (+0.3% per $) | skipped 0 bets that made +0.00 | days the kept set beat buying all per $: 0, lost: 0
+      by day (kept/all, kept net vs all net): 3/3 -0.0 vs -0.0; 17/17 +1.2 vs +1.2; 45/45 -4.7 vs -4.7; 37/37 +4.1 vs +4.1
+  edge >= -0.05 and not flat  : kept 74 bets, held +11.28 (+6.8% per $) | skipped 28 bets that made -10.69 | days the kept set beat buying all per $: 2, lost: 2
+      by day (kept/all, kept net vs all net): 1/3 -0.9 vs -0.0; 11/17 +0.6 vs +1.2; 37/45 +2.1 vs -4.7; 25/37 +9.5 vs +4.1
+  edge >= 0 and not flat      : kept 40 bets, held +0.48 (+0.6% per $) | skipped 62 bets that made +0.11 | days the kept set beat buying all per $: 2, lost: 2
+      by day (kept/all, kept net vs all net): 1/3 -0.9 vs -0.0; 6/17 +2.1 vs +1.2; 23/45 -3.8 vs -4.7; 10/37 +3.1 vs +4.1
+  walk-forward edge cutoff: kept 71 bets, held +8.25 (+5.4% per $) against buying all +0.59 (+0.3%)
+      cutoff used each day: None (3/3 -0.0 vs -0.0); None (17/17 +1.2 vs +1.2); -0.02 (26/45 -2.4 vs -4.7); -0.05 (25/37 +9.5 vs +4.1)
+DONE
+
+
+

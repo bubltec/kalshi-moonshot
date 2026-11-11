@@ -829,6 +829,31 @@ def ms_rule_ok(rule: Sequence[str], letters: dict[str, str]) -> bool:
     return True
 
 
+def curve_edge_now(series: str, side: str, left_seconds: float, price: float, strike: float | None, now: float | None = None) -> tuple[float, float] | None:
+    """(the curve's chance that `side` pays, that chance minus `price`) at this moment, for the buy gate (lane field buy_curve_edge_min). The chance is curvevalue.read on the 900 s horizon rate, the reading the curve sale uses: a crypto coin's settlement index against the window's `strike`, a commodity's BiQuote price against its own price when the window opened. None when it cannot be read (no index, under 16 minutes of ticks, a stale tick, no reference): the caller must not buy on None."""
+    from . import curvevalue
+
+    crypto = crypto_index(series)
+    index = crypto or biquote_index(series)
+    if not index or left_seconds <= 0 or left_seconds > 900:
+        return None
+    now = time.time() if now is None else now
+    got = ticks_mod.history.window(index, now - 1000.0, now)
+    if not got or not got[0]:
+        return None
+    ts, vs = got
+    if crypto:
+        ref = float(strike or 0.0)
+    else:
+        opened = now + left_seconds - 900.0
+        i = bisect.bisect_left(ts, opened - 5.0)
+        ref = vs[i] if i < len(ts) and ts[i] <= opened + 20.0 else 0.0
+    if ref <= 0:
+        return None
+    read = curvevalue.read(ts, vs, now, ref, side, left_seconds, "900")
+    return None if read is None else (read.p, read.p - price)
+
+
 def spot_exit_now(spec: Any, series: str, side: str, left_seconds: float, strike: float | None, now: float | None = None) -> str | None:
     """Whether the lane's own spot exits (watcher._shock_hit: shock_units, cross_units) would sell a bet on `side` at this moment, as a reason, else None. Same reading: the typical minute from the last 15 minutes, the worst `shock_seconds` move over `shock_memory` seconds, the cushion to the strike on the bet's side, only inside the last `shock_last` seconds. None also when the lane has no such exit, the series is not a crypto coin, or the ticks cannot say (a caller that buys on None is making no claim)."""
     index = crypto_index(series)

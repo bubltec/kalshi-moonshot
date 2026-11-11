@@ -687,6 +687,30 @@ def evaluate(
             trend = None
         if trend is not None:
             note = f"[trend60 {trend:+.1f}%] {note}"
+        if bet and spec.buy_flat_trend_pct > 0:
+            if trend is None:
+                bet = False
+                note = f"the market-wide 60-minute trend is unreadable; the lane does not buy without it. {note}"
+            elif abs(trend) < spec.buy_flat_trend_pct:
+                bet = False
+                note = f"the market-wide 60-minute trend is flat ({trend:+.2f}%, inside {spec.buy_flat_trend_pct:g}%); the lane sits these out. {note}"
+    if bet and spec.buy_curve_edge_min > -1.0:
+        from . import ticks as ticks_mod
+        from . import variants as _variants
+
+        try:
+            ce = _variants.curve_edge_now(shot.series, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
+        except Exception as exc:
+            ce = None
+            log.warning("curve edge unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if ce is None:
+            bet = False
+            note = f"the curve's chance cannot be read (no index, short history, a stale tick or no reference); the lane does not buy without it. {note}"
+        elif ce[1] < spec.buy_curve_edge_min:
+            bet = False
+            note = f"[curve edge {ce[1]:+.3f}] the curve's chance {ce[0]:.3f} is {-ce[1]:.3f} under the ask {shot.ask:.2f} (the lane allows {-spec.buy_curve_edge_min:g}). {note}"
+        else:
+            note = f"[curve edge {ce[1]:+.3f}] {note}"
     if bet and (spec.trend_down_max < 0 or spec.trend_up_min > 0):
         from . import variants as _variants
 
