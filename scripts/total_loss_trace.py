@@ -17,6 +17,7 @@ Reported: dollars as it happened, with each rule, the bets changed, helped and h
 import bisect
 import datetime as dt
 import math
+import os
 import re
 import time
 
@@ -131,13 +132,18 @@ def actual(r):
 
 
 LANES = ("crypto_multiscale", "commodity_multiscale")
-rows = st.db.execute("SELECT id, ts, lane, ticker, side, ask, stake_usd, outcome, exit_price, exit_ts, exit_reason FROM decisions WHERE action='bet' AND lane IN (?,?) AND ts>? AND outcome IS NOT NULL ORDER BY ts", (*LANES, now - 18 * 3600)).fetchall()
-print(f"{len(rows)} settled live bets in the last 18 h; run {hm(now)} ET")
+rows = st.db.execute("SELECT id, ts, lane, ticker, side, ask, stake_usd, outcome, exit_price, exit_ts, exit_reason FROM decisions WHERE action='bet' AND lane IN (?,?) AND ts>? AND outcome IS NOT NULL ORDER BY ts", (*LANES, now - float(os.environ.get("HOURS", "18")) * 3600)).fetchall()
+rows = [r for r in rows if float(r["ts"]) <= now - float(os.environ.get("UNTIL", "0")) * 3600]
+print(f"{len(rows)} settled live bets in the last {os.environ.get('HOURS', '18')} h; run {hm(now)} ET")
 bets = []
 for n_, r in enumerate(rows):
     if n_ % 10 == 0:
         print(f"  building paths {n_}/{len(rows)}", flush=True)
-    b = build(r)
+    try:
+        b = build(r)
+    except Exception as exc:  # a path that cannot be built is reported, not fatal
+        print(f"  could not build {r['ticker']}: {type(exc).__name__}: {exc}", flush=True)
+        continue
     if b is None or float(r["ask"] or 0) <= 0 or float(r["stake_usd"] or 0) <= 0:
         continue
     bets.append((r, b))
@@ -145,6 +151,18 @@ print(f"{len(bets)} with a tape path; with a curve chance on at least a minute o
 nearish = next(((r, b) for r, b in bets if "KXNEAR15M-26NOV111330" in r["ticker"]), None)
 RULES = ("time-to-go", "gap", "either")
 res = {k: [] for k in RULES}
+if os.environ.get("DUMP"):
+    for r, b in bets:  # one line a bet so windows run in pieces can be added up locally: lane, ts, stake, as it happened, total loss, then per rule: fired (0/1), dollars with the rule
+        a, aexit = actual(r)
+        out = [r["lane"], f"{float(r['ts']):.0f}", f"{float(r['stake_usd']):.4f}", f"{a:.4f}", "1" if (r["exit_price"] is None and r["outcome"] != (r["side"] or "yes")) else "0"]
+        for rule in RULES:
+            f_ = fire(b, rule)
+            if f_ is not None and (aexit is None or f_[0] < aexit):
+                out += ["1", f"{dollars(r, f_[1] - fee(f_[1])):.4f}"]
+            else:
+                out += ["0", f"{a:.4f}"]
+        print("REC," + ",".join(out), flush=True)
+
 for r, b in bets:
     a, aexit = actual(r)
     for rule in RULES:
