@@ -43,6 +43,9 @@ def close_of(tk):
     return dt.datetime(2000 + int(m[1]), MON[m[2]], int(m[3]), int(m[4]), int(m[5]), tzinfo=ET).timestamp()
 
 
+META = {}
+
+
 def build(r):
     """Per-second (second, seconds left, our side's bid, curve chance or None) from the buy to the close, or None."""
     tk, ser = r["ticker"], r["ticker"].split("-")[0]
@@ -86,6 +89,12 @@ def build(r):
     c60 = [0.0] * len(g)
     for k in range(100, len(g)):
         c60[k] = c60[k - 1] + (g[k] - g[k - 60]) ** 2 / 60.0
+    k0 = int(t0) - base
+    if k0 - 900 >= 100:
+        rate0 = math.sqrt(max(c60[k0] - c60[k0 - 900], 0.0) / 900.0)
+        cs = [(g[k] - ref) for k in range(k0 - 300, k0 + 1)]
+        crossings = sum(1 for a_, b_ in zip(cs, cs[1:]) if a_ * b_ < 0)
+        META[r["id"]] = {"cross": crossings, "span": (max(abs(x) for x in cs) / (rate0 * math.sqrt(60.0))) if rate0 > 0 else None}
     sign = 1.0 if yes else -1.0
     for b in bids:
         k = int(b[0]) - base
@@ -209,4 +218,38 @@ for lane in LANES:
         d = sum(x[2] - x[1] for x in out)
         n = sum(1 for x in out if x[3] is not None)
         print(f"   {rule:10s} change {d:+.2f} on {n} bets it changed")
+
+# By how close to the target the bet was bought (2026-11-11, user, after the natgas 16:00 loss: "I would never have bet down on that. It was so close to the target the whole time."):
+# the curve's chance that the side pays at the first second it could be read after the buy, in buckets. A chance near one half is a market sitting on the target.
+print("\nby the curve's chance that the side pays right after the buy (near 0.5 = on the target); as it happened, held to settlement, total losses, halves, per lane")
+first = []
+for r, b in bets:
+    ch = next((x[3] for x in b if x[3] is not None), None)
+    first.append((r, b, ch))
+def row(label, xs):
+    if not xs:
+        return f"  {label:26s} n=0"
+    a = [actual(r)[0] for r, _, _ in xs]
+    stake = sum(float(r["stake_usd"]) for r, _, _ in xs)
+    held = sum(dollars(r, None) for r, _, _ in xs)
+    tl = [(r) for r, _, _ in xs if r["exit_price"] is None and r["outcome"] != (r["side"] or "yes")]
+    h = sorted(xs, key=lambda x: float(x[0]["ts"]))
+    m = len(h) // 2
+    h1 = sum(actual(r)[0] for r, _, _ in h[:m]); h2 = sum(actual(r)[0] for r, _, _ in h[m:])
+    return f"  {label:26s} n={len(xs):3d} | as happened {sum(a):+7.2f} ({sum(a) / stake:+6.1%}) | held {held:+7.2f} | total losses {len(tl):2d} (${sum(float(r['stake_usd']) for r in tl):5.2f}) | halves {h1:+.2f} / {h2:+.2f}"
+for lane in (None,) + LANES:
+    sub = [x for x in first if lane is None or x[0]["lane"] == lane]
+    print(f"{lane or 'both lanes'}")
+    for lo, hi in ((0.0, 0.60), (0.60, 0.70), (0.70, 0.80), (0.80, 0.90), (0.90, 1.01)):
+        print(row(f"chance {lo:.2f}-{min(hi, 1.0):.2f}", [x for x in sub if x[2] is not None and lo <= x[2] < hi]))
+    print(row("no reading", [x for x in sub if x[2] is None]))
+print("\nby how the spot sat against the target in the 5 minutes BEFORE the buy (user: 'it was so close to the target the whole time'): crossings of the target, and the widest it strayed from it in typical minutes")
+def meta_rows(title, key, buckets):
+    print(title)
+    for lo, hi, label in buckets:
+        xs = [(r, b, c) for r, b, c in first if r["id"] in META and META[r["id"]][key] is not None and lo <= META[r["id"]][key] < hi]
+        print(row(label, xs))
+meta_rows("crossings of the target", "cross", [(0, 1, "0 crossings"), (1, 2, "1 crossing"), (2, 3, "2 crossings"), (3, 5, "3-4 crossings"), (5, 999, "5 or more")])
+meta_rows("widest stray from the target (typical minutes)", "span", [(0, 1.0, "under 1"), (1.0, 2.0, "1 to 2"), (2.0, 3.0, "2 to 3"), (3.0, 5.0, "3 to 5"), (5.0, 1e9, "5 or more")])
+print(f"  bets with a reading of this: {sum(1 for r, _, _ in first if r['id'] in META)} of {len(first)}")
 print("DONE")

@@ -1,0 +1,90 @@
+job 20261111-161949-20479 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/a242999c298a43cfa222d857ec2ca714
+394 settled live bets in the last 300 h; run 16:24:06 ET
+394 with a tape path; with a curve chance on at least a minute of it: 333
+
+held to a total loss, with a tape path: 28 of 394; as it happened: -51.60
+
+lane / time / market / side / paid | what each rule would have done (second left, sale price, dollars)
+crypto 08:19:44 KXHYPE15M      yes 0.44 stake 1.22 as it happened -1.22 | chance read 594/594 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.01 -> -1.20 | gap: no sale | either: 240s left @ 0.01 -> -1.20 |
+crypto 12:32:27 KXBNB15M       yes 0.51 stake 1.87 as it happened -1.87 | chance read 684/684 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.04 -> -1.72 | gap: no sale | either: 240s left @ 0.04 -> -1.72 |
+commod 23:02:48 KXPLATINUM15M  yes 0.61 stake 1.70 as it happened -1.70 | chance read 0/705 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+crypto 05:31:55 KXHYPE15M      yes 0.57 stake 1.13 as it happened -1.13 | chance read 625/625 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.00 -> -1.13 | gap: no sale | either: 240s left @ 0.00 -> -1.13 |
+crypto 05:31:59 KXNEAR15M      yes 0.59 stake 1.35 as it happened -1.35 | chance read 679/679 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.00 -> -1.34 | gap: no sale | either: 240s left @ 0.00 -> -1.34 |
+commod 08:02:37 KXPLATINUM15M  no  0.69 stake 2.85 as it happened -2.85 | chance read 742/742 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: no sale | gap: no sale | either: no sale |
+commod 13:11:10 KXPLATINUM15M  no  0.80 stake 1.40 as it happened -1.40 | chance read 229/229 s, lowest in the last 240 s 0.25, bid then 0.01 | time-to-go: 96s left @ 0.42 -> -0.70 | gap: no sale | either: 96s left @ 0.42 -> -0.70 |
+commod 14:47:14 KXBRENT15M     no  0.60 stake 1.57 as it happened -1.57 | chance read 765/765 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 222s left @ 0.49 -> -0.37 | gap: no sale | either: 222s left @ 0.49 -> -0.37 |
+commod 14:47:37 KXWTI15M       no  0.56 stake 0.90 as it happened -0.90 | chance read 742/742 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 82s left @ 0.34 -> -0.39 | gap: no sale | either: 82s left @ 0.34 -> -0.39 |
+commod 15:06:16 KXBRENT15M     no  0.60 stake 1.45 as it happened -1.45 | chance read 523/523 s, lowest in the last 240 s 0.83, bid then 0.01 | time-to-go: no sale | gap: 508s left @ 0.41 -> -0.53 | either: 508s left @ 0.41 -> -0.53 |
+commod 17:40:18 KXWTI15M       no  0.71 stake 2.87 as it happened -2.87 | chance read 281/281 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 38s left @ 0.38 -> -1.43 | gap: 218s left @ 0.31 -> -1.70 | either: 218s left @ 0.31 -> -1.70 |
+crypto 17:47:01 KXSOL15M       yes 0.55 stake 0.82 as it happened -0.82 | chance read 743/743 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.18 -> -0.58 | gap: no sale | either: 240s left @ 0.18 -> -0.58 |
+crypto 17:47:48 KXHYPE15M      yes 0.57 stake 1.10 as it happened -1.10 | chance read 692/692 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.23 -> -0.69 | gap: no sale | either: 240s left @ 0.23 -> -0.69 |
+crypto 17:48:56 KXNEAR15M      yes 0.60 stake 1.37 as it happened -1.37 | chance read 552/552 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.03 -> -1.31 | gap: no sale | either: 240s left @ 0.03 -> -1.31 |
+crypto 17:49:03 KXBTC15M       yes 0.74 stake 2.79 as it happened -2.79 | chance read 618/618 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 231s left @ 0.35 -> -1.55 | gap: no sale | either: 231s left @ 0.35 -> -1.55 |
+crypto 17:51:16 KXETH15M       yes 0.72 stake 3.00 as it happened -3.00 | chance read 480/480 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.37 -> -1.55 | gap: no sale | either: 240s left @ 0.37 -> -1.55 |
+crypto 18:09:43 KXZEC15M       yes 0.57 stake 1.05 as it happened -1.05 | chance read 316/316 s, lowest in the last 240 s 0.04, bid then 0.00 | time-to-go: 240s left @ 0.16 -> -0.78 | gap: no sale | either: 240s left @ 0.16 -> -0.78 |
+crypto 18:18:57 KXBTC15M       yes 0.66 stake 2.53 as it happened -2.53 | chance read 662/662 s, lowest in the last 240 s 0.12, bid then 0.00 | time-to-go: 171s left @ 0.48 -> -0.80 | gap: 14s left @ 0.01 -> -2.51 | either: 171s left @ 0.48 -> -0.80 |
+crypto 18:48:14 KXXRP15M       no  0.64 stake 2.10 as it happened -2.10 | chance read 705/705 s, lowest in the last 240 s 0.06, bid then 0.00 | time-to-go: 182s left @ 0.47 -> -0.65 | gap: no sale | either: 182s left @ 0.47 -> -0.65 |
+crypto 18:50:42 KXDOGE15M      no  0.74 stake 3.13 as it happened -3.13 | chance read 557/557 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.43 -> -1.41 | gap: no sale | either: 240s left @ 0.43 -> -1.41 |
+crypto 18:54:11 KXBNB15M       no  0.74 stake 2.99 as it happened -2.99 | chance read 348/348 s, lowest in the last 240 s 0.27, bid then 0.00 | time-to-go: 119s left @ 0.35 -> -1.67 | gap: no sale | either: 119s left @ 0.35 -> -1.67 |
+commod 19:02:12 KXCOPPER15M    no  0.59 stake 1.41 as it happened -1.41 | chance read 0/767 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+crypto 19:04:18 KXBNB15M       no  0.66 stake 2.49 as it happened -2.49 | chance read 641/641 s, lowest in the last 240 s 0.08, bid then 0.00 | time-to-go: 223s left @ 0.22 -> -1.73 | gap: no sale | either: 223s left @ 0.22 -> -1.73 |
+commod 20:31:50 KXCOPPER15M    no  0.61 stake 1.67 as it happened -1.67 | chance read 0/789 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+commod 20:47:25 KXBRENT15M     yes 0.59 stake 1.43 as it happened -1.43 | chance read 0/753 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+commod 20:47:30 KXWTI15M       yes 0.56 stake 0.90 as it happened -0.90 | chance read 0/749 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+crypto 21:06:14 KXDOGE15M      yes 0.62 stake 1.77 as it happened -1.77 | chance read 510/510 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.16 -> -1.35 | gap: no sale | either: 240s left @ 0.16 -> -1.35 |
+commod 22:54:54 KXCOPPER15M    yes 0.78 stake 2.76 as it happened -2.76 | chance read 0/305 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+
+rule | all bets as it happened | with the rule | change | bets changed (helped / hurt) | caught of the total losses | halves of the change
+time-to-go |   -56.78 |   -43.06 |  +13.72 |  48 (38 / 9) | 20 of 28 | +6.78 / +6.93
+gap        |   -56.78 |   -56.93 |   -0.16 |   5 (3 / 2) | 3 of 28 | -1.09 / +0.94
+either     |   -56.78 |   -44.67 |  +12.10 |  51 (39 / 11) | 21 of 28 | +5.69 / +6.41
+
+crypto_multiscale: 262 bets, as it happened -37.31
+   time-to-go change +8.25 on 35 bets it changed
+   gap        change +0.02 on 1 bets it changed
+   either     change +8.25 on 35 bets it changed
+
+commodity_multiscale: 132 bets, as it happened -19.47
+   time-to-go change +5.47 on 13 bets it changed
+   gap        change -0.18 on 4 bets it changed
+   either     change +3.85 on 16 bets it changed
+
+by the curve's chance that the side pays right after the buy (near 0.5 = on the target); as it happened, held to settlement, total losses, halves, per lane
+both lanes
+  chance 0.00-0.60           n=118 | as happened  -28.24 (-14.7%) | held   -2.03 | total losses 10 ($12.80) | halves -21.48 / -6.76
+  chance 0.60-0.70           n=142 | as happened  -28.79 ( -7.7%) | held  +15.78 | total losses  7 ($17.60) | halves +2.32 / -31.11
+  chance 0.70-0.80           n= 63 | as happened   +8.74 ( +5.2%) | held  +10.91 | total losses  3 ($ 7.02) | halves +10.53 / -1.79
+  chance 0.80-0.90           n= 10 | as happened   -1.39 ( -6.0%) | held   -1.62 | total losses  2 ($ 4.32) | halves +3.16 / -4.55
+  chance 0.90-1.00           n=0
+  no reading                 n= 61 | as happened   -7.08 ( -5.2%) | held   -7.10 | total losses  6 ($ 9.86) | halves +0.20 / -7.28
+crypto_multiscale
+  chance 0.00-0.60           n=100 | as happened  -12.76 ( -7.9%) | held   +6.68 | total losses  8 ($10.34) | halves -14.36 / +1.60
+  chance 0.60-0.70           n=116 | as happened  -29.11 ( -9.4%) | held   +4.70 | total losses  6 ($14.75) | halves -5.82 / -23.29
+  chance 0.70-0.80           n= 44 | as happened   +2.42 ( +2.0%) | held   +6.83 | total losses  2 ($ 5.62) | halves +4.67 / -2.25
+  chance 0.80-0.90           n=  2 | as happened   +2.14 (+36.3%) | held   +2.14 | total losses  0 ($ 0.00) | halves +1.16 / +0.97
+  chance 0.90-1.00           n=0
+  no reading                 n=0
+commodity_multiscale
+  chance 0.00-0.60           n= 18 | as happened  -15.49 (-51.1%) | held   -8.71 | total losses  2 ($ 2.46) | halves -8.34 / -7.15
+  chance 0.60-0.70           n= 26 | as happened   +0.31 ( +0.5%) | held  +11.08 | total losses  1 ($ 2.85) | halves -3.93 / +4.25
+  chance 0.70-0.80           n= 19 | as happened   +6.32 (+13.6%) | held   +4.07 | total losses  1 ($ 1.40) | halves +5.52 / +0.79
+  chance 0.80-0.90           n=  8 | as happened   -3.53 (-20.4%) | held   -3.76 | total losses  2 ($ 4.32) | halves -0.08 / -3.45
+  chance 0.90-1.00           n=0
+  no reading                 n= 61 | as happened   -7.08 ( -5.2%) | held   -7.10 | total losses  6 ($ 9.86) | halves +0.20 / -7.28
+
+by how the spot sat against the target in the 5 minutes BEFORE the buy (user: 'it was so close to the target the whole time'): crossings of the target, and the widest it strayed from it in typical minutes
+crossings of the target
+  0 crossings                n= 54 | as happened  -22.59 (-17.5%) | held  -18.93 | total losses  3 ($ 7.31) | halves -7.96 / -14.63
+  1 crossing                 n= 44 | as happened   +0.42 ( +0.4%) | held   +7.02 | total losses  1 ($ 0.90) | halves +5.35 / -4.93
+  2 crossings                n= 17 | as happened   -1.91 ( -4.8%) | held   +5.83 | total losses  1 ($ 1.57) | halves -0.75 / -1.16
+  3-4 crossings              n= 35 | as happened   +4.06 ( +4.7%) | held  +11.48 | total losses  5 ($ 9.81) | halves +6.89 / -2.84
+  5 or more                  n=183 | as happened  -29.67 ( -7.5%) | held  +17.64 | total losses 12 ($22.16) | halves -11.35 / -18.32
+widest stray from the target (typical minutes)
+  under 1                    n= 13 | as happened   -2.73 (-15.1%) | held   +3.00 | total losses  3 ($ 3.71) | halves -1.32 / -1.41
+  1 to 2                     n=103 | as happened   -3.79 ( -1.8%) | held  +34.83 | total losses  7 ($ 9.68) | halves +2.94 / -6.74
+  2 to 3                     n=122 | as happened  -14.91 ( -5.0%) | held  +10.19 | total losses  6 ($16.04) | halves -9.37 / -5.54
+  3 to 5                     n= 91 | as happened  -25.88 (-11.8%) | held  -21.39 | total losses  6 ($12.30) | halves -4.30 / -21.57
+  5 or more                  n=  4 | as happened   -2.39 (-21.6%) | held   -3.61 | total losses  0 ($ 0.00) | halves +0.07 / -2.46
+  bets with a reading of this: 333 of 394
+DONE
+exit=0  results in job-results/20261111-161949-20479/
