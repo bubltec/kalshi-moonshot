@@ -1,14 +1,10 @@
-
-window 3 h ending 20:08 local; per pair: ticks median gap | correlation of 60 s moves | wave rule read each minute: same answer YES / NO (n) | passes by KP vs by BQ
-S&P 500   | KP 4.0 s, BQ 1.3 s | corr +0.63 | same 89% (170) / 85% (170) | passes KP 32 BQ 17
-gold      | KP 1.0 s, BQ 1.1 s | corr +0.95 | same 88% (173) / 94% (173) | passes KP 34 BQ 5
-silver    | KP 1.0 s, BQ 1.5 s | corr +0.95 | same 89% (171) / 94% (171) | passes KP 40 BQ 43
-platinum  | KP 1.0 s, BQ 1.2 s | corr +0.94 | same 95% (170) / 90% (170) | passes KP 14 BQ 32
-WTI       | KP 1.0 s, BQ 1.1 s | corr +0.97 | same 93% (173) / 95% (173) | passes KP 35 BQ 28
-Brent     | KP 1.0 s, BQ 1.1 s | corr +0.96 | same 93% (173) / 96% (173) | passes KP 45 BQ 38
-copper    | KP 1.0 s, BQ 1.2 s | corr +0.47 | same 95% (157) / 96% (157) | passes KP 10 BQ 11
-natgas    | KP 1.0 s, BQ 1.1 s | corr +0.90 | same 98% (173) / 95% (173) | passes KP 28 BQ 24
-DONE
-
-
-
+window 3 h ending 20:08 local; per pair: ticks median gap | correlation of 60 s moves | wave rule read each minute: same answer YES / NO (n) | passes by KP vs by BQ
+S&P 500   | KP 4.0 s, BQ 1.3 s | corr +0.63 | same 89% (170) / 85% (170) | passes KP 32 BQ 17
+gold      | KP 1.0 s, BQ 1.1 s | corr +0.95 | same 88% (173) / 94% (173) | passes KP 34 BQ 5
+silver    | KP 1.0 s, BQ 1.5 s | corr +0.95 | same 89% (171) / 94% (171) | passes KP 40 BQ 43
+platinum  | KP 1.0 s, BQ 1.2 s | corr +0.94 | same 95% (170) / 90% (170) | passes KP 14 BQ 32
+WTI       | KP 1.0 s, BQ 1.1 s | corr +0.97 | same 93% (173) / 95% (173) | passes KP 35 BQ 28
+Brent     | KP 1.0 s, BQ 1.1 s | corr +0.96 | same 93% (173) / 96% (173) | passes KP 45 BQ 38
+copper    | KP 1.0 s, BQ 1.2 s | corr +0.47 | same 95% (157) / 96% (157) | passes KP 10 BQ 11
+natgas    | KP 1.0 s, BQ 1.1 s | corr +0.90 | same 98% (173) / 95% (173) | passes KP 28 BQ 24
+DONE
