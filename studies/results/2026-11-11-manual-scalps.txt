@@ -1,0 +1,52 @@
+
+15-minute positions opened by hand (manual_entries) and settled: 100 | sold by hand before the close: 25 | ran to settlement (set aside): 75
+  hand-sold: staked 470.94, made +189.96 (24 ahead, 1 behind); the same trades held to settlement would have made +658.16
+  ran to settlement: staked 658.56, made -113.49 (43 ahead, 32 behind)
+
+hand-sold scalps with a curve reading at the buy and the sale: 24 of 25
+  all: 24 | made +185.82 on 461.39 staked | medians: paid 0.36, sold 0.54, held 150s, bought with 484s left, sold with 214s left
+      at the buy: cushion toward the side -0.73 typical minutes, 5-minute slope -0.17/min, 1-minute slope +0.04/min | at the sale: cushion +0.10, 1-minute slope +0.59/min | after the sale the bid went up to +0.24 over the sale price and down to -0.17
+  ended ahead: 23 | made +189.17 on 456.79 staked | medians: paid 0.36, sold 0.54, held 150s, bought with 484s left, sold with 202s left
+      at the buy: cushion toward the side -0.73 typical minutes, 5-minute slope -0.17/min, 1-minute slope +0.04/min | at the sale: cushion +0.10, 1-minute slope +0.59/min | after the sale the bid went up to +0.24 over the sale price and down to -0.21
+  ended behind: 1 | made -3.35 on 4.60 staked | medians: paid 0.28, sold 0.08, held 44s, bought with 354s left, sold with 310s left
+      at the buy: cushion toward the side -1.10 typical minutes, 5-minute slope -0.27/min, 1-minute slope -0.82/min | at the sale: cushion -2.05, 1-minute slope -1.14/min | after the sale the bid went up to +0.55 over the sale price and down to -0.04
+  by the setup at the buy:
+      behind the target and still falling away (a trough buy)  n  15 | ahead  14 | made +153.80 on  255.88 | median paid 0.28, sold 0.45
+      ahead of the target, slipping back                       n   4 | ahead   4 | made  +14.67 on  150.72 | median paid 0.61, sold 0.77
+      ahead of the target and moving further ahead             n   3 | ahead   3 | made  +14.48 on   48.07 | median paid 0.61, sold 0.84
+      behind the target, already turning toward it             n   2 | ahead   2 | made   +2.87 on    6.71 | median paid 0.48, sold 0.77
+  by the price paid:
+      paid 0.00 to 0.25: n   6 | ahead   6 | made  +84.75 on  109.10
+      paid 0.25 to 0.45: n   9 | ahead   8 | made  +43.32 on  124.58
+      paid 0.45 to 0.60: n   5 | ahead   5 | made  +33.58 on   91.85
+      paid 0.60 to 0.80: n   3 | ahead   3 | made  +22.35 on   86.27
+      paid 0.80 to 1.01: n   1 | ahead   1 | made   +1.82 on   49.58
+  the 30 most recent (time ET, market, side, paid -> sold, contracts, made, seconds held, cushion and 1-minute slope at the buy -> at the sale, bid high after the sale):
+    11-05 08:46 KXSILVER15M     yes 0.57 -> 0.80 x  17.0   +3.73   59s | +0.5 +0.59 -> +2.1 +1.67 | high after 1.00, result yes
+    11-05 08:47 KXWTI15M        yes 0.29 -> 0.49 x   6.6   +1.20  510s | -2.0 -1.88 -> -0.0 +0.63 | high after 0.91, result yes
+    11-05 09:23 KXGOLD15M       no  0.36 -> 0.79 x   8.0   +3.33  200s | -0.6 +0.83 -> +0.9 -0.29 | high after 1.00, result no
+    11-05 10:09 KXGOLD15M       no  0.28 -> 0.08 x  16.4   -3.35   44s | -1.1 -0.82 -> -2.1 -1.14 | high after 0.63, result no
+    11-05 15:15 KXXRP15M        no  0.61 -> 0.77 x  78.5  +11.59  107s | +0.9 +1.19 -> +2.4 +0.88 | high after 1.00, result no
+    11-05 15:22 KXETH15M        yes 0.21 -> 0.27 x   9.0   +0.42   40s | -1.6 -0.15 -> -1.6 +0.07 | high after 0.51, result no
+    11-05 16:47 KXGOLD15M       yes 0.61 -> 0.84 x   8.0   +1.76  647s | +0.2 +0.76 -> +0.3 -0.15 | high after 1.00, result yes
+    11-05 17:06 KXBTC15M        no  0.14 -> 0.21 x  33.7   +1.97   52s | -3.2 -0.32 -> -2.7 +0.38 | high after 0.35, result yes
+    11-05 20:01 KXWTI15M        yes 0.48 -> 0.77 x  10.1   +2.45  314s | -0.7 -11.94 -> +6.7 +1.81 | high after 1.00, result yes
+    11-06 14:49 KXGOLD15M       yes 0.51 -> 0.54 x   9.5   +0.09  592s | +0.1 -0.64 -> -0.0 +1.11 | high after 1.00, result yes
+    11-06 15:09 KXBTC15M        no  0.12 -> 0.30 x  39.2   +7.06  170s | -3.9 +0.27 -> -1.6 +1.43 | high after 1.00, result no
+    11-06 17:36 KXBTC15M        yes 0.27 -> 0.50 x  24.9   +5.79  410s | -1.9 +0.12 -> -2.4 +0.17 | high after 1.00, result yes
+    11-06 20:55 KXDOGE15M       yes 0.42 -> 0.60 x 114.7  +19.10   59s | -0.5 +0.22 -> +0.5 +0.94 | high after 1.00, result yes
+    11-06 20:56 KXDOGE15M       no  0.36 -> 0.51 x  13.3   +1.76   71s | -0.5 -0.94 -> +0.1 +0.59 | high after 0.78, result yes
+    11-06 21:08 KXWTI15M        yes 0.19 -> 0.26 x 141.4   +7.88  144s | -3.5 -0.96 -> +2.5 +3.38 | high after 1.00, result yes
+    11-06 21:16 KXBTC15M        yes 0.19 -> 0.36 x 245.4  +36.94  526s | -1.9 -0.42 -> -2.2 +0.88 | high after 0.36, result no
+    11-06 21:53 KXBTC15M        yes 0.38 -> 0.45 x 123.0   +8.61  150s | -2.0 +0.62 -> -2.3 +0.12 | high after 0.69, result no
+    11-07 12:45 KXBTC15M        yes 0.53 -> 0.55 x  91.3   +1.16  735s | +0.0 +0.04 -> +0.1 -0.04 | high after 0.97, result no
+    11-07 12:57 KXBTC15M        no  0.46 -> 0.96 x  52.4  +26.15   94s | -0.1 +0.04 -> +0.1 +0.12 | high after 1.00, result no
+    11-07 13:11 KXBTC15M        yes 0.67 -> 0.85 x  50.0   +9.00   69s | +0.7 -0.19 -> +0.8 +0.11 | high after 1.00, result yes
+    11-08 14:21 KXZEC15M        yes 0.32 -> 0.69 x  14.9   +5.11  249s | -2.1 -1.49 -> +1.3 +0.69 | high after 1.00, result yes
+    11-08 14:25 KXZEC15M        no  0.25 -> 0.37 x  17.0   +1.76  104s | -1.3 -0.69 -> -0.9 +0.15 | high after 0.37, result yes
+    11-08 19:55 KXZEC15M        yes 0.88 -> 0.92 x  56.3   +1.82   42s | +3.0 +0.72 -> +2.2 -1.04 | high after 1.00, result yes
+    11-08 20:06 KXZEC15M        no  0.05 -> 0.12 x 452.3  +30.48  197s | -8.0 +0.06 -> -3.0 +1.35 | high after 0.99, result no
+DONE
+
+
+
