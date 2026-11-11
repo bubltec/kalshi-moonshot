@@ -1,0 +1,46 @@
+job 20261111-072359-74152 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/ca40da153bfc42dc8065356ffef700d5
+windows 3826 (1 in 3), readings 24724
+
+=== feed kind settlement: 16447 readings | mean |feed cushion - implied cushion| 0.81 typical minutes | sign of the two cushions agrees on 98.5%
+  Brier score by time left (lower is better): feed | mid | blend w 0.75 | 0.5 | 0.25 | walk-forward blend (and the weights it used)
+    600s left, n  2465: 0.1857 | 0.1845 | 0.1851 | 0.1847 | 0.1845 | walk-forward on 2010: 0.1839 against feed 0.1851, mid 0.1839 | weights on the feed: {0.0: 1, 0.1: 3, 0.2: 5, 0.3: 1}
+    420s left, n  2560: 0.1482 | 0.1465 | 0.1474 | 0.1468 | 0.1465 | walk-forward on 2105: 0.1462 against feed 0.1475, mid 0.1462 | weights on the feed: {0.0: 8, 0.1: 2}
+    300s left, n  2561: 0.1192 | 0.1176 | 0.1185 | 0.1179 | 0.1176 | walk-forward on 2106: 0.1184 against feed 0.1194, mid 0.1184 | weights on the feed: {0.0: 8, 0.1: 2}
+    180s left, n  2562: 0.0878 | 0.0865 | 0.0870 | 0.0865 | 0.0863 | walk-forward on 2107: 0.0863 against feed 0.0875, mid 0.0864 | weights on the feed: {0.0: 4, 0.1: 4, 0.2: 2}
+    120s left, n  2486: 0.0695 | 0.0676 | 0.0684 | 0.0678 | 0.0675 | walk-forward on 2041: 0.0692 against feed 0.0708, mid 0.0691 | weights on the feed: {0.0: 3, 0.1: 6, 0.2: 1}
+     60s left, n  2082: 0.0453 | 0.0407 | 0.0428 | 0.0412 | 0.0405 | walk-forward on 1696: 0.0408 against feed 0.0458, mid 0.0409 | weights on the feed: {0.2: 7, 0.3: 3}
+     30s left, n  1731: 0.0303 | 0.0154 | 0.0237 | 0.0191 | 0.0163 | walk-forward on 1411: 0.0155 against feed 0.0311, mid 0.0154 | weights on the feed: {0.0: 8, 0.1: 2}
+  where the two disagree (all times left pooled): n | share that won | average feed chance | average mid | the weight on the feed that fits the outcome
+    within 0.05   feed higher: n  6491 | won 0.544 | feed 0.558 | mid 0.544 | fitted weight on the feed -0.01
+    within 0.05   feed lower : n  5808 | won 0.502 | feed 0.490 | mid 0.506 | fitted weight on the feed +0.22
+    0.05 to 0.10  feed higher: n  1320 | won 0.262 | feed 0.331 | mid 0.261 | fitted weight on the feed +0.02
+    0.05 to 0.10  feed lower : n  1295 | won 0.719 | feed 0.658 | mid 0.728 | fitted weight on the feed +0.13
+    0.10 to 0.20  feed higher: n   547 | won 0.186 | feed 0.305 | mid 0.170 | fitted weight on the feed +0.12
+    0.10 to 0.20  feed lower : n   623 | won 0.814 | feed 0.707 | mid 0.841 | fitted weight on the feed +0.21
+    0.20 to 0.30  feed higher: n   108 | won 0.139 | feed 0.329 | mid 0.090 | fitted weight on the feed +0.20
+    0.20 to 0.30  feed lower : n   160 | won 0.863 | feed 0.658 | mid 0.899 | fitted weight on the feed +0.15
+    0.30 and up   feed higher: n    45 | won 0.089 | feed 0.510 | mid 0.127 | fitted weight on the feed -0.10
+    0.30 and up   feed lower : n    50 | won 0.800 | feed 0.534 | mid 0.894 | fitted weight on the feed +0.26
+
+=== feed kind proxy: 8277 readings | mean |feed cushion - implied cushion| 0.87 typical minutes | sign of the two cushions agrees on 94.1%
+  Brier score by time left (lower is better): feed | mid | blend w 0.75 | 0.5 | 0.25 | walk-forward blend (and the weights it used)
+    600s left, n  1246: 0.1879 | 0.1822 | 0.1852 | 0.1834 | 0.1824 | walk-forward on 761: 0.1814 against feed 0.1872, mid 0.1813 | weights on the feed: {0.0: 5, 0.1: 1}
+    420s left, n  1259: 0.1475 | 0.1410 | 0.1444 | 0.1422 | 0.1411 | walk-forward on 761: 0.1400 against feed 0.1451, mid 0.1399 | weights on the feed: {0.0: 5, 0.1: 1}
+    300s left, n  1247: 0.1308 | 0.1227 | 0.1269 | 0.1243 | 0.1229 | walk-forward on 755: 0.1195 against feed 0.1289, mid 0.1195 | weights on the feed: {0.1: 6}
+    180s left, n  1220: 0.1053 | 0.0921 | 0.0995 | 0.0954 | 0.0930 | walk-forward on 740: 0.0906 against feed 0.1059, mid 0.0905 | weights on the feed: {0.0: 5, 0.1: 1}
+    120s left, n  1182: 0.0934 | 0.0806 | 0.0872 | 0.0829 | 0.0808 | walk-forward on 718: 0.0802 against feed 0.0941, mid 0.0803 | weights on the feed: {0.0: 1, 0.1: 5}
+     60s left, n  1093: 0.0762 | 0.0610 | 0.0682 | 0.0630 | 0.0606 | walk-forward on 665: 0.0590 against feed 0.0756, mid 0.0593 | weights on the feed: {0.1: 4, 0.2: 2}
+     30s left, n  1030: 0.0657 | 0.0429 | 0.0550 | 0.0477 | 0.0437 | walk-forward on 621: 0.0426 against feed 0.0640, mid 0.0427 | weights on the feed: {0.0: 3, 0.1: 3}
+  where the two disagree (all times left pooled): n | share that won | average feed chance | average mid | the weight on the feed that fits the outcome
+    within 0.05   feed higher: n  2856 | won 0.636 | feed 0.656 | mid 0.641 | fitted weight on the feed -0.35
+    within 0.05   feed lower : n  2760 | won 0.381 | feed 0.378 | mid 0.395 | fitted weight on the feed +0.79
+    0.05 to 0.10  feed higher: n   677 | won 0.391 | feed 0.473 | mid 0.402 | fitted weight on the feed -0.14
+    0.05 to 0.10  feed lower : n   741 | won 0.540 | feed 0.535 | mid 0.606 | fitted weight on the feed +0.94
+    0.10 to 0.20  feed higher: n   391 | won 0.350 | feed 0.467 | mid 0.330 | fitted weight on the feed +0.15
+    0.10 to 0.20  feed lower : n   410 | won 0.600 | feed 0.487 | mid 0.624 | fitted weight on the feed +0.17
+    0.20 to 0.30  feed higher: n   101 | won 0.347 | feed 0.592 | mid 0.349 | fitted weight on the feed -0.01
+    0.20 to 0.30  feed lower : n    97 | won 0.732 | feed 0.467 | mid 0.708 | fitted weight on the feed -0.10
+    0.30 and up   feed higher: n   127 | won 0.268 | feed 0.783 | mid 0.231 | fitted weight on the feed +0.07
+    0.30 and up   feed lower : n   117 | won 0.829 | feed 0.311 | mid 0.830 | fitted weight on the feed +0.00
+DONE
+exit=0  results in job-results/20261111-072359-74152/
