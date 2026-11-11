@@ -9,7 +9,7 @@ UNIT = RATE * 60**0.5
 
 def target(**kw):
     base = dict(ticker="KXBTC15M-1", lane="x", side="yes", curve_margin=0.15, curve_persist=5.0, curve_scales="900", curve_last=900.0, curve_since=0.0, curve_at=0.0, curve_noted=0.0,
-                close_ts=9_850.0, shock_ref=100.0, shock_index="BRTI", curve_drop_units=1.5, curve_drop_seconds=60.0, curve_drop_margin=0.5, curve_drop_persist=0.0, curve_drop_since=0.0, curve_cush=deque(), curve_gap=-1.0, curve_gap_persist=15.0, curve_gap_since=0.0, curve_behind_last=-1.0, curve_behind_chance=0.5)
+                close_ts=9_850.0, shock_ref=100.0, shock_index="BRTI", curve_drop_units=1.5, curve_drop_seconds=60.0, curve_drop_margin=0.5, curve_drop_persist=0.0, curve_drop_since=0.0, curve_cush=deque(), curve_gap=-1.0, curve_gap_persist=15.0, curve_gap_since=0.0, curve_behind_last=-1.0, curve_behind_chance=0.5, curve_near=-1.0)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -74,3 +74,15 @@ def test_time_to_go_waits_for_its_own_chance_cutoff(monkeypatch):
     assert run(monkeypatch, target(curve_drop_units=-1.0, curve_behind_last=30.0, curve_behind_chance=0.3), path, bid=0.30, p=0.40)[1] is None  # behind, but not under 0.3
     i, reason = run(monkeypatch, target(curve_drop_units=-1.0, curve_behind_last=30.0, curve_behind_chance=0.3), path, bid=0.10, p=0.20)
     assert reason and "under 0.3" in reason and i == 820
+
+
+def test_the_curve_sale_margin_shrinks_toward_the_close(monkeypatch):
+    # bid 0.90 (about 0.892 after the fee) against a chance of 0.82: about 0.07 over
+    path = [2.0] * 846  # 850 s left at the start, one reading a second
+    assert run(monkeypatch, target(curve_drop_units=-1.0), path, bid=0.90, p=0.82)[1] is None  # fixed 0.15: never
+    i, reason = run(monkeypatch, target(curve_drop_units=-1.0, curve_near=0.0), path, bid=0.90, p=0.82)
+    assert reason and reason.startswith("curve exit: bid") and "s left" in reason
+    left = 850 - i
+    assert 150 < left < 230  # 0.15 * sqrt(left / 900) falls to about 0.07 near 200 s left, then 5 s of persistence
+    i2, _ = run(monkeypatch, target(curve_drop_units=-1.0, curve_near=0.05), path, bid=0.90, p=0.82)
+    assert i2 > i  # a floor of 0.05 at the close waits longer

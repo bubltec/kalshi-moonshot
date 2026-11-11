@@ -185,6 +185,7 @@ class Target:
     curve_persist: float = 5.0
     curve_scales: str = "900+180"
     curve_last: float = 900.0
+    curve_near: float = -1.0  # lane curve_exit_near (-1 = fixed): the curve sale's margin at the close; the margin runs from curve_margin at 900 s left down to this
     curve_since: float = 0.0  # when the curve condition began to hold without a break (0 = not holding)
     curve_at: float = 0.0  # the curve check reads at most once a second
     curve_noted: float = 0.0
@@ -734,9 +735,10 @@ class ProfitWatcher:
             return None
         net = bid - fee_per_contract(bid)
         over = net - read.p
+        margin = t.curve_margin if t.curve_near < 0 else t.curve_near + (t.curve_margin - t.curve_near) * (min(max(left, 0.0), 900.0) / 900.0) ** 0.5  # the margin shrinks with the square root of the time left
         if now - t.curve_noted >= 10.0:
             t.curve_noted = now
-            log.info("curve exit watch %s %s, %.0fs left: bid %.2f (%.3f after the fee), curve chance %.3f, over by %+.3f (sells at %+.3f for %.0fs); cushion %+.2f typical minutes", t.ticker, t.lane, left, bid, net, read.p, over, t.curve_margin, t.curve_persist, read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0)
+            log.info("curve exit watch %s %s, %.0fs left: bid %.2f (%.3f after the fee), curve chance %.3f, over by %+.3f (sells at %+.3f for %.0fs); cushion %+.2f typical minutes", t.ticker, t.lane, left, bid, net, read.p, over, margin, t.curve_persist, read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0)
         tm = read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0
         if t.curve_drop_units > 0:
             # the trajectory sale: the cushion fell curve_drop_units typical minutes over curve_drop_seconds and now sits at or under the margin
@@ -760,14 +762,14 @@ class ProfitWatcher:
                     return f"curve exit (market disagrees): the curve's chance {read.p:.3f} is {-over:.3f} over the bid {bid:.2f} ({net:.3f} after the fee) for {now - t.curve_gap_since:.0f}s (sells at {t.curve_gap:g} for {t.curve_gap_persist:g}s); cushion {tm:+.2f} typical minutes, {left:.0f}s left"
             else:
                 t.curve_gap_since = 0.0
-        if over < t.curve_margin:
+        if over < margin:
             t.curve_since = 0.0
             return None
         if t.curve_since <= 0:
             t.curve_since = now
         if now - t.curve_since < t.curve_persist:
             return None
-        return f"curve exit: bid {bid:.2f} ({net:.3f} after the fee) is {over:+.3f} over the curve's {read.p:.3f} chance that the side pays (margin {t.curve_margin:g}, held {now - t.curve_since:.0f}s); cushion {read.cushion * 1e4:+.1f} bp, rates {read.rate_long * 60**0.5 * 1e4:.1f} / {read.rate_short * 60**0.5 * 1e4:.1f} bp a typical minute (900 s / 180 s), {left:.0f}s left"
+        return f"curve exit: bid {bid:.2f} ({net:.3f} after the fee) is {over:+.3f} over the curve's {read.p:.3f} chance that the side pays (margin {margin:.3f} with {left:.0f}s left, held {now - t.curve_since:.0f}s); cushion {read.cushion * 1e4:+.1f} bp, rates {read.rate_long * 60**0.5 * 1e4:.1f} / {read.rate_short * 60**0.5 * 1e4:.1f} bp a typical minute (900 s / 180 s), {left:.0f}s left"
 
     def _late_drop_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The late-drop exit (2026-11-10, user: implement 30 s / 1 unit and push). Samples the held bid once a second (forward-filled) and, in the last late_drop_seconds, sells when the bid has fallen from its highest of the last 60 s by late_drop_units of its own typical minute (rms one-second bid change over up to 300 s, times sqrt(60)). Needs 20 seconds of the last 60 and 100 one-second changes, as in scripts/late_drop_exit_replay.py. Reads no model, no coin, no market."""
@@ -1511,6 +1513,7 @@ class ProfitWatcher:
                     held.shock_trend_hold = spec.shock_trend_hold
                     if spec.curve_exit >= 0:
                         held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
+                        held.curve_near = spec.curve_exit_near
                         held.curve_drop_units, held.curve_drop_seconds, held.curve_drop_margin, held.curve_drop_persist = spec.curve_drop_units, spec.curve_drop_seconds, spec.curve_drop_margin_units, spec.curve_drop_persist
                         held.curve_gap, held.curve_gap_persist, held.curve_behind_last, held.curve_behind_chance = spec.curve_gap, spec.curve_gap_persist, spec.curve_behind_last, spec.curve_behind_chance
                     held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
