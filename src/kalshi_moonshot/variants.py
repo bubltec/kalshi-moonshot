@@ -24,7 +24,7 @@ from collections import defaultdict, deque
 from collections.abc import Iterator, Sequence
 from typing import Any
 
-from . import db, volregime
+from . import db, perpref, volregime
 from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
@@ -558,9 +558,29 @@ def wave_features(ts: Sequence[float], values: Sequence[float], side: str, at: f
     return {"amp": hi - lo, "pos": (path[-1] - lo) / (hi - lo) if hi > lo else 0.5, "since_low": float(len(path) - 1 - low_at), "back": path[-1] - lo}
 
 
-def wave_now(series: str, side: str, now: float | None = None) -> dict | None:
+PERP_FRESH = 30.0  # seconds: a Kalshi perp reference tick older than this is not a live spot
+
+
+def spot_index(series: str, source: str = "", now: float | None = None) -> str | None:
+    """The tape index a curve reading takes as this series' spot (2026-11-11, user: "a new curve analysis based on kalshi's data only (with kalshi perpetuals to fill real spot pricing compared to strike)").
+    source "" is what every lane has always read: a coin's Kalshi settlement index, else the external BiQuote feed. source "kalshi": a coin's settlement index (Kalshi's own), else Kalshi's perp reference price for the
+    underlying (perpref.py) while it is ticking, and only if it is not, the external feed. The external feed stays a fallback and a hint; it is not what the Kalshi-only reading runs on when the perp reference is live."""
+    crypto = crypto_index(series)
+    if crypto:
+        return crypto
+    if source == "kalshi":
+        kp = perpref.index_for_series(series)
+        if kp:
+            now = time.time() if now is None else now
+            got = ticks_mod.history.window(kp, now - PERP_FRESH, now)
+            if got and got[0]:
+                return kp
+    return biquote_index(series)
+
+
+def wave_now(series: str, side: str, now: float | None = None, source: str = "") -> dict | None:
     """wave_features from the in-memory ticks of the series' spot index (a coin's index, or the feed a commodity or stock-index series reads), or None. The wave is a shape of the spot's own path, so it is read the same way on any market that has one."""
-    index = crypto_index(series) or biquote_index(series)
+    index = spot_index(series, source, now)
     if not index:
         return None
     now = time.time() if now is None else now
@@ -832,12 +852,12 @@ def ms_rule_ok(rule: Sequence[str], letters: dict[str, str]) -> bool:
     return True
 
 
-def curve_edge_now(series: str, side: str, left_seconds: float, price: float, strike: float | None, now: float | None = None) -> tuple[float, float] | None:
+def curve_edge_now(series: str, side: str, left_seconds: float, price: float, strike: float | None, now: float | None = None, source: str = "") -> tuple[float, float] | None:
     """(the curve's chance that `side` pays, that chance minus `price`) at this moment, for the buy gate (lane field buy_curve_edge_min). The chance is curvevalue.read on the 900 s horizon rate, the reading the curve sale uses: a crypto coin's settlement index against the window's `strike`, a commodity's BiQuote price against its own price when the window opened. None when it cannot be read (no index, under 16 minutes of ticks, a stale tick, no reference): the caller must not buy on None."""
     from . import curvevalue
 
     crypto = crypto_index(series)
-    index = crypto or biquote_index(series)
+    index = spot_index(series, source, now)
     if not index or left_seconds <= 0 or left_seconds > 900:
         return None
     now = time.time() if now is None else now

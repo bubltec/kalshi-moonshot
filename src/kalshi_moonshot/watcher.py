@@ -646,7 +646,7 @@ class ProfitWatcher:
 
     def _shock_reference(self, t: Target, index_id: str) -> float:
         """What the shock exit measures the cushion from. A BiQuote commodity price differs from Kalshi's strike by a dollar or two, so it is read against the same index's own price when the window opened (the tape); a crypto settlement index is read against the strike itself."""
-        if not index_id.startswith("BQ_"):
+        if not index_id.startswith(("BQ_", "KP_")):
             if t.strike <= 0:
                 try:
                     t.strike = float(self._market_static(t.ticker).get("floor_strike") or 0.0)
@@ -1538,7 +1538,7 @@ class ProfitWatcher:
                     log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
-                sid = biquote_index(series_name) or index_for_series(series_name) or ""
+                sid = (variants.spot_index(series_name, spec.spot_source) if spec.spot_source == "kalshi" else None) or biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
                 if (ticker, lane) not in self._shock_logged and (ref > 0 or sid):
                     self._shock_logged.add((ticker, lane))

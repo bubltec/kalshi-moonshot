@@ -25,6 +25,17 @@ FEEDS: dict[str, str] = {
 }
 _BY_TICKER = {ticker: index for index, ticker in FEEDS.items()}
 
+# 15-minute series prefix -> the Kalshi perp reference that follows it. Crypto is not here: its settlement source (the CF Benchmarks index on Kalshi's socket) is already Kalshi's own.
+SERIES_INDEX = {"KXGOLD": "KP_GOLD", "KXSILVER": "KP_SILVER", "KXPLATINUM": "KP_PLATINUM", "KXPALLADIUM": "KP_PALLADIUM", "KXCOPPER": "KP_COPPER", "KXWTI": "KP_WTI", "KXBRENT": "KP_BRENT", "KXNATGAS": "KP_NATGAS", "KXINX": "KP_SPX"}
+
+
+def index_for_series(series: str) -> str | None:
+    """The Kalshi perp reference tape index that follows a 15-minute series, or None."""
+    for prefix, index in SERIES_INDEX.items():
+        if series.startswith(prefix) and series[len(prefix):] == "15M":
+            return index
+    return None
+
 
 def enabled() -> bool:
     return os.environ.get("KALSHI_PERP_REF", "1").strip().lower() not in {"0", "off", "false", "no"}

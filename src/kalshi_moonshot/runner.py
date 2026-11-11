@@ -616,7 +616,7 @@ def evaluate(
         from . import variants as _variants
 
         try:
-            wave = _variants.wave_now(shot.series, shot.side)
+            wave = _variants.wave_now(shot.series, shot.side, source=spec.spot_source)
         except Exception as exc:
             wave = None
             log.warning("wave unreadable for %s %s: %s", shot.ticker, shot.side, exc)
@@ -702,7 +702,7 @@ def evaluate(
         from . import variants as _variants
 
         try:
-            ce = _variants.curve_edge_now(shot.series, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
+            ce = _variants.curve_edge_now(shot.series, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker), source=spec.spot_source)
         except Exception as exc:
             ce = None
             log.warning("curve edge unreadable for %s %s: %s", shot.ticker, shot.side, exc)
