@@ -7,7 +7,7 @@ The Kalshi-first reading (lane field spot_source = "kalshi": Kalshi's perp refer
     4. where a live twin exists, no worse than the twin on the markets both bought (at least 10 matched bets), per dollar staked.
   A shadow that turns negative over its last 20 bets is flagged RETIRE-CHECK (rule 6).
 Attribution is a separate warning: a shadow that also sells differently from its twin cannot show the spot is what made the difference. The 'attribution' line says what differs.
-Starts: commodity_multiscale_rest 2026-11-11 16:45 ET (new band, stake and hot gate matched to the live lane); index_wave 11:23 (its first bet). A clean twin of the live lane that changes only the spot would carry the attribution; the script lists any lane named *_kalshi.
+Starts: commodity_multiscale_kalshi 2026-11-11 17:30 ET (the clean twin: only the spot differs from the live lane, so it carries the attribution; added at the user's "Yes, add it"); commodity_multiscale_rest 2026-11-11 16:45 ET (new band, stake and hot gate matched to the live lane); index_wave 11:23 (its first bet). A clean twin of the live lane that changes only the spot would carry the attribution; the script lists any lane named *_kalshi.
     scripts/cloud.sh run scripts/kalshi_curve_scorecard.py        (or rpy.sh)
 """
 
@@ -25,7 +25,7 @@ ET = dt.timezone(dt.timedelta(hours=-5))
 day = dt.datetime(2026, 11, 11, tzinfo=ET)
 at = lambda h, m, sec=0: day.replace(hour=h, minute=m, second=sec).timestamp()  # noqa: E731
 hm = lambda t: dt.datetime.fromtimestamp(t, ET).strftime("%m-%d %H:%M")  # noqa: E731
-CARDS = [("commodity_multiscale_rest", "commodity_multiscale", at(16, 45)), ("index_wave", None, at(11, 23))]
+CARDS = [("commodity_multiscale_kalshi", "commodity_multiscale", at(17, 30)), ("commodity_multiscale_rest", "commodity_multiscale", at(16, 45)), ("index_wave", None, at(11, 23))]
 NEED_N, NEED_MATCHED = 30, 10
 
 
@@ -92,7 +92,7 @@ from kalshi_moonshot.lanes import lane_specs
 L = lane_specs(s)
 print("\nattribution (what differs from the live twin, besides the spot)")
 skip = {"name", "label", "priority", "enabled"}
-for lane, twin in (("commodity_multiscale_rest", "commodity_multiscale"),):
+for lane, twin in (("commodity_multiscale_kalshi", "commodity_multiscale"), ("commodity_multiscale_rest", "commodity_multiscale")):
     a, b = L[twin], L[lane]
     d = [f.name for f in dataclasses.fields(a) if f.name not in skip and getattr(a, f.name) != getattr(b, f.name)]
     print(f"  {lane}: differs in {', '.join(d)}")
