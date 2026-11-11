@@ -108,12 +108,15 @@ history = TickHistory()
 
 
 class MidHistory:
-    """The last few minutes of every market's quote mid (yes side), in memory, so a buy can ask how choppy the price has been without a query. Fed by tape.Recent.note_quote."""
+    """The last hour of every market's quotes (yes side), in memory (2026-11-11, user: "every market ticket should have the past 15 minutes, if we could store the past hour even better ... in memory"), so a decision asks the market's own
+    path without a query. One row a second per ticker (the latest quote of the second): (time, mid, bid, ask). Fed by tape.Recent.note_quote; filled from the tape at start (warm_mids_from_tape) so a restart does not begin every
+    open market with an empty path; a ticker whose last quote is older than `keep` is dropped, so closed windows do not pile up (before this the dict kept every ticker since the start). series_rows stitches one series' windows into the hour's path."""
 
-    def __init__(self, keep: float = 900.0) -> None:
+    def __init__(self, keep: float = 3600.0) -> None:
         self.keep = keep
         self._lock = threading.Lock()
-        self._rows: dict[str, deque[tuple[float, float]]] = {}
+        self._rows: dict[str, deque[tuple[float, float, float, float]]] = {}
+        self._n = 0
 
     def note(self, ticker: str, ts: float, bid: float, ask: float) -> None:
         if bid <= 0 or ask <= 0:
@@ -122,16 +125,73 @@ class MidHistory:
             rows = self._rows.get(ticker)
             if rows is None:
                 rows = self._rows[ticker] = deque()
-            rows.append((ts, (bid + ask) / 2.0))
+            row = (ts, (bid + ask) / 2.0, bid, ask)
+            if rows and int(rows[-1][0]) == int(ts):
+                rows[-1] = row  # one row a second: the latest quote of that second
+            else:
+                rows.append(row)
             cut = ts - self.keep
             while rows and rows[0][0] < cut:
                 rows.popleft()
+            self._n += 1
+            if self._n % 2000 == 0:
+                self._prune_locked(ts)
+
+    def _prune_locked(self, now: float) -> None:
+        for tk in [tk for tk, r in self._rows.items() if not r or r[-1][0] < now - self.keep]:
+            del self._rows[tk]
+
+    def prune(self, now: float) -> int:
+        """Drop the tickers whose last quote is older than `keep`. Returns how many went."""
+        with self._lock:
+            before = len(self._rows)
+            self._prune_locked(now)
+            return before - len(self._rows)
+
+    def warm(self, rows_by_ticker: dict[str, Sequence[tuple[float, float, float]]]) -> int:
+        """Put older (time, bid, ask) quotes in front of what a ticker already holds (a restart's tape load). A ticker keeps its live rows; only quotes older than its first live row are added, on the one-row-a-second grid."""
+        added = 0
+        with self._lock:
+            for tk, quotes in rows_by_ticker.items():
+                have = self._rows.get(tk)
+                first = have[0][0] if have else float("inf")
+                old: list[tuple[float, float, float, float]] = []
+                for ts, bid, ask in quotes:
+                    if ts >= first or bid <= 0 or ask <= 0:
+                        continue
+                    row = (float(ts), (bid + ask) / 2.0, float(bid), float(ask))
+                    if old and int(old[-1][0]) == int(ts):
+                        old[-1] = row
+                    else:
+                        old.append(row)
+                if old:
+                    if have is None:
+                        have = self._rows[tk] = deque()
+                    have.extendleft(reversed(old))
+                    added += len(old)
+        return added
+
+    def quotes(self, ticker: str) -> list[tuple[float, float, float]]:
+        """A copy of the market's (time, YES bid, YES ask) rows held in memory, oldest first."""
+        with self._lock:
+            return [(r[0], r[2], r[3]) for r in self._rows.get(ticker, ())]
+
+    def series_rows(self, series: str, now: float, seconds: float = 3600.0) -> list[tuple[float, float]]:
+        """The (time, YES mid) path of a whole series over the last `seconds`: its windows' tickers stitched in time order, so the hour before a window opens is one list."""
+        start = now - seconds
+        out: list[tuple[float, float]] = []
+        with self._lock:
+            for tk, rows in self._rows.items():
+                if tk.startswith(series + "-"):
+                    out += [(r[0], r[1]) for r in rows if start <= r[0] <= now]
+        out.sort()
+        return out
 
     def crossings(self, ticker: str, now: float, seconds: float = 300.0, level: float = 0.5, step: float = 5.0) -> int | None:
         """How many times the mid crossed `level` in the last `seconds`, on a `step` grid that carries the last quote forward (the way the study counted it). None when the history is too thin to say:
         under 40 of the 60 grid points have a quote within 20 s, or the first quote is later than the start of the span."""
         with self._lock:
-            rows = list(self._rows.get(ticker, ()))
+            rows = [(r[0], r[1]) for r in self._rows.get(ticker, ())]
         if not rows:
             return None
         times = [r[0] for r in rows]
@@ -151,7 +211,7 @@ class MidHistory:
     def rows(self, ticker: str) -> list[tuple[float, float]]:
         """A copy of the market's (time, YES mid) rows held in memory, oldest first."""
         with self._lock:
-            return list(self._rows.get(ticker, ()))
+            return [(r[0], r[1]) for r in self._rows.get(ticker, ())]
 
     def clear(self) -> None:
         with self._lock:
@@ -209,3 +269,21 @@ def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 8.0) ->
         history.warm(index_id, rows, start)
         total += len(rows)
     return total
+
+
+def warm_mids_from_tape(s, now: float, hours: float = 1.0) -> int:
+    """Load the last `hours` of every 15-minute market's quotes from the tape into `mids`, so a restart does not leave the open windows with only what arrived since. Meant for a bot that has just started."""
+    from . import db
+
+    if not db.tape_exists(s.tape_path):
+        return 0
+    tape = db.connect(s.tape_path, "tape", shared=True)
+    try:
+        rows = tape.execute("SELECT ticker, ts, bid, ask FROM quotes WHERE ts>? AND ts<=? AND ticker LIKE ? AND bid>0 AND ask>0 ORDER BY ts", (now - hours * 3600.0, now, "%15M-%")).fetchall()
+    except Exception:
+        log.warning("ticks: could not warm the market quotes", exc_info=True)
+        return 0
+    by: dict[str, list[tuple[float, float, float]]] = {}
+    for tk, ts, bid, ask in rows:
+        by.setdefault(tk, []).append((float(ts), float(bid), float(ask)))
+    return mids.warm(by)

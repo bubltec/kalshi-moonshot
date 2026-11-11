@@ -1723,10 +1723,11 @@ class ProfitWatcher:
         with contextlib.suppress(OSError):
             os.nice(10)
         try:
-            indexes = sorted({ix for sp in lane_specs(s).values() for series in sp.series for ix in (index_for_series(series) or biquote_index(series),) if ix})
+            indexes = sorted({ix for sp in lane_specs(s).values() for series in sp.series for ix in (index_for_series(series) or biquote_index(series), perpref.index_for_series(series)) if ix})
             if not self._ticks_warm:
                 self._ticks_warm = True
                 log.info("watcher: warmed %d ticks of history", ticks_mod.warm_from_tape(s, indexes, time.time()))
+                log.info("watcher: warmed %d market quotes of the last hour", ticks_mod.warm_mids_from_tape(s, time.time()))
             from . import volregime
             from .biquotefeed import SERIES_INDEX
             from .kalshiws import INDEX_FOR
