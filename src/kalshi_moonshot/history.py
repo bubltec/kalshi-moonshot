@@ -52,7 +52,11 @@ def ingest(
             have -= {r[0] for r in store.db.execute(
                 "SELECT DISTINCT ticker FROM candles WHERE bid_hi IS NULL"
             )}
+        unsettled = {r[0] for r in store.db.execute("SELECT ticker FROM windows WHERE series=? AND settled_value IS NULL", (ser,))}  # held before the settled value was kept
         for m in client.settled_markets(ser, limit=windows):
+            if m["ticker"] in unsettled and (value := _settled_value(m)) is not None:
+                store.db.execute("UPDATE windows SET settled_value=? WHERE ticker=?", (value, m["ticker"]))  # fills a window already held; not counted as added
+                store.db.commit()
             if m["ticker"] in have or m.get("result") not in {"yes", "no"}:
                 continue
             if max_new is not None and added >= max_new:
@@ -74,12 +78,21 @@ def ingest(
                 " oi, bid_hi, ask_lo) VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows,
             )
             store.db.execute(
-                "INSERT OR REPLACE INTO windows VALUES (?,?,?,?,?,?)",
-                (m["ticker"], ser, close, m.get("floor_strike"), m["result"], time.time()),
+                "INSERT OR REPLACE INTO windows (ticker, series, close_ts, strike, result, fetched_ts, settled_value) VALUES (?,?,?,?,?,?,?)",
+                (m["ticker"], ser, close, m.get("floor_strike"), m["result"], time.time(), _settled_value(m)),
             )
             store.db.commit()
             added += 1
     return added
+
+
+def _settled_value(m: dict) -> float | None:
+    """The settled market's expiration_value as a number (Kalshi sends it as text), or None when it is missing or not a number."""
+    raw = m.get("expiration_value")
+    try:
+        return float(raw) if raw not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
 
 
 def prune(store: Store, keep_days: int, now: float | None = None) -> int:

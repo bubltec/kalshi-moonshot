@@ -146,3 +146,38 @@ def test_the_bot_schedules_history_at_a_priority_below_trading(tmp_path):
     assert store.db.execute("SELECT COUNT(*) FROM windows").fetchone()[0] == 5  # one batch
     nxt = store.db.execute("SELECT run_at FROM jobs WHERE kind='history' AND status='pending'").fetchone()
     assert nxt["run_at"] - __import__("time").time() < 130  # more waiting: back in about two minutes
+
+
+def test_each_windows_settled_value_is_kept_and_an_older_window_is_filled_in(tmp_path):
+    """2026-11-11 (user): Kalshi's list of settled values per window is its own series, so it is stored beside the strike and result."""
+    paths = {f"KXGOLD15M-W{i}": ("yes", straight(0.5, 0.95)) for i in range(3)}
+    store = Store(tmp_path / "m.db")
+
+    class Settled(Client):
+        values = {"KXGOLD15M-W0": "3.51319", "KXGOLD15M-W1": "", "KXGOLD15M-W2": "not a number"}
+
+        def settled_markets(self, series, limit=40):
+            return [{**m, "expiration_value": self.values.get(m["ticker"])} for m in super().settled_markets(series, limit)]
+
+    client = Settled(paths)
+    history.ingest(client, store, ["KXGOLD15M"], windows=3)
+    got = {r[0]: r[1] for r in store.db.execute("SELECT ticker, settled_value FROM windows")}
+    assert got == {"KXGOLD15M-W0": pytest.approx(3.51319), "KXGOLD15M-W1": None, "KXGOLD15M-W2": None}
+    client.values["KXGOLD15M-W1"] = "3.50606"  # the value arrives later: a re-run fills the window already held and downloads nothing
+    calls = client.candle_calls
+    assert history.ingest(client, store, ["KXGOLD15M"], windows=3) == 0 and client.candle_calls == calls
+    assert store.db.execute("SELECT settled_value FROM windows WHERE ticker='KXGOLD15M-W1'").fetchone()[0] == pytest.approx(3.50606)
+
+
+def test_an_existing_database_gets_the_settled_value_column(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE windows (ticker TEXT PRIMARY KEY, series TEXT NOT NULL, close_ts INTEGER NOT NULL, strike REAL, result TEXT, fetched_ts REAL NOT NULL)")
+    db.execute("INSERT INTO windows (ticker, series, close_ts, strike, result, fetched_ts) VALUES ('KXGOLD15M-OLD','KXGOLD15M',1,100.0,'yes',1.0)")
+    db.commit()
+    db.close()
+    store = Store(path)
+    assert store.db.execute("SELECT ticker, settled_value FROM windows").fetchall()[0][1] is None
+    assert "settled_value" in {r["name"] for r in store.db.execute("PRAGMA table_info(windows)")}

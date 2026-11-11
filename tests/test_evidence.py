@@ -155,7 +155,7 @@ def test_too_few_trades_is_reported_not_guessed():
 
 def test_windows_load_from_the_candle_tables(tmp_path):
     store = Store(tmp_path / "m.db")
-    store.db.execute("INSERT INTO windows VALUES ('KXGOLD15M-A','KXGOLD15M',?,100.0,'yes',0)", (T0 + 900,))
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, result, fetched_ts) VALUES ('KXGOLD15M-A','KXGOLD15M',?,100.0,'yes',0)", (T0 + 900,))
     for k in range(1, 16):
         store.db.execute(
             "INSERT INTO candles (ticker,end_ts,bid_c,ask_c,bid_lo,ask_hi,last_c,volume,oi,bid_hi,ask_lo) "

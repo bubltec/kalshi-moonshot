@@ -275,7 +275,8 @@ CREATE TABLE IF NOT EXISTS windows (
   close_ts INTEGER NOT NULL,
   strike REAL,
   result TEXT,                   -- 'yes' / 'no'
-  fetched_ts REAL NOT NULL
+  fetched_ts REAL NOT NULL,
+  settled_value REAL             -- the value the window settled on (Kalshi's expiration_value: the price of the underlying, not the contract's); NULL until read
 );
 
 CREATE TABLE IF NOT EXISTS grid_obs (
@@ -447,6 +448,9 @@ class Store:
         for col in ("bid_hi", "ask_lo"):
             if col not in candle_cols:
                 self.db.execute(f"ALTER TABLE candles ADD COLUMN {col} REAL")
+        window_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(windows)")}
+        if "settled_value" not in window_cols:  # 2026-11-11 (user: record each window's settled value): Kalshi's own series of 15-minute settlement values, kept beside the strike and result
+            self.db.execute("ALTER TABLE windows ADD COLUMN settled_value REAL")
         job_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(jobs)")}
         if "priority" not in job_cols:
             self.db.execute("ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
