@@ -1,0 +1,43 @@
+
+
+=== crypto_multiscale: 308 settled bets at 0.55 or over with an hour of index before the buy | held +29.79 on 779.03
+  the 60 minutes before the buy, in typical hours, signed with the bet
+    against by 1+                      n   93 | won  69 (74%) | staked  226.71 | held  +27.60 (+12.2% per $) | halves +14.38 / +13.22
+    against 0.3 to 1                   n  102 | won  67 (66%) | staked  263.41 | held   -6.62 (-2.5% per $) | halves -12.29 / +5.67
+    flat (within 0.3)                  n   68 | won  46 (68%) | staked  173.93 | held   +0.56 (+0.3% per $) | halves +8.49 / -7.93
+    with 0.3 to 1                      n   36 | won  27 (75%) | staked   91.25 | held   +6.02 (+6.6% per $) | halves +1.37 / +4.66
+    with by 1+                         n    9 | won   7 (78%) | staked   23.73 | held   +2.23 (+9.4% per $) | halves +2.45 / -0.22
+  the 15 minutes before the buy, same units
+    against by 1+                      n   38 | won  26 (68%) | staked   97.47 | held   +3.05 (+3.1% per $) | halves -2.88 / +5.93
+    against 0.3 to 1                   n   74 | won  51 (69%) | staked  182.59 | held   +0.15 (+0.1% per $) | halves +3.33 / -3.18
+    flat (within 0.3)                  n  101 | won  70 (69%) | staked  262.19 | held  +11.70 (+4.5% per $) | halves +8.96 / +2.74
+    with 0.3 to 1                      n   69 | won  51 (74%) | staked  171.55 | held  +12.38 (+7.2% per $) | halves +9.42 / +2.95
+    with by 1+                         n   26 | won  18 (69%) | staked   65.22 | held   +2.52 (+3.9% per $) | halves -4.43 / +6.95
+  the hour, crossed with the minute of the buy
+    hour against (0.3+), before minute 4 n   72 | won  49 (68%) | staked  179.35 | held   +7.22 (+4.0% per $) | halves -0.27 / +7.49
+    hour against (0.3+), from minute 4 n  117 | won  82 (70%) | staked  294.71 | held  +10.54 (+3.6% per $) | halves +3.86 / +6.68
+    hour not against, before minute 4  n   27 | won  22 (81%) | staked   63.75 | held  +15.75 (+24.7% per $) | halves +11.90 / +3.85
+    hour not against, from minute 4    n   81 | won  54 (67%) | staked  212.65 | held   -9.15 (-4.3% per $) | halves -1.93 / -7.22
+
+=== commodity_multiscale: 101 settled bets at 0.55 or over with an hour of index before the buy | held -0.75 on 226.08
+  the 60 minutes before the buy, in typical hours, signed with the bet
+    against by 1+                      n   30 | won  17 (57%) | staked   60.72 | held   -4.28 (-7.0% per $) | halves -4.49 / +0.21
+    against 0.3 to 1                   n   28 | won  20 (71%) | staked   65.57 | held   +2.49 (+3.8% per $) | halves +2.84 / -0.36
+    flat (within 0.3)                  n   24 | won  17 (71%) | staked   53.66 | held   +2.47 (+4.6% per $) | halves -0.38 / +2.85
+    with 0.3 to 1                      n   16 | won  11 (69%) | staked   37.35 | held   -0.33 (-0.9% per $) | halves -1.74 / +1.41
+    with by 1+                         n    3 | won   2 (67%) | staked    8.78 | held   -1.10 (-12.5% per $) | halves +1.77 / -2.87
+  the 15 minutes before the buy, same units
+    against by 1+                      n    9 | won   4 (44%) | staked   20.13 | held   -4.89 (-24.3% per $) | halves -3.10 / -1.79
+    against 0.3 to 1                   n   26 | won  16 (62%) | staked   58.38 | held   -3.93 (-6.7% per $) | halves -0.67 / -3.26
+    flat (within 0.3)                  n   38 | won  28 (74%) | staked   82.34 | held  +11.09 (+13.5% per $) | halves +2.24 / +8.85
+    with 0.3 to 1                      n   19 | won  11 (58%) | staked   43.01 | held   -7.55 (-17.6% per $) | halves -1.98 / -5.58
+    with by 1+                         n    9 | won   8 (89%) | staked   22.22 | held   +4.53 (+20.4% per $) | halves +1.51 / +3.02
+  the hour, crossed with the minute of the buy
+    hour against (0.3+), before minute 4 n   12 | won   6 (50%) | staked   28.37 | held   -6.86 (-24.2% per $) | halves -6.46 / -0.41
+    hour against (0.3+), from minute 4 n   40 | won  29 (72%) | staked   87.22 | held  +10.17 (+11.7% per $) | halves +5.34 / +4.83
+    hour not against, before minute 4  n    6 | won   3 (50%) | staked   16.40 | held   -3.72 (-22.7% per $) | halves -3.55 / -0.18
+    hour not against, from minute 4    n   32 | won  26 (81%) | staked   72.70 | held  +11.51 (+15.8% per $) | halves +5.74 / +5.77
+DONE
+
+
+
