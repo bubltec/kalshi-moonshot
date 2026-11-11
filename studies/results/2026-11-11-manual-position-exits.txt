@@ -1,35 +1,63 @@
-
 hand-opened 15-minute positions, settled, with quotes on the tape: 100 | staked 1129.50 | with a curve reading 88 | sold by hand 25, left to run 75
 the position that swings the totals most: KXZEC15M-26NOV082015-15 cost 23.36, held result +428.93
-rule                                   | made (all) | ahead / behind | lost 90%+ | without the biggest swing | on the 25 sold by hand | on the 75 left to run
-held to settlement                     |   +544.67 |  61 /  39     |  39       |   +115.75                |   +658.16           |   -113.49
-time-scaled curve sale                 |   +541.97 |  63 /  37     |  30       |   +236.73                |   +584.49           |    -42.52
-lock (+0.10 then back to +0.03)        |   +294.32 |  53 /  47     |  23       |   -134.61                |   +439.16           |   -144.84
-resting ask at chance + 0.15 scaled    |   +221.33 |  57 /  43     |  16       |    +63.05                |   +281.45           |    -60.12
-resting ask at chance + 0.25 scaled    |   +213.93 |  55 /  45     |  24       |    +36.28                |   +322.49           |   -108.56
-resting ask at chance + 0.10 scaled    |   +163.74 |  53 /  47     |  13       |    +15.14                |   +234.85           |    -71.11
-stepping ask from +0.45, floor paid    |   +156.41 |  70 /  30     |  30       |    +37.57                |   +291.28           |   -134.88
-target +0.18, else held                |   +152.31 |  72 /  28     |  28       |    +70.89                |   +288.42           |   -136.11
-target +0.25, else held                |   +152.28 |  70 /  30     |  30       |    +39.21                |   +277.70           |   -125.42
-stepping ask from +0.45, floor none    |   +127.37 |  59 /  40     |  23       |     +8.54                |   +265.93           |   -138.55
-target +0.18 + time-to-go 120s         |    +96.54 |  58 /  42     |  16       |    +15.13                |   +241.10           |   -144.56
-stepping ask from +0.18, floor paid    |    +91.15 |  74 /  26     |  26       |    +22.41                |   +246.45           |   -155.31
-target +0.18 + time-to-go 60s          |    +90.68 |  67 /  33     |  23       |     +9.27                |   +263.62           |   -172.94
-stepping ask from +0.18, floor none    |    +86.49 |  68 /  31     |  21       |    +17.76                |   +235.22           |   -148.73
-target +0.25 + time-to-go 60s          |    +82.78 |  63 /  37     |  26       |    -30.29                |   +247.75           |   -164.97
-target +0.25 + time-to-go 120s         |    +81.73 |  52 /  48     |  17       |    -31.34                |   +221.05           |   -139.32
-as traded                              |    +76.47 |  67 /  33     |  32       |    +45.99                |   +189.96           |   -113.49
-target +0.18 + time-to-go 240s         |    +66.56 |  43 /  57     |   7       |    -14.85                |   +146.34           |    -79.78
-stepping ask from +0.30, floor paid    |    +65.62 |  70 /  30     |  30       |    -13.60                |   +206.05           |   -140.43
-target +0.25 + time-to-go 240s         |    +61.47 |  34 /  66     |   7       |    -51.60                |   +136.87           |    -75.40
-stepping ask from +0.30, floor none    |    +47.43 |  60 /  39     |  23       |    -31.79                |   +193.22           |   -145.78
-trail 0.15 from the high               |    +25.25 |  47 /  53     |  21       |   -111.36                |   +163.48           |   -138.23
-target +0.18 + give-up at half         |    +24.49 |  59 /  41     |   1       |    +37.32                |   +107.02           |    -82.53
-target +0.10, else held                |     +7.96 |  77 /  23     |  23       |    -37.27                |   +166.17           |   -158.21
-target +0.10 + time-to-go 120s         |    -14.86 |  67 /  33     |  15       |    -60.09                |   +140.58           |   -155.43
-target +0.10 + time-to-go 240s         |    -33.00 |  52 /  48     |   7       |    -78.23                |    +61.78           |    -94.77
-target +0.10 + time-to-go 60s          |    -36.80 |  74 /  26     |  20       |    -82.03                |   +144.73           |   -181.54
-trail 0.08 from the high               |    -48.83 |  53 /  47     |  19       |    -89.27                |    +92.81           |   -141.64
+rule                                       | made (all) | ahead / behind | lost 90%+ | without the biggest swing | on the 25 sold by hand | on the 75 left to run
+held to settlement                         |   +544.67 |  61 /  39     |  39       |   +115.75                |   +658.16           |   -113.49
+time-scaled curve sale                     |   +541.97 |  63 /  37     |  30       |   +236.73                |   +584.49           |    -42.52
+curve sale at bid + time-to-go 60s         |   +487.15 |  60 /  40     |  29       |   +181.91                |   +530.58           |    -43.43
+curve sale at bid + time-to-go 120s        |   +429.80 |  54 /  46     |  18       |   +124.56                |   +473.79           |    -43.99
+lock (+0.10 then back to +0.03)            |   +294.32 |  53 /  47     |  23       |   -134.61                |   +439.16           |   -144.84
+resting ask + time-to-go 60s               |   +223.16 |  57 /  43     |  15       |    +64.87                |   +281.45           |    -58.30
+resting ask at chance + 0.15 scaled        |   +221.33 |  57 /  43     |  16       |    +63.05                |   +281.45           |    -60.12
+resting ask + time-to-go 120s              |   +219.18 |  55 /  45     |  13       |    +60.89                |   +278.96           |    -59.78
+resting ask at chance + 0.25 scaled        |   +213.93 |  55 /  45     |  24       |    +36.28                |   +322.49           |   -108.56
+curve sale at bid + time-to-go 240s        |   +210.14 |  48 /  52     |   9       |   +135.08                |   +246.55           |    -36.41
+resting ask at chance + 0.10 scaled        |   +163.74 |  53 /  47     |  13       |    +15.14                |   +234.85           |    -71.11
+stepping ask from +0.45, floor paid        |   +156.41 |  70 /  30     |  30       |    +37.57                |   +291.28           |   -134.88
+target +0.18, else held                    |   +152.31 |  72 /  28     |  28       |    +70.89                |   +288.42           |   -136.11
+target +0.25, else held                    |   +152.28 |  70 /  30     |  30       |    +39.21                |   +277.70           |   -125.42
+curve sale at bid + rising floor to 0.20   |   +146.94 |  54 /  46     |  15       |   +150.89                |   +181.83           |    -34.89
+curve sale at bid + rising floor to 0.50   |   +133.91 |  50 /  50     |   5       |   +137.85                |   +160.34           |    -26.43
+resting ask + time-to-go 240s              |   +127.44 |  51 /  49     |   8       |    +52.38                |   +177.77           |    -50.33
+stepping ask from +0.45, floor none        |   +127.37 |  59 /  40     |  23       |     +8.54                |   +265.93           |   -138.55
+curve sale at bid + rising floor to 0.35   |   +115.10 |  51 /  49     |   6       |   +119.05                |   +145.29           |    -30.18
+target +0.18 + time-to-go 120s             |    +96.54 |  58 /  42     |  16       |    +15.13                |   +241.10           |   -144.56
+stepping ask from +0.18, floor paid        |    +91.15 |  74 /  26     |  26       |    +22.41                |   +246.45           |   -155.31
+target +0.18 + time-to-go 60s              |    +90.68 |  67 /  33     |  23       |     +9.27                |   +263.62           |   -172.94
+stepping ask from +0.18, floor none        |    +86.49 |  68 /  31     |  21       |    +17.76                |   +235.22           |   -148.73
+target +0.25 + time-to-go 60s              |    +82.78 |  63 /  37     |  26       |    -30.29                |   +247.75           |   -164.97
+target +0.25 + time-to-go 120s             |    +81.73 |  52 /  48     |  17       |    -31.34                |   +221.05           |   -139.32
+as traded                                  |    +76.47 |  67 /  33     |  32       |    +45.99                |   +189.96           |   -113.49
+resting ask + rising floor to 0.35         |    +72.86 |  55 /  45     |   4       |    +76.80                |   +115.96           |    -43.11
+resting ask + rising floor to 0.50         |    +68.05 |  55 /  45     |   4       |    +72.00                |   +107.56           |    -39.50
+target +0.18 + time-to-go 240s             |    +66.56 |  43 /  57     |   7       |    -14.85                |   +146.34           |    -79.78
+stepping ask from +0.30, floor paid        |    +65.62 |  70 /  30     |  30       |    -13.60                |   +206.05           |   -140.43
+resting ask + rising floor to 0.20         |    +64.93 |  54 /  46     |   7       |    +68.88                |   +115.51           |    -50.58
+target +0.25 + time-to-go 240s             |    +61.47 |  34 /  66     |   7       |    -51.60                |   +136.87           |    -75.40
+stepping ask from +0.30, floor none        |    +47.43 |  60 /  39     |  23       |    -31.79                |   +193.22           |   -145.78
+trail 0.15 from the high                   |    +25.25 |  47 /  53     |  21       |   -111.36                |   +163.48           |   -138.23
+target +0.18 + give-up at half             |    +24.49 |  59 /  41     |   1       |    +37.32                |   +107.02           |    -82.53
+target +0.10, else held                    |     +7.96 |  77 /  23     |  23       |    -37.27                |   +166.17           |   -158.21
+target +0.10 + time-to-go 120s             |    -14.86 |  67 /  33     |  15       |    -60.09                |   +140.58           |   -155.43
+target +0.10 + time-to-go 240s             |    -33.00 |  52 /  48     |   7       |    -78.23                |    +61.78           |    -94.77
+target +0.10 + time-to-go 60s              |    -36.80 |  74 /  26     |  20       |    -82.03                |   +144.73           |   -181.54
+trail 0.08 from the high                   |    -48.83 |  53 /  47     |  19       |    -89.27                |    +92.81           |   -141.64
+
+the combined rules in two halves of the period (by the time of the buy), against holding the same positions
+rule                                       | first 50: rule / held | last 50: rule / held | beat / lost to holding
+resting ask + time-to-go 240s              |   +102.48 /   +151.56 |    +24.96 /   +393.12 |  35 /  50
+resting ask + time-to-go 120s              |   +110.57 /   +151.56 |   +108.61 /   +393.12 |  34 /  50
+resting ask + time-to-go 60s               |   +111.89 /   +151.56 |   +111.27 /   +393.12 |  28 /  50
+resting ask + rising floor to 0.50         |   +113.48 /   +151.56 |    -45.42 /   +393.12 |  36 /  50
+resting ask + rising floor to 0.35         |   +118.68 /   +151.56 |    -45.82 /   +393.12 |  36 /  50
+resting ask + rising floor to 0.20         |   +111.94 /   +151.56 |    -47.01 /   +393.12 |  36 /  50
+curve sale at bid + time-to-go 240s        |   +152.42 /   +151.56 |    +57.72 /   +393.12 |  35 /  31
+curve sale at bid + time-to-go 120s        |   +143.23 /   +151.56 |   +286.57 /   +393.12 |  34 /  31
+curve sale at bid + time-to-go 60s         |   +199.19 /   +151.56 |   +287.96 /   +393.12 |  21 /  30
+curve sale at bid + rising floor to 0.50   |   +148.66 /   +151.56 |    -14.75 /   +393.12 |  35 /  31
+curve sale at bid + rising floor to 0.35   |   +132.26 /   +151.56 |    -17.16 /   +393.12 |  35 /  30
+curve sale at bid + rising floor to 0.20   |   +165.11 /   +151.56 |    -18.16 /   +393.12 |  33 /  28
+resting ask at chance + 0.15 (no guard)    |   +110.07 /   +151.56 |   +111.27 /   +393.12 |  23 /  50
+time-scaled curve sale (no guard)          |   +253.20 /   +151.56 |   +288.77 /   +393.12 |   9 /  28
 DONE
 
 

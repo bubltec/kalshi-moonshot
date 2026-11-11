@@ -195,7 +195,46 @@ def rule_curve_rest(p, far):
     return hold(p)
 
 
+def rule_combo(p, up, guard, far=0.15):
+    """One sale for the upside and one guard against the total loss, both from the curve and the clock (user, 2026-11-11: "we need a way to avoid the 90% or more ... that could just be a curve + time based exit value like we currently have").
+    up "rest": the resting ask at chance + far * sqrt(left / 900), repriced every 15 s. up "bid": the time-scaled curve sale at the bid after 5 s.
+    guard ("go", L): with L seconds or less left, sell at the bid when the curve's chance is under one half (the lanes' time-to-go sale).
+    guard ("floor", cap): at any time, sell at the bid when the chance has been under cap * (1 - sqrt(left / 900)) for 5 s: a floor that is zero at the open and rises to cap at the close."""
+    price = None
+    since = low = None
+    for t, left, bid in p["bids"]:
+        ch = p["chance"].get(t)
+        if left < 8 or ch is None:
+            since = low = None
+            continue
+        scale = math.sqrt(min(left, 900.0) / 900.0)
+        if up == "rest":
+            if price is None or t % 15 == 0:
+                price = min(0.99, ch + far * scale)
+            if bid >= price and price >= 0.05:
+                return p["n"] * price - p["cost"]
+        elif bid >= 0.05 and bid - fee(bid) - ch >= far * scale:
+            since = since if since is not None else t
+            if t - since >= 5:
+                return taker(p, bid)
+        else:
+            since = None
+        if guard[0] == "go":
+            if left <= guard[1] and ch < 0.5 and bid > 0:
+                return taker(p, bid)
+        elif ch < guard[1] * (1.0 - scale) and bid > 0:
+            low = low if low is not None else t
+            if t - low >= 5:
+                return taker(p, bid)
+        else:
+            low = None
+    return hold(p)
+
+
+COMBOS = [(f"{'resting ask' if up == 'rest' else 'curve sale at bid'} + {'time-to-go %ds' % g[1] if g[0] == 'go' else 'rising floor to %.2f' % g[1]}", lambda p, up=up, g=g: rule_combo(p, up, g))
+          for up in ("rest", "bid") for g in (("go", 240), ("go", 120), ("go", 60), ("floor", 0.50), ("floor", 0.35), ("floor", 0.20))]
 RULES = [("as traded", lambda p: p["actual"]), ("held to settlement", hold)]
+RULES += COMBOS
 RULES += [(f"stepping ask from +{G:.2f}, floor {fl}", lambda p, G=G, fl=fl: rule_step(p, G, fl)) for G in (0.18, 0.30, 0.45) for fl in ("paid", "none")]
 RULES += [(f"resting ask at chance + {far:.2f} scaled", lambda p, far=far: rule_curve_rest(p, far)) for far in (0.10, 0.15, 0.25)]
 RULES += [(f"target +{G:.2f}, else held", lambda p, G=G: rule_target(p, G)) for G in (0.10, 0.18, 0.25)]
@@ -214,10 +253,18 @@ for name, fn in RULES:
     tot = sum(x for _, x in res)
     out.append((tot, name, res))
 out.sort(key=lambda o: -o[0])
-print(f"{'rule':38s} | made (all) | ahead / behind | lost 90%+ | without the biggest swing | on the {sum(1 for p in P if p['hand'])} sold by hand | on the {sum(1 for p in P if not p['hand'])} left to run")
+print(f"{'rule':42s} | made (all) | ahead / behind | lost 90%+ | without the biggest swing | on the {sum(1 for p in P if p['hand'])} sold by hand | on the {sum(1 for p in P if not p['hand'])} left to run")
 for tot, name, res in out:
     ahead = sum(1 for _, x in res if x > 0)
     behind = sum(1 for _, x in res if x < 0)
     wiped = sum(1 for p, x in res if x <= -0.9 * p["cost"])
-    print(f"{name:38s} | {tot:+9.2f} | {ahead:3d} / {behind:3d}     | {wiped:3d}       | {sum(x for p, x in res if p is not bigwin):+9.2f}                | {sum(x for p, x in res if p['hand']):+9.2f}           | {sum(x for p, x in res if not p['hand']):+9.2f}")
+    print(f"{name:42s} | {tot:+9.2f} | {ahead:3d} / {behind:3d}     | {wiped:3d}       | {sum(x for p, x in res if p is not bigwin):+9.2f}                | {sum(x for p, x in res if p['hand']):+9.2f}           | {sum(x for p, x in res if not p['hand']):+9.2f}")
+P2 = sorted(P, key=lambda p: p["bids"][0][0])
+h = len(P2) // 2
+print()
+print("the combined rules in two halves of the period (by the time of the buy), against holding the same positions")
+print(f"{'rule':42s} | first {h}: rule / held | last {len(P2) - h}: rule / held | beat / lost to holding")
+for name, fn in COMBOS + [("resting ask at chance + 0.15 (no guard)", lambda p: rule_curve_rest(p, 0.15)), ("time-scaled curve sale (no guard)", rule_curve)]:
+    a = sum(fn(p) for p in P2[:h]); b = sum(fn(p) for p in P2[h:])
+    print(f"{name:42s} | {a:+9.2f} / {sum(hold(p) for p in P2[:h]):+9.2f} | {b:+9.2f} / {sum(hold(p) for p in P2[h:]):+9.2f} | {sum(1 for p in P if fn(p) > hold(p) + 0.005):3d} / {sum(1 for p in P if fn(p) < hold(p) - 0.005):3d}")
 print("DONE")
