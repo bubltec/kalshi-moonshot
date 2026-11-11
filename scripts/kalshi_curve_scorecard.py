@@ -25,7 +25,7 @@ ET = dt.timezone(dt.timedelta(hours=-5))
 day = dt.datetime(2026, 11, 11, tzinfo=ET)
 at = lambda h, m, sec=0: day.replace(hour=h, minute=m, second=sec).timestamp()  # noqa: E731
 hm = lambda t: dt.datetime.fromtimestamp(t, ET).strftime("%m-%d %H:%M")  # noqa: E731
-CARDS = [("commodity_multiscale_kalshi", "commodity_multiscale", at(17, 30)), ("commodity_multiscale_rest", "commodity_multiscale", at(16, 45)), ("index_wave", None, at(11, 23))]
+CARDS = [("commodity_multiscale_kalshi", "commodity_multiscale", at(18, 5)), ("commodity_multiscale_rest", "commodity_multiscale", at(18, 5)), ("index_wave", None, at(11, 23))]
 NEED_N, NEED_MATCHED = 30, 10
 
 
