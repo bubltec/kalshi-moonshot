@@ -1,0 +1,50 @@
+job 20261110-191051-31349 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/d50b2992169b4c75885647a18e30d794
+
+=== crypto_ms_alone: lanes ('crypto_multiscale',) | settled live bets 485 | replayed 485 | value exit margin 0.15, scales 60s900
+  held to the result -4.68 | live (own sales, stacked exits) +18.05 | whole-stake losses held 234
+  all variants by net (v = G, gap persist, N):
+    value + gap + drop (0.35, 5, 3.0): net +11.93 (vs holding +16.62, vs live -6.11) on 92 sold {'value': 58, 'gap': 7, 'drop': 27} | losers saved 36, winners sold 56, zeros partial 36 of 234 | halves +22.85 / -6.23 | choppy +2.1 middle +1.7 straight +12.8 
+    value + gap + drop (0.35, 15, 3.0): net +9.89 (vs holding +14.57, vs live -8.16) on 89 sold {'value': 58, 'gap': 4, 'drop': 27} | losers saved 33, winners sold 56, zeros partial 33 of 234 | halves +20.80 / -6.23 | choppy +1.7 middle +0.9 straight +11.9 
+    value + gap + drop (0.25, 5, 3.0): net +8.16 (vs holding +12.84, vs live -9.89) on 104 sold {'value': 58, 'gap': 19, 'drop': 27} | losers saved 45, winners sold 59, zeros partial 45 of 234 | halves +15.54 / -2.70 | choppy +1.1 middle -4.9 straight +16.6 
+    value + gap (0.35, 5, None): net +7.69 (vs holding +12.38, vs live -10.36) on 69 sold {'value': 62, 'gap': 7} | losers saved 17, winners sold 52, zeros partial 17 of 234 | halves +12.62 / -0.24 | choppy -2.6 middle +4.0 straight +10.9 
+    value + drop (None, 0, 3.0): net +6.98 (vs holding +11.66, vs live -11.07) on 85 sold {'value': 58, 'drop': 27} | losers saved 29, winners sold 56, zeros partial 29 of 234 | halves +17.90 / -6.23 | choppy +1.7 middle +0.4 straight +9.5 
+    value + gap + drop (0.25, 15, 3.0): net +6.62 (vs holding +11.30, vs live -11.43) on 92 sold {'value': 58, 'gap': 7, 'drop': 27} | losers saved 34, winners sold 58, zeros partial 34 of 234 | halves +17.53 / -6.23 | choppy -0.4 middle -0.7 straight +12.4 
+    value + gap (0.15, 15, None): net +6.50 (vs holding +11.18, vs live -11.55) on 94 sold {'gap': 34, 'value': 60} | losers saved 38, winners sold 56, zeros partial 38 of 234 | halves +10.27 / +0.91 | choppy -2.2 middle +1.8 straight +11.6 BOTH HALVES +
+    value + gap (0.35, 15, None): net +5.64 (vs holding +10.33, vs live -12.40) on 66 sold {'value': 62, 'gap': 4} | losers saved 14, winners sold 52, zeros partial 14 of 234 | halves +10.57 / -0.24 | choppy -3.0 middle +3.3 straight +10.0 
+    value + gap (0.25, 5, None): net +3.29 (vs holding +7.98, vs live -14.76) on 82 sold {'value': 62, 'gap': 20} | losers saved 26, winners sold 56, zeros partial 26 of 234 | halves +5.30 / +2.67 | choppy -3.6 middle -2.5 straight +14.1 BOTH HALVES +
+    value only (None, 0, None): net +2.74 (vs holding +7.42, vs live -15.31) on 62 sold {'value': 62} | losers saved 10, winners sold 52, zeros partial 10 of 234 | halves +7.66 / -0.24 | choppy -3.0 middle +2.8 straight +7.6 
+    value + gap + drop (0.35, 5, 2.0): net +2.48 (vs holding +7.16, vs live -15.57) on 193 sold {'drop': 150, 'value': 38, 'gap': 5} | losers saved 111, winners sold 82, zeros partial 111 of 234 | halves +23.98 / -16.82 | choppy -5.6 middle +0.2 straight +12.6 
+    value + gap (0.25, 15, None): net +2.37 (vs holding +7.06, vs live -15.68) on 69 sold {'value': 62, 'gap': 7} | losers saved 15, winners sold 54, zeros partial 15 of 234 | halves +7.30 / -0.24 | choppy -5.1 middle +1.7 straight +10.5 
+    value + gap + drop (0.35, 15, 2.0): net +1.12 (vs holding +5.80, vs live -16.93) on 191 sold {'drop': 150, 'value': 38, 'gap': 3} | losers saved 109, winners sold 82, zeros partial 109 of 234 | halves +22.62 / -16.82 | choppy -6.1 middle -0.5 straight +12.4 
+    value + gap (0.15, 5, None): net +1.01 (vs holding +5.69, vs live -17.04) on 133 sold {'gap': 76, 'value': 57} | losers saved 70, winners sold 63, zeros partial 70 of 234 | halves +10.57 / -4.88 | choppy -6.5 middle -0.0 straight +12.2 
+    value + gap + drop (0.25, 15, 2.0): net -1.01 (vs holding +3.67, vs live -19.06) on 193 sold {'drop': 149, 'value': 38, 'gap': 6} | losers saved 110, winners sold 83, zeros partial 110 of 234 | halves +20.49 / -16.82 | choppy -6.7 middle -2.2 straight +12.6 
+    value + drop (None, 0, 2.0): net -1.55 (vs holding +3.13, vs live -19.60) on 188 sold {'drop': 150, 'value': 38} | losers saved 106, winners sold 82, zeros partial 106 of 234 | halves +19.95 / -16.82 | choppy -6.1 middle -1.0 straight +10.2 
+    value + gap + drop (0.25, 5, 2.0): net -4.96 (vs holding -0.27, vs live -23.01) on 200 sold {'drop': 149, 'value': 38, 'gap': 13} | losers saved 116, winners sold 84, zeros partial 116 of 234 | halves +16.17 / -16.44 | choppy -6.0 middle -7.1 straight +12.8 
+    value + drop (None, 0, 1.0): net -32.60 (vs holding -27.92, vs live -50.65) on 353 sold {'drop': 334, 'value': 19} | losers saved 186, winners sold 167, zeros partial 186 of 234 | halves +4.66 / -32.59 | choppy -15.6 middle -12.2 straight -0.1 
+
+=== underdog_alone: lanes ('crypto_multiscale_underdog',) | settled live bets 41 | replayed 41 | value exit margin 0.15, scales 60s900
+  held to the result -8.40 | live (own sales, stacked exits) -12.05 | whole-stake losses held 32
+  all variants by net (v = G, gap persist, N):
+    value + drop (None, 0, 2.0): net -3.32 (vs holding +5.08, vs live +8.73) on 15 sold {'drop': 14, 'value': 1} | losers saved 13, winners sold 2, zeros partial 13 of 32 | halves +0.81 / +4.27 | choppy +3.0 middle +0.8 straight +1.3 BOTH HALVES +
+    value + gap + drop (0.25, 5, 2.0): net -3.32 (vs holding +5.08, vs live +8.73) on 15 sold {'drop': 14, 'value': 1} | losers saved 13, winners sold 2, zeros partial 13 of 32 | halves +0.81 / +4.27 | choppy +3.0 middle +0.8 straight +1.3 BOTH HALVES +
+    value + gap + drop (0.25, 15, 2.0): net -3.32 (vs holding +5.08, vs live +8.73) on 15 sold {'drop': 14, 'value': 1} | losers saved 13, winners sold 2, zeros partial 13 of 32 | halves +0.81 / +4.27 | choppy +3.0 middle +0.8 straight +1.3 BOTH HALVES +
+    value + gap + drop (0.35, 5, 2.0): net -3.32 (vs holding +5.08, vs live +8.73) on 15 sold {'drop': 14, 'value': 1} | losers saved 13, winners sold 2, zeros partial 13 of 32 | halves +0.81 / +4.27 | choppy +3.0 middle +0.8 straight +1.3 BOTH HALVES +
+    value + gap + drop (0.35, 15, 2.0): net -3.32 (vs holding +5.08, vs live +8.73) on 15 sold {'drop': 14, 'value': 1} | losers saved 13, winners sold 2, zeros partial 13 of 32 | halves +0.81 / +4.27 | choppy +3.0 middle +0.8 straight +1.3 BOTH HALVES +
+    value + drop (None, 0, 1.0): net -5.78 (vs holding +2.62, vs live +6.27) on 38 sold {'drop': 38} | losers saved 31, winners sold 7, zeros partial 31 of 32 | halves -2.69 / +5.31 | choppy +2.9 middle +3.4 straight -3.6 
+    value + gap (0.15, 15, None): net -8.61 (vs holding -0.21, vs live +3.44) on 7 sold {'value': 2, 'gap': 5} | losers saved 4, winners sold 3, zeros partial 4 of 32 | halves +0.13 / -0.33 | choppy +0.9 middle -1.2 straight +0.1 
+    value only (None, 0, None): net -8.81 (vs holding -0.41, vs live +3.24) on 2 sold {'value': 2} | losers saved 0, winners sold 2, zeros partial 0 of 32 | halves -0.41 / +0.00 | straight -0.4 
+    value + gap (0.25, 5, None): net -8.81 (vs holding -0.41, vs live +3.24) on 2 sold {'value': 2} | losers saved 0, winners sold 2, zeros partial 0 of 32 | halves -0.41 / +0.00 | straight -0.4 
+    value + gap (0.25, 15, None): net -8.81 (vs holding -0.41, vs live +3.24) on 2 sold {'value': 2} | losers saved 0, winners sold 2, zeros partial 0 of 32 | halves -0.41 / +0.00 | straight -0.4 
+    value + gap (0.35, 5, None): net -8.81 (vs holding -0.41, vs live +3.24) on 2 sold {'value': 2} | losers saved 0, winners sold 2, zeros partial 0 of 32 | halves -0.41 / +0.00 | straight -0.4 
+    value + gap (0.35, 15, None): net -8.81 (vs holding -0.41, vs live +3.24) on 2 sold {'value': 2} | losers saved 0, winners sold 2, zeros partial 0 of 32 | halves -0.41 / +0.00 | straight -0.4 
+    value + drop (None, 0, 3.0): net -10.92 (vs holding -2.52, vs live +1.13) on 3 sold {'drop': 2, 'value': 1} | losers saved 1, winners sold 2, zeros partial 1 of 32 | halves -2.87 / +0.36 | middle +0.4 straight -2.9 
+    value + gap + drop (0.25, 5, 3.0): net -10.92 (vs holding -2.52, vs live +1.13) on 3 sold {'drop': 2, 'value': 1} | losers saved 1, winners sold 2, zeros partial 1 of 32 | halves -2.87 / +0.36 | middle +0.4 straight -2.9 
+    value + gap + drop (0.25, 15, 3.0): net -10.92 (vs holding -2.52, vs live +1.13) on 3 sold {'drop': 2, 'value': 1} | losers saved 1, winners sold 2, zeros partial 1 of 32 | halves -2.87 / +0.36 | middle +0.4 straight -2.9 
+    value + gap + drop (0.35, 5, 3.0): net -10.92 (vs holding -2.52, vs live +1.13) on 3 sold {'drop': 2, 'value': 1} | losers saved 1, winners sold 2, zeros partial 1 of 32 | halves -2.87 / +0.36 | middle +0.4 straight -2.9 
+    value + gap + drop (0.35, 15, 3.0): net -10.92 (vs holding -2.52, vs live +1.13) on 3 sold {'drop': 2, 'value': 1} | losers saved 1, winners sold 2, zeros partial 1 of 32 | halves -2.87 / +0.36 | middle +0.4 straight -2.9 
+    value + gap (0.15, 5, None): net -16.92 (vs holding -8.51, vs live -4.87) on 11 sold {'gap': 10, 'value': 1} | losers saved 6, winners sold 5, zeros partial 6 of 32 | halves -6.50 / -2.02 | choppy -0.6 middle -1.4 straight -6.5 
+
+=== natgas_alone: lanes ('commodity_natgas',) | settled live bets 17 | replayed 7 | value exit margin 0.15, scales 60s900
+  too few bets
+DONE
+exit=0  results in job-results/20261110-191051-31349/
