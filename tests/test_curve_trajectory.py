@@ -9,7 +9,7 @@ UNIT = RATE * 60**0.5
 
 def target(**kw):
     base = dict(ticker="KXBTC15M-1", lane="x", side="yes", curve_margin=0.15, curve_persist=5.0, curve_scales="900", curve_last=900.0, curve_since=0.0, curve_at=0.0, curve_noted=0.0,
-                close_ts=9_850.0, shock_ref=100.0, shock_index="BRTI", curve_drop_units=1.5, curve_drop_seconds=60.0, curve_drop_margin=0.5, curve_drop_persist=0.0, curve_drop_since=0.0, curve_cush=deque(), curve_gap=-1.0, curve_gap_persist=15.0, curve_gap_since=0.0, curve_behind_last=-1.0)
+                close_ts=9_850.0, shock_ref=100.0, shock_index="BRTI", curve_drop_units=1.5, curve_drop_seconds=60.0, curve_drop_margin=0.5, curve_drop_persist=0.0, curve_drop_since=0.0, curve_cush=deque(), curve_gap=-1.0, curve_gap_persist=15.0, curve_gap_since=0.0, curve_behind_last=-1.0, curve_behind_chance=0.5)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -67,3 +67,10 @@ def test_time_to_go_sells_a_position_behind_the_strike_only_in_its_last_seconds(
     assert reason and reason.startswith("curve exit (time to go)") and i == 610  # 240 s left, though the bid is under the other sales' floor
     assert run(monkeypatch, target(curve_drop_units=-1.0, curve_behind_last=240.0), path, bid=0.60, p=0.70)[1] is None  # ahead of the strike: held
     assert run(monkeypatch, target(curve_drop_units=-1.0), path, bid=0.03, p=0.20)[1] is None  # off by default
+
+
+def test_time_to_go_waits_for_its_own_chance_cutoff(monkeypatch):
+    path = [-0.5] * 846
+    assert run(monkeypatch, target(curve_drop_units=-1.0, curve_behind_last=30.0, curve_behind_chance=0.3), path, bid=0.30, p=0.40)[1] is None  # behind, but not under 0.3
+    i, reason = run(monkeypatch, target(curve_drop_units=-1.0, curve_behind_last=30.0, curve_behind_chance=0.3), path, bid=0.10, p=0.20)
+    assert reason and "under 0.3" in reason and i == 820

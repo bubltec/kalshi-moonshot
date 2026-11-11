@@ -197,6 +197,7 @@ class Target:
     curve_gap_persist: float = 15.0
     curve_gap_since: float = 0.0
     curve_behind_last: float = -1.0  # lane curve_behind_last (-1 = off): the curve exit's time-to-go sale
+    curve_behind_chance: float = 0.5
     curve_cush: deque = field(default_factory=deque)  # (time, cushion in typical minutes), the last curve_drop_seconds of them
     late_seconds: float = 30.0  # lane late_drop_seconds
     late_bids: deque = field(default_factory=lambda: deque(maxlen=400))  # (second, bid) one a second, forward-filled, for the late-drop exit
@@ -726,8 +727,8 @@ class ProfitWatcher:
         if read is None:
             t.curve_since = 0.0
             return None
-        if go and read.p < 0.5:
-            return f"curve exit (time to go): the curve's chance is {read.p:.3f}, under one half, with {left:.0f}s left (sells in the last {t.curve_behind_last:g}s); bid {bid:.2f}, cushion {read.cushion * 1e4:+.1f} bp"
+        if go and read.p < t.curve_behind_chance:
+            return f"curve exit (time to go): the curve's chance is {read.p:.3f}, under {t.curve_behind_chance:g}, with {left:.0f}s left (sells in the last {t.curve_behind_last:g}s); bid {bid:.2f}, cushion {read.cushion * 1e4:+.1f} bp"
         if quiet:
             t.curve_since = 0.0
             return None
@@ -1511,7 +1512,7 @@ class ProfitWatcher:
                     if spec.curve_exit >= 0:
                         held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
                         held.curve_drop_units, held.curve_drop_seconds, held.curve_drop_margin, held.curve_drop_persist = spec.curve_drop_units, spec.curve_drop_seconds, spec.curve_drop_margin_units, spec.curve_drop_persist
-                        held.curve_gap, held.curve_gap_persist, held.curve_behind_last = spec.curve_gap, spec.curve_gap_persist, spec.curve_behind_last
+                        held.curve_gap, held.curve_gap_persist, held.curve_behind_last, held.curve_behind_chance = spec.curve_gap, spec.curve_gap_persist, spec.curve_behind_last, spec.curve_behind_chance
                     held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
                     held.value_gain_x, held.value_high, held.value_high_left, held.value_min_gain = spec.value_exit_gain_x, spec.value_exit_high, spec.value_exit_high_left, spec.value_exit_min_gain
                     self._shock_hist.setdefault(sid, deque())

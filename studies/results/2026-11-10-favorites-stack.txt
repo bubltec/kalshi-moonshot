@@ -1,0 +1,88 @@
+job 20261110-200538-35906 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/ce313839e00c4e5abb02b3d04d653a7c
+commodity_energy: settled 263, replayed 228, curve sale ('900', 0.2, 15)
+commodity_wti: settled 25, replayed 24, curve sale ('900', 0.15, 5)
+commodity_precious: settled 240, replayed 225, curve sale ('900', 0.25, 0)
+commodity_industrial: settled 247, replayed 71, curve sale ('900+180', 0.15, 0)
+
+=== ALL FOUR LANES: 548 bets | held +122.54 | total losses 68 ($457.84)
+    held, no exit                     : net  +122.54 (vs holding   +0.00) | total losses left 68 of 68, dollars lost on the losers $ 457.84 | winners sold   0 | halves +0.00 / +0.00 | {}
+    curve sale only                   : net  +170.46 (vs holding  +47.92) | total losses left 52 of 68, dollars lost on the losers $ 384.22 | winners sold  20 | halves +38.14 / +9.78 | {'curve': 36}
+    curve + gap                       : net  +174.53 (vs holding  +51.99) | total losses left 49 of 68, dollars lost on the losers $ 380.15 | winners sold  20 | halves +39.64 / +12.35 | {'curve': 36, 'gap': 3}
+    curve + gap + go 30s under 0.5    : net  +157.35 (vs holding  +34.81) | total losses left  8 of 68, dollars lost on the losers $ 347.52 | winners sold  31 | halves +45.65 / -10.84 | {'go': 53, 'curve': 35, 'gap': 3}
+    curve + gap + go 30s under 0.3    : net  +167.20 (vs holding  +44.66) | total losses left 11 of 68, dollars lost on the losers $ 358.11 | winners sold  27 | halves +39.96 / +4.69 | {'go': 45, 'curve': 36, 'gap': 3}
+    curve + gap + go 60s under 0.5    : net  +121.73 (vs holding   -0.80) | total losses left  5 of 68, dollars lost on the losers $ 312.88 | winners sold  41 | halves +32.63 / -33.43 | {'go': 71, 'curve': 31, 'gap': 2}
+    curve + gap + go 60s under 0.3    : net  +142.13 (vs holding  +19.59) | total losses left  8 of 68, dollars lost on the losers $ 339.38 | winners sold  33 | halves +39.12 / -19.52 | {'go': 57, 'curve': 33, 'gap': 3}
+    curve + gap + go 120s under 0.5   : net  +126.23 (vs holding   +3.69) | total losses left  3 of 68, dollars lost on the losers $ 251.26 | winners sold  55 | halves +38.00 / -34.31 | {'go': 90, 'curve': 28, 'gap': 2}
+    curve + gap + go 120s under 0.3   : net  +146.32 (vs holding  +23.78) | total losses left  8 of 68, dollars lost on the losers $ 321.74 | winners sold  35 | halves +37.49 / -13.71 | {'go': 59, 'curve': 33, 'gap': 3}
+    curve + gap + go 240s under 0.5   : net   +91.90 (vs holding  -30.64) | total losses left  2 of 68, dollars lost on the losers $ 218.32 | winners sold  71 | halves +20.21 / -50.84 | {'go': 110, 'curve': 25, 'gap': 2}
+    curve + gap + go 240s under 0.3   : net  +162.46 (vs holding  +39.92) | total losses left  8 of 68, dollars lost on the losers $ 307.62 | winners sold  35 | halves +47.95 / -8.03 | {'go': 61, 'curve': 31, 'gap': 3}
+    go 30s only                       : net  +130.16 (vs holding   +7.63) | total losses left 11 of 68, dollars lost on the losers $ 392.08 | winners sold  18 | halves +26.84 / -19.22 | {'go': 75}
+    go 60s only                       : net  +103.19 (vs holding  -19.35) | total losses left  6 of 68, dollars lost on the losers $ 348.64 | winners sold  28 | halves +17.59 / -36.94 | {'go': 90}
+    go 120s only                      : net  +109.08 (vs holding  -13.46) | total losses left  4 of 68, dollars lost on the losers $ 279.18 | winners sold  44 | halves +28.27 / -41.73 | {'go': 108}
+    go 240s only                      : net   +94.73 (vs holding  -27.81) | total losses left  3 of 68, dollars lost on the losers $ 223.80 | winners sold  60 | halves +21.27 / -49.08 | {'go': 125}
+=== commodity_energy: 228 bets | held +56.54 | total losses 26 ($172.81)
+    held, no exit                     : net   +56.54 (vs holding   +0.00) | total losses left 26 of 26, dollars lost on the losers $ 172.81 | winners sold   0 | halves +0.00 / +0.00 | {}
+    curve sale only                   : net   +69.95 (vs holding  +13.40) | total losses left 22 of 26, dollars lost on the losers $ 150.97 | winners sold   7 | halves +11.03 / +2.38 | {'curve': 11}
+    curve + gap                       : net   +72.06 (vs holding  +15.51) | total losses left 21 of 26, dollars lost on the losers $ 148.86 | winners sold   7 | halves +11.03 / +4.49 | {'curve': 11, 'gap': 1}
+    curve + gap + go 30s under 0.5    : net   +40.62 (vs holding  -15.92) | total losses left  1 of 26, dollars lost on the losers $ 134.59 | winners sold  17 | halves +13.77 / -29.69 | {'go': 31, 'curve': 10, 'gap': 1}
+    curve + gap + go 30s under 0.3    : net   +51.48 (vs holding   -5.06) | total losses left  3 of 26, dollars lost on the losers $ 140.06 | winners sold  14 | halves +8.59 / -13.65 | {'go': 25, 'curve': 11, 'gap': 1}
+    curve + gap + go 60s under 0.5    : net   +23.53 (vs holding  -33.01) | total losses left  0 of 26, dollars lost on the losers $ 115.21 | winners sold  21 | halves +10.29 / -43.30 | {'go': 37, 'curve': 9, 'gap': 1}
+    curve + gap + go 60s under 0.3    : net   +43.09 (vs holding  -13.45) | total losses left  2 of 26, dollars lost on the losers $ 130.28 | winners sold  16 | halves +16.49 / -29.95 | {'go': 29, 'curve': 10, 'gap': 1}
+    curve + gap + go 120s under 0.5   : net   +19.41 (vs holding  -37.14) | total losses left  0 of 26, dollars lost on the losers $  92.64 | winners sold  28 | halves +3.62 / -40.75 | {'go': 44, 'curve': 9, 'gap': 1}
+    curve + gap + go 120s under 0.3   : net   +38.38 (vs holding  -18.17) | total losses left  2 of 26, dollars lost on the losers $ 121.27 | winners sold  18 | halves +8.21 / -26.38 | {'go': 31, 'curve': 10, 'gap': 1}
+    curve + gap + go 240s under 0.5   : net   +12.44 (vs holding  -44.10) | total losses left  0 of 26, dollars lost on the losers $  81.58 | winners sold  33 | halves -9.38 / -34.72 | {'go': 50, 'curve': 8, 'gap': 1}
+    curve + gap + go 240s under 0.3   : net   +47.43 (vs holding   -9.11) | total losses left  2 of 26, dollars lost on the losers $ 114.55 | winners sold  18 | halves +15.05 / -24.16 | {'go': 32, 'curve': 9, 'gap': 1}
+    go 30s only                       : net   +30.91 (vs holding  -25.64) | total losses left  2 of 26, dollars lost on the losers $ 147.48 | winners sold  14 | halves +8.85 / -34.48 | {'go': 38}
+    go 60s only                       : net   +15.05 (vs holding  -41.49) | total losses left  1 of 26, dollars lost on the losers $ 126.46 | winners sold  18 | halves +6.06 / -47.56 | {'go': 43}
+    go 120s only                      : net    +9.68 (vs holding  -46.86) | total losses left  1 of 26, dollars lost on the losers $ 103.63 | winners sold  25 | halves -0.62 / -46.24 | {'go': 50}
+    go 240s only                      : net    +9.53 (vs holding  -47.02) | total losses left  1 of 26, dollars lost on the losers $  85.22 | winners sold  30 | halves -10.77 / -36.24 | {'go': 55}
+=== commodity_wti: 24 bets | held +16.95 | total losses 2 ($20.94)
+    held, no exit                     : net   +16.95 (vs holding   +0.00) | total losses left  2 of 2, dollars lost on the losers $  20.94 | winners sold   0 | halves +0.00 / +0.00 | {}
+    curve sale only                   : net   +19.62 (vs holding   +2.67) | total losses left  1 of 2, dollars lost on the losers $  10.95 | winners sold   2 | halves -7.32 / +9.99 | {'curve': 3}
+    curve + gap                       : net   +19.62 (vs holding   +2.67) | total losses left  1 of 2, dollars lost on the losers $  10.95 | winners sold   2 | halves -7.32 / +9.99 | {'curve': 3}
+    curve + gap + go 30s under 0.5    : net   +19.92 (vs holding   +2.97) | total losses left  0 of 2, dollars lost on the losers $  10.64 | winners sold   2 | halves -7.02 / +9.99 | {'go': 1, 'curve': 3}
+    curve + gap + go 30s under 0.3    : net   +19.92 (vs holding   +2.97) | total losses left  0 of 2, dollars lost on the losers $  10.64 | winners sold   2 | halves -7.02 / +9.99 | {'go': 1, 'curve': 3}
+    curve + gap + go 60s under 0.5    : net   +21.15 (vs holding   +4.20) | total losses left  0 of 2, dollars lost on the losers $   9.42 | winners sold   2 | halves -5.79 / +9.99 | {'go': 1, 'curve': 3}
+    curve + gap + go 60s under 0.3    : net   +20.03 (vs holding   +3.08) | total losses left  0 of 2, dollars lost on the losers $  10.54 | winners sold   2 | halves -6.91 / +9.99 | {'go': 1, 'curve': 3}
+    curve + gap + go 120s under 0.5   : net   +21.15 (vs holding   +4.20) | total losses left  0 of 2, dollars lost on the losers $   9.42 | winners sold   2 | halves -5.79 / +9.99 | {'go': 1, 'curve': 3}
+    curve + gap + go 120s under 0.3   : net   +20.03 (vs holding   +3.08) | total losses left  0 of 2, dollars lost on the losers $  10.54 | winners sold   2 | halves -6.91 / +9.99 | {'go': 1, 'curve': 3}
+    curve + gap + go 240s under 0.5   : net   +23.05 (vs holding   +6.09) | total losses left  0 of 2, dollars lost on the losers $   7.52 | winners sold   2 | halves -3.90 / +9.99 | {'go': 1, 'curve': 3}
+    curve + gap + go 240s under 0.3   : net   +20.03 (vs holding   +3.08) | total losses left  0 of 2, dollars lost on the losers $  10.54 | winners sold   2 | halves -6.91 / +9.99 | {'go': 1, 'curve': 3}
+    go 30s only                       : net   +17.37 (vs holding   +0.42) | total losses left  0 of 2, dollars lost on the losers $  20.52 | winners sold   0 | halves +0.30 / +0.12 | {'go': 2}
+    go 60s only                       : net   +18.92 (vs holding   +1.97) | total losses left  0 of 2, dollars lost on the losers $  18.97 | winners sold   0 | halves +1.53 / +0.44 | {'go': 2}
+    go 120s only                      : net   +16.39 (vs holding   -0.56) | total losses left  0 of 2, dollars lost on the losers $  16.57 | winners sold   2 | halves -3.40 / +2.84 | {'go': 4}
+    go 240s only                      : net   +25.07 (vs holding   +8.12) | total losses left  0 of 2, dollars lost on the losers $   5.94 | winners sold   2 | halves -3.45 / +11.57 | {'go': 4}
+=== commodity_precious: 225 bets | held +31.72 | total losses 31 ($210.02)
+    held, no exit                     : net   +31.72 (vs holding   +0.00) | total losses left 31 of 31, dollars lost on the losers $ 210.02 | winners sold   0 | halves +0.00 / +0.00 | {}
+    curve sale only                   : net   +44.13 (vs holding  +12.40) | total losses left 26 of 31, dollars lost on the losers $ 193.91 | winners sold   5 | halves +13.89 / -1.49 | {'curve': 10}
+    curve + gap                       : net   +45.63 (vs holding  +13.91) | total losses left 25 of 31, dollars lost on the losers $ 192.40 | winners sold   5 | halves +15.39 / -1.49 | {'gap': 1, 'curve': 10}
+    curve + gap + go 30s under 0.5    : net   +59.56 (vs holding  +27.84) | total losses left  6 of 31, dollars lost on the losers $ 174.36 | winners sold   6 | halves +24.66 / +3.18 | {'go': 20, 'gap': 1, 'curve': 10}
+    curve + gap + go 30s under 0.3    : net   +58.55 (vs holding  +26.83) | total losses left  7 of 31, dollars lost on the losers $ 179.48 | winners sold   5 | halves +25.05 / +1.77 | {'go': 18, 'gap': 1, 'curve': 10}
+    curve + gap + go 60s under 0.5    : net   +49.37 (vs holding  +17.64) | total losses left  5 of 31, dollars lost on the losers $ 159.40 | winners sold  11 | halves +12.57 / +5.08 | {'go': 28, 'curve': 9}
+    curve + gap + go 60s under 0.3    : net   +50.50 (vs holding  +18.77) | total losses left  6 of 31, dollars lost on the losers $ 170.54 | winners sold   8 | halves +16.04 / +2.73 | {'go': 23, 'gap': 1, 'curve': 9}
+    curve + gap + go 120s under 0.5   : net   +59.44 (vs holding  +27.72) | total losses left  3 of 31, dollars lost on the losers $ 126.00 | winners sold  17 | halves +23.13 / +4.59 | {'go': 38, 'curve': 7}
+    curve + gap + go 120s under 0.3   : net   +57.93 (vs holding  +26.21) | total losses left  6 of 31, dollars lost on the losers $ 164.07 | winners sold   8 | halves +19.67 / +6.54 | {'go': 23, 'gap': 1, 'curve': 9}
+    curve + gap + go 240s under 0.5   : net   +24.63 (vs holding   -7.10) | total losses left  2 of 31, dollars lost on the losers $ 108.91 | winners sold  28 | halves +12.30 / -19.39 | {'go': 51, 'curve': 6}
+    curve + gap + go 240s under 0.3   : net   +64.08 (vs holding  +32.36) | total losses left  6 of 31, dollars lost on the losers $ 157.60 | winners sold   8 | halves +22.40 / +9.96 | {'go': 24, 'gap': 1, 'curve': 8}
+    go 30s only                       : net   +53.16 (vs holding  +21.44) | total losses left  7 of 31, dollars lost on the losers $ 181.89 | winners sold   3 | halves +18.54 / +2.90 | {'go': 27}
+    go 60s only                       : net   +48.46 (vs holding  +16.74) | total losses left  5 of 31, dollars lost on the losers $ 161.43 | winners sold   8 | halves +11.39 / +5.35 | {'go': 34}
+    go 120s only                      : net   +58.76 (vs holding  +27.04) | total losses left  3 of 31, dollars lost on the losers $ 127.82 | winners sold  14 | halves +22.17 / +4.86 | {'go': 42}
+    go 240s only                      : net   +25.76 (vs holding   -5.96) | total losses left  2 of 31, dollars lost on the losers $ 108.91 | winners sold  25 | halves +13.16 / -19.12 | {'go': 54}
+=== commodity_industrial: 71 bets | held +17.32 | total losses 9 ($54.07)
+    held, no exit                     : net   +17.32 (vs holding   +0.00) | total losses left  9 of 9, dollars lost on the losers $  54.07 | winners sold   0 | halves +0.00 / +0.00 | {}
+    curve sale only                   : net   +36.77 (vs holding  +19.45) | total losses left  3 of 9, dollars lost on the losers $  28.39 | winners sold   6 | halves +17.99 / +1.46 | {'curve': 12}
+    curve + gap                       : net   +37.22 (vs holding  +19.90) | total losses left  2 of 9, dollars lost on the losers $  27.94 | winners sold   6 | halves +17.99 / +1.92 | {'curve': 12, 'gap': 1}
+    curve + gap + go 30s under 0.5    : net   +37.24 (vs holding  +19.92) | total losses left  1 of 9, dollars lost on the losers $  27.92 | winners sold   6 | halves +17.99 / +1.94 | {'curve': 12, 'gap': 1, 'go': 1}
+    curve + gap + go 30s under 0.3    : net   +37.24 (vs holding  +19.92) | total losses left  1 of 9, dollars lost on the losers $  27.92 | winners sold   6 | halves +17.99 / +1.94 | {'curve': 12, 'gap': 1, 'go': 1}
+    curve + gap + go 60s under 0.5    : net   +27.69 (vs holding  +10.37) | total losses left  0 of 9, dollars lost on the losers $  28.85 | winners sold   7 | halves +17.02 / -6.65 | {'curve': 10, 'go': 5, 'gap': 1}
+    curve + gap + go 60s under 0.3    : net   +28.52 (vs holding  +11.20) | total losses left  0 of 9, dollars lost on the losers $  28.02 | winners sold   7 | halves +17.84 / -6.65 | {'curve': 11, 'go': 4, 'gap': 1}
+    curve + gap + go 120s under 0.5   : net   +26.23 (vs holding   +8.91) | total losses left  0 of 9, dollars lost on the losers $  23.19 | winners sold   8 | halves +16.07 / -7.17 | {'curve': 9, 'go': 7, 'gap': 1}
+    curve + gap + go 120s under 0.3   : net   +29.99 (vs holding  +12.67) | total losses left  0 of 9, dollars lost on the losers $  25.86 | winners sold   7 | halves +19.86 / -7.20 | {'curve': 11, 'go': 4, 'gap': 1}
+    curve + gap + go 240s under 0.5   : net   +31.78 (vs holding  +14.46) | total losses left  0 of 9, dollars lost on the losers $  20.31 | winners sold   8 | halves +18.75 / -4.28 | {'curve': 8, 'go': 8, 'gap': 1}
+    curve + gap + go 240s under 0.3   : net   +30.91 (vs holding  +13.59) | total losses left  0 of 9, dollars lost on the losers $  24.94 | winners sold   7 | halves +20.75 / -7.16 | {'curve': 11, 'go': 4, 'gap': 1}
+    go 30s only                       : net   +28.72 (vs holding  +11.40) | total losses left  2 of 9, dollars lost on the losers $  42.19 | winners sold   1 | halves +11.25 / +0.15 | {'go': 8}
+    go 60s only                       : net   +20.75 (vs holding   +3.43) | total losses left  0 of 9, dollars lost on the losers $  41.78 | winners sold   2 | halves +11.80 / -8.37 | {'go': 11}
+    go 120s only                      : net   +24.25 (vs holding   +6.93) | total losses left  0 of 9, dollars lost on the losers $  31.16 | winners sold   3 | halves +15.69 / -8.76 | {'go': 12}
+    go 240s only                      : net   +34.37 (vs holding  +17.05) | total losses left  0 of 9, dollars lost on the losers $  23.72 | winners sold   3 | halves +20.00 / -2.95 | {'go': 12}
+DONE
+exit=0  results in job-results/20261110-200538-35906/
