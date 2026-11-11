@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import logging
 import threading
 import time
@@ -113,6 +114,16 @@ def parse_message(msg: dict[str, Any], received: float | None = None) -> dict[st
             return None
         return {"kind": "index_fast", "ts": now, "index_id": body["index_id"], "value": value,
                 "src_ms": body.get("source_ts_ms"), "sts": msg.get("sending_ts_ms")}
+    if kind == "market_lifecycle_v2":  # 2026-11-11 (user: market facts from the socket, not the REST API): a window's target when Kalshi sets it, and its result when it is determined
+        ticker, event = body.get("market_ticker"), body.get("event_type")
+        if not ticker:
+            return None
+        if event == "metadata_updated":
+            strike = _f(body.get("floor_strike"))
+            if strike is not None and strike > 0:
+                return {"kind": "strike", "ts": now, "ticker": ticker, "strike": strike, "sts": msg.get("sending_ts_ms")}
+        elif event == "determined" and body.get("result") in {"yes", "no"}:
+            return {"kind": "result", "ts": now, "ticker": ticker, "result": body["result"], "sts": msg.get("sending_ts_ms")}
     return None
 
 
@@ -120,11 +131,12 @@ class KalshiStream:
     """Keeps one connection open, reconnects with backoff, and resubscribes when the market set changes."""
 
     def __init__(self, client: KalshiClient, on_event: Callable[[dict[str, Any]], None],
-                 indices: list[str] | None = None, index_feed: bool = True, fills: bool = True):
-        """index_feed and fills are off for a stream that only records extra markets: the live stream alone carries the settlement indexes and the account's fills."""
+                 indices: list[str] | None = None, index_feed: bool = True, fills: bool = True, lifecycle: bool | None = None):
+        """index_feed and fills are off for a stream that only records extra markets: the live stream alone carries the settlement indexes and the account's fills. lifecycle (targets and results of every market, one subscription for the whole exchange) rides on the live stream too; off with KALSHI_LIFECYCLE=0."""
         self.client = client
         self.on_event = on_event
         self.index_feed, self.fills = index_feed, fills
+        self.lifecycle = (index_feed and os.environ.get("KALSHI_LIFECYCLE", "1").strip().lower() not in {"0", "off", "false", "no"}) if lifecycle is None else lifecycle
         self.indices = sorted(set(indices or INDEX_FOR.values()))
         self._tickers: set[str] = set()
         self._live: set[str] = set()  # the markets the open connection is subscribed to right now
@@ -239,6 +251,8 @@ class KalshiStream:
             out.append({"id": 5, "cmd": "subscribe", "params": {"channels": ["cfbenchmarks_value_5hz"], "index_ids": self.indices}})
         if self.fills:
             out.append({"id": 3, "cmd": "subscribe", "params": {"channels": ["fill"]}})  # every fill on the account, no ticker list
+        if self.lifecycle:
+            out.append({"id": 6, "cmd": "subscribe", "params": {"channels": ["market_lifecycle_v2"]}})  # no ticker list: Kalshi sends this channel for the whole exchange
         if tickers:
             out.extend(self._market_subscriptions(tickers))
         return out
@@ -270,5 +284,6 @@ class KalshiStream:
             return
         event = parse_message(msg)
         if event is not None:
-            self.last_event_at = event["ts"]
+            if event["kind"] not in {"strike", "result"}:  # market facts are not a sign the price stream is alive
+                self.last_event_at = event["ts"]
             self.on_event(event)

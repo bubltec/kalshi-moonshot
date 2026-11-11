@@ -256,7 +256,7 @@ def test_a_recording_only_stream_asks_for_quotes_and_nothing_else():
     live = kalshiws.KalshiStream(object(), lambda e: None)  # type: ignore[arg-type]
     extra = kalshiws.KalshiStream(object(), lambda e: None, index_feed=False, fills=False)  # type: ignore[arg-type]
     channels = lambda stream: [c for m in stream.subscriptions(["T1"]) for c in m["params"]["channels"]]  # noqa: E731
-    assert channels(live) == ["cfbenchmarks_value", "cfbenchmarks_value_5hz", "fill", "ticker", "trade"]
+    assert channels(live) == ["cfbenchmarks_value", "cfbenchmarks_value_5hz", "fill", "market_lifecycle_v2", "ticker", "trade"]  # the live stream also carries the targets and results (2026-11-11)
     assert channels(extra) == ["ticker", "trade"]
     assert extra.subscriptions([]) == []  # nothing to follow: nothing to subscribe to
 

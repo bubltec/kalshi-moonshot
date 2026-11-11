@@ -470,6 +470,10 @@ class TapeRecorder:
         self._listed: dict[str, tuple[float, set[str]]] = {}  # series -> (when it was listed, its open tickers)
 
     def _on_event(self, e: dict[str, Any]) -> None:
+        kind = e.get("kind")
+        if kind in {"strike", "result"}:  # market facts from the lifecycle channel: kept here, not written to the tape or passed to the price listeners
+            self._on_lifecycle(e)
+            return
         self.tape.add(e)
         cache = getattr(self.client, "cache", None)
         if cache is not None and e.get("kind") == "quote":
@@ -479,6 +483,24 @@ class TapeRecorder:
                 fn(e)
             except Exception:
                 log.exception("tape listener failed")
+
+    def _on_lifecycle(self, e: dict[str, Any]) -> None:
+        """A window's target from the socket goes into the same store the REST listing fills (ticks.Strikes), for the 15-minute series only. The REST listing stays as the fallback; the log line says how far ahead of it the socket was. A result is counted and logged, not yet used."""
+        ticker = str(e.get("ticker") or "")
+        if not ticker.split("-")[0].endswith("15M"):
+            return
+        if e["kind"] == "strike":
+            had = ticks_mod.strikes.get(ticker)
+            ticks_mod.strikes.note(ticker, float(e["strike"]))
+            self.socket_strikes = getattr(self, "socket_strikes", 0) + 1
+            if had is None:
+                self.socket_strikes_first = getattr(self, "socket_strikes_first", 0) + 1
+            if self.socket_strikes % 50 == 1:
+                log.info("lifecycle: %d targets from the socket so far, %d before the REST listing had them (latest %s %s)", self.socket_strikes, getattr(self, "socket_strikes_first", 0), ticker, e["strike"])
+        else:
+            self.socket_results = getattr(self, "socket_results", 0) + 1
+            if self.socket_results % 50 == 1:
+                log.info("lifecycle: %d results from the socket so far (latest %s %s)", self.socket_results, ticker, e["result"])
 
     def _series(self) -> list[str]:
         from .runner import watched  # late: runner imports modules that import the tape
