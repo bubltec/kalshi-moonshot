@@ -49,6 +49,7 @@ Off today but still in the code and reading the same indexes: hour-drift and per
 3. **The contract-implied cushion as a reading in its own right** (`Phi^-1(mid) * sqrt(seconds left / 60)` typical minutes, Kalshi data only): the cushion for markets with no Kalshi underlying (treasury), and the check on any spot reading. Where the two disagree, follow the contract or sit out; never act on the spot alone.
 4. **External feeds become judgement only**: lead signals (does the perp or BiQuote move first), never the cushion a rule acts on.
 5. **Re-study the buy on the new readings**: the curve model's features, the time-of-buy reading, and the edge gate, which item 4 above says is probably noise.
-6. **Remove code that serves only retired rules** (rule 8 in CLAUDE.md) once the lanes that used it are confirmed gone.
+6. **Market facts from the socket, not the REST API** (user, 2026-11-11: the REST calls cause hang-ups and blocks). The `market_lifecycle_v2` channel sends each new window's target (`metadata_updated`, `floor_strike`, 14 to 19 s after the open in the probe of 11-10) and each closed window's result (`determined`), for every series we follow, about one message a second for the whole exchange. First the strike, into the same in-memory store the REST listing fills (`ticks.Strikes`), with the REST listing kept as the fallback; then the result; then slow the 20 s listing to a safety check. Kalshi's perp reference prices are read over REST today (`perpref.py`); the perps websocket is the same move for that feed once our key can connect to it.
+7. **Remove code that serves only retired rules** (rule 8 in CLAUDE.md) once the lanes that used it are confirmed gone.
 
 Each step is a study or a shadow first unless the user calls it a fix.
