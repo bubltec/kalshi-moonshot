@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -33,6 +34,7 @@ REPRICE_EVERY = 15.0  # seconds between reprices, as in the replay
 ORDER_LIFE = 40.0  # an order's own expiry: long enough to cover a slow cycle, short enough that an orphan is gone within the minute
 QUIET_LAST = 8.0  # no new order in the last seconds of the market, as in the replay
 MIN_PRICE = 0.05
+REST_PREFIX = "curve exit (resting ask)"  # a lane's paper sale by the resting ask (lane field curve_rest): booked at the ask's price, with no taker fee and no slip
 GO_PREFIX = "curve time-to-go"  # a sale reason starting with this may sell a hand-placed position under its cost (watcher._sell_manual)
 
 
@@ -63,6 +65,14 @@ def plan(chance: float | None, left: float, bid: float, far: float, guard: float
     if price < MIN_PRICE:
         return "hold", 0.0
     return "rest", price
+
+
+def rest_fill_price(why: str) -> float | None:
+    """The ask's price from a resting-ask sale reason ("... filled at 0.63 ..."), else None."""
+    if not why.startswith(REST_PREFIX):
+        return None
+    m = re.search(r"filled at (\d\.\d+)", why)
+    return float(m.group(1)) if m else None
 
 
 class ManualRest:

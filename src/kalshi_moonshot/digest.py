@@ -33,6 +33,8 @@ def _roi(r: Any) -> tuple[float, float] | None:
     won = _won(r)
     held = won / cost - 1
     if r["exit_price"] is not None:
+        if str(r["exit_reason"] or "").startswith("curve exit (resting ask)"):
+            return r["exit_price"] / cost - 1, held  # a resting ask fills at its own price: no slip and no taker fee
         return (r["exit_price"] - EXIT_SLIP - fee(r["exit_price"])) / cost - 1, held
     return held, held
 

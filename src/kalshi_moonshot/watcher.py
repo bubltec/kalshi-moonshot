@@ -205,6 +205,9 @@ class Target:
     curve_drop_margin: float = 0.5
     curve_drop_persist: float = 5.0
     curve_drop_since: float = 0.0
+    curve_rest: float = -1.0  # lane curve_rest (-1 = off): the curve exit as a resting ask, simulated on paper (manualrest.plan)
+    rest_price: float = 0.0  # the ask now working (0 = none)
+    rest_at: float = 0.0  # when it was last priced
     curve_gap: float = -1.0  # lane curve_gap (-1 = off): the curve exit's market-disagrees sale
     curve_gap_persist: float = 15.0
     curve_gap_since: float = 0.0
@@ -714,7 +717,7 @@ class ProfitWatcher:
 
     def _shock_on_index(self, index_id: str, now: float) -> None:
         with self._lock:
-            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0 or t.value_exit > 0 or t.value_gain_x > 0 or t.value_high > 0 or t.curve_margin >= 0)]
+            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0 or t.value_exit > 0 or t.value_gain_x > 0 or t.value_high > 0 or t.curve_margin >= 0 or t.curve_rest > 0)]
         for t in hits:
             if t.last_ts <= 0 or t.cur_bid <= 0:
                 continue
@@ -726,9 +729,11 @@ class ProfitWatcher:
 
     def _curve_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """The curve exit (2026-11-10, user: enable on commodity_multiscale; curvevalue.py): sell when the bid after the sell fee is at least the curve's own chance that this side pays plus the lane's margin, for curve_exit_persist seconds. Reads the in-memory index ticks once a second. Takes profit and cuts losses with the one rule; the lane's shock, late-drop and value exits are off. Each decision logs its curve reading."""
-        if t.curve_margin < 0 or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.curve_at < 1.0:
+        if (t.curve_margin < 0 and t.curve_rest <= 0) or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.curve_at < 1.0:
             return None
         left = t.close_ts - now
+        if t.curve_rest > 0:
+            return self._curve_rest_hit(t, bid, now, quote_ts, left)
         go = t.curve_behind_last > 0 and CURVE_GO_MIN_LEFT <= left <= t.curve_behind_last and bid > 0 and now - quote_ts <= 5.0  # the time-to-go sale acts later and at lower bids than the other sales
         quiet = left <= CURVE_MIN_LEFT or left > t.curve_last or bid < CURVE_MIN_BID or now - quote_ts > 5.0
         if quiet and not go:
@@ -782,6 +787,27 @@ class ProfitWatcher:
         if now - t.curve_since < t.curve_persist:
             return None
         return f"curve exit: bid {bid:.2f} ({net:.3f} after the fee) is {over:+.3f} over the curve's {read.p:.3f} chance that the side pays (margin {margin:.3f} with {left:.0f}s left, held {now - t.curve_since:.0f}s); cushion {read.cushion * 1e4:+.1f} bp, rates {read.rate_long * 60**0.5 * 1e4:.1f} / {read.rate_short * 60**0.5 * 1e4:.1f} bp a typical minute (900 s / 180 s), {left:.0f}s left"
+
+    def _curve_rest_hit(self, t: Target, bid: float, now: float, quote_ts: float, left: float) -> str | None:
+        """The curve exit as a resting ask (lane field curve_rest; 2026-11-11, a shadow lane to compare with the multiscale lanes): the ask sits at the curve's chance + curve_rest * sqrt(seconds left / 900) (the 900 s rate, as the buy gate reads it), repriced every manualrest.REPRICE_EVERY seconds, never at or under the bid. The bet is sold when the bid reaches the ask, at the ask's price. The lane's time-to-go sale (curve_behind_last, curve_behind_chance) is the guard, at the bid. Simulated: nothing is placed on the book."""
+        if left < CURVE_MIN_LEFT or left > 900.0 or bid <= 0 or now - quote_ts > 5.0:
+            return None
+        t.curve_at = now
+        if t.rest_price > 0 and bid >= t.rest_price - 1e-9:
+            return f"{manualrest.REST_PREFIX}: filled at {t.rest_price:.2f} when the bid reached it ({bid:.2f}), {left:.0f}s left; the ask was priced {now - t.rest_at:.0f}s ago at the curve's chance + {t.curve_rest:g} * sqrt(time left / 900). No taker fee."
+        got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
+        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left, "900") if got else None
+        if read is None:
+            return None  # no reading: the ask already working stands
+        if t.curve_behind_last > 0 and left <= t.curve_behind_last and read.p < t.curve_behind_chance:
+            return f"curve exit (time to go): the curve's chance is {read.p:.3f}, under {t.curve_behind_chance:g}, with {left:.0f}s left (sells in the last {t.curve_behind_last:g}s); bid {bid:.2f}, the resting ask at {t.rest_price:.2f} is withdrawn"
+        if t.rest_price <= 0 or now - t.rest_at >= manualrest.REPRICE_EVERY:
+            action, price = manualrest.plan(read.p, left, bid, t.curve_rest, 0.0)
+            if action == "rest":
+                if abs(price - t.rest_price) >= 0.005:
+                    log.info("curve rest %s %s, %.0fs left: ask %.2f (was %.2f), curve chance %.3f, bid %.2f", t.ticker, t.lane, left, price, t.rest_price, read.p, bid)
+                t.rest_price, t.rest_at = price, now
+        return None
 
     def _late_drop_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The late-drop exit (2026-11-10, user: implement 30 s / 1 unit and push). Samples the held bid once a second (forward-filled) and, in the last late_drop_seconds, sells when the bid has fallen from its highest of the last 60 s by late_drop_units of its own typical minute (rms one-second bid change over up to 300 s, times sqrt(60)). Needs 20 seconds of the last 60 and 100 one-second changes, as in scripts/late_drop_exit_replay.py. Reads no model, no coin, no market."""
@@ -1510,7 +1536,7 @@ class ProfitWatcher:
                 if (ticker, lane) not in self._shock_logged:
                     self._shock_logged.add((ticker, lane))
                     log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
-            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
+            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
                 sid = biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
@@ -1523,6 +1549,9 @@ class ProfitWatcher:
                 if ref > 0:
                     held.shock_index, held.shock_ref = sid, ref
                     held.shock_trend_hold = spec.shock_trend_hold
+                    held.curve_rest = spec.curve_rest
+                    if spec.curve_rest > 0:
+                        held.curve_behind_last, held.curve_behind_chance = spec.curve_behind_last, spec.curve_behind_chance
                     if spec.curve_exit >= 0:
                         held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
                         held.curve_near = spec.curve_exit_near

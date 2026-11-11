@@ -1975,6 +1975,9 @@ def exit_position(
                 target = rest_target_price(spec, float(row["ask"] or 0.0)) if spec is not None and spec.rest_sell else None
                 if target is not None:
                     price = target
+            from . import manualrest
+
+            price = manualrest.rest_fill_price(why) or price  # a resting ask fills at its own price, not the bid this re-read catches
             store.mark_exited(row["ticker"], price, why, lane, seen)
             _ask_flip(s, store, row, lane, why)
             return f"paper-sold {row['ticker']} @ {price:.2f}. {why}"
