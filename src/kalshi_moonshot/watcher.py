@@ -33,6 +33,7 @@ from . import (
     manual,
     manualrest,
     paperfill,
+    perpref,
     quoteshock,
     runner,
     settlement,
