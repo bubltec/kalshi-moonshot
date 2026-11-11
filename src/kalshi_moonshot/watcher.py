@@ -209,6 +209,9 @@ class Target:
     curve_comeback_min: int = 5
     curve_comeback_hold: float = 240.0
     comeback_noted: float = 0.0
+    hold_since: float = 0.0  # when the comeback hold began (0 = none)
+    hold_ref: float = 0.0  # the cushion (typical minutes) when it began
+    hold_fall: float = 0.0  # how far it had fallen (typical minutes)
     curve_rest: float = -1.0  # lane curve_rest (-1 = off): the curve exit as a resting ask, simulated on paper (manualrest.plan)
     rest_price: float = 0.0  # the ask now working (0 = none)
     rest_at: float = 0.0  # when it was last priced
@@ -761,6 +764,10 @@ class ProfitWatcher:
             t.curve_noted = now
             log.info("curve exit watch %s %s, %.0fs left: bid %.2f (%.3f after the fee), curve chance %.3f, over by %+.3f (sells at %+.3f for %.0fs); cushion %+.2f typical minutes", t.ticker, t.lane, left, bid, net, read.p, over, margin, t.curve_persist, read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0)
         tm = read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0
+        if t.hold_since > 0:
+            ended = self._comeback_expired(t, now, left, tm, bid)
+            if ended:
+                return ended
         if t.curve_drop_units > 0:
             # the trajectory sale: the cushion fell curve_drop_units typical minutes over curve_drop_seconds and now sits at or under the margin
             t.curve_cush.append((now, tm))
@@ -770,7 +777,7 @@ class ProfitWatcher:
             if now - first_ts >= t.curve_drop_seconds - 1.0 and tm <= t.curve_drop_margin and first_tm - tm >= t.curve_drop_units:
                 if t.curve_drop_since <= 0:
                     t.curve_drop_since = now
-                if now - t.curve_drop_since >= t.curve_drop_persist and t.curve_comeback > 0 and self._comeback_holds(t, now, left):
+                if now - t.curve_drop_since >= t.curve_drop_persist and t.curve_comeback > 0 and self._comeback_holds(t, now, left, tm, first_tm - tm):
                     t.curve_drop_since = now  # held: look again at the next reading, not at once
                 elif now - t.curve_drop_since >= t.curve_drop_persist:
                     return f"curve exit (trajectory): the cushion fell {first_tm - tm:.2f} typical minutes over {now - first_ts:.0f}s to {tm:+.2f} (sells at a fall of {t.curve_drop_units:g} to {t.curve_drop_margin:g} or under, held {now - t.curve_drop_since:.0f}s); bid {bid:.2f}, curve chance {read.p:.3f}, {left:.0f}s left"
@@ -794,17 +801,41 @@ class ProfitWatcher:
             return None
         return f"curve exit: bid {bid:.2f} ({net:.3f} after the fee) is {over:+.3f} over the curve's {read.p:.3f} chance that the side pays (margin {margin:.3f} with {left:.0f}s left, held {now - t.curve_since:.0f}s); cushion {read.cushion * 1e4:+.1f} bp, rates {read.rate_long * 60**0.5 * 1e4:.1f} / {read.rate_short * 60**0.5 * 1e4:.1f} bp a typical minute (900 s / 180 s), {left:.0f}s left"
 
-    def _comeback_holds(self, t: Target, now: float, left: float) -> bool:
-        """The trajectory sale's hold (lane field curve_drop_comeback): True while this coin's own last hour says its fast falls usually come back (variants.comeback_rate at or over the lane's share, with enough falls) and there is time left for one to."""
+    COMEBACK_BACK_SECONDS = 120.0  # the window the comeback rate was measured over (variants.comeback_rate)
+
+    def _comeback_holds(self, t: Target, now: float, left: float, tm: float, fall: float) -> bool:
+        """The trajectory sale's hold (lane field curve_drop_comeback): True while this coin's own last hour says its fast falls usually come back (variants.comeback_rate at or over the lane's share, with enough falls) and there is time left for one to. Starts the hold: its start, the cushion and the size of the fall are kept so _comeback_expired can end it."""
         if t.curve_comeback <= 0 or left <= t.curve_comeback_hold:
             return False
         got = variants.comeback_rate(t.shock_index, now)
         if got is None or got[1] < t.curve_comeback_min or got[0] < t.curve_comeback:
             return False
+        if t.hold_since <= 0:
+            t.hold_since, t.hold_ref, t.hold_fall = now, tm, fall
         if now - t.comeback_noted >= 10.0:
             t.comeback_noted = now
             log.info("curve exit held %s %s, %.0fs left: the trajectory sale would fire, but %.0f%% of %d falls this hour came back by half within 120 s (the lane holds at %.0f%%)", t.ticker, t.lane, left, got[0] * 100, got[1], t.curve_comeback * 100)
         return True
+
+    def _comeback_expired(self, t: Target, now: float, left: float, tm: float, bid: float) -> str | None:
+        """The end of a comeback hold, checked on every reading while it lasts (the hold is a bet that the dip comes back, so it has to be called when it does not): the cushion regained half the fall (the bet paid, the hold ends with no sale); it fell another whole fall under where the hold began (a slide, not a dip); or the 120 s the rate was measured over passed without it coming back, or the lane's last seconds began. The last three sell at the bid, as the trajectory sale would have."""
+        if t.hold_since <= 0:
+            return None
+        if tm - t.hold_ref >= 0.5 * t.hold_fall:
+            t.hold_since = 0.0
+            log.info("curve exit hold ended %s %s: the cushion came back to %+.2f from %+.2f (half the fall of %.2f regained); no sale", t.ticker, t.lane, tm, t.hold_ref, t.hold_fall)
+            return None
+        held = now - t.hold_since
+        if tm <= t.hold_ref - t.hold_fall:
+            why = f"it kept falling: the cushion is {tm:+.2f}, another whole fall ({t.hold_fall:.2f}) under {t.hold_ref:+.2f} where the hold began"
+        elif held >= self.COMEBACK_BACK_SECONDS:
+            why = f"no comeback in {held:.0f}s: the cushion is {tm:+.2f}, under half of the fall of {t.hold_fall:.2f} regained from {t.hold_ref:+.2f}"
+        elif left <= t.curve_comeback_hold:
+            why = f"{left:.0f}s left: the hold ends and the cushion is {tm:+.2f}, not back from {t.hold_ref:+.2f}"
+        else:
+            return None
+        t.hold_since = 0.0
+        return f"curve exit (trajectory, comeback hold over): {why}; bid {bid:.2f}"
 
     def _curve_rest_hit(self, t: Target, bid: float, now: float, quote_ts: float, left: float) -> str | None:
         """The curve exit as a resting ask (lane field curve_rest; 2026-11-11, a shadow lane to compare with the multiscale lanes): the ask sits at the curve's chance + curve_rest * sqrt(seconds left / 900) (the 900 s rate, as the buy gate reads it), repriced every manualrest.REPRICE_EVERY seconds, never at or under the bid. The bet is sold when the bid reaches the ask, at the ask's price. The lane's time-to-go sale (curve_behind_last, curve_behind_chance) is the guard, at the bid. Simulated: nothing is placed on the book."""
