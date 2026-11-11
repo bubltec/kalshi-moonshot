@@ -65,3 +65,14 @@ def test_a_resting_fill_is_scored_at_its_own_price_with_no_fee_or_slip():
     assert digest._roi(row)[0] == 0.70 / cost - 1
     taker = dict(row, exit_reason="curve exit: bid 0.70")
     assert digest._roi(taker)[0] < digest._roi(row)[0]
+
+
+def test_a_lane_with_a_resting_curve_sale_has_its_bets_watched():
+    """The bug of 2026-11-11: takes_profit() did not know curve_rest, so a shadow lane's bets never got a target and neither the resting ask nor the guard ever ran."""
+    from kalshi_moonshot.lanes import LaneSpec, takes_profit
+
+    def spec(**kw):
+        return LaneSpec("x", "ladder", "x", (0.20, 0.40), (0, 1), 0.05, 0.0, **kw)
+
+    assert not takes_profit(spec())
+    assert takes_profit(spec(curve_rest=0.15))
