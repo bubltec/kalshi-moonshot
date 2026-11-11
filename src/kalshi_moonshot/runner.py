@@ -634,6 +634,20 @@ def evaluate(
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f} low {wave['since_low']:.0f}s ago, back {wave['back']:+.2f}] the slide has not levelled out: the lane waits {spec.wave_turn_seconds:g}s off the low and {spec.wave_turn_back:g} typical minutes back. {note}"
         else:
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f} low {wave['since_low']:.0f}s ago, back {wave['back']:+.2f}] {note}"
+            if spec.wave_market_gate:
+                try:
+                    mw = _variants.market_wave_now(shot.side)
+                except Exception as exc:
+                    mw = None
+                    log.warning("market-wide wave unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+                if mw is None:
+                    bet = False
+                    note = f"the market-wide path is unreadable (fewer than four coins have five minutes of history); the lane waits for it. {note}"
+                elif mw["amp"] >= spec.wave_amp_min and mw["since_low"] < spec.wave_turn_seconds:
+                    bet = False
+                    note = f"[market-wide amp {mw['amp']:.1f} low {mw['since_low']:.0f}s ago, back {mw['back']:+.2f}] the whole market is still running against this side: the lane buys a coin's own swing, not a tide. {note}"
+                else:
+                    note = f"[market-wide amp {mw['amp']:.1f} low {mw['since_low']:.0f}s ago, back {mw['back']:+.2f}] {note}"
     if bet and spec.hour_drift_q >= 0:
         from . import ticks as ticks_mod
         from . import variants as _variants

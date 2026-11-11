@@ -1148,3 +1148,84 @@ def test_a_lane_with_a_turn_rule_waits_for_the_slide_to_level_out(tmp_path, monk
                 assert "has not levelled out" in d.note
     finally:
         ticks.history.clear()
+
+
+def _market_ticks(ticks, now, phase_by_coin, amp=0.0003):
+    import math
+
+    for ser, phase in phase_by_coin.items():
+        index = variants.crypto_index(ser)
+        for k in range(341):
+            t = now - 340.0 + k
+            ticks.history.note(index, t, 100.0 * math.exp(amp * math.sin((t - now) / 20.0 + phase)))
+
+
+def test_the_market_wide_wave_is_the_five_coins_paths_averaged():
+    import time as _time
+
+    from kalshi_moonshot import ticks
+
+    now = _time.time()
+    ticks.history.clear()
+    try:
+        _market_ticks(ticks, now, dict.fromkeys(variants.BROAD_SERIES, -1.5708))  # every coin at the trough now
+        together = variants.market_wave_now("yes", now)
+        assert together["amp"] > 2.0 and together["pos"] < 0.1 and together["coins"] == 5
+        ticks.history.clear()
+        phases = dict(zip(variants.BROAD_SERIES, (0.0, 1.3, 2.6, 3.9, 5.2), strict=True))  # five coins out of step: the swings cancel
+        apart = variants.market_wave_now("yes", now)
+        assert apart is None  # no history yet
+        _market_ticks(ticks, now, phases)
+        apart = variants.market_wave_now("yes", now)
+        assert apart["amp"] < together["amp"] / 2
+        ticks.history.clear()
+        _market_ticks(ticks, now, dict(list(dict.fromkeys(variants.BROAD_SERIES, 0.0).items())[:3]))
+        assert variants.market_wave_now("yes", now) is None  # three coins are not a market
+    finally:
+        ticks.history.clear()
+
+
+def test_the_wave_buy_waits_while_the_whole_market_is_still_running_against_the_side(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.tidy]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nwave_amp_min=2.0\nwave_pos_max=0.5\nwave_turn_seconds=60\nwave_turn_back=0.25\nwave_market_gate=true\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    yes = LongShot("KXBTC15M-9", "t", "", 0.30, 0.31, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="tidy", series="KXBTC15M", side="yes")
+    try:
+        # the bet's own coin: a slide that levelled out 70 s ago (passes the wave rule alone)
+        def load(market):
+            ticks.history.clear()
+            ts, vals = _slide_then([0.00004 * min(k + 1, 20) / 20.0 for k in range(70)])
+            for ser in variants.BROAD_SERIES:
+                index = variants.crypto_index(ser)
+                if ser == "KXBTC15M":
+                    for t, v in zip(ts, vals, strict=True):
+                        ticks.history.note(index, now - 499.0 + (t - 1000.0), v)
+                else:
+                    t2, v2 = market
+                    for t, v in zip(t2, v2, strict=True):
+                        ticks.history.note(index, now - 499.0 + (t - 1000.0), v)
+
+        load(_slide_then([]))  # the other four coins are still sliding: a tide
+        d = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert d.action == "pass" and "still running against this side" in d.note
+        load(_slide_then([0.00004 * min(k + 1, 20) / 20.0 for k in range(70)]))  # everyone levelled out together
+        d = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+        assert d.action == "bet" and "[market-wide amp" in d.note
+    finally:
+        ticks.history.clear()

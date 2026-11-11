@@ -536,6 +536,12 @@ def wave_features(ts: Sequence[float], values: Sequence[float], side: str, at: f
     """The swing shape of the last five minutes toward the bet's side (2026-11-05, user: test the wave on the underdog): the index on a 1 s grid for 300 s, the bet side's price path in typical minutes (the 300 s
     root-mean-square move per minute). amp = how far that path ranged over the last 180 s; pos = where the buy sits in that range (0 = at the bet side's low, 1 = at its high). Wild-regime underdogs bought at
     the low of a swing of 2+ typical minutes won 21% against 17.3% for all (studies/results/2026-11-05-swing-shape-wave.txt). None when the history does not cover the five minutes."""
+    path = _wave_path(ts, values, side, at)
+    return None if path is None else _path_features(path)
+
+
+def _wave_path(ts: Sequence[float], values: Sequence[float], side: str, at: float) -> list[float] | None:
+    """The bet side's price path over the last 180 s in typical minutes (the 300 s root-mean-square move per minute), one point a second, or None when the history does not cover the five minutes or never moved."""
     i = bisect.bisect_right(ts, at) - 1
     if i < 0 or ts[i] < at - 10.0 or ts[0] > at - 320.0:
         return None
@@ -550,12 +556,33 @@ def wave_features(ts: Sequence[float], values: Sequence[float], side: str, at: f
         return None
     unit = math.sqrt(sq / 300.0) * math.sqrt(60.0)
     sign = 1.0 if side == "yes" else -1.0
-    path = [sign * (x - seq[0]) / unit for x in seq[-180:]]
+    return [sign * (x - seq[0]) / unit for x in seq[-180:]]
+
+
+def _path_features(path: Sequence[float]) -> dict:
     hi, lo = max(path), min(path)
     low_at = max(k for k, x in enumerate(path) if x == lo)  # the latest second the path stood at its low
     # since_low / back (2026-11-11, user's own trough trade: "keep watching until it starts to even out"): how many seconds ago the bet side's path last stood at its low of the 180 s, and how far it has come back
     # off that low, in typical minutes. A slide still running has since_low near 0; one that has levelled out and turned has a since_low of a minute or more and a small positive back.
     return {"amp": hi - lo, "pos": (path[-1] - lo) / (hi - lo) if hi > lo else 0.5, "since_low": float(len(path) - 1 - low_at), "back": path[-1] - lo}
+
+
+def market_wave_now(side: str, now: float | None = None) -> dict | None:
+    """The same swing reading on the market as a whole (2026-11-11, user: "that wave is also something the logic is supposed to be adapting to"): the average of the five traded coins' own paths (each in its own typical minutes, signed for the bet side), read from Kalshi's settlement indexes. A bet in the
+    coin's own swing sees a flat market-wide path; a bet in a tide sees one that is still running. None when fewer than four coins have the history."""
+    now = time.time() if now is None else now
+    paths = []
+    for ser in BROAD_SERIES:
+        index = crypto_index(ser)
+        got = ticks_mod.history.window(index, now - 340.0, now) if index else None
+        path = _wave_path(got[0], got[1], side, now) if got and got[0] else None
+        if path is not None:
+            paths.append(path)
+    if len(paths) < 4:
+        return None
+    n = min(len(p) for p in paths)
+    mean = [sum(p[-n:][k] for p in paths) / len(paths) for k in range(n)]
+    return _path_features(mean) | {"coins": float(len(paths))}
 
 
 PERP_FRESH = 30.0  # seconds: a Kalshi perp reference tick older than this is not a live spot
