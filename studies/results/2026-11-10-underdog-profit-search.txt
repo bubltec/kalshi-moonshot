@@ -1,0 +1,50 @@
+job 20261110-202707-37600 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/d8b8963d74144e7cb3fbeecd0d2ee5e7
+
+=== the underdog lane's live bets (dollars): 41 positions | held -8.40 | total losses 32 | won 9
+    profit_add (0.1, 5): +9.27 vs holding | halves -1.12 / +10.39 | total losses left 18 of 32, winners sold 9 
+    profit_mult (1.5, 5): +7.67 vs holding | halves -1.92 / +9.58 | total losses left 20 of 32, winners sold 8 
+    profit_add (0.15, 5): +6.30 vs holding | halves -0.32 / +6.62 | total losses left 21 of 32, winners sold 9 
+    profit_add (0.2, 5): +4.19 vs holding | halves -3.66 / +7.84 | total losses left 24 of 32, winners sold 8 
+    profit_add (0.1, 0): +4.18 vs holding | halves -4.39 / +8.57 | total losses left 17 of 32, winners sold 9 
+    trajectory (1.5, 60, 0.0): +3.86 vs holding | halves +0.64 / +3.21 | total losses left 16 of 32, winners sold 1 BOTH HALVES +
+    profit_add (0.25, 5): +3.42 vs holding | halves -2.67 / +6.09 | total losses left 25 of 32, winners sold 8 
+    value (0.15, 5): +3.41 vs holding | halves +1.39 / +2.01 | total losses left 27 of 32, winners sold 3 BOTH HALVES +
+    profit_mult (2.5, 0): +3.33 vs holding | halves +0.93 / +2.39 | total losses left 28 of 32, winners sold 9 BOTH HALVES +
+    profit_mult (2.0, 5): +3.10 vs holding | halves -1.48 / +4.58 | total losses left 26 of 32, winners sold 8 
+    profit_add (0.3, 5): +3.05 vs holding | halves -1.24 / +4.29 | total losses left 26 of 32, winners sold 8 
+    profit_add (0.15, 0): +2.69 vs holding | halves -4.05 / +6.74 | total losses left 20 of 32, winners sold 9 
+    profit_add (0.3, 0): +2.51 vs holding | halves -2.73 / +5.23 | total losses left 25 of 32, winners sold 9 
+    profit_add (0.2, 0): +2.02 vs holding | halves -4.18 / +6.20 | total losses left 22 of 32, winners sold 9 
+    profit_mult (1.5, 0): +1.65 vs holding | halves -5.84 / +7.48 | total losses left 20 of 32, winners sold 9 
+    profit_add (0.25, 0): +0.52 vs holding | halves -3.86 / +4.38 | total losses left 25 of 32, winners sold 9 
+    profit_add (0.4, 5): +0.44 vs holding | halves +0.49 / -0.05 | total losses left 29 of 32, winners sold 8 
+    profit_mult (2.0, 0): +0.43 vs holding | halves -4.39 / +4.82 | total losses left 25 of 32, winners sold 9 
+    profit_add (0.4, 0): -1.53 vs holding | halves -0.06 / -1.47 | total losses left 29 of 32, winners sold 9 
+    profit_mult (2.5, 5): -2.07 vs holding | halves -2.05 / -0.02 | total losses left 31 of 32, winners sold 8 
+windows 3826 (1 in 4), underdog-style positions 3643
+
+=== underdog-style positions from the tape (dollars per contract): 3643 positions | held -103.46 | total losses 2374 | won 1269
+    profit_mult (2.5, 5): -13.23 vs holding | halves -9.01 / -4.22 | total losses left 2325 of 2374, winners sold 517 
+    value (0.15, 5): -13.38 vs holding | halves -5.44 / -7.94 | total losses left 1989 of 2374, winners sold 487 
+    profit_mult (2.5, 0): -16.56 vs holding | halves -11.77 / -4.79 | total losses left 2312 of 2374, winners sold 530 
+    profit_add (0.4, 5): -34.56 vs holding | halves -29.84 / -4.71 | total losses left 2167 of 2374, winners sold 1235 
+    profit_add (0.3, 5): -37.98 vs holding | halves -29.34 / -8.63 | total losses left 2005 of 2374, winners sold 1246 
+    profit_add (0.4, 0): -41.91 vs holding | halves -32.70 / -9.21 | total losses left 2115 of 2374, winners sold 1249 
+    profit_mult (2.0, 5): -42.74 vs holding | halves -38.17 / -4.56 | total losses left 2140 of 2374, winners sold 1233 
+    trajectory (1.5, 60, 0.0): -44.65 vs holding | halves -33.97 / -10.69 | total losses left 784 of 2374, winners sold 432 
+    profit_add (0.25, 5): -45.28 vs holding | halves -29.15 / -16.13 | total losses left 1895 of 2374, winners sold 1252 
+    profit_mult (2.0, 0): -47.15 vs holding | halves -41.22 / -5.93 | total losses left 2083 of 2374, winners sold 1249 
+    profit_add (0.3, 0): -50.16 vs holding | halves -32.85 / -17.31 | total losses left 1929 of 2374, winners sold 1260 
+    profit_add (0.25, 0): -56.91 vs holding | halves -36.80 / -20.10 | total losses left 1802 of 2374, winners sold 1264 
+    profit_add (0.2, 5): -57.37 vs holding | halves -39.75 / -17.62 | total losses left 1778 of 2374, winners sold 1259 
+    profit_mult (1.5, 5): -64.33 vs holding | halves -43.44 / -20.89 | total losses left 1748 of 2374, winners sold 1258 
+    profit_add (0.2, 0): -64.86 vs holding | halves -43.05 / -21.82 | total losses left 1667 of 2374, winners sold 1264 
+    profit_add (0.15, 5): -65.49 vs holding | halves -43.29 / -22.19 | total losses left 1632 of 2374, winners sold 1259 
+    profit_mult (1.5, 0): -66.49 vs holding | halves -41.89 / -24.60 | total losses left 1622 of 2374, winners sold 1264 
+    profit_add (0.15, 0): -72.47 vs holding | halves -48.72 / -23.75 | total losses left 1503 of 2374, winners sold 1265 
+    profit_add (0.1, 5): -75.69 vs holding | halves -48.59 / -27.10 | total losses left 1447 of 2374, winners sold 1265 
+    profit_add (0.1, 0): -84.68 vs holding | halves -52.79 / -31.88 | total losses left 1311 of 2374, winners sold 1265 
+  walk-forward (best earlier-days setting used the next day): -5.62 vs holding over 12 days | halves -5.62 / +0.00 | days won 0, lost 1
+     picked: profit_add (0.25, 5) x1
+DONE
+exit=0  results in job-results/20261110-202707-37600/
