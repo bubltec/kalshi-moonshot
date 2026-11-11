@@ -1,0 +1,78 @@
+job 20261110-201048-36332 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/4728d73043a040cd9a393939093af82a
+
+=== the underdog lane's live bets (dollars): 41 positions | held -8.40 | total losses 32 | won 9
+    trajectory (1.5, 60, -0.5): +3.86 vs holding | halves +0.68 / +3.19 | total losses left 16 of 32, winners sold 1 BOTH HALVES +
+    trajectory (1.5, 60, 0.0): +3.86 vs holding | halves +0.64 / +3.21 | total losses left 16 of 32, winners sold 1 BOTH HALVES +
+    value (0.15, 5): +3.41 vs holding | halves +1.39 / +2.01 | total losses left 27 of 32, winners sold 3 BOTH HALVES +
+    value (0.15, 15): +2.73 vs holding | halves +1.83 / +0.90 | total losses left 29 of 32, winners sold 3 BOTH HALVES +
+    value (0.1, 15): +2.28 vs holding | halves -1.11 / +3.39 | total losses left 22 of 32, winners sold 4 
+    value (0.2, 5): +1.99 vs holding | halves +1.18 / +0.81 | total losses left 30 of 32, winners sold 2 BOTH HALVES +
+    rel (480, 0.75): +1.16 vs holding | halves -1.47 / +2.63 | total losses left 0 of 32, winners sold 5 
+    trajectory (1.5, 120, 0.0): +1.01 vs holding | halves -2.06 / +3.07 | total losses left 14 of 32, winners sold 2 
+    value (0.2, 15): +0.80 vs holding | halves -0.01 / +0.81 | total losses left 31 of 32, winners sold 1 
+    trajectory (2.0, 60, 0.0): +0.74 vs holding | halves -1.08 / +1.82 | total losses left 24 of 32, winners sold 1 
+    trajectory (2.0, 60, -0.5): +0.74 vs holding | halves -1.08 / +1.82 | total losses left 24 of 32, winners sold 1 
+    trajectory (1.5, 120, -0.5): +0.60 vs holding | halves -2.45 / +3.05 | total losses left 14 of 32, winners sold 2 
+    trajectory (2.0, 120, 0.0): +0.43 vs holding | halves -1.35 / +1.78 | total losses left 21 of 32, winners sold 1 
+    trajectory (2.0, 120, -0.5): +0.43 vs holding | halves -1.35 / +1.78 | total losses left 21 of 32, winners sold 1 
+    rel (60, 0.5): +0.11 vs holding | halves +0.10 / +0.02 | total losses left 16 of 32, winners sold 0 BOTH HALVES +
+    floor (60, 0.1): +0.07 vs holding | halves +0.05 / +0.02 | total losses left 18 of 32, winners sold 0 BOTH HALVES +
+    floor (480, 0.2): -0.14 vs holding | halves -2.29 / +2.14 | total losses left 0 of 32, winners sold 5 
+    value (0.1, 5): -1.36 vs holding | halves -2.83 / +1.46 | total losses left 20 of 32, winners sold 6 
+    trajectory (1.0, 120, 0.0): -1.66 vs holding | halves -2.11 / +0.46 | total losses left 9 of 32, winners sold 5 
+    trajectory (1.0, 120, -0.5): -2.08 vs holding | halves -2.52 / +0.44 | total losses left 9 of 32, winners sold 5 
+    trajectory (1.0, 60, 0.0): -3.11 vs holding | halves -2.47 / -0.63 | total losses left 11 of 32, winners sold 5 
+    trajectory (1.0, 60, -0.5): -3.24 vs holding | halves -2.58 / -0.66 | total losses left 11 of 32, winners sold 5 
+    floor (60, 0.2): -3.58 vs holding | halves -3.63 / +0.05 | total losses left 16 of 32, winners sold 2 
+    rel (480, 0.5): -4.19 vs holding | halves -3.96 / -0.22 | total losses left 0 of 32, winners sold 4 
+    floor (480, 0.1): -7.22 vs holding | halves -4.85 / -2.36 | total losses left 1 of 32, winners sold 4 
+    rel (240, 0.75): -7.23 vs holding | halves -4.50 / -2.74 | total losses left 0 of 32, winners sold 5 
+    floor (240, 0.2): -8.03 vs holding | halves -5.17 / -2.86 | total losses left 0 of 32, winners sold 5 
+    rel (240, 0.5): -8.74 vs holding | halves -5.68 / -3.06 | total losses left 0 of 32, winners sold 4 
+    rel (60, 0.75): -8.95 vs holding | halves -3.63 / -5.33 | total losses left 16 of 32, winners sold 4 
+    floor (120, 0.1): -9.86 vs holding | halves -7.55 / -2.31 | total losses left 3 of 32, winners sold 3 
+    floor (240, 0.1): -10.81 vs holding | halves -6.67 / -4.15 | total losses left 2 of 32, winners sold 4 
+    rel (120, 0.75): -12.00 vs holding | halves -7.18 / -4.82 | total losses left 1 of 32, winners sold 5 
+    floor (120, 0.2): -12.00 vs holding | halves -7.18 / -4.82 | total losses left 1 of 32, winners sold 5 
+    rel (120, 0.5): -12.21 vs holding | halves -7.25 / -4.96 | total losses left 1 of 32, winners sold 4 
+windows 3826 (1 in 4), underdog-style positions 3643
+
+=== underdog-style positions from the tape (dollars per contract): 3643 positions | held -103.46 | total losses 2374 | won 1269
+    floor (240, 0.1): +7.35 vs holding | halves +7.55 / -0.20 | total losses left 157 of 2374, winners sold 104 
+    floor (480, 0.1): +6.50 vs holding | halves +3.43 / +3.07 | total losses left 121 of 2374, winners sold 179 BOTH HALVES +
+    floor (120, 0.1): -1.64 vs holding | halves +1.66 / -3.30 | total losses left 397 of 2374, winners sold 68 
+    value (0.2, 15): -2.27 vs holding | halves +2.62 / -4.89 | total losses left 2258 of 2374, winners sold 172 
+    value (0.2, 5): -2.80 vs holding | halves -0.34 / -2.46 | total losses left 2198 of 2374, winners sold 271 
+    floor (60, 0.1): -5.20 vs holding | halves -3.90 / -1.31 | total losses left 1141 of 2374, winners sold 47 
+    trajectory (2.0, 60, -0.5): -7.97 vs holding | halves +1.95 / -9.92 | total losses left 1475 of 2374, winners sold 174 
+    trajectory (2.0, 60, 0.0): -8.44 vs holding | halves +3.35 / -11.78 | total losses left 1460 of 2374, winners sold 190 
+    rel (60, 0.5): -8.69 vs holding | halves -2.70 / -5.99 | total losses left 1062 of 2374, winners sold 69 
+    value (0.15, 15): -10.02 vs holding | halves -4.01 / -6.01 | total losses left 2135 of 2374, winners sold 330 
+    value (0.15, 5): -13.38 vs holding | halves -5.44 / -7.94 | total losses left 1989 of 2374, winners sold 487 
+    floor (60, 0.2): -13.80 vs holding | halves -6.19 / -7.62 | total losses left 1056 of 2374, winners sold 77 
+    rel (240, 0.5): -13.81 vs holding | halves +5.20 / -19.01 | total losses left 85 of 2374, winners sold 199 
+    rel (120, 0.5): -14.25 vs holding | halves +2.87 / -17.12 | total losses left 313 of 2374, winners sold 121 
+    floor (120, 0.2): -16.82 vs holding | halves +3.10 / -19.91 | total losses left 311 of 2374, winners sold 128 
+    floor (240, 0.2): -16.85 vs holding | halves +4.33 / -21.18 | total losses left 83 of 2374, winners sold 212 
+    rel (60, 0.75): -20.78 vs holding | halves -8.36 / -12.42 | total losses left 1020 of 2374, winners sold 118 
+    trajectory (1.5, 120, -0.5): -24.93 vs holding | halves -4.76 / -20.17 | total losses left 586 of 2374, winners sold 405 
+    value (0.1, 15): -25.07 vs holding | halves -16.44 / -8.62 | total losses left 1742 of 2374, winners sold 648 
+    trajectory (2.0, 120, -0.5): -25.56 vs holding | halves -3.12 / -22.44 | total losses left 1095 of 2374, winners sold 260 
+    rel (120, 0.75): -26.34 vs holding | halves +0.38 / -26.73 | total losses left 281 of 2374, winners sold 191 
+    trajectory (1.5, 120, 0.0): -27.75 vs holding | halves -8.24 / -19.51 | total losses left 560 of 2374, winners sold 452 
+    trajectory (2.0, 120, 0.0): -27.93 vs holding | halves -4.90 / -23.03 | total losses left 1072 of 2374, winners sold 286 
+    rel (480, 0.5): -29.44 vs holding | halves -8.01 / -21.42 | total losses left 49 of 2374, winners sold 355 
+    rel (240, 0.75): -31.07 vs holding | halves -5.11 / -25.97 | total losses left 54 of 2374, winners sold 314 
+    value (0.1, 5): -35.90 vs holding | halves -20.85 / -15.05 | total losses left 1502 of 2374, winners sold 819 
+    floor (480, 0.2): -36.60 vs holding | halves -15.43 / -21.17 | total losses left 48 of 2374, winners sold 384 
+    rel (480, 0.75): -37.58 vs holding | halves -22.40 / -15.18 | total losses left 25 of 2374, winners sold 533 
+    trajectory (1.5, 60, -0.5): -41.23 vs holding | halves -29.76 / -11.47 | total losses left 813 of 2374, winners sold 388 
+    trajectory (1.5, 60, 0.0): -44.65 vs holding | halves -33.97 / -10.69 | total losses left 784 of 2374, winners sold 432 
+    trajectory (1.0, 120, -0.5): -49.67 vs holding | halves -25.72 / -23.94 | total losses left 201 of 2374, winners sold 602 
+    trajectory (1.0, 60, -0.5): -54.22 vs holding | halves -38.80 / -15.42 | total losses left 243 of 2374, winners sold 641 
+    trajectory (1.0, 60, 0.0): -60.59 vs holding | halves -42.28 / -18.31 | total losses left 210 of 2374, winners sold 724 
+    trajectory (1.0, 120, 0.0): -63.41 vs holding | halves -34.87 / -28.54 | total losses left 169 of 2374, winners sold 694 
+  walk-forward (best earlier-days setting used the next day): -11.95 vs holding over 12 days | halves -5.21 / -6.74 | days won 4, lost 8
+     picked: rel (240, 0.5) x4; floor (480, 0.1) x4; floor (240, 0.1) x3; trajectory (2.0, 120, -0.5) x1
+DONE
+exit=0  results in job-results/20261110-201048-36332/
