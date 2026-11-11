@@ -612,7 +612,7 @@ def evaluate(
             note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
-    if bet and (spec.wave_amp_min > 0 or spec.wave_pos_max < 1.0):
+    if bet and (spec.wave_amp_min > 0 or spec.wave_pos_max < 1.0 or spec.wave_turn_seconds > 0):
         from . import variants as _variants
 
         try:
@@ -629,8 +629,11 @@ def evaluate(
         elif wave["pos"] > spec.wave_pos_max:
             bet = False
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the buy is above {spec.wave_pos_max:g} of the swing's range (waits for the low). {note}"
+        elif spec.wave_turn_seconds > 0 and (wave["since_low"] < spec.wave_turn_seconds or wave["back"] < spec.wave_turn_back):
+            bet = False
+            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f} low {wave['since_low']:.0f}s ago, back {wave['back']:+.2f}] the slide has not levelled out: the lane waits {spec.wave_turn_seconds:g}s off the low and {spec.wave_turn_back:g} typical minutes back. {note}"
         else:
-            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] {note}"
+            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f} low {wave['since_low']:.0f}s ago, back {wave['back']:+.2f}] {note}"
     if bet and spec.hour_drift_q >= 0:
         from . import ticks as ticks_mod
         from . import variants as _variants

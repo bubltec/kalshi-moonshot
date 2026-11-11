@@ -552,7 +552,10 @@ def wave_features(ts: Sequence[float], values: Sequence[float], side: str, at: f
     sign = 1.0 if side == "yes" else -1.0
     path = [sign * (x - seq[0]) / unit for x in seq[-180:]]
     hi, lo = max(path), min(path)
-    return {"amp": hi - lo, "pos": (path[-1] - lo) / (hi - lo) if hi > lo else 0.5}
+    low_at = max(k for k, x in enumerate(path) if x == lo)  # the latest second the path stood at its low
+    # since_low / back (2026-11-11, user's own trough trade: "keep watching until it starts to even out"): how many seconds ago the bet side's path last stood at its low of the 180 s, and how far it has come back
+    # off that low, in typical minutes. A slide still running has since_low near 0; one that has levelled out and turned has a since_low of a minute or more and a small positive back.
+    return {"amp": hi - lo, "pos": (path[-1] - lo) / (hi - lo) if hi > lo else 0.5, "since_low": float(len(path) - 1 - low_at), "back": path[-1] - lo}
 
 
 def wave_now(series: str, side: str, now: float | None = None) -> dict | None:

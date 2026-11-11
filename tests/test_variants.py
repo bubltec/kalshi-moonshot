@@ -1089,3 +1089,62 @@ def test_a_lane_with_a_price_scale_stakes_less_at_a_lower_price(tmp_path, monkey
         stakes[ask] = d
     assert stakes[0.75].action == "bet" and stakes[0.20].action == "bet"
     assert "[stake x" not in stakes[0.75].note and "[stake x0.25" in stakes[0.20].note and "[stake x0.63" in stakes[0.45].note
+
+
+def _slide_then(tail):
+    """A path of 500 one-second ticks: flat, a slide of ~4 typical minutes ending `len(tail)` seconds before the end, then `tail` (log offsets from the slide's low)."""
+    import math
+
+    n = 500 - len(tail)
+    logs = [0.0003 * math.sin(k / 3.0) * 0.2 for k in range(n - 90)]
+    base = logs[-1]
+    logs += [base - 0.0006 * (k + 1) / 90.0 for k in range(90)]
+    low = logs[-1]
+    logs += [low + x for x in tail]
+    return [1000.0 + k for k in range(500)], [100.0 * math.exp(x) for x in logs]
+
+
+def test_wave_features_tell_a_slide_still_running_from_one_that_has_levelled_out():
+    ts, vals = _slide_then([])  # the low is now
+    running = variants.wave_features(ts, vals, "yes", ts[-1])
+    assert running["since_low"] == 0 and running["back"] == 0.0
+    ts, vals = _slide_then([0.00004 * min(k + 1, 20) / 20.0 for k in range(70)])  # 70 s off the low, a small way back
+    turned = variants.wave_features(ts, vals, "yes", ts[-1])
+    assert turned["since_low"] >= 60 and turned["back"] > 0.25 and turned["pos"] < 0.5
+    assert variants.wave_features(ts, vals, "no", ts[-1])["pos"] > 0.5  # the other side sits near its high
+
+
+def test_a_lane_with_a_turn_rule_waits_for_the_slide_to_level_out(tmp_path, monkeypatch):
+    import time as _time
+
+    from kalshi_moonshot import config, regime, runner, ticks, variants
+    from kalshi_moonshot.estimators import Estimate
+    from kalshi_moonshot.store import Store
+    from kalshi_moonshot.strategy import LongShot
+
+    class Fixed:
+        def estimate(self, client, settings, shot):
+            return Estimate(0.9, "fixed")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.turny]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nwave_amp_min=2.0\nwave_pos_max=0.5\nwave_turn_seconds=60\nwave_turn_back=0.25\n")
+    s = config.load()
+    store = Store(s.db_path)
+    regime.reset()
+    now = _time.time()
+    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    index = variants.crypto_index("KXBTC15M")
+    yes = LongShot("KXBTC15M-9", "t", "", 0.30, 0.31, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="turny", series="KXBTC15M", side="yes")
+    try:
+        for tail, expect in (([], "pass"), ([0.00004 * min(k + 1, 20) / 20.0 for k in range(70)], "bet")):
+            ticks.history.clear()
+            ts, vals = _slide_then(tail)
+            for t, v in zip(ts, vals, strict=True):
+                ticks.history.note(index, now - 499.0 + (t - 1000.0), v)
+            d = runner.evaluate(s, None, None, store, yes, estimators={"market": Fixed()})
+            assert d.action == expect and "[wave amp" in d.note and "s ago, back" in d.note
+            if expect == "pass":
+                assert "has not levelled out" in d.note
+    finally:
+        ticks.history.clear()
