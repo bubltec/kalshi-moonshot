@@ -559,8 +559,8 @@ def wave_features(ts: Sequence[float], values: Sequence[float], side: str, at: f
 
 
 def wave_now(series: str, side: str, now: float | None = None) -> dict | None:
-    """wave_features from the in-memory index ticks of a coin, or None."""
-    index = crypto_index(series)
+    """wave_features from the in-memory ticks of the series' spot index (a coin's index, or the feed a commodity or stock-index series reads), or None. The wave is a shape of the spot's own path, so it is read the same way on any market that has one."""
+    index = crypto_index(series) or biquote_index(series)
     if not index:
         return None
     now = time.time() if now is None else now
