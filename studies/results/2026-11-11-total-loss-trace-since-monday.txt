@@ -1,0 +1,52 @@
+job 20261111-150139-14457 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/69fd4ed76aab4831861e69e6f0e3bc15
+394 settled live bets in the last 300 h; run 15:06:08 ET
+394 with a tape path; with a curve chance on at least a minute of it: 333
+
+held to a total loss, with a tape path: 28 of 394; as it happened: -51.60
+
+lane / time / market / side / paid | what each rule would have done (second left, sale price, dollars)
+crypto 08:19:44 KXHYPE15M      yes 0.44 stake 1.22 as it happened -1.22 | chance read 594/594 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.01 -> -1.20 | gap: no sale | either: 240s left @ 0.01 -> -1.20 |
+crypto 12:32:27 KXBNB15M       yes 0.51 stake 1.87 as it happened -1.87 | chance read 684/684 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.04 -> -1.72 | gap: no sale | either: 240s left @ 0.04 -> -1.72 |
+commod 23:02:48 KXPLATINUM15M  yes 0.61 stake 1.70 as it happened -1.70 | chance read 0/705 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+crypto 05:31:55 KXHYPE15M      yes 0.57 stake 1.13 as it happened -1.13 | chance read 625/625 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.00 -> -1.13 | gap: no sale | either: 240s left @ 0.00 -> -1.13 |
+crypto 05:31:59 KXNEAR15M      yes 0.59 stake 1.35 as it happened -1.35 | chance read 679/679 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.00 -> -1.34 | gap: no sale | either: 240s left @ 0.00 -> -1.34 |
+commod 08:02:37 KXPLATINUM15M  no  0.69 stake 2.85 as it happened -2.85 | chance read 742/742 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: no sale | gap: no sale | either: no sale |
+commod 13:11:10 KXPLATINUM15M  no  0.80 stake 1.40 as it happened -1.40 | chance read 229/229 s, lowest in the last 240 s 0.25, bid then 0.01 | time-to-go: 96s left @ 0.42 -> -0.70 | gap: no sale | either: 96s left @ 0.42 -> -0.70 |
+commod 14:47:14 KXBRENT15M     no  0.60 stake 1.57 as it happened -1.57 | chance read 765/765 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 222s left @ 0.49 -> -0.37 | gap: no sale | either: 222s left @ 0.49 -> -0.37 |
+commod 14:47:37 KXWTI15M       no  0.56 stake 0.90 as it happened -0.90 | chance read 742/742 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 82s left @ 0.34 -> -0.39 | gap: no sale | either: 82s left @ 0.34 -> -0.39 |
+commod 15:06:16 KXBRENT15M     no  0.60 stake 1.45 as it happened -1.45 | chance read 523/523 s, lowest in the last 240 s 0.83, bid then 0.01 | time-to-go: no sale | gap: 508s left @ 0.41 -> -0.53 | either: 508s left @ 0.41 -> -0.53 |
+commod 17:40:18 KXWTI15M       no  0.71 stake 2.87 as it happened -2.87 | chance read 281/281 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 38s left @ 0.38 -> -1.43 | gap: 218s left @ 0.31 -> -1.70 | either: 218s left @ 0.31 -> -1.70 |
+crypto 17:47:01 KXSOL15M       yes 0.55 stake 0.82 as it happened -0.82 | chance read 743/743 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.18 -> -0.58 | gap: no sale | either: 240s left @ 0.18 -> -0.58 |
+crypto 17:47:48 KXHYPE15M      yes 0.57 stake 1.10 as it happened -1.10 | chance read 692/692 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.23 -> -0.69 | gap: no sale | either: 240s left @ 0.23 -> -0.69 |
+crypto 17:48:56 KXNEAR15M      yes 0.60 stake 1.37 as it happened -1.37 | chance read 552/552 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.03 -> -1.31 | gap: no sale | either: 240s left @ 0.03 -> -1.31 |
+crypto 17:49:03 KXBTC15M       yes 0.74 stake 2.79 as it happened -2.79 | chance read 618/618 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 231s left @ 0.35 -> -1.55 | gap: no sale | either: 231s left @ 0.35 -> -1.55 |
+crypto 17:51:16 KXETH15M       yes 0.72 stake 3.00 as it happened -3.00 | chance read 480/480 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.37 -> -1.55 | gap: no sale | either: 240s left @ 0.37 -> -1.55 |
+crypto 18:09:43 KXZEC15M       yes 0.57 stake 1.05 as it happened -1.05 | chance read 316/316 s, lowest in the last 240 s 0.04, bid then 0.00 | time-to-go: 240s left @ 0.16 -> -0.78 | gap: no sale | either: 240s left @ 0.16 -> -0.78 |
+crypto 18:18:57 KXBTC15M       yes 0.66 stake 2.53 as it happened -2.53 | chance read 662/662 s, lowest in the last 240 s 0.12, bid then 0.00 | time-to-go: 171s left @ 0.48 -> -0.80 | gap: 14s left @ 0.01 -> -2.51 | either: 171s left @ 0.48 -> -0.80 |
+crypto 18:48:14 KXXRP15M       no  0.64 stake 2.10 as it happened -2.10 | chance read 705/705 s, lowest in the last 240 s 0.06, bid then 0.00 | time-to-go: 182s left @ 0.47 -> -0.65 | gap: no sale | either: 182s left @ 0.47 -> -0.65 |
+crypto 18:50:42 KXDOGE15M      no  0.74 stake 3.13 as it happened -3.13 | chance read 557/557 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.43 -> -1.41 | gap: no sale | either: 240s left @ 0.43 -> -1.41 |
+crypto 18:54:11 KXBNB15M       no  0.74 stake 2.99 as it happened -2.99 | chance read 348/348 s, lowest in the last 240 s 0.27, bid then 0.00 | time-to-go: 119s left @ 0.35 -> -1.67 | gap: no sale | either: 119s left @ 0.35 -> -1.67 |
+commod 19:02:12 KXCOPPER15M    no  0.59 stake 1.41 as it happened -1.41 | chance read 0/767 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+crypto 19:04:18 KXBNB15M       no  0.66 stake 2.49 as it happened -2.49 | chance read 641/641 s, lowest in the last 240 s 0.08, bid then 0.00 | time-to-go: 223s left @ 0.22 -> -1.73 | gap: no sale | either: 223s left @ 0.22 -> -1.73 |
+commod 20:31:50 KXCOPPER15M    no  0.61 stake 1.67 as it happened -1.67 | chance read 0/789 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+commod 20:47:25 KXBRENT15M     yes 0.59 stake 1.43 as it happened -1.43 | chance read 0/753 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+commod 20:47:30 KXWTI15M       yes 0.56 stake 0.90 as it happened -0.90 | chance read 0/749 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+crypto 21:06:14 KXDOGE15M      yes 0.62 stake 1.77 as it happened -1.77 | chance read 510/510 s, lowest in the last 240 s 0.00, bid then 0.00 | time-to-go: 240s left @ 0.16 -> -1.35 | gap: no sale | either: 240s left @ 0.16 -> -1.35 |
+commod 22:54:54 KXCOPPER15M    yes 0.78 stake 2.76 as it happened -2.76 | chance read 0/305 s, none in the last 240 s | time-to-go: no sale | gap: no sale | either: no sale |
+
+rule | all bets as it happened | with the rule | change | bets changed (helped / hurt) | caught of the total losses | halves of the change
+time-to-go |   -56.78 |   -43.06 |  +13.72 |  48 (38 / 9) | 20 of 28 | +6.78 / +6.93
+gap        |   -56.78 |   -56.93 |   -0.16 |   5 (3 / 2) | 3 of 28 | -1.09 / +0.94
+either     |   -56.78 |   -44.67 |  +12.10 |  51 (39 / 11) | 21 of 28 | +5.69 / +6.41
+
+crypto_multiscale: 262 bets, as it happened -37.31
+   time-to-go change +8.25 on 35 bets it changed
+   gap        change +0.02 on 1 bets it changed
+   either     change +8.25 on 35 bets it changed
+
+commodity_multiscale: 132 bets, as it happened -19.47
+   time-to-go change +5.47 on 13 bets it changed
+   gap        change -0.18 on 4 bets it changed
+   either     change +3.85 on 16 bets it changed
+DONE
+exit=0  results in job-results/20261111-150139-14457/

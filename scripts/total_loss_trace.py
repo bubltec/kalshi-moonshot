@@ -134,6 +134,10 @@ def actual(r):
 LANES = ("crypto_multiscale", "commodity_multiscale")
 rows = st.db.execute("SELECT id, ts, lane, ticker, side, ask, stake_usd, outcome, exit_price, exit_ts, exit_reason FROM decisions WHERE action='bet' AND lane IN (?,?) AND ts>? AND outcome IS NOT NULL ORDER BY ts", (*LANES, now - float(os.environ.get("HOURS", "18")) * 3600)).fetchall()
 rows = [r for r in rows if float(r["ts"]) <= now - float(os.environ.get("UNTIL", "0")) * 3600]
+SINCE = os.environ.get("SINCE", "")  # YYYY-MM-DD (ET midnight): the logic was rewritten Monday 2026-11-09 (user), so SINCE=2026-11-09 and nothing before it counts
+if SINCE:
+    t_from = dt.datetime.fromisoformat(SINCE).replace(tzinfo=ET).timestamp()
+    rows = [r for r in rows if float(r["ts"]) >= t_from]
 print(f"{len(rows)} settled live bets in the last {os.environ.get('HOURS', '18')} h; run {hm(now)} ET")
 bets = []
 for n_, r in enumerate(rows):

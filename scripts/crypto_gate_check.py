@@ -8,7 +8,9 @@ taker fee) or settlement; held = settlement; cost = ask plus the entry fee. Elap
 """
 
 import datetime as dt
+import os
 import re
+import time
 
 from kalshi_moonshot import config
 from kalshi_moonshot.runner import EXIT_SLIP
@@ -27,8 +29,12 @@ def close_of(tk):
     return dt.datetime(2000 + int(m[1]), MON[m[2]], int(m[3]), int(m[4]), int(m[5]), tzinfo=ET).timestamp()
 
 
+HOURS = float(os.environ.get("HOURS", "0"))  # 0 = every settled live bet since the lane began; HOURS=48 = the last 48 hours
+SINCE = os.environ.get("SINCE", "")  # YYYY-MM-DD (ET midnight): only bets from that day on. The user, 2026-11-11: the logic was rewritten Monday 2026-11-09, so nothing before it counts (SINCE=2026-11-09)
+FROM = dt.datetime.fromisoformat(SINCE).replace(tzinfo=ET).timestamp() if SINCE else 0.0
 rows = st.db.execute(
-    "SELECT ts, ticker, side, ask, stake_usd, outcome, exit_price, exit_ts, exit_reason FROM decisions WHERE action='bet' AND lane='crypto_multiscale' AND mode='trade' AND outcome IN ('yes','no') AND stake_usd>0 AND ask>0 ORDER BY ts"
+    "SELECT ts, ticker, side, ask, stake_usd, outcome, exit_price, exit_ts, exit_reason FROM decisions WHERE action='bet' AND lane='crypto_multiscale' AND mode='trade' AND outcome IN ('yes','no') AND stake_usd>0 AND ask>0 AND ts>? ORDER BY ts",
+    (max(time.time() - HOURS * 3600.0 if HOURS else 0.0, FROM),),
 ).fetchall()
 bets = []
 for r in rows:
@@ -46,7 +52,8 @@ for r in rows:
         real = stake * (back / cost - 1.0)
     else:
         real = held
-    bets.append(dict(ts=float(r["ts"]), ask=ask, el=elapsed, stake=stake, real=real, held=held, total_loss=(r["exit_price"] is None and won == 0.0)))
+    kind = "held to settlement" if r["exit_price"] is None else re.sub(r"[:(].*$", "", str(r["exit_reason"] or "sold")).strip()[:34] + (" (" + re.search(r"\((\w[\w ,-]*)\)", str(r["exit_reason"])).group(1) + ")" if re.search(r"\((\w[\w ,-]*)\)", str(r["exit_reason"] or "")) else "")
+    bets.append(dict(kind=kind, ts=float(r["ts"]), ask=ask, el=elapsed, stake=stake, real=real, held=held, total_loss=(r["exit_price"] is None and won == 0.0)))
 print(f"{len(bets)} settled live crypto bets, {hm(bets[0]['ts'])} to {hm(bets[-1]['ts'])} ET")
 
 
@@ -78,4 +85,10 @@ for lo, hi in ((0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 0.76)):
 print("elapsed buckets")
 for lo, hi in ((0, 4), (4, 8), (8, 12), (12, 15)):
     print(line(f"minute {lo}-{hi}", [x for x in bets if lo <= x["el"] < hi]))
+print("\nhow each bet ended (as it happened against holding the same bets)")
+kinds = {}
+for x in bets:
+    kinds.setdefault(x["kind"], []).append(x)
+for k, xs in sorted(kinds.items(), key=lambda kv: -len(kv[1])):
+    print(line(k, xs))
 print("DONE")
