@@ -1,0 +1,22 @@
+rows since Monday: gated-setting 25294, gates-off 117948; the tape ends 11-11 05:00 ET
+days (0 = Mon 11-09): [0, 1, 2] rows per day gates-off: {0: 50715, 1: 55485, 2: 11748}
+test day 1 (11-10): trained on 10835 gated rows / 50715 gates-off rows; fitted: True / True
+test day 2 (11-11): trained on 22688 gated rows / 106200 gates-off rows; fitted: True / True
+  A  live setting (band, minutes)      n= 627 |   -35.84 on $3135.00 ( -1.1%) | wins 490/627 | halves +37.76 / -73.60
+  B  gates off                         n=1306 |  -388.77 on $6530.00 ( -6.0%) | wins 995/1306 | halves -92.40 / -296.37
+  C  gates-off model, live band+minutes n= 698 |   -85.67 on $3490.00 ( -2.5%) | wins 573/698 | halves +46.48 / -132.15
+B by the price paid
+  ask 0.00-0.50                        n=  82 |  -165.46 on $ 410.00 (-40.4%) | wins 20/82 | halves -81.08 / -84.38
+  ask 0.50-0.70                        n= 221 |  -138.45 on $1105.00 (-12.5%) | wins 123/221 | halves -58.15 / -80.29
+  ask 0.70-0.90                        n= 641 |   -97.60 on $3205.00 ( -3.0%) | wins 513/641 | halves -35.11 / -62.48
+  ask 0.90-1.00                        n= 362 |   +12.73 on $1810.00 ( +0.7%) | wins 339/362 | halves +25.64 / -12.91
+B by minute of the window
+  minute 1-4                           n= 543 |  -232.41 on $2715.00 ( -8.6%) | wins 370/543 | halves -69.48 / -162.93
+  minute 4-7                           n= 386 |  -124.28 on $1930.00 ( -6.4%) | wins 303/386 | halves -18.36 / -105.92
+  minute 7-11                          n= 300 |    -8.51 on $1500.00 ( -0.6%) | wins 258/300 | halves -3.18 / -5.33
+  minute 11-15                         n=  77 |   -23.57 on $ 385.00 ( -6.1%) | wins 64/77 | halves -7.23 / -16.34
+B by the spot's distance to the strike on the bet's side (5-minute level reading; cuts +0.98, +1.53 typical minutes)
+  closest to the strike                n= 435 |  -272.76 on $2175.00 (-12.5%) | wins 259/435 | halves -72.85 / -199.91
+  middle                               n= 435 |   -73.02 on $2175.00 ( -3.4%) | wins 355/435 | halves -11.49 / -61.53
+  farthest on the bet's side           n= 436 |   -42.99 on $2180.00 ( -2.0%) | wins 381/436 | halves -52.84 / +9.86
+DONE
