@@ -1,0 +1,80 @@
+job 20261112-144031-93123 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/bbb8d3c747464f6cbf1e47f6c51df7aa
+  200 windows, 220 events, 13s
+  400 windows, 607 events, 23s
+windows scored 504 of 6880 closes since 1794200400; skipped {'too few ticks or quotes': 1744, 'no index value at the open': 11, 'gap in the index before or during the window': 2}
+in-band readings: {'warm-up': 3511, 'clean': 17398, 'extreme_gap': 1231, 'high_rate': 365} (warm-up readings are not scored)
+  share of scored readings: clean 91.6%, extreme_gap 6.5%, high_rate 1.9%
+
+=== first signal per window and side, held to settlement (dollars per contract, entry fee in the cost)
+    BASELINE: first in-band reading                n  514 avg cost 0.77 won 75% | net   -6.84 ( -1.3c a bet,  -1.7% per $)
+    CLEAN signal (what the rule would buy)         n  139 avg cost 0.79 won 81% | net   +1.76 ( +1.3c a bet,  +1.6% per $)
+    ANY signal (first, whatever its status)        n  150 avg cost 0.79 won 81% | net   +2.60 ( +1.7c a bet,  +2.2% per $)
+      first signal is clean                        n  121 avg cost 0.79 won 79% | net   +0.51 ( +0.4c a bet,  +0.5% per $)
+      first signal is extreme_gap                  n   29 avg cost 0.79 won 86% | net   +2.09 ( +7.2c a bet,  +9.1% per $)
+      first signal is high_rate                    n    0: too few
+  -- by feed health at the signal:
+      clean, feed healthy                          n  121 avg cost 0.79 won 79% | net   +0.51 ( +0.4c a bet,  +0.5% per $)
+      clean, feed troubled                         n    0: too few
+      extreme_gap, feed healthy                    n   29 avg cost 0.79 won 86% | net   +2.09 ( +7.2c a bet,  +9.1% per $)
+      extreme_gap, feed troubled                   n    0: too few
+      high_rate, feed healthy                      n    0: too few
+      high_rate, feed troubled                     n    0: too few
+  windows-sides with an ANY signal 150, with a CLEAN signal 139
+
+=== by the curve model's shape readings at the signal (terciles of the pooled signals; clean vs anomalous)
+  level_5m low (cuts +0.64,+1.00)
+        clean                                      n   42 avg cost 0.78 won 83% | net   +2.34 ( +5.6c a bet,  +7.2% per $)
+        anomalous                                  n    7: too few
+  level_5m mid (cuts +0.64,+1.00)
+        clean                                      n   37 avg cost 0.77 won 81% | net   +1.69 ( +4.6c a bet,  +6.0% per $)
+        anomalous                                  n   13 avg cost 0.78 won 85% | net   +0.81 ( +6.2c a bet,  +8.0% per $)
+  level_5m high (cuts +0.64,+1.00)
+        clean                                      n   41 avg cost 0.82 won 73% | net   -3.68 ( -9.0c a bet, -10.9% per $)
+        anomalous                                  n    9: too few
+  slope_5m low (cuts -0.16,+1.19)
+        clean                                      n   42 avg cost 0.78 won 69% | net   -3.76 ( -9.0c a bet, -11.5% per $)
+        anomalous                                  n    7: too few
+  slope_5m mid (cuts -0.16,+1.19)
+        clean                                      n   43 avg cost 0.79 won 81% | net   +0.82 ( +1.9c a bet,  +2.4% per $)
+        anomalous                                  n    7: too few
+  slope_5m high (cuts -0.16,+1.19)
+        clean                                      n   35 avg cost 0.79 won 89% | net   +3.30 ( +9.4c a bet, +11.9% per $)
+        anomalous                                  n   15 avg cost 0.78 won 87% | net   +1.25 ( +8.3c a bet, +10.6% per $)
+  curv_5m low (cuts -0.67,+0.62)
+        clean                                      n   40 avg cost 0.78 won 70% | net   -3.33 ( -8.3c a bet, -10.6% per $)
+        anomalous                                  n    9: too few
+  curv_5m mid (cuts -0.67,+0.62)
+        clean                                      n   47 avg cost 0.80 won 85% | net   +2.62 ( +5.6c a bet,  +7.0% per $)
+        anomalous                                  n    3: too few
+  curv_5m high (cuts -0.67,+0.62)
+        clean                                      n   33 avg cost 0.79 won 82% | net   +1.06 ( +3.2c a bet,  +4.1% per $)
+        anomalous                                  n   17 avg cost 0.78 won 82% | net   +0.66 ( +3.9c a bet,  +5.0% per $)
+  level_13m low (cuts +0.40,+0.67)
+        clean                                      n   38 avg cost 0.78 won 84% | net   +2.46 ( +6.5c a bet,  +8.3% per $)
+        anomalous                                  n   11 avg cost 0.75 won 91% | net   +1.70 (+15.5c a bet, +20.5% per $)
+  level_13m mid (cuts +0.40,+0.67)
+        clean                                      n   41 avg cost 0.78 won 73% | net   -1.91 ( -4.7c a bet,  -6.0% per $)
+        anomalous                                  n    9: too few
+  level_13m high (cuts +0.40,+0.67)
+        clean                                      n   41 avg cost 0.81 won 80% | net   -0.19 ( -0.5c a bet,  -0.6% per $)
+        anomalous                                  n    9: too few
+  slope_13m low (cuts +0.79,+1.97)
+        clean                                      n   38 avg cost 0.77 won 74% | net   -1.34 ( -3.5c a bet,  -4.6% per $)
+        anomalous                                  n   11 avg cost 0.77 won 82% | net   +0.51 ( +4.6c a bet,  +6.0% per $)
+  slope_13m mid (cuts +0.79,+1.97)
+        clean                                      n   41 avg cost 0.79 won 80% | net   +0.75 ( +1.8c a bet,  +2.3% per $)
+        anomalous                                  n    9: too few
+  slope_13m high (cuts +0.79,+1.97)
+        clean                                      n   41 avg cost 0.81 won 83% | net   +0.94 ( +2.3c a bet,  +2.8% per $)
+        anomalous                                  n    9: too few
+  curv_13m low (cuts +0.32,+1.28)
+        clean                                      n   40 avg cost 0.78 won 68% | net   -4.27 (-10.7c a bet, -13.6% per $)
+        anomalous                                  n    9: too few
+  curv_13m mid (cuts +0.32,+1.28)
+        clean                                      n   39 avg cost 0.79 won 82% | net   +1.36 ( +3.5c a bet,  +4.4% per $)
+        anomalous                                  n   11 avg cost 0.80 won 91% | net   +1.17 (+10.6c a bet, +13.2% per $)
+  curv_13m high (cuts +0.32,+1.28)
+        clean                                      n   41 avg cost 0.80 won 88% | net   +3.26 ( +7.9c a bet,  +9.9% per $)
+        anomalous                                  n    9: too few
+DONE
+exit=0  results in job-results/20261112-144031-93123/
