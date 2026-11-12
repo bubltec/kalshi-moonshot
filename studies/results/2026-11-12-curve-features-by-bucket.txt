@@ -1,0 +1,116 @@
+117948 moments since Monday, 3505 markets; the tape ends 11-11 05:00 ET; moments need 180 minutes of earlier history, so the first three hours of each series' tape are not in
+=== ALL (ask 0.05-0.95, minutes 1-14): 117948 moments ===
+ level_5m (cuts -0.49, +0.45)
+   low          moments  39316 | markets 3485 | won 19.9% | mean ask 0.211 | net per $1 -0.125
+   mid          moments  39316 | markets 2857 | won 49.1% | mean ask 0.499 | net per $1 -0.056
+   high         moments  39316 | markets 3480 | won 79.1% | mean ask 0.793 | net per $1 -0.018
+ slope_5m (cuts -0.97, +0.95)
+   low          moments  39316 | markets 3496 | won 39.5% | mean ask 0.407 | net per $1 -0.092
+   mid          moments  39316 | markets 3379 | won 49.3% | mean ask 0.501 | net per $1 -0.061
+   high         moments  39316 | markets 3493 | won 59.2% | mean ask 0.596 | net per $1 -0.046
+ curv_5m (cuts -0.86, +0.86)
+   low          moments  39316 | markets 3490 | won 47.2% | mean ask 0.482 | net per $1 -0.086
+   mid          moments  39316 | markets 3409 | won 49.4% | mean ask 0.501 | net per $1 -0.051
+   high         moments  39316 | markets 3487 | won 51.5% | mean ask 0.520 | net per $1 -0.061
+ level_13m (cuts -0.29, +0.27)
+   low          moments  39316 | markets 3438 | won 21.2% | mean ask 0.224 | net per $1 -0.124
+   mid          moments  39316 | markets 2866 | won 49.2% | mean ask 0.500 | net per $1 -0.057
+   high         moments  39316 | markets 3458 | won 77.7% | mean ask 0.779 | net per $1 -0.019
+ slope_13m (cuts -0.99, +0.95)
+   low          moments  39316 | markets 3455 | won 30.6% | mean ask 0.322 | net per $1 -0.107
+   mid          moments  39316 | markets 3170 | won 49.3% | mean ask 0.501 | net per $1 -0.066
+   high         moments  39316 | markets 3456 | won 68.2% | mean ask 0.681 | net per $1 -0.026
+ curv_13m (cuts -0.88, +0.87)
+   low          moments  39316 | markets 3445 | won 37.0% | mean ask 0.388 | net per $1 -0.106
+   mid          moments  39316 | markets 3237 | won 49.3% | mean ask 0.501 | net per $1 -0.058
+   high         moments  39316 | markets 3445 | won 61.7% | mean ask 0.614 | net per $1 -0.035
+ level_34m (cuts -0.15, +0.14)
+   low          moments  39316 | markets 3373 | won 27.3% | mean ask 0.278 | net per $1 -0.098
+   mid          moments  39316 | markets 2738 | won 49.4% | mean ask 0.502 | net per $1 -0.060
+   high         moments  39316 | markets 3387 | won 71.4% | mean ask 0.723 | net per $1 -0.041
+ slope_34m (cuts -0.87, +0.82)
+   low          moments  39316 | markets 3323 | won 37.2% | mean ask 0.375 | net per $1 -0.083
+   mid          moments  39316 | markets 2621 | won 49.3% | mean ask 0.501 | net per $1 -0.060
+   high         moments  39316 | markets 3325 | won 61.5% | mean ask 0.626 | net per $1 -0.056
+ curv_34m (cuts -0.82, +0.79)
+   low          moments  39316 | markets 3334 | won 38.4% | mean ask 0.394 | net per $1 -0.107
+   mid          moments  39316 | markets 2738 | won 49.3% | mean ask 0.501 | net per $1 -0.042
+   high         moments  39316 | markets 3344 | won 60.4% | mean ask 0.608 | net per $1 -0.050
+ level_180m (cuts -0.09, +0.09)
+   low          moments  39316 | markets 3122 | won 41.2% | mean ask 0.423 | net per $1 -0.075
+   mid          moments  39316 | markets 1997 | won 49.3% | mean ask 0.500 | net per $1 -0.079
+   high         moments  39316 | markets 3146 | won 57.6% | mean ask 0.580 | net per $1 -0.046
+ slope_180m (cuts -0.87, +0.86)
+   low          moments  39316 | markets 2786 | won 48.4% | mean ask 0.483 | net per $1 -0.041
+   mid          moments  39316 | markets 1619 | won 49.3% | mean ask 0.501 | net per $1 -0.079
+   high         moments  39316 | markets 2792 | won 50.4% | mean ask 0.519 | net per $1 -0.079
+ curv_180m (cuts -0.79, +0.78)
+   low          moments  39316 | markets 2853 | won 49.0% | mean ask 0.487 | net per $1 -0.032
+   mid          moments  39316 | markets 1669 | won 49.3% | mean ask 0.500 | net per $1 -0.074
+   high         moments  39316 | markets 2852 | won 49.7% | mean ask 0.515 | net per $1 -0.094
+ level_13m (rows) against slope_13m (columns), terciles low/mid/high; each cell: markets, won, net per $1
+   low   | 3353  21% -0.12   |   2498  23% -0.12   |    842  20% -0.16
+   mid   | 2395  50% -0.08   |   2215  49% -0.06   |   2392  49% -0.02
+   high  |  849  79% -0.02   |   2507  76% -0.03   |   3366  78% -0.02
+ level_5m (rows) against level_180m (columns), terciles low/mid/high; each cell: markets, won, net per $1
+   low   | 2268  19% -0.10   |   1838  19% -0.17   |   1425  23% -0.11
+   mid   | 2266  47% -0.07   |   1395  49% -0.06   |   2267  52% -0.04
+   high  | 1446  76% -0.03   |   1835  80% -0.01   |   2295  80% -0.02
+=== BAND (ask 0.70-0.90, minutes 7-15): 13535 moments ===
+ level_5m (cuts +0.59, +0.98)
+   low          moments   4511 | markets 1731 | won 76.3% | mean ask 0.785 | net per $1 -0.043
+   mid          moments   4512 | markets 1875 | won 78.8% | mean ask 0.809 | net per $1 -0.039
+   high         moments   4512 | markets 1734 | won 83.3% | mean ask 0.843 | net per $1 -0.023
+ slope_5m (cuts -0.62, +1.18)
+   low          moments   4511 | markets 1706 | won 78.0% | mean ask 0.810 | net per $1 -0.051
+   mid          moments   4512 | markets 1940 | won 79.9% | mean ask 0.813 | net per $1 -0.030
+   high         moments   4512 | markets 1852 | won 80.5% | mean ask 0.813 | net per $1 -0.024
+ curv_5m (cuts -0.86, +0.82)
+   low          moments   4511 | markets 1780 | won 78.7% | mean ask 0.813 | net per $1 -0.046
+   mid          moments   4512 | markets 1986 | won 79.7% | mean ask 0.812 | net per $1 -0.032
+   high         moments   4512 | markets 1916 | won 80.0% | mean ask 0.811 | net per $1 -0.028
+ level_13m (cuts +0.34, +0.65)
+   low          moments   4511 | markets 1638 | won 76.5% | mean ask 0.789 | net per $1 -0.046
+   mid          moments   4512 | markets 1673 | won 79.7% | mean ask 0.811 | net per $1 -0.031
+   high         moments   4512 | markets 1478 | won 82.2% | mean ask 0.836 | net per $1 -0.028
+ slope_13m (cuts +0.10, +1.59)
+   low          moments   4511 | markets 1485 | won 78.0% | mean ask 0.806 | net per $1 -0.046
+   mid          moments   4512 | markets 1809 | won 79.7% | mean ask 0.808 | net per $1 -0.027
+   high         moments   4512 | markets 1579 | won 80.6% | mean ask 0.822 | net per $1 -0.032
+ curv_13m (cuts -0.57, +1.10)
+   low          moments   4511 | markets 1403 | won 79.1% | mean ask 0.810 | net per $1 -0.038
+   mid          moments   4512 | markets 1785 | won 79.3% | mean ask 0.810 | net per $1 -0.035
+   high         moments   4512 | markets 1558 | won 80.0% | mean ask 0.816 | net per $1 -0.033
+ level_34m (cuts +0.15, +0.37)
+   low          moments   4511 | markets 1425 | won 78.3% | mean ask 0.797 | net per $1 -0.031
+   mid          moments   4512 | markets 1436 | won 79.4% | mean ask 0.812 | net per $1 -0.036
+   high         moments   4512 | markets 1221 | won 80.7% | mean ask 0.827 | net per $1 -0.038
+ slope_34m (cuts +0.15, +1.46)
+   low          moments   4511 | markets 1408 | won 77.4% | mean ask 0.805 | net per $1 -0.051
+   mid          moments   4512 | markets 1490 | won 80.1% | mean ask 0.813 | net per $1 -0.027
+   high         moments   4512 | markets 1272 | won 80.8% | mean ask 0.818 | net per $1 -0.027
+ curv_34m (cuts -0.06, +1.35)
+   low          moments   4511 | markets 1415 | won 77.3% | mean ask 0.807 | net per $1 -0.056
+   mid          moments   4512 | markets 1464 | won 79.6% | mean ask 0.812 | net per $1 -0.032
+   high         moments   4512 | markets 1309 | won 81.5% | mean ask 0.818 | net per $1 -0.018
+ level_180m (cuts -0.03, +0.13)
+   low          moments   4511 | markets 1266 | won 80.2% | mean ask 0.808 | net per $1 -0.022
+   mid          moments   4512 | markets 1276 | won 80.3% | mean ask 0.811 | net per $1 -0.023
+   high         moments   4512 | markets 1249 | won 77.8% | mean ask 0.817 | net per $1 -0.061
+ slope_180m (cuts -0.73, +0.96)
+   low          moments   4511 | markets 1155 | won 80.2% | mean ask 0.811 | net per $1 -0.024
+   mid          moments   4512 | markets 1095 | won 79.3% | mean ask 0.812 | net per $1 -0.038
+   high         moments   4512 | markets 1187 | won 78.9% | mean ask 0.813 | net per $1 -0.044
+ curv_180m (cuts -0.68, +0.89)
+   low          moments   4511 | markets 1194 | won 80.1% | mean ask 0.810 | net per $1 -0.025
+   mid          moments   4512 | markets 1119 | won 79.8% | mean ask 0.814 | net per $1 -0.034
+   high         moments   4512 | markets 1184 | won 78.4% | mean ask 0.812 | net per $1 -0.047
+ level_13m (rows) against slope_13m (columns), terciles low/mid/high; each cell: markets, won, net per $1
+   low   | 1014  76% -0.06   |    694  78% -0.02   |    474  76% -0.04
+   mid   |  654  80% -0.03   |    779  81% -0.02   |    689  78% -0.04
+   high  |  364  83% -0.02   |    738  81% -0.04   |   1054  83% -0.02
+ level_5m (rows) against level_180m (columns), terciles low/mid/high; each cell: markets, won, net per $1
+   low   |  768  75% -0.05   |    731  79% -0.01   |    620  74% -0.08
+   mid   |  717  79% -0.04   |    721  80% -0.02   |    742  77% -0.06
+   high  |  603  87% +0.03   |    631  82% -0.04   |    729  81% -0.05
+DONE

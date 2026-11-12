@@ -360,3 +360,19 @@ def test_curvature2_splits_the_bend_by_sign_and_damps_the_cushion_by_motion():
     assert curvemodel.lookback_seconds("curvature2") == 34 * 60
     model = curvemodel.fit([(curvemodel.expand_curvature2([random.gauss(0, 1) for _ in range(9)]), 0.8, random.gauss(0, 1)) for _ in range(3100)], kind="curvature2")
     assert model["names"] == [*curvemodel.CURV2_NAMES, "ask"] and len(model["mu"]) == 14
+
+
+def test_the_three_hour_window_is_a_reading_that_needs_three_hours_of_history():
+    now = 1_900_000_000.0
+    ts = [now - 4 * 3600 + i for i in range(4 * 3600 + 1)]
+    vs = [100.0 + 0.0001 * i + 0.01 * ((i // 7) % 2) for i in range(len(ts))]
+    g, sq, k = curvemodel.live_grid(ts, vs, now, 180 * 60)
+    strike = math.log(99.0)
+    read = curvemodel.readings_for("curvature3", g, sq, k, strike, 1)
+    assert read is not None and len(read) == 12 == len(curvemodel.LONG_NAMES)
+    assert read[:9] == curvemodel.readings_for("curvature", g, sq, k, strike, 1)  # the first three windows read the same
+    assert curvemodel.lookback_seconds("curvature3") == 180 * 60
+    short = [ts[0] + 2 * 3600 + i for i in range(2 * 3600 + 1)]
+    got = curvemodel.live_grid(short, [100.0 + 0.01 * (i % 5) for i in range(len(short))], short[-1], 180 * 60)
+    why: list[str] = []
+    assert got is None or curvemodel.readings_for("curvature3", got[0], got[1], got[2], strike, 1, why) is None  # two hours of history cannot read a three-hour window

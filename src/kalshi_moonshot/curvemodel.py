@@ -38,9 +38,11 @@ TIME_NAMES = ["left_min", *(f"z_{m}m" for m in TIME_SCALES), *(f"proj_{m}m" for 
 CLIP = 9.0
 QUAD_WINDOWS = (5, 13, 34)  # minutes
 QUAD_SAMPLES = 25
+LONG_WINDOWS = (5, 13, 34, 180)  # minutes: the curvature windows plus 3 hours (user, 2026-11-12: "i wish we could include 3h, great idea" for the views he zooms across: 1h, 15, 5m, live)
 QUAD_NAMES = [f"{kind}_{m}m" for m in QUAD_WINDOWS for kind in ("level", "slope", "curv")]
 CURV2_NAMES = [f"{kind}_{m}m" for m in QUAD_WINDOWS for kind in ("level", "slope", "bendup", "benddown")] + ["sat_13m"]
-KINDS = {"fibonacci": READ_NAMES, "curvature": QUAD_NAMES, "curvature2": CURV2_NAMES}
+LONG_NAMES = [f"{kind}_{m}m" for m in LONG_WINDOWS for kind in ("level", "slope", "curv")]
+KINDS = {"fibonacci": READ_NAMES, "curvature": QUAD_NAMES, "curvature2": CURV2_NAMES, "curvature3": LONG_NAMES}
 
 
 def _parabola_weights() -> list[list[float]]:
@@ -106,10 +108,10 @@ def features(g: list[float | None], sq: list[float], k: int, strike_log: float, 
     return out
 
 
-def features_curvature(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None) -> list[float] | None:
+def features_curvature(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None, windows: tuple[int, ...] = QUAD_WINDOWS) -> list[float] | None:
     """The curvature readings at index k: over the last 5, 13 and 34 minutes the cushion path (QUAD_SAMPLES points, in that window's typical move: the one-second root-mean-square log move times sqrt(window seconds)) is fitted with a parabola a + b u + c u^2, u from -1 (the window's start) to 0 (now); the readings are its level a (the cushion now, smoothed), slope b and curvature c, per window. One curve gives both sides' readings (all three flip sign with the side). None when a window is not covered or has no spread."""
     out: list[float] = []
-    for m in QUAD_WINDOWS:
+    for m in windows:
         look = 60 * m
         if k - look < 0:
             if why is not None:
@@ -145,6 +147,8 @@ def expand_curvature2(read: list[float]) -> list[float]:
 
 
 def readings_for(kind: str, g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None) -> list[float] | None:
+    if kind == "curvature3":
+        return features_curvature(g, sq, k, strike_log, sign, why, LONG_WINDOWS)
     if kind in ("curvature", "curvature2"):
         read = features_curvature(g, sq, k, strike_log, sign, why)
         return expand_curvature2(read) if read is not None and kind == "curvature2" else read
@@ -153,7 +157,7 @@ def readings_for(kind: str, g: list[float | None], sq: list[float], k: int, stri
 
 def lookback_seconds(kind: str) -> int:
     """How much history a model's readings reach back over: 55 minutes for the Fibonacci readings, 34 for the curvature ones. A lane must not wait for more than its readings use (2026-11-09: a 5-minute tick gap from a host reboot kept both curvature lanes blind for 55 minutes when 34 were needed)."""
-    return 60 * (max(QUAD_WINDOWS) if kind in ("curvature", "curvature2") else FIB[-1])
+    return 60 * (max(LONG_WINDOWS) if kind == "curvature3" else max(QUAD_WINDOWS) if kind in ("curvature", "curvature2") else FIB[-1])
 
 
 def live_grid(ts: list[float], vs: list[float], now: float, span: int | None = None) -> tuple[list[float | None], list[float], int] | None:
@@ -354,7 +358,7 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
     store = Store(s.db_path, s.exclude_versions)
     tape = db.connect(s.tape_path, "tape", shared=True)
     t0 = now - TRAIN_DAYS * 86400.0
-    g0 = int(t0 - 3500)
+    g0 = int(t0 - max(3500, lookback_seconds(kind) + 200))
     g1 = int(now) + 2
     wins = store.db.execute("SELECT ticker,series,close_ts,strike,result FROM windows WHERE close_ts>? AND result IN ('yes','no') AND strike>0 ORDER BY series,close_ts", (t0,)).fetchall()
     rows: list[tuple[list[float], float, float]] = []
@@ -414,7 +418,7 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
             for side, bid, ask in (("yes", yb, ya), ("no", 1 - ya, 1 - yb)):
                 if not (plo <= ask <= phi) or ask - bid > cap:
                     continue
-                if kind in ("curvature", "curvature2"):
+                if kind in ("curvature", "curvature2", "curvature3"):
                     read = readings_for(kind, g, sq, k, strike_log, 1 if side == "yes" else -1)
                 else:
                     read = features(g, sq, k, strike_log, 1 if side == "yes" else -1, None, close - at if timed else None)
