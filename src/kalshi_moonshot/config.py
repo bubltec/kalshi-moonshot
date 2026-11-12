@@ -160,6 +160,8 @@ class Settings:
     archive_hot_days: int  # tape days kept in the local database; older ones, once archived and verified, may be deleted locally
     site_bucket: str  # S3 bucket of the public website (infra/site_stack.py); the bot writes only public/public.json there, with its host role ('' = off; see sitepub.py)
     site_region: str
+    heartbeat_enabled: bool  # send the watchdog heartbeat to CloudWatch (heartbeat.py); on for the cloud host only
+    heartbeat_region: str
     site_publish_minutes: int  # how often public.json is rebuilt and uploaded
     archive_delete_local: bool  # off: the archive only uploads. On: archived days older than archive_hot_days are deleted from the local tape
     max_rps: float  # Kalshi requests per second the bot paces itself to
@@ -422,6 +424,8 @@ def load() -> Settings:
         archive_delete_local=_b("ARCHIVE_DELETE_LOCAL", False),
         site_bucket=os.environ.get("SITE_BUCKET", "").strip(),
         site_region=os.environ.get("SITE_REGION", "us-east-1").strip() or "us-east-1",
+        heartbeat_enabled=os.environ.get("HEARTBEAT_ENABLED", "").strip().lower() in ("1", "true", "yes"),
+        heartbeat_region=os.environ.get("HEARTBEAT_REGION", "us-east-2").strip() or "us-east-2",
         site_publish_minutes=max(5, _i("SITE_PUBLISH_MINUTES", 30)),
         esports_forecast=_b("ESPORTS_FORECAST", True),
         settlement_edge_enabled=_b("SETTLEMENT_EDGE_ENABLED", False),  # off: the paper observer's replay edge vanished once fills were delayed (scripts/settlement_edge_fill_study.py)

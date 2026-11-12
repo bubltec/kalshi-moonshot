@@ -112,6 +112,7 @@ class Worker:
         self._poly_client: Any = None  # PolymarketClient, False once building it has failed, None until first use
         self._poly_stream: Any = None
         self._last_cleanup = 0.0
+        self.last_progress = time.time()  # when a job last finished, for the watchdog heartbeat (heartbeat.py)
         self.share = EstimateShare()  # one estimate per market, reused by every lane that asks soon after
         self._split = False  # True once run_forever has started the maintenance thread: the main loop then leaves those jobs to it
         self._sell_threads = 0  # how many dedicated sell workers run_forever started
@@ -177,6 +178,14 @@ class Worker:
             sitepub.publish_admin_once(s, Store(s.db_path, s.exclude_versions), sitepub.client_for(s))
 
         control.start(lambda: self.s, publish_admin)  # the admin page's lane changes; idle until SITE_BUCKET is set
+        from . import heartbeat
+
+        def progress() -> tuple[float, float]:
+            rec = self.recorder
+            beat = max((getattr(x, "last_event_at", None) or 0.0) for x in (getattr(rec, "stream", None), getattr(rec, "extra_stream", None)))
+            return self.last_progress, beat
+
+        heartbeat.start(lambda: self.s.heartbeat_enabled, self.s.heartbeat_region, progress)  # the watchdog's heartbeat; idle unless HEARTBEAT_ENABLED
 
     def _start_tape(self) -> None:
         """Record quotes next to the feed price they follow (read-only; see tape.py)."""
@@ -502,6 +511,7 @@ class Worker:
                 raise ValueError(f"unknown job kind {job.kind!r}")
             began = time.time()
             self.jobs.complete(job.id, handler(job) or "")
+            self.last_progress = time.time()
             if job.kind == "evaluate":
                 shot = job.payload.get("shot") or {}
                 log.info("buy timing %s %s: %.0f ms from the queue to the start of the evaluation, %.1f ms evaluating and deciding. %s", shot.get("lane", ""), shot.get("ticker", ""),

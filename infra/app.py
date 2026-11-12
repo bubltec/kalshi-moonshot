@@ -16,6 +16,7 @@ from archive_stack import ArchiveStack
 from bot_stack import BotStack
 from jobs_stack import JobsStack
 from site_stack import SiteStack
+from watchdog_stack import WatchdogStack
 
 app = cdk.App()
 account = app.node.try_get_context("account") or os.environ.get("CDK_DEFAULT_ACCOUNT")
@@ -45,6 +46,12 @@ SiteStack(
     "KalshiMoonshotSite",
     env=cdk.Environment(account=account, region="us-east-1"),  # CloudFront's certificate and the shared WAF live in us-east-1
     description="kalshi-moonshot.bubbletech.io: a private bucket behind CloudFront and the shared bubbletech WAF.",
+)
+WatchdogStack(
+    app,
+    "KalshiMoonshotWatchdog",
+    env=cdk.Environment(account=account, region=app.node.try_get_context("bot_region") or "us-east-2"),
+    description="Emails when the live bot stops: EC2 status-check alarm plus a heartbeat alarm. Self-contained; never touches the bot stack. Needs -c alert_email=... -c bot_role_name=...",
 )
 cdk.Tags.of(app).add("project", "kalshi-moonshot")
 app.synth()
