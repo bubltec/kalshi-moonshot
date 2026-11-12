@@ -345,3 +345,18 @@ def test_the_refit_starts_when_any_category_has_no_model_or_an_old_one(tmp_path,
         curvemodel._cache.update(mtime=None, data=None)
         curvemodel._category_cache.clear()
         curvemodel._fitting = None
+
+
+def test_curvature2_splits_the_bend_by_sign_and_damps_the_cushion_by_motion():
+    read = [1.0, 0.5, 2.0, 0.8, -1.0, -3.0, 0.2, 0.0, 0.0]  # per window: level, slope, curvature
+    out = curvemodel.expand_curvature2(read)
+    assert len(out) == len(curvemodel.CURV2_NAMES) == 13
+    assert out[:4] == [1.0, 0.5, 2.0, 0.0]  # 5 min: bends toward the bet's side, nothing away
+    assert out[4:8] == [0.8, -1.0, 0.0, -3.0]  # 13 min: bends away
+    assert out[8:12] == [0.2, 0.0, 0.0, 0.0]
+    assert abs(out[12] - 0.8 / (1 + 1.0 + 3.0)) < 1e-12  # sat_13m: the level over one plus the slope and bend magnitudes
+    flipped = curvemodel.expand_curvature2([-x for x in read])
+    assert flipped[2] == 0.0 and flipped[3] == -2.0  # the other side of the same curve swaps which sign each bend lands in
+    assert curvemodel.lookback_seconds("curvature2") == 34 * 60
+    model = curvemodel.fit([(curvemodel.expand_curvature2([random.gauss(0, 1) for _ in range(9)]), 0.8, random.gauss(0, 1)) for _ in range(3100)], kind="curvature2")
+    assert model["names"] == [*curvemodel.CURV2_NAMES, "ask"] and len(model["mu"]) == 14

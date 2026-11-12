@@ -39,7 +39,8 @@ CLIP = 9.0
 QUAD_WINDOWS = (5, 13, 34)  # minutes
 QUAD_SAMPLES = 25
 QUAD_NAMES = [f"{kind}_{m}m" for m in QUAD_WINDOWS for kind in ("level", "slope", "curv")]
-KINDS = {"fibonacci": READ_NAMES, "curvature": QUAD_NAMES}
+CURV2_NAMES = [f"{kind}_{m}m" for m in QUAD_WINDOWS for kind in ("level", "slope", "bendup", "benddown")] + ["sat_13m"]
+KINDS = {"fibonacci": READ_NAMES, "curvature": QUAD_NAMES, "curvature2": CURV2_NAMES}
 
 
 def _parabola_weights() -> list[list[float]]:
@@ -132,13 +133,27 @@ def features_curvature(g: list[float | None], sq: list[float], k: int, strike_lo
     return out
 
 
+def expand_curvature2(read: list[float]) -> list[float]:
+    """The curvature readings reshaped (2026-11-12, user: integrate the three ideas from the 1989 curvature-dependent turbulence paper, Park and Chung, AIAA Journal 27(3)): the nine level/slope/curvature readings become, per window, the level, the slope and the curvature split by sign (bendup: the cushion path accelerates toward the bet's side, c above zero; benddown: it bends away, c below zero, so each sign gets its own weight, as the paper gives convex and concave curvature opposite effects), plus one saturating ratio on the 13-minute window, sat_13m = level / (1 + |slope| + |curvature|): the paper damps a term by 1 / (1 + a * velocity time scale / curvature time scale), so the cushion counts for less the faster the path is moving and bending, and the effect saturates instead of growing in a straight line. The form is a stated choice, not fitted; nothing here comes from the paper's fluid constants."""
+    out: list[float] = []
+    for j in range(len(QUAD_WINDOWS)):
+        a, b, c = read[3 * j: 3 * j + 3]
+        out += [a, b, max(c, 0.0), min(c, 0.0)]
+    a13, b13, c13 = read[3: 6]
+    out.append(a13 / (1.0 + abs(b13) + abs(c13)))
+    return out
+
+
 def readings_for(kind: str, g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None) -> list[float] | None:
-    return features_curvature(g, sq, k, strike_log, sign, why) if kind == "curvature" else features(g, sq, k, strike_log, sign, why)
+    if kind in ("curvature", "curvature2"):
+        read = features_curvature(g, sq, k, strike_log, sign, why)
+        return expand_curvature2(read) if read is not None and kind == "curvature2" else read
+    return features(g, sq, k, strike_log, sign, why)
 
 
 def lookback_seconds(kind: str) -> int:
     """How much history a model's readings reach back over: 55 minutes for the Fibonacci readings, 34 for the curvature ones. A lane must not wait for more than its readings use (2026-11-09: a 5-minute tick gap from a host reboot kept both curvature lanes blind for 55 minutes when 34 were needed)."""
-    return 60 * (max(QUAD_WINDOWS) if kind == "curvature" else FIB[-1])
+    return 60 * (max(QUAD_WINDOWS) if kind in ("curvature", "curvature2") else FIB[-1])
 
 
 def live_grid(ts: list[float], vs: list[float], now: float, span: int | None = None) -> tuple[list[float | None], list[float], int] | None:
@@ -399,8 +414,8 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
             for side, bid, ask in (("yes", yb, ya), ("no", 1 - ya, 1 - yb)):
                 if not (plo <= ask <= phi) or ask - bid > cap:
                     continue
-                if kind == "curvature":
-                    read = features_curvature(g, sq, k, strike_log, 1 if side == "yes" else -1)
+                if kind in ("curvature", "curvature2"):
+                    read = readings_for(kind, g, sq, k, strike_log, 1 if side == "yes" else -1)
                 else:
                     read = features(g, sq, k, strike_log, 1 if side == "yes" else -1, None, close - at if timed else None)
                 if read is None:
