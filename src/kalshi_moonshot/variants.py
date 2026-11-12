@@ -585,14 +585,14 @@ def market_wave_now(side: str, now: float | None = None) -> dict | None:
     return _path_features(mean) | {"coins": float(len(paths))}
 
 
-_comeback_memo: dict[str, tuple[int, tuple[float, int] | None]] = {}
+_comeback_memo: dict[str, tuple[int, tuple[float, int, float] | None]] = {}
 
 
-def comeback_rate(index: str, now: float | None = None, fall_units: float = 1.5, fall_seconds: int = 60, back_seconds: int = 120, hours: float = 1.0) -> tuple[float, int] | None:
-    """How often this index's own fast falls came back, over the last hour (2026-11-11, user, on the XRP sale of 12:08: "based on the hour curve we should have been able to tell it is going to return and wasn't a gradual down").
-    A fast fall is the trajectory sale's own trigger: the spot fell `fall_units` typical minutes (the rms one-second move of the preceding 900 s times sqrt(60)) over `fall_seconds`; counted once per fall (not again for `back_seconds`),
-    and it came back when the spot regained half the fall within `back_seconds`. Returns (share that came back, number of falls), or None when the history does not cover the hour. In the 11-11 hour before the XRP sale XRP had
-    10 such falls and 6 came back (BTC 1 of 4, ETH 4 of 6, SOL 4 of 7, DOGE 3 of 6; scripts in the commit message). Cached for 30 s. Direction-free: a spot that fell is the YES side's dip and the NO side's bounce, and the share that came back is the same number."""
+def comeback_stats(index: str, now: float | None = None, fall_units: float = 1.5, fall_seconds: int = 60, back_seconds: int = 120, hours: float = 1.0) -> tuple[float, int, float] | None:
+    """How this index's own fast falls came back over the last hour (2026-11-11, user: "based on the hour curve we should have been able to tell it is going to return"; then "the exit wait needs to scale with time left and how severe a drop"):
+    (share that came back, number of falls, median seconds a fall took to regain half of itself). A fast fall is the trajectory sale's own trigger: the spot fell `fall_units` typical minutes (the rms one-second move of the preceding 900 s times
+    sqrt(60)) over `fall_seconds`, counted once per fall (not again for `back_seconds`); it came back when the spot regained half the fall within `back_seconds`; a fall that did not counts as `back_seconds` in the median. None when the history
+    does not cover the hour. The fall being decided is not in it (falls in the last `back_seconds` cannot be judged yet). Cached for 30 s. Direction-free."""
     now = time.time() if now is None else now
     key = f"{index}:{fall_units}:{fall_seconds}:{back_seconds}:{hours}"
     memo = _comeback_memo.get(key)
@@ -600,7 +600,7 @@ def comeback_rate(index: str, now: float | None = None, fall_units: float = 1.5,
         return memo[1]
     span = hours * 3600.0
     got = ticks_mod.history.window(index, now - span - 1000.0, now)
-    out: tuple[float, int] | None = None
+    out: tuple[float, int, float] | None = None
     if got and got[0] and got[0][0] <= now - span - 900.0:
         ts, vs = got
         base = int(now - span - 900.0)
@@ -621,6 +621,7 @@ def comeback_rate(index: str, now: float | None = None, fall_units: float = 1.5,
             for a, b in itertools.pairwise(g):
                 pre.append(pre[-1] + (b - a) ** 2)
             n = came = 0
+            took: list[float] = []
             skip = -1
             for k in range(900, len(g) - back_seconds):
                 if k < skip:
@@ -632,11 +633,18 @@ def comeback_rate(index: str, now: float | None = None, fall_units: float = 1.5,
                 if fall >= fall_units * unit:
                     n += 1
                     skip = k + back_seconds
-                    if max(g[k : k + back_seconds + 1]) - g[k] >= 0.5 * fall:
-                        came += 1
-            out = (came / n, n) if n else (0.0, 0)
+                    first = next((d for d in range(back_seconds + 1) if g[k + d] - g[k] >= 0.5 * fall), None)
+                    came += first is not None
+                    took.append(float(back_seconds if first is None else first))
+            out = (came / n, n, statistics.median(took)) if n else (0.0, 0, float(back_seconds))
     _comeback_memo[key] = (int(now // 30), out)
     return out
+
+
+def comeback_rate(index: str, now: float | None = None, fall_units: float = 1.5, fall_seconds: int = 60, back_seconds: int = 120, hours: float = 1.0) -> tuple[float, int] | None:
+    """(share that came back, number of falls) from comeback_stats; see there."""
+    got = comeback_stats(index, now, fall_units, fall_seconds, back_seconds, hours)
+    return None if got is None else (got[0], got[1])
 
 
 PERP_FRESH = 30.0  # seconds: a Kalshi perp reference tick older than this is not a live spot

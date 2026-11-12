@@ -206,6 +206,10 @@ class Target:
     curve_drop_margin: float = 0.5
     curve_drop_persist: float = 5.0
     curve_drop_since: float = 0.0
+    curve_wait_share: float = -1.0  # lane curve_wait_share (-1 = off): the curve sale and time-to-go wait by the market's own recovery time, less with a deeper drop, never over this share of the time left
+    curve_wait_severe: float = 1.5
+    curve_wait_default: float = 15.0
+    go_since: float = 0.0
     curve_comeback: float = -1.0  # lane curve_drop_comeback (-1 = off): hold the trajectory sale while the coin's own hour says its falls come back (variants.comeback_rate)
     curve_comeback_min: int = 5
     curve_comeback_hold: float = 240.0
@@ -753,8 +757,17 @@ class ProfitWatcher:
         if read is None:
             t.curve_since = 0.0
             return None
-        if go and read.p < t.curve_behind_chance:
+        tm = read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0
+        wait = self._scaled_wait(t, now, left, tm) if t.curve_wait_share > 0 else None
+        if go and read.p < t.curve_behind_chance and wait is not None:
+            if t.go_since <= 0:
+                t.go_since = now
+            if now - t.go_since >= wait:
+                return f"curve exit (time to go): the curve's chance is {read.p:.3f}, under {t.curve_behind_chance:g}, with {left:.0f}s left; held {now - t.go_since:.0f}s of a {wait:.0f}s wait that scales with the time left and how far under the target it is ({tm:+.2f} typical minutes); bid {bid:.2f}"
+        elif go and read.p < t.curve_behind_chance:
             return f"curve exit (time to go): the curve's chance is {read.p:.3f}, under {t.curve_behind_chance:g}, with {left:.0f}s left (sells in the last {t.curve_behind_last:g}s); bid {bid:.2f}, cushion {read.cushion * 1e4:+.1f} bp"
+        if not (go and read.p < t.curve_behind_chance):
+            t.go_since = 0.0
         if quiet:
             t.curve_since = 0.0
             return None
@@ -763,8 +776,7 @@ class ProfitWatcher:
         margin = t.curve_margin if t.curve_near < 0 else t.curve_near + (t.curve_margin - t.curve_near) * (min(max(left, 0.0), 900.0) / 900.0) ** 0.5  # the margin shrinks with the square root of the time left
         if now - t.curve_noted >= 10.0:
             t.curve_noted = now
-            log.info("curve exit watch %s %s, %.0fs left: bid %.2f (%.3f after the fee), curve chance %.3f, over by %+.3f (sells at %+.3f for %.0fs); cushion %+.2f typical minutes", t.ticker, t.lane, left, bid, net, read.p, over, margin, t.curve_persist, read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0)
-        tm = read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0
+            log.info("curve exit watch %s %s, %.0fs left: bid %.2f (%.3f after the fee), curve chance %.3f, over by %+.3f (sells at %+.3f for %.0fs); cushion %+.2f typical minutes", t.ticker, t.lane, left, bid, net, read.p, over, margin, wait if wait is not None else t.curve_persist, read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0)
         if t.hold_since > 0:
             ended = self._comeback_expired(t, now, left, tm, bid)
             if ended:
@@ -798,9 +810,20 @@ class ProfitWatcher:
             return None
         if t.curve_since <= 0:
             t.curve_since = now
-        if now - t.curve_since < t.curve_persist:
+        if now - t.curve_since < (wait if wait is not None else t.curve_persist):
             return None
         return f"curve exit: bid {bid:.2f} ({net:.3f} after the fee) is {over:+.3f} over the curve's {read.p:.3f} chance that the side pays (margin {margin:.3f} with {left:.0f}s left, held {now - t.curve_since:.0f}s); cushion {read.cushion * 1e4:+.1f} bp, rates {read.rate_long * 60**0.5 * 1e4:.1f} / {read.rate_short * 60**0.5 * 1e4:.1f} bp a typical minute (900 s / 180 s), {left:.0f}s left"
+
+    def _scaled_wait(self, t: Target, now: float, left: float, tm: float) -> float:
+        """Seconds the curve sale and time-to-go wait before selling (lane field curve_wait_share): the market's own median seconds for a fast fall to regain half of itself over the last hour (curve_wait_default when it has under 5 falls),
+        less the deeper the spot is under the target (typical minutes under it over curve_wait_severe: zero at that depth), and never more than curve_wait_share of the time left."""
+        base = t.curve_wait_default
+        got = variants.comeback_stats(t.shock_index, now)
+        if got is not None and got[1] >= 5:
+            base = got[2]
+        severity = max(0.0, -tm)
+        scale = 1.0 - min(1.0, severity / max(t.curve_wait_severe, 1e-9))
+        return max(0.0, min(base * scale, t.curve_wait_share * max(left, 0.0)))
 
     COMEBACK_BACK_SECONDS = 120.0  # the window the comeback rate was measured over (variants.comeback_rate)
 
@@ -1605,6 +1628,7 @@ class ProfitWatcher:
                     if spec.curve_exit >= 0:
                         held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
                         held.curve_near = spec.curve_exit_near
+                        held.curve_wait_share, held.curve_wait_severe, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_severe, spec.curve_wait_default
                         held.curve_comeback, held.curve_comeback_min, held.curve_comeback_hold = spec.curve_drop_comeback, spec.curve_drop_comeback_min, spec.curve_drop_comeback_hold
                         held.curve_drop_units, held.curve_drop_seconds, held.curve_drop_margin, held.curve_drop_persist = spec.curve_drop_units, spec.curve_drop_seconds, spec.curve_drop_margin_units, spec.curve_drop_persist
                         held.curve_gap, held.curve_gap_persist, held.curve_behind_last, held.curve_behind_chance = spec.curve_gap, spec.curve_gap_persist, spec.curve_behind_last, spec.curve_behind_chance

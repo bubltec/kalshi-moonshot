@@ -10,7 +10,7 @@ CLOSE = 9_900.0
 
 
 def target(**kw):
-    base = dict(ticker="KXBTC15M-1", lane="x", side="yes", curve_margin=-1.0, curve_rest=0.15, rest_price=0.0, rest_at=0.0, curve_at=0.0, close_ts=CLOSE, shock_ref=100.0, shock_index="BRTI",
+    base = dict(ticker="KXBTC15M-1", lane="x", side="yes", curve_margin=-1.0, curve_rest=0.15, curve_wait_share=-1.0, curve_wait_severe=1.5, curve_wait_default=15.0, go_since=0.0, rest_price=0.0, rest_at=0.0, curve_at=0.0, close_ts=CLOSE, shock_ref=100.0, shock_index="BRTI",
                 curve_behind_last=120.0, curve_behind_chance=0.5)
     base.update(kw)
     return SimpleNamespace(**base)
