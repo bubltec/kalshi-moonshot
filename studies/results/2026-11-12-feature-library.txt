@@ -1,0 +1,158 @@
+161145 moments from 3518 markets since Monday 11-09; the tape ends 11-11 05:00 ET; features per moment up to 107
+
+=== ALL (ask 0.05-0.95): 131430 moments, 3505 markets ===
+all moments, round trip H=2: mean net per $1 -0.1967  (the baseline every feature is a change from); H=1 -0.1979, H=3 -0.1903
+ask terciles cut at 0.35 and 0.66
+106 features screened; 72 past |t| = 2 (about 5 expected by chance)
+feature        | spread of round-trip net per $1, high minus low tercile (t) | inside level_13m low/mid/high | same sign in all three | inside ask terciles low/mid/high | same sign in all three | spread of the bid change, cents (t)
+ mom_2m        | +0.2377 (+31.4) | +0.076 / +0.023 / +0.022 | yes | +0.065 / +0.018 / +0.008 | yes | +1.89 (+9.6)
+ mom_3m        | +0.2801 (+31.3) | +0.118 / +0.034 / +0.038 | yes | +0.109 / +0.027 / +0.028 | yes | +2.06 (+9.1)
+ mom_1m        | +0.1879 (+30.6) | +0.035 / +0.014 / +0.007 | yes | +0.040 / +0.022 / -0.000 | no  | +1.75 (+11.0)
+ slope_5m      | +0.1997 (+27.4) | +0.071 / +0.031 / +0.019 | yes | +0.048 / +0.066 / +0.017 | yes | +1.22 (+6.1)
+ slope_8m      | +0.2092 (+27.3) | +0.079 / +0.029 / +0.008 | yes | +0.085 / +0.048 / +0.014 | yes | +0.72 (+3.5)
+ level_55m     | +0.2320 (+26.1) | +nan / +0.114 / +nan | no  | +0.044 / +0.129 / +0.075 | yes | -0.04 (-0.2)
+ level_180m    | +0.2342 (+25.8) | +nan / +0.157 / +nan | no  | +0.078 / +0.138 / +0.076 | yes | +0.06 (+0.2)
+ level_34m     | +0.2288 (+25.5) | +nan / +0.116 / +nan | no  | +0.076 / +0.126 / +0.082 | yes | -0.17 (-0.7)
+ level_1m      | +0.2271 (+25.5) | +nan / +0.095 / +nan | no  | +0.051 / +0.108 / +0.049 | yes | -0.15 (-0.7)
+ level_13m     | +0.2284 (+25.5) | +nan / +nan / +nan | no  | +0.052 / +0.143 / +0.068 | yes | -0.05 (-0.2)
+ fromlow_8m    | +0.1883 (+25.5) | -0.010 / +0.011 / -0.008 | no  | -0.014 / +0.043 / +0.008 | no  | +0.62 (+2.9)
+ level_2m      | +0.2280 (+25.4) | +nan / +0.115 / +nan | no  | -0.078 / +0.121 / +0.013 | no  | -0.08 (-0.4)
+ level_3m      | +0.2273 (+25.4) | +nan / +0.098 / +nan | no  | -0.029 / +0.124 / +0.020 | no  | -0.13 (-0.6)
+ fromlow_5m    | +0.1734 (+25.4) | -0.022 / +0.017 / +0.005 | no  | -0.017 / +0.058 / +0.013 | no  | +1.10 (+5.6)
+ slope_3m      | +0.1714 (+25.3) | +0.015 / +0.023 / +0.015 | yes | +0.011 / +0.072 / +0.014 | yes | +1.32 (+7.0)
+ level_21m     | +0.2284 (+25.2) | +nan / +0.116 / +nan | no  | +0.032 / +0.138 / +0.056 | yes | -0.10 (-0.5)
+ fromhigh_8m   | -0.2028 (-24.8) | -0.029 / -0.011 / +0.008 | no  | -0.035 / -0.046 / -0.005 | yes | -0.67 (-3.2)
+ fromhigh_13m  | -0.2013 (-24.5) | -0.142 / +0.008 / -0.001 | no  | -0.172 / -0.024 / -0.010 | yes | +0.19 (+0.9)
+ level_8m      | +0.2247 (+24.4) | +nan / +0.074 / +nan | no  | +0.034 / +0.123 / +0.065 | yes | -0.19 (-0.8)
+ level_5m      | +0.2236 (+24.2) | +nan / +0.083 / +nan | no  | -0.003 / +0.120 / +0.049 | no  | -0.23 (-1.0)
+ fromlow_13m   | +0.1862 (+23.5) | +0.045 / +0.008 / +0.023 | yes | +0.061 / +0.022 / +0.036 | yes | -0.23 (-1.0)
+ fromlow_3m    | +0.1479 (+23.4) | -0.024 / +0.009 / +0.003 | no  | -0.013 / +0.052 / +0.002 | no  | +1.28 (+7.1)
+ fromhigh_5m   | -0.1800 (-22.8) | +0.030 / -0.015 / -0.001 | no  | +0.006 / -0.058 / -0.008 | no  | -1.12 (-5.7)
+ slope_2m      | +0.1417 (+22.1) | -0.024 / +0.003 / +0.007 | no  | -0.024 / +0.053 / +0.003 | no  | +1.14 (+6.5)
+ fromhigh_3m   | -0.1530 (-21.5) | +0.026 / -0.009 / -0.005 | no  | +0.030 / -0.050 / -0.007 | no  | -1.27 (-7.1)
+ fromlow_2m    | +0.1216 (+20.2) | -0.048 / +0.012 / +0.003 | no  | -0.038 / +0.046 / +0.002 | no  | +1.19 (+7.1)
+ curv_13m      | +0.1546 (+19.5) | +0.065 / +0.054 / +0.032 | yes | +0.059 / +0.074 / +0.026 | yes | +1.69 (+7.5)
+ fromhigh_2m   | -0.1267 (-19.5) | +0.032 / -0.012 / -0.001 | no  | +0.035 / -0.049 / -0.002 | no  | -1.20 (-7.2)
+ slope_1m      | +0.1051 (+18.1) | -0.024 / +0.008 / +0.004 | no  | -0.019 / +0.041 / +0.003 | no  | +1.16 (+7.6)
+ slope_13m     | +0.1441 (+17.9) | +0.069 / -0.012 / +0.004 | no  | +0.070 / -0.004 / +0.017 | no  | -1.28 (-5.9)
+
+the ten strongest, bucket by bucket (cuts; markets, moments, mean round-trip net per $1 at H=1/2/3, bid change at H=2 in cents)
+ mom_2m (cuts -6.10, +6.00)
+   low   markets 3434 moments  32938 | net/$1 -0.3124 -0.3245 -0.3278 | bid change -0.67
+   mid   markets 3362 moments  33585 | net/$1 -0.2125 -0.2021 -0.1803 | bid change +0.17
+   high  markets 3435 moments  33412 | net/$1 -0.0960 -0.0867 -0.0817 | bid change +1.22
+ mom_3m (cuts -8.00, +8.00)
+   low   markets 3379 moments  28167 | net/$1 -0.3407 -0.3553 -0.3539 | bid change -0.70
+   mid   markets 3191 moments  28763 | net/$1 -0.2194 -0.2055 -0.1753 | bid change +0.13
+   high  markets 3375 moments  29257 | net/$1 -0.0836 -0.0752 -0.0688 | bid change +1.36
+ mom_1m (cuts -4.00, +4.00)
+   low   markets 3470 moments  36690 | net/$1 -0.2875 -0.2923 -0.2965 | bid change -0.61
+   mid   markets 3467 moments  38598 | net/$1 -0.2107 -0.2063 -0.1921 | bid change +0.05
+   high  markets 3472 moments  38479 | net/$1 -0.1076 -0.1044 -0.0929 | bid change +1.14
+ slope_5m (cuts -0.42, +0.40)
+   low   markets 3496 moments  41961 | net/$1 -0.2873 -0.2909 -0.2890 | bid change -0.38
+   mid   markets 3190 moments  41833 | net/$1 -0.1856 -0.1761 -0.1656 | bid change +0.17
+   high  markets 3496 moments  42088 | net/$1 -0.1019 -0.0912 -0.0813 | bid change +0.84
+ slope_8m (cuts -0.40, +0.38)
+   low   markets 3493 moments  42023 | net/$1 -0.2988 -0.2962 -0.2871 | bid change -0.11
+   mid   markets 3088 moments  41676 | net/$1 -0.1831 -0.1782 -0.1617 | bid change +0.12
+   high  markets 3491 moments  42183 | net/$1 -0.0941 -0.0871 -0.0812 | bid change +0.61
+ level_55m (cuts -0.12, +0.11)
+   low   markets 3457 moments  42192 | net/$1 -0.3227 -0.3050 -0.2852 | bid change +0.29
+   mid   markets 2765 moments  41130 | net/$1 -0.1597 -0.1549 -0.1517 | bid change +0.05
+   high  markets 3466 moments  42560 | net/$1 -0.0730 -0.0730 -0.0724 | bid change +0.25
+ level_180m (cuts -0.06, +0.06)
+   low   markets 3446 moments  42190 | net/$1 -0.3221 -0.3059 -0.2867 | bid change +0.27
+   mid   markets 2747 moments  41138 | net/$1 -0.1603 -0.1543 -0.1486 | bid change +0.03
+   high  markets 3449 moments  42554 | net/$1 -0.0726 -0.0717 -0.0719 | bid change +0.33
+ level_34m (cuts -0.16, +0.15)
+   low   markets 3465 moments  42183 | net/$1 -0.3229 -0.3029 -0.2834 | bid change +0.34
+   mid   markets 2779 moments  41147 | net/$1 -0.1591 -0.1539 -0.1516 | bid change +0.07
+   high  markets 3474 moments  42552 | net/$1 -0.0735 -0.0742 -0.0742 | bid change +0.17
+ level_1m (cuts -1.06, +1.00)
+   low   markets 3484 moments  41084 | net/$1 -0.3242 -0.3013 -0.2789 | bid change +0.36
+   mid   markets 2859 moments  40318 | net/$1 -0.1641 -0.1633 -0.1603 | bid change -0.03
+   high  markets 3491 moments  41475 | net/$1 -0.0734 -0.0741 -0.0734 | bid change +0.20
+ level_13m (cuts -0.27, +0.25)
+   low   markets 3476 moments  42165 | net/$1 -0.3205 -0.3013 -0.2787 | bid change +0.32
+   mid   markets 2784 moments  41162 | net/$1 -0.1586 -0.1575 -0.1552 | bid change -0.02
+   high  markets 3479 moments  42555 | net/$1 -0.0736 -0.0729 -0.0741 | bid change +0.26
+
+=== BAND (ask 0.70-0.90, minutes 7-15): 15275 moments, 2881 markets ===
+all moments, round trip H=2: mean net per $1 -0.0487  (the baseline every feature is a change from); H=1 -0.0504, H=3 -0.0525
+ask terciles cut at 0.78 and 0.85
+106 features screened; 26 past |t| = 2 (about 5 expected by chance)
+feature        | spread of round-trip net per $1, high minus low tercile (t) | inside level_13m low/mid/high | same sign in all three | inside ask terciles low/mid/high | same sign in all three | spread of the bid change, cents (t)
+ eff_8m        | +0.0308 (+3.8) | +0.044 / +0.024 / +0.010 | yes | +0.035 / +0.025 / +0.008 | yes | +1.73 (+2.8)
+ mom_2m        | +0.0284 (+3.4) | +0.035 / +0.019 / +0.023 | yes | +0.037 / +0.032 / +0.011 | yes | +1.68 (+2.6)
+ cross_8m      | +0.0315 (+3.3) | +0.029 / +0.020 / +0.017 | yes | +0.033 / +0.024 / +0.009 | yes | +2.52 (+3.4)
+ slope_8m      | +0.0286 (+3.2) | +0.034 / +0.031 / +0.006 | yes | +0.039 / +0.026 / -0.004 | no  | +1.42 (+2.1)
+ flowspike_60s | +0.0249 (+3.2) | +0.035 / +0.005 / +0.023 | yes | +0.043 / +0.019 / -0.011 | no  | +2.00 (+3.3)
+ eff_1m        | +0.0230 (+3.1) | +0.034 / +0.006 / +0.009 | yes | +0.006 / +0.034 / +0.009 | yes | +1.83 (+3.2)
+ fromlow_8m    | +0.0279 (+3.0) | +0.038 / +0.014 / -0.002 | no  | +0.015 / +0.029 / -0.008 | no  | +1.32 (+1.8)
+ bounce_13m    | +0.0272 (+2.9) | +0.009 / -0.002 / +0.028 | no  | +0.017 / +0.022 / +0.009 | yes | +2.17 (+3.0)
+ eff_2m        | +0.0214 (+2.9) | +0.008 / +0.015 / +0.019 | yes | +0.017 / +0.014 / +0.006 | yes | +1.69 (+2.9)
+ slope_3m      | +0.0243 (+2.9) | +0.026 / +0.015 / +0.030 | yes | +0.032 / +0.018 / +0.013 | yes | +1.45 (+2.2)
+ fromlow_5m    | +0.0256 (+2.8) | +0.040 / +0.024 / +0.021 | yes | +0.037 / +0.029 / +0.014 | yes | +1.37 (+2.0)
+ fromhigh_5m   | -0.0237 (-2.7) | -0.048 / -0.031 / -0.015 | yes | -0.043 / -0.036 / -0.016 | yes | -1.39 (-2.1)
+ flowimb_60s   | -0.0194 (-2.6) | -0.037 / -0.021 / -0.002 | yes | -0.040 / -0.013 / +0.007 | no  | -1.39 (-2.4)
+ fromhigh_3m   | -0.0211 (-2.6) | -0.040 / -0.025 / -0.012 | yes | -0.042 / -0.021 / -0.010 | yes | -1.24 (-2.0)
+ flowspike_30s | +0.0187 (+2.6) | +0.022 / +0.013 / +0.015 | yes | +0.032 / +0.017 / -0.007 | no  | +1.44 (+2.5)
+ range_2m      | +0.0202 (+2.5) | +0.001 / +0.008 / +0.010 | yes | +0.009 / +0.002 / -0.002 | no  | +1.49 (+2.4)
+ slope_5m      | +0.0226 (+2.5) | +0.022 / +0.010 / +0.020 | yes | +0.015 / +0.015 / +0.013 | yes | +1.28 (+1.8)
+ eff_21m       | -0.0212 (-2.4) | -0.021 / -0.023 / -0.021 | yes | -0.021 / -0.039 / -0.014 | yes | -1.76 (-2.6)
+ range_1m      | +0.0179 (+2.4) | +0.010 / +0.004 / +0.014 | yes | -0.002 / +0.014 / +0.015 | no  | +1.41 (+2.4)
+ fromlow_3m    | +0.0189 (+2.3) | +0.020 / +0.032 / +0.013 | yes | +0.037 / +0.019 / +0.011 | yes | +1.01 (+1.6)
+ fromlow_1m    | +0.0165 (+2.2) | +0.037 / +0.018 / +0.008 | yes | +0.038 / +0.022 / +0.015 | yes | +1.00 (+1.7)
+ vol_1m        | +0.0181 (+2.2) | +0.023 / +0.009 / -0.002 | no  | +0.017 / +0.004 / -0.002 | no  | +1.22 (+1.9)
+ fromlow_2m    | +0.0165 (+2.1) | +0.030 / +0.016 / +0.010 | yes | +0.037 / +0.017 / +0.009 | yes | +0.90 (+1.5)
+ mom_3m        | +0.0178 (+2.1) | +0.019 / +0.012 / +0.028 | yes | +0.018 / +0.023 / +0.010 | yes | +0.82 (+1.2)
+ slope_2m      | +0.0163 (+2.0) | +0.021 / +0.018 / +0.017 | yes | +0.027 / +0.020 / +0.001 | yes | +0.88 (+1.4)
+ left_min      | -0.0181 (-2.0) | -0.032 / -0.016 / -0.019 | yes | -0.033 / -0.004 / -0.018 | yes | -1.11 (-1.6)
+ bounce_2m     | -0.0151 (-2.0) | -0.018 / -0.008 / -0.009 | yes | -0.023 / -0.003 / +0.005 | no  | -1.24 (-2.1)
+ vol_5m        | +0.0171 (+1.9) | +0.020 / +0.003 / -0.003 | no  | +0.012 / +0.003 / -0.000 | no  | +1.07 (+1.5)
+ range_55m     | +0.0170 (+1.9) | +0.034 / +0.007 / +0.010 | yes | +0.025 / +0.011 / -0.003 | no  | +1.03 (+1.5)
+ range_34m     | +0.0165 (+1.8) | +0.019 / +0.009 / +0.003 | yes | +0.012 / +0.012 / -0.002 | no  | +0.87 (+1.2)
+
+the ten strongest, bucket by bucket (cuts; markets, moments, mean round-trip net per $1 at H=1/2/3, bid change at H=2 in cents)
+ eff_8m (cuts +0.10, +0.20)
+   low   markets 1778 moments   4625 | net/$1 -0.0745 -0.0792 -0.0764 | bid change -0.20
+   mid   markets 2058 moments   4790 | net/$1 -0.0642 -0.0639 -0.0638 | bid change +0.66
+   high  markets 1943 moments   4688 | net/$1 -0.0540 -0.0484 -0.0504 | bid change +1.53
+ mom_2m (cuts +2.00, +14.00)
+   low   markets 1686 moments   4628 | net/$1 -0.0765 -0.0765 -0.0746 | bid change +0.03
+   mid   markets 1998 moments   4883 | net/$1 -0.0705 -0.0755 -0.0793 | bid change -0.40
+   high  markets 1928 moments   4530 | net/$1 -0.0513 -0.0480 -0.0467 | bid change +1.71
+ cross_8m (cuts +1.00, +3.00)
+   low   markets 1142 moments   4178 | net/$1 -0.0758 -0.0814 -0.0777 | bid change -0.76
+   mid   markets 1731 moments   4711 | net/$1 -0.0578 -0.0490 -0.0543 | bid change +1.79
+   high  markets 1673 moments   5214 | net/$1 -0.0541 -0.0499 -0.0479 | bid change +1.76
+ slope_8m (cuts +0.29, +0.73)
+   low   markets 1595 moments   4431 | net/$1 -0.0747 -0.0801 -0.0823 | bid change -0.24
+   mid   markets 1996 moments   4856 | net/$1 -0.0683 -0.0704 -0.0711 | bid change +0.26
+   high  markets 1915 moments   4816 | net/$1 -0.0559 -0.0515 -0.0485 | bid change +1.19
+ flowspike_60s (cuts +1.49, +2.59)
+   low   markets 1798 moments   4893 | net/$1 -0.0711 -0.0759 -0.0743 | bid change -0.24
+   mid   markets 2073 moments   4718 | net/$1 -0.0571 -0.0512 -0.0538 | bid change +1.55
+   high  markets 1923 moments   4492 | net/$1 -0.0564 -0.0510 -0.0542 | bid change +1.77
+ eff_1m (cuts +0.33, +0.75)
+   low   markets 2001 moments   4606 | net/$1 -0.0605 -0.0725 -0.0705 | bid change -0.05
+   mid   markets 2131 moments   4607 | net/$1 -0.0590 -0.0517 -0.0540 | bid change +1.51
+   high  markets 2215 moments   4556 | net/$1 -0.0577 -0.0496 -0.0487 | bid change +1.78
+ fromlow_8m (cuts +0.62, +1.05)
+   low   markets 1392 moments   4526 | net/$1 -0.0802 -0.0895 -0.0960 | bid change -0.90
+   mid   markets 1889 moments   4791 | net/$1 -0.0636 -0.0628 -0.0565 | bid change +0.75
+   high  markets 1698 moments   4786 | net/$1 -0.0621 -0.0616 -0.0591 | bid change +0.42
+ bounce_13m (cuts +0.65, +0.92)
+   low   markets 1289 moments   4804 | net/$1 -0.0750 -0.0784 -0.0764 | bid change -0.51
+   mid   markets 1444 moments   4711 | net/$1 -0.0622 -0.0606 -0.0607 | bid change +0.89
+   high  markets 1305 moments   4588 | net/$1 -0.0525 -0.0513 -0.0608 | bid change +1.66
+ eff_2m (cuts +0.21, +0.48)
+   low   markets 1939 moments   4686 | net/$1 -0.0687 -0.0695 -0.0761 | bid change +0.17
+   mid   markets 2127 moments   4660 | net/$1 -0.0641 -0.0704 -0.0690 | bid change +0.14
+   high  markets 2094 moments   4644 | net/$1 -0.0587 -0.0481 -0.0468 | bid change +1.86
+ slope_3m (cuts -0.13, +0.61)
+   low   markets 1592 moments   4637 | net/$1 -0.0774 -0.0766 -0.0714 | bid change -0.08
+   mid   markets 1961 moments   4708 | net/$1 -0.0627 -0.0637 -0.0655 | bid change +0.59
+   high  markets 1880 moments   4714 | net/$1 -0.0569 -0.0523 -0.0542 | bid change +1.37
+DONE
