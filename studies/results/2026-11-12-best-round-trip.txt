@@ -1,0 +1,79 @@
+9700 market-sides from 4850 markets since Monday 11-09; the tape ends 11-12 01:00 ET
+
+PART 1: the best round trip per market, in hindsight (4849 markets): net per $1 spent
+positive 98.3% | above 10% 96.4% | above 25% 91.5% | above 50% 81.4%
+quartiles +0.64 / median +1.27 / +2.52; mean +2.462
+for context, the hindsight ceiling of buying the side that won and holding: median +0.02 per $1 (not a timing trade; left out of everything below)
+  among sold: buy at minute quartiles 3.0 / 5.0 / 8.5
+  among sold: sell at minute quartiles 7.0 / 10.0 / 12.5
+  among sold: buy ask quartiles 0.09 / 0.21 / 0.40; sell bid quartiles 0.36 / 0.78 / 0.88
+  among sold: seconds held, quartiles 90 / 210 / 360
+
+PART 2: 4674 markets with a best round trip above 10% that sells before settlement
+
+BUY moment: each feature's rank inside the market's own readings at the best moment (0.5 = says nothing); 106 features, 101 past |t| = 2 (about 5 by chance)
+feature        | mean rank (t) | markets | inside level_13m low/mid/high at that moment | same side of 0.5 in all three
+ level_13m     | 0.091 (-175.8) |  4674 | 0.109 / 0.111 / 0.054 | yes
+ level_21m     | 0.092 (-174.4) |  4674 | 0.113 / 0.108 / 0.054 | yes
+ level_55m     | 0.093 (-172.5) |  4674 | 0.115 / 0.110 / 0.055 | yes
+ level_34m     | 0.093 (-172.2) |  4674 | 0.114 / 0.110 / 0.055 | yes
+ level_180m    | 0.093 (-172.0) |  4674 | 0.115 / 0.110 / 0.054 | yes
+ level_8m      | 0.095 (-170.7) |  4674 | 0.118 / 0.111 / 0.055 | yes
+ level_5m      | 0.098 (-164.5) |  4674 | 0.127 / 0.110 / 0.056 | yes
+ ask           | 0.094 (-163.8) |  4674 | 0.180 / 0.093 / 0.009 | yes
+ level_3m      | 0.105 (-153.5) |  4656 | 0.144 / 0.117 / 0.054 | yes
+ level_2m      | 0.109 (-151.5) |  4630 | 0.155 / 0.117 / 0.055 | yes
+ level_1m      | 0.125 (-135.3) |  4550 | 0.188 / 0.128 / 0.059 | yes
+ fromlow_55m   | 0.140 (-131.9) |  4674 | 0.166 / 0.149 / 0.106 | yes
+ fromhigh_55m  | 0.861 (+125.6) |  4674 | 0.864 / 0.855 / 0.864 | yes
+ fromhigh_34m  | 0.860 (+122.6) |  4674 | 0.873 / 0.855 / 0.851 | yes
+ fromlow_34m   | 0.147 (-121.6) |  4674 | 0.170 / 0.151 / 0.121 | yes
+ fromlow_180m  | 0.157 (-119.2) |  4674 | 0.183 / 0.174 / 0.114 | yes
+ fromhigh_180m | 0.846 (+118.3) |  4674 | 0.842 / 0.834 / 0.861 | yes
+ fromlow_13m   | 0.155 (-117.2) |  4674 | 0.168 / 0.155 / 0.141 | yes
+ fromlow_21m   | 0.154 (-117.0) |  4674 | 0.170 / 0.165 / 0.127 | yes
+ fromhigh_21m  | 0.850 (+113.1) |  4674 | 0.864 / 0.849 / 0.837 | yes
+ fromlow_8m    | 0.172 (-112.5) |  4674 | 0.176 / 0.153 / 0.186 | yes
+ fromhigh_13m  | 0.844 (+107.7) |  4674 | 0.868 / 0.846 / 0.817 | yes
+ fromlow_5m    | 0.197 (-99.3) |  4674 | 0.197 / 0.162 / 0.232 | yes
+ fromhigh_8m   | 0.828 (+98.7) |  4674 | 0.856 / 0.839 / 0.790 | yes
+ mom_1m        | 0.216 (-90.1) |  3657 | 0.304 / 0.226 / 0.118 | yes
+ fromlow_3m    | 0.221 (-89.6) |  4656 | 0.221 / 0.180 / 0.263 | yes
+ mom_2m        | 0.204 (-85.2) |  3048 | 0.275 / 0.219 / 0.119 | yes
+ slope_8m      | 0.203 (-85.0) |  4674 | 0.180 / 0.217 / 0.211 | yes
+ fromhigh_5m   | 0.793 (+84.3) |  4674 | 0.806 / 0.818 / 0.756 | yes
+ slope_5m      | 0.216 (-82.9) |  4674 | 0.195 / 0.204 / 0.250 | yes
+
+SELL moment: each feature's rank inside the market's own readings at the best moment (0.5 = says nothing); 106 features, 97 past |t| = 2 (about 5 by chance)
+feature        | mean rank (t) | markets | inside level_13m low/mid/high at that moment | same side of 0.5 in all three
+ mom_1m        | 0.848 (+116.2) |  4661 | 0.942 / 0.854 / 0.748 | yes
+ mom_2m        | 0.844 (+112.8) |  4598 | 0.914 / 0.855 / 0.763 | yes
+ mom_3m        | 0.825 (+100.0) |  4435 | 0.871 / 0.849 / 0.756 | yes
+ fromhigh_13m  | 0.207 (-93.5) |  4674 | 0.198 / 0.152 / 0.272 | yes
+ fromhigh_21m  | 0.217 (-88.9) |  4674 | 0.194 / 0.157 / 0.302 | yes
+ fromhigh_3m   | 0.217 (-88.7) |  4661 | 0.124 / 0.209 / 0.317 | yes
+ fromhigh_5m   | 0.214 (-88.5) |  4674 | 0.161 / 0.182 / 0.298 | yes
+ fromhigh_8m   | 0.219 (-86.5) |  4674 | 0.209 / 0.169 / 0.278 | yes
+ fromlow_5m    | 0.791 (+85.9) |  4674 | 0.894 / 0.799 / 0.680 | yes
+ fromhigh_2m   | 0.230 (-84.5) |  4639 | 0.127 / 0.232 / 0.333 | yes
+ fromlow_3m    | 0.789 (+84.3) |  4661 | 0.908 / 0.778 / 0.682 | yes
+ fromlow_8m    | 0.784 (+83.7) |  4674 | 0.875 / 0.820 / 0.657 | yes
+ fromhigh_34m  | 0.233 (-81.5) |  4674 | 0.204 / 0.162 / 0.333 | yes
+ fromlow_2m    | 0.782 (+80.1) |  4639 | 0.905 / 0.763 / 0.678 | yes
+ slope_2m      | 0.770 (+78.0) |  4639 | 0.867 / 0.766 / 0.676 | yes
+ slope_1m      | 0.767 (+75.9) |  4570 | 0.887 / 0.746 / 0.668 | yes
+ fromhigh_55m  | 0.247 (-75.7) |  4674 | 0.212 / 0.171 / 0.357 | yes
+ slope_3m      | 0.759 (+75.2) |  4661 | 0.829 / 0.770 / 0.678 | yes
+ level_13m     | 0.753 (+75.0) |  4674 | 0.802 / 0.851 / 0.605 | yes
+ level_8m      | 0.752 (+74.4) |  4674 | 0.802 / 0.853 / 0.602 | yes
+ level_21m     | 0.751 (+74.1) |  4674 | 0.801 / 0.851 / 0.600 | yes
+ fromhigh_1m   | 0.265 (-73.9) |  4570 | 0.165 / 0.273 / 0.357 | yes
+ level_34m     | 0.750 (+73.8) |  4674 | 0.800 / 0.850 / 0.600 | yes
+ level_55m     | 0.750 (+73.6) |  4674 | 0.802 / 0.849 / 0.599 | yes
+ level_180m    | 0.750 (+73.4) |  4674 | 0.801 / 0.848 / 0.600 | yes
+ level_5m      | 0.751 (+73.3) |  4674 | 0.801 / 0.855 / 0.596 | yes
+ level_3m      | 0.750 (+73.0) |  4661 | 0.802 / 0.854 / 0.595 | yes
+ level_2m      | 0.751 (+72.6) |  4639 | 0.804 / 0.855 / 0.593 | yes
+ level_1m      | 0.751 (+72.3) |  4570 | 0.806 / 0.855 / 0.594 | yes
+ fromlow_13m   | 0.755 (+70.9) |  4674 | 0.852 / 0.806 / 0.608 | yes
+DONE
