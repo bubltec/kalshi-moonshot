@@ -800,6 +800,23 @@ def evaluate(
         else:
             bet = False
             note = f"{why_mod} {note}"
+    if spec.tick_buy:  # every look is a reading of the side's own gap history, so it runs whether or not the earlier gates passed
+        from . import tickgap
+        from . import ticks as ticks_mod
+
+        try:
+            tv = tickgap.decide(s, shot.series, shot.ticker, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker), spec)
+        except Exception as exc:
+            tv = None
+            log.warning("tick gap unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if tv is None:
+            bet = False
+            note = f"tick gap: unreadable. {note}"
+        elif tv.ok:
+            note = f"[{tv.note}] {note}"
+        else:
+            bet = False
+            note = f"{tv.note} {note}"
     if bet and spec.skip_other_varieties:
         from . import ticks as ticks_mod
         from . import variants
@@ -1706,6 +1723,17 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
         ok_hot, why_hot = hotcheck.allows(spec)
         if not ok_hot:
             log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, why_hot)
+            return None
+    if getattr(spec, "tick_buy", False):  # the gap at the bid's price must still clear this side's own cutoff
+        from . import tickgap
+        from . import ticks as ticks_mod
+
+        try:
+            still = tickgap.recheck(shot.series, shot.side, shot.hours_to_close * 3600.0 - float(spec.buy_rest_seconds), limit, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker), spec)
+        except Exception:
+            still = False
+        if not still:
+            log.info("buy %s %s: the resting bid did not fill and the curve's gap no longer clears this side's own cutoff at %.2f", shot.ticker, shot.side, limit)
             return None
     if spec.record_buy:  # the curve must still say buy: the spot may have moved out of the state that cleared the record while the bid rested
         from . import staterecord
