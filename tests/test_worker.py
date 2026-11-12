@@ -311,3 +311,50 @@ def test_a_new_key_swaps_the_client_without_closing_the_old_one(tmp_path):
     w = Worker(s, client, FakeEst(), Store(s.db_path), None, client_factory=lambda fresh: fresh_client, reload=lambda: rekeyed)
     w.refresh()
     assert w.client is fresh_client and not client._http.is_closed  # threads still holding the old one keep working
+
+
+def test_a_live_lane_is_queued_ahead_of_a_paper_lane_whatever_the_priority_numbers_say():
+    from types import SimpleNamespace
+
+    from kalshi_moonshot.lanes import LIVE_BOOST, job_priority
+
+    s = SimpleNamespace(live_lanes=frozenset({"live_a"}), is_live=lambda name, series="": name == "live_a")
+    live = SimpleNamespace(name="live_a", priority=46)
+    paper = SimpleNamespace(name="paper_b", priority=48)  # the paper lane's own number is the higher one
+    assert job_priority(s, live) == 46 + LIVE_BOOST > job_priority(s, paper) == 48
+    s_all = SimpleNamespace(live_lanes=None, is_live=lambda name, series="": True)  # an empty LIVE_LANES means every lane: nothing to rank
+    assert job_priority(s_all, live) == 46
+
+
+def test_the_main_loop_leaves_a_live_lanes_scope_and_review_to_its_own_thread(tmp_path):
+    from kalshi_moonshot.worker import BUY_KINDS, MAINTENANCE, SELL_KINDS
+
+    w = worker(tmp_path)
+    w._split = True
+    w._buy_threads = 3
+    w._sell_threads = 1
+    w._lane_threads = {"live_a"}
+    w.jobs.enqueue("lane_scope:live_a", {}, run_at=1.0)
+    w.jobs.enqueue("lane_review:live_a", {}, run_at=1.0)
+    w.jobs.enqueue("lane_scope:paper_b", {}, run_at=1.0)
+    left_out = MAINTENANCE | BUY_KINDS | SELL_KINDS | w.lane_kinds()
+    assert w.jobs.claim(exclude=left_out).kind == "lane_scope:paper_b"  # the main loop keeps the paper lane
+    assert w.jobs.claim(exclude=left_out) is None  # and nothing of the live lane's
+
+
+def test_a_live_lane_thread_runs_only_its_own_lanes_jobs(tmp_path):
+    w = worker(tmp_path)
+    w.jobs.enqueue("lane_scope:paper_b", {}, run_at=1.0, priority=900)
+    w.jobs.enqueue("lane_scope:live_a", {}, run_at=1.0)
+    w.jobs.enqueue("evaluate", {"shot": {}}, run_at=1.0)
+    ran: list[str] = []
+
+    def record(job):
+        ran.append(job.kind)
+        w.jobs.complete(job.id, "")
+        w.stopping = True
+
+    w.run_job = record
+    w._lane_loop("live_a")
+    assert ran == ["lane_scope:live_a"]
+    assert status(w, "lane_scope:paper_b") == {"pending": 1} and status(w, "evaluate") == {"pending": 1}

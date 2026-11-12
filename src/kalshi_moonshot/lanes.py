@@ -484,6 +484,14 @@ def tiered_lanes(s: Settings) -> list[LaneSpec]:
     return [lane for lane in enabled_lanes(s) if tiered(lane)]
 
 
+LIVE_BOOST = 1000  # a live lane's jobs are claimed before any paper lane's, whatever the lanes' own priority numbers say
+
+
+def job_priority(s: Settings, spec: LaneSpec) -> int:
+    """The priority a lane's jobs are queued at (2026-11-12, user: "we only have 2 live lanes ... they should run on different queues"): the lane's own number, plus LIVE_BOOST when the lane places real orders. Before this a paper lane at 48 and the treasury lane at 50 were claimed ahead of the live lanes at 46 and 47."""
+    return spec.priority + (LIVE_BOOST if s.live_lanes is not None and s.is_live(spec.name) else 0)
+
+
 def spec_for(s: Settings, name: str) -> LaneSpec:
     lanes = lane_specs(s)
     if name not in lanes:

@@ -33,7 +33,7 @@ from .config import Settings
 from .estimators import Estimator
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series
-from .lanes import LaneSpec, in_blackout, lane_specs, tiered
+from .lanes import LaneSpec, in_blackout, job_priority, lane_specs, tiered
 from .marketdata import shared_for
 from .store import Store
 from .strategy import LongShot
@@ -265,7 +265,7 @@ class EntryWatcher:
             if shot.ticker == ticker and shot.side == side:
                 made = Jobs(store).enqueue(
                     "evaluate", {"shot": asdict(shot), "late": sig}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
-                    expires_in=60.0, max_attempts=s.job_max_attempts, priority=spec.priority,
+                    expires_in=60.0, max_attempts=s.job_max_attempts, priority=job_priority(s, spec),
                 )
                 line = f"{lane} {ticker} {side}: new window extreme, {sig['trend']} trend ({sig['ups']} up {sig['downs']} down), z {sig['z']}; evaluation {'queued' if made else 'already queued'}"
                 log.info("entry watcher: %s", line)
@@ -311,7 +311,7 @@ class EntryWatcher:
             if shot.ticker == ticker and shot.side == side:
                 made = Jobs(store).enqueue(
                     "evaluate", {"shot": asdict(shot), "floor_bid": True, "move": {"ts": ts, "yes_was": was, "yes_now": now_mid, "queued_ts": round(time.time(), 3)}},
-                    dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}", expires_in=max(60.0, spec.entry_arm_seconds + 15.0), max_attempts=s.job_max_attempts, priority=spec.priority,
+                    dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}", expires_in=max(60.0, spec.entry_arm_seconds + 15.0), max_attempts=s.job_max_attempts, priority=job_priority(s, spec),
                 )
                 line = f"{lane} {ticker} {side}: YES moved {was:.2f} -> {now_mid:.2f} in {spec.entry_move_seconds:.0f}s; resting buy {spec.entry_move_below:.2f} under the ask; evaluation {'queued' if made else 'already queued'}"
                 log.info("entry watcher: %s", line)
@@ -386,7 +386,7 @@ class EntryWatcher:
             return
         made = Jobs(store).enqueue(
             "evaluate", {"shot": asdict(shot), "floor_bid": True}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
-            expires_in=max(60.0, spec.entry_arm_seconds + 15.0), max_attempts=s.job_max_attempts, priority=spec.priority,
+            expires_in=max(60.0, spec.entry_arm_seconds + 15.0), max_attempts=s.job_max_attempts, priority=job_priority(s, spec),
         )
         line = f"{key[0]} {shot.ticker} {shot.side}: bid resting at the floor {shot.ask:.2f} for {spec.entry_arm_seconds:.0f}s; evaluation {'queued' if made else 'already queued'}"
         log.info("entry watcher: %s", line)
@@ -453,7 +453,7 @@ class EntryWatcher:
         for shot in shots:
             made = jobs.enqueue(
                 "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
-                expires_in=max(60.0, 2 * every), max_attempts=s.job_max_attempts, priority=spec.priority,
+                expires_in=max(60.0, 2 * every), max_attempts=s.job_max_attempts, priority=job_priority(s, spec),
             )
             queued += 1 if made else 0
         if shots:

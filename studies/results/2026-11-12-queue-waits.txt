@@ -1,0 +1,19 @@
+Do paper lanes slow the live lanes' jobs? (2026-11-12, from the cloud jobs table, started_ts - run_at; the 11-12 01:45 to 12:37 ET host outage is in the maximums and is ignored below)
+
+Evaluate (buy) jobs, last 30 h, by lane (3 shared buy workers):
+  lane                          priority   n     avg wait  p90   p99   over 2 s  avg run
+  crypto_multiscale_underdog (paper)  48  1794   0.38 s   0.37  9.56   72        0.54
+  crypto_multiscale (LIVE)            47  2921   0.15     0.28  2.23   31        0.34
+  commodity_multiscale (LIVE)         46  2716   0.07     0.20  0.45    5        0.29
+  paper lanes at 41-45                    1.5-2.8k each, avg wait 0.01-0.17 s, p99 0.06-3.66 s
+  Live evaluate waits are small (0.2% to 1% over 2 s). By hour, live evaluate wait averaged 0.2-1.0 s on 11-10 (live lanes only) and 0.01-0.3 s from 11-11 14:00 on, with six paper lanes running: no sign that adding paper lanes made it worse.
+
+Lane scope and review jobs, the main job thread, last 30 h (ignoring the outage maximums):
+  live lane_scope waits: crypto_multiscale p90 1.7 s p99 38.8 s, over 10 s in 29 of 588 passes; commodity_multiscale p90 2.3 p99 43.8, over 10 s in 39 of 584.
+  Cause: one main thread runs every lane's scope and review, the broad scan and others, and some jobs are long: lane_scope:treasury_favorite (priority 50) averaged 24 s, max 915 s; resolve averaged 80 s; scan 27 s.
+
+Priority inversion: a paper lane (crypto_multiscale_underdog, 48) and the treasury lane (50) outranked the live lanes (46, 47) on the queue.
+
+Request budget: KALSHI_MAX_RPS=6; steady use 0.5 to 1.0 requests a second (35 to 61 a minute), 2.8 a second (183 a minute) in the minute after a restart; the 429 refusals in the log are all from that restart minute. The budget is not what limits the live lanes.
+
+Live bets a day (crypto_multiscale / commodity_multiscale): 11-08 254/-, 11-09 135/34, 11-10 127/71, 11-11 47/53. The fall on 11-11 comes with fewer evaluate jobs queued for the live lanes (about 400 an hour against 600-700 on 11-10), i.e. fewer candidates passing the lane's own review gates (curve-edge gate and flat-trend skip went in on 11-11), not slower jobs. Not proven; no lane was switched on and off to test it.

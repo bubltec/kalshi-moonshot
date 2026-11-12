@@ -168,6 +168,7 @@ class Settings:
     page_size: int  # markets and events per Kalshi page (max 1000)
     job_max_attempts: int  # tries per queued job before it is parked as dead
     sell_workers: int  # threads that run only stop-loss sweeps, apart from scans, reviews and buys (0 = they share the main job thread)
+    live_lane_threads: bool  # one thread per live lane that runs only that lane's scope and review jobs, so a slow paper or maintenance job never holds a live lane's watch list back (2026-11-12). LIVE_LANE_THREADS=0 puts them back on the main job thread
     buy_workers: int  # threads that run only evaluate (buy) jobs, so a scan, review or scope pass never holds a buy back (0 = buys share the main job thread)
     skip_categories: frozenset[str]  # Kalshi event categories, e.g. Sports
     exclude_versions: frozenset[str]  # strategy versions left out of report and similar-case search
@@ -481,6 +482,7 @@ def load() -> Settings:
         max_rps=max(0.5, _f("KALSHI_MAX_RPS", 8.0)),
         page_size=min(1000, max(1, _i("KALSHI_PAGE_SIZE", 1000))),
         job_max_attempts=max(1, _i("JOB_MAX_ATTEMPTS", 3)),
+        live_lane_threads=_b("LIVE_LANE_THREADS", True),
         buy_workers=max(0, _i("BUY_WORKERS", 3)),
         sell_workers=max(0, _i("SELL_WORKERS", 1)),
         exclude_versions=_csv("EXCLUDE_VERSIONS", "v1"),

@@ -30,7 +30,7 @@ from .entrywatch import lane_full, quote_keys
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
 from .kalshi import KalshiClient, KalshiError, KalshiRateLimited, snap_price
-from .lanes import POLY_LANES, lane_specs, spec_for, tiered, tiered_lanes
+from .lanes import POLY_LANES, job_priority, lane_specs, spec_for, tiered, tiered_lanes
 from .marketdata import Discovery, shared_for
 from .search import NewsSearch
 from .store import Store
@@ -116,6 +116,7 @@ class Worker:
         self.share = EstimateShare()  # one estimate per market, reused by every lane that asks soon after
         self._split = False  # True once run_forever has started the maintenance thread: the main loop then leaves those jobs to it
         self._sell_threads = 0  # how many dedicated sell workers run_forever started
+        self._lane_threads: set[str] = set()  # the live lanes whose scope and review jobs run on a thread of their own (run_forever)
         self._buy_threads = 0  # how many dedicated buy workers run_forever started: while it is above 0 the main loop leaves evaluate jobs to them
 
     # ---- lifecycle ----
@@ -394,6 +395,13 @@ class Worker:
         self._sell_threads = self.s.sell_workers
         if self._buy_threads:
             log.info("%d buy worker(s) run evaluate jobs apart from scans and reviews", self._buy_threads)
+        if self.s.live_lane_threads and self.s.live_lanes is not None:
+            for spec in tiered_lanes(self.s):
+                if self.s.is_live(spec.name):
+                    self._lane_threads.add(spec.name)
+                    threading.Thread(target=self._lane_loop, args=(spec.name,), name=f"live-lane-{spec.name}", daemon=True).start()
+            if self._lane_threads:
+                log.info("live lane thread(s) run the scope and review of %s apart from every other job", ", ".join(sorted(self._lane_threads)))
         while not self.stopping:
             if not self.step():
                 time.sleep(1.0)
@@ -431,6 +439,23 @@ class Worker:
                 log.exception("buy worker")
             jobs_mod.WAKE.wait(BUY_POLL)  # an enqueue wakes it in microseconds; BUY_POLL is only the fallback for a job another process queued
 
+    def _lane_loop(self, name: str) -> None:
+        """A live lane's own thread: claims only that lane's scope and review jobs, so what holds up its watch list is its own previous pass, never a paper lane's or a maintenance job (2026-11-12: live scopes waited over 10 s in about 6% of passes behind jobs that ran 24 to 900 s)."""
+        kinds = frozenset({f"lane_scope:{name}", f"lane_review:{name}"})
+        while not self.stopping:
+            try:
+                job = self.jobs.claim(kinds=kinds)
+                if job is not None:
+                    self.run_job(job)
+                    continue
+            except Exception:
+                log.exception("live lane thread %s", name)
+            time.sleep(BUY_POLL)
+
+    def lane_kinds(self) -> frozenset[str]:
+        """The job kinds the live lane threads own, left out of the main loop."""
+        return frozenset(f"{p}:{n}" for n in self._lane_threads for p in ("lane_scope", "lane_review"))
+
     def _sell_loop(self) -> None:
         """A sell worker: claims only the stop-loss sweep, so what holds up a sale is another sale, never a scan, review or scope."""
         while not self.stopping:
@@ -447,7 +472,7 @@ class Worker:
         """Claim and run one due job. Returns False when nothing was due."""
         self.refresh()
         self._housekeeping()
-        left_out = (MAINTENANCE | (BUY_KINDS if self._buy_threads else frozenset()) | (SELL_KINDS if self._sell_threads else frozenset())) if self._split else None
+        left_out = (MAINTENANCE | (BUY_KINDS if self._buy_threads else frozenset()) | (SELL_KINDS if self._sell_threads else frozenset()) | self.lane_kinds()) if self._split else None
         job = self.jobs.claim(exclude=left_out)
         if job is None:
             return False
@@ -549,7 +574,7 @@ class Worker:
             made = self.jobs.enqueue(
                 "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
                 expires_in=every, max_attempts=s.job_max_attempts,
-                priority=spec_for(s, shot.lane).priority,
+                priority=job_priority(s, spec_for(s, shot.lane)),
             )
             queued += 1 if made else 0
         self.jobs.enqueue("resolve", dedupe_key="resolve", max_attempts=s.job_max_attempts)
@@ -714,11 +739,11 @@ class Worker:
             now = time.time()
             self.jobs.ensure(
                 f"lane_scope:{spec.name}", now, max_attempts=self.s.job_max_attempts,
-                priority=spec.priority,
+                priority=job_priority(self.s, spec),
             )
             self.jobs.ensure(
                 f"lane_review:{spec.name}", now + 15, max_attempts=self.s.job_max_attempts,
-                priority=spec.priority,
+                priority=job_priority(self.s, spec),
             )
 
     def _tiered_spec(self, job: Job):
@@ -731,14 +756,14 @@ class Worker:
             return "lane off or not two-level; not rescheduled"
         self.jobs.ensure(
             job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
-            max_attempts=self.s.job_max_attempts, priority=spec.priority,
+            max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec),
         )
         if spec.name in POLY_LANES and self._poly() is None:
             return "polymarket paper lane has no client"
         venue = self._venue(spec.name)
         with shared_for(venue, self.s.discovery_max_age, self.s.discovery_enabled):
             n = runner.scope_lane(self.s, venue, self.store, spec, quant=None if spec.name in POLY_LANES else self.quant)
-        self.jobs.run_now(f"lane_review:{spec.name}", priority=spec.priority)
+        self.jobs.run_now(f"lane_review:{spec.name}", priority=job_priority(self.s, spec))
         log.info("scope %s: watching %d event(s)", spec.name, n)
         return f"{n} events watched"
 
@@ -749,7 +774,7 @@ class Worker:
         every = (spec.review_minutes or 2.0) * 60
         self.jobs.ensure(
             job.kind, time.time() + every, max_attempts=self.s.job_max_attempts,
-            priority=spec.priority,
+            priority=job_priority(self.s, spec),
         )
         if spec.name in POLY_LANES and self._poly() is None:
             return "polymarket paper lane has no client"
@@ -763,7 +788,7 @@ class Worker:
             made = self.jobs.enqueue(
                 "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
                 expires_in=max(60.0, 2 * every), max_attempts=self.s.job_max_attempts,
-                priority=spec.priority,
+                priority=job_priority(self.s, spec),
             )
             queued += 1 if made else 0
         return f"{len(self.store.watch(spec.name))} watched, queued {queued} of {len(shots)}"
