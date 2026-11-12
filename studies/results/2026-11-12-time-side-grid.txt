@@ -1,0 +1,82 @@
+545656 side-moments from 11060 markets, days [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] (day 0 = 11-03 ET); the tape ends 11-12 01:00 ET
+
+the grid: net per $1 bought at the ask, held to settlement, fee in; markets / won / mean ask / net (t) / days positive of days with 20+ markets
+
+=== spot WITH us (cushion >= 0) ===
+  minute  1.0- 4.0 ask 0.05-0.20 | markets    17 | won  5.0% vs ask 0.134 | net -0.428 (t -1.1) | days positive 0/0
+  minute  1.0- 4.0 ask 0.20-0.40 | markets   175 | won 37.1% vs ask 0.335 | net +0.044 (t +0.4) | days positive 2/4
+  minute  1.0- 4.0 ask 0.40-0.60 | markets  6056 | won 53.5% vs ask 0.541 | net -0.028 (t -3.0) | days positive 3/10
+  minute  1.0- 4.0 ask 0.60-0.80 | markets  8833 | won 67.9% vs ask 0.684 | net -0.029 (t -4.2) | days positive 2/10
+  minute  1.0- 4.0 ask 0.80-0.90 | markets  2797 | won 83.1% vs ask 0.838 | net -0.026 (t -3.0) | days positive 3/10
+  minute  1.0- 4.0 ask 0.90-0.97 | markets   753 | won 91.2% vs ask 0.920 | net -0.025 (t -2.1) | days positive 3/9
+  minute  4.0- 7.0 ask 0.05-0.20 | markets    44 | won  7.4% vs ask 0.136 | net -0.416 (t -1.7) | days positive 0/0
+  minute  4.0- 7.0 ask 0.20-0.40 | markets   245 | won 33.2% vs ask 0.330 | net -0.006 (t -0.1) | days positive 2/6
+  minute  4.0- 7.0 ask 0.40-0.60 | markets  4941 | won 53.5% vs ask 0.539 | net -0.010 (t -1.0) | days positive 3/10
+  minute  4.0- 7.0 ask 0.60-0.80 | markets  8862 | won 68.9% vs ask 0.695 | net -0.019 (t -3.0) | days positive 3/10
+  minute  4.0- 7.0 ask 0.80-0.90 | markets  5494 | won 83.7% vs ask 0.844 | net -0.027 (t -4.6) | days positive 2/10
+  minute  4.0- 7.0 ask 0.90-0.97 | markets  2892 | won 92.5% vs ask 0.928 | net -0.019 (t -3.3) | days positive 2/9
+  minute  7.0-10.0 ask 0.05-0.20 | markets    61 | won  9.9% vs ask 0.135 | net -0.253 (t -1.0) | days positive 0/0
+  minute  7.0-10.0 ask 0.20-0.40 | markets   279 | won 28.9% vs ask 0.319 | net -0.096 (t -1.2) | days positive 2/6
+  minute  7.0-10.0 ask 0.40-0.60 | markets  3660 | won 53.3% vs ask 0.536 | net -0.023 (t -1.9) | days positive 4/10
+  minute  7.0-10.0 ask 0.60-0.80 | markets  6857 | won 69.0% vs ask 0.701 | net -0.016 (t -2.3) | days positive 2/10
+  minute  7.0-10.0 ask 0.80-0.90 | markets  5928 | won 83.4% vs ask 0.847 | net -0.024 (t -4.3) | days positive 1/10
+  minute  7.0-10.0 ask 0.90-0.97 | markets  5041 | won 93.4% vs ask 0.933 | net -0.012 (t -3.1) | days positive 3/10
+  minute 10.0-13.0 ask 0.05-0.20 | markets   117 | won 10.2% vs ask 0.126 | net +0.017 (t +0.1) | days positive 1/4
+  minute 10.0-13.0 ask 0.20-0.40 | markets   324 | won 27.9% vs ask 0.314 | net -0.136 (t -1.8) | days positive 1/6
+  minute 10.0-13.0 ask 0.40-0.60 | markets  2678 | won 53.5% vs ask 0.532 | net -0.017 (t -1.1) | days positive 2/10
+  minute 10.0-13.0 ask 0.60-0.80 | markets  4988 | won 68.4% vs ask 0.702 | net +0.004 (t +0.5) | days positive 4/10
+  minute 10.0-13.0 ask 0.80-0.90 | markets  5186 | won 83.6% vs ask 0.848 | net -0.023 (t -3.8) | days positive 2/10
+  minute 10.0-13.0 ask 0.90-0.97 | markets  6039 | won 93.9% vs ask 0.936 | net -0.008 (t -2.4) | days positive 2/10
+  minute 13.0-14.5 ask 0.05-0.20 | markets   149 | won 11.5% vs ask 0.117 | net +0.221 (t +0.8) | days positive 3/5
+  minute 13.0-14.5 ask 0.20-0.40 | markets   243 | won 30.1% vs ask 0.310 | net -0.060 (t -0.6) | days positive 1/6
+  minute 13.0-14.5 ask 0.40-0.60 | markets   932 | won 53.5% vs ask 0.520 | net +0.004 (t +0.2) | days positive 5/9
+  minute 13.0-14.5 ask 0.60-0.80 | markets  1982 | won 68.5% vs ask 0.704 | net -0.023 (t -1.8) | days positive 4/9
+  minute 13.0-14.5 ask 0.80-0.90 | markets  2078 | won 83.3% vs ask 0.850 | net -0.027 (t -2.9) | days positive 1/9
+  minute 13.0-14.5 ask 0.90-0.97 | markets  3340 | won 92.4% vs ask 0.938 | net -0.016 (t -3.3) | days positive 1/10
+
+=== spot AGAINST us (cushion < 0) ===
+  minute  1.0- 4.0 ask 0.05-0.20 | markets  2384 | won 14.2% vs ask 0.147 | net -0.026 (t -0.5) | days positive 5/10
+  minute  1.0- 4.0 ask 0.20-0.40 | markets  8163 | won 29.7% vs ask 0.309 | net -0.078 (t -5.1) | days positive 2/10
+  minute  1.0- 4.0 ask 0.40-0.60 | markets  6765 | won 44.3% vs ask 0.458 | net -0.100 (t -9.3) | days positive 0/10
+  minute  1.0- 4.0 ask 0.60-0.80 | markets   172 | won 66.0% vs ask 0.660 | net -0.013 (t -0.2) | days positive 3/5
+  minute  1.0- 4.0 ask 0.80-0.90 | markets     9 | won 81.2% vs ask 0.839 | net -0.088 (t -0.5) | days positive 0/0
+  minute  1.0- 4.0 ask 0.90-0.97 | markets     7 | won 100.0% vs ask 0.926 | net +0.081 (t +8.3) | days positive 0/0
+  minute  4.0- 7.0 ask 0.05-0.20 | markets  5408 | won 12.3% vs ask 0.131 | net -0.029 (t -0.9) | days positive 7/10
+  minute  4.0- 7.0 ask 0.20-0.40 | markets  8804 | won 28.6% vs ask 0.297 | net -0.108 (t -7.2) | days positive 0/10
+  minute  4.0- 7.0 ask 0.40-0.60 | markets  5552 | won 43.7% vs ask 0.458 | net -0.125 (t -10.8) | days positive 1/10
+  minute  4.0- 7.0 ask 0.60-0.80 | markets   227 | won 68.4% vs ask 0.667 | net -0.040 (t -0.8) | days positive 3/6
+  minute  4.0- 7.0 ask 0.80-0.90 | markets    35 | won 85.7% vs ask 0.842 | net +0.049 (t +0.8) | days positive 0/0
+  minute  4.0- 7.0 ask 0.90-0.97 | markets    14 | won 100.0% vs ask 0.919 | net +0.084 (t +18.9) | days positive 0/0
+  minute  7.0-10.0 ask 0.05-0.20 | markets  6971 | won 11.2% vs ask 0.119 | net -0.091 (t -3.0) | days positive 3/10
+  minute  7.0-10.0 ask 0.20-0.40 | markets  7081 | won 28.3% vs ask 0.292 | net -0.120 (t -7.2) | days positive 0/10
+  minute  7.0-10.0 ask 0.40-0.60 | markets  4035 | won 44.5% vs ask 0.460 | net -0.097 (t -7.1) | days positive 1/10
+  minute  7.0-10.0 ask 0.60-0.80 | markets   270 | won 67.3% vs ask 0.671 | net -0.032 (t -0.8) | days positive 2/7
+  minute  7.0-10.0 ask 0.80-0.90 | markets    55 | won 84.8% vs ask 0.841 | net -0.036 (t -0.6) | days positive 0/0
+  minute  7.0-10.0 ask 0.90-0.97 | markets    19 | won 97.6% vs ask 0.920 | net +0.026 (t +0.4) | days positive 0/0
+  minute 10.0-13.0 ask 0.05-0.20 | markets  7057 | won 10.2% vs ask 0.112 | net -0.140 (t -4.6) | days positive 2/10
+  minute 10.0-13.0 ask 0.20-0.40 | markets  5209 | won 28.8% vs ask 0.291 | net -0.167 (t -9.1) | days positive 1/10
+  minute 10.0-13.0 ask 0.40-0.60 | markets  2976 | won 43.8% vs ask 0.462 | net -0.114 (t -7.0) | days positive 2/10
+  minute 10.0-13.0 ask 0.60-0.80 | markets   308 | won 67.9% vs ask 0.675 | net -0.043 (t -1.1) | days positive 3/7
+  minute 10.0-13.0 ask 0.80-0.90 | markets    80 | won 85.8% vs ask 0.846 | net -0.034 (t -0.7) | days positive 0/0
+  minute 10.0-13.0 ask 0.90-0.97 | markets    39 | won 97.3% vs ask 0.937 | net +0.010 (t +0.2) | days positive 0/0
+  minute 13.0-14.5 ask 0.05-0.20 | markets  3803 | won 10.8% vs ask 0.106 | net -0.092 (t -2.0) | days positive 2/10
+  minute 13.0-14.5 ask 0.20-0.40 | markets  2080 | won 28.2% vs ask 0.288 | net -0.120 (t -3.8) | days positive 0/9
+  minute 13.0-14.5 ask 0.40-0.60 | markets  1059 | won 42.8% vs ask 0.470 | net -0.131 (t -4.4) | days positive 1/9
+  minute 13.0-14.5 ask 0.60-0.80 | markets   231 | won 64.8% vs ask 0.675 | net -0.062 (t -1.4) | days positive 1/6
+  minute 13.0-14.5 ask 0.80-0.90 | markets    74 | won 79.1% vs ask 0.848 | net -0.102 (t -1.8) | days positive 0/0
+  minute 13.0-14.5 ask 0.90-0.97 | markets    62 | won 89.3% vs ask 0.933 | net -0.054 (t -1.3) | days positive 0/0
+
+60 cells; 29 past |t| = 2 (about 3 by chance); positive ones past t = 2:
+  t +18.9 | spot AGAINST us (cushion < 0) | minute 4.0+ ask 0.90+ | markets 14 | net +0.084 | by day 
+  t +8.3 | spot AGAINST us (cushion < 0) | minute 1.0+ ask 0.90+ | markets 7 | net +0.081 | by day 
+  t +0.8 | spot WITH us (cushion >= 0) | minute 13.0+ ask 0.05+ | markets 149 | net +0.221 | by day 2:+0.41, 3:+0.93, 6:+0.37, 7:-0.47, 8:-0.14
+  t +0.8 | spot AGAINST us (cushion < 0) | minute 4.0+ ask 0.80+ | markets 35 | net +0.049 | by day 
+  t +0.5 | spot WITH us (cushion >= 0) | minute 10.0+ ask 0.60+ | markets 4988 | net +0.004 | by day 0:-0.11, 1:-0.01, 2:+0.02, 3:+0.02, 4:+0.07, 5:-0.01, 6:-0.01, 7:-0.00, 8:-0.00, 9:+0.01
+  t +0.4 | spot AGAINST us (cushion < 0) | minute 7.0+ ask 0.90+ | markets 19 | net +0.026 | by day 
+  t +0.4 | spot WITH us (cushion >= 0) | minute 1.0+ ask 0.20+ | markets 175 | net +0.044 | by day 3:+0.12, 6:+0.01, 7:-0.35, 8:-0.07
+  t +0.2 | spot AGAINST us (cushion < 0) | minute 10.0+ ask 0.90+ | markets 39 | net +0.010 | by day 
+
+YES against NO (the label itself), all minutes, ask 0.05-0.97
+  yes: markets 11045 | won 49.0% vs ask 0.508 | net -0.139 (t -13.3)
+  no: markets 11044 | won 52.2% vs ask 0.522 | net -0.084 (t -7.9)
+DONE
