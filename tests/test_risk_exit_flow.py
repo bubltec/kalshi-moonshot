@@ -1,0 +1,105 @@
+"""The risk exit end to end, through the real watcher path (2026-11-13). The first tests of the exit built a Target by hand and so never touched the step that failed live: a lane with only curve_risk_sell set was never given a watched position (takes_profit() was false), so nothing was armed and nothing could sell. These tests start from the lane file and the stored bet, as the bot does: Store row -> refresh() -> quote events -> sale signal."""
+
+import os
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+
+from kalshi_moonshot import config, lanes, watcher
+from kalshi_moonshot.store import Store
+
+CLOSE = datetime(2030, 1, 1, 0, 15, tzinfo=UTC).timestamp()
+TICKER = "KXBTC15M-30JAN010015-15"
+
+LANE = """[lane.risk_only]
+estimator='ladder'
+sides=['yes']
+price=[0.70,0.90]
+hours=[0.0,0.26]
+timed_suffix='15M'
+stop_loss=false
+curve_risk_sell=0.5
+curve_risk_live={live}
+curve_risk_spot_weight=0.0
+curve_risk_history=false
+"""
+
+
+class Client:
+    """The few market reads the watcher makes when it arms a position."""
+
+    def market(self, ticker):
+        return {"floor_strike": 100.0, "close_time": "2030-01-01T00:15:00Z"}
+
+
+def held(tmp_path, monkeypatch, live):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false"))
+    s = config.load()
+    store = Store(s.db_path)
+    store.db.execute(
+        "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (CLOSE - 450, TICKER, "bet", "trade", 0.81, "yes", "risk_only", 4.65, 3.77, "2030-01-01T00:15:00Z"))
+    store.db.commit()
+    w = watcher.ProfitWatcher(lambda: s, Client(), lambda: Store(s.db_path))
+    w.refresh()
+    return w
+
+
+def yes_bid(w, bid, left):
+    w.on_event({"kind": "quote", "ticker": TICKER, "bid": bid, "ask": round(bid + 0.01, 4), "ts": CLOSE - left})
+
+
+def signals(w):
+    out = []
+    while not w._jobs.empty():
+        out.append(w._jobs.get_nowait())
+    return out
+
+
+# the platinum bet of 2026-11-13: YES bought at 0.81, the bid slid to 0.56 over ninety seconds
+PATH = [0.77, 0.74, 0.72, 0.70, 0.68, 0.66, 0.64, 0.62, 0.60, 0.56]
+
+
+def test_a_lane_with_only_the_risk_exit_gets_a_watched_position_with_the_exit_armed(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True)
+    t = w.targets.get((TICKER, "risk_only"))
+    assert t is not None and t.risk_sell == 0.5 and t.risk_live and t.risk_spot_weight == 0.0 and t.close_ts > 0
+
+
+def test_live_it_sells_a_sliding_bet_at_the_max_loss_and_not_before(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True)
+    sold = None
+    for k, bid in enumerate(PATH):
+        yes_bid(w, bid, 450 - 3 * k)
+        out = signals(w)
+        if out:
+            sold = (bid, out[0].why)
+            break
+    assert sold is not None, "the bet slid to 0.56 and nothing sold"
+    assert sold[0] > 0.55 and sold[1].startswith("curve risk exit (max loss)")
+    assert sold[0] <= 0.62  # not on the early dip: at 0.70 the loss is 16% against a limit of a third
+
+
+def test_in_shadow_it_sells_nothing(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=False)
+    for k, bid in enumerate(PATH):
+        yes_bid(w, bid, 450 - 3 * k)
+    assert signals(w) == []
+
+
+def test_the_lanes_that_trade_live_are_all_watched():
+    """Guards the live config itself: every lane in LIVE_LANES must be one the watcher tracks (takes_profit), or it has no exits at all (the 09:45 break)."""
+    root = Path(__file__).resolve().parents[1]
+    toml, env = root / "data" / "strategies.toml", root / ".env"
+    if not toml.exists() or not env.exists():
+        pytest.skip("no local lane file or .env")
+    live = next((line.split("=", 1)[1].strip().strip('"') for line in env.read_text().splitlines() if line.startswith("LIVE_LANES=")), "")
+    names = [n for n in live.split(",") if n]
+    if not names:
+        pytest.skip("LIVE_LANES is blank")
+    os.environ.setdefault("DATA_DIR", str(root / "data"))
+    specs = lanes.lane_specs(config.reload())
+    unwatched = [n for n in names if n in specs and not lanes.takes_profit(specs[n])]
+    assert unwatched == [], f"live lanes with no watched exit: {unwatched}"
