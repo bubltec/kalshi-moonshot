@@ -1,0 +1,49 @@
+orders columns: ['id', 'ts', 'ticker', 'env', 'count', 'price', 'fill_count', 'cost_usd', 'fee_usd', 'order_id', 'side', 'contract']
+filled 15-minute orders since Monday: 1218; envs: {'prod': 1218}; sides: {'buy': 836, 'sell': 382}
+   sample sell: count 2.97 price 0.48 filled 2.97 cost_usd -1.3739219999999999 fee_usd 0.051678  (price x filled = 1.426)
+   sample sell: count 4.05 price 0.4 filled 4.05 cost_usd -1.5519600000000002 fee_usd 0.06803999999999999  (price x filled = 1.620)
+   sample sell: count 4.22 price 0.59 filled 4.22 cost_usd -2.418482 fee_usd 0.07131799999999999  (price x filled = 2.490)
+markets traded: 800; settled: 800; open/unsettled at the tape's end: 0; with a settlements row: 800
+payout at the close, from the orders' own counts (bought - sold): $2214.97; from the settlements table's yes_count/no_count: $3858.52; buys $3138.67; sales $851.94
+markets where the two payouts disagree: 354 of 800; of those, with a sale: 353
+   KXGOLD15M-26NOV090045-45 held by orders {'yes': 0.0, 'no': 0.0} settlements-table payout 2.97, orders payout 0.00, buy 2.47, sell 1.37
+   KXXRP15M-26NOV090100-00 held by orders {'yes': 0.0, 'no': 0.0} settlements-table payout 4.22, orders payout 0.00, buy 3.14, sell 2.42
+   KXSOL15M-26NOV090100-00 held by orders {'yes': 0.0, 'no': 0.0} settlements-table payout 4.05, orders payout 0.00, buy 2.92, sell 1.55
+   KXSILVER15M-26NOV090100-00 held by orders {'yes': 0.0, 'no': 0.0} settlements-table payout 12.82, orders payout 0.00, buy 10.52, sell 9.65
+   KXPALLADIUM15M-26NOV090115-15 held by orders {'yes': 0.0, 'no': 0.0} settlements-table payout 11.76, orders payout 0.00, buy 10.32, sell 9.77
+
+=== SINCE 11-12 00:00 ET (yesterday on): real cash per lane (settled markets whose first order was after the start)
+   commodity_natgas                 markets    6 | bought $   62.42 | real net   -20.02 (-32.1% on the buys) | 3 up | the decisions-table model said   -22.01
+   commodity_industrial             markets    6 | bought $   51.18 | real net   -10.45 (-20.4% on the buys) | 3 up | the decisions-table model said    -0.73
+   commodity_multiscale_rest        markets   12 | bought $   56.71 | real net    -9.11 (-16.1% on the buys) | 8 up | the decisions-table model said    +0.00
+   manual                           markets    7 | bought $   42.58 | real net    -8.79 (-20.6% on the buys) | 3 up | the decisions-table model said    +0.00
+   commodity_precious               markets    4 | bought $   40.48 | real net    -3.15 (-7.8% on the buys) | 3 up | the decisions-table model said    +4.41
+   crypto_multiscale_comeback       markets    4 | bought $   17.12 | real net    -0.67 (-3.9% on the buys) | 3 up | the decisions-table model said    +0.00
+   crypto_multiscale_rest           markets   12 | bought $   50.00 | real net    -0.58 (-1.2% on the buys) | 8 up | the decisions-table model said    +0.00
+   treasury_favorite                markets    5 | bought $    5.10 | real net    -0.36 (-7.0% on the buys) | 3 up | the decisions-table model said    -0.38
+   commodity_multiscale             markets    2 | bought $    9.17 | real net    -0.20 (-2.2% on the buys) | 1 up | the decisions-table model said    -0.32
+   commodity_multiscale_kalshi      markets    1 | bought $    4.57 | real net    +0.38 (+8.2% on the buys) | 1 up | the decisions-table model said    +0.00
+   crypto_multiscale                markets    1 | bought $    4.81 | real net    +0.50 (+10.3% on the buys) | 1 up | the decisions-table model said    +0.00
+   commodity_energy                 markets    1 | bought $    8.88 | real net    +2.61 (+29.4% on the buys) | 1 up | the decisions-table model said    +0.00
+   commodity_wti                    markets    2 | bought $   18.55 | real net    +4.10 (+22.1% on the buys) | 2 up | the decisions-table model said    +0.70
+   ALL                              bought $  371.57 | real net   -45.74 | model   -18.31
+   hand-placed markets: 0
+
+=== SINCE MONDAY 11-09 00:00 ET: real cash per lane (settled markets whose first order was after the start)
+   commodity_natgas                 markets   10 | bought $  107.21 | real net   -26.97 (-25.2% on the buys) | 6 up | the decisions-table model said   -28.43
+   crypto_multiscale_underdog       markets   84 | bought $   93.96 | real net   -24.86 (-26.5% on the buys) | 23 up | the decisions-table model said   -34.68
+   manual                           markets   85 | bought $  214.87 | real net   -19.07 (-8.9% on the buys) | 42 up | the decisions-table model said    +0.00
+   commodity_multiscale_rest        markets   22 | bought $   80.14 | real net   -12.71 (-15.9% on the buys) | 13 up | the decisions-table model said    +0.00
+   commodity_precious               markets   72 | bought $  679.83 | real net    -4.71 (-0.7% on the buys) | 53 up | the decisions-table model said    +1.48
+   commodity_multiscale             markets  119 | bought $  332.11 | real net    -3.60 (-1.1% on the buys) | 66 up | the decisions-table model said   -13.28
+   treasury_favorite                markets   36 | bought $   36.45 | real net    -3.43 (-9.4% on the buys) | 24 up | the decisions-table model said    -3.76
+   crypto_multiscale_comeback       markets    6 | bought $   21.99 | real net    -3.40 (-15.5% on the buys) | 3 up | the decisions-table model said    +0.00
+   commodity_industrial             markets   68 | bought $  601.54 | real net    -3.33 (-0.6% on the buys) | 50 up | the decisions-table model said    +6.61
+   commodity_multiscale_kalshi      markets    4 | bought $   16.93 | real net    +0.82 (+4.9% on the buys) | 3 up | the decisions-table model said    +0.00
+   crypto_multiscale_rest           markets   29 | bought $   98.55 | real net    +2.19 (+2.2% on the buys) | 19 up | the decisions-table model said    +0.00
+   crypto_multiscale                markets  241 | bought $  601.94 | real net    +4.85 (+0.8% on the buys) | 138 up | the decisions-table model said   -28.43
+   commodity_energy                 markets    8 | bought $   88.86 | real net    +7.90 (+8.9% on the buys) | 7 up | the decisions-table model said    +3.14
+   commodity_wti                    markets   16 | bought $  164.31 | real net   +14.54 (+8.9% on the buys) | 14 up | the decisions-table model said   +13.46
+   ALL                              bought $ 3138.67 | real net   -71.77 | model   -83.90
+   hand-placed markets: 0
+DONE
