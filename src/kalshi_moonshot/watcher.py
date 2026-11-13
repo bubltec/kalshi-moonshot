@@ -851,7 +851,7 @@ class ProfitWatcher:
         if now - t.risk_noted >= 10.0:
             t.risk_noted = now
             log.info("curve risk watch %s %s, %.0fs left: chance %.3f (%s worse; price %.3f, spot %.3f after history x%.2f), line %.2f, result %+.1f%% of cost%s", t.ticker, t.lane, left, r.q, r.worse, r.q_price, r.q_spot, t.risk_hist, t.risk_sell, pnl * 100.0, "" if t.risk_live else " [shadow]")
-        stop = curverisk.stopped(pnl, t.risk_max_loss) and bid >= CURVE_MIN_BID  # the max loss: sell now (below this bid the market has priced the loss and there is nothing to sell for)
+        stop = curverisk.stopped(pnl, r.q, t.risk_max_loss) and bid >= CURVE_MIN_BID  # the max loss: sell now (below this bid the market has priced the loss and there is nothing to sell for)
         if not stop and not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit):
             t.risk_since = 0.0
             return None

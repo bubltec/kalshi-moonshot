@@ -44,18 +44,21 @@ def test_history_factor_is_one_for_an_even_hour_and_larger_when_the_hour_is_bunc
     assert curverisk.history_factor(list(map(float, range(3700))), [100.0] * 3700, 3699.0) == 1.0  # flat: nothing to read
 
 
-def test_a_sale_needs_high_risk_and_a_loss_or_a_real_profit():
-    assert curverisk.sale_ok(0.40, 0.50, -0.20, 0.01)  # a small loss
-    assert curverisk.sale_ok(0.40, 0.50, -0.70, 0.01)  # a deep one is cut too
-    assert curverisk.sale_ok(0.40, 0.50, 0.10, 0.01)  # a profit
-    assert not curverisk.sale_ok(0.60, 0.50, -0.20, 0.01)  # risk is low: hold
-    assert not curverisk.sale_ok(0.40, 0.50, 0.005, 0.01)  # a profit under the minimum
-    assert not curverisk.sale_ok(0.10, -1.0, -0.1, 0.01)  # off
+def test_a_sale_needs_high_risk_and_a_loss_or_a_profit_that_shrinks_with_the_risk():
+    assert curverisk.sale_ok(0.40, 0.50, -0.20, 0.05)  # a small loss
+    assert curverisk.sale_ok(0.40, 0.50, -0.70, 0.05)  # a deep one is cut too
+    assert curverisk.sale_ok(0.40, 0.50, 0.10, 0.05)  # a profit
+    assert not curverisk.sale_ok(0.60, 0.50, -0.20, 0.05)  # risk is low: hold
+    assert not curverisk.sale_ok(0.45, 0.50, 0.01, 0.10)  # asked 0.10 * 0.45 = 0.045, got 0.01
+    assert curverisk.sale_ok(0.10, 0.50, 0.02, 0.10)  # at q 0.10 the ask is 0.01: taken
+    assert not curverisk.sale_ok(0.10, -1.0, -0.1, 0.05)  # off
 
 
-def test_the_max_loss_sells_at_once_whatever_the_chance_reads():
-    assert curverisk.stopped(-0.50, 0.5) and curverisk.stopped(-0.80, 0.5)
-    assert not curverisk.stopped(-0.30, 0.5) and not curverisk.stopped(-0.99, 0.0)
+def test_the_loss_we_carry_shrinks_with_the_risk():
+    assert not curverisk.stopped(-0.30, 0.9, 0.5)  # q 0.9: limit 45%
+    assert curverisk.stopped(-0.46, 0.9, 0.5)
+    assert curverisk.stopped(-0.30, 0.5, 0.5)  # q 0.5: limit 25%
+    assert not curverisk.stopped(-0.20, 0.5, 0.5) and not curverisk.stopped(-0.99, 0.5, 0.0)
 
 
 def test_the_wait_scales_with_the_time_left_and_how_far_under_the_line():
@@ -106,5 +109,5 @@ def test_shadow_logs_the_sale_once_and_sells_nothing(monkeypatch):
 
 def test_a_high_chance_holds_and_the_max_loss_sells_at_once(monkeypatch):
     assert run(monkeypatch, target(risk_live=True), bid=0.80, p=0.90)[1] is None  # plenty of cushion
-    i, reason, _ = run(monkeypatch, target(risk_live=True), bid=0.30, p=0.85)  # a 63% loss: past the 50% max, the sale is at the first reading
+    i, reason, _ = run(monkeypatch, target(risk_live=True), bid=0.30, p=0.85)  # a 63% loss at q 0.28: past the limit, the sale is at the first reading
     assert i == 0 and "(max loss)" in reason
