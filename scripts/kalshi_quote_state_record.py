@@ -41,6 +41,10 @@ s = config.reload()
 st = Store(s.db_path, s.exclude_versions)
 tape = db.connect(s.tape_path, "tape", shared=True)
 ET = dt.timezone(dt.timedelta(hours=-5))
+# Scope (user, 2026-11-13: "it should only be crypto multiscale, and commodity favorite lanes"; the underdog was live only 11-09 13:47 to 11-11 05:37 ET and is out, commodity_multiscale is out too).
+SCOPE_LANES = ("crypto_multiscale", "commodity_energy", "commodity_wti", "commodity_natgas", "commodity_precious", "commodity_industrial")
+LANE_SQL = ",".join("'%s'" % x for x in SCOPE_LANES)
+
 hm = lambda t: dt.datetime.fromtimestamp(t, ET).strftime("%m-%d %H:%M")  # noqa: E731
 
 MON = calendar.timegm((2026, 11, 9, 5, 0, 0))  # 11-09 00:00 ET
@@ -210,7 +214,7 @@ def dollars(r):
 # ---- the bets ----
 bet_rows = st.db.execute(
     "SELECT d.ts,d.ticker,d.lane,d.side,d.ask,d.stake_usd,d.exit_price,d.exit_reason,w.close_ts,w.result FROM decisions d JOIN windows w ON w.ticker=d.ticker "
-    "WHERE d.action='bet' AND d.mode='trade' AND d.stake_usd>0 AND d.ask>0 AND d.ts>? AND d.ticker LIKE '%15M-%' AND w.result IN ('yes','no') ORDER BY d.ts",
+    "WHERE d.action='bet' AND d.mode='trade' AND d.stake_usd>0 AND d.ask>0 AND d.ts>? AND d.ticker LIKE '%15M-%' AND d.lane IN (" + LANE_SQL + ") AND w.result IN ('yes','no') ORDER BY d.ts",
     (MON,),
 ).fetchall()
 bets_by_ticker = collections.defaultdict(list)

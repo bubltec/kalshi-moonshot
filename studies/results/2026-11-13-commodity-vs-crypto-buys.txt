@@ -1,69 +1,66 @@
-live trade-mode 15-minute bets since 11-12 00:00 ET, settled: 54 (manual excluded: 0); first 11-12 00:08, last 11-12 23:27 ET
+SCOPE: crypto_multiscale and the commodity favorite lanes (energy, wti, natgas, precious, industrial) only; the underdog (live 11-09 13:47 to 11-11 05:37 ET) and commodity_multiscale are out of the bet sets of the bet studies. The real-cash table lists every trade-mode lane and sums the in-scope ones separately.
+live trade-mode 15-minute bets since 11-12 00:00 ET, settled: 36 (manual excluded: 0); first 11-12 00:25, last 11-12 23:27 ET
 
 BY GROUP, all bets
-   commodity  n=  39 | booked   -34.79 (-15.3%) | held   -16.09 (-7.1%) | won 79.5% vs ask 0.841 (gap -0.046)
+   commodity  n=  21 | booked   -23.36 (-13.6%) | held    -6.40 (-3.7%) | won 85.7% vs ask 0.842 (gap +0.015)
    crypto     n=  15 | booked    -5.06 (-8.0%) | held    +8.39 (+13.4%) | won 93.3% vs ask 0.814 (gap +0.119)
 
 BY LANE
    commodity_industrial         n=   5 | booked    -3.26 (-8.0%) | held    +7.29 (+17.8%) | won 100.0% vs ask 0.834 (gap +0.166)
-   commodity_multiscale         n=  13 | booked   -11.05 (-22.1%) | held    -9.34 (-18.7%) | won 69.2% vs ask 0.835 (gap -0.142)
    commodity_natgas             n=   9 | booked   -21.25 (-33.3%) | held   -12.75 (-19.9%) | won 77.8% vs ask 0.833 (gap -0.056)
    commodity_precious           n=   4 | booked    -0.93 (-2.4%) | held    -4.09 (-10.7%) | won 75.0% vs ask 0.828 (gap -0.078)
    commodity_wti                n=   3 | booked    +2.08 (+7.1%) | held    +3.15 (+10.8%) | won 100.0% vs ask 0.899 (gap +0.101)
    crypto_multiscale            n=  15 | booked    -5.06 (-8.0%) | held    +8.39 (+13.4%) | won 93.3% vs ask 0.814 (gap +0.119)
-   treasury_favorite            n=   5 | booked    -0.38 (-7.4%) | held    -0.35 (-6.8%) | won 80.0% vs ask 0.852 (gap -0.052)
 
-quote path read at the buy on 13 of 54 bets (the rest were bought before minute 5 or have a gap)
+quote path read at the buy on 8 of 36 bets (the rest were bought before minute 5 or have a gap)
 
 CURVE AT THE BUY: group means (median in brackets)
-   unit     commodity 10.382 [9.940] | crypto 15.466 [15.479]
-   cushion  commodity 1.812 [1.440] | crypto 0.795 [1.027]
-   slope    commodity 1.003 [0.792] | crypto 1.431 [1.531]
-   eff      commodity 0.182 [0.127] | crypto 0.131 [0.131]
-   cross    commodity 3.273 [3.000] | crypto 9.500 [10.000]
-   jump     commodity 2.035 [1.938] | crypto 1.552 [1.615]
-   minute   commodity 12.097 [12.225] | crypto 11.429 [11.588]
-   spread   commodity 0.016 [0.010] | crypto 0.010 [0.010]
+   unit     commodity 11.042 [10.761] | crypto 15.466 [15.479]
+   cushion  commodity 1.689 [2.102] | crypto 0.795 [1.027]
+   slope    commodity 0.988 [0.792] | crypto 1.431 [1.531]
+   eff      commodity 0.199 [0.189] | crypto 0.131 [0.131]
+   cross    commodity 3.667 [3.000] | crypto 9.500 [10.000]
+   jump     commodity 1.987 [1.938] | crypto 1.552 [1.615]
+   minute   commodity 12.580 [13.294] | crypto 11.429 [11.588]
+   spread   commodity 0.015 [0.010] | crypto 0.010 [0.010]
 
 BY CURVE SHAPE: the same terciles for both groups together (cut from all bets), booked / held per group
-   unit     low  (8.51..): commodity n=  4   -5.03/  -2.50 won-ask -0.147 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   unit     mid  (8.51..): commodity n=  4  -11.09/  -8.35 won-ask -0.113 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   unit     high (13.45..): commodity n=  3   -3.41/  -9.12 won-ask -0.137 | crypto n=  2   -0.36/  +2.00 won-ask +0.200
-   cushion  low  (1.21..): commodity n=  2   -4.12/  -9.83 won-ask -0.280 | crypto n=  2   -0.36/  +2.00 won-ask +0.200
-   cushion  mid  (1.21..): commodity n=  4   -0.21/  +2.53 won-ask +0.153 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   cushion  high (2.10..): commodity n=  5  -15.20/ -12.67 won-ask -0.300 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   slope    low  (0.51..): commodity n=  4  -11.10/  -8.36 won-ask -0.115 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   slope    mid  (0.51..): commodity n=  3   -4.00/  -9.71 won-ask -0.150 | crypto n=  1   +0.06/  +0.50 won-ask +0.100
-   slope    high (1.50..): commodity n=  4   -4.43/  -1.90 won-ask -0.135 | crypto n=  1   -0.42/  +1.50 won-ask +0.300
-   eff      low  (0.08..): commodity n=  4   -5.02/  -8.18 won-ask -0.103 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   eff      mid  (0.08..): commodity n=  2  -10.06/ -10.06 won-ask -0.400 | crypto n=  2   -0.36/  +2.00 won-ask +0.200
-   eff      high (0.19..): commodity n=  5   -4.45/  -1.73 won-ask -0.048 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   cross    low  (3.00..): commodity n=  4   -9.95/  -9.03 won-ask -0.137 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   cross    mid  (3.00..): commodity n=  4   -9.70/ -12.67 won-ask -0.312 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   cross    high (5.00..): commodity n=  3   +0.13/  +1.74 won-ask +0.117 | crypto n=  2   -0.36/  +2.00 won-ask +0.200
-   jump     low  (1.80..): commodity n=  2   -0.57/  +1.04 won-ask +0.100 | crypto n=  2   -0.36/  +2.00 won-ask +0.200
-   jump     mid  (1.80..): commodity n=  4  -13.59/ -19.29 won-ask -0.330 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   jump     high (2.01..): commodity n=  5   -5.37/  -1.71 won-ask -0.066 | crypto n=  0   +0.00/  +0.00 won-ask +nan
-   minute   low  (11.48..): commodity n=  3   +0.22/  +1.14 won-ask +0.120 | crypto n=  1   +0.06/  +0.50 won-ask +0.100
-   minute   mid  (11.48..): commodity n=  3   -4.25/  -4.05 won-ask -0.150 | crypto n=  1   -0.42/  +1.50 won-ask +0.300
-   minute   high (12.36..): commodity n=  5  -15.50/ -17.05 won-ask -0.272 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   unit     low  (8.51..): commodity n=  2   -0.79/  +1.74 won-ask +0.085 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   unit     mid  (8.51..): commodity n=  2  -11.42/  -8.68 won-ask -0.370 | crypto n=  1   +0.06/  +0.50 won-ask +0.100
+   unit     high (15.48..): commodity n=  2   -4.12/  -9.83 won-ask -0.280 | crypto n=  1   -0.42/  +1.50 won-ask +0.300
+   cushion  low  (1.01..): commodity n=  1   -0.02/  +0.17 won-ask +0.300 | crypto n=  1   -0.42/  +1.50 won-ask +0.300
+   cushion  mid  (1.01..): commodity n=  2   -5.34/  -8.50 won-ask -0.345 | crypto n=  1   +0.06/  +0.50 won-ask +0.100
+   cushion  high (2.10..): commodity n=  3  -10.96/  -8.43 won-ask -0.247 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   slope    low  (0.51..): commodity n=  2  -11.42/  -8.68 won-ask -0.370 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   slope    mid  (0.51..): commodity n=  2   -4.12/  -9.83 won-ask -0.280 | crypto n=  1   +0.06/  +0.50 won-ask +0.100
+   slope    high (1.53..): commodity n=  2   -0.79/  +1.74 won-ask +0.085 | crypto n=  1   -0.42/  +1.50 won-ask +0.300
+   eff      low  (0.08..): commodity n=  2   -5.34/  -8.50 won-ask -0.345 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   eff      mid  (0.08..): commodity n=  1  -10.17/ -10.17 won-ask -0.910 | crypto n=  2   -0.36/  +2.00 won-ask +0.200
+   eff      high (0.19..): commodity n=  3   -0.81/  +1.91 won-ask +0.157 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   cross    low  (3.00..): commodity n=  2  -10.27/  -9.35 won-ask -0.415 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   cross    mid  (3.00..): commodity n=  3   -5.36/  -8.33 won-ask -0.130 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   cross    high (9.00..): commodity n=  1   -0.69/  +0.92 won-ask +0.090 | crypto n=  2   -0.36/  +2.00 won-ask +0.200
+   jump     low  (1.80..): commodity n=  0   +0.00/  +0.00 won-ask +nan | crypto n=  2   -0.36/  +2.00 won-ask +0.200
+   jump     mid  (1.80..): commodity n=  3   -4.81/  -8.91 won-ask -0.157 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   jump     high (1.94..): commodity n=  3  -11.52/  -7.86 won-ask -0.220 | crypto n=  0   +0.00/  +0.00 won-ask +nan
+   minute   low  (11.59..): commodity n=  1   -0.10/  +0.82 won-ask +0.080 | crypto n=  1   +0.06/  +0.50 won-ask +0.100
+   minute   mid  (11.59..): commodity n=  2  -10.20/ -10.00 won-ask -0.305 | crypto n=  1   -0.42/  +1.50 won-ask +0.300
+   minute   high (13.29..): commodity n=  3   -6.03/  -7.58 won-ask -0.200 | crypto n=  0   +0.00/  +0.00 won-ask +nan
 
 BY PRICE BAND (ask)
    ask 0.0-0.5: commodity n=0 || crypto n=0
    ask 0.5-0.7: commodity n=   2 | booked   -11.15 (-52.6%) | held    -5.36 (-25.3%) | won 50.0% vs ask 0.655 (gap -0.155) || crypto n=0
-   ask 0.7-0.8: commodity n=   6 | booked    -4.25 (-23.6%) | held    +2.06 (+11.4%) | won 83.3% vs ask 0.750 (gap +0.083) || crypto n=   6 | booked    -2.53 (-10.6%) | held    +2.67 (+11.2%) | won 83.3% vs ask 0.737 (gap +0.097)
-   ask 0.8-0.9: commodity n=  19 | booked   -12.31 (-12.7%) | held    -9.76 (-10.1%) | won 73.7% vs ask 0.844 (gap -0.107) || crypto n=   7 | booked    -3.11 (-10.7%) | held    +4.70 (+16.1%) | won 100.0% vs ask 0.856 (gap +0.144)
-   ask 0.9-1.0: commodity n=  12 | booked    -7.08 (-7.8%) | held    -3.03 (-3.3%) | won 91.7% vs ask 0.912 (gap +0.004) || crypto n=   2 | booked    +0.58 (+5.9%) | held    +1.02 (+10.3%) | won 100.0% vs ask 0.900 (gap +0.100)
+   ask 0.7-0.8: commodity n=   3 | booked    -2.35 (-20.8%) | held    +3.32 (+29.5%) | won 100.0% vs ask 0.750 (gap +0.250) || crypto n=   6 | booked    -2.53 (-10.6%) | held    +2.67 (+11.2%) | won 83.3% vs ask 0.737 (gap +0.097)
+   ask 0.8-0.9: commodity n=   7 | booked    -3.19 (-5.4%) | held    -0.20 (-0.3%) | won 85.7% vs ask 0.839 (gap +0.019) || crypto n=   7 | booked    -3.11 (-10.7%) | held    +4.70 (+16.1%) | won 100.0% vs ask 0.856 (gap +0.144)
+   ask 0.9-1.0: commodity n=   9 | booked    -6.68 (-8.4%) | held    -4.15 (-5.2%) | won 88.9% vs ask 0.916 (gap -0.027) || crypto n=   2 | booked    +0.58 (+5.9%) | held    +1.02 (+10.3%) | won 100.0% vs ask 0.900 (gap +0.100)
 
 BY MINUTE OF THE WINDOW AT THE BUY
    minute 0-5: commodity n=0 || crypto n=0
-   minute 5-8: commodity n=   6 | booked    -7.61 (-21.1%) | held    -7.56 (-20.9%) | won 50.0% vs ask 0.852 (gap -0.352) || crypto n=   2 | booked    -2.15 (-22.3%) | held    +1.64 (+17.1%) | won 100.0% vs ask 0.845 (gap +0.155)
-   minute 8-11: commodity n=  18 | booked    -7.43 (-6.2%) | held   +11.03 (+9.2%) | won 94.4% vs ask 0.818 (gap +0.126) || crypto n=  10 | booked    -3.25 (-8.1%) | held    +3.49 (+8.7%) | won 90.0% vs ask 0.816 (gap +0.084)
-   minute 11-15: commodity n=  15 | booked   -19.75 (-27.7%) | held   -19.56 (-27.4%) | won 73.3% vs ask 0.863 (gap -0.130) || crypto n=   3 | booked    +0.34 (+2.7%) | held    +3.25 (+25.2%) | won 100.0% vs ask 0.787 (gap +0.213)
+   minute 5-8: commodity n=   2 | booked    +1.45 (+7.0%) | held    +2.52 (+12.3%) | won 100.0% vs ask 0.885 (gap +0.115) || crypto n=   2 | booked    -2.15 (-22.3%) | held    +1.64 (+17.1%) | won 100.0% vs ask 0.845 (gap +0.155)
+   minute 8-11: commodity n=  11 | booked    -9.80 (-9.7%) | held    +7.45 (+7.4%) | won 90.9% vs ask 0.816 (gap +0.093) || crypto n=  10 | booked    -3.25 (-8.1%) | held    +3.49 (+8.7%) | won 90.0% vs ask 0.816 (gap +0.084)
+   minute 11-15: commodity n=   8 | booked   -15.01 (-29.8%) | held   -16.37 (-32.5%) | won 75.0% vs ask 0.866 (gap -0.116) || crypto n=   3 | booked    +0.34 (+2.7%) | held    +3.25 (+25.2%) | won 100.0% vs ask 0.787 (gap +0.213)
 
 HOW THE LOSERS LOST (as booked, losers only): sold early or held to zero
-   commodity  losers n=18: sold early 14 (-19.02), held to settlement 4 (-29.63)
+   commodity  losers n=10: sold early 8 (-12.23), held to settlement 2 (-20.67)
    crypto     losers n=5: sold early 5 (-11.22), held to settlement 0 (+0.00)
 DONE
-
-NOTE (added after the run): the curve readings need 10 minutes of the market's own quote path inside the window, so they exist only for the 13 bets bought after about minute 10; the by-shape split is therefore thin (n=13) and tilted to late buys. The group, lane, price-band, minute and loser tables use all 54 bets.

@@ -31,9 +31,17 @@ print(f"filled 15-minute orders since Monday: {len(orders)}; envs: {dict(collect
 for o in [x for x in orders if x["side"] == "sell"][:3]:
     print(f"   sample sell: count {o['count']} price {o['price']} filled {o['fill_count']} cost_usd {o['cost_usd']} fee_usd {o['fee_usd']}  (price x filled = {float(o['price']) * float(o['fill_count']):.3f})")
 
+SCOPE_LANES = ("crypto_multiscale", "commodity_energy", "commodity_wti", "commodity_natgas", "commodity_precious", "commodity_industrial")  # user, 2026-11-13: "it should only be crypto multiscale, and commodity favorite lanes"
 lane_of = {}
-for r in st.db.execute("SELECT ticker,lane,mode FROM decisions WHERE action='bet' AND ts>? AND ticker LIKE '%15M-%' ORDER BY ts", (MON,)).fetchall():
-    lane_of.setdefault(r["ticker"], (r["lane"], r["mode"]))
+two = 0
+for r in st.db.execute("SELECT ticker,lane,mode FROM decisions WHERE action='bet' AND ts>? AND ticker LIKE '%15M-%' ORDER BY (mode='trade') DESC, ts", (MON,)).fetchall():
+    # an order belongs to the lane that had a TRADE-mode bet on the ticker (observe-mode decisions are paper lanes and hand-placed ones, which place no order); a lane with only observe decisions is a label of last resort
+    if r["ticker"] in lane_of:
+        if r["mode"] == "trade" and lane_of[r["ticker"]][1] == "trade" and lane_of[r["ticker"]][0] != r["lane"]:
+            two += 1
+        continue
+    lane_of[r["ticker"]] = (r["lane"], r["mode"])
+print(f"markets where two lanes both had a trade-mode bet (the order goes to the first): {two}")
 sett = {}
 for r in st.db.execute("SELECT ticker,result,yes_count,no_count FROM settlements WHERE settled_ts>?", (MON,)).fetchall():
     sett[r["ticker"]] = r
@@ -60,7 +68,8 @@ for tk, p in per.items():
     p["pay"] = max(p["held"].get(result, 0.0), 0.0) if result in ("yes", "no") else 0.0  # what the orders say was still held at the close, paid $1 each if it is the winning contract
     p["net"] = p["sell"] + p["pay"] - p["buy"]
     p["net_settlements"] = p["sell"] + p["pay_settlements"] - p["buy"]
-    p["lane"] = lane_of.get(tk, ("no bot decision (hand-placed)", None))[0]
+    ln = lane_of.get(tk, ("no bot decision (hand-placed)", None))
+    p["lane"] = ln[0] if ln[1] == "trade" or ln[0] == "manual" else f"(observe-mode only: {ln[0]})"
     done[tk] = p
 print(f"markets traded: {len(per)}; settled: {len(done)}; open/unsettled at the tape's end: {open_}; with a settlements row: {sum(1 for t in done if t in sett)}")
 
@@ -94,15 +103,20 @@ for label, since in (("SINCE 11-12 00:00 ET (yesterday on)", YDAY), ("SINCE MOND
         if p["first"] >= since:
             lanes[p["lane"]].append((tk, p))
     tot = [0.0, 0.0, 0.0]
+    sc = [0.0, 0.0]
     for lane in sorted(lanes, key=lambda x: sum(p["net"] for _, p in lanes[x])):
         g = lanes[lane]
         buy, net = sum(p["buy"] for _, p in g), sum(p["net"] for _, p in g)
         m = sum(v for (tk, ln), v in mod.items() if ln == lane and tk in {t for t, _ in g})
         win = sum(1 for _, p in g if p["net"] > 0)
         print(f"   {lane:32s} markets {len(g):4d} | bought ${buy:8.2f} | real net {net:+8.2f} ({net / buy:+.1%} on the buys) | {win} up | the decisions-table model said {m:+8.2f}")
+        if lane in SCOPE_LANES:
+            sc[0] += buy
+            sc[1] += net
         tot[0] += buy
         tot[1] += net
         tot[2] += m
+    print(f"   {'IN SCOPE (crypto multiscale + commodity favorites)':32s} bought ${sc[0]:8.2f} | real net {sc[1]:+8.2f} ({sc[1] / sc[0]:+.1%} on the buys)" if sc[0] else "   in scope: none")
     print(f"   {'ALL':32s} bought ${tot[0]:8.2f} | real net {tot[1]:+8.2f} | model {tot[2]:+8.2f}")
     hand = [p for g in lanes.get("no bot decision (hand-placed)", []) for p in [g[1]]]
     print(f"   hand-placed markets: {len(hand)}")

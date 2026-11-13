@@ -1,111 +1,103 @@
+SCOPE: crypto_multiscale and the commodity favorite lanes (energy, wti, natgas, precious, industrial) only; the underdog (live 11-09 13:47 to 11-11 05:37 ET) and commodity_multiscale are out of the bet sets of the bet studies. The real-cash table lists every trade-mode lane and sums the in-scope ones separately.
 settled 15-minute windows opened since Monday 11-09 00:00 ET: 8854 in 27 markets; the restored tape's last window closes 11-12 23:30 ET
-live trade-mode bets since Monday, settled: 826
+live trade-mode bets since Monday, settled: 514
 markets read: 7808; record moments (side, ask 0.05-0.95, spread <= 0.04): 137409
    unread (under 300 readings in the market's last 24 h): 11123
    anomaly: 9554
    perp hour unread: 102056
 perp reference ticks on the tape begin 11-11 07:45 to 11-11 07:45 ET across 18 markets (the hour layer needs an hour after that)
-bets read: 826 of 826 (the rest have no quote path on the restored tape or a window that opened before Monday)
-    259 bets: bought before minute 5 (the 5-minute layer is not covered)
-    105 bets: no quote path on the tape
-    358 bets: quote state read, perp hour unread (no perp, or before 11-11 08:45 ET)
-     40 bets: the market has under 300 readings in its last 24 h (new since Monday, or thinly quoted)
+bets read: 514 of 514 (the rest have no quote path on the restored tape or a window that opened before Monday)
+    134 bets: bought before minute 5 (the 5-minute layer is not covered)
+     58 bets: no quote path on the tape
+    248 bets: quote state read, perp hour unread (no perp, or before 11-11 08:45 ET)
+     26 bets: the market has under 300 readings in its last 24 h (new since Monday, or thinly quoted)
 
-WHAT HAPPENED on the same bets: n= 826 |  -139.01 on $ 3056.91 (-4.5%) | 426 ended up
+WHAT HAPPENED on the same bets: n= 514 |   -63.38 on $ 2512.39 (-2.5%) | 299 ended up
    commodity_energy         n=   8 |    +3.14 on $   79.98 (+3.9%) | 6 ended up
    commodity_industrial     n=  73 |    -8.77 on $  632.76 (-1.4%) | 53 ended up
-   commodity_multiscale     n= 171 |   -38.65 on $  408.82 (-9.5%) | 80 ended up
    commodity_natgas         n=  15 |   -26.54 on $  119.67 (-22.2%) | 7 ended up
    commodity_precious       n=  76 |    -6.98 on $  701.74 (-1.0%) | 54 ended up
    commodity_wti            n=  18 |   +15.87 on $  184.93 (+8.6%) | 16 ended up
    crypto_multiscale        n= 324 |   -40.09 on $  793.31 (-5.1%) | 163 ended up
-   crypto_multiscale_underdog n= 103 |   -33.46 on $   97.28 (-34.4%) | 21 ended up
-   treasury_favorite        n=  38 |    -3.52 on $   38.43 (-9.2%) | 26 ended up
 
 R1  quote layers + perp hour (the question)
-   kept            n=  14 |   -12.36 on $   77.99 (-15.8%) | 9 ended up
-   net change against what happened: +126.65 | bets the rule beat (skipped losers) 395, lost to (skipped winners) 417, same (kept or flat) 14
-   skipped, unread               n= 737 |  -101.88 on $ 2654.91 (-3.8%) | 376 ended up
-   skipped, anomaly              n=  28 |   -12.55 on $  101.21 (-12.4%) | 12 ended up
-   skipped, thin record          n=  34 |    -8.11 on $  148.98 (-5.4%) | 22 ended up
-   skipped, record not positive  n=  13 |    -4.10 on $   73.82 (-5.6%) | 7 ended up
+   kept            n=   9 |    -5.28 on $   59.34 (-8.9%) | 7 ended up
+   net change against what happened: +58.10 | bets the rule beat (skipped losers) 213, lost to (skipped winners) 292, same (kept or flat) 9
+   skipped, unread               n= 449 |   -37.39 on $ 2180.57 (-1.7%) | 261 ended up
+   skipped, anomaly              n=  19 |   -13.19 on $   80.29 (-16.4%) | 8 ended up
+   skipped, thin record          n=  27 |    -4.57 on $  129.46 (-3.5%) | 18 ended up
+   skipped, record not positive  n=  10 |    -2.96 on $   62.74 (-4.7%) | 5 ended up
    record at the tape's end: 918 state-and-band cells, 361 with 15+ markets, 138 of those positive
    by curve shape (the state's own letters at the buy): all bets | kept
-      level (5m, own variance)   1: all n= 188   -48.29 | kept n=   5    -5.31 | skipped   +42.98 change  <- kept bets not positive
-      level (5m, own variance)   2: all n= 169   -11.66 | kept n=   8    +3.13 | skipped   +14.79 change
-      level (5m, own variance)   3: all n=  37   -16.61 | kept n=   1   -10.17 | skipped    +6.44 change
-      2m slope                   d: all n=  87   -21.36 | kept n=   1    +0.70 | skipped   +22.06 change
-      2m slope                   f: all n= 131   -23.48 | kept n=   1    -2.56 | skipped   +20.93 change
-      2m slope                   u: all n= 176   -31.71 | kept n=  12   -10.50 | skipped   +21.21 change  <- kept bets not positive
-      2m bend                    n: all n= 198   -47.70 | kept n=   2    -1.86 | skipped   +45.85 change
-      2m bend                    p: all n= 196   -28.85 | kept n=  12   -10.50 | skipped   +18.35 change  <- kept bets not positive
-      5m slope                   d: all n=  68   -34.73 | kept n=   0    +0.00 | skipped   +34.73 change
-      5m slope                   f: all n= 111   -24.09 | kept n=   3    +3.07 | skipped   +27.16 change
-      5m slope                   u: all n= 215   -17.74 | kept n=  11   -15.43 | skipped    +2.31 change  <- kept bets not positive
-      5m bend                    n: all n= 166   -41.49 | kept n=   2    +0.77 | skipped   +42.26 change
-      5m bend                    p: all n= 228   -35.07 | kept n=  12   -13.13 | skipped   +21.94 change  <- kept bets not positive
-      perp hour                  D: all n=  33    -1.67 | kept n=   4    +0.00 | skipped    +1.67 change
-      perp hour                  F: all n=  24   -18.49 | kept n=   8   -15.36 | skipped    +3.12 change  <- kept bets not positive
-      perp hour                  U: all n=  18    -7.86 | kept n=   2    +3.00 | skipped   +10.86 change
+      level (5m, own variance)   1: all n= 126   -35.30 | kept n=   2    -1.81 | skipped   +33.49 change
+      level (5m, own variance)   2: all n= 128    -3.03 | kept n=   6    +6.71 | skipped    +9.74 change
+      level (5m, own variance)   3: all n=  23   -11.65 | kept n=   1   -10.17 | skipped    +1.47 change
+      2m slope                   d: all n=  51   -15.24 | kept n=   1    +0.70 | skipped   +15.94 change
+      2m slope                   f: all n=  92   -14.75 | kept n=   0    +0.00 | skipped   +14.75 change
+      2m slope                   u: all n= 134   -19.99 | kept n=   8    -5.98 | skipped   +14.01 change  <- kept bets not positive
+      2m bend                    n: all n= 134   -25.89 | kept n=   1    +0.70 | skipped   +26.59 change
+      2m bend                    p: all n= 143   -24.09 | kept n=   8    -5.98 | skipped   +18.11 change  <- kept bets not positive
+      5m slope                   d: all n=  48   -24.43 | kept n=   0    +0.00 | skipped   +24.43 change
+      5m slope                   f: all n=  77   -22.17 | kept n=   3    +3.07 | skipped   +25.24 change
+      5m slope                   u: all n= 152    -3.38 | kept n=   6    -8.34 | skipped    -4.96 change  <- kept bets not positive
+      5m bend                    n: all n= 123   -34.60 | kept n=   2    +0.77 | skipped   +35.37 change
+      5m bend                    p: all n= 154   -15.38 | kept n=   7    -6.05 | skipped    +9.33 change  <- kept bets not positive
+      perp hour                  D: all n=  26    +2.34 | kept n=   3    +2.56 | skipped    +0.22 change
+      perp hour                  F: all n=  15   -12.24 | kept n=   4   -10.84 | skipped    +1.40 change
+      perp hour                  U: all n=  15    -4.20 | kept n=   2    +3.00 | skipped    +7.20 change
    by price band: all bets | kept
-      <0.35     all n=  74   -27.75 | kept n=   0    +0.00
-      0.35-0.5  all n=  45   -12.14 | kept n=   0    +0.00
-      0.5-0.7   all n= 228   -43.66 | kept n=   0    +0.00
-      0.7-0.8   all n= 234    -7.38 | kept n=   2    +1.58
-      0.8-0.9   all n= 179   -11.88 | kept n=  10    -2.75
-      >=0.9     all n=  66   -36.20 | kept n=   2   -11.19
+      0.35-0.5  all n=  14    -5.01 | kept n=   0    +0.00
+      0.5-0.7   all n= 154   -19.83 | kept n=   0    +0.00
+      0.7-0.8   all n= 164    -5.48 | kept n=   1    +1.08
+      0.8-0.9   all n= 134    +1.16 | kept n=   7    +3.81
+      >=0.9     all n=  48   -34.22 | kept n=   1   -10.17
    kept bets by state (3 or more bets):
-      1up.up.F     n=  4   -6.39  (record behind them at the buy: 45-78 markets, shrunk +0.027 to +0.070 per $1)
-   [ ] kept at least 30 bets (14)
-   [x] change against what happened positive (+126.65)
-   [ ] kept bets net positive (-12.36)
+   [ ] kept at least 30 bets (9)
+   [x] change against what happened positive (+58.10)
+   [ ] kept bets net positive (-5.28)
    [ ] kept bets positive in every shape with 5+ kept
 
 R2  quote layers alone (check)
-   kept            n=  98 |    +8.86 on $  476.69 (+1.9%) | 67 ended up
-   net change against what happened: +147.87 | bets the rule beat (skipped losers) 369, lost to (skipped winners) 359, same (kept or flat) 98
-   skipped, unread               n= 404 |   -49.90 on $ 1094.32 (-4.6%) | 185 ended up
-   skipped, anomaly              n=  28 |   -12.55 on $  101.21 (-12.4%) | 12 ended up
-   skipped, thin record          n=  31 |    -7.45 on $  193.56 (-3.8%) | 20 ended up
-   skipped, record not positive  n= 265 |   -77.97 on $ 1191.14 (-6.5%) | 142 ended up
+   kept            n=  74 |    +5.96 on $  431.29 (+1.4%) | 54 ended up
+   net change against what happened: +69.34 | bets the rule beat (skipped losers) 195, lost to (skipped winners) 245, same (kept or flat) 74
+   skipped, unread               n= 218 |    -0.21 on $  792.69 (-0.0%) | 118 ended up
+   skipped, anomaly              n=  19 |   -13.19 on $   80.29 (-16.4%) | 8 ended up
+   skipped, thin record          n=  23 |    -2.57 on $  180.53 (-1.4%) | 14 ended up
+   skipped, record not positive  n= 180 |   -53.37 on $ 1027.58 (-5.2%) | 105 ended up
    record at the tape's end: 434 state-and-band cells, 289 with 15+ markets, 72 of those positive
    by curve shape (the state's own letters at the buy): all bets | kept
-      level (5m, own variance)   1: all n= 188   -48.29 | kept n=  37    +5.71 | skipped   +54.00 change
-      level (5m, own variance)   2: all n= 169   -11.66 | kept n=  43   +16.46 | skipped   +28.12 change
-      level (5m, own variance)   3: all n=  37   -16.61 | kept n=  18   -13.31 | skipped    +3.30 change  <- kept bets not positive
-      2m slope                   d: all n=  87   -21.36 | kept n=  14    +1.08 | skipped   +22.44 change
-      2m slope                   f: all n= 131   -23.48 | kept n=  44   +13.50 | skipped   +36.99 change
-      2m slope                   u: all n= 176   -31.71 | kept n=  40    -5.72 | skipped   +25.99 change  <- kept bets not positive
-      2m bend                    n: all n= 198   -47.70 | kept n=  54   +15.78 | skipped   +63.49 change
-      2m bend                    p: all n= 196   -28.85 | kept n=  44    -6.92 | skipped   +21.93 change  <- kept bets not positive
-      5m slope                   d: all n=  68   -34.73 | kept n=  19   -14.07 | skipped   +20.66 change  <- kept bets not positive
-      5m slope                   f: all n= 111   -24.09 | kept n=  22    +9.67 | skipped   +33.76 change
-      5m slope                   u: all n= 215   -17.74 | kept n=  57   +13.26 | skipped   +30.99 change
-      5m bend                    n: all n= 166   -41.49 | kept n=  41    +4.12 | skipped   +45.61 change
-      5m bend                    p: all n= 228   -35.07 | kept n=  57    +4.74 | skipped   +39.81 change
+      level (5m, own variance)   1: all n= 126   -35.30 | kept n=  30    +3.15 | skipped   +38.45 change
+      level (5m, own variance)   2: all n= 128    -3.03 | kept n=  31   +16.53 | skipped   +19.57 change
+      level (5m, own variance)   3: all n=  23   -11.65 | kept n=  13   -13.72 | skipped    -2.07 change  <- kept bets not positive
+      2m slope                   d: all n=  51   -15.24 | kept n=   8    +0.88 | skipped   +16.12 change
+      2m slope                   f: all n=  92   -14.75 | kept n=  34    +8.59 | skipped   +23.34 change
+      2m slope                   u: all n= 134   -19.99 | kept n=  32    -3.51 | skipped   +16.48 change  <- kept bets not positive
+      2m bend                    n: all n= 134   -25.89 | kept n=  40   +15.19 | skipped   +41.08 change
+      2m bend                    p: all n= 143   -24.09 | kept n=  34    -9.23 | skipped   +14.86 change  <- kept bets not positive
+      5m slope                   d: all n=  48   -24.43 | kept n=  15   -13.45 | skipped   +10.98 change  <- kept bets not positive
+      5m slope                   f: all n=  77   -22.17 | kept n=  15    +7.56 | skipped   +29.73 change
+      5m slope                   u: all n= 152    -3.38 | kept n=  44   +11.85 | skipped   +15.23 change
+      5m bend                    n: all n= 123   -34.60 | kept n=  33    -0.23 | skipped   +34.37 change  <- kept bets not positive
+      5m bend                    p: all n= 154   -15.38 | kept n=  41    +6.19 | skipped   +21.57 change
    by price band: all bets | kept
-      <0.35     all n=  74   -27.75 | kept n=   4    +0.37
-      0.35-0.5  all n=  45   -12.14 | kept n=   1    +0.01
-      0.5-0.7   all n= 228   -43.66 | kept n=   7    +1.64
-      0.7-0.8   all n= 234    -7.38 | kept n=  39    +9.13
-      0.8-0.9   all n= 179   -11.88 | kept n=  22    +8.57
-      >=0.9     all n=  66   -36.20 | kept n=  25   -10.88
+      0.35-0.5  all n=  14    -5.01 | kept n=   1    +0.01
+      0.5-0.7   all n= 154   -19.83 | kept n=   6    +0.58
+      0.7-0.8   all n= 164    -5.48 | kept n=  31    +6.04
+      0.8-0.9   all n= 134    +1.16 | kept n=  18    +8.16
+      >=0.9     all n=  48   -34.22 | kept n=  18    -8.83
    kept bets by state (3 or more bets):
-      1fn.up       n= 13   -3.73  (record behind them at the buy: 57-312 markets, shrunk +0.004 to +0.055 per $1)
-      2up.up       n= 10   +5.11  (record behind them at the buy: 51-1238 markets, shrunk +0.000 to +0.047 per $1)
-      2up.dn       n=  7   -1.66  (record behind them at the buy: 29-134 markets, shrunk +0.008 to +0.067 per $1)
-      3fn.up       n=  5   +1.28  (record behind them at the buy: 35-222 markets, shrunk +0.009 to +0.083 per $1)
-      2dn.up       n=  4   +2.08  (record behind them at the buy: 38-298 markets, shrunk +0.005 to +0.058 per $1)
+      1fn.up       n= 11   -3.75  (record behind them at the buy: 57-289 markets, shrunk +0.004 to +0.055 per $1)
+      2up.up       n=  7   +5.77  (record behind them at the buy: 77-682 markets, shrunk +0.001 to +0.023 per $1)
+      2up.dn       n=  6   -1.27  (record behind them at the buy: 29-98 markets, shrunk +0.008 to +0.067 per $1)
       2fn.un       n=  4   +4.98  (record behind them at the buy: 20-58 markets, shrunk +0.021 to +0.037 per $1)
       1fn.fn       n=  4   +3.28  (record behind them at the buy: 33-115 markets, shrunk +0.011 to +0.033 per $1)
-      2dn.fn       n=  4   -0.05  (record behind them at the buy: 66-161 markets, shrunk +0.008 to +0.089 per $1)
-      1up.fp       n=  4   +0.68  (record behind them at the buy: 27-385 markets, shrunk +0.009 to +0.049 per $1)
+      2dn.up       n=  3   +2.37  (record behind them at the buy: 38-219 markets, shrunk +0.006 to +0.058 per $1)
+      1up.fp       n=  3   +0.57  (record behind them at the buy: 41-385 markets, shrunk +0.009 to +0.049 per $1)
       1fp.dn       n=  3   -2.20  (record behind them at the buy: 130-172 markets, shrunk +0.008 to +0.018 per $1)
-   [x] kept at least 30 bets (98)
-   [x] change against what happened positive (+147.87)
-   [x] kept bets net positive (+8.86)
+   [x] kept at least 30 bets (74)
+   [x] change against what happened positive (+69.34)
+   [x] kept bets net positive (+5.96)
    [ ] kept bets positive in every shape with 5+ kept
 
 VERDICT: R1 does NOT qualify; R2 (check only) does not meet the bar.
 DONE
-exit=0  results in job-results/20261113-094516-64685/
