@@ -111,3 +111,23 @@ def test_a_high_chance_holds_and_the_max_loss_sells_at_once(monkeypatch):
     assert run(monkeypatch, target(risk_live=True), bid=0.80, p=0.90)[1] is None  # plenty of cushion
     i, reason, _ = run(monkeypatch, target(risk_live=True), bid=0.30, p=0.85)  # a 63% loss at q 0.28: past the limit, the sale is at the first reading
     assert i == 0 and "(max loss)" in reason
+
+
+def test_the_hours_history_is_read_from_the_kalshi_perp_not_the_spot_feed(monkeypatch):
+    assert watcher.perp_index("KXWTI15M") == "KP_WTI" and watcher.perp_index("KXBTC15M") == "KP_BTC" and watcher.perp_index("KXBTCD") is None and watcher.perp_index("KXNOPE15M") is None
+    rng = random.Random(3)
+    sts, svs = ticks(3700, rng, spike_every=300)
+    spiky = ([x + 6100.0 for x in sts], svs)  # the last tick lands just before now = 9,800
+    asked = []
+
+    def window(index, a, b):
+        asked.append(index)
+        return spiky if index == "KP_WTI" else ([0.0], [1.0])
+
+    monkeypatch.setattr(watcher.ticks_mod.history, "window", window)
+    monkeypatch.setattr(curvevalue, "read", lambda *a, **k: curvevalue.Curve(0.85, 0.0, 1e-4, 1e-4))
+    monkeypatch.setattr(watcher.variants, "comeback_stats", lambda *a, **k: None)
+    monkeypatch.setattr(watcher.log, "info", lambda *a, **k: None)
+    t = target(risk_history=True, risk_live=True)
+    watcher.ProfitWatcher._risk_hit(SimpleNamespace(), t, 0.80, CLOSE - 100.0, CLOSE - 100.0)
+    assert "KP_WTI" in asked and t.risk_hist > 1.5

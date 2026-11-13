@@ -106,6 +106,16 @@ class SellSignal(NamedTuple):
     why: str
 
 
+def perp_index(series: str) -> str | None:
+    """The Kalshi perp reference tape index that follows a 15-minute series, commodities and coins alike (perpref.index_for_series has no coins: their settlement index is Kalshi's own, but the perp is the long-horizon layer, 2026-11-13, user: "use Kalshi perp as our additional layer for long term analysis")."""
+    ix = perpref.index_for_series(series)
+    if ix:
+        return ix
+    base = series.removeprefix("KX").removesuffix("15M")
+    ix = f"KP_{base}"
+    return ix if ix in perpref.FEEDS and series.endswith("15M") else None
+
+
 @dataclass
 class Target:
     ticker: str
@@ -842,7 +852,8 @@ class ProfitWatcher:
             t.risk_since = 0.0
             return None
         if t.risk_history and now - t.risk_hist_at >= 30.0:
-            hour = ticks_mod.history.window(t.shock_index, now - 3700.0, now)
+            kp = perp_index(t.ticker.split("-")[0])  # the Kalshi perp is the long-horizon layer, not the spot feed the cushion reads
+            hour = ticks_mod.history.window(kp, now - 3700.0, now) if kp else None
             t.risk_hist, t.risk_hist_at = (curverisk.history_factor(hour[0], hour[1], now) if hour else 1.0), now
         net = bid - fee_per_contract(bid)
         basis = t.entry + fee_per_contract(t.entry)
@@ -1809,7 +1820,7 @@ class ProfitWatcher:
         with contextlib.suppress(OSError):
             os.nice(10)
         try:
-            indexes = sorted({ix for sp in lane_specs(s).values() for series in sp.series for ix in (index_for_series(series) or biquote_index(series), perpref.index_for_series(series)) if ix})
+            indexes = sorted({ix for sp in lane_specs(s).values() for series in sp.series for ix in (index_for_series(series) or biquote_index(series), perp_index(series)) if ix})
             if not self._ticks_warm:
                 self._ticks_warm = True
                 log.info("watcher: warmed %d ticks of history", ticks_mod.warm_from_tape(s, indexes, time.time()))
