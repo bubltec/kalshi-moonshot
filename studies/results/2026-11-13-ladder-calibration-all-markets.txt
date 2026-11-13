@@ -1,0 +1,79 @@
+SCOPE: the five crypto 15-minute series with a perp reference, every settled market 11-11 12:00 ET to 11-12 23:30 ET (the tape's end), sampled at minutes 5, 8, 11, 14. Not bot bets. Complete run of the fixed script (the shape table now matches kept bets by market).
+
+settled windows of the five series since 11-11 12:00 ET: 670; last close 11-12 23:30 ET
+samples priced: 1741 from 455 markets; not priced: {'no quote within 30 s': 819, 'under 6 boundaries': 100, 'under 20 bars': 20}
+
+width pieces (basis points): realized sigma median 16.13 (x k 1.25); offset spread unc median 2.42; unc share of the width squared, median 1.6%
+k as set 1.25; best fixed k over all samples 0.75 (after the fact); walk-forward k median 0.875
+
+BRIER on the yes outcome (lower is better): all samples | samples with a side in the price band
+   Kalshi quote mid                         0.1215 | 0.1543
+   ladder, as set                           0.1322 | 0.1666
+   ladder, walk-forward k                   0.1271 | 0.1580
+   ladder, best fixed k (after the fact)    0.1262 | 0.1595
+   average of mid and ladder as set         0.1241 | 0.1568
+
+CALIBRATION, yes side, by the ladder chance as set (n | mean chance | yes share | mean quote mid)
+   chance 0.0-0.1: n=  224 | chance 0.033 | yes 0.000 | mid 0.024
+   chance 0.1-0.3: n=  312 | chance 0.207 | yes 0.045 | mid 0.107
+   chance 0.3-0.5: n=  392 | chance 0.401 | yes 0.327 | mid 0.309
+   chance 0.5-0.7: n=  379 | chance 0.589 | yes 0.586 | mid 0.651
+   chance 0.7-0.9: n=  239 | chance 0.797 | yes 0.841 | mid 0.886
+   chance 0.9-1.0: n=  195 | chance 0.967 | yes 0.979 | mid 0.985
+by the quote mid, same table (so the two sources can be compared bin for bin): n | mean mid | yes share | mean chance
+   mid 0.0-0.1: n=  389 | mid 0.030 | yes 0.010 | chance 0.110
+   mid 0.1-0.3: n=  322 | mid 0.192 | yes 0.134 | chance 0.287
+   mid 0.3-0.5: n=  232 | mid 0.393 | yes 0.405 | chance 0.440
+   mid 0.5-0.7: n=  237 | mid 0.600 | yes 0.557 | chance 0.564
+   mid 0.7-0.9: n=  253 | mid 0.803 | yes 0.719 | chance 0.713
+   mid 0.9-1.0: n=  308 | mid 0.975 | yes 0.977 | chance 0.908
+
+BUY RULES, first in-band sample of each market (ask 0.7-0.9, spread <= 0.04), held to settlement, per $1 staked after the entry fee
+   the band alone (no ladder)                         n= 364 | net   -13.48 on $364 (-3.7%) | won 78.3% vs ask 0.800
+   ladder as set                          edge >= +0.015  kept n=  39 | net    +3.49 on $39 (+9.0%) | won 89.7% vs ask 0.813
+                                                         skipped n= 325 | net   -16.97 on $325 (-5.2%) | won 76.9% vs ask 0.798  | change vs the band alone +16.97, beat 75, lost to 250
+   ladder as set                          edge >= +0.000  kept n=  48 | net    +3.91 on $48 (+8.2%) | won 89.6% vs ask 0.818
+                                                         skipped n= 316 | net   -17.39 on $316 (-5.5%) | won 76.6% vs ask 0.797  | change vs the band alone +17.39, beat 74, lost to 242
+   ladder as set                          edge >= -0.050  kept n=  76 | net    -0.80 on $76 (-1.0%) | won 81.6% vs ask 0.812
+                                                         skipped n= 288 | net   -12.68 on $288 (-4.4%) | won 77.4% vs ask 0.797  | change vs the band alone +12.68, beat 65, lost to 223
+   ladder walk-forward k                  edge >= +0.015  kept n= 153 | net    +4.94 on $153 (+3.2%) | won 85.0% vs ask 0.812
+                                                         skipped n= 211 | net   -18.42 on $211 (-8.7%) | won 73.5% vs ask 0.791  | change vs the band alone +18.42, beat 56, lost to 155
+   ladder walk-forward k                  edge >= +0.000  kept n= 161 | net    +4.59 on $161 (+2.8%) | won 84.5% vs ask 0.810
+                                                         skipped n= 203 | net   -18.07 on $203 (-8.9%) | won 73.4% vs ask 0.792  | change vs the band alone +18.07, beat 54, lost to 149
+   ladder walk-forward k                  edge >= -0.050  kept n= 197 | net    +6.72 on $197 (+3.4%) | won 84.3% vs ask 0.805
+                                                         skipped n= 167 | net   -20.20 on $167 (-12.1%) | won 71.3% vs ask 0.794  | change vs the band alone +20.20, beat 48, lost to 119
+   ladder best fixed k (after the fact)   edge >= +0.015  kept n= 128 | net    -2.96 on $128 (-2.3%) | won 80.5% vs ask 0.811
+                                                         skipped n= 236 | net   -10.52 on $236 (-4.5%) | won 77.1% vs ask 0.794  | change vs the band alone +10.52, beat 54, lost to 182
+   ladder best fixed k (after the fact)   edge >= +0.000  kept n= 153 | net    -2.73 on $153 (-1.8%) | won 81.0% vs ask 0.813
+                                                         skipped n= 211 | net   -10.75 on $211 (-5.1%) | won 76.3% vs ask 0.790  | change vs the band alone +10.75, beat 50, lost to 161
+   ladder best fixed k (after the fact)   edge >= -0.050  kept n= 264 | net    -4.83 on $264 (-1.8%) | won 79.9% vs ask 0.803
+                                                         skipped n= 100 | net    -8.65 on $100 (-8.7%) | won 74.0% vs ask 0.792  | change vs the band alone +8.65, beat 26, lost to 74
+
+BY CURVE SHAPE (rule 4): kept at edge >= 0.015 vs the band alone, terciles cut from all in-band picks; kept n | kept net per $ | band-alone n | band-alone net per $
+   curve readings available for 360 of 364 picks
+   level_5m  low : kept n=  4 +0.018 | band alone n=120 -0.094
+   level_5m  mid : kept n= 14 +0.248 | band alone n=120 +0.001
+   level_5m  high: kept n= 19 -0.028 | band alone n=120 -0.028
+   slope_5m  low : kept n= 14 +0.113 | band alone n=120 -0.033
+   slope_5m  mid : kept n= 10 +0.243 | band alone n=120 -0.022
+   slope_5m  high: kept n= 13 -0.078 | band alone n=120 -0.066
+   curv_5m   low : kept n= 15 +0.114 | band alone n=120 +0.002
+   curv_5m   mid : kept n= 10 +0.255 | band alone n=120 -0.118
+   curv_5m   high: kept n= 12 -0.104 | band alone n=120 -0.005
+   level_13m low : kept n=  8 -0.177 | band alone n=120 -0.102
+   level_13m mid : kept n= 12 +0.248 | band alone n=120 +0.000
+   level_13m high: kept n= 17 +0.085 | band alone n=120 -0.019
+   slope_13m low : kept n= 11 +0.082 | band alone n=120 +0.005
+   slope_13m mid : kept n=  9 -0.052 | band alone n=120 -0.139
+   slope_13m high: kept n= 17 +0.151 | band alone n=120 +0.013
+   curv_13m  low : kept n= 11 +0.082 | band alone n=120 -0.014
+   curv_13m  mid : kept n= 11 -0.019 | band alone n=120 -0.089
+   curv_13m  high: kept n= 15 +0.154 | band alone n=120 -0.018
+
+BY SERIES (a label for the market; nothing is keyed on it): the band alone vs kept as set at 0.015
+   KXBTC15M   band n=  74 | net    +0.07 on $74 (+0.1%) | won 81.1% vs ask 0.794  ||  kept n=  10 | net    +1.94 on $10 (+19.4%) | won 100.0% vs ask 0.832
+   KXETH15M   band n=  73 | net    -1.01 on $73 (-1.4%) | won 79.5% vs ask 0.791  ||  kept n=   8 | net    +1.85 on $8 (+23.1%) | won 100.0% vs ask 0.806
+   KXSOL15M   band n=  67 | net    -0.98 on $67 (-1.5%) | won 82.1% vs ask 0.823  ||  kept n=   8 | net    +0.38 on $8 (+4.8%) | won 87.5% vs ask 0.826
+   KXXRP15M   band n=  76 | net    -2.53 on $76 (-3.3%) | won 78.9% vs ask 0.803  ||  kept n=   5 | net    -0.20 on $5 (-4.0%) | won 80.0% vs ask 0.810
+   KXDOGE15M  band n=  74 | net    -9.03 on $74 (-12.2%) | won 70.3% vs ask 0.791  ||  kept n=   8 | net    -0.48 on $8 (-6.0%) | won 75.0% vs ask 0.784
+DONE
