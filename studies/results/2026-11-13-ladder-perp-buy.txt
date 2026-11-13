@@ -1,0 +1,71 @@
+live trade-mode 15-minute bets since Monday 11-09 00:00 ET, settled: 826 (first 11-09 00:22, last 11-12 23:27 ET)
+
+all 826 bets as they happened: n= 826 |  -139.01 on $ 3056.91 (-4.5%) | 426 ended up
+bets the ladder could not price from the perp (left out):
+   bought before the perp ticks begin on the tape          n= 677 |  -101.02 on $ 2563.30 (-3.9%) | 331 ended up
+   the market has no Kalshi perp reference                 n=  38 |    -3.52 on $   38.43 (-9.2%) | 26 ended up
+   under 6 boundaries to learn the perp's offset from      n=  17 |    +7.21 on $   40.89 (+17.6%) | 14 ended up
+   the perp's last tick was over 120 s old                 n=   4 |    -1.07 on $   10.02 (-10.7%) | 2 ended up
+
+PRICED bets (first 11-11 09:27 ET), WHAT HAPPENED: n=  90 |   -40.60 on $  404.27 (-10.0%) | 53 ended up
+   kept (edge >= the lane's min_edge)   n=   3 |    -5.11 on $   11.18 (-45.7%) | 0 ended up
+   skipped                              n=  87 |   -35.49 on $  393.09 (-9.0%) | 53 ended up
+   net change against what happened: +35.49 | bets the rule beat (skipped losers) 34, lost to (skipped winners) 53, same 3
+
+by lane: all priced | kept
+   commodity_industrial       n=   5 |    -3.26 on $   40.83 (-8.0%) | 3 ended up  ||  n=   0 |    +0.00 on $    0.00 (+0.0%) | 0 ended up
+   commodity_multiscale       n=  25 |   -13.05 on $   79.81 (-16.3%) | 14 ended up  ||  n=   1 |    -0.83 on $    3.50 (-23.6%) | 0 ended up
+   commodity_natgas           n=   9 |   -21.25 on $   63.92 (-33.3%) | 3 ended up  ||  n=   0 |    +0.00 on $    0.00 (+0.0%) | 0 ended up
+   commodity_precious         n=   4 |    -0.93 on $   38.07 (-2.4%) | 2 ended up  ||  n=   0 |    +0.00 on $    0.00 (+0.0%) | 0 ended up
+   commodity_wti              n=   3 |    +2.08 on $   29.18 (+7.1%) | 3 ended up  ||  n=   0 |    +0.00 on $    0.00 (+0.0%) | 0 ended up
+   crypto_multiscale          n=  44 |    -4.19 on $  152.47 (-2.7%) | 28 ended up  ||  n=   2 |    -4.28 on $    7.68 (-55.7%) | 0 ended up
+
+by the ladder's edge (chance - ask - fee): n | won share | mean ask | mean ladder chance | as booked | held to settlement
+   edge -9.000 to -0.150: n=  22 | won 81.8% | ask 0.824 | chance 0.646 |   -15.51 |   -10.08
+   edge -0.150 to -0.050: n=  46 | won 80.4% | ask 0.789 | chance 0.701 |   -10.58 |    +0.24
+   edge -0.050 to +0.015: n=  19 | won 68.4% | ask 0.750 | chance 0.743 |    -9.39 |    -8.39
+   edge +0.015 to +0.050: n=   2 | won 100.0% | ask 0.780 | chance 0.815 |    -4.28 |    +1.91
+   edge +0.050 to +9.000: n=   1 | won 100.0% | ask 0.820 | chance 0.939 |    -0.83 |    +0.72
+   Brier of the ask            0.1569
+   Brier of the ladder chance  0.1738
+   Brier of their average      0.1622
+
+by curve shape (terciles of the perp's own readings at the buy, side bought): all priced | kept
+   level_5m   low : all n=  28   -13.08 | kept n=   0    +0.00
+   level_5m   mid : all n=  28   -21.21 | kept n=   1    -3.24
+   level_5m   high: all n=  28    -9.43 | kept n=   1    -1.04
+   slope_5m   low : all n=  28   -22.52 | kept n=   0    +0.00
+   slope_5m   mid : all n=  28    -6.88 | kept n=   1    -3.24
+   slope_5m   high: all n=  28   -14.33 | kept n=   1    -1.04
+   curv_5m    low : all n=  28   -19.21 | kept n=   0    +0.00
+   curv_5m    mid : all n=  28    -6.81 | kept n=   1    -3.24
+   curv_5m    high: all n=  28   -17.71 | kept n=   1    -1.04
+   level_13m  low : all n=  28   -25.63 | kept n=   0    +0.00
+   level_13m  mid : all n=  28   -17.67 | kept n=   2    -4.28
+   level_13m  high: all n=  28    -0.43 | kept n=   0    +0.00
+   slope_13m  low : all n=  28   -28.51 | kept n=   0    +0.00
+   slope_13m  mid : all n=  28    -5.44 | kept n=   0    +0.00
+   slope_13m  high: all n=  28    -9.78 | kept n=   2    -4.28
+   curv_13m   low : all n=  28   -30.31 | kept n=   0    +0.00
+   curv_13m   mid : all n=  28    -3.08 | kept n=   1    -1.04
+   curv_13m   high: all n=  28   -10.33 | kept n=   1    -3.24
+   (shape unread on 6 priced bets: under 34 minutes of perp ticks)
+
+   [ ] kept at least 30 bets (3)
+   [x] change against what happened positive (+35.49)
+   [ ] kept bets net positive (-5.11)
+   [ ] kept bets positive in every shape tercile with 5+ kept
+VERDICT: the ladder buy from the Kalshi perp does NOT meet the bar on these bets.
+
+PART B: the curve model's predicted net per $1 (from the bet's note) against what its bets returned
+   bets whose note carries a prediction: 597 of 826
+   lowest third : n= 199 | predicted +0.01 to +0.03 (mean +0.023) | won 72.4% at mean ask 0.682 | held to settlement +0.041 per $1 | as booked -0.057 per $1
+   middle third : n= 199 | predicted +0.03 to +0.06 (mean +0.042) | won 65.8% at mean ask 0.684 | held to settlement -0.072 per $1 | as booked -0.114 per $1
+   highest third: n= 199 | predicted +0.06 to +0.40 (mean +0.120) | won 47.2% at mean ask 0.485 | held to settlement -0.135 per $1 | as booked -0.197 per $1
+   rank correlation of the prediction with the return: held to settlement -0.020, as booked -0.181 (0 = the equation does not order its own bets)
+   mean predicted +0.062 per $1 against -0.055 held to settlement and -0.123 as booked
+   commodity_multiscale       n= 170 | rank correlation held +0.056, as booked -0.022 | mean predicted +0.038, held -0.042, booked -0.123
+   crypto_multiscale          n= 324 | rank correlation held +0.018, as booked -0.038 | mean predicted +0.044, held +0.022, booked -0.053
+   crypto_multiscale_underdog n= 103 | rank correlation held +0.577, as booked +0.099 | mean predicted +0.158, held -0.323, booked -0.343
+DONE
+exit=0  results in job-results/20261113-095606-66213/
