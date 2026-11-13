@@ -1,7 +1,10 @@
 """The single risk exit (curverisk.py, 2026-11-13, user): the worse of the price cushion and the spot cushion, widened by the hour's jumps, sold within a max loss or min profit, with a wait that scales with the time left."""
 
+import json
 import math
 import random
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 from kalshi_moonshot import curverisk, curvevalue, watcher
@@ -79,17 +82,20 @@ def target(**kw):
     return SimpleNamespace(**base)
 
 
-def run(monkeypatch, t, bid, p, seconds=30, left0=100.0):
+def run(monkeypatch, t, bid, p, seconds=30, left0=100.0, tmp=None):
     monkeypatch.setattr(watcher.ticks_mod.history, "window", lambda *a, **k: ([0.0], [1.0]))
     monkeypatch.setattr(curvevalue, "read", lambda *a, **k: curvevalue.Curve(p, 0.0, 1e-4, 1e-4))
     monkeypatch.setattr(watcher.variants, "comeback_stats", lambda *a, **k: None)
     logged = []
     monkeypatch.setattr(watcher.log, "info", lambda msg, *a, **k: logged.append(msg % a if a else msg))
     me = SimpleNamespace()
+    me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
+    tmp = Path(tmp) if tmp else Path(tempfile.mkdtemp())
+    monkeypatch.setattr("kalshi_moonshot.config.reload", lambda: SimpleNamespace(data_dir=tmp))
     out = None
     for i in range(seconds):
         now = CLOSE - left0 + i
-        out = watcher.ProfitWatcher._risk_hit(me, t, bid, now, now)
+        out = watcher.ProfitWatcher._risk_hit(me, t, bid, now, now) if t.risk_spot_weight > 0 else watcher.ProfitWatcher._risk_quote_hit(me, t, bid, now)
         if out:
             return i, out, logged
     return None, None, logged
@@ -129,5 +135,28 @@ def test_the_hours_history_is_read_from_the_kalshi_perp_not_the_spot_feed(monkey
     monkeypatch.setattr(watcher.variants, "comeback_stats", lambda *a, **k: None)
     monkeypatch.setattr(watcher.log, "info", lambda *a, **k: None)
     t = target(risk_history=True, risk_live=True)
-    watcher.ProfitWatcher._risk_hit(SimpleNamespace(), t, 0.80, CLOSE - 100.0, CLOSE - 100.0)
+    me = SimpleNamespace()
+    me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
+    monkeypatch.setattr("kalshi_moonshot.config.reload", lambda: SimpleNamespace(data_dir=Path(tempfile.mkdtemp())))
+    watcher.ProfitWatcher._risk_hit(me, t, 0.80, CLOSE - 100.0, CLOSE - 100.0)
     assert "KP_WTI" in asked and t.risk_hist > 1.5
+
+
+def test_the_price_only_exit_needs_no_spot_feed_and_writes_its_shadow_record(monkeypatch, tmp_path):
+    t = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=False)  # no spot reference at all
+    _, reason, logged = run(monkeypatch, t, bid=0.48, p=0.85, seconds=60, tmp=tmp_path)
+    assert reason is None and sum("curve risk shadow" in m for m in logged) == 1
+    rows = (tmp_path / "risk_shadow.jsonl").read_text().splitlines()
+    assert len(rows) == 1 and json.loads(rows[0])["worse"] == "price" and json.loads(rows[0])["ticker"] == "KXWTI15M-1"
+
+
+def test_live_the_price_only_exit_sells_at_the_max_loss_with_no_wait(monkeypatch, tmp_path):
+    t = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True)
+    i, reason, _ = run(monkeypatch, t, bid=0.30, p=0.85, tmp=tmp_path)
+    assert i == 0 and "(max loss)" in reason
+
+
+def test_the_spot_path_leaves_a_price_only_lane_alone_and_the_quote_path_a_spot_lane(monkeypatch):
+    me = SimpleNamespace()
+    assert watcher.ProfitWatcher._risk_hit(me, target(risk_spot_weight=0.0, risk_live=True), 0.30, CLOSE - 100.0, CLOSE - 100.0) is None
+    assert watcher.ProfitWatcher._risk_quote_hit(me, target(risk_spot_weight=0.5, risk_live=True), 0.30, CLOSE - 100.0) is None
