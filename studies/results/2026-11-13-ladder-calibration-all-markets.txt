@@ -1,5 +1,4 @@
-SCOPE: the five crypto 15-minute series with a perp reference, every settled market 11-11 12:00 ET to 11-12 23:30 ET (the tape's end), sampled at minutes 5, 8, 11, 14. Not bot bets.
-NOTE: this is the first run's output. Its BY CURVE SHAPE table is wrong (kept rows show n=0: the kept set was matched by object id, fixed in the script since). Two reruns of the fixed script did not start: the upload to the archive bucket failed on DNS from this shell. The shape table has not been produced, so rule 4's per-shape bar is NOT checked.
+SCOPE: the five crypto 15-minute series with a perp reference, every settled market 11-11 12:00 ET to 11-12 23:30 ET (the tape's end), sampled at minutes 5, 8, 11, 14. Not bot bets. Complete run of the fixed script (the shape table now matches kept bets by market).
 
 settled windows of the five series since 11-11 12:00 ET: 670; last close 11-12 23:30 ET
 samples priced: 1741 from 455 markets; not priced: {'no quote within 30 s': 819, 'under 6 boundaries': 100, 'under 20 bars': 20}
@@ -52,24 +51,24 @@ BUY RULES, first in-band sample of each market (ask 0.7-0.9, spread <= 0.04), he
 
 BY CURVE SHAPE (rule 4): kept at edge >= 0.015 vs the band alone, terciles cut from all in-band picks; kept n | kept net per $ | band-alone n | band-alone net per $
    curve readings available for 360 of 364 picks
-   level_5m  low : kept n=  0 +nan | band alone n=120 -0.094
-   level_5m  mid : kept n=  0 +nan | band alone n=120 +0.001
-   level_5m  high: kept n=  0 +nan | band alone n=120 -0.028
-   slope_5m  low : kept n=  0 +nan | band alone n=120 -0.033
-   slope_5m  mid : kept n=  0 +nan | band alone n=120 -0.022
-   slope_5m  high: kept n=  0 +nan | band alone n=120 -0.066
-   curv_5m   low : kept n=  0 +nan | band alone n=120 +0.002
-   curv_5m   mid : kept n=  0 +nan | band alone n=120 -0.118
-   curv_5m   high: kept n=  0 +nan | band alone n=120 -0.005
-   level_13m low : kept n=  0 +nan | band alone n=120 -0.102
-   level_13m mid : kept n=  0 +nan | band alone n=120 +0.000
-   level_13m high: kept n=  0 +nan | band alone n=120 -0.019
-   slope_13m low : kept n=  0 +nan | band alone n=120 +0.005
-   slope_13m mid : kept n=  0 +nan | band alone n=120 -0.139
-   slope_13m high: kept n=  0 +nan | band alone n=120 +0.013
-   curv_13m  low : kept n=  0 +nan | band alone n=120 -0.014
-   curv_13m  mid : kept n=  0 +nan | band alone n=120 -0.089
-   curv_13m  high: kept n=  0 +nan | band alone n=120 -0.018
+   level_5m  low : kept n=  4 +0.018 | band alone n=120 -0.094
+   level_5m  mid : kept n= 14 +0.248 | band alone n=120 +0.001
+   level_5m  high: kept n= 19 -0.028 | band alone n=120 -0.028
+   slope_5m  low : kept n= 14 +0.113 | band alone n=120 -0.033
+   slope_5m  mid : kept n= 10 +0.243 | band alone n=120 -0.022
+   slope_5m  high: kept n= 13 -0.078 | band alone n=120 -0.066
+   curv_5m   low : kept n= 15 +0.114 | band alone n=120 +0.002
+   curv_5m   mid : kept n= 10 +0.255 | band alone n=120 -0.118
+   curv_5m   high: kept n= 12 -0.104 | band alone n=120 -0.005
+   level_13m low : kept n=  8 -0.177 | band alone n=120 -0.102
+   level_13m mid : kept n= 12 +0.248 | band alone n=120 +0.000
+   level_13m high: kept n= 17 +0.085 | band alone n=120 -0.019
+   slope_13m low : kept n= 11 +0.082 | band alone n=120 +0.005
+   slope_13m mid : kept n=  9 -0.052 | band alone n=120 -0.139
+   slope_13m high: kept n= 17 +0.151 | band alone n=120 +0.013
+   curv_13m  low : kept n= 11 +0.082 | band alone n=120 -0.014
+   curv_13m  mid : kept n= 11 -0.019 | band alone n=120 -0.089
+   curv_13m  high: kept n= 15 +0.154 | band alone n=120 -0.018
 
 BY SERIES (a label for the market; nothing is keyed on it): the band alone vs kept as set at 0.015
    KXBTC15M   band n=  74 | net    +0.07 on $74 (+0.1%) | won 81.1% vs ask 0.794  ||  kept n=  10 | net    +1.94 on $10 (+19.4%) | won 100.0% vs ask 0.832
