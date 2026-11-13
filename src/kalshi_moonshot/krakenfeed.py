@@ -196,15 +196,16 @@ def _kraken_minutes(feed: KrakenFeed, symbol: str, hours: float = 4.0) -> dict[i
 
 
 class RoutingFeed:
-    """Sends "kraken:" symbols to Kraken and everything else to the fallback feed."""
+    """Sends "kraken:" symbols to Kraken, "hl:" to Hyperliquid, "kp:" to Kalshi's own perp reference on the tape, and everything else to the fallback feed."""
 
     def __init__(
         self, kraken: KrakenFeed | None = None, other: Feed | None = None,
-        hyperliquid: Any = None,
+        hyperliquid: Any = None, kalshi: Any = None,
     ):
         self.kraken = kraken or KrakenFeed()
         self._other = other
         self._hl = hyperliquid
+        self._kp = kalshi
 
     @classmethod
     def for_instruments(cls) -> RoutingFeed:
@@ -220,6 +221,14 @@ class RoutingFeed:
         )
 
     @property
+    def kalshi(self) -> Any:
+        if self._kp is None:
+            from .kalshifeed import KalshiPerpFeed
+
+            self._kp = KalshiPerpFeed()
+        return self._kp
+
+    @property
     def hyperliquid(self) -> Any:
         if self._hl is None:
             from .hlfeed import HyperliquidFeed
@@ -233,6 +242,8 @@ class RoutingFeed:
             return self.kraken.minute_closes(symbol, hours)
         if symbol.startswith("hl:"):
             return self.hyperliquid.minute_closes(symbol, hours)
+        if symbol.startswith("kp:"):
+            return self.kalshi.minute_closes(symbol, hours)
         raise CommodityError(f"no minute history for {symbol}")
 
     @property
@@ -248,4 +259,6 @@ class RoutingFeed:
             return self.kraken.series(symbol)
         if symbol.startswith("hl:"):
             return self.hyperliquid.series(symbol)
+        if symbol.startswith("kp:"):
+            return self.kalshi.series(symbol)
         return self.other.series(symbol)

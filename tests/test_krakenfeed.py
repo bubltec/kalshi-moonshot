@@ -114,7 +114,8 @@ def test_the_default_pricer_routes_through_kraken():
 
 def test_the_default_feed_subscribes_to_every_kraken_pair_up_front():
     feed = cm.CommodityPricer().feed
-    assert {"BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "DOGE/USD"} <= feed.kraken._symbols
+    assert {"AUD/USD"} <= feed.kraken._symbols  # the currency pairs Kraken still prices
+    assert not {"BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "DOGE/USD"} & feed.kraken._symbols  # crypto is read from Kalshi's perp reference (2026-11-12), so Kraken is not asked for it
     assert {"xyz:GOLD", "xyz:SILVER", "xyz:CL", "xyz:COPPER"} <= feed.hyperliquid._coins
 
 

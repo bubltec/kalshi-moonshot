@@ -1264,7 +1264,7 @@ def _spot_symbols(series: str) -> list[str]:
     from .commodities import contract_priced, symbol_for
 
     inst = symbol_for(series)
-    if not inst or contract_priced(inst):
+    if not inst or contract_priced(inst) or inst.startswith("kp:"):  # a Kalshi perp reference is an index on the tape, not a feed_ticks symbol
         return []
     return [inst]
 

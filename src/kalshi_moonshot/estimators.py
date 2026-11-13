@@ -380,6 +380,19 @@ class CurveEstimator:
         return Estimate(p_up, f"curve class {info['class']} ({curve.describe(info['class'])}): up {p_up:.1%} against {base:.1%} for a random walk ({n} windows)", context)
 
 
+def _price_band(rows: list[dict]) -> dict[str, tuple[float, str]]:
+    """Each market priced at its own yes ask: what a lane that bets the price band reads instead of a model."""
+    band: dict[str, tuple[float, str]] = {}
+    for m in rows:
+        try:
+            ask = float(m.get("yes_ask_dollars") or 0)
+        except (TypeError, ValueError):
+            continue
+        if ask > 0:
+            band[m["ticker"]] = (ask, "price band")
+    return band
+
+
 class LadderEstimator:
     def __init__(self, pricer: CommodityPricer):
         self.pricer = pricer
@@ -408,17 +421,9 @@ class LadderEstimator:
             rows = by_event.get(event, [])
             series = (rows[0].get("series_ticker") if rows else "") or event.split("-")[0]
             inst = instrument_for(series, instruments)
-            if spec.always and (inst is None or contract_priced(inst.symbol)):
+            if spec.always and (inst is None or contract_priced(inst.symbol) or inst.symbol.startswith("kp:")):
                 # The lane bets the price band. Do not open Kraken to price it. A market with no instrument (ZEC, HYPE, BNB, NEAR) has no feed to price from and is not dropped for that: the curve model reads the index ticks itself.
-                band: dict[str, tuple[float, str]] = {}
-                for m in rows:
-                    try:
-                        ask = float(m.get("yes_ask_dollars") or 0)
-                    except (TypeError, ValueError):
-                        continue
-                    if ask > 0:
-                        band[m["ticker"]] = (ask, "price band")
-                priced[event] = band
+                priced[event] = _price_band(rows)
                 continue
             try:
                 priced[event] = self.pricer.price_markets(rows, s, now)

@@ -75,3 +75,58 @@ def test_the_pricer_estimate_for_an_always_lane_with_no_instrument_is_the_price_
     sh = dataclasses.replace(shot("KXZEC15M-26NOV072015-15", ask=0.43), series="KXZEC15M", lane="band")
     p, why = CommodityPricer.__new__(CommodityPricer).estimate(None, sh, s)
     assert abs(p - 0.43) < 1e-9 and why == "price band"
+
+
+class _Never(FakePricer):
+    def price_markets(self, markets, s, now):
+        raise AssertionError("a lane that bets the price band must not ask the pricer")
+
+
+def _btc(ask=0.77):
+    import dataclasses
+
+    sh = dataclasses.replace(shot("KXBTC15M-26NOV122100-00", ask=ask), series="KXBTC15M", event_ticker="KXBTC15M-26NOV122100")
+    return sh, [{"ticker": sh.ticker, "event_ticker": sh.event_ticker, "series_ticker": "KXBTC15M", "yes_ask_dollars": str(ask)}]
+
+
+def test_crypto_for_a_price_band_lane_is_still_the_ask_and_never_asks_the_pricer():
+    import dataclasses
+
+    s = config.load()
+    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], always=True)
+    sh, markets = _btc()
+    est = LadderEstimator(_Never(0.5))
+    assert [k.ticker for k in est.screen([sh], markets, spec, s, None)] == [sh.ticker] and est.dropped == []
+
+
+@pytest.mark.parametrize(("p", "kept"), [(0.95, True), (0.65, False)])
+def test_crypto_for_a_lane_that_needs_a_model_is_priced_by_the_pricer(p, kept):
+    import dataclasses
+
+    s = config.load()
+    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], always=False)
+    sh, markets = _btc()
+    est = LadderEstimator(FakePricer(p))
+    assert bool(est.screen([sh], markets, spec, s, None)) is kept
+
+
+def test_the_decision_time_estimate_for_crypto_follows_the_lane(monkeypatch):
+    import dataclasses
+
+    from kalshi_moonshot.commodities import CommodityPricer
+
+    s = config.load()
+    base = lanes.lane_specs_from(s, None)["commodity"]
+    sh, markets = _btc(ask=0.43)
+    sh = dataclasses.replace(sh, lane="x")
+
+    class Client:
+        def event_markets(self, event):
+            return [dict(m) for m in markets]
+
+    monkeypatch.setattr(CommodityPricer, "price_markets", lambda self, ms, s, now=None: {sh.ticker: (0.81, "perp note")})
+    pricer = CommodityPricer.__new__(CommodityPricer)
+    monkeypatch.setattr(lanes, "lane_specs", lambda _s: {"x": dataclasses.replace(base, always=True)})
+    assert pricer.estimate(None, sh, s) == (pytest.approx(0.43), "price band")  # no client needed: nothing is read
+    monkeypatch.setattr(lanes, "lane_specs", lambda _s: {"x": dataclasses.replace(base, always=False)})
+    assert pricer.estimate(Client(), sh, s) == (0.81, "perp note")

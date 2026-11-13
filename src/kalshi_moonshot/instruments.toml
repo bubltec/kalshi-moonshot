@@ -6,6 +6,8 @@
 #
 # Feeds, all free and keyless, all real-time:
 #   kraken:PAIR   Kraken's WebSocket v2 ticker. Crypto spot.
+#   kp:INDEX      Kalshi's own perpetual-futures reference price, about one reading a second, recorded on the tape
+#                 as the index KP_BTC, KP_ETH ... (perpref.py; kalshifeed.py reads it). Crypto.
 #   hl:xyz:COIN   Hyperliquid's "xyz" builder market: deep gold, silver, oil, gas, copper, platinum and
 #                 palladium perpetuals, trading around the clock.
 # `realtime` marks a feed that is current to a few seconds (a dead one is refused outright). `proxy`
@@ -75,33 +77,38 @@ proxy = true
 
 [[instrument]]
 prefix = "KXBTC"
-symbol = "kraken:BTC/USD"
+symbol = "kp:KP_BTC"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:BTC/USD, which the pricer never read
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXETH"
-symbol = "kraken:ETH/USD"
+symbol = "kp:KP_ETH"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:ETH/USD, which the pricer never read
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXSOL"
-symbol = "kraken:SOL/USD"
+symbol = "kp:KP_SOL"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:SOL/USD, which the pricer never read
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXXRP"
-symbol = "kraken:XRP/USD"
+symbol = "kp:KP_XRP"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:XRP/USD, which the pricer never read
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
+proxy = true
 
 [[instrument]]
 prefix = "KXDOGE"
-symbol = "kraken:DOGE/USD"
+symbol = "kp:KP_DOGE"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:DOGE/USD, which the pricer never read
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
+proxy = true
 
 # --- New markets. Currencies are live; indices stay paper only (`live = false`; Brent went live 2026-11-02): a live lane prices and logs them but never sends an order for them until
 # you flip the switch here. Currencies use Hyperliquid's EUR/GBP/JPY perpetuals, or Kraken's spot FX where there is no perp.
