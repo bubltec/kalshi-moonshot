@@ -1,0 +1,22 @@
+job 20261113-122953-92904 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/b07c833903a04c31aee71b928c3e56ca
+
+=== crypto: lanes ('crypto_multiscale',) | settled live bets 310 | replayed 310
+  held to the result +47.94 | lost the whole stake 89 ($206.05) | won 221 ($253.98)
+  spot must be under X (None = price alone, as live):
+    X=None: vs holding -31.44 on 184 sold | winners sold 95 of 221, losers sold 89 of 89 (saved +143.53) | by time left at the sale: <120s +9.4 (13) 120-240s -24.8 (38) >240s -16.0 (133)
+    X=0.8: vs holding -31.44 on 184 sold | winners sold 95 of 221, losers sold 89 of 89 (saved +143.53) | by time left at the sale: <120s +9.4 (13) 120-240s -24.8 (38) >240s -16.0 (133)
+    X=0.7: vs holding -32.26 on 184 sold | winners sold 95 of 221, losers sold 89 of 89 (saved +142.71) | by time left at the sale: <120s +8.7 (13) 120-240s -24.8 (38) >240s -16.2 (133)
+    X=0.6: vs holding -32.96 on 184 sold | winners sold 95 of 221, losers sold 89 of 89 (saved +142.60) | by time left at the sale: <120s +8.7 (13) 120-240s -24.9 (38) >240s -16.8 (133)
+    X=0.5: vs holding -31.84 on 170 sold | winners sold 81 of 221, losers sold 89 of 89 (saved +129.68) | by time left at the sale: <120s +3.4 (17) 120-240s -16.9 (36) >240s -18.4 (117)
+    X=0.4: vs holding -18.38 on 139 sold | winners sold 50 of 221, losers sold 89 of 89 (saved +95.66) | by time left at the sale: <120s +2.6 (22) 120-240s -5.7 (29) >240s -15.2 (88)
+
+=== commodity favorites: lanes ('commodity_energy', 'commodity_wti', 'commodity_precious', 'commodity_industrial', 'commodity_natgas', 'commodity_multiscale') | settled live bets 349 | replayed 244
+  held to the result +46.29 | lost the whole stake 55 ($197.70) | won 189 ($243.99)
+  spot must be under X (None = price alone, as live):
+    X=None: vs holding -66.03 on 125 sold | winners sold 70 of 189, losers sold 55 of 55 (saved +127.78) | by time left at the sale: <120s -3.8 (21) 120-240s -25.5 (28) >240s -36.7 (76)
+    X=0.8: vs holding -60.58 on 120 sold | winners sold 66 of 189, losers sold 54 of 55 (saved +124.88) | by time left at the sale: <120s +6.2 (21) 120-240s -29.5 (26) >240s -37.3 (73)
+    X=0.7: vs holding -56.17 on 118 sold | winners sold 64 of 189, losers sold 54 of 55 (saved +123.58) | by time left at the sale: <120s +9.2 (20) 120-240s -29.6 (26) >240s -35.8 (72)
+    X=0.6: vs holding -63.61 on 115 sold | winners sold 62 of 189, losers sold 53 of 55 (saved +116.73) | by time left at the sale: <120s +8.3 (20) 120-240s -35.7 (29) >240s -36.2 (66)
+    X=0.5: vs holding -49.94 on 100 sold | winners sold 48 of 189, losers sold 52 of 55 (saved +95.40) | by time left at the sale: <120s +2.7 (21) 120-240s -37.0 (23) >240s -15.6 (56)
+    X=0.4: vs holding -29.14 on 83 sold | winners sold 32 of 189, losers sold 51 of 55 (saved +75.24) | by time left at the sale: <120s +9.2 (18) 120-240s -35.4 (25) >240s -3.0 (40)
+DONE

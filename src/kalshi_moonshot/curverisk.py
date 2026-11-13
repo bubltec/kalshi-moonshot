@@ -77,3 +77,27 @@ def wait(q: float, line: float, left: float, base: float, share: float) -> float
     """Seconds the risk must stay high before the sale: the market's own recovery time (`base`), less the further q is under the line (zero at q = 0), never more than `share` of the time left."""
     severity = min(1.0, max(0.0, (line - q) / line)) if line > 0 else 1.0
     return max(0.0, min(base * (1.0 - severity), share * max(left, 0.0)))
+
+
+def long_chance(ts: list[float], vs: list[float], now: float, ref: float, side: str, left: float, hours: float = 1.0, stale: float = 30.0) -> float | None:
+    """The long layer's chance that the side pays (2026-11-13, user, after a live sale of a bet that dipped briefly, never crossed the strike and went on to win: "the hour view showed it likely staying positive"): the distance of the Kalshi perp from its own value at the window open, over the typical movement of the perp across the last hour (rms of its 60 s moves, per sqrt second) for the time left. None when the hour is too short, the newest tick is stale, or the reference is unusable (the sale then does not wait for this layer)."""
+    if ref <= 0 or left <= 0 or not ts or len(ts) != len(vs):
+        return None
+    j = bisect.bisect_right(ts, now) - 1
+    if j < 0 or now - ts[j] > stale or vs[j] <= 0:
+        return None
+    levels: list[float] = []
+    for k in range(int(hours * 3600.0 // MINUTE) + 1):
+        i = bisect.bisect_right(ts, now - k * MINUTE) - 1
+        if i < 0 or vs[i] <= 0:
+            break
+        levels.append(math.log(vs[i]))
+    moves = [levels[k] - levels[k + 1] for k in range(len(levels) - 1)]
+    if len(moves) < MIN_MOVES:
+        return None
+    rate = math.sqrt(sum(m * m for m in moves) / len(moves) / MINUTE)
+    sign = 1.0 if side == "yes" else -1.0
+    cushion = (math.log(vs[j]) - math.log(ref)) * sign
+    if rate <= 0:
+        return 1.0 if cushion > 0 else 0.0
+    return _N.cdf(cushion / (rate * math.sqrt(left)))

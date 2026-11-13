@@ -235,6 +235,9 @@ class Target:
     risk_since: float = 0.0  # when the risk began to stay high without a break (0 = not high)
     risk_hist: float = 1.0  # the market's last-hour history factor, reread every 30 s
     risk_hist_at: float = 0.0
+    risk_confirm: float = -1.0  # lane curve_risk_confirm (-1 = off): a risk sale also needs the long layer's chance under this
+    risk_long: float | None = None
+    risk_long_at: float = 0.0
     risk_logged: bool = False
     comeback_noted: float = 0.0
     hold_since: float = 0.0  # when the comeback hold began (0 = none)
@@ -859,7 +862,7 @@ class ProfitWatcher:
         basis = t.entry + fee_per_contract(t.entry)
         pnl = (net - basis) / basis if basis > 0 else 0.0
         r = curverisk.risk(read.p, net, t.risk_hist if t.risk_history else 1.0, t.risk_spot_weight)
-        return self._risk_decide(t, r, bid, now, left, pnl)
+        return self._risk_decide(t, r, bid, now, left, pnl, self._risk_long(t, now, left))
 
     def _risk_quote_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The single risk exit on Kalshi's own quote (2026-11-13, user: "switch to use kalshis price instead of the external feeds for everything", then "exit first"): for a lane that gives the spot cushion no weight the chance the side pays IS the bid net of the sell fee, so the exit needs no spot feed, reads every quote and acts the second the price moves."""
@@ -874,13 +877,29 @@ class ProfitWatcher:
         basis = t.entry + fee_per_contract(t.entry)
         pnl = (net - basis) / basis if basis > 0 else 0.0
         q = min(max(net, 0.0), 1.0)
-        return self._risk_decide(t, curverisk.Risk(q, q, q, "price"), bid, now, left, pnl)
+        return self._risk_decide(t, curverisk.Risk(q, q, q, "price"), bid, now, left, pnl, self._risk_long(t, now, left))
 
-    def _risk_decide(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> str | None:
+    def _risk_long(self, t: Target, now: float, left: float) -> float | None:
+        """The long layer's chance that the side pays (curverisk.long_chance, from the market's Kalshi perp and its own last hour), only for a lane that asks for it (curve_risk_confirm), reread every 5 s. None when the lane does not ask or the perp's hour is not there."""
+        if t.risk_confirm <= 0:
+            return None
+        if now - t.risk_long_at < 5.0:
+            return t.risk_long
+        t.risk_long_at = now
+        kp = perp_index(t.ticker.split("-")[0])
+        hour = ticks_mod.history.window(kp, now - 3700.0, now) if kp else None
+        ref = ticks_mod.history.first_at_or_after(kp, t.close_ts - 900.0, 60.0) if kp else None
+        t.risk_long = curverisk.long_chance(hour[0], hour[1], now, ref or 0.0, t.side, left) if hour else None
+        return t.risk_long
+
+    def _risk_decide(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, long_chance: float | None = None) -> str | None:
         """The sale decision both risk paths share: the watch line every 10 s, the max loss (sells at once), the line (sells after the scaled wait), and in shadow one logged and recorded would-sell per bet (data/risk_shadow.jsonl, for scoring against what the bet really got)."""
         if now - t.risk_noted >= 10.0:
             t.risk_noted = now
-            log.info("curve risk watch %s %s, %.0fs left: chance %.3f (%s worse; price %.3f, spot %.3f, history x%.2f), line %.2f, result %+.1f%% of cost%s", t.ticker, t.lane, left, r.q, r.worse, r.q_price, r.q_spot, t.risk_hist, t.risk_sell, pnl * 100.0, "" if t.risk_live else " [shadow]")
+            log.info("curve risk watch %s %s, %.0fs left: chance %.3f (%s worse; price %.3f, spot %.3f, history x%.2f, long layer %s), line %.2f, result %+.1f%% of cost%s", t.ticker, t.lane, left, r.q, r.worse, r.q_price, r.q_spot, t.risk_hist, "n/a" if long_chance is None else f"{long_chance:.3f}", t.risk_sell, pnl * 100.0, "" if t.risk_live else " [shadow]")
+        if t.risk_confirm > 0 and long_chance is not None and long_chance >= t.risk_confirm:
+            t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
+            return None
         stop = curverisk.stopped(pnl, r.q, t.risk_max_loss) and bid >= CURVE_MIN_BID  # the max loss: sell now (below this bid the market has priced the loss and there is nothing to sell for)
         if not stop and not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit):
             t.risk_since = 0.0
@@ -1712,7 +1731,7 @@ class ProfitWatcher:
                     log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
             if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
-                held.risk_max_loss, held.risk_min_profit = spec.curve_risk_max_loss, spec.curve_risk_min_profit
+                held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]

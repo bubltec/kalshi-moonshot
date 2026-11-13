@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from kalshi_moonshot import config, lanes, watcher
+from kalshi_moonshot import ticks as ticks_mod
 from kalshi_moonshot.store import Store
 
 CLOSE = datetime(2030, 1, 1, 0, 15, tzinfo=UTC).timestamp()
@@ -22,6 +23,7 @@ curve_risk_sell=0.5
 curve_risk_live={live}
 curve_risk_spot_weight=0.0
 curve_risk_history=false
+curve_risk_confirm={confirm}
 """
 
 
@@ -40,9 +42,9 @@ class Client:
         return {"fill_count": count, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None):
+def held(tmp_path, monkeypatch, live, client=None, confirm=-1):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false"))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -130,3 +132,45 @@ def test_the_lanes_that_trade_live_are_all_watched(tmp_path, monkeypatch):
     specs = lanes.lane_specs_from(config.load(), toml.read_text())
     unwatched = [n for n in names if n in specs and not lanes.takes_profit(specs[n])]
     assert unwatched == [], f"live lanes with no watched exit: {unwatched}"
+
+
+def seed_perp(monkeypatch, last_over_open):
+    """An hour of the Kalshi perp ahead of the 450 s mark: ticks every 20 s around 100.0 with a little noise, ending `last_over_open` (a fraction) over the value at the window open (CLOSE - 900), which is 100.0."""
+    fresh = ticks_mod.TickHistory()
+    monkeypatch.setattr(ticks_mod, "history", fresh)
+    start = CLOSE - 4300.0
+    rows = []
+    for k in range(int((4300.0 - 100.0) // 20)):
+        ts = start + 20.0 * k
+        base = 100.0 + (0.02 if k % 2 else -0.02)
+        if ts >= CLOSE - 900.0:
+            base = 100.0 + (100.0 * last_over_open) * min(1.0, (ts - (CLOSE - 900.0)) / 450.0)
+        rows.append((ts, base))
+    fresh.warm("KP_BTC", rows, start)
+    return fresh
+
+
+def slide(w):
+    for k, bid in enumerate(PATH):
+        yes_bid(w, bid, 450 - 3 * k)
+    return signals(w)
+
+
+def test_integration_the_hour_view_keeps_a_bet_the_price_alone_would_sell(tmp_path, monkeypatch):
+    """The 12:13 NEAR case: the price dips through the max-loss limit but the perp, against its own last hour, says the side stays on its side: nothing sells."""
+    seed_perp(monkeypatch, last_over_open=0.004)  # 40 bp over the open, 7-8 minutes left
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    assert slide(w) == []
+
+
+def test_integration_the_hour_view_agrees_and_the_sale_goes(tmp_path, monkeypatch):
+    seed_perp(monkeypatch, last_over_open=-0.004)  # the perp is 40 bp under the open: a YES bet is losing on every layer
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    out = slide(w)
+    assert out and out[0].why.startswith("curve risk exit (max loss)")
+
+
+def test_integration_with_no_perp_hour_the_price_alone_decides(tmp_path, monkeypatch):
+    monkeypatch.setattr(ticks_mod, "history", ticks_mod.TickHistory())
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    assert slide(w) != []

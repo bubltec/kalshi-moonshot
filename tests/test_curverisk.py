@@ -77,7 +77,7 @@ CLOSE = 9_900.0
 
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False)
+                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -91,6 +91,7 @@ def run(monkeypatch, t, bid, p, seconds=30, left0=100.0, tmp=None):
     me = SimpleNamespace()
     me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
     me._risk_record = lambda *a: watcher.ProfitWatcher._risk_record(me, *a)
+    me._risk_long = lambda *a: watcher.ProfitWatcher._risk_long(me, *a)
     tmp = Path(tmp) if tmp else Path(tempfile.mkdtemp())
     me.get_settings = lambda: SimpleNamespace(data_dir=tmp)
     out = None
@@ -139,6 +140,7 @@ def test_the_hours_history_is_read_from_the_kalshi_perp_not_the_spot_feed(monkey
     me = SimpleNamespace()
     me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
     me._risk_record = lambda *a: watcher.ProfitWatcher._risk_record(me, *a)
+    me._risk_long = lambda *a: watcher.ProfitWatcher._risk_long(me, *a)
     me.get_settings = lambda: SimpleNamespace(data_dir=Path(tempfile.mkdtemp()))
     watcher.ProfitWatcher._risk_hit(me, t, 0.80, CLOSE - 100.0, CLOSE - 100.0)
     assert "KP_WTI" in asked and t.risk_hist > 1.5
@@ -173,3 +175,36 @@ def test_a_lane_with_only_the_risk_exit_still_gets_a_watched_position():
         return lanes.LaneSpec("x", "ladder", "x", (0.70, 0.97), (0, 1), 0.05, 0.0, **kw)
 
     assert lanes.takes_profit(spec(curve_risk_sell=0.5)) and not lanes.takes_profit(spec())
+
+
+def test_long_chance_reads_the_cushion_against_the_hours_own_movement():
+    rng = random.Random(5)
+    ts, vs = ticks(3700, rng)
+    now = 3699.0
+    ref = vs[-1]
+    flat = curverisk.long_chance(ts, vs, now, ref, "yes", 120.0)
+    assert flat is not None and abs(flat - 0.5) < 0.01  # sitting on the reference: a coin flip
+    above = curverisk.long_chance(ts, vs, now, ref * 0.997, "yes", 120.0)
+    assert above is not None and above > 0.9  # 30 bp over the open in a quiet hour with 2 minutes left
+    assert curverisk.long_chance(ts, vs, now, ref * 0.997, "no", 120.0) < 0.1
+    assert curverisk.long_chance(ts[:100], vs[:100], 99.0, ref, "yes", 120.0) is None  # too short an hour
+    assert curverisk.long_chance(ts, vs, now + 100.0, ref, "yes", 120.0) is None  # the newest tick is stale
+    assert curverisk.long_chance(ts, vs, now, 0.0, "yes", 120.0) is None
+
+
+def test_a_price_dip_alone_does_not_sell_when_the_long_layer_says_the_bet_stays_positive(monkeypatch, tmp_path):
+    t = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True, risk_confirm=0.4)
+    logged = []
+    monkeypatch.setattr(watcher.log, "info", lambda msg, *a, **k: logged.append(msg % a if a else msg))
+    me = SimpleNamespace(get_settings=lambda: SimpleNamespace(data_dir=tmp_path))
+    me._risk_record = lambda *a: watcher.ProfitWatcher._risk_record(me, *a)
+    monkeypatch.setattr(watcher.variants, "comeback_stats", lambda *a, **k: None)
+    me._risk_long = lambda tt, now, left: 0.9  # the hour says the side is very likely to pay
+    me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
+    assert watcher.ProfitWatcher._risk_quote_hit(me, t, 0.30, CLOSE - 100.0) is None  # a 63% loss, past the max-loss limit, price alone would sell
+    me._risk_long = lambda tt, now, left: 0.2  # the hour agrees it is going wrong
+    t.risk_at = 0.0
+    assert watcher.ProfitWatcher._risk_quote_hit(me, t, 0.30, CLOSE - 99.0).startswith("curve risk exit (max loss)")
+    me._risk_long = lambda tt, now, left: None  # no hour to read: the sale does not wait for it
+    t.risk_at = 0.0
+    assert watcher.ProfitWatcher._risk_quote_hit(me, t, 0.30, CLOSE - 98.0) is not None
