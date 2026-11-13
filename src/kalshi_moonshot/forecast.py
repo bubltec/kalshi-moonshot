@@ -93,7 +93,7 @@ def forecast_move(weights: Weights, moves: list[float]) -> tuple[float, float, f
 
 
 def load_gates(path: str) -> dict[str, dict[str, Any]]:
-    """The skip rules in `path` (behavior.write_gates), re-read when the file changes. Empty when there is no file."""
+    """The skip rules in `path` (forecast_gates.json; its writer, behavior.write_gates, was removed 2026-11-12), re-read when the file changes. Empty when there is no file."""
     try:
         mtime = os.path.getmtime(path)
     except OSError:

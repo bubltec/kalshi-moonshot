@@ -116,7 +116,6 @@ class Settings:
     settlement_edge_enabled: bool  # log, as paper bets, the side whose exact settlement chance beats its ask in the last 150 s of every crypto 15-minute market (settlement_edge.py)
     fut_flow_enabled: bool  # record Hyperliquid perpetual-futures trade flow per second on the tape (futflow.py)
     fut_flow_coins: tuple[str, ...]
-    behavior_cases_hours: float  # how often newly finished windows are added to the case memory (behavior.py); 0 = never
     forecast_refit_hours: float  # how often the forecast weights are refit from the tape while a forecast lane is on (0 = never)
     forecast_weights: str  # JSON file of forecast weights (forecast.py); empty = <data dir>/forecast_h5.json
     watch_series: tuple[str, ...]  # opt-in list of series to follow (tape and discovery); empty = follow every series a lane or the instruments file names. Live lanes' own series are always followed
@@ -432,7 +431,6 @@ def load() -> Settings:
         settlement_edge_enabled=_b("SETTLEMENT_EDGE_ENABLED", False),  # off: the paper observer's replay edge vanished once fills were delayed (scripts/settlement_edge_fill_study.py)
         fut_flow_enabled=_b("FUT_FLOW_ENABLED", True),
         fut_flow_coins=tuple(x.strip() if ":" in x else x.strip().upper() for x in os.environ.get("FUT_FLOW_COINS", "BTC,ETH,SOL,XRP,DOGE").split(",") if x.strip()),  # a builder-dex coin such as xyz:GOLD keeps its case: Hyperliquid names it exactly so
-        behavior_cases_hours=max(0.0, _f("BEHAVIOR_CASES_HOURS", 2.0)),
         forecast_refit_hours=max(0.0, _f("FORECAST_REFIT_HOURS", 2.0)),
         forecast_weights=os.environ.get("FORECAST_WEIGHTS", "").strip(),
         watch_series=tuple(x.strip() for x in os.environ.get("WATCH_SERIES", "").split(",") if x.strip()),

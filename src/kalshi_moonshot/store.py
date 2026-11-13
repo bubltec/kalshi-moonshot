@@ -167,6 +167,7 @@ CREATE TABLE IF NOT EXISTS shock_log (  -- every new low of the spot's move agai
 );
 CREATE INDEX IF NOT EXISTS idx_shock_log_ticker ON shock_log(ticker);
 
+-- 2026-11-12: nothing writes this table any more (the behavior-cases helper was removed: it grew to 1.6 GB and froze the host, and no lane read its output). The rows stay for scripts/behavior_walkforward.py and scripts/per_coin_forecast_study.py.
 CREATE TABLE IF NOT EXISTS behavior_cases (
   ticker TEXT NOT NULL, side TEXT NOT NULL, ts REAL NOT NULL, kind TEXT NOT NULL,  -- kind: 'moment' (a sampled moment of a finished window) or 'buy' (our own real buy)
   series TEXT, close_ts REAL,
@@ -188,6 +189,7 @@ CREATE TABLE IF NOT EXISTS scalp_cases (
 );
 CREATE INDEX IF NOT EXISTS idx_scalp_close ON scalp_cases(close_ts);
 
+-- 2026-11-12: nothing writes or reads this table any more (the vector builder was removed with the behavior-cases helper). The rows stay.
 CREATE TABLE IF NOT EXISTS curve_vectors (
   ticker TEXT NOT NULL, minute INTEGER NOT NULL,  -- one vector point per finished crypto window and decision minute (vectors.py)
   series TEXT, close_ts REAL,

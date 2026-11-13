@@ -961,22 +961,6 @@ def cmd_forecast_compare(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_behavior_cases(s: config.Settings, args: argparse.Namespace) -> int:
-    """Add finished 15-minute windows (features at each moment, and whether the side won / touched 99c) to the case memory."""
-    from . import behavior
-
-    print(f"added {behavior.build_cases(s, args.max_windows)} moments")
-    return 0
-
-
-def cmd_behavior_report(s: config.Settings, args: argparse.Namespace) -> int:
-    """Which saved features separate the markets that reach 99c from those that do not (read-only)."""
-    from . import behavior
-
-    print("\n".join(behavior.report_by_series(s) if args.by_series else behavior.report(s)))
-    return 0
-
-
 def cmd_variants(s: config.Settings, args: argparse.Namespace) -> int:
     """How each variety of favorite (the spot's path against the strike over the last five minutes) has paid, by asset class and side (read-only)."""
     from . import variants
@@ -1021,14 +1005,6 @@ def cmd_scalp_cases(s: config.Settings, args: argparse.Namespace) -> int:
     from . import scalp
 
     print(f"added {scalp.build_cases(s, args.max_windows)} attempts")
-    return 0
-
-
-def cmd_curve_vectors(s: config.Settings, args: argparse.Namespace) -> int:
-    """Save every finished crypto window as vector points (the coin's curve, its 10-second tail, the hour context and Kalshi's own price curve) with what became of them."""
-    from . import vectors
-
-    print(f"added {vectors.build(s, args.max_windows)} vector points")
     return 0
 
 
@@ -1242,7 +1218,7 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
-    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "factors": cmd_factors, "template": cmd_template, "probe-maker": cmd_probe_maker, "esports": cmd_esports, "forecast-fit": cmd_forecast_fit, "forecast-review": cmd_forecast_review, "forecast-compare": cmd_forecast_compare, "behavior-cases": cmd_behavior_cases, "scalp-cases": cmd_scalp_cases, "curve-vectors": cmd_curve_vectors, "behavior-report": cmd_behavior_report, "variants": cmd_variants, "misses": cmd_misses, "scorecard": cmd_scorecard, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
+    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "factors": cmd_factors, "template": cmd_template, "probe-maker": cmd_probe_maker, "esports": cmd_esports, "forecast-fit": cmd_forecast_fit, "forecast-review": cmd_forecast_review, "forecast-compare": cmd_forecast_compare, "scalp-cases": cmd_scalp_cases, "variants": cmd_variants, "misses": cmd_misses, "scorecard": cmd_scorecard, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
     "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "gap": cmd_gap, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
@@ -1306,14 +1282,8 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--prior-weight", type=float, default=15.0)
             p.add_argument("--min-loss", type=float, default=0.10)
             p.add_argument("--market", action="store_true", help="every crypto window's favorite, whether or not a lane bought it (keeps the observation going while the choppy rule has the lanes paused); use --days 6 --recent-days 1")
-        if name == "behavior-report":
-            p.add_argument("--by-series", action="store_true", help="each instrument (every coin, FX pair and commodity) on its own, never a category")
-        if name == "curve-vectors":
-            p.add_argument("--max-windows", type=int, default=800, help="finished windows to add this run")
         if name == "scalp-cases":
             p.add_argument("--max-windows", type=int, default=600, help="finished windows to replay this run")
-        if name == "behavior-cases":
-            p.add_argument("--max-windows", type=int, default=400, help="finished windows to add this run")
         if name == "shardmove":
             p.add_argument("--from", dest="source", default="event:2", help="event:SHARD or margined:SHARD (margined is Perpetuals)")
             p.add_argument("--to", dest="dest", default="event:0")

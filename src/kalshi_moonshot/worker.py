@@ -158,9 +158,6 @@ class Worker:
         from . import forecast_fit
 
         forecast_fit.start_refit(lambda: self.s)  # idle unless a forecast lane is on
-        from . import behavior
-
-        behavior.start_cases(lambda: self.s)  # add newly finished windows to the case memory every few hours
         from . import backup
 
         backup.start_nightly(lambda: self.s)

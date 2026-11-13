@@ -293,7 +293,7 @@ class ForecastEstimator:
         return self._local.tape
 
     def _gates(self, s: Settings, shot: LongShot, moves: list[float]) -> list[str]:
-        """The skip rules the case memory has found (behavior.write_gates) that this moment falls under. None found, no file or any failure means no skip."""
+        """The skip rules in forecast_gates.json (the case memory that wrote them, behavior.write_gates, was removed 2026-11-12) that this moment falls under. None found, no file or any failure means no skip."""
         try:
             gates = forecast.load_gates(f"{s.data_dir}/forecast_gates.json")
             if not gates:
