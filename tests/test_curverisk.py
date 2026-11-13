@@ -44,13 +44,18 @@ def test_history_factor_is_one_for_an_even_hour_and_larger_when_the_hour_is_bunc
     assert curverisk.history_factor(list(map(float, range(3700))), [100.0] * 3700, 3699.0) == 1.0  # flat: nothing to read
 
 
-def test_a_sale_needs_high_risk_and_a_result_within_the_lanes_bounds():
-    assert curverisk.sale_ok(0.40, 0.50, -0.20, 0.5, 0.01)  # a small loss
-    assert curverisk.sale_ok(0.40, 0.50, 0.10, 0.5, 0.01)  # a profit
-    assert not curverisk.sale_ok(0.60, 0.50, -0.20, 0.5, 0.01)  # risk is low: hold
-    assert not curverisk.sale_ok(0.40, 0.50, -0.80, 0.5, 0.01)  # the loss is past max: already gone, hold
-    assert not curverisk.sale_ok(0.40, 0.50, 0.005, 0.5, 0.01)  # a profit under the minimum
-    assert not curverisk.sale_ok(0.10, -1.0, -0.1, 0.5, 0.01)  # off
+def test_a_sale_needs_high_risk_and_a_loss_or_a_real_profit():
+    assert curverisk.sale_ok(0.40, 0.50, -0.20, 0.01)  # a small loss
+    assert curverisk.sale_ok(0.40, 0.50, -0.70, 0.01)  # a deep one is cut too
+    assert curverisk.sale_ok(0.40, 0.50, 0.10, 0.01)  # a profit
+    assert not curverisk.sale_ok(0.60, 0.50, -0.20, 0.01)  # risk is low: hold
+    assert not curverisk.sale_ok(0.40, 0.50, 0.005, 0.01)  # a profit under the minimum
+    assert not curverisk.sale_ok(0.10, -1.0, -0.1, 0.01)  # off
+
+
+def test_the_max_loss_sells_at_once_whatever_the_chance_reads():
+    assert curverisk.stopped(-0.50, 0.5) and curverisk.stopped(-0.80, 0.5)
+    assert not curverisk.stopped(-0.30, 0.5) and not curverisk.stopped(-0.99, 0.0)
 
 
 def test_the_wait_scales_with_the_time_left_and_how_far_under_the_line():
@@ -99,6 +104,7 @@ def test_shadow_logs_the_sale_once_and_sells_nothing(monkeypatch):
     assert reason is None and sum("curve risk shadow" in m for m in logged) == 1
 
 
-def test_a_high_chance_holds_and_a_loss_past_the_max_holds(monkeypatch):
+def test_a_high_chance_holds_and_the_max_loss_sells_at_once(monkeypatch):
     assert run(monkeypatch, target(risk_live=True), bid=0.80, p=0.90)[1] is None  # plenty of cushion
-    assert run(monkeypatch, target(risk_live=True), bid=0.20, p=0.15)[1] is None  # a 75% loss: past the 50% max, nothing left to save
+    i, reason, _ = run(monkeypatch, target(risk_live=True), bid=0.30, p=0.85)  # a 63% loss: past the 50% max, the sale is at the first reading
+    assert i == 0 and "(max loss)" in reason

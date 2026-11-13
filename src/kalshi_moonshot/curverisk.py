@@ -6,7 +6,7 @@ Two cushions, both read as the chance that the side we hold pays:
 The worse of the two is the risk. The price is the one we trust: when the price is the worse one it counts in full, when the spot is the worse one only `spot_weight` of the way down to it (a spot move does not flip Kalshi's price, so a spot alarm alone is a hint, a price alarm is the market's own).
 Time left is inside both readings (the spot chance shrinks with the square root of the time left; the bid is the market's chance with that time). Nothing here is a number of seconds, a price level, a coin or a commodity.
 
-The sale: sell when q is under the lane's line, and the sale is within what the lane accepts: a loss no deeper than max_loss of the cost, or a profit of at least min_profit of it. Below that line the wait before selling is the market's own recovery time cut by how far q is under the line and never over a share of the time left (wait()).
+The sale: sell when q is under the lane's line, for a loss at any depth or a profit of at least min_profit of the cost, after a wait (the market's own recovery time cut by how far q is under the line, never over a share of the time left: wait()). And never let a loss pass max_loss of the cost: at that depth it sells at once (stopped()).
 Evidence: none yet. This is a first build, shadow only (lane field curve_risk_live off), and its settings are guesses to be scored against the bets that follow."""
 
 from __future__ import annotations
@@ -61,11 +61,16 @@ def risk(p_spot: float, net_bid: float, hist: float = 1.0, spot_weight: float = 
     return Risk(q_price - w * (q_price - q_spot), q_spot, q_price, "spot")
 
 
-def sale_ok(q: float, line: float, pnl: float, max_loss: float, min_profit: float) -> bool:
-    """Whether the risk is high and the sale is one the lane accepts. `pnl` is the sale's result as a fraction of the cost: at least min_profit for a profit, or no worse than -max_loss for a loss (a loss deeper than that is a bet the market has already priced as gone: holding it costs no more than selling)."""
+def stopped(pnl: float, max_loss: float) -> bool:
+    """The max loss: the sale's result as a fraction of the cost has reached -max_loss. The exit sells at once, with no wait, whatever the chance reads: this is the most the lane accepts to lose on a bet."""
+    return max_loss > 0 and pnl <= -max_loss
+
+
+def sale_ok(q: float, line: float, pnl: float, min_profit: float) -> bool:
+    """Whether the risk is high and a sale is worth making. A loss is always worth cutting once the risk is high (a small loss beats a full one); a profit only when it is at least min_profit of the cost, so the fee and the spread are not paid for nothing. A result between zero and min_profit is held."""
     if line <= 0 or q >= line:
         return False
-    return pnl >= min_profit or -max_loss <= pnl < 0.0
+    return pnl >= min_profit or pnl < 0.0
 
 
 def wait(q: float, line: float, left: float, base: float, share: float) -> float:
