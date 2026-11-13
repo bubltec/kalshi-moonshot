@@ -1,6 +1,5 @@
 """The risk exit end to end, through the real watcher path (2026-11-13). The first tests of the exit built a Target by hand and so never touched the step that failed live: a lane with only curve_risk_sell set was never given a watched position (takes_profit() was false), so nothing was armed and nothing could sell. These tests start from the lane file and the stored bet, as the bot does: Store row -> refresh() -> quote events -> sale signal."""
 
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -89,8 +88,8 @@ def test_in_shadow_it_sells_nothing(tmp_path, monkeypatch):
     assert signals(w) == []
 
 
-def test_the_lanes_that_trade_live_are_all_watched():
-    """Guards the live config itself: every lane in LIVE_LANES must be one the watcher tracks (takes_profit), or it has no exits at all (the 09:45 break)."""
+def test_the_lanes_that_trade_live_are_all_watched(tmp_path, monkeypatch):
+    """Guards the live config itself: every lane in LIVE_LANES must be one the watcher tracks (takes_profit), or it has no exits at all (the 09:45 break). Reads the Mac's lane file and .env as text only, with settings from a scratch data dir."""
     root = Path(__file__).resolve().parents[1]
     toml, env = root / "data" / "strategies.toml", root / ".env"
     if not toml.exists() or not env.exists():
@@ -99,7 +98,7 @@ def test_the_lanes_that_trade_live_are_all_watched():
     names = [n for n in live.split(",") if n]
     if not names:
         pytest.skip("LIVE_LANES is blank")
-    os.environ.setdefault("DATA_DIR", str(root / "data"))
-    specs = lanes.lane_specs(config.reload())
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    specs = lanes.lane_specs_from(config.load(), toml.read_text())
     unwatched = [n for n in names if n in specs and not lanes.takes_profit(specs[n])]
     assert unwatched == [], f"live lanes with no watched exit: {unwatched}"

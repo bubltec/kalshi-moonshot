@@ -896,21 +896,24 @@ class ProfitWatcher:
             return None
         reason = f"curve risk exit{' (max loss)' if stop else ''}: the chance the side pays is {r.q:.3f} ({r.worse} cushion the worse: price {r.q_price:.3f}, spot {r.q_spot:.3f}, history x{t.risk_hist:.2f}), line {t.risk_sell:.2f}, held {now - t.risk_since:.0f}s of a {wait:.0f}s wait; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
         if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, wait, stop, True)  # a live signal is kept on disk too: the container log is lost at every rebuild, and an exit that did not happen has to be explainable afterward
             return reason
         if not t.risk_logged:
             t.risk_logged = True
             log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
-            try:
-                from pathlib import Path
-
-                from . import config
-
-                row = {"ts": now, "ticker": t.ticker, "lane": t.lane, "side": t.side, "entry": t.entry, "bid": bid, "q": round(r.q, 4), "worse": r.worse, "pnl": round(pnl, 4), "left": round(left, 1), "wait": round(wait, 1), "stop": stop, "line": t.risk_sell}
-                with open(Path(config.reload().data_dir) / "risk_shadow.jsonl", "a") as f:
-                    f.write(json.dumps(row) + "\n")
-            except OSError:
-                log.warning("curve risk shadow: could not write data/risk_shadow.jsonl")
+            self._risk_record(t, r, bid, now, left, pnl, wait, stop, False)
         return None
+
+    def _risk_record(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, wait: float, stop: bool, live: bool) -> None:
+        """Append one risk-exit signal to data/risk_shadow.jsonl (ticker, lane, bid, chance, result, time left, max-loss or line, live or shadow). Never raises."""
+        try:
+            from pathlib import Path
+
+            row = {"ts": now, "ticker": t.ticker, "lane": t.lane, "side": t.side, "entry": t.entry, "bid": bid, "q": round(r.q, 4), "worse": r.worse, "pnl": round(pnl, 4), "left": round(left, 1), "wait": round(wait, 1), "stop": stop, "line": t.risk_sell, "live": live}
+            with open(Path(self.get_settings().data_dir) / "risk_shadow.jsonl", "a") as f:  # the watcher's own settings, not config.reload(): that rebinds the process-wide settings
+                f.write(json.dumps(row) + "\n")
+        except OSError:
+            log.warning("curve risk: could not write data/risk_shadow.jsonl")
 
     def _scaled_wait(self, t: Target, now: float, left: float, tm: float) -> float:
         """Seconds the curve sale and time-to-go wait before selling (lane field curve_wait_share): the market's own median seconds for a fast fall to regain half of itself over the last hour (curve_wait_default when it has under 5 falls),

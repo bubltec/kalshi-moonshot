@@ -90,8 +90,9 @@ def run(monkeypatch, t, bid, p, seconds=30, left0=100.0, tmp=None):
     monkeypatch.setattr(watcher.log, "info", lambda msg, *a, **k: logged.append(msg % a if a else msg))
     me = SimpleNamespace()
     me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
+    me._risk_record = lambda *a: watcher.ProfitWatcher._risk_record(me, *a)
     tmp = Path(tmp) if tmp else Path(tempfile.mkdtemp())
-    monkeypatch.setattr("kalshi_moonshot.config.reload", lambda: SimpleNamespace(data_dir=tmp))
+    me.get_settings = lambda: SimpleNamespace(data_dir=tmp)
     out = None
     for i in range(seconds):
         now = CLOSE - left0 + i
@@ -137,7 +138,8 @@ def test_the_hours_history_is_read_from_the_kalshi_perp_not_the_spot_feed(monkey
     t = target(risk_history=True, risk_live=True)
     me = SimpleNamespace()
     me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
-    monkeypatch.setattr("kalshi_moonshot.config.reload", lambda: SimpleNamespace(data_dir=Path(tempfile.mkdtemp())))
+    me._risk_record = lambda *a: watcher.ProfitWatcher._risk_record(me, *a)
+    me.get_settings = lambda: SimpleNamespace(data_dir=Path(tempfile.mkdtemp()))
     watcher.ProfitWatcher._risk_hit(me, t, 0.80, CLOSE - 100.0, CLOSE - 100.0)
     assert "KP_WTI" in asked and t.risk_hist > 1.5
 
@@ -154,6 +156,8 @@ def test_live_the_price_only_exit_sells_at_the_max_loss_with_no_wait(monkeypatch
     t = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True)
     i, reason, _ = run(monkeypatch, t, bid=0.30, p=0.85, tmp=tmp_path)
     assert i == 0 and "(max loss)" in reason
+    rows = [json.loads(x) for x in (tmp_path / "risk_shadow.jsonl").read_text().splitlines()]
+    assert len(rows) == 1 and rows[0]["live"] is True and rows[0]["stop"] is True
 
 
 def test_the_spot_path_leaves_a_price_only_lane_alone_and_the_quote_path_a_spot_lane(monkeypatch):
