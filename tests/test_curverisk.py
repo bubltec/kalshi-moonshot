@@ -160,3 +160,12 @@ def test_the_spot_path_leaves_a_price_only_lane_alone_and_the_quote_path_a_spot_
     me = SimpleNamespace()
     assert watcher.ProfitWatcher._risk_hit(me, target(risk_spot_weight=0.0, risk_live=True), 0.30, CLOSE - 100.0, CLOSE - 100.0) is None
     assert watcher.ProfitWatcher._risk_quote_hit(me, target(risk_spot_weight=0.5, risk_live=True), 0.30, CLOSE - 100.0) is None
+
+
+def test_a_lane_with_only_the_risk_exit_still_gets_a_watched_position():
+    from kalshi_moonshot import lanes
+
+    def spec(**kw):
+        return lanes.LaneSpec("x", "ladder", "x", (0.70, 0.97), (0, 1), 0.05, 0.0, **kw)
+
+    assert lanes.takes_profit(spec(curve_risk_sell=0.5)) and not lanes.takes_profit(spec())
