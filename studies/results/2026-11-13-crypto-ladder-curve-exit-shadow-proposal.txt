@@ -1,0 +1,21 @@
+PROPOSAL, not applied: a paper twin of crypto_multiscale that buys on the ladder chance (priced from the Kalshi perp) and sells with the new curve risk exit.
+(user, 2026-11-13: "i wanted to use ladder on it with the new curve exit". Nothing here is in data/strategies.toml; cloud_push.sh was not run; the live switch stays the user's.)
+
+What crypto_multiscale does today (read from lanes.py, runner.py, estimators.py and data/strategies.toml):
+  always = true  -> the ladder estimator returns the ask as the "chance" for crypto (kp: symbols), so edge is 0 and min_edge = 0.015 is never applied. estimator = "ladder" does nothing for the buy.
+  the buy is decided by: price 0.70-0.90, spread <= 0.04, minutes 5-15; buy_flat_trend_pct = 0.05 (sit out while the market-wide 60-minute trend is within 0.05%); buy_curve_edge_min = -0.05 (the spot curve's chance no more than 0.05 under the ask); model_buy with model_top = 0.30, model_features = "curvature" (the ridge's predicted net in the top 30% of training moments and above 0).
+
+The twin (one buy change plus the exit, everything else copied from crypto_multiscale on the day it is added, as the other twins were):
+  [lane.crypto_ladder_perp]
+  enabled = true                 # paper: NOT in LIVE_LANES; the host's PAPER_LANE_NAMES must name it or PAPER_LANES=false switches it off
+  series  = KXBTC15M, KXETH15M, KXSOL15M, KXXRP15M, KXDOGE15M   # the only coins with a kp: instrument (instruments.toml); ADA, BCH, BNB, HYPE, NEAR, ZEC have none: the ladder cannot price them and a non-always lane drops them ("could not price this ladder")
+  always = false                 # the ladder chance is read: edge = chance - ask - fee, from kalshifeed (KP_*) through the window-offset pricer
+  min_edge = 0.015               # the lane's own edge bar (lanes.wants_bet); see the evidence below for why this will buy rarely
+  model_buy = false, buy_curve_edge_min = -9.0, buy_flat_trend_pct = -1.0   # the three curve gates off: the ladder is the buy
+  curve_risk_sell = 0.5, curve_risk_live = true (a paper sale), curve_risk_spot_weight = 0.0, curve_risk_history = true, curve_risk_max_loss = 0.5, curve_risk_min_profit = 0.01   # the new exit as in crypto_multiscale's shadow today; the older curve_exit / time-to-go / shock sale fields set off on the twin so one handler sells (user: "the single handler for all exits")
+
+What the evidence says about it (studies/results/2026-11-13-ladder-perp-buy.txt, in scope, 65 bets that could be priced, since 11-11):
+  - at min_edge 0.015 the ladder keeps 2 of 65 bets (-4.28 booked, 0 won); the twin would almost never buy.
+  - edge buckets: under -0.05: 45 bets won 81-85% at asks 0.80-0.82; -0.05 to 0.015: 18 bets won 66.7%; the ask beats the ladder chance (Brier 0.1506 against 0.1738): the pricer's width (6 hours of 5-minute bars x COMMODITY_VOL_MULT 1.25) is wide for a 15-minute market.
+  - keeping every bet at edge -0.05 or better would keep about 20 of 65: about -14 booked, -7 held.
+  So the ladder buy is not supported by the history; this twin is to collect forward evidence, scored against crypto_multiscale's bets (rule 5/6), not a recommendation to go live. Two stated choices to make before it is added: the edge bar (0.015 buys almost nothing; -0.05 matches the live lane's curve-edge allowance) and whether the width multiplier (a global setting) is touched at all; neither is chosen from these results.
