@@ -1,0 +1,74 @@
+"""The curve exit as one risk reading (2026-11-13, user: "the curve exit logic needs to be the single handler for all exits based around curve logic and time left ... Our risk factor is what the exit should be. And it's based on kalshis current price compared to ours (price cushion) or the spot to strike distance cushion, whichever is relatively worse; factored by curve event history in the past hour and time remaining in the market. Spot prices don't flip the price cushion, and vice versa, so knowing that we should be more biased of the price cushion. We should have a min profit and a max loss factor and a wait scale but not a specific time at all.").
+
+Two cushions, both read as the chance that the side we hold pays:
+  spot cushion  q_spot: the curve's chance from the spot's distance to the strike over the time left, in the market's own variance (curvevalue.read), then widened by the market's own last hour (history_factor).
+  price cushion q_price: what Kalshi's own bid, net of the sell fee, says the position is worth.
+The worse of the two is the risk. The price is the one we trust: when the price is the worse one it counts in full, when the spot is the worse one only `spot_weight` of the way down to it (a spot move does not flip Kalshi's price, so a spot alarm alone is a hint, a price alarm is the market's own).
+Time left is inside both readings (the spot chance shrinks with the square root of the time left; the bid is the market's chance with that time). Nothing here is a number of seconds, a price level, a coin or a commodity.
+
+The sale: sell when q is under the lane's line, and the sale is within what the lane accepts: a loss no deeper than max_loss of the cost, or a profit of at least min_profit of it. Below that line the wait before selling is the market's own recovery time cut by how far q is under the line and never over a share of the time left (wait()).
+Evidence: none yet. This is a first build, shadow only (lane field curve_risk_live off), and its settings are guesses to be scored against the bets that follow."""
+
+from __future__ import annotations
+
+import bisect
+import math
+from statistics import NormalDist
+from typing import NamedTuple
+
+_N = NormalDist()
+MINUTE = 60.0
+MIN_MOVES = 30  # one-minute moves needed in the hour before the history reading is trusted
+HISTORY_CAP = 3.0  # the history factor never widens the spot's uncertainty more than this many times
+
+
+class Risk(NamedTuple):
+    q: float  # the chance the side pays that the exit acts on (the worse cushion, the price one counted in full)
+    q_spot: float  # the spot cushion's chance, after the history factor
+    q_price: float  # Kalshi's bid, net of the sell fee
+    worse: str  # "price" or "spot"
+
+
+def history_factor(ts: list[float], vs: list[float], now: float, hours: float = 1.0, cap: float = HISTORY_CAP) -> float:
+    """How bunched into jumps this market's last hour was: the rms of its one-minute moves over their robust sigma (1.4826 times the median absolute move). 1.0 for an hour as even as a normal one; the more of the hour's movement sits in a few big minutes, the larger (capped). 1.0 when the hour is too short or too flat to read."""
+    if not ts or len(ts) != len(vs):
+        return 1.0
+    minutes = int(hours * 3600.0 // MINUTE)
+    levels: list[float] = []
+    for k in range(minutes + 1):
+        i = bisect.bisect_right(ts, now - k * MINUTE) - 1
+        if i < 0 or vs[i] <= 0:
+            break
+        levels.append(math.log(vs[i]))
+    moves = [levels[k] - levels[k + 1] for k in range(len(levels) - 1)]
+    if len(moves) < MIN_MOVES:
+        return 1.0
+    sigma = 1.4826 * sorted(abs(m) for m in moves)[len(moves) // 2]
+    if sigma <= 0:
+        return 1.0
+    rms = math.sqrt(sum(m * m for m in moves) / len(moves))
+    return min(max(rms / sigma, 1.0), cap)
+
+
+def risk(p_spot: float, net_bid: float, hist: float = 1.0, spot_weight: float = 0.5) -> Risk:
+    """The two cushions and the worse of them. `p_spot` is the curve's chance that the side pays, `net_bid` the bid after the sell fee, `hist` the history factor (a jumpy hour pulls the spot's chance toward even, as more can happen than the quiet rate says), `spot_weight` how far a spot alarm counts when it is the worse one."""
+    p = min(max(p_spot, 1e-6), 1.0 - 1e-6)
+    q_spot = _N.cdf(_N.inv_cdf(p) / max(hist, 1.0))
+    q_price = min(max(net_bid, 0.0), 1.0)
+    if q_price <= q_spot:
+        return Risk(q_price, q_spot, q_price, "price")
+    w = min(max(spot_weight, 0.0), 1.0)
+    return Risk(q_price - w * (q_price - q_spot), q_spot, q_price, "spot")
+
+
+def sale_ok(q: float, line: float, pnl: float, max_loss: float, min_profit: float) -> bool:
+    """Whether the risk is high and the sale is one the lane accepts. `pnl` is the sale's result as a fraction of the cost: at least min_profit for a profit, or no worse than -max_loss for a loss (a loss deeper than that is a bet the market has already priced as gone: holding it costs no more than selling)."""
+    if line <= 0 or q >= line:
+        return False
+    return pnl >= min_profit or -max_loss <= pnl < 0.0
+
+
+def wait(q: float, line: float, left: float, base: float, share: float) -> float:
+    """Seconds the risk must stay high before the sale: the market's own recovery time (`base`), less the further q is under the line (zero at q = 0), never more than `share` of the time left."""
+    severity = min(1.0, max(0.0, (line - q) / line)) if line > 0 else 1.0
+    return max(0.0, min(base * (1.0 - severity), share * max(left, 0.0)))
