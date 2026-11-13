@@ -246,6 +246,12 @@ class RoutingFeed:
             return self.kalshi.minute_closes(symbol, hours)
         raise CommodityError(f"no minute history for {symbol}")
 
+    def ticks(self, symbol: str, hours: float) -> tuple[list[float], list[float]]:
+        """Raw recorded readings, for the feeds that keep them (the Kalshi perp reference)."""
+        if symbol.startswith("kp:"):
+            return self.kalshi.ticks(symbol, hours)
+        raise CommodityError(f"no tick history for {symbol}")
+
     @property
     def other(self) -> Feed:
         if self._other is None:

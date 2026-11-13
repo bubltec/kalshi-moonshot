@@ -76,6 +76,11 @@ class KalshiPerpFeed:
                 self._bars[index_id] = hit
         return Series(last=tick[0], last_ts=tick[1], closes=hit[1], times=hit[2])
 
+    def ticks(self, symbol: str, hours: float) -> tuple[list[float], list[float]]:
+        """(times, values) of the recorded readings of the last `hours`, in time order."""
+        rows = self._rows(symbol.removeprefix(PREFIX), hours)
+        return [float(r[0]) for r in rows], [float(r[1]) for r in rows]
+
     def minute_closes(self, symbol: str, hours: float = 4.0) -> dict[int, float]:
         """Close of each 1-minute bar, keyed by the unix second it opened."""
         index_id = symbol.removeprefix(PREFIX)

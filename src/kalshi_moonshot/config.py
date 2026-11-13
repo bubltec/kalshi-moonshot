@@ -219,6 +219,7 @@ class Settings:
     commodity_min_hours_to_close: float
     commodity_max_hours_to_close: float
     commodity_vol_mult: float  # scales realized volatility; above 1 widens the tails we price
+    commodity_width_fit: bool  # a series priced from the Kalshi perp fits its own multiplier from its last hours of outcomes (widthfit.py); the global multiplier above is its fallback
     commodity_max_basis: float  # skip when the ladder center is this far (fraction) from the feed spot
     commodity_usd_per_trade: float
     commodity_shortlist: int
@@ -519,6 +520,7 @@ def load() -> Settings:
         commodity_min_hours_to_close=0.03,
         commodity_max_hours_to_close=2.0,
         commodity_vol_mult=_f("COMMODITY_VOL_MULT", 1.25),
+        commodity_width_fit=_b("COMMODITY_WIDTH_FIT", True),
         commodity_max_basis=_f("COMMODITY_MAX_BASIS", 0.04),
         commodity_usd_per_trade=0.0,
         commodity_shortlist=10,
