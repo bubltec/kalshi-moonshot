@@ -42,6 +42,7 @@ def check(
     event_ticker: str = "",
     mutually_exclusive: bool = False,
     equity: float = 0.0,
+    allow_held: bool = False,
 ) -> Verdict:
     """max_trade lets a lane use a tighter per-trade cap. It can never loosen the global one. `equity` (the account's cash plus open bets) is for the caps set as a share of it: with MAX_TRADE_PCT the
     per-trade ceiling was already applied when the bet was sized, so a sized order passes here, and MAX_LOSS_PCT_PER_DAY turns into dollars of that equity."""
@@ -58,7 +59,7 @@ def check(
     if cost_usd > cap + 1e-9:
         return Verdict(False, f"cost ${cost_usd:.2f} over per-trade cap ${cap:.2f}")
     held = store.open_position_tickers(s.env)
-    if ticker in held:
+    if ticker in held and not allow_held:  # allow_held: the top-up of a partly filled resting buy, whose first part is already a position (2026-11-13)
         return Verdict(False, "already holding this market")
     if mutually_exclusive:
         others = store.bet_tickers_in_event(event_ticker) - {ticker}

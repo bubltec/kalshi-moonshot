@@ -318,3 +318,46 @@ def test_the_tick_ahead_chase_is_held_to_two_cents_whatever_the_lanes_retry_chas
     spec = _spec(tmp_path, monkeypatch, buy_tick_ahead=True, buy_slip=0.03, buy_retry_chase=0.05)  # a favourite lane: a 5c retry chase
     _stream(monkeypatch, [(995.0, 0.80, 0.82), (999.0, 0.86, 0.88)])  # the ask ran from 0.82 to 0.88
     assert runner.buy_limit(spec, "T", "yes", 0.80, 0.80, 1000.0) == 0.85  # 0.80 + 0.03 + 0.02, not 0.88
+
+@pytest.fixture
+def real_gate(tmp_path, monkeypatch):
+    """The same setup but with the REAL risk gate. The fixture above stubs risk.check to always pass, which hid a bug: a partly filled resting bid is recorded as a position, and the real gate refuses a second buy of a market already held, so the top-up never went in (2026-11-13: 5.22 of 11.11 contracts on KXPLATINUM15M-26NOV131430, and none of 42 before it)."""
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("MODE", "trade")
+    monkeypatch.setenv("KALSHI_ENV", "demo")
+    monkeypatch.setenv("MIN_ORDER_USD", "0.25")
+    runner._NO_FRACTION.clear()
+    runner._EXCHANGE_OF.clear()
+    runner._UNFUNDED.clear()
+    s = config.load()
+    store = Store(s.db_path)
+    monkeypatch.setattr(runner, "_top_up", lambda *a, **k: None)
+    shot = LongShot("KXBTC15M-1", "t", "r", 0.30, 0.31, 100.0, "2099-01-01T00:00:00Z", 0.2, lane="scalpy", series="KXBTC15M", event_ticker="KXBTC15M-E", side="yes")
+
+    def spec(**over):
+        base = dataclasses.replace(lanes.spec_for(s, "moonshot"), buy_rest_seconds=0.0, price=(0.02, 0.39), buy_slip=0.02, buy_retries=1, buy_retry_chase=0.0)
+        sp = dataclasses.replace(base, **over)
+        monkeypatch.setattr(runner, "lane_specs", lambda settings: {"scalpy": sp})
+        return sp
+
+    yield s, store, shot, spec
+    runner._NO_FRACTION.clear()
+
+
+def test_a_partly_filled_resting_bid_is_topped_up_through_the_real_risk_gate(real_gate, monkeypatch):
+    s, store, shot, spec = real_gate
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_rest_top_up=True, buy_retries=0)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    client = RestClient(fills=[1.0], asks=[0.30], rest_fill=0.5)
+    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
+    assert got.filled == 1.5 and "Topped up" in got.note and client.ids == ["k-top"]
+
+
+def test_the_real_gate_still_refuses_a_second_ordinary_buy_of_a_held_market(real_gate):
+    """The top-up gets past the holding check, nothing else does."""
+    from kalshi_moonshot import risk
+
+    s, store, shot, spec = real_gate
+    store.add_order(ticker=shot.ticker, env=s.env, count=1.0, price=0.3, fill_count=1.0, cost_usd=0.3, fee_usd=0.0, order_id="o", contract="yes")
+    assert risk.check(s, store, shot.ticker, 0.3, max_trade=0.3).ok is False
+    assert risk.check(s, store, shot.ticker, 0.3, max_trade=0.3, allow_held=True).ok is True

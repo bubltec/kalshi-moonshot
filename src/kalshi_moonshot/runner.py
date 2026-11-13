@@ -1646,7 +1646,7 @@ def _top_up_rest(s: Settings, client: KalshiClient, store: Store, shot: LongShot
     """Buy what a resting bid left unfilled at the fresh ask, under the same guards as the fallback for a bid that filled nothing (price band, buy_retry_chase, the risk gate). If any guard refuses or the order fails,
     the part that did fill stands as it was. The merged result carries the blended price, so the take-profit and the log read the whole position."""
     left = count - placed.filled
-    limit = _requote(s, client, store, shot, spec, left)
+    limit = _requote(s, client, store, shot, spec, left, topping_up=True)
     if limit is None or left * limit < s.min_order_usd:
         return Placed(f"{placed.note} (the other {left:g} not topped up: ask moved out of the lane's guards or under the minimum)", placed.filled, placed.cost, placed.price)
     buy = client.buy_yes_ioc if shot.side == "yes" else client.buy_no_ioc
@@ -1688,7 +1688,7 @@ def _buy_again_block(store: Store, spec: LaneSpec, shot: LongShot) -> str | None
     return None
 
 
-def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, count: float) -> float | None:
+def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, count: float, topping_up: bool = False) -> float | None:
     """The limit for a second try after an immediate buy filled nothing, or None to give up. It reads the book again and prices the order off the fresh ask, but never above the first limit plus
     `buy_retry_chase`, never outside the lane's price band, and only if the curve (model or record) and the risk gate still agree at the limit, the most the order can pay: a market that ran away is not chased."""
     try:
@@ -1746,7 +1746,9 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
         log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, blocked)
         return None
     cost = limit * count + order_fee(limit, count)
-    verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store))
+    verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store), allow_held=topping_up)  # a top-up's first part is already a position: the holding check would refuse every one
+    if not verdict.ok:
+        log.info("buy %s %s: %s at %.2f not placed: the risk gate refused (%s)", shot.ticker, shot.side, "the top-up" if topping_up else "the second try", limit, verdict.reason)
     return limit if verdict.ok else None
 
 
