@@ -2006,10 +2006,9 @@ class ProfitWatcher:
             os.nice(10)
         try:
             indexes = sorted({ix for sp in lane_specs(s).values() for series in sp.series for ix in (index_for_series(series) or biquote_index(series), perp_index(series)) if ix})
-            if not self._ticks_warm:
+            if not self._ticks_warm:  # a watcher that was never started (a script, a test): the start-up reload did not run
                 self._ticks_warm = True
-                log.info("watcher: warmed %d ticks of history", ticks_mod.warm_from_tape(s, indexes, time.time()))
-                log.info("watcher: warmed %d market quotes of the last hour", ticks_mod.warm_mids_from_tape(s, time.time()))
+                ticks_mod.reload_from_tape(s, indexes, time.time())
             from . import volregime
             from .biquotefeed import SERIES_INDEX
             from .kalshiws import INDEX_FOR
@@ -2462,9 +2461,18 @@ class ProfitWatcher:
                 log.exception("watcher: could not enroll a fill")
             self._stop.wait(0.5)
 
+    def _reload_memory(self) -> None:
+        """Fill memory from the tape as the first thing the process does (ticks.reload_from_tape), at normal priority. Until 2026-11-14 this ran inside the low-priority ledger job, only when a lane asked for that job, and finished 30 to 85 s after the bot was already deciding."""
+        s = self.get_settings()
+        indexes = sorted({ix for sp in lane_specs(s).values() for series in sp.series for ix in (index_for_series(series) or biquote_index(series), perp_index(series)) if ix})
+        ticks_mod.reload_from_tape(s, indexes, time.time())
+
     def start(self) -> None:
         if self._threads:
             return
+        self._ticks_warm = True
+        ticks_mod.reload_begin()  # before any thread runs: buys wait for the reload from this moment (worker._evaluate)
+        threading.Thread(target=self._reload_memory, name="memory-reload", daemon=True).start()
         for fn, name in (
             (self._run_refresh, "watch-refresh"), (self._run_sells, "watch-sell"), (self._run_timers, "watch-timer"),
             (self._run_fills, "watch-fills"), (self._run_checks, "watch-checks"),

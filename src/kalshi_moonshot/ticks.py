@@ -10,6 +10,7 @@ import bisect
 import itertools
 import logging
 import threading
+import time
 from array import array
 from collections import deque
 from collections.abc import Sequence
@@ -287,3 +288,68 @@ def warm_mids_from_tape(s, now: float, hours: float = 1.0) -> int:
     for tk, ts, bid, ask in rows:
         by.setdefault(tk, []).append((float(ts), float(bid), float(ask)))
     return mids.warm(by)
+
+
+# ---- the reload of memory at start-up (2026-11-14, user: "I just want to make sure that's filled when we rebuild or restart") ----
+RELOAD_LIMIT = 180.0  # buys are held for the reload this long at most: a reload that hangs must not stop the bot trading
+HOLE_MIN = 10.0  # seconds with no quote from ANY 15-minute market before it counts as a hole in the record (one quiet market is not a hole; all of them silent is the feed being down)
+_reload_began = 0.0
+_reload_done = threading.Event()
+reload_report: dict[str, float] = {}
+
+
+def reload_begin(now: float | None = None) -> None:
+    """Mark the reload as started, so buys wait for it (reload_pending). Called before the reload thread starts, so there is no moment when the bot is up, memory is empty and nothing says so."""
+    global _reload_began
+    _reload_done.clear()
+    _reload_began = time.time() if now is None else now
+
+
+def reload_pending(now: float | None = None) -> bool:
+    """True from reload_begin until the reload has finished, or RELOAD_LIMIT seconds have passed. False when no reload was ever started (a test, a script, a process with no tape)."""
+    if _reload_began <= 0 or _reload_done.is_set():
+        return False
+    return (time.time() if now is None else now) - _reload_began < RELOAD_LIMIT
+
+
+def longest_hole(times: Sequence[float], start: float, end: float) -> tuple[float, float]:
+    """The longest stretch with no reading between `start` and `end`, given the sorted times of every reading in that span: (its length in seconds, the time it ended). The stretch from the last reading to `end` counts (after a restart that is the time the recorder was down)."""
+    worst, at, prev = 0.0, start, start
+    for t in itertools.chain(times, (end,)):
+        if t < start:
+            continue
+        if t - prev > worst:
+            worst, at = t - prev, t
+        prev = max(prev, t)
+    return worst, at
+
+
+def reload_from_tape(s, indexes: Sequence[str], now: float | None = None) -> dict[str, float]:
+    """Fill memory from the tape at start-up, at normal priority, then say how complete it is: the index ticks (8 hours), every 15-minute market's quotes (1 hour), how long it took, and the longest hole in the last hour of quotes (a stretch of HOLE_MIN seconds or more in which no 15-minute market quoted: the recorder was down). Buys wait on this (reload_pending). Never raises: a failed reload still lets the bot trade."""
+    from . import db
+
+    began = time.time()
+    now = began if now is None else now
+    report: dict[str, float] = {"ticks": 0, "quotes": 0, "markets": 0, "hole": 0.0, "hole_end": 0.0, "seconds": 0.0}
+    try:
+        report["ticks"] = warm_from_tape(s, indexes, now)
+        report["quotes"] = warm_mids_from_tape(s, now)
+        report["markets"] = len(mids._rows)
+        if db.tape_exists(s.tape_path):
+            tape = db.connect(s.tape_path, "tape", shared=True)
+            times = [float(r[0]) for r in tape.execute("SELECT ts FROM quotes WHERE ts>? AND ts<=? AND ticker LIKE ? AND bid>0 AND ask>0 ORDER BY ts", (now - 3600.0, now, "%15M-%"))]
+            if times:
+                report["hole"], report["hole_end"] = longest_hole(times, max(times[0], now - 3600.0), now)
+    except Exception:
+        log.warning("ticks: the reload of memory from the tape failed; the bot trades on what arrives from here", exc_info=True)
+    finally:
+        report["seconds"] = time.time() - began
+        reload_report.clear()
+        reload_report.update(report)
+        _reload_done.set()
+    hole = report["hole"]
+    log.log(logging.WARNING if hole >= HOLE_MIN else logging.INFO,
+            "memory reloaded from the tape in %.1fs: %d index ticks (8 h, %d indexes), %d quotes of the last hour (%d markets); %s",
+            report["seconds"], report["ticks"], len(indexes), report["quotes"], report["markets"],
+            f"the longest hole in the last hour of quotes is {hole:.0f}s, ending {time.strftime('%H:%M:%S', time.gmtime(report['hole_end']))} UTC (not filled: no quotes were recorded then)" if hole >= HOLE_MIN else "no hole in the last hour of quotes")
+    return report

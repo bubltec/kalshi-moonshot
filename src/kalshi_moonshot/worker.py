@@ -25,6 +25,7 @@ from typing import Any
 
 from . import jobs as jobs_mod
 from . import reqstats, runner, steptime
+from . import ticks as ticks_mod
 from .commodities import CommodityPricer
 from .config import Settings
 from .entrywatch import lane_full, quote_keys
@@ -657,6 +658,8 @@ class Worker:
     def _evaluate(self, job: Job) -> str:
         s = self.s
         shot = LongShot(**job.payload["shot"])
+        if ticks_mod.reload_pending():
+            return f"skip {shot.ticker}: memory is still reloading from the tape after the restart (no buy is decided on empty history)"
         client = self._venue(shot.lane)
         # The shortlist may be minutes old. Re-read the market and drop it if it no longer fits.
         with steptime.step("market read"):
