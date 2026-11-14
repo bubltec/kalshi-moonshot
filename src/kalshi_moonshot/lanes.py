@@ -307,7 +307,7 @@ class LaneSpec:
     scope_minutes: float | None = None  # with review_minutes: slow pass that builds the watchlist
     review_minutes: float | None = None  # fast pass over the watchlist; None = the main scan only
     cooldown_minutes: float = 0.0  # skip a market decided on this recently
-    entry_socket: bool = False  # two-level lanes: also re-review a watched event the moment a streamed quote puts a side in the price band (entrywatch.py)
+    entry_socket: bool | None = None  # 2026-11-14 (user: "It should be the default"): None = on for a two-level lane (one with review_minutes) and off for any other; set false to keep a two-level lane on its review timer. Two-level lanes: also re-review a watched event the moment a streamed quote puts a side in the price band (entrywatch.py)
     entry_approach: float = 0.0  # arm a side when its price is within this many dollars UNDER the lane's floor and gaining (entrywatch.py). The watch then rests a buy AT the floor; it is not a take of the ask (0 = off)
     entry_arm_seconds: float = 30.0  # the resting floor bid is canceled after this many seconds if it has not filled. An arm that never got its bid out is dropped then too, and may be armed again
     entry_move: float = 0.0  # a socket move trigger: when YES moves this many dollars within entry_move_seconds either way, rest a buy on the side that FELL (a YES fall buys YES, a YES rise buys NO). Needs entry_socket; the taker path is off for the lane (0 = off)
@@ -438,6 +438,7 @@ def lane_specs_from(s: Settings, strategies_toml: str | None, overrides_json: st
         for name in rows:
             lanes[name] = _overlay(lanes.get(name), name, _inherited(rows, name))
     lanes = overrides.apply(lanes, overrides.parse(overrides_json))  # the admin page's changes, already checked against overrides.TUNABLES
+    lanes = {name: replace(spec, entry_socket=tiered(spec)) if spec.entry_socket is None else spec for name, spec in lanes.items()}  # the default: a two-level lane reviews on the socket
     for spec in lanes.values():
         if tiered(spec) and not (spec.series or spec.needs_instrument):
             raise ValueError(

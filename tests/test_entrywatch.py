@@ -33,9 +33,17 @@ def test_entry_socket_needs_a_two_level_lane(tmp_path):
         lanes.lane_specs(settings(tmp_path))
 
 
-def test_it_is_off_unless_a_lane_asks(tmp_path):
-    assert not entrywatch.wanted(settings(tmp_path))
-    assert entrywatch.wanted(socket_settings(tmp_path))
+def test_a_two_level_lane_reviews_on_the_socket_unless_it_says_not_to(tmp_path):
+    assert entrywatch.wanted(settings(tmp_path))  # the default: the commodity lane is two-level, so it is on with nothing set
+    assert lanes.lane_specs(settings(tmp_path))["commodity"].entry_socket is True
+    (tmp_path / "strategies.toml").write_text('[lane.commodity]\nentry_socket = false\n')
+    s = settings(tmp_path)
+    assert not entrywatch.wanted(s) and lanes.lane_specs(s)["commodity"].entry_socket is False
+
+
+def test_a_lane_that_is_not_two_level_never_gets_the_socket_by_default(tmp_path):
+    (tmp_path / "strategies.toml").write_text('[lane.x]\nestimator = "llm"\nprice = [0.1, 0.2]\nhours = [1, 2]\nseries = ["A"]\n')
+    assert not lanes.lane_specs(settings(tmp_path))["x"].entry_socket
 
 
 def test_the_band_check_looks_at_either_side_the_lane_may_buy():
@@ -98,7 +106,8 @@ def test_a_quote_out_of_range_queues_nothing(tmp_path):
     assert w._jobs.qsize() == 0
 
 
-def test_a_lane_without_entry_socket_is_ignored(tmp_path):
+def test_a_lane_with_entry_socket_off_is_ignored(tmp_path):
+    (tmp_path / "strategies.toml").write_text('[lane.commodity]\nentry_socket = false\n')
     s = settings(tmp_path)
     w = watcher(s, Client(live_event()))
     w.watch = {("commodity", EVENT): {"close": (datetime.now(UTC) + timedelta(minutes=5)).isoformat()}}
