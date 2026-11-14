@@ -238,6 +238,7 @@ class Target:
     risk_swing_noted: bool = False
     risk_take: bool = False  # the profit take (lane field curve_take)
     risk_take_slope: float = 0.08  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
+    risk_squeeze: float = 0.0  # near a sell bar and sliding: sell at once (lane field squeeze_seconds)
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
     risk_stop_hold: float = 0.0  # the max-loss stop waits this share of the time left (lane field curve_risk_stop_hold)
     risk_at: float = 0.0  # the risk check reads at most once a second
@@ -969,19 +970,30 @@ class ProfitWatcher:
         if now - t.risk_noted >= 10.0:
             t.risk_noted = now
             log.info("curve risk watch %s %s, %.0fs left: chance %.3f (%s worse; price %.3f, spot %.3f, history x%.2f, long layer %s), line %.2f, result %+.1f%% of cost%s", t.ticker, t.lane, left, r.q, r.worse, r.q_price, r.q_spot, t.risk_hist, "n/a" if long_chance is None else f"{long_chance:.3f}", t.risk_sell, pnl * 100.0, "" if t.risk_live else " [shadow]")
-        if t.risk_take:  # the profit take comes before the hour view: a bet that is well ahead is the one to cash, whatever the hour says
+        look = t.risk_take_slope * left  # the look back for the slope shrinks with the time left
+        basis = t.entry + fee_per_contract(t.entry)
+        net = bid - fee_per_contract(bid)
+        if t.risk_take or t.risk_squeeze > 0:
             t.risk_take_hist.append((now, bid))
-            look = t.risk_take_slope * left  # the look back shrinks with the time left
             while t.risk_take_hist and t.risk_take_hist[0][0] < now - max(60.0, 2.0 * look):
                 t.risk_take_hist.pop(0)
-            basis = t.entry + fee_per_contract(t.entry)
-            gain = (bid - fee_per_contract(bid)) - basis
+        noise = 0.0
+        if t.risk_squeeze > 0:
+            unit = self._risk_unit(t, now)
+            noise = unit * (t.risk_squeeze / 60.0) ** 0.5 if unit else 0.0
+        if t.risk_take:  # the profit take comes before the hour view: a bet that is well ahead is the one to cash, whatever the hour says
+            gain = net - basis
             room, rebuy = 1.0 - basis, fee_per_contract(bid)
             unit = self._risk_unit(t, now)
             taken = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy) and not curverisk.still_rising(t.risk_take_hist, now, look, unit)
-            if taken:
+            high = max((b for ts, b in t.risk_take_hist if ts >= now - look), default=bid)
+            squeezed = not taken and noise > 0 and pnl > 0 and bid >= CURVE_MIN_BID and bid < high and curverisk.squeeze_profit(gain, (high - fee_per_contract(high)) - basis, room, left, 900.0, rebuy, noise)
+            if taken or squeezed:
                 used = 1.0 - left / 900.0
-                reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room, and {used * 100.0:.0f}% of the market is gone ({left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+                if taken:
+                    reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room, and {used * 100.0:.0f}% of the market is gone ({left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+                else:
+                    reason = f"curve risk exit (profit take) [squeeze: the gain cleared the bar at {high:.2f} and has slipped to {gain:.3f} a contract, {used * room - gain:.3f} under the bar ({used * 100.0:.0f}% of its {room:.3f} room, {left:.0f}s left), inside this market's {noise:.3f} of noise over {t.risk_squeeze:g}s]; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
                 if t.risk_live:
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True)
                     return reason
@@ -992,6 +1004,18 @@ class ProfitWatcher:
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= t.risk_confirm:
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             return None
+        if noise > 0 and pnl < 0 and bid >= CURVE_MIN_BID:  # the squeeze on a loss: at, past or near a sell bar and sliding. It comes before the swing hold and the stop's wait: minimizing a loss comes first
+            miss = curverisk.stop_miss(net, basis, r.q, t.risk_max_loss)
+            if curverisk.squeeze_loss(pnl, miss, r.q, t.risk_sell, t.risk_max_loss, noise) and curverisk.still_falling(t.risk_take_hist, now, look, t.risk_unit):
+                where = "at or past the max loss" if miss <= 0 else f"{miss:.3f} short of the max loss" if miss < noise else f"{r.q - t.risk_sell:.3f} over the line {t.risk_sell:.2f}"
+                reason = f"curve risk exit [squeeze: a loss {where}, inside this market's {noise:.3f} of noise over {t.risk_squeeze:g}s, and the bid has slid over the last {look:.0f}s without a bounce (typical minute {t.risk_unit or 0.0:.3f})]; the chance the side pays is {r.q:.3f}; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
+                if t.risk_live:
+                    self._risk_record(t, r, bid, now, left, pnl, 0.0, True, True)
+                    return reason
+                if not t.risk_logged:
+                    t.risk_logged = True
+                    log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+                    self._risk_record(t, r, bid, now, left, pnl, 0.0, True, False)
         if t.risk_swing > 0 and pnl < 0 and r.q >= t.risk_swing_floor:  # under the floor the market already prices the bet as nearly dead: a loss is not inside any swing
             self._risk_unit(t, now)
             drop = (t.entry + fee_per_contract(t.entry)) - (bid - fee_per_contract(bid))
@@ -1834,7 +1858,7 @@ class ProfitWatcher:
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_stop_hold, held.risk_swing, held.risk_swing_floor = spec.curve_risk_stop_hold, spec.curve_risk_swing, spec.curve_risk_swing_floor
-                held.risk_take, held.risk_take_slope = spec.curve_take, spec.curve_take_slope_share
+                held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_seconds
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]

@@ -1,3 +1,4 @@
+import pytest
 """The single risk exit (curverisk.py, 2026-11-13, user): the worse of the price cushion and the spot cushion, widened by the hour's jumps, sold within a max loss or min profit, with a wait that scales with the time left."""
 
 import json
@@ -77,7 +78,7 @@ CLOSE = 9_900.0
 
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
+                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_squeeze=0.0, risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -299,3 +300,50 @@ def test_unit_still_rising_in_the_markets_own_noise():
     assert curverisk.still_rising(slow, 10.0, 10.0, 0.01) is True  # the same rise in a quiet market (noise 0.004) is a slope
     level = up + [(float(t), 0.90) for t in range(11, 22)]  # the climb has aged out of the look back
     assert curverisk.still_rising(level, 21.0, 10.0, 0.10) is False
+
+
+# ---- the squeeze on sales (2026-11-14, user: "If something missed the bar to sell and history thinks we should ... minimizing loss is always more important") ----
+def test_unit_still_falling_is_a_slide_that_has_lasted_not_one_bad_print():
+    slide = [(float(t), 0.80 - 0.01 * t) for t in range(0, 11)]  # -0.10 in 10 s
+    assert curverisk.still_falling(slide, 10.0, 10.0, 0.10) is True  # noise over 10 s is 0.041
+    crash = [(float(t), 0.80) for t in range(0, 10)] + [(10.0, 0.60)]
+    assert curverisk.still_falling(crash, 10.0, 10.0, 0.10) is False  # one print: half the look back ago it was still at the start
+    stayed = crash + [(float(t), 0.60) for t in range(11, 17)]
+    assert curverisk.still_falling(stayed, 16.0, 10.0, 0.10) is True  # it has stayed down for over half the look back
+    bounced = slide + [(11.0, 0.76)]
+    assert curverisk.still_falling(bounced, 11.0, 10.0, 0.10) is False  # 0.06 off the low: more than the noise
+    steep = [(float(t), 0.80 - 0.02 * t) for t in range(0, 11)] + [(11.0, 0.66)]  # down 0.20, then 0.06 back up
+    assert curverisk.still_falling(steep, 11.0, 10.0, 0.10) is False  # still far under its start, but it has bounced by more than the noise
+    drift = [(float(t), 0.80 - 0.002 * t) for t in range(0, 11)]
+    assert curverisk.still_falling(drift, 10.0, 10.0, 0.10) is False  # -0.02 in 10 s: inside this market's noise
+    assert curverisk.still_falling(drift, 10.0, 10.0, 0.01) is True  # the same slide in a quiet market
+    assert curverisk.still_falling(slide[-3:], 10.0, 10.0, 0.10) is False  # under 10 s of readings: unknown, no squeeze
+    assert curverisk.still_falling(slide, 10.0, 0.0, 0.10) is False
+
+
+def test_unit_stop_miss_is_zero_at_the_stop_and_positive_short_of_it():
+    # cost 0.80, max loss 0.5 x q: the stop is where net - 0.80 = -0.5 * net * 0.80, a net bid of 0.571
+    assert curverisk.stop_miss(0.5714, 0.80, 0.5714, 0.5) == pytest.approx(0.0, abs=1e-3)
+    assert curverisk.stop_miss(0.60, 0.80, 0.60, 0.5) == pytest.approx(0.04)
+    assert curverisk.stop_miss(0.50, 0.80, 0.50, 0.5) < 0
+    assert (curverisk.stop_miss(0.56, 0.80, 0.56, 0.5) <= 0) is curverisk.stopped((0.56 - 0.80) / 0.80, 0.56, 0.5)
+
+
+def test_unit_squeeze_loss_is_a_loss_at_past_or_near_a_sell_bar():
+    assert curverisk.squeeze_loss(-0.2, 0.02, 0.60, 0.5, 0.5, 0.03) is True  # 0.02 short of the stop, noise 0.03
+    assert curverisk.squeeze_loss(-0.2, 0.05, 0.60, 0.5, 0.5, 0.03) is False  # a clear miss of both bars
+    assert curverisk.squeeze_loss(-0.3, -0.01, 0.55, 0.5, 0.5, 0.03) is True  # past the stop (held by a wait or the swing)
+    assert curverisk.squeeze_loss(-0.05, 0.20, 0.52, 0.5, 0.5, 0.03) is True  # 0.02 over the line
+    assert curverisk.squeeze_loss(-0.05, 0.20, 0.52, 0.0, 0.0, 0.03) is False  # the lane has neither bar
+    assert curverisk.squeeze_loss(0.05, 0.02, 0.52, 0.5, 0.5, 0.03) is False  # in profit: not a loss squeeze
+    assert curverisk.squeeze_loss(-0.2, 0.02, 0.60, 0.5, 0.5, 0.0) is False  # no reading of the noise
+
+
+def test_unit_squeeze_profit_only_saves_a_gain_that_had_cleared_the_bar():
+    # room 0.20, half the market gone: the bar is 0.10
+    assert curverisk.squeeze_profit(0.09, 0.12, 0.20, 450, 900, 0.01, 0.03) is True  # was 0.12 at its high, now 0.01 under the bar
+    assert curverisk.squeeze_profit(0.09, 0.095, 0.20, 450, 900, 0.01, 0.03) is False  # never cleared the bar
+    assert curverisk.squeeze_profit(0.06, 0.12, 0.20, 450, 900, 0.01, 0.03) is False  # 0.04 under: it is gone, not near
+    assert curverisk.squeeze_profit(0.11, 0.12, 0.20, 450, 900, 0.01, 0.03) is False  # still over the bar: the plain take decides
+    assert curverisk.squeeze_profit(0.09, 0.12, 0.20, 450, 900, 0.095, 0.03) is False  # does not pay the buy-back fee
+    assert curverisk.squeeze_profit(0.09, 0.12, 0.20, 450, 900, 0.01, 0.0) is False

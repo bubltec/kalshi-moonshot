@@ -136,3 +136,42 @@ def still_rising(samples: list[tuple[float, float]], now: float, seconds: float,
         return bid >= high and bid > start
     noise = unit * math.sqrt(seconds / MINUTE)
     return bid - start > noise and high - bid < noise
+
+
+def still_falling(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None) -> bool:
+    """True while the bid is sliding, not dipping, over the last `seconds` (the squeeze's reading of history, 2026-11-14, user: "If something missed the bar to sell and history thinks we should"; earlier the same day, on a sale they did not want: "It was gradual and it didn't stay").
+    A slide = the bid has fallen over the look back by more than the market's own noise for it (unit * sqrt(seconds / 60)), sits within that noise of the look back's low (it has not bounced), AND was already under the look back's start half the look back ago (it has stayed down: one bad print is not a slide until it has lasted half the look back).
+    With no reading of the unit the plain test is used (the newest bid is the look back's low and under its start, and the half-way reading was under the start too). With under `seconds` of readings the slope is unknown and the answer is False: no squeeze on a bet just opened."""
+    if seconds <= 0:
+        return False
+    window = [(t, b) for t, b in samples if t >= now - seconds]
+    if not window or not samples or samples[0][0] > now - seconds:
+        return False
+    bid, low, start = window[-1][1], min(b for _, b in window), window[0][1]
+    half = [b for t, b in window if t <= now - seconds / 2.0]
+    if not half or half[-1] >= start:
+        return False
+    if unit is None or unit <= 0:
+        return bid <= low and bid < start
+    noise = unit * math.sqrt(seconds / MINUTE)
+    return start - bid > noise and bid - low < noise
+
+
+def stop_miss(net: float, basis: float, q: float, max_loss: float) -> float:
+    """How far the bet is from the max-loss stop, per contract in probability: zero or less = at or past it (stopped() is true), positive = that much short of it."""
+    return (net - basis) + max_loss * q * basis
+
+
+def squeeze_loss(pnl: float, miss: float, q: float, line: float, max_loss: float, noise: float) -> bool:
+    """Whether a losing bet is at, past, or within the market's own noise of a sell bar (lane field squeeze_seconds): the max-loss stop (miss under the noise) or the line (q under the line plus the noise). The caller adds the history read (still_falling) and sells at once, whatever the stop's wait or the swing hold say: minimizing a loss comes first."""
+    if pnl >= 0 or noise <= 0:
+        return False
+    return (max_loss > 0 and miss < noise) or (line > 0 and q < line + noise)
+
+
+def squeeze_profit(gain: float, high_gain: float, room: float, left: float, window: float, rebuy_fee: float, noise: float) -> bool:
+    """Whether a profit that had cleared the take's bar and was held for its slope has now slipped just under it (lane field squeeze_seconds): the gain at the look back's high was over the bar, the gain now is under it by less than the market's own noise, and it still pays the buy-back fee. The caller adds that the bid is under that high. A gain that never cleared the bar is not squeezed: on a profit the squeeze only stops a cleared gain from getting away."""
+    if gain <= 0 or room <= 0 or window <= 0 or left <= 0 or gain <= rebuy_fee or noise <= 0:
+        return False
+    bar = min(max(1.0 - left / window, 0.0), 1.0) * room
+    return high_gain >= bar and 0.0 < bar - gain < noise

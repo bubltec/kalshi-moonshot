@@ -30,6 +30,7 @@ curve_risk_swing_floor={floor}
 curve_take={take}
 curve_take_slope_share={share}
 stretch_seconds={stretch}
+squeeze_seconds={squeeze}
 """
 
 
@@ -63,9 +64,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0, swing=0, floor=0, take='false', stretch=0, share=0.015):
+def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0, swing=0, floor=0, take='false', stretch=0, share=0.015, squeeze=0):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor, take=take, stretch=stretch, share=share))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor, take=take, stretch=stretch, share=share, squeeze=squeeze))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -410,7 +411,7 @@ def test_integration_with_no_hold_the_stop_sells_at_once_as_before(tmp_path, mon
 def test_unit_the_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for hold in (0, 0.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, swing=0, floor=0, take='false', stretch=0, share=0.015))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, swing=0, floor=0, take='false', stretch=0, share=0.015, squeeze=0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_stop_hold" in got) is (hold > 0)
@@ -497,7 +498,7 @@ def test_integration_the_hold_is_logged_once_for_the_bet(tmp_path, monkeypatch, 
 def test_unit_the_swing_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for swing in (0, 1.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=swing, floor=0, take='false', stretch=0, share=0.015))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=swing, floor=0, take='false', stretch=0, share=0.015, squeeze=0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_swing" in got) is (swing > 0)
@@ -532,7 +533,7 @@ def test_integration_the_floor_is_a_chance_not_a_price_of_the_yes_side(tmp_path,
 def test_unit_the_floor_changes_a_lanes_version_only_when_set_with_the_swing(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for floor in (0, 0.1):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=1.5, floor=floor, take='false', stretch=0, share=0.015))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=1.5, floor=floor, take='false', stretch=0, share=0.015, squeeze=0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_swing_floor" in got) is (floor > 0)
@@ -652,7 +653,7 @@ def test_integration_the_take_sale_is_executed_as_an_order(tmp_path, monkeypatch
 def test_unit_the_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for take in ("false", "true"):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take=take, stretch=0, share=0.015))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take=take, stretch=0, share=0.015, squeeze=0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_take" in got) is (take == "true")
@@ -701,3 +702,90 @@ def test_integration_late_in_the_market_the_same_pause_ends_the_climb(tmp_path, 
     assert climb(w, 0.82, 0.96, 300) is None
     sig = sit(w, 0.96, 285, 30)  # about 260 s left: the look back is 21 s and the climb has aged out of it
     assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+# ---- the squeeze on sales (2026-11-14, user: "If something missed the bar to sell and history thinks we should ... minimizing loss is always more important") ----
+# the lane carries the live holds (the stop waits half the time left, a loss inside 1.5 swings is held): without the squeeze none of these slides sells
+def slid(w, path, left):
+    """The bid follows `path`, one quote a second from `left`; returns (bid, signal) of the first sale or None."""
+    for k, bid in enumerate(path):
+        ticks_mod.mids.note(TICKER, CLOSE - left + k, bid - 0.005, bid + 0.005)
+        yes_bid(w, bid, left - k)
+        out = signals(w)
+        if out:
+            return bid, out[0]
+    return None
+
+
+SIT = [0.78] * 10
+SLIDE = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 26)]  # 0.78 down a cent a second to 0.53
+
+
+def test_integration_a_slide_to_the_max_loss_is_sold_by_the_squeeze_before_the_holds_would(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=611)  # a typical minute of about 0.10: 0.029 of noise over 5 s
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5)
+    got = slid(w, SLIDE, 610)
+    assert got is not None and got[1].why.startswith("curve risk exit [squeeze")
+    assert 0.55 <= got[0] <= 0.66  # near the stop (a net bid of about 0.59), not on the way there
+
+
+def test_integration_without_the_squeeze_the_same_slide_is_held(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=611)
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=0)
+    assert slid(w, SLIDE, 610) is None
+
+
+def test_integration_one_bad_print_that_bounces_is_not_squeezed(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=611)
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5)
+    assert slid(w, SIT + [0.58, 0.58] + [0.72] * 10, 610) is None
+
+
+def test_integration_a_crash_that_stays_down_is_squeezed_once_it_has_lasted(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=611)
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5)
+    path = SIT + [0.58] * 9
+    seen = []
+    for k, bid in enumerate(path):
+        ticks_mod.mids.note(TICKER, CLOSE - 610 + k, bid - 0.005, bid + 0.005)
+        yes_bid(w, bid, 610 - k)
+        seen.append(bool(signals(w)))
+    assert not any(seen[:12]) and any(seen[12:])  # not on the first two prints at 0.58, but once it has stayed half the look back
+
+
+def test_integration_the_hour_view_still_holds_a_squeezed_loss(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=611)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4, hold=0.5, swing=1.5, squeeze=5)
+    monkeypatch.setattr(w, "_risk_long", lambda t, now, left: 0.9)  # the hour says the side is very likely to pay
+    assert slid(w, SLIDE, 610) is None
+
+
+def test_integration_a_gain_that_cleared_the_bar_and_slips_just_under_it_is_squeezed(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=480)
+    w = held(tmp_path, monkeypatch, live=True, take="true", squeeze=5)
+    assert climb(w, 0.82, 0.93, 470) is None  # over the bar and still climbing: held for its slope
+    got = slid(w, [0.90], 458)  # back under the bar by about half a cent
+    assert got is not None and got[1].why.startswith("curve risk exit (profit take) [squeeze")
+
+
+def test_integration_without_the_squeeze_that_slipped_gain_is_not_sold(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=480)
+    w = held(tmp_path, monkeypatch, live=True, take="true", squeeze=0)
+    assert climb(w, 0.82, 0.93, 470) is None
+    assert slid(w, [0.90], 458) is None
+
+
+def test_integration_a_gain_that_never_cleared_the_bar_is_not_squeezed(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=480)
+    w = held(tmp_path, monkeypatch, live=True, take="true", squeeze=5)
+    assert climb(w, 0.82, 0.90, 470) is None  # just under the bar at its high
+    assert slid(w, [0.89], 461) is None
+
+
+def test_unit_the_squeeze_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    for squeeze in (0, 5):
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take="false", stretch=0, share=0.015, squeeze=squeeze))
+        s = config.load()
+        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
+        assert ("squeeze_seconds" in got) is (squeeze > 0)
