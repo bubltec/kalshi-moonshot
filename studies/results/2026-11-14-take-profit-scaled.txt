@@ -1,0 +1,74 @@
+job 20261114-001632-49303 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/697a47657dce47a7869cd112e42f9aeb
+crypto markets with quotes since Monday: 2121
+markets in the test: 378
+
+=== all markets: 378 markets, one contract each | holding +3.85 | the price stop alone -12.38
+  step   s_far 0.25 rebuy off: total   -4.90 | vs stop alone  +7.48 (beat 121, lost 153) | vs holding  -8.75 (beat 111, lost 266) | profit sales 274: then won 212 (gave up 47.67), then lost 62 (saved 47.87)
+  step   s_far 0.25 rebuy on : total  -20.71 | vs stop alone  -8.33 (beat 153, lost 121) | vs holding -24.56 (beat 148, lost 229) | profit sales 482: then won 379 (gave up 76.47), then lost 103 (saved 81.20)
+  step   s_far 0.40 rebuy off: total   -6.57 | vs stop alone  +5.81 (beat 80, lost 150) | vs holding -10.42 (beat 111, lost 263) | profit sales 230: then won 187 (gave up 32.98), then lost 43 (saved 35.25)
+  step   s_far 0.40 rebuy on : total  -19.05 | vs stop alone  -6.67 (beat 125, lost 105) | vs holding -22.89 (beat 159, lost 215) | profit sales 355: then won 294 (gave up 43.77), then lost 61 (saved 51.27)
+  step   s_far 0.60 rebuy off: total  -10.07 | vs stop alone  +2.31 (beat 38, lost 139) | vs holding -13.92 (beat 111, lost 252) | profit sales 177: then won 153 (gave up 17.64), then lost 24 (saved 21.48)
+  step   s_far 0.60 rebuy on : total  -17.79 | vs stop alone  -5.41 (beat 84, lost 93) | vs holding -21.64 (beat 157, lost 206) | profit sales 224: then won 197 (gave up 19.62), then lost 27 (saved 24.32)
+  smooth s_far 0.25 rebuy off: total   -4.08 | vs stop alone  +8.29 (beat 115, lost 148) | vs holding  -7.93 (beat 111, lost 261) | profit sales 263: then won 204 (gave up 44.26), then lost 59 (saved 45.55)
+  smooth s_far 0.25 rebuy on : total  -18.99 | vs stop alone  -6.61 (beat 151, lost 112) | vs holding -22.83 (beat 151, lost 221) | profit sales 415: then won 332 (gave up 61.17), then lost 83 (saved 65.71)
+  smooth s_far 0.40 rebuy off: total   -4.75 | vs stop alone  +7.63 (beat 76, lost 146) | vs holding  -8.60 (beat 111, lost 259) | profit sales 222: then won 181 (gave up 30.20), then lost 41 (saved 34.17)
+  smooth s_far 0.40 rebuy on : total  -15.37 | vs stop alone  -2.99 (beat 131, lost 91) | vs holding -19.21 (beat 168, lost 202) | profit sales 323: then won 275 (gave up 36.83), then lost 48 (saved 40.61)
+  smooth s_far 0.60 rebuy off: total  -15.23 | vs stop alone  -2.85 (beat 20, lost 132) | vs holding -19.08 (beat 111, lost 245) | profit sales 152: then won 138 (gave up 13.43), then lost 14 (saved 12.62)
+  smooth s_far 0.60 rebuy on : total  -18.65 | vs stop alone  -6.27 (beat 60, lost 92) | vs holding -22.50 (beat 151, lost 205) | profit sales 188: then won 172 (gave up 14.57), then lost 16 (saved 14.56)
+
+=== choppy (path efficiency, lowest third): 127 markets, one contract each | holding +1.05 | the price stop alone -2.57
+  step   s_far 0.25 rebuy off: total   +0.05 | vs stop alone  +2.62 (beat 46, lost 47) | vs holding  -1.00 (beat 44, lost 83) | profit sales  93: then won 67 (gave up 17.78), then lost 26 (saved 19.10)
+  step   s_far 0.25 rebuy on : total   -6.34 | vs stop alone  -3.77 (beat 56, lost 37) | vs holding  -7.40 (beat 56, lost 71) | profit sales 150: then won 109 (gave up 25.95), then lost 41 (saved 30.80)
+  step   s_far 0.40 rebuy off: total   -1.37 | vs stop alone  +1.20 (beat 27, lost 47) | vs holding  -2.42 (beat 44, lost 83) | profit sales  74: then won 57 (gave up 11.57), then lost 17 (saved 13.36)
+  step   s_far 0.40 rebuy on : total   -6.20 | vs stop alone  -3.63 (beat 40, lost 34) | vs holding  -7.25 (beat 58, lost 69) | profit sales 102: then won 80 (gave up 14.17), then lost 22 (saved 17.70)
+  step   s_far 0.60 rebuy off: total   -3.44 | vs stop alone  -0.87 (beat 10, lost 44) | vs holding  -4.49 (beat 44, lost 80) | profit sales  54: then won 47 (gave up 6.38), then lost 7 (saved 6.08)
+  step   s_far 0.60 rebuy on : total   -6.03 | vs stop alone  -3.46 (beat 25, lost 29) | vs holding  -7.09 (beat 59, lost 65) | profit sales  65: then won 55 (gave up 6.74), then lost 10 (saved 8.92)
+  smooth s_far 0.25 rebuy off: total   +0.54 | vs stop alone  +3.11 (beat 44, lost 45) | vs holding  -0.51 (beat 44, lost 81) | profit sales  89: then won 64 (gave up 16.44), then lost 25 (saved 18.41)
+  smooth s_far 0.25 rebuy on : total   -6.23 | vs stop alone  -3.66 (beat 50, lost 39) | vs holding  -7.29 (beat 52, lost 73) | profit sales 131: then won 96 (gave up 21.49), then lost 35 (saved 26.44)
+  smooth s_far 0.40 rebuy off: total   -1.16 | vs stop alone  +1.41 (beat 25, lost 45) | vs holding  -2.22 (beat 44, lost 81) | profit sales  70: then won 54 (gave up 10.59), then lost 16 (saved 12.73)
+  smooth s_far 0.40 rebuy on : total   -5.96 | vs stop alone  -3.39 (beat 39, lost 31) | vs holding  -7.01 (beat 59, lost 66) | profit sales  90: then won 72 (gave up 12.13), then lost 18 (saved 14.54)
+  smooth s_far 0.60 rebuy off: total   -4.81 | vs stop alone  -2.24 (beat 5, lost 42) | vs holding  -5.86 (beat 44, lost 78) | profit sales  47: then won 43 (gave up 5.16), then lost 4 (saved 3.45)
+  smooth s_far 0.60 rebuy on : total   -6.76 | vs stop alone  -4.19 (beat 17, lost 30) | vs holding  -7.81 (beat 56, lost 66) | profit sales  57: then won 51 (gave up 5.48), then lost 6 (saved 5.39)
+
+=== middle third: 125 markets, one contract each | holding +11.40 | the price stop alone -0.04
+  step   s_far 0.25 rebuy off: total   -0.29 | vs stop alone  -0.25 (beat 36, lost 56) | vs holding -11.68 (beat 27, lost 97) | profit sales  92: then won 79 (gave up 17.82), then lost 13 (saved 10.23)
+  step   s_far 0.25 rebuy on : total   -4.88 | vs stop alone  -4.84 (beat 45, lost 47) | vs holding -16.27 (beat 37, lost 87) | profit sales 166: then won 145 (gave up 29.13), then lost 21 (saved 16.72)
+  step   s_far 0.40 rebuy off: total   -0.80 | vs stop alone  -0.76 (beat 23, lost 56) | vs holding -12.20 (beat 27, lost 97) | profit sales  79: then won 70 (gave up 12.77), then lost 9 (saved 7.47)
+  step   s_far 0.40 rebuy on : total   -4.09 | vs stop alone  -4.05 (beat 36, lost 43) | vs holding -15.48 (beat 41, lost 83) | profit sales 128: then won 115 (gave up 17.47), then lost 13 (saved 11.02)
+  step   s_far 0.60 rebuy off: total   -0.89 | vs stop alone  -0.85 (beat 11, lost 51) | vs holding -12.29 (beat 27, lost 92) | profit sales  62: then won 56 (gave up 6.77), then lost 6 (saved 5.36)
+  step   s_far 0.60 rebuy on : total   -2.52 | vs stop alone  -2.47 (beat 26, lost 36) | vs holding -13.91 (beat 42, lost 77) | profit sales  80: then won 74 (gave up 7.58), then lost 6 (saved 5.36)
+  smooth s_far 0.25 rebuy off: total   -0.43 | vs stop alone  -0.39 (beat 34, lost 56) | vs holding -11.82 (beat 27, lost 97) | profit sales  90: then won 77 (gave up 16.89), then lost 13 (saved 10.23)
+  smooth s_far 0.25 rebuy on : total   -4.52 | vs stop alone  -4.48 (beat 46, lost 44) | vs holding -15.91 (beat 39, lost 85) | profit sales 142: then won 125 (gave up 23.21), then lost 17 (saved 13.74)
+  smooth s_far 0.40 rebuy off: total   -0.60 | vs stop alone  -0.56 (beat 21, lost 55) | vs holding -11.99 (beat 27, lost 96) | profit sales  76: then won 68 (gave up 11.96), then lost 8 (saved 6.83)
+  smooth s_far 0.40 rebuy on : total   -2.46 | vs stop alone  -2.42 (beat 40, lost 36) | vs holding -13.86 (beat 46, lost 77) | profit sales 116: then won 107 (gave up 14.60), then lost 9 (saved 7.76)
+  smooth s_far 0.60 rebuy off: total   -1.16 | vs stop alone  -1.12 (beat 7, lost 47) | vs holding -12.56 (beat 27, lost 88) | profit sales  54: then won 49 (gave up 4.89), then lost 5 (saved 4.60)
+  smooth s_far 0.60 rebuy on : total   -2.18 | vs stop alone  -2.14 (beat 20, lost 34) | vs holding -13.58 (beat 40, lost 75) | profit sales  68: then won 63 (gave up 5.26), then lost 5 (saved 4.60)
+
+=== straight (highest third): 126 markets, one contract each | holding -8.60 | the price stop alone -9.77
+  step   s_far 0.25 rebuy off: total   -4.67 | vs stop alone  +5.10 (beat 39, lost 50) | vs holding  +3.93 (beat 40, lost 86) | profit sales  89: then won 66 (gave up 12.07), then lost 23 (saved 18.55)
+  step   s_far 0.25 rebuy on : total   -9.49 | vs stop alone  +0.28 (beat 52, lost 37) | vs holding  -0.89 (beat 55, lost 71) | profit sales 166: then won 125 (gave up 21.40), then lost 41 (saved 33.68)
+  step   s_far 0.40 rebuy off: total   -4.41 | vs stop alone  +5.36 (beat 30, lost 47) | vs holding  +4.19 (beat 40, lost 83) | profit sales  77: then won 60 (gave up 8.64), then lost 17 (saved 14.43)
+  step   s_far 0.40 rebuy on : total   -8.76 | vs stop alone  +1.01 (beat 49, lost 28) | vs holding  -0.16 (beat 60, lost 63) | profit sales 125: then won 99 (gave up 12.13), then lost 26 (saved 22.55)
+  step   s_far 0.60 rebuy off: total   -5.74 | vs stop alone  +4.03 (beat 17, lost 44) | vs holding  +2.86 (beat 40, lost 80) | profit sales  61: then won 50 (gave up 4.49), then lost 11 (saved 10.04)
+  step   s_far 0.60 rebuy on : total   -9.24 | vs stop alone  +0.52 (beat 33, lost 28) | vs holding  -0.64 (beat 56, lost 64) | profit sales  79: then won 68 (gave up 5.30), then lost 11 (saved 10.04)
+  smooth s_far 0.25 rebuy off: total   -4.19 | vs stop alone  +5.57 (beat 37, lost 47) | vs holding  +4.41 (beat 40, lost 83) | profit sales  84: then won 63 (gave up 10.93), then lost 21 (saved 16.91)
+  smooth s_far 0.25 rebuy on : total   -8.24 | vs stop alone  +1.53 (beat 55, lost 29) | vs holding  +0.36 (beat 60, lost 63) | profit sales 142: then won 111 (gave up 16.47), then lost 31 (saved 25.52)
+  smooth s_far 0.40 rebuy off: total   -2.99 | vs stop alone  +6.78 (beat 30, lost 46) | vs holding  +5.61 (beat 40, lost 82) | profit sales  76: then won 59 (gave up 7.65), then lost 17 (saved 14.62)
+  smooth s_far 0.40 rebuy on : total   -6.95 | vs stop alone  +2.82 (beat 52, lost 24) | vs holding  +1.65 (beat 63, lost 59) | profit sales 117: then won 96 (gave up 10.10), then lost 21 (saved 18.31)
+  smooth s_far 0.60 rebuy off: total   -9.26 | vs stop alone  +0.51 (beat 8, lost 43) | vs holding  -0.66 (beat 40, lost 79) | profit sales  51: then won 46 (gave up 3.39), then lost 5 (saved 4.57)
+  smooth s_far 0.60 rebuy on : total   -9.71 | vs stop alone  +0.06 (beat 23, lost 28) | vs holding  -1.11 (beat 55, lost 64) | profit sales  63: then won 58 (gave up 3.82), then lost 5 (saved 4.57)
+
+=== entered with 8 minutes or more left: 378 markets, one contract each | holding +3.85 | the price stop alone -12.38
+  step   s_far 0.25 rebuy off: total   -4.90 | vs stop alone  +7.48 (beat 121, lost 153) | vs holding  -8.75 (beat 111, lost 266) | profit sales 274: then won 212 (gave up 47.67), then lost 62 (saved 47.87)
+  step   s_far 0.25 rebuy on : total  -20.71 | vs stop alone  -8.33 (beat 153, lost 121) | vs holding -24.56 (beat 148, lost 229) | profit sales 482: then won 379 (gave up 76.47), then lost 103 (saved 81.20)
+  step   s_far 0.40 rebuy off: total   -6.57 | vs stop alone  +5.81 (beat 80, lost 150) | vs holding -10.42 (beat 111, lost 263) | profit sales 230: then won 187 (gave up 32.98), then lost 43 (saved 35.25)
+  step   s_far 0.40 rebuy on : total  -19.05 | vs stop alone  -6.67 (beat 125, lost 105) | vs holding -22.89 (beat 159, lost 215) | profit sales 355: then won 294 (gave up 43.77), then lost 61 (saved 51.27)
+  step   s_far 0.60 rebuy off: total  -10.07 | vs stop alone  +2.31 (beat 38, lost 139) | vs holding -13.92 (beat 111, lost 252) | profit sales 177: then won 153 (gave up 17.64), then lost 24 (saved 21.48)
+  step   s_far 0.60 rebuy on : total  -17.79 | vs stop alone  -5.41 (beat 84, lost 93) | vs holding -21.64 (beat 157, lost 206) | profit sales 224: then won 197 (gave up 19.62), then lost 27 (saved 24.32)
+  smooth s_far 0.25 rebuy off: total   -4.08 | vs stop alone  +8.29 (beat 115, lost 148) | vs holding  -7.93 (beat 111, lost 261) | profit sales 263: then won 204 (gave up 44.26), then lost 59 (saved 45.55)
+  smooth s_far 0.25 rebuy on : total  -18.99 | vs stop alone  -6.61 (beat 151, lost 112) | vs holding -22.83 (beat 151, lost 221) | profit sales 415: then won 332 (gave up 61.17), then lost 83 (saved 65.71)
+  smooth s_far 0.40 rebuy off: total   -4.75 | vs stop alone  +7.63 (beat 76, lost 146) | vs holding  -8.60 (beat 111, lost 259) | profit sales 222: then won 181 (gave up 30.20), then lost 41 (saved 34.17)
+  smooth s_far 0.40 rebuy on : total  -15.37 | vs stop alone  -2.99 (beat 131, lost 91) | vs holding -19.21 (beat 168, lost 202) | profit sales 323: then won 275 (gave up 36.83), then lost 48 (saved 40.61)
+  smooth s_far 0.60 rebuy off: total  -15.23 | vs stop alone  -2.85 (beat 20, lost 132) | vs holding -19.08 (beat 111, lost 245) | profit sales 152: then won 138 (gave up 13.43), then lost 14 (saved 12.62)
+  smooth s_far 0.60 rebuy on : total  -18.65 | vs stop alone  -6.27 (beat 60, lost 92) | vs holding -22.50 (beat 151, lost 205) | profit sales 188: then won 172 (gave up 14.57), then lost 16 (saved 14.56)
+DONE
