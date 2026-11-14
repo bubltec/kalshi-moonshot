@@ -354,3 +354,27 @@ def test_unit_a_stretched_bets_slide_counts_after_a_quarter_of_the_look_back():
     assert curverisk.still_falling(crash, 13.0, 10.0, 0.10) is False  # a plain bet: it must have been down for 5 s
     assert curverisk.still_falling(crash, 13.0, 10.0, 0.10, 0.25) is True  # a stretched one: 2.5 s is enough
     assert curverisk.still_falling(crash[:11], 10.0, 10.0, 0.10, 0.25) is False  # still not on the first print
+
+
+# ---- the late cap on the profit take's bar (2026-11-14, user, on a SOL NO back at 0.96 with 30 s left that lost at the bell: "Yes we should have cashed that out") ----
+def test_unit_late_in_a_swinging_market_the_bar_is_half_the_room_once_more_is_made_than_is_left():
+    # the SOL bet: room 0.20, 0.157 made, 30 s left, a typical minute of 0.15 (a swing of 0.106 over 30 s against 0.043 left to win)
+    assert curverisk.take_bar(0.157, 0.20, 30, 900, 0.15) == pytest.approx(0.10)
+    assert curverisk.take_profit(0.157, 0.20, 30, 900, 0.01, 0.15) is True
+    assert curverisk.take_profit(0.157, 0.20, 30, 900, 0.01) is False  # the clock's bar alone (0.193) held it: what happened live
+
+
+def test_unit_in_a_market_too_quiet_to_take_it_back_the_clocks_bar_stands():
+    assert curverisk.take_bar(0.157, 0.20, 30, 900, 0.01) == pytest.approx(0.20 * (1 - 30 / 900))  # a swing of 0.007 against 0.043 left to win
+    assert curverisk.take_profit(0.157, 0.20, 30, 900, 0.01, 0.01) is False
+
+
+def test_unit_the_cap_never_lets_through_a_gain_under_half_the_room():
+    assert curverisk.take_profit(0.09, 0.20, 60, 900, 0.01, 0.15) is False  # 0.11 left to win is inside the swing, but 0.09 is under half of 0.20
+    assert curverisk.take_profit(0.11, 0.20, 60, 900, 0.01, 0.15) is True
+
+
+def test_unit_early_the_clocks_bar_is_already_lower_and_nothing_changes():
+    for unit in (None, 0.01, 0.15):
+        assert curverisk.take_bar(0.05, 0.20, 800, 900, unit) == pytest.approx(0.20 * (1 - 800 / 900))
+    assert curverisk.take_bar(0.05, 0.0, 800, 900, 0.15) == float("inf")

@@ -112,14 +112,24 @@ def swing_hold(drop: float, unit: float | None, left: float, k: float) -> bool:
     return drop < k * unit * math.sqrt(left / MINUTE)
 
 
-def take_profit(gain: float, room: float, left: float, window: float, rebuy_fee: float = 0.0) -> bool:
-    """True when a profit is worth taking now, read off the bet itself and the clock (2026-11-14, user, on a BTC NO bought at 0.77 that rose to 0.85, fell to 0.26 and was sold for -67%: "why not just use the bet?"; "there needs to be the time factor too, where earlier in the market is a better favor to sell for profit, since we can always buy back").
-    `gain` is the profit per contract in probability (the bid after its sell fee less the cost with its buy fee), `room` the most this bet could still have made (1 less that cost), `left` the seconds to the close, `window` the market's length in seconds (900 for a 15-minute market, structural), `rebuy_fee` the fee to buy the side back.
-    The bar is the share of the bet's own room that the market has already used up: none at the open, all of it at the close. Early, any gain that pays for the buy-back fee is worth cashing, since the side can be bought again; late, the bet has to be nearly at its win before it is sold, so the bets that are about to win are held. No share, price level, coin or number of cents is fixed."""
+def take_bar(gain: float, room: float, left: float, window: float, unit: float | None = None) -> float:
+    """The gain a bet must have before the profit take sells it, per contract in probability.
+    The clock's bar: the share of the bet's own room (1 less its all-in cost) that the market's time has used up, none at the open and all of it at the close. Early, any gain is worth cashing since the side can be bought back; late, the bar climbs toward the whole room.
+    The late cap (2026-11-14, user, on KXSOL15M-26NOV141530 NO bought at 0.78, back at 0.96 with 30 s left after a fall to 0.37, then lost on a flip at the bell: "Yes we should have cashed that out"): once what is left to win (the room less the gain) is no more than this market's own swing over the time left (unit * sqrt(left / 60)), the bar is never over half the room. A bet that has made more than it still stands to make, in a market that can take the rest back, is cashed; in a market too quiet to move that far in the time left, the clock's bar stands and the bet rides to its win. `unit` is the market's typical minute (quoteshock.typical_minute); with no reading of it the clock's bar stands."""
+    if room <= 0 or window <= 0:
+        return float("inf")
+    bar = min(max(1.0 - left / window, 0.0), 1.0) * room
+    if unit is not None and unit > 0 and left > 0 and room - gain <= unit * math.sqrt(left / MINUTE):
+        bar = min(bar, room / 2.0)
+    return bar
+
+
+def take_profit(gain: float, room: float, left: float, window: float, rebuy_fee: float = 0.0, unit: float | None = None) -> bool:
+    """True when a profit is worth taking now, read off the bet itself, the clock and the market's own swing (2026-11-14, user, on a BTC NO bought at 0.77 that rose to 0.85, fell to 0.26 and was sold for -67%: "why not just use the bet?"; "there needs to be the time factor too, where earlier in the market is a better favor to sell for profit, since we can always buy back").
+    `gain` is the profit per contract in probability (the bid after its sell fee less the cost with its buy fee), `room` the most this bet could still have made (1 less that cost), `left` the seconds to the close, `window` the market's length in seconds (900 for a 15-minute market, structural), `rebuy_fee` the fee to buy the side back, `unit` the market's typical minute. The gain has to pay for the buy-back fee and reach take_bar. No share, price level, coin or number of cents is fixed."""
     if gain <= 0 or room <= 0 or window <= 0 or left <= 0 or gain <= rebuy_fee:
         return False
-    used = min(max(1.0 - left / window, 0.0), 1.0)
-    return gain >= used * room
+    return gain >= take_bar(gain, room, left, window, unit)
 
 
 def still_rising(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None) -> bool:

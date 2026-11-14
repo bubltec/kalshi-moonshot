@@ -816,3 +816,23 @@ def test_integration_a_bet_that_got_in_on_a_stretch_is_sold_sooner_by_the_squeez
     stretched = first_sale(w, CRASH, 610)
     assert plain is not None and stretched is not None and stretched < plain
     assert stretched > len(SIT)  # still not on the first print of the crash
+
+
+# ---- the late cap on the profit take's bar (2026-11-14, user, on a SOL NO back at 0.96 with 30 s left that lost at the bell: "Yes we should have cashed that out") ----
+def late_recovery(w):
+    """With two minutes left the bet sits just in profit, climbs toward 0.96 and sits there (79% of its room made, 0.04 left to win); returns the first sale signal, on the way up or at the top."""
+    assert sit(w, 0.82, 120, 20) is None
+    return climb(w, 0.82, 0.96, 100) or sit(w, 0.96, 85, 12)
+
+
+def test_integration_late_in_a_swinging_market_a_bet_at_ninety_six_is_cashed(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=121)  # a typical minute of about 0.10: a swing of about 0.12 over the 85 s left
+    w = held(tmp_path, monkeypatch, live=True, take="true")
+    sig = late_recovery(w)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)") and "half the room" in sig.why
+
+
+def test_integration_late_in_a_quiet_market_the_same_bet_rides_to_its_win(tmp_path, monkeypatch):
+    feed_history(0.0013, from_left=1300, to_left=121)  # with the climb itself, a swing of under 0.02 over the time left against 0.04 left to win
+    w = held(tmp_path, monkeypatch, live=True, take="true")
+    assert late_recovery(w) is None

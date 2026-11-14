@@ -986,13 +986,14 @@ class ProfitWatcher:
             gain = net - basis
             room, rebuy = 1.0 - basis, fee_per_contract(bid)
             unit = self._risk_unit(t, now)
-            taken = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy) and not curverisk.still_rising(t.risk_take_hist, now, look, unit)
+            taken = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit) and not curverisk.still_rising(t.risk_take_hist, now, look, unit)
             high = max((b for ts, b in t.risk_take_hist if ts >= now - look), default=bid)
             squeezed = not taken and noise > 0 and pnl > 0 and bid >= CURVE_MIN_BID and bid < high and curverisk.squeeze_profit(gain, (high - fee_per_contract(high)) - basis, room, left, 900.0, rebuy, noise)
             if taken or squeezed:
                 used = 1.0 - left / 900.0
+                bar = curverisk.take_bar(gain, room, left, 900.0, unit)
                 if taken:
-                    reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room, and {used * 100.0:.0f}% of the market is gone ({left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+                    reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room against a bar of {bar / max(room, 1e-9) * 100.0:.0f}% ({'half the room: what is left to win is inside this market swing over the time left' if bar < used * room - 1e-9 else f'{used * 100.0:.0f}% of the market is gone'}, {left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
                 else:
                     reason = f"curve risk exit (profit take) [squeeze: the gain cleared the bar at {high:.2f} and has slipped to {gain:.3f} a contract, {used * room - gain:.3f} under the bar ({used * 100.0:.0f}% of its {room:.3f} room, {left:.0f}s left), inside this market's {noise:.3f} of noise over {t.risk_squeeze:g}s]; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
                 if t.risk_live:
