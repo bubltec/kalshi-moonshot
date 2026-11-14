@@ -29,7 +29,7 @@ MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", 
 SINCE = calendar.timegm((2026, 11, 9, 5, 0, 0))
 BAND, MAX_SPREAD, MAX_BUYS, MIN_LEFT_REBUY, ENTRY_FROM, ENTRY_TO, N = (0.60, 0.90), 0.04, 4, 60, 120, 540, 900
 OFF, MID, FAR = 180, 360, 600  # seconds left: the profit take stands down at OFF; the step's first stage ends at MID; the smooth bar starts at FAR
-VARIANTS = [(shape, sf, rb) for shape in ("step", "smooth") for sf in (0.25, 0.40, 0.60) for rb in (False, True)]
+VARIANTS = [(shape, sf, rb, stop) for stop in (False, True) for shape in ("step", "smooth") for sf in (0.25, 0.40, 0.60) for rb in (False, True)]
 
 
 def bar(shape, sf, paid, left):
@@ -43,8 +43,8 @@ def bar(shape, sf, paid, left):
     return first + (0.99 - first) * w
 
 
-def simulate(bid, ask, u, win, e, shape, sf, rebuy, take=True):
-    """Total per contract, buys, and the profit sales as (net received, win)."""
+def simulate(bid, ask, u, win, e, shape, sf, rebuy, take=True, use_stop=True, trace=None):
+    """Total per contract, buys, and the profit sales as (net received, win). `trace`, when a list, gets every action as (action, second, price)."""
     total, buys, sales = 0.0, 0, []
     state, paid, last_sale = "buy", None, None
     i = e
@@ -62,13 +62,15 @@ def simulate(bid, ask, u, win, e, shape, sf, rebuy, take=True):
                 total -= paid
                 buys += 1
                 state = "hold"
+                if trace is not None:
+                    trace.append(("buy", i, a))
             elif buys > 0 and not rebuy:
                 break
         else:
             b = bid[i]
             net = b - fee(b)
             pnl = net - paid
-            stop = b >= 0.05 and pnl <= -0.5 * max(net, 0.0)
+            stop = use_stop and b >= 0.05 and pnl <= -0.5 * max(net, 0.0)
             tgt = bar(shape, sf, paid, left) if take else None
             prof = tgt is not None and b >= tgt and pnl > 0
             if (stop or prof) and i + 1 < N:
@@ -77,6 +79,8 @@ def simulate(bid, ask, u, win, e, shape, sf, rebuy, take=True):
                 total += got
                 last_sale = sb
                 state = "buy"
+                if trace is not None:
+                    trace.append(("sell-profit" if prof and not stop else "sell-stop", i + 1, sb))
                 if prof and not stop:
                     sales.append((got, win))
                 if not rebuy:
@@ -84,10 +88,12 @@ def simulate(bid, ask, u, win, e, shape, sf, rebuy, take=True):
         i += 1
     if state == "hold":
         total += win
+        if trace is not None:
+            trace.append(("settle", N, float(win)))
     return total, buys, sales
 
 
-rows = []
+rows, AUDIT = [], []
 tickers = [r[0] for r in tape.execute("SELECT DISTINCT ticker FROM quotes WHERE ts>? AND ticker ~ ?", (SINCE, "^KX(BTC|ETH|SOL|XRP|DOGE)15M-")).fetchall()]
 print(f"crypto markets with quotes since Monday: {len(tickers)}")
 for ticker in tickers:
@@ -150,7 +156,13 @@ for ticker in tickers:
     entry = ask[e]
     hold = win - entry - fee(entry)
     stop_only = simulate(bid, ask, u, win, e, "step", 0.5, False, take=False)[0]
-    res = {v: simulate(bid, ask, u, win, e, v[0], v[1], v[2]) for v in VARIANTS}
+    res = {v: simulate(bid, ask, u, win, e, v[0], v[1], v[2], True, v[3]) for v in VARIANTS}
+    audit = None
+    if len(AUDIT) < 3 and res[("step", 0.25, True, False)][1] >= 3:
+        tr = []
+        simulate(bid, ask, u, win, e, "step", 0.25, True, True, False, tr)
+        audit = (ticker, side, win, entry, tr, res[("step", 0.25, True, False)][0], hold)
+        AUDIT.append(audit)
     rows.append({"hold": hold, "stop": stop_only, "res": res, "eff": eff, "left": N - e})
 print(f"markets in the test: {len(rows)}")
 
@@ -171,10 +183,14 @@ def table(label, sub):
         gave = sum(1.0 - g for g, w in sales if w == 1)
         saved = sum(g for g, w in sales if w == 0)
         won_after = sum(1 for g, w in sales if w == 1)
-        print(f"  {v[0]:6s} s_far {v[1]:.2f} rebuy {'on ' if v[2] else 'off'}: total {tot:+7.2f} | vs stop alone {tot - st:+6.2f} (beat {bs}, lost {ls}) | vs holding {tot - h:+6.2f} (beat {bh}, lost {lh}) | profit sales {len(sales):3d}: then won {won_after} (gave up {gave:.2f}), then lost {len(sales) - won_after} (saved {saved:.2f})")
+        print(f"  {v[0]:6s} s_far {v[1]:.2f} rebuy {'on ' if v[2] else 'off'} stop {'live' if v[3] else 'none'}: total {tot:+7.2f} | vs stop alone {tot - st:+6.2f} (beat {bs}, lost {ls}) | vs holding {tot - h:+6.2f} (beat {bh}, lost {lh}) | profit sales {len(sales):3d}: then won {won_after} (gave up {gave:.2f}), then lost {len(sales) - won_after} (saved {saved:.2f})")
 
 
 table("all markets", rows)
+print("\n=== three markets traced leg by leg (step, s_far 0.25, rebuy on, no stop): second of the window, action, price")
+for tk, sd, w, ent, tr, tot, hd in AUDIT:
+    print(f"  {tk} side {sd}, won {w}, first entry {ent:.2f}; total {tot:+.3f}, holding would have made {hd:+.3f}")
+    print("    " + " | ".join(f"{a} @{sec} {pr:.2f}" for a, sec, pr in tr))
 effs = sorted(r["eff"] for r in rows if r["eff"] is not None)
 if effs:
     lo, hi = effs[len(effs) // 3], effs[2 * len(effs) // 3]
