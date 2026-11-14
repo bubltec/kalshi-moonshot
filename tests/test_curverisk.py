@@ -77,7 +77,7 @@ CLOSE = 9_900.0
 
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_stretch=0.0, risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
+                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -299,14 +299,3 @@ def test_unit_still_rising_in_the_markets_own_noise():
     assert curverisk.still_rising(slow, 10.0, 10.0, 0.01) is True  # the same rise in a quiet market (noise 0.004) is a slope
     level = up + [(float(t), 0.90) for t in range(11, 22)]  # the climb has aged out of the look back
     assert curverisk.still_rising(level, 21.0, 10.0, 0.10) is False
-
-
-def test_unit_take_stretch_is_a_miss_inside_the_noise_and_nothing_else():
-    # room 0.20, half the market gone: the bar is 0.10
-    assert curverisk.take_stretch(0.085, 0.20, 450, 900, 0.01, 0.03) is True  # 0.015 under, noise 0.03
-    assert curverisk.take_stretch(0.060, 0.20, 450, 900, 0.01, 0.03) is False  # 0.04 under: a clear miss
-    assert curverisk.take_stretch(0.085, 0.20, 450, 900, 0.01, 0.01) is False  # the same miss in a quiet market
-    assert curverisk.take_stretch(0.110, 0.20, 450, 900, 0.01, 0.03) is False  # over the bar: not a miss, the plain take decides
-    assert curverisk.take_stretch(0.085, 0.20, 450, 900, 0.09, 0.03) is False  # does not pay the buy-back fee
-    assert curverisk.take_stretch(0.085, 0.20, 450, 900, 0.01, 0.0) is False  # no reading of the noise
-    assert curverisk.take_stretch(-0.01, 0.20, 450, 900, 0.0, 0.03) is False  # a loss is never stretched

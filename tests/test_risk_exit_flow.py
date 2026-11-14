@@ -658,48 +658,11 @@ def test_unit_the_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, mon
         assert ("curve_take" in got) is (take == "true")
 
 
-# ---- the stretch on the profit take (2026-11-14, user: "if something misses by a cent or two ... it skips to the history read or the trending read") ----
-# the fixture bet costs about 0.80 a contract all-in, so it has about 0.20 of room; at about half the market gone the bar is about 0.098, so a bid of 0.90 (a gain of about 0.093) misses by about 0.005 and 0.89 by about 0.015
-def near_miss(w, then):
-    """The bid climbs to 0.91 (just under the bar, still at its high), then prints `then`."""
+# ---- the stretch is for buys only (2026-11-14, user: "I only want the stretch for buying") ----
+def test_integration_a_lane_with_the_stretch_set_does_not_sell_a_near_miss_of_the_takes_bar(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=480)  # a swinging market: the removed stretch sale would have fired here
+    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
     assert climb(w, 0.82, 0.91, 470) is None
-    ticks_mod.mids.note(TICKER, CLOSE - 459, then - 0.005, then + 0.005)
-    yes_bid(w, then, 459)
-    return signals(w)
-
-
-def test_integration_a_near_miss_of_the_bar_sells_once_the_bid_turns_down(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=480)  # a typical minute of about 0.10: 0.029 of noise over 5 s
-    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
-    out = near_miss(w, 0.90)
-    assert out and out[0].why.startswith("curve risk exit (profit take) [stretch sale")
-
-
-def test_integration_with_the_stretch_off_the_same_near_miss_is_held(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=480)
-    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=0)
-    assert near_miss(w, 0.90) == []
-
-
-def test_integration_a_clear_miss_is_not_stretched(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=480)
-    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
-    assert near_miss(w, 0.86) == []  # about 0.045 under the bar, over the 0.029 of noise
-
-
-def test_integration_in_a_quiet_market_the_same_miss_is_not_near(tmp_path, monkeypatch):
-    feed_history(0.0013, from_left=1300, to_left=480)  # a quiet history: with the climb itself, about 0.005 of noise over 5 s
-    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
-    assert near_miss(w, 0.89) == []  # about 0.015 under the bar
-
-
-def test_integration_the_same_miss_in_a_swinging_market_is_near(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=480)
-    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
-    assert near_miss(w, 0.89) != []
-
-
-def test_integration_a_near_miss_still_at_its_high_is_not_sold(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=480)
-    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
-    assert climb(w, 0.82, 0.90, 470) is None  # just under the bar at the top, never off its high
+    ticks_mod.mids.note(TICKER, CLOSE - 459, 0.895, 0.905)
+    yes_bid(w, 0.90, 459)  # just under the bar, one tick off its high
+    assert signals(w) == []
