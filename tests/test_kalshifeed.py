@@ -71,11 +71,13 @@ def test_the_router_sends_kp_symbols_to_the_kalshi_feed(tmp_path):
     assert router.minute_closes("kp:KP_BTC", 1.0)
 
 
-def test_the_crypto_instruments_read_kalshis_perp_and_the_currencies_still_read_kraken():
+def test_the_crypto_instruments_read_kalshis_own_index_and_the_currencies_still_read_kraken():
+    from kalshi_moonshot import kalshiws
+
     by = {i.prefix: i for i in cm.load_instruments()}
     for coin in ("BTC", "ETH", "SOL", "XRP", "DOGE"):
         inst = by[f"KX{coin}"]
-        assert inst.symbol == f"kp:KP_{coin}" and inst.proxy and inst.realtime and not cm.contract_priced(inst.symbol)
+        assert inst.symbol == f"kp:{kalshiws.INDEX_FOR[f'KX{coin}']}" and inst.proxy and inst.realtime and not cm.contract_priced(inst.symbol)  # the settlement index the socket streams (2026-11-13; the polled perp reference before)
     assert cm.contract_priced(by["KXAUDUSD"].symbol)
 
 
@@ -83,3 +85,33 @@ def test_a_kalshi_perp_is_not_a_feed_ticks_symbol():
     from kalshi_moonshot.runner import _spot_symbols
 
     assert _spot_symbols("KXBTC15M") == []
+
+
+# ---- the newest price comes from the websocket's in-memory ticks, not a poll (2026-11-13) ----
+
+def test_latest_is_the_tick_the_socket_just_delivered_when_memory_has_a_fresh_one(tmp_path, monkeypatch):
+    from kalshi_moonshot import ticks as ticks_mod
+
+    fresh = ticks_mod.TickHistory()
+    monkeypatch.setattr(ticks_mod, "history", fresh)
+    now = time.time()
+    rows = _ticks(index_id="BRTI")  # the tape's newest reading is a second old and reads about 124
+    feed = KalshiPerpFeed(_tape(tmp_path, rows).db)
+    fresh.warm("BRTI", [(now - 30.0, 500.0), (now - 0.2, 501.5)], now - 60.0)  # the socket's newest is 0.2 s old
+    price, at = feed.latest("kp:BRTI")
+    assert price == 501.5 and at == pytest.approx(now - 0.2, abs=0.01)
+    assert feed.series("kp:BRTI").last == 501.5  # the ladder prices off it; the bars still come from the tape
+    assert len(feed.series("kp:BRTI").closes) >= 8
+
+
+def test_latest_falls_back_to_the_tape_when_memory_is_empty_or_stale(tmp_path, monkeypatch):
+    from kalshi_moonshot import ticks as ticks_mod
+
+    fresh = ticks_mod.TickHistory()
+    monkeypatch.setattr(ticks_mod, "history", fresh)
+    rows = _ticks(index_id="BRTI")
+    feed = KalshiPerpFeed(_tape(tmp_path, rows).db)
+    assert feed.latest("kp:BRTI")[0] == pytest.approx(rows[-1][2])  # nothing in memory
+    now = time.time()
+    fresh.warm("BRTI", [(now - 300.0, 500.0), (now - 60.0, 501.5)], now - 400.0)  # the socket stalled a minute ago
+    assert feed.latest("kp:BRTI")[0] == pytest.approx(rows[-1][2])

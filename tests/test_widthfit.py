@@ -51,7 +51,7 @@ def _world(tmp_path, hours=13.0):
     for k in range(n):
         price *= math.exp(rng.gauss(0.0, 0.87e-4))
         t = now - (n - k)
-        rows.append((t, "KP_BTC", price, None, None, None))
+        rows.append((t, "BRTI", price, None, None, None))
         px[int(t)] = price
     tape = Tape(tmp_path / "tape.db")
     tape.db.executemany("INSERT INTO index_ticks VALUES (?,?,?,?,?,?)", rows)

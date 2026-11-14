@@ -77,35 +77,35 @@ proxy = true
 
 [[instrument]]
 prefix = "KXBTC"
-symbol = "kp:KP_BTC"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:BTC/USD, which the pricer never read
+symbol = "kp:BRTI"  # 2026-11-13 (user: the ladder's price belongs on the websocket, not a REST poll): the coin's settlement index as Kalshi's own socket streams it (cfbenchmarks_value), read from memory the moment it arrives. Was kp:KP_BTC, the perp reference polled once a second, which is this same number rounded down to the dollar (2026-11-12, user: "It should use Kalshi perp")
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
 proxy = true
 
 [[instrument]]
 prefix = "KXETH"
-symbol = "kp:KP_ETH"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:ETH/USD, which the pricer never read
+symbol = "kp:ETHUSD_RTI"  # 2026-11-13 (user: the ladder's price belongs on the websocket, not a REST poll): the coin's settlement index as Kalshi's own socket streams it (cfbenchmarks_value), read from memory the moment it arrives. Was kp:KP_ETH, the perp reference polled once a second, which is this same number rounded down to the dollar (2026-11-12, user: "It should use Kalshi perp")
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
 proxy = true
 
 [[instrument]]
 prefix = "KXSOL"
-symbol = "kp:KP_SOL"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:SOL/USD, which the pricer never read
+symbol = "kp:SOLUSD_RTI"  # 2026-11-13 (user: the ladder's price belongs on the websocket, not a REST poll): the coin's settlement index as Kalshi's own socket streams it (cfbenchmarks_value), read from memory the moment it arrives. Was kp:KP_SOL, the perp reference polled once a second, which is this same number rounded down to the dollar (2026-11-12, user: "It should use Kalshi perp")
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
 proxy = true
 
 [[instrument]]
 prefix = "KXXRP"
-symbol = "kp:KP_XRP"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:XRP/USD, which the pricer never read
+symbol = "kp:XRPUSD_RTI"  # 2026-11-13 (user: the ladder's price belongs on the websocket, not a REST poll): the coin's settlement index as Kalshi's own socket streams it (cfbenchmarks_value), read from memory the moment it arrives. Was kp:KP_XRP, the perp reference polled once a second, which is this same number rounded down to the dollar (2026-11-12, user: "It should use Kalshi perp")
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
 proxy = true
 
 [[instrument]]
 prefix = "KXDOGE"
-symbol = "kp:KP_DOGE"  # 2026-11-12 (user: "It should use Kalshi perp"): Kalshi's own perp reference price, recorded on the tape; was kraken:DOGE/USD, which the pricer never read
+symbol = "kp:DOGEUSD_RTI"  # 2026-11-13 (user: the ladder's price belongs on the websocket, not a REST poll): the coin's settlement index as Kalshi's own socket streams it (cfbenchmarks_value), read from memory the moment it arrives. Was kp:KP_DOGE, the perp reference polled once a second, which is this same number rounded down to the dollar (2026-11-12, user: "It should use Kalshi perp")
 suffixes = ["", "D", "15M", "5M"]
 realtime = true
 proxy = true

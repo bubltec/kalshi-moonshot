@@ -13,6 +13,7 @@ from typing import Any
 from .commodities import CommodityError, Series
 
 PREFIX = "kp:"
+MEMORY_FRESH = 10.0  # seconds: an in-memory tick older than this is not used as the newest price (the tape is asked instead)
 BARS_TTL = 60.0  # seconds a built set of bars is reused
 BAR_SECONDS = 300  # the pricer's volatility reads 5-minute closes, as the Hyperliquid feed gives
 BAR_HOURS = 6.0  # 72 five-minute bars
@@ -44,6 +45,19 @@ class KalshiPerpFeed:
             self._local.db = db.connect(config.reload().tape_path, "tape", shared=True)
         return self._local.db
 
+    def _memory(self, index_id: str) -> tuple[float, float] | None:
+        """The newest in-memory tick of this index (the socket's, noted as it arrives), if it is fresh. None when memory has nothing recent: a process with no stream, a feed that is only on the tape, or a stalled socket."""
+        from . import ticks as ticks_mod
+
+        now = time.time()
+        try:
+            got = ticks_mod.history.window(index_id, now - MEMORY_FRESH, now)
+        except Exception:
+            return None
+        if not got or not got[0] or got[1][-1] <= 0:
+            return None
+        return float(got[1][-1]), float(got[0][-1])
+
     def _rows(self, index_id: str, hours: float) -> list[Any]:
         try:
             return self._db().execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND value > 0 ORDER BY ts", (index_id, time.time() - hours * 3600.0)).fetchall()
@@ -52,8 +66,11 @@ class KalshiPerpFeed:
             raise CommodityError(f"Kalshi perp ticks could not be read for {index_id}: {exc}") from exc
 
     def latest(self, symbol: str) -> tuple[float, float] | None:
-        """(price, the tick's own time) of the newest recorded reading, or None. One indexed query."""
+        """(price, the tick's own time) of the newest reading, or None. The reading the websocket just delivered (ticks.history, in memory) when there is one in the last MEMORY_FRESH seconds; else the newest on the tape (one indexed query)."""
         index_id = symbol.removeprefix(PREFIX)
+        mem = self._memory(index_id)
+        if mem is not None:
+            return mem
         try:
             row = self._db().execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND value > 0 ORDER BY ts DESC LIMIT 1", (index_id,)).fetchone()
         except Exception as exc:
