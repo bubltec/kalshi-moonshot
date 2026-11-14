@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from . import jobs as jobs_mod
+from . import manual as manual_mod
 from . import reqstats, runner, steptime
 from . import ticks as ticks_mod
 from .commodities import CommodityPricer
@@ -652,8 +653,15 @@ class Worker:
         """A live lane's evaluation always reads the real market (it is about to place an order); a paper lane's may use the shared cache."""
         lane = job.payload["shot"].get("lane", "")
         live = self.s.is_live(lane)
-        with shared_for(self._venue(lane), 0.0 if live else self.s.discovery_eval_age, self.s.discovery_enabled):
-            return self._evaluate(job)
+        ticker = str(job.payload["shot"].get("ticker", ""))
+        if live and ticker:
+            manual_mod.buying_begin(ticker)  # the fill reaches the account before the order reaches the books: until then the position must not be read as hand-placed
+        try:
+            with shared_for(self._venue(lane), 0.0 if live else self.s.discovery_eval_age, self.s.discovery_enabled):
+                return self._evaluate(job)
+        finally:
+            if live and ticker:
+                manual_mod.buying_end(ticker)
 
     def _evaluate(self, job: Job) -> str:
         s = self.s

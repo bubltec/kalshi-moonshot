@@ -265,3 +265,70 @@ def test_the_rebuild_check_ignores_hand_placed_positions_unless_asked(tmp_path, 
     parser = cli.build_parser()
     assert cli.cmd_flat(s, parser.parse_args(["flat"])) == 0 and "not counted" in capsys.readouterr().out  # a rain bet does not hold up a restart
     assert cli.cmd_flat(s, parser.parse_args(["flat", "--include-manual"])) == 1
+
+
+# ---- the bot's own buy is never read as hand-placed while it is in flight (2026-11-14, KXSOL15M-26NOV141530: a resting bid filled 2.8 s before its order was on the books, and the position was booked twice) ----
+SOL = "KXSOL15M-30JAN010015-15"
+
+
+@pytest.fixture(autouse=True)
+def _no_buys_in_flight():
+    manual._buying.clear()
+    yield
+    manual._buying.clear()
+
+
+def sol_client():
+    return Client(positions=[{"ticker": SOL, "position_fp": "-33.98", "market_exposure_dollars": "26.50"}])  # 33.98 NO on the account
+
+
+def test_unit_a_market_is_in_flight_from_the_start_of_the_buy_job_until_the_grace_after_it():
+    assert manual.bot_buying(SOL, 100.0) is False
+    manual.buying_begin(SOL)
+    assert manual.bot_buying(SOL, 100.0) is True and manual.bot_buying(SOL, 9e9) is True  # however long the job runs
+    manual.buying_end(SOL, 200.0)
+    assert manual.bot_buying(SOL, 200.0 + manual.BUY_GRACE - 0.1) is True
+    assert manual.bot_buying(SOL, 200.0 + manual.BUY_GRACE + 0.1) is False
+    assert SOL not in manual._buying  # forgotten once it has passed
+
+
+def test_integration_a_fill_on_the_account_before_the_order_is_on_the_books_is_not_a_hand_placed_position(s):
+    store = Store(s.db_path)
+    manual.buying_begin(SOL)  # the bot's buy job is running: the resting bid has filled, the orders row is not written yet
+    assert manual.ManualPositions(sol_client()).positions(s, store, fresh=True) == []
+    store.add_order(ticker=SOL, env=s.env, count=33.98, price=0.78, fill_count=33.98, cost_usd=26.50, fee_usd=0.0, side="buy", contract="no")
+    manual.buying_end(SOL)
+    assert manual.ManualPositions(sol_client()).positions(s, store, fresh=True) == []  # in the grace, and on the books
+    manual._buying.clear()
+    assert manual.ManualPositions(sol_client()).positions(s, store, fresh=True) == []  # after it: all of it is the bot's
+
+
+def test_integration_without_the_guard_the_same_read_books_it_as_yours(s):
+    """What happened live: no order on the books yet and nothing saying a buy was in flight."""
+    got = manual.ManualPositions(sol_client()).positions(s, Store(s.db_path), fresh=True)
+    assert [(p.ticker, p.side, p.count) for p in got] == [(SOL, "no", 33.98)]
+
+
+def test_integration_a_real_hand_placed_position_is_still_seen_once_no_buy_is_in_flight(s):
+    store = Store(s.db_path)
+    manual.buying_begin(SOL)
+    manual.buying_end(SOL, 0.0)  # a buy job that ended long ago and bought nothing
+    got = manual.ManualPositions(sol_client()).positions(s, store, fresh=True)
+    assert [(p.ticker, p.count) for p in got] == [(SOL, 33.98)]
+
+
+def test_integration_a_live_lanes_buy_job_marks_its_market_and_a_paper_lanes_does_not(tmp_path, monkeypatch):
+    from tests.test_worker import FakeClient, worker
+
+    w = worker(tmp_path, FakeClient())
+    w.start()
+    w.run_job(w.jobs.claim(kinds={"scan"}))
+    job = w.jobs.claim(kinds={"evaluate"})
+    ticker = job.payload["shot"]["ticker"]
+    seen = []
+    monkeypatch.setattr(w, "_evaluate", lambda j: seen.append(manual.bot_buying(ticker)) or "ok")
+    w.do_evaluate(job)
+    assert seen == [False]  # a paper lane: your own trades on that market stay visible
+    monkeypatch.setattr(type(w.s), "is_live", lambda self, lane, series="": True)
+    w.do_evaluate(job)
+    assert seen == [False, True] and manual.bot_buying(ticker) is True  # live: in flight during the job, and for the grace after it

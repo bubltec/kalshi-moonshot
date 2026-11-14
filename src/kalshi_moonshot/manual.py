@@ -26,6 +26,36 @@ LANE = "manual"
 POLL_EVERY = 10.0  # seconds between reads of the account's positions
 
 
+BUY_GRACE = 5.0  # seconds after a live buy job ends in which its market's position is still not read as hand-placed (the order row is written inside the job; this covers a read that started just before)
+_buying: dict[str, float] = {}  # market -> the time until which the bot's own buy is taken to be in flight (inf while the job runs)
+_buying_lock = threading.Lock()
+
+
+def buying_begin(ticker: str) -> None:
+    """A live lane's buy job for this market has started. From here until buying_end plus BUY_GRACE a position on it is not read as hand-placed.
+    Why (2026-11-14, KXSOL15M-26NOV141530): a resting bid filled on the exchange at 15:20:07 and its orders row was written at 15:20:09.9, when the job finished. A read of the account in between found 33.98 contracts the books did not have, booked them as a hand-placed buy and gave them the hand-placed exits; that copy was then paper-sold by a stop-loss the live lane has switched off, and the books showed two losses for one bet."""
+    with _buying_lock:
+        _buying[ticker] = float("inf")
+
+
+def buying_end(ticker: str, now: float | None = None) -> None:
+    with _buying_lock:
+        _buying[ticker] = (time.time() if now is None else now) + BUY_GRACE
+
+
+def bot_buying(ticker: str, now: float | None = None) -> bool:
+    """Whether a live buy job for this market is running or ended under BUY_GRACE seconds ago."""
+    now = time.time() if now is None else now
+    with _buying_lock:
+        until = _buying.get(ticker)
+        if until is None:
+            return False
+        if now >= until:
+            del _buying[ticker]
+            return False
+        return True
+
+
 @dataclass(frozen=True)
 class Position:
     ticker: str
@@ -82,8 +112,8 @@ class ManualPositions:
             # is not a position on the account, so it does not count.
             mine: list[Position] = []
             for p in every:
-                if skipped(p.ticker, s):
-                    continue
+                if skipped(p.ticker, s) or bot_buying(p.ticker):
+                    continue  # a prefix to leave alone, or the bot's own buy still in flight: its fill is on the account before its order is on the books
                 bot_n = store.net_contracts(p.ticker, s.env)
                 if bot_n > 0.005:
                     left = p.count - bot_n
