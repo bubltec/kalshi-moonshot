@@ -1025,7 +1025,7 @@ class ProfitWatcher:
         got_stats = variants.comeback_stats(t.shock_index, now) if t.shock_index else None
         if got_stats is not None and got_stats[1] >= 5:
             base = got_stats[2]
-        wait = max(0.0, t.risk_stop_hold * left) if stop else curverisk.wait(r.q, t.risk_sell, left, base, t.curve_wait_share if t.curve_wait_share > 0 else 0.25)
+        wait = curverisk.stop_wait(r.q, t.risk_sell, left, base, t.risk_stop_hold) if stop else curverisk.wait(r.q, t.risk_sell, left, base, t.curve_wait_share if t.curve_wait_share > 0 else 0.25)
         if now - t.risk_since < wait:
             return None
         reason = f"curve risk exit{' (max loss)' if stop else ''}: the chance the side pays is {r.q:.3f} ({r.worse} cushion the worse: price {r.q_price:.3f}, spot {r.q_spot:.3f}, history x{t.risk_hist:.2f}), line {t.risk_sell:.2f}, held {now - t.risk_since:.0f}s of a {wait:.0f}s wait; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left{squeezed}"

@@ -79,6 +79,17 @@ def wait(q: float, line: float, left: float, base: float, share: float) -> float
     return max(0.0, min(base * (1.0 - severity), share * max(left, 0.0)))
 
 
+def stop_wait(q: float, line: float, left: float, base: float, share: float, window: float = 900.0) -> float:
+    """Seconds the max-loss stop waits before it sells (lane field curve_risk_stop_hold = `share`; 0 = sells at once).
+    Until 2026-11-14 it was `share` of the time left and nothing else: 100 s with three and a half minutes left, 270 s with nine, the same at 2 cents past the stop as at 40. Three bets rode to nothing inside that wait (ZEC 18:37, BTC 16:35, BTC 18:28). User: "The stops wait sounds incomplete"; "Is it missing a cap or something?"; "it also needs to be scaled on time left. Just like the nudge behavior we added".
+    Now: the market's own recovery time (`base`: the median seconds its fast falls took to regain half of themselves over the last hour, or the lane's default), less the deeper the chance `q` is under the lane's `line` (none at q = 0), times the share of the market still to run (left / window: with less time left there is less time for a dip to come back, so less patience), and never over `share` of the time left."""
+    if share <= 0 or left <= 0:
+        return 0.0
+    severity = min(1.0, max(0.0, (line - q) / line)) if line > 0 else 0.0
+    clock = min(1.0, max(0.0, left / window)) if window > 0 else 1.0
+    return max(0.0, min(base * (1.0 - severity) * clock, share * left))
+
+
 def hour_rate(ts: list[float], vs: list[float], now: float, hours: float = 1.0) -> float | None:
     """How much this index has been moving over the last hour, per square-root second in log terms: the root-mean-square of its one-minute moves over that hour, over sqrt(60). Times sqrt(seconds) it is the typical move over that many seconds. None when the hour has under MIN_MOVES one-minute moves on record.
     The one reading of volatility for both ends of a bet (2026-11-14, user, on a ladder width read from six hours of bars times a multiplier fitted on six hours of outcomes: "These markets shift in behavior hourly if you're looking at 6 hours to base a decision on right now that is totally irrelevant"): the exit's hour view (long_chance) and the ladder's width for a market priced from the Kalshi perp (commodities.price_event)."""

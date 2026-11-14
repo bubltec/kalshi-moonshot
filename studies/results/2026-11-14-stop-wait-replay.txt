@@ -1,0 +1,37 @@
+The stop's wait, old against new, on the live lane's own bets of 2026-11-14: scripts/stop_wait_replay.py, run on the host about 19:10 ET.
+Question (user: "The stops wait sounds incomplete"; "Is it missing a cap or something?"; "it also needs to be scaled on time left"): what does the capped, time-scaled wait (curverisk.stop_wait) change on today's bets, with the holds as they are, and with the tighter holds proposed the same evening?
+Same 38 bets, against what happened (sold or settled, fee on every leg). The recovery time is the lane's 15 s default, not the market's measured one. One day; the bets are the ones the lane chose. The ZEC 18:37 loss had not settled on the books and is not in it. Only bets that either column changes, or that lost over $5, are listed.
+
+RUN 1: the live holds (hour view holds at 0.4, swing 1.5, stop wait share 0.5)
+bought   coin side paid | happened               | old wait (half the time left)  | new wait
+10:03:04 ETH  yes 0.53 | LOST held       -17.30 | as happened             -17.30 | sells 0.11 at 11:53, 187s left  -13.93
+10:08:36 SOL  yes 0.58 | LOST held        -8.80 | as happened              -8.80 | sells 0.22 at 14:12, 48s left    -5.64
+10:36:59 SOL  yes 0.80 | won  held        +6.84 | as happened              +6.84 | sells 0.29 at 39:18, 342s left  -17.94
+11:48:05 BTC  no  0.77 | sold 0.26 56:23 -17.85 | sells 0.30 at 56:22     -16.53 | sells 0.23 at 53:00, 420s left  -18.84
+15:20:09 SOL  no  0.78 | LOST held       -26.50 | as happened             -26.50 | sells 0.36 at 27:04, 176s left  -14.82
+16:18:37 XRP  no  0.76 | sold 0.45 20:55 -10.97 | as happened             -10.97 | as happened                     -10.97
+16:18:42 SOL  no  0.78 | sold 0.53 20:15  -9.09 | as happened              -9.09 | as happened                      -9.09
+16:33:16 XRP  no  0.55 | LOST held        -0.55 | as happened              -0.55 | sells 0.13 at 39:44, 316s left   -0.43
+16:35:45 BTC  no  0.57 | LOST held       -18.06 | as happened             -18.06 | sells 0.11 at 39:12, 348s left  -14.78
+18:28:09 BTC  no  0.78 | LOST held       -26.68 | as happened             -26.68 | sells 0.06 at 29:24, 36s left   -24.77
+bets 38: what happened +25.77 | old wait replayed +27.09 (1 loss sale) | new wait +23.53 (8 loss sales) | new against what happened -2.24
+
+RUN 2: tighter holds (hour view holds at 0.5, swing 0.5), old and new wait
+10:03:04 ETH  yes 0.53 | LOST held       -17.30 | sells 0.14 at 12:00     -13.00 | sells 0.40 at 03:40, 680s left   -4.79
+10:03:45 BTC  no  0.50 | won  held       +15.64 | as happened             +15.64 | sells 0.40 at 04:44, 616s left   -3.65
+10:08:36 SOL  yes 0.58 | LOST held        -8.80 | as happened              -8.80 | sells 0.22 at 14:12, 48s left    -5.64
+10:33:11 XRP  no  0.69 | won  held       +10.34 | as happened             +10.34 | sells 0.42 at 36:36, 504s left   -9.57
+10:36:59 SOL  yes 0.80 | won  held        +6.84 | sells 0.39 at 40:48     -14.60 | sells 0.44 at 38:48, 372s left  -12.91
+11:48:05 BTC  no  0.77 | sold 0.26 56:23 -17.85 | sells 0.25 at 54:54     -18.18 | sells 0.46 at 51:02, 538s left  -11.16
+15:20:09 SOL  no  0.78 | LOST held       -26.50 | sells 0.33 at 27:53     -15.82 | sells 0.42 at 26:32, 208s left  -12.81
+15:20:15 BTC  no  0.77 | sold 0.98 28:40  +7.15 | as happened              +7.15 | sells 0.48 at 22:25, 455s left  -10.43
+16:18:42 SOL  no  0.78 | sold 0.53 20:15  -9.09 | as happened              -9.09 | sells 0.53 at 20:07, 593s left   -9.09
+16:33:16 XRP  no  0.55 | LOST held        -0.55 | as happened              -0.55 | sells 0.25 at 39:10, 350s left   -0.31
+16:35:45 BTC  no  0.57 | LOST held       -18.06 | as happened             -18.06 | sells 0.36 at 38:25, 395s left   -7.11
+18:28:09 BTC  no  0.78 | LOST held       -26.68 | as happened             -26.68 | sells 0.34 at 28:34, 86s left   -15.62
+bets 38: what happened +25.77 | old wait +18.99 (4 loss sales) | new wait +7.52 (12 loss sales) | new against what happened -18.25
+
+Reading:
+- With the live holds the new wait is about neutral (-2.24): it gets a few dollars more out of five losers and sells one winner. Its sales still come at 6 to 36 cents, because the wait was never what held those bets: the hour view and the swing hold release them only once the price is already low.
+- The tighter holds do what they were meant to on the losers (ETH -4.79 for -17.30, BTC 16:35 -7.11 for -18.06, BTC 18:28 -15.62 for -26.68, SOL 15:20 -12.81 for -26.50) and sell four bets that came back and won (BTC 10:03, XRP 10:33, SOL 10:36, BTC 15:20): -18.25 against what happened. Proposed the same evening without this run; the run says no.
+- On this day a fall that comes back was about as common as one that does not, and none of these three levers tells them apart.

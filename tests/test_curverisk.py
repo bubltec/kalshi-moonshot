@@ -351,3 +351,20 @@ def test_unit_early_the_clocks_bar_is_already_lower_and_nothing_changes():
     for unit in (None, 0.01, 0.15):
         assert curverisk.take_bar(0.05, 0.20, 800, 900, unit) == pytest.approx(0.20 * (1 - 800 / 900))
     assert curverisk.take_bar(0.05, 0.0, 800, 900, 0.15) == float("inf")
+
+
+# ---- the stop's wait: capped by the market's recovery time, shorter with depth, scaled by the time left (2026-11-14) ----
+def test_unit_stop_wait_is_the_recovery_time_cut_by_depth_and_by_the_clock():
+    assert curverisk.stop_wait(0.60, 0.5, 900, 40.0, 0.5) == pytest.approx(40.0)  # over the line at the open: the whole recovery time
+    assert curverisk.stop_wait(0.60, 0.5, 450, 40.0, 0.5) == pytest.approx(20.0)  # half the market gone: half the patience
+    assert curverisk.stop_wait(0.25, 0.5, 450, 40.0, 0.5) == pytest.approx(10.0)  # and half way from the line to nothing: half again
+    assert curverisk.stop_wait(0.0, 0.5, 450, 40.0, 0.5) == 0.0  # priced at nothing: no wait
+    assert curverisk.stop_wait(0.44, 0.5, 215, 40.0, 0.5) == pytest.approx(40.0 * 0.88 * 215 / 900)  # the ZEC bet at 18:41:25: about 8 s; it was 107 s
+
+
+def test_unit_stop_wait_never_exceeds_the_lanes_share_of_the_time_left_and_zero_is_at_once():
+    assert curverisk.stop_wait(0.60, 0.5, 450, 400.0, 0.5) == pytest.approx(200.0)  # a market whose falls take long to come back: capped at... its own clock-scaled time, here 200 s
+    assert curverisk.stop_wait(0.60, 0.5, 450, 4000.0, 0.5) == pytest.approx(225.0)  # and never over half the time left
+    assert curverisk.stop_wait(0.60, 0.5, 450, 40.0, 0.0) == 0.0  # the lane has no wait: the stop sells at once
+    assert curverisk.stop_wait(0.60, 0.5, 0, 40.0, 0.5) == 0.0
+    assert curverisk.stop_wait(0.60, 0.0, 450, 40.0, 0.5) == pytest.approx(20.0)  # a lane with no line: no depth to read, the clock still applies

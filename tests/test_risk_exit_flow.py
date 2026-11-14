@@ -378,28 +378,53 @@ def test_integration_a_settled_market_leaving_the_account_is_not_a_hand_sale(tmp
 
 
 # ---- the stop waits a share of the time left (2026-11-14, user: "A 57c bet should be able to deal with a dip for a moment with 5 mins remaining") ----
-def test_integration_the_stop_waits_half_the_time_left_and_then_sells(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5)
-    sold_at = None
-    for k in range(0, 150):  # the bid drops to 0.55 at 450 s left and stays there: past the stop from the first quote
-        left = 450 - 3 * k
-        yes_bid(w, 0.55, left)
+def sold_after(w, bid, left, step=1, limit=200):
+    """The bid sits at `bid` from `left` seconds to the close, one quote every `step` s; returns how many seconds passed before the sale, or None."""
+    for k in range(0, limit, step):
+        yes_bid(w, bid, left - k)
         if signals(w):
-            sold_at = left
-            break
-    assert sold_at is not None, "a bid that stayed under the stop for the whole wait was never sold"
-    assert 295 <= sold_at <= 310  # the first hit at 450 s left, then 0.5 x the time left (shrinking): the two meet near 300 s left
+            return k
+    return None
+
+
+# The stop's wait (2026-11-14 evening, user: "The stops wait sounds incomplete"; "Is it missing a cap or something?"; "it also needs to be scaled on time left"):
+# the market's recovery time (15 s here, the lane's default) x (1 - how deep the chance is under the line) x the share of the market still to run, never over the lane's share of the time left.
+def test_integration_the_stop_waits_the_recovery_time_scaled_by_the_clock_not_half_the_time_left(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5)
+    took = sold_after(w, 0.55, 450)  # past the stop from the first quote, still over the line: 15 s x 1 x (450 / 900) = 7.5 s. It was 225 s
+    assert took is not None and 7 <= took <= 9
+
+
+def test_integration_the_deeper_the_fall_the_shorter_the_wait(tmp_path, monkeypatch):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    shallow = sold_after(held(tmp_path / "a", monkeypatch, live=True, hold=0.5), 0.55, 450)
+    deep = sold_after(held(tmp_path / "b", monkeypatch, live=True, hold=0.5), 0.20, 450)  # a chance of about 0.19: 62% of the way from the line to nothing, so about 2.8 s
+    assert deep is not None and shallow is not None and deep < shallow and deep <= 4
+
+
+def test_integration_the_less_time_left_the_shorter_the_wait(tmp_path, monkeypatch):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    early = sold_after(held(tmp_path / "a", monkeypatch, live=True, hold=0.5), 0.55, 720)  # 15 s x (720 / 900) = 12 s
+    late = sold_after(held(tmp_path / "b", monkeypatch, live=True, hold=0.5), 0.55, 120)  # 15 s x (120 / 900) = 2 s
+    assert early is not None and late is not None and 11 <= early <= 13 and late <= 3
+
+
+def test_integration_the_lanes_share_of_the_time_left_is_still_its_upper_limit(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, hold=0.005)  # 0.5% of 450 s is 2.25 s, under the 7.5 s the rest would give
+    assert sold_after(w, 0.55, 450) <= 3
 
 
 def test_integration_a_dip_that_recovers_inside_the_wait_does_not_sell_and_the_clock_restarts(tmp_path, monkeypatch):
     w = held(tmp_path, monkeypatch, live=True, hold=0.5)
-    for k in range(0, 20):  # 60 s under the stop, shorter than the wait
-        yes_bid(w, 0.55, 450 - 3 * k)
+    for k in range(0, 5):  # 5 s under the stop, shorter than the 7.5 s wait
+        yes_bid(w, 0.55, 450 - k)
         assert signals(w) == []
-    yes_bid(w, 0.80, 390)  # it recovers: the wait is cancelled
+    yes_bid(w, 0.80, 445)  # it recovers: the wait is cancelled
     assert signals(w) == []
-    for k in range(0, 20):  # a second dip gets its own full wait
-        yes_bid(w, 0.55, 387 - 3 * k)
+    for k in range(0, 5):  # a second dip gets its own wait
+        yes_bid(w, 0.55, 444 - k)
         assert signals(w) == []
 
 
