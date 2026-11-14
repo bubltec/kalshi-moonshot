@@ -14,6 +14,7 @@ TICKER, SIDE = os.environ["TICKER"], os.environ.get("SIDE", "no")
 ENTRY, BOUGHT = float(os.environ["ENTRY"]), float(os.environ["BOUGHT"])
 SHARE, SECONDS, LINE, MAX_LOSS = 0.08, 5.0, 0.5, 0.5
 HOLD, SWING, FLOOR = os.environ.get("HOLD", "1") == "1", 1.5, 0.10
+FLIPPED = os.environ.get("FLIPPED", "1") == "1"  # the third version: only a bet priced under the line (it has flipped) is squeezed
 
 s = config.load()
 tape = db.connect(s.tape_path, "tape", shared=True)
@@ -37,11 +38,11 @@ while t < close - 8:
         held = HOLD and pnl < 0 and net >= FLOOR and unit and (basis - net) < SWING * unit * math.sqrt(left / 60.0)
         if pnl < 0 and bid >= 0.05 and noise > 0 and not held:
             miss = curverisk.stop_miss(net, basis, net, MAX_LOSS)
-            if curverisk.squeeze_loss(pnl, miss, net, LINE, MAX_LOSS, noise) and curverisk.still_falling(hist, float(t), SHARE * left, unit):
+            if (not FLIPPED or net < LINE) and (miss < noise if FLIPPED else curverisk.squeeze_loss(pnl, miss, net, LINE, MAX_LOSS, noise)) and curverisk.still_falling(hist, float(t), SHARE * left, unit):
                 sold = (t, bid, net - basis, left, unit)
                 break
     t += 1
-print(f"{TICKER} {SIDE} bought at {ENTRY} ({basis:.3f} with the fee), swing hold in front: {HOLD}")
+print(f"{TICKER} {SIDE} bought at {ENTRY} ({basis:.3f} with the fee), swing hold in front: {HOLD}, flipped only: {FLIPPED}")
 if sold:
     t, bid, per, left, unit = sold
     print(f"  the squeeze sells at {bid:.2f} with {left:.0f}s left, {per:+.3f} a contract (typical minute {unit or 0:.3f})")

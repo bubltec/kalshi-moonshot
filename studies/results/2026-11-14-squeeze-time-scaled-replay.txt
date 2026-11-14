@@ -18,3 +18,10 @@ SOL 16:30 settled YES: the bet lost $26.50. Live (first version): about -$9.7. S
 SOL 15:30 settled YES: the bet lost $26.50. Second version: about -$14.9; but it had recovered to 0.96 before the bell, where the profit take's late cap (live since 16:16) sells at 0.91 for about +$3.9, and a squeeze sale at 0.37 would have ended the bet before that.
 
 On the two 16:30 bets: holding -$18.4, first version (live) -$20.7, second version -$6.5.
+
+THIRD VERSION (HOLD=1, FLIPPED=1: after the swing hold AND only a bet priced under the 0.50 line), run about 16:50 ET
+(user, asked whether three minutes left is too early: "Yes 3 minutes is too soon, unless the vision has flipped and win looks unlikely")
+KXXRP15M-26NOV141630-30: the squeeze does not sell
+KXSOL15M-26NOV141630-30: sells at 0.38 with 199s left, -0.429 a contract
+KXSOL15M-26NOV141530-30: sells at 0.37 with 179s left, -0.438 a contract
+The same as the second version on these three: both SOL sales were of bets already priced at 0.37 to 0.38, well under the line. What the third version removes is a sale of a bet still priced over 0.50 (the live sale at 0.52).

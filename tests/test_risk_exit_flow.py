@@ -719,7 +719,7 @@ def slid(w, path, left):
 
 
 SIT = [0.78] * 10
-SLIDE = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 26)]  # 0.78 down a cent a second to 0.53
+SLIDE = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 36)]  # 0.78 down a cent a second to 0.43, through the 0.50 line
 LIVE = dict(hold=0.5, swing=1.5, share=0.08)
 
 
@@ -735,7 +735,14 @@ def test_integration_with_a_minute_and_a_half_left_the_same_slide_is_squeezed(tm
     w = held(tmp_path, monkeypatch, live=True, squeeze=5, **LIVE)
     got = slid(w, SLIDE, 120)
     assert got is not None and got[1].why.startswith("curve risk exit [squeeze")
-    assert 0.55 <= got[0] <= 0.63  # near the stop, not on the way there
+    assert 0.43 <= got[0] <= 0.51  # only once it has flipped under the line (a bid of about 0.51 nets 0.49), not at the stop's depth near 0.58
+
+
+def test_integration_a_late_slide_that_stops_above_the_line_is_never_squeezed(tmp_path, monkeypatch):
+    """Past the stop's depth and sliding with ninety seconds left, but still priced over 0.50: it has not flipped."""
+    feed_history(0.013, from_left=1300, to_left=121)
+    w = held(tmp_path, monkeypatch, live=True, squeeze=5, **LIVE)
+    assert slid(w, SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 24)] + [0.55] * 6, 120) is None  # down to 0.55 and sitting there
 
 
 def test_integration_without_the_squeeze_that_late_slide_waits_out_the_stops_wait(tmp_path, monkeypatch):
@@ -747,19 +754,19 @@ def test_integration_without_the_squeeze_that_late_slide_waits_out_the_stops_wai
 def test_integration_one_bad_print_that_bounces_is_not_squeezed(tmp_path, monkeypatch):
     feed_history(0.013, from_left=1300, to_left=121)
     w = held(tmp_path, monkeypatch, live=True, squeeze=5, **LIVE)
-    assert slid(w, SIT + [0.58, 0.58] + [0.72] * 10, 120) is None
+    assert slid(w, SIT + [0.45, 0.45] + [0.72] * 10, 120) is None
 
 
 def test_integration_a_crash_that_stays_down_is_squeezed_once_it_has_lasted(tmp_path, monkeypatch):
     feed_history(0.013, from_left=1300, to_left=121)
     w = held(tmp_path, monkeypatch, live=True, squeeze=5, **LIVE)
-    path = SIT + [0.58] * 9
+    path = SIT + [0.45] * 9
     seen = []
     for k, bid in enumerate(path):
         ticks_mod.mids.note(TICKER, CLOSE - 120 + k, bid - 0.005, bid + 0.005)
         yes_bid(w, bid, 120 - k)
         seen.append(bool(signals(w)))
-    assert not any(seen[:12]) and any(seen[12:])  # not on the first two prints at 0.58, but once it has stayed half the look back
+    assert not any(seen[:12]) and any(seen[12:])  # not on the first two prints at 0.45, but once it has stayed half the look back
 
 
 def test_integration_the_hour_view_still_holds_a_squeezed_loss(tmp_path, monkeypatch):
@@ -801,7 +808,7 @@ def test_unit_the_squeeze_changes_a_lanes_version_only_when_it_is_set(tmp_path, 
 
 
 # ---- a stretched buy is squeezed harder (2026-11-14, user: "The stretch buy and squeeze sale need to work together") ----
-CRASH = SIT + [0.58] * 9  # a crash that stays, with two minutes left: the look back is about 8 s, so half is about 4 s and a quarter about 2 s
+CRASH = SIT + [0.45] * 9  # a crash under the line that stays, with two minutes left: the look back is about 8 s, so half is about 4 s and a quarter about 2 s
 
 
 def first_sale(w, path, left):

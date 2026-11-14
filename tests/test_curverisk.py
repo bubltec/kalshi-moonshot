@@ -329,14 +329,15 @@ def test_unit_stop_miss_is_zero_at_the_stop_and_positive_short_of_it():
     assert (curverisk.stop_miss(0.56, 0.80, 0.56, 0.5) <= 0) is curverisk.stopped((0.56 - 0.80) / 0.80, 0.56, 0.5)
 
 
-def test_unit_squeeze_loss_is_a_loss_at_past_or_near_a_sell_bar():
-    assert curverisk.squeeze_loss(-0.2, 0.02, 0.60, 0.5, 0.5, 0.03) is True  # 0.02 short of the stop, noise 0.03
-    assert curverisk.squeeze_loss(-0.2, 0.05, 0.60, 0.5, 0.5, 0.03) is False  # a clear miss of both bars
-    assert curverisk.squeeze_loss(-0.3, -0.01, 0.55, 0.5, 0.5, 0.03) is True  # past the stop (held by a wait or the swing)
-    assert curverisk.squeeze_loss(-0.05, 0.20, 0.52, 0.5, 0.5, 0.03) is True  # 0.02 over the line
-    assert curverisk.squeeze_loss(-0.05, 0.20, 0.52, 0.0, 0.0, 0.03) is False  # the lane has neither bar
-    assert curverisk.squeeze_loss(0.05, 0.02, 0.52, 0.5, 0.5, 0.03) is False  # in profit: not a loss squeeze
-    assert curverisk.squeeze_loss(-0.2, 0.02, 0.60, 0.5, 0.5, 0.0) is False  # no reading of the noise
+def test_unit_squeeze_loss_needs_a_bet_that_has_flipped_under_the_line():
+    assert curverisk.squeeze_loss(-0.5, -0.05, 0.38, 0.5, 0.5, 0.03) is True  # the SOL bets: priced at 0.38, past the stop
+    assert curverisk.squeeze_loss(-0.3, -0.01, 0.52, 0.5, 0.5, 0.03) is False  # the live sale at 0.52: past the stop but still over the line
+    assert curverisk.squeeze_loss(-0.4, -0.03, 0.46, 0.5, 0.5, 0.03) is True  # flipped and past the stop (time left is the caller's check)
+    assert curverisk.squeeze_loss(-0.1, 0.02, 0.48, 0.5, 0.5, 0.03) is True  # flipped and 0.02 short of the stop: inside the noise
+    assert curverisk.squeeze_loss(-0.1, 0.05, 0.48, 0.5, 0.5, 0.03) is False  # flipped but clear of the stop
+    assert curverisk.squeeze_loss(-0.3, -0.01, 0.45, 0.0, 0.5, 0.03) is False  # the lane has no line: nothing says the bet has flipped
+    assert curverisk.squeeze_loss(0.05, -0.01, 0.45, 0.5, 0.5, 0.03) is False  # in profit
+    assert curverisk.squeeze_loss(-0.3, -0.01, 0.45, 0.5, 0.5, 0.0) is False  # no reading of the noise
 
 
 def test_unit_squeeze_profit_only_saves_a_gain_that_had_cleared_the_bar():

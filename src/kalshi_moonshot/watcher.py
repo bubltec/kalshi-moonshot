@@ -1018,8 +1018,8 @@ class ProfitWatcher:
         if noise > 0 and pnl < 0 and bid >= CURVE_MIN_BID:  # the squeeze on a loss: at, past or near a sell bar and sliding. It comes AFTER the swing hold, so time left decides whether it exists at all (2026-11-14, user, after it sold two bets two minutes after the buy with nine minutes left: "at that time distance it should be nonexistent"): a loss inside what the market can move in the time left never reaches here. Past that band it skips the stop's wait
             miss = curverisk.stop_miss(net, basis, r.q, t.risk_max_loss)
             if curverisk.squeeze_loss(pnl, miss, r.q, t.risk_sell, t.risk_max_loss, noise) and curverisk.still_falling(t.risk_take_hist, now, look, t.risk_unit, STRETCHED_STAY if t.risk_stretched else 0.5):
-                where = "at or past the max loss" if miss <= 0 else f"{miss:.3f} short of the max loss" if miss < noise else f"{r.q - t.risk_sell:.3f} over the line {t.risk_sell:.2f}"
-                reason = f"curve risk exit [squeeze: a loss {where}, inside this market's {noise:.3f} of noise over {t.risk_squeeze:g}s, and the bid has slid over the last {look:.0f}s without a bounce (typical minute {t.risk_unit or 0.0:.3f}){', a stretched buy: squeezed sooner' if t.risk_stretched else ''}]; the chance the side pays is {r.q:.3f}; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
+                where = "at or past the max loss" if miss <= 0 else f"{miss:.3f} short of the max loss"
+                reason = f"curve risk exit [squeeze: the bet has flipped (the chance it pays, {r.q:.3f}, is under the line {t.risk_sell:.2f}), a loss {where}, outside what this market can move in the {left:.0f}s left, and the bid has slid over the last {look:.0f}s without a bounce (typical minute {t.risk_unit or 0.0:.3f}){', a stretched buy: squeezed sooner' if t.risk_stretched else ''}]; the chance the side pays is {r.q:.3f}; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
                 if t.risk_live:
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, True, True)
                     return reason
