@@ -784,6 +784,11 @@ class Store:
         self.touch("orders")
 
     @remembers('orders')
+    def last_order_ts(self, ticker: str, env: str) -> float:
+        """When the bot last placed an order on this market (0 if never): a positions read can trail a fill by a few seconds."""
+        row = self.db.execute("SELECT COALESCE(MAX(ts), 0) AS t FROM orders WHERE ticker=? AND env=?", (ticker, env)).fetchone()
+        return float(row["t"])
+
     def net_contracts(self, ticker: str, env: str) -> float:
         row = self.db.execute(
             """SELECT COALESCE(SUM(CASE WHEN COALESCE(side,'buy')='buy' THEN fill_count

@@ -60,6 +60,8 @@ class ManualPositions:
         self.client = client
         self._at = 0.0
         self._cache: list[Position] = []
+        self.account: dict[str, tuple[str, float]] = {}  # every open position on the account at the last read: ticker -> (side, contracts)
+        self.read_at = 0.0  # when that read was made (0 = never)
         self._lock = threading.Lock()
 
     def invalidate(self) -> None:
@@ -92,4 +94,6 @@ class ManualPositions:
                 mine.append(p)
             self._cache = mine
             self._at = time.time()
+            self.account = {p.ticker: (p.side, p.count) for p in every}
+            self.read_at = self._at
             return list(self._cache)

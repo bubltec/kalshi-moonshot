@@ -1997,6 +1997,51 @@ def _ask_flip(s: Settings, store: Store, row, lane: str, why: str) -> None:
         log.debug("flip request failed", exc_info=True)
 
 
+HAND_SALE_MIN_AGE = 20.0  # seconds after the bot's last order on a market before a smaller account position is read as a hand sale (the positions read can trail a fill)
+
+
+def account_count(client: Any, ticker: str, side: str) -> float | None:
+    """Contracts of `side` the account really holds on `ticker` (0 when it holds none or the other side), or None when the account cannot be read."""
+    reader = getattr(client, "positions", None)
+    if reader is None:
+        return None
+    try:
+        body = reader()
+    except KalshiError:
+        return None
+    from . import manual
+
+    for pos in manual.parse_positions(body):
+        if pos.ticker == ticker:
+            return pos.count if pos.side == side else 0.0
+    return 0.0
+
+
+def book_hand_sale(s: Settings, store: Store, ticker: str, side: str, real: float, bid: float) -> float:
+    """Take off the bot's books the contracts the account no longer holds (sold by hand, or netted by a hand buy of the other side). Returns how many were written off, 0 when the books already agree or the bot's last order is too fresh to trust the read. The written-off contracts are booked at `bid`: the real fill is the user's and is not known here."""
+    held = store.net_contracts(ticker, s.env)
+    gone = round(held - max(real, 0.0), 2)
+    if gone < 0.05 or time.time() - store.last_order_ts(ticker, s.env) < HAND_SALE_MIN_AGE:
+        return 0.0
+    store.add_order(ticker=ticker, env=s.env, count=gone, price=bid, fill_count=gone, cost_usd=-(bid * gone), fee_usd=0.0, order_id="hand-sale", side="sell", contract=side)
+    log.warning("hand sale seen on %s: the books held %.2f %s, the account holds %.2f; wrote off %.2f at the bid %.2f", ticker, held, side, real, gone, bid)
+    return gone
+
+
+def close_by_hand(s: Settings, store: Store, row: Any, real: float, bid: float) -> str | None:
+    """A bet the account no longer holds in full: write the missing contracts off the books and, when nothing is left, close the bet so the lane may buy the market again. Returns a log line, or None when nothing changed."""
+    with _EXIT_LOCK:
+        lane = row["lane"] or "moonshot"
+        side = row["side"] or "yes"
+        gone = book_hand_sale(s, store, row["ticker"], side, real, bid)
+        if gone <= 0:
+            return None
+        if store.net_contracts(row["ticker"], s.env) < 0.005:
+            store.mark_exited(row["ticker"], bid, f"closed by hand: the account no longer holds these contracts (booked at the bid {bid:.2f} when the bot noticed, not at your fill)", lane)
+            return f"{row['ticker']}: closed by hand, {gone:g} contracts written off at the bid {bid:.2f}"
+        return f"{row['ticker']}: {gone:g} contracts sold by hand, {real:g} still held"
+
+
 def exit_position(
     s: Settings, client: KalshiClient, store: Store, row, bid: float, why: str,
     before_order: Callable[[], None] | None = None, slip: float = EXIT_SLIP,
@@ -2032,6 +2077,12 @@ def exit_position(
         # before selling anything ourselves, or the two orders would race for the same contracts.
         _new, rest_filled, rest_avg = _book_resting_fills(s, client, store, row["ticker"], cancel=True)
         count = round(store.net_contracts(row["ticker"], s.env), 2)
+        real = account_count(client, row["ticker"], side) if count > 0 else None  # what the account really holds: the user may have sold some by hand (2026-11-13: 100 sell orders in 77 s for 1.72 contracts that were gone)
+        if real is not None and real < count - 0.05 and book_hand_sale(s, store, row["ticker"], side, real, bid) > 0:
+            count = round(store.net_contracts(row["ticker"], s.env), 2)
+            if count < 0.005:
+                store.mark_exited(row["ticker"], bid, f"closed by hand: the account no longer holds these contracts (booked at the bid {bid:.2f} when the bot noticed, not at your fill). {why}", lane, seen)
+                return f"{row['ticker']}: closed by hand, nothing left to sell. {why}"
         if count < 0.005 and rest_filled > 0:
             store.mark_exited(row["ticker"], rest_avg, f"resting take-profit filled at {rest_avg:.4f} (no taker fee)", lane, seen)
             _ask_flip(s, store, row, lane, why)

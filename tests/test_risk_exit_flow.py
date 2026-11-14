@@ -30,16 +30,31 @@ curve_risk_confirm={confirm}
 class Client:
     """The market reads the watcher makes when it arms a position, and the sale it places."""
 
-    def __init__(self, bid=0.56):
+    authed = True
+
+    def __init__(self, bid=0.56, fills=None, account=None):
         self.bid = bid
         self.sold = []
+        self.fills = fills  # None = every sale fills in full; a number = each sale fills that many
+        self.account = account  # None = the account cannot be read; else {ticker: signed contracts (+ YES, - NO)}
+
+    def positions(self):
+        if self.account is None:
+            from kalshi_moonshot.kalshi import KalshiError
+
+            raise KalshiError("no positions in this test")
+        return {"market_positions": [{"ticker": tk, "position_fp": str(n), "market_exposure_dollars": str(abs(n) * 0.5)} for tk, n in self.account.items()]}
+
+    def orderbook(self, ticker):
+        return {}
 
     def market(self, ticker):
         return {"ticker": ticker, "floor_strike": 100.0, "close_time": "2030-01-01T00:15:00Z", "yes_bid_dollars": str(self.bid), "yes_ask_dollars": str(self.bid + 0.01)}
 
     def sell_yes_ioc(self, ticker, count, price, client_order_id=None):
-        self.sold.append(price)
-        return {"fill_count": count, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
+        self.sold.append((count, price))
+        got = count if self.fills is None else min(count, self.fills)
+        return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
 def held(tmp_path, monkeypatch, live, client=None, confirm=-1):
@@ -174,3 +189,123 @@ def test_integration_with_no_perp_hour_the_price_alone_decides(tmp_path, monkeyp
     monkeypatch.setattr(ticks_mod, "history", ticks_mod.TickHistory())
     w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
     assert slide(w) != []
+
+
+# ---- a position the user sold by hand (2026-11-13: the bot sent 100 sell orders in 77 s for contracts that were gone) ----
+
+def live(monkeypatch):
+    from kalshi_moonshot import runner
+
+    monkeypatch.setattr(runner, "HAND_SALE_MIN_AGE", -1e12)  # the fixture's market is in 2030, so its buy order is "in the future": count it as old; the freshness test below sets the real guard back
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    monkeypatch.setenv("MODE", "trade")
+    monkeypatch.setenv("KALSHI_ENV", "demo")
+
+
+def first_signal(w):
+    for k, bid in enumerate(PATH):
+        yes_bid(w, bid, 450 - 3 * k)
+        if not w._jobs.empty():
+            return w._jobs.get_nowait()
+    return None
+
+
+def test_unit_account_count_reads_the_side_held_and_none_when_it_cannot_read():
+    from kalshi_moonshot import runner
+
+    c = Client(account={TICKER: 4.12, "OTHER-1": -3.0})
+    assert runner.account_count(c, TICKER, "yes") == 4.12
+    assert runner.account_count(c, TICKER, "no") == 0.0  # the account holds the other side
+    assert runner.account_count(c, "OTHER-1", "no") == 3.0 and runner.account_count(c, "GONE-1", "yes") == 0.0
+    assert runner.account_count(Client(account=None), TICKER, "yes") is None
+    assert runner.account_count(object(), TICKER, "yes") is None
+
+
+def test_unit_a_shortfall_is_written_off_only_when_the_last_order_is_old_enough(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    live(monkeypatch)
+    w = held(tmp_path, monkeypatch, live=True)
+    s = config.load()
+    store = Store(s.db_path)
+    assert runner.book_hand_sale(s, store, TICKER, "yes", 4.65, 0.5) == 0.0  # the books agree
+    assert runner.book_hand_sale(s, store, TICKER, "yes", 2.0, 0.5) == pytest.approx(2.65)  # the buy order is 449 s before the close of a 2030 market: old
+    assert store.net_contracts(TICKER, s.env) == pytest.approx(2.0)
+    store.add_order(ticker=TICKER, env=s.env, count=1.0, price=0.5, fill_count=1.0, cost_usd=0.5, fee_usd=0.0, order_id="fresh", contract="yes")
+    monkeypatch.setattr(runner, "HAND_SALE_MIN_AGE", 20.0)
+    monkeypatch.setattr(store, "last_order_ts", lambda *a: __import__("time").time())
+    assert runner.book_hand_sale(s, store, TICKER, "yes", 0.0, 0.5) == 0.0  # an order a moment ago: the account read may trail it
+    monkeypatch.setattr(store, "last_order_ts", lambda *a: __import__("time").time() - 60.0)
+    assert runner.book_hand_sale(s, store, TICKER, "yes", 0.0, 0.5) == pytest.approx(3.0)  # a minute old: trusted
+    assert w is not None
+
+
+def test_integration_the_sale_sells_only_what_the_account_still_holds(tmp_path, monkeypatch):
+    live(monkeypatch)
+    c = Client(bid=0.56, account={TICKER: 3.0})  # the user sold 1.65 of the 4.65 by hand
+    w = held(tmp_path, monkeypatch, live=True, client=c)
+    job = first_signal(w)
+    assert job is not None
+    w._sell(*job)
+    assert [n for n, _ in c.sold] == [3.0]  # one order, for the three contracts that are there
+    assert len(Store(config.load().db_path).open_bets()) == 0
+
+
+def test_integration_a_bet_sold_entirely_by_hand_sends_no_order_and_is_closed(tmp_path, monkeypatch):
+    live(monkeypatch)
+    c = Client(bid=0.56, account={})  # nothing of it left on the account
+    w = held(tmp_path, monkeypatch, live=True, client=c)
+    job = first_signal(w)
+    w._sell(*job)
+    s = config.load()
+    store = Store(s.db_path)
+    assert c.sold == [] and len(store.open_bets()) == 0
+    assert TICKER not in store.open_position_tickers(s.env)  # the lane may buy this market again
+    row = store.db.execute("SELECT exit_reason FROM decisions WHERE ticker=?", (TICKER,)).fetchone()
+    assert "closed by hand" in row["exit_reason"]
+
+
+def test_integration_when_the_account_cannot_be_read_the_sale_goes_by_the_books(tmp_path, monkeypatch):
+    live(monkeypatch)
+    c = Client(bid=0.56, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=c)
+    w._sell(*first_signal(w))
+    assert [n for n, _ in c.sold] == [4.65]
+
+
+def test_integration_a_sale_that_fills_nothing_backs_off_instead_of_firing_every_second(tmp_path, monkeypatch):
+    live(monkeypatch)
+    monkeypatch.setattr("kalshi_moonshot.runner.time.sleep", lambda x: None)
+    c = Client(bid=0.30, fills=0.0, account=None)  # every order comes back unfilled
+    w = held(tmp_path, monkeypatch, live=True, client=c)
+    clock = {"now": 1_000_000.0}
+    monkeypatch.setattr(watcher.time, "time", lambda: clock["now"])
+    signals_sent = 0
+    for k in range(77):  # 77 seconds of quotes at a bid past the max loss, as on the BTC bet
+        clock["now"] += 1.0
+        yes_bid(w, 0.30, 400 - k)
+        while not w._jobs.empty():
+            w._sell(*w._jobs.get_nowait())
+            signals_sent += 1
+    assert 1 <= signals_sent <= 7, signals_sent  # 2, 4, 8, 16, 32 s apart: a handful of tries, not seventy-seven
+    assert w.targets[(TICKER, "risk_only")].sell_misses == signals_sent
+
+
+def test_integration_a_hand_sale_seen_on_two_account_reads_closes_the_bet_so_the_lane_can_buy_again(tmp_path, monkeypatch):
+    from kalshi_moonshot import manual, risk
+
+    live(monkeypatch)
+    monkeypatch.setattr(manual, "POLL_EVERY", 0.0)  # every call reads the account
+    c = Client(bid=0.90, account={TICKER: 4.65})
+    w = held(tmp_path, monkeypatch, live=True, client=c)
+    s = config.load()
+    store = Store(s.db_path)
+    yes_bid(w, 0.90, 420)
+    assert w.reconcile_hand_sales(s, store) == [] and len(store.open_bets()) == 1  # the account holds it all
+    c.account = {}  # the user cashes out by hand
+    assert w.reconcile_hand_sales(s, store) == [] and len(store.open_bets()) == 1  # seen once: not acted on yet
+    out = w.reconcile_hand_sales(s, store)  # a second, later read agrees
+    assert len(out) == 1 and "closed by hand" in out[0] and len(store.open_bets()) == 0
+    assert c.sold == []
+    monkeypatch.setenv("ALLOW_REAL_MONEY", "true")
+    assert risk.check(config.load(), store, TICKER, 1.0, max_trade=5.0).reason != "already holding this market"

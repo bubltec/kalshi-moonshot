@@ -139,6 +139,7 @@ class Target:
     below_since: float | None = None  # when the bid first fell trail_drop below the peak and has stayed there
     rest_rule: bool = False  # a hand-placed position the resting curve sell is working (manualrest.py)
     retry_after: float = 0.0  # after a sale was checked and declined, do not look again before this time
+    sell_misses: int = 0  # sales in a row that filled nothing: each one doubles the wait before the next try
     stop_drop: float = 0.0  # stop-loss: sell at once when the bid is this fraction under the price paid (0 = this position has none)
     unstable_gain: float = 0.0  # sell when up this fraction after fees and the bid is swinging (0 = off)
     unstable_range: float = 0.0
@@ -842,7 +843,7 @@ class ProfitWatcher:
 
     def _risk_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """The single risk exit on the spot's tick (curverisk.py, 2026-11-13, user), for a lane that gives the spot cushion a weight: the chance the side pays is the worse of Kalshi's own bid and the curve's spot chance (the price counted in full), widened by the market's last hour of jumps from its Kalshi perp. A lane with no spot weight is read on Kalshi's quote instead (_risk_quote_hit)."""
-        if t.risk_sell <= 0 or t.risk_spot_weight <= 0 or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.risk_at < 1.0:
+        if t.risk_sell <= 0 or t.risk_spot_weight <= 0 or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.risk_at < 1.0 or time.time() < t.retry_after:
             return None
         left = t.close_ts - now
         if left <= CURVE_MIN_LEFT or bid <= 0 or now - quote_ts > 5.0:
@@ -866,7 +867,7 @@ class ProfitWatcher:
 
     def _risk_quote_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The single risk exit on Kalshi's own quote (2026-11-13, user: "switch to use kalshis price instead of the external feeds for everything", then "exit first"): for a lane that gives the spot cushion no weight the chance the side pays IS the bid net of the sell fee, so the exit needs no spot feed, reads every quote and acts the second the price moves."""
-        if t.risk_sell <= 0 or t.risk_spot_weight > 0 or t.close_ts <= 0 or now - t.risk_at < 1.0:
+        if t.risk_sell <= 0 or t.risk_spot_weight > 0 or t.close_ts <= 0 or now - t.risk_at < 1.0 or time.time() < t.retry_after:
             return None
         left = t.close_ts - now
         if left <= CURVE_MIN_LEFT or bid <= 0:
@@ -878,6 +879,44 @@ class ProfitWatcher:
         pnl = (net - basis) / basis if basis > 0 else 0.0
         q = min(max(net, 0.0), 1.0)
         return self._risk_decide(t, curverisk.Risk(q, q, q, "price"), bid, now, left, pnl, self._risk_long(t, now, left))
+
+    def reconcile_hand_sales(self, s: Settings, store: Store) -> list[str]:
+        """Close the bot's record of a live bet the account no longer holds (the user sold it by hand, or bought the other side and Kalshi netted it), so the books agree and the lane may buy the market again. A shortfall has to show on two separate reads of the account, and the bot's last order on the market has to be 20 s old, because the positions read can trail a fill. Returns the log lines of what it closed."""
+        out: list[str] = []
+        if s.mode != "trade" or not getattr(self.client, "authed", False):
+            return out
+        self.manual.positions(s, store)  # reads the account at most every manual.POLL_EVERY seconds; the copy it keeps is what is compared here
+        read_at = self.manual.read_at
+        if read_at <= 0:
+            return out
+        account = self.manual.account
+        with self._lock:
+            watched = [(tk, lane, t) for (tk, lane), t in self.targets.items() if lane != manual.LANE]
+        seen = getattr(self, "_short_seen", None)
+        if seen is None:
+            seen = self._short_seen = {}
+        for tk, lane, t in watched:
+            if not s.is_live(lane, tk.split("-")[0]):
+                continue
+            held = store.net_contracts(tk, s.env)
+            side, count = account.get(tk, (t.side, 0.0))
+            real = count if side == t.side else 0.0
+            if held < 0.05 or real >= held - 0.05:
+                seen.pop(tk, None)
+                continue
+            first = seen.setdefault(tk, read_at)
+            if read_at <= first:
+                continue  # seen once: wait for a second, later read of the account to agree
+            row = next((r for r in store.open_bets() if r["ticker"] == tk and (r["lane"] or "moonshot") == lane), None)
+            if row is None:
+                seen.pop(tk, None)
+                continue
+            line = runner.close_by_hand(s, store, row, real, t.cur_bid if t.cur_bid > 0 else 0.0)
+            if line:
+                log.info("watcher: %s", line)
+                out.append(line)
+                seen.pop(tk, None)
+        return out
 
     def _risk_long(self, t: Target, now: float, left: float) -> float | None:
         """The long layer's chance that the side pays (curverisk.long_chance, from the market's Kalshi perp and its own last hour), only for a lane that asks for it (curve_risk_confirm), reread every 5 s. None when the lane does not ask or the perp's hour is not there."""
@@ -901,7 +940,7 @@ class ProfitWatcher:
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             return None
         stop = curverisk.stopped(pnl, r.q, t.risk_max_loss) and bid >= CURVE_MIN_BID  # the max loss: sell now (below this bid the market has priced the loss and there is nothing to sell for)
-        if not stop and not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit):
+        if not stop and (bid < CURVE_MIN_BID or not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):  # under the minimum bid there is nothing left to sell for, on the line as on the max loss
             t.risk_since = 0.0
             return None
         if t.risk_since <= 0:
@@ -1801,6 +1840,10 @@ class ProfitWatcher:
         for tk in [tk for tk, b in list(self._flow.items()) if max(list(b), default=0) < now - 300.0]:
             self._flow.pop(tk, None)  # a market that stopped trading five minutes ago: the ledger only trims itself when a trade arrives, so a closed window's rows would stay for good
         self._book_resting(store, s)
+        try:
+            self.reconcile_hand_sales(s, store)
+        except Exception:
+            log.warning("watcher: the hand-sale check failed this cycle", exc_info=True)
         if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties_auto or sp.skip_varieties or sp.skip_markets_auto or sp.min_vol_rel > 0 or sp.max_vol_rel > 0 for sp in lane_specs(s).values()):
             self._ledger_at = time.time()
             threading.Thread(target=self._refresh_ledger, args=(s,), daemon=True, name="variety-ledger").start()  # the scoreboard reads days of ticks: off the refresh cycle and at low priority
@@ -2203,6 +2246,12 @@ class ProfitWatcher:
             log.info("watcher: sale timing %s: %.0f ms waiting in the queue, %.0f ms reading the market and checking, %.0f ms deciding to sell, %.0f ms placing the order",
                      ticker, (picked - queued) * 1000, (read - picked) * 1000, (ordering - read) * 1000, (time.time() - ordering) * 1000)
             self.sold.append(line)
+            if t is not None:
+                if line.startswith("partial exit 0/") or ": sell failed" in line:
+                    t.sell_misses += 1  # nothing filled: wait 2, 4, 8 ... 60 s before the next try, so a sale that cannot fill is not sent a hundred times a minute
+                    self._back_off(ticker, lane, seconds=min(60.0, 2.0 ** t.sell_misses))
+                else:
+                    t.sell_misses = 0
             if why.startswith("burst") and t is not None and line.startswith("partial exit"):
                 t.burst_resell = True  # the burst sale did not finish: the next burst tries again
             if why.startswith("settlement-guard") and t is not None and t.burst_exit and line.startswith(("sold", "paper-sold")):

@@ -77,7 +77,7 @@ CLOSE = 9_900.0
 
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0)
+                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -208,3 +208,11 @@ def test_a_price_dip_alone_does_not_sell_when_the_long_layer_says_the_bet_stays_
     me._risk_long = lambda tt, now, left: None  # no hour to read: the sale does not wait for it
     t.risk_at = 0.0
     assert watcher.ProfitWatcher._risk_quote_hit(me, t, 0.30, CLOSE - 98.0) is not None
+
+
+def test_under_the_minimum_bid_the_line_sale_does_not_fire_either(monkeypatch, tmp_path):
+    """A bid of a few cents has nothing left to sell for: the line sale stood down there as the max loss already did (the BTC bet of 2026-11-13 was offered at 1 to 4 cents)."""
+    t = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True, risk_max_loss=0.0)  # no max loss: only the line could sell
+    assert run(monkeypatch, t, bid=0.03, p=0.85, seconds=40, tmp=tmp_path)[1] is None
+    t2 = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True, risk_max_loss=0.0)
+    assert run(monkeypatch, t2, bid=0.30, p=0.85, seconds=40, tmp=tmp_path)[1] is not None
