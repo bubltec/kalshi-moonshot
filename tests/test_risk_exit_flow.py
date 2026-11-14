@@ -309,3 +309,32 @@ def test_integration_a_hand_sale_seen_on_two_account_reads_closes_the_bet_so_the
     assert c.sold == []
     monkeypatch.setenv("ALLOW_REAL_MONEY", "true")
     assert risk.check(config.load(), store, TICKER, 1.0, max_trade=5.0).reason != "already holding this market"
+
+
+# ---- the perp is silent: the long layer falls back to the lane's own spot index (2026-11-13, Brent sold on a 9-second dip with "long layer n/a") ----
+
+def seed_spot_only(monkeypatch, last_over_strike):
+    """An hour of the lane's spot index (BRTI for KXBTC15M, armed against the strike 100.0) and a Kalshi perp with ONE old reading, as a futures reference is outside its hours."""
+    fresh = ticks_mod.TickHistory()
+    monkeypatch.setattr(ticks_mod, "history", fresh)
+    start = CLOSE - 4300.0
+    rows = [(start + 20.0 * k, 100.0 * (1.0 + last_over_strike) + (0.02 if k % 2 else -0.02)) for k in range(int((4300.0 - 100.0) // 20))]
+    fresh.warm("BRTI", rows, start)
+    fresh.warm("KP_BTC", [(CLOSE - 2000.0, 100.0)], CLOSE - 2000.0)
+    return fresh
+
+
+def test_integration_a_silent_perp_falls_back_to_the_spot_index_and_holds_a_dip(tmp_path, monkeypatch):
+    seed_spot_only(monkeypatch, last_over_strike=0.004)  # the spot sits 40 bp over the strike: a YES bet is fine on the long view
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    t = w.targets[(TICKER, "risk_only")]
+    assert t.shock_index == "BRTI" and t.shock_ref == 100.0
+    assert slide(w) == []  # the price dips through the max loss; the spot's hour says hold
+    assert t.risk_long is not None and t.risk_long > 0.9 and t.risk_long_fallback
+
+
+def test_integration_a_silent_perp_and_a_spot_under_the_strike_still_sells(tmp_path, monkeypatch):
+    seed_spot_only(monkeypatch, last_over_strike=-0.004)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    out = slide(w)
+    assert out and out[0].why.startswith("curve risk exit (max loss)")

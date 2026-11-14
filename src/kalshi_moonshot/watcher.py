@@ -239,6 +239,8 @@ class Target:
     risk_confirm: float = -1.0  # lane curve_risk_confirm (-1 = off): a risk sale also needs the long layer's chance under this
     risk_long: float | None = None
     risk_long_at: float = 0.0
+    risk_long_fallback: bool = False  # logged once: the long layer is read from the spot index because the perp is silent
+    risk_long_missing: bool = False  # logged once: no long layer at all
     risk_logged: bool = False
     comeback_noted: float = 0.0
     hold_since: float = 0.0  # when the comeback hold began (0 = none)
@@ -928,7 +930,18 @@ class ProfitWatcher:
         kp = perp_index(t.ticker.split("-")[0])
         hour = ticks_mod.history.window(kp, now - 3700.0, now) if kp else None
         ref = ticks_mod.history.first_at_or_after(kp, t.close_ts - 900.0, 60.0) if kp else None
-        t.risk_long = curverisk.long_chance(hour[0], hour[1], now, ref or 0.0, t.side, left) if hour else None
+        val = curverisk.long_chance(hour[0], hour[1], now, ref or 0.0, t.side, left) if hour else None
+        if val is None and t.shock_index and t.shock_ref > 0:
+            # The perp is silent or stale (a futures reference stops ticking outside its hours: KP_BRENT had one reading in 70 minutes on 2026-11-13 and the check fell away, so a 9-second dip sold a Brent bet on the price alone). Read the lane's own spot index against its armed reference instead.
+            spot = ticks_mod.history.window(t.shock_index, now - 3700.0, now)
+            val = curverisk.long_chance(spot[0], spot[1], now, t.shock_ref, t.side, left) if spot else None
+            if val is not None and not t.risk_long_fallback:
+                t.risk_long_fallback = True
+                log.info("curve risk: %s %s reads its long layer from %s (the Kalshi perp %s has no fresh reading)", t.ticker, t.lane, t.shock_index, kp or "n/a")
+        if val is None and not t.risk_long_missing:
+            t.risk_long_missing = True
+            log.warning("curve risk: %s %s has NO long layer (no fresh perp or spot hour): its sales go by the price alone", t.ticker, t.lane)
+        t.risk_long = val
         return t.risk_long
 
     def _risk_decide(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, long_chance: float | None = None) -> str | None:
