@@ -77,7 +77,7 @@ CLOSE = 9_900.0
 
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
+                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_take_room=0.0, risk_take_cover=1.0, risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -253,3 +253,25 @@ def test_unit_swing_hold_scales_with_the_market_and_with_k():
     assert curverisk.swing_hold(0.25, 0.10, 300, 1.0) is False
     assert curverisk.swing_hold(0.25, 0.10, 300, 2.0) is True  # a larger k widens the band
     assert curverisk.swing_hold(0.25, 0.10, 300, 0.5) is False
+
+
+def test_unit_take_profit_scales_by_the_bets_room_and_the_markets_swing():
+    # a 0.77 buy (room 0.21) and a 0.30 buy (room 0.70) at the same gain of 0.06: the first has made 29% of its room, the second 9%
+    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.25, 1.0) is True
+    assert curverisk.take_profit(0.06, 0.70, 0.10, 400, 0.25, 1.0) is False
+    # the same bet in a market whose swing over the time left is under the gain: nothing to take back
+    assert curverisk.take_profit(0.06, 0.21, 0.01, 400, 0.25, 1.0) is False
+    # the swing shrinks with the time left: the same gain is held near the close
+    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.25, 1.0) is True
+    assert curverisk.take_profit(0.06, 0.21, 0.10, 20, 0.25, 1.0) is False
+    # the cover asks for more swing per gain
+    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.25, 4.0) is True
+    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.25, 5.0) is False
+
+
+def test_unit_take_profit_is_off_without_a_setting_a_gain_a_unit_or_time():
+    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.0, 1.0) is False
+    assert curverisk.take_profit(-0.01, 0.21, 0.10, 400, 0.25, 1.0) is False
+    assert curverisk.take_profit(0.06, 0.0, 0.10, 400, 0.25, 1.0) is False
+    assert curverisk.take_profit(0.06, 0.21, None, 400, 0.25, 1.0) is False
+    assert curverisk.take_profit(0.06, 0.21, 0.10, 0, 0.25, 1.0) is False

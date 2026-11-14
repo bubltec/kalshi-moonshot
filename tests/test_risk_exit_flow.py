@@ -27,6 +27,8 @@ curve_risk_confirm={confirm}
 curve_risk_stop_hold={hold}
 curve_risk_swing={swing}
 curve_risk_swing_floor={floor}
+curve_take_room={take}
+curve_take_cover={cover}
 """
 
 
@@ -60,9 +62,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0, swing=0, floor=0):
+def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0, swing=0, floor=0, take=0, cover=1.0):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor, take=take, cover=cover))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -407,7 +409,7 @@ def test_integration_with_no_hold_the_stop_sells_at_once_as_before(tmp_path, mon
 def test_unit_the_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for hold in (0, 0.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, swing=0, floor=0))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, swing=0, floor=0, take=0, cover=1.0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_stop_hold" in got) is (hold > 0)
@@ -494,7 +496,7 @@ def test_integration_the_hold_is_logged_once_for_the_bet(tmp_path, monkeypatch, 
 def test_unit_the_swing_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for swing in (0, 1.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=swing, floor=0))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=swing, floor=0, take=0, cover=1.0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_swing" in got) is (swing > 0)
@@ -529,7 +531,75 @@ def test_integration_the_floor_is_a_chance_not_a_price_of_the_yes_side(tmp_path,
 def test_unit_the_floor_changes_a_lanes_version_only_when_set_with_the_swing(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for floor in (0, 0.1):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=1.5, floor=floor))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=1.5, floor=floor, take=0, cover=1.0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_swing_floor" in got) is (floor > 0)
+
+
+# ---- the profit take, scaled by the bet and its market (2026-11-14, user: "that needs to scale it needs to be based on the bet") ----
+# the fixture bet: YES bought at 0.81, a cost of about 0.821 with the fee, so 0.179 of room
+def test_integration_a_gain_that_is_a_big_share_of_the_bets_room_in_a_swinging_market_is_taken(tmp_path, monkeypatch):
+    feed_history(0.013)  # a typical minute of about 0.10: a swing of 0.27 over 450 s
+    w = held(tmp_path, monkeypatch, live=True, take=0.25)
+    sig = dip(w, 0.90, 450, seconds=3)  # a gain of 0.073 is 41% of the room, under the swing
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+def test_integration_a_gain_under_the_share_of_room_is_held(tmp_path, monkeypatch):
+    feed_history(0.013)
+    w = held(tmp_path, monkeypatch, live=True, take=0.25)
+    assert dip(w, 0.85, 450, seconds=3) is None  # a gain of 0.022 is 12% of the room
+
+
+def test_integration_the_same_gain_in_a_market_that_cannot_take_it_back_is_held(tmp_path, monkeypatch):
+    feed_history(0.0013)  # a typical minute of about 0.01: a swing of 0.027 over 450 s, under the gain of 0.073
+    w = held(tmp_path, monkeypatch, live=True, take=0.25)
+    assert dip(w, 0.90, 450, seconds=3) is None
+
+
+def test_integration_near_the_close_the_swing_is_too_small_and_the_gain_rides_to_settlement(tmp_path, monkeypatch):
+    feed_history(0.013, to_left=10)
+    w = held(tmp_path, monkeypatch, live=True, take=0.25)
+    assert dip(w, 0.90, 12, seconds=3) is None  # 0.10 * sqrt(12 / 60) = 0.045 under the gain of 0.073
+
+
+def test_integration_the_take_is_off_by_default(tmp_path, monkeypatch):
+    feed_history(0.013)
+    w = held(tmp_path, monkeypatch, live=True, take=0)
+    assert dip(w, 0.90, 450, seconds=3) is None
+
+
+def test_integration_in_shadow_the_take_logs_and_sells_nothing(tmp_path, monkeypatch, caplog):
+    import logging
+
+    feed_history(0.013)
+    w = held(tmp_path, monkeypatch, live=False, take=0.25)
+    with caplog.at_level(logging.INFO):
+        assert dip(w, 0.90, 450, seconds=3) is None
+    assert any("would sell: curve risk exit (profit take)" in r.getMessage() for r in caplog.records)
+
+
+def test_integration_the_take_sale_is_executed_as_an_order(tmp_path, monkeypatch):
+    c = Client(bid=0.90)
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    feed_history(0.013)
+    w = held(tmp_path, monkeypatch, live=True, client=c, take=0.25)
+    job = None
+    ticks_mod.mids.note(TICKER, CLOSE - 450, 0.895, 0.905)
+    yes_bid(w, 0.90, 450)
+    if not w._jobs.empty():
+        job = w._jobs.get_nowait()
+    assert job is not None
+    w._sell(*job)
+    assert len(c.sold) == 1
+    assert len(Store(config.load().db_path).open_bets()) == 0
+
+
+def test_unit_the_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    for take in (0, 0.25):
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take=take, cover=1.0))
+        s = config.load()
+        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
+        assert ("curve_take_room" in got) is (take > 0)

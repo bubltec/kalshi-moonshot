@@ -110,3 +110,12 @@ def swing_hold(drop: float, unit: float | None, left: float, k: float) -> bool:
     if k <= 0 or unit is None or unit <= 0 or left <= 0:
         return False
     return drop < k * unit * math.sqrt(left / MINUTE)
+
+
+def take_profit(gain: float, room: float, unit: float | None, left: float, share: float, cover: float) -> bool:
+    """True when a profit is worth taking now, read off the bet itself and its own market (2026-11-14, user, on a BTC NO bought at 0.77 that rose to 0.85, fell to 0.26 and was sold for -67%: "that needs to scale it needs to be based on the bet").
+    `gain` is the profit per contract in probability (the bid after its sell fee less the cost with its buy fee), `room` the most this bet could still have made (1 less that cost), `unit` the market's own typical minute (quoteshock.typical_minute), `left` the seconds to the close, `share` the lane's setting (0 = off), `cover` how many times the gain the market's own swing over the time left must be.
+    Two readings, both from the bet and not a fixed cent figure: the gain has to be at least `share` of the room the bet had (a 0.77 buy has 0.21 of room, a 0.30 buy has 0.70, so the same share asks 0.05 of the first and 0.18 of the second), and the market's swing over the time left (unit * sqrt(left / 60)) has to be at least `cover` times the gain, so the gain is small enough for this market to take back. As the close nears the swing shrinks and a held gain turns into a won bet instead of a sale. No reading of the unit means no sale."""
+    if share <= 0 or gain <= 0 or room <= 0 or unit is None or unit <= 0 or left <= 0:
+        return False
+    return gain >= share * room and unit * math.sqrt(left / MINUTE) >= cover * gain

@@ -236,6 +236,8 @@ class Target:
     risk_unit: float | None = None
     risk_unit_at: float = 0.0
     risk_swing_noted: bool = False
+    risk_take_room: float = 0.0  # the profit take: the share of the bet's own room a gain must be (lane field curve_take_room)
+    risk_take_cover: float = 1.0  # how many times the gain the market's swing over the time left must be (lane field curve_take_cover)
     risk_stop_hold: float = 0.0  # the max-loss stop waits this share of the time left (lane field curve_risk_stop_hold)
     risk_at: float = 0.0  # the risk check reads at most once a second
     risk_noted: float = 0.0
@@ -954,18 +956,36 @@ class ProfitWatcher:
         t.risk_long = val
         return t.risk_long
 
+    def _risk_unit(self, t: Target, now: float) -> float | None:
+        """The market's own typical minute (quoteshock.typical_minute: sqrt(60) times the root-mean-square one-second change of its mid over the last 15 minutes), read from the quotes at most every 5 s and kept on the target."""
+        if now - t.risk_unit_at >= 5.0:
+            t.risk_unit_at = now
+            t.risk_unit = quoteshock.typical_minute(ticks_mod.mids.rows(t.ticker), now)
+        return t.risk_unit
+
     def _risk_decide(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, long_chance: float | None = None) -> str | None:
         """The sale decision both risk paths share: the watch line every 10 s, the max loss (sells at once), the line (sells after the scaled wait), and in shadow one logged and recorded would-sell per bet (data/risk_shadow.jsonl, for scoring against what the bet really got)."""
         if now - t.risk_noted >= 10.0:
             t.risk_noted = now
             log.info("curve risk watch %s %s, %.0fs left: chance %.3f (%s worse; price %.3f, spot %.3f, history x%.2f, long layer %s), line %.2f, result %+.1f%% of cost%s", t.ticker, t.lane, left, r.q, r.worse, r.q_price, r.q_spot, t.risk_hist, "n/a" if long_chance is None else f"{long_chance:.3f}", t.risk_sell, pnl * 100.0, "" if t.risk_live else " [shadow]")
+        if t.risk_take_room > 0 and pnl > 0 and bid >= CURVE_MIN_BID:  # the profit take comes before the hour view: a bet that is well ahead is the one to cash, whatever the hour says
+            unit = self._risk_unit(t, now)
+            basis = t.entry + fee_per_contract(t.entry)
+            gain = (bid - fee_per_contract(bid)) - basis
+            if curverisk.take_profit(gain, 1.0 - basis, unit, left, t.risk_take_room, t.risk_take_cover):
+                reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead ({gain / max(1.0 - basis, 1e-9) * 100.0:.0f}% of its {1.0 - basis:.3f} room, asked {t.risk_take_room * 100.0:.0f}%), and this market's own swing over the {left:.0f}s left is {unit * (left / 60.0) ** 0.5:.3f} (typical minute {unit:.3f}), at least {t.risk_take_cover:g} x the gain; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+                if t.risk_live:
+                    self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True)
+                    return reason
+                if not t.risk_logged:
+                    t.risk_logged = True
+                    log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+                    self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False)
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= t.risk_confirm:
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             return None
         if t.risk_swing > 0 and pnl < 0 and r.q >= t.risk_swing_floor:  # under the floor the market already prices the bet as nearly dead: a loss is not inside any swing
-            if now - t.risk_unit_at >= 5.0:  # the typical minute is read from 15 minutes of quotes: not every second
-                t.risk_unit_at = now
-                t.risk_unit = quoteshock.typical_minute(ticks_mod.mids.rows(t.ticker), now)
+            self._risk_unit(t, now)
             drop = (t.entry + fee_per_contract(t.entry)) - (bid - fee_per_contract(bid))
             if curverisk.swing_hold(drop, t.risk_unit, left, t.risk_swing):
                 if not t.risk_swing_noted:
@@ -1806,6 +1826,7 @@ class ProfitWatcher:
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_stop_hold, held.risk_swing, held.risk_swing_floor = spec.curve_risk_stop_hold, spec.curve_risk_swing, spec.curve_risk_swing_floor
+                held.risk_take_room, held.risk_take_cover = spec.curve_take_room, spec.curve_take_cover
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
