@@ -180,19 +180,3 @@ def still_falling(samples: list[tuple[float, float]], now: float, seconds: float
 def stop_miss(net: float, basis: float, q: float, max_loss: float) -> float:
     """How far the bet is from the max-loss stop, per contract in probability: zero or less = at or past it (stopped() is true), positive = that much short of it."""
     return (net - basis) + max_loss * q * basis
-
-
-def squeeze_loss(pnl: float, miss: float, q: float, line: float, max_loss: float, noise: float) -> bool:
-    """Whether a losing bet may be squeezed (lane field squeeze_seconds): it has FLIPPED, the chance the side pays is under the lane's line (the market now prices a win as the less likely result), and it is at, past or within the market's own noise of the max-loss stop.
-    A loss on a bet still priced over the line is never squeezed, however deep (2026-11-14, user, on sales at 0.52 and 0.46 with nine minutes left: "it didn't even cross the strike"; then, asked whether three minutes left is too early: "Yes 3 minutes is too soon, unless the vision has flipped and win looks unlikely"). The caller adds the time left (the swing hold comes first), the history read (still_falling) and the hour view."""
-    if pnl >= 0 or noise <= 0 or line <= 0 or q >= line:
-        return False
-    return max_loss <= 0 or miss < noise
-
-
-def squeeze_profit(gain: float, high_gain: float, room: float, left: float, window: float, rebuy_fee: float, noise: float) -> bool:
-    """Whether a profit that had cleared the take's bar and was held for its slope has now slipped just under it (lane field squeeze_seconds): the gain at the look back's high was over the bar, the gain now is under it by less than the market's own noise, and it still pays the buy-back fee. The caller adds that the bid is under that high. A gain that never cleared the bar is not squeezed: on a profit the squeeze only stops a cleared gain from getting away."""
-    if gain <= 0 or room <= 0 or window <= 0 or left <= 0 or gain <= rebuy_fee or noise <= 0:
-        return False
-    bar = min(max(1.0 - left / window, 0.0), 1.0) * room
-    return high_gain >= bar and 0.0 < bar - gain < noise

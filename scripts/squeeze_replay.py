@@ -1,4 +1,5 @@
-"""Would the squeeze (paper, lane field squeeze_seconds) have sold a losing bet? One bet replayed on its own taped quotes, second by second (2026-11-14).
+"""RECORD OF THREE RETIRED VERSIONS of the squeeze (2026-11-14): each made it an exit of its own, which was more than was asked for; the squeeze is now only a near-miss nudge on the existing sell bars (watcher._risk_decide). Kept so the result files of that day can be rerun.
+Would the squeeze (paper, lane field squeeze_seconds) have sold a losing bet? One bet replayed on its own taped quotes, second by second (2026-11-14).
 The squeeze: a losing bet at, past or within the market's noise over 5 s of the max-loss stop or the 0.50 line is sold at once when its bid is sliding over the look back (8% of the time left): fallen by more than its noise, not bounced, and already down half the look back ago.
 Run on the host: scripts/cloud.sh run scripts/squeeze_replay.py TICKER=... SIDE=no ENTRY=0.78 BOUGHT=<epoch>
 HOLD=1 puts the swing hold in front of it, as the second version does (a loss under 1.5 x typical minute x sqrt(left / 60) is held while the bid net of its fee is at least 0.10): then time left decides whether the squeeze acts at all. HOLD=0 is the first version, which went ahead of the hold.
@@ -38,7 +39,7 @@ while t < close - 8:
         held = HOLD and pnl < 0 and net >= FLOOR and unit and (basis - net) < SWING * unit * math.sqrt(left / 60.0)
         if pnl < 0 and bid >= 0.05 and noise > 0 and not held:
             miss = curverisk.stop_miss(net, basis, net, MAX_LOSS)
-            if (not FLIPPED or net < LINE) and (miss < noise if FLIPPED else curverisk.squeeze_loss(pnl, miss, net, LINE, MAX_LOSS, noise)) and curverisk.still_falling(hist, float(t), SHARE * left, unit):
+            if (not FLIPPED or net < LINE) and (miss < noise if FLIPPED else (pnl < 0 and (miss < noise or net < LINE + noise))) and curverisk.still_falling(hist, float(t), SHARE * left, unit):
                 sold = (t, bid, net - basis, left, unit)
                 break
     t += 1

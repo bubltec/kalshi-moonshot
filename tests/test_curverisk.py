@@ -329,27 +329,6 @@ def test_unit_stop_miss_is_zero_at_the_stop_and_positive_short_of_it():
     assert (curverisk.stop_miss(0.56, 0.80, 0.56, 0.5) <= 0) is curverisk.stopped((0.56 - 0.80) / 0.80, 0.56, 0.5)
 
 
-def test_unit_squeeze_loss_needs_a_bet_that_has_flipped_under_the_line():
-    assert curverisk.squeeze_loss(-0.5, -0.05, 0.38, 0.5, 0.5, 0.03) is True  # the SOL bets: priced at 0.38, past the stop
-    assert curverisk.squeeze_loss(-0.3, -0.01, 0.52, 0.5, 0.5, 0.03) is False  # the live sale at 0.52: past the stop but still over the line
-    assert curverisk.squeeze_loss(-0.4, -0.03, 0.46, 0.5, 0.5, 0.03) is True  # flipped and past the stop (time left is the caller's check)
-    assert curverisk.squeeze_loss(-0.1, 0.02, 0.48, 0.5, 0.5, 0.03) is True  # flipped and 0.02 short of the stop: inside the noise
-    assert curverisk.squeeze_loss(-0.1, 0.05, 0.48, 0.5, 0.5, 0.03) is False  # flipped but clear of the stop
-    assert curverisk.squeeze_loss(-0.3, -0.01, 0.45, 0.0, 0.5, 0.03) is False  # the lane has no line: nothing says the bet has flipped
-    assert curverisk.squeeze_loss(0.05, -0.01, 0.45, 0.5, 0.5, 0.03) is False  # in profit
-    assert curverisk.squeeze_loss(-0.3, -0.01, 0.45, 0.5, 0.5, 0.0) is False  # no reading of the noise
-
-
-def test_unit_squeeze_profit_only_saves_a_gain_that_had_cleared_the_bar():
-    # room 0.20, half the market gone: the bar is 0.10
-    assert curverisk.squeeze_profit(0.09, 0.12, 0.20, 450, 900, 0.01, 0.03) is True  # was 0.12 at its high, now 0.01 under the bar
-    assert curverisk.squeeze_profit(0.09, 0.095, 0.20, 450, 900, 0.01, 0.03) is False  # never cleared the bar
-    assert curverisk.squeeze_profit(0.06, 0.12, 0.20, 450, 900, 0.01, 0.03) is False  # 0.04 under: it is gone, not near
-    assert curverisk.squeeze_profit(0.11, 0.12, 0.20, 450, 900, 0.01, 0.03) is False  # still over the bar: the plain take decides
-    assert curverisk.squeeze_profit(0.09, 0.12, 0.20, 450, 900, 0.095, 0.03) is False  # does not pay the buy-back fee
-    assert curverisk.squeeze_profit(0.09, 0.12, 0.20, 450, 900, 0.01, 0.0) is False
-
-
 def test_unit_a_stretched_bets_slide_counts_after_a_quarter_of_the_look_back():
     crash = [(float(t), 0.80) for t in range(0, 10)] + [(float(t), 0.60) for t in range(10, 14)]  # down for 3 s of a 10 s look back
     assert curverisk.still_falling(crash, 13.0, 10.0, 0.10) is False  # a plain bet: it must have been down for 5 s

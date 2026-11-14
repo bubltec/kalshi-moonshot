@@ -978,24 +978,21 @@ class ProfitWatcher:
             t.risk_take_hist.append((now, bid))
             while t.risk_take_hist and t.risk_take_hist[0][0] < now - max(60.0, 2.0 * look):
                 t.risk_take_hist.pop(0)
-        noise = 0.0
+        # The squeeze (lane field squeeze_seconds): the mirror of the buy's stretch. When a sale is being weighed and the reading is just short of its sell bar (by less than this market moves in squeeze_seconds), and the recent history says the bid is heading down (a slide over the look back: curverisk.still_falling), the bar counts as reached. It applies to one bar, the max loss's depth. (Not to the profit take's bar: a gain within a few seconds' noise of that bar cannot also have slid by more than the look back's noise, so the two conditions never meet, and the take has its own slope rule. Not to the line: its sale waits out a recovery time, and a slide that lasts that long crosses the line anyway.) Nothing else about the sale changes: the hour view, the swing hold and the stop's wait all still apply.
+        noise, sliding, squeezed = 0.0, False, ""
         if t.risk_squeeze > 0:
             unit = self._risk_unit(t, now)
             noise = unit * (t.risk_squeeze / 60.0) ** 0.5 if unit else 0.0
+            sliding = noise > 0 and curverisk.still_falling(t.risk_take_hist, now, look, unit, STRETCHED_STAY if t.risk_stretched else 0.5)
         if t.risk_take:  # the profit take comes before the hour view: a bet that is well ahead is the one to cash, whatever the hour says
             gain = net - basis
             room, rebuy = 1.0 - basis, fee_per_contract(bid)
             unit = self._risk_unit(t, now)
+            bar = curverisk.take_bar(gain, room, left, 900.0, unit)
             taken = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit) and not curverisk.still_rising(t.risk_take_hist, now, look, unit)
-            high = max((b for ts, b in t.risk_take_hist if ts >= now - look), default=bid)
-            squeezed = not taken and noise > 0 and pnl > 0 and bid >= CURVE_MIN_BID and bid < high and curverisk.squeeze_profit(gain, (high - fee_per_contract(high)) - basis, room, left, 900.0, rebuy, noise)
-            if taken or squeezed:
+            if taken:
                 used = 1.0 - left / 900.0
-                bar = curverisk.take_bar(gain, room, left, 900.0, unit)
-                if taken:
-                    reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room against a bar of {bar / max(room, 1e-9) * 100.0:.0f}% ({'half the room: what is left to win is inside this market swing over the time left' if bar < used * room - 1e-9 else f'{used * 100.0:.0f}% of the market is gone'}, {left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
-                else:
-                    reason = f"curve risk exit (profit take) [squeeze: the gain cleared the bar at {high:.2f} and has slipped to {gain:.3f} a contract, {used * room - gain:.3f} under the bar ({used * 100.0:.0f}% of its {room:.3f} room, {left:.0f}s left), inside this market's {noise:.3f} of noise over {t.risk_squeeze:g}s]; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+                reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room against a bar of {bar / max(room, 1e-9) * 100.0:.0f}% ({'half the room: what is left to win is inside this market swing over the time left' if bar < used * room - 1e-9 else f'{used * 100.0:.0f}% of the market is gone'}, {left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
                 if t.risk_live:
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True)
                     return reason
@@ -1015,19 +1012,12 @@ class ProfitWatcher:
                     log.info("curve risk: %s %s holds a loss of %.3f: under %.1f x the market's own swing over %.0fs (typical minute %.3f)", t.ticker, t.lane, drop, t.risk_swing, left, t.risk_unit or 0.0)
                 t.risk_since = 0.0  # the loss is inside what this market does in the time left: no clock runs toward a sale
                 return None
-        if noise > 0 and pnl < 0 and bid >= CURVE_MIN_BID:  # the squeeze on a loss: at, past or near a sell bar and sliding. It comes AFTER the swing hold, so time left decides whether it exists at all (2026-11-14, user, after it sold two bets two minutes after the buy with nine minutes left: "at that time distance it should be nonexistent"): a loss inside what the market can move in the time left never reaches here. Past that band it skips the stop's wait
+        stop = curverisk.stopped(pnl, r.q, t.risk_max_loss)  # the max loss
+        if not stop and sliding and pnl < 0 and t.risk_max_loss > 0:
             miss = curverisk.stop_miss(net, basis, r.q, t.risk_max_loss)
-            if curverisk.squeeze_loss(pnl, miss, r.q, t.risk_sell, t.risk_max_loss, noise) and curverisk.still_falling(t.risk_take_hist, now, look, t.risk_unit, STRETCHED_STAY if t.risk_stretched else 0.5):
-                where = "at or past the max loss" if miss <= 0 else f"{miss:.3f} short of the max loss"
-                reason = f"curve risk exit [squeeze: the bet has flipped (the chance it pays, {r.q:.3f}, is under the line {t.risk_sell:.2f}), a loss {where}, outside what this market can move in the {left:.0f}s left, and the bid has slid over the last {look:.0f}s without a bounce (typical minute {t.risk_unit or 0.0:.3f}){', a stretched buy: squeezed sooner' if t.risk_stretched else ''}]; the chance the side pays is {r.q:.3f}; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
-                if t.risk_live:
-                    self._risk_record(t, r, bid, now, left, pnl, 0.0, True, True)
-                    return reason
-                if not t.risk_logged:
-                    t.risk_logged = True
-                    log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
-                    self._risk_record(t, r, bid, now, left, pnl, 0.0, True, False)
-        stop = curverisk.stopped(pnl, r.q, t.risk_max_loss) and bid >= CURVE_MIN_BID  # the max loss: sell now (below this bid the market has priced the loss and there is nothing to sell for)
+            if 0.0 < miss < noise:  # the squeeze on the max loss: just short of its depth, and heading down
+                stop, squeezed = True, f" [squeeze: {miss:.3f} short of the max loss, inside this market's {noise:.3f} of noise over {t.risk_squeeze:g}s, and the bid is sliding]"
+        stop = stop and bid >= CURVE_MIN_BID  # below this bid the market has priced the loss and there is nothing to sell for
         if not stop and (bid < CURVE_MIN_BID or not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):  # under the minimum bid there is nothing left to sell for, on the line as on the max loss
             t.risk_since = 0.0
             return None
@@ -1040,7 +1030,7 @@ class ProfitWatcher:
         wait = max(0.0, t.risk_stop_hold * left) if stop else curverisk.wait(r.q, t.risk_sell, left, base, t.curve_wait_share if t.curve_wait_share > 0 else 0.25)
         if now - t.risk_since < wait:
             return None
-        reason = f"curve risk exit{' (max loss)' if stop else ''}: the chance the side pays is {r.q:.3f} ({r.worse} cushion the worse: price {r.q_price:.3f}, spot {r.q_spot:.3f}, history x{t.risk_hist:.2f}), line {t.risk_sell:.2f}, held {now - t.risk_since:.0f}s of a {wait:.0f}s wait; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
+        reason = f"curve risk exit{' (max loss)' if stop else ''}: the chance the side pays is {r.q:.3f} ({r.worse} cushion the worse: price {r.q_price:.3f}, spot {r.q_spot:.3f}, history x{t.risk_hist:.2f}), line {t.risk_sell:.2f}, held {now - t.risk_since:.0f}s of a {wait:.0f}s wait; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left{squeezed}"
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, wait, stop, True)  # a live signal is kept on disk too: the container log is lost at every rebuild, and an exit that did not happen has to be explainable afterward
             return reason
