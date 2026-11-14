@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import queue
 import threading
 import time
 import uuid
@@ -197,6 +198,7 @@ class Worker:
             log.info("tape recorder on: %s (kept %.0f days)", self.s.tape_path, self.s.tape_keep_days)
             self._start_watcher()
             self._start_entry_watcher()
+            self._start_market_events()
             self._start_settlement_edge()
         except Exception:
             log.exception("could not start the tape recorder; continuing without it")
@@ -733,6 +735,8 @@ class Worker:
         """Keep one scope and one review job alive per two-level lane (also picks up a lane
         turned on by a settings change)."""
         for spec in tiered_lanes(self.s):
+            if self._driven(spec):
+                continue  # kept by the stream's events: no timer keeps it alive (see _on_market_event)
             now = time.time()
             self.jobs.ensure(
                 f"lane_scope:{spec.name}", now, max_attempts=self.s.job_max_attempts,
@@ -743,6 +747,55 @@ class Worker:
                 priority=job_priority(self.s, spec),
             )
 
+    def _driven(self, spec) -> bool:
+        """True when this lane's scope and review run on the stream's events and not on a timer (2026-11-14, user: "we need to get rid of these timers"): the lane reviews on a socket quote (entry_socket) and the market list is kept from the lifecycle channel. While the stream is down the timers run as before."""
+        cache = getattr(self.client, "cache", None)
+        return bool(spec.entry_socket and cache is not None and hasattr(cache, "fed") and cache.fed())
+
+    def _start_market_events(self) -> None:
+        """A thread that turns the stream's market events into scope runs: a new or reopened market, or a changed close, scopes the lanes that trade its series at once; the stream coming up scopes every lane, and the stream going down puts the timers back."""
+        if getattr(self, "_market_q", None) is not None or self.recorder is None:
+            return
+        self._market_q: queue.SimpleQueue = queue.SimpleQueue()
+        self.recorder.market_listeners.append(lambda e: self._market_q.put(("market", e)))
+        cache = getattr(self.client, "cache", None)
+        if cache is not None and hasattr(cache, "fed_listeners"):
+            cache.fed_listeners.append(lambda up: self._market_q.put(("feed", up)))
+        threading.Thread(target=self._run_market_events, name="market-events", daemon=True).start()
+
+    def _run_market_events(self) -> None:
+        store = Store(self.s.db_path, self.s.exclude_versions)
+        jobs = Jobs(store)
+        while not self.stopping:
+            try:
+                kind, item = self._market_q.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            try:
+                self._on_market_event(jobs, kind, item)
+            except Exception:
+                log.exception("market event %s failed", kind)
+
+    def _on_market_event(self, jobs: Jobs, kind: str, item: Any) -> None:
+        """One market event or feed change onto the scope jobs. Separate from the thread so a test can drive it."""
+        if kind == "feed":
+            if item:
+                for spec in tiered_lanes(self.s):
+                    if self._driven(spec):
+                        jobs.run_now(f"lane_scope:{spec.name}", priority=job_priority(self.s, spec))
+            else:
+                for spec in tiered_lanes(self.s):  # stream down: the timers come back
+                    now = time.time()
+                    jobs.ensure(f"lane_scope:{spec.name}", now, max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec))
+                    jobs.ensure(f"lane_review:{spec.name}", now + 15, max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec))
+            return
+        if item.get("event") not in {"created", "activated", "close_date_updated"}:
+            return
+        series = str(item.get("ticker", "")).split("-")[0]
+        for spec in tiered_lanes(self.s):
+            if self._driven(spec) and series in runner.lane_series(spec, self.s):
+                jobs.run_now(f"lane_scope:{spec.name}", priority=job_priority(self.s, spec))
+
     def _tiered_spec(self, job: Job):
         spec = lane_specs(self.s).get(job.kind.partition(":")[2])
         return spec if spec is not None and spec.enabled and tiered(spec) else None
@@ -751,10 +804,11 @@ class Worker:
         spec = self._tiered_spec(job)
         if spec is None:
             return "lane off or not two-level; not rescheduled"
-        self.jobs.ensure(
-            job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
-            max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec),
-        )
+        if not self._driven(spec):  # a lane the stream drives is scoped by its events, not by this timer
+            self.jobs.ensure(
+                job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
+                max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec),
+            )
         if spec.name in POLY_LANES and self._poly() is None:
             return "polymarket paper lane has no client"
         venue = self._venue(spec.name)
@@ -769,10 +823,11 @@ class Worker:
         if spec is None:
             return "lane off or not two-level; not rescheduled"
         every = (spec.review_minutes or 2.0) * 60
-        self.jobs.ensure(
-            job.kind, time.time() + every, max_attempts=self.s.job_max_attempts,
-            priority=job_priority(self.s, spec),
-        )
+        if not self._driven(spec):  # a lane the stream drives is reviewed on a socket quote or an index tick, not by this timer
+            self.jobs.ensure(
+                job.kind, time.time() + every, max_attempts=self.s.job_max_attempts,
+                priority=job_priority(self.s, spec),
+            )
         if spec.name in POLY_LANES and self._poly() is None:
             return "polymarket paper lane has no client"
         venue = self._venue(spec.name)

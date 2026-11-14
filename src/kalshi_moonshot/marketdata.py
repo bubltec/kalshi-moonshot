@@ -16,7 +16,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 log = logging.getLogger("moonshot")
@@ -42,6 +42,9 @@ class MarketCache:
         self._event_series: dict[str, str] = {}
         self._ticker_series: dict[str, str] = {}
         self._quotes: dict[str, tuple[float, float, float]] = {}  # ticker -> (time, yes bid, yes ask), from the live stream
+        self.fed_listeners: list[Callable[[bool], None]] = []  # called with True when the lifecycle subscription is confirmed and with False when its connection ends
+        self._fed_since: float | None = None  # when the lifecycle subscription was confirmed on the open connection; None while there is none
+        self._created: dict[str, dict[str, Any]] = {}  # markets announced by the stream, kept so a listing read just before one was announced does not lose it
         self.hits = 0
         self.misses = 0
 
@@ -49,7 +52,9 @@ class MarketCache:
     def put_series(self, series: str, rows: list[dict[str, Any]]) -> None:
         now = self._clock()
         with self._lock:
-            self._series[series] = (now, [dict(m) for m in rows])
+            have = {m.get("ticker") for m in rows}
+            extra = [dict(m) for t, m in self._created.items() if m.get("series_ticker") == series and t not in have]
+            self._series[series] = (now, [dict(m) for m in rows] + extra)
             for m in rows:
                 if m.get("event_ticker"):
                     self._event_series[m["event_ticker"]] = series
@@ -69,6 +74,88 @@ class MarketCache:
         if bid is None or ask is None or ask <= 0:
             return
         self._quotes[ticker] = (ts if ts is not None else self._clock(), float(bid), float(ask))
+
+    # ---- keeping the list from the stream (2026-11-14, user: "why would anything go stale? it would just mean you're not subscribed to the correct websocket events") ----
+    def feed(self, up: bool) -> None:
+        """The lifecycle subscription is confirmed (True) or its connection ended (False). A listing read after the confirmation is kept current by the stream's events and does not expire; a connection that ends makes every listing unproven until it is read again."""
+        with self._lock:
+            self._fed_since = self._clock() if up else None
+        for fn in list(self.fed_listeners):  # the listings read before a confirmation are unproven: whoever reads them wakes up and reads them again
+            try:
+                fn(up)
+            except Exception:
+                log.exception("market cache: feed listener failed")
+
+    def fed(self) -> bool:
+        """True while the lifecycle subscription is confirmed on an open connection."""
+        with self._lock:
+            return self._fed_since is not None
+
+    def live(self, series: str) -> bool:
+        """True when this series' listing was read after the stream's subscription was confirmed, so the stream's events have kept it current since."""
+        with self._lock:
+            return self._live_locked(series)
+
+    def _live_locked(self, series: str) -> bool:
+        hit = self._series.get(series)
+        return self._fed_since is not None and hit is not None and hit[0] >= self._fed_since
+
+    @staticmethod
+    def _iso(v: Any) -> str:
+        """A time from the stream (epoch seconds, milliseconds or text) as the ISO text the listing uses."""
+        if isinstance(v, (int, float)) and v > 0:
+            return datetime.fromtimestamp(v / 1000.0 if v > 1e11 else v, UTC).isoformat().replace("+00:00", "Z")
+        return str(v) if v else ""
+
+    def apply_market(self, e: dict[str, Any]) -> None:
+        """One lifecycle event onto the listing: created adds the market, activated and deactivated set its status, close_date_updated moves its close, a strike sets its target, and a result or a settlement removes it."""
+        ticker, kind = str(e.get("ticker") or ""), e.get("event") or e.get("kind")
+        if not ticker:
+            return
+        series = ticker.split("-")[0]
+        with self._lock:
+            hit = self._series.get(series)
+            rows = hit[1] if hit else None
+            row = next((m for m in rows if m.get("ticker") == ticker), None) if rows is not None else None
+            if kind == "created":
+                new = {"ticker": ticker, "event_ticker": e.get("event_ticker") or "-".join(ticker.split("-")[:2]), "series_ticker": series, "title": e.get("title") or "", "yes_sub_title": e.get("sub") or "",
+                       "rules_primary": e.get("rules") or "", "floor_strike": e.get("strike"), "cap_strike": e.get("cap"), "open_time": self._iso(e.get("open_ts")), "close_time": self._iso(e.get("close_ts")),
+                       "status": "active", "market_type": "binary", "yes_bid_dollars": "0.0000", "yes_ask_dollars": "0.0000", "volume_fp": "0"}
+                self._created[ticker] = new
+                self._event_series[new["event_ticker"]] = series
+                self._ticker_series[ticker] = series
+                if rows is not None and row is None:
+                    rows.append(dict(new))
+                return
+            if kind in {"settled", "result", "determined"}:
+                self._created.pop(ticker, None)
+                if rows is not None:
+                    rows[:] = [m for m in rows if m.get("ticker") != ticker]
+                return
+            for m in (row, self._created.get(ticker)):
+                if m is None:
+                    continue
+                if kind == "activated":
+                    m["status"] = "active"
+                elif kind == "deactivated":
+                    m["status"] = "inactive"
+                elif kind == "close_date_updated" and e.get("close_ts"):
+                    m["close_time"] = self._iso(e["close_ts"])
+                elif kind == "strike" and e.get("strike"):
+                    m["floor_strike"] = e["strike"]
+
+    def _open_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Rows of a stream-kept listing that are still open: one past its close time is closed whether or not its settlement has been announced yet."""
+        now = self._clock()
+        out = []
+        for m in rows:
+            try:
+                if datetime.fromisoformat(str(m.get("close_time", "")).replace("Z", "+00:00")).timestamp() <= now:
+                    continue
+            except ValueError:
+                pass
+            out.append(m)
+        return out
 
     # ---- reading ----
     def _overlay(self, m: dict[str, Any], fetched: float) -> dict[str, Any]:
@@ -121,6 +208,9 @@ class MarketCache:
     def get_series(self, series: str, max_age: float) -> list[dict[str, Any]] | None:
         with self._lock:
             hit = self._series.get(series)
+            if hit and self._live_locked(series):  # kept by the stream's events: it has no age
+                self.hits += 1
+                return [self._overlay(m, 0.0) for m in self._open_rows(hit[1])]
             if hit and self._clock() - hit[0] <= max_age and not self._rolled_rows(hit[1]):
                 self.hits += 1
                 return [self._overlay(m, hit[0]) for m in hit[1]]
@@ -130,6 +220,12 @@ class MarketCache:
     def get_event(self, event: str, max_age: float) -> list[dict[str, Any]] | None:
         with self._lock:
             now = self._clock()
+            series = self._event_series.get(event, "")
+            if series and self._live_locked(series):  # kept by the stream's events: it has no age
+                rows = [m for m in self._open_rows(self._series[series][1]) if m.get("event_ticker") == event]
+                if rows:
+                    self.hits += 1
+                    return [self._overlay(m, 0.0) for m in rows]
             direct = self._events.get(event)
             if direct and now - direct[0] <= max_age:
                 self.hits += 1
@@ -180,6 +276,8 @@ class Discovery:
         self.get_client, self.get_settings, self.wanted = get_client, get_settings, wanted  # the client can be replaced when the key or the rate limit changes
         self.hot = hot
         self._stop = threading.Event()
+        self._wake_hot = threading.Event()
+        self._wake = threading.Event()  # set when the stream's subscription is confirmed: the series are read at once, not at the next tick
         self._thread: threading.Thread | None = None
         self._hot_thread: threading.Thread | None = None
         self.last_cycle = 0.0
@@ -191,6 +289,9 @@ class Discovery:
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
+        cache = getattr(self.get_client(), "cache", None)
+        if cache is not None and hasattr(cache, "fed_listeners"):
+            cache.fed_listeners.append(lambda up: (self._wake.set(), self._wake_hot.set()) if up else None)
         self._thread = threading.Thread(target=self._run, name="discovery", daemon=True)
         self._thread.start()
         if self.hot is not None:
@@ -203,6 +304,11 @@ class Discovery:
     def _fresh(self, client: Any, series: str, within: float) -> bool:
         """True when the series was listed less than `within` seconds ago and its listed window has not rolled. A window that has closed is not fresh: the next window must be seen the moment it opens."""
         cache = getattr(client, "cache", None)
+        if cache is not None and hasattr(cache, "live"):
+            if cache.live(series):
+                return True  # the stream keeps it: no clock decides when it is read again
+            if cache.fed():
+                return False  # the stream is up and this series has not been read since: read it now
         age = cache.series_age(series) if cache is not None and hasattr(cache, "series_age") else None
         if age is None or age >= within:
             return False
@@ -254,6 +360,11 @@ class Discovery:
         self.last_hot, self.last_hot_count = time.time(), done
         return done
 
+    def _wait(self, seconds: float, wake: threading.Event) -> None:
+        """Until the next pass is due or the stream's subscription is confirmed, whichever comes first."""
+        wake.wait(seconds)
+        wake.clear()
+
     def _run_hot(self) -> None:
         while not self._stop.is_set():
             s = self.get_settings()
@@ -262,7 +373,7 @@ class Discovery:
                     self.hot_cycle()
                 except Exception:
                     log.exception("discovery fast cycle failed")
-            self._stop.wait(max(5.0, float(getattr(s, "discovery_hot_seconds", 15.0))))
+            self._wait(max(5.0, float(getattr(s, "discovery_hot_seconds", 15.0))), self._wake_hot)
 
     def _run(self) -> None:
         reported = time.time()
@@ -278,4 +389,4 @@ class Discovery:
                     cache = getattr(self.get_client(), "cache", None)
                     if cache is not None:
                         log.info("discovery: %d series listed per cycle; %s", self.last_count, cache.stats())
-            self._stop.wait(max(5.0, float(getattr(s, "discovery_seconds", 45.0))))
+            self._wait(max(5.0, float(getattr(s, "discovery_seconds", 45.0))), self._wake)

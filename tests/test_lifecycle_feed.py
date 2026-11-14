@@ -15,7 +15,7 @@ def test_a_target_and_a_result_are_parsed():
 
 
 def test_other_lifecycle_messages_are_ignored():
-    assert kalshiws.parse_message(life("settled", settled_ts=1), 1.0) is None
+    assert kalshiws.parse_message(life("price_level_structure_updated"), 1.0) is None
     assert kalshiws.parse_message(life("metadata_updated"), 1.0) is None  # no strike in it
     assert kalshiws.parse_message(life("metadata_updated", floor_strike=0), 1.0) is None
     assert kalshiws.parse_message(life("determined", result="void"), 1.0) is None

@@ -450,8 +450,9 @@ class TapeRecorder:
         self.client, self.s, self.feed = client, s, feed
         self.tape = Tape(s.tape_path)
         self.extra_tickers: Any = None  # a callable returning more tickers to stream (positions we hold in any market)
+        self.market_listeners: list[Any] = []  # called with every lifecycle market event (created, activated, close changed, settled) after the shared list has it; must be fast and never raise
         self.listeners: list[Any] = []  # called with every event after it is stored (must be fast and never raise)
-        self.stream = KalshiStream(client, self._on_event)
+        self.stream = KalshiStream(client, self._on_event, on_feed=self._feed_state)
         # Sports and esports series list a new market every few minutes, and a changed market list reconnects a stream. They get their own connection so the
         # live one (15-minute quotes, settlement indexes, the account's fills) is never dropped for them.
         self.extra_stream = KalshiStream(client, self._on_event, index_feed=False, fills=False)
@@ -467,10 +468,27 @@ class TapeRecorder:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._refresh_thread: threading.Thread | None = None
+        self._wanted: set[str] = set()  # the series refresh_tickers last listed
+        self._refresh_wake = threading.Event()  # set by a new market and by the stream coming up or going down: the refresh runs now
         self._listed: dict[str, tuple[float, set[str]]] = {}  # series -> (when it was listed, its open tickers)
 
     def _on_event(self, e: dict[str, Any]) -> None:
         kind = e.get("kind")
+        if kind in {"strike", "result", "market"}:
+            cache = getattr(self.client, "cache", None)
+            if cache is not None:
+                cache.apply_market(e)  # the shared market list is kept from these, not re-read on a clock (marketdata.MarketCache.apply_market)
+            if kind == "market":
+                if e.get("event") == "created":
+                    self._follow_new(str(e.get("ticker") or ""))
+                elif e.get("event") == "settled":
+                    self._refresh_wake.set()  # drop its ticker from the stream
+                for fn in self.market_listeners:
+                    try:
+                        fn(e)
+                    except Exception:
+                        log.exception("market listener failed")
+                return
         if kind in {"strike", "result"}:  # market facts from the lifecycle channel: kept here, not written to the tape or passed to the price listeners
             self._on_lifecycle(e)
             return
@@ -483,6 +501,21 @@ class TapeRecorder:
                 fn(e)
             except Exception:
                 log.exception("tape listener failed")
+
+    def _follow_new(self, ticker: str) -> None:
+        """A new window of a series we record: stream its quotes from the moment it exists, not from the next listing (the listing found markets a median of 134 s into their window). History for it is armed by the refresh the wake below starts."""
+        if ticker.split("-")[0] not in self._wanted:
+            return
+        self.stream.set_tickers(set(self.stream._tickers) | {ticker})
+        self._refresh_wake.set()
+
+    def _feed_state(self, up: bool) -> None:
+        """The live stream's lifecycle subscription is confirmed or its connection ended: the shared market list is stream-kept only between the two."""
+        cache = getattr(self.client, "cache", None)
+        if cache is not None:
+            cache.feed(up)
+        self._refresh_wake.set()
+        log.info("market list: %s", "kept from the stream's lifecycle events" if up else "stream down, listings are read from Kalshi until it is back")
 
     def _on_lifecycle(self, e: dict[str, Any]) -> None:
         """A window's target from the socket goes into the same store the REST listing fills (ticks.Strikes), for the 15-minute series only. The REST listing stays as the fallback; the log line says how far ahead of it the socket was. A result is counted and logged, not yet used."""
@@ -519,7 +552,9 @@ class TapeRecorder:
     def _list(self, series: str, every_open: float, every_idle: float, now: float) -> set[str]:
         """The open tickers of one series: the last listing, unless it is due again. Each listing is a request on the bot's shared, rate-limited client."""
         seen = self._listed.get(series)
-        if seen is not None and now - seen[0] < (every_open if seen[1] else every_idle):
+        cache = getattr(self.client, "cache", None)
+        kept = cache is not None and hasattr(cache, "live") and cache.live(series)  # the stream keeps this listing: reading it is a memory read, so no clock decides when
+        if seen is not None and not kept and now - seen[0] < (every_open if seen[1] else every_idle):
             return seen[1]
         try:
             with shared_for(self.client, self.s.discovery_max_age, self.s.discovery_enabled):  # a listing the discovery threads read lately (and whose window has not rolled) is not asked of Kalshi again every 20 s (2026-11-07: tape-refresh was 15-58 GET /markets a minute)
@@ -540,7 +575,8 @@ class TapeRecorder:
     def refresh_tickers(self, now: float | None = None) -> int:
         now = time.time() if now is None else now
         tickers: set[str] = set()
-        for ser in self._series():
+        self._wanted = set(self._series())
+        for ser in self._wanted:
             tickers |= self._list(ser, SERIES_EVERY, IDLE_EVERY, now)
         extras: set[str] = set()
         for ser in self.s.tape_extra_series:  # sports, esports and anything else named in TAPE_EXTRA_SERIES
@@ -624,6 +660,7 @@ class TapeRecorder:
 
     def stop(self) -> None:
         self._stop.set()
+        self._refresh_wake.set()
         self.stream.close()
         self.extra_stream.close()
         if self.futflow is not None:
@@ -645,7 +682,10 @@ class TapeRecorder:
                 self.refresh_tickers()
             except Exception as exc:
                 log.warning("tape: %s", exc)
-            self._stop.wait(REFRESH_EVERY)
+            cache = getattr(self.client, "cache", None)
+            kept = cache is not None and hasattr(cache, "fed") and cache.fed()
+            self._refresh_wake.wait(None if kept else REFRESH_EVERY)  # with the stream up the refresh runs when a market or the stream changes (a new window, a settlement, a reconnect), not on a clock; a stop wakes it too
+            self._refresh_wake.clear()
 
     def _run(self) -> None:
         last_flush = last_prune = 0.0

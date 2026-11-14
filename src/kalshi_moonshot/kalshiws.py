@@ -124,6 +124,12 @@ def parse_message(msg: dict[str, Any], received: float | None = None) -> dict[st
                 return {"kind": "strike", "ts": now, "ticker": ticker, "strike": strike, "sts": msg.get("sending_ts_ms")}
         elif event == "determined" and body.get("result") in {"yes", "no"}:
             return {"kind": "result", "ts": now, "ticker": ticker, "result": body["result"], "sts": msg.get("sending_ts_ms")}
+        elif event in {"created", "activated", "deactivated", "close_date_updated", "settled"}:
+            # 2026-11-14 (user: "why would anything go stale? it would just mean you're not subscribed to the correct websocket events"): the market list is kept from these, not re-read on a clock (marketdata.MarketCache.apply_market)
+            meta = body.get("additional_metadata") or {}
+            return {"kind": "market", "ts": now, "ticker": ticker, "event": event, "event_ticker": meta.get("event_ticker") or "", "title": meta.get("title") or meta.get("name") or "",
+                    "sub": meta.get("yes_sub_title") or "", "rules": meta.get("rules_primary") or "", "strike": _f(meta.get("floor_strike")), "cap": _f(meta.get("cap_strike")),
+                    "open_ts": body.get("open_ts"), "close_ts": body.get("close_ts"), "deactivated": body.get("is_deactivated"), "sts": msg.get("sending_ts_ms")}
     return None
 
 
@@ -131,10 +137,11 @@ class KalshiStream:
     """Keeps one connection open, reconnects with backoff, and resubscribes when the market set changes."""
 
     def __init__(self, client: KalshiClient, on_event: Callable[[dict[str, Any]], None],
-                 indices: list[str] | None = None, index_feed: bool = True, fills: bool = True, lifecycle: bool | None = None):
+                 indices: list[str] | None = None, index_feed: bool = True, fills: bool = True, lifecycle: bool | None = None, on_feed: Callable[[bool], None] | None = None):
         """index_feed and fills are off for a stream that only records extra markets: the live stream alone carries the settlement indexes and the account's fills. lifecycle (targets and results of every market, one subscription for the whole exchange) rides on the live stream too; off with KALSHI_LIFECYCLE=0."""
         self.client = client
         self.on_event = on_event
+        self.on_feed = on_feed  # called with True when the lifecycle subscription is confirmed on a connection and with False when that connection ends: the market list is only kept from the stream between the two
         self.index_feed, self.fills = index_feed, fills
         self.lifecycle = (index_feed and os.environ.get("KALSHI_LIFECYCLE", "1").strip().lower() not in {"0", "off", "false", "no"}) if lifecycle is None else lifecycle
         self.indices = sorted(set(indices or INDEX_FOR.values()))
@@ -238,6 +245,7 @@ class KalshiStream:
             except Exception as exc:
                 log.warning("kalshi websocket: %s; reconnecting in %.0fs", exc, backoff)
             self._ws, self._live, self._sids = None, set(), {}
+            self._feed(False)
             if self._stop:
                 break
             await asyncio.sleep(backoff)
@@ -265,6 +273,13 @@ class KalshiStream:
             {"id": 4, "cmd": "subscribe", "params": {"channels": ["trade"], "market_tickers": tickers}},
         ]
 
+    def _feed(self, up: bool) -> None:
+        if self.on_feed is not None:
+            try:
+                self.on_feed(up)
+            except Exception:
+                log.exception("kalshi websocket: feed state callback failed")
+
     def handle(self, raw: str | bytes) -> None:
         try:
             msg = json.loads(raw)
@@ -277,6 +292,8 @@ class KalshiStream:
             return
         if msg.get("type") == "subscribed":
             channel, sid = (msg.get("msg") or {}).get("channel"), (msg.get("msg") or {}).get("sid")
+            if channel == "market_lifecycle_v2":
+                self._feed(True)
             if channel in {"ticker", "trade"} and isinstance(sid, int):
                 self._sids[channel] = sid
                 if self._loop is not None and "ticker" in self._sids and "trade" in self._sids:
@@ -284,6 +301,6 @@ class KalshiStream:
             return
         event = parse_message(msg)
         if event is not None:
-            if event["kind"] not in {"strike", "result"}:  # market facts are not a sign the price stream is alive
+            if event["kind"] not in {"strike", "result", "market"}:  # market facts are not a sign the price stream is alive
                 self.last_event_at = event["ts"]
             self.on_event(event)

@@ -120,6 +120,7 @@ class EntryWatcher:
     def on_event(self, e: dict[str, Any]) -> None:
         if e.get("kind") == "index" and e.get("index_id") and e.get("value"):
             self._on_index(e)
+            self._index_review(e)
             return
         if e.get("kind") != "quote" or e.get("bid") is None or e.get("ask") is None:
             return
@@ -147,6 +148,29 @@ class EntryWatcher:
             if key in self._pending or time.time() - self._last.get(key, 0.0) < spec.entry_min_gap_seconds:
                 continue
             if in_band(spec, float(e["bid"]), float(e["ask"])) and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
+                self._pending.add(key)
+                self._jobs.put(key)
+
+    def _index_review(self, e: dict[str, Any]) -> None:
+        """A settlement index tick (2026-11-14, user: "we need to get rid of these timers"): the ladder's chance moves with the index while Kalshi's quote may sit still, so the tick reviews every watched event that index settles, if its last streamed quote is in the lane's band and window, at most once per entry_min_gap_seconds. This replaces the review timer for a lane with entry_socket."""
+        idx = str(e["index_id"])
+        s = self.get_settings()
+        specs = lane_specs(s)
+        now = datetime.fromtimestamp(float(e["ts"]), UTC)
+        with self._lock:
+            hits = [(lane, ev, info) for (lane, ev), info in self.watch.items() if index_for_series(str(info.get("series", ""))) == idx]
+        for lane, event, info in hits:
+            spec = specs.get(lane)
+            if spec is None or not spec.enabled or not spec.entry_socket or spec.late_steps > 0 or spec.entry_move > 0 or spec.entry_approach > 0:
+                continue  # those lanes have their own triggers
+            rows = self._hist.get(str(info.get("ticker", "")))
+            if not rows:
+                continue
+            _, bid, ask = rows[-1]
+            key = (lane, event)
+            if key in self._pending or time.time() - self._last.get(key, 0.0) < spec.entry_min_gap_seconds:
+                continue
+            if in_band(spec, bid, ask) and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 self._pending.add(key)
                 self._jobs.put(key)
 
