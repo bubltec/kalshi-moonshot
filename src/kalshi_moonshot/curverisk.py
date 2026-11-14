@@ -79,12 +79,10 @@ def wait(q: float, line: float, left: float, base: float, share: float) -> float
     return max(0.0, min(base * (1.0 - severity), share * max(left, 0.0)))
 
 
-def long_chance(ts: list[float], vs: list[float], now: float, ref: float, side: str, left: float, hours: float = 1.0, stale: float = 30.0) -> float | None:
-    """The long layer's chance that the side pays (2026-11-13, user, after a live sale of a bet that dipped briefly, never crossed the strike and went on to win: "the hour view showed it likely staying positive"): the distance of the Kalshi perp from its own value at the window open, over the typical movement of the perp across the last hour (rms of its 60 s moves, per sqrt second) for the time left. None when the hour is too short, the newest tick is stale, or the reference is unusable (the sale then does not wait for this layer)."""
-    if ref <= 0 or left <= 0 or not ts or len(ts) != len(vs):
-        return None
-    j = bisect.bisect_right(ts, now) - 1
-    if j < 0 or now - ts[j] > stale or vs[j] <= 0:
+def hour_rate(ts: list[float], vs: list[float], now: float, hours: float = 1.0) -> float | None:
+    """How much this index has been moving over the last hour, per square-root second in log terms: the root-mean-square of its one-minute moves over that hour, over sqrt(60). Times sqrt(seconds) it is the typical move over that many seconds. None when the hour has under MIN_MOVES one-minute moves on record.
+    The one reading of volatility for both ends of a bet (2026-11-14, user, on a ladder width read from six hours of bars times a multiplier fitted on six hours of outcomes: "These markets shift in behavior hourly if you're looking at 6 hours to base a decision on right now that is totally irrelevant"): the exit's hour view (long_chance) and the ladder's width for a market priced from the Kalshi perp (commodities.price_event)."""
+    if not ts or len(ts) != len(vs):
         return None
     levels: list[float] = []
     for k in range(int(hours * 3600.0 // MINUTE) + 1):
@@ -95,7 +93,19 @@ def long_chance(ts: list[float], vs: list[float], now: float, ref: float, side: 
     moves = [levels[k] - levels[k + 1] for k in range(len(levels) - 1)]
     if len(moves) < MIN_MOVES:
         return None
-    rate = math.sqrt(sum(m * m for m in moves) / len(moves) / MINUTE)
+    return math.sqrt(sum(m * m for m in moves) / len(moves) / MINUTE)
+
+
+def long_chance(ts: list[float], vs: list[float], now: float, ref: float, side: str, left: float, hours: float = 1.0, stale: float = 30.0) -> float | None:
+    """The long layer's chance that the side pays (2026-11-13, user, after a live sale of a bet that dipped briefly, never crossed the strike and went on to win: "the hour view showed it likely staying positive"): the distance of the Kalshi perp from its own value at the window open, over the typical movement of the perp across the last hour (rms of its 60 s moves, per sqrt second) for the time left. None when the hour is too short, the newest tick is stale, or the reference is unusable (the sale then does not wait for this layer)."""
+    if ref <= 0 or left <= 0 or not ts or len(ts) != len(vs):
+        return None
+    j = bisect.bisect_right(ts, now) - 1
+    if j < 0 or now - ts[j] > stale or vs[j] <= 0:
+        return None
+    rate = hour_rate(ts, vs, now, hours)
+    if rate is None:
+        return None
     sign = 1.0 if side == "yes" else -1.0
     cushion = (math.log(vs[j]) - math.log(ref)) * sign
     if rate <= 0:
