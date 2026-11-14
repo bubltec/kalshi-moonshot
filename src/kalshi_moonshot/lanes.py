@@ -53,6 +53,7 @@ class LaneSpec:
     max_spread: float
     min_volume: float
     min_edge: float | None = None  # bet when the calibrated edge reaches this ...
+    min_edge_room: float | None = None  # 2026-11-13 (user: a flat edge bar "makes it less likely to buy a 'sure' bet"): the edge bar scaled to the room left. Bet when the edge is at least this share of what lies between the all-in cost (ask + fee) and certainty: edge / (1 - ask - fee) >= this. 0.3 = our chance of losing is at least 30% smaller than the price implies: a chance of about 0.935 at an ask of 0.90, just over 0.80 at an ask of 0.70. A flat min_edge asks for the same cents at every price and so can never be met near the top of the band. Both may be set: then both must pass. None = off
     max_lag: float | None = None  # ... or, when set, when the estimate is no more than this under the ask
     usd_per_trade: float | None = None  # optional dollar ceiling per bet; None/0 = sized by balance
     fixed_stake: float = 0.0  # dollars per bet, ignoring Kelly (0 = size by the odds and the balance)
@@ -514,7 +515,7 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "entry_socket", "entry_min_gap_seconds", "buy_rest_top_up", "curve_shadow", "confidence_shadow", "accumulate_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
+    "entry_socket", "entry_min_gap_seconds", "buy_rest_top_up", "min_edge_room", "curve_shadow", "confidence_shadow", "accumulate_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
     "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_source", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "value_exit", "value_exit_bid", "value_exit_gain_x", "value_exit_high", "value_exit_high_left", "value_exit_min_gain", "entry_checks_exit", "rebuy_opposite_after_gain_seconds", "shock_memory", "shock_persist", "hour_drift_q", "buy_curve_edge_min", "buy_flat_trend_pct", "perp_lead_buy", "curve_exit", "curve_exit_scales", "curve_exit_persist", "curve_exit_last", "curve_exit_near", "curve_drop_units", "curve_drop_seconds", "curve_drop_margin_units", "curve_drop_persist", "curve_rest", "curve_gap", "curve_gap_persist", "curve_risk_sell", "curve_risk_live", "curve_risk_spot_weight", "curve_risk_history", "curve_risk_max_loss", "curve_risk_min_profit", "curve_risk_confirm", "curve_behind_last", "curve_behind_chance", "late_drop_units", "late_drop_seconds", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "wave_turn_seconds", "wave_turn_back", "wave_market_gate", "curve_wait_share", "curve_wait_severe", "curve_wait_default", "curve_drop_comeback", "curve_drop_comeback_min", "curve_drop_comeback_hold", "spot_source", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
@@ -570,6 +571,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     if spec.burst_ratio:
         out["burst_ratio"] = repr(spec.burst_ratio)
         out["burst_min_dollars"] = repr(spec.burst_min_dollars)
+    if spec.min_edge_room is not None:  # reported only when set, so a lane without it keeps the version it had
+        out["min_edge_room"] = repr(spec.min_edge_room)
     if spec.curve_risk_sell > 0 and spec.curve_risk_live:  # shadow changes nothing the lane does, so only a live risk exit changes its version
         out["curve_risk_sell"], out["curve_risk_spot_weight"], out["curve_risk_history"] = repr(spec.curve_risk_sell), repr(spec.curve_risk_spot_weight), repr(spec.curve_risk_history)
         out["curve_risk_max_loss"], out["curve_risk_min_profit"] = repr(spec.curve_risk_max_loss), repr(spec.curve_risk_min_profit)
@@ -634,4 +637,12 @@ def wants_bet(spec: LaneSpec, p: float, ask: float, edge: float) -> bool:
         return False
     if spec.min_edge is not None and edge < spec.min_edge:
         return False
-    return spec.max_lag is not None or spec.min_edge is not None
+    if spec.min_edge_room is not None and scaled_edge(p, edge) < spec.min_edge_room - 1e-12:
+        return False
+    return spec.max_lag is not None or spec.min_edge is not None or spec.min_edge_room is not None
+
+
+def scaled_edge(p: float, edge: float) -> float:
+    """The edge as a share of the room between the all-in cost and certainty (lane field min_edge_room). The edge is p - ask - fee, so that room, 1 - ask - fee, is (1 - p) + edge. No room left (a cost of $1 or more) is no edge."""
+    room = (1.0 - p) + edge
+    return edge / room if room > 1e-9 else -1.0

@@ -442,7 +442,7 @@ class LadderEstimator:
             if wants_bet(spec, p_side, shot.ask, e) and chance_ok(spec, p_side):
                 keep.append((e, shot))
             else:
-                bar = f"needs {spec.min_edge:+.1%}" if spec.min_edge is not None else "outside the lane's chance band"
+                bar = (f"needs {spec.min_edge:+.1%}" if spec.min_edge is not None else f"needs {spec.min_edge_room:.0%} of the room left" if spec.min_edge_room is not None else "outside the lane's chance band")
                 self.dropped.append({"ticker": shot.ticker, "side": shot.side, "ask": shot.ask, "p": p_side, "edge": e,
                                      "reason": f"our chance {p_side:.0%} vs ask {shot.ask:.2f}: edge {e:+.1%}, {bar}. {hit[1][:120]}"})
         keep.sort(key=lambda x: x[0], reverse=True)
