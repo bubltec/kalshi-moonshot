@@ -1006,7 +1006,16 @@ class ProfitWatcher:
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= t.risk_confirm:
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             return None
-        if noise > 0 and pnl < 0 and bid >= CURVE_MIN_BID:  # the squeeze on a loss: at, past or near a sell bar and sliding. It comes before the swing hold and the stop's wait: minimizing a loss comes first
+        if t.risk_swing > 0 and pnl < 0 and r.q >= t.risk_swing_floor:  # under the floor the market already prices the bet as nearly dead: a loss is not inside any swing
+            self._risk_unit(t, now)
+            drop = (t.entry + fee_per_contract(t.entry)) - (bid - fee_per_contract(bid))
+            if curverisk.swing_hold(drop, t.risk_unit, left, t.risk_swing):
+                if not t.risk_swing_noted:
+                    t.risk_swing_noted = True
+                    log.info("curve risk: %s %s holds a loss of %.3f: under %.1f x the market's own swing over %.0fs (typical minute %.3f)", t.ticker, t.lane, drop, t.risk_swing, left, t.risk_unit or 0.0)
+                t.risk_since = 0.0  # the loss is inside what this market does in the time left: no clock runs toward a sale
+                return None
+        if noise > 0 and pnl < 0 and bid >= CURVE_MIN_BID:  # the squeeze on a loss: at, past or near a sell bar and sliding. It comes AFTER the swing hold, so time left decides whether it exists at all (2026-11-14, user, after it sold two bets two minutes after the buy with nine minutes left: "at that time distance it should be nonexistent"): a loss inside what the market can move in the time left never reaches here. Past that band it skips the stop's wait
             miss = curverisk.stop_miss(net, basis, r.q, t.risk_max_loss)
             if curverisk.squeeze_loss(pnl, miss, r.q, t.risk_sell, t.risk_max_loss, noise) and curverisk.still_falling(t.risk_take_hist, now, look, t.risk_unit, STRETCHED_STAY if t.risk_stretched else 0.5):
                 where = "at or past the max loss" if miss <= 0 else f"{miss:.3f} short of the max loss" if miss < noise else f"{r.q - t.risk_sell:.3f} over the line {t.risk_sell:.2f}"
@@ -1018,15 +1027,6 @@ class ProfitWatcher:
                     t.risk_logged = True
                     log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, True, False)
-        if t.risk_swing > 0 and pnl < 0 and r.q >= t.risk_swing_floor:  # under the floor the market already prices the bet as nearly dead: a loss is not inside any swing
-            self._risk_unit(t, now)
-            drop = (t.entry + fee_per_contract(t.entry)) - (bid - fee_per_contract(bid))
-            if curverisk.swing_hold(drop, t.risk_unit, left, t.risk_swing):
-                if not t.risk_swing_noted:
-                    t.risk_swing_noted = True
-                    log.info("curve risk: %s %s holds a loss of %.3f: under %.1f x the market's own swing over %.0fs (typical minute %.3f)", t.ticker, t.lane, drop, t.risk_swing, left, t.risk_unit or 0.0)
-                t.risk_since = 0.0  # the loss is inside what this market does in the time left: no clock runs toward a sale
-                return None
         stop = curverisk.stopped(pnl, r.q, t.risk_max_loss) and bid >= CURVE_MIN_BID  # the max loss: sell now (below this bid the market has priced the loss and there is nothing to sell for)
         if not stop and (bid < CURVE_MIN_BID or not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):  # under the minimum bid there is nothing left to sell for, on the line as on the max loss
             t.risk_since = 0.0

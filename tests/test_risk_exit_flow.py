@@ -705,7 +705,8 @@ def test_integration_late_in_the_market_the_same_pause_ends_the_climb(tmp_path, 
 
 
 # ---- the squeeze on sales (2026-11-14, user: "If something missed the bar to sell and history thinks we should ... minimizing loss is always more important") ----
-# the lane carries the live holds (the stop waits half the time left, a loss inside 1.5 swings is held): without the squeeze none of these slides sells
+# Time decides whether it acts at all (same day, user, after it sold two live bets two minutes after their buys with nine minutes left: "at that time distance it should be nonexistent"):
+# the squeeze comes after the swing hold, so a loss inside what the market can move in the time left is never squeezed. The lane carries the live holds (stop wait of half the time left, swing 1.5).
 def slid(w, path, left):
     """The bid follows `path`, one quote a second from `left`; returns (bid, signal) of the first sale or None."""
     for k, bid in enumerate(path):
@@ -719,45 +720,53 @@ def slid(w, path, left):
 
 SIT = [0.78] * 10
 SLIDE = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 26)]  # 0.78 down a cent a second to 0.53
+LIVE = dict(hold=0.5, swing=1.5, share=0.08)
 
 
-def test_integration_a_slide_to_the_max_loss_is_sold_by_the_squeeze_before_the_holds_would(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=611)  # a typical minute of about 0.10: 0.029 of noise over 5 s
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5)
-    got = slid(w, SLIDE, 610)
+def test_integration_with_nine_minutes_left_a_slide_to_the_max_loss_is_not_squeezed(tmp_path, monkeypatch):
+    """The two live sales of 16:20: about 0.25 lost in the two minutes after the buy, 9 to 10 minutes left. The market's swing over that time is far larger, so the squeeze does not exist there."""
+    feed_history(0.013, from_left=1300, to_left=671)  # a typical minute of about 0.10: a band of 1.5 x 0.10 x sqrt(10) = 0.47 with ten minutes left
+    w = held(tmp_path, monkeypatch, live=True, squeeze=5, **LIVE)
+    assert slid(w, [0.78] * 60 + SLIDE, 670) is None  # a minute of readings first, so the slide is read as a slide (the look back is about 48 s here)
+
+
+def test_integration_with_a_minute_and_a_half_left_the_same_slide_is_squeezed(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=121)  # the band is down to about 0.19: the loss is outside what the market can win back
+    w = held(tmp_path, monkeypatch, live=True, squeeze=5, **LIVE)
+    got = slid(w, SLIDE, 120)
     assert got is not None and got[1].why.startswith("curve risk exit [squeeze")
-    assert 0.55 <= got[0] <= 0.66  # near the stop (a net bid of about 0.59), not on the way there
+    assert 0.55 <= got[0] <= 0.63  # near the stop, not on the way there
 
 
-def test_integration_without_the_squeeze_the_same_slide_is_held(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=611)
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=0)
-    assert slid(w, SLIDE, 610) is None
+def test_integration_without_the_squeeze_that_late_slide_waits_out_the_stops_wait(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=121)
+    w = held(tmp_path, monkeypatch, live=True, squeeze=0, **LIVE)
+    assert slid(w, SLIDE, 120) is None  # past the stop, but the stop waits half the time left
 
 
 def test_integration_one_bad_print_that_bounces_is_not_squeezed(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=611)
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5)
-    assert slid(w, SIT + [0.58, 0.58] + [0.72] * 10, 610) is None
+    feed_history(0.013, from_left=1300, to_left=121)
+    w = held(tmp_path, monkeypatch, live=True, squeeze=5, **LIVE)
+    assert slid(w, SIT + [0.58, 0.58] + [0.72] * 10, 120) is None
 
 
 def test_integration_a_crash_that_stays_down_is_squeezed_once_it_has_lasted(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=611)
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5)
+    feed_history(0.013, from_left=1300, to_left=121)
+    w = held(tmp_path, monkeypatch, live=True, squeeze=5, **LIVE)
     path = SIT + [0.58] * 9
     seen = []
     for k, bid in enumerate(path):
-        ticks_mod.mids.note(TICKER, CLOSE - 610 + k, bid - 0.005, bid + 0.005)
-        yes_bid(w, bid, 610 - k)
+        ticks_mod.mids.note(TICKER, CLOSE - 120 + k, bid - 0.005, bid + 0.005)
+        yes_bid(w, bid, 120 - k)
         seen.append(bool(signals(w)))
     assert not any(seen[:12]) and any(seen[12:])  # not on the first two prints at 0.58, but once it has stayed half the look back
 
 
 def test_integration_the_hour_view_still_holds_a_squeezed_loss(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=611)
-    w = held(tmp_path, monkeypatch, live=True, confirm=0.4, hold=0.5, swing=1.5, squeeze=5)
+    feed_history(0.013, from_left=1300, to_left=121)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4, squeeze=5, **LIVE)
     monkeypatch.setattr(w, "_risk_long", lambda t, now, left: 0.9)  # the hour says the side is very likely to pay
-    assert slid(w, SLIDE, 610) is None
+    assert slid(w, SLIDE, 120) is None
 
 
 def test_integration_a_gain_that_cleared_the_bar_and_slips_just_under_it_is_squeezed(tmp_path, monkeypatch):
@@ -792,7 +801,7 @@ def test_unit_the_squeeze_changes_a_lanes_version_only_when_it_is_set(tmp_path, 
 
 
 # ---- a stretched buy is squeezed harder (2026-11-14, user: "The stretch buy and squeeze sale need to work together") ----
-CRASH = SIT + [0.58] * 9  # a crash that stays: the look back is about 9 s, so half is about 4.5 s and a quarter about 2.3 s
+CRASH = SIT + [0.58] * 9  # a crash that stays, with two minutes left: the look back is about 8 s, so half is about 4 s and a quarter about 2 s
 
 
 def first_sale(w, path, left):
@@ -807,15 +816,16 @@ def first_sale(w, path, left):
 def test_integration_a_bet_that_got_in_on_a_stretch_is_sold_sooner_by_the_squeeze(tmp_path, monkeypatch):
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
-    feed_history(0.013, from_left=1300, to_left=611)
-    plain = first_sale(held(tmp_path / "a", monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5), CRASH, 610)
+    feed_history(0.013, from_left=1300, to_left=121)
+    plain = first_sale(held(tmp_path / "a", monkeypatch, live=True, squeeze=5, **LIVE), CRASH, 120)
     ticks_mod.mids._rows.clear()
-    feed_history(0.013, from_left=1300, to_left=611)
-    w = held(tmp_path / "b", monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5, reason="stake $1. [stretch buy: the edge is 0.008 under the bar] note")
+    feed_history(0.013, from_left=1300, to_left=121)
+    w = held(tmp_path / "b", monkeypatch, live=True, squeeze=5, reason="stake $1. [stretch buy: the edge is 0.008 under the bar] note", **LIVE)
     assert w.targets[(TICKER, "risk_only")].risk_stretched is True
-    stretched = first_sale(w, CRASH, 610)
+    stretched = first_sale(w, CRASH, 120)
     assert plain is not None and stretched is not None and stretched < plain
     assert stretched > len(SIT)  # still not on the first print of the crash
+
 
 
 # ---- the late cap on the profit take's bar (2026-11-14, user, on a SOL NO back at 0.96 with 30 s left that lost at the bell: "Yes we should have cashed that out") ----
