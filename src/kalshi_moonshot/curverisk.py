@@ -138,7 +138,7 @@ def still_rising(samples: list[tuple[float, float]], now: float, seconds: float,
     return bid - start > noise and high - bid < noise
 
 
-def still_falling(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None) -> bool:
+def still_falling(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None, stay: float = 0.5) -> bool:
     """True while the bid is sliding, not dipping, over the last `seconds` (the squeeze's reading of history, 2026-11-14, user: "If something missed the bar to sell and history thinks we should"; earlier the same day, on a sale they did not want: "It was gradual and it didn't stay").
     A slide = the bid has fallen over the look back by more than the market's own noise for it (unit * sqrt(seconds / 60)), sits within that noise of the look back's low (it has not bounced), AND was already under the look back's start half the look back ago (it has stayed down: one bad print is not a slide until it has lasted half the look back).
     With no reading of the unit the plain test is used (the newest bid is the look back's low and under its start, and the half-way reading was under the start too). With under `seconds` of readings the slope is unknown and the answer is False: no squeeze on a bet just opened."""
@@ -148,7 +148,7 @@ def still_falling(samples: list[tuple[float, float]], now: float, seconds: float
     if not window or not samples or samples[0][0] > now - seconds:
         return False
     bid, low, start = window[-1][1], min(b for _, b in window), window[0][1]
-    half = [b for t, b in window if t <= now - seconds / 2.0]
+    half = [b for t, b in window if t <= now - seconds * stay]  # `stay` is the share of the look back the bid must already have been down for: half for a plain bet, a quarter for one that got in on a stretch (lanes.STRETCHED_STAY)
     if not half or half[-1] >= start:
         return False
     if unit is None or unit <= 0:

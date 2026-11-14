@@ -45,7 +45,7 @@ from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series, strike_index_for
-from .lanes import LaneSpec, lane_specs, stop_drop_for, takes_profit
+from .lanes import STRETCHED_STAY, LaneSpec, lane_specs, stop_drop_for, takes_profit
 from .store import Store
 from .strategy import (
     cash_if_losing,
@@ -239,6 +239,7 @@ class Target:
     risk_take: bool = False  # the profit take (lane field curve_take)
     risk_take_slope: float = 0.08  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
     risk_squeeze: float = 0.0  # near a sell bar and sliding: sell at once (lane field squeeze_seconds)
+    risk_stretched: bool = False  # the bet got in on a stretch (its note says so): the squeeze sells its slide sooner
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
     risk_stop_hold: float = 0.0  # the max-loss stop waits this share of the time left (lane field curve_risk_stop_hold)
     risk_at: float = 0.0  # the risk check reads at most once a second
@@ -1006,9 +1007,9 @@ class ProfitWatcher:
             return None
         if noise > 0 and pnl < 0 and bid >= CURVE_MIN_BID:  # the squeeze on a loss: at, past or near a sell bar and sliding. It comes before the swing hold and the stop's wait: minimizing a loss comes first
             miss = curverisk.stop_miss(net, basis, r.q, t.risk_max_loss)
-            if curverisk.squeeze_loss(pnl, miss, r.q, t.risk_sell, t.risk_max_loss, noise) and curverisk.still_falling(t.risk_take_hist, now, look, t.risk_unit):
+            if curverisk.squeeze_loss(pnl, miss, r.q, t.risk_sell, t.risk_max_loss, noise) and curverisk.still_falling(t.risk_take_hist, now, look, t.risk_unit, STRETCHED_STAY if t.risk_stretched else 0.5):
                 where = "at or past the max loss" if miss <= 0 else f"{miss:.3f} short of the max loss" if miss < noise else f"{r.q - t.risk_sell:.3f} over the line {t.risk_sell:.2f}"
-                reason = f"curve risk exit [squeeze: a loss {where}, inside this market's {noise:.3f} of noise over {t.risk_squeeze:g}s, and the bid has slid over the last {look:.0f}s without a bounce (typical minute {t.risk_unit or 0.0:.3f})]; the chance the side pays is {r.q:.3f}; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
+                reason = f"curve risk exit [squeeze: a loss {where}, inside this market's {noise:.3f} of noise over {t.risk_squeeze:g}s, and the bid has slid over the last {look:.0f}s without a bounce (typical minute {t.risk_unit or 0.0:.3f}){', a stretched buy: squeezed sooner' if t.risk_stretched else ''}]; the chance the side pays is {r.q:.3f}; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
                 if t.risk_live:
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, True, True)
                     return reason
@@ -1859,6 +1860,7 @@ class ProfitWatcher:
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_stop_hold, held.risk_swing, held.risk_swing_floor = spec.curve_risk_stop_hold, spec.curve_risk_swing, spec.curve_risk_swing_floor
                 held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_seconds
+                held.risk_stretched = "[stretch buy" in (row["reason"] or "")
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]

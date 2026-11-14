@@ -1359,23 +1359,34 @@ def side_trend_z(s: Settings, shot: LongShot, seconds: float, now: float | None 
     return move / sd
 
 
+def market_unit(ticker: str, now: float) -> float | None:
+    """The market's typical minute from its own quotes (quoteshock.typical_minute over the last 15 minutes of mids): the one ruler the buy stretch and the sale squeeze both measure "near" with."""
+    from . import quoteshock
+    from . import ticks as ticks_mod
+
+    return quoteshock.typical_minute(ticks_mod.mids.rows(ticker), now)
+
+
 def stretch_buy(s: Settings, spec: LaneSpec, shot: LongShot, p: float, e: float, now: float | None = None) -> str | None:
-    """The stretch for a buy that missed the scaled edge bar (lane field stretch_seconds): the note to put on the bet when the miss is inside the market's own noise over stretch_seconds and the side is trending the bet's way, else None."""
-    if spec.stretch_seconds <= 0:
+    """The stretch for a buy that missed the scaled edge bar (lane field stretch_seconds): the note to put on the bet when the miss is inside the market's own noise over stretch_seconds and the side is trending the bet's way, else None. Paired with the squeeze: a lane without squeeze_seconds gets no stretch, and the noise is the squeeze's own ruler (market_unit), not the trend reader's."""
+    if spec.stretch_seconds <= 0 or spec.squeeze_seconds <= 0:
         return None
     miss = edge_miss(spec, p, shot.ask, e)
     if miss is None or miss <= 0:
+        return None
+    now = time.time() if now is None else now
+    unit = market_unit(shot.ticker, now)
+    if unit is None or unit <= 0:
         return None
     seconds = spec.entry_trend_seconds if spec.entry_trend_seconds > 0 else 60.0
     got = side_trend_read(s, shot, seconds, now)
     if got is None or got[1] <= 1e-6:
         return None
-    move, sd = got
-    noise = sd * math.sqrt(spec.stretch_seconds / seconds)
-    zed = move / sd
+    noise = unit * math.sqrt(spec.stretch_seconds / 60.0)
+    zed = got[0] / got[1]
     if not stretch_ok(miss, noise, zed, spec.stretch_trend_z):
         return None
-    return f"[stretch buy: the edge is {miss:.3f} under the bar, inside this market's {noise:.3f} of noise over {spec.stretch_seconds:g}s, and the side moved {zed:+.1f} typical moves its way over {seconds:.0f}s (needs over {spec.stretch_trend_z:+.1f})]"
+    return f"[stretch buy: the edge is {miss:.3f} under the bar, inside this market's {noise:.3f} of noise over {spec.stretch_seconds:g}s (typical minute {unit:.3f}), and the side moved {zed:+.1f} typical moves its way over {seconds:.0f}s (needs over {spec.stretch_trend_z:+.1f})]"
 
 
 def _day_start(now: float) -> float:

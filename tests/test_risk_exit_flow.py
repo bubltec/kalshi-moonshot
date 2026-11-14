@@ -64,14 +64,14 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0, swing=0, floor=0, take='false', stretch=0, share=0.015, squeeze=0):
+def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, swing=0, floor=0, take='false', stretch=0, share=0.015, squeeze=0):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor, take=take, stretch=stretch, share=share, squeeze=squeeze))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
-        "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (CLOSE - 450, TICKER, "bet", "trade", 0.81, "yes", "risk_only", 4.65, 3.77, "2030-01-01T00:15:00Z"))
+        "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time, reason) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (CLOSE - 450, TICKER, "bet", "trade", 0.81, "yes", "risk_only", 4.65, 3.77, "2030-01-01T00:15:00Z", reason))
     store.db.execute(  # the live fill the executor sells against: without a buy order the sale is a paper one
         "INSERT INTO orders (ts, ticker, env, count, price, fill_count, cost_usd, fee_usd, order_id, side, contract) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (CLOSE - 449, TICKER, s.env, 4.65, 0.81, 4.65, 3.77, 0.10, "o1", "buy", "yes"))
@@ -789,3 +789,30 @@ def test_unit_the_squeeze_changes_a_lanes_version_only_when_it_is_set(tmp_path, 
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("squeeze_seconds" in got) is (squeeze > 0)
+
+
+# ---- a stretched buy is squeezed harder (2026-11-14, user: "The stretch buy and squeeze sale need to work together") ----
+CRASH = SIT + [0.58] * 9  # a crash that stays: the look back is about 9 s, so half is about 4.5 s and a quarter about 2.3 s
+
+
+def first_sale(w, path, left):
+    for k, bid in enumerate(path):
+        ticks_mod.mids.note(TICKER, CLOSE - left + k, bid - 0.005, bid + 0.005)
+        yes_bid(w, bid, left - k)
+        if signals(w):
+            return k
+    return None
+
+
+def test_integration_a_bet_that_got_in_on_a_stretch_is_sold_sooner_by_the_squeeze(tmp_path, monkeypatch):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    feed_history(0.013, from_left=1300, to_left=611)
+    plain = first_sale(held(tmp_path / "a", monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5), CRASH, 610)
+    ticks_mod.mids._rows.clear()
+    feed_history(0.013, from_left=1300, to_left=611)
+    w = held(tmp_path / "b", monkeypatch, live=True, hold=0.5, swing=1.5, squeeze=5, reason="stake $1. [stretch buy: the edge is 0.008 under the bar] note")
+    assert w.targets[(TICKER, "risk_only")].risk_stretched is True
+    stretched = first_sale(w, CRASH, 610)
+    assert plain is not None and stretched is not None and stretched < plain
+    assert stretched > len(SIT)  # still not on the first print of the crash

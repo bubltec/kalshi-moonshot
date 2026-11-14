@@ -130,11 +130,16 @@ def test_unit_stretch_ok_needs_a_miss_inside_the_noise_and_the_trend_its_way():
     assert lanes.stretch_ok(-0.01, 0.02, 1.5, 1.0) is False  # not a miss
 
 
-STRETCH = "min_edge_room=0.10\nrecord_adjust=false\nstretch_seconds=5"
+STRETCH = "min_edge_room=0.10\nrecord_adjust=false\nstretch_seconds=5\nsqueeze_seconds=5"
+
+
+@pytest.fixture(autouse=True)
+def _unit(monkeypatch):
+    monkeypatch.setattr(runner, "market_unit", lambda ticker, now: 0.06)  # a typical minute of 0.06: 0.017 of noise over 5 s, the ruler the squeeze uses too
 
 
 def test_integration_a_near_miss_with_the_side_trending_its_way_is_bet_and_tagged(tmp_path, monkeypatch):
-    monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: (0.09, 0.06))  # +1.5 typical moves; noise over 5 s = 0.06 * sqrt(5/60) = 0.017
+    monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: (0.09, 0.06))  # +1.5 typical moves
     got = decide(tmp_path, monkeypatch, STRETCH, 0.58, 0.629)  # 0.008 under the bar
     assert got.action == "bet" and "[stretch buy" in got.note
 
@@ -169,7 +174,7 @@ def test_integration_the_ladder_screen_keeps_a_stretched_near_miss_and_drops_it_
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     s = config.load()
-    sp = dataclasses.replace(spec(min_edge_room=0.10, stretch_seconds=5.0), price=(0.30, 0.90))
+    sp = dataclasses.replace(spec(min_edge_room=0.10, stretch_seconds=5.0, squeeze_seconds=5.0), price=(0.30, 0.90))
     sh = LongShot("KXBTCD-X-T1", "t", "r", 0.57, 0.58, 100.0, "2099-01-01T00:00:00Z", 0.2, lane="x", series="KXBTCD", event_ticker="KXBTCD-X", side="yes")
     rows = [{"ticker": "KXBTCD-X-T1", "event_ticker": "KXBTCD-X"}]
     monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: (0.09, 0.06))
@@ -186,3 +191,25 @@ def test_unit_the_stretch_changes_a_lanes_version_only_when_it_is_set(tmp_path, 
     assert "stretch_seconds" not in lanes.settings_of(plain, s)
     on = dataclasses.replace(plain, stretch_seconds=5.0)
     assert lanes.settings_of(on, s)["stretch_seconds"] == "5.0" and lanes.version_of(plain, s) != lanes.version_of(on, s)
+
+
+# ---- the stretch and the squeeze work as a pair (2026-11-14, user: "The stretch buy and squeeze sale need to work together") ----
+def test_integration_a_lane_with_the_stretch_but_no_squeeze_gets_no_stretch(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: (0.09, 0.06))
+    alone = decide(tmp_path, monkeypatch, "min_edge_room=0.10\nrecord_adjust=false\nstretch_seconds=5", 0.58, 0.629)
+    assert alone.action == "pass" and "[stretch buy" not in alone.note
+
+
+def test_integration_the_buy_is_measured_with_the_squeezes_ruler_not_the_trend_readers(tmp_path, monkeypatch):
+    # the side's 60 s moves are wild (sd 0.20: the old ruler allowed 0.058), the market's typical minute is quiet (0.02: 0.006 over 5 s). The miss of 0.008 is not near
+    monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: (0.30, 0.20))
+    monkeypatch.setattr(runner, "market_unit", lambda ticker, now: 0.02)
+    assert decide(tmp_path, monkeypatch, STRETCH, 0.58, 0.629).action == "pass"
+    monkeypatch.setattr(runner, "market_unit", lambda ticker, now: 0.06)
+    assert decide(tmp_path, monkeypatch, STRETCH, 0.58, 0.629).action == "bet"
+
+
+def test_integration_with_no_reading_of_the_markets_unit_nothing_is_stretched(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: (0.09, 0.06))
+    monkeypatch.setattr(runner, "market_unit", lambda ticker, now: None)
+    assert decide(tmp_path, monkeypatch, STRETCH, 0.58, 0.629).action == "pass"
