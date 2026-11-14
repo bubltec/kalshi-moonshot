@@ -75,7 +75,7 @@ def test_the_crypto_instruments_read_kalshis_own_index_and_the_currencies_still_
     from kalshi_moonshot import kalshiws
 
     by = {i.prefix: i for i in cm.load_instruments()}
-    for coin in ("BTC", "ETH", "SOL", "XRP", "DOGE"):
+    for coin in ("BTC", "ETH", "SOL", "XRP", "DOGE", "ADA", "BCH", "BNB", "HYPE", "NEAR", "ZEC"):  # all eleven coins (the last six added 2026-11-13)
         inst = by[f"KX{coin}"]
         assert inst.symbol == f"kp:{kalshiws.INDEX_FOR[f'KX{coin}']}" and inst.proxy and inst.realtime and not cm.contract_priced(inst.symbol)  # the settlement index the socket streams (2026-11-13; the polled perp reference before)
     assert cm.contract_priced(by["KXAUDUSD"].symbol)
@@ -115,3 +115,18 @@ def test_latest_falls_back_to_the_tape_when_memory_is_empty_or_stale(tmp_path, m
     now = time.time()
     fresh.warm("BRTI", [(now - 300.0, 500.0), (now - 60.0, 501.5)], now - 400.0)  # the socket stalled a minute ago
     assert feed.latest("kp:BRTI")[0] == pytest.approx(rows[-1][2])
+
+
+def test_every_series_the_live_ladder_lane_lists_has_an_instrument_the_ladder_can_price():
+    """Guards the lane file: a series with no instrument drops out as "could not price this ladder", which is how six coins were silently missing from the ladder lane."""
+    import tomllib
+    from pathlib import Path
+
+    toml = Path(__file__).resolve().parents[1] / "data" / "strategies.toml"
+    if not toml.exists():
+        pytest.skip("no local lane file")
+    lane = tomllib.loads(toml.read_text()).get("lane", {}).get("crypto_ladder_perp")
+    if not lane:
+        pytest.skip("no crypto_ladder_perp lane")
+    missing = [s for s in lane["series"] if cm.symbol_for(s) is None or not cm.symbol_for(s).startswith("kp:")]
+    assert missing == [] and len(lane["series"]) == 11

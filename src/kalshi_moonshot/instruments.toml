@@ -114,6 +114,48 @@ proxy = true
 # you flip the switch here. Currencies use Hyperliquid's EUR/GBP/JPY perpetuals, or Kraken's spot FX where there is no perp.
 # Indices use the S&P 500 and Nasdaq-100 perps (Kalshi's index markets run in US trading hours); Brent adds its 15-minute series.
 
+
+[[instrument]]
+prefix = "KXADA"
+symbol = "kp:ADAUSD_RTI"  # 2026-11-13 (user: "what about the other coins?"): the coin's settlement index from Kalshi's socket, as for the five coins above; until now this coin had no instrument and the ladder could not price it
+suffixes = ["15M"]
+realtime = true
+proxy = true
+
+[[instrument]]
+prefix = "KXBCH"
+symbol = "kp:BCHUSD_RTI"  # 2026-11-13 (user: "what about the other coins?"): the coin's settlement index from Kalshi's socket, as for the five coins above; until now this coin had no instrument and the ladder could not price it
+suffixes = ["15M"]
+realtime = true
+proxy = true
+
+[[instrument]]
+prefix = "KXBNB"
+symbol = "kp:BNBUSD_RTI"  # 2026-11-13 (user: "what about the other coins?"): the coin's settlement index from Kalshi's socket, as for the five coins above; until now this coin had no instrument and the ladder could not price it
+suffixes = ["15M"]
+realtime = true
+proxy = true
+
+[[instrument]]
+prefix = "KXHYPE"
+symbol = "kp:HYPEUSD_RTI"  # 2026-11-13 (user: "what about the other coins?"): the coin's settlement index from Kalshi's socket, as for the five coins above; until now this coin had no instrument and the ladder could not price it
+suffixes = ["15M"]
+realtime = true
+proxy = true
+
+[[instrument]]
+prefix = "KXNEAR"
+symbol = "kp:NEARUSD_RTI"  # 2026-11-13 (user: "what about the other coins?"): the coin's settlement index from Kalshi's socket, as for the five coins above; until now this coin had no instrument and the ladder could not price it
+suffixes = ["15M"]
+realtime = true
+proxy = true
+
+[[instrument]]
+prefix = "KXZEC"
+symbol = "kp:ZECUSD_RTI"  # 2026-11-13 (user: "what about the other coins?"): the coin's settlement index from Kalshi's socket, as for the five coins above; until now this coin had no instrument and the ladder could not price it
+suffixes = ["15M"]
+realtime = true
+proxy = true
 [[instrument]]
 prefix = "KXEURUSD"
 symbol = "hl:xyz:EUR"
