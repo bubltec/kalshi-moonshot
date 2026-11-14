@@ -27,6 +27,7 @@ SINCE = calendar.timegm((2026, 11, 9, 5, 0, 0))
 BAND, MAX_SPREAD, MAX_BUYS, MIN_LEFT_REBUY, ENTRY_FROM, ENTRY_TO, N = (0.60, 0.90), 0.04, 4, 60, 120, 540, 900
 OFF, MID, FAR, GUARD = 180, 360, 600, 8
 CONFIRM = 0.4
+DELAY = int(os.environ.get("DELAY", "0"))  # seconds after a sale before a rebuy may fill (2026-11-14, user: a low rebuy delay, 15 s if anything)
 INDEX = {"BTC": "BRTI", "ETH": "ETHUSD_RTI", "SOL": "SOLUSD_RTI", "XRP": "XRPUSD_RTI", "DOGE": "DOGEUSD_RTI"}
 VARIANTS = [(shape, sf, rb) for shape in ("step", "smooth") for sf in (0.25, 0.40) for rb in (False, True)]
 
@@ -44,7 +45,7 @@ def bar(shape, sf, paid, left):
 def simulate(bid, ask, u, win, e, hour_ok, take=None, rebuy=False):
     """(total, buys, profit sales as (net received, win), counts of sales by kind). `take` is (shape, s_far) or None."""
     total, buys, sales, kinds = 0.0, 0, [], {"stop": 0, "line": 0, "profit": 0}
-    state, paid, last_sale, since = "buy", None, None, None
+    state, paid, last_sale, since, sold_i = "buy", None, None, None, -10**9
     i = e
     while i < N - 3:
         left = N - i
@@ -53,7 +54,7 @@ def simulate(bid, ask, u, win, e, hour_ok, take=None, rebuy=False):
             if buys == 0:
                 fill = a
             else:
-                ok = last_sale is not None and a <= last_sale - 0.5 * u[i] and BAND[0] <= a <= BAND[1] and left > MIN_LEFT_REBUY and buys < MAX_BUYS
+                ok = last_sale is not None and i - sold_i >= DELAY and a <= last_sale - 0.5 * u[i] and BAND[0] <= a <= BAND[1] and left > MIN_LEFT_REBUY and buys < MAX_BUYS
                 if not ok:
                     if not rebuy:
                         break
@@ -91,7 +92,7 @@ def simulate(bid, ask, u, win, e, hour_ok, take=None, rebuy=False):
                 sb = min(bid[i + 1], bid[i + 2])
                 got = sb - fee(sb)
                 total += got
-                last_sale, state, since = sb, "buy", None
+                last_sale, state, since, sold_i = sb, "buy", None, i
                 kinds[kind] += 1
                 if kind == "profit":
                     sales.append((got, win))
