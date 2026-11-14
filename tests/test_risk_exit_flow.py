@@ -24,6 +24,7 @@ curve_risk_live={live}
 curve_risk_spot_weight=0.0
 curve_risk_history=false
 curve_risk_confirm={confirm}
+curve_risk_stop_hold={hold}
 """
 
 
@@ -57,9 +58,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, confirm=-1):
+def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -367,3 +368,44 @@ def test_integration_a_settled_market_leaving_the_account_is_not_a_hand_sale(tmp
     assert len(store.open_bets()) == 1 and store.net_contracts(TICKER, s.env) == pytest.approx(4.65)
     clock["now"] = CLOSE - 5.0  # the last seconds before the close: not acted on either
     assert w.reconcile_hand_sales(s, store) == [] and w.reconcile_hand_sales(s, store) == []
+
+
+# ---- the stop waits a share of the time left (2026-11-14, user: "A 57c bet should be able to deal with a dip for a moment with 5 mins remaining") ----
+def test_integration_the_stop_waits_half_the_time_left_and_then_sells(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5)
+    sold_at = None
+    for k in range(0, 150):  # the bid drops to 0.55 at 450 s left and stays there: past the stop from the first quote
+        left = 450 - 3 * k
+        yes_bid(w, 0.55, left)
+        if signals(w):
+            sold_at = left
+            break
+    assert sold_at is not None, "a bid that stayed under the stop for the whole wait was never sold"
+    assert 295 <= sold_at <= 310  # the first hit at 450 s left, then 0.5 x the time left (shrinking): the two meet near 300 s left
+
+
+def test_integration_a_dip_that_recovers_inside_the_wait_does_not_sell_and_the_clock_restarts(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5)
+    for k in range(0, 20):  # 60 s under the stop, shorter than the wait
+        yes_bid(w, 0.55, 450 - 3 * k)
+        assert signals(w) == []
+    yes_bid(w, 0.80, 390)  # it recovers: the wait is cancelled
+    assert signals(w) == []
+    for k in range(0, 20):  # a second dip gets its own full wait
+        yes_bid(w, 0.55, 387 - 3 * k)
+        assert signals(w) == []
+
+
+def test_integration_with_no_hold_the_stop_sells_at_once_as_before(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, hold=0)
+    yes_bid(w, 0.55, 450)
+    assert signals(w) != []
+
+
+def test_unit_the_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    for hold in (0, 0.5):
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold))
+        s = config.load()
+        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
+        assert ("curve_risk_stop_hold" in got) is (hold > 0)
