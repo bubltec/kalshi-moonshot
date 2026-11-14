@@ -28,7 +28,7 @@ curve_risk_stop_hold={hold}
 curve_risk_swing={swing}
 curve_risk_swing_floor={floor}
 curve_take={take}
-curve_take_slope_seconds=10
+curve_take_slope_share={share}
 stretch_seconds={stretch}
 """
 
@@ -63,9 +63,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0, swing=0, floor=0, take='false', stretch=0):
+def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0, swing=0, floor=0, take='false', stretch=0, share=0.015):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor, take=take, stretch=stretch))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor, take=take, stretch=stretch, share=share))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -410,7 +410,7 @@ def test_integration_with_no_hold_the_stop_sells_at_once_as_before(tmp_path, mon
 def test_unit_the_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for hold in (0, 0.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, swing=0, floor=0, take='false', stretch=0))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, swing=0, floor=0, take='false', stretch=0, share=0.015))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_stop_hold" in got) is (hold > 0)
@@ -497,7 +497,7 @@ def test_integration_the_hold_is_logged_once_for_the_bet(tmp_path, monkeypatch, 
 def test_unit_the_swing_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for swing in (0, 1.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=swing, floor=0, take='false', stretch=0))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=swing, floor=0, take='false', stretch=0, share=0.015))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_swing" in got) is (swing > 0)
@@ -532,7 +532,7 @@ def test_integration_the_floor_is_a_chance_not_a_price_of_the_yes_side(tmp_path,
 def test_unit_the_floor_changes_a_lanes_version_only_when_set_with_the_swing(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for floor in (0, 0.1):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=1.5, floor=floor, take='false', stretch=0))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=1.5, floor=floor, take='false', stretch=0, share=0.015))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_swing_floor" in got) is (floor > 0)
@@ -652,7 +652,7 @@ def test_integration_the_take_sale_is_executed_as_an_order(tmp_path, monkeypatch
 def test_unit_the_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for take in ("false", "true"):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take=take, stretch=0))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take=take, stretch=0, share=0.015))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_take" in got) is (take == "true")
@@ -666,3 +666,38 @@ def test_integration_a_lane_with_the_stretch_set_does_not_sell_a_near_miss_of_th
     ticks_mod.mids.note(TICKER, CLOSE - 459, 0.895, 0.905)
     yes_bid(w, 0.90, 459)  # just under the bar, one tick off its high
     assert signals(w) == []
+
+
+# ---- the slope's look back is a share of the time left (2026-11-14, user: "the 10s look back depends on how much time is left. It needs to be based on the time left") ----
+def sit(w, bid, left, seconds):
+    """The bid sits at `bid`, one quote a second from `left`; returns the first sale signal or None."""
+    for k in range(seconds):
+        ticks_mod.mids.note(TICKER, CLOSE - left + k, bid - 0.005, bid + 0.005)
+        yes_bid(w, bid, left - k)
+        out = signals(w)
+        if out:
+            return out[0]
+    return None
+
+
+def test_integration_early_in_the_market_a_pause_of_sixteen_seconds_does_not_end_the_climb(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.05)
+    assert sit(w, 0.82, 740, 40) is None  # the bet sits just in profit, under the bar
+    assert climb(w, 0.82, 0.96, 700) is None
+    assert sit(w, 0.96, 685, 16) is None  # about 670 s left: the look back is 33 s and still reaches the start of the climb
+
+
+def test_integration_early_in_the_market_the_gain_is_taken_once_the_pause_outlasts_the_look_back(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.05)
+    assert sit(w, 0.82, 740, 40) is None
+    assert climb(w, 0.82, 0.96, 700) is None
+    sig = sit(w, 0.96, 685, 50)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+def test_integration_late_in_the_market_the_same_pause_ends_the_climb(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.05)
+    assert sit(w, 0.82, 340, 40) is None
+    assert climb(w, 0.82, 0.96, 300) is None
+    sig = sit(w, 0.96, 285, 16)  # about 270 s left: the look back is 13 s and the climb has aged out of it
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
