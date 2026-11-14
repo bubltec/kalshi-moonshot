@@ -132,6 +132,10 @@ class MarketCache:
                 if rows is not None:
                     rows[:] = [m for m in rows if m.get("ticker") != ticker]
                 return
+            if row is None and ticker not in self._created and rows is not None and kind in {"strike", "activated", "deactivated", "close_date_updated"}:
+                # 2026-11-14 08:15 live miss: a new window came as a strike event with no created event before it, so the stream-kept listing never held it and the lane saw 0 events. A market the listing does not hold means the listing is incomplete: it is unproven again and the next read asks Kalshi (and fills it).
+                self._series[series] = (0.0, rows)
+                return
             for m in (row, self._created.get(ticker)):
                 if m is None:
                     continue

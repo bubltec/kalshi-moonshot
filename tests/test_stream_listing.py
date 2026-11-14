@@ -188,3 +188,49 @@ def test_raw_lifecycle_messages_keep_the_clients_listing_current_with_no_rest_ca
     stream._ws = None
     rec._feed_state(False)  # the connection ended
     assert not client.cache.live("KXBTC15M")
+
+
+def test_an_event_for_a_market_the_listing_does_not_hold_makes_the_listing_unproven():
+    """The 08:15 live miss: the next window arrived as a strike event with no created event, so the kept listing never held it."""
+    cache, clock = seeded_live()
+    assert cache.live("KXBTC15M")
+    cache.apply_market({"kind": "strike", "ticker": "KXBTC15M-26NOV141215-15", "strike": 7.0})
+    assert not cache.live("KXBTC15M")
+    assert cache.get_series("KXBTC15M", 180) is None and cache.get_event(E, 180) is None  # even a young listing is asked for again
+    cache.put_series("KXBTC15M", [rest_row(), rest_row("KXBTC15M-26NOV141215-15", "KXBTC15M-26NOV141215", "2026-11-14T17:30:00Z")])
+    assert cache.live("KXBTC15M") and len(cache.get_series("KXBTC15M", 180)) == 2
+
+
+def test_an_event_for_a_market_it_does_hold_keeps_the_listing_proven():
+    cache, _ = seeded_live()
+    cache.apply_market({"kind": "strike", "ticker": T, "strike": 7.0})
+    cache.apply_market({"kind": "market", "event": "activated", "ticker": T})
+    assert cache.live("KXBTC15M")
+
+
+def test_the_next_window_arriving_as_a_bare_strike_event_reaches_the_client_through_one_rest_read():
+    client = KalshiClient("https://example.test", max_rps=100)
+    clock = Clock()
+    client.cache._clock = clock
+    nxt = "KXBTC15M-26NOV141215-15"
+    state = {"listed": [rest_row()], "calls": 0}
+
+    def request(method, path, params=None, **kw):
+        state["calls"] += 1
+        return {"markets": list(state["listed"]), "cursor": ""}
+
+    client._request = request
+    rec = SimpleNamespace(tape=SimpleNamespace(add=lambda e: None), client=client, listeners=[], market_listeners=[], _wanted=set(), _refresh_wake=threading.Event(), stream=SimpleNamespace(_tickers=set(), set_tickers=lambda t: None))
+    rec._feed_state = lambda up: tape.TapeRecorder._feed_state(rec, up)
+    rec._on_lifecycle = lambda e: tape.TapeRecorder._on_lifecycle(rec, e)
+    stream = kalshiws.KalshiStream(client, lambda e: tape.TapeRecorder._on_event(rec, e), on_feed=rec._feed_state)
+    stream.handle(json.dumps({"type": "subscribed", "id": 6, "msg": {"channel": "market_lifecycle_v2", "sid": 6}}))
+    with client.shared(180):
+        client.series_markets("KXBTC15M")
+    assert state["calls"] == 1
+    state["listed"] = [rest_row(), rest_row(nxt, nxt.rsplit("-", 1)[0], "2026-11-14T17:30:00Z")]
+    stream.handle(json.dumps({"type": "market_lifecycle_v2", "sid": 6, "seq": 3, "msg": {"event_type": "metadata_updated", "market_ticker": nxt, "floor_strike": 99.0}}))
+    with client.shared(180):
+        got = [m["ticker"] for m in client.series_markets("KXBTC15M")]
+        again = [m["ticker"] for m in client.series_markets("KXBTC15M")]
+    assert nxt in got and got == again and state["calls"] == 2  # one read refilled it, and the second is from memory
