@@ -543,6 +543,7 @@ def climb(w, start, stop, left, step=0.01):
     """The bid climbs from start to stop one quote a second, then the sale signal (if any) is returned; the market's quotes also go into its history."""
     bid, k, sig = start, 0, None
     while bid <= stop + 1e-9:
+        ticks_mod.mids.note(TICKER, CLOSE - left + k, round(bid, 4) - 0.005, round(bid, 4) + 0.005)
         yes_bid(w, round(bid, 4), left - k)
         out = signals(w)
         if out and sig is None:
@@ -554,6 +555,7 @@ def climb(w, start, stop, left, step=0.01):
 
 def level(w, bid, left, seconds=12):
     for k in range(seconds):
+        ticks_mod.mids.note(TICKER, CLOSE - left + 30 + k, bid - 0.005, bid + 0.005)
         yes_bid(w, bid, left - 30 - k)
         out = signals(w)
         if out:
@@ -591,6 +593,26 @@ def test_integration_the_bid_turning_down_ends_the_slope(tmp_path, monkeypatch):
     assert climb(w, 0.82, 0.92, 700) is None
     yes_bid(w, 0.91, 688)
     assert signals(w) != []  # under the window's high: it has turned
+
+
+def test_integration_in_a_swinging_market_a_one_tick_pause_does_not_end_the_slope(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=800)  # a typical minute of about 0.10: 0.041 of noise over the 10 s look back
+    w = held(tmp_path, monkeypatch, live=True, take="true")
+    assert climb(w, 0.82, 0.92, 790) is None
+    ticks_mod.mids.note(TICKER, CLOSE - 778, 0.905, 0.915)
+    yes_bid(w, 0.91, 778)
+    assert signals(w) == []  # one tick off the high, the bid still 0.08 up over the look back
+    sig = level(w, 0.91, 777 + 30, seconds=14)  # then it sits: the rise ages out of the look back
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+def test_integration_in_a_swinging_market_a_fall_past_the_noise_ends_the_slope(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=800)
+    w = held(tmp_path, monkeypatch, live=True, take="true")
+    assert climb(w, 0.82, 0.92, 790) is None
+    ticks_mod.mids.note(TICKER, CLOSE - 778, 0.865, 0.875)
+    yes_bid(w, 0.87, 778)  # 0.05 off the high, still well in profit
+    assert signals(w) != []
 
 
 def test_integration_the_take_is_off_by_default(tmp_path, monkeypatch):

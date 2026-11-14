@@ -975,9 +975,9 @@ class ProfitWatcher:
                 t.risk_take_hist.pop(0)
             basis = t.entry + fee_per_contract(t.entry)
             gain = (bid - fee_per_contract(bid)) - basis
-            if pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, 1.0 - basis, left, 900.0, fee_per_contract(bid)) and not curverisk.still_rising(t.risk_take_hist, now, t.risk_take_slope):
+            if pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, 1.0 - basis, left, 900.0, fee_per_contract(bid)) and not curverisk.still_rising(t.risk_take_hist, now, t.risk_take_slope, self._risk_unit(t, now)):
                 used = 1.0 - left / 900.0
-                reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(1.0 - basis, 1e-9) * 100.0:.0f}% of its {1.0 - basis:.3f} room, and {used * 100.0:.0f}% of the market is gone ({left:.0f}s left), more than the {fee_per_contract(bid):.3f} fee to buy it back; the bid is no longer sloping up over {t.risk_take_slope:g}s; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+                reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(1.0 - basis, 1e-9) * 100.0:.0f}% of its {1.0 - basis:.3f} room, and {used * 100.0:.0f}% of the market is gone ({left:.0f}s left), more than the {fee_per_contract(bid):.3f} fee to buy it back; the bid is no longer sloping up over {t.risk_take_slope:g}s (typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
                 if t.risk_live:
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True)
                     return reason

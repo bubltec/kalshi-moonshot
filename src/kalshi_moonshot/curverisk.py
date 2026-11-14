@@ -122,12 +122,17 @@ def take_profit(gain: float, room: float, left: float, window: float, rebuy_fee:
     return gain >= used * room
 
 
-def still_rising(samples: list[tuple[float, float]], now: float, seconds: float) -> bool:
-    """True while the bid is still sloping up over the last `seconds` (2026-11-14, user: "if it's sloping in profit direction don't sell until it stops sloping"): the newest bid is the window's highest and above where the window started. A bid that has turned (under the window's high) or levelled out (back at the start) is not rising. With under `seconds` of readings the slope is unknown and the answer is True (no sale on a bet just opened)."""
+def still_rising(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None) -> bool:
+    """True while the bid is still sloping up over the last `seconds` (2026-11-14, user: "if it's sloping in profit direction don't sell until it stops sloping"), measured in the market's own noise: `unit` is its typical minute (quoteshock.typical_minute), so what it normally moves in the look back is unit * sqrt(seconds / 60).
+    Sloping = the bid has risen over the look back by more than that noise AND sits within that noise of the look back's high. A one-tick pause in a climb is inside the noise and does not end it; a bid that has levelled out (the rise has aged out of the look back) or fallen back from its high by more than the noise has stopped.
+    With no reading of the unit (under five minutes of quotes) the plain test is used: the newest bid is the look back's high and above where it started. With under `seconds` of readings the slope is unknown and the answer is True (no sale on a bet just opened)."""
     if seconds <= 0:
         return False
     window = [(t, b) for t, b in samples if t >= now - seconds]
     if not window or not samples or samples[0][0] > now - seconds:
         return True
-    bid = window[-1][1]
-    return bid >= max(b for _, b in window) and bid > window[0][1]
+    bid, high, start = window[-1][1], max(b for _, b in window), window[0][1]
+    if unit is None or unit <= 0:
+        return bid >= high and bid > start
+    noise = unit * math.sqrt(seconds / MINUTE)
+    return bid - start > noise and high - bid < noise
