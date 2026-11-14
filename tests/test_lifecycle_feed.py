@@ -35,7 +35,7 @@ def test_the_live_stream_subscribes_and_the_extra_stream_does_not(monkeypatch):
 def test_a_socket_target_fills_the_strike_store_for_15_minute_series_only():
     ticks.strikes.clear()
     added = []
-    rec = SimpleNamespace(tape=SimpleNamespace(add=added.append), client=None, listeners=[])
+    rec = SimpleNamespace(tape=SimpleNamespace(add=added.append), client=None, listeners=[], market_listeners=[])
     rec._on_lifecycle = lambda e: tape.TapeRecorder._on_lifecycle(rec, e)
     tape.TapeRecorder._on_event(rec, {"kind": "strike", "ts": 1.0, "ticker": "KXSILVER15M-26NOV101900-00", "strike": 51.551})
     tape.TapeRecorder._on_event(rec, {"kind": "strike", "ts": 1.0, "ticker": "KXLIGAPROMATCH-26NOV110545AKUBYS-AKU", "strike": 3.0})

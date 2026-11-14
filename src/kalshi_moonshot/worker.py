@@ -789,7 +789,7 @@ class Worker:
                     jobs.ensure(f"lane_scope:{spec.name}", now, max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec))
                     jobs.ensure(f"lane_review:{spec.name}", now + 15, max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec))
             return
-        if item.get("event") not in {"created", "activated", "close_date_updated"}:
+        if item.get("event") not in {"created", "activated", "close_date_updated", "strike", "determined", "settled"}:
             return
         series = str(item.get("ticker", "")).split("-")[0]
         for spec in tiered_lanes(self.s):
