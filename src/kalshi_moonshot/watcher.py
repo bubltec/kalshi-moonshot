@@ -231,6 +231,10 @@ class Target:
     risk_history: bool = True
     risk_max_loss: float = 0.5
     risk_min_profit: float = 0.01
+    risk_swing: float = 0.0  # a loss under this many times the market's own swing over the time left is not sold (lane field curve_risk_swing)
+    risk_unit: float | None = None
+    risk_unit_at: float = 0.0
+    risk_swing_noted: bool = False
     risk_stop_hold: float = 0.0  # the max-loss stop waits this share of the time left (lane field curve_risk_stop_hold)
     risk_at: float = 0.0  # the risk check reads at most once a second
     risk_noted: float = 0.0
@@ -957,6 +961,17 @@ class ProfitWatcher:
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= t.risk_confirm:
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             return None
+        if t.risk_swing > 0 and pnl < 0:
+            if now - t.risk_unit_at >= 5.0:  # the typical minute is read from 15 minutes of quotes: not every second
+                t.risk_unit_at = now
+                t.risk_unit = quoteshock.typical_minute(ticks_mod.mids.rows(t.ticker), now)
+            drop = (t.entry + fee_per_contract(t.entry)) - (bid - fee_per_contract(bid))
+            if curverisk.swing_hold(drop, t.risk_unit, left, t.risk_swing):
+                if not t.risk_swing_noted:
+                    t.risk_swing_noted = True
+                    log.info("curve risk: %s %s holds a loss of %.3f: under %.1f x the market's own swing over %.0fs (typical minute %.3f)", t.ticker, t.lane, drop, t.risk_swing, left, t.risk_unit or 0.0)
+                t.risk_since = 0.0  # the loss is inside what this market does in the time left: no clock runs toward a sale
+                return None
         stop = curverisk.stopped(pnl, r.q, t.risk_max_loss) and bid >= CURVE_MIN_BID  # the max loss: sell now (below this bid the market has priced the loss and there is nothing to sell for)
         if not stop and (bid < CURVE_MIN_BID or not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):  # under the minimum bid there is nothing left to sell for, on the line as on the max loss
             t.risk_since = 0.0
@@ -1789,7 +1804,7 @@ class ProfitWatcher:
             if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
-                held.risk_stop_hold = spec.curve_risk_stop_hold
+                held.risk_stop_hold, held.risk_swing = spec.curve_risk_stop_hold, spec.curve_risk_swing
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]

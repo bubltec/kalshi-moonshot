@@ -1,0 +1,36 @@
+# Output of scripts/stop_replay_real_bets.py (swing variants) on the cloud host, 2026-11-14 about 09:30 ET. k = 1.5 was fixed in the tests before this run; 1.0 and 2.0 are shown for the sensitivity.
+live crypto bets that settled since 11-13: 79
+replayed: 50 (stopped live: 20, held: 30)
+
+=== all: 50 bets | live stop -39.44 | hold to settlement -6.33
+  persist 0.50    -28.54 | vs live  +10.90 (beat 9, lost 12) | vs hold  -22.21
+  swing 1.0       -37.39 | vs live   +2.05 (beat 17, lost 5) | vs hold  -31.06
+  swing 1.5       -40.75 | vs live   -1.31 (beat 17, lost 6) | vs hold  -34.42
+  swing 2.0       -33.74 | vs live   +5.70 (beat 16, lost 6) | vs hold  -27.41
+  swing 1.5 + persist 0.5    -2.82 | vs live  +36.62 (beat 10, lost 11) | vs hold   +3.51
+  no stop          -6.33 | vs live  +33.11 (beat 9, lost 11) | vs hold   +0.00
+
+=== choppy third: 17 bets | live stop -4.23 | hold to settlement +3.17
+  persist 0.50     +4.26 | vs live   +8.49 (beat 4, lost 3) | vs hold   +1.09
+  swing 1.0        -1.47 | vs live   +2.76 (beat 5, lost 1) | vs hold   -4.64
+  swing 1.5        -1.70 | vs live   +2.53 (beat 5, lost 2) | vs hold   -4.87
+  swing 2.0        +1.64 | vs live   +5.87 (beat 4, lost 3) | vs hold   -1.53
+  swing 1.5 + persist 0.5    +4.26 | vs live   +8.49 (beat 4, lost 3) | vs hold   +1.09
+  no stop          +3.17 | vs live   +7.40 (beat 4, lost 3) | vs hold   +0.00
+
+=== middle third: 16 bets | live stop -20.49 | hold to settlement -25.10
+  persist 0.50    -22.67 | vs live   -2.18 (beat 3, lost 5) | vs hold   +2.42
+  swing 1.0       -17.96 | vs live   +2.53 (beat 8, lost 1) | vs hold   +7.14
+  swing 1.5       -18.41 | vs live   +2.08 (beat 8, lost 1) | vs hold   +6.69
+  swing 2.0       -16.20 | vs live   +4.29 (beat 8, lost 1) | vs hold   +8.89
+  swing 1.5 + persist 0.5   -22.67 | vs live   -2.18 (beat 3, lost 5) | vs hold   +2.42
+  no stop         -25.10 | vs live   -4.61 (beat 2, lost 5) | vs hold   +0.00
+
+=== straight third: 17 bets | live stop -14.72 | hold to settlement +15.60
+  persist 0.50    -10.12 | vs live   +4.59 (beat 2, lost 4) | vs hold  -25.72
+  swing 1.0       -17.96 | vs live   -3.24 (beat 4, lost 3) | vs hold  -33.56
+  swing 1.5       -20.64 | vs live   -5.93 (beat 4, lost 3) | vs hold  -36.24
+  swing 2.0       -19.17 | vs live   -4.46 (beat 4, lost 2) | vs hold  -34.78
+  swing 1.5 + persist 0.5   +15.60 | vs live  +30.32 (beat 3, lost 3) | vs hold   +0.00
+  no stop         +15.60 | vs live  +30.32 (beat 3, lost 3) | vs hold   +0.00
+DONE

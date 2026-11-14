@@ -15,9 +15,13 @@ Reported: totals, bets beaten and lost against the live stop, by curve shape (pa
 import bisect
 import math
 
-from kalshi_moonshot import config, curverisk, db
+from kalshi_moonshot import config, curverisk, db, quoteshock
 from kalshi_moonshot.strategy import fee_per_contract as fee
 from kalshi_moonshot.watcher import perp_index
+
+def swing_hold(drop, unit, left, k):  # curverisk.swing_hold, copied so the script also runs on a host whose image predates it
+    return k > 0 and unit is not None and unit > 0 and left > 0 and drop < k * unit * math.sqrt(left / 60.0)
+
 
 s = config.reload()
 main = db.connect(s.db_path, "main", shared=True)
@@ -25,7 +29,7 @@ tape = db.connect(s.tape_path, "tape", shared=True)
 SINCE = 1794470400.0  # 2026-11-13 08:00 ET
 CONFIRM = 0.4
 GUARD = 8
-VARIANTS = [("persist 0.25", "persist", 0.25), ("persist 0.50", "persist", 0.50), ("scaled 300", "scaled", 300.0), ("scaled 150", "scaled", 150.0), ("max_loss 0.7", "flat", 0.7), ("max_loss 0.9", "flat", 0.9), ("no stop", "off", 0.0)]
+VARIANTS = [("persist 0.50", "persist", 0.50), ("swing 1.0", "swing", 1.0), ("swing 1.5", "swing", 1.5), ("swing 2.0", "swing", 2.0), ("swing 1.5 + persist 0.5", "swinghold", 1.5), ("no stop", "off", 0.0)]
 
 bets = main.execute(
     "SELECT id, lane, ticker, side, ts, stake_usd, outcome, exit_ts, exit_price FROM decisions WHERE action='bet' AND mode='trade' AND lane IN ('crypto_multiscale','crypto_ladder_perp') AND ts>? AND outcome IN ('yes','no') ORDER BY ts",
@@ -39,8 +43,8 @@ for b in bets:
     if not o or not o["fill_count"]:
         continue
     entry, n = float(o["price"]), float(o["fill_count"])
-    q = tape.execute("SELECT ts,bid,ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid>=0 AND ask>0 ORDER BY ts", (tk, t0 - 130, t0 + 960)).fetchall()
-    if len(q) < 60:
+    q = tape.execute("SELECT ts,bid,ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid>=0 AND ask>0 ORDER BY ts", (tk, t0 - 1000, t0 + 960)).fetchall()
+    if len([r for r in q if r[0] >= t0 - 130]) < 60:
         continue
     import re
     m = re.match(r"^KX[A-Z0-9]+-(\d{2})([A-Z]{3})(\d{2})(\d{2})(\d{2})-", tk)
@@ -60,6 +64,29 @@ for b in bets:
         ya.append(last[1] if last else None)
     if any(x is None for x in yb):
         continue
+    # the market's own YES mids on a 1 s grid from 1000 s before the entry: the typical minute is read from the last 900 s at each decision
+    pre_t0 = int(t0) - 1000
+    pm, j2, last2 = [], 0, None
+    for t in range(pre_t0, int(t0)):
+        while j2 < len(q) and q[j2][0] <= t:
+            last2 = (float(q[j2][1]) + float(q[j2][2])) / 2.0
+            j2 += 1
+        pm.append(last2)
+    full = [x for x in pm] + [(yb[k] + ya[k]) / 2.0 for k in range(len(grid))]
+    unit_cache = {}
+
+    def unit_at(i, full=full, pre_t0=pre_t0, unit_cache=unit_cache):
+        """The market's typical minute at second i of the bet: from the quotes it has had in the last 900 s (a market that has quoted for under 300 s has none, as live)."""
+        key = i // 5
+        if key not in unit_cache:
+            idx = 1000 + i
+            lo = max(0, idx - 900)
+            while lo <= idx and full[lo] is None:
+                lo += 1
+            seg = full[lo: idx + 1]
+            unit_cache[key] = quoteshock.typical_minute([(float(pre_t0 + lo + n), seg[n]) for n in range(len(seg))], float(pre_t0 + idx)) if len(seg) >= 301 else None
+        return unit_cache[key]
+
     bid = yb if side == "yes" else [1.0 - a for a in ya]
     mids = [(yb[k] + ya[k]) / 2.0 if side == "yes" else 1.0 - (yb[k] + ya[k]) / 2.0 for k in range(len(grid))]
     kp = perp_index(tk.split("-")[0])
@@ -80,7 +107,7 @@ for b in bets:
             cache[i] = True if v is None else v < CONFIRM
         return cache[i]
 
-    def run(kind, par, bid=bid, grid=grid, basis=basis, close=close, t0=t0, hour_ok=hour_ok):
+    def run(kind, par, bid=bid, grid=grid, basis=basis, close=close, t0=t0, hour_ok=hour_ok, unit_at=unit_at):
         since = None
         for i in range(len(grid) - 3):
             left = close - (t0 + i)
@@ -91,14 +118,17 @@ for b in bets:
             qq = min(max(net, 0.0), 1.0)
             if kind == "off":
                 return None
-            ml = 0.5 if kind in ("persist",) else par if kind == "flat" else 0.5 * math.sqrt(left / par) if kind == "scaled" else 0.5
-            hit = bid[i] >= 0.05 and pnl <= -ml * qq and hour_ok(i)
+            if kind in ("swing", "swinghold") and pnl < 0 and swing_hold(basis - net, unit_at(i), left, par):
+                since = None
+                continue
+            hit = bid[i] >= 0.05 and pnl <= -0.5 * qq and hour_ok(i)
             if not hit:
                 since = None
                 continue
-            if kind == "persist":
+            if kind in ("persist", "swinghold"):
+                share = 0.5
                 since = i if since is None else since
-                if i - since < par * left:
+                if i - since < share * left:
                     continue
             sold = bid[i + 1]
             return sold - fee(sold)

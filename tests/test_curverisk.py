@@ -77,7 +77,7 @@ CLOSE = 9_900.0
 
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
+                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -216,3 +216,40 @@ def test_under_the_minimum_bid_the_line_sale_does_not_fire_either(monkeypatch, t
     assert run(monkeypatch, t, bid=0.03, p=0.85, seconds=40, tmp=tmp_path)[1] is None
     t2 = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True, risk_max_loss=0.0)
     assert run(monkeypatch, t2, bid=0.30, p=0.85, seconds=40, tmp=tmp_path)[1] is not None
+
+
+# ---- the swing hold (2026-11-14): a loss inside the market's own swing over the time left is no reason to sell ----
+def test_unit_swing_hold_is_off_without_a_setting_a_unit_or_time():
+    assert curverisk.swing_hold(0.2, 0.1, 300, 0.0) is False  # setting off
+    assert curverisk.swing_hold(0.2, None, 300, 1.0) is False  # no reading of the market's swing: the plain stop applies
+    assert curverisk.swing_hold(0.2, 0.0, 300, 1.0) is False  # a flat market has no swing to hide in
+    assert curverisk.swing_hold(0.2, 0.1, 0, 1.0) is False  # no time left
+
+
+def test_unit_swing_hold_compares_the_loss_with_a_move_over_the_time_left():
+    unit, k = 0.10, 1.0
+    # five minutes left: a move this market makes in that time is 0.10 * sqrt(5) = 0.224
+    assert curverisk.swing_hold(0.20, unit, 300, k) is True
+    assert curverisk.swing_hold(0.23, unit, 300, k) is False
+    # the band is exactly k units wide at one minute left
+    assert curverisk.swing_hold(0.099, unit, 60, k) is True and curverisk.swing_hold(0.101, unit, 60, k) is False
+
+
+def test_unit_swing_hold_band_widens_with_time_left_and_narrows_as_the_close_nears():
+    widths = []
+    for left in (900, 600, 300, 120, 60, 30, 10):
+        # the widest loss still held at this time left, by bisection
+        lo, hi = 0.0, 5.0
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if curverisk.swing_hold(mid, 0.1, left, 1.0) else (lo, mid)
+        widths.append(lo)
+    assert widths == sorted(widths, reverse=True) and widths[0] > 3 * widths[4] > 0.0  # four times wider at 15 minutes than at 1 minute (sqrt of 15)
+    assert abs(widths[0] - 0.1 * 15 ** 0.5) < 1e-6
+
+
+def test_unit_swing_hold_scales_with_the_market_and_with_k():
+    assert curverisk.swing_hold(0.25, 0.20, 300, 1.0) is True  # a market that swings twice as much holds the same loss
+    assert curverisk.swing_hold(0.25, 0.10, 300, 1.0) is False
+    assert curverisk.swing_hold(0.25, 0.10, 300, 2.0) is True  # a larger k widens the band
+    assert curverisk.swing_hold(0.25, 0.10, 300, 0.5) is False
