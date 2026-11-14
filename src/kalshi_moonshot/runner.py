@@ -501,9 +501,12 @@ def evaluate(
 
     p, why = side_prob(got.p, shot.side), got.why  # chance the contract we would buy pays
     cal: Calibration = store.calibrator.adjust(shot.lane, shot.category, shot.ask, p, spec.trust)
+    adjusted_note = "" if cal.n == 0 else cal.note(p)
+    if not spec.record_adjust:
+        cal = Calibration(p, 1.0, cal.band_p, cal.band_n, cal.skill, cal.n)  # the lane bets on its estimator's own chance: the adjustment is noted, not applied
     e = edge(cal.p, shot.ask)
     bet = wants_bet(spec, cal.p, shot.ask, e)
-    note = why if cal.n == 0 else f"{why} | {cal.note(p)}"
+    note = why if not adjusted_note else f"{why} | {adjusted_note}" if spec.record_adjust else f"{why} | record adjustment off for this lane, betting on {p:.2f} (it would have read: {adjusted_note})"
     if bet and spec.gate_from:
         open_, gate_note = gate.check(store, spec, shot.close_time, series=shot.series)
         if not open_:

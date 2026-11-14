@@ -327,6 +327,7 @@ class LaneSpec:
     watch_max: int = 40
     priority: int = 0  # queue priority of this lane's jobs; higher runs first
     trust: float = 1.0  # prior weight on the estimator before our record has any say (0 to 1)
+    record_adjust: bool = True  # 2026-11-13 (user: "I want to try the ladder out"): false = the lane bets on its estimator's own chance. The record adjustment (calibration.py) is still computed and written in the note, but not applied. Why: on crypto_ladder_perp the adjustment's weight on the ladder fell from 0.71 to 0.25 in one evening (skill -0.04 over 61 settled), which turned ladder chances of 0.91 and 0.94 at asks of 0.80 and 0.79 into passes, so the lane could not show what the ladder alone does
     sides: tuple[str, ...] = ("yes",)  # contracts the lane may buy: "yes", "no" or both
     timed_suffix: str = ""  # series ending in this are fixed-length windows with an entry window
     timed_minutes: float = 15.0  # length of such a window
@@ -515,7 +516,7 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "entry_socket", "entry_min_gap_seconds", "buy_rest_top_up", "min_edge_room", "curve_shadow", "confidence_shadow", "accumulate_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
+    "entry_socket", "entry_min_gap_seconds", "buy_rest_top_up", "min_edge_room", "record_adjust", "curve_shadow", "confidence_shadow", "accumulate_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
     "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
     "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_source", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "value_exit", "value_exit_bid", "value_exit_gain_x", "value_exit_high", "value_exit_high_left", "value_exit_min_gain", "entry_checks_exit", "rebuy_opposite_after_gain_seconds", "shock_memory", "shock_persist", "hour_drift_q", "buy_curve_edge_min", "buy_flat_trend_pct", "perp_lead_buy", "curve_exit", "curve_exit_scales", "curve_exit_persist", "curve_exit_last", "curve_exit_near", "curve_drop_units", "curve_drop_seconds", "curve_drop_margin_units", "curve_drop_persist", "curve_rest", "curve_gap", "curve_gap_persist", "curve_risk_sell", "curve_risk_live", "curve_risk_spot_weight", "curve_risk_history", "curve_risk_max_loss", "curve_risk_min_profit", "curve_risk_confirm", "curve_behind_last", "curve_behind_chance", "late_drop_units", "late_drop_seconds", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "wave_turn_seconds", "wave_turn_back", "wave_market_gate", "curve_wait_share", "curve_wait_severe", "curve_wait_default", "curve_drop_comeback", "curve_drop_comeback_min", "curve_drop_comeback_hold", "spot_source", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
@@ -571,6 +572,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     if spec.burst_ratio:
         out["burst_ratio"] = repr(spec.burst_ratio)
         out["burst_min_dollars"] = repr(spec.burst_min_dollars)
+    if not spec.record_adjust:  # reported only when off, so every other lane keeps the version it had
+        out["record_adjust"] = "False"
     if spec.min_edge_room is not None:  # reported only when set, so a lane without it keeps the version it had
         out["min_edge_room"] = repr(spec.min_edge_room)
     if spec.curve_risk_sell > 0 and spec.curve_risk_live:  # shadow changes nothing the lane does, so only a live risk exit changes its version

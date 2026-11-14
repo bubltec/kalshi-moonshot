@@ -80,3 +80,27 @@ def test_integration_the_lane_file_setting_decides_the_bet_through_evaluate(tmp_
 def test_integration_the_flat_bar_refuses_the_same_sure_looking_bet(tmp_path, monkeypatch):
     assert decide(tmp_path, monkeypatch, "min_edge=0.10", 0.90, 0.95).action == "pass"
     assert decide(tmp_path, monkeypatch, "min_edge=0.10", 0.70, 0.85).action == "bet"
+
+
+# ---- record_adjust = false: the lane bets on its estimator's own chance ----
+
+def test_integration_with_the_record_adjustment_off_the_ladders_own_chance_decides(tmp_path, monkeypatch):
+    """The 22:26 XRP case: an ask of 0.80, the estimator at 0.907, and a record that pulls it to 0.79."""
+    from kalshi_moonshot.calibration import Calibration, Calibrator
+
+    monkeypatch.setattr(Calibrator, "adjust", lambda self, lane, category, ask, p_model, trust=1.0: Calibration(0.79, 0.25, 0.75, 12, -0.04, 61))
+    on = decide(tmp_path, monkeypatch, "min_edge_room=0.25", 0.80, 0.907)
+    assert on.action == "pass" and "record-adjusted 0.91 -> 0.79" in on.note
+    off = decide(tmp_path, monkeypatch, "min_edge_room=0.25\nrecord_adjust=false", 0.80, 0.907)
+    assert off.action == "bet" and "record adjustment off for this lane, betting on 0.91" in off.note and "0.79" in off.note
+    weak = decide(tmp_path, monkeypatch, "min_edge_room=0.25\nrecord_adjust=false", 0.80, 0.83)
+    assert weak.action == "pass"  # the bar still applies to the ladder's own chance
+
+
+def test_unit_a_lane_keeps_its_version_unless_the_adjustment_is_switched_off(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    plain = spec(min_edge=0.015)
+    assert "record_adjust" not in lanes.settings_of(plain, s)
+    off = dataclasses.replace(plain, record_adjust=False)
+    assert lanes.settings_of(off, s)["record_adjust"] == "False" and lanes.version_of(plain, s) != lanes.version_of(off, s)
