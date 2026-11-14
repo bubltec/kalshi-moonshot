@@ -122,6 +122,14 @@ def take_profit(gain: float, room: float, left: float, window: float, rebuy_fee:
     return gain >= used * room
 
 
+def take_stretch(gain: float, room: float, left: float, window: float, rebuy_fee: float, noise: float) -> bool:
+    """True when a profit just misses the take's bar by less than the market's own noise over a few seconds (lane field stretch_seconds; `noise` is the typical minute times the square root of those seconds over 60). The caller adds the trend read: the bid has turned down from its high. A gain that does not pay the buy-back fee, or a miss of the noise or more, is not stretched."""
+    if gain <= 0 or room <= 0 or window <= 0 or left <= 0 or gain <= rebuy_fee or noise <= 0:
+        return False
+    miss = min(max(1.0 - left / window, 0.0), 1.0) * room - gain
+    return 0.0 < miss < noise
+
+
 def still_rising(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None) -> bool:
     """True while the bid is still sloping up over the last `seconds` (2026-11-14, user: "if it's sloping in profit direction don't sell until it stops sloping"), measured in the market's own noise: `unit` is its typical minute (quoteshock.typical_minute), so what it normally moves in the look back is unit * sqrt(seconds / 60).
     Sloping = the bid has risen over the look back by more than that noise AND sits within that noise of the look back's high. A one-tick pause in a climb is inside the noise and does not end it; a bid that has levelled out (the rise has aged out of the look back) or fallen back from its high by more than the noise has stopped.

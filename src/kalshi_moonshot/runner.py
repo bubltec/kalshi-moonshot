@@ -39,6 +39,8 @@ from .lanes import (
     takes_profit,
     tiered_lanes,
     version_of,
+    edge_miss,
+    stretch_ok,
     wants_bet,
 )
 from .marketdata import shared_for
@@ -507,6 +509,10 @@ def evaluate(
     e = edge(cal.p, shot.ask)
     bet = wants_bet(spec, cal.p, shot.ask, e)
     note = why if not adjusted_note else f"{why} | {adjusted_note}" if spec.record_adjust else f"{why} | record adjustment off for this lane, betting on {p:.2f} (it would have read: {adjusted_note})"
+    if not bet and spec.stretch_seconds > 0:
+        stretched = stretch_buy(s, spec, shot, cal.p, e)
+        if stretched:
+            bet, note = True, f"{stretched} {note}"
     if bet and spec.gate_from:
         open_, gate_note = gate.check(store, spec, shot.close_time, series=shot.series)
         if not open_:
@@ -1315,8 +1321,8 @@ def spot_move(s: Settings, shot: LongShot, seconds: float, now: float | None = N
     return (prices[-1][1] - old[-1]) * (1.0 if shot.side == "yes" else -1.0)
 
 
-def side_trend_z(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
-    """The side's price move over the last `seconds` in units of that market's own noise: the move divided by the standard deviation of its `seconds`-long changes over the 2 minutes before. None when the tape has too little to say or the market has not moved."""
+def side_trend_read(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> tuple[float, float] | None:
+    """The side's price move over the last `seconds` and that market's own noise for the same span (the standard deviation of its `seconds`-long changes over the 2 minutes before), both in probability. None when the tape has too little to say."""
     import bisect
     import statistics
 
@@ -1339,10 +1345,37 @@ def side_trend_z(s: Settings, shot: LongShot, seconds: float, now: float | None 
     steps = [a - b for a, b in zip(grid[:n], grid[int(seconds):int(seconds) + n], strict=False) if a is not None and b is not None]
     if len(steps) < 20:
         return None
-    sd = statistics.pstdev(steps)
+    return cur - then, statistics.pstdev(steps)
+
+
+def side_trend_z(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
+    """The side's price move over the last `seconds` in units of that market's own noise: the move divided by the standard deviation of its `seconds`-long changes over the 2 minutes before. None when the tape has too little to say or the market has not moved."""
+    got = side_trend_read(s, shot, seconds, now)
+    if got is None:
+        return None
+    move, sd = got
     if sd <= 1e-6:  # a market whose price never changed lately: no move is no gain, a move is a big one
-        return 0.0 if abs(cur - then) < 1e-9 else math.copysign(10.0, cur - then)
-    return (cur - then) / sd
+        return 0.0 if abs(move) < 1e-9 else math.copysign(10.0, move)
+    return move / sd
+
+
+def stretch_buy(s: Settings, spec: LaneSpec, shot: LongShot, p: float, e: float, now: float | None = None) -> str | None:
+    """The stretch for a buy that missed the scaled edge bar (lane field stretch_seconds): the note to put on the bet when the miss is inside the market's own noise over stretch_seconds and the side is trending the bet's way, else None."""
+    if spec.stretch_seconds <= 0:
+        return None
+    miss = edge_miss(spec, p, shot.ask, e)
+    if miss is None or miss <= 0:
+        return None
+    seconds = spec.entry_trend_seconds if spec.entry_trend_seconds > 0 else 60.0
+    got = side_trend_read(s, shot, seconds, now)
+    if got is None or got[1] <= 1e-6:
+        return None
+    move, sd = got
+    noise = sd * math.sqrt(spec.stretch_seconds / seconds)
+    zed = move / sd
+    if not stretch_ok(miss, noise, zed, spec.stretch_trend_z):
+        return None
+    return f"[stretch buy: the edge is {miss:.3f} under the bar, inside this market's {noise:.3f} of noise over {spec.stretch_seconds:g}s, and the side moved {zed:+.1f} typical moves its way over {seconds:.0f}s (needs over {spec.stretch_trend_z:+.1f})]"
 
 
 def _day_start(now: float) -> float:

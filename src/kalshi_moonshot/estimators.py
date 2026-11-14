@@ -40,6 +40,15 @@ from .strategy import LongShot, edge, side_prob
 log = logging.getLogger("moonshot")
 
 
+def _stretched(s: Settings, spec: LaneSpec, shot: LongShot, p: float, e: float) -> bool:
+    """Whether a candidate that missed the scaled edge bar is kept by the stretch (lane field stretch_seconds): the evaluation decides again and writes the note."""
+    if spec.stretch_seconds <= 0:
+        return False
+    from . import runner
+
+    return runner.stretch_buy(s, spec, shot, p, e) is not None
+
+
 @dataclass(frozen=True)
 class Estimate:
     p: float
@@ -439,7 +448,7 @@ class LadderEstimator:
                 continue
             p_side = side_prob(hit[0], shot.side)
             e = edge(p_side, shot.ask)
-            if wants_bet(spec, p_side, shot.ask, e) and chance_ok(spec, p_side):
+            if (wants_bet(spec, p_side, shot.ask, e) or _stretched(s, spec, shot, p_side, e)) and chance_ok(spec, p_side):
                 keep.append((e, shot))
             else:
                 bar = (f"needs {spec.min_edge:+.1%}" if spec.min_edge is not None else f"needs {spec.min_edge_room:.0%} of the room left" if spec.min_edge_room is not None else "outside the lane's chance band")

@@ -238,6 +238,7 @@ class Target:
     risk_swing_noted: bool = False
     risk_take: bool = False  # the profit take (lane field curve_take)
     risk_take_slope: float = 10.0  # the short look back: no profit sale while the bid is still sloping up over this many seconds (lane field curve_take_slope_seconds)
+    risk_stretch: float = 0.0  # a near miss of the profit take's bar still sells once the bid has turned down (lane field stretch_seconds)
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
     risk_stop_hold: float = 0.0  # the max-loss stop waits this share of the time left (lane field curve_risk_stop_hold)
     risk_at: float = 0.0  # the risk check reads at most once a second
@@ -975,9 +976,18 @@ class ProfitWatcher:
                 t.risk_take_hist.pop(0)
             basis = t.entry + fee_per_contract(t.entry)
             gain = (bid - fee_per_contract(bid)) - basis
-            if pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, 1.0 - basis, left, 900.0, fee_per_contract(bid)) and not curverisk.still_rising(t.risk_take_hist, now, t.risk_take_slope, self._risk_unit(t, now)):
+            room, rebuy = 1.0 - basis, fee_per_contract(bid)
+            unit = self._risk_unit(t, now)
+            taken = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy) and not curverisk.still_rising(t.risk_take_hist, now, t.risk_take_slope, unit)
+            noise = unit * (t.risk_stretch / 60.0) ** 0.5 if unit and t.risk_stretch > 0 else 0.0
+            high = max((b for ts, b in t.risk_take_hist if ts >= now - t.risk_take_slope), default=bid)
+            stretched = not taken and pnl > 0 and bid >= CURVE_MIN_BID and bid < high and curverisk.take_stretch(gain, room, left, 900.0, rebuy, noise)  # a near miss, and the bid has turned down from its high of the look back
+            if taken or stretched:
                 used = 1.0 - left / 900.0
-                reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(1.0 - basis, 1e-9) * 100.0:.0f}% of its {1.0 - basis:.3f} room, and {used * 100.0:.0f}% of the market is gone ({left:.0f}s left), more than the {fee_per_contract(bid):.3f} fee to buy it back; the bid is no longer sloping up over {t.risk_take_slope:g}s (typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+                if taken:
+                    reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room, and {used * 100.0:.0f}% of the market is gone ({left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {t.risk_take_slope:g}s (typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+                else:
+                    reason = f"curve risk exit (profit take) [stretch sale: the gain of {gain:.3f} a contract is {used * room - gain:.3f} under the bar ({used * 100.0:.0f}% of its {room:.3f} room, {left:.0f}s left), inside this market's {noise:.3f} of noise over {t.risk_stretch:g}s, and the bid has turned down from {high:.2f}]; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
                 if t.risk_live:
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True)
                     return reason
@@ -1830,7 +1840,7 @@ class ProfitWatcher:
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_stop_hold, held.risk_swing, held.risk_swing_floor = spec.curve_risk_stop_hold, spec.curve_risk_swing, spec.curve_risk_swing_floor
-                held.risk_take, held.risk_take_slope = spec.curve_take, spec.curve_take_slope_seconds
+                held.risk_take, held.risk_take_slope, held.risk_stretch = spec.curve_take, spec.curve_take_slope_seconds, spec.stretch_seconds
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]

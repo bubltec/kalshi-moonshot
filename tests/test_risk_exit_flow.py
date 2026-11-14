@@ -29,6 +29,7 @@ curve_risk_swing={swing}
 curve_risk_swing_floor={floor}
 curve_take={take}
 curve_take_slope_seconds=10
+stretch_seconds={stretch}
 """
 
 
@@ -62,9 +63,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0, swing=0, floor=0, take='false'):
+def held(tmp_path, monkeypatch, live, client=None, confirm=-1, hold=0, swing=0, floor=0, take='false', stretch=0):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor, take=take))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor, take=take, stretch=stretch))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -409,7 +410,7 @@ def test_integration_with_no_hold_the_stop_sells_at_once_as_before(tmp_path, mon
 def test_unit_the_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for hold in (0, 0.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, swing=0, floor=0, take='false'))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, swing=0, floor=0, take='false', stretch=0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_stop_hold" in got) is (hold > 0)
@@ -496,7 +497,7 @@ def test_integration_the_hold_is_logged_once_for_the_bet(tmp_path, monkeypatch, 
 def test_unit_the_swing_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for swing in (0, 1.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=swing, floor=0, take='false'))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=swing, floor=0, take='false', stretch=0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_swing" in got) is (swing > 0)
@@ -531,7 +532,7 @@ def test_integration_the_floor_is_a_chance_not_a_price_of_the_yes_side(tmp_path,
 def test_unit_the_floor_changes_a_lanes_version_only_when_set_with_the_swing(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for floor in (0, 0.1):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=1.5, floor=floor, take='false'))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=1.5, floor=floor, take='false', stretch=0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_swing_floor" in got) is (floor > 0)
@@ -651,7 +652,54 @@ def test_integration_the_take_sale_is_executed_as_an_order(tmp_path, monkeypatch
 def test_unit_the_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for take in ("false", "true"):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take=take))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take=take, stretch=0))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_take" in got) is (take == "true")
+
+
+# ---- the stretch on the profit take (2026-11-14, user: "if something misses by a cent or two ... it skips to the history read or the trending read") ----
+# the fixture bet costs about 0.80 a contract all-in, so it has about 0.20 of room; at about half the market gone the bar is about 0.098, so a bid of 0.90 (a gain of about 0.093) misses by about 0.005 and 0.89 by about 0.015
+def near_miss(w, then):
+    """The bid climbs to 0.91 (just under the bar, still at its high), then prints `then`."""
+    assert climb(w, 0.82, 0.91, 470) is None
+    ticks_mod.mids.note(TICKER, CLOSE - 459, then - 0.005, then + 0.005)
+    yes_bid(w, then, 459)
+    return signals(w)
+
+
+def test_integration_a_near_miss_of_the_bar_sells_once_the_bid_turns_down(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=480)  # a typical minute of about 0.10: 0.029 of noise over 5 s
+    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
+    out = near_miss(w, 0.90)
+    assert out and out[0].why.startswith("curve risk exit (profit take) [stretch sale")
+
+
+def test_integration_with_the_stretch_off_the_same_near_miss_is_held(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=480)
+    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=0)
+    assert near_miss(w, 0.90) == []
+
+
+def test_integration_a_clear_miss_is_not_stretched(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=480)
+    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
+    assert near_miss(w, 0.86) == []  # about 0.045 under the bar, over the 0.029 of noise
+
+
+def test_integration_in_a_quiet_market_the_same_miss_is_not_near(tmp_path, monkeypatch):
+    feed_history(0.0013, from_left=1300, to_left=480)  # a quiet history: with the climb itself, about 0.005 of noise over 5 s
+    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
+    assert near_miss(w, 0.89) == []  # about 0.015 under the bar
+
+
+def test_integration_the_same_miss_in_a_swinging_market_is_near(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=480)
+    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
+    assert near_miss(w, 0.89) != []
+
+
+def test_integration_a_near_miss_still_at_its_high_is_not_sold(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=480)
+    w = held(tmp_path, monkeypatch, live=True, take="true", stretch=5)
+    assert climb(w, 0.82, 0.90, 470) is None  # just under the bar at the top, never off its high
