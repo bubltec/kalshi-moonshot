@@ -897,8 +897,12 @@ class ProfitWatcher:
         seen = getattr(self, "_short_seen", None)
         if seen is None:
             seen = self._short_seen = {}
+        now = time.time()
         for tk, lane, t in watched:
             if not s.is_live(lane, tk.split("-")[0]):
+                continue
+            if t.close_ts <= 0 or now >= t.close_ts - CURVE_MIN_LEFT or t.cur_bid <= 0:
+                seen.pop(tk, None)  # a market at or past its close leaves the account when it settles: that is not a hand sale (2026-11-13: two settled bets were closed "by hand" at a price of 0 half a minute after their close)
                 continue
             held = store.net_contracts(tk, s.env)
             side, count = account.get(tk, (t.side, 0.0))

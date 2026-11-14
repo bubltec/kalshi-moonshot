@@ -301,6 +301,13 @@ def test_integration_a_hand_sale_seen_on_two_account_reads_closes_the_bet_so_the
     s = config.load()
     store = Store(s.db_path)
     yes_bid(w, 0.90, 420)
+    tick = {"now": CLOSE - 400.0}  # the market is open; each call is a second later, so each account read is a later one
+
+    def clock():
+        tick["now"] += 1.0
+        return tick["now"]
+
+    monkeypatch.setattr(watcher.time, "time", clock)
     assert w.reconcile_hand_sales(s, store) == [] and len(store.open_bets()) == 1  # the account holds it all
     c.account = {}  # the user cashes out by hand
     assert w.reconcile_hand_sales(s, store) == [] and len(store.open_bets()) == 1  # seen once: not acted on yet
@@ -338,3 +345,25 @@ def test_integration_a_silent_perp_and_a_spot_under_the_strike_still_sells(tmp_p
     w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
     out = slide(w)
     assert out and out[0].why.startswith("curve risk exit (max loss)")
+
+
+def test_integration_a_settled_market_leaving_the_account_is_not_a_hand_sale(tmp_path, monkeypatch):
+    """After the close the position disappears from the account because it settled. The check must leave that bet to the settlement, not close it at a price of 0."""
+    from kalshi_moonshot import manual
+
+    live(monkeypatch)
+    monkeypatch.setattr(manual, "POLL_EVERY", 0.0)
+    c = Client(bid=0.90, account={TICKER: 4.65})
+    w = held(tmp_path, monkeypatch, live=True, client=c)
+    s = config.load()
+    store = Store(s.db_path)
+    yes_bid(w, 0.90, 420)
+    clock = {"now": CLOSE - 400.0}
+    monkeypatch.setattr(watcher.time, "time", lambda: clock["now"])
+    assert w.reconcile_hand_sales(s, store) == []
+    c.account = {}  # settled: gone from the account
+    clock["now"] = CLOSE + 30.0
+    assert w.reconcile_hand_sales(s, store) == [] and w.reconcile_hand_sales(s, store) == []
+    assert len(store.open_bets()) == 1 and store.net_contracts(TICKER, s.env) == pytest.approx(4.65)
+    clock["now"] = CLOSE - 5.0  # the last seconds before the close: not acted on either
+    assert w.reconcile_hand_sales(s, store) == [] and w.reconcile_hand_sales(s, store) == []
