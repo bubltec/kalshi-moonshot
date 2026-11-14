@@ -29,7 +29,7 @@ tape = db.connect(s.tape_path, "tape", shared=True)
 SINCE = 1794470400.0  # 2026-11-13 08:00 ET
 CONFIRM = 0.4
 GUARD = 8
-VARIANTS = [("persist 0.50", "persist", 0.50), ("swing 1.0", "swing", 1.0), ("swing 1.5", "swing", 1.5), ("swing 2.0", "swing", 2.0), ("swing 1.5 + persist 0.5", "swinghold", 1.5), ("no stop", "off", 0.0)]
+VARIANTS = [("live now: swing 1.5 + wait 0.5", "swinghold", 1.5), ("cap band 2.5 U", "swingcap", 2.5), ("cap band 3.5 U", "swingcap", 3.5), ("cap band 5 U", "swingcap", 5.0), ("no hold under q 0.30", "swingq", 0.30), ("no hold under q 0.25", "swingq", 0.25), ("no hold under q 0.20", "swingq", 0.20), ("no stop", "off", 0.0)]
 
 bets = main.execute(
     "SELECT id, lane, ticker, side, ts, stake_usd, outcome, exit_ts, exit_price FROM decisions WHERE action='bet' AND mode='trade' AND lane IN ('crypto_multiscale','crypto_ladder_perp') AND ts>? AND outcome IN ('yes','no') ORDER BY ts",
@@ -121,11 +121,19 @@ for b in bets:
             if kind in ("swing", "swinghold") and pnl < 0 and swing_hold(basis - net, unit_at(i), left, par):
                 since = None
                 continue
+            if kind == "swingcap" and pnl < 0:
+                u = unit_at(i)
+                if u is not None and u > 0 and (basis - net) < min(1.5 * u * math.sqrt(left / 60.0), par * u):
+                    since = None
+                    continue
+            if kind == "swingq" and pnl < 0 and net >= par and swing_hold(basis - net, unit_at(i), left, 1.5):
+                since = None
+                continue
             hit = bid[i] >= 0.05 and pnl <= -0.5 * qq and hour_ok(i)
             if not hit:
                 since = None
                 continue
-            if kind in ("persist", "swinghold"):
+            if kind in ("persist", "swinghold", "swingcap", "swingq"):
                 share = 0.5
                 since = i if since is None else since
                 if i - since < share * left:
