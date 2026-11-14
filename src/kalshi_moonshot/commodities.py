@@ -400,7 +400,7 @@ BasisMemory = dict[str, tuple[float, float, float]]
 def price_event(
     markets: list[dict[str, Any]], inst: Instrument, feed: Feed, s: Settings,
     now: datetime | None = None, hours: float | None = None, memory: BasisMemory | None = None,
-    windows: dict[str, WindowBasis] | None = None,
+    windows: dict[str, WindowBasis] | None = None, hour_k: float = 1.0,
 ) -> Pricing:
     """Where the price is centered and how wide it can still move. Raises CommodityError.
 
@@ -468,7 +468,7 @@ def price_event(
         hours = _hours_to_close(markets, now)
     # A feed that is `age` seconds old has an unseen move of about that much extra time.
     if inst.symbol.startswith("kp:"):
-        # A market priced from the Kalshi perp reads its width from the last HOUR of that perp and nothing else: the root-mean-square of its one-minute moves, over the time left. No multiplier.
+        # A market priced from the Kalshi perp reads its width from the last HOUR of that perp and nothing else: the root-mean-square of its one-minute moves, over the time left, times the hour's own correction (hour_k, widthfit.py: fitted on the windows of the last hour only).
         # Until 2026-11-14 this was six hours of 5-minute bars times a multiplier refitted hourly on six hours of outcomes; after a one-way afternoon that multiplier was 0.625 and a gap of 0.14 of a real move was read as 0.4 (KXBTC15M-26NOV141645 NO, bought at 0.55 on a "65%" chance, lost).
         from . import curverisk
 
@@ -476,7 +476,7 @@ def price_event(
         rate = curverisk.hour_rate(got[0], got[1], now.timestamp()) if got else None
         if rate is None or rate <= 0:
             raise CommodityError("under half an hour of the perp on record: its movement cannot be read, so the market is not priced")
-        sigma = rate * math.sqrt(max(hours, 0.0) * 3600.0 + age)
+        sigma = rate * math.sqrt(max(hours, 0.0) * 3600.0 + age) * hour_k  # hour_k: this hour's own correction, fitted from the windows that settled in the last hour (widthfit.py); 1 when there is no fresh fit
     else:
         sigma = realized_sigma(feed_series, max(hours, 0.0) + age / 3600.0) * s.commodity_vol_mult
     total = math.sqrt(sigma * sigma + unc * unc)
@@ -504,6 +504,9 @@ class CommodityPricer:
         self.feed: Feed = feed
         self.memory: BasisMemory = {}
         self.windows: dict[str, WindowBasis] = {}
+        self.width_fit: tuple[float, float, int] | None = None  # (this hour's width correction, when it was fitted, how many readings): one for every series priced from the Kalshi perp (widthfit.py)
+        self._settled: dict[str, tuple[str, list[dict[str, Any]]]] = {}  # series -> (feed symbol, its recent settled markets), kept for the width fit
+        self._width_tried = 0.0
         self._tried: dict[str, float] = {}  # series -> when learn_windows last looked
 
     def price_markets(
@@ -520,7 +523,7 @@ class CommodityPricer:
         if contract_priced(inst.symbol):
             raise CommodityError(f"{series} is not priced from an exchange feed")
         hours = _hours_to_close(markets, now)
-        pricing = price_event(markets, inst, self.feed, s, now, hours, self.memory, self.windows)
+        pricing = price_event(markets, inst, self.feed, s, now, hours, self.memory, self.windows, self.hour_k(now.timestamp() if now else None))
         floor = s.commodity_tail_floor
         out: dict[str, tuple[float, str]] = {}
         for m in markets:
@@ -549,6 +552,7 @@ class CommodityPricer:
             self._tried[series] = now_ts
             try:
                 settled = client.settled_markets(series)
+                self._settled[series] = (inst.symbol, settled)
                 refs = boundary_refs(settled)
                 wb = window_basis(refs, minutes_of(inst.symbol), now_ts)
             except Exception as exc:
@@ -557,7 +561,42 @@ class CommodityPricer:
             if wb is not None:
                 self.windows[series] = wb
                 learned += 1
+        self.learn_widths(s, now_ts)
         return learned
+
+    def hour_k(self, now_ts: float | None = None) -> float:
+        """This hour's correction to the width, or 1 when there is no fit fresh enough (widthfit.MAX_AGE)."""
+        from . import widthfit
+
+        fit = self.width_fit
+        now_ts = time.time() if now_ts is None else now_ts
+        return fit[0] if fit is not None and now_ts - fit[1] <= widthfit.MAX_AGE else 1.0
+
+    def learn_widths(self, s: Settings, now_ts: float) -> bool:
+        """Refit the hour's width correction from the windows that settled in the last hour, every series priced from the Kalshi perp pooled (widthfit.py). Once a window (widthfit.REFRESH). True when a fit was made."""
+        from . import widthfit
+
+        ticks_of = getattr(self.feed, "ticks", None)
+        if ticks_of is None or now_ts - self._width_tried < widthfit.REFRESH:
+            return False
+        self._width_tried = now_ts
+        samples: list[Any] = []
+        for series, (symbol, settled) in list(self._settled.items()):
+            if not symbol.startswith("kp:"):
+                continue
+            try:
+                ts, vs = ticks_of(symbol, widthfit.FIT_HOURS + 4.5)
+                samples += widthfit.samples_from(settled, ts, vs, now_ts, s.commodity_window_unc_floor)
+            except Exception as exc:
+                log.warning("width fit for %s: %s", series, exc)
+        if len(samples) < widthfit.MIN_SAMPLES:
+            self.width_fit = None
+            log.info("hour width correction: %d readings from the last hour, too few to fit: the hour's own movement is used as it is", len(samples))
+            return False
+        k = widthfit.best_k(samples, 1.0, s.commodity_tail_floor)
+        self.width_fit = (k, now_ts, len(samples))
+        log.info("hour width correction: %.3f from %d readings of the windows settled in the last %.0f h (1 = the hour's own movement; under 1 = results more decisive than it, over 1 = less)", k, len(samples), widthfit.FIT_HOURS)
+        return True
 
     def estimate(self, client: Any, shot: Any, s: Settings) -> tuple[float, str]:
         """Fresh P(yes) for a shortlisted market, re-reading its whole ladder."""
