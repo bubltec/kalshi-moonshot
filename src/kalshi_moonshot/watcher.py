@@ -232,6 +232,7 @@ class Target:
     risk_max_loss: float = 0.5
     risk_min_profit: float = 0.01
     risk_swing: float = 0.0  # a loss under this many times the market's own swing over the time left is not sold (lane field curve_risk_swing)
+    risk_swing_floor: float = 0.0  # the swing hold does not apply while the chance the side pays is under this (lane field curve_risk_swing_floor)
     risk_unit: float | None = None
     risk_unit_at: float = 0.0
     risk_swing_noted: bool = False
@@ -961,7 +962,7 @@ class ProfitWatcher:
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= t.risk_confirm:
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             return None
-        if t.risk_swing > 0 and pnl < 0:
+        if t.risk_swing > 0 and pnl < 0 and r.q >= t.risk_swing_floor:  # under the floor the market already prices the bet as nearly dead: a loss is not inside any swing
             if now - t.risk_unit_at >= 5.0:  # the typical minute is read from 15 minutes of quotes: not every second
                 t.risk_unit_at = now
                 t.risk_unit = quoteshock.typical_minute(ticks_mod.mids.rows(t.ticker), now)
@@ -1804,7 +1805,7 @@ class ProfitWatcher:
             if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
-                held.risk_stop_hold, held.risk_swing = spec.curve_risk_stop_hold, spec.curve_risk_swing
+                held.risk_stop_hold, held.risk_swing, held.risk_swing_floor = spec.curve_risk_stop_hold, spec.curve_risk_swing, spec.curve_risk_swing_floor
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
