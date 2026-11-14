@@ -109,3 +109,17 @@ def test_integration_no_buy_is_decided_while_memory_is_reloading_and_one_is_afte
     assert w.store.db.execute("SELECT COUNT(*) FROM decisions").fetchone()[0] == before  # nothing decided, nothing bought
     ticks_mod._reload_done.set()
     assert "memory is still reloading" not in w.do_evaluate(job)
+
+
+def test_integration_a_decided_window_with_no_bid_on_one_side_is_not_a_hole(tmp_path, monkeypatch):
+    """The 16:15 restart of 2026-11-14: every coin's window was decided, the yes bid was 0 for its last 50 s, and the first version of the report left those quotes out and called it a hole."""
+    now = time.time()
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    tape = Tape(s.tape_path)
+    for back in range(600, 0, -1):
+        decided = 120 >= back > 60  # a minute with the yes side dead: no bid, an ask of a tenth of a cent, the size still changing
+        tape.add({"kind": "quote", "ticker": TICKER, "ts": now - back, "bid": 0.0 if decided else 0.50 + (back % 7) * 0.01, "ask": 0.001 if decided else 0.52 + (back % 7) * 0.01, "ask_size": float(back)})
+    tape.flush(now)
+    report = ticks_mod.reload_from_tape(s, [], now)
+    assert report["hole"] < ticks_mod.HOLE_MIN

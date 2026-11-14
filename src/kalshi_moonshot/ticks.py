@@ -337,7 +337,7 @@ def reload_from_tape(s, indexes: Sequence[str], now: float | None = None) -> dic
         report["markets"] = len(mids._rows)
         if db.tape_exists(s.tape_path):
             tape = db.connect(s.tape_path, "tape", shared=True)
-            times = [float(r[0]) for r in tape.execute("SELECT ts FROM quotes WHERE ts>? AND ts<=? AND ticker LIKE ? AND bid>0 AND ask>0 ORDER BY ts", (now - 3600.0, now, "%15M-%"))]
+            times = [float(r[0]) for r in tape.execute("SELECT ts FROM quotes WHERE ts>? AND ts<=? AND ticker LIKE ? ORDER BY ts", (now - 3600.0, now, "%15M-%"))]  # every recorded quote, one-sided ones too: in the last minute of a decided window the losing side has no bid, and leaving those out read a decisive close as a 50 s hole (16:15 restart, 2026-11-14)
             if times:
                 report["hole"], report["hole_end"] = longest_hole(times, max(times[0], now - 3600.0), now)
     except Exception:
