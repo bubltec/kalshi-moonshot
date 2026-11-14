@@ -94,7 +94,7 @@ def test_unit_each_reading_is_priced_from_the_hour_before_it(tmp_path):
     assert all(0.8 * 0.87e-4 * math.sqrt(60) <= sig <= 1.2 * 0.87e-4 * math.sqrt(600) for _, sig, _, _ in samples)
 
 
-def _pricer(tmp_path, monkeypatch, min_samples=8):
+def _pricer(tmp_path, monkeypatch, min_samples=4):  # 4: sixteen minutes on, only one of the fixture's settled windows may still be inside the hour (it depends on where the clock sits in the quarter-hour; at 8 this test failed about one run in three)
     tape, markets, now = _world(tmp_path)
     monkeypatch.setattr(widthfit, "MIN_SAMPLES", min_samples)  # one series in the test: the live fit pools every perp-priced series to reach its 40
     s = settings(tmp_path, commodity_window_unc_floor=0.00015)
