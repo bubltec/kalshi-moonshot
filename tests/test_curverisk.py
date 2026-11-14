@@ -78,7 +78,7 @@ CLOSE = 9_900.0
 
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_squeeze=0.0, risk_stretched=False, risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
+                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_squeeze=0.0, risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -327,13 +327,6 @@ def test_unit_stop_miss_is_zero_at_the_stop_and_positive_short_of_it():
     assert curverisk.stop_miss(0.60, 0.80, 0.60, 0.5) == pytest.approx(0.04)
     assert curverisk.stop_miss(0.50, 0.80, 0.50, 0.5) < 0
     assert (curverisk.stop_miss(0.56, 0.80, 0.56, 0.5) <= 0) is curverisk.stopped((0.56 - 0.80) / 0.80, 0.56, 0.5)
-
-
-def test_unit_a_stretched_bets_slide_counts_after_a_quarter_of_the_look_back():
-    crash = [(float(t), 0.80) for t in range(0, 10)] + [(float(t), 0.60) for t in range(10, 14)]  # down for 3 s of a 10 s look back
-    assert curverisk.still_falling(crash, 13.0, 10.0, 0.10) is False  # a plain bet: it must have been down for 5 s
-    assert curverisk.still_falling(crash, 13.0, 10.0, 0.10, 0.25) is True  # a stretched one: 2.5 s is enough
-    assert curverisk.still_falling(crash[:11], 10.0, 10.0, 0.10, 0.25) is False  # still not on the first print
 
 
 # ---- the late cap on the profit take's bar (2026-11-14, user, on a SOL NO back at 0.96 with 30 s left that lost at the bell: "Yes we should have cashed that out") ----
