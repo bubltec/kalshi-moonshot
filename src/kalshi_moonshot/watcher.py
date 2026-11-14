@@ -237,7 +237,7 @@ class Target:
     risk_unit_at: float = 0.0
     risk_swing_noted: bool = False
     risk_take: bool = False  # the profit take (lane field curve_take)
-    risk_take_slope: float = 0.05  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
+    risk_take_slope: float = 0.08  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
     risk_stop_hold: float = 0.0  # the max-loss stop waits this share of the time left (lane field curve_risk_stop_hold)
     risk_at: float = 0.0  # the risk check reads at most once a second

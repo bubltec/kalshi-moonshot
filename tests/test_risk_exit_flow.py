@@ -680,24 +680,24 @@ def sit(w, bid, left, seconds):
     return None
 
 
-def test_integration_early_in_the_market_a_pause_of_sixteen_seconds_does_not_end_the_climb(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.05)
-    assert sit(w, 0.82, 740, 40) is None  # the bet sits just in profit, under the bar
+def test_integration_early_in_the_market_a_pause_of_half_a_minute_does_not_end_the_climb(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
+    assert sit(w, 0.82, 760, 60) is None  # the bet sits just in profit, under the bar
     assert climb(w, 0.82, 0.96, 700) is None
-    assert sit(w, 0.96, 685, 16) is None  # about 670 s left: the look back is 33 s and still reaches the start of the climb
+    assert sit(w, 0.96, 685, 30) is None  # about 655 s left: the look back is 52 s and still reaches the start of the climb
 
 
 def test_integration_early_in_the_market_the_gain_is_taken_once_the_pause_outlasts_the_look_back(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.05)
-    assert sit(w, 0.82, 740, 40) is None
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
+    assert sit(w, 0.82, 760, 60) is None
     assert climb(w, 0.82, 0.96, 700) is None
-    sig = sit(w, 0.96, 685, 50)
+    sig = sit(w, 0.96, 685, 70)
     assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
 
 
 def test_integration_late_in_the_market_the_same_pause_ends_the_climb(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.05)
-    assert sit(w, 0.82, 340, 40) is None
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
+    assert sit(w, 0.82, 360, 60) is None
     assert climb(w, 0.82, 0.96, 300) is None
-    sig = sit(w, 0.96, 285, 16)  # about 270 s left: the look back is 13 s and the climb has aged out of it
+    sig = sit(w, 0.96, 285, 30)  # about 260 s left: the look back is 21 s and the climb has aged out of it
     assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
