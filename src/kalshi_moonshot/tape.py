@@ -459,7 +459,7 @@ class TapeRecorder:
         key = pyth_key()
         self.biquote = BiQuoteFeed(self._on_event) if biquote_enabled() else None  # the commodity prices from BiQuote's free stream, recorded to test how well they call the settled direction (biquotefeed.py)
         fh = finnhub_key()
-        self.perpref = PerpRefFeed(self._on_event) if perpref_enabled() else None  # the reference price on Kalshi's own perps, one reading a second, recorded beside the feeds the curve reads (perpref.py)
+        self.perpref = PerpRefFeed(self._on_event, client=client) if perpref_enabled() else None  # the reference price on Kalshi's own perps, one reading a second, recorded beside the feeds the curve reads (perpref.py)
         it = itick_key()
         self.itick = ITickFeed(self._on_event, it) if it else None  # the S&P 500 index from iTick's free websocket, recorded next to BiQuote's US500 CFD (itickfeed.py)
         self.finnhub = FinnhubFeed(self._on_event, fh) if fh else None  # OANDA's commodity contracts from Finnhub's free websocket, recorded for the same direction test (finnhubfeed.py)
