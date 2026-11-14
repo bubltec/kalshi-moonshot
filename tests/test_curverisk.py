@@ -77,7 +77,7 @@ CLOSE = 9_900.0
 
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_take_room=0.0, risk_take_cover=1.0, risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
+                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_swing=0.0, risk_swing_floor=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_unit=None, risk_unit_at=0.0, risk_swing_noted=False, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -255,23 +255,31 @@ def test_unit_swing_hold_scales_with_the_market_and_with_k():
     assert curverisk.swing_hold(0.25, 0.10, 300, 0.5) is False
 
 
-def test_unit_take_profit_scales_by_the_bets_room_and_the_markets_swing():
-    # a 0.77 buy (room 0.21) and a 0.30 buy (room 0.70) at the same gain of 0.06: the first has made 29% of its room, the second 9%
-    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.25, 1.0) is True
-    assert curverisk.take_profit(0.06, 0.70, 0.10, 400, 0.25, 1.0) is False
-    # the same bet in a market whose swing over the time left is under the gain: nothing to take back
-    assert curverisk.take_profit(0.06, 0.21, 0.01, 400, 0.25, 1.0) is False
-    # the swing shrinks with the time left: the same gain is held near the close
-    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.25, 1.0) is True
-    assert curverisk.take_profit(0.06, 0.21, 0.10, 20, 0.25, 1.0) is False
-    # the cover asks for more swing per gain
-    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.25, 4.0) is True
-    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.25, 5.0) is False
+def test_unit_take_profit_bar_is_the_share_of_the_bets_room_the_market_has_used():
+    # the same gain of 0.05 on a bet with 0.20 of room: early it is plenty, late it is not
+    assert curverisk.take_profit(0.05, 0.20, 800, 900, 0.01) is True  # 11% of the market gone, bar 0.022
+    assert curverisk.take_profit(0.05, 0.20, 450, 900, 0.01) is False  # half gone, bar 0.10
+    assert curverisk.take_profit(0.05, 0.20, 100, 900, 0.01) is False
+    # a bigger room is a bigger bar at the same time: the bet itself sets the scale
+    assert curverisk.take_profit(0.05, 0.60, 850, 900, 0.01) is True
+    assert curverisk.take_profit(0.05, 0.60, 600, 900, 0.01) is False  # a third gone, bar 0.20 vs 0.07
+    # the near-certain gain at the very end rides to settlement
+    assert curverisk.take_profit(0.19, 0.20, 10, 900, 0.01) is False
 
 
-def test_unit_take_profit_is_off_without_a_setting_a_gain_a_unit_or_time():
-    assert curverisk.take_profit(0.06, 0.21, 0.10, 400, 0.0, 1.0) is False
-    assert curverisk.take_profit(-0.01, 0.21, 0.10, 400, 0.25, 1.0) is False
-    assert curverisk.take_profit(0.06, 0.0, 0.10, 400, 0.25, 1.0) is False
-    assert curverisk.take_profit(0.06, 0.21, None, 400, 0.25, 1.0) is False
-    assert curverisk.take_profit(0.06, 0.21, 0.10, 0, 0.25, 1.0) is False
+def test_unit_take_profit_needs_a_gain_over_the_buy_back_fee_and_a_live_clock():
+    assert curverisk.take_profit(0.01, 0.20, 800, 900, 0.02) is False
+    assert curverisk.take_profit(-0.01, 0.20, 800, 900, 0.0) is False
+    assert curverisk.take_profit(0.05, 0.0, 800, 900, 0.01) is False
+    assert curverisk.take_profit(0.05, 0.20, 0, 900, 0.01) is False
+
+
+def test_unit_still_rising_follows_the_short_slope():
+    up = [(float(t), 0.80 + 0.01 * t) for t in range(0, 11)]  # a climb to 0.90
+    assert curverisk.still_rising(up, 10.0, 10.0) is True
+    turned = up + [(11.0, 0.89)]
+    assert curverisk.still_rising(turned, 11.0, 10.0) is False  # under the window's high
+    flat = [(float(t), 0.90) for t in range(0, 12)]
+    assert curverisk.still_rising(flat, 11.0, 10.0) is False  # levelled out: back at the start
+    assert curverisk.still_rising([(5.0, 0.8), (6.0, 0.9)], 6.0, 10.0) is True  # under 10 s of readings: unknown, no sale
+    assert curverisk.still_rising(up, 10.0, 0.0) is False  # no look back asked

@@ -112,10 +112,22 @@ def swing_hold(drop: float, unit: float | None, left: float, k: float) -> bool:
     return drop < k * unit * math.sqrt(left / MINUTE)
 
 
-def take_profit(gain: float, room: float, unit: float | None, left: float, share: float, cover: float) -> bool:
-    """True when a profit is worth taking now, read off the bet itself and its own market (2026-11-14, user, on a BTC NO bought at 0.77 that rose to 0.85, fell to 0.26 and was sold for -67%: "that needs to scale it needs to be based on the bet").
-    `gain` is the profit per contract in probability (the bid after its sell fee less the cost with its buy fee), `room` the most this bet could still have made (1 less that cost), `unit` the market's own typical minute (quoteshock.typical_minute), `left` the seconds to the close, `share` the lane's setting (0 = off), `cover` how many times the gain the market's own swing over the time left must be.
-    Two readings, both from the bet and not a fixed cent figure: the gain has to be at least `share` of the room the bet had (a 0.77 buy has 0.21 of room, a 0.30 buy has 0.70, so the same share asks 0.05 of the first and 0.18 of the second), and the market's swing over the time left (unit * sqrt(left / 60)) has to be at least `cover` times the gain, so the gain is small enough for this market to take back. As the close nears the swing shrinks and a held gain turns into a won bet instead of a sale. No reading of the unit means no sale."""
-    if share <= 0 or gain <= 0 or room <= 0 or unit is None or unit <= 0 or left <= 0:
+def take_profit(gain: float, room: float, left: float, window: float, rebuy_fee: float = 0.0) -> bool:
+    """True when a profit is worth taking now, read off the bet itself and the clock (2026-11-14, user, on a BTC NO bought at 0.77 that rose to 0.85, fell to 0.26 and was sold for -67%: "why not just use the bet?"; "there needs to be the time factor too, where earlier in the market is a better favor to sell for profit, since we can always buy back").
+    `gain` is the profit per contract in probability (the bid after its sell fee less the cost with its buy fee), `room` the most this bet could still have made (1 less that cost), `left` the seconds to the close, `window` the market's length in seconds (900 for a 15-minute market, structural), `rebuy_fee` the fee to buy the side back.
+    The bar is the share of the bet's own room that the market has already used up: none at the open, all of it at the close. Early, any gain that pays for the buy-back fee is worth cashing, since the side can be bought again; late, the bet has to be nearly at its win before it is sold, so the bets that are about to win are held. No share, price level, coin or number of cents is fixed."""
+    if gain <= 0 or room <= 0 or window <= 0 or left <= 0 or gain <= rebuy_fee:
         return False
-    return gain >= share * room and unit * math.sqrt(left / MINUTE) >= cover * gain
+    used = min(max(1.0 - left / window, 0.0), 1.0)
+    return gain >= used * room
+
+
+def still_rising(samples: list[tuple[float, float]], now: float, seconds: float) -> bool:
+    """True while the bid is still sloping up over the last `seconds` (2026-11-14, user: "if it's sloping in profit direction don't sell until it stops sloping"): the newest bid is the window's highest and above where the window started. A bid that has turned (under the window's high) or levelled out (back at the start) is not rising. With under `seconds` of readings the slope is unknown and the answer is True (no sale on a bet just opened)."""
+    if seconds <= 0:
+        return False
+    window = [(t, b) for t, b in samples if t >= now - seconds]
+    if not window or not samples or samples[0][0] > now - seconds:
+        return True
+    bid = window[-1][1]
+    return bid >= max(b for _, b in window) and bid > window[0][1]
