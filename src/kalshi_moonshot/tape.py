@@ -478,6 +478,8 @@ class TapeRecorder:
             cache = getattr(self.client, "cache", None)
             if cache is not None:
                 cache.apply_market(e)  # the shared market list is kept from these, not re-read on a clock (marketdata.MarketCache.apply_market)
+            if kind == "strike":
+                self._follow_new(str(e.get("ticker") or ""))  # stream the new window's quotes from its first strike, whether or not a created event came
             if kind != "market":  # a window's strike is set as it opens and a result as it closes: the lanes are scoped on both (2026-11-14: the 08:00 window got neither a created nor an activated event, and a lane that waited for one had no watchlist)
                 for fn in self.market_listeners:
                     try:

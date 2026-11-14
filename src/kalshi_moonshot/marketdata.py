@@ -133,8 +133,18 @@ class MarketCache:
                     rows[:] = [m for m in rows if m.get("ticker") != ticker]
                 return
             if row is None and ticker not in self._created and rows is not None and kind in {"strike", "activated", "deactivated", "close_date_updated"}:
-                # 2026-11-14 08:15 live miss: a new window came as a strike event with no created event before it, so the stream-kept listing never held it and the lane saw 0 events. A market the listing does not hold means the listing is incomplete: it is unproven again and the next read asks Kalshi (and fills it).
-                self._series[series] = (0.0, rows)
+                # 2026-11-14 live misses at 08:15 and 08:30: a new 15-minute window arrives as a strike event with no created event before it, and Kalshi's REST listing trails the stream by seconds, so neither the kept listing nor a read of it holds the window.
+                # A strike names the window's market, its target and (in its ticker) its close, which is all a lane needs: the row is built from them. Any other event for a market the listing lacks makes the listing unproven, so its next read asks Kalshi.
+                close = self._close_from_ticker(ticker)
+                if kind == "strike" and e.get("strike") and close:
+                    new = {"ticker": ticker, "event_ticker": ticker.rsplit("-", 1)[0], "series_ticker": series, "title": "", "yes_sub_title": "", "rules_primary": "", "floor_strike": e["strike"], "cap_strike": None,
+                           "open_time": "", "close_time": close, "status": "active", "market_type": "binary", "yes_bid_dollars": "0.0000", "yes_ask_dollars": "0.0000", "volume_fp": "0"}
+                    self._created[ticker] = new
+                    self._event_series[new["event_ticker"]] = series
+                    self._ticker_series[ticker] = series
+                    rows.append(dict(new))
+                else:
+                    self._series[series] = (0.0, rows)
                 return
             for m in (row, self._created.get(ticker)):
                 if m is None:
@@ -147,6 +157,22 @@ class MarketCache:
                     m["close_time"] = self._iso(e["close_ts"])
                 elif kind == "strike" and e.get("strike"):
                     m["floor_strike"] = e["strike"]
+
+    @staticmethod
+    def _close_from_ticker(ticker: str) -> str:
+        """The close time a 15-minute market's ticker carries (KXBTC15M-26NOV140845-45: 2026-11-14 08:45 New York time) as ISO UTC text; empty when the ticker does not carry one."""
+        import re
+        from zoneinfo import ZoneInfo
+
+        m = re.match(r"^[A-Z0-9]+-(\d{2})([A-Z]{3})(\d{2})(\d{2})(\d{2})-", ticker)
+        months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+        if not m or m.group(2) not in months:
+            return ""
+        try:
+            local = datetime(2000 + int(m.group(1)), months.index(m.group(2)) + 1, int(m.group(3)), int(m.group(4)), int(m.group(5)), tzinfo=ZoneInfo("America/New_York"))
+        except ValueError:
+            return ""
+        return local.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
     def _open_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Rows of a stream-kept listing that are still open: one past its close time is closed whether or not its settlement has been announced yet."""

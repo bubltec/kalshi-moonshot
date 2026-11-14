@@ -194,11 +194,30 @@ def test_an_event_for_a_market_the_listing_does_not_hold_makes_the_listing_unpro
     """The 08:15 live miss: the next window arrived as a strike event with no created event, so the kept listing never held it."""
     cache, clock = seeded_live()
     assert cache.live("KXBTC15M")
-    cache.apply_market({"kind": "strike", "ticker": "KXBTC15M-26NOV141215-15", "strike": 7.0})
+    cache.apply_market({"kind": "market", "event": "activated", "ticker": "KXBTC15M-26NOV141215-15"})  # a market it holds no row for, and no strike to build one from
     assert not cache.live("KXBTC15M")
     assert cache.get_series("KXBTC15M", 180) is None and cache.get_event(E, 180) is None  # even a young listing is asked for again
     cache.put_series("KXBTC15M", [rest_row(), rest_row("KXBTC15M-26NOV141215-15", "KXBTC15M-26NOV141215", "2026-11-14T17:30:00Z")])
     assert cache.live("KXBTC15M") and len(cache.get_series("KXBTC15M", 180)) == 2
+
+
+def test_a_strike_event_for_a_new_window_builds_its_row_and_keeps_the_listing_proven():
+    """The 08:30 live miss: the REST listing trailed the stream, so re-reading it on the first strike found nothing new. The strike and the ticker carry what a lane needs."""
+    cache, _ = seeded_live()
+    nxt = "KXBTC15M-26NOV141215-15"
+    cache.apply_market({"kind": "strike", "ticker": nxt, "strike": 66915.52})
+    assert cache.live("KXBTC15M")
+    row = next(m for m in cache.get_event("KXBTC15M-26NOV141215", 180) if m["ticker"] == nxt)
+    assert row["floor_strike"] == 66915.52 and row["status"] == "active" and row["close_time"] == "2026-11-14T17:15:00Z" and row["series_ticker"] == "KXBTC15M"
+    cache.put_series("KXBTC15M", [rest_row()])  # a later listing that does not have it yet does not lose it
+    assert nxt in [m["ticker"] for m in cache.get_series("KXBTC15M", 180)]
+    cache.apply_market({"kind": "result", "ticker": nxt, "result": "yes"})
+    assert nxt not in [m["ticker"] for m in cache.get_series("KXBTC15M", 180)]
+
+
+def test_a_ticker_without_a_close_time_builds_no_row():
+    assert MarketCache._close_from_ticker("KXBTC15M-26NOV140845-45") == "2026-11-14T13:45:00Z"
+    assert MarketCache._close_from_ticker("KXFOO") == "" and MarketCache._close_from_ticker("KXBTC15M-26XXX140845-45") == ""
 
 
 def test_an_event_for_a_market_it_does_hold_keeps_the_listing_proven():
@@ -208,7 +227,7 @@ def test_an_event_for_a_market_it_does_hold_keeps_the_listing_proven():
     assert cache.live("KXBTC15M")
 
 
-def test_the_next_window_arriving_as_a_bare_strike_event_reaches_the_client_through_one_rest_read():
+def test_the_next_window_arriving_as_a_bare_strike_event_reaches_the_client_with_no_rest_read():
     client = KalshiClient("https://example.test", max_rps=100)
     clock = Clock()
     client.cache._clock = clock
@@ -222,6 +241,7 @@ def test_the_next_window_arriving_as_a_bare_strike_event_reaches_the_client_thro
     client._request = request
     rec = SimpleNamespace(tape=SimpleNamespace(add=lambda e: None), client=client, listeners=[], market_listeners=[], _wanted=set(), _refresh_wake=threading.Event(), stream=SimpleNamespace(_tickers=set(), set_tickers=lambda t: None))
     rec._feed_state = lambda up: tape.TapeRecorder._feed_state(rec, up)
+    rec._follow_new = lambda t: tape.TapeRecorder._follow_new(rec, t)
     rec._on_lifecycle = lambda e: tape.TapeRecorder._on_lifecycle(rec, e)
     stream = kalshiws.KalshiStream(client, lambda e: tape.TapeRecorder._on_event(rec, e), on_feed=rec._feed_state)
     stream.handle(json.dumps({"type": "subscribed", "id": 6, "msg": {"channel": "market_lifecycle_v2", "sid": 6}}))
@@ -233,4 +253,4 @@ def test_the_next_window_arriving_as_a_bare_strike_event_reaches_the_client_thro
     with client.shared(180):
         got = [m["ticker"] for m in client.series_markets("KXBTC15M")]
         again = [m["ticker"] for m in client.series_markets("KXBTC15M")]
-    assert nxt in got and got == again and state["calls"] == 2  # one read refilled it, and the second is from memory
+    assert nxt in got and got == again and state["calls"] == 1  # the strike built the row: no read of Kalshi, whose listing trails the stream

@@ -166,7 +166,8 @@ def test_a_window_opening_or_closing_scopes_the_lane_even_with_no_created_event(
     client.cache.feed(True)
     series = sorted(runner.lane_series(spec, s))[0]
     got = []
-    rec = SimpleNamespace(tape=SimpleNamespace(add=lambda e: None), client=client, listeners=[], market_listeners=[got.append], _wanted=set())
+    rec = SimpleNamespace(tape=SimpleNamespace(add=lambda e: None), client=client, listeners=[], market_listeners=[got.append], _wanted=set(), _refresh_wake=__import__("threading").Event(), stream=SimpleNamespace(_tickers=set(), set_tickers=lambda t: None))
+    rec._follow_new = lambda t: tape.TapeRecorder._follow_new(rec, t)
     rec._on_lifecycle = lambda e: tape.TapeRecorder._on_lifecycle(rec, e)
     jobs = Jobs(Store(s.db_path))
     for ev in ({"kind": "strike", "ts": 1.0, "ticker": f"{series}-26NOV140815-15", "strike": 5.0}, {"kind": "result", "ts": 1.0, "ticker": f"{series}-26NOV140800-00", "result": "yes"}):
