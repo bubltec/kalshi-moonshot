@@ -121,14 +121,14 @@ def parse_message(msg: dict[str, Any], received: float | None = None) -> dict[st
         if event == "metadata_updated":
             strike = _f(body.get("floor_strike"))
             if strike is not None and strike > 0:
-                return {"kind": "strike", "ts": now, "ticker": ticker, "strike": strike, "sts": msg.get("sending_ts_ms")}
+                return {"kind": "strike", "ts": now, "ticker": ticker, "strike": strike, "strike_type": body.get("strike_type") or "", "sts": msg.get("sending_ts_ms")}
         elif event == "determined" and body.get("result") in {"yes", "no"}:
             return {"kind": "result", "ts": now, "ticker": ticker, "result": body["result"], "sts": msg.get("sending_ts_ms")}
         elif event in {"created", "activated", "deactivated", "close_date_updated", "settled"}:
             # 2026-11-14 (user: "why would anything go stale? it would just mean you're not subscribed to the correct websocket events"): the market list is kept from these, not re-read on a clock (marketdata.MarketCache.apply_market)
             meta = body.get("additional_metadata") or {}
             return {"kind": "market", "ts": now, "ticker": ticker, "event": event, "event_ticker": meta.get("event_ticker") or "", "title": meta.get("title") or meta.get("name") or "",
-                    "sub": meta.get("yes_sub_title") or "", "rules": meta.get("rules_primary") or "", "strike": _f(meta.get("floor_strike")), "cap": _f(meta.get("cap_strike")),
+                    "sub": meta.get("yes_sub_title") or "", "rules": meta.get("rules_primary") or "", "strike": _f(meta.get("floor_strike")), "cap": _f(meta.get("cap_strike")), "strike_type": meta.get("strike_type") or "",
                     "open_ts": body.get("open_ts"), "close_ts": body.get("close_ts"), "deactivated": body.get("is_deactivated"), "sts": msg.get("sending_ts_ms")}
     return None
 

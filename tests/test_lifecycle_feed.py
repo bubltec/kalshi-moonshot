@@ -9,7 +9,7 @@ def life(event="metadata_updated", **body):
 
 def test_a_target_and_a_result_are_parsed():
     e = kalshiws.parse_message(life(strike_type="greater_or_equal", floor_strike=51.551), 9.0)
-    assert e == {"kind": "strike", "ts": 9.0, "ticker": "KXSILVER15M-26NOV101900-00", "strike": 51.551, "sts": 1794354316000}
+    assert e == {"kind": "strike", "ts": 9.0, "ticker": "KXSILVER15M-26NOV101900-00", "strike": 51.551, "strike_type": "greater_or_equal", "sts": 1794354316000}
     r = kalshiws.parse_message(life("determined", result="no", settlement_value="0.0000"), 9.0)
     assert r["kind"] == "result" and r["result"] == "no"
 

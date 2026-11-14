@@ -119,7 +119,7 @@ class MarketCache:
             row = next((m for m in rows if m.get("ticker") == ticker), None) if rows is not None else None
             if kind == "created":
                 new = {"ticker": ticker, "event_ticker": e.get("event_ticker") or "-".join(ticker.split("-")[:2]), "series_ticker": series, "title": e.get("title") or "", "yes_sub_title": e.get("sub") or "",
-                       "rules_primary": e.get("rules") or "", "floor_strike": e.get("strike"), "cap_strike": e.get("cap"), "open_time": self._iso(e.get("open_ts")), "close_time": self._iso(e.get("close_ts")),
+                       "rules_primary": e.get("rules") or "", "floor_strike": e.get("strike"), "cap_strike": e.get("cap"), "strike_type": self._strike_type(e, series), "open_time": self._iso(e.get("open_ts")), "close_time": self._iso(e.get("close_ts")),
                        "status": "active", "market_type": "binary", "yes_bid_dollars": "0.0000", "yes_ask_dollars": "0.0000", "volume_fp": "0"}
                 self._created[ticker] = new
                 self._event_series[new["event_ticker"]] = series
@@ -137,7 +137,7 @@ class MarketCache:
                 # A strike names the window's market, its target and (in its ticker) its close, which is all a lane needs: the row is built from them. Any other event for a market the listing lacks makes the listing unproven, so its next read asks Kalshi.
                 close = self._close_from_ticker(ticker)
                 if kind == "strike" and e.get("strike") and close:
-                    new = {"ticker": ticker, "event_ticker": ticker.rsplit("-", 1)[0], "series_ticker": series, "title": "", "yes_sub_title": "", "rules_primary": "", "floor_strike": e["strike"], "cap_strike": None,
+                    new = {"ticker": ticker, "event_ticker": ticker.rsplit("-", 1)[0], "series_ticker": series, "title": "", "yes_sub_title": "", "rules_primary": "", "floor_strike": e["strike"], "cap_strike": None, "strike_type": self._strike_type(e, series),
                            "open_time": "", "close_time": close, "status": "active", "market_type": "binary", "yes_bid_dollars": "0.0000", "yes_ask_dollars": "0.0000", "volume_fp": "0"}
                     self._created[ticker] = new
                     self._event_series[new["event_ticker"]] = series
@@ -157,6 +157,11 @@ class MarketCache:
                     m["close_time"] = self._iso(e["close_ts"])
                 elif kind == "strike" and e.get("strike"):
                     m["floor_strike"] = e["strike"]
+
+    @staticmethod
+    def _strike_type(e: dict[str, Any], series: str) -> str:
+        """The market's strike type as the stream gave it. The pricer reads it (commodities.market_prob prices nothing without one: the 2026-11-14 miss, where every window built from a strike event was dropped at the ladder screen as "could not price this ladder"). A 15-minute window is an up-or-down market, "greater_or_equal" the strike, when the stream does not say."""
+        return str(e.get("strike_type") or "") or ("greater_or_equal" if series.endswith("15M") else "")
 
     @staticmethod
     def _close_from_ticker(ticker: str) -> str:

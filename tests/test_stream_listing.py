@@ -254,3 +254,31 @@ def test_the_next_window_arriving_as_a_bare_strike_event_reaches_the_client_with
         got = [m["ticker"] for m in client.series_markets("KXBTC15M")]
         again = [m["ticker"] for m in client.series_markets("KXBTC15M")]
     assert nxt in got and got == again and state["calls"] == 1  # the strike built the row: no read of Kalshi, whose listing trails the stream
+
+
+def test_a_row_built_from_the_stream_can_be_priced_by_the_ladder():
+    """The live miss from 08:45: windows built from strike and created events had no strike_type, so commodities.market_prob priced nothing and the lane's screen dropped every one as 'could not price this ladder'."""
+    from kalshi_moonshot import commodities
+
+    cache, _ = seeded_live()
+    nxt = "KXBTC15M-26NOV141215-15"
+    cache.apply_market({"kind": "strike", "ticker": nxt, "strike": 100.0})
+    built = next(m for m in cache.get_series("KXBTC15M", 180) if m["ticker"] == nxt)
+    assert built["strike_type"] == "greater_or_equal"
+    p = commodities.market_prob(built, 101.0, 0.5)
+    assert p is not None and 0.5 < p <= 1.0  # the price is above the strike: YES is the likelier side
+    assert commodities.market_prob(built, 99.0, 0.5) < 0.5
+    created_row = dict(next(m for m in cache.get_series("KXBTC15M", 180) if m["ticker"] == T), ticker="KXBTC15M-26NOV141230-30")
+    cache.apply_market(created("KXBTC15M-26NOV141230-30", strike_type="greater_or_equal"))
+    row = next(m for m in cache.get_series("KXBTC15M", 180) if m["ticker"] == "KXBTC15M-26NOV141230-30")
+    assert row["strike_type"] == "greater_or_equal" and commodities.market_prob(row, 101.0, 0.5) is not None
+
+
+def test_the_streams_own_strike_type_is_kept_and_parsed():
+    e = kalshiws.parse_message(json.loads(raw("created", open_ts=10, close_ts=20, additional_metadata={"event_ticker": E, "floor_strike": 5.0, "strike_type": "less"})), 1.0)
+    assert e["strike_type"] == "less"
+    s = kalshiws.parse_message(json.loads(raw("metadata_updated", floor_strike=5.0, strike_type="greater")), 1.0)
+    assert s["strike_type"] == "greater"
+    cache, _ = seeded_live()
+    cache.apply_market({"kind": "strike", "ticker": "KXBTC15M-26NOV141215-15", "strike": 5.0, "strike_type": "less"})
+    assert next(m for m in cache.get_series("KXBTC15M", 180) if m["ticker"] == "KXBTC15M-26NOV141215-15")["strike_type"] == "less"
