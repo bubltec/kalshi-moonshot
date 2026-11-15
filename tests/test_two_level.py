@@ -125,9 +125,41 @@ def test_cooldown_stops_a_fast_loop_from_relogging_the_same_market(tmp_path):
     assert first
     store.add_decision(
         ticker=first[0].ticker, title="t", bid=0.1, ask=0.1, model_p=0.3, edge=0.1,
-        action="pass", mode="observe",
+        action="pass", mode="observe", lane=spec.name,
     )
     assert runner.review_lane(s, client, store, spec, est) == []
+
+
+def test_unit_decided_since_counts_one_lane_or_all(tmp_path):
+    store = Store(tmp_path / "d.db")
+    store.add_decision(ticker="KX-1", title="t", bid=0.1, ask=0.1, model_p=0.3, edge=0.1, action="pass", mode="observe", lane="paper_variant")
+    assert store.decided_since("KX-1", 0.0) is True  # any lane
+    assert store.decided_since("KX-1", 0.0, "paper_variant") is True
+    assert store.decided_since("KX-1", 0.0, "live_lane") is False
+    assert store.decided_since("KX-2", 0.0, "paper_variant") is False
+
+
+def test_integration_another_lanes_reading_does_not_put_this_lane_on_cooldown(tmp_path):
+    """2026-11-15: three paper variants logged hundreds of decisions an hour on the live lane's markets and, counted from every lane, kept its review off 57% of the time."""
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    client = Client(live_event())
+    spec = lanes.spec_for(s, "commodity")
+    runner.scope_lane(s, client, store, spec)
+    est = build_estimators(None, None, None, live_quant())
+    first = runner.review_lane(s, client, store, spec, est)
+    assert first
+    store.add_decision(
+        ticker=first[0].ticker, title="t", bid=0.1, ask=0.1, model_p=0.3, edge=0.1,
+        action="pass", mode="observe", lane="some_paper_variant",
+    )
+    again = runner.review_lane(s, client, store, spec, est)
+    assert [x.ticker for x in again] == [first[0].ticker]  # the other lane's decision is no reason to skip it
+    store.add_decision(
+        ticker=first[0].ticker, title="t", bid=0.1, ask=0.1, model_p=0.3, edge=0.1,
+        action="pass", mode="observe", lane=spec.name,
+    )
+    assert runner.review_lane(s, client, store, spec, est) == []  # its own reading still cools it
 
 
 def test_finished_events_leave_the_watchlist(tmp_path):

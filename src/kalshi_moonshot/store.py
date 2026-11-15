@@ -641,10 +641,12 @@ class Store:
         self.db.execute("DELETE FROM screen_log WHERE ts<?", (now - days * 86400,))
         self.db.commit()
 
-    def decided_since(self, ticker: str, since_ts: float) -> bool:
-        row = self.db.execute(
-            "SELECT 1 FROM decisions WHERE ticker=? AND ts>=? LIMIT 1", (ticker, since_ts)
-        ).fetchone()
+    def decided_since(self, ticker: str, since_ts: float, lane: str | None = None) -> bool:
+        """Whether a decision on the market was logged since `since_ts`: by any lane, or (with `lane`) by that lane alone. The review cooldown asks with the lane's own name (2026-11-15): the paper variants log hundreds of decisions an hour on the same markets, and counted from every lane they kept the live lane's review off 57% of the last two hours."""
+        if lane is None:
+            row = self.db.execute("SELECT 1 FROM decisions WHERE ticker=? AND ts>=? LIMIT 1", (ticker, since_ts)).fetchone()
+        else:
+            row = self.db.execute("SELECT 1 FROM decisions WHERE ticker=? AND ts>=? AND lane=? LIMIT 1", (ticker, since_ts, lane)).fetchone()
         return row is not None
 
     # ---- watchlist: what the slow scoping pass hands to the fast review pass ----

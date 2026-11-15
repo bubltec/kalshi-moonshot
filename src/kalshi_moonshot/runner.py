@@ -338,7 +338,7 @@ def review_lane(
         # So the cooldown is at most a fifth of the time left.
         def cooling(x: LongShot) -> bool:
             minutes = min(spec.cooldown_minutes, max(0.5, x.hours_to_close * 60.0 / 5.0))
-            return store.decided_since(x.ticker, now.timestamp() - minutes * 60)
+            return store.decided_since(x.ticker, now.timestamp() - minutes * 60, spec.name)  # this lane's own decisions only: another lane's reading of the market is no reason for this lane to skip it
 
         shots = [x for x in shots if not cooling(x)]
     return shots[: spec.shortlist]

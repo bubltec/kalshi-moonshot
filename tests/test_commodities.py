@@ -560,7 +560,7 @@ def test_the_cooldown_shrinks_as_a_short_market_nears_its_close(tmp_path):
     def decide(seconds_ago):
         store.db.execute("DELETE FROM decisions")
         store.add_decision(ticker=ticker, title="t", bid=0.1, ask=0.9, model_p=0.99, edge=0.05,
-                           action="pass", mode="observe", ts=time.time() - seconds_ago)
+                           action="pass", mode="observe", ts=time.time() - seconds_ago, lane=spec.name)
 
     decide(30)
     assert runner.review_lane(s, client, store, spec, est) == []  # inside ~72s: still cooling
