@@ -932,6 +932,52 @@ def broad_trend_now(now: float | None = None) -> float | None:
     return out
 
 
+FLAT_LOOKBACK_HOURS = 6.0  # the market-wide trend's own history the flat cutoff is read from: the same six hours the volatility regime reads
+FLAT_STEP = 300.0  # one reading of the trend every five minutes
+FLAT_MIN_READINGS = 24  # two hours of them, or the history is too short to say what is normal
+_flat_memo: dict[float, tuple[int, float | None]] = {}
+
+
+def broad_trend_series(now: float, hours: float = FLAT_LOOKBACK_HOURS, step: float = FLAT_STEP) -> list[float]:
+    """The market-wide 60-minute move (the average of the five coins' change over an hour, in percent, as broad_trend_now reads it) at every `step` seconds over the last `hours`, from the in-memory index ticks. A reading is left out when any coin has no tick near its two times."""
+    got = {}
+    for ser in BROAD_SERIES:
+        index = crypto_index(ser)
+        win = ticks_mod.history.window(index, now - hours * 3600.0 - 3700.0, now) if index else None
+        if win is None or not win[0]:
+            return []
+        got[ser] = win
+    out: list[float] = []
+    t = now
+    while t >= now - hours * 3600.0:
+        moves = []
+        for ts, vs in got.values():
+            i, j = bisect.bisect_right(ts, t) - 1, bisect.bisect_right(ts, t - 3600.0) - 1
+            if i < 0 or j < 0 or t - ts[i] > 60.0 or t - 3600.0 - ts[j] > 60.0:
+                break
+            moves.append(100.0 * (vs[i] / vs[j] - 1.0))
+        else:
+            out.append(sum(moves) / len(moves))
+        t -= step
+    return out
+
+
+def broad_trend_bar(share: float, now: float | None = None) -> float | None:
+    """The flat-trend cutoff from the market's own history (CLAUDE.md rule 2): the `share` quantile of |market-wide 60-minute move| over the last six hours, in percent, recomputed hourly. None with under two hours of readings. A trend inside this is flat for the market as it has been behaving, not by a fixed number."""
+    now = time.time() if now is None else now
+    hit = _flat_memo.get(share)
+    if hit is not None and hit[0] == int(now // 3600.0):
+        return hit[1]
+    vals = sorted(abs(v) for v in broad_trend_series(now))
+    bar = None
+    if len(vals) >= FLAT_MIN_READINGS:
+        pos = min(max(share, 0.0), 1.0) * (len(vals) - 1)
+        lo = int(pos)
+        bar = vals[lo] + (vals[min(lo + 1, len(vals) - 1)] - vals[lo]) * (pos - lo)
+    _flat_memo[share] = (int(now // 3600.0), bar)
+    return bar
+
+
 def ms_rule_ok(rule: Sequence[str], letters: dict[str, str]) -> bool:
     """Whether every "scale:letters" term of a lane's ms_rule holds ("60m:D", "5m:EF" = the 5-minute variety is E or F)."""
     for term in rule:

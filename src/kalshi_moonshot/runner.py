@@ -666,13 +666,21 @@ def evaluate(
             trend = None
         if trend is not None:
             note = f"[trend60 {trend:+.1f}%] {note}"
-        if bet and spec.buy_flat_trend_pct > 0:
+        flat_bar, flat_from = spec.buy_flat_trend_pct, "the lane's fixed cutoff"
+        if spec.buy_flat_trend_quantile > 0:  # the cutoff scales with the market's own last six hours; the fixed number is the fallback when that history is short
+            try:
+                own = _variants.broad_trend_bar(spec.buy_flat_trend_quantile)
+            except Exception:
+                own = None
+            if own is not None:
+                flat_bar, flat_from = own, f"the smallest {spec.buy_flat_trend_quantile:.0%} of the last six hours' readings"
+        if bet and flat_bar > 0:
             if trend is None:
                 bet = False
                 note = f"the market-wide 60-minute trend is unreadable; the lane does not buy without it. {note}"
-            elif abs(trend) < spec.buy_flat_trend_pct:
+            elif abs(trend) < flat_bar:
                 bet = False
-                note = f"the market-wide 60-minute trend is flat ({trend:+.2f}%, inside {spec.buy_flat_trend_pct:g}%); the lane sits these out. {note}"
+                note = f"the market-wide 60-minute trend is flat ({trend:+.2f}%, inside {flat_bar:.3g}%, {flat_from}); the lane sits these out. {note}"
     if bet and spec.buy_curve_edge_min > -1.0:
         from . import ticks as ticks_mod
         from . import variants as _variants
