@@ -18,7 +18,7 @@ from kalshi_moonshot import config, db
 
 LANE = os.environ.get("LANE", "crypto_multiscale")
 COOL = float(os.environ.get("COOLDOWN_MINUTES", "3.0"))
-SINCE = datetime.datetime(2026, 11, 9, 5, 0, tzinfo=datetime.UTC).timestamp()  # Monday 2026-11-09 00:00 ET: the logic was rewritten then
+SINCE = float(os.environ.get("SINCE", datetime.datetime(2026, 11, 9, 5, 0, tzinfo=datetime.UTC).timestamp()))  # Monday 2026-11-09 00:00 ET: the logic was rewritten then (SINCE=epoch seconds to look at a later stretch)
 WINDOW = 900.0
 
 s = config.load()
