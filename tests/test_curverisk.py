@@ -249,6 +249,14 @@ def test_unit_still_rising_follows_the_short_slope():
     assert curverisk.still_rising(up, 10.0, 0.0) is False  # no look back asked
 
 
+def test_unit_a_climb_that_inflated_its_own_noise_is_still_a_slope():
+    # SOL 21:15 YES, 2026-11-14: over the 43 s look back the bid rose 0.102 (0.880 to 0.982) in a market whose 15-minute typical minute, run-up included, was 0.124: a noise bar of 0.105
+    path = [(float(t), 0.880 + 0.102 * t / 43.0) for t in range(0, 44)]
+    assert curverisk.still_rising(path, 43.0, 43.0, 0.124) is True
+    pause = path + [(44.0, 0.981)]  # the last tick back by 0.001, as it was
+    assert curverisk.still_rising(pause, 44.0, 43.0, 0.124) is True
+
+
 def test_unit_still_rising_in_the_markets_own_noise():
     # a typical minute of 0.10: the noise over 10 s is 0.10 * sqrt(10 / 60) = 0.041
     up = [(float(t), 0.80 + 0.01 * t) for t in range(0, 11)]  # +0.10 in 10 s
@@ -259,8 +267,10 @@ def test_unit_still_rising_in_the_markets_own_noise():
     fell = up + [(11.0, 0.85)]  # 0.05 off the high: more than the noise
     assert curverisk.still_rising(fell, 11.0, 10.0, 0.10) is False
     slow = [(float(t), 0.80 + 0.002 * t) for t in range(0, 11)]  # +0.02 in 10 s: under this market's noise
-    assert curverisk.still_rising(slow, 10.0, 10.0, 0.10) is False
-    assert curverisk.still_rising(slow, 10.0, 10.0, 0.01) is True  # the same rise in a quiet market (noise 0.004) is a slope
+    assert curverisk.still_rising(slow, 10.0, 10.0, 0.10) is True  # any rise at the high is a slope (2026-11-14: the rise no longer has to beat the noise)
+    assert curverisk.still_rising(slow, 10.0, 10.0, 0.01) is True  # and in a quiet market too
+    flat_top = [(float(t), 0.80) for t in range(0, 11)]
+    assert curverisk.still_rising(flat_top, 10.0, 10.0, 0.10) is False  # no rise at all is not a slope
     level = up + [(float(t), 0.90) for t in range(11, 22)]  # the climb has aged out of the look back
     assert curverisk.still_rising(level, 21.0, 10.0, 0.10) is False
 

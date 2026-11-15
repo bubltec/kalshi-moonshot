@@ -810,3 +810,9 @@ def test_unit_the_cushion_changes_a_lanes_version_only_when_it_is_set(tmp_path, 
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_take_cushion" in got) is (cushion == "true")
+
+
+def test_integration_in_a_swinging_market_a_steady_small_climb_is_still_a_slope(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=800)  # a typical minute of about 0.10: more noise than a slow climb makes
+    w = held(tmp_path, monkeypatch, live=True, take="true")
+    assert climb(w, 0.84, 0.90, 700, step=0.002) is None  # the bid rises every second: 0.002 a second is under the noise, and still a slope (it sold on the noise bar before 2026-11-14)
