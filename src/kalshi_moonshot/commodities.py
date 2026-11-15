@@ -591,10 +591,12 @@ class CommodityPricer:
                 log.warning("width fit for %s: %s", series, exc)
         if len(samples) < widthfit.MIN_SAMPLES:
             self.width_fit = None
+            widthfit.latest = None
             log.info("hour width correction: %d readings from the last hour, too few to fit: the hour's own movement is used as it is", len(samples))
             return False
         k = widthfit.best_k(samples, 1.0, s.commodity_tail_floor)
         self.width_fit = (k, now_ts, len(samples))
+        widthfit.latest = self.width_fit
         log.info("hour width correction: %.3f from %d readings of the windows settled in the last %.0f h (1 = the hour's own movement; under 1 = results more decisive than it, over 1 = less)", k, len(samples), widthfit.FIT_HOURS)
         return True
 

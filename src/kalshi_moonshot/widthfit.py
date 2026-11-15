@@ -79,3 +79,23 @@ def samples_from(settled: list[dict[str, Any]], ts: list[float], vs: list[float]
             sig = rate * math.sqrt((close - t) + (t - ts[i]))
             out.append((math.log(vs[i] * math.exp(wb.basis) / strike), sig, max(wb.sd, unc_floor), 1 if m["result"] == "yes" else 0))
     return out
+
+
+latest: tuple[float, float, int] | None = None  # (k, when fitted, readings): the market's present fit, set by CommodityPricer.learn_widths so the buy's stretch and the sale's squeeze can read it without the pricer
+
+
+def hour_k(now_ts: float) -> float:
+    """The hour's width correction as last fitted, or 1 when there is none fresh enough (MAX_AGE): the market's own hour, not a number picked."""
+    fit = latest
+    return fit[0] if fit is not None and now_ts - fit[1] <= MAX_AGE else 1.0
+
+
+NUDGE_FLOOR = 0.5  # a wild hour (k of 2 and over) halves the nudge at most
+
+
+def nudge_scale(k: float) -> float:
+    """How much of its cap a nudge may use this hour (2026-11-15, user: the hourly factor should affect the nudge amount). k is under 1 when the hour's results were more decisive than its own movement and over 1 when less: a near miss of a bar means more when the market has been decisive, so the nudge keeps its whole cap at k of 1 or under and shrinks as 1 / k above it, to NUDGE_FLOOR. The lane's cap stays the ceiling."""
+    if k <= 1.0:
+        return 1.0
+    return max(NUDGE_FLOOR, 1.0 / k)
+

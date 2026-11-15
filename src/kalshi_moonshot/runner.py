@@ -1328,10 +1328,15 @@ def stretch_buy(s: Settings, spec: LaneSpec, shot: LongShot, p: float, e: float,
     seconds = 60.0  # the stretch reads the side's last minute, whatever span the lane's trend check looks back over (2026-11-14: that check moved to three minutes and the nudge was not meant to)
     zed = side_trend_z(s, shot, seconds, now)
     time_share = min(max(float(shot.hours_to_close) * 3600.0 / 900.0, 0.0), 1.0)
-    allowed = nudge(spec.stretch_max, trend_share(zed), time_share)
+    hour_scale = 1.0
+    if spec.nudge_hour_factor:
+        from . import widthfit
+
+        hour_scale = widthfit.nudge_scale(widthfit.hour_k(time.time() if now is None else now))
+    allowed = nudge(spec.stretch_max, trend_share(zed), time_share, hour_scale)
     if not miss < allowed:
         return None
-    return f"[stretch buy: the edge is {miss:.3f} under the bar, inside a nudge of {allowed:.3f} (at most {spec.stretch_max:g}; the side moved {zed:+.1f} typical moves its way over {seconds:.0f}s, {time_share:.0%} of the market still to run)]"
+    return f"[stretch buy: the edge is {miss:.3f} under the bar, inside a nudge of {allowed:.3f} (at most {spec.stretch_max:g}; the side moved {zed:+.1f} typical moves its way over {seconds:.0f}s, {time_share:.0%} of the market still to run{f'; the hour factor scales the nudge by {hour_scale:.2f}' if spec.nudge_hour_factor else ''})]"
 
 
 def _day_start(now: float) -> float:

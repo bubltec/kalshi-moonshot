@@ -64,9 +64,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false'):
+def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false', nudge_hour='false'):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion) + f"nudge_hour_factor={nudge_hour}\n")
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -982,3 +982,32 @@ def test_integration_a_hold_with_no_sale_wanted_writes_nothing(tmp_path, monkeyp
     for k in range(5):
         yes_bid(w, 0.80, 450 - 3 * k)  # the bet is fine: nothing is wanted, so nothing is held
     assert held_rows(tmp_path) == []
+
+
+# ---- the hour's width factor scales the nudge (2026-11-15, user: "make the hourly factor market number affect the nudge amount") ----
+def hour_fit(monkeypatch, k):
+    from kalshi_moonshot import widthfit
+
+    monkeypatch.setattr(widthfit, "latest", (k, CLOSE - 300.0, 60))
+
+
+def test_integration_a_wild_hour_shrinks_the_squeeze_so_the_same_near_miss_is_not_sold(tmp_path, monkeypatch):
+    """1.7 cents short of the max loss, sliding, 85 s left: the nudge is about 1.8 cents and the bet sells. With the hour's k at 2 the nudge is halved to about 0.9 of a cent and it does not."""
+    (tmp_path / "calm").mkdir()
+    (tmp_path / "wild").mkdir()
+    feed_history(0.013, from_left=1300, to_left=121)
+    hour_fit(monkeypatch, 1.0)
+    calm = slid(held(tmp_path / "calm", monkeypatch, live=True, squeeze=CAP, nudge_hour='true', **NO_HOLDS), TO_60, 120)
+    ticks_mod.mids._rows.clear()
+    feed_history(0.013, from_left=1300, to_left=121)
+    hour_fit(monkeypatch, 2.0)
+    wild = slid(held(tmp_path / "wild", monkeypatch, live=True, squeeze=CAP, nudge_hour='true', **NO_HOLDS), TO_60, 120)
+    assert calm is not None and "the hour factor scales the nudge by 1.00" in calm[1].why
+    assert wild is None
+
+
+def test_integration_with_the_option_off_the_hour_factor_changes_nothing(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=121)
+    hour_fit(monkeypatch, 2.0)
+    out = slid(held(tmp_path, monkeypatch, live=True, squeeze=CAP, nudge_hour='false', **NO_HOLDS), TO_60, 120)
+    assert out is not None and "hour factor" not in out[1].why  # the nudge as it was
