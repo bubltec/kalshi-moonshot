@@ -949,3 +949,36 @@ def test_integration_a_strong_hour_view_still_holds_late(tmp_path, monkeypatch):
     with_hour_view(monkeypatch, 0.97)
     w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
     assert slide_at(w, 60) == []  # 0.97 is over the faded bar of about 0.8
+
+
+def held_rows(tmp_path):
+    import json
+
+    path = Path(tmp_path) / "risk_shadow.jsonl"
+    return [json.loads(x) for x in path.read_text().splitlines() if '"held"' in x] if path.exists() else []
+
+
+def test_integration_a_stop_the_hour_view_holds_is_written_down_once_with_its_reason(tmp_path, monkeypatch):
+    """2026-11-15: ETH 09:00 and three more bets were held to a full loss and nothing recorded why. A wanted sale that the hour view holds is logged once, and the row says so."""
+    seed_perp(monkeypatch, last_over_open=0.004)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    assert slide(w) == []
+    rows = held_rows(tmp_path)
+    assert len(rows) == 1 and rows[0]["held"].startswith("hour view: ") and rows[0]["live"] is True and rows[0]["ticker"] == TICKER
+
+
+def test_integration_a_stop_waiting_out_its_wait_is_written_down(tmp_path, monkeypatch):
+    monkeypatch.setattr(ticks_mod, "history", ticks_mod.TickHistory())
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5)  # the max-loss stop waits half the time left
+    slide(w)
+    rows = held_rows(tmp_path)
+    assert rows and all(r["held"].startswith("wait: ") for r in rows)
+    assert len(rows) == 1  # one row as the wait begins, not one a second
+
+
+def test_integration_a_hold_with_no_sale_wanted_writes_nothing(tmp_path, monkeypatch):
+    seed_perp(monkeypatch, last_over_open=0.004)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    for k in range(5):
+        yes_bid(w, 0.80, 450 - 3 * k)  # the bet is fine: nothing is wanted, so nothing is held
+    assert held_rows(tmp_path) == []

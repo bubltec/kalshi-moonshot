@@ -251,6 +251,7 @@ class Target:
     risk_long_fallback: bool = False  # logged once: the long layer is read from the spot index because the perp is silent
     risk_long_missing: bool = False  # logged once: no long layer at all
     risk_logged: bool = False
+    risk_held_kind: str = ""  # what last held a sale this bet's risk exit wanted ("hour view", "wait"), so the hold is logged once as it begins
     comeback_noted: float = 0.0
     hold_since: float = 0.0  # when the comeback hold began (0 = none)
     hold_ref: float = 0.0  # the cushion (typical minutes) when it began
@@ -1020,6 +1021,8 @@ class ProfitWatcher:
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False)
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= curverisk.confirm_bar(t.risk_confirm, left):
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
+            if bid >= CURVE_MIN_BID and (curverisk.stopped(pnl, r.q, t.risk_max_loss) or curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):
+                self._risk_held(t, r, bid, now, left, pnl, "hour view", f"the sale was wanted but the hour view's chance {long_chance:.3f} is at or over its bar {curverisk.confirm_bar(t.risk_confirm, left):.3f}")
             return None
         stop = curverisk.stopped(pnl, r.q, t.risk_max_loss)  # the max loss
         if not stop and allowed > 0 and t.risk_max_loss > 0:
@@ -1029,6 +1032,7 @@ class ProfitWatcher:
         stop = stop and bid >= CURVE_MIN_BID  # below this bid the market has priced the loss and there is nothing to sell for
         if not stop and (bid < CURVE_MIN_BID or not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):  # under the minimum bid there is nothing left to sell for, on the line as on the max loss
             t.risk_since = 0.0
+            t.risk_held_kind = ""
             return None
         if t.risk_since <= 0:
             t.risk_since = now
@@ -1038,6 +1042,7 @@ class ProfitWatcher:
             base = got_stats[2]
         wait = curverisk.stop_wait(r.q, t.risk_sell, left, base, t.risk_stop_hold) if stop else curverisk.wait(r.q, t.risk_sell, left, base, t.curve_wait_share if t.curve_wait_share > 0 else 0.25)
         if now - t.risk_since < wait:
+            self._risk_held(t, r, bid, now, left, pnl, "wait", f"the {'max loss' if stop else 'line'} is reached but the wait is not over: held {now - t.risk_since:.0f}s of a {wait:.0f}s wait")
             return None
         reason = f"curve risk exit{' (max loss)' if stop else ''}: the chance the side pays is {r.q:.3f} ({r.worse} cushion the worse: price {r.q_price:.3f}, spot {r.q_spot:.3f}, history x{t.risk_hist:.2f}), line {t.risk_sell:.2f}, held {now - t.risk_since:.0f}s of a {wait:.0f}s wait; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left{squeezed}"
         if t.risk_live:
@@ -1049,12 +1054,22 @@ class ProfitWatcher:
             self._risk_record(t, r, bid, now, left, pnl, wait, stop, False)
         return None
 
-    def _risk_record(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, wait: float, stop: bool, live: bool) -> None:
+    def _risk_held(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, kind: str, why: str) -> None:
+        """A live sale the risk exit wanted and something held (2026-11-15: four bets were held to a full loss with the bid at 0.37 to 0.41 when they crossed the max-loss line, and the log said nothing about why). Logged and written to data/risk_shadow.jsonl once as each kind of hold begins; it ends when the sale is no longer wanted."""
+        if not t.risk_live or t.risk_held_kind == kind:
+            return
+        t.risk_held_kind = kind
+        log.info("curve risk held %s %s, %.0fs left: %s (bid %.2f, %+.1f%% of cost, chance %.3f)", t.ticker, t.lane, left, why, bid, pnl * 100.0, r.q)
+        self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, held=f"{kind}: {why}")
+
+    def _risk_record(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, wait: float, stop: bool, live: bool, held: str = "") -> None:
         """Append one risk-exit signal to data/risk_shadow.jsonl (ticker, lane, bid, chance, result, time left, max-loss or line, live or shadow). Never raises."""
         try:
             from pathlib import Path
 
             row = {"ts": now, "ticker": t.ticker, "lane": t.lane, "side": t.side, "entry": t.entry, "bid": bid, "q": round(r.q, 4), "worse": r.worse, "pnl": round(pnl, 4), "left": round(left, 1), "wait": round(wait, 1), "stop": stop, "line": t.risk_sell, "live": live}
+            if held:
+                row["held"] = held
             with open(Path(self.get_settings().data_dir) / "risk_shadow.jsonl", "a") as f:  # the watcher's own settings, not config.reload(): that rebinds the process-wide settings
                 f.write(json.dumps(row) + "\n")
         except OSError:

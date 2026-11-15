@@ -79,6 +79,7 @@ CLOSE = 9_900.0
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
                 risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_squeeze=0.0, risk_unit=None, risk_unit_at=0.0, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
+    base.setdefault("risk_held_kind", "")
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -91,7 +92,8 @@ def run(monkeypatch, t, bid, p, seconds=30, left0=100.0, tmp=None):
     monkeypatch.setattr(watcher.log, "info", lambda msg, *a, **k: logged.append(msg % a if a else msg))
     me = SimpleNamespace()
     me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
-    me._risk_record = lambda *a: watcher.ProfitWatcher._risk_record(me, *a)
+    me._risk_record = lambda *a, **k: watcher.ProfitWatcher._risk_record(me, *a, **k)
+    me._risk_held = lambda *a: watcher.ProfitWatcher._risk_held(me, *a)
     me._risk_long = lambda *a: watcher.ProfitWatcher._risk_long(me, *a)
     tmp = Path(tmp) if tmp else Path(tempfile.mkdtemp())
     me.get_settings = lambda: SimpleNamespace(data_dir=tmp)
@@ -140,7 +142,8 @@ def test_the_hours_history_is_read_from_the_kalshi_perp_not_the_spot_feed(monkey
     t = target(risk_history=True, risk_live=True)
     me = SimpleNamespace()
     me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
-    me._risk_record = lambda *a: watcher.ProfitWatcher._risk_record(me, *a)
+    me._risk_record = lambda *a, **k: watcher.ProfitWatcher._risk_record(me, *a, **k)
+    me._risk_held = lambda *a: watcher.ProfitWatcher._risk_held(me, *a)
     me._risk_long = lambda *a: watcher.ProfitWatcher._risk_long(me, *a)
     me.get_settings = lambda: SimpleNamespace(data_dir=Path(tempfile.mkdtemp()))
     watcher.ProfitWatcher._risk_hit(me, t, 0.80, CLOSE - 100.0, CLOSE - 100.0)
@@ -198,7 +201,8 @@ def test_a_price_dip_alone_does_not_sell_when_the_long_layer_says_the_bet_stays_
     logged = []
     monkeypatch.setattr(watcher.log, "info", lambda msg, *a, **k: logged.append(msg % a if a else msg))
     me = SimpleNamespace(get_settings=lambda: SimpleNamespace(data_dir=tmp_path))
-    me._risk_record = lambda *a: watcher.ProfitWatcher._risk_record(me, *a)
+    me._risk_record = lambda *a, **k: watcher.ProfitWatcher._risk_record(me, *a, **k)
+    me._risk_held = lambda *a: watcher.ProfitWatcher._risk_held(me, *a)
     monkeypatch.setattr(watcher.variants, "comeback_stats", lambda *a, **k: None)
     me._risk_long = lambda tt, now, left: 0.9  # the hour says the side is very likely to pay
     me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
