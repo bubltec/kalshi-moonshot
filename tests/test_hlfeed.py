@@ -83,9 +83,9 @@ def test_no_price_yet_fails_cleanly(monkeypatch):
 
 
 def test_routing_sends_hl_symbols_to_hyperliquid():
-    from kalshi_moonshot.krakenfeed import KrakenFeed, RoutingFeed
+    from kalshi_moonshot.routingfeed import RoutingFeed
 
     hl, _ = live_feed()
-    r = RoutingFeed(KrakenFeed(), hyperliquid=hl)
+    r = RoutingFeed(hyperliquid=hl)
     assert r.series("hl:xyz:CL").last == 98.4
     assert r.minute_closes.__name__ == "minute_closes"

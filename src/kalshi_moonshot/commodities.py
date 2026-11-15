@@ -41,8 +41,8 @@ _N = NormalDist()
 
 
 def contract_priced(symbol: str) -> bool:
-    """A symbol with no exchange feed to price from: Kraken FX, or a Pyth-only series (Treasury yields). Those lanes bet the contract's own price."""
-    return symbol.startswith(("kraken:", "pyth:"))
+    """A symbol with no exchange feed to price from: a Pyth-only series (Treasury yields). Those lanes bet the contract's own price."""
+    return symbol.startswith("pyth:")
 
 
 @dataclass(frozen=True)
@@ -498,7 +498,7 @@ class CommodityPricer:
 
     def __init__(self, feed: Feed | None = None):
         if feed is None:
-            from .krakenfeed import RoutingFeed
+            from .routingfeed import RoutingFeed
 
             feed = RoutingFeed.for_instruments()
         self.feed: Feed = feed
@@ -615,7 +615,7 @@ class CommodityPricer:
         else:
             band_only = contract_priced(inst.symbol)
         if band_only:
-            # These lanes bet the contract's own price. Kraken is not an input, so do not open it.
+            # These lanes bet the contract's own price. No feed is an input, so do not open one.
             ask = float(getattr(shot, "ask", 0.0) or 0.0)
             p_yes = 1.0 - ask if getattr(shot, "side", "yes") == "no" else ask
             return min(1.0, max(0.0, p_yes)), "price band"

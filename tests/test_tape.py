@@ -74,7 +74,7 @@ def test_the_recorder_follows_the_open_15_minute_markets(tmp_path):
 
     rec = TapeRecorder(Client(), s, None)  # type: ignore[arg-type]
     n = rec.refresh_tickers()
-    assert n == 30 and all(t.endswith("-26OCT192030-30") for t in rec.stream._tickers)  # one per instrument with a 15-minute series (24 until 2026-11-13, when six more coins got a ladder instrument)
+    assert n == 28 and all(t.endswith("-26OCT192030-30") for t in rec.stream._tickers)  # one per instrument with a 15-minute series (24 until 2026-11-13, when six more coins got a ladder instrument; 30 until 2026-11-14, when the two Kraken FX instruments went)
     assert "hl:xyz:GOLD" in rec._commodity_symbols() and not any("BTC" in x for x in rec._commodity_symbols())
 
 
@@ -142,26 +142,6 @@ def test_build_tracks_aligns_quotes_and_the_index(tmp_path):
 
 
 
-def test_the_recorder_does_not_sample_kraken(tmp_path):
-    s = config.load()
-    s = type(s)(**{**s.__dict__, "data_dir": tmp_path})
-
-    class Kraken:
-        def latest(self, symbol):
-            raise AssertionError(symbol)
-
-        def series(self, symbol):
-            raise AssertionError(symbol)
-
-    class Feed:
-        kraken = Kraken()
-
-    rec = TapeRecorder(object(), s, Feed())  # type: ignore[arg-type]
-    rec.sample_feed()
-    rec.tape.flush()
-    assert rec.tape.db.execute("SELECT count(*) FROM feed_ticks").fetchone()[0] == 0
-
-
 def test_extra_series_are_recorded_on_their_own_connection(tmp_path):
     s = config.load()
     s = type(s)(**{**s.__dict__, "data_dir": tmp_path, "tape_extra_series": ("KXESOCCERGAME",)})
@@ -174,7 +154,7 @@ def test_extra_series_are_recorded_on_their_own_connection(tmp_path):
 
     rec = TapeRecorder(Client(), s, None)  # type: ignore[arg-type]
     n = rec.refresh_tickers()
-    assert n == 31  # the 30 15-minute markets and the one extra
+    assert n == 29  # the 28 15-minute markets and the one extra
     assert rec.extra_stream._tickers == {"KXESOCCERGAME-26OCT241551AAABBB-AAA"}
     assert not any(t.startswith("KXESOCCERGAME") for t in rec.stream._tickers)  # a new match every minute never reconnects the live stream
 

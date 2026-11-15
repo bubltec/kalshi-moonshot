@@ -5,7 +5,6 @@
 # that far out.
 #
 # Feeds, all free and keyless, all real-time:
-#   kraken:PAIR   Kraken's WebSocket v2 ticker. Crypto spot.
 #   kp:INDEX      Kalshi's own perpetual-futures reference price, about one reading a second, recorded on the tape
 #                 as the index KP_BTC, KP_ETH ... (perpref.py; kalshifeed.py reads it). Crypto.
 #   hl:xyz:COIN   Hyperliquid's "xyz" builder market: deep gold, silver, oil, gas, copper, platinum and
@@ -111,7 +110,7 @@ realtime = true
 proxy = true
 
 # --- New markets. Currencies are live; indices stay paper only (`live = false`; Brent went live 2026-11-02): a live lane prices and logs them but never sends an order for them until
-# you flip the switch here. Currencies use Hyperliquid's EUR/GBP/JPY perpetuals, or Kraken's spot FX where there is no perp.
+# you flip the switch here. Currencies use Hyperliquid's EUR/GBP/JPY perpetuals (Kraken's spot FX for AUD and CAD was dropped 2026-11-14).
 # Indices use the S&P 500 and Nasdaq-100 perps (Kalshi's index markets run in US trading hours); Brent adds its 15-minute series.
 
 
@@ -175,22 +174,6 @@ live = true
 [[instrument]]
 prefix = "KXUSDJPY"
 symbol = "hl:xyz:JPY"
-suffixes = ["15M"]
-realtime = true
-proxy = true
-live = true
-
-[[instrument]]
-prefix = "KXAUDUSD"
-symbol = "kraken:AUD/USD"
-suffixes = ["15M"]
-realtime = true
-proxy = true
-live = true
-
-[[instrument]]
-prefix = "KXUSDCAD"
-symbol = "kraken:USD/CAD"
 suffixes = ["15M"]
 realtime = true
 proxy = true

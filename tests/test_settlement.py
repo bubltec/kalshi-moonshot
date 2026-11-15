@@ -1,4 +1,4 @@
-"""The last minute of a 15-minute crypto market: the settlement average, the guard, and the Coinbase tick parser."""
+"""The last minute of a 15-minute crypto market: the settlement average, and the guard."""
 import json
 import math
 import queue
@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from kalshi_moonshot import coinbasefeed, config, settlement, watcher
+from kalshi_moonshot import config, settlement, watcher
 from kalshi_moonshot.store import Store
 
 
@@ -47,15 +47,6 @@ def test_volatility_and_the_locked_average_from_ticks():
     assert got == pytest.approx(sum(vals[1440:1490]) / 50, rel=1e-9)
     assert settlement.locked_average(ts, vals, 1500.0, 1440.7) == pytest.approx(vals[1440], rel=1e-9)  # one whole second past
     assert settlement.sigma_per_second([], [], 100.0) is None
-
-
-def test_the_coinbase_ticker_message_is_parsed_and_noise_is_ignored():
-    msg = {"type": "ticker", "product_id": "BTC-USD", "price": "80580.12", "time": "2026-10-25T18:43:20.123456Z"}
-    got = coinbasefeed.parse_ticker(msg)
-    assert got is not None and got[0] == "BTC-USD" and got[2] == 80580.12 and got[1] == pytest.approx(1792953800.123456, abs=1.0)
-    assert coinbasefeed.parse_ticker({"type": "subscriptions"}) is None
-    assert coinbasefeed.parse_ticker({"type": "ticker", "product_id": "BTC-USD"}) is None  # no price
-    assert coinbasefeed.parse_ticker({"type": "ticker", "product_id": "BTC-USD", "price": "x", "time": "bad"}) is None
 
 
 class _Tape:

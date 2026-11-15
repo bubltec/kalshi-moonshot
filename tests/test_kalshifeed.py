@@ -5,7 +5,7 @@ import pytest
 
 from kalshi_moonshot import commodities as cm
 from kalshi_moonshot.kalshifeed import KalshiPerpFeed
-from kalshi_moonshot.krakenfeed import RoutingFeed
+from kalshi_moonshot.routingfeed import RoutingFeed
 from kalshi_moonshot.tape import Tape
 
 
@@ -66,19 +66,19 @@ def test_a_tape_that_cannot_be_read_is_a_pricing_error():
 
 def test_the_router_sends_kp_symbols_to_the_kalshi_feed(tmp_path):
     rows = _ticks()
-    router = RoutingFeed(kraken=object(), kalshi=KalshiPerpFeed(_tape(tmp_path, rows).db))
+    router = RoutingFeed(kalshi=KalshiPerpFeed(_tape(tmp_path, rows).db))
     assert router.series("kp:KP_BTC").last == pytest.approx(rows[-1][2])
     assert router.minute_closes("kp:KP_BTC", 1.0)
 
 
-def test_the_crypto_instruments_read_kalshis_own_index_and_the_currencies_still_read_kraken():
+def test_the_crypto_instruments_read_kalshis_own_index():
     from kalshi_moonshot import kalshiws
 
     by = {i.prefix: i for i in cm.load_instruments()}
     for coin in ("BTC", "ETH", "SOL", "XRP", "DOGE", "ADA", "BCH", "BNB", "HYPE", "NEAR", "ZEC"):  # all eleven coins (the last six added 2026-11-13)
         inst = by[f"KX{coin}"]
         assert inst.symbol == f"kp:{kalshiws.INDEX_FOR[f'KX{coin}']}" and inst.proxy and inst.realtime and not cm.contract_priced(inst.symbol)  # the settlement index the socket streams (2026-11-13; the polled perp reference before)
-    assert cm.contract_priced(by["KXAUDUSD"].symbol)
+    assert "KXAUDUSD" not in by and "KXUSDCAD" not in by  # their Kraken spot feed was dropped 2026-11-14
 
 
 def test_a_kalshi_perp_is_not_a_feed_ticks_symbol():

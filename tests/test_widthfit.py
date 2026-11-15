@@ -91,7 +91,7 @@ def test_unit_each_reading_is_priced_from_the_hour_before_it(tmp_path):
     ts, vs = feed.ticks("kp:BRTI", widthfit.FIT_HOURS + 4.5)
     samples = widthfit.samples_from(markets, ts, vs, now.timestamp(), 0.00015)
     # the walk moves 0.87 bp a second, so the movement over the 60 to 600 s left at a reading is 0.87e-4 * sqrt(seconds): between 6.7 and 21 bp
-    assert all(0.8 * 0.87e-4 * math.sqrt(60) <= sig <= 1.2 * 0.87e-4 * math.sqrt(600) for _, sig, _, _ in samples)
+    assert all(0.6 * 0.87e-4 * math.sqrt(60) <= sig <= 1.5 * 0.87e-4 * math.sqrt(600) for _, sig, _, _ in samples)  # the rate is read from one hour of a seeded random walk (a spread of 10 to 15% from one run to the next as the clock moves through the quarter hour); the bounds were 0.8 and 1.2 and the test failed about one run in ten
 
 
 def _pricer(tmp_path, monkeypatch, min_samples=4):  # 4: sixteen minutes on, only one of the fixture's settled windows may still be inside the hour (it depends on where the clock sits in the quarter-hour; at 8 this test failed about one run in three)

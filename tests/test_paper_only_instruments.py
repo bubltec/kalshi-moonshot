@@ -13,7 +13,7 @@ def settings(tmp_path, monkeypatch):
 
 def test_currencies_are_live_and_indices_stay_paper_only(tmp_path, monkeypatch):
     s = settings(tmp_path, monkeypatch)
-    for series in ("KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M", "KXAUDUSD15M", "KXUSDCAD15M"):
+    for series in ("KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M"):
         assert cm.instrument_for(series).live and s.is_live("commodity", series), series
     for series in ("KXINX15M", "KXNDQ15M"):
         inst = cm.instrument_for(series)
