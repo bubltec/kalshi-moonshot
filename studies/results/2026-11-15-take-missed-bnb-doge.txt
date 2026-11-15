@@ -1,0 +1,12 @@
+
+BNB15M-26NOV151315 yes bought 13:03:58 at 0.79 (basis 0.804, room 0.196), sold 13:10:50 at 0.38
+  best: gain +0.111 a contract (57% of room, $+3.88 on 35 contracts) at 13:06:50
+  seconds in profit 279; seconds the take wanted a sale 21; of those held by the slope test (still rising) 21, not held 0
+  in-profit path (time bid gain%room bar%room wants rising left): 04:24 0.83 8/29 - 636s | 04:47 0.86 24/32 - 613s | 05:11 0.84 14/35 - 589s | 05:34 0.85 19/37 - 566s | 05:57 0.88 35/40 - 543s | 06:26 0.83 8/43 - 514s | 06:49 0.91 52/45 WR 491s | 07:12 0.83 8/48 - 468s | 07:58 0.85 19/50 - 422s | 08:21 0.85 19/50 - 399s | 08:44 0.87 30/50 - 376s | 09:07 0.87 30/50 - 353s | 09:30 0.83 8/50 - 330s
+
+DOGE15M-26NOV151315 yes bought 13:04:11 at 0.76 (basis 0.773, room 0.227), sold 13:10:18 at 0.36
+  best: gain +0.100 a contract (44% of room, $+3.55 on 36 contracts) at 13:06:51
+  seconds in profit 219; seconds the take wanted a sale 0; of those held by the slope test (still rising) 0, not held 0
+  in-profit path (time bid gain%room bar%room wants rising left): 04:24 0.80 7/29 - 636s | 04:43 0.82 16/31 - 617s | 05:31 0.80 7/37 - 569s | 05:52 0.84 25/39 - 548s | 06:11 0.79 2/41 - 529s | 06:40 0.84 25/44 - 500s | 06:58 0.86 35/46 - 482s | 07:40 0.79 2/50 - 440s | 07:59 0.82 16/50 - 421s | 08:17 0.85 30/50 - 403s | 08:37 0.79 2/50 - 383s | 08:55 0.81 12/50 - 365s | 09:18 0.80 7/50 - 342s
+DONE
+	
