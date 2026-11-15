@@ -2365,7 +2365,7 @@ class ProfitWatcher:
             t = self.targets.get((ticker, manual.LANE))
         if t is not None and t.last_ts and time.time() - t.last_ts < 5.0 and t.last_bid > 0:
             bid = min(bid, t.last_bid)  # the socket is the freshest price
-        go = why.startswith(manualrest.GO_PREFIX)  # the resting rule's late guard: a sale under cost, like a stop, but with no model to ask and no reverse bet
+        go = why.startswith(manualrest.GO_PREFIX)  # the resting rule's late guard: a sale under cost, like a stop, but with no model to ask
         stop = why.startswith("stop-loss") or go
         if t is not None and t.rest_rule and not stop:
             self._back_off(ticker, manual.LANE)
@@ -2400,11 +2400,6 @@ class ProfitWatcher:
         self.sold.append(line)
         if filled >= pos.count - 0.005:
             store.mark_exited(ticker, avg, why, manual.LANE)
-        if filled > 0 and stop and not go:
-            from . import reverse
-
-            with contextlib.suppress(Exception):
-                reverse.request(s, store, ticker, pos.side, manual.LANE, filled * pos.entry, why)
         if filled < pos.count - 0.005:
             self._back_off(ticker, manual.LANE)
 

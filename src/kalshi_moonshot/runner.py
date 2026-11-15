@@ -1970,16 +1970,6 @@ EXIT_RETRY_SLIP = (0.02, 0.05, 0.10)  # if the first sale fills nothing (or part
 EXIT_SLIP = 0.02  # an exit order is limited this far under the bid we saw: it is immediate-or-cancel, so it still fills at the best bid
 
 
-def _ask_flip(s: Settings, store: Store, row, lane: str, why: str) -> None:
-    """A stop just sold this bet: queue a look at the other side (reverse.py). Never lets a failure here touch the sale."""
-    try:
-        from . import reverse
-
-        reverse.request(s, store, row["ticker"], row["side"] or "yes", lane, float(row["stake_usd"] or 0.0), why)
-    except Exception:
-        log.debug("flip request failed", exc_info=True)
-
-
 HAND_SALE_MIN_AGE = 20.0  # seconds after the bot's last order on a market before a smaller account position is read as a hand sale (the positions read can trail a fill)
 
 
@@ -2054,7 +2044,6 @@ def exit_position(
 
             price = manualrest.rest_fill_price(why) or price  # a resting ask fills at its own price, not the bid this re-read catches
             store.mark_exited(row["ticker"], price, why, lane, seen)
-            _ask_flip(s, store, row, lane, why)
             return f"paper-sold {row['ticker']} @ {price:.2f}. {why}"
         # A resting take-profit sell may be working on this position: cancel it and book whatever it filled
         # before selling anything ourselves, or the two orders would race for the same contracts.
@@ -2068,7 +2057,6 @@ def exit_position(
                 return f"{row['ticker']}: closed by hand, nothing left to sell. {why}"
         if count < 0.005 and rest_filled > 0:
             store.mark_exited(row["ticker"], rest_avg, f"resting take-profit filled at {rest_avg:.4f} (no taker fee)", lane, seen)
-            _ask_flip(s, store, row, lane, why)
             return f"sold {rest_filled:g} {row['ticker']} resting @ {rest_avg:.4f} (no taker fee); the {why} sale found nothing left"
         if count <= 0:
             store.mark_exited(row["ticker"], bid, why, lane, seen)
@@ -2124,7 +2112,6 @@ def exit_position(
             filled = sold
         if store.net_contracts(row["ticker"], s.env) < 0.005:
             store.mark_exited(row["ticker"], avg if filled else bid, why, lane, seen)
-            _ask_flip(s, store, row, lane, why)
             return f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
         return f"partial exit {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
 

@@ -332,3 +332,22 @@ def test_integration_a_live_lanes_buy_job_marks_its_market_and_a_paper_lanes_doe
     monkeypatch.setattr(type(w.s), "is_live", lambda self, lane, series="": True)
     w.do_evaluate(job)
     assert seen == [False, True] and manual.bot_buying(ticker) is True  # live: in flight during the job, and for the grace after it
+
+
+# ---- the flip job is gone (2026-11-14, cleanup): a stop sale of a hand-placed position sells and books, and queues nothing ----
+def test_a_hand_placed_stop_sale_still_sells_and_no_flip_is_queued_or_stored(s):
+    c, w = stop_watcher(s, 0.25, held=None)
+    w._sell("KXWTI-26OCT2214-T98.99", "manual", "stop-loss: bid 0.25 is 38% under the 0.40 paid (socket)")
+    assert len(c.sold) == 1  # the sale itself is unchanged
+    store = Store(s.db_path)
+    tables = {r[0] for r in store.db.execute("SELECT name FROM sqlite_master WHERE type='table'")} if not hasattr(store.db, "_pg") else set()
+    assert "flips" not in tables  # the table that held the look at the other side is no longer made
+    assert not hasattr(store, "add_flip") and not hasattr(store, "pending_flips")
+    assert store.db.execute("SELECT COUNT(*) FROM jobs WHERE kind='flip'").fetchone()[0] == 0
+
+
+def test_the_flip_job_kind_and_the_stop_flip_lane_no_longer_exist(s):
+    from kalshi_moonshot import lanes, worker
+
+    assert "flip" not in worker.BUY_KINDS and "stop_flip" not in lanes.lane_specs(s)
+    assert not hasattr(worker.Worker, "do_flip") and not hasattr(s, "flip_after_stop")
