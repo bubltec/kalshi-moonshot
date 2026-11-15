@@ -1967,11 +1967,23 @@ def _hours_left(close_time: str, now: datetime | None = None) -> float | None:
 _EXIT_LOCK = threading.Lock()  # one exit at a time, so the periodic pass and the live watcher never sell the same bet twice
 
 
+def profit_floor(paid: float) -> float:
+    """The lowest limit, in whole cents, at which a sale still clears what the bet cost: L - fee(L) >= paid + fee(paid). The watcher's veto uses the same two fees."""
+    from .strategy import fee_per_contract
+
+    need = paid + fee_per_contract(paid)
+    cents = max(1, math.ceil(need * 100 - 1e-9))
+    while cents < 100 and cents / 100 - fee_per_contract(cents / 100) < need - 1e-9:
+        cents += 1
+    return cents / 100
+
+
 def is_profit_sale(why: str) -> bool:
     """True for a sale that cashes a gain (the old take-profit and the curve's profit take). It is sent once at the bid and never chased down the book like a crash exit, and its limit never goes under what the bet cost."""
     return why.startswith(("take-profit", "curve risk exit (profit take)"))
 
 
+PROFIT_RETRY_SLIP = (0.0,)  # a profit sale that misses is retried once, at the bid and no lower
 EXIT_RETRY_SLIP = (0.02, 0.05, 0.10)  # if the first sale fills nothing (or part), sell the rest this far under a fresh read of the best bid, three more times
 EXIT_SLIP = 0.02  # an exit order is limited this far under the bid we saw: it is immediate-or-cancel, so it still fills at the best bid
 
@@ -2068,13 +2080,12 @@ def exit_position(
             store.mark_exited(row["ticker"], bid, why, lane, seen)
             return f"paper-sold {row['ticker']} @ {bid:.2f} (no live fill). {why}"
         limit = max(0.01, round(bid - slip, 2))
-        if is_profit_sale(why):
-            from .strategy import fee_per_contract
-
+        profit, floor = is_profit_sale(why), 0.0
+        if profit:
             paid = store.entry_fill(row["ticker"], side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)
-            floor = math.ceil((paid + fee_per_contract(paid)) * 100 - 1e-9) / 100
+            floor = profit_floor(paid)
             if bid < floor:
-                return f"profit take on {row['ticker']} not sent: the bid {bid:.2f} is under the {floor:.2f} the bet cost with its fee. {why}"
+                return f"profit take on {row['ticker']} not sent: the bid {bid:.2f} is under the {floor:.2f} the bet cost with both fees. {why}"
             limit = max(limit, floor)  # a profit sale never fills under what the bet cost
         if before_order:
             before_order()
@@ -2095,18 +2106,19 @@ def exit_position(
         )
         proceeds, sold = avg * filled, filled
         left = store.net_contracts(row["ticker"], s.env)
-        if left >= 0.005 and not is_profit_sale(why):  # a profit sale that part-fills keeps the rest for the next quote: the watcher decides again at the new bid (2026-11-14: a take at 0.88 sold its second leg at 0.860)
+        if left >= 0.005:
             # A sale into a book that has just been cleared fills nothing at a bid read a moment ago (burst and crash exits do this). Read the book again and sell what is left a little lower each time.
-            for extra in EXIT_RETRY_SLIP:
+            # A profit sale (2026-11-14: a take at 0.88 sold its second leg at 0.860) is retried once, at a fresh read of the bid with no slip and never under its floor; the rest waits for the next quote.
+            for extra in PROFIT_RETRY_SLIP if profit else EXIT_RETRY_SLIP:
                 time.sleep(0.4)
                 try:
                     fresh = best_bid(client.orderbook(row["ticker"]), side)
                 except KalshiError:
                     fresh = None
-                if fresh is None:
-                    break  # nobody is bidding: nothing to sell into
+                if fresh is None or fresh < floor:
+                    break  # nobody is bidding, or (a profit sale) the bid is under what the bet cost: nothing to sell into
                 try:
-                    r2 = sell(row["ticker"], round(left, 2), max(0.01, round(fresh - extra, 2)))
+                    r2 = sell(row["ticker"], round(left, 2), max(0.01, round(fresh - extra, 2), floor))
                 except KalshiRateLimited:
                     raise
                 except KalshiError:
