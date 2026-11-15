@@ -18,7 +18,7 @@ from collections import defaultdict
 from statistics import NormalDist
 
 from kalshi_moonshot import config, db
-from kalshi_moonshot import curvevalue
+from kalshi_moonshot import curvevalue, variants
 from kalshi_moonshot.commodities import instrument_for, load_instruments
 from kalshi_moonshot.strategy import fee_per_contract
 
@@ -56,7 +56,7 @@ def cushion_z(ticker, side, at, left):
     strike = strike_of(ticker)
     if inst is None or strike is None:
         return None, None
-    ix = inst.symbol.removeprefix("kp:")
+    ix = variants.spot_index(ticker.split("-")[0], "") or inst.symbol.removeprefix("kp:")  # the index the lane's own exit reads (a coin's Kalshi settlement index), else the perp
     got = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value>0 ORDER BY ts", (ix, at - 3700.0, at)).fetchall()
     if len(got) < 100:
         return None, None

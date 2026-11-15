@@ -863,7 +863,7 @@ class Store:
             """UPDATE decisions SET exit_price=?, exit_ts=?, exit_reason=?, exit_factors=?
                WHERE ticker=? AND action='bet' AND outcome IS NULL AND exit_ts IS NULL
                  AND (? IS NULL OR COALESCE(lane,'moonshot')=?)""",
-            (price, time.time(), reason[:300], factors or None, ticker, lane, lane),
+            (price, time.time(), reason[:900], factors or None, ticker, lane, lane),  # 900, not 300 (2026-11-14): a profit take's reason carries the typical minute and the cushion note at its end, which the cut dropped
         )
         self.db.commit()
         self.touch("bets")

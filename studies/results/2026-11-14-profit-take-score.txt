@@ -1,14 +1,4 @@
-Success	lane crypto_multiscale: profit takes since Mon 2026-11-09 00:00 ET: 21
-  KXXRP15M-26NOV141330-30      no  sold 13:20:25 ET,  574s left, decided 0.90 filled 0.897, share None, market gone 36%: realized 1.9 held 5.6 outcome no [time bar]
-  KXXRP15M-26NOV141400-00      no  sold 13:51:07 ET,  532s left, decided 0.88 filled 0.877, share None, market gone 41%: realized 3.05 held 7.49 outcome no [time bar]
-  KXSOL15M-26NOV141400-00      no  sold 13:51:38 ET,  501s left, decided 0.94 filled 0.938, share None, market gone 44%: realized 0.42 held 0.79 outcome no [time bar]
-  KXBTC15M-26NOV141530-30      no  sold 15:28:40 ET,   80s left, decided 0.98 filled 0.981, share None, market gone 91%: realized 7.11 held 7.8 outcome no [time bar]
-  KXETH15M-26NOV141545-45      no  sold 15:42:53 ET,  127s left, decided 0.98 filled 0.980, share None, market gone 86%: realized 4.88 held 5.62 outcome no [time bar]
-  KXBNB15M-26NOV141545-45      no  sold 15:43:03 ET,  117s left, decided 0.99 filled 0.984, share None, market gone 87%: realized 3.34 held 3.8 outcome no [time bar]
-  KXXRP15M-26NOV141600-00      no  sold 15:53:20 ET,  400s left, decided 0.93 filled 0.925, share None, market gone 56%: realized 4.09 held 6.82 outcome no [time bar]
-  KXBTC15M-26NOV141615-15      no  sold 16:08:52 ET,  368s left, decided 0.85 filled 0.841, share None, market gone 59%: realized 8.18 held 13.62 outcome no [time bar]
-  KXETH15M-26NOV141615-15      no  sold 16:09:48 ET,  312s left, decided 0.83 filled 0.820, share None, market gone 65%: realized 8.67 held 14.57 outcome no [time bar]
-  KXXRP15M-26NOV141615-15      no  sold 16:13:30 ET,   90s left, decided 0.99 filled 0.993, share None, market gone 90%: realized 5.23 held 5.5 outcome no [time bar]
+Success	  KXXRP15M-26NOV141615-15      no  sold 16:13:30 ET,   90s left, decided 0.99 filled 0.993, share None, market gone 90%: realized 5.23 held 5.5 outcome no [time bar]
   KXBNB15M-26NOV141700-00      no  sold 16:51:27 ET,  513s left, decided 0.94 filled 0.936, share 0.52, market gone 43%: realized 1.6 held 3.92 outcome no [time bar]
   KXSOL15M-26NOV141700-00      no  sold 16:51:15 ET,  525s left, decided 0.93 filled 0.926, share 0.43, market gone 42%: realized 2.45 held 5.17 outcome no [time bar]
   KXDOGE15M-26NOV141745-45     no  sold 17:37:58 ET,  421s left, decided 0.90 filled 0.894, share 0.64, market gone 53%: realized 6.6 held -23.07 outcome yes [late cap, time bar also met]
@@ -19,11 +9,20 @@ Success	lane crypto_multiscale: profit takes since Mon 2026-11-09 00:00 ET: 21
   KXXRP15M-26NOV141845-45      no  sold 18:38:20 ET,  399s left, decided 0.94 filled 0.940, share 0.54, market gone 56%: realized 2.97 held -29.27 outcome yes [late cap only (time bar would have held)]
   KXBTC15M-26NOV142030-30      no  sold 20:23:02 ET,  418s left, decided 0.83 filled 0.820, share 0.56, market gone 54%: realized 7.74 held 13.85 outcome no [late cap, time bar also met]
   KXZEC15M-26NOV142045-45      no  sold 20:40:23 ET,  277s left, decided 0.89 filled 0.883, share 0.54, market gone 69%: realized 4.95 held 9.12 outcome no [late cap only (time bar would have held)]
-  KXBNB15M-26NOV142100-00      yes sold 20:50:17 ET,  583s left, decided 0.82 filled 0.808, share 0.47, market gone 35%: realized 4.76 held None outcome None [time bar]
+  KXBNB15M-26NOV142100-00      yes sold 20:50:17 ET,  583s left, decided 0.82 filled 0.808, share 0.47, market gone 35%: realized 4.76 held 11.48 outcome yes [time bar]
+  KXBTC15M-26NOV142100-00      yes sold 20:51:31 ET,  508s left, decided 0.85 filled 0.841, share 0.44, market gone 44%: realized 4.43 held 10.05 outcome yes [time bar]
+  KXETH15M-26NOV142100-00      yes sold 20:55:32 ET,  267s left, decided 0.95 filled 0.942, share 0.53, market gone 70%: realized 1.83 held 3.92 outcome yes [late cap only (time bar would have held)]
+  KXNEAR15M-26NOV142100-00     yes sold 20:58:34 ET,   85s left, decided 0.80 filled 0.789, share 0.56, market gone 91%: realized 7.38 held 14.59 outcome yes [late cap only (time bar would have held)]
+  KXSOL15M-26NOV142100-00      yes sold 20:58:35 ET,   85s left, decided 0.94 filled 0.940, share 0.65, market gone 91%: realized 9.46 held 11.56 outcome yes [late cap only (time bar would have held)]
+  KXSOL15M-26NOV142115-15      yes sold 21:06:06 ET,  533s left, decided 0.98 filled 0.981, share 0.95, market gone 41%: realized 1.17 held 1.24 outcome yes [time bar]
+  KXSOL15M-26NOV142145-45      yes sold 21:39:10 ET,  350s left, decided 0.88 filled 0.873, share 0.72, market gone 61%: realized 10.58 held 15.86 outcome yes [late cap, time bar also met]
+  KXZEC15M-26NOV142145-45      yes sold 21:38:52 ET,  368s left, decided 0.93 filled 0.921, share 0.79, market gone 59%: realized 11.26 held 14.42 outcome yes [late cap, time bar also met]
+  KXXRP15M-26NOV142145-45      yes sold 21:42:24 ET,  155s left, decided 0.86 filled 0.857, share 0.55, market gone 83%: realized 4.38 held 9.94 outcome yes [late cap only (time bar would have held)]
+  KXETH15M-26NOV142145-45      yes sold 21:42:53 ET,  127s left, decided 0.94 filled 0.941, share 0.6, market gone 86%: realized 3.37 held 5.55 outcome yes [late cap only (time bar would have held)]
 
-time bar: n=14 realized $+59.38, holding $+99.30, net change from selling $-39.92; sale beat holding on 0, holding beat the sale on 14; not settled or no order rows: 1
-late cap, time bar also met: n=2 realized $+14.34, holding $-9.22, net change from selling $+23.56; sale beat holding on 1, holding beat the sale on 1; not settled or no order rows: 0
-late cap only (time bar would have held): n=4 realized $+22.42, holding $+0.42, net change from selling $+21.99; sale beat holding on 1, holding beat the sale on 3; not settled or no order rows: 0
+time bar: n=17 realized $+69.74, holding $+122.07, net change from selling $-52.33; sale beat holding on 0, holding beat the sale on 17; not settled or no order rows: 0
+late cap, time bar also met: n=4 realized $+36.18, holding $+21.07, net change from selling $+15.11; sale beat holding on 1, holding beat the sale on 3; not settled or no order rows: 0
+late cap only (time bar would have held): n=9 realized $+48.83, holding $+45.98, net change from selling $+2.86; sale beat holding on 1, holding beat the sale on 8; not settled or no order rows: 0
 
 cushion at the sale: spot to strike on the side held, in typical-hour units over the time left (z), the curve's chance Phi(z), and the net bid it sold at
   KXXRP15M-26NOV141330-30      z 1.07  curve chance 0.967  net bid 0.897  sale vs hold -3.7
@@ -46,8 +45,17 @@ cushion at the sale: spot to strike on the side held, in typical-hour units over
   KXXRP15M-26NOV141845-45      z 1.36  curve chance 0.909  net bid 0.940  sale vs hold 32.24
   KXBTC15M-26NOV142030-30      z 1.3  curve chance 0.828  net bid 0.820  sale vs hold -6.11
   KXZEC15M-26NOV142045-45      z 1.16  curve chance 0.877  net bid 0.883  sale vs hold -4.18
-  KXBNB15M-26NOV142100-00      z 0.76  curve chance 0.756  net bid 0.808  sale vs hold None
-rule 'hold when the curve chance is over the net bid': of 20 settled takes it would still sell 14 (sale vs hold +23.24) and hold 6 (what holding paid over the sale +17.61)
-rule 'hold when the curve chance is over the net bid by 0.05': of 20 settled takes it would still sell 19 (sale vs hold +9.33) and hold 1 (what holding paid over the sale +3.70)
+  KXBNB15M-26NOV142100-00      z 0.76  curve chance 0.756  net bid 0.808  sale vs hold -6.72
+  KXBTC15M-26NOV142100-00      z 0.86  curve chance 0.774  net bid 0.841  sale vs hold -5.62
+  KXETH15M-26NOV142100-00      z 1.1  curve chance 0.877  net bid 0.942  sale vs hold -2.09
+  KXNEAR15M-26NOV142100-00     z 0.43  curve chance 0.679  net bid 0.789  sale vs hold -7.21
+  KXSOL15M-26NOV142100-00      z 0.87  curve chance 0.831  net bid 0.940  sale vs hold -2.09
+  KXSOL15M-26NOV142115-15      z 1.92  curve chance 0.896  net bid 0.981  sale vs hold -0.06
+  KXSOL15M-26NOV142145-45      z 0.98  curve chance 0.904  net bid 0.873  sale vs hold -5.28
+  KXZEC15M-26NOV142145-45      z 1.48  curve chance 0.882  net bid 0.921  sale vs hold -3.17
+  KXXRP15M-26NOV142145-45      z 0.69  curve chance 0.859  net bid 0.857  sale vs hold -5.56
+  KXETH15M-26NOV142145-45      z 0.87  curve chance 0.902  net bid 0.941  sale vs hold -2.18
+rule 'hold when the curve chance is over the net bid': of 30 settled takes it would still sell 22 (sale vs hold -5.91) and hold 8 (what holding paid over the sale +28.46)
+rule 'hold when the curve chance is over the net bid by 0.05': of 30 settled takes it would still sell 29 (sale vs hold -30.66) and hold 1 (what holding paid over the sale +3.70)
 DONE
 	
