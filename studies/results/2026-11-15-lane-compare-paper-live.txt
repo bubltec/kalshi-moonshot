@@ -1,0 +1,18 @@
+since 11-14 17:02 ET, settled bets, ALL entry prices:
+  crypto_multiscale              n  92 | own exits  -100.61 ( -4.9%) | held to settlement  -256.96 (-12.6%) | won 57/92 | avg entry 0.70
+  crypto_multiscale_comeback     n  79 | own exits   +26.35 ( +7.2%) | held to settlement   +23.44 ( +6.4%) | won 70/79 | avg entry 0.83
+  crypto_multiscale_rest         n  98 | own exits   +25.03 ( +5.5%) | held to settlement   +43.74 ( +9.7%) | won 89/98 | avg entry 0.83
+  crypto_multiscale_stretch      n   4 | own exits   +12.54 (+14.6%) | held to settlement   -52.52 (-61.0%) | won 1/4 | avg entry 0.77
+  crypto_multiscale_underdog     n  83 | own exits   -19.07 (-23.0%) | held to settlement   -10.85 (-13.1%) | won 25/83 | avg entry 0.34
+
+only entries inside the live lane's band 0.57 to 0.82:
+  crypto_multiscale              n  60 | own exits   -85.71 ( -6.3%) | held to settlement  -210.15 (-15.5%) | won 37/60 | avg entry 0.71
+  crypto_multiscale_comeback     n  23 | own exits    +6.67 ( +7.0%) | held to settlement    +9.57 (+10.1%) | won 19/23 | avg entry 0.75
+  crypto_multiscale_rest         n  37 | own exits    +9.54 ( +6.2%) | held to settlement   +21.58 (+14.0%) | won 32/37 | avg entry 0.76
+  crypto_multiscale_stretch      n   3 | own exits   +11.63 (+15.5%) | held to settlement   -41.35 (-55.2%) | won 1/3 | avg entry 0.74
+
+only entries 0.57 to 0.82, the live lane's own bets vs markets the live lane bought that a paper variant also bought (same ticker):
+  crypto_multiscale_comeback (same markets) n   3 | own exits    -4.61 (-36.4%) | held to settlement    -7.13 (-56.3%) | won 1/3 | avg entry 0.77
+  crypto_multiscale_rest (same markets) n   5 | own exits    -0.83 ( -4.0%) | held to settlement    -4.28 (-20.5%) | won 3/5 | avg entry 0.76
+DONE
+	
