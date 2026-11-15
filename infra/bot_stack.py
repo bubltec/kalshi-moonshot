@@ -152,7 +152,7 @@ done
 chown -R 1000:1000 /mnt/moonshot/data /mnt/moonshot/secrets /mnt/moonshot/env/.env
 registry="${BOT_IMAGE%%/*}"
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$registry"
-sed -e "s|BOT_IMAGE|$BOT_IMAGE|" -e "s|DB_IMAGE|$DB_IMAGE|" /opt/moonshot/compose.src.yml > /opt/moonshot/compose.yml
+sed -e "s|BOT_IMAGE|$BOT_IMAGE|" -e "s|DB_IMAGE|$DB_IMAGE|" -e "s|RECORDER_IMAGE|${BOT_IMAGE%:latest}:recorder|" /opt/moonshot/compose.src.yml > /opt/moonshot/compose.yml
 docker compose --env-file /mnt/moonshot/env/.env -f /opt/moonshot/compose.yml pull
 docker compose --env-file /mnt/moonshot/env/.env -f /opt/moonshot/compose.yml up -d
 UP

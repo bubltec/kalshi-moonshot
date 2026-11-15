@@ -253,6 +253,7 @@ class Settings:
     # --- which lanes run ---
     paper_named: frozenset[str] = frozenset()  # lanes kept running on paper although paper_lanes is False (PAPER_LANE_NAMES)
     paper_lanes: bool = True  # False = a lane not named in LIVE_LANES is switched off, not paper-traded: the live host runs only what is live. No effect while LIVE_LANES is empty (then every lane is live)
+    tape_role: str = "both"  # who writes the Kalshi side of the tape: "both" (this process streams and writes, as always), "memory" (this process streams for its own memory and leaves the Kalshi rows to the recorder process) or "record" (this process is the recorder: the Kalshi streams, nothing else; `python -m kalshi_moonshot record`)
 
     @property
     def base_url(self) -> str:
@@ -382,6 +383,7 @@ def load() -> Settings:
         allow_real_money=_b("ALLOW_REAL_MONEY", False),
         live_lanes=_live_lanes(),
         paper_lanes=_b("PAPER_LANES", True),
+        tape_role=os.environ.get("TAPE_ROLE", "both").strip().lower() if os.environ.get("TAPE_ROLE", "both").strip().lower() in {"both", "memory", "record"} else "both",
         paper_named=_paper_named(),
         fast_live=_b("COMMODITY_15M_LIVE", False),
         data_dir=data_dir,

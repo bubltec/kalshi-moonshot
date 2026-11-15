@@ -6,6 +6,7 @@ import argparse
 import logging
 import signal
 import sys
+import threading
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -44,6 +45,41 @@ def cmd_scan(s: config.Settings, args: argparse.Namespace) -> int:
     for line in runner.stop_loss_pass(s, client, store):
         print(line)
     print(f"\n{len(results)} evaluated, mode={s.mode}, env={s.env}")
+    return 0
+
+
+def cmd_record(s: config.Settings, args: argparse.Namespace) -> int:
+    """The tape recorder as a process of its own (2026-11-14): Kalshi's market, settlement-index and extra-series sockets and the perp reference, written to the tape and nothing else. It runs in a container the bot's updates do not restart, so a rebuild of the bot no longer leaves a gap in the tape; the bot beside it runs with TAPE_ROLE=memory and keeps these streams for its own memory only."""
+    import dataclasses
+
+    from .tape import TapeRecorder
+
+    s = dataclasses.replace(s, tape_role="record")
+    client = _client(s)
+    rec = TapeRecorder(client, s, None)
+    stop = threading.Event()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: stop.set())
+    rec.start()
+    log.info("tape recorder (its own process) on: %s, the Kalshi streams only (kept %.0f days by the bot's pruning)", s.tape_path, s.tape_keep_days)
+    last_log = 0.0
+    while not stop.wait(30.0):
+        try:
+            rec.s = dataclasses.replace(config.reload(), tape_role="record")  # the series the tape follows change with WATCH_SERIES and TAPE_EXTRA_SERIES, without a restart
+        except Exception:
+            log.warning("recorder: could not re-read the settings", exc_info=True)
+        if time.time() - last_log >= 300.0:
+            last_log = time.time()
+            n = len(rec.stream._tickers)
+            age = time.time() - (rec.stream.last_event_at or 0.0)
+            log.info("recorder: following %d tickers, the last event %.0f s ago", n, age)
+            if age > 120.0 and n:
+                log.warning("recorder: the stream has been silent for %.0f s", age)
+    rec.stop()
+    try:
+        rec.tape.flush()
+    except Exception:
+        log.warning("recorder: the last flush failed", exc_info=True)
     return 0
 
 
@@ -1217,7 +1253,7 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 
 COMMANDS = {
-    "scan": cmd_scan, "run": cmd_run, "resolve": cmd_resolve, "report": cmd_report,
+    "scan": cmd_scan, "run": cmd_run, "record": cmd_record, "resolve": cmd_resolve, "report": cmd_report,
     "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "factors": cmd_factors, "template": cmd_template, "probe-maker": cmd_probe_maker, "esports": cmd_esports, "forecast-fit": cmd_forecast_fit, "forecast-review": cmd_forecast_review, "forecast-compare": cmd_forecast_compare, "scalp-cases": cmd_scalp_cases, "variants": cmd_variants, "misses": cmd_misses, "scorecard": cmd_scorecard, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
     "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "gap": cmd_gap, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,

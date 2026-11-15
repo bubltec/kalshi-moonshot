@@ -312,11 +312,13 @@ IDLE_EVERY = 120.0  # a series with nothing open (a closed session) is looked at
 EXTRA_EVERY = 90.0  # sports and esports series list their matches hours ahead, so they need no faster
 EXTRA_IDLE_EVERY = 300.0
 PRUNE_EVERY = 3600.0
+RECORDER_SILENT = 120.0  # a bot running beside the recorder process writes the Kalshi rows itself again when the newest settlement-index tick in the database is this old while its own stream is delivering them
 FEED_MIN_GAP = 0.5  # at most one stored price per symbol per this many seconds
 
 
 class Tape:
-    def __init__(self, path: Path | str):
+    def __init__(self, path: Path | str, external: bool = False):
+        self.external = external  # the recorder process writes the Kalshi side (quotes, trades, the settlement and perp indexes): events tagged src=kalshi only feed this process's memory
         self.db = db.connect(path, "tape", shared=True)
         if not db.is_pg(self.db):
             self.db.execute("PRAGMA journal_mode=WAL")  # readers never block the stream, and a crash mid-write cannot damage the file
@@ -340,28 +342,34 @@ class Tape:
         self._last_feed: dict[str, tuple[float, float]] = {}
 
     def add(self, e: dict[str, Any]) -> None:
-        """Queue one event from the stream. A repeated quote (same bid and ask) is skipped."""
+        """Queue one event from the stream. A repeated quote (same bid and ask) is skipped. With `external` set, an event the Kalshi streams delivered (src = "kalshi") updates this process's memory and is not queued for the database: the recorder process writes it."""
+        mem_only = self.external and e.get("src") == "kalshi"
         with self._lock:
             if e["kind"] == "quote":
-                key = (e["bid"], e["ask"], round(e.get("bid_size") or 0), round(e.get("ask_size") or 0))
-                prev = self._last_quote.get(e["ticker"])
-                if prev is not None and prev == key:
-                    return
-                self._last_quote[e["ticker"]] = key
-                self._quotes.append((e["ts"], e["ticker"], e["bid"], e["ask"], e.get("last"), e.get("sts"),
-                                     e.get("bid_size"), e.get("ask_size")))
+                if not mem_only:
+                    key = (e["bid"], e["ask"], round(e.get("bid_size") or 0), round(e.get("ask_size") or 0))
+                    prev = self._last_quote.get(e["ticker"])
+                    if prev is not None and prev == key:
+                        return
+                    self._last_quote[e["ticker"]] = key
+                    self._quotes.append((e["ts"], e["ticker"], e["bid"], e["ask"], e.get("last"), e.get("sts"),
+                                         e.get("bid_size"), e.get("ask_size")))
                 recent.note_quote(e["ticker"], e["ts"], e["bid"], e["ask"])
             elif e["kind"] == "trade":
+                if mem_only:
+                    return
                 row = self._flow.setdefault((int(e["ts"]), e["ticker"]), [0.0, 0.0, 0.0, 0.0])
                 row[0 if e["taker"] == "yes" else 1] += e["count"]
                 row[2] += 1
                 row[3] += e["price"] * e["count"]
             elif e["kind"] == "index":
-                self._index.append((e["ts"], e["index_id"], e["value"], e.get("avg60"), e.get("quarter_avg"),
-                                    e.get("src_ms")))
+                if not mem_only:
+                    self._index.append((e["ts"], e["index_id"], e["value"], e.get("avg60"), e.get("quarter_avg"),
+                                        e.get("src_ms")))
                 recent.note_index(e["index_id"], e["ts"], e["value"])
             elif e["kind"] == "index_fast":  # recorded for replays; kept out of the live index window, which is one tick a second
-                self._fast.append((e["ts"], e["index_id"], e["value"], e.get("src_ms")))
+                if not mem_only:
+                    self._fast.append((e["ts"], e["index_id"], e["value"], e.get("src_ms")))
 
     def add_fut(self, coin: str, ts: float, px: float, size: float, bought: bool) -> None:
         """One live perpetual-futures trade: folded into its second's row (see futflow.py), put in memory at once under "hl:<coin>" (ticks.py, the same store the index ticks are in, for the spike read; a few microseconds on this socket thread, no database and no request), and, when its price differs from the coin's previous trade, queued for the millisecond fut_ticks record."""
@@ -444,25 +452,43 @@ class TapeRecorder:
 
     def __init__(self, client: KalshiClient, s: Settings, feed: Any = None):
         self.client, self.s, self.feed = client, s, feed
-        self.tape = Tape(s.tape_path)
+        self.role = s.tape_role  # "both", "memory" (the bot beside a recorder process) or "record" (the recorder process itself)
+        self.tape = Tape(s.tape_path, external=self.role == "memory")
         self.extra_tickers: Any = None  # a callable returning more tickers to stream (positions we hold in any market)
         self.market_listeners: list[Any] = []  # called with every lifecycle market event (created, activated, close changed, settled) after the shared list has it; must be fast and never raise
         self.listeners: list[Any] = []  # called with every event after it is stored (must be fast and never raise)
-        self.stream = KalshiStream(client, self._on_event, on_feed=self._feed_state)
+        self.stream = KalshiStream(client, self._on_kalshi, fills=self.role != "record", on_feed=self._feed_state)  # the recorder has no use for the account's fills: the bot's stream carries them
         # Sports and esports series list a new market every few minutes, and a changed market list reconnects a stream. They get their own connection so the
         # live one (15-minute quotes, settlement indexes, the account's fills) is never dropped for them.
-        self.extra_stream = KalshiStream(client, self._on_event, index_feed=False, fills=False)
-        self.futflow = FuturesFlow(s.fut_flow_coins, self.tape.add_fut) if s.fut_flow_enabled and s.fut_flow_coins else None
+        self.extra_stream = KalshiStream(client, self._on_kalshi, index_feed=False, fills=False)
+        rec = self.role == "record"  # the recorder process streams from Kalshi and nothing else: the bot keeps Hyperliquid, BiQuote and Pyth, which only it reads
+        self.futflow = FuturesFlow(s.fut_flow_coins, self.tape.add_fut) if s.fut_flow_enabled and s.fut_flow_coins and not rec else None
         key = pyth_key()
-        self.biquote = BiQuoteFeed(self._on_event) if biquote_enabled() else None  # the commodity prices from BiQuote's free stream, recorded to test how well they call the settled direction (biquotefeed.py)
-        self.perpref = PerpRefFeed(self._on_event, client=client) if perpref_enabled() else None  # the reference price on Kalshi's own perps, one reading a second, recorded beside the feeds the curve reads (perpref.py)
-        self.pyth = PythFeed(self._on_event, key) if key else None  # the commodity markets' settlement prices, one tick a second on the tape (pythfeed.py)
+        self.biquote = BiQuoteFeed(self._on_event) if biquote_enabled() and not rec else None  # the commodity prices from BiQuote's free stream, recorded to test how well they call the settled direction (biquotefeed.py)
+        self.perpref = PerpRefFeed(self._on_kalshi, client=client) if perpref_enabled() else None  # the reference price on Kalshi's own perps, one reading a second, recorded beside the feeds the curve reads (perpref.py)
+        self.pyth = PythFeed(self._on_event, key) if key and not rec else None  # the commodity markets' settlement prices, one tick a second on the tape (pythfeed.py)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._refresh_thread: threading.Thread | None = None
         self._wanted: set[str] = set()  # the series refresh_tickers last listed
+        self._probe: tuple[str, float] | None = None
         self._refresh_wake = threading.Event()  # set by a new market and by the stream coming up or going down: the refresh runs now
         self._listed: dict[str, tuple[float, set[str]]] = {}  # series -> (when it was listed, its open tickers)
+
+    def _on_kalshi(self, e: dict[str, Any]) -> None:
+        """An event from one of Kalshi's own streams (the market and settlement-index socket, the extra-series socket, the perp reference): tagged, so a bot running beside the recorder process keeps it in memory and leaves the database row to the recorder."""
+        e["src"] = "kalshi"
+        if e.get("kind") == "index":
+            self._probe = (str(e["index_id"]), float(e["ts"]))  # the newest settlement-index tick this process saw: what the recorder's rows are checked against
+        self._on_event(e)
+
+    def recorder_silent(self, now: float) -> bool:
+        """For a process in the memory role: True when its own Kalshi stream is delivering settlement-index ticks (one a second, all day) but the database's newest one is over RECORDER_SILENT seconds old, so the recorder process is not writing."""
+        probe = self._probe
+        if probe is None or now - probe[1] > 20.0:
+            return False  # this process's own stream is quiet: nothing to compare with
+        newest = self.tape.db.execute("SELECT max(ts) FROM index_ticks WHERE index_id=?", (probe[0],)).fetchone()[0]
+        return newest is None or now - float(newest) > RECORDER_SILENT
 
     def _on_event(self, e: dict[str, Any]) -> None:
         kind = e.get("kind")
@@ -680,15 +706,21 @@ class TapeRecorder:
             self._refresh_wake.clear()
 
     def _run(self) -> None:
-        last_flush = last_prune = 0.0
+        last_flush = last_prune = last_watch = 0.0
         while not self._stop.is_set():
             now = time.time()
             try:
-                self.sample_feed()
+                if self.role == "memory" and self.tape.external and now - last_watch >= 30.0:
+                    last_watch = now
+                    if self.recorder_silent(now):  # the recorder container is down: this process writes what it streams, so the tape has no hole while it is
+                        self.tape.external = False
+                        log.warning("tape: the recorder process has written nothing for %.0f s while this process's own stream is live: writing the Kalshi rows here until the next start", RECORDER_SILENT)
+                if self.role != "record":
+                    self.sample_feed()
                 if now - last_flush >= FLUSH_EVERY:
                     self.tape.flush()
                     last_flush = now
-                if now - last_prune >= PRUNE_EVERY:
+                if self.role != "record" and now - last_prune >= PRUNE_EVERY:  # one process prunes: the bot
                     if archive.enabled(self.s):  # old rows leave only after they are verified in the bucket (and only if ARCHIVE_DELETE_LOCAL is on)
                         archive.prune_local(self.s, Store(self.s.db_path, self.s.exclude_versions), self.tape.db)
                     else:

@@ -1,10 +1,33 @@
-# The bot and its database on one machine. No Ollama: the model stays on the Mac, and a review
+# The bot, the tape recorder (a process of its own since 2026-11-14) and the database on one machine. No Ollama: the model stays on the Mac, and a review
 # that cannot reach it skips. Images are filled in by the stack (infra/bot_stack.py).
 services:
   bot:
     image: BOT_IMAGE
     restart: unless-stopped
     stop_grace_period: 60s
+    env_file: /mnt/moonshot/env/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATA_DIR: /data
+      TAPE_DIR: /tape
+      DATABASE_URL: postgresql://moonshot:${POSTGRES_PASSWORD:-moonshot}@db:5432/moonshot
+      DB_SCHEMA_MAIN: moonshot
+      DB_SCHEMA_TAPE: tape
+      TAPE_ROLE: memory  # the recorder below writes the Kalshi side of the tape; this process keeps those streams for its own memory (and writes them itself again if the recorder goes silent for two minutes)
+    volumes:
+      - /mnt/moonshot/data:/data
+      - /mnt/moonshot/secrets:/app/.secrets:ro
+      - /mnt/moonshot/env/.env:/app/.env:ro
+
+  # The tape recorder: Kalshi's market, settlement-index and extra-series sockets and the perp reference, written to the tape. It runs from the image tagged :recorder, which scripts/cloud_push.sh --recorder moves and an ordinary --build does not, so a bot update recreates the bot and leaves this container (and the tape it is writing) alone.
+  recorder:
+    image: RECORDER_IMAGE
+    command: ["python", "-m", "kalshi_moonshot", "record"]
+    restart: unless-stopped
+    stop_grace_period: 20s
+    mem_limit: 512m
     env_file: /mnt/moonshot/env/.env
     depends_on:
       db:

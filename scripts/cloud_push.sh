@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Send this Mac's lane file and .env to the Ohio host. The bot picks them up on its next decision.
 #   scripts/cloud_push.sh            # strategies.toml, .env, and .secrets
-#   scripts/cloud_push.sh --build    # that, then a new image and a container restart
+#   scripts/cloud_push.sh --build    # that, then a new image and a restart of the bot (the tape recorder container keeps running)
+#   scripts/cloud_push.sh --build --recorder   # also move the recorder to this image: it restarts, and the tape has a gap of a few seconds. Only when the recorder's own code changed (tape.py, kalshiws.py, perpref.py, the record command)
 # The admin page's Settings tab changes lanes on top of strategies.toml. Pushing the file while such changes exist would leave them shadowing it, so the push stops and lists them:
 #   python -m kalshi_moonshot.settings_sync fold    # keep the page's values in the file     (or `drop` to discard them), then push again
 #   scripts/cloud_push.sh --ignore-page-changes     # push anyway
@@ -14,10 +15,12 @@ stack="${BOT_STACK:-KalshiMoonshotBot}"
 profile=()
 if [ -n "${AWS_PROFILE:-}" ]; then profile=(--profile "$AWS_PROFILE"); fi
 build=0
+recorder=0
 ignore=0
 for arg in "$@"; do
   case "$arg" in
     --build) build=1 ;;
+    --recorder) recorder=1 ;;
     --ignore-page-changes) ignore=1 ;;
   esac
 done
@@ -81,6 +84,10 @@ if [ "$build" = 1 ]; then
   docker build --platform linux/arm64 -f Dockerfile.db -t "${registry}/kalshi-moonshot-db:latest" .
   docker push "${registry}/kalshi-moonshot-bot:latest"
   docker push "${registry}/kalshi-moonshot-db:latest"
+  if [ "$recorder" = 1 ]; then  # the recorder container reads this tag; an ordinary --build leaves it where it was, so the recorder is not restarted with the bot
+    docker tag "${registry}/kalshi-moonshot-bot:latest" "${registry}/kalshi-moonshot-bot:recorder"
+    docker push "${registry}/kalshi-moonshot-bot:recorder"
+  fi
 fi
 
 instance=$(aws "${profile[@]}" cloudformation describe-stacks --region "$region" --stack-name "$stack" \
