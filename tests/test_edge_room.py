@@ -205,3 +205,42 @@ def test_unit_the_stretch_changes_a_lanes_version_only_when_it_is_set(tmp_path, 
     assert "stretch_max" not in lanes.settings_of(plain, s)
     on = dataclasses.replace(plain, stretch_max=0.02)
     assert lanes.settings_of(on, s)["stretch_max"] == "0.02" and lanes.version_of(plain, s) != lanes.version_of(on, s)
+
+
+# ---- no fixed cap (2026-11-15, user: "remove the cap, it needs to hold its own logically. Maybe the high nudge is a good indication") ----
+def sub(base, name):
+    (base / name).mkdir(exist_ok=True)
+    return base / name
+
+
+UNITS = "min_edge_room=0.10\nrecord_adjust=false\nnudge_units=1.0"
+
+
+def test_integration_without_a_cap_a_miss_over_two_cents_is_bet_when_the_market_moves_enough_and_everything_agrees(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "side_trend_z", lambda s, shot, seconds, now=None: 1.5)
+    monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: (0.12, 0.08))  # a 60 s typical move of 8 cents
+    assert far(tmp_path, monkeypatch, STRETCH, 0.58, 0.60, 0.25).action == "pass"  # the capped stretch: about 0.04 under the bar, twice the cap (test above)
+    got = far(sub(tmp_path, "u"), monkeypatch, UNITS, 0.58, 0.60, 0.25)  # 0.08 x 1 (the history share) x 1 (15 minutes left) = 8 cents allowed
+    assert got.action == "bet" and "[stretch buy" in got.note and "no cap:" in got.note
+
+
+def test_integration_without_a_cap_a_quiet_market_allows_a_smaller_miss_and_a_weak_trend_or_a_late_clock_allows_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "side_trend_z", lambda s, shot, seconds, now=None: 1.5)
+    monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: (0.01, 0.01))  # a quiet market: a typical move of one cent
+    assert far(sub(tmp_path, "q"), monkeypatch, UNITS, 0.58, 0.60, 0.25).action == "pass"  # 4 cents under the bar, 1 cent allowed
+    monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: (0.12, 0.08))
+    monkeypatch.setattr(runner, "side_trend_z", lambda s, shot, seconds, now=None: -1.5)
+    assert far(sub(tmp_path, "w"), monkeypatch, UNITS, 0.58, 0.60, 0.25).action == "pass"  # trending against: no history share
+    monkeypatch.setattr(runner, "side_trend_z", lambda s, shot, seconds, now=None: 1.5)
+    assert far(sub(tmp_path, "l"), monkeypatch, UNITS, 0.58, 0.60, 0.01).action == "pass"  # a minute left: the clock share is a few percent
+    monkeypatch.setattr(runner, "side_trend_read", lambda s, shot, seconds, now=None: None)
+    assert far(sub(tmp_path, "n"), monkeypatch, UNITS, 0.58, 0.60, 0.25).action == "pass"  # the unit cannot be read: no nudge
+
+
+def test_unit_nudge_units_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    plain = spec(min_edge_room=0.10)
+    assert "nudge_units" not in lanes.settings_of(plain, s)
+    on = dataclasses.replace(plain, nudge_units=1.0)
+    assert lanes.settings_of(on, s)["nudge_units"] == "1.0" and lanes.version_of(plain, s) != lanes.version_of(on, s)

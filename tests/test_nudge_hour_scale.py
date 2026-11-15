@@ -26,3 +26,13 @@ def test_unit_the_nudge_takes_the_scale_and_never_exceeds_its_cap():
     assert nudge(0.02, 1.0, 1.0, 0.5) == pytest.approx(0.01)
     assert nudge(0.02, 1.0, 1.0, 5.0) == 0.02  # a scale over 1 is not a way past the cap
     assert nudge(0.02, 0.5, 0.5, 0.5) == pytest.approx(0.0025)
+
+
+def test_unit_the_nudge_in_units_is_the_markets_typical_move_times_everything_that_agrees():
+    from kalshi_moonshot.lanes import nudge_in_units
+
+    assert nudge_in_units(1.0, 0.08, 1.0, 1.0) == pytest.approx(0.08)  # no cap: a whole typical move at full agreement
+    assert nudge_in_units(1.0, 0.08, 0.5, 0.5, 0.5) == pytest.approx(0.01)
+    assert nudge_in_units(1.0, 0.16, 1.0, 1.0) == pytest.approx(2 * nudge_in_units(1.0, 0.08, 1.0, 1.0))  # a wilder market allows a bigger miss
+    assert nudge_in_units(1.0, None, 1.0, 1.0) == 0.0 and nudge_in_units(0.0, 0.08, 1.0, 1.0) == 0.0
+    assert nudge_in_units(1.0, 0.08, 0.0, 1.0) == 0.0  # no agreement from the history, no nudge

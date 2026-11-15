@@ -64,9 +64,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false', nudge_hour='false'):
+def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false', nudge_hour='false', nudge_units=0):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion) + f"nudge_hour_factor={nudge_hour}\n")
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion) + f"nudge_hour_factor={nudge_hour}\nnudge_units={nudge_units}\n")
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -1011,3 +1011,30 @@ def test_integration_with_the_option_off_the_hour_factor_changes_nothing(tmp_pat
     hour_fit(monkeypatch, 2.0)
     out = slid(held(tmp_path, monkeypatch, live=True, squeeze=CAP, nudge_hour='false', **NO_HOLDS), TO_60, 120)
     assert out is not None and "hour factor" not in out[1].why  # the nudge as it was
+
+
+# ---- no fixed cap: the squeeze's allowed miss is the market's own typical minute times how strongly everything agrees (2026-11-15, user: "remove the cap, it needs to hold its own logically. Maybe the high nudge is a good indication") ----
+def test_integration_without_a_cap_a_larger_near_miss_than_the_cents_cap_allows_sells_when_the_market_is_sliding_and_late(tmp_path, monkeypatch):
+    """The slide to 0.62 stops about 4.5 cents short of the max loss: over the two-cent cap, so the capped squeeze never sells it (test above). With the cap gone the allowed miss is the market's typical minute times the history and the clock, and this slide is a large move for it."""
+    feed_history(0.013, from_left=1300, to_left=121)
+    path = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 17)] + [0.62] * 8
+    capped = slid(held(tmp_path, monkeypatch, live=True, squeeze=CAP, **NO_HOLDS), path, 120)
+    assert capped is None
+    (tmp_path / "nocap").mkdir()
+    ticks_mod.mids._rows.clear()
+    feed_history(0.013, from_left=1300, to_left=121)
+    free = slid(held(tmp_path / "nocap", monkeypatch, live=True, squeeze=0, nudge_units=1.0, **NO_HOLDS), path, 120)
+    assert free is not None and "no cap:" in free[1].why and "[squeeze: " in free[1].why
+
+
+def test_integration_without_a_cap_a_near_miss_that_is_not_sliding_still_waits(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=121)
+    w = held(tmp_path, monkeypatch, live=True, squeeze=0, nudge_units=1.0, **NO_HOLDS)
+    assert slid(w, SIT + [0.59] + [0.70] * 14, 120) is None  # the history share is zero: nothing is allowed
+
+
+def test_integration_without_a_cap_the_clock_still_shrinks_it_early_in_the_market(tmp_path, monkeypatch):
+    (tmp_path / "early").mkdir()
+    feed_history(0.013, from_left=1300, to_left=671)
+    early = slid(held(tmp_path / "early", monkeypatch, live=True, squeeze=0, nudge_units=1.0, **NO_HOLDS), [0.78] * 60 + TO_60[len(SIT):] + [0.60] * 30, 670)
+    assert early is None  # ten minutes left: the clock share is near zero, so is the nudge

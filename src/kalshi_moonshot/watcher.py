@@ -46,7 +46,7 @@ from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series, strike_index_for
-from .lanes import LaneSpec, lane_specs, nudge, stop_drop_for, takes_profit
+from .lanes import LaneSpec, lane_specs, nudge, nudge_in_units, stop_drop_for, takes_profit
 from .store import Store
 from .strategy import (
     cash_if_losing,
@@ -238,6 +238,7 @@ class Target:
     risk_take_cushion: bool = False  # the spot's cushion is asked before the take sells (lane field curve_take_cushion)
     risk_take_held: bool = False  # the cushion has already been logged as holding this bet's take
     risk_take_slope: float = 0.08  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
+    risk_nudge_units: float = 0.0  # the squeeze has no cap: the allowed miss is this many typical minutes of the market times how strongly everything agrees (lane field nudge_units; 0 = the cents cap)
     risk_nudge_hour: bool = False  # the squeeze's cap is scaled by the hour's width correction (lane field nudge_hour_factor)
     risk_squeeze: float = 0.0  # the most a loss may be short of the max loss and still count as reaching it (lane field squeeze_max)
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
@@ -982,16 +983,20 @@ class ProfitWatcher:
         look = t.risk_take_slope * left  # the look back for the slope shrinks with the time left
         basis = t.entry + fee_per_contract(t.entry)
         net = bid - fee_per_contract(bid)
-        if t.risk_take or t.risk_squeeze > 0:
+        if t.risk_take or t.risk_squeeze > 0 or t.risk_nudge_units > 0:
             t.risk_take_hist.append((now, bid))
             while t.risk_take_hist and t.risk_take_hist[0][0] < now - max(60.0, 2.0 * look):
                 t.risk_take_hist.pop(0)
         # The squeeze (lane field squeeze_max): the mirror of the buy's stretch, and as small. When a loss is just short of the max loss's depth, it counts as reaching it if it is short by less than the nudge the lane allows: a cent or two at most, times the history (the bid is sliding over the look back: all or nothing) times the clock (the share of the market already gone, so early in a market it is nothing). Nothing else about the sale changes: the hour view and the stop's wait still apply.
         allowed, squeezed, hour_scale = 0.0, "", 1.0
-        if t.risk_squeeze > 0 and pnl < 0:
-            sliding = curverisk.still_falling(t.risk_take_hist, now, look, self._risk_unit(t, now))
+        if (t.risk_squeeze > 0 or t.risk_nudge_units > 0) and pnl < 0:
+            unit_now = self._risk_unit(t, now)
+            sliding = curverisk.still_falling(t.risk_take_hist, now, look, unit_now)
             hour_scale = widthfit.nudge_scale(widthfit.hour_k(now)) if t.risk_nudge_hour else 1.0
-            allowed = nudge(t.risk_squeeze, 1.0 if sliding else 0.0, curverisk.squeeze_clock(left, 900.0), hour_scale)
+            if t.risk_nudge_units > 0:  # no cap: the market's own typical minute times how strongly everything agrees
+                allowed = nudge_in_units(t.risk_nudge_units, unit_now, 1.0 if sliding else 0.0, curverisk.squeeze_clock(left, 900.0), hour_scale)
+            else:
+                allowed = nudge(t.risk_squeeze, 1.0 if sliding else 0.0, curverisk.squeeze_clock(left, 900.0), hour_scale)
         if t.risk_take:  # the profit take comes before the hour view: a bet that is well ahead is the one to cash, whatever the hour says
             gain = net - basis
             room, rebuy = 1.0 - basis, fee_per_contract(bid)
@@ -1031,7 +1036,7 @@ class ProfitWatcher:
         if not stop and allowed > 0 and t.risk_max_loss > 0:
             miss = curverisk.stop_miss(net, basis, r.q, t.risk_max_loss)
             if 0.0 < miss < allowed:  # the squeeze: just short of the max loss's depth, heading down, and late enough for the nudge to exist
-                stop, squeezed = True, f" [squeeze: {miss:.3f} short of the max loss, inside a nudge of {allowed:.3f} (at most {t.risk_squeeze:g}; the bid is sliding, {(1.0 - left / 900.0) * 100.0:.0f}% of the market gone{f'; the hour factor scales the nudge by {hour_scale:.2f}' if t.risk_nudge_hour else ''})]"
+                stop, squeezed = True, f" [squeeze: {miss:.3f} short of the max loss, inside a nudge of {allowed:.3f} ({f'no cap: {allowed / (t.risk_unit or 1.0):.2f} of the market typical minute of {t.risk_unit or 0.0:.3f}' if t.risk_nudge_units > 0 else f'at most {t.risk_squeeze:g}'}; the bid is sliding, {(1.0 - left / 900.0) * 100.0:.0f}% of the market gone{f'; the hour factor scales the nudge by {hour_scale:.2f}' if t.risk_nudge_hour else ''})]"
         stop = stop and bid >= CURVE_MIN_BID  # below this bid the market has priced the loss and there is nothing to sell for
         if not stop and (bid < CURVE_MIN_BID or not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):  # under the minimum bid there is nothing left to sell for, on the line as on the max loss
             t.risk_since = 0.0
@@ -1879,6 +1884,7 @@ class ProfitWatcher:
                 held.risk_stop_hold = spec.curve_risk_stop_hold
                 held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_max
                 held.risk_nudge_hour = spec.nudge_hour_factor
+                held.risk_nudge_units = spec.nudge_units
                 held.risk_take_cushion = spec.curve_take_cushion
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):

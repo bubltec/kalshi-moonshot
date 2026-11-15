@@ -40,6 +40,7 @@ from .lanes import (
     version_of,
     edge_miss,
     nudge,
+    nudge_in_units,
     trend_share,
     wants_bet,
 )
@@ -475,7 +476,7 @@ def evaluate(
     e = edge(cal.p, shot.ask)
     bet = wants_bet(spec, cal.p, shot.ask, e)
     note = why if not adjusted_note else f"{why} | {adjusted_note}" if spec.record_adjust else f"{why} | record adjustment off for this lane, betting on {p:.2f} (it would have read: {adjusted_note})"
-    if not bet and spec.stretch_max > 0:
+    if not bet and (spec.stretch_max > 0 or spec.nudge_units > 0):
         stretched = stretch_buy(s, spec, shot, cal.p, e)
         if stretched:
             bet, note = True, f"{stretched} {note}"
@@ -1312,7 +1313,11 @@ def side_trend_z(s: Settings, shot: LongShot, seconds: float, now: float | None 
     got = side_trend_read(s, shot, seconds, now)
     if got is None:
         return None
-    move, sd = got
+    return z_of(*got)
+
+
+def z_of(move: float, sd: float) -> float:
+    """A move in units of the market's own noise (side_trend_z's rule)."""
     if sd <= 1e-6:  # a market whose price never changed lately: no move is no gain, a move is a big one
         return 0.0 if abs(move) < 1e-9 else math.copysign(10.0, move)
     return move / sd
@@ -1320,23 +1325,30 @@ def side_trend_z(s: Settings, shot: LongShot, seconds: float, now: float | None 
 
 def stretch_buy(s: Settings, spec: LaneSpec, shot: LongShot, p: float, e: float, now: float | None = None) -> str | None:
     """The stretch for a buy that missed the scaled edge bar (lane field stretch_max): the note to put on the bet when the miss is inside the nudge the lane allows, else None. The nudge is a cent or two at most, scaled by how far the side has moved its way over the last minute and by the share of a 15-minute market still to run (lanes.nudge). A lane without the squeeze gets no stretch: the pair works together."""
-    if spec.stretch_max <= 0 or spec.squeeze_max <= 0:
+    if spec.nudge_units <= 0 and (spec.stretch_max <= 0 or spec.squeeze_max <= 0):
         return None
     miss = edge_miss(spec, p, shot.ask, e)
     if miss is None or miss <= 0:
         return None
     seconds = 60.0  # the stretch reads the side's last minute, whatever span the lane's trend check looks back over (2026-11-14: that check moved to three minutes and the nudge was not meant to)
     zed = side_trend_z(s, shot, seconds, now)
+    sd = None
+    if spec.nudge_units > 0:  # the market's own 60 s move is the unit of a nudge with no cap
+        got = side_trend_read(s, shot, seconds, now)
+        sd = got[1] if got is not None else None
     time_share = min(max(float(shot.hours_to_close) * 3600.0 / 900.0, 0.0), 1.0)
     hour_scale = 1.0
     if spec.nudge_hour_factor:
         from . import widthfit
 
         hour_scale = widthfit.nudge_scale(widthfit.hour_k(time.time() if now is None else now))
-    allowed = nudge(spec.stretch_max, trend_share(zed), time_share, hour_scale)
+    if spec.nudge_units > 0:  # no cap: the allowed miss is the market's own 60 s move times how strongly everything agrees
+        allowed = nudge_in_units(spec.nudge_units, sd, trend_share(zed), time_share, hour_scale)
+    else:
+        allowed = nudge(spec.stretch_max, trend_share(zed), time_share, hour_scale)
     if not miss < allowed:
         return None
-    return f"[stretch buy: the edge is {miss:.3f} under the bar, inside a nudge of {allowed:.3f} (at most {spec.stretch_max:g}; the side moved {zed:+.1f} typical moves its way over {seconds:.0f}s, {time_share:.0%} of the market still to run{f'; the hour factor scales the nudge by {hour_scale:.2f}' if spec.nudge_hour_factor else ''})]"
+    return f"[stretch buy: the edge is {miss:.3f} under the bar, inside a nudge of {allowed:.3f} ({f'no cap: {allowed / sd:.2f} of the side 60 s typical move of {sd:.3f}' if spec.nudge_units > 0 and sd else f'at most {spec.stretch_max:g}'}; the side moved {zed:+.1f} typical moves its way over {seconds:.0f}s, {time_share:.0%} of the market still to run{f'; the hour factor scales the nudge by {hour_scale:.2f}' if spec.nudge_hour_factor else ''})]"
 
 
 def _day_start(now: float) -> float:

@@ -40,7 +40,7 @@ log = logging.getLogger("moonshot")
 
 def _stretched(s: Settings, spec: LaneSpec, shot: LongShot, p: float, e: float) -> bool:
     """Whether a candidate that missed the scaled edge bar is kept by the stretch (lane field stretch_max): the evaluation decides again and writes the note."""
-    if spec.stretch_max <= 0:
+    if spec.stretch_max <= 0 and spec.nudge_units <= 0:
         return False
     from . import runner
 
