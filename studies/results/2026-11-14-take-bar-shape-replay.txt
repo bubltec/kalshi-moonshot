@@ -1,0 +1,28 @@
+Success	live bets since the take went live with taped quotes and a result: 49; the real run made -22.76
+live    : total   -37.15 | takes 24 stops 25 settles  0
+squared : total   -53.12 | takes 25 stops 24 settles  0
+1.5     : total   -29.23 | takes 25 stops 24 settles  0
+linear  : total   -48.04 | takes 22 stops 27 settles  0
+
+change against the live bar, per bet (only bets that differ by more than 0.50):
+  XRP15M-26NOV141330     no  live take   +4.15 (real   +2.46) | squared take -1.69 | 1.5 take -1.69 | linear stop -16.08
+  ETH15M-26NOV141615     no  live take   +8.21 (real   +9.51) | squared take -4.81 | linear take +2.61
+  XRP15M-26NOV141615     no  live take   +2.94 (real   +5.24) | squared take +2.38 | 1.5 take +2.38 | linear take +2.38
+  BNB15M-26NOV141700     no  live take   +2.36 (real   +2.01) | squared take -0.87 | 1.5 take -0.87 | linear take +1.10
+  DOGE15M-26NOV141745    no  live take   +6.10 (real   +6.81) | squared take -3.15 | 1.5 take -1.05
+  NEAR15M-26NOV141830    yes live take   +6.03 (real   +4.57) | squared take -3.93 | 1.5 take -1.81
+  XRP15M-26NOV141830     yes live stop   -6.08 (real   +4.89) | squared take +8.53 | 1.5 take +9.57
+  SOL15M-26NOV141830     no  live take  +10.74 (real  +11.73) | squared take +0.99 | 1.5 take +2.09 | linear take +2.89
+  XRP15M-26NOV141845     no  live take   +3.11 (real   +3.10) | linear stop -12.64
+  BTC15M-26NOV142030     no  live take   +8.39 (real   +8.06) | squared take -1.35 | 1.5 take -1.35
+  ZEC15M-26NOV142045     no  live take   +5.67 (real   +5.17) | 1.5 take +0.61 | linear take +2.19
+  BNB15M-26NOV142100     yes live take   +8.56 (real   +5.57) | squared take -6.39 | 1.5 take -5.70
+  ETH15M-26NOV142100     yes live take   +2.29 (real   +2.21) | squared take +1.28 | 1.5 take +1.28 | linear take +1.39
+  SOL15M-26NOV142145     yes live take  +11.12 (real  +11.54) | squared take -6.53
+  XRP15M-26NOV142145     yes live take   +5.80 (real   +5.22) | squared take -1.16 | 1.5 take +3.74 | linear take +3.74
+  ETH15M-26NOV142145     yes live take   +3.44 (real   +3.49) | squared take +1.44 | 1.5 take +1.44 | linear take +1.55
+squared: better on 5 bets, worse on 9, net -15.97
+1.5: better on 7 bets, worse on 6, net +7.92
+linear: better on 8 bets, worse on 2, net -10.89
+DONE
+	

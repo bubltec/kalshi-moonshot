@@ -1,0 +1,54 @@
+Success	bet                    bought  first wanted (left, bid, value)   really: how, value | worse by
+XRP15M-26NOV141330      0.82   never wanted to sell                  sold take       +2.46
+XRP15M-26NOV141400      0.78    533s 0.890   +3.51   sold take       +3.29 | +0.22
+SOL15M-26NOV141400      0.86    502s 0.938   +0.42   sold take       +0.44 | -0.02
+SOL15M-26NOV141530      0.78     76s 0.904   +4.01   settled lost   -26.50 | +30.51  <-- ended worse than selling then
+BTC15M-26NOV141530      0.77     93s 0.930   +5.27   sold take       +7.15 | -1.88
+ETH15M-26NOV141545      0.83    165s 0.944   +3.79   sold take       +5.14 | -1.35
+BNB15M-26NOV141545      0.85    125s 0.945   +2.47   sold take       +3.62 | -1.15
+XRP15M-26NOV141600      0.80    415s 0.913   +3.66   sold take       +4.25 | -0.58
+BTC15M-26NOV141615      0.58    536s 0.780   +6.10   sold take       +8.47 | -2.37
+ETH15M-26NOV141615      0.51    361s 0.780   +7.89   sold take       +9.51 | -1.62
+XRP15M-26NOV141615      0.84    237s 0.932   +3.01   sold take       +5.24 | -2.23
+XRP15M-26NOV141630      0.76   never wanted to sell                  sold stop      -10.97
+SOL15M-26NOV141630      0.78   never wanted to sell                  sold stop       -9.09
+XRP15M-26NOV141645      0.55   never wanted to sell                  settled lost    -0.55
+BTC15M-26NOV141645      0.57   never wanted to sell                  settled lost   -18.06
+BNB15M-26NOV141700      0.88    521s 0.940   +2.00   sold take       +2.01 | -0.01
+SOL15M-26NOV141700      0.85    547s 0.924   +2.38   sold take       +2.60 | -0.22
+DOGE15M-26NOV141745     0.69    438s 0.870   +5.75   sold take       +6.81 | -1.06
+XRP15M-26NOV141745      0.85     72s 0.937   +2.85   sold take       +3.10 | -0.26
+NEAR15M-26NOV141830     0.73   never wanted to sell                  sold take       +4.57
+XRP15M-26NOV141830      0.70   never wanted to sell                  sold take       +4.89
+SOL15M-26NOV141830      0.51    169s 0.790   +8.44   sold take      +11.73 | -3.29
+BTC15M-26NOV141830      0.78   never wanted to sell                  settled lost   -26.68
+XRP15M-26NOV141845      0.85    399s 0.939   +2.93   sold take       +3.10 | -0.17
+ZEC15M-26NOV141845      0.71   never wanted to sell                  settled lost   -23.79
+BTC15M-26NOV142030      0.57    444s 0.810   +7.38   sold take       +8.06 | -0.67
+ZEC15M-26NOV142045      0.73    279s 0.900   +5.53   sold take       +5.17 | +0.36
+BNB15M-26NOV142100      0.64    599s 0.800   +4.93   sold take       +5.57 | -0.64
+SOL15M-26NOV142100      0.57   never wanted to sell                  sold stop       -6.46
+BTC15M-26NOV142100      0.70    556s 0.850   +4.73   sold take       +4.73 | +0.00
+ETH15M-26NOV142100      0.88    554s 0.936   +1.85   sold take       +2.21 | -0.36
+NEAR15M-26NOV142100     0.55     92s 0.810   +8.08   sold take       +7.74 | +0.34
+SOL15M-26NOV142100      0.65     93s 0.880   +7.35   sold take       +9.59 | -2.24
+SOL15M-26NOV142115      0.60    653s 0.740   +0.39   sold take       +1.18 | -0.79
+SOL15M-26NOV142145      0.58    400s 0.830   +9.48   sold take      +11.54 | -2.06
+ZEC15M-26NOV142145      0.62    401s 0.870   +9.19   sold take      +11.43 | -2.24
+XRP15M-26NOV142145      0.71    378s 0.880   +5.80   sold take       +5.22 | +0.58  <-- ended worse than selling then
+ETH15M-26NOV142145      0.84    162s 0.933   +3.07   sold take       +3.49 | -0.42
+BNB15M-26NOV142200      0.63    333s 0.840   +7.78   sold take       +6.98 | +0.80  <-- ended worse than selling then
+ETH15M-26NOV142215      0.88    271s 0.954   +2.54   sold take       +4.02 | -1.48
+BNB15M-26NOV142230      0.63   never wanted to sell                  sold stop      -17.16
+XRP15M-26NOV142230      0.72    200s 0.880   +5.48   sold take       +8.96 | -3.48
+ETH15M-26NOV142230      0.68   never wanted to sell                  sold stop      -15.25
+DOGE15M-26NOV142245     0.76   never wanted to sell                  sold stop      -15.51
+NEAR15M-26NOV142245     0.67   never wanted to sell                  sold stop      -12.18
+ZEC15M-26NOV142245      0.70   never wanted to sell                  sold stop      -19.47
+BNB15M-26NOV142300      0.82    339s 0.925   +2.27   sold take       +2.36 | -0.09
+HYPE15M-26NOV142300     0.66   never wanted to sell                  sold stop      -16.08
+
+before 21:30:52: 34 bets, 24 had a moment the take wanted to sell, 1 of those ended worse than selling then (total +30.51 dollars)
+after 21:30:52: 14 bets, 8 had a moment the take wanted to sell, 2 of those ended worse than selling then (total +1.38 dollars)
+DONE
+	

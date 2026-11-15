@@ -1,0 +1,41 @@
+Success	live crypto_multiscale buys since Mon 2026-11-09 with quotes and a result: 397; net -10.52
+
+span 60 s, needs z > 0.0 (live)
+   kept                         n=217 net    -7.65 per $1 -0.005 lost 80
+   dropped                      n=180 net    -2.87 per $1 -0.004 lost 78
+
+span 60 s, needs z > 0.5
+   kept                         n=172 net    +5.27 per $1 +0.004 lost 64
+   dropped                      n=225 net   -15.79 per $1 -0.017 lost 94
+
+span 120 s, needs z > 0.0
+   kept                         n=220 net   +16.88 per $1 +0.010 lost 78
+   dropped                      n=177 net   -27.40 per $1 -0.040 lost 80
+
+span 120 s, needs z > 0.5
+   kept                         n=194 net   +12.78 per $1 +0.008 lost 66
+   dropped                      n=203 net   -23.30 per $1 -0.029 lost 92
+
+span 180 s, needs z > 0.0
+   kept                         n=231 net   +60.64 per $1 +0.035 lost 83
+   dropped                      n=166 net   -71.16 per $1 -0.126 lost 75
+
+span 180 s, needs z > 0.5
+   kept                         n=208 net   +61.61 per $1 +0.038 lost 73
+   dropped                      n=189 net   -72.13 per $1 -0.106 lost 85
+
+span 240 s, needs z > 0.0
+   kept                         n=191 net   +38.31 per $1 +0.029 lost 67
+   dropped                      n=206 net   -48.83 per $1 -0.050 lost 91
+
+span 240 s, needs z > 0.5
+   kept                         n=168 net  +112.30 per $1 +0.097 lost 52
+   dropped                      n=229 net  -122.82 per $1 -0.106 lost 106
+
+both the 60 s and the 180 s reading above 0
+   kept                         n=152 net   +41.61 per $1 +0.030 lost 50
+   dropped                      n=245 net   -52.13 per $1 -0.057 lost 108
+
+buys since 10:00 today (the live check was on): 63; of them z60 <= 0 (should be none): 13
+DONE
+	

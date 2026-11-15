@@ -1277,7 +1277,8 @@ def side_trend_read(s: Settings, shot: LongShot, seconds: float, now: float | No
     import statistics
 
     now = time.time() if now is None else now
-    q = _load_quotes(s, shot.ticker, now - 150.0 - seconds, now)
+    window = max(120.0, 2.0 * seconds)  # 2026-11-14: the noise is read over twice the span (2 minutes at the least), so a look back of three minutes can be read; up to 60 s this is the 2 minutes it always was
+    q = _load_quotes(s, shot.ticker, now - window - 30.0, now)
     if len(q) < 6 or now - q[-1][0] > 30.0:
         return None
     ts = [r[0] for r in q]
@@ -1290,8 +1291,8 @@ def side_trend_read(s: Settings, shot: LongShot, seconds: float, now: float | No
     cur, then = at(now), at(now - seconds)
     if cur is None or then is None:
         return None
-    n = int(120 - seconds)
-    grid = [at(now - 5.0 - k) for k in range(120)]
+    n = int(window - seconds)
+    grid = [at(now - 5.0 - k) for k in range(int(window))]
     steps = [a - b for a, b in zip(grid[:n], grid[int(seconds):int(seconds) + n], strict=False) if a is not None and b is not None]
     if len(steps) < 20:
         return None
@@ -1316,7 +1317,7 @@ def stretch_buy(s: Settings, spec: LaneSpec, shot: LongShot, p: float, e: float,
     miss = edge_miss(spec, p, shot.ask, e)
     if miss is None or miss <= 0:
         return None
-    seconds = spec.entry_trend_seconds if spec.entry_trend_seconds > 0 else 60.0
+    seconds = 60.0  # the stretch reads the side's last minute, whatever span the lane's trend check looks back over (2026-11-14: that check moved to three minutes and the nudge was not meant to)
     zed = side_trend_z(s, shot, seconds, now)
     time_share = min(max(float(shot.hours_to_close) * 3600.0 / 900.0, 0.0), 1.0)
     allowed = nudge(spec.stretch_max, trend_share(zed), time_share)

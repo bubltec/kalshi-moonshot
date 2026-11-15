@@ -1,0 +1,39 @@
+Success	live crypto_multiscale buys since Mon 2026-11-09 with a result and features: 426; net -5.81 on $2379 staked
+
+fresh move over the last 3 min toward the side (typical minutes; negative = against): terciles cut at +0.25 and +1.19
+   lowest third  n=143 net   -67.18  per $1 staked -0.109  lost 65 of 143
+   middle third  n=142 net   +43.72  per $1 staked +0.059  lost 52 of 142
+   highest third n=141 net   +17.65  per $1 staked +0.017  lost 51 of 141
+
+cushion z at the buy (negative = wrong side of the strike): terciles cut at +0.25 and +0.47
+   lowest third  n=143 net   +15.69  per $1 staked +0.032  lost 60 of 143
+   middle third  n=142 net   -80.61  per $1 staked -0.127  lost 69 of 142
+   highest third n=141 net   +59.11  per $1 staked +0.047  lost 39 of 141
+
+hour trend toward the side (hourly sigmas; negative = against): terciles cut at -0.59 and +0.12
+   lowest third  n=143 net   -12.58  per $1 staked -0.024  lost 60 of 143
+   middle third  n=142 net   -16.44  per $1 staked -0.030  lost 60 of 142
+   highest third n=141 net   +23.21  per $1 staked +0.018  lost 48 of 141
+
+seconds left at the buy: terciles cut at +416.76 and +636.69
+   lowest third  n=143 net   +26.23  per $1 staked +0.039  lost 59 of 143
+   middle third  n=142 net    -3.27  per $1 staked -0.004  lost 52 of 142
+   highest third n=141 net   -28.77  per $1 staked -0.037  lost 57 of 141
+
+by the time of the buy around today's releases (ET):
+   before today                       n=362 net    -3.24 per $1 -0.003 | median z +0.35 fresh +0.66 hour -0.33 left 507s
+   today to 21:03                     n= 48 net   +29.57 per $1 +0.029 | median z +0.54 fresh +1.22 hour +0.86 left 582s
+   21:03 to 21:30 (cushion check)     n=  1 net    +1.18 per $1 +0.635 | median z +0.21 fresh +0.58 hour -0.80 left 703s
+   21:31 to 22:00 (slope)             n=  5 net   +38.66 per $1 +0.308 | median z +0.25 fresh +0.98 hour +2.47 left 526s
+   22:00 to 22:30 (cleanup 2b-A)      n=  4 net   -19.43 per $1 -0.183 | median z +0.52 fresh +1.24 hour +1.79 left 693s
+   22:31 on (flat hold, 12%)          n=  6 net   -52.54 per $1 -0.358 | median z +0.56 fresh +0.79 hour +0.12 left 689s
+
+the six stops of the 22:00 hour and HYPE, with each feature's rank among all buys (0% = lowest, 100% = highest):
+   22:18:11 BNB15M-26NOV142230     yes  -17.16 | fresh +1.24 (rank 69%) z +0.27 (rank 37%) hour +1.79 (rank 98%) left 708s
+   22:22:51 ETH15M-26NOV142230     yes  -15.25 | fresh -0.27 (rank 20%) z +0.25 (rank 33%) hour +1.24 (rank 94%) left 429s
+   22:33:11 DOGE15M-26NOV142245    no   -15.51 | fresh +1.27 (rank 70%) z +0.66 (rank 83%) hour -0.75 (rank 26%) left 709s
+   22:33:21 NEAR15M-26NOV142245    no   -12.18 | fresh +0.79 (rank 51%) z +0.46 (rank 65%) hour +0.12 (rank 67%) left 698s
+   22:33:31 ZEC15M-26NOV142245     no   -19.47 | fresh +0.64 (rank 46%) z +0.33 (rank 45%) hour -0.29 (rank 48%) left 689s
+   22:51:01 HYPE15M-26NOV142300    yes  -16.08 | fresh -1.31 (rank 6%) z +0.40 (rank 57%) hour +0.55 (rank 82%) left 538s
+DONE
+	
