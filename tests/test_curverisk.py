@@ -264,6 +264,15 @@ def test_unit_late_in_the_market_a_flat_bid_holds_and_only_a_dip_sells():
     assert curverisk.still_rising(flat + [(11.0, 0.89)], 11.0, 10.0, None, flat_ok=True) is False
 
 
+def test_unit_a_flat_bid_is_held_late_only_while_the_cushion_backs_the_price():
+    # a typical minute of 0.10 and 120 s left: a swing of 0.141
+    assert curverisk.flat_holds(0.94, 0.90, 0.10, 120.0) is True  # the chance is 0.04 under what the sale pays: inside the swing
+    assert curverisk.flat_holds(0.94, 0.99, 0.10, 120.0) is True  # the chance is over the price
+    assert curverisk.flat_holds(0.95, 0.61, 0.10, 30.0) is False  # SOL NO 15:30: a chance of 0.61 against 0.95, a gap of 0.34 against a swing of 0.07
+    assert curverisk.flat_holds(0.94, None, 0.10, 120.0) is False  # no reading of the cushion
+    assert curverisk.flat_holds(0.94, 0.90, None, 120.0) is False  # no reading of the unit
+
+
 def test_unit_a_climb_that_inflated_its_own_noise_is_still_a_slope():
     # SOL 21:15 YES, 2026-11-14: over the 43 s look back the bid rose 0.102 (0.880 to 0.982) in a market whose 15-minute typical minute, run-up included, was 0.124: a noise bar of 0.105
     path = [(float(t), 0.880 + 0.102 * t / 43.0) for t in range(0, 44)]

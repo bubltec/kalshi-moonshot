@@ -730,6 +730,7 @@ def late_recovery(w):
 
 def test_integration_late_in_a_swinging_market_a_bet_at_ninety_six_is_held_while_flat_and_cashed_on_a_dip(tmp_path, monkeypatch):
     # 2026-11-14 (user: "a flat slope under 3 mins is perfectly fine, unless it starts to dip while profitable we should not sell"): this bet used to be cashed the moment it sat flat at 0.96 (SOL NO 15:30, "Yes we should have cashed that out"); now it is held while flat and cashed when the bid starts to fall
+    seed_spot(monkeypatch, 0.008)  # a high cushion
     feed_history(0.013, from_left=1300, to_left=121)  # a typical minute of about 0.10: a swing of about 0.12 over the 85 s left
     w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
     assert late_recovery(w) is None
@@ -827,6 +828,7 @@ def test_integration_in_a_swinging_market_a_steady_small_climb_is_still_a_slope(
 
 # ---- a flat bid late in the market is held; only a dip sells (2026-11-14, user: "a flat slope under 3 mins is perfectly fine, unless it starts to dip while profitable we should not sell") ----
 def test_integration_in_the_last_fifth_a_flat_bid_is_held_and_a_dip_sells(tmp_path, monkeypatch):
+    seed_spot(monkeypatch, 0.008)  # the spot 80 bp over the strike: a high cushion
     feed_history(0.013, from_left=900, to_left=151)  # a typical minute of about 0.10
     w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
     assert climb(w, 0.82, 0.99, 150) is None  # still rising
@@ -846,3 +848,21 @@ def test_integration_before_the_last_fifth_a_flat_bid_still_sells(tmp_path, monk
     assert climb(w, 0.82, 0.92, 700) is None
     sig = level(w, 0.92, 700)  # 700 s left: outside the last fifth, so flat ends the hold as before
     assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+def test_integration_in_the_last_fifth_a_flat_bid_with_a_thin_cushion_sells(tmp_path, monkeypatch):
+    # 2026-11-14 (user: "flat and low cushion is an acceptable sell"): the same flat bid, with the spot only 1 bp over the strike
+    seed_spot(monkeypatch, 0.0001)
+    feed_history(0.013, from_left=900, to_left=151)
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
+    assert climb(w, 0.82, 0.99, 150) is None
+    sig = level(w, 0.99, 150, seconds=12)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+def test_integration_in_the_last_fifth_a_flat_bid_with_no_spot_reading_sells_as_before(tmp_path, monkeypatch):
+    monkeypatch.setattr(ticks_mod, "history", ticks_mod.TickHistory())
+    feed_history(0.013, from_left=900, to_left=151)
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
+    assert climb(w, 0.82, 0.99, 150) is None
+    assert level(w, 0.99, 150, seconds=12) is not None

@@ -7,7 +7,7 @@ import datetime
 import json
 import urllib.request
 
-from kalshi_moonshot import config, curverisk, db, quoteshock
+from kalshi_moonshot import config, curvevalue, curverisk, db, quoteshock, variants
 from kalshi_moonshot.strategy import fee_per_contract
 
 ET = datetime.timezone(datetime.timedelta(hours=-5))
@@ -31,7 +31,20 @@ def result_of(ticker, outcome):
         return None
 
 
-MODE = os.environ.get("RISE_RULE", "cut")  # "cut": flat holds when FLAT_LEFT s or less is left; "scaled": the rise a bid needs shrinks with the share of the market gone (a flat bid holds late, a dip sells), no cut-off
+MODE = os.environ.get("RISE_RULE", "cut")  # "cut": flat holds when FLAT_LEFT s or less is left; "cushion": the same, but only while curverisk.flat_holds (the cushion backs the price); "scaled": the rise a bid needs shrinks with the share of the market gone (a flat bid holds late, a dip sells), no cut-off
+
+
+def flat_holds(net_bid, chance, unit, left):
+    """curverisk.flat_holds, restated so the replay runs against a host image that does not have it yet."""
+    return chance is not None and unit is not None and unit > 0 and left > 0 and net_bid - chance <= unit * (left / 60.0) ** 0.5
+
+
+def strike_of(ticker):
+    try:
+        with urllib.request.urlopen(f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker}", timeout=10) as f:
+            return float(json.load(f)["market"]["floor_strike"])
+    except Exception:
+        return None
 
 
 def holds(samples, now, seconds, unit, flat_ok, left=None):
@@ -69,6 +82,12 @@ for r in rows:
     at = lambda x: bd[max(bisect.bisect_right(ts, x) - 1, 0)]
     real = n * (float(r["exit_price"]) - fee_per_contract(float(r["exit_price"]))) - cost
     entry = cost / n; basis = entry + fee_per_contract(entry)
+    idx = variants.spot_index(r["ticker"].split("-")[0], "")
+    strike = strike_of(r["ticker"]) if MODE == "cushion" else None
+    its, ivs = [], []
+    if MODE == "cushion" and idx:
+        ig = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value>0 ORDER BY ts", (idx, t0 - 1300.0, close)).fetchall()
+        its, ivs = [float(x[0]) for x in ig], [float(x[1]) for x in ig]
     hist, unit, unit_at, got, t = [], None, 0.0, None, t0 - 60.0
     while t < close - 8.0:
         bid, left = at(t), close - t; look = 0.08 * left
@@ -79,7 +98,15 @@ for r in rows:
             unit_at = t; unit = quoteshock.typical_minute(mids[: bisect.bisect_right(ts, t)], t, 900.0)
         if t >= t0 - 1.0:
             net = bid - fee_per_contract(bid); gain, room = net - basis, 1.0 - basis
-            if gain > 0 and bid >= 0.05 and curverisk.take_profit(gain, room, left, 900.0, fee_per_contract(bid), unit) and not holds(hist, t, look, unit, left <= FLAT_LEFT, left):
+            ok = left <= FLAT_LEFT
+            if MODE == "cushion" and ok and gain > 0 and curverisk.take_profit(gain, room, left, 900.0, fee_per_contract(bid), unit):
+                if idx is not None and strike is not None:
+                    jt = bisect.bisect_right(its, t)
+                    rd = curvevalue.read(its[max(jt - 1100, 0):jt], ivs[max(jt - 1100, 0):jt], t, strike, side, left, "900+180") if jt else None
+                else:
+                    rd = None
+                ok = flat_holds(net, rd.p if rd else None, unit, left)
+            if gain > 0 and bid >= 0.05 and curverisk.take_profit(gain, room, left, 900.0, fee_per_contract(bid), unit) and not holds(hist, t, look, unit, ok, left):
                 got = (t, bid); break
         t += 1.0
     if got:

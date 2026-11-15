@@ -153,6 +153,14 @@ def cushion_holds(chance: float, net_bid: float) -> bool:
 LATE_SHARE = 0.2  # the last fifth of a market (three minutes of fifteen): where a flat bid is held, not sold (2026-11-14, user, "a flat slope under 3 mins is perfectly fine, unless it starts to dip while profitable we should not sell"); a share of the market's length, which is structural
 
 
+def flat_holds(net_bid: float, chance: float | None, unit: float | None, left: float) -> bool:
+    """True when the spot's cushion backs the price well enough for a flat bid to be held late (2026-11-14, user: "flat and low cushion is an acceptable sell"; "slopping upward with high cushion is not"; on SOL NO 15:30, back at 0.95 with 30 s left on a curve chance of 0.61, which lost at the bell).
+    The gap is what the sale pays net of its fee less the curve's chance that the side pays (the cushion check's own two numbers); the cushion is thin when that gap is more than the market's swing over the time left (the typical minute x sqrt(left / 60), the late cap's own yardstick). With no reading of the chance or the unit the cushion is unknown and a flat bid is not held."""
+    if chance is None or unit is None or unit <= 0 or left <= 0:
+        return False
+    return net_bid - chance <= unit * math.sqrt(left / MINUTE)
+
+
 def still_rising(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None, flat_ok: bool = False) -> bool:
     """True while the bid is still sloping up over the last `seconds` (2026-11-14, user: "if it's sloping in profit direction don't sell until it stops sloping"), measured in the market's own noise: `unit` is its typical minute (quoteshock.typical_minute), so what it normally moves in the look back is unit * sqrt(seconds / 60).
     Sloping = the bid has risen over the look back AND sits within that noise of the look back's high (the rise itself needs no minimum: the noise is read over the last 15 minutes, which a climb inflates). With `flat_ok` (the last LATE_SHARE of the market) a flat bid holds too: only a dip below the noise from the high ends the hold. A one-tick pause in a climb is inside the noise and does not end it; a bid that has levelled out (the rise has aged out of the look back) or fallen back from its high by more than the noise has stopped.
