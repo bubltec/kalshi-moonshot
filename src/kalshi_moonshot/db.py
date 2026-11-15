@@ -203,6 +203,23 @@ def _locked(fn):
     return wrapper
 
 
+_FLOAT_NUMERIC: Any = None
+
+
+def float_numeric_loader() -> Any:
+    """The psycopg loader that returns numeric (SUM and AVG over integers) as a float, the dialect the code was written in. Built once: it used to be defined inside PgConn._open, so every connection opened made a new class, and the classes were never freed (2026-11-15: the recorder grew about 200 MiB an hour, tracemalloc put it at <frozen abc>:106 and db.py:224, 25,746 classes in two hours)."""
+    global _FLOAT_NUMERIC
+    if _FLOAT_NUMERIC is None:
+        from psycopg.adapt import Loader
+
+        class FloatNumeric(Loader):
+            def load(self, data: Any) -> float:
+                return float(bytes(data))
+
+        _FLOAT_NUMERIC = FloatNumeric
+    return _FLOAT_NUMERIC
+
+
 class PgConn:
     """A Postgres connection that speaks the dialect the code was written in (see the module docstring)."""
 
@@ -218,16 +235,11 @@ class PgConn:
 
     def _open(self) -> None:
         import psycopg
-        from psycopg.adapt import Loader
-
-        class FloatNumeric(Loader):  # SUM and AVG over integers come back as numeric; the code does float arithmetic
-            def load(self, data: Any) -> float:
-                return float(bytes(data))
 
         conn = psycopg.connect(self.dsn, cursor_factory=psycopg.ClientCursor, row_factory=_row_factory, autocommit=True, connect_timeout=10)
         conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.schema}"')
         conn.execute(f'SET search_path TO "{self.schema}", public')  # public holds extensions such as pgvector
-        conn.adapters.register_loader("numeric", FloatNumeric)
+        conn.adapters.register_loader("numeric", float_numeric_loader())
         conn.autocommit = False
         self.conn = conn
         self._dirty = False
