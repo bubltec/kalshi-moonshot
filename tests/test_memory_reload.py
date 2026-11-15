@@ -1,5 +1,6 @@
 """Memory is filled from the tape before the bot decides anything (2026-11-14, user: "I just want to make sure that's filled when we rebuild or restart"). Until then the reload ran inside a low-priority job and finished 30 to 85 s after the bot was already deciding; nothing waited for it and nothing said how complete it was. Unit tests of the pieces, then the pieces through the real tape and the real evaluate job."""
 
+import datetime
 import logging
 import time
 
@@ -9,7 +10,14 @@ from kalshi_moonshot import config
 from kalshi_moonshot import ticks as ticks_mod
 from kalshi_moonshot.tape import Tape
 
-TICKER = "KXBTC15M-30JAN010015-15"
+
+
+TICKER = ""
+
+
+def current(s, now):
+    """The name of the BTC 15-minute market open at `now`, as the tape would hold it."""
+    return next(t for t in ticks_mod.recent_15m_tickers(s, now, 0.0) if t.startswith("KXBTC15M-"))
 
 
 @pytest.fixture(autouse=True)
@@ -52,6 +60,8 @@ def taped(tmp_path, monkeypatch, now, hole=(0, 0)):
     """A tape with a quote a second for the ten minutes before `now`, less the seconds in `hole` (counted back from now), and an index tick a second."""
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     s = config.load()
+    global TICKER
+    TICKER = current(s, now)
     tape = Tape(s.tape_path)
     for back in range(600, 0, -1):
         if hole[0] >= back > hole[1]:
@@ -116,6 +126,8 @@ def test_integration_a_decided_window_with_no_bid_on_one_side_is_not_a_hole(tmp_
     now = time.time()
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     s = config.load()
+    global TICKER
+    TICKER = current(s, now)
     tape = Tape(s.tape_path)
     for back in range(600, 0, -1):
         decided = 120 >= back > 60  # a minute with the yes side dead: no bid, an ask of a tenth of a cent, the size still changing
@@ -193,3 +205,28 @@ def test_integration_a_failed_second_stage_does_not_stop_the_bot(tmp_path, monke
     ticks_mod.reload_begin(now)
     report = ticks_mod.reload_from_tape(s, ["BTCUSD_RTI"], now)
     assert report["ticks"] > 0 and ticks_mod.reload_pending(now + 1.0) is False
+
+
+
+def test_unit_the_tickers_of_the_open_windows_are_built_from_the_series_and_the_quarter_hours(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    # 2026-11-14 18:31 ET is 23:31 UTC: the windows of the last hour closed at 17:45 to 18:30, and the one closing at 18:45 is open
+    now = datetime.datetime(2026, 11, 14, 23, 31, 0, tzinfo=datetime.UTC).timestamp()
+    got = ticks_mod.recent_15m_tickers(s, now, 1.0)
+    for name in ("KXBTC15M-26NOV141745-45", "KXBTC15M-26NOV141800-00", "KXETH15M-26NOV141830-30", "KXXRP15M-26NOV141845-45", "KXBTC15M-26NOV141900-00"):
+        assert name in got, name  # the names seen on the host, from the 17:45 window to the one after the open one
+    assert "KXBTC15M-26NOV141645-45" not in got  # older than the hour
+    assert len(got) == len(set(got))
+
+
+def test_integration_only_the_open_windows_are_read_and_a_market_that_is_not_one_is_ignored(tmp_path, monkeypatch):
+    now = time.time()
+    s = taped(tmp_path, monkeypatch, now)
+    tape = Tape(s.tape_path)
+    tape.add({"kind": "quote", "ticker": "KXBTC15M-26JAN010015-15", "ts": now - 30, "bid": 0.5, "ask": 0.52})  # a window from long ago: not in the hour
+    tape.add({"kind": "quote", "ticker": "KXSOMETHINGELSE-X-1", "ts": now - 30, "bid": 0.5, "ask": 0.52})
+    tape.flush(now)
+    ticks_mod.mids._rows.clear()
+    ticks_mod.reload_from_tape(s, [], now)
+    assert set(ticks_mod.mids._rows) == {TICKER}

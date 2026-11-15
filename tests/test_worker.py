@@ -358,3 +358,37 @@ def test_a_live_lane_thread_runs_only_its_own_lanes_jobs(tmp_path):
     w._lane_loop("live_a")
     assert ran == ["lane_scope:live_a"]
     assert status(w, "lane_scope:paper_b") == {"pending": 1} and status(w, "evaluate") == {"pending": 1}
+
+
+# ---- the all-markets scan reads nothing when no lane is served by it (2026-11-14: 9,273 markets, about 220 requests at every start and every half hour, for no lane) ----
+def test_the_scan_makes_no_market_request_when_every_enabled_lane_is_two_level(tmp_path, monkeypatch):
+    from kalshi_moonshot import lanes as lanes_mod
+
+    class Counting(FakeClient):
+        reads = 0
+
+        def markets_closing(self, *a, **k):
+            Counting.reads += 1
+            return iter(())
+
+    w = worker(tmp_path, Counting())
+    w.start()
+    monkeypatch.setattr(lanes_mod, "main_lanes", lambda s: [])
+    w.run_job(w.jobs.claim(kinds={"scan"}))
+    assert Counting.reads == 0
+    assert status(w, "scan") == {"done": 1, "pending": 1}  # the next one is still scheduled
+    assert w.jobs.claim(kinds={"resolve"}) is not None  # and the scan's follow-ups still run
+
+
+def test_the_scan_still_reads_the_markets_when_a_main_scan_lane_is_enabled(tmp_path):
+    class Counting(FakeClient):
+        reads = 0
+
+        def markets_closing(self, *a, **k):
+            Counting.reads += 1
+            return iter(())
+
+    w = worker(tmp_path, Counting())
+    w.start()
+    w.run_job(w.jobs.claim(kinds={"scan"}))
+    assert Counting.reads == 1

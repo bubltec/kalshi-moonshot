@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from . import jobs as jobs_mod
+from . import lanes as lanes_mod
 from . import manual as manual_mod
 from . import reqstats, runner, steptime
 from . import ticks as ticks_mod
@@ -564,7 +565,8 @@ class Worker:
         every = s.scan_interval_minutes * 60
         # Scheduled first, so even a scan that crashes or is killed leaves the next one waiting.
         self.jobs.ensure("scan", time.time() + every, max_attempts=s.job_max_attempts)
-        markets = runner.candidate_markets(s, self.client, partial_ok=job.last_attempt)
+        # The all-markets scan reads every open market closing in the next 2 to 47 hours (9,273 of them on 2026-11-14: about 220 requests, a burst of 429s at every start and every half hour) to shortlist for the lanes it serves. When no enabled lane is served by it (every running lane is two-level and event-driven) there is nothing to shortlist, and the read is skipped.
+        markets = runner.candidate_markets(s, self.client, partial_ok=job.last_attempt) if lanes_mod.main_lanes(s) else []
         lanes = runner.shortlists(s, self.client, markets, self.estimators())
         shots = [shot for picked in lanes.values() for shot in picked]
         log.info(runner.describe_scan(

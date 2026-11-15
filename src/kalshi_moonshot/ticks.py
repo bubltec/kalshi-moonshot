@@ -273,21 +273,52 @@ def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 8.0, un
     return total
 
 
-def warm_mids_from_tape(s, now: float, hours: float = 1.0) -> int:
-    """Load the last `hours` of every 15-minute market's quotes from the tape into `mids`, so a restart does not leave the open windows with only what arrived since. Meant for a bot that has just started."""
+def recent_15m_tickers(s, now: float, hours: float = 1.0) -> list[str]:
+    """The tickers of every 15-minute market that was open in the last `hours` (and the one about to open), built from the series and the quarter-hours: SERIES-YYMONDDHHMM-MM with the close time in New York, as KXBTC15M-26NOV141830-30. A lookup of these by name uses the tape's (ticker, ts) index and touches a few hundred pages; the old filter, ticker LIKE '%15M-%', has a leading wildcard, read the whole index (about 264,000 buffers, 79,000 of them from disk, for 31,000 rows) and was most of the reload's wait after a restart."""
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    from .commodities import load_instruments
+
+    et = ZoneInfo("America/New_York")
+    first = int((now - hours * 3600.0) // 900.0) * 900
+    series = [f"{i.prefix}15M" for i in load_instruments(s.data_dir) if "15M" in i.suffixes]
+    out: list[str] = []
+    for close in range(first, int(now) + 2 * 900, 900):
+        t = datetime.fromtimestamp(close, UTC).astimezone(et)
+        stamp = f"{t:%y}{t:%b}{t:%d}{t:%H%M}".upper()
+        out += [f"{ser}-{stamp}-{t:%M}" for ser in series]
+    return out
+
+
+def _quote_rows(s, now: float, hours: float) -> list[tuple[str, float, float, float]]:
+    """(ticker, ts, bid, ask) of every quote in the last `hours` of the 15-minute markets, oldest first, by ticker name (recent_15m_tickers). One-sided quotes are in it (a decided window's dead side has no bid): the report's hole is read from all of them, and the memory loads only those with both sides."""
     from . import db
 
     if not db.tape_exists(s.tape_path):
-        return 0
+        return []
+    tickers = recent_15m_tickers(s, now, hours)
     tape = db.connect(s.tape_path, "tape", shared=True)
+    rows: list[tuple[str, float, float, float]] = []
     try:
-        rows = tape.execute("SELECT ticker, ts, bid, ask FROM quotes WHERE ts>? AND ts<=? AND ticker LIKE ? AND bid>0 AND ask>0 ORDER BY ts", (now - hours * 3600.0, now, "%15M-%")).fetchall()
+        for k in range(0, len(tickers), 100):
+            chunk = tickers[k : k + 100]
+            marks = ",".join("?" * len(chunk))
+            got = tape.execute(f"SELECT ticker, ts, bid, ask FROM quotes WHERE ticker IN ({marks}) AND ts>? AND ts<=?", (*chunk, now - hours * 3600.0, now)).fetchall()
+            rows += [(str(r[0]), float(r[1]), float(r[2] or 0.0), float(r[3] or 0.0)) for r in got]
     except Exception:
-        log.warning("ticks: could not warm the market quotes", exc_info=True)
-        return 0
+        log.warning("ticks: could not read the market quotes", exc_info=True)
+        return []
+    rows.sort(key=lambda r: r[1])
+    return rows
+
+
+def warm_mids_from_tape(s, now: float, hours: float = 1.0) -> int:
+    """Load the last `hours` of every 15-minute market's quotes from the tape into `mids`, so a restart does not leave the open windows with only what arrived since. Meant for a bot that has just started."""
     by: dict[str, list[tuple[float, float, float]]] = {}
-    for tk, ts, bid, ask in rows:
-        by.setdefault(tk, []).append((float(ts), float(bid), float(ask)))
+    for tk, ts, bid, ask in _quote_rows(s, now, hours):
+        if bid > 0 and ask > 0:
+            by.setdefault(tk, []).append((ts, bid, ask))
     return mids.warm(by)
 
 
@@ -339,13 +370,16 @@ def reload_from_tape(s, indexes: Sequence[str], now: float | None = None) -> dic
     report: dict[str, float] = {"ticks": 0, "quotes": 0, "markets": 0, "hole": 0.0, "hole_end": 0.0, "seconds": 0.0, "seconds_all": 0.0}
     try:
         report["ticks"] = warm_from_tape(s, indexes, now, hours=FIRST_STAGE_HOURS)
-        report["quotes"] = warm_mids_from_tape(s, now)
+        rows = _quote_rows(s, now, 1.0)
+        by: dict[str, list[tuple[float, float, float]]] = {}
+        for tk, ts, bid, ask in rows:
+            if bid > 0 and ask > 0:
+                by.setdefault(tk, []).append((ts, bid, ask))
+        report["quotes"] = mids.warm(by)
         report["markets"] = len(mids._rows)
-        if db.tape_exists(s.tape_path):
-            tape = db.connect(s.tape_path, "tape", shared=True)
-            times = [float(r[0]) for r in tape.execute("SELECT ts FROM quotes WHERE ts>? AND ts<=? AND ticker LIKE ? ORDER BY ts", (now - 3600.0, now, "%15M-%"))]  # every recorded quote, one-sided ones too: in the last minute of a decided window the losing side has no bid, and leaving those out read a decisive close as a 50 s hole (16:15 restart, 2026-11-14)
-            if times:
-                report["hole"], report["hole_end"] = longest_hole(times, max(times[0], now - 3600.0), now)
+        times = [r[1] for r in rows]  # the rows just read, one-sided quotes included (a decided window's dead side: leaving them out read a decisive close as a 50 s hole at the 16:15 restart): the hole is read from them, with no second query
+        if times:
+            report["hole"], report["hole_end"] = longest_hole(times, max(times[0], now - 3600.0), now)
     except Exception:
         log.warning("ticks: the reload of memory from the tape failed; the bot trades on what arrives from here", exc_info=True)
     finally:
