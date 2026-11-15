@@ -1,0 +1,17 @@
+Success	live crypto_multiscale buys since Mon 2026-11-09 with a result: 442; net -36.37; early (under 3.5 min after the open): 88
+
+by the size of the 180 s move, in the market's own units (z): net and per $1 staked
+  reading: own
+    z <= 0   n= 73 net   -49.33 per $1 -0.143 lost 38
+    0 < z <= 1 n= 54 net    +3.20 per $1 +0.012 lost 21
+    1 < z <= 2 n= 70 net    -4.33 per $1 -0.009 lost 28
+    2 < z <= 3 n= 55 net   -14.39 per $1 -0.028 lost 19
+    z > 3    n= 47 net   +56.99 per $1 +0.095 lost 13
+  reading: spot
+    z <= 0   n=112 net   -56.64 per $1 -0.120 lost 52
+    0 < z <= 1 n= 99 net   -13.25 per $1 -0.027 lost 39
+    1 < z <= 2 n=131 net   +65.38 per $1 +0.072 lost 49
+    2 < z <= 3 n= 77 net   -60.29 per $1 -0.088 lost 27
+    z > 3    n= 23 net   +28.43 per $1 +0.160 lost 7
+DONE
+	

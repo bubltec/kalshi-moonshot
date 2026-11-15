@@ -1967,6 +1967,11 @@ def _hours_left(close_time: str, now: datetime | None = None) -> float | None:
 _EXIT_LOCK = threading.Lock()  # one exit at a time, so the periodic pass and the live watcher never sell the same bet twice
 
 
+def is_profit_sale(why: str) -> bool:
+    """True for a sale that cashes a gain (the old take-profit and the curve's profit take). It is sent once at the bid and never chased down the book like a crash exit, and its limit never goes under what the bet cost."""
+    return why.startswith(("take-profit", "curve risk exit (profit take)"))
+
+
 EXIT_RETRY_SLIP = (0.02, 0.05, 0.10)  # if the first sale fills nothing (or part), sell the rest this far under a fresh read of the best bid, three more times
 EXIT_SLIP = 0.02  # an exit order is limited this far under the bid we saw: it is immediate-or-cancel, so it still fills at the best bid
 
@@ -2062,11 +2067,20 @@ def exit_position(
         if count <= 0:
             store.mark_exited(row["ticker"], bid, why, lane, seen)
             return f"paper-sold {row['ticker']} @ {bid:.2f} (no live fill). {why}"
+        limit = max(0.01, round(bid - slip, 2))
+        if is_profit_sale(why):
+            from .strategy import fee_per_contract
+
+            paid = store.entry_fill(row["ticker"], side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)
+            floor = math.ceil((paid + fee_per_contract(paid)) * 100 - 1e-9) / 100
+            if bid < floor:
+                return f"profit take on {row['ticker']} not sent: the bid {bid:.2f} is under the {floor:.2f} the bet cost with its fee. {why}"
+            limit = max(limit, floor)  # a profit sale never fills under what the bet cost
         if before_order:
             before_order()
         try:
             sell = client.sell_yes_ioc if side == "yes" else client.sell_no_ioc
-            resp = sell(row["ticker"], count, max(0.01, round(bid - slip, 2)))
+            resp = sell(row["ticker"], count, limit)
         except KalshiRateLimited:
             raise
         except KalshiError as exc:
@@ -2081,7 +2095,7 @@ def exit_position(
         )
         proceeds, sold = avg * filled, filled
         left = store.net_contracts(row["ticker"], s.env)
-        if left >= 0.005 and not why.startswith("take-profit"):
+        if left >= 0.005 and not is_profit_sale(why):  # a profit sale that part-fills keeps the rest for the next quote: the watcher decides again at the new bid (2026-11-14: a take at 0.88 sold its second leg at 0.860)
             # A sale into a book that has just been cleared fills nothing at a bid read a moment ago (burst and crash exits do this). Read the book again and sell what is left a little lower each time.
             for extra in EXIT_RETRY_SLIP:
                 time.sleep(0.4)

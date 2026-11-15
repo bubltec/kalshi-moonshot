@@ -1,0 +1,61 @@
+Success	  01:35:41 BTC15M-26NOV150145   no  0.87 high 0.96 take  @0.95 real   +2.69 hold   +4.58 -> ended no
+  01:49:03 ETH15M-26NOV150200   no  0.70 high 0.94 take  @0.91 real   +7.60 hold  +10.97 -> ended no
+  01:52:06 SOL15M-26NOV150200   no  0.86 high 0.96 take  @0.94 real   +2.83 hold   +4.89 -> ended no
+  01:52:33 DOGE15M-26NOV150200  no  0.81 high 0.96 take  @0.94 real   +3.00 hold   +4.67 -> ended no
+  01:52:36 BTC15M-26NOV150200   no  0.79 high 0.95 take  @0.91 real   +2.56 hold   +4.92 -> ended no
+  02:50:25 ETH15M-26NOV150300   no  0.67 high 0.91 take  @0.85 real   +5.02 hold  -19.72 -> ended yes
+  02:51:50 NEAR15M-26NOV150300  no  0.79 high 0.87 stop  @0.45 real  -12.63 hold  -27.93 -> ended yes
+  02:52:01 ZEC15M-26NOV150300   no  0.90 high 0.87 stop  @0.36 real  -19.12 hold  -31.01 -> ended yes
+  02:53:31 ETH15M-26NOV150300   no  0.87 high 0.87 stop  @0.38 real  -13.83 hold  -23.75 -> ended yes
+  02:53:34 BTC15M-26NOV150300   no  0.75 high 0.80 stop  @0.35 real   -8.43 hold  -15.20 -> ended yes
+  02:58:50 NEAR15M-26NOV150300  no  0.35 high 0.26 stop  @0.08 real  -11.00 hold  -14.20 -> ended yes
+  03:03:38 ZEC15M-26NOV150315   yes 0.53 high 0.75 stop  @0.20 real   -7.11 hold  -11.08 -> ended no
+  03:06:48 BTC15M-26NOV150315   yes 0.51 high 0.81 stop  @0.14 real  -14.94 hold  -20.14 -> ended no
+  03:07:12 ETH15M-26NOV150315   yes 0.53 high 0.82 take  @0.83 real  +11.66 hold  -21.37 -> ended no
+  03:21:03 SOL15M-26NOV150330   yes 0.68 high 0.97 take  @0.93 real   +5.52 hold   +7.22 -> ended yes
+  03:21:08 DOGE15M-26NOV150330  yes 0.54 high 0.97 take  @0.85 real  +11.82 hold  +18.05 -> ended yes
+  03:22:50 ZEC15M-26NOV150330   yes 0.82 high 0.97 take  @0.94 real   +4.08 hold   +6.30 -> ended yes
+  04:20:26 XRP15M-26NOV150430   yes 0.49 high 0.70 stop  @0.26 real  -10.02 hold  -20.17 -> ended no
+  05:03:59 XRP15M-26NOV150515   yes 0.80 high 1.00 held        real   +6.92 hold   +6.92 -> ended yes
+  05:04:01 BTC15M-26NOV150515   yes 0.79 high 1.00 held        real   +7.42 hold   +7.42 -> ended yes
+  05:37:30 BTC15M-26NOV150545   yes 0.59 high 0.93 take  @0.83 real   +9.20 hold  +16.31 -> ended yes
+  05:37:40 HYPE15M-26NOV150545  yes 0.73 high 0.92 take  @0.86 real   +4.30 hold   +9.68 -> ended yes
+  05:38:43 DOGE15M-26NOV150545  yes 0.84 high 1.00 held        real   +2.23 hold   +2.23 -> ended yes
+  05:38:46 SOL15M-26NOV150545   yes 0.66 high 0.99 take  @0.97 real   +1.68 hold   +1.88 -> ended yes
+  05:41:47 ETH15M-26NOV150545   yes 0.40 high 0.46 stop  @0.39 real   -1.19 hold  +26.77 -> ended yes
+  05:55:47 ETH15M-26NOV150600   yes 0.63 high 0.72 stop  @0.33 real  -11.64 hold  +13.65 -> ended yes
+  05:57:11 SOL15M-26NOV150600   yes 0.86 high 1.00 held        real   +4.84 hold   +4.84 -> ended yes
+  05:58:39 BTC15M-26NOV150600   yes 0.47 high 1.00 held        real  +17.37 hold  +17.37 -> ended yes
+  06:07:10 ETH15M-26NOV150615   no  0.78 high 0.97 take  @0.95 real   +5.52 hold   +7.47 -> ended no
+  06:22:23 NEAR15M-26NOV150630  yes 0.84 high 1.00 held        real   +5.57 hold   +5.57 -> ended yes
+  06:33:46 DOGE15M-26NOV150645  yes 0.68 high 0.90 take  @0.86 real   +6.22 hold  +11.61 -> ended yes
+  06:37:35 BNB15M-26NOV150645   yes 0.81 high 0.94 take  @0.91 real   +2.93 hold   +6.09 -> ended yes
+  06:52:18 BTC15M-26NOV150700   no  0.79 high 1.00 held        real   +7.42 hold   +7.42 -> ended no
+  06:52:21 ETH15M-26NOV150700   no  0.72 high 1.00 held        real  +10.12 hold  +10.12 -> ended no
+  06:53:13 SOL15M-26NOV150700   no  0.76 high 1.00 held        real   +7.67 hold   +7.67 -> ended no
+  07:03:57 ETH15M-26NOV150715   no  0.89 high 0.96 take  @0.93 real   +0.73 hold   +2.02 -> ended no
+  07:05:06 BTC15M-26NOV150715   no  0.78 high 0.86 stop  @0.54 real   -3.91 hold   +3.34 -> ended no
+  07:05:54 ZEC15M-26NOV150715   no  0.85 high 0.95 take  @0.94 real   +0.32 hold   +0.60 -> ended no
+
+takes on bets that then won: 16, real +70.99, holding would have made +117.28: given up +46.28
+  sold at 0.80 to 0.90: 4 takes, gave up +24.11 (avg +6.03)
+  sold at 0.90 to 0.95: 11 takes, gave up +21.97 (avg +2.00)
+  sold at 0.95 to 1.01: 1 takes, gave up +0.20 (avg +0.20)
+takes on bets that then LOST (the take saved money): 3
+
+B. takes sold at a bid of 0.95 or over: why the hold did not stop them
+  01:41:00 BTC15M-26NOV150145   sold @0.95, 240s left, ended no, gave up +1.89 | gap +0.004 vs swing 0.174 -> cushion backs the price | dip 0.015 vs noise 0.049 -> within noise
+  05:44:00 SOL15M-26NOV150545   sold @0.97, 59s left, ended yes, gave up +0.20 | gap +0.054 vs swing 0.095 -> cushion backs the price | dip 0.028 vs noise 0.027 -> dipped beyond noise
+
+C. bets not sold by a take that had a bid of 0.95 or over after the buy: when the take, as it was before the 0.95 hold, would have sold
+  XRP15M-26NOV150515   yes bought 0.80: high 1.00, the old take would not have sold it either; held -> +6.92
+  BTC15M-26NOV150515   yes bought 0.79: the old take would have sold at 05:10:22 @0.98 (chance 0.975 vs 0.984) for +6.86; held it ended yes and made +7.42 -> the hold made 0.57
+  DOGE15M-26NOV150545  yes bought 0.84: high 1.00, the old take would not have sold it either; held -> +2.23
+  SOL15M-26NOV150600   yes bought 0.86: high 1.00, the old take would not have sold it either; held -> +4.84
+  BTC15M-26NOV150600   yes bought 0.47: high 1.00, the old take would not have sold it either; held -> +17.37
+  NEAR15M-26NOV150630  yes bought 0.84: high 1.00, the old take would not have sold it either; held -> +5.57
+  BTC15M-26NOV150700   no  bought 0.79: high 1.00, the old take would not have sold it either; held -> +7.42
+  ETH15M-26NOV150700   no  bought 0.72: high 1.00, the old take would not have sold it either; held -> +10.12
+  SOL15M-26NOV150700   no  bought 0.76: high 1.00, the old take would not have sold it either; held -> +7.67
+DONE
+	

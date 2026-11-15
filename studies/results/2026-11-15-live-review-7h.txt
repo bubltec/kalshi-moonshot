@@ -1,0 +1,49 @@
+Success	window: last 7 h (11-15 00:20 to now ET); live bets bought: 42; settled or sold: 40; still open or unread: 2
+NET +28.44 on $835 staked (+3.4%); wins 28 avg +5.64; losses 12 avg -10.79; win rate 70%
+
+by hour of the buy (ET)
+  00:00                  n=  1 net   -15.68  won  0/1    per $1 staked -1.000
+  01:00                  n=  6 net   +19.37  won  6/6    per $1 staked +0.154
+  02:00                  n=  6 net   -59.99  won  1/6    per $1 staked -0.455
+  03:00                  n=  6 net   +11.02  won  4/6    per $1 staked +0.094
+  04:00                  n=  1 net   -10.02  won  0/1    per $1 staked -0.497
+  05:00                  n= 10 net   +41.14  won  8/10   per $1 staked +0.198
+  06:00                  n=  7 net   +45.45  won  7/7    per $1 staked +0.246
+  07:00                  n=  3 net    -2.86  won  2/3    per $1 staked -0.092
+
+by how it ended
+  take                   n= 19 net   +88.38  won 19/19   per $1 staked +0.231
+  held, won              n=  9 net   +69.56  won  9/9    per $1 staked +0.315
+  held, lost             n=  1 net   -15.68  won  0/1    per $1 staked -1.000
+  stop                   n= 11 net  -113.82  won  0/11   per $1 staked -0.526
+
+by buy price
+  under 0.60             n= 11 net    -9.19  won  5/11   per $1 staked -0.051
+  0.60 to 0.80           n= 16 net   +34.45  won 12/16   per $1 staked +0.100
+  0.80 and over          n= 13 net    +3.19  won 11/13   per $1 staked +0.010
+
+by seconds left at the buy
+  under 150 s            n=  3 net    -9.31  won  1/3    per $1 staked -0.206
+  150 to 400 s           n=  7 net   -26.33  won  3/7    per $1 staked -0.210
+  400 to 600 s           n= 23 net   +41.60  won 18/23   per $1 staked +0.079
+  600 s and over         n=  7 net   +22.48  won  6/7    per $1 staked +0.166
+
+by side
+  no                     n= 20 net   -28.42  won 13/20   per $1 staked -0.069
+  yes                    n= 20 net   +56.86  won 15/20   per $1 staked +0.134
+
+biggest wins:
+  05:58 BTC15M-26NOV150600     yes 0.47  +17.37 held, won
+  03:21 DOGE15M-26NOV150330    yes 0.54  +11.82 take
+  03:07 ETH15M-26NOV150315     yes 0.53  +11.66 take
+  06:52 ETH15M-26NOV150700     no 0.72  +10.12 held, won
+  05:37 BTC15M-26NOV150545     yes 0.59   +9.20 take
+biggest losses:
+  02:52 ZEC15M-26NOV150300     no 0.90  -19.12 stop, 478s left at the buy
+  00:28 BNB15M-26NOV150030     no 0.34  -15.68 held, lost, 118s left at the buy
+  03:06 BTC15M-26NOV150315     yes 0.51  -14.94 stop, 491s left at the buy
+  02:53 ETH15M-26NOV150300     no 0.87  -13.83 stop, 389s left at the buy
+  02:51 NEAR15M-26NOV150300    no 0.79  -12.63 stop, 489s left at the buy
+  05:55 ETH15M-26NOV150600     yes 0.63  -11.64 stop, 252s left at the buy
+DONE
+	
