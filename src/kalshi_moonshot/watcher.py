@@ -1018,7 +1018,7 @@ class ProfitWatcher:
                     t.risk_logged = True
                     log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False)
-        if t.risk_confirm > 0 and long_chance is not None and long_chance >= t.risk_confirm:
+        if t.risk_confirm > 0 and long_chance is not None and long_chance >= curverisk.confirm_bar(t.risk_confirm, left):
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             return None
         stop = curverisk.stopped(pnl, r.q, t.risk_max_loss)  # the max loss

@@ -159,6 +159,15 @@ LATE_SHARE = 0.2  # the last fifth of a market (three minutes of fifteen): where
 HIGH_BID = 0.95  # 2026-11-14 (user: "I don't think when it's above 95 we need to consider an early sale as long as it has cushion"): from this bid up, a flat bid is held whenever the spot's cushion backs the price, at any time left, as in the last fifth of the market. The user's own number: five cents is all that is left to win.
 
 
+def confirm_bar(confirm: float, left: float, window: float = 900.0) -> float:
+    """The chance the hour view must reach to hold a risk sale (lane field curve_risk_confirm), faded as the close nears (2026-11-15, user: "Yes replay it so it does the fade", after ETH 09:00 YES was held to a full loss: the stop wanted out from 104 s left and the hour view, which is slow, stayed at 0.44 to 0.61 until 37 s left).
+    The lane's `confirm` with more than the last LATE_SHARE of the market left, rising straight to 1.0 (the view can never hold) at the close: a dip with time left may still come back, one with a minute left cannot. Same last fifth as the flat hold; replayed on 98 live bets: +$47.32 against the constant bar (5 better, 1 worse), studies/results/2026-11-15-hour-view-fade-replay.txt."""
+    if confirm <= 0:
+        return confirm
+    clock = min(max(1.0 - left / (window * LATE_SHARE), 0.0), 1.0) if window > 0 else 1.0
+    return confirm + (1.0 - confirm) * clock
+
+
 def squeeze_clock(left: float, window: float = 900.0) -> float:
     """The clock's share for the squeeze, 0 to 1 (2026-11-14, user: "squeeze shouldn't even apply at 6 minutes in, i thought we covered this"; earlier "at that time distance it should be nonexistent"). Nothing in the first half of the market, then rising to all of it at the close: a linear share of the market gone still allowed 0.8 of a cent six minutes in."""
     if window <= 0:

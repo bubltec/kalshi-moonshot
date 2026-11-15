@@ -1,0 +1,43 @@
+Success	live bets since the take went live with taped quotes, a strike and a result: 98; the real run made +10.88; bets with an hour view reading: 98
+live          : total   +32.54 | take 38 +227.54 | stop 31 -311.11 | line  0   +0.00 | settle 29 +116.11
+squeeze clock : total   +72.87 | take 33 +198.76 | stop 40 -304.46 | line  0   +0.00 | settle 25 +178.57
+last fifth    : total   +79.87 | take 37 +223.15 | stop 35 -330.18 | line  0   +0.00 | settle 26 +186.90
+no hour view  : total   +19.84 | take 30 +172.82 | stop 44 -304.14 | line  2   -3.27 | settle 22 +154.43
+
+change against the live hold, bets that differ by more than $0.50:
+squeeze clock : net   +40.33; better on 18, worse on 7
+     BTC15M-26NOV141530   no  15:20 live take   +7.40 -> stop  -11.78 (-19.18); ended no
+     DOGE15M-26NOV142245  yes 22:38 live settle   +8.34 -> stop   -8.02 (-16.36); ended yes
+     XRP15M-26NOV142230   yes 22:18 live take   +7.08 -> stop   -8.17 (-15.25); ended yes
+     XRP15M-26NOV141745   no  17:40 live take   +3.25 -> stop  -11.95 (-15.20); ended no
+     SOL15M-26NOV142100   yes 20:57 live take   +6.66 -> stop   -5.86 (-12.52); ended yes
+     BTC15M-26NOV150200   no  01:52 live take   +4.40 -> stop   -6.03 (-10.43); ended no
+     BTC15M-26NOV150315   yes 03:06 live stop   -6.56 -> stop   -9.64 (-3.08); ended no
+     BTC15M-26NOV150300   no  02:53 live stop   -5.22 -> stop   -4.40 (+0.81); ended yes
+     ZEC15M-26NOV150300   no  02:52 live stop  -12.59 -> stop  -10.14 (+2.45); ended yes
+     XRP15M-26NOV150430   yes 04:20 live stop  -10.02 -> stop   -6.82 (+3.20); ended no
+     ZEC15M-26NOV141845   no  18:37 live stop  -12.27 -> stop   -8.96 (+3.31); ended yes
+     BTC15M-26NOV141645   no  16:35 live stop  -12.96 -> stop   -9.60 (+3.37); ended yes
+     ETH15M-26NOV150300   no  02:53 live stop  -11.40 -> stop   -7.83 (+3.57); ended yes
+     HYPE15M-26NOV142300  yes 22:51 live stop  -12.11 -> stop   -7.34 (+4.77); ended no
+     ETH15M-26NOV150600   yes 05:55 live stop  -10.92 -> stop   -5.81 (+5.11); ended yes
+     SOL15M-26NOV141530   no  15:20 live stop  -13.48 -> stop   -8.06 (+5.42); ended yes
+     ETH15M-26NOV142230   yes 22:22 live stop  -15.25 -> stop   -9.05 (+6.21); ended no
+     XRP15M-26NOV141400   no  13:49 live stop  -18.16 -> stop  -11.82 (+6.34); ended no
+     BNB15M-26NOV142230   yes 22:18 live stop  -17.16 -> stop   -8.96 (+8.20); ended no
+     NEAR15M-26NOV142100  yes 20:55 live stop  -13.57 -> stop   -4.13 (+9.44); ended yes
+     XRP15M-26NOV141830   yes 18:19 live stop  -18.17 -> stop   -6.41 (+11.75); ended yes
+     XRP15M-26NOV141845   no  18:36 live stop  -22.44 -> stop   -9.19 (+13.25); ended yes
+     BNB15M-26NOV150030   no  00:28 live settle  -15.68 -> stop   -2.07 (+13.61); ended yes
+     ETH15M-26NOV150900   yes 08:53 live settle  -28.43 -> stop  -14.46 (+13.97); ended no
+     BTC15M-26NOV141830   no  18:28 live settle  -26.68 -> stop   -9.54 (+17.14); ended yes
+last fifth    : net   +47.32; better on 5, worse on 1
+     BTC15M-26NOV150200   no  01:52 live take   +4.40 -> stop   -6.03 (-10.43); ended no
+     XRP15M-26NOV141400   no  13:49 live stop  -18.16 -> stop  -12.16 (+6.00); ended no
+     XRP15M-26NOV141845   no  18:36 live stop  -22.44 -> stop  -15.39 (+7.04); ended yes
+     BNB15M-26NOV150030   no  00:28 live settle  -15.68 -> stop   -2.07 (+13.61); ended yes
+     ETH15M-26NOV150900   yes 08:53 live settle  -28.43 -> stop  -14.46 (+13.97); ended no
+     BTC15M-26NOV141830   no  18:28 live settle  -26.68 -> stop   -9.54 (+17.14); ended yes
+no hour view  : net   -12.70; better on 24, worse on 14
+DONE
+	

@@ -919,3 +919,33 @@ def test_integration_a_chance_one_cent_under_the_price_holds_the_take(tmp_path, 
 def test_integration_a_chance_three_cents_under_the_price_still_sells_and_the_note_says_so(tmp_path, monkeypatch):
     sig = cushion_take(tmp_path, monkeypatch, lambda net: net - 0.03)
     assert sig is not None and sig.why.startswith("curve risk exit (profit take)") and "is not within 0.02 of the" in sig.why
+
+
+# ---- the hour view's hold fades over the last fifth (2026-11-15, ETH 09:00 YES: the stop wanted out from 104 s left, the hour view stayed at 0.44 to 0.61) ----
+def slide_at(w, left0):
+    for k, bid in enumerate(PATH):
+        yes_bid(w, bid, left0 - 3 * k)
+    return signals(w)
+
+
+def with_hour_view(monkeypatch, chance):
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_long", lambda self, t, now, left: chance)
+
+
+def test_integration_an_hour_view_of_half_still_holds_the_stop_with_seven_minutes_left(tmp_path, monkeypatch):
+    with_hour_view(monkeypatch, 0.55)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    assert slide_at(w, 450) == []  # 0.55 is over the lane's 0.4 and the market is not in its last fifth
+
+
+def test_integration_the_same_hour_view_no_longer_holds_with_a_minute_left(tmp_path, monkeypatch):
+    with_hour_view(monkeypatch, 0.55)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    out = slide_at(w, 60)  # the bar is 0.8 at 36 s of the last fifth gone: 0.55 does not reach it
+    assert out and out[0].why.startswith("curve risk exit (max loss)")
+
+
+def test_integration_a_strong_hour_view_still_holds_late(tmp_path, monkeypatch):
+    with_hour_view(monkeypatch, 0.97)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
+    assert slide_at(w, 60) == []  # 0.97 is over the faded bar of about 0.8
