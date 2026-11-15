@@ -231,11 +231,8 @@ class Target:
     risk_history: bool = True
     risk_max_loss: float = 0.5
     risk_min_profit: float = 0.01
-    risk_swing: float = 0.0  # a loss under this many times the market's own swing over the time left is not sold (lane field curve_risk_swing)
-    risk_swing_floor: float = 0.0  # the swing hold does not apply while the chance the side pays is under this (lane field curve_risk_swing_floor)
     risk_unit: float | None = None
     risk_unit_at: float = 0.0
-    risk_swing_noted: bool = False
     risk_take: bool = False  # the profit take (lane field curve_take)
     risk_take_slope: float = 0.08  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
     risk_squeeze: float = 0.0  # the most a loss may be short of the max loss and still count as reaching it (lane field squeeze_max)
@@ -977,7 +974,7 @@ class ProfitWatcher:
             t.risk_take_hist.append((now, bid))
             while t.risk_take_hist and t.risk_take_hist[0][0] < now - max(60.0, 2.0 * look):
                 t.risk_take_hist.pop(0)
-        # The squeeze (lane field squeeze_max): the mirror of the buy's stretch, and as small. When a loss is just short of the max loss's depth, it counts as reaching it if it is short by less than the nudge the lane allows: a cent or two at most, times the history (the bid is sliding over the look back: all or nothing) times the clock (the share of the market already gone, so early in a market it is nothing). Nothing else about the sale changes: the hour view, the swing hold and the stop's wait all still apply.
+        # The squeeze (lane field squeeze_max): the mirror of the buy's stretch, and as small. When a loss is just short of the max loss's depth, it counts as reaching it if it is short by less than the nudge the lane allows: a cent or two at most, times the history (the bid is sliding over the look back: all or nothing) times the clock (the share of the market already gone, so early in a market it is nothing). Nothing else about the sale changes: the hour view and the stop's wait still apply.
         allowed, squeezed = 0.0, ""
         if t.risk_squeeze > 0 and pnl < 0:
             sliding = curverisk.still_falling(t.risk_take_hist, now, look, self._risk_unit(t, now))
@@ -1001,15 +998,6 @@ class ProfitWatcher:
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= t.risk_confirm:
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             return None
-        if t.risk_swing > 0 and pnl < 0 and r.q >= t.risk_swing_floor:  # under the floor the market already prices the bet as nearly dead: a loss is not inside any swing
-            self._risk_unit(t, now)
-            drop = (t.entry + fee_per_contract(t.entry)) - (bid - fee_per_contract(bid))
-            if curverisk.swing_hold(drop, t.risk_unit, left, t.risk_swing):
-                if not t.risk_swing_noted:
-                    t.risk_swing_noted = True
-                    log.info("curve risk: %s %s holds a loss of %.3f: under %.1f x the market's own swing over %.0fs (typical minute %.3f)", t.ticker, t.lane, drop, t.risk_swing, left, t.risk_unit or 0.0)
-                t.risk_since = 0.0  # the loss is inside what this market does in the time left: no clock runs toward a sale
-                return None
         stop = curverisk.stopped(pnl, r.q, t.risk_max_loss)  # the max loss
         if not stop and allowed > 0 and t.risk_max_loss > 0:
             miss = curverisk.stop_miss(net, basis, r.q, t.risk_max_loss)
@@ -1847,7 +1835,7 @@ class ProfitWatcher:
             if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
-                held.risk_stop_hold, held.risk_swing, held.risk_swing_floor = spec.curve_risk_stop_hold, spec.curve_risk_swing, spec.curve_risk_swing_floor
+                held.risk_stop_hold = spec.curve_risk_stop_hold
                 held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_max
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):

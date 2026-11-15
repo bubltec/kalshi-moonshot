@@ -25,8 +25,6 @@ curve_risk_spot_weight=0.0
 curve_risk_history=false
 curve_risk_confirm={confirm}
 curve_risk_stop_hold={hold}
-curve_risk_swing={swing}
-curve_risk_swing_floor={floor}
 curve_risk_max_loss={max_loss}
 curve_take={take}
 curve_take_slope_share={share}
@@ -65,9 +63,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, swing=0, floor=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5):
+def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, swing=swing, floor=floor, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -437,13 +435,13 @@ def test_integration_with_no_hold_the_stop_sells_at_once_as_before(tmp_path, mon
 def test_unit_the_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for hold in (0, 0.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, swing=0, floor=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_stop_hold" in got) is (hold > 0)
 
 
-# ---- the swing hold, through the real watcher path (2026-11-14) ----
+# ---- helpers: a market's own quote history, and a bid that sits ----
 @pytest.fixture(autouse=True)
 def _clean_mids():
     ticks_mod.mids._rows.clear()
@@ -468,101 +466,6 @@ def dip(w, bid, left, seconds=30):
         if out:
             return out[0]
     return None
-
-
-def test_integration_a_dip_inside_the_markets_own_swings_is_not_sold_at_five_minutes_left(tmp_path, monkeypatch):
-    feed_history(0.013)  # a typical minute of about 0.10: this market routinely moves 0.10 in a minute
-    w = held(tmp_path, monkeypatch, live=True, swing=1.5)
-    assert dip(w, 0.58, 300) is None  # 0.58 is a loss of 0.26 against a band of 1.5 * 0.10 * sqrt(5) = 0.34
-
-
-def test_integration_the_same_dip_in_a_quiet_market_is_sold(tmp_path, monkeypatch):
-    feed_history(0.0013)  # a typical minute of about 0.01
-    w = held(tmp_path, monkeypatch, live=True, swing=1.5)
-    sig = dip(w, 0.58, 300)
-    assert sig is not None and sig.why.startswith("curve risk exit (max loss)")
-
-
-def test_integration_the_same_swinging_market_sells_that_dip_when_the_close_is_near(tmp_path, monkeypatch):
-    feed_history(0.013, to_left=40)
-    w = held(tmp_path, monkeypatch, live=True, swing=1.5)
-    sig = dip(w, 0.58, 40, seconds=9)  # the band is 1.5 * 0.10 * sqrt(40 / 60) = 0.12, under the loss of 0.26
-    assert sig is not None
-
-
-def test_integration_with_the_swing_off_the_swinging_markets_dip_is_sold_as_before(tmp_path, monkeypatch):
-    feed_history(0.013)
-    w = held(tmp_path, monkeypatch, live=True, swing=0)
-    assert dip(w, 0.58, 300) is not None
-
-
-def test_integration_with_no_quote_history_the_plain_stop_applies(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, swing=1.5)  # nothing in the market's own history: no reading of its swing, no hold
-    assert dip(w, 0.58, 300) is not None
-
-
-def test_integration_a_loss_sold_on_the_line_is_held_too(tmp_path, monkeypatch):
-    feed_history(0.013)
-    w = held(tmp_path, monkeypatch, live=True, swing=2.5)  # a band of 2.5 * 0.10 * sqrt(5) = 0.56: the loss of 0.37 at a bid of 0.45 is inside it
-    assert dip(w, 0.45, 300, seconds=60) is None  # neither the max-loss stop nor the line sale (q under 0.5, after its wait) may sell it
-    ticks_mod.mids._rows.clear()
-    feed_history(0.013)
-    w2 = held(tmp_path, monkeypatch, live=True, swing=0)
-    assert dip(w2, 0.45, 300, seconds=60) is not None  # the same bet with the swing off sells
-
-
-def test_integration_the_hold_is_logged_once_for_the_bet(tmp_path, monkeypatch, caplog):
-    import logging
-
-    feed_history(0.013)
-    w = held(tmp_path, monkeypatch, live=True, swing=1.5)
-    with caplog.at_level(logging.INFO, logger="moonshot"):
-        dip(w, 0.58, 300, seconds=60)
-    assert sum(1 for r in caplog.records if "holds a loss" in r.getMessage()) == 1
-
-
-def test_unit_the_swing_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    for swing in (0, 1.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=swing, floor=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5))
-        s = config.load()
-        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
-        assert ("curve_risk_swing" in got) is (swing > 0)
-
-
-# ---- the swing hold's floor (2026-11-14, user: "Floor at 10") ----
-def test_integration_under_the_floor_the_swing_hold_lets_a_loss_sell(tmp_path, monkeypatch):
-    feed_history(0.013)  # a typical minute of about 0.10
-    w = held(tmp_path, monkeypatch, live=True, swing=4.0, floor=0.10)  # a band of 4 * 0.10 * sqrt(5) = 0.9: the loss at a bid of 0.08 (0.75) is inside it
-    sig = dip(w, 0.08, 300)
-    assert sig is not None and sig.why.startswith("curve risk exit (max loss)")
-
-
-def test_integration_above_the_floor_the_same_band_still_holds(tmp_path, monkeypatch):
-    feed_history(0.013)
-    w = held(tmp_path, monkeypatch, live=True, swing=4.0, floor=0.10)
-    assert dip(w, 0.30, 300) is None  # a loss of 0.52 at a bid of 0.30: inside the band and above the floor
-
-
-def test_integration_with_no_floor_the_band_holds_a_bid_of_eight_cents(tmp_path, monkeypatch):
-    feed_history(0.013)
-    w = held(tmp_path, monkeypatch, live=True, swing=4.0, floor=0)
-    assert dip(w, 0.08, 300) is None  # the ETH case: held all the way down
-
-
-def test_integration_the_floor_is_a_chance_not_a_price_of_the_yes_side(tmp_path, monkeypatch):
-    feed_history(0.013)
-    w = held(tmp_path, monkeypatch, live=True, swing=4.0, floor=0.60)  # a floor above the bid's net chance of 0.567
-    assert dip(w, 0.58, 300) is not None
-
-
-def test_unit_the_floor_changes_a_lanes_version_only_when_set_with_the_swing(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    for floor in (0, 0.1):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=1.5, floor=floor, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5))
-        s = config.load()
-        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
-        assert ("curve_risk_swing_floor" in got) is (floor > 0)
 
 
 # ---- the profit take, scaled by the bet and the clock (2026-11-14, user: "why not just use the bet?"; "earlier in the market is a better favor to sell for profit") ----
@@ -679,7 +582,7 @@ def test_integration_the_take_sale_is_executed_as_an_order(tmp_path, monkeypatch
 def test_unit_the_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for take in ("false", "true"):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take=take, stretch=0, share=0.015, squeeze=0, max_loss=0.5))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take=take, stretch=0, share=0.015, squeeze=0, max_loss=0.5))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_take" in got) is (take == "true")
@@ -747,8 +650,8 @@ SIT = [0.78] * 12
 # the fixture bet costs about 0.80 all-in; the max loss (0.5 x the chance) is reached at a net bid of about 0.571. A bid of 0.59 nets about 0.574, which is about 0.003 short of it; a bid of 0.60 about 0.017 short
 TO_59 = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 20)] + [0.59] * 6  # slides to 0.59 and stops: never reaches the max loss
 TO_60 = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 19)] + [0.60] * 6
-NO_HOLDS = dict(hold=0, swing=0, share=0.08)  # the bar alone, so the test reads the squeeze and nothing else
-LIVE = dict(hold=0.5, swing=1.5, share=0.08)  # the live lane's holds
+NO_HOLDS = dict(hold=0, share=0.08)  # the bar alone, so the test reads the squeeze and nothing else
+LIVE = dict(hold=0.5, share=0.08)  # the live lane's holds
 CAP = 0.02  # two cents
 
 
@@ -808,7 +711,7 @@ def test_integration_the_hour_view_still_holds_a_squeezed_sale(tmp_path, monkeyp
 def test_unit_the_squeeze_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for squeeze in (0, 0.02):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, swing=0, floor=0, take="false", stretch=0, share=0.015, squeeze=squeeze, max_loss=0.5))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="false", stretch=0, share=0.015, squeeze=squeeze, max_loss=0.5))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("squeeze_max" in got) is (squeeze > 0)

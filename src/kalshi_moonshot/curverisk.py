@@ -124,15 +124,6 @@ def long_chance(ts: list[float], vs: list[float], now: float, ref: float, side: 
     return _N.cdf(cushion / (rate * math.sqrt(left)))
 
 
-def swing_hold(drop: float, unit: float | None, left: float, k: float) -> bool:
-    """True when a loss is still inside the market's own swings, so it is no reason to sell (2026-11-14, user, after a NEAR NO bought at 0.56 with 295 s left was sold at 0.29 and then won: "the look back should have seen that the curve was dipping and rising ... So why would a 56c care if it dips to 12c for a moment? Thats not a reason to sell at 5mins left").
-    `drop` is the loss per contract in probability (the cost less the bid after its fee), `unit` the market's own typical minute (quoteshock.typical_minute: sqrt(60) times the root-mean-square one-second change of its mid over the last 15 minutes, in probability), `left` the seconds to the close, `k` the lane's setting (0 = off).
-    A move over the time left is about unit * sqrt(left / 60), so a loss under k of that is what this market does in the time it has: more time left means a wider band, and the band narrows to one typical minute as the close nears. No reading of the unit means no hold (the plain stop applies)."""
-    if k <= 0 or unit is None or unit <= 0 or left <= 0:
-        return False
-    return drop < k * unit * math.sqrt(left / MINUTE)
-
-
 def take_bar(gain: float, room: float, left: float, window: float, unit: float | None = None) -> float:
     """The gain a bet must have before the profit take sells it, per contract in probability.
     The clock's bar: the share of the bet's own room (1 less its all-in cost) that the market's time has used up, none at the open and all of it at the close. Early, any gain is worth cashing since the side can be bought back; late, the bar climbs toward the whole room.
