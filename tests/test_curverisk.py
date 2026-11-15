@@ -365,3 +365,18 @@ def test_unit_stop_wait_never_exceeds_the_lanes_share_of_the_time_left_and_zero_
     assert curverisk.stop_wait(0.60, 0.5, 450, 40.0, 0.0) == 0.0  # the lane has no wait: the stop sells at once
     assert curverisk.stop_wait(0.60, 0.5, 0, 40.0, 0.5) == 0.0
     assert curverisk.stop_wait(0.60, 0.0, 450, 40.0, 0.5) == pytest.approx(20.0)  # a lane with no line: no depth to read, the clock still applies
+
+
+def test_unit_the_squeeze_clock_is_nothing_in_the_first_half_of_a_market():
+    # 2026-11-14 (user: "squeeze shouldn't even apply at 6 minutes in"): none until the market is half gone, then rising to all of it at the close
+    assert curverisk.squeeze_clock(900.0) == 0.0
+    assert curverisk.squeeze_clock(540.0) == 0.0  # six minutes in: it was 0.4 of the cap before
+    assert curverisk.squeeze_clock(450.0) == 0.0  # the half way point
+    assert abs(curverisk.squeeze_clock(300.0) - 1.0 / 3.0) < 1e-9
+    assert abs(curverisk.squeeze_clock(120.0) - (2.0 * (1.0 - 120.0 / 900.0) - 1.0)) < 1e-9
+    assert curverisk.squeeze_clock(0.0) == 1.0
+    assert curverisk.squeeze_clock(-5.0) == 1.0 and curverisk.squeeze_clock(500.0, 0.0) == 0.0
+    from kalshi_moonshot.lanes import nudge
+
+    assert nudge(0.02, 1.0, curverisk.squeeze_clock(540.0)) == 0.0  # six minutes in the nudge does not exist
+    assert nudge(0.02, 1.0, curverisk.squeeze_clock(120.0)) > 0.014  # with two minutes left it is about three quarters of the cap

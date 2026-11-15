@@ -153,6 +153,14 @@ def cushion_holds(chance: float, net_bid: float) -> bool:
 LATE_SHARE = 0.2  # the last fifth of a market (three minutes of fifteen): where a flat bid is held, not sold (2026-11-14, user, "a flat slope under 3 mins is perfectly fine, unless it starts to dip while profitable we should not sell"); a share of the market's length, which is structural
 
 
+def squeeze_clock(left: float, window: float = 900.0) -> float:
+    """The clock's share for the squeeze, 0 to 1 (2026-11-14, user: "squeeze shouldn't even apply at 6 minutes in, i thought we covered this"; earlier "at that time distance it should be nonexistent"). Nothing in the first half of the market, then rising to all of it at the close: a linear share of the market gone still allowed 0.8 of a cent six minutes in."""
+    if window <= 0:
+        return 0.0
+    used = min(max(1.0 - left / window, 0.0), 1.0)
+    return max(0.0, 2.0 * used - 1.0)
+
+
 def flat_holds(net_bid: float, chance: float | None, unit: float | None, left: float) -> bool:
     """True when the spot's cushion backs the price well enough for a flat bid to be held late (2026-11-14, user: "flat and low cushion is an acceptable sell"; "slopping upward with high cushion is not"; on SOL NO 15:30, back at 0.95 with 30 s left on a curve chance of 0.61, which lost at the bell).
     The gap is what the sale pays net of its fee less the curve's chance that the side pays (the cushion check's own two numbers); the cushion is thin when that gap is more than the market's swing over the time left (the typical minute x sqrt(left / 60), the late cap's own yardstick). With no reading of the chance or the unit the cushion is unknown and a flat bid is not held."""

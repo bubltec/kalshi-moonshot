@@ -987,7 +987,7 @@ class ProfitWatcher:
         allowed, squeezed = 0.0, ""
         if t.risk_squeeze > 0 and pnl < 0:
             sliding = curverisk.still_falling(t.risk_take_hist, now, look, self._risk_unit(t, now))
-            allowed = nudge(t.risk_squeeze, 1.0 if sliding else 0.0, 1.0 - left / 900.0)
+            allowed = nudge(t.risk_squeeze, 1.0 if sliding else 0.0, curverisk.squeeze_clock(left, 900.0))
         if t.risk_take:  # the profit take comes before the hour view: a bet that is well ahead is the one to cash, whatever the hour says
             gain = net - basis
             room, rebuy = 1.0 - basis, fee_per_contract(bid)
