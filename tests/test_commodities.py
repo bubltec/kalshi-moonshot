@@ -514,7 +514,9 @@ def test_a_stale_learned_offset_is_dropped(tmp_path):
                        memory={}, windows=old)
 
 
-def test_scoping_refreshes_the_offsets_before_it_lists_windows(tmp_path):
+def test_scoping_refreshes_the_offsets_before_it_lists_windows_from_the_stored_windows_and_not_from_kalshi(tmp_path):
+    from tests.test_window_marks import stream_it
+
     now = datetime.now(UTC)
     s = settings(tmp_path)
     markets, minutes = boundary_world(now=now)
@@ -528,8 +530,11 @@ def test_scoping_refreshes_the_offsets_before_it_lists_windows(tmp_path):
             return []
 
     store = Store(s.db_path)
-    runner.scope_lane(s, Client(markets), store, lanes.spec_for(s, "commodity"), now, quant=quant)
+    stream_it(store, markets)  # what the stream said of those windows
+    client = Client(markets)
+    runner.scope_lane(s, client, store, lanes.spec_for(s, "commodity"), now, quant=quant)
     assert "KXSILVER15M" in quant.windows
+    assert client.calls == 0  # no REST read of settled markets
 
 
 def test_the_cooldown_shrinks_as_a_short_market_nears_its_close(tmp_path):

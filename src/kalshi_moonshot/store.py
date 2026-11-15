@@ -256,6 +256,16 @@ CREATE TABLE IF NOT EXISTS windows (
   settled_value REAL             -- the value the window settled on (Kalshi's expiration_value: the price of the underlying, not the contract's); NULL until read
 );
 
+CREATE TABLE IF NOT EXISTS window_marks (
+  ticker TEXT PRIMARY KEY,
+  series TEXT NOT NULL,
+  close_ts INTEGER NOT NULL,
+  strike REAL,
+  result TEXT,                   -- 'yes' / 'no', from the stream's result event
+  noted_ts REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_window_marks_series ON window_marks(series, close_ts);
+
 CREATE TABLE IF NOT EXISTS grid_obs (
   ticker TEXT NOT NULL, series TEXT NOT NULL, side TEXT NOT NULL,
   mband INTEGER NOT NULL, pband INTEGER NOT NULL, rule TEXT NOT NULL DEFAULT 'trail',
@@ -801,6 +811,40 @@ class Store:
 
     def lane_versions(self, lane: str) -> list[db.Row]:
         return self.db.execute("SELECT ver, first_ts, settings FROM lane_versions WHERE lane=? ORDER BY first_ts", (lane,)).fetchall()
+
+    def note_window(self, ticker: str, close_ts: int, strike: float | None = None, result: str | None = None) -> None:
+        """Keep what the stream says of a 15-minute window: its strike when it opens, its result when it settles. The two arrive apart, so each fills only its own column. The window offset is learned from these (commodities.learn_windows), so no REST read of settled markets is needed."""
+        if strike is None and result not in ("yes", "no"):
+            return
+        row = self.db.execute("SELECT strike, result FROM window_marks WHERE ticker=?", (ticker,)).fetchone()
+        have_strike, have_result = (row["strike"], row["result"]) if row else (None, None)
+        self.db.execute(
+            "INSERT OR REPLACE INTO window_marks (ticker, series, close_ts, strike, result, noted_ts) VALUES (?,?,?,?,?,?)",
+            (ticker, ticker.split("-")[0], int(close_ts), strike or have_strike, result if result in ("yes", "no") else have_result, time.time()),
+        )
+        self.db.commit()
+
+    def settled_windows(self, series: str, limit: int = 40) -> list[dict[str, Any]]:
+        """The series' newest windows in the shape Kalshi's settled-markets listing has (ticker, close_time, floor_strike, result, expiration_value), from the stream's marks and the history job's windows. Where both hold a window the history row wins. A window with no strike is left out."""
+        from datetime import UTC, datetime
+
+        out: dict[str, dict[str, Any]] = {}
+        for t, c, k, r, v in self.db.execute(
+            "SELECT ticker, close_ts, strike, result, NULL FROM window_marks WHERE series=? AND strike IS NOT NULL ORDER BY close_ts DESC LIMIT ?", (series, limit),
+        ).fetchall():
+            out[t] = {"ticker": t, "close_ts": c, "floor_strike": k, "result": r, "expiration_value": v}
+        for t, c, k, r, v in self.db.execute(
+            "SELECT ticker, close_ts, strike, result, settled_value FROM windows WHERE series=? AND strike IS NOT NULL ORDER BY close_ts DESC LIMIT ?", (series, limit),
+        ).fetchall():
+            out[t] = {"ticker": t, "close_ts": c, "floor_strike": k, "result": r, "expiration_value": v}
+        rows = sorted(out.values(), key=lambda m: -m["close_ts"])[:limit]
+        for m in rows:
+            m["close_time"] = datetime.fromtimestamp(m.pop("close_ts"), UTC).isoformat()
+        return rows
+
+    def settled_markets(self, series: str, limit: int = 40) -> list[dict[str, Any]]:
+        """The name the window learner calls on its source (a Kalshi client has the same method): this store answers from its own rows."""
+        return self.settled_windows(series, limit)
 
     @remembers()
     def window_strike(self, ticker: str) -> float | None:

@@ -756,9 +756,28 @@ class Worker:
             except queue.Empty:
                 continue
             try:
+                if kind == "market":
+                    self._note_window(store, item)
                 self._on_market_event(jobs, kind, item)
             except Exception:
                 log.exception("market event %s failed", kind)
+
+    @staticmethod
+    def _note_window(store: Store, e: dict[str, Any]) -> None:
+        """A 15-minute window's strike and result, kept from the stream's events (Store.note_window) so the window offset is learned with no REST read."""
+        from .marketdata import MarketCache
+
+        ticker = str(e.get("ticker") or "")
+        if e.get("event") not in {"strike", "determined"} or not ticker.split("-")[0].endswith("15M"):
+            return
+        close = MarketCache._close_from_ticker(ticker)
+        if not close:
+            return
+        ts = int(datetime.fromisoformat(close).timestamp())
+        if e.get("event") == "strike":
+            store.note_window(ticker, ts, strike=float(e["strike"]) if e.get("strike") else None)
+        else:
+            store.note_window(ticker, ts, result=str(e.get("result") or "").lower() or None)
 
     def _on_market_event(self, jobs: Jobs, kind: str, item: Any) -> None:
         """One market event or feed change onto the scope jobs. Separate from the thread so a test can drive it."""

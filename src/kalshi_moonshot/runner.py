@@ -262,7 +262,7 @@ def scope_lane(
     """
     now = now or datetime.now(UTC)
     if quant is not None and spec.timed_suffix:
-        quant.learn_windows(client, s, now)  # keep each 15-minute series' feed offset fresh
+        quant.learn_windows(store, s, now)  # keep each 15-minute series' feed offset fresh, from the windows the stream and the history job have stored (no REST read)
     relaxed = replace(
         spec, price=(0.0, 1.0), max_spread=1.0, min_volume=0.0, min_return=0.0,
         entry_elapsed=(0.0, 1e9),  # a window not yet in its entry range must still be watched
