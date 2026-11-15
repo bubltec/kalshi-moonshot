@@ -1,0 +1,21 @@
+live bets since 11-14 17:02 ET with a result: 132; net $-79.45 on $2729
+
+by entry price: n | made money | avg win $ (% of stake) | avg loss $ (% of stake) | net | win rate needed to break even
+  0.00-0.65: n  39 | won  20 (51%) | avg win $ 8.11 (+50%) | avg loss $ 7.81 (53%) | net $ +13.84 | needs 49%
+  0.65-0.72: n  24 | won  16 (67%) | avg win $ 5.41 (+30%) | avg loss $14.59 (67%) | net $ -30.19 | needs 73%
+  0.72-0.78: n  28 | won  19 (68%) | avg win $ 6.15 (+27%) | avg loss $11.56 (58%) | net $ +12.89 | needs 65%
+  0.78-0.90: n  41 | won  30 (73%) | avg win $ 3.88 (+16%) | avg loss $17.49 (66%) | net $ -76.00 | needs 82%
+
+losses by how they ended: n | avg loss $ | avg loss % of stake
+  stop : n  42 | $11.01 | 56%
+  held : n   4 | $23.65 | 100%
+  exit : n   1 | $ 4.57 | 29%
+
+five biggest losses:
+  11-15 08:53 ETH15M-26NOV150900 entry 0.78 stake $28.43 result $-28.43 (-100%) held
+  11-14 18:28 BTC15M-26NOV141830 entry 0.78 stake $26.68 result $-26.68 (-100%) held
+  11-14 18:37 ZEC15M-26NOV141845 entry 0.71 stake $23.79 result $-23.79 (-100%) held
+  11-15 13:04 BTC15M-26NOV151315 entry 0.82 stake $29.91 result $-20.93 (-70%) stop
+  11-15 09:20 XRP15M-26NOV150930 entry 0.79 stake $27.88 result $-20.36 (-73%) stop
+DONE
+	
