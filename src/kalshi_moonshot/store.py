@@ -201,19 +201,6 @@ CREATE TABLE IF NOT EXISTS curve_vectors (
 );
 CREATE INDEX IF NOT EXISTS idx_curve_vectors_series ON curve_vectors(series, close_ts);
 
-CREATE TABLE IF NOT EXISTS esports_forecasts (
-  event_ticker TEXT PRIMARY KEY, -- one forecast per match (esports.py)
-  ticker TEXT NOT NULL,          -- the team market that was asked about
-  game TEXT, team TEXT, rival TEXT,
-  ts REAL NOT NULL, start_ts REAL,
-  p_model REAL NOT NULL,         -- the model's chance that `team` wins, from news only (it never sees the price)
-  why TEXT, news TEXT,
-  bid REAL, ask REAL, mid REAL,  -- the market when the forecast was made
-  outcome TEXT, settled_ts REAL, -- 'yes' / 'no' once the match is over
-  p_rank REAL,                   -- the same question with both teams' rankings added to the news (rankings.py); empty when no ranking could be read
-  rank_why TEXT, ranking TEXT    -- what the model said, and the ranking lines it was shown
-);
-
 CREATE TABLE IF NOT EXISTS flips (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -442,10 +429,6 @@ class Store:
                 if name == "version":
                     # Every row that exists before versions did was made by the old logic.
                     self.db.execute("UPDATE decisions SET version=?", (LEGACY_VERSION,))
-        have_es = {r["name"] for r in self.db.execute("PRAGMA table_info(esports_forecasts)")}
-        for name, ddl in (("p_rank", "REAL"), ("rank_why", "TEXT"), ("ranking", "TEXT")):
-            if name not in have_es:
-                self.db.execute(f"ALTER TABLE esports_forecasts ADD COLUMN {name} {ddl}")
         candle_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(candles)")}
         for col in ("bid_hi", "ask_lo"):
             if col not in candle_cols:

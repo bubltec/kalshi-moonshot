@@ -112,7 +112,6 @@ class Settings:
     shard_topup_max_per_day: float  # most dollars the bot may move between exchanges per day (New York time)
     patterns_hours: float  # how often to rewrite data/patterns.md from your trades (0 = off)
     tape_enabled: bool  # record contract quotes next to the price they follow (lead-lag study)
-    esports_forecast: bool  # forecast CS2 and Dota 2 matches with the local model and news, and score it against the market (esports.py); never trades
     settlement_edge_enabled: bool  # log, as paper bets, the side whose exact settlement chance beats its ask in the last 150 s of every crypto 15-minute market (settlement_edge.py)
     fut_flow_enabled: bool  # record Hyperliquid perpetual-futures trade flow per second on the tape (futflow.py)
     fut_flow_coins: tuple[str, ...]
@@ -429,7 +428,6 @@ def load() -> Settings:
         heartbeat_enabled=os.environ.get("HEARTBEAT_ENABLED", "").strip().lower() in ("1", "true", "yes"),
         heartbeat_region=os.environ.get("HEARTBEAT_REGION", "us-east-2").strip() or "us-east-2",
         site_publish_minutes=max(5, _i("SITE_PUBLISH_MINUTES", 30)),
-        esports_forecast=_b("ESPORTS_FORECAST", True),
         settlement_edge_enabled=_b("SETTLEMENT_EDGE_ENABLED", False),  # off: the paper observer's replay edge vanished once fills were delayed (scripts/settlement_edge_fill_study.py)
         fut_flow_enabled=_b("FUT_FLOW_ENABLED", True),
         fut_flow_coins=tuple(x.strip() if ":" in x else x.strip().upper() for x in os.environ.get("FUT_FLOW_COINS", "BTC,ETH,SOL,XRP,DOGE").split(",") if x.strip()),  # a builder-dex coin such as xyz:GOLD keeps its case: Hyperliquid names it exactly so

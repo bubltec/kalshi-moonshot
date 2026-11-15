@@ -117,7 +117,7 @@ def test_latest_falls_back_to_the_tape_when_memory_is_empty_or_stale(tmp_path, m
     assert feed.latest("kp:BRTI")[0] == pytest.approx(rows[-1][2])
 
 
-def test_every_series_the_live_ladder_lane_lists_has_an_instrument_the_ladder_can_price():
+def test_every_series_the_live_crypto_lane_lists_has_an_instrument_the_ladder_can_price():
     """Guards the lane file: a series with no instrument drops out as "could not price this ladder", which is how six coins were silently missing from the ladder lane."""
     import tomllib
     from pathlib import Path
@@ -125,8 +125,8 @@ def test_every_series_the_live_ladder_lane_lists_has_an_instrument_the_ladder_ca
     toml = Path(__file__).resolve().parents[1] / "data" / "strategies.toml"
     if not toml.exists():
         pytest.skip("no local lane file")
-    lane = tomllib.loads(toml.read_text()).get("lane", {}).get("crypto_ladder_perp")
+    lane = tomllib.loads(toml.read_text()).get("lane", {}).get("crypto_multiscale")  # was crypto_ladder_perp until that retired lane was removed (2026-11-14): the live lane lists the same eleven series
     if not lane:
-        pytest.skip("no crypto_ladder_perp lane")
+        pytest.skip("no crypto_multiscale lane")
     missing = [s for s in lane["series"] if cm.symbol_for(s) is None or not cm.symbol_for(s).startswith("kp:")]
     assert missing == [] and len(lane["series"]) == 11

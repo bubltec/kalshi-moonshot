@@ -110,7 +110,6 @@ class Worker:
         self.settlement_edge: Any = None
         self.discovery: Any = None
         self._hot_local = threading.local()  # the discovery thread's own store connection
-        self.esports: Any = None
         self._tape_db: Any = None  # a read connection to the tape, opened on first use, for the entry factors saved with decisions
         self.stopping = False
         self._poly_client: Any = None  # PolymarketClient, False once building it has failed, None until first use
@@ -158,7 +157,6 @@ class Worker:
         self._start_discovery()
         self._start_tape()
         threading.Thread(target=self._quote_polymarket, name="polymarket-paper", daemon=True).start()
-        self._start_esports()
         from . import forecast_fit
 
         forecast_fit.start_refit(lambda: self.s)  # idle unless a forecast lane is on
@@ -206,18 +204,6 @@ class Worker:
         except Exception:
             log.exception("could not start the tape recorder; continuing without it")
             self.recorder = None
-
-    def _start_esports(self) -> None:
-        """Forecast CS2 and Dota 2 matches with the local model and news, to see whether it beats the market. Measure only; its own thread, no orders."""
-        from . import esports
-        from .rankings import Rankings
-
-        if not self.s.esports_forecast or self.esports is not None or not hasattr(self.est, "estimate"):
-            return
-        db_path = self.s.db_path
-        self.esports = esports.Forecaster(self.client, self.est, self.searcher, lambda: Store(db_path, self.s.exclude_versions), Rankings())
-        self.esports.start()
-        log.info("esports forecaster on: scoring the model against the market on CS2 and Dota 2 (no orders)")
 
     def _start_watcher(self) -> None:
         """Sell on the live socket when a lane's take-profit level is hit (only if some lane asks for one)."""
@@ -378,8 +364,6 @@ class Worker:
             self.watcher.stop()
         if self.entry_watcher is not None:
             self.entry_watcher.stop()
-        if self.esports is not None:
-            self.esports.stop()
         if self.recorder is not None:
             self.recorder.stop()
 

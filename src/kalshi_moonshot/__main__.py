@@ -980,14 +980,6 @@ def cmd_scalp_cases(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_esports(s: config.Settings, args: argparse.Namespace) -> int:
-    """How the model's CS2 and Dota 2 forecasts compare with Kalshi's prices so far (read-only)."""
-    from . import esports
-
-    print("\n".join(esports.report(Store(s.db_path, s.exclude_versions))))
-    return 0
-
-
 def cmd_probe_maker(s: config.Settings, args: argparse.Namespace) -> int:
     """Place ONE small resting buy under the market, to see a real fill with no fee. Dry run unless --yes. It cancels itself after --seconds."""
     import time
@@ -1131,7 +1123,7 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "record": cmd_record, "resolve": cmd_resolve, "report": cmd_report,
-    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "factors": cmd_factors, "template": cmd_template, "probe-maker": cmd_probe_maker, "esports": cmd_esports, "forecast-fit": cmd_forecast_fit, "forecast-review": cmd_forecast_review, "forecast-compare": cmd_forecast_compare, "scalp-cases": cmd_scalp_cases, "variants": cmd_variants, "misses": cmd_misses, "scorecard": cmd_scorecard, "versions": cmd_versions, "shardmove": cmd_shardmove, "kill": cmd_kill,
+    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "factors": cmd_factors, "template": cmd_template, "probe-maker": cmd_probe_maker, "forecast-fit": cmd_forecast_fit, "forecast-review": cmd_forecast_review, "forecast-compare": cmd_forecast_compare, "scalp-cases": cmd_scalp_cases, "variants": cmd_variants, "misses": cmd_misses, "scorecard": cmd_scorecard, "versions": cmd_versions, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
     "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "gap": cmd_gap, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
