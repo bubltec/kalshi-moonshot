@@ -144,10 +144,13 @@ def take_profit(gain: float, room: float, left: float, window: float, rebuy_fee:
     return gain >= take_bar(gain, room, left, window, unit)
 
 
-def cushion_holds(chance: float, net_bid: float) -> bool:
+CUSHION_NUDGE = 0.02  # 2026-11-15 (user: "Yes the .02", after ETH YES 07:23 sold at 0.88 on a cushion 0.015 short and went to 0.98): the most the curve's chance may fall short of what the sale pays and still count as backing it. The same two cents as the buy's stretch and the sale's squeeze.
+
+
+def cushion_holds(chance: float, net_bid: float, allowance: float = 0.0) -> bool:
     """True when the spot's cushion says the bet is worth more held than sold (2026-11-14, user, after a BTC NO sold at 0.83 that "was never close to losing" and a ZEC NO sold at 0.89: "we just need a cushion check before we decide to sell (in the profit flow)").
     `chance` is the curve's chance, from the spot's distance to the strike over the time left in the market's own variance (history widened), that the side pays; `net_bid` is what the sale pays after its fee. Holding is worth `chance` of a dollar on that read, the sale `net_bid`: when the cushion's chance is the larger, the cushion says hold. No share, price level or number of cents is fixed; the chance and the bid are the market's own."""
-    return chance > net_bid
+    return chance > net_bid - allowance  # with the allowance (CUSHION_NUDGE on the live take) a chance within that much under the price still holds
 
 
 LATE_SHARE = 0.2  # the last fifth of a market (three minutes of fifteen): where a flat bid is held, not sold (2026-11-14, user, "a flat slope under 3 mins is perfectly fine, unless it starts to dip while profitable we should not sell"); a share of the market's length, which is structural

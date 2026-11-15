@@ -999,13 +999,13 @@ class ProfitWatcher:
             cushion = ""
             if taken and t.risk_take_cushion:
                 chance = self._take_cushion(t, now, left, net)
-                if chance is not None and curverisk.cushion_holds(chance, net):
+                if chance is not None and curverisk.cushion_holds(chance, net, curverisk.CUSHION_NUDGE):
                     taken = False  # the spot's cushion says the bet is worth more held than sold
                     if not t.risk_take_held:
                         t.risk_take_held = True
-                        log.info("curve risk: %s %s profit take held by the cushion: the spot's chance %.3f is over the %.3f the sale pays (bid %.2f, %.0fs left)", t.ticker, t.lane, chance, net, bid, left)
+                        log.info("curve risk: %s %s profit take held by the cushion: the spot's chance %.3f is over (or within the allowance of) the %.3f the sale pays (bid %.2f, %.0fs left)", t.ticker, t.lane, chance, net, bid, left)
                 elif chance is not None:
-                    cushion = f" [cushion: the spot's chance {chance:.3f} is not over the {net:.3f} the sale pays]"
+                    cushion = f" [cushion: the spot's chance {chance:.3f} is not within {curverisk.CUSHION_NUDGE:g} of the {net:.3f} the sale pays]"
                 else:
                     cushion = " [cushion: no spot reading, so the check did not apply]"  # 2026-11-14: SOL 21:45 sold with the check on and a chance over the bid; a sale has to say whether the check ran
             if taken:

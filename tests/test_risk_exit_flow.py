@@ -890,3 +890,32 @@ def test_integration_above_ninety_five_a_flat_bid_with_a_thin_cushion_sells(tmp_
 def test_integration_under_ninety_five_the_same_flat_bid_still_sells_with_seven_minutes_left(tmp_path, monkeypatch):
     sig = high_flat(tmp_path, monkeypatch, 0.008, 0.93)  # a high cushion, but the bid is under 0.95 and the market is not in its last fifth
     assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+# ---- a two cent allowance on the cushion check (2026-11-15, user: "Yes the .02"; ETH YES 07:23 sold at 0.88 with the spot's chance 0.858 against the 0.873 the sale paid, then 0.98) ----
+def test_unit_the_cushion_allowance_holds_a_chance_within_two_cents_under_the_price():
+    from kalshi_moonshot import curverisk
+
+    nudge = curverisk.CUSHION_NUDGE
+    assert nudge == 0.02
+    assert curverisk.cushion_holds(0.858, 0.873, nudge) is True  # 0.015 short: held
+    assert curverisk.cushion_holds(0.853, 0.873, nudge) is False  # exactly 0.02 short: sells (the chance must be over, not equal to, the price less the allowance)
+    assert curverisk.cushion_holds(0.80, 0.873, nudge) is False
+    assert curverisk.cushion_holds(0.858, 0.873) is False  # without the allowance it is the strict check
+
+
+def cushion_take(tmp_path, monkeypatch, chance):
+    """The lane file with the cushion check on; the spot's chance is set directly so the gap to the price is exact."""
+    monkeypatch.setattr(watcher.ProfitWatcher, "_take_cushion", lambda self, t, now, left, net: chance(net))
+    w = held(tmp_path, monkeypatch, live=True, take="true", cushion="true")  # the fixture's short look back, so the climb has history behind it
+    assert climb(w, 0.82, 0.92, 700) is None
+    return level(w, 0.92, 700)
+
+
+def test_integration_a_chance_one_cent_under_the_price_holds_the_take(tmp_path, monkeypatch):
+    assert cushion_take(tmp_path, monkeypatch, lambda net: net - 0.015) is None  # inside the allowance
+
+
+def test_integration_a_chance_three_cents_under_the_price_still_sells_and_the_note_says_so(tmp_path, monkeypatch):
+    sig = cushion_take(tmp_path, monkeypatch, lambda net: net - 0.03)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)") and "is not within 0.02 of the" in sig.why
