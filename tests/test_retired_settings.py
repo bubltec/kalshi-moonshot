@@ -1,4 +1,4 @@
-"""Removing dead code must not start a new version of every lane (2026-11-14): the record gate, the nearest-neighbour gate, the learned grid and the stake scaling are gone, and the settings of theirs that every lane's fingerprint carried stay in it as constants."""
+"""Removing dead code must not start a new version of every lane (2026-11-14): the record gate, the nearest-neighbour gate, the learned grid and the stake scaling are gone, and the settings of theirs that every lane's fingerprint carried stay in it as constants. (stop_model joined them on 2026-11-14, when the model stopped being asked about a stop.)"""
 from kalshi_moonshot import config, lanes
 
 
@@ -10,7 +10,7 @@ def test_unit_the_retired_settings_stay_in_the_fingerprint_at_the_values_every_l
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     got = lanes.settings_of(spec(), config.load())
     assert {k: got[k] for k in lanes._RETIRED_SETTINGS} == lanes._RETIRED_SETTINGS
-    assert got["gate_from"] == "()" and got["knn_k"] == "300" and got["grid_z"] == "3.0" and len(lanes._RETIRED_SETTINGS) == 14
+    assert got["gate_from"] == "()" and got["knn_k"] == "300" and got["grid_z"] == "3.0" and len(lanes._RETIRED_SETTINGS) == 15 and lanes._RETIRED_SETTINGS["stop_model"] == "False"
 
 
 def test_unit_the_retired_settings_are_no_longer_fields_a_lane_file_may_name(tmp_path, monkeypatch):

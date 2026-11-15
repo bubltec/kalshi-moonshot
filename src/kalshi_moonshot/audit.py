@@ -190,7 +190,7 @@ def rag_health(store: Any, s: Settings) -> list[str]:
     avg = store.db.execute("SELECT AVG(LENGTH(body)) FROM rag_cases").fetchone()[0]
     out.append(f"average case text length: {float(avg or 0):.0f} characters (a case is the title, the prior estimate, how it resolved and a short note: thin context for similar-case lookup)")
     for spec in lanes.enabled_lanes(s):
-        if spec.estimator in (lanes.LLM, lanes.SHAPE):
+        if spec.estimator == lanes.LLM:
             r = store.db.execute("SELECT COUNT(*) AS n, SUM(CASE WHEN reason LIKE 'model error%' THEN 1 ELSE 0 END) AS err, AVG(ABS(model_p - ask)) AS gap FROM decisions WHERE lane = ? AND model_p IS NOT NULL", (spec.name,)).fetchone()
             if r["n"] or r["err"]:
                 out.append(f"estimator {spec.estimator} on {spec.name}: {int(r['n'] or 0)} answers, {int(r['err'] or 0)} model errors, average |answer - ask| {float(r['gap'] or 0):.3f}")

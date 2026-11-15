@@ -401,7 +401,6 @@ class ProfitWatcher:
     def __init__(
         self, get_settings: Callable[[], Settings], client: KalshiClient, store_factory: Callable[[], Store],
         hold_value: Callable[[Any, Store], float | None] | None = None,
-        stop_model: Callable[[str, str, float, str], float | None] | None = None,
         spot_side: Callable[[str, str], float | None] | None = None,
     ):
         self.spot_side = spot_side  # (ticker, side) -> the chance, from spot against the strike alone, that this side pays; None if unknown
@@ -414,8 +413,6 @@ class ProfitWatcher:
         self._spot = self._model.spot  # settlement index -> (time, latest value), from the socket's index ticks
         self._tls = threading.local()
         self._flow: dict[str, dict[int, list[float]]] = {}  # ticker -> second -> [YES-taker contracts, NO-taker contracts], the last 125 seconds
-        self._soft_holds: dict[tuple[str, str], float] = {}  # (ticker, lane) -> when the model first said hold on a stop (not yet confirmed)
-        self.stop_model = stop_model  # (ticker, side, bid, close time) -> the model's chance this side pays, from the window's shape; None = cannot say in time
         self.hold_value = hold_value  # (open bet, store) -> the model's calibrated chance this position pays, or None if unknown
         self.get_settings = get_settings
         self.client = client
@@ -1922,8 +1919,6 @@ class ProfitWatcher:
                 runner.arm_index_history(s, held.index_id)
         with self._lock:
             self.targets = fresh
-            for k in [k for k in self._soft_holds if k not in fresh]:
-                self._soft_holds.pop(k, None)  # a bet that settled or was sold with a soft hold pending
             self._inflight.intersection_update(fresh)  # a sale signal for a market that has since ended
         now = time.time()
         for tk in [tk for tk, b in list(self._flow.items()) if max(list(b), default=0) < now - 300.0]:
@@ -2175,38 +2170,6 @@ class ProfitWatcher:
         spec = lane_specs(self.get_settings()).get(lane)
         return False if spec is None else spec.stop_guard
 
-    def _stop_model_lane(self, lane: str) -> bool:
-        """Whether this lane's stop first asks the model (stop_model = true in its settings)."""
-        spec = lane_specs(self.get_settings()).get(lane)
-        return spec is not None and spec.stop_model
-
-    def _model_holds_stop(self, s: Settings, ticker: str, lane: str, side: str, entry: float, bid: float, close_time: str) -> bool:
-        """A stop on a 15-minute window first asks the model (the shape prompt): True when it values the position clearly above what the sale would pay.
-        Slow, unsure or no answer means sell. A favorite (bought above 50c) that the model now sees as a loser is sold too."""
-        if self.stop_model is None or s.stop_model_seconds <= 0 or not ticker.split("-")[0].endswith("15M"):
-            return False
-        try:
-            held = self.stop_model(ticker, side, bid, close_time)
-        except Exception:
-            held = None
-        key = (ticker, lane)
-        if held is None or (entry > 0.5 and held <= 0.5) or held <= bid - fee_per_contract(bid) + HOLD_MARGIN:
-            self._soft_holds.pop(key, None)
-            return False
-        # The first "hold" is soft: it only buys a short wait, after which the stop fires again and the model is asked again with the price then. Only a second
-        # "hold" in a row (asked at least the recheck wait later) is firm and lets the stop rest for the usual back-off.
-        now, recheck = time.time(), s.stop_model_recheck_seconds
-        first = self._soft_holds.get(key)
-        if first is None or now - first > 4 * recheck:
-            self._soft_holds[key] = now
-            log.info("watcher: stop on %s softly held: the model values it at %.2f against a bid of %.2f; asking again in %.0fs", ticker, held, bid, recheck)
-            self._back_off(ticker, lane, recheck)
-        else:
-            self._soft_holds[key] = now
-            log.info("watcher: stop on %s held: the model still values it at %.2f against a bid of %.2f", ticker, held, bid)
-            self._back_off(ticker, lane)
-        return True
-
     def _back_off(self, ticker: str, lane: str, seconds: float = RETRY_AFTER) -> None:
         """A declined sale is not re-checked for RETRY_AFTER seconds, so a position sitting under its price costs no API calls."""
         with self._lock:
@@ -2295,8 +2258,6 @@ class ProfitWatcher:
             if self._spot_holds(tgt, ticker, side, why, bid):
                 return
             hard_stop = why.startswith("stop-loss") and not self._stop_guard(lane)  # a lane may ask for a stop that no model opinion can hold back
-            if why.startswith("stop-loss") and self._stop_model_lane(lane) and self._model_holds_stop(s, ticker, lane, side, entry, bid, str(row["close_time"] or "")):
-                return
             if why.startswith(("peak-crash", "stop-loss")) and self.hold_value is not None and not hard_stop:
                 # A cash-out or stop is only worth it when there is a real chance of loss: if holding is worth more than the bid we
                 # would sell at, the dip is noise (a near-decided contract jitters), so keep the position and look again shortly.
@@ -2383,8 +2344,6 @@ class ProfitWatcher:
             return
         # A stop is a hard rule: it sells whatever a model thinks the position is worth. (A model's value for a collapsed contract has been wrong,
         # for example 37c against a 17c bid on a contract that expired worthless; only the crash exit above, which protects a profit, still asks it.)
-        if stop and not go and s.manual_stop_model and self._model_holds_stop(s, ticker, manual.LANE, pos.side, pos.entry, bid, str(m.get("close_time", ""))):
-            return
         slip = runner.EXIT_SLIP + (0.02 if "fast exit" in why else 0.0) + (0.03 if stop else 0.0)
         price = max(0.01, round(bid - slip, 2)) if stop else max(floor, round(bid - slip, 2))
         if not (s.mode == "trade" and (s.env != "prod" or s.allow_real_money)):

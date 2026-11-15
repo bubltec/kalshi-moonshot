@@ -40,7 +40,6 @@ LADDER = "ladder"
 MARKET = "market"
 CURVE = "curve"  # the class of the move so far in the window (curve.py) gives the chance
 FORECAST = "forecast"  # the index's recent moves forecast the side's price (forecast.py)
-SHAPE = "llm_shape"  # the language model reads the shapes of similar past 15-minute windows (shape.py)
 
 
 @dataclass(frozen=True)
@@ -214,7 +213,6 @@ class LaneSpec:
     stop_loss_at: float = 0.0  # this lane's own stop, as a fraction under the price paid (0 = the global STOP_LOSS_DROP)
     stop_confirm_seconds: float = 0.0  # the LONGEST the stop waits for a dipped bid to recover before selling (0 = at once); the actual wait is calculated from the time left — strategy.stop_wait, fitted in scripts/stop_wait_study.py
     stop_guard: bool = False  # True = the model's opinion may hold the stop back; the default is a hard stop that sells whatever the model thinks it is worth
-    stop_model: bool = False  # a 15-minute lane's stop first asks the model about the window's shape and holds only when it values the position above the sale (STOP_MODEL_SECONDS wait; no answer = sell)
     settlement_guard: float = 0.0  # OFF: 377 live sales, 88% would have won, -8.3c vs holding. Same job as the burst exit, worse signal. The watcher still has the code; 0.10 would turn it back on
     burst_exit: bool = False  # watch held 15-minute bets for a volume burst against the holder in the last 120 s and SELL the favorite (watcher.py: that is the peak-crash exit); also log the other side as a paper bet in burst_flip. A silent book cannot 5x itself (BURST_MIN_NORMAL)
     burst_ratio: float = 0.0  # the burst EXIT as a multiple of the market's own normal: sell when the dollars bought against the holder in 3 s are at least this many times this market's normal 3 s (the median second of the 120 s before, both sides, times 3). A bar that grows in a busy market and shrinks in a quiet one. 0 = off (burst_dollars, the flat bar, applies). When set it replaces burst_dollars
@@ -506,6 +504,7 @@ _RETIRED_SETTINGS = {
     "gate_by": "'band'", "gate_from": "()", "gate_min_n": "30", "gate_pool": "30.0", "gate_z": "1.0",
     "grid": "False", "grid_min_n": "30", "grid_rule": "'trail'", "grid_z": "3.0",
     "knn": "False", "knn_k": "300", "knn_min_n": "25.0", "knn_rule": "'trail'", "knn_z": "3.0",
+    "stop_model": "False",
 }
 
 

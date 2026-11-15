@@ -143,9 +143,6 @@ class Settings:
     discovery_max_age: float  # a lane's scope and review accept cached listings this young (the live quote stream keeps their prices current)
     discovery_eval_age: float  # a PAPER lane's evaluation accepts a cached market this young; a live lane's evaluation always asks Kalshi
     estimate_share_seconds: float  # one lane's estimate of a market (model or ladder price) is reused by every other lane asking within this many seconds; 0 = each lane asks for itself
-    stop_model_seconds: float  # a stop on a 15-minute market first asks the model whether to hold, waiting at most this long (0 = never ask); a lane opts in with stop_model = true, hand-placed buys with MANUAL_EXIT_STOP_MODEL
-    stop_model_recheck_seconds: float  # the model's first "hold" on a stop is soft: the stop looks again after this long, with the price then, and holds on for longer only if the model still says hold
-    manual_stop_model: bool  # a hand-placed buy's stop asks the model before selling (same wait; no answer in time = sell)
     fractional_stake: bool  # size a bet to the dollar stake in contracts to the hundredth (a $2 stake buys $2 worth), not the whole contracts that fit under it; falls back to whole contracts if Kalshi refuses a fractional order
     manual_exit_stop: float  # stop-loss on hand-placed positions: sell at this fraction under the price paid (0 = none); same hours rules as the bot's
     tape_dir: Path  # names the tape store; the data itself is the `tape` schema in Postgres (DB_SCHEMA_TAPE)
@@ -454,9 +451,6 @@ def load() -> Settings:
         discovery_max_age=max(0.0, _f("DISCOVERY_MAX_AGE", 180.0)),
         discovery_eval_age=max(0.0, _f("DISCOVERY_EVAL_AGE", 10.0)),
         estimate_share_seconds=max(0.0, _f("ESTIMATE_SHARE_SECONDS", 60.0)),
-        stop_model_seconds=max(0.0, _f("STOP_MODEL_SECONDS", 8.0)),
-        stop_model_recheck_seconds=max(1.0, _f("STOP_MODEL_RECHECK_SECONDS", 15.0)),
-        manual_stop_model=_b("MANUAL_EXIT_STOP_MODEL", False),
         fractional_stake=_b("FRACTIONAL_STAKE", True),
         manual_exit_stop=_f("MANUAL_EXIT_STOP_LOSS", 0.30),
         manual_rest_far=_f("MANUAL_REST_CURVE", 0.0),
