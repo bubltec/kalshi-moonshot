@@ -866,3 +866,27 @@ def test_integration_in_the_last_fifth_a_flat_bid_with_no_spot_reading_sells_as_
     w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
     assert climb(w, 0.82, 0.99, 150) is None
     assert level(w, 0.99, 150, seconds=12) is not None
+
+
+# ---- from a 0.95 bid up a flat bid is held while the cushion backs the price, at any time left (2026-11-14, user: "I don't think when it's above 95 we need to consider an early sale as long as it has cushion"; BTC 00:00 YES sold at 0.955 with 419 s left, then 0.99) ----
+def high_flat(tmp_path, monkeypatch, over_strike, top):
+    seed_spot(monkeypatch, over_strike)
+    feed_history(0.013, from_left=1300, to_left=401)  # a typical minute of about 0.10
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
+    assert climb(w, 0.82, top, 400, step=0.0025) is None  # still rising, slowly enough that the look back (32 s at 400 s left) has history behind it
+    steps = int(round((top - 0.82) / 0.0025)) + 1  # the climb's quotes end this many seconds after 400 s left; the level starts right after them
+    return level(w, top, 400 - steps + 30, seconds=40)
+
+
+def test_integration_above_ninety_five_a_flat_bid_with_cushion_is_held_with_seven_minutes_left(tmp_path, monkeypatch):
+    assert high_flat(tmp_path, monkeypatch, 0.008, 0.96) is None  # 400 s left, nowhere near the last fifth
+
+
+def test_integration_above_ninety_five_a_flat_bid_with_a_thin_cushion_sells(tmp_path, monkeypatch):
+    sig = high_flat(tmp_path, monkeypatch, 0.0001, 0.96)  # the spot 1 bp over the strike
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+def test_integration_under_ninety_five_the_same_flat_bid_still_sells_with_seven_minutes_left(tmp_path, monkeypatch):
+    sig = high_flat(tmp_path, monkeypatch, 0.008, 0.93)  # a high cushion, but the bid is under 0.95 and the market is not in its last fifth
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")

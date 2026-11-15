@@ -153,6 +153,9 @@ def cushion_holds(chance: float, net_bid: float) -> bool:
 LATE_SHARE = 0.2  # the last fifth of a market (three minutes of fifteen): where a flat bid is held, not sold (2026-11-14, user, "a flat slope under 3 mins is perfectly fine, unless it starts to dip while profitable we should not sell"); a share of the market's length, which is structural
 
 
+HIGH_BID = 0.95  # 2026-11-14 (user: "I don't think when it's above 95 we need to consider an early sale as long as it has cushion"): from this bid up, a flat bid is held whenever the spot's cushion backs the price, at any time left, as in the last fifth of the market. The user's own number: five cents is all that is left to win.
+
+
 def squeeze_clock(left: float, window: float = 900.0) -> float:
     """The clock's share for the squeeze, 0 to 1 (2026-11-14, user: "squeeze shouldn't even apply at 6 minutes in, i thought we covered this"; earlier "at that time distance it should be nonexistent"). Nothing in the first half of the market, then rising to all of it at the close: a linear share of the market gone still allowed 0.8 of a cent six minutes in."""
     if window <= 0:
