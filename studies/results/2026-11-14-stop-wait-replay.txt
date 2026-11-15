@@ -54,3 +54,29 @@ Question (user: "The second chance would be built in by the time scale in these 
 18:28:09 BTC  no  0.78 | LOST held       -26.68 | new: sells 0.52 at 28:31, 89s left    -9.54
 bets 38: what happened +25.77 | new wait with the holds scaled by the clock -19.18 (14 loss sales) | against what happened -44.95
 Reading: it does get out of the reversals (the five losers that rode to nothing cost 35 between them here, against 97), and it sells seven bets that dipped and came back for gains (BTC 10:03, DOGE, SOL 10:36, BTC 15:20, ETH 15:33, BNB 15:35, XRP 17:40), which costs far more. The worst of the three versions tried. Not built.
+
+RUNS 4 to 6 (about 19:20 ET), now 39 bets (the ZEC 18:37 loss has settled; what happened is +1.98).
+Question (user: "lets figure out how we can fix this stops wait, where you described 3 gates that should be 2?"; "and it needs the factor in time"): the loss side has three gates in a row (the hour view, the swing hold, the stop's wait). Which two, with the time-scaled wait, do best on today's bets? Stated before the runs: A = hour view + wait (no swing hold); B = swing hold + wait (no hour view); C = all three with the new wait.
+
+C: three gates, new wait:            +9.29 (9 loss sales)   against what happened  +7.32
+B: swing hold + new wait, no hour:  -19.45 (12 loss sales)  against what happened -21.43
+A: hour view + new wait, no swing:  +29.53 (10 loss sales)  against what happened +27.55
+
+A, bet by bet (only the bets it changes, or that lost over $5):
+10:03:04 ETH  yes 0.53 | LOST held       -17.30 | sells 0.35 at 05:47, 553s left   -6.39
+10:08:36 SOL  yes 0.58 | LOST held        -8.80 | sells 0.22 at 14:12, 48s left    -5.64
+10:36:59 SOL  yes 0.80 | won  held        +6.84 | sells 0.37 at 39:01, 359s left  -15.27
+11:48:05 BTC  no  0.77 | sold 0.26 56:23 -17.85 | sells 0.31 at 52:53, 427s left  -16.20
+15:20:09 SOL  no  0.78 | LOST held       -26.50 | sells 0.40 at 26:33, 207s left  -13.48
+16:18:37 XRP  no  0.76 | sold 0.45 20:55 -10.97 | as happened                     -10.97
+16:18:42 SOL  no  0.78 | sold 0.53 20:15  -9.09 | sells 0.57 at 20:09, 591s left   -7.72
+16:33:16 XRP  no  0.55 | LOST held        -0.55 | sells 0.12 at 39:43, 317s left   -0.44
+16:35:45 BTC  no  0.57 | LOST held       -18.06 | sells 0.20 at 39:05, 355s left  -12.05
+18:28:09 BTC  no  0.78 | LOST held       -26.68 | sells 0.06 at 29:24, 36s left   -24.77
+18:37:02 ZEC  no  0.71 | LOST held       -23.79 | sells 0.36 at 41:32, 208s left  -12.27
+
+Reading:
+- The gate to drop is the swing hold. With the hour view and the time-scaled wait alone the exit gets out of the reversals earlier and higher (ZEC at 0.36 for 0.11, SOL 15:20 at 0.40, ETH at 0.35, BTC 16:35 at 0.20) and sells one bet that came back (SOL 10:36).
+- Dropping the hour view instead is the worst: the swing hold alone lets five winners be sold on dips.
+- The hour view reads the spot against where the window opened, over the hour's own movement and the time left; the swing hold reads the size of the loss in the contract's price. The second holds almost any loss while there are minutes left, which is what kept the reversals; the first is what tells a dip from a turn on these bets.
+- One day, 39 bets the lane chose, three versions compared after seeing the day; the recovery time is the 15 s default. A lead strong enough to try, not a result. The BTC 18:28 bet (bought 111 s before the close) is not helped by any of them.
