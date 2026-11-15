@@ -252,18 +252,19 @@ class Strikes:
 strikes = Strikes()
 
 
-def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 8.0) -> int:
+def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 8.0, until: float | None = None) -> int:
     """Load the last `hours` of each index from the tape into `history` (8 by default: the volatility regime reads the last 6 hours and 2 minutes, so a 6-hour load would never cover it). Meant for a background thread at start-up; returns how many ticks were loaded."""
     from . import db
 
     if not db.tape_exists(s.tape_path):
         return 0
     start = now - hours * 3600.0
+    end = now if until is None else until  # the second stage of the reload loads only what is older than the first
     tape = db.connect(s.tape_path, "tape", shared=True)
     total = 0
     for index_id in indexes:
         try:
-            rows = [(float(ts), float(v)) for ts, v in tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value>0 ORDER BY ts", (index_id, start, now))]
+            rows = [(float(ts), float(v)) for ts, v in tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value>0 ORDER BY ts", (index_id, start, end))]
         except Exception:
             log.warning("ticks: could not warm %s", index_id, exc_info=True)
             continue
@@ -324,15 +325,20 @@ def longest_hole(times: Sequence[float], start: float, end: float) -> tuple[floa
     return worst, at
 
 
+FIRST_STAGE_HOURS = 1.4  # the first part of the reload: what the decision path reads out of memory (the hour's width and view, the hour of falls, the quote history), a little over an hour and a quarter. Buys wait for this and no more
+
+
 def reload_from_tape(s, indexes: Sequence[str], now: float | None = None) -> dict[str, float]:
-    """Fill memory from the tape at start-up, at normal priority, then say how complete it is: the index ticks (8 hours), every 15-minute market's quotes (1 hour), how long it took, and the longest hole in the last hour of quotes (a stretch of HOLE_MIN seconds or more in which no 15-minute market quoted: the recorder was down). Buys wait on this (reload_pending). Never raises: a failed reload still lets the bot trade."""
+    """Fill memory from the tape at start-up, in two stages, and say how complete it is.
+    Stage 1 (FIRST_STAGE_HOURS of every index, and the last hour of every 15-minute market's quotes) is what the decisions read; buys are released the moment it is in memory. Stage 2, behind it and without holding anything, adds the rest of the 8 hours of index ticks for the readers that look further back (the volatility regime, the daily profile); a reader that wants more than is there yet asks the tape, as it did before the reload existed (ticks.history.window returns None).
+    Until 2026-11-14 it was one load of 8 hours (about 700,000 ticks) with everything waiting on it: 74 s and 104 s at the 16:16 and 18:31 restarts. Reports the rows loaded, the seconds each stage took, and the longest hole in the last hour of quotes (a stretch of HOLE_MIN seconds or more in which no 15-minute market quoted: the recorder was down). Never raises: a failed reload still lets the bot trade."""
     from . import db
 
     began = time.time()
     now = began if now is None else now
-    report: dict[str, float] = {"ticks": 0, "quotes": 0, "markets": 0, "hole": 0.0, "hole_end": 0.0, "seconds": 0.0}
+    report: dict[str, float] = {"ticks": 0, "quotes": 0, "markets": 0, "hole": 0.0, "hole_end": 0.0, "seconds": 0.0, "seconds_all": 0.0}
     try:
-        report["ticks"] = warm_from_tape(s, indexes, now)
+        report["ticks"] = warm_from_tape(s, indexes, now, hours=FIRST_STAGE_HOURS)
         report["quotes"] = warm_mids_from_tape(s, now)
         report["markets"] = len(mids._rows)
         if db.tape_exists(s.tape_path):
@@ -346,10 +352,17 @@ def reload_from_tape(s, indexes: Sequence[str], now: float | None = None) -> dic
         report["seconds"] = time.time() - began
         reload_report.clear()
         reload_report.update(report)
-        _reload_done.set()
+        _reload_done.set()  # the buys are released here: the rest is for readers that can wait
     hole = report["hole"]
     log.log(logging.WARNING if hole >= HOLE_MIN else logging.INFO,
-            "memory reloaded from the tape in %.1fs: %d index ticks (8 h, %d indexes), %d quotes of the last hour (%d markets); %s",
-            report["seconds"], report["ticks"], len(indexes), report["quotes"], report["markets"],
+            "memory reloaded from the tape in %.1fs (buys released): %d index ticks (the last %.1f h of %d indexes), %d quotes of the last hour (%d markets); %s",
+            report["seconds"], report["ticks"], FIRST_STAGE_HOURS, len(indexes), report["quotes"], report["markets"],
             f"the longest hole in the last hour of quotes is {hole:.0f}s, ending {time.strftime('%H:%M:%S', time.gmtime(report['hole_end']))} UTC (not filled: no quotes were recorded then)" if hole >= HOLE_MIN else "no hole in the last hour of quotes")
+    try:
+        more = warm_from_tape(s, indexes, now, hours=8.0, until=now - FIRST_STAGE_HOURS * 3600.0)  # stage 2: only the ticks older than stage 1 go in front of what is there
+        report["ticks"] += more
+        report["seconds_all"] = time.time() - began
+        log.info("memory: the rest of the 8 hours of index ticks loaded behind the decisions: %d more ticks, %.1fs from the start", more, report["seconds_all"])
+    except Exception:
+        log.warning("ticks: the second stage of the reload failed; readers that look back further ask the tape", exc_info=True)
     return report

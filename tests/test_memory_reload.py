@@ -123,3 +123,73 @@ def test_integration_a_decided_window_with_no_bid_on_one_side_is_not_a_hole(tmp_
     tape.flush(now)
     report = ticks_mod.reload_from_tape(s, [], now)
     assert report["hole"] < ticks_mod.HOLE_MIN
+
+
+# ---- two stages (2026-11-14, user: "yes do the restart fix first"): the decisions' hour first and the buys released, the rest of the 8 hours behind ----
+def long_tape(tmp_path, monkeypatch, now, hours=3.0):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    tape = Tape(s.tape_path)
+    n = int(hours * 3600 // 10)
+    for k in range(n, 0, -1):  # an index tick every 10 s
+        tape.add({"kind": "index", "index_id": "BTCUSD_RTI", "ts": now - k * 10.0, "value": 65000.0 + k})
+    tape.flush(now)
+    ticks_mod.history._ts.clear()
+    ticks_mod.history._val.clear()
+    ticks_mod.history._from.clear()
+    return s, n
+
+
+def test_integration_the_buys_are_released_before_the_older_ticks_are_loaded(tmp_path, monkeypatch):
+    now = time.time()
+    s, _ = long_tape(tmp_path, monkeypatch, now)
+    seen = []
+    real = ticks_mod.warm_from_tape
+
+    def spy(s_, indexes, now_, hours=8.0, until=None):
+        seen.append((hours, until is not None, ticks_mod.reload_pending(now_ + 1.0)))
+        return real(s_, indexes, now_, hours=hours, until=until)
+
+    monkeypatch.setattr(ticks_mod, "warm_from_tape", spy)
+    ticks_mod.reload_begin(now)
+    ticks_mod.reload_from_tape(s, ["BTCUSD_RTI"], now)
+    assert seen[0] == (ticks_mod.FIRST_STAGE_HOURS, False, True)  # stage 1: the buys are still waiting
+    assert seen[1] == (8.0, True, False)  # stage 2: they have been released, and only the older ticks are asked for
+
+
+def test_integration_the_two_stages_together_hold_every_tick_once_and_in_order(tmp_path, monkeypatch):
+    now = time.time()
+    s, n = long_tape(tmp_path, monkeypatch, now, hours=3.0)
+    report = ticks_mod.reload_from_tape(s, ["BTCUSD_RTI"], now)
+    got = ticks_mod.history.window("BTCUSD_RTI", now - 8 * 3600.0, now)
+    assert got is not None
+    ts, vs = got
+    assert len(ts) == n == report["ticks"]  # no tick twice, none missing
+    assert all(a < b for a, b in zip(ts, ts[1:], strict=False))
+    assert ts[0] <= now - 3 * 3600.0 + 15.0 and ts[-1] >= now - 15.0
+
+
+def test_integration_after_stage_one_alone_the_decision_path_has_its_hour(tmp_path, monkeypatch):
+    now = time.time()
+    s, n = long_tape(tmp_path, monkeypatch, now, hours=3.0)
+    got = ticks_mod.warm_from_tape(s, ["BTCUSD_RTI"], now, hours=ticks_mod.FIRST_STAGE_HOURS)
+    assert 0 < got < n  # a part of the tape, not all of it
+    hour = ticks_mod.history.window("BTCUSD_RTI", now - 3700.0, now)
+    assert hour is not None and len(hour[0]) >= 360  # the last hour is there: the width and the exit's hour view read from it
+    assert ticks_mod.history.window("BTCUSD_RTI", now - 3 * 3600.0, now) is None  # a reader that wants more asks the tape, as before
+
+
+def test_integration_a_failed_second_stage_does_not_stop_the_bot(tmp_path, monkeypatch):
+    now = time.time()
+    s, _ = long_tape(tmp_path, monkeypatch, now)
+    real = ticks_mod.warm_from_tape
+
+    def flaky(s_, indexes, now_, hours=8.0, until=None):
+        if until is not None:
+            raise RuntimeError("the tape went away")
+        return real(s_, indexes, now_, hours=hours, until=until)
+
+    monkeypatch.setattr(ticks_mod, "warm_from_tape", flaky)
+    ticks_mod.reload_begin(now)
+    report = ticks_mod.reload_from_tape(s, ["BTCUSD_RTI"], now)
+    assert report["ticks"] > 0 and ticks_mod.reload_pending(now + 1.0) is False
