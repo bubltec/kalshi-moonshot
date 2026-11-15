@@ -666,42 +666,6 @@ def cmd_watch(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_gate(s: config.Settings, args: argparse.Namespace) -> int:
-    """Show the learned entry gate: which minutes of a 15-minute window the record says a lane may enter."""
-    from . import gate
-
-    spec = lanes.spec_for(s, args.lane)
-    sources = tuple(spec.gate_from) or tuple(args.sources.split(",")) if (spec.gate_from or args.sources) else ()
-    if not sources:
-        print(f"lane {args.lane} has no gate_from; pass --sources late_ticket,late_ticket_trail to preview one.")
-        return 0
-    store = Store(s.db_path, s.exclude_versions)
-    cells = gate.table(store, sources, since=gate.since_ts(spec.gate_since))
-    print(f"{args.lane}: entry bands from the finished bets of {', '.join(sources)}{f' since {spec.gate_since}' if spec.gate_since else ''}\n"
-          f"(open needs {spec.gate_min_n} bets and mean return minus {spec.gate_z:g} standard errors above zero)\n")
-    print(f"{'band':14} {'bets':>5} {'won':>5} {'mean ROI':>9} {'lower':>8}  gate")
-    for band, c in cells.items():
-        ok, _ = gate.decide(c, spec.gate_min_n, spec.gate_z)
-        won = f"{c.wins / c.n:.0%}" if c.n else "-"
-        lower = "-" if c.n < 2 else f"{c.lower(spec.gate_z):+.0%}"
-        print(f"minutes {band[0]}-{band[1]:<4} {c.n:>5} {won:>5} {c.mean_roi:>+9.0%} {lower:>8}  {'OPEN' if ok else 'closed'}")
-    if args.by_series or spec.gate_by == "series":
-        since = gate.since_ts(spec.gate_since)
-        by = gate.series_table(store, sources, since=since)
-        print(f"\nEach market's own record, blended toward the lane's pool (pool strength {spec.gate_pool:g} bets):")
-        print(f"{'market':14} {'band':10} {'own bets':>8} {'own ROI':>8} {'pool ROI':>9} {'blended':>8} {'lower':>7}  gate")
-        for series in sorted({k[0] for k in by}):
-            for band, pooled in cells.items():
-                own = by.get((series, band))
-                if own is None and pooled.n == 0:
-                    continue
-                ok, _ = gate.decide_series(own, pooled, series, spec.gate_min_n, spec.gate_z, spec.gate_pool)
-                mean, se, n = gate.shrink(own, pooled, spec.gate_pool)
-                print(f"{series:14} {band[0]:>2}-{band[1]:<2} min {n:>8} {(own.mean_roi if own else 0):>+8.0%} {pooled.mean_roi:>+9.0%} "
-                      f"{mean:>+8.0%} {mean - spec.gate_z * se:>+7.0%}  {'OPEN' if ok else 'closed'}")
-    return 0
-
-
 def cmd_bymin(s: config.Settings, args: argparse.Namespace) -> int:
     """15-minute results of a lane (or all lanes) by how far into the window each bet was placed."""
     from . import journal
@@ -840,34 +804,6 @@ def cmd_manual(s: config.Settings, args: argparse.Namespace) -> int:
             bid = 0.0
         gain = (bid - fee_per_contract(bid)) / p.entry - 1 if p.entry and bid else 0.0
         print(f"{p.ticker[:40]:40} {p.side:4} {p.count:8.2f} {p.entry:6.2f} {bid:6.2f} {gain:+7.0%}")
-    return 0
-
-
-def cmd_grid(s: config.Settings, args: argparse.Namespace) -> int:
-    """What the learned grid knows: entry results by minute, price, last-hour trend and whole-market trend (read-only)."""
-    from . import gate, grid
-
-    store = Store(s.db_path, s.exclude_versions)
-    series = tuple(x for x in args.series.split(",") if x)
-    added = grid.update(store, s.tape_path, series, rule=args.rule)
-    n = store.db.execute(f"SELECT COUNT(*), COUNT(DISTINCT ticker) FROM grid_obs WHERE rule = ? AND series IN ({','.join('?' * len(series))})", (args.rule, *series)).fetchone()
-    table = grid.cells(store, series, rule=args.rule)
-    base = [c for k, c in table.items() if k[2] is None and k[3] is None and k[4] is None]
-    allroi = sum(c.mean * c.n for c in base) / max(1, sum(c.n for c in base))
-    print(f"{series}: {n[1]} windows replayed ({added} new), {n[0]} entries; average ROI of entering anywhere with the live exit: {allroi:+.1%}\n")
-    print("ROI by minute (rows) and ask price (columns), with replays; '.' = fewer than 5")
-    print(f"{'minutes':8}" + "".join(f"{lo:.1f}-{hi:.1f}".rjust(12) for lo, hi in grid.PBANDS))
-    for mb, (lo, hi) in enumerate(gate.BANDS):
-        row = f"{lo:>3}-{hi:<4}"
-        for pb in range(len(grid.PBANDS)):
-            c = table.get((mb, pb, None, None, None))
-            row += (f"{c.mean:+.0%}({c.n})" if c and c.n >= 5 else ".").rjust(12)
-        print(row)
-    ranked = sorted(((c.lower(args.z), k, c) for k, c in table.items() if c.n >= args.min_n), key=lambda x: -x[0])
-    print(f"\ncells with at least {args.min_n} replays: {len(ranked)}; clearing zero by {args.z:g} standard errors: {sum(1 for r in ranked if r[0] > 0)}")
-    for lcb, (mb, pb, e, a, b), c in ranked[:10]:
-        split = "".join(f", {n} {v}" for n, v in (("price", e), ("hour", a), ("market", b)) if v)
-        print(f"  minutes {gate.BANDS[mb][0]}-{gate.BANDS[mb][1]}, ask {grid.PBANDS[pb][0]:.2f}-{grid.PBANDS[pb][1]:.2f}{split}: {c.mean:+.1%} over {c.n} (lower bound {lcb:+.1%})")
     return 0
 
 
@@ -1117,39 +1053,11 @@ def cmd_template(s: config.Settings, args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_scale(s: config.Settings, args: argparse.Namespace) -> int:
-    """Each lane's record against the bar for a bigger stake, and what the stake is now (read-only)."""
-    from . import journal, scale
-    from .gate import since_ts
-
-    store = Store(s.db_path, s.exclude_versions)
-    specs = lanes.lane_specs(s)
-    by_lane: dict[str, int] = {}
-    for t in journal.trades(store):
-        by_lane[t.lane] = by_lane.get(t.lane, 0) + 1
-    print(f"{'lane':20}{'scaling':8}{'bets':>6}{'mean':>8}{'lower':>8}{'need n':>8}{'stake':>16}  why")
-    for name in sorted(by_lane, key=lambda k: -by_lane[k]):
-        spec = specs.get(name)
-        if spec is None:
-            continue
-        names = tuple(spec.scale_from) or (name,)
-        rec = scale.record(store, names, since_ts(spec.scale_since), scale.current_versions(s, names), spec.scale_old_weight)
-        equity = store.bankroll.read(None, s, live=False).equity
-        base = spec.fixed_stake or equity * spec.max_bet_pct
-        mult, why = scale.multiplier(rec, spec, equity, base)
-        on = "on" if spec.scale else "off"
-        shown = f"${base * mult:.2f} (x{mult:.2f})" if spec.scale else f"${base:.2f} fixed"
-        lo = rec.lower(spec.scale_z)
-        print(f"{name:20}{on:8}{rec.n:6}{rec.mean:+8.1%}{(f'{lo:+.1%}' if rec.n > 1 else '-'):>8}{spec.scale_min_n:8}{shown:>16}  {why.split('; ', 1)[-1] if rec.n >= spec.scale_min_n else why.split(': ', 1)[-1]}")
-    print("\nA lane's stake grows only when `scaling` is on and its lower bound is above zero with enough bets. Turn it on per lane with `scale = true` in strategies.toml.")
-    return 0
-
-
 def cmd_versions(s: config.Settings, args: argparse.Namespace) -> int:
     """Each lane's versions: when each began, what changed, and how it has done. A change to what a lane does is a new version."""
     import json as _json
 
-    from . import journal, scale
+    from . import journal
 
     store = Store(s.db_path, s.exclude_versions)
     specs = lanes.lane_specs(s)
@@ -1162,7 +1070,6 @@ def cmd_versions(s: config.Settings, args: argparse.Namespace) -> int:
             continue
         spec = specs[name]
         cur_ver = lanes.version_of(spec, s)
-        cur_set = lanes.settings_of(spec, s)
         rows = list(store.lane_versions(name))
         if not rows and not any(ln == name for ln, _ in by):
             continue
@@ -1173,8 +1080,7 @@ def cmd_versions(s: config.Settings, args: argparse.Namespace) -> int:
         for label, ver, st, _ts in listed:
             v = by.get((name, ver), [])
             roi = f"{sum(v) / len(v):+.1%}" if v else "-"
-            weight = "(unknown settings)" if ver is None else ("current, weight 1" if ver == cur_ver else f"weight {min(spec.scale_old_weight, scale.similarity(st, cur_set)):.2f}")
-            print(f"  {ver or '-':9}{label:32}{len(v):5} bets  {roi:>7}   {weight}")
+            print(f"  {ver or '-':9}{label:32}{len(v):5} bets  {roi:>7}   {'current' if ver == cur_ver else ''}")
             if st is not None and prev is not None:
                 changed = [f"{k}: {prev.get(k, '-')} -> {st.get(k, '-')}" for k in sorted(set(st) | set(prev)) if st.get(k) != prev.get(k)]
                 if changed:
@@ -1183,35 +1089,6 @@ def cmd_versions(s: config.Settings, args: argparse.Namespace) -> int:
                 prev = st
         if rows and rows[-1]["ver"] != cur_ver:
             print(f"  {cur_ver:9}{'(set in the file now; no bet yet)':32}")
-    return 0
-
-
-def cmd_knn(s: config.Settings, args: argparse.Namespace) -> int:
-    """The nearest-neighbour entry model: bring its history up to date, and (--validate) test it on windows it has not seen."""
-    from . import knn
-
-    store = Store(s.db_path, s.exclude_versions)
-    series = tuple(x for x in args.series.split(",") if x)
-    if not knn.ensure_schema(store):
-        print("pgvector is not available in this database")
-        return 1
-    added = knn.update(store, s.tape_path, series, args.rule, limit=args.limit)
-    n = store.db.execute(f"SELECT COUNT(*), COUNT(DISTINCT ticker) FROM entry_vec WHERE rule=? AND series IN ({','.join('?' * len(series))})", (args.rule, *series)).fetchone()
-    print(f"{n[1]} windows, {n[0]:,} sampled entries stored for rule '{args.rule}' ({added} windows added this run)")
-    if args.validate:
-        out = knn.validate(store, series, args.rule, k=args.k, z=args.z, min_n=args.min_n, sample=args.sample, ask_range=(args.lo, args.hi))
-        if "error" in out:
-            print(out["error"])
-            return 1
-        print(f"\nfit on windows closing before {datetime.fromtimestamp(out['cut'], UTC):%m-%d %H:%M} UTC, tested on {out['test_entries']:,} entries from later windows")
-        print(f"{'':36}{'entries':>9}{'avg return':>12}{'(± across windows)':>20}")
-        for label, key in (("all test entries", "all"), ("the model says BUY", "buy"), ("top fifth by predicted return", "top_fifth"), ("bottom fifth by predicted return", "bottom_fifth"),
-                           ("veto the worst fifth, take the rest", "drop_worst_fifth"), ("veto the worst two fifths, take the rest", "drop_worst_two_fifths")):
-            c, m_, se = out[key]
-            print(f"{label:36}{c:9}{m_:+12.1%}{('±%.1f%%' % (se * 100)) if se == se else '-':>20}")
-        print("\npredicted vs realized, in fifths from lowest to highest predicted return:")
-        for pred, real in out["by_fifth"]:
-            print(f"  predicted {pred:+7.1%}   realized {real:+7.1%}")
     return 0
 
 
@@ -1254,9 +1131,9 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
 
 COMMANDS = {
     "scan": cmd_scan, "run": cmd_run, "record": cmd_record, "resolve": cmd_resolve, "report": cmd_report,
-    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "grid": cmd_grid, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "factors": cmd_factors, "template": cmd_template, "probe-maker": cmd_probe_maker, "esports": cmd_esports, "forecast-fit": cmd_forecast_fit, "forecast-review": cmd_forecast_review, "forecast-compare": cmd_forecast_compare, "scalp-cases": cmd_scalp_cases, "variants": cmd_variants, "misses": cmd_misses, "scorecard": cmd_scorecard, "scale": cmd_scale, "versions": cmd_versions, "knn": cmd_knn, "shardmove": cmd_shardmove, "kill": cmd_kill,
+    "prune": cmd_prune, "jobs": cmd_jobs, "balance": cmd_balance, "manual": cmd_manual, "backup": cmd_backup, "archive": cmd_archive, "digest": cmd_digest, "audit": cmd_audit, "flat": cmd_flat, "factors": cmd_factors, "template": cmd_template, "probe-maker": cmd_probe_maker, "esports": cmd_esports, "forecast-fit": cmd_forecast_fit, "forecast-review": cmd_forecast_review, "forecast-compare": cmd_forecast_compare, "scalp-cases": cmd_scalp_cases, "variants": cmd_variants, "misses": cmd_misses, "scorecard": cmd_scorecard, "versions": cmd_versions, "shardmove": cmd_shardmove, "kill": cmd_kill,
     "unkill": cmd_unkill, "doctor": cmd_doctor, "review": cmd_review, "show-buys": cmd_show_buys,
-    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "gate": cmd_gate, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "gap": cmd_gap, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
+    "sync": cmd_sync, "mytrades": cmd_mytrades, "target": cmd_target, "screened": cmd_screened, "patterns": cmd_patterns, "patience": cmd_patience, "bymin": cmd_bymin, "watch": cmd_watch, "evidence": cmd_evidence, "leadlag": cmd_leadlag, "history": cmd_history, "profile": cmd_profile, "daily": cmd_daily, "gap": cmd_gap, "lanes": cmd_lanes, "backfill": cmd_backfill, "arbs": cmd_arbs, "bankroll": cmd_bankroll, "shadow": cmd_shadow,
 }
 
 
@@ -1329,21 +1206,6 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "watch":
             p.add_argument("tickers", help="one or more market tickers, comma separated")
             p.add_argument("--quotes-only", action="store_true", help="hide the individual trades")
-        if name == "gate":
-            p.add_argument("--lane", required=True)
-            p.add_argument("--sources", default="", help="lanes to preview the gate from, if the lane has no gate_from")
-            p.add_argument("--by-series", action="store_true", help="also show each market's own record, blended toward the lane pool")
-        if name == "knn":
-            p.add_argument("--series", default="KXGOLD15M,KXSILVER15M,KXWTI15M,KXNATGAS15M,KXCOPPER15M,KXPLATINUM15M,KXPALLADIUM15M,KXBTC15M,KXETH15M,KXSOL15M,KXXRP15M,KXDOGE15M")
-            p.add_argument("--rule", default="trail", choices=["trail", "hold"])
-            p.add_argument("--validate", action="store_true", help="test on windows the model has not seen")
-            p.add_argument("--limit", type=int, default=None, help="add at most this many windows this run")
-            p.add_argument("--k", type=int, default=200)
-            p.add_argument("-z", type=float, default=3.0)
-            p.add_argument("--min-n", type=float, default=25.0)
-            p.add_argument("--sample", type=int, default=3000, help="test entries to score")
-            p.add_argument("--lo", type=float, default=0.0, help="test only entries with an ask at least this")
-            p.add_argument("--hi", type=float, default=1.0, help="... and at most this")
         if name == "archive":
             p.add_argument("action", nargs="?", default="run", choices=["run", "status", "fetch"], help="run (default, a dry run unless --apply), status, or fetch a day")
             p.add_argument("--apply", action="store_true", help="upload for real (needs ARCHIVE_BUCKET and AWS keys in .env)")
@@ -1357,11 +1219,6 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--hours", type=float, default=None, help="look-back in hours instead of --days (the hourly review sends this window to the local model)")
         if name == "versions":
             p.add_argument("--lane", help="one lane")
-        if name == "grid":
-            p.add_argument("--series", default="KXBTC15M,KXGOLD15M", help="comma list of 15-minute series to pool")
-            p.add_argument("--rule", default="trail", choices=["trail", "hold"], help="replay each entry with the live exit (trail) or held to settlement (hold)")
-            p.add_argument("--min-n", type=int, default=30, help="replays a cell needs before it is ranked")
-            p.add_argument("-z", type=float, default=3.0, help="standard errors a cell must clear zero by")
         if name == "bymin":
             p.add_argument("--lane", help="a lane name, or leave out for all")
         if name == "patience":

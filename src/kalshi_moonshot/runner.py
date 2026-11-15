@@ -20,8 +20,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
 
-from . import factors, gate, risk, shadow, steptime
-from . import scale as scale_mod
+from . import factors, risk, shadow, steptime
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
@@ -425,40 +424,6 @@ def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
     )
 
 
-def _knn_says(s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, shot: LongShot) -> tuple[bool, str]:
-    """Ask the nearest-neighbour model (knn.py) whether entries like this one have paid."""
-    from . import knn
-
-    try:
-        got = client.market(shot.ticker).get("floor_strike")
-        strike = float(got) if got is not None else None
-    except (TypeError, ValueError, KalshiError):
-        strike = None
-    try:
-        close = datetime.fromisoformat(shot.close_time).timestamp()
-    except (TypeError, ValueError):
-        return False, "knn: no close time"
-    return knn.says(store, spec, s.tape_path, shot.ticker, shot.series, shot.side, time.time(), close, strike, shot.ask, gate.since_ts(spec.gate_since))
-
-
-def _grid_says(s: Settings, client: KalshiClient, store: Store, spec: LaneSpec, shot: LongShot) -> tuple[bool, str]:
-    """Ask the learned grid (grid.py) whether the conditions right now are ones that have paid: minute, price, last hour, whole market."""
-    from . import grid
-
-    tape = s.tape_path
-    series = tuple(spec.series) or (shot.series,)
-    grid.refresh_soon(lambda: Store(s.db_path, s.exclude_versions), tape, series, spec.grid_rule)
-    elapsed = spec.timed_minutes - shot.hours_to_close * 60.0
-    try:
-        got = client.market(shot.ticker).get("floor_strike")
-        strike = float(got) if got is not None else None
-    except (TypeError, ValueError, KalshiError):
-        strike = None
-    edge, alpha, beta = grid.live_features(tape, shot.series, shot.side, time.time(), strike, shot.hours_to_close * 60.0, shot.ask)
-    go, why = grid.pick(store, spec, series, elapsed, shot.ask, edge, alpha, beta, gate.since_ts(spec.gate_since))
-    return go, f"{why} [price {edge or '?'}, hour {alpha or '?'}, market {beta or '?'}]"
-
-
 def evaluate(
     s: Settings, client: KalshiClient, est, store: Store, shot: LongShot,
     searcher: NewsSearch | None = None,
@@ -514,19 +479,6 @@ def evaluate(
         stretched = stretch_buy(s, spec, shot, cal.p, e)
         if stretched:
             bet, note = True, f"{stretched} {note}"
-    if bet and spec.gate_from:
-        open_, gate_note = gate.check(store, spec, shot.close_time, series=shot.series)
-        if not open_:
-            bet = False
-            note = f"{gate_note}. {note}"
-    if bet and spec.knn:
-        go, knote = _knn_says(s, client, store, spec, shot)
-        note = f"{knote}. {note}"
-        bet = go
-    elif bet and spec.grid:
-        go, gnote = _grid_says(s, client, store, spec, shot)
-        note = f"{gnote}. {note}"
-        bet = go
     if bet and not chance_ok(spec, p):
         bet = False
         note = f"chance {p:.0%} outside the lane's {spec.min_chance:.0%}-{spec.max_chance:.0%}. {note}"
@@ -948,14 +900,11 @@ def evaluate(
     if bet:
         with steptime.step("balance read"):
             balance = store.bankroll.read(client, s, live=s.is_live(shot.lane, shot.series))
-        grown = scale_mod.for_lane(store, spec, balance.equity, s=s)
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
-            balance.open_by_lane.get(shot.lane, 0.0), grown.mult * stake_factor, fractional=s.fractional_stake and not _NO_FRACTION,
+            balance.open_by_lane.get(shot.lane, 0.0), stake_factor, fractional=s.fractional_stake and not _NO_FRACTION,
             maker_price=shot.ask if rest_seconds > 0 else (round(max(0.01, shot.ask - spec.buy_rest_below), 4) if spec.buy_rest_seconds > 0 else None),
         )
-        if grown.note:
-            note = f"{grown.note}. {note}"
         if store.holds_sized_bet(shot.ticker, shot.lane) and not s.is_live(shot.lane, shot.series):
             sized = Sizing(0, 0.0, "already holding this market (paper)")
         elif not sized.ok:

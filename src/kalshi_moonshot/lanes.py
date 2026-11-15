@@ -59,29 +59,6 @@ class LaneSpec:
     fixed_stake: float = 0.0  # dollars per bet, ignoring Kelly (0 = size by the odds and the balance)
     always: bool = False  # bet whenever the filters pass, with no minimum edge from a model
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
-    gate_from: tuple[str, ...] = ()  # lanes whose finished bets decide which minutes of a 15-minute window this lane may enter (see gate.py)
-    gate_since: str = ""  # a date (YYYY-MM-DD, New York time): only bets placed on or after it count toward the gate (a reset)
-    gate_by: str = "band"  # "band": one record per minute band; "series": each market (series) keeps its own record, shrunk toward the lane's pooled band
-    gate_pool: float = 30.0  # with gate_by="series": how many pooled bets' worth of prior a market's own record is blended with
-    gate_min_n: int = 30  # finished bets a minute band needs before it can open
-    gate_z: float = 1.0  # standard errors subtracted from a band's mean return before it must beat zero
-    grid: bool = False  # buy only where the learned grid (grid.py) has a cell that pays; the lane's own exit settings manage the position
-    knn: bool = False  # decide by the nearest-neighbour model of past entries (knn.py) instead of hard buckets
-    knn_k: int = 300  # how many nearest past entries the estimate uses
-    knn_min_n: float = 25.0  # comparable windows (after weighting) needed before it may buy
-    knn_z: float = 3.0  # standard errors the estimate's mean must clear zero by
-    knn_rule: str = "trail"  # the exit the past entries are scored under: "trail" (the live crash exit) or "hold"
-    grid_rule: str = "trail"  # how the grid replays each entry: "trail" (the live peak-crash exit) or "hold" (to settlement, for a lane with no exit)
-    grid_min_n: int = 30  # finished replays a cell needs before it can decide
-    grid_z: float = 3.0  # standard errors a cell's mean must clear zero by (strict on purpose: of ~300 cells, some clear 2 by luck alone)
-    scale: bool = False  # stake and exposure cap grow with the lane's own record (scale.py); the base stake until the record clears the bar
-    scale_from: tuple[str, ...] = ()  # lanes whose finished bets count as the record (default: this lane)
-    scale_since: str = ""  # only count bets opened on or after this New York date (YYYY-MM-DD)
-    scale_min_n: int = 40  # finished bets needed before the stake can grow
-    scale_z: float = 2.0  # standard errors the average return must clear zero by (one test per lane, not a search)
-    scale_kelly: float = 0.25  # share of the Kelly stake the lower bound justifies
-    scale_old_weight: float = 0.5  # how much the previous version's bets count, per version back (a new version is usually an improvement, so its record starts partly from the old one's, and fades from it as its own builds)
-    scale_max_mult: float = 3.0  # most the stake and exposure cap may grow to, as a multiple of the base
     shares_markets: bool = False  # main-scan lane that also takes markets another lane took (for A/B controls); never consumes them
     min_chance: float = 0.0  # bet only when the estimator's chance that the contract pays is in [min_chance, max_chance]
     max_chance: float = 1.0  # (the estimate before calibration; for a ladder lane this is a distance to the strike)
@@ -401,7 +378,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed", "value_exit_bid"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "gate_from", "scale_from", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series", "ms_rule"):
+    for key in ("series", "sides", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series", "ms_rule"):
         if key in row:
             row[key] = tuple(row[key])
     for window in row.get("blackout_et", ()):
@@ -523,15 +500,23 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_rest_top_up", "min_edge_room", "record_adjust", "curve_shadow", "confidence_shadow", "accumulate_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
-    "scale", "scale_from", "scale_since", "scale_min_n", "scale_z", "scale_kelly", "scale_max_mult", "scale_old_weight", "gate_since",
     "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_source", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "value_exit", "value_exit_bid", "value_exit_gain_x", "value_exit_high", "value_exit_high_left", "value_exit_min_gain", "entry_checks_exit", "rebuy_opposite_after_gain_seconds", "shock_memory", "shock_persist", "hour_drift_q", "buy_curve_edge_min", "buy_flat_trend_pct", "perp_lead_buy", "curve_exit", "curve_exit_scales", "curve_exit_persist", "curve_exit_last", "curve_exit_near", "curve_drop_units", "curve_drop_seconds", "curve_drop_margin_units", "curve_drop_persist", "curve_rest", "curve_gap", "curve_gap_persist", "curve_risk_sell", "curve_risk_live", "curve_risk_spot_weight", "curve_risk_history", "curve_risk_max_loss", "curve_risk_min_profit", "curve_risk_stop_hold", "curve_take", "curve_take_slope_share", "stretch_max", "squeeze_max", "curve_risk_confirm", "curve_behind_last", "curve_behind_chance", "late_drop_units", "late_drop_seconds", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "wave_turn_seconds", "wave_turn_back", "wave_market_gate", "curve_wait_share", "curve_wait_severe", "curve_wait_default", "curve_drop_comeback", "curve_drop_comeback_min", "curve_drop_comeback_hold", "spot_source", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
+
+
+# The record gate, the nearest-neighbour gate, the learned grid and the stake scaling were removed on 2026-11-14 (no lane set any of them). Their fourteen settings were part of every lane's fingerprint at these defaults; they stay in it as constants so the removal does not change a version.
+_RETIRED_SETTINGS = {
+    "gate_by": "'band'", "gate_from": "()", "gate_min_n": "30", "gate_pool": "30.0", "gate_z": "1.0",
+    "grid": "False", "grid_min_n": "30", "grid_rule": "'trail'", "grid_z": "3.0",
+    "knn": "False", "knn_k": "300", "knn_min_n": "25.0", "knn_rule": "'trail'", "knn_z": "3.0",
+}
 
 
 def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     """Everything that decides what this lane buys, how much, and how it gets out, including the global rules that reach it."""
     out = {f.name: repr(getattr(spec, f.name)) for f in fields(spec) if f.name not in _NOT_LOGIC}
     out["settlement_flip"] = out.pop("burst_exit")  # the old name, so no lane's version changes with the rename
+    out.update(_RETIRED_SETTINGS)  # settings of rules that no longer exist, at the value every lane carried, so removing dead code is not a new version of every lane
     out["effective_stop"] = repr(stop_drop_for(spec, s) if spec.stop_loss else None)
     out["crash_spot_sigma"] = repr(spec.trail_spot_sigma if spec.trail_spot_sigma is not None else s.crash_spot_sigma)
     out["crash_giveback"] = repr(spec.trail_giveback if spec.trail_giveback is not None else s.crash_giveback)

@@ -156,7 +156,7 @@ numeric = "allow"
 series = ["KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M", "KXAUDUSD15M", "KXUSDCAD15M"]
 timed_suffix = "15M"
 timed_minutes = 15
-entry_elapsed = [1, 14]          # the whole window: the learned gate decides which minutes may trade
+entry_elapsed = [1, 14]          # the whole window
 scope_minutes = 3
 review_minutes = 1
 priority = 10
@@ -164,9 +164,6 @@ max_exposure_pct = 0.10
 trail_activate = 0.10
 trail_drop = 0.04
 stop_loss = false
-gate_from = ["late_ticket", "late_ticket_trail", "fx_ticket"]   # the lanes whose finished bets decide which minutes may trade
-gate_min_n = 30
-gate_z = 1.0
 
 
 # Last-minute lottery tickets (paper experiment): the 0.2-5 cent side of a commodity 15-minute market in its last minute, held to
