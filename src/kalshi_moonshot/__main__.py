@@ -6,6 +6,7 @@ import argparse
 import logging
 import signal
 import sys
+import os
 import threading
 import time
 from datetime import UTC, datetime
@@ -60,10 +61,24 @@ def cmd_record(s: config.Settings, args: argparse.Namespace) -> int:
     stop = threading.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stop.set())
+    diag = os.environ.get("RECORDER_DIAG", "").lower() in ("1", "true", "yes")  # 2026-11-15: where the recorder's memory goes (recorderdiag.py); off unless asked
+    if diag and os.environ.get("RECORDER_TRACEMALLOC", "").lower() in ("1", "true", "yes"):
+        from . import recorderdiag
+
+        recorderdiag.start_tracing()
     rec.start()
     log.info("tape recorder (its own process) on: %s, the Kalshi streams only (kept %.0f days by the bot's pruning)", s.tape_path, s.tape_keep_days)
     last_log = 0.0
+    last_diag = time.time()
     while not stop.wait(30.0):
+        if diag and time.time() - last_diag >= 300.0:
+            last_diag = time.time()
+            try:
+                from . import recorderdiag
+
+                log.info("%s", recorderdiag.report(rec))
+            except Exception:
+                log.warning("recorder: the memory report failed", exc_info=True)
         try:
             rec.s = dataclasses.replace(config.reload(), tape_role="record")  # the series the tape follows change with WATCH_SERIES and TAPE_EXTRA_SERIES, without a restart
         except Exception:

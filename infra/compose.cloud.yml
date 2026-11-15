@@ -27,7 +27,7 @@ services:
     command: ["python", "-m", "kalshi_moonshot", "record"]
     restart: unless-stopped
     stop_grace_period: 20s
-    mem_limit: 512m
+    mem_limit: 1g  # 2026-11-15: 512m killed the recorder once (05:03 ET, 521 MiB) while it grew about 70 MiB an hour; raised first, the leak is found next
     env_file: /mnt/moonshot/env/.env
     depends_on:
       db:
