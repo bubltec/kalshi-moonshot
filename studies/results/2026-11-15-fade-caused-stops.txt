@@ -1,0 +1,11 @@
+live stops and line sales since 09:36:00: 6
+  ETH15M-26NOV150945   yes sold 09:38:58  361s left @0.34: hour view 0.257, old bar 0.4, faded bar 0.400; result -15.97, holding -27.6 (market no)
+  HYPE15M-26NOV151100  no  sold 10:55:44  255s left @0.20: hour view 0.317, old bar 0.4, faded bar 0.400; result -4.97, holding -7.09 (market yes)
+  HYPE15M-26NOV151115  no  sold 11:07:57  422s left @0.33: hour view 0.315, old bar 0.4, faded bar 0.400; result -12.00, holding -21.82 (market yes)
+  DOGE15M-26NOV151315  yes sold 13:10:18  281s left @0.36: hour view 0.265, old bar 0.4, faded bar 0.400; result -14.78, holding -27.0 (market no)
+  BNB15M-26NOV151315   yes sold 13:10:50  249s left @0.38: hour view 0.312, old bar 0.4, faded bar 0.400; result -14.94, holding -27.61 (market no)
+  BTC15M-26NOV151315   yes sold 13:12:31  148s left @0.26: hour view 0.296, old bar 0.4, faded bar 0.506; result -20.93, holding 6.54 (market yes)
+
+stops the fade caused: 0; their sale result +0.00, holding would have paid +0.00
+DONE
+	
