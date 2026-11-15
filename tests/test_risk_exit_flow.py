@@ -28,6 +28,7 @@ curve_risk_stop_hold={hold}
 curve_risk_max_loss={max_loss}
 curve_take={take}
 curve_take_slope_share={share}
+curve_take_cushion={cushion}
 stretch_max={stretch}
 squeeze_max={squeeze}
 """
@@ -63,9 +64,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5):
+def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false'):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -435,7 +436,7 @@ def test_integration_with_no_hold_the_stop_sells_at_once_as_before(tmp_path, mon
 def test_unit_the_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for hold in (0, 0.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false'))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_risk_stop_hold" in got) is (hold > 0)
@@ -582,7 +583,7 @@ def test_integration_the_take_sale_is_executed_as_an_order(tmp_path, monkeypatch
 def test_unit_the_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for take in ("false", "true"):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take=take, stretch=0, share=0.015, squeeze=0, max_loss=0.5))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take=take, stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false'))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_take" in got) is (take == "true")
@@ -711,7 +712,7 @@ def test_integration_the_hour_view_still_holds_a_squeezed_sale(tmp_path, monkeyp
 def test_unit_the_squeeze_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for squeeze in (0, 0.02):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="false", stretch=0, share=0.015, squeeze=squeeze, max_loss=0.5))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="false", stretch=0, share=0.015, squeeze=squeeze, max_loss=0.5, cushion='false'))
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("squeeze_max" in got) is (squeeze > 0)
@@ -738,3 +739,74 @@ def test_integration_late_in_a_quiet_market_the_same_bet_rides_to_its_win(tmp_pa
     feed_history(0.0013, from_left=1300, to_left=121)  # with the climb itself, a swing of under 0.02 over the time left against 0.04 left to win
     w = held(tmp_path, monkeypatch, live=True, take="true")
     assert late_recovery(w) is None
+
+
+# ---- the profit take's cushion check (2026-11-14, user: "we just need a cushion check before we decide to sell (in the profit flow)") ----
+def seed_spot(monkeypatch, over_strike, seconds_before_close=50.0):
+    """The lane's spot index (BRTI for KXBTC15M, armed against the strike 100.0): a tick every 5 s from 2000 s before the close, `over_strike` (a share, +0.008 = 80 bp) over the strike on the YES side, alternating a hundredth either way."""
+    fresh = ticks_mod.TickHistory()
+    monkeypatch.setattr(ticks_mod, "history", fresh)
+    start = CLOSE - 2000.0
+    rows = [(start + 5.0 * k, 100.0 * (1.0 + over_strike) + (0.01 if k % 2 else -0.01)) for k in range(int((2000.0 - seconds_before_close) // 5.0))]
+    fresh.warm("BRTI", rows, start)
+
+
+def taken_after_climb(tmp_path, monkeypatch, cushion, over_strike):
+    if over_strike is not None:
+        seed_spot(monkeypatch, over_strike)
+    w = held(tmp_path, monkeypatch, live=True, take="true", cushion=cushion)
+    assert climb(w, 0.82, 0.92, 700) is None
+    return level(w, 0.92, 700)
+
+
+def test_unit_the_cushion_holds_when_its_chance_is_over_what_the_sale_pays():
+    from kalshi_moonshot import curverisk
+
+    assert curverisk.cushion_holds(0.95, 0.91) is True
+    assert curverisk.cushion_holds(0.80, 0.91) is False
+    assert curverisk.cushion_holds(0.91, 0.91) is False  # a tie sells: the take was already earned
+
+
+def test_integration_the_lane_file_arms_the_cushion_check_on_the_watched_position(tmp_path, monkeypatch):
+    seed_spot(monkeypatch, 0.008)
+    w = held(tmp_path, monkeypatch, live=True, take="true", cushion="true")
+    assert w.targets[(TICKER, "risk_only")].risk_take_cushion is True
+    w2 = held(tmp_path / "off", monkeypatch, live=True, take="true") if (tmp_path / "off").mkdir() is None else None
+    assert w2.targets[(TICKER, "risk_only")].risk_take_cushion is False
+
+
+def test_integration_a_spot_well_over_the_strike_holds_the_take_that_would_have_sold(tmp_path, monkeypatch):
+    assert taken_after_climb(tmp_path, monkeypatch, "true", 0.008) is None  # 80 bp over: the curve's chance is about 1, over the 0.91 the sale pays
+
+
+def test_integration_the_same_bet_without_the_check_sells_as_before(tmp_path, monkeypatch):
+    sig = taken_after_climb(tmp_path, monkeypatch, "false", 0.008)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+def test_integration_a_spot_under_the_strike_still_sells_and_the_note_says_why(tmp_path, monkeypatch):
+    sig = taken_after_climb(tmp_path, monkeypatch, "true", -0.004)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)") and "[cushion: the spot's chance" in sig.why
+
+
+def test_integration_with_no_spot_reading_the_take_goes_as_before(tmp_path, monkeypatch):
+    monkeypatch.setattr(ticks_mod, "history", ticks_mod.TickHistory())  # no spot history at all
+    w = held(tmp_path, monkeypatch, live=True, take="true", cushion="true")
+    assert climb(w, 0.82, 0.92, 700) is None
+    sig = level(w, 0.92, 700)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+def test_integration_the_cushion_only_holds_the_profit_take_not_the_stop(tmp_path, monkeypatch):
+    seed_spot(monkeypatch, 0.008)
+    w = held(tmp_path, monkeypatch, live=True, take="true", cushion="true", hold=0)
+    assert [s for s in (slide(w) or []) if "profit take" in s.why] == []  # a loss is no profit take, so the check never applies to it
+
+
+def test_unit_the_cushion_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
+    for cushion in ("false", "true"):
+        monkeypatch.setenv("DATA_DIR", str(tmp_path))
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=-1, hold=0, take="true", stretch=0, share=0.08, squeeze=0, max_loss=0.5, cushion=cushion))
+        s = config.load()
+        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
+        assert ("curve_take_cushion" in got) is (cushion == "true")

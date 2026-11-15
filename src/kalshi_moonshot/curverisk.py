@@ -144,6 +144,12 @@ def take_profit(gain: float, room: float, left: float, window: float, rebuy_fee:
     return gain >= take_bar(gain, room, left, window, unit)
 
 
+def cushion_holds(chance: float, net_bid: float) -> bool:
+    """True when the spot's cushion says the bet is worth more held than sold (2026-11-14, user, after a BTC NO sold at 0.83 that "was never close to losing" and a ZEC NO sold at 0.89: "we just need a cushion check before we decide to sell (in the profit flow)").
+    `chance` is the curve's chance, from the spot's distance to the strike over the time left in the market's own variance (history widened), that the side pays; `net_bid` is what the sale pays after its fee. Holding is worth `chance` of a dollar on that read, the sale `net_bid`: when the cushion's chance is the larger, the cushion says hold. No share, price level or number of cents is fixed; the chance and the bid are the market's own."""
+    return chance > net_bid
+
+
 def still_rising(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None) -> bool:
     """True while the bid is still sloping up over the last `seconds` (2026-11-14, user: "if it's sloping in profit direction don't sell until it stops sloping"), measured in the market's own noise: `unit` is its typical minute (quoteshock.typical_minute), so what it normally moves in the look back is unit * sqrt(seconds / 60).
     Sloping = the bid has risen over the look back by more than that noise AND sits within that noise of the look back's high. A one-tick pause in a climb is inside the noise and does not end it; a bid that has levelled out (the rise has aged out of the look back) or fallen back from its high by more than the noise has stopped.

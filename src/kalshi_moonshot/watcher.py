@@ -234,6 +234,8 @@ class Target:
     risk_unit: float | None = None
     risk_unit_at: float = 0.0
     risk_take: bool = False  # the profit take (lane field curve_take)
+    risk_take_cushion: bool = False  # the spot's cushion is asked before the take sells (lane field curve_take_cushion)
+    risk_take_held: bool = False  # the cushion has already been logged as holding this bet's take
     risk_take_slope: float = 0.08  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
     risk_squeeze: float = 0.0  # the most a loss may be short of the max loss and still count as reaching it (lane field squeeze_max)
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
@@ -874,6 +876,16 @@ class ProfitWatcher:
         r = curverisk.risk(read.p, net, t.risk_hist if t.risk_history else 1.0, t.risk_spot_weight)
         return self._risk_decide(t, r, bid, now, left, pnl, self._risk_long(t, now, left))
 
+    def _take_cushion(self, t: Target, now: float, left: float, net: float) -> float | None:
+        """The curve's chance, from the spot's distance to the strike over the time left, that the side pays: the profit take's cushion check (lane field curve_take_cushion). The reading is the lane's own (curvevalue.read on the index it is armed against), widened by the hour's jumps as the risk reading is. None when there is no reading (no spot index armed, too little history, a stale tick): the take then goes as before."""
+        if t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or left <= 0:
+            return None
+        got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
+        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left, t.curve_scales) if got else None
+        if read is None:
+            return None
+        return curverisk.risk(read.p, net, t.risk_hist if t.risk_history else 1.0, 0.0).q_spot
+
     def _risk_quote_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The single risk exit on Kalshi's own quote (2026-11-13, user: "switch to use kalshis price instead of the external feeds for everything", then "exit first"): for a lane that gives the spot cushion no weight the chance the side pays IS the bid net of the sell fee, so the exit needs no spot feed, reads every quote and acts the second the price moves."""
         if t.risk_sell <= 0 or t.risk_spot_weight > 0 or t.close_ts <= 0 or now - t.risk_at < 1.0 or time.time() < t.retry_after:
@@ -985,9 +997,19 @@ class ProfitWatcher:
             unit = self._risk_unit(t, now)
             bar = curverisk.take_bar(gain, room, left, 900.0, unit)
             taken = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit) and not curverisk.still_rising(t.risk_take_hist, now, look, unit)
+            cushion = ""
+            if taken and t.risk_take_cushion:
+                chance = self._take_cushion(t, now, left, net)
+                if chance is not None and curverisk.cushion_holds(chance, net):
+                    taken = False  # the spot's cushion says the bet is worth more held than sold
+                    if not t.risk_take_held:
+                        t.risk_take_held = True
+                        log.info("curve risk: %s %s profit take held by the cushion: the spot's chance %.3f is over the %.3f the sale pays (bid %.2f, %.0fs left)", t.ticker, t.lane, chance, net, bid, left)
+                elif chance is not None:
+                    cushion = f" [cushion: the spot's chance {chance:.3f} is not over the {net:.3f} the sale pays]"
             if taken:
                 used = 1.0 - left / 900.0
-                reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room against a bar of {bar / max(room, 1e-9) * 100.0:.0f}% ({'half the room: what is left to win is inside this market swing over the time left' if bar < used * room - 1e-9 else f'{used * 100.0:.0f}% of the market is gone'}, {left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+                reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room against a bar of {bar / max(room, 1e-9) * 100.0:.0f}% ({'half the room: what is left to win is inside this market swing over the time left' if bar < used * room - 1e-9 else f'{used * 100.0:.0f}% of the market is gone'}, {left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost{cushion}"
                 if t.risk_live:
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True)
                     return reason
@@ -1837,6 +1859,7 @@ class ProfitWatcher:
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_stop_hold = spec.curve_risk_stop_hold
                 held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_max
+                held.risk_take_cushion = spec.curve_take_cushion
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
