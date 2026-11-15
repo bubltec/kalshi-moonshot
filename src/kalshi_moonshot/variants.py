@@ -932,50 +932,42 @@ def broad_trend_now(now: float | None = None) -> float | None:
     return out
 
 
-FLAT_LOOKBACK_HOURS = 6.0  # the market-wide trend's own history the flat cutoff is read from: the same six hours the volatility regime reads
-FLAT_STEP = 300.0  # one reading of the trend every five minutes
-FLAT_MIN_READINGS = 24  # two hours of them, or the history is too short to say what is normal
-_flat_memo: dict[float, tuple[int, float | None]] = {}
+_hour_move_memo: tuple[int, float | None] = (0, None)
 
 
-def broad_trend_series(now: float, hours: float = FLAT_LOOKBACK_HOURS, step: float = FLAT_STEP) -> list[float]:
-    """The market-wide 60-minute move (the average of the five coins' change over an hour, in percent, as broad_trend_now reads it) at every `step` seconds over the last `hours`, from the in-memory index ticks. A reading is left out when any coin has no tick near its two times."""
-    got = {}
+def broad_hour_move(now: float | None = None) -> float | None:
+    """The market-wide typical 60-minute move, in percent, from the CURRENT hour's own one-minute moves only (2026-11-15, user: not six hours, the current hour): for each of the five coins the root-mean-square of its last 60 one-minute log changes times sqrt(60), averaged over the coins. How far the market has been moving around within the hour, whatever it netted. Cached for 30 s. None when any coin has no tick within a minute of any of the 61 minute marks."""
+    global _hour_move_memo
+    now = time.time() if now is None else now
+    if _hour_move_memo[0] == int(now // 30):
+        return _hour_move_memo[1]
+    sigmas = []
     for ser in BROAD_SERIES:
         index = crypto_index(ser)
-        win = ticks_mod.history.window(index, now - hours * 3600.0 - 3700.0, now) if index else None
-        if win is None or not win[0]:
-            return []
-        got[ser] = win
-    out: list[float] = []
-    t = now
-    while t >= now - hours * 3600.0:
-        moves = []
-        for ts, vs in got.values():
-            i, j = bisect.bisect_right(ts, t) - 1, bisect.bisect_right(ts, t - 3600.0) - 1
-            if i < 0 or j < 0 or t - ts[i] > 60.0 or t - 3600.0 - ts[j] > 60.0:
-                break
-            moves.append(100.0 * (vs[i] / vs[j] - 1.0))
-        else:
-            out.append(sum(moves) / len(moves))
-        t -= step
+        got = ticks_mod.history.window(index, now - 3700.0, now) if index else None
+        if got is None or not got[0]:
+            _hour_move_memo = (int(now // 30), None)
+            return None
+        ts, vs = got
+        marks = []
+        for k in range(61):
+            t = now - 60.0 * k
+            i = bisect.bisect_right(ts, t) - 1
+            if i < 0 or t - ts[i] > 60.0:
+                _hour_move_memo = (int(now // 30), None)
+                return None
+            marks.append(math.log(vs[i]))
+        changes = [marks[k] - marks[k + 1] for k in range(60)]
+        sigmas.append(100.0 * math.sqrt(sum(c * c for c in changes) / len(changes)) * math.sqrt(60.0))
+    out = sum(sigmas) / len(sigmas)
+    _hour_move_memo = (int(now // 30), out)
     return out
 
 
 def broad_trend_bar(share: float, now: float | None = None) -> float | None:
-    """The flat-trend cutoff from the market's own history (CLAUDE.md rule 2): the `share` quantile of |market-wide 60-minute move| over the last six hours, in percent, recomputed hourly. None with under two hours of readings. A trend inside this is flat for the market as it has been behaving, not by a fixed number."""
-    now = time.time() if now is None else now
-    hit = _flat_memo.get(share)
-    if hit is not None and hit[0] == int(now // 3600.0):
-        return hit[1]
-    vals = sorted(abs(v) for v in broad_trend_series(now))
-    bar = None
-    if len(vals) >= FLAT_MIN_READINGS:
-        pos = min(max(share, 0.0), 1.0) * (len(vals) - 1)
-        lo = int(pos)
-        bar = vals[lo] + (vals[min(lo + 1, len(vals) - 1)] - vals[lo]) * (pos - lo)
-    _flat_memo[share] = (int(now // 3600.0), bar)
-    return bar
+    """The flat-trend cutoff from the market's own current hour (CLAUDE.md rule 1 and 2): `share` of this hour's typical move (broad_hour_move), in percent. A net 60-minute move under it is flat for the way the market has actually been moving, not by a fixed number: a trend that nets little while the market swung around a lot is flat, and the same net move in a quiet hour is a real one. None when the hour cannot be read."""
+    move = broad_hour_move(now)
+    return None if move is None else share * move
 
 
 def ms_rule_ok(rule: Sequence[str], letters: dict[str, str]) -> bool:

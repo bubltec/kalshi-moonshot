@@ -668,13 +668,13 @@ def evaluate(
         if trend is not None:
             note = f"[trend60 {trend:+.1f}%] {note}"
         flat_bar, flat_from = spec.buy_flat_trend_pct, "the lane's fixed cutoff"
-        if spec.buy_flat_trend_quantile > 0:  # the cutoff scales with the market's own last six hours; the fixed number is the fallback when that history is short
+        if spec.buy_flat_trend_share > 0:  # the cutoff scales with this hour's own typical move; the fixed number is the fallback when the hour cannot be read
             try:
-                own = _variants.broad_trend_bar(spec.buy_flat_trend_quantile)
+                own = _variants.broad_trend_bar(spec.buy_flat_trend_share)
             except Exception:
                 own = None
             if own is not None:
-                flat_bar, flat_from = own, f"the smallest {spec.buy_flat_trend_quantile:.0%} of the last six hours' readings"
+                flat_bar, flat_from = own, f"{spec.buy_flat_trend_share:.0%} of this hour's own typical move"
         if bet and flat_bar > 0:
             if trend is None:
                 bet = False
