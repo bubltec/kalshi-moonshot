@@ -1004,6 +1004,8 @@ class ProfitWatcher:
                         log.info("curve risk: %s %s profit take held by the cushion: the spot's chance %.3f is over the %.3f the sale pays (bid %.2f, %.0fs left)", t.ticker, t.lane, chance, net, bid, left)
                 elif chance is not None:
                     cushion = f" [cushion: the spot's chance {chance:.3f} is not over the {net:.3f} the sale pays]"
+                else:
+                    cushion = " [cushion: no spot reading, so the check did not apply]"  # 2026-11-14: SOL 21:45 sold with the check on and a chance over the bid; a sale has to say whether the check ran
             if taken:
                 used = 1.0 - left / 900.0
                 reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room against a bar of {bar / max(room, 1e-9) * 100.0:.0f}% ({'half the room: what is left to win is inside this market swing over the time left' if bar < used * room - 1e-9 else f'{used * 100.0:.0f}% of the market is gone'}, {left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost{cushion}"

@@ -794,7 +794,7 @@ def test_integration_with_no_spot_reading_the_take_goes_as_before(tmp_path, monk
     w = held(tmp_path, monkeypatch, live=True, take="true", cushion="true")
     assert climb(w, 0.82, 0.92, 700) is None
     sig = level(w, 0.92, 700)
-    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)") and "[cushion: no spot reading" in sig.why
 
 
 def test_integration_the_cushion_only_holds_the_profit_take_not_the_stop(tmp_path, monkeypatch):
