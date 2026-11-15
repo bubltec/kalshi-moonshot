@@ -150,9 +150,12 @@ def cushion_holds(chance: float, net_bid: float) -> bool:
     return chance > net_bid
 
 
-def still_rising(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None) -> bool:
+LATE_SHARE = 0.2  # the last fifth of a market (three minutes of fifteen): where a flat bid is held, not sold (2026-11-14, user, "a flat slope under 3 mins is perfectly fine, unless it starts to dip while profitable we should not sell"); a share of the market's length, which is structural
+
+
+def still_rising(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None, flat_ok: bool = False) -> bool:
     """True while the bid is still sloping up over the last `seconds` (2026-11-14, user: "if it's sloping in profit direction don't sell until it stops sloping"), measured in the market's own noise: `unit` is its typical minute (quoteshock.typical_minute), so what it normally moves in the look back is unit * sqrt(seconds / 60).
-    Sloping = the bid has risen over the look back AND sits within that noise of the look back's high (the rise itself needs no minimum: the noise is read over the last 15 minutes, which a climb inflates). A one-tick pause in a climb is inside the noise and does not end it; a bid that has levelled out (the rise has aged out of the look back) or fallen back from its high by more than the noise has stopped.
+    Sloping = the bid has risen over the look back AND sits within that noise of the look back's high (the rise itself needs no minimum: the noise is read over the last 15 minutes, which a climb inflates). With `flat_ok` (the last LATE_SHARE of the market) a flat bid holds too: only a dip below the noise from the high ends the hold. A one-tick pause in a climb is inside the noise and does not end it; a bid that has levelled out (the rise has aged out of the look back) or fallen back from its high by more than the noise has stopped.
     With no reading of the unit (under five minutes of quotes) the plain test is used: the newest bid is the look back's high and above where it started. With under `seconds` of readings the slope is unknown and the answer is True (no sale on a bet just opened)."""
     if seconds <= 0:
         return False
@@ -161,9 +164,9 @@ def still_rising(samples: list[tuple[float, float]], now: float, seconds: float,
         return True
     bid, high, start = window[-1][1], max(b for _, b in window), window[0][1]
     if unit is None or unit <= 0:
-        return bid >= high and bid > start
+        return bid >= high and (flat_ok or bid > start)
     noise = unit * math.sqrt(seconds / MINUTE)
-    return bid > start and high - bid < noise  # 2026-11-14 (user: "the increase in profit should be the main driver for holding"): any rise over the look back counts; the noise only says how far under its high the bid may sit. Was: the rise had to beat the noise, which the climb itself inflates (SOL 21:15 YES, a rise of 0.102 against a bar of 0.105, sold at 0.982 and the bid went on to 0.996)
+    return (flat_ok or bid > start) and high - bid < noise  # 2026-11-14 (user: "the increase in profit should be the main driver for holding"): any rise over the look back counts; the noise only says how far under its high the bid may sit. Was: the rise had to beat the noise, which the climb itself inflates (SOL 21:15 YES, a rise of 0.102 against a bar of 0.105, sold at 0.982 and the bid went on to 0.996)
 
 
 def still_falling(samples: list[tuple[float, float]], now: float, seconds: float, unit: float | None = None) -> bool:

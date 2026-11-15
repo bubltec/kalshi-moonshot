@@ -993,7 +993,7 @@ class ProfitWatcher:
             room, rebuy = 1.0 - basis, fee_per_contract(bid)
             unit = self._risk_unit(t, now)
             bar = curverisk.take_bar(gain, room, left, 900.0, unit)
-            taken = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit) and not curverisk.still_rising(t.risk_take_hist, now, look, unit)
+            taken = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit) and not curverisk.still_rising(t.risk_take_hist, now, look, unit, left <= 900.0 * curverisk.LATE_SHARE)
             cushion = ""
             if taken and t.risk_take_cushion:
                 chance = self._take_cushion(t, now, left, net)

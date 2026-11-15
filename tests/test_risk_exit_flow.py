@@ -728,11 +728,18 @@ def late_recovery(w):
     return climb(w, 0.82, 0.96, 100) or sit(w, 0.96, 85, 12)
 
 
-def test_integration_late_in_a_swinging_market_a_bet_at_ninety_six_is_cashed(tmp_path, monkeypatch):
+def test_integration_late_in_a_swinging_market_a_bet_at_ninety_six_is_held_while_flat_and_cashed_on_a_dip(tmp_path, monkeypatch):
+    # 2026-11-14 (user: "a flat slope under 3 mins is perfectly fine, unless it starts to dip while profitable we should not sell"): this bet used to be cashed the moment it sat flat at 0.96 (SOL NO 15:30, "Yes we should have cashed that out"); now it is held while flat and cashed when the bid starts to fall
     feed_history(0.013, from_left=1300, to_left=121)  # a typical minute of about 0.10: a swing of about 0.12 over the 85 s left
-    w = held(tmp_path, monkeypatch, live=True, take="true")
-    sig = late_recovery(w)
-    assert sig is not None and sig.why.startswith("curve risk exit (profit take)") and "half the room" in sig.why
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
+    assert late_recovery(w) is None
+    out = []
+    for k in range(6):  # over 5 s the bid falls from 0.96 to 0.925: more than the noise (about 0.03), and still over the half-room bar
+        left, bid = 70 - k, round(0.96 - 0.007 * k, 4)
+        ticks_mod.mids.note(TICKER, CLOSE - left, bid - 0.005, bid + 0.005)
+        yes_bid(w, bid, left)
+        out += signals(w)
+    assert out and out[0].why.startswith("curve risk exit (profit take)") and "half the room" in out[0].why
 
 
 def test_integration_late_in_a_quiet_market_the_same_bet_rides_to_its_win(tmp_path, monkeypatch):
@@ -816,3 +823,26 @@ def test_integration_in_a_swinging_market_a_steady_small_climb_is_still_a_slope(
     feed_history(0.013, from_left=1300, to_left=800)  # a typical minute of about 0.10: more noise than a slow climb makes
     w = held(tmp_path, monkeypatch, live=True, take="true")
     assert climb(w, 0.84, 0.90, 700, step=0.002) is None  # the bid rises every second: 0.002 a second is under the noise, and still a slope (it sold on the noise bar before 2026-11-14)
+
+
+# ---- a flat bid late in the market is held; only a dip sells (2026-11-14, user: "a flat slope under 3 mins is perfectly fine, unless it starts to dip while profitable we should not sell") ----
+def test_integration_in_the_last_fifth_a_flat_bid_is_held_and_a_dip_sells(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=900, to_left=151)  # a typical minute of about 0.10
+    w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
+    assert climb(w, 0.82, 0.99, 150) is None  # still rising
+    assert level(w, 0.99, 150, seconds=12) is None  # flat at the top with 137 s left: held
+    out = []
+    for k in range(9):  # it starts to dip: over 8 s it falls from 0.99 to 0.945, more than the noise (about 0.036)
+        left, bid = 108 - k, round(0.99 - 0.005625 * k, 4)
+        ticks_mod.mids.note(TICKER, CLOSE - left, bid - 0.005, bid + 0.005)
+        yes_bid(w, bid, left)
+        out += signals(w)
+    assert out and out[0].why.startswith("curve risk exit (profit take)")
+
+
+def test_integration_before_the_last_fifth_a_flat_bid_still_sells(tmp_path, monkeypatch):
+    feed_history(0.013, from_left=1300, to_left=800)
+    w = held(tmp_path, monkeypatch, live=True, take="true")
+    assert climb(w, 0.82, 0.92, 700) is None
+    sig = level(w, 0.92, 700)  # 700 s left: outside the last fifth, so flat ends the hold as before
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")

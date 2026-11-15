@@ -1,0 +1,15 @@
+Success	takes sold with 180 s or less left: real sale vs the rule's sale (time left, price), and how the market ended
+  BTC15M-26NOV141530     no  real   80s left @0.982, ended no: rule -> settles (+0.65)
+  ETH15M-26NOV141545     no  real  127s left @0.981, ended no: rule -> settles (+0.70)
+  BNB15M-26NOV141545     no  real  117s left @0.985, ended no: rule -> settles (+0.43)
+  XRP15M-26NOV141615     no  real   90s left @0.993, ended no: rule -> settles (+0.26)
+  XRP15M-26NOV141745     no  real   70s left @0.944, ended no: rule -> settles (+2.05)
+  SOL15M-26NOV141830     no  real  152s left @0.890, ended no: rule -> 153s @0.860 (-0.99)
+  NEAR15M-26NOV142100    yes real   85s left @0.800, ended yes: rule -> 74s @0.902 (+3.47)
+  SOL15M-26NOV142100     yes real   85s left @0.944, ended yes: rule -> 86s @0.860 (-2.93)
+  XRP15M-26NOV142145     yes real  155s left @0.865, ended yes: rule -> settles (+5.26)
+  ETH15M-26NOV142145     yes real  127s left @0.944, ended yes: rule -> settles (+2.06)
+
+10 bets: real +62.03, rule +72.98, change +10.96; better 8, worse 2
+DONE
+	

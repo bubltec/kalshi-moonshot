@@ -249,6 +249,21 @@ def test_unit_still_rising_follows_the_short_slope():
     assert curverisk.still_rising(up, 10.0, 0.0) is False  # no look back asked
 
 
+def test_unit_late_in_the_market_a_flat_bid_holds_and_only_a_dip_sells():
+    # a typical minute of 0.10: the noise over 10 s is 0.041
+    flat = [(float(t), 0.90) for t in range(0, 11)]
+    assert curverisk.still_rising(flat, 10.0, 10.0, 0.10) is False  # the live test outside the last fifth: flat sells
+    assert curverisk.still_rising(flat, 10.0, 10.0, 0.10, flat_ok=True) is True  # in the last fifth a flat bid is held
+    up_then_flat = [(float(t), 0.80 + 0.01 * min(t, 5)) for t in range(0, 11)]
+    assert curverisk.still_rising(up_then_flat, 10.0, 10.0, 0.10, flat_ok=True) is True
+    pause = up_then_flat + [(11.0, 0.84)]  # one tick back, inside the noise
+    assert curverisk.still_rising(pause, 11.0, 10.0, 0.10, flat_ok=True) is True
+    dip = up_then_flat + [(11.0, 0.80)]  # 0.05 off the high: more than the noise: it has started to dip
+    assert curverisk.still_rising(dip, 11.0, 10.0, 0.10, flat_ok=True) is False
+    assert curverisk.still_rising(flat, 10.0, 10.0, None, flat_ok=True) is True  # no unit: the newest bid is at the high
+    assert curverisk.still_rising(flat + [(11.0, 0.89)], 11.0, 10.0, None, flat_ok=True) is False
+
+
 def test_unit_a_climb_that_inflated_its_own_noise_is_still_a_slope():
     # SOL 21:15 YES, 2026-11-14: over the 43 s look back the bid rose 0.102 (0.880 to 0.982) in a market whose 15-minute typical minute, run-up included, was 0.124: a noise bar of 0.105
     path = [(float(t), 0.880 + 0.102 * t / 43.0) for t in range(0, 44)]
