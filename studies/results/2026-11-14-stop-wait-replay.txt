@@ -35,3 +35,22 @@ Reading:
 - With the live holds the new wait is about neutral (-2.24): it gets a few dollars more out of five losers and sells one winner. Its sales still come at 6 to 36 cents, because the wait was never what held those bets: the hour view and the swing hold release them only once the price is already low.
 - The tighter holds do what they were meant to on the losers (ETH -4.79 for -17.30, BTC 16:35 -7.11 for -18.06, BTC 18:28 -15.62 for -26.68, SOL 15:20 -12.81 for -26.50) and sell four bets that came back and won (BTC 10:03, XRP 10:33, SOL 10:36, BTC 15:20): -18.25 against what happened. Proposed the same evening without this run; the run says no.
 - On this day a fall that comes back was about as common as one that does not, and none of these three levers tells them apart.
+
+RUN 3 (about 19:25 ET): the live holds, and in the "new" column the two holds are also scaled by the clock as the wait is (SCALED=1): the hour view has to say 1 - 0.6 x (time left / 900) or more to hold (0.4 at the open, certainty at the close), and the swing band is multiplied by time left / 900.
+Question (user: "The second chance would be built in by the time scale in these scenarios"): if the same time scale reaches the two holds in front of the wait, does the exit get out of the reversals?
+10:03:04 ETH  yes 0.53 | LOST held       -17.30 | new: sells 0.40 at 03:40, 680s left   -4.79
+10:03:45 BTC  no  0.50 | won  held       +15.64 | new: sells 0.40 at 04:44, 616s left   -3.65
+10:08:36 SOL  yes 0.58 | LOST held        -8.80 | new: sells 0.22 at 14:12, 48s left    -5.64
+10:09:29 DOGE no  0.79 | won  held        +4.70 | new: sells 0.47 at 10:27, 273s left   -7.55
+10:36:59 SOL  yes 0.80 | won  held        +6.84 | new: sells 0.45 at 38:43, 377s left  -12.57
+11:48:05 BTC  no  0.77 | sold 0.26 56:23 -17.85 | new: sells 0.38 at 50:58, 542s left  -13.86
+15:20:09 SOL  no  0.78 | LOST held       -26.50 | new: sells 0.56 at 24:37, 323s left   -8.06
+15:20:15 BTC  no  0.77 | sold 0.98 28:40  +7.15 | new: sells 0.48 at 22:25, 455s left  -10.43
+15:33:55 ETH  no  0.83 | sold 0.98 42:53  +5.14 | new: sells 0.57 at 40:38, 262s left   -9.53
+15:35:17 BNB  no  0.85 | sold 0.99 43:03  +3.62 | new: sells 0.51 at 40:18, 282s left   -9.60
+16:33:16 XRP  no  0.55 | LOST held        -0.55 | new: sells 0.37 at 38:55, 365s left   -0.20
+16:35:45 BTC  no  0.57 | LOST held       -18.06 | new: sells 0.36 at 38:21, 399s left   -7.11
+17:40:36 XRP  no  0.85 | sold 0.94 43:49  +3.10 | new: sells 0.52 at 41:28, 212s left  -11.95
+18:28:09 BTC  no  0.78 | LOST held       -26.68 | new: sells 0.52 at 28:31, 89s left    -9.54
+bets 38: what happened +25.77 | new wait with the holds scaled by the clock -19.18 (14 loss sales) | against what happened -44.95
+Reading: it does get out of the reversals (the five losers that rode to nothing cost 35 between them here, against 97), and it sells seven bets that dipped and came back for gains (BTC 10:03, DOGE, SOL 10:36, BTC 15:20, ETH 15:33, BNB 15:35, XRP 17:40), which costs far more. The worst of the three versions tried. Not built.

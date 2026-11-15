@@ -20,7 +20,8 @@ tape = db.connect(s.tape_path, "tape", shared=True)
 ET = datetime.timezone(datetime.timedelta(hours=-5))
 MAX_LOSS, LINE, FLOOR, BASE = 0.5, 0.5, 0.10, 15.0
 CONFIRM, SWING, SHARE = float(os.environ.get("CONFIRM", "0.4")), float(os.environ.get("SWING", "1.5")), float(os.environ.get("SHARE", "0.5"))  # the live holds; CONFIRM=0.5 SWING=0.5 is the tighter pair proposed the same evening
-print(f"holds: hour view holds at {CONFIRM}, swing {SWING}, stop wait share {SHARE}")
+SCALED = os.environ.get("SCALED", "0") == "1"  # the "new" column also scales the two holds by the clock (the share of the market still to run, as the wait is): the hour view has to say 1 - (1 - CONFIRM) x clock or more to hold (CONFIRM at the open, certainty at the close), and the swing band is multiplied by the clock
+print(f"holds: hour view holds at {CONFIRM}, swing {SWING}, stop wait share {SHARE}, holds scaled by the clock in the new column: {SCALED}")
 
 
 def stop_wait(q, left):
@@ -74,12 +75,13 @@ for b in bets:
             pnl, left = (net - basis) / basis, close - t
             k = bisect.bisect_right(its, t)
             lc = curverisk.long_chance(its[:k], ivs[:k], float(t), ref, side, left) if ref > 0 else None
-            if lc is not None and lc >= CONFIRM:
+            clock = min(1.0, left / 900.0) if (SCALED and name == "new") else 1.0
+            if lc is not None and lc >= 1.0 - (1.0 - CONFIRM) * clock:
                 since = 0.0
                 continue
             if pnl < 0 and net >= FLOOR:
                 unit = quoteshock.typical_minute([m for m in mids if m[0] <= t], float(t))
-                if curverisk.swing_hold(basis - net, unit, left, SWING):
+                if curverisk.swing_hold(basis - net, unit, left, SWING * clock):
                     since = 0.0
                     continue
             if not (curverisk.stopped(pnl, net, MAX_LOSS) and bid >= 0.05):
