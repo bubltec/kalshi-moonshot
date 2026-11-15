@@ -220,7 +220,7 @@ def cmd_prune(s: config.Settings, args: argparse.Namespace) -> int:
 
 
 def cmd_review(s: config.Settings, args: argparse.Namespace) -> int:
-    """Run the hourly review once: tighten a setting only when the scorecard is clear, then send the last hour of bets to the local model for suggested improvements (written to data/review-notes.md, never applied)."""
+    """Run the hourly review once: tighten a setting only when the scorecard is clear."""
     from .review import run_review
 
     if not s.review_enabled:
@@ -1115,8 +1115,6 @@ def cmd_doctor(s: config.Settings, args: argparse.Namespace) -> int:
             print(f"signed call: FAILED {exc}")
     else:
         print("credentials: not set (fine for observe mode)")
-    o = Ollama(s.ollama_url, s.model)
-    print(f"ollama {s.ollama_url} model={s.model}: {'ok' if o.ping() else 'NOT REACHABLE'}")
     print(f"kill switch: {'ON' if s.kill_file.exists() else 'off'}")
     return 0
 

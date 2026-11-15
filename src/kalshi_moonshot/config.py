@@ -237,7 +237,6 @@ class Settings:
     # --- hourly review (see review.py). It can only tighten these. ---
     review_enabled: bool
     review_interval_minutes: int
-    review_llm: bool  # after the scorecard pass, send the last hour of bets to the local model for suggested improvements (review.py); never applies them
     rag_skip_lanes: frozenset[str]
 
     # --- local model (Ollama) ---
@@ -529,7 +528,6 @@ def load() -> Settings:
         search_results=_i("SEARCH_RESULTS", 5),
         review_enabled=_b("REVIEW_ENABLED", True),
         review_interval_minutes=max(15, _i("REVIEW_INTERVAL_MINUTES", 60)),
-        review_llm=_b("REVIEW_LLM", True),
         rag_skip_lanes=frozenset(),
         ollama_url=os.environ.get("OLLAMA_URL", "http://host.docker.internal:11434").rstrip("/"),
         model=os.environ.get("MODEL", "qwen3:8b"),
