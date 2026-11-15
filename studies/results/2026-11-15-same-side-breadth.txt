@@ -1,0 +1,21 @@
+live crypto_multiscale bets since Mon 11-09 with a result: 479, net $-40.19, window 480 s
+
+by rank among same-side buys in the window (0 = first):
+  rank 0 : n 226  net    +4.88  on $  1754 ( +0.3%)  won 141  avg win +2.42  avg loss -3.96
+  rank 1 : n 121  net   -10.14  on $   988 ( -1.0%)  won  79  avg win +2.21  avg loss -4.39
+  rank 2 : n  67  net   -12.18  on $   480 ( -2.5%)  won  40  avg win +2.31  avg loss -3.87
+  rank 3 : n  33  net    +6.17  on $   179 ( +3.4%)  won  18  avg win +2.07  avg loss -2.07
+  rank 4+: n  32  net   -28.92  on $   117 (-24.8%)  won  14  avg win +0.80  avg loss -2.23
+
+skipping every bet of rank >= K (same bets, result removed):
+  K=1: skips 253 bets, change   +45.07; better 102, worse 151
+  K=2: skips 132 bets, change   +34.93; better 60, worse 72
+  K=3: skips  65 bets, change   +22.75; better 33, worse 32
+  K=4: skips  32 bets, change   +28.92; better 18, worse 14
+
+by opposite-side buys in the window:
+  opposite 0 : n 446 net   -47.56
+  opposite 1 : n  25 net    -7.31
+  opposite 2+: n   8 net   +14.67
+DONE
+	
