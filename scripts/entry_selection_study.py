@@ -9,7 +9,10 @@ Run on the host: scripts/cloud.sh run scripts/entry_selection_study.py
 import bisect
 import datetime
 import math
+import io
 import os
+import re
+import sys
 from collections import defaultdict
 
 from kalshi_moonshot import config, db
@@ -25,8 +28,9 @@ st = db.connect(s.db_path, "main", shared=True)
 tape = db.connect(s.tape_path, "tape", shared=True)
 
 bets = {}
-for r in st.execute("SELECT ts, ticker, side, ask, stake_usd FROM decisions WHERE lane='crypto_multiscale' AND mode='trade' AND action='bet' AND stake_usd>0 AND ts>? ORDER BY ts", (SINCE,)).fetchall():
-    bets.setdefault((r["ticker"], r["side"]), (float(r["ts"]), float(r["ask"] or 0.0), float(r["stake_usd"])))
+for r in st.execute("SELECT ts, ticker, side, ask, stake_usd, reason FROM decisions WHERE lane='crypto_multiscale' AND mode='trade' AND action='bet' AND stake_usd>0 AND ts>? ORDER BY ts", (SINCE,)).fetchall():
+    ce = re.search(r"\[curve edge ([+-][\d.]+)\]", str(r["reason"] or ""))  # the curve's own chance less the ask, as the buy recorded it
+    bets.setdefault((r["ticker"], r["side"]), (float(r["ts"]), float(r["ask"] or 0.0), float(r["stake_usd"]), float(ce.group(1)) if ce else None))
 series = sorted({k[0].split("-")[0] for k in bets})
 wins = [w for w in st.execute("SELECT ticker, series, close_ts, result FROM windows WHERE close_ts>? AND result IN ('yes','no') ORDER BY close_ts", (SINCE,)).fetchall() if w["series"] in series]
 by_ticker = defaultdict(list)
@@ -92,7 +96,7 @@ for w in wins:
             bid, ask = (q[0], q[1]) if side == "yes" else (1 - q[1], 1 - q[0])
             if LO <= ask <= HI and ask - bid <= SPREAD:
                 band.append((ask, w["result"] == side, t - opened, bucket_shape(shape(at, opened, t, side)), w["ticker"]))
-    for side, (ts_, ask, stake) in by_ticker.get(w["ticker"], ()):
+    for side, (ts_, ask, stake, edge) in by_ticker.get(w["ticker"], ()):
         q = at(ts_)
         if not (0.05 < ask < 0.99) and q:
             ask = q[1] if side == "yes" else 1 - q[0]
@@ -105,7 +109,7 @@ for w in wins:
                 first_under = u - ts_
                 break
         other = (1 - q[0] if side == "yes" else q[1]) if q else None
-        mine.append((ask, w["result"] == side, ts_ - opened, bucket_shape(shape(at, opened, ts_, side)), ts_, stake, first_under, other, ts_ >= ALWAYS))
+        mine.append((ask, w["result"] == side, ts_ - opened, bucket_shape(shape(at, opened, ts_, side)), ts_, stake, first_under, other, ts_ >= ALWAYS, edge))
 
 
 def line(name, rows):
@@ -120,11 +124,14 @@ def line(name, rows):
 
 
 print(f"window: since 2026-11-14 17:02 ET; {len(mine)} settled live crypto_multiscale buys (of {len(bets)} placed), {len(wins)} settled markets, {len({b[4] for b in band})} of them with a moment in the band")
+out = sys.stdout
+if os.environ.get("TAIL") == "2":
+    sys.stdout = io.StringIO()  # sections 1 to 6 are computed and not printed
 print("\n1. the lane's buys against every moment in its own band (held to settlement at the ask, fee in)")
 line("lane's buys", mine)
 line("lane's buys since always = true (11-15 16:31)", [m for m in mine if m[8]])
 line("every band moment", band)
-TAIL = os.environ.get("TAIL") == "1"  # the host session drops long printouts: TAIL=1 prints sections 4 to 6 only
+TAIL = os.environ.get("TAIL") in ("1", "2")  # the host session drops long printouts: TAIL=1 skips sections 2 and 3, TAIL=2 prints 7 to 9 only
 if not TAIL:
   print("\n2. by price")
   for lo, hi in ((0.57, 0.66), (0.66, 0.74), (0.74, 0.83)):
@@ -151,4 +158,18 @@ opp = [(m[7], not m[1]) for m in mine if m[7] is not None and 0.03 < m[7] < 0.97
 line("other side at the lane's moments", opp)
 opp_band = [(1 - b[0] + 0.01, not b[1]) for b in band]
 line("other side at every band moment (ask = 1 - ask + 1c)", opp_band)
+sys.stdout = out
+print("\n7. the lane's buys by the curve's own reading at the buy (curve edge = the curve's chance less the ask, from the buy's note)")
+EDGES = ((-9, -0.03, "edge under -0.03"), (-0.03, 0.0, "edge -0.03 to 0"), (0.0, 0.03, "edge 0 to +0.03"), (0.03, 9, "edge +0.03 and over"))
+line("no curve edge in the note", [m for m in mine if m[9] is None])
+for lo, hi, name in EDGES:
+    line(name, [m for m in mine if m[9] is not None and lo <= m[9] < hi])
+print("\n8. the same, early and late (minutes into the market)")
+for a, b in ((3, 6), (6, 9), (9, 15)):
+    for lo, hi, name in ((-9, 0.0, "edge under 0"), (0.0, 9, "edge 0 and over")):
+        line(f"{a} to {b} min, {name}", [m for m in mine if m[9] is not None and lo <= m[9] < hi and a * 60 <= m[2] < b * 60])
+print("\n9. is the early weakness the top-of-range weakness? buys by minutes x position")
+for a, b in ((3, 6), (6, 9), (9, 15)):
+    for name, pick in (("top fifth of its range", lambda m: m[3].startswith("at its high")), ("lower in its range", lambda m: not m[3].startswith("at its high") and m[3] != "no reading")):
+        line(f"{a} to {b} min, {name}", [m for m in mine if pick(m) and a * 60 <= m[2] < b * 60])
 print("DONE")

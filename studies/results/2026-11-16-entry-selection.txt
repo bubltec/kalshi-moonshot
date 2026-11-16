@@ -56,3 +56,28 @@ window: since 2026-11-14 17:02 ET; 236 settled live crypto_multiscale buys (of 2
   other side at every band moment (ask = 1 - ask + 1c) n  18872 | won  33% | ask 0.312 | needs  33% | held net per $   +0.3%
 
 Notes: run 2026-11-16 about 08:50 ET on the host (scripts/cloud.sh run scripts/entry_selection_study.py; sections 4 to 6 from a second run with TAIL=1, the session dropped the long printout). Band moments are every 15 s, so they overlap inside a market: 18,872 moments are 1,074 markets, and the coins move together, so the win rates carry about +/- 3 points. The shape cuts (top fifth, 0.4, +/- 0.5 typical minutes) were set before the run. Held to settlement at the decision ask, not the lane's own sales.
+
+7. the lane's buys by the curve's own reading at the buy (curve edge = the curve's chance less the ask, from the buy's note)
+  no curve edge in the note                      n    0
+  edge under -0.03                               n     38 | won  61% | ask 0.739 | needs  75% | held net per $  -19.1%
+  edge -0.03 to 0                                n    109 | won  72% | ask 0.719 | needs  73% | held net per $   -0.7%
+  edge 0 to +0.03                                n     56 | won  68% | ask 0.706 | needs  72% | held net per $   -6.5%
+  edge +0.03 and over                            n     33 | won  61% | ask 0.691 | needs  71% | held net per $  -17.0%
+
+8. the same, early and late (minutes into the market)
+  3 to 6 min, edge under 0                       n     70 | won  70% | ask 0.716 | needs  73% | held net per $   -3.3%
+  3 to 6 min, edge 0 and over                    n     48 | won  56% | ask 0.701 | needs  71% | held net per $  -23.0%
+  6 to 9 min, edge under 0                       n     47 | won  79% | ask 0.731 | needs  74% | held net per $   +6.3%
+  6 to 9 min, edge 0 and over                    n     29 | won  72% | ask 0.709 | needs  72% | held net per $   -1.5%
+  9 to 15 min, edge under 0                      n     30 | won  50% | ask 0.734 | needs  75% | held net per $  -28.9%
+  9 to 15 min, edge 0 and over                   n     12 | won  83% | ask 0.679 | needs  69% | held net per $  +18.5%
+
+9. is the early weakness the top-of-range weakness? buys by minutes x position
+  3 to 6 min, top fifth of its range             n     47 | won  62% | ask 0.715 | needs  73% | held net per $  -17.9%
+  3 to 6 min, lower in its range                 n     39 | won  72% | ask 0.697 | needs  71% | held net per $   +1.2%
+  6 to 9 min, top fifth of its range             n     38 | won  74% | ask 0.757 | needs  77% | held net per $   -4.5%
+  6 to 9 min, lower in its range                 n     20 | won  80% | ask 0.679 | needs  69% | held net per $  +14.4%
+  9 to 15 min, top fifth of its range            n     17 | won  53% | ask 0.757 | needs  77% | held net per $  -31.0%
+  9 to 15 min, lower in its range                n     16 | won  62% | ask 0.661 | needs  68% | held net per $   -1.8%
+
+Notes on 7 to 9: run 2026-11-16 about 09:20 ET (TAIL=2), same 236 buys. The edge bands and the minute bands were set before the run. The late cells are small (12 and 30 buys).
