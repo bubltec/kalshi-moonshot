@@ -1,0 +1,19 @@
+window: since 2026-11-14 17:02 ET; 243 settled live crypto_multiscale bets, 184 sold before the close
+
+1. by the kind of sale
+  profit take                        n  97 | would have won held  83 ( 86%) | sale less hold $  +74.60 | saved $ +291.69 on 14, gave up $ -217.09 on 83
+  max loss                           n  86 | would have won held  24 ( 28%) | sale less hold $  +24.16 | saved $ +421.90 on 62, gave up $ -397.74 on 24
+  closed by hand: the account no     n   1 | would have won held   0 (  0%) | sale less hold $  +10.53 | saved $  +10.53 on 1, gave up $   +0.00 on 0
+
+2. sales at a loss, by minutes into the market at the sale
+  0 to 6 min                         n   6 | would have won held   3 ( 50%) | sale less hold $  -24.92 | saved $  +33.16 on 3, gave up $  -58.08 on 3
+  6 to 9 min                         n  16 | would have won held   4 ( 25%) | sale less hold $  +16.34 | saved $  +87.28 on 12, gave up $  -70.94 on 4
+  9 to 12 min                        n  36 | would have won held   9 ( 25%) | sale less hold $  +59.73 | saved $ +191.59 on 27, gave up $ -131.86 on 9
+  12 to 15 min                       n  29 | would have won held   8 ( 28%) | sale less hold $  -16.47 | saved $ +120.39 on 21, gave up $ -136.86 on 8
+
+3. sales at a loss, by how long the bet had been held
+  under 2 min                        n  23 | would have won held   7 ( 30%) | sale less hold $  -40.63 | saved $  +87.11 on 16, gave up $ -127.73 on 7
+  2 to 5 min                         n  40 | would have won held  11 ( 28%) | sale less hold $  +70.39 | saved $ +215.80 on 29, gave up $ -145.41 on 11
+  5 min and over                     n  24 | would have won held   6 ( 25%) | sale less hold $   +4.92 | saved $ +129.52 on 18, gave up $ -124.59 on 6
+
+Notes: run 2026-11-16 about 09:55 ET on the host. Sale prices and results from the decisions and windows tables (no tape needed). Contracts from the stake over the all-in ask at the decision. The early cells are small (6 and 23 sales). Bands set before the run.
