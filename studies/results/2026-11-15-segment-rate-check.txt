@@ -1,0 +1,16 @@
+windows 3109, samples scored on the same keys for every variant: 11942
+
+variant | Brier | log loss | log-loss change vs live (mean +- se; negative = better) | hold zone 0.30-0.60: n, mean chance, share that paid
+  block 60 (live): four segments, equal| 0.1464 | 0.4443 | +0.0000 +- 0.0000 |  3287, 0.448, 0.434
+  block 120                         | 0.1454 | 0.4406 | -0.0037 +- 0.0007 |  3398, 0.448, 0.432
+  segments, each x0.5 of the next older| 0.1464 | 0.4441 | -0.0003 +- 0.0005 |  3173, 0.448, 0.429
+  segments, each x0.7 of the next older| 0.1464 | 0.4440 | -0.0003 +- 0.0003 |  3223, 0.448, 0.433
+  segments, each x0.85 of the next older| 0.1464 | 0.4441 | -0.0002 +- 0.0001 |  3251, 0.448, 0.433
+  segments, each x1.2 of the next older| 0.1465 | 0.4446 | +0.0003 +- 0.0001 |  3310, 0.448, 0.433
+  segments, each x1.5 of the next older| 0.1466 | 0.4452 | +0.0008 +- 0.0003 |  3334, 0.447, 0.432
+  newest segment alone (15)         | 0.1472 | 0.4481 | +0.0038 +- 0.0013 |  2969, 0.447, 0.428
+  newest segment stepped by log trend x0.5| 0.1497 | 0.4623 | +0.0180 +- 0.0023 |  3016, 0.448, 0.422
+  newest segment stepped by log trend x1.0| 0.1536 | 0.4892 | +0.0448 +- 0.0038 |  3150, 0.448, 0.417
+  log-linear trend of the four segments| 0.1490 | 0.4581 | +0.0138 +- 0.0020 |  3047, 0.446, 0.421
+DONE
+	
