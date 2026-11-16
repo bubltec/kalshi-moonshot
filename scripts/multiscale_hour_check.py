@@ -1,6 +1,6 @@
 """The hour view read from 15, 30, 60, 120 and 180 minutes together (2026-11-15, user: "the hour view should look further, but we need the context of the current hour; maybe half hour as well; how do we look at the past 3 hours in 15, 30, 60, 120, 180 mins")
 
-One question, same samples as scripts/decay_window_check.py (every 15-minute window of the last DAYS days for 11 coins, read at 600, 450, 300 and 180 seconds left; the YES chance from the perp's distance to its window-open reference over rate x sqrt(time left); the outcome the perp's direction over the window). The movement rate is built from block rates at the five scales r15, r30, r60, r120, r180 (the root-mean-square one-minute move over that many minutes, each scale twice the one before from 30 on). Variants: each block alone; the geometric mean of all five (each scale a factor of the next, the log-mean); the geometric mean of 60, 120 and 180 (the current hour with the longer context); sqrt(r60 x r180); the mean of the five variances; and WEIGHTS fitted on the earlier two thirds of the windows (a search over weights summing to 1 on the five variances, in steps of 0.1, by log loss) and scored on the last third that the fit never saw, against the live 60-minute block and the best single block on that same last third. Each variant: Brier, log loss and the paired log-loss change against the live reading with its standard error. Not split by curve shape. A check of the chance's quality, not a rule.
+One question, same samples as scripts/decay_window_check.py (every 15-minute window of the last DAYS days for 11 coins, read at 600, 450, 300 and 180 seconds left; the YES chance from the perp's distance to its window-open reference over rate x sqrt(time left); the outcome the perp's direction over the window). The movement rate is built from block rates at the five scales r15, r30, r60, r120, r180 (the root-mean-square one-minute move over that many minutes, each scale twice the one before from 30 on). Variants: each block alone; the geometric mean of all five (each scale a factor of the next, the log-mean); the geometric mean of 60, 120 and 180 (the current hour with the longer context); sqrt(r60 x r180); the mean of the five variances; the 15, 60 and 180 minute segments alone (log-mean and variance mean) and with 30 added (2026-11-15 night, user: look at 15, 60, 180 only); and WEIGHTS fitted on the earlier two thirds of the windows (a search over weights summing to 1 on the five variances, in steps of 0.1, by log loss) and scored on the last third that the fit never saw, against the live 60-minute block and the best single block on that same last third. Each variant: Brier, log loss and the paired log-loss change against the live reading with its standard error. Not split by curve shape. A check of the chance's quality, not a rule.
 
 Run on the host: python scripts/multiscale_hour_check.py (DAYS=3 to change the look back).
 """
@@ -77,6 +77,10 @@ for i, m in enumerate(SCALES):
     named[f"block {m}" + (" (live)" if m == 60 else "")] = lambda var, i=i: var[i]
 named["geometric mean of all five"] = lambda var: geo(var, range(5))
 named["geometric mean of 60, 120, 180"] = lambda var: geo(var, (2, 3, 4))
+named["geometric mean of 15, 60, 180"] = lambda var: geo(var, (0, 2, 4))
+named["geometric mean of 15, 30, 60, 180"] = lambda var: geo(var, (0, 1, 2, 4))
+named["geometric mean of 30, 60, 180"] = lambda var: geo(var, (1, 2, 4))
+named["mean of variances 15, 60, 180"] = lambda var: (var[0] + var[2] + var[4]) / 3.0
 named["sqrt(r60 x r180)"] = lambda var: math.sqrt(var[2] * var[4])
 named["mean of the five variances"] = lambda var: sum(var) / 5.0
 base = named["block 60 (live)"]
@@ -102,7 +106,7 @@ for w in itertools.product(grid, repeat=5):
 print(f"\nweights fitted on the first {len(train)} samples (variance weights at 15/30/60/120/180): {best_w}; train log loss {best:.4f}")
 print(f"scored on the last {len(test)} samples the fit never saw: log loss | change vs live (mean +- se)")
 lt = {"fitted weights": [ll(r, sum(a * b for a, b in zip(best_w, r[5]))) for r in test]}
-for name in ("block 60 (live)", "block 120", "block 180", "geometric mean of all five", "geometric mean of 60, 120, 180"):
+for name in ("block 60 (live)", "block 120", "block 180", "geometric mean of all five", "geometric mean of 15, 60, 180", "geometric mean of 15, 30, 60, 180", "geometric mean of 30, 60, 180", "geometric mean of 60, 120, 180"):
     lt[name] = [ll(r, named[name](r[5])) for r in test]
 for name, l in lt.items():
     d = [a - b for a, b in zip(l, lt["block 60 (live)"])]
