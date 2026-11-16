@@ -34,9 +34,9 @@ for ser in series:
     pr = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND value>0 ORDER BY ts", (kp, SINCE - 4 * 3600)).fetchall() if kp else []
     pt, pv, last = [], [], -1
     for r in pr:
-        b = int(float(r[0]) // 30)
+        b = int(float(r[0]) // 15)  # 15 s buckets stamped at their END and holding their last tick: at a moment on the 15 s grid this is the last tick at or before it. Until 2026-11-16 16:20 these were 30 s buckets stamped at their START, so a reading could hold a tick from up to 30 s AFTER the moment: a look-ahead that made every result here too good
         if b != last:
-            pt.append(b * 30.0); pv.append(math.log(float(r[1]))); last = b
+            pt.append((b + 1) * 15.0); pv.append(math.log(float(r[1]))); last = b
         else:
             pv[-1] = math.log(float(r[1]))
     del pr

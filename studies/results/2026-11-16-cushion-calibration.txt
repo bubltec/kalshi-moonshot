@@ -1,65 +1,130 @@
-window: 2026-11-09 00:00 ET on; 172363 moments with a cushion reading on days 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; scored walk-forward on 11-13, 11-14, 11-15, 11-16
-the fits used for the last scored day (trained on every day before it): time band | b of model A | w1, w2 of model B | training moments
-  12 to 14 min left  | b 0.95 | w1 0.83, w2 +0.604 | 22785
-  9 to 12 min left   | b 0.95 | w1 0.81, w2 +0.410 | 37096
-  6 to 9 min left    | b 1.04 | w1 0.81, w2 +0.506 | 38102
-  3 to 6 min left    | b 1.00 | w1 0.80, w2 +0.464 | 38126
-  1 to 3 min left    | b 0.87 | w1 0.83, w2 +0.431 | 25333
-log-loss on the held-out days (lower is better): Kalshi's mid 0.4349, A cushion only 0.5008, B price + cushion 0.4357
-
-A. cushion only, calibrated: by the edge over the price
-  edge under -0.10                         |  66361 (2744 markets) | won  62% | ask 0.672 | held net per $  -10.6%
-  -0.10 to -0.03                           |  32495 (2438 markets) | won  52% | ask 0.537 | held net per $  -10.1%
-  -0.03 to +0.03                           |  28726 (2177 markets) | won  48% | ask 0.488 | held net per $   -9.2%
-  +0.03 to +0.06                           |  13790 (2307 markets) | won  47% | ask 0.464 | held net per $   -4.7%
-  +0.06 to +0.10                           |  15884 (2474 markets) | won  42% | ask 0.415 | held net per $   -6.0%
-  +0.10 and over                           |  51798 (2715 markets) | won  36% | ask 0.314 | held net per $  +13.1%
-
-B. price + cushion: by the edge over the price
-  edge under -0.10                         |   9916 (1262 markets) | won  47% | ask 0.536 | held net per $  -16.7%
-  -0.10 to -0.03                           |  65042 (2752 markets) | won  46% | ask 0.466 | held net per $   -4.2%
-  -0.03 to +0.03                           | 112070 (2708 markets) | won  51% | ask 0.524 | held net per $   -4.8%
-  +0.03 to +0.06                           |  12828 (1849 markets) | won  53% | ask 0.511 | held net per $   +5.0%
-  +0.06 to +0.10                           |   5974 (1125 markets) | won  51% | ask 0.488 | held net per $   +6.0%
-  +0.10 and over                           |   3224 ( 600 markets) | won  56% | ask 0.449 | held net per $  +31.5%
-
-B. edges of +0.03 and over, by the time left
-  1 to 3 min left | +0.03 to +0.06         |   1324 ( 680 markets) | won  65% | ask 0.594 | held net per $  +17.8%
-  1 to 3 min left | +0.06 to +0.10         |    764 ( 423 markets) | won  58% | ask 0.507 | held net per $  +22.6%
-  1 to 3 min left | +0.10 and over         |    725 ( 293 markets) | won  58% | ask 0.443 | held net per $  +38.7%
-  12 to 14 min left | +0.03 to +0.06       |   2801 (1113 markets) | won  41% | ask 0.428 | held net per $   -6.8%
-  12 to 14 min left | +0.06 to +0.10       |   1324 ( 542 markets) | won  43% | ask 0.412 | held net per $   -1.8%
-  12 to 14 min left | +0.10 and over       |    475 ( 195 markets) | won  63% | ask 0.400 | held net per $  +63.8%
-  3 to 6 min left | +0.03 to +0.06         |   2561 ( 847 markets) | won  60% | ask 0.552 | held net per $  +22.6%
-  3 to 6 min left | +0.06 to +0.10         |   1345 ( 491 markets) | won  55% | ask 0.516 | held net per $  +14.4%
-  3 to 6 min left | +0.10 and over         |   1029 ( 276 markets) | won  55% | ask 0.460 | held net per $  +21.5%
-  6 to 9 min left | +0.03 to +0.06         |   2938 ( 861 markets) | won  57% | ask 0.552 | held net per $   +4.1%
-  6 to 9 min left | +0.06 to +0.10         |   1364 ( 425 markets) | won  51% | ask 0.524 | held net per $   -5.8%
-  6 to 9 min left | +0.10 and over         |    629 ( 172 markets) | won  51% | ask 0.464 | held net per $  +15.2%
-  9 to 12 min left | +0.03 to +0.06        |   3204 ( 920 markets) | won  47% | ask 0.479 | held net per $   -3.2%
-  9 to 12 min left | +0.06 to +0.10        |   1177 ( 392 markets) | won  53% | ask 0.486 | held net per $   +7.9%
-  9 to 12 min left | +0.10 and over        |    366 ( 138 markets) | won  55% | ask 0.465 | held net per $  +31.4%
-
-B. edges of +0.03 and over, by the ask
-  ask 0.40 to 0.70 | +0.03 to +0.06        |   4087 (1155 markets) | won  54% | ask 0.540 | held net per $   -3.3%
-  ask 0.40 to 0.70 | +0.06 to +0.10        |   2472 ( 733 markets) | won  56% | ask 0.544 | held net per $   -0.7%
-  ask 0.40 to 0.70 | +0.10 and over        |   1508 ( 438 markets) | won  65% | ask 0.537 | held net per $  +18.3%
-  ask 0.70 and over | +0.03 to +0.06       |   3839 (1009 markets) | won  83% | ask 0.821 | held net per $   -0.6%
-  ask 0.70 and over | +0.06 to +0.10       |   1272 ( 452 markets) | won  82% | ask 0.787 | held net per $   +3.3%
-  ask 0.70 and over | +0.10 and over       |    404 ( 174 markets) | won  85% | ask 0.759 | held net per $  +10.3%
-  ask under 0.40 | +0.03 to +0.06          |   4902 (1012 markets) | won  28% | ask 0.244 | held net per $  +16.4%
-  ask under 0.40 | +0.06 to +0.10          |   2230 ( 613 markets) | won  29% | ask 0.256 | held net per $  +14.8%
-  ask under 0.40 | +0.10 and over          |   1312 ( 336 markets) | won  37% | ask 0.252 | held net per $  +53.2%
-
-A. edges of +0.03 and over, by the ask
-  ask 0.40 to 0.70 | +0.03 to +0.06        |   4311 (1497 markets) | won  52% | ask 0.515 | held net per $   -2.6%
-  ask 0.40 to 0.70 | +0.06 to +0.10        |   4647 (1556 markets) | won  52% | ask 0.511 | held net per $   -0.7%
-  ask 0.40 to 0.70 | +0.10 and over        |  11596 (1847 markets) | won  57% | ask 0.516 | held net per $   +7.2%
-  ask 0.70 and over | +0.03 to +0.06       |   3253 (1098 markets) | won  88% | ask 0.857 | held net per $   +1.9%
-  ask 0.70 and over | +0.06 to +0.10       |   2782 ( 936 markets) | won  87% | ask 0.832 | held net per $   +3.3%
-  ask 0.70 and over | +0.10 and over       |   3045 ( 765 markets) | won  83% | ask 0.773 | held net per $   +5.6%
-  ask under 0.40 | +0.03 to +0.06          |   6226 (1699 markets) | won  22% | ask 0.224 | held net per $   -9.6%
-  ask under 0.40 | +0.06 to +0.10          |   8455 (1911 markets) | won  21% | ask 0.226 | held net per $  -12.0%
-  ask under 0.40 | +0.10 and over          |  37157 (2505 markets) | won  25% | ask 0.213 | held net per $  +15.5%
+CORRECTION 2026-11-16 16:35 ET: THIS RESULT IS NOT VALID. The run read the Kalshi perp in 30 s buckets stamped at their start and holding their last tick, so each reading could include up to 30 s of the perp AFTER the moment being scored. The corrected rerun of the band study (2026-11-16-band-by-spike-view.txt) shows the edge was that look-ahead. The script is fixed; rerun before using anything below.
+
+window: 2026-11-09 00:00 ET on; 172363 moments with a cushion reading on days 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; scored walk-forward on 11-13, 11-14, 11-15, 11-16
+
+the fits used for the last scored day (trained on every day before it): time band | b of model A | w1, w2 of model B | training moments
+
+  12 to 14 min left  | b 0.95 | w1 0.83, w2 +0.604 | 22785
+
+  9 to 12 min left   | b 0.95 | w1 0.81, w2 +0.410 | 37096
+
+  6 to 9 min left    | b 1.04 | w1 0.81, w2 +0.506 | 38102
+
+  3 to 6 min left    | b 1.00 | w1 0.80, w2 +0.464 | 38126
+
+  1 to 3 min left    | b 0.87 | w1 0.83, w2 +0.431 | 25333
+
+log-loss on the held-out days (lower is better): Kalshi's mid 0.4349, A cushion only 0.5008, B price + cushion 0.4357
+
+
+
+A. cushion only, calibrated: by the edge over the price
+
+  edge under -0.10                         |  66361 (2744 markets) | won  62% | ask 0.672 | held net per $  -10.6%
+
+  -0.10 to -0.03                           |  32495 (2438 markets) | won  52% | ask 0.537 | held net per $  -10.1%
+
+  -0.03 to +0.03                           |  28726 (2177 markets) | won  48% | ask 0.488 | held net per $   -9.2%
+
+  +0.03 to +0.06                           |  13790 (2307 markets) | won  47% | ask 0.464 | held net per $   -4.7%
+
+  +0.06 to +0.10                           |  15884 (2474 markets) | won  42% | ask 0.415 | held net per $   -6.0%
+
+  +0.10 and over                           |  51798 (2715 markets) | won  36% | ask 0.314 | held net per $  +13.1%
+
+
+
+B. price + cushion: by the edge over the price
+
+  edge under -0.10                         |   9916 (1262 markets) | won  47% | ask 0.536 | held net per $  -16.7%
+
+  -0.10 to -0.03                           |  65042 (2752 markets) | won  46% | ask 0.466 | held net per $   -4.2%
+
+  -0.03 to +0.03                           | 112070 (2708 markets) | won  51% | ask 0.524 | held net per $   -4.8%
+
+  +0.03 to +0.06                           |  12828 (1849 markets) | won  53% | ask 0.511 | held net per $   +5.0%
+
+  +0.06 to +0.10                           |   5974 (1125 markets) | won  51% | ask 0.488 | held net per $   +6.0%
+
+  +0.10 and over                           |   3224 ( 600 markets) | won  56% | ask 0.449 | held net per $  +31.5%
+
+
+
+B. edges of +0.03 and over, by the time left
+
+  1 to 3 min left | +0.03 to +0.06         |   1324 ( 680 markets) | won  65% | ask 0.594 | held net per $  +17.8%
+
+  1 to 3 min left | +0.06 to +0.10         |    764 ( 423 markets) | won  58% | ask 0.507 | held net per $  +22.6%
+
+  1 to 3 min left | +0.10 and over         |    725 ( 293 markets) | won  58% | ask 0.443 | held net per $  +38.7%
+
+  12 to 14 min left | +0.03 to +0.06       |   2801 (1113 markets) | won  41% | ask 0.428 | held net per $   -6.8%
+
+  12 to 14 min left | +0.06 to +0.10       |   1324 ( 542 markets) | won  43% | ask 0.412 | held net per $   -1.8%
+
+  12 to 14 min left | +0.10 and over       |    475 ( 195 markets) | won  63% | ask 0.400 | held net per $  +63.8%
+
+  3 to 6 min left | +0.03 to +0.06         |   2561 ( 847 markets) | won  60% | ask 0.552 | held net per $  +22.6%
+
+  3 to 6 min left | +0.06 to +0.10         |   1345 ( 491 markets) | won  55% | ask 0.516 | held net per $  +14.4%
+
+  3 to 6 min left | +0.10 and over         |   1029 ( 276 markets) | won  55% | ask 0.460 | held net per $  +21.5%
+
+  6 to 9 min left | +0.03 to +0.06         |   2938 ( 861 markets) | won  57% | ask 0.552 | held net per $   +4.1%
+
+  6 to 9 min left | +0.06 to +0.10         |   1364 ( 425 markets) | won  51% | ask 0.524 | held net per $   -5.8%
+
+  6 to 9 min left | +0.10 and over         |    629 ( 172 markets) | won  51% | ask 0.464 | held net per $  +15.2%
+
+  9 to 12 min left | +0.03 to +0.06        |   3204 ( 920 markets) | won  47% | ask 0.479 | held net per $   -3.2%
+
+  9 to 12 min left | +0.06 to +0.10        |   1177 ( 392 markets) | won  53% | ask 0.486 | held net per $   +7.9%
+
+  9 to 12 min left | +0.10 and over        |    366 ( 138 markets) | won  55% | ask 0.465 | held net per $  +31.4%
+
+
+
+B. edges of +0.03 and over, by the ask
+
+  ask 0.40 to 0.70 | +0.03 to +0.06        |   4087 (1155 markets) | won  54% | ask 0.540 | held net per $   -3.3%
+
+  ask 0.40 to 0.70 | +0.06 to +0.10        |   2472 ( 733 markets) | won  56% | ask 0.544 | held net per $   -0.7%
+
+  ask 0.40 to 0.70 | +0.10 and over        |   1508 ( 438 markets) | won  65% | ask 0.537 | held net per $  +18.3%
+
+  ask 0.70 and over | +0.03 to +0.06       |   3839 (1009 markets) | won  83% | ask 0.821 | held net per $   -0.6%
+
+  ask 0.70 and over | +0.06 to +0.10       |   1272 ( 452 markets) | won  82% | ask 0.787 | held net per $   +3.3%
+
+  ask 0.70 and over | +0.10 and over       |    404 ( 174 markets) | won  85% | ask 0.759 | held net per $  +10.3%
+
+  ask under 0.40 | +0.03 to +0.06          |   4902 (1012 markets) | won  28% | ask 0.244 | held net per $  +16.4%
+
+  ask under 0.40 | +0.06 to +0.10          |   2230 ( 613 markets) | won  29% | ask 0.256 | held net per $  +14.8%
+
+  ask under 0.40 | +0.10 and over          |   1312 ( 336 markets) | won  37% | ask 0.252 | held net per $  +53.2%
+
+
+
+A. edges of +0.03 and over, by the ask
+
+  ask 0.40 to 0.70 | +0.03 to +0.06        |   4311 (1497 markets) | won  52% | ask 0.515 | held net per $   -2.6%
+
+  ask 0.40 to 0.70 | +0.06 to +0.10        |   4647 (1556 markets) | won  52% | ask 0.511 | held net per $   -0.7%
+
+  ask 0.40 to 0.70 | +0.10 and over        |  11596 (1847 markets) | won  57% | ask 0.516 | held net per $   +7.2%
+
+  ask 0.70 and over | +0.03 to +0.06       |   3253 (1098 markets) | won  88% | ask 0.857 | held net per $   +1.9%
+
+  ask 0.70 and over | +0.06 to +0.10       |   2782 ( 936 markets) | won  87% | ask 0.832 | held net per $   +3.3%
+
+  ask 0.70 and over | +0.10 and over       |   3045 ( 765 markets) | won  83% | ask 0.773 | held net per $   +5.6%
+
+  ask under 0.40 | +0.03 to +0.06          |   6226 (1699 markets) | won  22% | ask 0.224 | held net per $   -9.6%
+
+  ask under 0.40 | +0.06 to +0.10          |   8455 (1911 markets) | won  21% | ask 0.226 | held net per $  -12.0%
+
+  ask under 0.40 | +0.10 and over          |  37157 (2505 markets) | won  25% | ask 0.213 | held net per $  +15.5%
+
 
 Notes: run 2026-11-16 15:39 ET on the host. Walk-forward: each day scored with fits made only on the days before it; four held-out days. Moments every 15 s, overlapping inside a market; market counts beside each cell. Model B's log-loss is no better than Kalshi's mid overall (0.4357 against 0.4349): it is not a better predictor on average, it sorts the moments where it disagrees with the price. Its w1 of about 0.8 pulls Kalshi's price toward even, so part of its edge is the favorite being a little overpriced, apart from the cushion. Held to settlement at the quoted ask; fills not tested. Bands fixed before the run.

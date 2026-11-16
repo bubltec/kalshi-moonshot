@@ -1,41 +1,82 @@
-window: 2026-11-09 00:00 ET on; 417947 moments at any price from minute 1, 157529 without 3 hours of the perp and left out
-
-1. by the ask (any minute from the first)
-  z +0.5 to +1.5 | ask 0.05 to 0.20                    |   6166 (1802 markets) | won  16% | ask 0.124 | held net per $  +24.3%
-  z +0.5 to +1.5 | ask 0.20 to 0.40                    |   8552 (2363 markets) | won  36% | ask 0.298 | held net per $  +15.5%
-  z +0.5 to +1.5 | ask 0.40 to 0.57                    |   9527 (2343 markets) | won  53% | ask 0.485 | held net per $   +5.0%
-  z +0.5 to +1.5 | ask 0.57 to 0.70                    |   9627 (2609 markets) | won  66% | ask 0.632 | held net per $   +2.1%
-  z +0.5 to +1.5 | ask 0.70 to 0.82                    |  10389 (2932 markets) | won  76% | ask 0.755 | held net per $   -0.5%
-  z +0.5 to +1.5 | ask 0.82 to 0.95                    |  12400 (3016 markets) | won  90% | ask 0.885 | held net per $   +1.1%
-  z +1.5 and over | ask 0.05 to 0.20                   |   1061 ( 490 markets) | won  14% | ask 0.120 | held net per $  +17.5%
-  z +1.5 and over | ask 0.20 to 0.40                   |   1334 ( 659 markets) | won  36% | ask 0.303 | held net per $  +12.0%
-  z +1.5 and over | ask 0.40 to 0.57                   |   1802 ( 912 markets) | won  61% | ask 0.487 | held net per $  +21.3%
-  z +1.5 and over | ask 0.57 to 0.70                   |   2116 (1081 markets) | won  71% | ask 0.635 | held net per $   +8.6%
-  z +1.5 and over | ask 0.70 to 0.82                   |   2926 (1452 markets) | won  81% | ask 0.759 | held net per $   +5.0%
-  z +1.5 and over | ask 0.82 to 0.95                   |   4480 (1554 markets) | won  94% | ask 0.886 | held net per $   +5.1%
-
-2. by minutes into the market (any ask)
-  z +0.5 to +1.5 | minute 01 to 03                     |   8497 (2299 markets) | won  63% | ask 0.621 | held net per $   +0.5%
-  z +0.5 to +1.5 | minute 03 to 06                     |  16859 (3158 markets) | won  61% | ask 0.592 | held net per $   +1.7%
-  z +0.5 to +1.5 | minute 06 to 09                     |  15511 (3067 markets) | won  61% | ask 0.584 | held net per $   +2.2%
-  z +0.5 to +1.5 | minute 09 to 12                     |  11379 (2567 markets) | won  60% | ask 0.550 | held net per $  +14.4%
-  z +0.5 to +1.5 | minute 12 to 15                     |   4415 (1452 markets) | won  60% | ask 0.515 | held net per $  +28.9%
-  z +1.5 and over | minute 01 to 03                    |   3265 (1004 markets) | won  78% | ask 0.715 | held net per $   +9.7%
-  z +1.5 and over | minute 03 to 06                    |   4144 (1193 markets) | won  72% | ask 0.669 | held net per $   +5.0%
-  z +1.5 and over | minute 06 to 09                    |   3466 (1075 markets) | won  69% | ask 0.622 | held net per $   +6.4%
-  z +1.5 and over | minute 09 to 12                    |   2092 ( 750 markets) | won  64% | ask 0.594 | held net per $   +8.0%
-  z +1.5 and over | minute 12 to 15                    |    752 ( 380 markets) | won  71% | ask 0.581 | held net per $  +49.3%
-
-3. by minutes into the market, inside the live band (ask 0.57 to 0.82)
-  z +0.5 to +1.5 | minute 01 to 03                     |   5299 (1850 markets) | won  69% | ask 0.683 | held net per $   -1.2%
-  z +0.5 to +1.5 | minute 03 to 06                     |   6827 (2218 markets) | won  71% | ask 0.701 | held net per $   -0.6%
-  z +0.5 to +1.5 | minute 06 to 09                     |   4785 (1693 markets) | won  72% | ask 0.706 | held net per $   +0.1%
-  z +0.5 to +1.5 | minute 09 to 12                     |   2657 (1112 markets) | won  76% | ask 0.708 | held net per $   +5.9%
-  z +0.5 to +1.5 | minute 12 to 15                     |    837 ( 501 markets) | won  81% | ask 0.704 | held net per $  +12.6%
-  z +1.5 and over | minute 01 to 03                    |   1996 ( 876 markets) | won  75% | ask 0.712 | held net per $   +3.6%
-  z +1.5 and over | minute 03 to 06                    |   1521 ( 693 markets) | won  75% | ask 0.704 | held net per $   +5.4%
-  z +1.5 and over | minute 06 to 09                    |    977 ( 492 markets) | won  81% | ask 0.710 | held net per $  +11.4%
-  z +1.5 and over | minute 09 to 12                    |    530 ( 285 markets) | won  79% | ask 0.715 | held net per $   +8.3%
-  z +1.5 and over | minute 12 to 15                    |    143 ( 108 markets) | won  85% | ask 0.713 | held net per $  +15.8%
+CORRECTION 2026-11-16 16:35 ET: THIS RESULT IS NOT VALID. The run read the Kalshi perp in 30 s buckets stamped at their start and holding their last tick, so each reading could include up to 30 s of the perp AFTER the moment being scored. The corrected rerun of the band study (2026-11-16-band-by-spike-view.txt) shows the edge was that look-ahead. The script is fixed; rerun before using anything below.
+
+window: 2026-11-09 00:00 ET on; 417947 moments at any price from minute 1, 157529 without 3 hours of the perp and left out
+
+
+
+1. by the ask (any minute from the first)
+
+  z +0.5 to +1.5 | ask 0.05 to 0.20                    |   6166 (1802 markets) | won  16% | ask 0.124 | held net per $  +24.3%
+
+  z +0.5 to +1.5 | ask 0.20 to 0.40                    |   8552 (2363 markets) | won  36% | ask 0.298 | held net per $  +15.5%
+
+  z +0.5 to +1.5 | ask 0.40 to 0.57                    |   9527 (2343 markets) | won  53% | ask 0.485 | held net per $   +5.0%
+
+  z +0.5 to +1.5 | ask 0.57 to 0.70                    |   9627 (2609 markets) | won  66% | ask 0.632 | held net per $   +2.1%
+
+  z +0.5 to +1.5 | ask 0.70 to 0.82                    |  10389 (2932 markets) | won  76% | ask 0.755 | held net per $   -0.5%
+
+  z +0.5 to +1.5 | ask 0.82 to 0.95                    |  12400 (3016 markets) | won  90% | ask 0.885 | held net per $   +1.1%
+
+  z +1.5 and over | ask 0.05 to 0.20                   |   1061 ( 490 markets) | won  14% | ask 0.120 | held net per $  +17.5%
+
+  z +1.5 and over | ask 0.20 to 0.40                   |   1334 ( 659 markets) | won  36% | ask 0.303 | held net per $  +12.0%
+
+  z +1.5 and over | ask 0.40 to 0.57                   |   1802 ( 912 markets) | won  61% | ask 0.487 | held net per $  +21.3%
+
+  z +1.5 and over | ask 0.57 to 0.70                   |   2116 (1081 markets) | won  71% | ask 0.635 | held net per $   +8.6%
+
+  z +1.5 and over | ask 0.70 to 0.82                   |   2926 (1452 markets) | won  81% | ask 0.759 | held net per $   +5.0%
+
+  z +1.5 and over | ask 0.82 to 0.95                   |   4480 (1554 markets) | won  94% | ask 0.886 | held net per $   +5.1%
+
+
+
+2. by minutes into the market (any ask)
+
+  z +0.5 to +1.5 | minute 01 to 03                     |   8497 (2299 markets) | won  63% | ask 0.621 | held net per $   +0.5%
+
+  z +0.5 to +1.5 | minute 03 to 06                     |  16859 (3158 markets) | won  61% | ask 0.592 | held net per $   +1.7%
+
+  z +0.5 to +1.5 | minute 06 to 09                     |  15511 (3067 markets) | won  61% | ask 0.584 | held net per $   +2.2%
+
+  z +0.5 to +1.5 | minute 09 to 12                     |  11379 (2567 markets) | won  60% | ask 0.550 | held net per $  +14.4%
+
+  z +0.5 to +1.5 | minute 12 to 15                     |   4415 (1452 markets) | won  60% | ask 0.515 | held net per $  +28.9%
+
+  z +1.5 and over | minute 01 to 03                    |   3265 (1004 markets) | won  78% | ask 0.715 | held net per $   +9.7%
+
+  z +1.5 and over | minute 03 to 06                    |   4144 (1193 markets) | won  72% | ask 0.669 | held net per $   +5.0%
+
+  z +1.5 and over | minute 06 to 09                    |   3466 (1075 markets) | won  69% | ask 0.622 | held net per $   +6.4%
+
+  z +1.5 and over | minute 09 to 12                    |   2092 ( 750 markets) | won  64% | ask 0.594 | held net per $   +8.0%
+
+  z +1.5 and over | minute 12 to 15                    |    752 ( 380 markets) | won  71% | ask 0.581 | held net per $  +49.3%
+
+
+
+3. by minutes into the market, inside the live band (ask 0.57 to 0.82)
+
+  z +0.5 to +1.5 | minute 01 to 03                     |   5299 (1850 markets) | won  69% | ask 0.683 | held net per $   -1.2%
+
+  z +0.5 to +1.5 | minute 03 to 06                     |   6827 (2218 markets) | won  71% | ask 0.701 | held net per $   -0.6%
+
+  z +0.5 to +1.5 | minute 06 to 09                     |   4785 (1693 markets) | won  72% | ask 0.706 | held net per $   +0.1%
+
+  z +0.5 to +1.5 | minute 09 to 12                     |   2657 (1112 markets) | won  76% | ask 0.708 | held net per $   +5.9%
+
+  z +0.5 to +1.5 | minute 12 to 15                     |    837 ( 501 markets) | won  81% | ask 0.704 | held net per $  +12.6%
+
+  z +1.5 and over | minute 01 to 03                    |   1996 ( 876 markets) | won  75% | ask 0.712 | held net per $   +3.6%
+
+  z +1.5 and over | minute 03 to 06                    |   1521 ( 693 markets) | won  75% | ask 0.704 | held net per $   +5.4%
+
+  z +1.5 and over | minute 06 to 09                    |    977 ( 492 markets) | won  81% | ask 0.710 | held net per $  +11.4%
+
+  z +1.5 and over | minute 09 to 12                    |    530 ( 285 markets) | won  79% | ask 0.715 | held net per $   +8.3%
+
+  z +1.5 and over | minute 12 to 15                    |    143 ( 108 markets) | won  85% | ask 0.713 | held net per $  +15.8%
+
 
 Notes: run 2026-11-16 14:36 ET on the host. Moments every 15 s, overlapping inside a market; market counts beside each cell. 38% of moments have no 3 hours of the perp and are left out. Held to settlement at the quoted ask, no exit; the lane's own exits (its max-loss stop scales with the price) are not replayed here, and neither is whether the ask is still there after the perp moves. Bands fixed before the run.

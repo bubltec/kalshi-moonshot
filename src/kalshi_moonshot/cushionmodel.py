@@ -157,9 +157,9 @@ def rebuild(s: Any, now: float | None = None) -> dict[str, Any]:
         pv: list[float] = []
         last = -1
         for r in tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND value>0 ORDER BY ts", (kp, since - 4 * 3600.0)).fetchall():
-            b = int(float(r[0]) // 30)
+            b = int(float(r[0]) // 15)  # 15 s buckets stamped at their END and holding their last tick, so a moment on the 15 s grid reads the last tick at or before it. The first version (30 s buckets stamped at their start) let the fit see up to 30 s past each moment
             if b != last:
-                pt.append(b * 30.0)
+                pt.append((b + 1) * 15.0)
                 pv.append(float(r[1]))
                 last = b
             else:

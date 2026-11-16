@@ -1,42 +1,41 @@
-window: 2026-11-09 00:00 ET on; 91832 band moments, 34873 without 3 hours of the perp and left out
+window: 2026-11-09 00:00 ET on; 93544 band moments, 34877 without 3 hours of the perp and left out
 
 0. the band
-  every read moment                                    |  56959 (3237 markets) | won  68% | ask 0.699 | held net per $   -5.0%
+  every read moment                                    |  58667 (3338 markets) | won  68% | ask 0.698 | held net per $   -5.0%
 
 1. by the last 90 s on the 3-hour view, signed toward the side
-  z under -1.5 (a real move against)                   |   1656 ( 740 markets) | won  62% | ask 0.686 | held net per $  -11.6%
-  -1.5 to -0.5                                         |  10138 (2450 markets) | won  62% | ask 0.692 | held net per $  -12.6%
-  -0.5 to +0.5 (the perp is still)                     |  27476 (3001 markets) | won  66% | ask 0.698 | held net per $   -7.0%
-  +0.5 to +1.5                                         |  14597 (2842 markets) | won  73% | ask 0.704 | held net per $   +1.8%
-  +1.5 to +3                                           |   2798 (1156 markets) | won  78% | ask 0.708 | held net per $   +7.6%
-  +3 and over (a real move for it)                     |    294 ( 160 markets) | won  83% | ask 0.710 | held net per $  +15.0%
+  z under -1.5 (a real move against)                   |   1330 ( 632 markets) | won  73% | ask 0.688 | held net per $   +4.3%
+  -1.5 to -0.5                                         |   9511 (2453 markets) | won  67% | ask 0.689 | held net per $   -4.5%
+  -0.5 to +0.5 (the perp is still)                     |  28757 (3120 markets) | won  66% | ask 0.697 | held net per $   -6.7%
+  +0.5 to +1.5                                         |  15793 (2923 markets) | won  69% | ask 0.705 | held net per $   -3.5%
+  +1.5 to +3                                           |   3026 (1233 markets) | won  70% | ask 0.708 | held net per $   -2.7%
+  +3 and over (a real move for it)                     |    250 ( 133 markets) | won  74% | ask 0.722 | held net per $   +0.7%
 
 2. by similar moves in the last 3 hours
-  none as large in 3 hours                             |    199 ( 115 markets) | won  82% | ask 0.709 | held net per $  +14.1%
-  1 to 5                                               |   1525 ( 659 markets) | won  73% | ask 0.702 | held net per $   +2.2%
-  6 to 24                                              |   7641 (2175 markets) | won  70% | ask 0.699 | held net per $   -2.0%
-  25 and over (ordinary)                               |  47594 (3163 markets) | won  67% | ask 0.698 | held net per $   -5.8%
+  none as large in 3 hours                             |    153 ( 103 markets) | won  76% | ask 0.717 | held net per $   +4.2%
+  1 to 5                                               |   1449 ( 672 markets) | won  71% | ask 0.703 | held net per $   -0.9%
+  6 to 24                                              |   7656 (2324 markets) | won  70% | ask 0.701 | held net per $   -1.6%
+  25 and over (ordinary)                               |  49409 (3277 markets) | won  67% | ask 0.698 | held net per $   -5.6%
 
 3. the same z, by half of the market
-  +0.5 to +1.5 | first half                            |   9055 (2504 markets) | won  71% | ask 0.702 | held net per $   -0.2%
-  +0.5 to +1.5 | second half                           |   5542 (1723 markets) | won  76% | ask 0.707 | held net per $   +4.9%
-  +1.5 to +3 | first half                              |   1774 ( 818 markets) | won  76% | ask 0.704 | held net per $   +5.6%
-  +1.5 to +3 | second half                             |   1024 ( 525 markets) | won  81% | ask 0.714 | held net per $  +11.0%
-  +3 and over (a real move for it) | first half        |    217 ( 119 markets) | won  82% | ask 0.704 | held net per $  +15.9%
-  +3 and over (a real move for it) | second half       |     77 (  48 markets) | won  84% | ask 0.727 | held net per $  +12.6%
-  -0.5 to +0.5 (the perp is still) | first half        |  15496 (2795 markets) | won  66% | ask 0.692 | held net per $   -7.0%
-  -0.5 to +0.5 (the perp is still) | second half       |  11980 (2124 markets) | won  67% | ask 0.705 | held net per $   -6.9%
-  -1.5 to -0.5 | first half                            |   5487 (1930 markets) | won  62% | ask 0.685 | held net per $  -10.9%
-  -1.5 to -0.5 | second half                           |   4651 (1570 markets) | won  61% | ask 0.701 | held net per $  -14.7%
-  z under -1.5 (a real move against) | first half      |    938 ( 455 markets) | won  64% | ask 0.682 | held net per $   -8.2%
-  z under -1.5 (a real move against) | second half     |    718 ( 400 markets) | won  60% | ask 0.690 | held net per $  -16.0%
+  +0.5 to +1.5 | first half                            |  10006 (2693 markets) | won  69% | ask 0.704 | held net per $   -4.7%
+  +0.5 to +1.5 | second half                           |   5787 (1701 markets) | won  71% | ask 0.707 | held net per $   -1.6%
+  +1.5 to +3 | first half                              |   2041 ( 937 markets) | won  70% | ask 0.706 | held net per $   -2.1%
+  +1.5 to +3 | second half                             |    985 ( 517 markets) | won  70% | ask 0.712 | held net per $   -4.0%
+  +3 and over (a real move for it) | first half        |    174 ( 104 markets) | won  77% | ask 0.716 | held net per $   +6.0%
+  +3 and over (a real move for it) | second half       |     76 (  47 markets) | won  68% | ask 0.737 | held net per $  -11.4%
+  -0.5 to +0.5 (the perp is still) | first half        |  16324 (2947 markets) | won  66% | ask 0.691 | held net per $   -6.2%
+  -0.5 to +0.5 (the perp is still) | second half       |  12433 (2188 markets) | won  67% | ask 0.705 | held net per $   -7.2%
+  -1.5 to -0.5 | first half                            |   4833 (1835 markets) | won  67% | ask 0.680 | held net per $   -3.1%
+  -1.5 to -0.5 | second half                           |   4678 (1615 markets) | won  67% | ask 0.699 | held net per $   -5.8%
+  z under -1.5 (a real move against) | first half      |    654 ( 357 markets) | won  71% | ask 0.683 | held net per $   +2.7%
+  z under -1.5 (a real move against) | second half     |    676 ( 366 markets) | won  75% | ask 0.692 | held net per $   +5.7%
 
 4. a rare move (5 or fewer as large in 3 hours): with or against the side, by who had led
-  against it | contested                               |     98 (  66 markets) | won  66% | ask 0.689 | held net per $   -7.0%
-  against it | the side led 80% and over               |    432 ( 238 markets) | won  56% | ask 0.688 | held net per $  -20.4%
-  against it | the side trailed (led under 20%)        |      1 (   1 markets) | won 100% | ask 0.740 | held net per $  +32.7%
-  with it | contested                                  |    651 ( 326 markets) | won  83% | ask 0.713 | held net per $  +14.6%
-  with it | the side led 80% and over                  |    167 ( 112 markets) | won  84% | ask 0.757 | held net per $  +10.0%
-  with it | the side trailed (led under 20%)           |    375 ( 229 markets) | won  77% | ask 0.679 | held net per $  +12.0%
+  against it | contested                               |     63 (  47 markets) | won  73% | ask 0.681 | held net per $   +4.9%
+  against it | the side led 80% and over               |    322 ( 185 markets) | won  68% | ask 0.687 | held net per $   -3.2%
+  with it | contested                                  |    683 ( 337 markets) | won  77% | ask 0.717 | held net per $   +6.1%
+  with it | the side led 80% and over                  |    104 (  69 markets) | won  71% | ask 0.766 | held net per $   -7.8%
+  with it | the side trailed (led under 20%)           |    430 ( 261 markets) | won  65% | ask 0.686 | held net per $   -7.6%
 
-Notes: run 2026-11-16 14:03 ET on the host. Moments are every 15 s and overlap inside a market; the market counts are beside each cell. 38% of band moments have no 3 hours of the perp on the tape and are left out. Held to settlement at the quoted ask: whether the bot can actually buy at that ask in the seconds after the perp moves is not tested here (studies/results/2026-11-16-fill-selection.txt found resting buys that fill do worse than those that miss). Bands fixed before the run.
+Notes: rerun 2026-11-16 16:31 ET with the perp read exactly (15 s buckets stamped at their end). This REPLACES the 14:03 run, which read the perp with a look-ahead of up to 30 s (30 s buckets stamped at their start, holding their last tick) and showed +1.8%, +7.6% and +15.0% for the three bands where the perp moved toward the side. Without the look-ahead those bands are -3.5%, -2.7% and +0.7%: the spike rule has no edge in the band. A second rerun with the perp read up to 30 s LATE gave -3.9%, -2.0%, +1.1%.
