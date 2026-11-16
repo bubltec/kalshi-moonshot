@@ -1,0 +1,10 @@
+window: since 2026-11-14 17:02 ET; 62 max-loss sales replayed, 25 more without quotes on the tape
+  all                    n  62 (18 won if held) | what happened $ -712.03 | squared $ -639.29 ( +72.74; beat 34, lost to 15) | linear $ -752.25 ( -40.22; beat 21, lost to 37)
+
+by the time left when the live stop sold
+  over 8 min             n  10 (5 won if held) | what happened $ -105.53 | squared $ -114.72 (  -9.20; beat 3, lost to 5) | linear $ -123.35 ( -17.82; beat 2, lost to 8)
+  5 to 8 min             n  12 (3 won if held) | what happened $ -146.95 | squared $ -127.33 ( +19.62; beat 7, lost to 1) | linear $ -154.66 (  -7.72; beat 4, lost to 5)
+  3 to 5 min             n  19 (4 won if held) | what happened $ -225.70 | squared $ -211.91 ( +13.79; beat 9, lost to 5) | linear $ -217.31 (  +8.39; beat 8, lost to 11)
+  under 3 min            n  21 (6 won if held) | what happened $ -233.85 | squared $ -185.33 ( +48.52; beat 15, lost to 4) | linear $ -256.93 ( -23.08; beat 7, lost to 13)
+
+Notes: run 2026-11-16 about 09:58 ET on the host. The replay leaves out the long layer's hold and the squeeze, so its stop can begin before the live one did: the gain with under 3 minutes left (where the squared wait is a few seconds) comes from selling sooner than the live exit did, not from waiting. The group the wait was meant for, sales with over 8 minutes left, is worse with the longer wait (-9.20, beat 3, lost to 5). 25 sales have no quotes on the tape (00:31 to 09:17 ET on 11-16). The two waits were stated before the run.
