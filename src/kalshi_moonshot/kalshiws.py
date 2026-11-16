@@ -164,6 +164,7 @@ class KalshiStream:
         self.on_feed = on_feed  # called with True when the lifecycle subscription is confirmed on a connection and with False when that connection ends: the market list is only kept from the stream between the two
         self.index_feed, self.fills = index_feed, fills
         self.books = books  # also subscribe to orderbook_delta for the same markets (the order book kept in ticks.books, not read over REST)
+        self._stray: dict[int, tuple[Any, str]] = {}  # seq -> (type, ticker) of numbered messages on the book subscription that were not applied as book messages
         self._book_seq: dict[int, int] = {}  # orderbook_delta sid -> the last sequence number seen; a gap asks for fresh snapshots
         self.lifecycle = (index_feed and os.environ.get("KALSHI_LIFECYCLE", "1").strip().lower() not in {"0", "off", "false", "no"}) if lifecycle is None else lifecycle
         self.indices = sorted(set(indices or INDEX_FOR.values()))
@@ -318,7 +319,8 @@ class KalshiStream:
         self._book_seq[sid] = seq
         if last is None or seq == last + 1 or event["kind"] == "book_snapshot":
             return True
-        log.warning("kalshi websocket: orderbook_delta sequence jumped from %s to %s: asking for fresh snapshots", last, seq)
+        missing = [(n, self._stray.get(n, "not seen at all")) for n in range(last + 1, seq)]
+        log.warning("kalshi websocket: orderbook_delta sequence jumped from %s to %s (this message: %s %s; skipped: %s): asking for fresh snapshots", last, seq, event.get("kind"), event.get("ticker"), missing)
         books_mod.books.clear()
         if self._loop is not None and self._ws is not None:
             with self._lock:
@@ -355,6 +357,10 @@ class KalshiStream:
                     asyncio.run_coroutine_threadsafe(self._sync(), self._loop)  # the wanted set may have moved since the subscribe went out
             return
         event = parse_message(msg)
+        if self.books and (event is None or event["kind"] not in {"book_snapshot", "book_delta"}) and isinstance(msg.get("seq"), int) and msg.get("sid") in self._book_seq:
+            self._stray[msg["seq"]] = (msg.get("type"), str((msg.get("msg") or {}).get("market_ticker")))  # a numbered message on the book subscription that is not a book message the code applied: kept so a sequence jump can say what it skipped
+            if len(self._stray) > 50:
+                self._stray.pop(next(iter(self._stray)))
         if event is not None and event["kind"] in {"book_snapshot", "book_delta"}:
             if not self._book_in_order(event):
                 return  # a gap in the sequence: fresh snapshots are on their way, nothing is applied until they arrive

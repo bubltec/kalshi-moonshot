@@ -67,3 +67,14 @@ def test_the_client_reads_the_stream_book_and_never_rest(monkeypatch):
     assert best_bid(c.orderbook("M"), "yes") == 0.4
     assert best_ask(c.orderbook("NOPE"), "yes") is None  # no book: empty, nothing to trade off
     ticks.books.clear()
+
+
+def test_a_jump_names_what_it_skipped(caplog):
+    ticks.books.clear()
+    s = KalshiStream(types.SimpleNamespace(), lambda e: None, books=True)
+    s._book_seq[3] = 1
+    s.handle('{"type": "something_else", "sid": 3, "seq": 2, "msg": {"market_ticker": "M"}}')
+    with caplog.at_level("WARNING"):
+        assert s._book_in_order({"kind": "book_delta", "seq": 4, "sid": 3, "ticker": "X"}) is False
+    assert "something_else" in caplog.text and "(3, 'not seen at all')" in caplog.text
+    ticks.books.clear()
