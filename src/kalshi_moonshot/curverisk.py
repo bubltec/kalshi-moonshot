@@ -228,6 +228,14 @@ def take_profit(gain: float, room: float, left: float, window: float, rebuy_fee:
     return gain >= take_bar(gain, room, left, window, unit)
 
 
+def trail_hit(gain: float, rebuy_fee: float, bid: float, peak: float, unit: float | None, units: float) -> bool:
+    """True when a bet that is ahead has come off its high far enough to cash what is left of the gain (lane field curve_take_trail; 2026-11-16, user, on an XRP NO bought at 0.60 that reached 0.80 with five minutes left, short of the take's bar, and was sold at 0.25: "we should be tracking every market that we buy with a trail").
+    `gain` is the profit per contract after the sell fee, `rebuy_fee` the fee to buy the side back, `peak` the highest bid since the buy, `unit` the market's typical minute, `units` how many of them under the peak the bid must be. The fall is measured in the market's own swing, not in cents, so a jumpy market is given more rope than a quiet one. False with no typical minute (no reading, no rule), with the trail off, or once the gain is gone: a bet under water is the loss exit's business."""
+    if units <= 0 or unit is None or unit <= 0 or peak <= 0 or gain <= rebuy_fee:
+        return False
+    return bid <= peak - units * unit + 1e-9
+
+
 CUSHION_NUDGE = 0.02  # 2026-11-15 (user: "Yes the .02", after ETH YES 07:23 sold at 0.88 on a cushion 0.015 short and went to 0.98): the most the curve's chance may fall short of what the sale pays and still count as backing it. The same two cents as the buy's stretch and the sale's squeeze.
 
 

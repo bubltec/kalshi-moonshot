@@ -1268,3 +1268,106 @@ def test_integration_the_long_layer_holding_an_early_sale_does_not_switch_the_st
     assert sold_after(w, 0.55, 600, limit=30) is None
     t = w.targets.get((TICKER, "risk_only"))
     assert t is not None and not t.risk_early_off  # held by the long layer, not by the early hold: no latch
+
+
+# ---- the profit take's trail (2026-11-16, user, on KXXRP15M-26NOV161745 NO bought at 0.60, up to 0.80 with five minutes left, short of the take's bar, sold at 0.25: "we should be tracking every market that we buy with a trail") ----
+# the fixture bet again: YES at 0.81, about 0.821 with the fee, 0.179 of room. With 250 s left 72% of the market is gone, so the take's bar is about 0.13 and a climb to 0.90 (a gain of 0.073) is under it.
+TRAIL = "curve risk exit (profit take): trail"
+
+
+def tick(w, bid, left):
+    """One quote, also in the market's own history; returns the sale signals it raised."""
+    ticks_mod.mids.note(TICKER, CLOSE - left, bid - 0.005, bid + 0.005)
+    yes_bid(w, bid, left)
+    return signals(w)
+
+
+def run_up(w):
+    """A quiet market (a typical minute near 0.02), then the bid climbs to 0.90 with about four minutes left: ahead, and under the take's bar."""
+    feed_history(0.002, from_left=900, to_left=262)
+    return climb(w, 0.82, 0.90, 260)
+
+
+def test_unit_the_trail_needs_a_gain_a_typical_minute_and_a_fall_of_that_size():
+    assert curverisk.trail_hit(0.05, 0.01, 0.76, 0.80, 0.03, 1.0)  # ahead, 4c under the high, the typical minute is 3c
+    assert not curverisk.trail_hit(0.05, 0.01, 0.78, 0.80, 0.03, 1.0)  # 2c under: inside the market's own swing
+    assert curverisk.trail_hit(0.05, 0.01, 0.74, 0.80, 0.03, 2.0) and not curverisk.trail_hit(0.05, 0.01, 0.76, 0.80, 0.03, 2.0)  # the lane's units scale the fall
+    assert not curverisk.trail_hit(0.005, 0.01, 0.76, 0.80, 0.03, 1.0)  # the gain does not pay for the buy-back
+    assert not curverisk.trail_hit(-0.10, 0.01, 0.50, 0.80, 0.03, 1.0)  # under water: the loss exit's business
+    assert not curverisk.trail_hit(0.05, 0.01, 0.76, 0.80, None, 1.0) and not curverisk.trail_hit(0.05, 0.01, 0.76, 0.80, 0.0, 1.0)  # no reading of the market's swing
+    assert not curverisk.trail_hit(0.05, 0.01, 0.76, 0.80, 0.03, 0.0)  # off
+
+
+def test_integration_a_bet_ahead_that_falls_a_typical_minute_off_its_high_is_sold(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_trail=1.0\ncurve_take_trail_live=true")
+    assert run_up(w) is None  # under the bar, still rising: nothing to sell
+    assert tick(w, 0.89, 250) == []  # one cent off the high: inside the market's own swing
+    out = tick(w, 0.86, 249)  # four cents off the high, still 3c ahead after the fee
+    assert out and out[0].why.startswith(TRAIL) and "0.90 high" in out[0].why
+
+
+def test_integration_the_trail_is_off_by_default_and_the_same_fall_sells_nothing(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true")
+    assert run_up(w) is None
+    assert tick(w, 0.89, 250) == [] and tick(w, 0.86, 249) == []  # the take's bar is not met and nothing trails
+
+
+def test_integration_in_shadow_the_trail_logs_once_records_and_sells_nothing(tmp_path, monkeypatch, caplog):
+    import json
+    import logging
+
+    w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_trail=1.0")  # the risk exit is live, the trail is not
+    with caplog.at_level(logging.INFO):
+        run_up(w)
+        assert tick(w, 0.86, 250) == [] and tick(w, 0.86, 249) == []
+    assert sum(1 for r in caplog.records if f"would sell: {TRAIL}" in r.getMessage()) == 1
+    rows = [json.loads(x) for x in (tmp_path / "risk_shadow.jsonl").read_text().splitlines()]
+    assert [(x["kind"], x["live"], x["bid"]) for x in rows if x.get("kind")] == [("trail", False, 0.86)]
+
+
+def test_integration_a_fall_that_takes_the_whole_gain_is_not_a_trail_sale(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_trail=1.0\ncurve_take_trail_live=true")
+    run_up(w)
+    assert tick(w, 0.80, 250) == []  # under what the bet cost: no profit to protect, and far from the max loss
+
+
+def test_integration_with_no_reading_of_the_markets_swing_the_trail_does_not_fire(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_trail=1.0\ncurve_take_trail_live=true")
+    for k, bid in enumerate((0.84, 0.87, 0.90)):  # quotes to the watcher only: the market's own history is empty
+        yes_bid(w, bid, 260 - k)
+    signals(w)
+    yes_bid(w, 0.86, 250)
+    assert signals(w) == []
+
+
+def test_integration_a_sure_win_is_not_trailed_out(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_trail=1.0\ncurve_take_trail_live=true\ncurve_take_sure=0.95")
+    feed_history(0.002, from_left=900, to_left=262)
+    climb(w, 0.82, 0.96, 260)  # latched as a sure win at 0.95
+    signals(w)
+    assert tick(w, 0.93, 240) == []  # three cents off the high: a dip the latch holds through
+
+
+def test_integration_the_trail_sale_is_executed_as_a_profit_sale_and_the_bet_closes(tmp_path, monkeypatch):
+    from kalshi_moonshot import runner
+
+    c = Client(bid=0.86)
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    w = held(tmp_path, monkeypatch, live=True, client=c, take="true", extra="curve_take_trail=1.0\ncurve_take_trail_live=true")
+    run_up(w)
+    ticks_mod.mids.note(TICKER, CLOSE - 250, 0.855, 0.865)
+    yes_bid(w, 0.86, 250)
+    job = w._jobs.get_nowait()
+    assert job.why.startswith(TRAIL) and runner.is_profit_sale(job.why)  # sent once at the bid, never chased under the bet's cost
+    w._sell(*job)
+    assert len(c.sold) == 1
+    assert len(Store(config.load().db_path).open_bets()) == 0
+
+
+def test_unit_the_trail_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    for extra in ("", "curve_take_trail=1.0\n"):
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + extra)
+        s = config.load()
+        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
+        assert ("curve_take_trail" in got) is bool(extra) and ("curve_take_trail_live" in got) is bool(extra)

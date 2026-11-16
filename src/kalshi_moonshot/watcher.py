@@ -245,6 +245,10 @@ class Target:
     risk_sure_level: float = 0.0
     risk_take_early_bid: float = -1.0  # sell at once at this bid in the first risk_take_early_seconds (lane field curve_take_early_bid)
     risk_take_early_seconds: float = 360.0
+    risk_take_trail: float = 0.0  # the profit take's trail: typical minutes under the peak at which a bet that is ahead is sold (lane field curve_take_trail); 0 = off
+    risk_take_trail_live: bool = False  # the trail sells (curve_take_trail_live); off = it logs and records a would-sell
+    risk_take_peak: float = 0.0  # the highest bid the risk check has seen on this bet
+    risk_trail_logged: bool = False
     risk_long_scales: tuple = ()  # the minutes the long layer reads its movement over, together (lane field curve_risk_long_scales); empty = the last hour
     risk_nudge_units: float = 0.0  # the squeeze has no cap: the allowed miss is this many typical minutes of the market times how strongly everything agrees (lane field nudge_units; 0 = the cents cap)
     risk_nudge_hour: bool = False  # the squeeze's cap is scaled by the hour's width correction (lane field nudge_hour_factor)
@@ -1013,6 +1017,7 @@ class ProfitWatcher:
             room, rebuy = 1.0 - basis, fee_per_contract(bid)
             unit = self._risk_unit(t, now)
             bar = curverisk.take_bar(gain, room, left, 900.0, unit)
+            t.risk_take_peak = max(t.risk_take_peak, bid)
             wants = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit)
             flat_ok = wants and (left <= 900.0 * curverisk.LATE_SHARE or bid >= curverisk.HIGH_BID) and curverisk.flat_holds(net, self._take_cushion(t, now, left, net), unit, left)  # in the last fifth a flat bid is held while the spot's cushion backs the price; a thin cushion sells (user, 2026-11-14)
             taken = wants and not curverisk.still_rising(t.risk_take_hist, now, look, unit, flat_ok)
@@ -1055,6 +1060,16 @@ class ProfitWatcher:
                     t.risk_logged = True
                     log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
                     self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False)
+            if not taken and not early and not t.risk_sure_latched and bid >= CURVE_MIN_BID and curverisk.trail_hit(gain, rebuy, bid, t.risk_take_peak, unit, t.risk_take_trail):
+                # The trail: the bet is ahead and has come off its high by the market's own swing. It needs no bar (the bar asks for more the later it is, and a late buy starts under a high one), and the cushion check does not hold it: the replay it rests on had none.
+                reason = f"curve risk exit (profit take): trail: the bet is {gain:.3f} a contract ahead and the bid {bid:.2f} is {t.risk_take_peak - bid:.2f} under its {t.risk_take_peak:.2f} high since the buy, at least {t.risk_take_trail:g} typical minute(s) of this market ({unit:.3f}); {left:.0f}s left"
+                if t.risk_live and t.risk_take_trail_live:
+                    self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="trail")
+                    return reason
+                if not t.risk_trail_logged:
+                    t.risk_trail_logged = True
+                    log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+                    self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="trail")
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= curverisk.confirm_bar(t.risk_confirm, left):
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             if bid >= CURVE_MIN_BID and (curverisk.stopped(pnl, r.q, t.risk_max_loss) or curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):
@@ -1105,7 +1120,7 @@ class ProfitWatcher:
         log.info("curve risk held %s %s, %.0fs left: %s (bid %.2f, %+.1f%% of cost, chance %.3f)", t.ticker, t.lane, left, why, bid, pnl * 100.0, r.q)
         self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, held=f"{kind}: {why}")
 
-    def _risk_record(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, wait: float, stop: bool, live: bool, held: str = "") -> None:
+    def _risk_record(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, wait: float, stop: bool, live: bool, held: str = "", kind: str = "") -> None:
         """Append one risk-exit signal to data/risk_shadow.jsonl (ticker, lane, bid, chance, result, time left, max-loss or line, live or shadow). Never raises."""
         try:
             from pathlib import Path
@@ -1113,6 +1128,8 @@ class ProfitWatcher:
             row = {"ts": now, "ticker": t.ticker, "lane": t.lane, "side": t.side, "entry": t.entry, "bid": bid, "q": round(r.q, 4), "worse": r.worse, "pnl": round(pnl, 4), "left": round(left, 1), "wait": round(wait, 1), "stop": stop, "line": t.risk_sell, "live": live}
             if held:
                 row["held"] = held
+            if kind:
+                row["kind"] = kind
             with open(Path(self.get_settings().data_dir) / "risk_shadow.jsonl", "a") as f:  # the watcher's own settings, not config.reload(): that rebinds the process-wide settings
                 f.write(json.dumps(row) + "\n")
         except OSError:
@@ -1925,6 +1942,7 @@ class ProfitWatcher:
                 held.risk_take_sure, held.risk_take_sure_late = spec.curve_take_sure, spec.curve_take_sure_late
                 held.risk_take_early_bid, held.risk_take_early_seconds = spec.curve_take_early_bid, spec.curve_take_early_seconds
                 held.risk_take_cushion = spec.curve_take_cushion
+                held.risk_take_trail, held.risk_take_trail_live = spec.curve_take_trail, spec.curve_take_trail_live
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
