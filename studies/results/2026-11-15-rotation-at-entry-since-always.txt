@@ -1,0 +1,61 @@
+  17:48 HYPE15M-26NOV151800 yes z13 -0.13 z5-z21 -0.82 -> SKIP | result $  -7.97
+  17:49 NEAR15M-26NOV151800 no  z13 +0.48 z5-z21 +0.69 -> let in | result $  -6.17
+  17:50 ZEC15M-26NOV151800 no  z13 +0.03 z5-z21 +0.35 -> let in | result $  -4.93
+  17:50 ETH15M-26NOV151800 no  z13 -0.00 z5-z21 +0.15 -> let in | result $  +8.41
+  17:50 XRP15M-26NOV151800 no  z13 -0.19 z5-z21 +0.01 -> let in | result $  -5.95
+  17:52 SOL15M-26NOV151800 yes z13 +0.26 z5-z21 +0.08 -> let in | result $  +0.59
+  17:52 BTC15M-26NOV151800 no  z13 +0.58 z5-z21 +0.24 -> let in | result $  -0.58
+  17:55 BNB15M-26NOV151800 yes z13 +0.54 z5-z21 +0.64 -> let in | result $  +6.61
+  18:05 BTC15M-26NOV151815 yes z13 +2.60 z5-z21 +0.98 -> SKIP | result $ -14.83
+  18:05 HYPE15M-26NOV151815 yes z13 +2.48 z5-z21 +0.09 -> SKIP | result $  +5.23
+  18:27 BNB15M-26NOV151830 yes z13 +0.07 z5-z21 +1.74 -> let in | result $  +8.34
+  18:37 BNB15M-26NOV151845 yes z13 +0.79 z5-z21 +0.31 -> let in | result $  +6.12
+  18:38 NEAR15M-26NOV151845 yes z13 +0.63 z5-z21 +0.28 -> let in | result $  +6.27
+  18:49 BTC15M-26NOV151900 yes z13 +1.36 z5-z21 -0.44 -> SKIP | result $ -10.39
+  18:51 ZEC15M-26NOV151900 no  z13 -0.03 z5-z21 +0.53 -> let in | result $ -13.76
+  18:54 BNB15M-26NOV151900 no  z13 +0.47 z5-z21 +1.47 -> let in | result $ -18.75
+  18:54 NEAR15M-26NOV151900 no  z13 +0.56 z5-z21 +1.16 -> let in | result $ -14.93
+  18:58 ETH15M-26NOV151900 yes z13 -0.10 z5-z21 +0.24 -> let in | result $  +8.61
+  19:05 BNB15M-26NOV151915 yes z13 +0.88 z5-z21 +0.07 -> let in | result $ -13.46
+  19:06 BNB15M-26NOV151915 no  z13 -1.07 z5-z21 -0.19 -> let in | result $  +7.39
+  19:22 BTC15M-26NOV151930 no  z13 +1.31 z5-z21 -0.87 -> SKIP | result $ -14.53
+  19:22 ETH15M-26NOV151930 no  z13 +1.37 z5-z21 -1.03 -> SKIP | result $  +4.18
+  19:33 BTC15M-26NOV151945 yes z13 -0.15 z5-z21 +0.88 -> let in | result $  -9.10
+  19:35 NEAR15M-26NOV151945 no  z13 +0.15 z5-z21 -0.95 -> SKIP | result $  +7.94
+  19:37 HYPE15M-26NOV151945 no  z13 -0.15 z5-z21 -1.00 -> SKIP | result $  +2.28
+  20:05 SOL15M-26NOV152015 no  z13 +1.56 z5-z21 +1.95 -> SKIP | result $  +8.08
+  20:20 HYPE15M-26NOV152030 no  z13 +1.02 z5-z21 -0.12 -> let in | result $  +8.80
+  20:20 BNB15M-26NOV152030 no  z13 +0.29 z5-z21 -0.27 -> let in | result $  +6.92
+  20:27 ZEC15M-26NOV152030 no  z13 +0.60 z5-z21 -1.15 -> SKIP | result $  -3.01
+  20:35 HYPE15M-26NOV152045 no  z13 +0.15 z5-z21 -0.79 -> SKIP | result $  +7.20
+  20:37 SOL15M-26NOV152045 no  z13 +0.16 z5-z21 +0.26 -> let in | result $  +6.05
+  20:38 BNB15M-26NOV152045 no  z13 +0.12 z5-z21 -0.93 -> SKIP | result $  +1.92
+  20:53 ZEC15M-26NOV152100 yes z13 -0.36 z5-z21 +0.69 -> let in | result $  -9.74
+  20:54 XRP15M-26NOV152100 yes z13 +0.03 z5-z21 +0.41 -> let in | result $  +7.63
+  20:56 ETH15M-26NOV152100 no  z13 -0.25 z5-z21 +0.10 -> let in | result $  +4.31
+  20:57 BTC15M-26NOV152100 no  z13 +0.02 z5-z21 +0.45 -> let in | result $  +3.07
+  21:05 BTC15M-26NOV152115 yes z13 +0.00 z5-z21 +1.69 -> let in | result $  +8.52
+  21:20 BTC15M-26NOV152130 yes z13 +1.26 z5-z21 -0.70 -> SKIP | result $  +5.48
+  21:21 XRP15M-26NOV152130 yes z13 +1.28 z5-z21 -1.35 -> SKIP | result $  +7.33
+  21:35 ZEC15M-26NOV152145 no  z13 -1.21 z5-z21 +1.65 -> let in | result $  -8.95
+  21:40 ETH15M-26NOV152145 yes z13 +0.00 z5-z21 +0.73 -> let in | result $ -12.38
+  21:42 BNB15M-26NOV152145 yes z13 -0.25 z5-z21 -0.09 -> let in | result $ -15.74
+  21:50 HYPE15M-26NOV152200 no  z13 +0.98 z5-z21 -0.37 -> SKIP | result $ -16.31
+  21:54 NEAR15M-26NOV152200 yes z13 -0.93 z5-z21 +0.34 -> let in | result $  +6.48
+  22:03 DOGE15M-26NOV152215 no  z13 -0.33 z5-z21 -1.09 -> SKIP | result $  +8.96
+  22:06 HYPE15M-26NOV152215 no  z13 -0.37 z5-z21 +0.82 -> let in | result $  +8.51
+  22:07 NEAR15M-26NOV152215 yes z13 +0.83 z5-z21 -1.27 -> SKIP | result $  -8.12
+  22:20 ETH15M-26NOV152230 no  z13 +0.50 z5-z21 +0.46 -> let in | result $  +5.42
+  22:22 NEAR15M-26NOV152230 no  z13 -0.40 z5-z21 -0.54 -> SKIP | result $ -17.01
+  22:24 HYPE15M-26NOV152230 yes z13 +1.16 z5-z21 +0.31 -> let in | result $  -8.99
+  22:24 BNB15M-26NOV152230 yes z13 +1.20 z5-z21 +0.68 -> let in | result $  -6.83
+  22:35 BTC15M-26NOV152245 no  z13 +1.05 z5-z21 +0.49 -> let in | result $  +5.86
+  22:55 XRP15M-26NOV152300 no  z13 +0.18 z5-z21 -1.11 -> SKIP | result $ -20.58
+  22:56 BTC15M-26NOV152300 yes z13 +0.26 z5-z21 +0.99 -> let in | result $  +6.28
+
+live in this stretch: 71 bets, net $-31.35
+  the gate would have SKIPPED 24: 15 winners $+80.93, 9 losers $-112.76; net $-31.84
+  and LET IN 47: 29 winners $+163.01, 18 losers $-162.52; net $+0.49
+  the let-in losses of $10 or more: 6: ZEC15M-26NOV151900 no $-13.76, BNB15M-26NOV151900 no $-18.75, NEAR15M-26NOV151900 no $-14.93, BNB15M-26NOV151915 yes $-13.46, ETH15M-26NOV152145 yes $-12.38, BNB15M-26NOV152145 yes $-15.74
+DONE
+	

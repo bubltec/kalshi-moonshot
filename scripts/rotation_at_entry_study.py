@@ -18,7 +18,8 @@ from kalshi_moonshot.strategy import fee_per_contract
 from kalshi_moonshot.watcher import perp_index
 
 ET = datetime.timezone(datetime.timedelta(hours=-5))
-SINCE = datetime.datetime(2026, 11, 14, 17, 2, tzinfo=ET).timestamp()
+import os
+SINCE = float(os.environ.get("SINCE", datetime.datetime(2026, 11, 14, 17, 2, tzinfo=ET).timestamp()))  # SINCE=epoch seconds to look at a later stretch
 SCALES = (2, 3, 5, 8, 13, 21)
 s = config.load()
 st = db.connect(s.db_path, "main", shared=True)
@@ -62,7 +63,7 @@ for r in st.execute("SELECT lane, ts, ticker, side, contracts, stake_usd, exit_p
         continue
     sign = 1.0 if r["side"] == "yes" else -1.0
     z = {m_: sign * (marks[0] - marks[m_]) / (s1 * math.sqrt(m_)) for m_ in SCALES}
-    bets.append((r["lane"] == "crypto_multiscale", v, cost, z))
+    bets.append((r["lane"] == "crypto_multiscale", v, cost, z, r["ticker"][2:-3], r["side"], float(r["ts"])))
 print(f"bets with a result and a perp tape: {len(bets)} (live {sum(1 for b in bets if b[0])}); net ${sum(b[1] for b in bets):+.2f} on ${sum(b[2] for b in bets):.0f}")
 
 
@@ -105,4 +106,16 @@ for label, sel in (("all bets", bets), ("live only", [b for b in bets if b[0]]))
         sk = [b for b in sel if rule(b[3])]
         kept = [b for b in sel if not rule(b[3])]
         print(f"  {label:9s} {name:36s}: skips {len(sk):3d} bets ({sum(1 for b in sk if b[1] > 0)} winners, {sum(1 for b in sk if b[1] <= 0)} losers), change ${-sum(b[1] for b in sk):+8.2f}; the rest: net ${sum(b[1] for b in kept):+8.2f} ({sum(b[1] for b in kept) / max(sum(b[2] for b in kept), 1) * 100:+.1f}% on ${sum(b[2] for b in kept):.0f})")
+print("\nlive bets one by one: the gate's two readings and what it would have done (skip = z13 at or over 1.5, or z5 - z21 under -0.3)")
+for b in sorted([b for b in bets if b[0]], key=lambda b: b[6]):
+    flag = b[3][13] >= 1.5 or b[3][5] - b[3][21] < -0.3
+    print(f"  {datetime.datetime.fromtimestamp(b[6], ET):%H:%M} {b[4]:16s} {b[5]:3s} z13 {b[3][13]:+5.2f} z5-z21 {b[3][5] - b[3][21]:+5.2f} -> {'SKIP' if flag else 'let in'} | result ${b[1]:+7.2f}")
+live = [b for b in bets if b[0]]
+sk = [b for b in live if b[3][13] >= 1.5 or b[3][5] - b[3][21] < -0.3]
+ok = [b for b in live if not (b[3][13] >= 1.5 or b[3][5] - b[3][21] < -0.3)]
+print(f"\nlive in this stretch: {len(live)} bets, net ${sum(b[1] for b in live):+.2f}")
+print(f"  the gate would have SKIPPED {len(sk)}: {sum(1 for b in sk if b[1] > 0)} winners ${sum(b[1] for b in sk if b[1] > 0):+.2f}, {sum(1 for b in sk if b[1] <= 0)} losers ${sum(b[1] for b in sk if b[1] <= 0):+.2f}; net ${sum(b[1] for b in sk):+.2f}")
+print(f"  and LET IN {len(ok)}: {sum(1 for b in ok if b[1] > 0)} winners ${sum(b[1] for b in ok if b[1] > 0):+.2f}, {sum(1 for b in ok if b[1] <= 0)} losers ${sum(b[1] for b in ok if b[1] <= 0):+.2f}; net ${sum(b[1] for b in ok):+.2f}")
+big = [b for b in ok if b[1] <= -10.0]
+print(f"  the let-in losses of $10 or more: {len(big)}: " + ", ".join(f"{b[4]} {b[5]} ${b[1]:+.2f}" for b in big))
 print("DONE")
