@@ -1,0 +1,13 @@
+profit takes by the bid they sold at and the time left: n | total sell fee | sale after fee | holding to settlement | sale less hold | holding paid less (the take saved the bet) / more
+  bid 0.90 to 0.95   over 120 s left : n  32 | fee $ 4.63 | sale $ +156.17 | hold $ +101.23 | diff $ +54.94 | 4 / 28
+  bid 0.90 to 0.95   60 to 120 s left: n   5 | fee $ 0.75 | sale $  +29.78 | hold $  +42.12 | diff $ -12.35 | 0 / 5
+  bid 0.90 to 0.95   under 60 s left : n   2 | fee $ 0.25 | sale $  +17.02 | hold $  +21.06 | diff $  -4.04 | 0 / 2
+  bid 0.90 to 0.95   all times       : n  39 | fee $ 5.63 | sale $ +202.97 | hold $ +164.41 | diff $ +38.56 | 4 / 35
+  bid 0.95 and over  over 120 s left : n   5 | fee $ 0.31 | sale $  +23.87 | hold $  +28.77 | diff $  -4.90 | 0 / 5
+  bid 0.95 and over  under 60 s left : n   7 | fee $ 0.14 | sale $  +29.91 | hold $  +32.08 | diff $  -2.17 | 0 / 6
+  bid 0.95 and over  all times       : n  12 | fee $ 0.45 | sale $  +53.78 | hold $  +60.85 | diff $  -7.07 | 0 / 11
+  bid under 0.90     over 120 s left : n  28 | fee $ 6.99 | sale $ +161.33 | hold $ +145.30 | diff $ +16.04 | 6 / 22
+  bid under 0.90     60 to 120 s left: n   3 | fee $ 0.78 | sale $  +23.75 | hold $  -20.49 | diff $ +44.23 | 2 / 1
+  bid under 0.90     all times       : n  31 | fee $ 7.77 | sale $ +185.08 | hold $ +124.81 | diff $ +60.27 | 8 / 23
+DONE
+	
