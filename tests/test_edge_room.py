@@ -36,7 +36,7 @@ def test_unit_with_both_bars_both_must_pass_and_always_still_skips_them():
     both = spec(min_edge=0.03, min_edge_room=0.3)
     assert lanes.wants_bet(both, 0.81, 0.70, edge(0.81, 0.70))
     assert not lanes.wants_bet(both, 0.935, 0.90, edge(0.935, 0.90))  # clears the scaled bar (about 0.3 of the room) but is under 3 cents
-    assert lanes.wants_bet(spec(always=True, min_edge_room=0.9), 0.50, 0.90, edge(0.50, 0.90))
+    assert lanes.wants_bet(spec(needs_model_edge=False, min_edge_room=0.9), 0.50, 0.90, edge(0.50, 0.90))
 
 
 def test_unit_a_lane_without_the_bar_keeps_its_version_and_a_lane_with_it_gets_a_new_one(tmp_path, monkeypatch):
@@ -116,7 +116,7 @@ def test_unit_edge_miss_is_the_shortfall_under_the_scaled_bar_only():
     assert lanes.edge_miss(sp, 0.70, 0.58, edge(0.70, 0.58)) < 0  # over the bar: no miss
     assert lanes.edge_miss(spec(min_edge=0.03), 0.629, 0.58, e) is None  # no scaled bar
     assert lanes.edge_miss(spec(min_edge=0.05, min_edge_room=0.10), 0.629, 0.58, e) is None  # the flat bar fails too: not reached for
-    assert lanes.edge_miss(spec(always=True, min_edge_room=0.10), 0.629, 0.58, e) is None
+    assert lanes.edge_miss(spec(needs_model_edge=False, min_edge_room=0.10), 0.629, 0.58, e) is None
 
 
 def test_unit_the_nudge_is_the_cap_scaled_down_by_history_and_by_the_clock():
@@ -244,3 +244,30 @@ def test_unit_nudge_units_changes_a_lanes_version_only_when_it_is_set(tmp_path, 
     assert "nudge_units" not in lanes.settings_of(plain, s)
     on = dataclasses.replace(plain, nudge_units=1.0)
     assert lanes.settings_of(on, s)["nudge_units"] == "1.0" and lanes.version_of(plain, s) != lanes.version_of(on, s)
+
+
+# needs_model_edge (2026-11-16, user: "lets re-work that concept. because 'always' means nothing"): the renamed switch, its old name still read from a lane file, and no lane's version changed by the rename.
+def test_unit_the_switch_says_what_it_does_and_defaults_to_needing_an_edge():
+    assert lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0).needs_model_edge is True
+    assert not lanes.wants_bet(spec(needs_model_edge=True, min_edge_room=0.9), 0.50, 0.90, edge(0.50, 0.90))  # the model sees no edge: no bet
+    assert lanes.wants_bet(spec(needs_model_edge=False, min_edge_room=0.9), 0.50, 0.90, edge(0.50, 0.90))  # the screen is off
+
+
+def test_integration_a_lane_file_may_use_the_new_name_or_the_old_one_but_not_both(tmp_path, monkeypatch):
+    from kalshi_moonshot import config
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    lane = "[lane.a]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\n{line}\n"
+    (tmp_path / "strategies.toml").write_text(lane.format(line="needs_model_edge=false"))
+    new = lanes.lane_specs(config.load())["a"]
+    (tmp_path / "strategies.toml").write_text(lane.format(line="always=true"))
+    s = config.load()
+    old = lanes.lane_specs(s)["a"]
+    assert new.needs_model_edge is False and old.needs_model_edge is False
+    assert lanes.version_of(new, s) == lanes.version_of(old, s)  # the same lane, whichever name its file uses
+    assert lanes.settings_of(old, s)["always"] == "True" and "needs_model_edge" not in lanes.settings_of(old, s)  # reported under the old name, so the rename is not a new version of every lane
+    (tmp_path / "strategies.toml").write_text(lane.format(line="always=false"))
+    assert lanes.lane_specs(config.load())["a"].needs_model_edge is True
+    (tmp_path / "strategies.toml").write_text(lane.format(line="always=true\nneeds_model_edge=false"))
+    with pytest.raises(ValueError, match="not both"):
+        lanes.lane_specs(config.load())

@@ -286,7 +286,7 @@ class LadderEstimator:
             rows = by_event.get(event, [])
             series = (rows[0].get("series_ticker") if rows else "") or event.split("-")[0]
             inst = instrument_for(series, instruments)
-            if spec.always and (inst is None or contract_priced(inst.symbol) or inst.symbol.startswith("kp:")):
+            if not spec.needs_model_edge and (inst is None or contract_priced(inst.symbol) or inst.symbol.startswith("kp:")):
                 # The lane bets the price band. Do not open Kraken to price it. A market with no instrument (ZEC, HYPE, BNB, NEAR) has no feed to price from and is not dropped for that: the curve model reads the index ticks itself.
                 priced[event] = _price_band(rows)
                 continue

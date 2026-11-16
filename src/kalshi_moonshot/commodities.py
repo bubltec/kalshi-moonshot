@@ -607,13 +607,13 @@ class CommodityPricer:
             from .lanes import lane_specs
 
             spec = lane_specs(s).get(getattr(shot, "lane", "") or "")
-            band_only = spec is not None and spec.always
+            band_only = spec is not None and not spec.needs_model_edge
         elif inst.symbol.startswith("kp:"):
             # 2026-11-12: crypto is priced from Kalshi's perp reference, for a lane that needs a model. A lane that bets the price band does not need that price to bet, and reading it would add a Kalshi request per decision and a new way for a buy to fail, so it still takes the ask.
             from .lanes import lane_specs
 
             spec = lane_specs(s).get(getattr(shot, "lane", "") or "")
-            band_only = spec is not None and spec.always
+            band_only = spec is not None and not spec.needs_model_edge
         else:
             band_only = contract_priced(inst.symbol)
         if band_only:

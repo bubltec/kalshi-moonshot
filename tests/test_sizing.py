@@ -154,7 +154,7 @@ def example_lane(tmp_path):
 def test_the_example_lane_loads_and_is_tiered(tmp_path):
     s = example_lane(tmp_path)
     lane = lanes.spec_for(s, "fifteen")
-    assert lane.always and lane.fixed_stake == 2.0 and lane.sides == ("yes", "no")
+    assert not lane.needs_model_edge and lane.fixed_stake == 2.0 and lane.sides == ("yes", "no")
     assert lane.price == (0.12, 0.30) and lane.entry_elapsed == (1.0, 12.0)
     assert lanes.tiered(lane) and "fifteen" in [x.name for x in lanes.tiered_lanes(s)]
 

@@ -12,7 +12,7 @@
 
 [lane.fifteen]
 estimator = "ladder"            # prices each window from the live feed; only used to log our chance
-always = true                   # bet whenever the filters pass: no minimum edge
+needs_model_edge = false                   # bet whenever the filters pass: no minimum edge
 fixed_stake = 2.0               # dollars per bet
 sides = ["yes", "no"]           # "Up" is YES, "Down" is NO
 price = [0.12, 0.30]            # what one contract costs
@@ -44,7 +44,7 @@ max_exposure_pct = 0.30         # all open bets in this lane, share of equity
 shares_markets = true         # takes the same markets as steady, so the two can be compared
 estimator = "llm"               # still asked, so its estimate is logged and scored; it just no longer decides
 label = "steady"
-always = true
+needs_model_edge = false
 fixed_stake = 2.0
 price = [0.66, 0.75]
 hours = [1, 72]
@@ -69,7 +69,7 @@ max_exposure_pct = 0.30
 [lane.late_ticket]
 estimator = "ladder"
 label = "late ticket"
-always = true
+needs_model_edge = false
 fixed_stake = 1.0
 sides = ["yes", "no"]
 price = [0.05, 0.40]
@@ -105,7 +105,7 @@ stop_loss = false
 [lane.late_ticket_trail]
 estimator = "ladder"
 label = "late ticket"
-always = true
+needs_model_edge = false
 fixed_stake = 1.0
 sides = ["yes", "no"]
 price = [0.05, 0.40]
@@ -140,7 +140,7 @@ stop_loss = false
 [lane.fx_ticket]
 estimator = "ladder"
 label = "currency ticket"
-always = true
+needs_model_edge = false
 fixed_stake = 1.0
 sides = ["yes", "no"]
 price = [0.05, 0.40]
@@ -174,7 +174,7 @@ stop_loss = false
 [lane.last_minute]
 estimator = "ladder"
 label = "last-minute ticket"
-always = true
+needs_model_edge = false
 fixed_stake = 0.5
 sides = ["yes", "no"]
 price = [0.002, 0.05]
@@ -204,7 +204,7 @@ stop_loss = false
 [lane.fx_favorite]
 estimator = "ladder"
 label = "currency favorite"
-always = true
+needs_model_edge = false
 fixed_stake = 2.0
 sides = ["yes", "no"]
 price = [0.59, 0.85]
@@ -233,7 +233,7 @@ stop_loss = false
 [lane.fx_trail30]
 estimator = "ladder"
 label = "currency 30c trail"
-always = true
+needs_model_edge = false
 fixed_stake = 1.0
 sides = ["yes", "no"]
 price = [0.10, 0.39]

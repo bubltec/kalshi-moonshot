@@ -52,7 +52,7 @@ def test_an_always_lane_keeps_a_market_with_no_instrument_instead_of_dropping_it
     import dataclasses
 
     s = config.load()
-    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], always=True)
+    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], needs_model_edge=False)
 
     class NoFeed(FakePricer):
         def price_markets(self, markets, s, now):
@@ -70,7 +70,7 @@ def test_the_pricer_estimate_for_an_always_lane_with_no_instrument_is_the_price_
     from kalshi_moonshot.commodities import CommodityPricer
 
     s = config.load()
-    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], always=True)
+    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], needs_model_edge=False)
     monkeypatch.setattr(lanes, "lane_specs", lambda _s: {"band": spec})
     sh = dataclasses.replace(shot("KXZEC15M-26NOV072015-15", ask=0.43), series="KXZEC15M", lane="band")
     p, why = CommodityPricer.__new__(CommodityPricer).estimate(None, sh, s)
@@ -93,7 +93,7 @@ def test_crypto_for_a_price_band_lane_is_still_the_ask_and_never_asks_the_pricer
     import dataclasses
 
     s = config.load()
-    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], always=True)
+    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], needs_model_edge=False)
     sh, markets = _btc()
     est = LadderEstimator(_Never(0.5))
     assert [k.ticker for k in est.screen([sh], markets, spec, s, None)] == [sh.ticker] and est.dropped == []
@@ -104,7 +104,7 @@ def test_crypto_for_a_lane_that_needs_a_model_is_priced_by_the_pricer(p, kept):
     import dataclasses
 
     s = config.load()
-    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], always=False)
+    spec = dataclasses.replace(lanes.lane_specs_from(s, None)["commodity"], needs_model_edge=True)
     sh, markets = _btc()
     est = LadderEstimator(FakePricer(p))
     assert bool(est.screen([sh], markets, spec, s, None)) is kept
@@ -126,7 +126,7 @@ def test_the_decision_time_estimate_for_crypto_follows_the_lane(monkeypatch):
 
     monkeypatch.setattr(CommodityPricer, "price_markets", lambda self, ms, s, now=None: {sh.ticker: (0.81, "perp note")})
     pricer = CommodityPricer.__new__(CommodityPricer)
-    monkeypatch.setattr(lanes, "lane_specs", lambda _s: {"x": dataclasses.replace(base, always=True)})
+    monkeypatch.setattr(lanes, "lane_specs", lambda _s: {"x": dataclasses.replace(base, needs_model_edge=False)})
     assert pricer.estimate(None, sh, s) == (pytest.approx(0.43), "price band")  # no client needed: nothing is read
-    monkeypatch.setattr(lanes, "lane_specs", lambda _s: {"x": dataclasses.replace(base, always=False)})
+    monkeypatch.setattr(lanes, "lane_specs", lambda _s: {"x": dataclasses.replace(base, needs_model_edge=True)})
     assert pricer.estimate(Client(), sh, s) == (0.81, "perp note")

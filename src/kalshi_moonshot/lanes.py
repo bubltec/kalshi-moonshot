@@ -56,7 +56,7 @@ class LaneSpec:
     max_lag: float | None = None  # ... or, when set, when the estimate is no more than this under the ask
     usd_per_trade: float | None = None  # optional dollar ceiling per bet; None/0 = sized by balance
     fixed_stake: float = 0.0  # dollars per bet, ignoring Kelly (0 = size by the odds and the balance)
-    always: bool = False  # bet whenever the filters pass, with no minimum edge from a model
+    needs_model_edge: bool = True  # the model must see an edge over the price before the lane buys (min_edge, min_edge_room, max_lag). False = the lane buys whatever passes its other gates, with no minimum edge from a model. Until 2026-11-16 this was `always` with the opposite sense (user: "lets re-work that concept. because 'always' means nothing"); a lane file may still say `always`. On the live crypto lane's 157 bets with the screen off (11-15 16:31 on), the 19 it would have passed made +1.10 and the 138 it would have dropped -175.35, though the model's edge does not sort the bets: the screen mostly buys an eighth as often (studies/results/2026-11-16-edge-screen-record.txt)
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
     shares_markets: bool = False  # main-scan lane that also takes markets another lane took (for A/B controls); never consumes them
     min_chance: float = 0.0  # bet only when the estimator's chance that the contract pays is in [min_chance, max_chance]
@@ -389,6 +389,10 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
         if "burst_exit" in row:
             raise ValueError(f"lane {name!r}: set burst_exit or its old name settlement_flip, not both")
         row = {("burst_exit" if k == "settlement_flip" else k): v for k, v in row.items()}
+    if "always" in row:  # the old name of needs_model_edge, with the opposite sense
+        if "needs_model_edge" in row:
+            raise ValueError(f"lane {name!r}: set needs_model_edge or its old name always, not both")
+        row = {k: v for k, v in row.items() if k != "always"} | {"needs_model_edge": not row["always"]}
     known = {f.name for f in fields(LaneSpec)}
     unknown = set(row) - known
     if unknown:
@@ -536,6 +540,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     """Everything that decides what this lane buys, how much, and how it gets out, including the global rules that reach it."""
     out = {f.name: repr(getattr(spec, f.name)) for f in fields(spec) if f.name not in _NOT_LOGIC}
     out["settlement_flip"] = out.pop("burst_exit")  # the old name, so no lane's version changes with the rename
+    out["always"] = repr(not spec.needs_model_edge)  # the old name and sense of needs_model_edge, for the same reason
+    out.pop("needs_model_edge")
     out.update(_RETIRED_SETTINGS)  # settings of rules that no longer exist, at the value every lane carried, so removing dead code is not a new version of every lane
     out["effective_stop"] = repr(stop_drop_for(spec, s) if spec.stop_loss else None)
     out["crash_spot_sigma"] = repr(spec.trail_spot_sigma if spec.trail_spot_sigma is not None else s.crash_spot_sigma)
@@ -699,7 +705,7 @@ def chance_ok(spec: LaneSpec, p: float) -> bool:
 
 def wants_bet(spec: LaneSpec, p: float, ask: float, edge: float) -> bool:
     """The lane's bet rule, from its parameters. An edge bar and a lag bar can both be set."""
-    if spec.always:
+    if not spec.needs_model_edge:
         return True
     if spec.max_lag is not None and ask - p > spec.max_lag + 1e-9:
         return False
@@ -712,7 +718,7 @@ def wants_bet(spec: LaneSpec, p: float, ask: float, edge: float) -> bool:
 
 def edge_miss(spec: LaneSpec, p: float, ask: float, edge: float) -> float | None:
     """How far the edge is under the scaled bar, in probability: min_edge_room of the room less the edge. None when the lane has no scaled bar, bets always, or fails another bar (the lag bar, the flat edge bar): the stretch only reaches for the scaled bar."""
-    if spec.always or spec.min_edge_room is None:
+    if not spec.needs_model_edge or spec.min_edge_room is None:
         return None
     if spec.max_lag is not None and ask - p > spec.max_lag + 1e-9:
         return None
