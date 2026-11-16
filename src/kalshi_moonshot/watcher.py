@@ -1070,14 +1070,6 @@ class ProfitWatcher:
             t.risk_since = 0.0
             t.risk_held_kind = ""
             return None
-        if t.risk_early_hold > 0 and pnl < 0 and (t.risk_early_off or curverisk.early_hold(left, 900.0, t.risk_early_hold)):
-            # A loss sale is wanted with most of the market still to run: held, and held to settlement (lane field curve_risk_early_hold). The market-units reading is logged for the forward score, not used.
-            unit_now = self._risk_unit(t, now)
-            reach = unit_now * math.sqrt(left / 60.0) if unit_now and left > 0 else 0.0
-            t.risk_early_off = True
-            self._risk_held(t, r, bid, now, left, pnl, "early hold", f"a loss sale ({'max loss' if stop else 'line'}) was wanted with {left:.0f}s left, over {t.risk_early_hold:g} of the market: held, and this bet's loss sales stay off to settlement; 0.50 less the bid is {f'{(0.5 - net) / reach:.2f}' if reach > 0 else 'n/a'} of what the market typically travels in the time left")
-            t.risk_since = 0.0
-            return None
         if t.risk_since <= 0:
             t.risk_since = now
         base = t.curve_wait_default
@@ -1087,6 +1079,13 @@ class ProfitWatcher:
         wait = curverisk.stop_wait(r.q, t.risk_sell, left, base, t.risk_stop_hold) if stop else curverisk.wait(r.q, t.risk_sell, left, base, t.curve_wait_share if t.curve_wait_share > 0 else 0.25)
         if now - t.risk_since < wait:
             self._risk_held(t, r, bid, now, left, pnl, "wait", f"the {'max loss' if stop else 'line'} is reached but the wait is not over: held {now - t.risk_since:.0f}s of a {wait:.0f}s wait")
+            return None
+        if t.risk_early_hold > 0 and pnl < 0 and (t.risk_early_off or curverisk.early_hold(left, 900.0, t.risk_early_hold)):
+            # A loss sale is about to go (its wait is over) with most of the market still to run: held instead, and held to settlement (lane field curve_risk_early_hold). It sits at the point of the sale on purpose (2026-11-16, user: "i think the early hold might get overriden by something else"): placed before the wait it latched on a dip that the wait would have let recover, and the bet then had no stop for the rest of the market; the replay scored sales that were actually made. The market-units reading is logged for the forward score, not used.
+            unit_now = self._risk_unit(t, now)
+            reach = unit_now * math.sqrt(left / 60.0) if unit_now and left > 0 else 0.0
+            t.risk_early_off = True
+            self._risk_held(t, r, bid, now, left, pnl, "early hold", f"a loss sale ({'max loss' if stop else 'line'}) was wanted with {left:.0f}s left, over {t.risk_early_hold:g} of the market: held, and this bet's loss sales stay off to settlement; 0.50 less the bid is {f'{(0.5 - net) / reach:.2f}' if reach > 0 else 'n/a'} of what the market typically travels in the time left")
             return None
         reason = f"curve risk exit{' (max loss)' if stop else ''}: the chance the side pays is {r.q:.3f} ({r.worse} cushion the worse: price {r.q_price:.3f}, spot {r.q_spot:.3f}, history x{t.risk_hist:.2f}), line {t.risk_sell:.2f}, held {now - t.risk_since:.0f}s of a {wait:.0f}s wait; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left{squeezed}"
         if t.risk_live:

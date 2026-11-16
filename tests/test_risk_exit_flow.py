@@ -1209,7 +1209,7 @@ def test_integration_a_loss_with_most_of_the_market_to_run_is_not_sold(tmp_path,
 
 def test_integration_a_bet_held_early_is_held_to_settlement_even_when_it_falls_further(tmp_path, monkeypatch):
     w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
-    assert sold_after(w, 0.55, 600, limit=10) is None
+    assert sold_after(w, 0.55, 600, limit=20) is None  # the 10 s wait runs out and the sale is held instead
     assert sold_after(w, 0.30, 300, limit=120) is None  # five minutes left and deeper: the hold stays (what the replay scored)
     assert sold_after(w, 0.20, 60, limit=40) is None
 
@@ -1246,3 +1246,25 @@ def test_unit_the_early_hold_changes_a_lanes_version_only_when_set(tmp_path, mon
     base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
     assert "curve_risk_early_hold" not in lanes.settings_of(base, s)
     assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, curve_risk_early_hold=0.53), s)
+
+
+def test_integration_an_early_dip_that_recovers_inside_the_wait_leaves_the_stop_armed(tmp_path, monkeypatch):
+    """2026-11-16 (user: "i think the early hold might get overriden by something else"): the hold is taken at the point of the sale. A dip the wait lets recover does not switch the bet's stop off for the rest of the market."""
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
+    for k in range(0, 5):  # 5 s under the stop with 10 minutes left, shorter than the 10 s wait
+        yes_bid(w, 0.55, 600 - k)
+        assert signals(w) == []
+    yes_bid(w, 0.80, 594)  # it recovers: nothing was sold and nothing was latched
+    assert signals(w) == []
+    t = w.targets.get((TICKER, "risk_only"))
+    assert t is not None and not t.risk_early_off
+    took = sold_after(w, 0.55, 300)  # a real fall later in the market: the stop is still there (15 s x 300 / 900 = 5 s)
+    assert took is not None and 4 <= took <= 6
+
+
+def test_integration_the_long_layer_holding_an_early_sale_does_not_switch_the_stop_off(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4, hold=0.5, extra="curve_risk_early_hold=0.53")
+    seed_perp(monkeypatch, 1.004)  # the perp is over its open: the long layer holds the sale
+    assert sold_after(w, 0.55, 600, limit=30) is None
+    t = w.targets.get((TICKER, "risk_only"))
+    assert t is not None and not t.risk_early_off  # held by the long layer, not by the early hold: no latch
