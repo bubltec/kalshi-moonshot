@@ -227,6 +227,8 @@ def test_the_fallback_does_not_chase_a_market_that_ran_away(setup, monkeypatch):
     client = RestClient(fills=[1.5], asks=[0.30, 0.40])  # place() reads 0.30; the fresh read is 0.40, past the first limit
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert got.filled == 0 and client.sent == []
+    # 2026-11-15 night (user: several buy orders did not fill): the note says why the second try was not placed, so it is stored with the bet's decision and survives a rebuild
+    assert "Second try at the ask not placed: the ask 0.40 is outside the lane's price band" in got.note  # (here the fresh ask is also over the band; the chase reason reads "the ask ran from X to Y, more than the chase of Z")
 
 
 def test_a_partly_filled_resting_bid_is_topped_up_at_the_ask(setup, monkeypatch):

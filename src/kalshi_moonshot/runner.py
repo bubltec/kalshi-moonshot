@@ -1619,7 +1619,7 @@ def place(
             return placed  # a refusal or a skip is not a miss: only a bid that rested its time and filled nothing falls back to the ask
         again = _requote(s, client, store, shot, lane_spec, count)
         if again is None:
-            return placed
+            return Placed(f"{placed.note} Second try at the ask not placed: {GAVE_UP.get((shot.ticker, shot.side)) or 'no reason kept'}.", placed.filled, placed.cost, placed.price)
         log.info("buy %s %s: the resting bid did not fill, taking the ask at %.2f", shot.ticker, shot.side, again)
         limit = again
         order_key = f"{order_key}-take" if order_key else None  # a new id: Kalshi refuses one it has seen, even on an order that filled nothing
@@ -1720,42 +1720,52 @@ def _buy_again_block(store: Store, spec: LaneSpec, shot: LongShot) -> str | None
     return None
 
 
+GAVE_UP: dict[tuple[str, str], str] = {}  # why the last second try on a market and side was not placed, for the decision note
+
+
 def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, count: float, topping_up: bool = False) -> float | None:
-    """The limit for a second try after an immediate buy filled nothing, or None to give up. It reads the book again and prices the order off the fresh ask, but never above the first limit plus
+    """The limit for a second try, or None to give up (the reason is kept in GAVE_UP for the note); see _requote_why."""
+    limit, why = _requote_why(s, client, store, shot, spec, count, topping_up)
+    GAVE_UP[(shot.ticker, shot.side)] = why
+    return limit
+
+
+def _requote_why(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, count: float, topping_up: bool = False) -> tuple[float | None, str]:
+    """(The limit for a second try after an immediate buy filled nothing, or None to give up, and why it gave up (2026-11-15 night, user: several buy orders did not fill; the container log is lost at every rebuild, so the reason goes into the stored note). It reads the book again and prices the order off the fresh ask, but never above the first limit plus
     `buy_retry_chase`, never outside the lane's price band, and only if the curve (model or record) and the risk gate still agree at the limit, the most the order can pay: a market that ran away is not chased."""
     try:
         ask = best_ask(client.orderbook(shot.ticker), shot.side)
     except KalshiError:
-        return None
+        return None, "the book could not be read"
     if ask is None or ask < spec.price[0] - 1e-9 or ask > spec.price[1] + 1e-9:
-        return None
+        return None, ("the book has no ask" if ask is None else f"the ask {ask:.2f} is outside the lane's price band")
     if ask > shot.ask + max(0.0, spec.buy_retry_chase) + 1e-9:  # a market that ran away is not chased
-        return None
+        return None, f"the ask ran from {shot.ask:.2f} to {ask:.2f}, more than the chase of {spec.buy_retry_chase:g}"
     limit = buy_limit(spec, shot.ticker, shot.side, shot.ask, ask)
     if getattr(spec, "buy_tick_ahead", False):
         seen = side_ask_ticks(shot.ticker, shot.side)
         log.info("buy limit %s %s %s (the take after a resting bid): decided at %.2f, the book's ask %.2f, the stream's ask %s (last tick %s), limit %.4f", shot.lane, shot.ticker, shot.side, shot.ask, ask, f"{seen[0]:.2f}" if seen else "silent", f"{seen[1]:+.2f}" if seen else "-", limit)
     if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
-        return None
+        return None, f"the limit {limit:.2f} is over the decided ask {shot.ask:.2f} plus the slip and the chase"
     if spec.model_buy:  # the curve model must still say buy
         from . import curvemodel
 
         ok_mod, why_mod = curvemodel.admits(s, store, shot, spec, limit, waited=float(spec.buy_rest_seconds))
         if not ok_mod:
             log.info("buy %s %s: the resting bid did not fill and the curve model no longer says buy at %.2f (%s)", shot.ticker, shot.side, limit, why_mod)
-            return None
+            return None, f"the curve model no longer says buy at {limit:.2f} ({why_mod})"
         from . import timerecord
 
         ok_time, why_time = timerecord.allows(store, shot, spec, s=s)
         if not ok_time:
             log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, why_time)
-            return None
+            return None, str(why_time)
         from . import hotcheck
 
         ok_hot, why_hot = hotcheck.allows(spec)
         if not ok_hot:
             log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, why_hot)
-            return None
+            return None, str(why_hot)
     if getattr(spec, "tick_buy", False):  # the gap at the bid's price must still clear this side's own cutoff
         from . import tickgap
         from . import ticks as ticks_mod
@@ -1766,22 +1776,22 @@ def _requote(s: Settings, client: KalshiClient, store: Store, shot: LongShot, sp
             still = False
         if not still:
             log.info("buy %s %s: the resting bid did not fill and the curve's gap no longer clears this side's own cutoff at %.2f", shot.ticker, shot.side, limit)
-            return None
+            return None, f"the curve's gap no longer clears this side's own cutoff at {limit:.2f}"
     if spec.record_buy:  # the curve must still say buy: the spot may have moved out of the state that cleared the record while the bid rested
         from . import staterecord
 
         ok_rec, why_rec = staterecord.admits(s, store, shot, spec, limit, waited=float(spec.buy_rest_seconds))
         if not ok_rec:
             log.info("buy %s %s: the resting bid did not fill and the curve no longer clears the record at %.2f (%s)", shot.ticker, shot.side, limit, why_rec)
-            return None
+            return None, f"the curve no longer clears the record at {limit:.2f} ({why_rec})"
     if blocked := _buy_again_block(store, spec, shot):
         log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, blocked)
-        return None
+        return None, str(blocked)
     cost = limit * count + order_fee(limit, count)
     verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store), allow_held=topping_up)  # a top-up's first part is already a position: the holding check would refuse every one
     if not verdict.ok:
         log.info("buy %s %s: %s at %.2f not placed: the risk gate refused (%s)", shot.ticker, shot.side, "the top-up" if topping_up else "the second try", limit, verdict.reason)
-    return limit if verdict.ok else None
+    return (limit, "") if verdict.ok else (None, f"the risk gate refused ({verdict.reason})")
 
 
 def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) -> tuple[float | None, str]:
