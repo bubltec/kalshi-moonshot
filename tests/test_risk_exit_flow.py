@@ -1182,3 +1182,11 @@ def test_integration_a_fall_far_past_the_markets_own_swing_releases_the_latch(tm
     assert tgt.risk_sure_latched is True
     sit(w, 0.30, 400, 6)  # a collapse far past what this market normally moves over the time left (the stop may sell it: the latch is read before)
     assert tgt.risk_sure_latched is False
+
+
+def test_integration_a_held_sure_win_leaves_a_stored_row_so_its_effect_can_be_scored(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_sure=0.95")
+    climb(w, 0.82, 0.96, 450)
+    assert level(w, 0.96, 450) is None
+    rows = held_rows(tmp_path)
+    assert rows and any(r["held"].startswith("sure hold: ") for r in rows)

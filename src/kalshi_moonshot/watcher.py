@@ -1025,6 +1025,7 @@ class ProfitWatcher:
                 t.risk_sure_latched = False
             if taken and not early and t.risk_sure_latched:
                 taken = False  # a sure win: the bid is far enough up that the sale gives up cents to a dollar and pays a fee for protection the price already carries
+                self._risk_held(t, r, bid, now, left, pnl, "sure hold", f"a profit take was wanted at a bid of {bid:.2f} and held: a sure win latched at {t.risk_sure_level:g}, held to settlement")  # a stored row (data/risk_shadow.jsonl), so the hold's effect can be scored on the bets it touched
                 if not t.risk_sure_logged:
                     t.risk_sure_logged = True
                     log.info("curve risk: %s %s profit take held, a sure win (latched at %.2f): bid %.2f, %.0fs left; held to settlement through a dip, released only by a fall past the market's own swing", t.ticker, t.lane, t.risk_sure_level, bid, left)

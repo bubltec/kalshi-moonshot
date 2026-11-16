@@ -1,0 +1,15 @@
+WHAT EACH RULE CHANGED, on the decisions it touched, since it went live (blocked buys' return if held to settlement against the live buys taken in the same period)
+
+max_same_side = 2, since 20:44:
+  blocked: 'same side held' (distinct market and side) n  22 | paid  64% | held-to-settlement return per $   -6.1%
+  taken: the live lane's own bets                  n  26 | paid  65% | held-to-settlement return per $   -8.7%
+
+curve edge floor, the earlier -0.05, since 20:44:
+  blocked: edge under -0.05                        n  85 | paid  65% | held-to-settlement return per $  -12.9%
+  taken: the live lane's own bets                  n  26 | paid  65% | held-to-settlement return per $   -8.7%
+
+curve edge floor -0.03, since 23:35 (newly blocked: -0.05 to -0.03):
+  blocked: edge -0.05 to -0.03                     n   0
+  taken: the live lane's own bets                  n   0
+DONE
+	
