@@ -1,71 +1,94 @@
-"""Whichever side spikes first is the tell? Both sides watched, every finished 15-minute crypto market, whether or not anything is held. Replayed from the tape. Places nothing.
+"""When a spike makes a new favorite, which side pays? (2026-11-16, user, on DOGE 09:30 YES bought at the top of an 80-second spike and stopped out three minutes later: "It bought the wrong side tho. At the top of a spike like that you would want the DOWN but since the history shows a likely outcome")
 
-Per second from minute 3 to 20 seconds before the close: the contracts traded by YES takers and by NO takers in the last 3 seconds, each against the market's own normal side-volume (half the median per-second volume of the 2 minutes before, times 3).
-A spike is a side's 3-second volume at or over R times that, and at least 100 contracts. The first second either side spikes marks the market: the spiking side is the aggressor (if both spike in the same second, the bigger).
-Then: FOLLOW buys the aggressor's side at its ask at that second and holds to the result, FADE buys the other side; both fee paid and fee-free, and the aggressor side's mid move over the next 30 seconds.
-Per coin; standard errors across markets.
-    docker compose exec -T bot python - < scripts/spike_side_study.py
+One question, same moments (CLAUDE.md rule 4), read from Kalshi's own quotes only. In every settled market of the live crypto lane's series since Monday 2026-11-09 (the tape ends 2026-11-16 00:31 ET), the FIRST moment, 3 minutes in or later, at which a side enters the lane's band (ask 0.57 to 0.82, spread 0.03 or under) although the OTHER side had been the favorite (mid over 0.50) for at least 80% of the market so far. That is the buy the lane makes today (the new favorite). Against it: the old favorite, bought at its ask at the same second. Both held to settlement, fee in.
+The spike: the new favorite's rise over the last 90 seconds in the market's own typical minutes (root-mean-square 5 s move of the mid since the open, scaled to a minute). "Fast" = 2 typical minutes or more. The 80%, the 90 s and the 2 are stated before the run, not fitted.
+Shapes: how fast the flip came, and how far into the market. No coin is named.
+
+Run on the host: scripts/cloud.sh run scripts/spike_side_study.py
 """
 import bisect
+import datetime
 import math
-import statistics
 
 from kalshi_moonshot import config, db
-from kalshi_moonshot.store import Store
+from kalshi_moonshot.lanes import lane_specs
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
-s = config.reload()
+ET = datetime.timezone(datetime.timedelta(hours=-5))
+SINCE = datetime.datetime(2026, 11, 9, 0, 0, tzinfo=ET).timestamp()
+LO, HI, SPREAD, FROM, STEP = 0.57, 0.82, 0.03, 180, 5
+HELD, LOOK, FAST = 0.80, 90, 2.0
+s = config.load()
+st = db.connect(s.db_path, "main", shared=True)
 tape = db.connect(s.tape_path, "tape", shared=True)
-main = Store(s.db_path, s.exclude_versions)
-SERIES = ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M")
-RATIOS = (3, 5, 10, 20)
-results = {sr: {r: [] for r in RATIOS} for sr in SERIES}
-for sr in SERIES:
-    for m in main.db.execute("SELECT ticker, result, close_ts FROM windows WHERE series=? AND result IN ('yes','no') ORDER BY close_ts DESC LIMIT 600", (sr,)).fetchall():
-        close = m["close_ts"]
-        fl = tape.execute("SELECT ts, yes_vol, no_vol FROM flow_1s WHERE ticker=? AND ts>? AND ts<=?", (m["ticker"], int(close - 900), int(close))).fetchall()
-        q = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts>? AND ts<=? AND bid > 0 AND ask > 0 ORDER BY ts", (m["ticker"], close - 900, close)).fetchall()
-        if len(fl) < 60 or len(q) < 30:
+series = set(lane_specs(s)["crypto_multiscale"].series)
+wins = [w for w in st.execute("SELECT ticker, series, close_ts, result FROM windows WHERE close_ts>? AND result IN ('yes','no') ORDER BY close_ts", (SINCE,)).fetchall() if w["series"] in series]
+
+ev = []  # (new favorite's ask, new favorite won, old favorite's ask, seconds in, spike in typical minutes)
+seen = 0
+for w in wins:
+    close = float(w["close_ts"])
+    opened = close - 900.0
+    q = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? ORDER BY ts", (w["ticker"], opened - 20, close)).fetchall()
+    q = [(float(x[0]), float(x[1] or 0.0), float(x[2] or 0.0)) for x in q if x[2] and float(x[2]) > 0 and not (float(x[1] or 0.0) <= 0 and float(x[2]) >= 1)]
+    if len(q) < 50:
+        continue
+    seen += 1
+    qt = [x[0] for x in q]
+    grid = []  # (yes bid, yes ask) every STEP seconds from the open
+    for t in range(int(opened), int(close) - 10, STEP):
+        i = bisect.bisect_right(qt, t) - 1
+        grid.append((q[i][1], q[i][2]) if i >= 0 else None)
+    mids = [None if g is None else (g[0] + g[1]) / 2 for g in grid]
+    yes_fav = 0
+    n = 0
+    for k, g in enumerate(grid):
+        if g is None:
             continue
-        qts = [x[0] for x in q]
-        fby = {int(x[0]): (x[1], x[2]) for x in fl}
-        first = {r: None for r in RATIOS}
-        for sec in range(720, 19, -1):  # from minute 3 (720 s before the close)
-            t = int(close - sec)
-            y3 = sum(fby.get(t - k, (0, 0))[0] for k in range(3))
-            n3 = sum(fby.get(t - k, (0, 0))[1] for k in range(3))
-            per = sorted(sum(fby.get(t - 3 - k, (0, 0))) for k in range(120))
-            base = (per[59] + per[60]) / 2.0
-            norm = 3.0 * base / 2.0 + 1.0  # a side's normal 3 seconds
-            for r in RATIOS:
-                if first[r] is not None:
-                    continue
-                ry, rn = y3 / norm, n3 / norm
-                if max(ry, rn) >= r and max(y3, n3) >= 100:
-                    side = "yes" if ry >= rn else "no"
-                    i = bisect.bisect_right(qts, t) - 1
-                    if i < 0 or t - qts[i] > 30:
-                        continue
-                    j = bisect.bisect_right(qts, t + 30) - 1
-                    bid, ask = q[i][1], q[i][2]
-                    price = ask if side == "yes" else 1 - bid
-                    mid0 = (bid + ask) / 2
-                    mid1 = (q[j][1] + q[j][2]) / 2
-                    move = (mid1 - mid0) if side == "yes" else -(mid1 - mid0)
-                    won = 1.0 if m["result"] == side else 0.0
-                    first[r] = (price, won, move, 1 - price if 0 < price < 1 else None)
-        for r in RATIOS:
-            if first[r] is not None:
-                results[sr][r].append((m["ticker"], *first[r]))
-print("coin  spike | markets with a spike (of those scanned) | aggressor side wins | price paid | FOLLOW return with fee / fee-free | FADE return with fee | aggressor side's mid over the next 30 s")
-for sr in SERIES:
-    for r in RATIOS:
-        g = results[sr][r]
-        if len(g) < 40:
-            print(f"{sr[2:5]:4} {r:3}x | only {len(g)}")
-            continue
-        fol = [((w - p - fee(p)) / (p + fee(p))) for _, p, w, _, _ in g]
-        folg = [((w - p) / p) for _, p, w, _, _ in g]
-        po = [1 - p for _, p, w, _, _ in g]
-        fad = [(((1 - w) - q - fee(q)) / (q + fee(q))) for q, (_, p, w, _, _) in zip(po, g, strict=True) if 0.01 < q < 0.99]
-        print(f"{sr[2:5]:4} {r:3}x | {len(g):4} | {100 * statistics.mean(w for _, _, w, _, _ in g):4.1f}% | {100 * statistics.mean(p for _, p, *_ in g):4.1f}c | {100 * statistics.mean(fol):+6.1f}% +-{100 * statistics.pstdev(fol) / math.sqrt(len(fol)):.0f} / {100 * statistics.mean(folg):+6.1f}% | {100 * statistics.mean(fad):+6.1f}% | {100 * statistics.mean(mv for _, _, _, mv, _ in g):+5.2f}c")
+        if k * STEP >= FROM and n >= FROM // STEP // 2:
+            have = [m for m in mids[:k + 1] if m is not None]
+            moves = [b - a for a, b in zip(have, have[1:])]
+            unit = math.sqrt(sum(m * m for m in moves) / len(moves)) * math.sqrt(60 / STEP) if moves else 0.0
+            hit = None
+            for side in ("yes", "no"):
+                bid, ask = (g[0], g[1]) if side == "yes" else (1 - g[1], 1 - g[0])
+                other_share = (n - yes_fav) / n if side == "yes" else yes_fav / n
+                if LO <= ask <= HI and ask - bid <= SPREAD and other_share >= HELD:
+                    back = mids[k - LOOK // STEP] if k >= LOOK // STEP else None
+                    rise = None if back is None or unit <= 0 else ((mids[k] - back) if side == "yes" else (back - mids[k])) / unit
+                    other_ask = (1 - g[0]) if side == "yes" else g[1]
+                    hit = (ask, w["result"] == side, other_ask, k * STEP, rise)
+            if hit:
+                ev.append(hit)
+                break
+        n += 1
+        yes_fav += mids[k] > 0.5
+
+
+def net(ask, won):
+    return (1.0 if won else 0.0) / (ask + fee(ask)) - 1.0
+
+
+def line(name, rs):
+    if not rs:
+        print(f"  {name:36s} n    0")
+        return
+    n = len(rs)
+    new = sum(net(r[0], r[1]) for r in rs) / n
+    old = sum(net(r[2], not r[1]) for r in rs if 0.03 < r[2] < 0.97) / n
+    print(f"  {name:36s} n {n:4d} | new favorite won {sum(1 for r in rs if r[1]) / n:4.0%} at {sum(r[0] for r in rs) / n:.3f}: {new * 100:+6.1f}% per $ | old favorite at {sum(r[2] for r in rs) / n:.3f}: {old * 100:+6.1f}% per $")
+
+
+print(f"window: 2026-11-09 00:00 ET to the end of the tape; {len(wins)} settled markets, {seen} with quotes, {len(ev)} with a flip into the band after the other side led 80% of the market so far")
+print("\n1. all flips: the side the lane buys today (new favorite) against the side that led the market (old favorite)")
+line("all", ev)
+print("\n2. by how fast the new favorite rose over the last 90 s (typical minutes)")
+for lo, hi, name in ((-99, 1.0, "under 1"), (1.0, 2.0, "1 to 2"), (2.0, 3.0, "2 to 3 (fast)"), (3.0, 99, "3 and over (fast)")):
+    line(name, [r for r in ev if r[4] is not None and lo <= r[4] < hi])
+print("\n3. by minutes into the market")
+for lo, hi in ((3, 6), (6, 9), (9, 15)):
+    line(f"{lo} to {hi} min", [r for r in ev if lo * 60 <= r[3] < hi * 60])
+print("\n4. fast flips (2 and over) by minutes into the market")
+for lo, hi in ((3, 6), (6, 9), (9, 15)):
+    line(f"fast, {lo} to {hi} min", [r for r in ev if r[4] is not None and r[4] >= FAST and lo * 60 <= r[3] < hi * 60])
+print("DONE")

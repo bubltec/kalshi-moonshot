@@ -1,0 +1,22 @@
+window: 2026-11-09 00:00 ET to the end of the tape; 6300 settled markets, 5652 with quotes, 2325 with a flip into the band after the other side led 80% of the market so far
+
+1. all flips: the side the lane buys today (new favorite) against the side that led the market (old favorite)
+  all                                  n 2325 | new favorite won  60% at 0.607:   -4.5% per $ | old favorite at 0.407:   -5.1% per $
+
+2. by how fast the new favorite rose over the last 90 s (typical minutes)
+  under 1                              n  201 | new favorite won  58% at 0.585:   -3.5% per $ | old favorite at 0.429:   -6.5% per $
+  1 to 2                               n  902 | new favorite won  58% at 0.597:   -4.8% per $ | old favorite at 0.418:   -4.3% per $
+  2 to 3 (fast)                        n  805 | new favorite won  58% at 0.610:   -7.0% per $ | old favorite at 0.404:   -1.6% per $
+  3 and over (fast)                    n  417 | new favorite won  65% at 0.634:   +0.5% per $ | old favorite at 0.380:  -12.8% per $
+
+3. by minutes into the market
+  3 to 6 min                           n  899 | new favorite won  56% at 0.596:   -8.6% per $ | old favorite at 0.417:   +1.9% per $
+  6 to 9 min                           n  621 | new favorite won  55% at 0.598:  -10.8% per $ | old favorite at 0.416:   +3.1% per $
+  9 to 15 min                          n  805 | new favorite won  67% at 0.626:   +5.0% per $ | old favorite at 0.389:  -19.2% per $
+
+4. fast flips (2 and over) by minutes into the market
+  fast, 3 to 6 min                     n  309 | new favorite won  57% at 0.600:   -7.0% per $ | old favorite at 0.413:   -0.1% per $
+  fast, 6 to 9 min                     n  318 | new favorite won  55% at 0.604:  -11.8% per $ | old favorite at 0.409:   +4.8% per $
+  fast, 9 to 15 min                    n  595 | new favorite won  66% at 0.635:   +0.8% per $ | old favorite at 0.379:  -13.6% per $
+
+Notes: run 2026-11-16 about 09:27 ET on the host. One flip per market (the first). The coins move together, so the win rates carry about +/- 3 points; the old favorite's +1.9% and +3.1% before minute 9 are not distinguishable from zero. The 80%, the 90 s and the speed bands were stated before the run. Held to settlement at the ask, no exit.
