@@ -1,136 +1,68 @@
-CORRECTION 2026-11-16 16:35 ET: THIS RESULT IS NOT VALID. The run read the Kalshi perp in 30 s buckets stamped at their start and holding their last tick, so each reading could include up to 30 s of the perp AFTER the moment being scored. The corrected rerun of the band study (2026-11-16-band-by-spike-view.txt) shows the edge was that look-ahead. The script is fixed; rerun before using anything below.
-
-window: 2026-11-09 00:00 ET on; sides with an ask of 0.70 to 0.97 and 3 hours of the perp
-
-
-
-1. every such side, by the time left
-
-  9 to 12 min left                         |  23300 (2990 markets) | won  80% needs  82% | ask 0.812 | held net per $   -2.6%
-
-  6 to 9 min left                          |  25597 (3215 markets) | won  84% needs  85% | ask 0.844 | held net per $   -2.0%
-
-  3 to 6 min left                          |  21903 (3002 markets) | won  85% needs  87% | ask 0.865 | held net per $   -3.1%
-
-  1 to 3 min left                          |   7889 (2015 markets) | won  87% needs  89% | ask 0.882 | held net per $   -2.7%
-
-  under 1 min left                         |    524 ( 404 markets) | won  91% needs  90% | ask 0.894 | held net per $   +1.5%
-
-
-
-2. the same with the perp flat (z between -0.5 and +0.5)
-
-  9 to 12 min left                         |   9830 (2326 markets) | won  78% needs  82% | ask 0.804 | held net per $   -3.9%
-
-  6 to 9 min left                          |  11986 (2672 markets) | won  82% needs  85% | ask 0.840 | held net per $   -3.8%
-
-  3 to 6 min left                          |  10767 (2521 markets) | won  83% needs  87% | ask 0.864 | held net per $   -4.9%
-
-  1 to 3 min left                          |   3915 (1485 markets) | won  86% needs  89% | ask 0.883 | held net per $   -3.3%
-
-  under 1 min left                         |    238 ( 207 markets) | won  95% needs  90% | ask 0.896 | held net per $   +5.1%
-
-
-
-3. under 3 minutes left (flat or not), by the cushion
-
-  cushion under 0.5                        |   3604 (1052 markets) | won  80% needs  87% | ask 0.864 | held net per $   -8.4%
-
-  0.5 to 1                                 |   1886 ( 846 markets) | won  91% needs  90% | ask 0.891 | held net per $   +1.7%
-
-  1 to 2                                   |   2077 ( 898 markets) | won  92% needs  91% | ask 0.899 | held net per $   +1.4%
-
-  2 to 3                                   |    601 ( 318 markets) | won  94% needs  92% | ask 0.911 | held net per $   +2.9%
-
-  3 and over                               |    245 ( 137 markets) | won  96% needs  90% | ask 0.895 | held net per $   +7.1%
-
-
-
-4. under 3 minutes left, by the ask and the cushion
-
-  ask 0.70 to 0.80 | 0.5 to 1              |    235 ( 186 markets) | won  83% needs  76% | ask 0.751 | held net per $   +8.6%
-
-  ask 0.70 to 0.80 | 1 to 2                |    241 ( 167 markets) | won  83% needs  76% | ask 0.751 | held net per $   +8.7%
-
-  ask 0.70 to 0.80 | 2 to 3                |     53 (  31 markets) | won  89% needs  75% | ask 0.740 | held net per $  +17.8%
-
-  ask 0.70 to 0.80 | 3 and over            |     40 (  24 markets) | won  90% needs  75% | ask 0.739 | held net per $  +20.2%
-
-  ask 0.70 to 0.80 | cushion under 0.5     |    855 ( 546 markets) | won  68% needs  76% | ask 0.747 | held net per $  -10.2%
-
-  ask 0.80 to 0.90 | 0.5 to 1              |    527 ( 355 markets) | won  87% needs  86% | ask 0.850 | held net per $   +2.0%
-
-  ask 0.80 to 0.90 | 1 to 2                |    477 ( 322 markets) | won  88% needs  86% | ask 0.851 | held net per $   +2.5%
-
-  ask 0.80 to 0.90 | 2 to 3                |     94 (  75 markets) | won  91% needs  86% | ask 0.851 | held net per $   +6.4%
-
-  ask 0.80 to 0.90 | 3 and over            |     49 (  33 markets) | won  94% needs  86% | ask 0.852 | held net per $   +9.3%
-
-  ask 0.80 to 0.90 | cushion under 0.5     |   1144 ( 625 markets) | won  78% needs  86% | ask 0.849 | held net per $   -8.9%
-
-  ask 0.90 to 0.97 | 0.5 to 1              |   1124 ( 614 markets) | won  94% needs  94% | ask 0.940 | held net per $   +0.1%
-
-  ask 0.90 to 0.97 | 1 to 2                |   1359 ( 726 markets) | won  94% needs  95% | ask 0.943 | held net per $   -0.3%
-
-  ask 0.90 to 0.97 | 2 to 3                |    454 ( 266 markets) | won  95% needs  95% | ask 0.944 | held net per $   +0.4%
-
-  ask 0.90 to 0.97 | 3 and over            |    156 ( 110 markets) | won  98% needs  95% | ask 0.948 | held net per $   +3.1%
-
-  ask 0.90 to 0.97 | cushion under 0.5     |   1605 ( 712 markets) | won  87% needs  94% | ask 0.937 | held net per $   -7.1%
-
-
-
-5. the perp flat, by the time left and the cushion
-
-  1 to 3 min left | 0.5 to 1               |   1016 ( 504 markets) | won  91% needs  90% | ask 0.892 | held net per $   +0.9%
-
-  1 to 3 min left | 1 to 2                 |    928 ( 449 markets) | won  92% needs  91% | ask 0.902 | held net per $   +1.8%
-
-  1 to 3 min left | 2 to 3                 |    198 ( 116 markets) | won  91% needs  92% | ask 0.917 | held net per $   -0.6%
-
-  1 to 3 min left | 3 and over             |     50 (  35 markets) | won  94% needs  92% | ask 0.914 | held net per $   +3.4%
-
-  1 to 3 min left | cushion under 0.5      |   1723 ( 694 markets) | won  79% needs  87% | ask 0.862 | held net per $   -9.1%
-
-  3 to 6 min left | 0.5 to 1               |   3682 (1129 markets) | won  86% needs  88% | ask 0.872 | held net per $   -1.9%
-
-  3 to 6 min left | 1 to 2                 |   2467 ( 845 markets) | won  88% needs  90% | ask 0.897 | held net per $   -2.6%
-
-  3 to 6 min left | 2 to 3                 |    395 ( 171 markets) | won  93% needs  93% | ask 0.921 | held net per $   +0.3%
-
-  3 to 6 min left | 3 and over             |     53 (  30 markets) | won  79% needs  93% | ask 0.921 | held net per $  -13.9%
-
-  3 to 6 min left | cushion under 0.5      |   4170 (1149 markets) | won  76% needs  84% | ask 0.832 | held net per $   -9.3%
-
-  6 to 9 min left | 0.5 to 1               |   4174 (1197 markets) | won  83% needs  86% | ask 0.854 | held net per $   -3.4%
-
-  6 to 9 min left | 1 to 2                 |   2285 ( 708 markets) | won  91% needs  90% | ask 0.888 | held net per $   +1.9%
-
-  6 to 9 min left | 2 to 3                 |    183 (  79 markets) | won  93% needs  92% | ask 0.913 | held net per $   +1.1%
-
-  6 to 9 min left | 3 and over             |     20 (  11 markets) | won 100% needs  95% | ask 0.943 | held net per $   +5.9%
-
-  6 to 9 min left | cushion under 0.5      |   5324 (1409 markets) | won  76% needs  82% | ask 0.806 | held net per $   -6.7%
-
-  9 to 12 min left | 0.5 to 1              |   2955 ( 874 markets) | won  79% needs  84% | ask 0.826 | held net per $   -5.4%
-
-  9 to 12 min left | 1 to 2                |    791 ( 308 markets) | won  89% needs  88% | ask 0.874 | held net per $   +1.0%
-
-  9 to 12 min left | 2 to 3                |     38 (  19 markets) | won 100% needs  93% | ask 0.924 | held net per $   +7.8%
-
-  9 to 12 min left | 3 and over            |      5 (   3 markets) | won 100% needs  96% | ask 0.955 | held net per $   +4.4%
-
-  9 to 12 min left | cushion under 0.5     |   6041 (1578 markets) | won  77% needs  80% | ask 0.784 | held net per $   -3.9%
-
-  under 1 min left | 0.5 to 1              |     41 (  40 markets) | won  95% needs  90% | ask 0.891 | held net per $   +6.5%
-
-  under 1 min left | 1 to 2                |     36 (  35 markets) | won  92% needs  92% | ask 0.919 | held net per $   -0.5%
-
-  under 1 min left | 2 to 3                |     15 (  14 markets) | won 100% needs  86% | ask 0.851 | held net per $  +17.4%
-
-  under 1 min left | 3 and over            |     14 (  12 markets) | won  93% needs  85% | ask 0.843 | held net per $  +10.2%
-
-  under 1 min left | cushion under 0.5     |    132 ( 113 markets) | won  95% needs  91% | ask 0.902 | held net per $   +4.3%
-
-
-Notes: run 2026-11-16 15:22 ET on the host. Moments every 15 s, overlapping inside a market. Held to settlement at the quoted ask. The cushion is measured from the perp at the market's open, not from the strike. Bands fixed before the run.
+window: 2026-11-09 00:00 ET on; sides with an ask of 0.70 to 0.97 and 3 hours of the perp
+
+1. every such side, by the time left
+  9 to 12 min left                         |  23656 (3040 markets) | won  80% needs  82% | ask 0.812 | held net per $   -2.4%
+  6 to 9 min left                          |  26034 (3269 markets) | won  84% needs  85% | ask 0.844 | held net per $   -1.9%
+  3 to 6 min left                          |  22248 (3050 markets) | won  85% needs  87% | ask 0.866 | held net per $   -3.2%
+  1 to 3 min left                          |   8041 (2055 markets) | won  87% needs  89% | ask 0.882 | held net per $   -2.6%
+  under 1 min left                         |    532 ( 411 markets) | won  91% needs  90% | ask 0.894 | held net per $   +1.4%
+
+2. the same with the perp flat (z between -0.5 and +0.5)
+  9 to 12 min left                         |   9517 (2355 markets) | won  79% needs  81% | ask 0.799 | held net per $   -2.5%
+  6 to 9 min left                          |  12072 (2718 markets) | won  82% needs  85% | ask 0.839 | held net per $   -3.5%
+  3 to 6 min left                          |  11066 (2559 markets) | won  83% needs  87% | ask 0.864 | held net per $   -5.0%
+  1 to 3 min left                          |   3940 (1509 markets) | won  84% needs  89% | ask 0.883 | held net per $   -5.7%
+  under 1 min left                         |    248 ( 222 markets) | won  92% needs  90% | ask 0.897 | held net per $   +1.8%
+
+3. under 3 minutes left (flat or not), by the cushion
+  cushion under 0.5                        |   3261 (1042 markets) | won  84% needs  86% | ask 0.854 | held net per $   -2.8%
+  0.5 to 1                                 |   2479 (1013 markets) | won  88% needs  90% | ask 0.889 | held net per $   -1.5%
+  1 to 2                                   |   2276 ( 901 markets) | won  88% needs  92% | ask 0.913 | held net per $   -4.3%
+  2 to 3                                   |    423 ( 213 markets) | won  97% needs  92% | ask 0.918 | held net per $   +5.6%
+  3 and over                               |    134 (  46 markets) | won  86% needs  87% | ask 0.857 | held net per $   +0.3%
+
+4. under 3 minutes left, by the ask and the cushion
+  ask 0.70 to 0.80 | 0.5 to 1              |    313 ( 218 markets) | won  73% needs  76% | ask 0.750 | held net per $   -4.5%
+  ask 0.70 to 0.80 | 1 to 2                |    155 ( 111 markets) | won  66% needs  76% | ask 0.749 | held net per $  -13.0%
+  ask 0.70 to 0.80 | 2 to 3                |     55 (  17 markets) | won  96% needs  77% | ask 0.753 | held net per $  +26.0%
+  ask 0.70 to 0.80 | 3 and over            |     46 (  13 markets) | won  85% needs  75% | ask 0.740 | held net per $  +13.2%
+  ask 0.70 to 0.80 | cushion under 0.5     |    899 ( 562 markets) | won  75% needs  76% | ask 0.747 | held net per $   -1.4%
+  ask 0.80 to 0.90 | 0.5 to 1              |    749 ( 439 markets) | won  84% needs  86% | ask 0.852 | held net per $   -2.5%
+  ask 0.80 to 0.90 | 1 to 2                |    441 ( 268 markets) | won  81% needs  86% | ask 0.853 | held net per $   -6.3%
+  ask 0.80 to 0.90 | 2 to 3                |     28 (  25 markets) | won 100% needs  87% | ask 0.857 | held net per $  +15.6%
+  ask 0.80 to 0.90 | 3 and over            |     27 (  11 markets) | won  78% needs  86% | ask 0.854 | held net per $   -9.8%
+  ask 0.80 to 0.90 | cushion under 0.5     |   1086 ( 613 markets) | won  84% needs  86% | ask 0.847 | held net per $   -2.1%
+  ask 0.90 to 0.97 | 0.5 to 1              |   1417 ( 731 markets) | won  94% needs  94% | ask 0.939 | held net per $   -0.4%
+  ask 0.90 to 0.97 | 1 to 2                |   1680 ( 785 markets) | won  92% needs  95% | ask 0.943 | held net per $   -3.0%
+  ask 0.90 to 0.97 | 2 to 3                |    340 ( 194 markets) | won  97% needs  95% | ask 0.950 | held net per $   +1.5%
+  ask 0.90 to 0.97 | 3 and over            |     61 (  34 markets) | won  90% needs  95% | ask 0.948 | held net per $   -5.1%
+  ask 0.90 to 0.97 | cushion under 0.5     |   1276 ( 644 markets) | won  90% needs  94% | ask 0.934 | held net per $   -4.2%
+
+5. the perp flat, by the time left and the cushion
+  1 to 3 min left | 0.5 to 1               |   1217 ( 603 markets) | won  87% needs  90% | ask 0.891 | held net per $   -3.6%
+  1 to 3 min left | 1 to 2                 |    992 ( 508 markets) | won  86% needs  92% | ask 0.917 | held net per $   -6.6%
+  1 to 3 min left | 2 to 3                 |    132 (  91 markets) | won  98% needs  93% | ask 0.923 | held net per $   +6.0%
+  1 to 3 min left | 3 and over             |     38 (  19 markets) | won  74% needs  85% | ask 0.844 | held net per $  -11.4%
+  1 to 3 min left | cushion under 0.5      |   1561 ( 659 markets) | won  80% needs  86% | ask 0.854 | held net per $   -7.5%
+  3 to 6 min left | 0.5 to 1               |   4255 (1306 markets) | won  83% needs  88% | ask 0.869 | held net per $   -5.0%
+  3 to 6 min left | 1 to 2                 |   2915 (1014 markets) | won  89% needs  91% | ask 0.907 | held net per $   -2.9%
+  3 to 6 min left | 2 to 3                 |    338 ( 160 markets) | won  95% needs  94% | ask 0.931 | held net per $   +1.2%
+  3 to 6 min left | 3 and over             |     43 (  21 markets) | won  74% needs  94% | ask 0.938 | held net per $  -21.7%
+  3 to 6 min left | cushion under 0.5      |   3515 (1038 markets) | won  77% needs  82% | ask 0.814 | held net per $   -7.2%
+  6 to 9 min left | 0.5 to 1               |   5098 (1503 markets) | won  81% needs  85% | ask 0.845 | held net per $   -5.9%
+  6 to 9 min left | 1 to 2                 |   2535 ( 865 markets) | won  93% needs  91% | ask 0.902 | held net per $   +2.0%
+  6 to 9 min left | 2 to 3                 |    214 ( 114 markets) | won  96% needs  93% | ask 0.925 | held net per $   +3.3%
+  6 to 9 min left | 3 and over             |      8 (   7 markets) | won 100% needs  95% | ask 0.947 | held net per $   +5.3%
+  6 to 9 min left | cushion under 0.5      |   4217 (1235 markets) | won  77% needs  80% | ask 0.788 | held net per $   -4.3%
+  9 to 12 min left | 0.5 to 1              |   3697 (1199 markets) | won  81% needs  83% | ask 0.817 | held net per $   -2.3%
+  9 to 12 min left | 1 to 2                |    934 ( 380 markets) | won  88% needs  88% | ask 0.877 | held net per $   -0.9%
+  9 to 12 min left | 2 to 3                |     53 (  31 markets) | won  98% needs  94% | ask 0.935 | held net per $   +4.1%
+  9 to 12 min left | 3 and over            |      6 (   5 markets) | won 100% needs  96% | ask 0.959 | held net per $   +4.0%
+  9 to 12 min left | cushion under 0.5     |   4827 (1394 markets) | won  76% needs  78% | ask 0.768 | held net per $   -3.1%
+  under 1 min left | 0.5 to 1              |     40 (  39 markets) | won  92% needs  91% | ask 0.906 | held net per $   +1.2%
+  under 1 min left | 1 to 2                |     45 (  42 markets) | won  87% needs  90% | ask 0.893 | held net per $   -4.0%
+  under 1 min left | 2 to 3                |      6 (   6 markets) | won 100% needs  87% | ask 0.860 | held net per $  +16.2%
+  under 1 min left | 3 and over            |      8 (   7 markets) | won  88% needs  83% | ask 0.819 | held net per $   +7.3%
+  under 1 min left | cushion under 0.5     |    149 ( 134 markets) | won  93% needs  91% | ask 0.901 | held net per $   +2.8%
+
+Notes: rerun 2026-11-16 about 16:47 ET with the perp read exactly. This REPLACES the 15:22 run, which read the perp up to 30 s into the future. Without the look-ahead the cushion does not split late favorites: under 3 minutes left, cushion under 0.5 -2.8%, 0.5 to 1 -1.5%, 1 to 2 -4.3%, 2 to 3 +5.6% (213 markets), 3 and over +0.3%.
