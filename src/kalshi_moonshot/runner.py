@@ -579,11 +579,13 @@ def evaluate(
         from . import variants as _variants
 
         try:
-            wave = _variants.wave_now(shot.series, shot.side, source=spec.spot_source)
+            wave = _variants.quote_wave_now(shot.ticker, shot.side, time.time() + shot.hours_to_close * 3600.0 - 900.0) if spec.wave_quote else _variants.wave_now(shot.series, shot.side, source=spec.spot_source)  # 900: a 15-minute market's length, structural
         except Exception as exc:
             wave = None
             log.warning("wave unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if wave is None:
+        if wave is None and spec.wave_quote:
+            note = f"[wave unreadable: under three minutes of this market's quotes] {note}"  # no reading is not a reason to sit out: the other gates decide
+        elif wave is None:
             bet = False
             note = f"the last five minutes of the index are unreadable for the wave rule. {note}"
         elif wave["amp"] < spec.wave_amp_min:

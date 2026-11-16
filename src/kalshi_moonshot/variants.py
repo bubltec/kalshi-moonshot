@@ -677,6 +677,38 @@ def wave_now(series: str, side: str, now: float | None = None, source: str = "")
     return wave_features(got[0], got[1], side, now) if got else None
 
 
+QUOTE_WAVE_MIN = 180.0  # seconds of the market's own quotes a reading needs: the three minutes the study's reading needed (studies/results/2026-11-16-entry-selection.txt)
+
+
+def quote_wave_features(rows: Sequence[tuple[float, float]], side: str, opened: float, at: float) -> dict | None:
+    """The wave read from the market's own Kalshi quote, not the spot (2026-11-16, user: "i often see a YES that should have been a NO a few minutes later ... something with how we choose to buy is off"): the bet side's mid on a 1 s grid from the market's open (or its first quote) to `at`, in the market's own typical minutes over that stretch. The same keys as wave_features: pos = where the side's mid sits in its own range since the open (0 = its low, 1 = its high), amp = that range, since_low and back off the low.
+    236 live buys since 11-14 17:02 (studies/results/2026-11-16-entry-selection.txt): the 102 bought in the top fifth of that range made -12.2% (rising) and -29.7% (flat) held to settlement, the 69 mid-range buys +5 to +6%; the top fifth was the worse place 3 to 6, 6 to 9 and 9 to 15 minutes in. `rows` are (time, YES mid), oldest first. None with under QUOTE_WAVE_MIN seconds of quotes, a newest quote over 10 s old or a mid that never moved."""
+    ts = [r[0] for r in rows]
+    i = bisect.bisect_right(ts, at) - 1
+    if i < 0 or ts[i] < at - 10.0:
+        return None
+    n = int(at - max(opened, ts[0]))
+    if n < QUOTE_WAVE_MIN:
+        return None
+    seq = []
+    for k in range(n + 1):
+        idx = bisect.bisect_right(ts, at - n + k) - 1
+        if idx < 0:
+            return None
+        seq.append(rows[idx][1] if side == "yes" else 1.0 - rows[idx][1])
+    sq = sum((b - a) ** 2 for a, b in itertools.pairwise(seq))
+    if sq <= 0:
+        return None
+    unit = math.sqrt(sq / n) * math.sqrt(60.0)
+    return _path_features([x / unit for x in seq])
+
+
+def quote_wave_now(ticker: str, side: str, opened: float, now: float | None = None) -> dict | None:
+    """quote_wave_features from the market's quote mids held in memory (ticks.mids), or None."""
+    now = time.time() if now is None else now
+    return quote_wave_features(ticks_mod.mids.rows(ticker), side, opened, now)
+
+
 def pretrend_features(ts: Sequence[float], values: Sequence[float], side: str, at: float, span: float = 420.0, gap: float = 90.0) -> float | None:
     """The bet side's drift over the span seconds that end gap seconds before the buy, in typical minutes (2026-11-06, user: a jumpy stretch is read by the trend before it). The index on a 1 s grid for 900 s; the unit is the root-mean-square one-second move times sqrt(60). Positive = the spot moved toward the bet's side. None when the history does not cover span + gap seconds."""
     i = bisect.bisect_right(ts, at) - 1
