@@ -123,3 +123,60 @@ def test_unit_the_rule_changes_a_lanes_version_only_when_set(tmp_path, monkeypat
     assert "flip_skip_minutes" not in lanes.settings_of(base, s)
     on = dataclasses.replace(base, flip_skip_minutes=9.0)
     assert lanes.version_of(base, s) != lanes.version_of(on, s)
+
+
+# The trailing-side buy (2026-11-16, user: "ok sounds good what you suggested"): lane fields entry_led_max and wave_pos_min. studies/results/2026-11-16-buy-state-table.txt.
+def comeback(now, opened, base=0.25, low=0.15, top=0.45, pull=None):
+    """(time, YES mid) rows: YES trails at `base`, dips to `low` mid-market, then climbs to `top`; `pull` sets where it ends (None = at `top`)."""
+    n = int(now - opened)
+    end = top if pull is None else pull
+    rows = []
+    for k in range(n + 1):
+        f = k / n
+        mid = base if f < 0.3 else low if f < 0.5 else low + (top - low) * (f - 0.5) / 0.4 if f < 0.9 else top + (end - top) * (f - 0.9) / 0.1
+        rows.append((opened + k, mid + (0.002 if k % 2 else -0.002)))
+    return rows
+
+
+TRAIL = "entry_led_max=0.2\nwave_quote=true\nwave_pos_min=0.2\nwave_pos_max=0.8"
+
+
+def test_integration_the_trailing_side_off_its_low_is_bought(tmp_path, monkeypatch):
+    now = time.time()
+    seed(comeback(now, now - 600.0, pull=0.33))  # trailed all market, off its low, not at its high
+    out = decide(tmp_path, monkeypatch, now, TRAIL, left=300.0)
+    assert out.action == "bet" and "[led 0.00]" in out.note and "[wave amp" in out.note
+
+
+def test_integration_the_side_that_led_is_not_bought(tmp_path, monkeypatch):
+    now = time.time()
+    seed(comeback(now, now - 600.0, pull=0.33))  # the same market's NO led it
+    out = decide(tmp_path, monkeypatch, now, TRAIL, side="no", left=300.0)
+    assert out.action == "pass" and "the lane buys a side that led 20% or less" in out.note
+
+
+def test_integration_the_trailing_side_at_its_low_or_its_high_is_not_bought(tmp_path, monkeypatch):
+    now = time.time()
+    seed(comeback(now, now - 600.0))  # ends at the top of its climb
+    out = decide(tmp_path, monkeypatch, now, TRAIL, left=300.0)
+    assert out.action == "pass" and "waits for the low" in out.note
+    seed(comeback(now, now - 600.0, pull=0.16))  # fell back to its low
+    out = decide(tmp_path, monkeypatch, now, TRAIL, left=300.0)
+    assert out.action == "pass" and "still at its low" in out.note
+
+
+def test_integration_with_no_reading_the_trailing_lane_does_not_buy(tmp_path, monkeypatch):
+    now = time.time()
+    ticks.mids.clear()
+    out = decide(tmp_path, monkeypatch, now, TRAIL, left=300.0)
+    assert out.action == "pass" and "[led unreadable" in out.note
+
+
+def test_unit_the_trailing_settings_change_a_lanes_version_only_when_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
+    out = lanes.settings_of(base, s)
+    assert "entry_led_max" not in out and "wave_pos_min" not in out
+    assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, entry_led_max=0.2), s)
+    assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, wave_pos_min=0.2), s)

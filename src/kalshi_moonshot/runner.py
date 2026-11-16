@@ -575,7 +575,7 @@ def evaluate(
             note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
-    if bet and spec.flip_skip_minutes > 0:
+    if bet and (spec.flip_skip_minutes > 0 or spec.entry_led_max < 1.0):
         from . import variants as _variants
 
         left_s = shot.hours_to_close * 3600.0
@@ -584,14 +584,20 @@ def evaluate(
         except Exception as exc:
             led = None
             log.warning("flip unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if led is None:
+        if led is None and spec.entry_led_max < 1.0:
+            bet = False
+            note = f"[led unreadable: under 90 s of this market's quotes] the lane buys only a side whose share of the lead it can read. {note}"
+        elif led is None:
             note = f"[flip unreadable: under 90 s of this market's quotes] {note}"  # no reading is not a reason to sit out: the other gates decide
-        elif 900.0 - left_s < spec.flip_skip_minutes * 60.0 and 1.0 - led >= spec.flip_led_share:
+        elif led > spec.entry_led_max:
+            bet = False
+            note = f"[led {led:.2f}] this side led {100 * led:.0f}% of the market so far; the lane buys a side that led {100 * spec.entry_led_max:.0f}% or less (the one that trailed). {note}"
+        elif spec.flip_skip_minutes > 0 and 900.0 - left_s < spec.flip_skip_minutes * 60.0 and 1.0 - led >= spec.flip_led_share:
             bet = False
             note = f"[flip: led {led:.2f}] the other side led {100 * (1 - led):.0f}% of the market so far and it is {(900.0 - left_s) / 60.0:.1f} minutes in (the lane skips a new favorite before minute {spec.flip_skip_minutes:g}). {note}"
         else:
             note = f"[led {led:.2f}] {note}"
-    if bet and (spec.wave_amp_min > 0 or spec.wave_pos_max < 1.0 or spec.wave_turn_seconds > 0):
+    if bet and (spec.wave_amp_min > 0 or spec.wave_pos_max < 1.0 or spec.wave_pos_min > 0 or spec.wave_turn_seconds > 0):
         from . import variants as _variants
 
         try:
@@ -607,6 +613,9 @@ def evaluate(
         elif wave["amp"] < spec.wave_amp_min:
             bet = False
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the swing is under the lane's {spec.wave_amp_min:g} typical minutes. {note}"
+        elif wave["pos"] < spec.wave_pos_min:
+            bet = False
+            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the buy is under {spec.wave_pos_min:g} of the range: the side is still at its low. {note}"
         elif wave["pos"] > spec.wave_pos_max:
             bet = False
             note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the buy is above {spec.wave_pos_max:g} of the swing's range (waits for the low). {note}"
