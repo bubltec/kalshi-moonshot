@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Send this Mac's lane file and .env to the Ohio host. The bot picks them up on its next decision.
 #   scripts/cloud_push.sh            # strategies.toml, .env, and .secrets
-#   scripts/cloud_push.sh --build    # that, then a new image and a restart of the bot (the tape recorder container keeps running)
+#   scripts/cloud_push.sh --build    # a new image first, a check that the host can pull it, then those files and a restart of the bot (the tape recorder container keeps running). If the image cannot be pulled, nothing is sent
 #   scripts/cloud_push.sh --build --recorder   # also move the recorder to this image: it restarts, and the tape has a gap of a few seconds. Only when the recorder's own code changed (tape.py, kalshiws.py, perpref.py, the record command)
 # The admin page's Settings tab changes lanes on top of strategies.toml. Pushing the file while such changes exist would leave them shadowing it, so the push stops and lists them:
 #   python -m kalshi_moonshot.settings_sync fold    # keep the page's values in the file     (or `drop` to discard them), then push again
@@ -33,6 +33,58 @@ if [ "$ignore" = 0 ] && [ -f data/strategies.toml ]; then
   set -e
   if [ "$code" = 3 ]; then echo "not pushed: settle the page's changes first (see the top of this script)" >&2; exit 1; fi
   if [ "$code" != 0 ]; then echo "(could not check the page's changes; pushing anyway)" >&2; fi
+fi
+
+instance=$(aws "${profile[@]}" cloudformation describe-stacks --region "$region" --stack-name "$stack" \
+  --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text)
+[ -n "$instance" ] && [ "$instance" != "None" ] || { echo "stack $stack has no InstanceId in $region. Deploy it from infra/ first." >&2; exit 1; }
+
+# Run a script on the host and wait for it to end (up to 15 minutes: a cold pull of a new image is slow). Prints its status and error output; fails unless it succeeded.
+run_remote() {
+  local params cmd status
+  params=$(REMOTE="$2" python3 -c 'import json,os; print(json.dumps({"commands":[os.environ["REMOTE"]]}))')
+  cmd=$(aws "${profile[@]}" ssm send-command --region "$region" --instance-ids "$instance" \
+    --document-name AWS-RunShellScript --comment "$1" \
+    --parameters "$params" --query Command.CommandId --output text)
+  status=Pending
+  for _ in $(seq 1 180); do
+    sleep 5
+    status=$(aws "${profile[@]}" ssm get-command-invocation --region "$region" --command-id "$cmd" --instance-id "$instance" \
+      --query '[Status,StandardErrorContent]' --output text 2>/dev/null || echo Pending)
+    case "$status" in Pending*|InProgress*|Delayed*) ;; *) break ;; esac
+  done
+  echo "$status"
+  case "$status" in Success*) return 0 ;; *) return 1 ;; esac
+}
+
+# The image goes first, and the host must be able to pull every image it runs BEFORE the lane file and .env are sent (2026-11-16: the pull failed on a missing recorder tag after the new lane file was already in place, and the old image refused its new field for 100 seconds: every lane load raised an error). A build that cannot be deployed stops here with the host untouched.
+if [ "$build" = 1 ]; then
+  account=$(aws "${profile[@]}" sts get-caller-identity --query Account --output text)
+  registry="${account}.dkr.ecr.${region}.amazonaws.com"
+  if [ "$recorder" = 0 ] && ! aws "${profile[@]}" ecr describe-images --region "$region" --repository-name kalshi-moonshot-bot --image-ids imageTag=recorder >/dev/null 2>&1; then
+    echo "not pushed: the registry has no kalshi-moonshot-bot:recorder image, so the host's pull would fail. Restore that tag, or push with --build --recorder (the recorder restarts)." >&2
+    exit 1
+  fi
+  aws "${profile[@]}" ecr get-login-password --region "$region" | docker login --username AWS --password-stdin "$registry"
+  docker build --platform linux/arm64 -t "${registry}/kalshi-moonshot-bot:latest" .
+  docker build --platform linux/arm64 -f Dockerfile.db -t "${registry}/kalshi-moonshot-db:latest" .
+  docker push "${registry}/kalshi-moonshot-bot:latest"
+  docker push "${registry}/kalshi-moonshot-db:latest"
+  if [ "$recorder" = 1 ]; then  # the recorder container reads this tag; an ordinary --build leaves it where it was, so the recorder is not restarted with the bot
+    docker tag "${registry}/kalshi-moonshot-bot:latest" "${registry}/kalshi-moonshot-bot:recorder"
+    docker push "${registry}/kalshi-moonshot-bot:recorder"
+  fi
+  precheck=$(cat << 'EOF'
+set -euo pipefail
+[ -f /opt/moonshot/compose.yml ] && [ -f /mnt/moonshot/env/.env ] || { echo "first start: nothing to check"; exit 0; }
+aws ecr get-login-password --region REGION_HERE | docker login --username AWS --password-stdin REGISTRY_HERE >/dev/null 2>&1
+docker compose --env-file /mnt/moonshot/env/.env -f /opt/moonshot/compose.yml pull
+echo pulled
+EOF
+)
+  precheck=${precheck//REGION_HERE/$region}
+  precheck=${precheck//REGISTRY_HERE/$registry}
+  run_remote "moonshot-pull-check" "$precheck" || { echo "not pushed: the host could not pull the images (above). The lane file and .env were NOT sent; the bot runs on as it was." >&2; exit 1; }
 fi
 
 put() {
@@ -76,24 +128,6 @@ if [ -d .secrets ]; then
   done
 fi
 
-if [ "$build" = 1 ]; then
-  account=$(aws "${profile[@]}" sts get-caller-identity --query Account --output text)
-  registry="${account}.dkr.ecr.${region}.amazonaws.com"
-  aws "${profile[@]}" ecr get-login-password --region "$region" | docker login --username AWS --password-stdin "$registry"
-  docker build --platform linux/arm64 -t "${registry}/kalshi-moonshot-bot:latest" .
-  docker build --platform linux/arm64 -f Dockerfile.db -t "${registry}/kalshi-moonshot-db:latest" .
-  docker push "${registry}/kalshi-moonshot-bot:latest"
-  docker push "${registry}/kalshi-moonshot-db:latest"
-  if [ "$recorder" = 1 ]; then  # the recorder container reads this tag; an ordinary --build leaves it where it was, so the recorder is not restarted with the bot
-    docker tag "${registry}/kalshi-moonshot-bot:latest" "${registry}/kalshi-moonshot-bot:recorder"
-    docker push "${registry}/kalshi-moonshot-bot:recorder"
-  fi
-fi
-
-instance=$(aws "${profile[@]}" cloudformation describe-stacks --region "$region" --stack-name "$stack" \
-  --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text)
-[ -n "$instance" ] && [ "$instance" != "None" ] || { echo "stack $stack has no InstanceId in $region. Deploy it from infra/ first." >&2; exit 1; }
-
 remote=$(cat << 'EOF'
 set -euo pipefail
 install -d -m 0700 /mnt/moonshot/env /mnt/moonshot/secrets /mnt/moonshot/data
@@ -132,15 +166,5 @@ EOF
 remote=${remote//REGION_HERE/$region}
 remote=${remote//BUILD_HERE/$build}
 
-params=$(REMOTE="$remote" python3 -c 'import json,os; print(json.dumps({"commands":[os.environ["REMOTE"]]}))')
-cmd=$(aws "${profile[@]}" ssm send-command --region "$region" --instance-ids "$instance" \
-  --document-name AWS-RunShellScript --comment "moonshot-sync" \
-  --parameters "$params" --query Command.CommandId --output text)
-aws "${profile[@]}" ssm wait command-executed --region "$region" --command-id "$cmd" --instance-id "$instance" || true
-status=$(aws "${profile[@]}" ssm get-command-invocation --region "$region" --command-id "$cmd" --instance-id "$instance" \
-  --query '[Status,StandardErrorContent]' --output text)
-echo "$status"
-case "$status" in
-  Success*) echo "pushed to ${instance}" ;;
-  *) exit 1 ;;
-esac
+run_remote "moonshot-sync" "$remote" || exit 1
+echo "pushed to ${instance}"
