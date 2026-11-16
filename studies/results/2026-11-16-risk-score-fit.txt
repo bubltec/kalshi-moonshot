@@ -1,0 +1,14 @@
+window: 2026-11-09 00:00 ET on; 84350 moments on days 11-09, 11-10, 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; scored walk-forward on 11-11, 11-12, 11-13, 11-14, 11-15, 11-16
+weights of the last fit (trained on every day before the last): price +0.873, cushion +0.299, led -0.306, place -0.049, drift -0.042, time -0.018
+log-loss on the held-out days (lower is better): Kalshi's mid 0.5036 | the score 0.5037
+
+where the score and Kalshi's mid disagree, who was right? (YES side, held-out days)
+  score 6+ points UNDER the mid  n    196
+  3 to 6 under                   n   2186 | Kalshi's mid said 59.6% | the score said 55.6% | YES actually won 62.4%
+  1 to 3 under                   n  13537 | Kalshi's mid said 66.7% | the score said 64.9% | YES actually won 64.7%
+  within 1 point                 n  27226 | Kalshi's mid said 45.4% | the score said 45.4% | YES actually won 45.1%
+  1 to 3 over                    n  15878 | Kalshi's mid said 32.0% | the score said 33.7% | YES actually won 34.7%
+  3 to 6 over                    n   3439 | Kalshi's mid said 38.0% | the score said 41.9% | YES actually won 36.9%
+  score 6+ points OVER the mid   n    191
+
+Notes: run 2026-11-16 18:45 ET on the host. Every factor at a moment is read from data stamped at or before it (the index in 5 s buckets stamped at their end). Walk-forward by day. The fit gives the cushion and the lead some weight in-sample, but on the held-out days the score is no better than Kalshi's mid, and where the two differ by 3 to 6 points the mid was the closer one both ways.
