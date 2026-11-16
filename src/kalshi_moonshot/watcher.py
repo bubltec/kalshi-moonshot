@@ -245,7 +245,7 @@ class Target:
     risk_sure_level: float = 0.0
     risk_take_early_bid: float = -1.0  # sell at once at this bid in the first risk_take_early_seconds (lane field curve_take_early_bid)
     risk_take_early_seconds: float = 360.0
-    risk_long_scales: tuple = ()  # the minutes the hour view reads its movement over, together (lane field curve_risk_long_scales); empty = the last hour
+    risk_long_scales: tuple = ()  # the minutes the long layer reads its movement over, together (lane field curve_risk_long_scales); empty = the last hour
     risk_nudge_units: float = 0.0  # the squeeze has no cap: the allowed miss is this many typical minutes of the market times how strongly everything agrees (lane field nudge_units; 0 = the cents cap)
     risk_nudge_hour: bool = False  # the squeeze's cap is scaled by the hour's width correction (lane field nudge_hour_factor)
     risk_squeeze: float = 0.0  # the most a loss may be short of the max loss and still count as reaching it (lane field squeeze_max)
@@ -262,7 +262,7 @@ class Target:
     risk_long_fallback: bool = False  # logged once: the long layer is read from the spot index because the perp is silent
     risk_long_missing: bool = False  # logged once: no long layer at all
     risk_logged: bool = False
-    risk_held_kind: str = ""  # what last held a sale this bet's risk exit wanted ("hour view", "wait"), so the hold is logged once as it begins
+    risk_held_kind: str = ""  # what last held a sale this bet's risk exit wanted ("long layer", "wait"), so the hold is logged once as it begins
     comeback_noted: float = 0.0
     hold_since: float = 0.0  # when the comeback hold began (0 = none)
     hold_ref: float = 0.0  # the cushion (typical minutes) when it began
@@ -996,7 +996,7 @@ class ProfitWatcher:
             t.risk_take_hist.append((now, bid))
             while t.risk_take_hist and t.risk_take_hist[0][0] < now - max(60.0, 2.0 * look):
                 t.risk_take_hist.pop(0)
-        # The squeeze (lane field squeeze_max): the mirror of the buy's stretch, and as small. When a loss is just short of the max loss's depth, it counts as reaching it if it is short by less than the nudge the lane allows: a cent or two at most, times the history (the bid is sliding over the look back: all or nothing) times the clock (the share of the market already gone, so early in a market it is nothing). Nothing else about the sale changes: the hour view and the stop's wait still apply.
+        # The squeeze (lane field squeeze_max): the mirror of the buy's stretch, and as small. When a loss is just short of the max loss's depth, it counts as reaching it if it is short by less than the nudge the lane allows: a cent or two at most, times the history (the bid is sliding over the look back: all or nothing) times the clock (the share of the market already gone, so early in a market it is nothing). Nothing else about the sale changes: the long layer and the stop's wait still apply.
         allowed, squeezed, hour_scale = 0.0, "", 1.0
         if (t.risk_squeeze > 0 or t.risk_nudge_units > 0) and pnl < 0:
             unit_now = self._risk_unit(t, now)
@@ -1006,7 +1006,7 @@ class ProfitWatcher:
                 allowed = nudge_in_units(t.risk_nudge_units, unit_now, 1.0 if sliding else 0.0, curverisk.squeeze_clock(left, 900.0), hour_scale)
             else:
                 allowed = nudge(t.risk_squeeze, 1.0 if sliding else 0.0, curverisk.squeeze_clock(left, 900.0), hour_scale)
-        if t.risk_take:  # the profit take comes before the hour view: a bet that is well ahead is the one to cash, whatever the hour says
+        if t.risk_take:  # the profit take comes before the long layer: a bet that is well ahead is the one to cash, whatever the hour says
             gain = net - basis
             room, rebuy = 1.0 - basis, fee_per_contract(bid)
             unit = self._risk_unit(t, now)
@@ -1055,7 +1055,7 @@ class ProfitWatcher:
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= curverisk.confirm_bar(t.risk_confirm, left):
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             if bid >= CURVE_MIN_BID and (curverisk.stopped(pnl, r.q, t.risk_max_loss) or curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):
-                self._risk_held(t, r, bid, now, left, pnl, "hour view", f"the sale was wanted but the hour view's chance {long_chance:.3f} is at or over its bar {curverisk.confirm_bar(t.risk_confirm, left):.3f}")
+                self._risk_held(t, r, bid, now, left, pnl, "long layer", f"the sale was wanted but the long layer's chance {long_chance:.3f} is at or over its bar {curverisk.confirm_bar(t.risk_confirm, left):.3f}")
             return None
         stop = curverisk.stopped(pnl, r.q, t.risk_max_loss)  # the max loss
         if not stop and allowed > 0 and t.risk_max_loss > 0:

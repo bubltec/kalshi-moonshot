@@ -921,7 +921,7 @@ def test_integration_a_chance_three_cents_under_the_price_still_sells_and_the_no
     assert sig is not None and sig.why.startswith("curve risk exit (profit take)") and "is not within 0.02 of the" in sig.why
 
 
-# ---- the hour view's hold fades over the last fifth (2026-11-15, ETH 09:00 YES: the stop wanted out from 104 s left, the hour view stayed at 0.44 to 0.61) ----
+# ---- the long layer's hold fades over the last fifth (2026-11-15, ETH 09:00 YES: the stop wanted out from 104 s left, the long layer stayed at 0.44 to 0.61) ----
 def slide_at(w, left0):
     for k, bid in enumerate(PATH):
         yes_bid(w, bid, left0 - 3 * k)
@@ -959,12 +959,12 @@ def held_rows(tmp_path):
 
 
 def test_integration_a_stop_the_hour_view_holds_is_written_down_once_with_its_reason(tmp_path, monkeypatch):
-    """2026-11-15: ETH 09:00 and three more bets were held to a full loss and nothing recorded why. A wanted sale that the hour view holds is logged once, and the row says so."""
+    """2026-11-15: ETH 09:00 and three more bets were held to a full loss and nothing recorded why. A wanted sale that the long layer holds is logged once, and the row says so."""
     seed_perp(monkeypatch, last_over_open=0.004)
     w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
     assert slide(w) == []
     rows = held_rows(tmp_path)
-    assert len(rows) == 1 and rows[0]["held"].startswith("hour view: ") and rows[0]["live"] is True and rows[0]["ticker"] == TICKER
+    assert len(rows) == 1 and rows[0]["held"].startswith("long layer: ") and rows[0]["live"] is True and rows[0]["ticker"] == TICKER
 
 
 def test_integration_a_stop_waiting_out_its_wait_is_written_down(tmp_path, monkeypatch):
@@ -1040,7 +1040,7 @@ def test_integration_without_a_cap_the_clock_still_shrinks_it_early_in_the_marke
     assert early is None  # ten minutes left: the clock share is near zero, so is the nudge
 
 
-# ---- the hour view read at several scales together (2026-11-15, user: "the hour view should look further, but we need the context of the current hour") ----
+# ---- the long layer read at several scales together (2026-11-15, user: "the long layer should look further, but we need the context of the current hour") ----
 def test_integration_the_lanes_hour_view_scales_reach_the_watched_position(tmp_path, monkeypatch):
     seed_perp(monkeypatch, last_over_open=0.004)
     w = held(tmp_path, monkeypatch, live=True, confirm=0.4, long_scales="[15,30,60]")

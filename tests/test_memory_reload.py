@@ -187,7 +187,7 @@ def test_integration_after_stage_one_alone_the_decision_path_has_its_hour(tmp_pa
     got = ticks_mod.warm_from_tape(s, ["BTCUSD_RTI"], now, hours=ticks_mod.FIRST_STAGE_HOURS)
     assert 0 < got < n  # a part of the tape, not all of it
     hour = ticks_mod.history.window("BTCUSD_RTI", now - 3700.0, now)
-    assert hour is not None and len(hour[0]) >= 360  # the last hour is there: the width and the exit's hour view read from it
+    assert hour is not None and len(hour[0]) >= 360  # the last hour is there: the width and the exit's long layer read from it
     assert ticks_mod.history.window("BTCUSD_RTI", now - 3 * 3600.0, now) is None  # a reader that wants more asks the tape, as before
 
 

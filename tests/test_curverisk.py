@@ -389,11 +389,11 @@ def test_unit_the_squeeze_clock_is_nothing_in_the_first_half_of_a_market():
 
 
 def test_unit_the_hour_views_hold_fades_over_the_last_fifth_of_the_market():
-    # 2026-11-15: the bar the hour view must reach to hold a risk sale is the lane's 0.4 until the last fifth (180 s of 900), then rises to 1.0 at the close
+    # 2026-11-15: the bar the long layer must reach to hold a risk sale is the lane's 0.4 until the last fifth (180 s of 900), then rises to 1.0 at the close
     assert curverisk.confirm_bar(0.4, 900.0) == 0.4
     assert curverisk.confirm_bar(0.4, 181.0) == 0.4
     assert curverisk.confirm_bar(0.4, 180.0) == 0.4
     assert abs(curverisk.confirm_bar(0.4, 90.0) - 0.7) < 1e-9
     assert abs(curverisk.confirm_bar(0.4, 37.0) - (0.4 + 0.6 * (1.0 - 37.0 / 180.0))) < 1e-9
     assert curverisk.confirm_bar(0.4, 0.0) == 1.0 and curverisk.confirm_bar(0.4, -5.0) == 1.0
-    assert curverisk.confirm_bar(-1.0, 50.0) == -1.0  # a lane that does not ask for the hour view is left as it was
+    assert curverisk.confirm_bar(-1.0, 50.0) == -1.0  # a lane that does not ask for the long layer is left as it was

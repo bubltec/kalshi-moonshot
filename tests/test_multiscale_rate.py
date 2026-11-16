@@ -1,4 +1,4 @@
-"""The hour view's movement read at several scales together (2026-11-15, user: "the hour view should look further, but we need the context of the current hour ... in 15, 30, 60, 120, 180 mins")."""
+"""The long layer's movement read at several scales together (2026-11-15, user: "the long layer should look further, but we need the context of the current hour ... in 15, 30, 60, 120, 180 mins")."""
 import math
 import random
 
