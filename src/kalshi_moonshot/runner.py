@@ -898,7 +898,7 @@ def evaluate(
             )
     if spec.entry_spike_view:  # shadow: on passes as well as buys, so the skipped decisions can be scored too
         try:
-            sv = side_spike(shot)
+            sv = side_spike_view(shot)
         except Exception as exc:
             sv = None
             log.warning("spike view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
@@ -1335,7 +1335,7 @@ def side_phase(shot: LongShot, now: float | None = None) -> dict[int, float] | N
     return curverisk.side_slopes(got[0], got[1], now, shot.side) if got else None
 
 
-def side_spike(shot: LongShot, now: float | None = None) -> tuple[float, int] | None:
+def side_spike_view(shot: LongShot, now: float | None = None) -> tuple[float, int] | None:
     """The 3-hour spike reading for the buy's note (lane field entry_spike_view): curverisk.spike_view on the series' Kalshi perp. None when the series has no perp or the 3 hours are not in memory."""
     from . import ticks as ticks_mod
     from .watcher import perp_index
