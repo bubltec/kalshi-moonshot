@@ -1,0 +1,28 @@
+window: live crypto_multiscale bets from 11-15 16:31 ET (the edge screen switched off) to now; 157 settled bets with the ladder's chance recorded
+
+1. what the screen would have done (pass = the ladder's edge is at least 0.10 of the room left)
+  all bets                                     n 157 | won  69% | ask 0.714 | held net per $   -4.0% | as traded $ -174.25 on $2461
+  the screen would have passed                 n  19 | won  79% | ask 0.751 | held net per $   +7.1% | as traded $   +1.10 on $377
+  the screen would have dropped                n 138 | won  68% | ask 0.708 | held net per $   -5.6% | as traded $ -175.35 on $2085
+
+2. by the ladder's edge (its chance less the ask and fee)
+  edge under -0.10                             n  10 | won 100% | ask 0.753 | held net per $  +31.1% | as traded $  +17.70 on $151
+  -0.10 to -0.05                               n  11 | won  82% | ask 0.713 | held net per $  +11.7% | as traded $  +13.83 on $196
+  -0.05 to 0                                   n 113 | won  65% | ask 0.705 | held net per $   -9.5% | as traded $ -219.17 on $1688
+  0 to +0.05                                   n  11 | won  64% | ask 0.750 | held net per $  -18.1% | as traded $  +21.97 on $216
+  +0.05 and over                               n  12 | won  83% | ask 0.727 | held net per $  +17.1% | as traded $   -8.58 on $210
+
+3. by six-hour block: passed against dropped
+  11-15 12:00 to 18:00 | passed: n  3 held  +21.8% traded $  +8.75 | dropped: n 22 held   +0.3% traded $ +14.57
+  11-15 18:00 to 24:00 | passed: n  7 held   +0.4% traded $ -31.71 | dropped: n 48 held   -5.7% traded $ -52.73
+  11-16 00:00 to 06:00 | passed: n  3 held  +38.7% traded $ +22.07 | dropped: n 36 held  -13.5% traded $-103.91
+  11-16 06:00 to 12:00 | passed: n  4 held  -35.2% traded $  -9.06 | dropped: n 24 held   -0.8% traded $ -14.20
+  11-16 12:00 to 18:00 | passed: n  2 held  +45.4% traded $ +11.04 | dropped: n  8 held   +0.5% traded $ -19.09
+
+4. does its own recent record say when to trust it? (the 20 bets of the same kind before each bet)
+  dropped: after a paying stretch              n  27 | won  48% | ask 0.694 | held net per $  -31.7% | as traded $  -79.01 on $418
+  dropped: after a losing stretch              n  91 | won  73% | ask 0.713 | held net per $   +0.1% | as traded $ -105.67 on $1424
+  passed: after a paying stretch               n   0
+  passed: after a losing stretch               n   0
+
+Notes: run 2026-11-16 about 17:40 ET on the host. From the decisions table alone: the ask, the ladder's chance and the stake as recorded at the buy, the sale or settlement after it; no other feed is joined in. 157 bets in 25 hours; the screen would have passed 19 of them, so that row and the small edge bands (10 to 12 bets) can move a long way. Section 4 looks only backward from each bet (the 20 before it).
