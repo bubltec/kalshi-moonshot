@@ -445,3 +445,42 @@ def test_without_the_options_the_queue_is_never_read(setup, monkeypatch):
     client.order_queue_position = lambda oid: called.append(oid)
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert called == [] and "Queue" not in got.note
+
+
+# ---- the queue cutoff from the lane's own filled bids (2026-11-16, user: "build that") ----
+def test_the_cutoff_is_a_quantile_of_the_filled_bids_queue_and_needs_ten_fills(tmp_path):
+    from kalshi_moonshot import queuehist
+
+    queuehist.reset()
+    now = 1_000_000.0
+    for i in range(9):
+        queuehist.record(tmp_path, "L", "T", 10.0 * (i + 1), True, now - 60)
+    assert queuehist.cutoff(tmp_path, "L", 0.8, 3.0, now) is None  # nine fills: no cutoff, no skip
+    queuehist.record(tmp_path, "L", "T", 100.0, True, now - 50)
+    queuehist.record(tmp_path, "L", "T", 5000.0, False, now - 40)  # a miss is not part of the cutoff
+    assert queuehist.cutoff(tmp_path, "L", 0.8, 3.0, now) == 82.0
+    assert queuehist.cutoff(tmp_path, "OTHER", 0.8, 3.0, now) is None  # per lane
+    assert queuehist.cutoff(tmp_path, "L", 0.8, 3.0, now + 4 * 3600) is None  # older than the window
+    queuehist.reset()
+    assert queuehist.cutoff(tmp_path, "L", 0.8, 3.0, now) == 82.0  # reloaded from the file
+
+
+def test_a_bid_over_the_lanes_own_cutoff_is_skipped_for_the_ask(setup, monkeypatch):
+    from kalshi_moonshot import queuehist
+
+    s, store, shot, spec = setup
+    sp = spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, buy_rest_queue_quantile=0.8)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    queuehist.reset()
+    for i in range(10):
+        queuehist.record(s.data_dir, sp.name, "T", 10.0 * (i + 1), True)
+    client = RestClient(fills=[1.5], asks=[0.30])
+    book_ahead(shot, 500.0)
+    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
+    assert client.rested == [] and got.filled == 1.5 and client.ids == ["k-take"]
+    client = RestClient(fills=[1.5], asks=[0.30], rest_fill=1.5)
+    book_ahead(shot, 20.0)
+    got = runner.place(s, client, store, shot, "why", 1.5)
+    assert client.rested and got.filled == 1.5  # a shallow queue rests as usual, and the fill is recorded
+    assert queuehist.cutoff(s.data_dir, sp.name, 0.5, 3.0) is not None
+    queuehist.reset()

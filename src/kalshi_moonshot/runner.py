@@ -1861,14 +1861,17 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
         if price is None:
             return Placed(skip)
     ahead_at_bid = None
-    if spec.buy_rest_queue_note or spec.buy_rest_queue_max > 0:
+    queue_cut = spec.buy_rest_queue_max if spec.buy_rest_queue_max > 0 else None
+    if spec.buy_rest_queue_note or queue_cut is not None or spec.buy_rest_queue_quantile > 0:
         # The queue ahead of a bid, from the websocket book: price-time priority puts the shares at better prices first, then the ones already resting at our price. No REST call.
-        from . import ticks
+        from . import queuehist, ticks
 
         got = ticks.books.shares_ahead(shot.ticker, shot.side, price)
         ahead_at_bid = got[1] if got is not None else None
-        if spec.buy_rest_queue_max > 0 and ahead_at_bid is not None and ahead_at_bid > spec.buy_rest_queue_max:
-            return Placed(f"The resting bid was not placed and did not fill: {ahead_at_bid:g} shares ahead of our {count:g}, over the lane's {spec.buy_rest_queue_max:g}; the ask is taken instead.")
+        if queue_cut is None and spec.buy_rest_queue_quantile > 0:
+            queue_cut = queuehist.cutoff(s.data_dir, spec.name, spec.buy_rest_queue_quantile, spec.buy_rest_queue_hours)  # None until enough of this lane's bids have filled
+        if queue_cut is not None and ahead_at_bid is not None and ahead_at_bid > queue_cut:
+            return Placed(f"The resting bid was not placed and did not fill: {ahead_at_bid:g} shares ahead of our {count:g}, over the lane's {queue_cut:g}; the ask is taken instead.")
     started = time.time()
     try:
         resp = client.buy_resting(shot.ticker, shot.side, count, price, wait, client_order_id=order_key)
@@ -1897,7 +1900,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     filled = spent = fee_paid = 0.0
     seen: set[str] = set()
     deadline = started + wait + 3.0
-    queue_text = f" Queue: {ahead_at_bid:g} shares ahead of our {count:g}." if ahead_at_bid is not None else (" Queue: not readable." if spec.buy_rest_queue_note or spec.buy_rest_queue_max > 0 else "")
+    queue_text = f" Queue: {ahead_at_bid:g} shares ahead of our {count:g}." if ahead_at_bid is not None else (" Queue: not readable." if spec.buy_rest_queue_note or spec.buy_rest_queue_max > 0 or spec.buy_rest_queue_quantile > 0 else "")
     while time.time() < deadline and filled < count - 1e-9:
         time.sleep(2.0)
         try:
@@ -1917,6 +1920,10 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     store.add_order(
         ticker=shot.ticker, env=s.env, count=count, price=price, fill_count=filled, cost_usd=spent, fee_usd=fee_paid, order_id=order_id, contract=shot.side,
     )
+    if ahead_at_bid is not None:
+        from . import queuehist
+
+        queuehist.record(s.data_dir, spec.name, shot.ticker, ahead_at_bid, filled > 0)
     if filled <= 0:
         return Placed(f"resting buy at {price:.2f} for {wait:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought.{queue_text}")
     return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}.{queue_text} {why}", filled, spent, price)
