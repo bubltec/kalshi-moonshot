@@ -1,0 +1,14 @@
+coins used 11, about 4309 one-minute readings each over 3 days (gaps in the tape count as one longer step)
+variance ratio VR(q): mean over coins | coins under 1
+  q =  2 min: 0.985 | 8 of 11
+  q =  3 min: 0.978 | 8 of 11
+  q =  5 min: 0.944 | 10 of 11
+  q =  8 min: 0.951 | 8 of 11
+  q = 15 min: 0.975 | 7 of 11
+  q = 30 min: 0.980 | 6 of 11
+  q = 60 min: 1.023 | 4 of 11
+autocorrelation of one-minute returns at lag 1..10 minutes (mean over coins): 1:-0.015 2:-0.003 3:-0.030 4:-0.009 5:+0.039 6:+0.006 7:-0.014 8:+0.032 9:+0.019 10:-0.000
+autocorrelation of non-overlapping 5-minute returns at lag 1..4 (5 to 20 minutes): 5m:+0.016 10m:-0.005 15m:-0.017 20m:+0.005
+volatility memory: autocorrelation of |one-minute return| at lag (minutes): 1:+0.273 2:+0.216 3:+0.240 5:+0.204 10:+0.177 15:+0.172 20:+0.179 30:+0.159 60:+0.145
+DONE
+	
