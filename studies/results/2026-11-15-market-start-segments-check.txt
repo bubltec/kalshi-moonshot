@@ -8,5 +8,8 @@ variant | log loss | change vs live (mean +- se) on all samples | on the last th
   nested: so far, 60, 180                             | 0.4434 | -0.0038 +- 0.0006 (n 11788) | -0.0042 +- 0.0012
   adjacent: so far, 15 before, 60 before, 180 before  | 0.4431 | -0.0041 +- 0.0006 (n 11788) | -0.0013 +- 0.0012
   adjacent: so far, 15 before, 60 before              | 0.4446 | -0.0027 +- 0.0005 (n 11788) | -0.0007 +- 0.0010
+  cumulative: so far, +15, +60, +180 past the open (e, e+15, e+60, e+180)| 0.4439 | -0.0034 +- 0.0006 (n 11788) | -0.0037 +- 0.0012
+  cumulative chain: e, e+15, e+75, e+255              | 0.4436 | -0.0036 +- 0.0006 (n 11788) | -0.0041 +- 0.0013
+  cumulative: so far, +15, +60 (e, e+15, e+60)        | 0.4458 | -0.0014 +- 0.0007 (n 11788) | -0.0041 +- 0.0015
 DONE
 	

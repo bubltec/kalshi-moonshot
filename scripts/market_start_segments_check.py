@@ -3,6 +3,7 @@
 One question, same samples as scripts/multiscale_hour_check.py (every 15-minute window of the last DAYS days for 11 coins, read at 600, 450, 300 and 180 seconds left, so 5, 7.5, 10 and 12 minutes into the market; the YES chance from the perp's distance to its window-open reference over rate x sqrt(time left); the outcome the perp's direction over the window; Brier, log loss and the paired log-loss change against the live 60-minute block, over all samples and over the last third in time). The movement rate is the log-mean (geometric mean) of the rates of these segments:
   nested: the market so far (from its open to now, e minutes), the last 15, the last 60 and the last 180 minutes, every one ending now;
   adjacent: the market so far [open, now], then the 15 minutes before the open, the 60 before that, the 180 before that (separate stretches, going back in time, none overlapping);
+  cumulative: windows that start at the open and reach back by 15, 60 and 180 minutes past it (e, e+15, e+60, e+180, every one ending now), and the chained lengths e, e+15, e+75, e+255;
   and, for reference, the nested set without the market-so-far segment (15, 60, 180), the market-so-far alone, and the market-so-far with 60 and 180.
 Each segment rate is the root-mean-square one-minute move in it over sqrt(60). Not split by curve shape. A check of the chance's quality, not a rule.
 
@@ -75,6 +76,9 @@ variants = {
     "nested: so far, 60, 180": lambda m2, e: geo([rate(m2, 0, e), rate(m2, 0, 60), rate(m2, 0, 180)]),
     "adjacent: so far, 15 before, 60 before, 180 before": lambda m2, e: geo([rate(m2, 0, e), rate(m2, e, e + 15), rate(m2, e + 15, e + 75), rate(m2, e + 75, e + 255)]),
     "adjacent: so far, 15 before, 60 before": lambda m2, e: geo([rate(m2, 0, e), rate(m2, e, e + 15), rate(m2, e + 15, e + 75)]),
+    "cumulative: so far, +15, +60, +180 past the open (e, e+15, e+60, e+180)": lambda m2, e: geo([rate(m2, 0, e), rate(m2, 0, e + 15), rate(m2, 0, e + 60), rate(m2, 0, e + 180)]),
+    "cumulative chain: e, e+15, e+75, e+255": lambda m2, e: geo([rate(m2, 0, e), rate(m2, 0, e + 15), rate(m2, 0, e + 75), rate(m2, 0, e + 255)]),
+    "cumulative: so far, +15, +60 (e, e+15, e+60)": lambda m2, e: geo([rate(m2, 0, e), rate(m2, 0, e + 15), rate(m2, 0, e + 60)]),
 }
 
 

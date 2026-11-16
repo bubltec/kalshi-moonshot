@@ -88,3 +88,13 @@ def test_unit_long_chance_passes_the_elapsed_time_through():
     a = curverisk.long_chance(ts, vs, 0.0, ref, "yes", 300.0, scales=(0, 15, 60, 180), elapsed=600.0)
     b = curverisk.long_chance(ts, vs, 0.0, ref, "yes", 300.0, scales=(10, 15, 60, 180))
     assert a == pytest.approx(b)
+
+
+def test_unit_a_negative_scale_reaches_back_that_many_minutes_past_the_open():
+    ts, vs = series(300, wild_from=40)
+    e = 8 * 60.0
+    got = curverisk.multiscale_rate(ts, vs, 0.0, (0, -15, -75, -255), elapsed=e)
+    parts = [curverisk.multiscale_rate(ts, vs, 0.0, (m,)) for m in (8, 23, 83, 263)]
+    assert got == pytest.approx(math.exp(sum(math.log(x) for x in parts) / 4))
+    assert curverisk.multiscale_rate(ts, vs, 0.0, (-15,)) is None  # no elapsed time: it cannot be placed
+    assert curverisk.multiscale_rate(ts, vs, 0.0, (60, -15), elapsed=e) == pytest.approx(curverisk.multiscale_rate(ts, vs, 0.0, (60, 23)))
