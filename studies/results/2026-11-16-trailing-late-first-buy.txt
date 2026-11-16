@@ -1,0 +1,31 @@
+window: 2026-11-09 00:00 ET on; 6615 settled markets, 5947 with quotes, 3044 with a trailing-side buy (51% of markets)
+  all                          n 3044 | won  30% needs  29% | ask 0.275 | held net per $   +4.9% | the other side at that second   -6.7%
+
+by day
+  11-09                        n  421 | won  26% needs  27% | ask 0.255 | held net per $   -1.8% | the other side at that second   -3.5%
+  11-10                        n  455 | won  29% needs  28% | ask 0.268 | held net per $   +8.7% | the other side at that second   -6.4%
+  11-11                        n  441 | won  30% needs  30% | ask 0.287 | held net per $   +1.4% | the other side at that second   -4.6%
+  11-12                        n  267 | won  31% needs  28% | ask 0.266 | held net per $  +13.4% | the other side at that second  -10.1%
+  11-13                        n  470 | won  29% needs  30% | ask 0.282 | held net per $   +3.6% | the other side at that second   -4.8%
+  11-14                        n  392 | won  36% needs  29% | ask 0.274 | held net per $  +23.3% | the other side at that second  -16.7%
+  11-15                        n  435 | won  30% needs  30% | ask 0.285 | held net per $   +2.0% | the other side at that second   -6.2%
+  11-16                        n  163 | won  25% needs  30% | ask 0.287 | held net per $  -24.7% | the other side at that second   +1.8%
+
+by the ask
+  ask 0.15 to 0.22             n 1132 | won  19% needs  19% | ask 0.177 | held net per $   +4.0% | the other side at that second   -4.6%
+  ask 0.22 to 0.30             n  781 | won  31% needs  27% | ask 0.255 | held net per $  +14.6% | the other side at that second  -10.1%
+  ask 0.30 to 0.40             n  637 | won  35% needs  36% | ask 0.339 | held net per $   -0.3% | the other side at that second   -6.5%
+  ask 0.40 to 0.51             n  494 | won  46% needs  47% | ask 0.450 | held net per $   -1.5% | the other side at that second   -6.2%
+
+by the minute of the buy
+  minute 7.5 to 8.5            n 2272 | won  32% needs  31% | ask 0.296 | held net per $   +4.2% | the other side at that second   -6.3%
+  minute 8.5 to 10             n  384 | won  27% needs  23% | ask 0.220 | held net per $  +15.2% | the other side at that second   -9.1%
+  minute 10 to 12              n  276 | won  21% needs  22% | ask 0.208 | held net per $   -6.7% | the other side at that second   -4.3%
+  minute 12 to 14.5            n  112 | won  28% needs  23% | ask 0.217 | held net per $  +12.5% | the other side at that second  -12.3%
+
+by where it sat in its range
+  position 0.2 to 0.4          n 2017 | won  27% needs  24% | ask 0.231 | held net per $  +10.6% | the other side at that second   -8.4%
+  position 0.4 to 0.6          n  549 | won  33% needs  35% | ask 0.331 | held net per $   -4.0% | the other side at that second   -4.4%
+  position 0.6 to 0.8          n  478 | won  38% needs  41% | ask 0.398 | held net per $   -8.5% | the other side at that second   -1.9%
+
+Notes: run 2026-11-16 about 18:00 to 18:09 ET on the host. Every reading at a moment uses only data stamped at or before it. Bands fixed before the run.

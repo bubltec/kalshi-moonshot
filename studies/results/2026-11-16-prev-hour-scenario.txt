@@ -1,0 +1,22 @@
+window: 2026-11-09 00:00 ET on; 654 quarter-hours with a minute-7.5 reading, 640 with a full previous hour; 5468 markets
+  every window                             windows 640, markets 5358 | leader won  75% at 0.772:   -5.4% | trailer at 0.240:   -3.6%
+
+1. by the previous hour's share of leaders that held
+  under 65% held (a flipping hour)         windows 153, markets 1293 | leader won  74% at 0.771:   -5.5% | trailer at 0.241:   -2.9%
+  65 to 75%                                windows 149, markets 1223 | leader won  74% at 0.772:   -6.1% | trailer at 0.240:   -4.1%
+  75 to 85%                                windows 182, markets 1533 | leader won  74% at 0.771:   -5.8% | trailer at 0.241:   -0.3%
+  85% and over (leaders held)              windows 156, markets 1309 | leader won  76% at 0.774:   -4.0% | trailer at 0.238:   -7.5%
+
+2. by the previous hour's flips per market
+  under 1 flip a market                    windows  10, markets   85 | leader won  78% at 0.789:   -5.1% | trailer at 0.223:  -33.1%
+  1 to 2                                   windows 185, markets 1558 | leader won  73% at 0.771:   -7.1% | trailer at 0.241:   +6.5%
+  2 to 3                                   windows 305, markets 2539 | leader won  76% at 0.775:   -4.2% | trailer at 0.237:  -11.9%
+  3 and over                               windows 140, markets 1176 | leader won  73% at 0.766:   -5.6% | trailer at 0.247:   +3.3%
+
+3. by what the trailer returned in the previous hour
+  trailer lost over 30%                    windows 257, markets 2143 | leader won  75% at 0.776:   -4.6% | trailer at 0.236:   -1.2%
+  lost up to 30%                           windows 136, markets 1150 | leader won  75% at 0.768:   -4.9% | trailer at 0.244:  -10.3%
+  made up to 30%                           windows  87, markets  725 | leader won  73% at 0.752:   -5.9% | trailer at 0.260:  -13.2%
+  made over 30%                            windows 160, markets 1340 | leader won  74% at 0.780:   -6.6% | trailer at 0.232:   +3.7%
+
+Notes: run 2026-11-16 about 18:00 to 18:09 ET on the host. Every reading at a moment uses only data stamped at or before it. Bands fixed before the run.
