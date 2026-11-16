@@ -113,6 +113,8 @@ def _take_after_rest(spec: Any, r: Any, quotes: Any, window: float) -> float | N
         return None
     q = after[0]
     a = float(q[2]) if r["side"] == "yes" else 1.0 - float(q[1])
+    if getattr(spec, "price_skip", (0.0, 0.0))[1] > 0 and spec.price_skip[0] - 1e-9 <= a <= spec.price_skip[1] + 1e-9:
+        return None  # the lane's no-buy range, as the live fallback
     if a < spec.price[0] - 1e-9 or a > spec.price[1] + 1e-9 or a > float(r["ask"]) + max(0.0, spec.buy_retry_chase) + 1e-9:
         return None
     return round(a, 4)

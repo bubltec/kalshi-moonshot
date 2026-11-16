@@ -32,6 +32,7 @@ from .lanes import (
     chance_ok,
     lane_specs,
     main_lanes,
+    no_buy,
     settings_of,
     spec_for,
     stop_drop_for,
@@ -535,6 +536,9 @@ def evaluate(
             if why_not:
                 bet = False
                 note = f"market skipped: {why_not}. {note}"
+    if bet and no_buy(spec, shot.ask):
+        bet = False
+        note = f"no-buy range: the {shot.side} ask {shot.ask:.2f} is inside the lane's {spec.price_skip[0]:.2f} to {spec.price_skip[1]:.2f}, where it does not buy. {note}"
     if bet and (spec.min_vol_rel > 0 or spec.max_vol_rel > 0):
         from . import variants, volregime
 
@@ -1743,6 +1747,15 @@ def place(
         offered = side_ask_notional(book, limit, shot.side)
     except KalshiError as exc:
         return Placed(f"skipped: could not read the book ({exc})")
+    if lane_spec is not None and getattr(lane_spec, "price_skip", (0.0, 0.0))[1] > 0:
+        live = best_ask(book, shot.side)
+        if no_buy(lane_spec, live):
+            return Placed(f"skipped: the {shot.side} ask is now {live:.2f}, inside the lane's no-buy range {lane_spec.price_skip[0]:.2f} to {lane_spec.price_skip[1]:.2f} (it was {shot.ask:.2f} when the lane decided)")
+        if shot.ask < lane_spec.price_skip[0] - 1e-9 and limit >= lane_spec.price_skip[0] - 1e-9:
+            limit = round(max(shot.ask, lane_spec.price_skip[0] - 0.01), 4)  # an order decided under the range does not pay its way up into it
+            cost = limit * count + order_fee(limit, count)
+            cap = cost
+            offered = side_ask_notional(book, limit, shot.side)
     if lane_spec is not None and lane_spec.buy_max_move > 0:
         fresh = best_ask(book, shot.side)
         if fresh is not None and fresh < shot.ask - lane_spec.buy_max_move - 1e-9:
@@ -1906,6 +1919,8 @@ def _requote_why(s: Settings, client: KalshiClient, store: Store, shot: LongShot
         return None, "the book could not be read"
     if ask is None or ask < spec.price[0] - 1e-9 or ask > spec.price[1] + 1e-9:
         return None, ("the book has no ask" if ask is None else f"the ask {ask:.2f} is outside the lane's price band")
+    if no_buy(spec, ask):
+        return None, f"the ask {ask:.2f} is inside the lane's no-buy range {spec.price_skip[0]:.2f} to {spec.price_skip[1]:.2f}"
     if ask > shot.ask + max(0.0, spec.buy_retry_chase) + 1e-9:  # a market that ran away is not chased
         return None, f"the ask ran from {shot.ask:.2f} to {ask:.2f}, more than the chase of {spec.buy_retry_chase:g}"
     limit = buy_limit(spec, shot.ticker, shot.side, shot.ask, ask)
@@ -1976,6 +1991,8 @@ def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) 
         if lowered < price:
             log.info("resting buy %s %s: the ask fell from %.2f to %.2f, resting at %.2f instead of %.2f", shot.ticker, shot.side, shot.ask, live_ask, lowered, price)
             price = lowered
+    if no_buy(spec, price):
+        return None, f"skipped: a resting buy at {price:.2f} would sit inside the lane's no-buy range {spec.price_skip[0]:.2f} to {spec.price_skip[1]:.2f}"
     return price, ""
 
 
@@ -1985,6 +2002,8 @@ def _place_floor_bid(
 ) -> Placed:
     """Rest a post-only bid at `shot.ask` for `seconds`. Nothing is bought when the ask is not above that price: that bid would take the book instead of waiting."""
     price = round(shot.ask, 4)
+    if no_buy(lane_specs(s).get(shot.lane), price):
+        return Placed(f"bid at {price:.2f} not placed: it is inside the lane's no-buy range")
     cost = price * count  # a bid that rests pays no taker fee; the fill records whatever fee did come back
     if cost + 1e-9 < s.min_order_usd:
         return Placed(f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum")

@@ -340,6 +340,7 @@ class LaneSpec:
     timed_suffix: str = ""  # series ending in this are fixed-length windows with an entry window
     timed_minutes: float = 15.0  # length of such a window
     entry_elapsed: tuple[float, float] = (0.0, 1e9)  # bet only this many minutes after it opens
+    price_skip: tuple[float, float] = (0.0, 0.0)  # 2026-11-16 STOPGAP (user: "a hard stop on buying from 42-58 while we figure out a better solution"; on the flat result of the middle: "i know they are break even, but that's useless"): a hole in the price band. The lane does not buy a side whose ask is inside this range, rests no bid inside it and lets no order fill inside it (no_buy; runner.evaluate, place, _resting_price, _requote_why, _place_floor_bid). (0, 0) = off. A fixed range, the user's own numbers, not a reading of the curve: it stands until a rule in the market's own units replaces it. Live buys since 11-09 at 0.42 to 0.58: crypto 91 bets +$0.90 on $577, commodity 24 bets +$0.53 (a query in chat, no results file)
     blackout_et: tuple[str, ...] = ()  # no new entries inside these New York clock windows, each "HH:MM-HH:MM" (a window may cross midnight), or "SERIES@HH:MM-HH:MM" to bar just that series (e.g. "KXNATGAS15M@17:00-18:00", the CME daily break on a thin feed). Open bets are still managed and sold
     shadow_suffix: str = ""  # series ending in this are only measured (see shadow.py), never bet
     enabled: bool = True
@@ -401,7 +402,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     if unknown:
         raise ValueError(f"lane {name!r}: unknown field(s) {sorted(unknown)}")
     row = dict(row)
-    for key in ("price", "hours", "entry_elapsed", "value_exit_bid"):
+    for key in ("price", "hours", "entry_elapsed", "value_exit_bid", "price_skip"):
         if key in row:
             row[key] = _pair(row[key])
     for key in ("series", "sides", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series", "ms_rule"):
@@ -517,6 +518,14 @@ def spec_for(s: Settings, name: str) -> LaneSpec:
     return lanes[name]
 
 
+def no_buy(spec: LaneSpec | None, price: float | None) -> bool:
+    """True when `price` is inside the lane's no-buy range (lane field price_skip), both ends included."""
+    if spec is None or price is None:
+        return False
+    lo, hi = getattr(spec, "price_skip", (0.0, 0.0))  # a stand-in spec without the field has no range
+    return hi > 0 and lo - 1e-9 <= price <= hi + 1e-9
+
+
 def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
     """How far under the price paid this lane's stop sits."""
     return spec.stop_loss_at if spec is not None and spec.stop_loss_at else s.stop_loss_drop
@@ -526,7 +535,7 @@ def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "entry_socket", "entry_min_gap_seconds", "buy_rest_top_up", "min_edge_room", "record_adjust", "curve_shadow", "confidence_shadow", "accumulate_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
-    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_source", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "value_exit", "value_exit_bid", "value_exit_gain_x", "value_exit_high", "value_exit_high_left", "value_exit_min_gain", "entry_checks_exit", "rebuy_opposite_after_gain_seconds", "shock_memory", "shock_persist", "hour_drift_q", "buy_curve_edge_min", "buy_flat_trend_pct", "buy_flat_trend_share", "nudge_hour_factor", "nudge_units", "curve_risk_long_scales", "curve_risk_early_hold", "entry_run_max", "entry_rotation_min", "entry_view_scales", "entry_spike_view", "entry_spike_min", "entry_cushion_edge_min", "entry_scenario_view", "curve_take_sure", "curve_take_sure_late", "curve_take_early_bid", "curve_take_trail", "curve_take_trail_live", "curve_take_early_seconds", "buy_rest_queue_note", "buy_rest_queue_max", "buy_rest_queue_quantile", "buy_rest_queue_hours", "perp_lead_buy", "curve_exit", "curve_exit_scales", "curve_exit_persist", "curve_exit_last", "curve_exit_near", "curve_drop_units", "curve_drop_seconds", "curve_drop_margin_units", "curve_drop_persist", "curve_rest", "curve_gap", "curve_gap_persist", "curve_risk_sell", "curve_risk_live", "curve_risk_spot_weight", "curve_risk_history", "curve_risk_max_loss", "curve_risk_min_profit", "curve_risk_stop_hold", "curve_take", "curve_take_slope_share", "curve_take_cushion", "stretch_max", "squeeze_max", "curve_risk_confirm", "curve_behind_last", "curve_behind_chance", "late_drop_units", "late_drop_seconds", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "wave_quote", "flip_skip_minutes", "flip_led_share", "entry_led_max", "wave_pos_min", "wave_turn_seconds", "wave_turn_back", "wave_market_gate", "curve_wait_share", "curve_wait_severe", "curve_wait_default", "curve_drop_comeback", "curve_drop_comeback_min", "curve_drop_comeback_hold", "spot_source", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_source", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "value_exit", "value_exit_bid", "value_exit_gain_x", "value_exit_high", "value_exit_high_left", "value_exit_min_gain", "entry_checks_exit", "rebuy_opposite_after_gain_seconds", "shock_memory", "shock_persist", "hour_drift_q", "buy_curve_edge_min", "buy_flat_trend_pct", "buy_flat_trend_share", "nudge_hour_factor", "nudge_units", "curve_risk_long_scales", "curve_risk_early_hold", "entry_run_max", "entry_rotation_min", "entry_view_scales", "entry_spike_view", "entry_spike_min", "entry_cushion_edge_min", "entry_scenario_view", "curve_take_sure", "curve_take_sure_late", "curve_take_early_bid", "curve_take_trail", "curve_take_trail_live", "price_skip", "curve_take_early_seconds", "buy_rest_queue_note", "buy_rest_queue_max", "buy_rest_queue_quantile", "buy_rest_queue_hours", "perp_lead_buy", "curve_exit", "curve_exit_scales", "curve_exit_persist", "curve_exit_last", "curve_exit_near", "curve_drop_units", "curve_drop_seconds", "curve_drop_margin_units", "curve_drop_persist", "curve_rest", "curve_gap", "curve_gap_persist", "curve_risk_sell", "curve_risk_live", "curve_risk_spot_weight", "curve_risk_history", "curve_risk_max_loss", "curve_risk_min_profit", "curve_risk_stop_hold", "curve_take", "curve_take_slope_share", "curve_take_cushion", "stretch_max", "squeeze_max", "curve_risk_confirm", "curve_behind_last", "curve_behind_chance", "late_drop_units", "late_drop_seconds", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "wave_quote", "flip_skip_minutes", "flip_led_share", "entry_led_max", "wave_pos_min", "wave_turn_seconds", "wave_turn_back", "wave_market_gate", "curve_wait_share", "curve_wait_severe", "curve_wait_default", "curve_drop_comeback", "curve_drop_comeback_min", "curve_drop_comeback_hold", "spot_source", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -615,6 +624,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["curve_risk_long_scales"] = repr(spec.curve_risk_long_scales)
     if spec.curve_take_sure > 0:
         out["curve_take_sure"] = repr(spec.curve_take_sure)
+    if spec.price_skip[1] > 0:  # reported only when set, so a lane without it keeps the version it had
+        out["price_skip"] = repr(spec.price_skip)
     if spec.curve_take_trail > 0:  # reported only when set, so a lane without it keeps the version it had
         out["curve_take_trail"] = repr(spec.curve_take_trail)
         out["curve_take_trail_live"] = repr(spec.curve_take_trail_live)
