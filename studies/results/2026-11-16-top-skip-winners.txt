@@ -1,0 +1,44 @@
+window: crypto_multiscale_rest since 2026-11-16 09:06 ET; 166 settled sides skipped at the top and never bought
+  all                            n 166 | won  72% | needs  78% | ask 0.770 | held net per $   -8.4%
+
+1. by the ask
+  under 0.70                     n   0
+  0.70 to 0.78                   n 105 | won  62% | needs  74% | ask 0.723 | held net per $  -15.9%
+  0.78 to 0.84                   n  21 | won  81% | needs  82% | ask 0.805 | held net per $   -0.7%
+  0.84 and over                  n  40 | won  95% | needs  88% | ask 0.876 | held net per $   +7.5%
+
+2. by minutes into the market
+  under 3                        n   0
+  3 to 6                         n  65 | won  83% | needs  81% | ask 0.797 | held net per $   +1.8%
+  6 to 9                         n  55 | won  62% | needs  77% | ask 0.762 | held net per $  -21.6%
+  9 and over                     n  46 | won  70% | needs  76% | ask 0.742 | held net per $   -7.0%
+
+3. by how far up its range the side sat
+  0.80 to 0.90                   n  44 | won  82% | needs  80% | ask 0.791 | held net per $   +2.0%
+  0.90 to 0.99                   n  58 | won  79% | needs  80% | ask 0.787 | held net per $   -1.6%
+  at the very top (1.00)         n  64 | won  59% | needs  75% | ask 0.740 | held net per $  -21.6%
+
+4. by the size of the range (typical minutes)
+  under 3                        n  57 | won  77% | needs  77% | ask 0.761 | held net per $   -0.9%
+  3 to 5                         n 103 | won  70% | needs  78% | ask 0.773 | held net per $  -11.8%
+  5 and over                     n   6
+
+5. by the curve edge (the curve's chance less the ask)
+  no reading                     n 166 | won  72% | needs  78% | ask 0.770 | held net per $   -8.4%
+  under -0.03                    n   0
+  -0.03 to 0                     n   0
+  0 and over                     n   0
+
+6. by the 3-hour spike reading, signed toward the side (from 12:00)
+  no reading                     n 115 | won  73% | needs  78% | ask 0.768 | held net per $   -7.5%
+  under +0.5                     n  22 | won  82% | needs  79% | ask 0.783 | held net per $   +3.4%
+  +0.5 to +1.5                   n  26 | won  62% | needs  77% | ask 0.762 | held net per $  -21.2%
+  +1.5 and over                  n   3
+
+7. by similar moves in the last 3 hours (from 12:00)
+  no reading                     n 115 | won  73% | needs  78% | ask 0.768 | held net per $   -7.5%
+  5 or fewer (a rare move)       n   0
+  6 to 24                        n   7
+  25 and over (ordinary)         n  44 | won  75% | needs  79% | ask 0.775 | held net per $   -4.8%
+
+Notes: run 2026-11-16 13:50 ET on the host. One day, 166 sides: the cells are small. The paper lane's notes carry no curve edge on a skipped decision (section 5 is empty), and the spike reading only from 12:00.

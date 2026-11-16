@@ -1,0 +1,15 @@
+window: 2026-11-09 00:00 ET on; 6453 settled markets. Sides in the live band, by position in their own range since the open
+  under 0.40       |  10630 (2723 markets) | won  63% | ask 0.651 | held net per $   -5.7%
+  0.40 to 0.60     |  13911 (3843 markets) | won  62% | ask 0.667 | held net per $   -8.9%
+  0.60 to 0.80     |  25683 (4713 markets) | won  67% | ask 0.698 | held net per $   -5.2%
+  0.80 to 0.90     |  16371 (4304 markets) | won  69% | ask 0.717 | held net per $   -5.1%
+  0.90 to 0.97     |  11353 (3876 markets) | won  71% | ask 0.728 | held net per $   -4.5%
+  0.97 to 0.99     |   3002 (1937 markets) | won  72% | ask 0.733 | held net per $   -2.9%
+  at the very top  |  13256 (4302 markets) | won  70% | ask 0.720 | held net per $   -5.0%
+
+at the very top, by the ask
+  0.57 to 0.66     |   3079 (2011 markets) | won  58% | ask 0.617 | held net per $   -7.9%
+  0.66 to 0.74     |   3603 (2320 markets) | won  68% | ask 0.700 | held net per $   -4.3%
+  0.74 to 0.82     |   6574 (3599 markets) | won  76% | ask 0.780 | held net per $   -4.1%
+
+Notes: run 2026-11-16 13:53 ET on the host. Moments are every 15 s and overlap inside a market. This is the wider check of the top-of-range rule and it does not support it: in the live band every position loses 3 to 9% held to settlement, the top no more than the rest. The rule rested on the lane's own 177 bets and a 1.6-day band (studies/results/2026-11-16-entry-selection.txt), where the top fifth looked worst.
