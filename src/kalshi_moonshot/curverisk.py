@@ -117,7 +117,12 @@ def multiscale_rate(ts: list[float], vs: list[float], now: float, scales: tuple[
     minutes = [m if m > 0 else so_far - m for m in scales if m > 0 or so_far is not None]
     if not minutes:
         return None
-    scales = tuple(minutes)
+    # Late in a market the market so far (0) and the 15-minute segment are the same stretch of history and would count twice in the mean (user, 2026-11-16: "0 being the current market, so nearly the end of a market the 0 and 15 values are likely identical and count double"). Windows within one minute of each other, the resolution of the moves, are one segment.
+    kept: list[int] = []
+    for m in sorted(set(minutes)):
+        if not kept or m - kept[-1] > 1:
+            kept.append(m)
+    scales = tuple(kept)
     levels: list[float] = []
     for k in range(max(scales) + 1):
         i = bisect.bisect_right(ts, now - k * MINUTE) - 1

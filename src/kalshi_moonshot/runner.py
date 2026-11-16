@@ -878,6 +878,13 @@ def evaluate(
                 f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
                 else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
             )
+    if bet and spec.entry_view_scales:
+        try:
+            view = side_view(shot, tuple(spec.entry_view_scales))
+        except Exception as exc:
+            view = None
+            log.warning("entry view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        note = f"[entry view {view:.3f} at {','.join(str(m) for m in spec.entry_view_scales)} min] {note}" if view is not None else f"[entry view unreadable] {note}"  # shadow: written down, gates nothing
     if bet and (spec.entry_run_max > 0 or spec.entry_rotation_min > -90):
         slopes = side_phase(shot)
         if slopes is None:
@@ -1301,6 +1308,24 @@ def side_phase(shot: LongShot, now: float | None = None) -> dict[int, float] | N
     kp = perp_index(shot.series or shot.ticker.split("-")[0])
     got = ticks_mod.history.window(kp, now - 4000.0, now) if kp else None
     return curverisk.side_slopes(got[0], got[1], now, shot.side) if got else None
+
+
+def side_view(shot: LongShot, scales: tuple[int, ...], now: float | None = None) -> float | None:
+    """The buy's view (lane field entry_view_scales): the chance the side pays on the long layer's own reading, the Kalshi perp's movement read at `scales` minutes together (curverisk.long_chance; 0 = the market so far), the cushion measured from the perp at the window's open. None when the series has no perp, no tick is fresh or the window's open was not recorded."""
+    from . import ticks as ticks_mod
+    from .watcher import perp_index
+
+    now = time.time() if now is None else now
+    kp = perp_index(shot.series or shot.ticker.split("-")[0])
+    if not kp:
+        return None
+    left = shot.hours_to_close * 3600.0
+    reach = 60.0 * max(max(scales), 1) + 100.0
+    got = ticks_mod.history.window(kp, now - max(3700.0, reach), now)
+    ref = ticks_mod.history.first_at_or_after(kp, now + left - 900.0, 60.0)
+    if not got or not ref:
+        return None
+    return curverisk.long_chance(got[0], got[1], now, ref, shot.side, left, scales=tuple(scales), elapsed=max(0.0, 900.0 - left))
 
 
 def side_trend_read(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> tuple[float, float] | None:
