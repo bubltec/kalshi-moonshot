@@ -1888,6 +1888,19 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     filled = spent = fee_paid = 0.0
     seen: set[str] = set()
     deadline = started + wait + 3.0
+    ahead = None
+    queue_text = ""
+    if order_id and (spec.buy_rest_queue_note or spec.buy_rest_queue_max > 0):
+        reader = getattr(client, "order_queue_position", None)
+        ahead = reader(order_id) if reader else None
+        queue_text = f" Queue: {ahead:g} shares ahead of our {count:g}." if ahead is not None else " Queue: not readable."
+        if spec.buy_rest_queue_max > 0 and ahead is not None and ahead > spec.buy_rest_queue_max:
+            try:
+                client.cancel_order(order_id)  # a queue that will not reach us in the wait: drop the bid and let the take at the ask run now, not after the wait
+            except KalshiError:
+                pass
+            queue_text = f" Queue: {ahead:g} shares ahead of our {count:g}, over the lane's {spec.buy_rest_queue_max:g}: the bid was cancelled at once and the ask is taken instead."
+            deadline = time.time() + 2.0  # long enough for a fill that beat the cancel to show
     while time.time() < deadline and filled < count - 1e-9:
         time.sleep(2.0)
         try:
@@ -1908,8 +1921,8 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
         ticker=shot.ticker, env=s.env, count=count, price=price, fill_count=filled, cost_usd=spent, fee_usd=fee_paid, order_id=order_id, contract=shot.side,
     )
     if filled <= 0:
-        return Placed(f"resting buy at {price:.2f} for {wait:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought")
-    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}. {why}", filled, spent, price)
+        return Placed(f"resting buy at {price:.2f} for {wait:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought.{queue_text}")
+    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}.{queue_text} {why}", filled, spent, price)
 
 
 def rest_target_price(spec: LaneSpec, entry: float) -> float | None:
