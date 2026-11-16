@@ -94,3 +94,18 @@ Reading: these factors do not tell us a bet's worth better than its price does. 
 - 11-13 12:48: the long layer's agreement is added as a hold.
 - 11-14: the profit take is added (12:10); a swing hold is tried and removed; the lane file is pruned of switched-off exits' settings (16:21).
 - 11-16 18:36: the max-loss stop is switched off on the six live lanes.
+
+## The two exits on the bot's own bets (18:50)
+
+`scripts/exit_eras_compare.py`, result in `studies/results/2026-11-16-exit-eras-compare.txt`. Each sale against holding the same bet.
+
+| Stretch | Lanes | Bets | The exits against holding | Per dollar staked |
+|---|---|---|---|---|
+| Curve exit (11-10 to 11-13 09:45) | crypto | 287 | -$21.74 | -3.6% |
+| Curve exit | commodity | 330 | -$48.08 | -2.5% |
+| Risk exit (11-13 11:02 to 11-16 18:36) | crypto | 352 | +$31.70 | +0.6% |
+| Risk exit | commodity | 116 | +$16.23 | +1.5% |
+
+By kind: the curve exit's margin sale was +$16.03 on 30 crypto sales and -$41.77 on 68 commodity sales (79% of those would have won). The shock exit that ran beside it was -$27.84 on 58 crypto sales. The risk exit's profit take was +$45.73 on 114; its max-loss stop -$22.95 on 117 crypto sales and +$16.23 on 31 commodity sales.
+
+Reading: the old stack was not doing better. The part of either exit that has earned its place is the profit take. Loss sales of every kind land near zero against holding.

@@ -1,0 +1,29 @@
+=== curve exit (11-10 to 11-13 09:45)
+  crypto lanes: 287 bets, $608 staked | as traded $-54.09 (-8.9%) | if every bet were held $-32.35 (-5.3%) | the exits added $-21.74
+      held to settlement                   n  152 | won  63%
+      other: shock exit: spot moved # bp agains n   58 | would have won held  50% | sale less hold $  -27.84 (per sale $-0.48)
+      curve exit: margin sale              n   30 | would have won held  60% | sale less hold $  +16.03 (per sale $+0.53)
+      curve exit: trajectory               n   27 | would have won held  33% | sale less hold $   -4.51 (per sale $-0.17)
+      other: value exit: bid # after the fee is n   10 | would have won held  30% | sale less hold $   +2.26 (per sale $+0.23)
+      curve exit: time-to-go               n   10 | would have won held  50% | sale less hold $   -7.67 (per sale $-0.77)
+  commodity lanes: 330 bets, $1900 staked | as traded $-89.86 (-4.7%) | if every bet were held $-41.77 (-2.2%) | the exits added $-48.08
+      held to settlement                   n  213 | won  84%
+      curve exit: margin sale              n   68 | would have won held  79% | sale less hold $  -41.77 (per sale $-0.61)
+      other: shock exit: spot moved # bp agains n   20 | would have won held  40% | sale less hold $   -0.39 (per sale $-0.02)
+      curve exit: time-to-go               n   11 | would have won held  36% | sale less hold $   +3.51 (per sale $+0.32)
+      curve exit: trajectory               n    8 | would have won held  50% | sale less hold $   -5.36 (per sale $-0.67)
+      other: shock exit: the contract's mid mov n    7 | would have won held  71% | sale less hold $   -1.67 (per sale $-0.24)
+      other: late drop: bid # is # under its #  n    3 | would have won held  67% | sale less hold $   -2.41 (per sale $-0.80)
+
+=== risk exit (11-13 11:02 to 11-16 18:36)
+  crypto lanes: 352 bets, $5752 staked | as traded $-406.66 (-7.1%) | if every bet were held $-438.36 (-7.6%) | the exits added $+31.70
+      held to settlement                   n  118 | won  90%
+      risk exit: max loss                  n  117 | would have won held  30% | sale less hold $  -22.95 (per sale $-0.20)
+      risk exit: profit take               n  114 | would have won held  87% | sale less hold $  +45.73 (per sale $+0.40)
+      risk exit: the 0.50 line             n    2 | would have won held  50% | sale less hold $   -1.60 (per sale $-0.80)
+      other: closed by hand: the account no lon n    1 | would have won held   0% | sale less hold $  +10.53 (per sale $+10.53)
+  commodity lanes: 116 bets, $1083 staked | as traded $-43.55 (-4.0%) | if every bet were held $-59.78 (-5.5%) | the exits added $+16.23
+      held to settlement                   n   85 | won  99%
+      risk exit: max loss                  n   31 | would have won held  35% | sale less hold $  +16.23 (per sale $+0.52)
+
+Notes: run 2026-11-16 18:50 ET on the host, from the decisions and windows tables only. Stakes were about $2 a crypto bet in the first stretch and about $16 in the second, so compare the exits per dollar staked: the curve exit stack cost 3.6% of the crypto stake and 2.5% of the commodity stake against holding; the risk exit added 0.6% and 1.5%. The buying also changed between the stretches.
