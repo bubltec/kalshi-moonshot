@@ -1,0 +1,58 @@
+window: since 2026-11-14 17:02 ET; 236 settled live crypto_multiscale buys (of 239 placed), 1395 settled markets, 1074 of them with a moment in the band
+
+1. the lane's buys against every moment in its own band (held to settlement at the ask, fee in)
+  lane's buys                                    n    236 | won  67% | ask 0.716 | needs  73% | held net per $   -7.3%
+  lane's buys since always = true (11-15 16:31)  n    137 | won  70% | ask 0.716 | needs  73% | held net per $   -3.4%
+  every band moment                              n  18872 | won  67% | ask 0.698 | needs  71% | held net per $   -5.6%
+
+2. by price
+  buys  ask 0.57 to 0.66                         n     52 | won  65% | ask 0.611 | needs  63% | held net per $   +4.1%
+  band  ask 0.57 to 0.66                         n   6520 | won  59% | ask 0.613 | needs  63% | held net per $   -5.7%
+  buys  ask 0.66 to 0.74                         n     67 | won  61% | ask 0.700 | needs  71% | held net per $  -14.6%
+  band  ask 0.66 to 0.74                         n   5514 | won  66% | ask 0.698 | needs  71% | held net per $   -7.3%
+  buys  ask 0.74 to 0.83                         n     88 | won  72% | ask 0.788 | needs  80% | held net per $  -10.4%
+  band  ask 0.74 to 0.83                         n   6838 | won  76% | ask 0.777 | needs  79% | held net per $   -4.0%
+
+3. by minutes into the market
+  buys  3 to 6 min                               n    118 | won  64% | ask 0.710 | needs  72% | held net per $  -11.3%
+  band  3 to 6 min                               n   8128 | won  69% | ask 0.690 | needs  70% | held net per $   -2.1%
+  buys  6 to 9 min                               n     76 | won  76% | ask 0.723 | needs  74% | held net per $   +3.4%
+  band  6 to 9 min                               n   5842 | won  66% | ask 0.703 | needs  72% | held net per $   -7.6%
+  buys  9 to 15 min                              n     42 | won  60% | ask 0.718 | needs  73% | held net per $  -15.4%
+  band  9 to 15 min                              n   4902 | won  66% | ask 0.705 | needs  72% | held net per $   -8.8%
+
+4. by the side's own curve before the moment (position in its range so far; 3-minute move in typical minutes)
+  buys  at its high (top fifth of its range), falling n    0
+  band  at its high (top fifth of its range), falling n      3 | won 100% | ask 0.793 | needs  80% | held net per $  +24.3%
+  buys  at its high (top fifth of its range), flat n     17 | won  53% | ask 0.698 | needs  71% | held net per $  -29.7%
+  band  at its high (top fifth of its range), flat n   2470 | won  68% | ask 0.722 | needs  74% | held net per $   -8.1%
+  buys  at its high (top fifth of its range), rising n     85 | won  67% | ask 0.746 | needs  76% | held net per $  -12.2%
+  band  at its high (top fifth of its range), rising n   6949 | won  67% | ask 0.721 | needs  74% | held net per $   -8.7%
+  buys  low in its range, falling                n      1 | won 100% | ask 0.490 | needs  51% | held net per $  +97.0%
+  band  low in its range, falling                n    667 | won  57% | ask 0.631 | needs  65% | held net per $  -11.3%
+  buys  low in its range, flat                   n      4 | won  50% | ask 0.662 | needs  68% | held net per $  -18.9%
+  band  low in its range, flat                   n    743 | won  74% | ask 0.643 | needs  66% | held net per $  +12.2%
+  buys  low in its range, rising                 n    0
+  band  low in its range, rising                 n     11 | won  55% | ask 0.649 | needs  66% | held net per $  -15.0%
+  buys  mid range, falling                       n      1 | won   0% | ask 0.670 | needs  69% | held net per $ -100.0%
+  band  mid range, falling                       n   1085 | won  63% | ask 0.685 | needs  70% | held net per $  -10.0%
+  buys  mid range, flat                          n     42 | won  74% | ask 0.697 | needs  71% | held net per $   +6.0%
+  band  mid range, flat                          n   4330 | won  68% | ask 0.681 | needs  70% | held net per $   -1.7%
+  buys  mid range, rising                        n     27 | won  74% | ask 0.677 | needs  69% | held net per $   +5.0%
+  band  mid range, rising                        n   1831 | won  66% | ask 0.675 | needs  69% | held net per $   -4.6%
+  buys  no reading                               n     59 | won  66% | ask 0.716 | needs  73% | held net per $   -8.4%
+  band  no reading                               n    783 | won  70% | ask 0.679 | needs  69% | held net per $   +0.8%
+
+5. the lane's buys: how soon the side was no longer the favorite (its mid under 0.50)
+  within  60 s:  34 of 236 ( 14%); of those 15 still won ( 44%)
+  within 120 s:  52 of 236 ( 22%); of those 24 still won ( 46%)
+  within 180 s:  68 of 236 ( 29%); of those 30 still won ( 44%)
+  within 300 s:  89 of 236 ( 38%); of those 38 still won ( 43%)
+  within 900 s: 105 of 236 ( 44%); of those 46 still won ( 44%)
+  never under 0.50: 131 of 236; won 113
+
+6. the other side bought at the same moment, held to settlement (fee in)
+  other side at the lane's moments               n    180 | won  33% | ask 0.309 | needs  32% | held net per $   +4.7%
+  other side at every band moment (ask = 1 - ask + 1c) n  18872 | won  33% | ask 0.312 | needs  33% | held net per $   +0.3%
+
+Notes: run 2026-11-16 about 08:50 ET on the host (scripts/cloud.sh run scripts/entry_selection_study.py; sections 4 to 6 from a second run with TAIL=1, the session dropped the long printout). Band moments are every 15 s, so they overlap inside a market: 18,872 moments are 1,074 markets, and the coins move together, so the win rates carry about +/- 3 points. The shape cuts (top fifth, 0.4, +/- 0.5 typical minutes) were set before the run. Held to settlement at the decision ask, not the lane's own sales.
