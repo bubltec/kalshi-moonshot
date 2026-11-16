@@ -1,19 +1,35 @@
-window: since 2026-11-14 17:02 ET; 243 settled live crypto_multiscale bets, 184 sold before the close
+window: since 2026-11-14 17:02 ET; 245 settled live crypto_multiscale bets, 186 sold before the close
 
 1. by the kind of sale
-  profit take                        n  97 | would have won held  83 ( 86%) | sale less hold $  +74.60 | saved $ +291.69 on 14, gave up $ -217.09 on 83
-  max loss                           n  86 | would have won held  24 ( 28%) | sale less hold $  +24.16 | saved $ +421.90 on 62, gave up $ -397.74 on 24
+  profit take                        n  98 | would have won held  83 ( 85%) | sale less hold $  +82.71 | saved $ +299.79 on 15, gave up $ -217.09 on 83
+  max loss                           n  87 | would have won held  25 ( 29%) | sale less hold $  +16.09 | saved $ +421.90 on 62, gave up $ -405.81 on 25
   closed by hand: the account no     n   1 | would have won held   0 (  0%) | sale less hold $  +10.53 | saved $  +10.53 on 1, gave up $   +0.00 on 0
 
 2. sales at a loss, by minutes into the market at the sale
   0 to 6 min                         n   6 | would have won held   3 ( 50%) | sale less hold $  -24.92 | saved $  +33.16 on 3, gave up $  -58.08 on 3
-  6 to 9 min                         n  16 | would have won held   4 ( 25%) | sale less hold $  +16.34 | saved $  +87.28 on 12, gave up $  -70.94 on 4
+  6 to 9 min                         n  17 | would have won held   5 ( 29%) | sale less hold $   +8.28 | saved $  +87.28 on 12, gave up $  -79.00 on 5
   9 to 12 min                        n  36 | would have won held   9 ( 25%) | sale less hold $  +59.73 | saved $ +191.59 on 27, gave up $ -131.86 on 9
   12 to 15 min                       n  29 | would have won held   8 ( 28%) | sale less hold $  -16.47 | saved $ +120.39 on 21, gave up $ -136.86 on 8
 
 3. sales at a loss, by how long the bet had been held
   under 2 min                        n  23 | would have won held   7 ( 30%) | sale less hold $  -40.63 | saved $  +87.11 on 16, gave up $ -127.73 on 7
-  2 to 5 min                         n  40 | would have won held  11 ( 28%) | sale less hold $  +70.39 | saved $ +215.80 on 29, gave up $ -145.41 on 11
+  2 to 5 min                         n  41 | would have won held  12 ( 29%) | sale less hold $  +62.32 | saved $ +215.80 on 29, gave up $ -153.48 on 12
   5 min and over                     n  24 | would have won held   6 ( 25%) | sale less hold $   +4.92 | saved $ +129.52 on 18, gave up $ -124.59 on 6
+
+4. sales at a loss, by the time left at the sale (user, 2026-11-16: "before 5 mins remaining it doesn't usually matter")
+  more than 5 min left               n  35 | would have won held  11 ( 31%) | sale less hold $  -34.66 | saved $ +164.43 on 24, gave up $ -199.09 on 11
+  5 min or less left                 n  53 | would have won held  14 ( 26%) | sale less hold $  +61.28 | saved $ +267.99 on 39, gave up $ -206.72 on 14
+    8:00 to 15:00 left               n  13 | would have won held   7 ( 54%) | sale less hold $  -60.63 | saved $  +58.92 on 6, gave up $ -119.55 on 7
+    5:00 to 8:00 left                n  22 | would have won held   4 ( 18%) | sale less hold $  +25.97 | saved $ +105.51 on 18, gave up $  -79.54 on 4
+    3:00 to 5:00 left                n  24 | would have won held   6 ( 25%) | sale less hold $  +77.74 | saved $ +147.60 on 18, gave up $  -69.86 on 6
+    1:30 to 3:00 left                n  23 | would have won held   6 ( 26%) | sale less hold $   -4.13 | saved $ +109.34 on 17, gave up $ -113.47 on 6
+    0:00 to 1:30 left                n   6 | would have won held   2 ( 33%) | sale less hold $  -12.34 | saved $  +11.05 on 4, gave up $  -23.39 on 2
+
+5. sales at a loss, by the loss in units of what the market can still travel (user, 2026-11-16: "5 mins isn't always 5 mins. sometimes its 7, sometimes its 3, sometimes its 1"): the loss per contract over this market's own typical minute x sqrt(minutes left). Under 1 = the market typically moves further than that in the time left
+  no reading (no quotes on the tape) n  25 | would have won held   7 ( 28%) | sale less hold $   -7.05 | saved $  +86.30 on 18, gave up $  -93.35 on 7
+  under 0.5 reaches                  n   3 | would have won held   2 ( 67%) | sale less hold $  -39.99 | saved $  +11.55 on 1, gave up $  -51.55 on 2
+  0.5 to 1                           n   9 | would have won held   3 ( 33%) | sale less hold $  +23.69 | saved $  +53.31 on 6, gave up $  -29.61 on 3
+  1 to 2                             n  33 | would have won held   9 ( 27%) | sale less hold $  +44.81 | saved $ +205.73 on 24, gave up $ -160.91 on 9
+  2 and over                         n  18 | would have won held   4 ( 22%) | sale less hold $   +5.16 | saved $  +75.54 on 14, gave up $  -70.38 on 4
 
-Notes: run 2026-11-16 about 09:55 ET on the host. Sale prices and results from the decisions and windows tables (no tape needed). Contracts from the stake over the all-in ask at the decision. The early cells are small (6 and 23 sales). Bands set before the run.
+Notes: run 2026-11-16 about 10:00 ET on the host (sections 4 and 5 added after the first run of 09:55; two more bets had settled). Sale prices and results from the decisions and windows tables; section 5 reads the tape, which has no quotes from 00:31 to 09:17 ET on 11-16 (25 sales without a reading). Contracts from the stake over the all-in ask. Bands set before each run. The cells where the stop loses are small: 13 sales with over 8 minutes left, 3 sales under half a reach.
