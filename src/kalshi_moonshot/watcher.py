@@ -238,6 +238,7 @@ class Target:
     risk_take_cushion: bool = False  # the spot's cushion is asked before the take sells (lane field curve_take_cushion)
     risk_take_held: bool = False  # the cushion has already been logged as holding this bet's take
     risk_take_slope: float = 0.08  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
+    risk_long_scales: tuple = ()  # the minutes the hour view reads its movement over, together (lane field curve_risk_long_scales); empty = the last hour
     risk_nudge_units: float = 0.0  # the squeeze has no cap: the allowed miss is this many typical minutes of the market times how strongly everything agrees (lane field nudge_units; 0 = the cents cap)
     risk_nudge_hour: bool = False  # the squeeze's cap is scaled by the hour's width correction (lane field nudge_hour_factor)
     risk_squeeze: float = 0.0  # the most a loss may be short of the max loss and still count as reaching it (lane field squeeze_max)
@@ -952,9 +953,10 @@ class ProfitWatcher:
             return t.risk_long
         t.risk_long_at = now
         kp = perp_index(t.ticker.split("-")[0])
-        hour = ticks_mod.history.window(kp, now - 3700.0, now) if kp else None
+        reach = 60.0 * max(t.risk_long_scales or (60,)) + 100.0  # the history the scales need: the longest one and a minute's margin
+        hour = ticks_mod.history.window(kp, now - max(3700.0, reach), now) if kp else None
         ref = ticks_mod.history.first_at_or_after(kp, t.close_ts - 900.0, 60.0) if kp else None
-        val = curverisk.long_chance(hour[0], hour[1], now, ref or 0.0, t.side, left) if hour else None
+        val = curverisk.long_chance(hour[0], hour[1], now, ref or 0.0, t.side, left, scales=tuple(t.risk_long_scales)) if hour else None
         if val is None and t.shock_index and t.shock_ref > 0:
             # The perp is silent or stale (a futures reference stops ticking outside its hours: KP_BRENT had one reading in 70 minutes on 2026-11-13 and the check fell away, so a 9-second dip sold a Brent bet on the price alone). Read the lane's own spot index against its armed reference instead.
             spot = ticks_mod.history.window(t.shock_index, now - 3700.0, now)
@@ -1885,6 +1887,7 @@ class ProfitWatcher:
                 held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_max
                 held.risk_nudge_hour = spec.nudge_hour_factor
                 held.risk_nudge_units = spec.nudge_units
+                held.risk_long_scales = tuple(spec.curve_risk_long_scales)
                 held.risk_take_cushion = spec.curve_take_cushion
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):

@@ -64,9 +64,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false', nudge_hour='false', nudge_units=0):
+def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false', nudge_hour='false', nudge_units=0, long_scales=''):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion) + f"nudge_hour_factor={nudge_hour}\nnudge_units={nudge_units}\n")
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion) + f"nudge_hour_factor={nudge_hour}\nnudge_units={nudge_units}\n" + (f"curve_risk_long_scales={long_scales}\n" if long_scales else ""))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -1038,3 +1038,22 @@ def test_integration_without_a_cap_the_clock_still_shrinks_it_early_in_the_marke
     feed_history(0.013, from_left=1300, to_left=671)
     early = slid(held(tmp_path / "early", monkeypatch, live=True, squeeze=0, nudge_units=1.0, **NO_HOLDS), [0.78] * 60 + TO_60[len(SIT):] + [0.60] * 30, 670)
     assert early is None  # ten minutes left: the clock share is near zero, so is the nudge
+
+
+# ---- the hour view read at several scales together (2026-11-15, user: "the hour view should look further, but we need the context of the current hour") ----
+def test_integration_the_lanes_hour_view_scales_reach_the_watched_position(tmp_path, monkeypatch):
+    seed_perp(monkeypatch, last_over_open=0.004)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4, long_scales="[15,30,60]")
+    assert [tuple(x.risk_long_scales) for x in w.targets.values()] == [(15, 30, 60)]
+
+
+def test_integration_with_scales_the_hour_view_still_holds_a_dip_the_perp_says_stays_on_its_side_and_sells_when_it_agrees(tmp_path, monkeypatch):
+    seed_perp(monkeypatch, last_over_open=0.004)
+    (tmp_path / "up").mkdir()
+    (tmp_path / "down").mkdir()
+    holds = held(tmp_path / "up", monkeypatch, live=True, confirm=0.4, long_scales="[15,30,60]")
+    assert slide(holds) == []  # the perp is 40 bp over the open: the view says the side stays, so no sale
+    seed_perp(monkeypatch, last_over_open=-0.004)
+    sells = held(tmp_path / "down", monkeypatch, live=True, confirm=0.4, long_scales="[15,30,60]")
+    out = slide(sells)
+    assert out and out[0].why.startswith("curve risk exit (max loss)")
