@@ -20,7 +20,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
 
-from . import factors, risk, shadow, steptime
+from . import curverisk, factors, risk, shadow, steptime
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
@@ -878,6 +878,18 @@ def evaluate(
                 f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
                 else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
             )
+    if bet and (spec.entry_run_max > 0 or spec.entry_rotation_min > -90):
+        slopes = side_phase(shot)
+        if slopes is None:
+            note = f"[phase unreadable: no full hour of the perp's ticks] {note}"  # no reading is not a reason to sit out: the other gates decide
+        else:
+            note = f"[phase z13 {slopes[13]:+.1f}, z5-z21 {slopes[5] - slopes[21]:+.1f}] {note}"
+            if spec.entry_run_max > 0 and slopes[13] >= spec.entry_run_max:
+                bet = False
+                note = f"already run: this side moved {slopes[13]:+.1f} typical moves over the last 13 minutes (the lane skips at {spec.entry_run_max:g} or more). {note}"
+            elif spec.entry_rotation_min > -90 and slopes[5] - slopes[21] < spec.entry_rotation_min:
+                bet = False
+                note = f"rolled over: this side's 5-minute move ({slopes[5]:+.1f}) is {slopes[21] - slopes[5]:+.1f} under its 21-minute move ({slopes[21]:+.1f}) in their own units (the lane needs {spec.entry_rotation_min:+.1f} or more). {note}"
     if bet and spec.entry_spike_seconds > 0:
         rose, swung = side_spike(s, shot, spec.entry_spike_seconds)
         if (rose is not None and rose >= spec.entry_spike_rise) or (swung is not None and swung >= spec.entry_spike_range):
@@ -1278,6 +1290,17 @@ def spot_move(s: Settings, shot: LongShot, seconds: float, now: float | None = N
     if not prices or not old:
         return None
     return (prices[-1][1] - old[-1]) * (1.0 if shot.side == "yes" else -1.0)
+
+
+def side_phase(shot: LongShot, now: float | None = None) -> dict[int, float] | None:
+    """The side's slopes at 3, 5, 13 and 21 minutes in each scale's own units (curverisk.side_slopes), from the Kalshi perp's ticks held in memory; None when the series has no perp or the hour is not all there."""
+    from . import ticks as ticks_mod
+    from .watcher import perp_index
+
+    now = time.time() if now is None else now
+    kp = perp_index(shot.series or shot.ticker.split("-")[0])
+    got = ticks_mod.history.window(kp, now - 4000.0, now) if kp else None
+    return curverisk.side_slopes(got[0], got[1], now, shot.side) if got else None
 
 
 def side_trend_read(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> tuple[float, float] | None:

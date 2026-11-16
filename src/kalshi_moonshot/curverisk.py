@@ -154,6 +154,24 @@ def long_chance(ts: list[float], vs: list[float], now: float, ref: float, side: 
     return _N.cdf(cushion / (rate * math.sqrt(left)))
 
 
+def side_slopes(ts: list[float], vs: list[float], now: float, side: str, scales: tuple[int, ...] = (3, 5, 13, 21), hour: int = 60) -> dict[int, float] | None:
+    """Where the market stands in its wave, side-signed (2026-11-15 night, user: "betting when we shouldn't, and on the wrong side ... crypto moves in waves, directions shift in minutes"): for each scale m minutes, the side's move over the last m minutes in units of that scale's own typical move, z_m = side x (L(now) - L(now - m)) / (s1 x sqrt(m)), s1 the root-mean-square one-minute log move of the last `hour` minutes. Positive = the side's price has been rising at that scale. None without a tick at every minute mark of the last hour and the longest scale, or with a flat hour. studies/results/2026-11-15-rotation-at-entry.txt: buys with z13 of 1.5 or more won 35% (n 26, -25.0%); the bottom fifth of z5 - z21 won 48% (n 105, -14.7%) against 63 to 69% elsewhere."""
+    if not ts or len(ts) != len(vs):
+        return None
+    marks = max(max(scales), hour) + 1
+    levels: list[float] = []
+    for k in range(marks):
+        i = bisect.bisect_right(ts, now - k * MINUTE) - 1
+        if i < 0 or vs[i] <= 0 or (k == 0 and now - ts[i] > 30.0):
+            return None
+        levels.append(math.log(vs[i]))
+    s1 = math.sqrt(sum((levels[k] - levels[k + 1]) ** 2 for k in range(hour)) / hour)
+    if s1 <= 0:
+        return None
+    sign = 1.0 if side == "yes" else -1.0
+    return {m: sign * (levels[0] - levels[m]) / (s1 * math.sqrt(m)) for m in scales}
+
+
 def take_bar(gain: float, room: float, left: float, window: float, unit: float | None = None) -> float:
     """The gain a bet must have before the profit take sells it, per contract in probability.
     The clock's bar: the share of the bet's own room (1 less its all-in cost) that the market's time has used up, none at the open and all of it at the close. Early, any gain is worth cashing since the side can be bought back; late, the bar climbs toward the whole room.
