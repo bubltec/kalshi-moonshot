@@ -1,0 +1,12 @@
+samples 11788; the last third starts at sample 7858
+
+variant | log loss | change vs live (mean +- se) on all samples | on the last third
+  block 60 (live)                                     | 0.4472 | +0.0000 +- 0.0000 (n 11788) | +0.0000 +- 0.0000
+  market so far alone                                 | 0.4529 | +0.0057 +- 0.0016 (n 11788) | -0.0014 +- 0.0031
+  nested: so far, 15, 60, 180                         | 0.4442 | -0.0031 +- 0.0007 (n 11788) | -0.0040 +- 0.0014
+  nested: 15, 60, 180 (no market-so-far)              | 0.4441 | -0.0031 +- 0.0005 (n 11788) | -0.0020 +- 0.0010
+  nested: so far, 60, 180                             | 0.4434 | -0.0038 +- 0.0006 (n 11788) | -0.0042 +- 0.0012
+  adjacent: so far, 15 before, 60 before, 180 before  | 0.4431 | -0.0041 +- 0.0006 (n 11788) | -0.0013 +- 0.0012
+  adjacent: so far, 15 before, 60 before              | 0.4446 | -0.0027 +- 0.0005 (n 11788) | -0.0007 +- 0.0010
+DONE
+	

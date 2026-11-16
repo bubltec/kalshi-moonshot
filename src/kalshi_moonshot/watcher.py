@@ -956,7 +956,7 @@ class ProfitWatcher:
         reach = 60.0 * max(t.risk_long_scales or (60,)) + 100.0  # the history the scales need: the longest one and a minute's margin
         hour = ticks_mod.history.window(kp, now - max(3700.0, reach), now) if kp else None
         ref = ticks_mod.history.first_at_or_after(kp, t.close_ts - 900.0, 60.0) if kp else None
-        val = curverisk.long_chance(hour[0], hour[1], now, ref or 0.0, t.side, left, scales=tuple(t.risk_long_scales)) if hour else None
+        val = curverisk.long_chance(hour[0], hour[1], now, ref or 0.0, t.side, left, scales=tuple(t.risk_long_scales), elapsed=max(0.0, 900.0 - left)) if hour else None
         if val is None and t.shock_index and t.shock_ref > 0:
             # The perp is silent or stale (a futures reference stops ticking outside its hours: KP_BRENT had one reading in 70 minutes on 2026-11-13 and the check fell away, so a 9-second dip sold a Brent bet on the price alone). Read the lane's own spot index against its armed reference instead.
             spot = ticks_mod.history.window(t.shock_index, now - 3700.0, now)

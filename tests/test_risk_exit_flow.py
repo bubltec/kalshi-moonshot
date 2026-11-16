@@ -1057,3 +1057,12 @@ def test_integration_with_scales_the_hour_view_still_holds_a_dip_the_perp_says_s
     sells = held(tmp_path / "down", monkeypatch, live=True, confirm=0.4, long_scales="[15,30,60]")
     out = slide(sells)
     assert out and out[0].why.startswith("curve risk exit (max loss)")
+
+
+def test_integration_with_the_market_so_far_scale_the_hour_view_reaches_the_watcher_and_sells_when_the_perp_agrees(tmp_path, monkeypatch):
+    """The fixture's perp ramps smoothly over the market, so the market-so-far scale reads that ramp as movement (a trending open is a wide one) and its chance sits lower than the hour's: the hold the plain hour gave a 40 bp lead is not asserted here, only that the lane's scales reach the position and that a perp against the side still lets the stop through."""
+    seed_perp(monkeypatch, last_over_open=-0.004)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4, long_scales="[0,15,60,180]")
+    assert [tuple(x.risk_long_scales) for x in w.targets.values()] == [(0, 15, 60, 180)]
+    out = slide(w)
+    assert out and out[0].why.startswith("curve risk exit (max loss)")

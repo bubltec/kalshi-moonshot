@@ -63,3 +63,28 @@ def test_unit_long_chance_with_scales_uses_that_rate_and_without_them_the_hour()
 
     assert curverisk.long_chance(ts, vs, 0.0, ref, "yes", 300.0, scales=(15, 30, 60, 120, 180)) == pytest.approx(NormalDist().cdf(cush / (rate * math.sqrt(300.0))))
     assert curverisk.long_chance(ts, vs, 0.0, ref, "no", 300.0, scales=(15, 30, 60, 120, 180)) == pytest.approx(1.0 - curverisk.long_chance(ts, vs, 0.0, ref, "yes", 300.0, scales=(15, 30, 60, 120, 180)))
+
+
+def test_unit_a_scale_of_zero_is_the_market_so_far_and_needs_its_elapsed_time():
+    ts, vs = series(240, wild_from=8)  # the last eight minutes (the market so far) are quiet, everything before is five times as wild
+    so_far = curverisk.multiscale_rate(ts, vs, 0.0, (0,), elapsed=8 * 60.0)
+    assert so_far == pytest.approx(curverisk.multiscale_rate(ts, vs, 0.0, (8,)))
+    assert curverisk.multiscale_rate(ts, vs, 0.0, (0,)) is None  # no elapsed time: the scale cannot be read
+    both = curverisk.multiscale_rate(ts, vs, 0.0, (0, 15, 60, 180), elapsed=8 * 60.0)
+    parts = [curverisk.multiscale_rate(ts, vs, 0.0, (m,)) for m in (8, 15, 60, 180)]
+    assert both == pytest.approx(math.exp(sum(math.log(x) for x in parts) / 4))
+    assert so_far < both < parts[3]  # the quiet market so far pulls the blend under the wild longer scales
+    assert curverisk.multiscale_rate(ts, vs, 0.0, (15, 60, 180), elapsed=None) == pytest.approx(curverisk.multiscale_rate(ts, vs, 0.0, (15, 60, 180)))
+
+
+def test_unit_the_market_so_far_is_at_least_two_minutes():
+    ts, vs = series(240)
+    assert curverisk.multiscale_rate(ts, vs, 0.0, (0,), elapsed=10.0) == pytest.approx(curverisk.multiscale_rate(ts, vs, 0.0, (2,)))
+
+
+def test_unit_long_chance_passes_the_elapsed_time_through():
+    ts, vs = series(240, wild_from=8)
+    ref = vs[-16]
+    a = curverisk.long_chance(ts, vs, 0.0, ref, "yes", 300.0, scales=(0, 15, 60, 180), elapsed=600.0)
+    b = curverisk.long_chance(ts, vs, 0.0, ref, "yes", 300.0, scales=(10, 15, 60, 180))
+    assert a == pytest.approx(b)

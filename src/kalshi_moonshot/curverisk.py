@@ -107,10 +107,15 @@ def hour_rate(ts: list[float], vs: list[float], now: float, hours: float = 1.0) 
     return math.sqrt(sum(m * m for m in moves) / len(moves) / MINUTE)
 
 
-def multiscale_rate(ts: list[float], vs: list[float], now: float, scales: tuple[int, ...]) -> float | None:
-    """The hour view's movement read at several scales together (2026-11-15, user: "the hour view should look further, but we need the context of the current hour ... in 15, 30, 60, 120, 180 mins"): for each scale m minutes, the root-mean-square one-minute move over the last m minutes over sqrt(60) (what hour_rate reads for m = 60), and the geometric mean of those rates, so each scale counts as a factor of the next and none is picked. A scale is used only when the history holds at least min(m, MIN_MOVES) of its one-minute moves; None when no scale can be read. studies/results/2026-11-15-multiscale-hour-check.txt: on 11,942 samples the log-mean of 15, 30, 60, 120 and 180 beat the 60-minute block by 0.0035 log loss, and by 0.0024 on the last third that no weight was fitted on."""
+def multiscale_rate(ts: list[float], vs: list[float], now: float, scales: tuple[int, ...], elapsed: float | None = None) -> float | None:
+    """The hour view's movement read at several scales together (2026-11-15, user: "the hour view should look further, but we need the context of the current hour ... in 15, 30, 60, 120, 180 mins"): for each scale m minutes, the root-mean-square one-minute move over the last m minutes over sqrt(60) (what hour_rate reads for m = 60), and the geometric mean of those rates, so each scale counts as a factor of the next and none is picked. A scale is used only when the history holds at least min(m, MIN_MOVES) of its one-minute moves; None when no scale can be read. studies/results/2026-11-15-multiscale-hour-check.txt and 2026-11-15-market-start-segments-check.txt: the log-mean of 15, 30, 60, 120 and 180 beat the 60-minute block by 0.0035 log loss (0.0024 on the last third, which no weight was fitted on); with the market so far (scale 0) added to 15, 60 and 180 it beat it by 0.0031, and by 0.0040 on the last third."""
     if not ts or len(ts) != len(vs) or not scales:
         return None
+    # A scale of 0 is the market so far (2026-11-15 night, user: "start with the view from now - market start, 15 after that, 60, 180"): from the market's open to now, `elapsed` seconds, at least two minutes. Every scale ends now.
+    minutes = [max(2, int(round(elapsed / MINUTE))) if m == 0 else m for m in scales if m > 0 or elapsed is not None]
+    if not minutes:
+        return None
+    scales = tuple(minutes)
     levels: list[float] = []
     for k in range(max(scales) + 1):
         i = bisect.bisect_right(ts, now - k * MINUTE) - 1
@@ -130,14 +135,14 @@ def multiscale_rate(ts: list[float], vs: list[float], now: float, scales: tuple[
     return math.exp(sum(logs) / len(logs)) if logs else None
 
 
-def long_chance(ts: list[float], vs: list[float], now: float, ref: float, side: str, left: float, hours: float = 1.0, stale: float = 30.0, scales: tuple[int, ...] = ()) -> float | None:
+def long_chance(ts: list[float], vs: list[float], now: float, ref: float, side: str, left: float, hours: float = 1.0, stale: float = 30.0, scales: tuple[int, ...] = (), elapsed: float | None = None) -> float | None:
     """The long layer's chance that the side pays (2026-11-13, user, after a live sale of a bet that dipped briefly, never crossed the strike and went on to win: "the hour view showed it likely staying positive"): the distance of the Kalshi perp from its own value at the window open, over the typical movement of the perp across the last hour (rms of its 60 s moves, per sqrt second) for the time left. None when the hour is too short, the newest tick is stale, or the reference is unusable (the sale then does not wait for this layer)."""
     if ref <= 0 or left <= 0 or not ts or len(ts) != len(vs):
         return None
     j = bisect.bisect_right(ts, now) - 1
     if j < 0 or now - ts[j] > stale or vs[j] <= 0:
         return None
-    rate = multiscale_rate(ts, vs, now, scales) if scales else hour_rate(ts, vs, now, hours)
+    rate = multiscale_rate(ts, vs, now, scales, elapsed) if scales else hour_rate(ts, vs, now, hours)
     if rate is None:
         return None
     sign = 1.0 if side == "yes" else -1.0
