@@ -905,19 +905,38 @@ def evaluate(
                 f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
                 else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
             )
-    if spec.entry_spike_view or spec.entry_spike_min > -90:  # the note carries the reading on passes as well as buys, so the skipped decisions can be scored too
+    spike_on, cushion_on = spec.entry_spike_min > -90, spec.entry_cushion_edge_min > -90
+    spike_no = cushion_no = ""  # why each way to buy says no; a buy needs one of the lane's ways to say yes
+    if spec.entry_spike_view or spike_on:  # the note carries the reading on passes as well as buys, so the skipped decisions can be scored too
         try:
             sv = side_spike_view(shot)
         except Exception as exc:
             sv = None
             log.warning("spike view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if bet and spec.entry_spike_min > -90 and sv is None:
-            bet = False
-            note = f"the lane buys only when it can read the perp's last 90 s against its 3 hours (needs {spec.entry_spike_min:+g}). {note}"
-        elif bet and spec.entry_spike_min > -90 and sv[0] < spec.entry_spike_min:
-            bet = False
-            note = f"the perp has not moved toward this side: {sv[0]:+.1f} typical moves over the last 90 s, the lane needs {spec.entry_spike_min:+g}. {note}"
+        if spike_on and sv is None:
+            spike_no = f"the lane buys only when it can read the perp's last 90 s against its 3 hours (needs {spec.entry_spike_min:+g})"
+        elif spike_on and sv[0] < spec.entry_spike_min:
+            spike_no = f"the perp has not moved toward this side: {sv[0]:+.1f} typical moves over the last 90 s, the lane needs {spec.entry_spike_min:+g}"
         note = f"[spike view z {sv[0]:+.1f}, {sv[1]} of {curverisk.SPIKE_STRETCHES} as large] {note}" if sv is not None else f"[spike view unreadable] {note}"
+    if cushion_on:
+        try:
+            ce = side_cushion_edge(s, shot, spec.entry_cushion_edge_min)
+        except Exception as exc:
+            ce = None
+            log.warning("cushion edge unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if ce is None:
+            cushion_no = "the cushion's chance cannot be read (no perp, under 3 hours of it, no fitted model for this time left, or no reference at the open)"
+            note = f"[cushion unreadable] {note}"
+        else:
+            if ce[2] < ce[3]:
+                cushion_no = f"the cushion's chance {ce[1]:.3f} is {ce[2]:+.3f} against what the price needs, and the lane asks +{ce[3]:.3f} with this much time left"
+            note = f"[cushion {ce[0]:+.1f}, chance {ce[1]:.3f}, edge {ce[2]:+.3f} against +{ce[3]:.3f} needed] {note}"
+    if bet and (spike_on or cushion_on):
+        if (spike_on and not spike_no) or (cushion_on and not cushion_no):
+            note = f"[buy on the {'spike' if spike_on and not spike_no else 'cushion'}] {note}"
+        else:
+            bet = False
+            note = f"{'; and '.join(x for x in (spike_no, cushion_no) if x)}. {note}"
     if bet and spec.entry_view_scales:
         try:
             view = side_view(shot, tuple(spec.entry_view_scales))
@@ -1361,6 +1380,32 @@ def side_spike_view(shot: LongShot, now: float | None = None) -> tuple[float, in
         return None
     got = ticks_mod.history.window(kp, now - curverisk.SPIKE_LOOK * (curverisk.SPIKE_STRETCHES + 2) - 130.0, now)
     return curverisk.spike_view(got[0], got[1], now, shot.side) if got else None
+
+
+def side_cushion_edge(s: Settings, shot: LongShot, base: float, now: float | None = None) -> tuple[float, float, float, float] | None:
+    """(cushion, chance, edge, edge needed) for the buy's second way in (lane field entry_cushion_edge_min = `base`): the cushion of the series' Kalshi perp against its level at the market's open, the chance cushionmodel makes of Kalshi's mid and that cushion, that chance less the ask and its fee, and the edge the lane asks with this much time left. None when any part cannot be read."""
+    from . import cushionmodel
+    from . import ticks as ticks_mod
+    from .strategy import fee_per_contract
+    from .watcher import perp_index
+
+    now = time.time() if now is None else now
+    kp = perp_index(shot.series or shot.ticker.split("-")[0])
+    left = shot.hours_to_close * 3600.0
+    if not kp or left <= 0:
+        return None
+    got = ticks_mod.history.window(kp, now - cushionmodel.LOOK * (cushionmodel.STRETCHES + 2) - 130.0, now)
+    ref = ticks_mod.history.first_at_or_after(kp, now + left - 900.0, 60.0)  # 900: a 15-minute market's length, structural
+    if not got or not ref:
+        return None
+    cush = cushionmodel.cushion(got[0], got[1], now, ref, "yes", left)
+    if cush is None:
+        return None
+    cush = cush if shot.side == "yes" else -cush
+    p = cushionmodel.chance(cushionmodel.load(s), (shot.bid + shot.ask) / 2.0, cush, left)
+    if p is None:
+        return None
+    return cush, p, p - (shot.ask + fee_per_contract(shot.ask)), cushionmodel.edge_needed(base, left)
 
 
 def side_view(shot: LongShot, scales: tuple[int, ...], now: float | None = None) -> float | None:

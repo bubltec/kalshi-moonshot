@@ -2046,6 +2046,10 @@ class ProfitWatcher:
 
                 hotcheck.refresh(self._tape_db())
                 hotcheck.run_score(s, self.store_factory())
+            if any(sp.enabled and sp.entry_cushion_edge_min > -90 for sp in specs.values()):
+                from . import cushionmodel
+
+                cushionmodel.maybe_refit(s)
             if any(sp.enabled and sp.record_buy for sp in specs.values()):
                 from . import staterecord
 
