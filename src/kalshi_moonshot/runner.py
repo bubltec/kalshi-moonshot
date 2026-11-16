@@ -905,6 +905,13 @@ def evaluate(
                 f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
                 else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
             )
+    if spec.entry_scenario_view:  # shadow: a reading for the note, on passes as well as buys
+        try:
+            sc_note = side_scenario(store, shot)
+        except Exception as exc:
+            sc_note = None
+            log.warning("scenario unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        note = f"{sc_note or '[scenario unreadable]'} {note}"
     spike_on, cushion_on = spec.entry_spike_min > -90, spec.entry_cushion_edge_min > -90
     spike_no = cushion_no = ""  # why each way to buy says no; a buy needs one of the lane's ways to say yes
     if spec.entry_spike_view or spike_on:  # the note carries the reading on passes as well as buys, so the skipped decisions can be scored too
@@ -1380,6 +1387,43 @@ def side_spike_view(shot: LongShot, now: float | None = None) -> tuple[float, in
         return None
     got = ticks_mod.history.window(kp, now - curverisk.SPIKE_LOOK * (curverisk.SPIKE_STRETCHES + 2) - 130.0, now)
     return curverisk.spike_view(got[0], got[1], now, shot.side) if got else None
+
+
+def side_scenario(store: Store, shot: LongShot, now: float | None = None) -> str | None:
+    """The market's scenario as a tag for the note (lane field entry_scenario_view; scenario.py): the target and its place in the 15, 30 and 60 minute scopes before the open, the cushion and the spot's place in each scope now, and the series' last four markets. None when the series has no spot index, the hour before the open is not in memory, or the target cannot be read."""
+    import bisect
+    import math
+
+    from . import scenario, variants
+    from . import ticks as ticks_mod
+
+    now = time.time() if now is None else now
+    series = shot.series or shot.ticker.split("-")[0]
+    left = shot.hours_to_close * 3600.0
+    opened = now + left - 900.0  # 900: a 15-minute market's length, structural
+    ix = variants.spot_index(series, "", now)
+    got = ticks_mod.history.window(ix, opened - 3700.0, now) if ix else None
+    if not got:
+        return None
+    ts, vs = got
+    opening = scenario.at_open(ts, vs, opened)
+    if opening is None:
+        return None
+    sc = opening["scopes"]
+    unit = next((sc[m]["unit"] for m in reversed(scenario.SCOPES) if m in sc), None)  # the widest scope read
+    cush = scenario.cushion(ts, vs, now, opening["target"], shot.side, left, unit) if unit else None
+    i = bisect.bisect_right(ts, now) - 1
+    now_place = {m: got_["place"] for m in scenario.SCOPES if i >= 0 and (got_ := scenario.scope(ts, vs, now, m, vs[i])) is not None}
+    prev: list[tuple[float | None, int | None]] = []
+    for w in store.db.execute("SELECT ticker, close_ts, strike, settled_value FROM windows WHERE series=? AND close_ts<=? AND strike IS NOT NULL ORDER BY close_ts DESC LIMIT 4", (series, opened + 1.0)).fetchall():
+        strike, settled = float(w["strike"] or 0.0), w["settled_value"]
+        if unit and strike > 0 and settled:
+            mg = math.log(float(settled) / strike) / (unit * math.sqrt(15.0))
+        else:
+            mg = scenario.margin(ts, vs, float(w["close_ts"]), strike, unit) if unit else None
+        rows = ticks_mod.mids.rows(w["ticker"])
+        prev.append((mg, scenario.flips([m for _, m in rows]) if rows else None))
+    return scenario.note(opening, cush, now_place, prev)
 
 
 def side_cushion_edge(s: Settings, shot: LongShot, base: float, now: float | None = None) -> tuple[float, float, float, float] | None:
