@@ -1,0 +1,7 @@
+by seconds left at the buy: n | made money | net (per $ staked) | avg win | avg loss | stopped within 60 s of the buy
+  under 180 s    : n  11 | won 55% | $  -20.30 (-10.6%) | win $ 8.64 | loss $14.42 | quick stops 2
+  180-300 s      : n  11 | won 64% | $   +6.36 ( +2.8%) | win $ 6.79 | loss $10.29 | quick stops 2
+  300-450 s      : n  34 | won 62% | $  -52.11 ( -8.5%) | win $ 4.63 | loss $11.48 | quick stops 0
+  450 s and over : n 104 | won 65% | $  -42.07 ( -1.9%) | win $ 5.75 | loss $12.03 | quick stops 1
+DONE
+	
