@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from kalshi_moonshot import config, lanes, watcher
+from kalshi_moonshot import config, curverisk, lanes, watcher
 from kalshi_moonshot import ticks as ticks_mod
 from kalshi_moonshot.store import Store
 
@@ -64,9 +64,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false', nudge_hour='false', nudge_units=0, long_scales=''):
+def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false', nudge_hour='false', nudge_units=0, long_scales='', extra=''):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion) + f"nudge_hour_factor={nudge_hour}\nnudge_units={nudge_units}\n" + (f"curve_risk_long_scales={long_scales}\n" if long_scales else ""))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion) + f"nudge_hour_factor={nudge_hour}\nnudge_units={nudge_units}\n" + (f"curve_risk_long_scales={long_scales}\n" if long_scales else "") + (extra + "\n" if extra else ""))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -1080,3 +1080,43 @@ def test_integration_the_hour_view_is_re_read_every_second_not_every_five(tmp_pa
     ticks_mod.history.note("KP_BTC", now + 1.8, 100.0 * (1.0 - 0.006))  # the perp drops 0.6% under the open
     second = w._risk_long(t, now + 2.0, 108.0)
     assert second is not None and second < first - 0.05  # seen two seconds later, not five
+
+
+# ---- sure wins are not sold (2026-11-15 night, user: "if it stops these sure wins from selling, sure. I thought we had this fixed") ----
+def test_unit_sure_win_holds_from_the_sure_bid_at_any_time_and_from_the_late_bid_in_the_last_fifth():
+    assert curverisk.sure_win(0.96, 700.0, 0.95, -1.0) and curverisk.sure_win(0.95, 20.0, 0.95, -1.0)
+    assert not curverisk.sure_win(0.94, 700.0, 0.95, -1.0)
+    assert curverisk.sure_win(0.92, 150.0, 0.95, 0.90)  # the last fifth is 180 s: 0.92 is over the late bid
+    assert not curverisk.sure_win(0.92, 400.0, 0.95, 0.90)  # not late: only the sure bid counts
+    assert not curverisk.sure_win(0.99, 10.0, -1.0, -1.0)  # off: nothing is held
+
+
+def test_integration_a_take_that_would_sell_at_a_bid_of_0_96_is_held_with_the_sure_hold_and_sold_without_it(tmp_path, monkeypatch):
+    (tmp_path / "off").mkdir()
+    (tmp_path / "on").mkdir()
+    w = held(tmp_path / "off", monkeypatch, live=True, take="true")
+    assert climb(w, 0.82, 0.96, 700) is None
+    sig = level(w, 0.96, 700)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")  # as it was: the bid levels out and it sells
+    ticks_mod.mids._rows.clear()
+    w2 = held(tmp_path / "on", monkeypatch, live=True, take="true", extra="curve_take_sure=0.95")
+    assert climb(w2, 0.82, 0.96, 700) is None
+    assert level(w2, 0.96, 700) is None  # a sure win: held to settlement
+
+
+def test_integration_a_bid_of_0_92_is_sold_early_and_held_late_with_the_late_hold(tmp_path, monkeypatch):
+    (tmp_path / "early").mkdir()
+    w = held(tmp_path / "early", monkeypatch, live=True, take="true", extra="curve_take_sure=0.95\ncurve_take_sure_late=0.90")
+    climb(w, 0.82, 0.92, 700)
+    sig = level(w, 0.92, 700)  # 700 s left: not the last fifth, 0.92 is under the sure bid: the take sells as before
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
+
+
+def test_unit_the_sure_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false'))
+    s = config.load()
+    assert "curve_take_sure" not in lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + "curve_take_sure=0.95\n")
+    s = config.load()
+    assert lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)["curve_take_sure"] == "0.95"

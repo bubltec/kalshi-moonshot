@@ -238,6 +238,9 @@ class Target:
     risk_take_cushion: bool = False  # the spot's cushion is asked before the take sells (lane field curve_take_cushion)
     risk_take_held: bool = False  # the cushion has already been logged as holding this bet's take
     risk_take_slope: float = 0.08  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
+    risk_take_sure: float = -1.0  # the profit take holds at a bid at or over this (lane field curve_take_sure)
+    risk_take_sure_late: float = -1.0  # ... and in the last fifth from this bid (curve_take_sure_late)
+    risk_sure_logged: bool = False
     risk_long_scales: tuple = ()  # the minutes the hour view reads its movement over, together (lane field curve_risk_long_scales); empty = the last hour
     risk_nudge_units: float = 0.0  # the squeeze has no cap: the allowed miss is this many typical minutes of the market times how strongly everything agrees (lane field nudge_units; 0 = the cents cap)
     risk_nudge_hour: bool = False  # the squeeze's cap is scaled by the hour's width correction (lane field nudge_hour_factor)
@@ -1007,6 +1010,11 @@ class ProfitWatcher:
             wants = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit)
             flat_ok = wants and (left <= 900.0 * curverisk.LATE_SHARE or bid >= curverisk.HIGH_BID) and curverisk.flat_holds(net, self._take_cushion(t, now, left, net), unit, left)  # in the last fifth a flat bid is held while the spot's cushion backs the price; a thin cushion sells (user, 2026-11-14)
             taken = wants and not curverisk.still_rising(t.risk_take_hist, now, look, unit, flat_ok)
+            if taken and curverisk.sure_win(bid, left, t.risk_take_sure, t.risk_take_sure_late):
+                taken = False  # a sure win: the bid is far enough up that the sale gives up cents to a dollar and pays a fee for protection the price already carries
+                if not t.risk_sure_logged:
+                    t.risk_sure_logged = True
+                    log.info("curve risk: %s %s profit take held, a sure win: bid %.2f is at or over the lane's %s (%.0fs left); held to settlement", t.ticker, t.lane, bid, f"{t.risk_take_sure:g} at any time" if t.risk_take_sure > 0 and bid >= t.risk_take_sure else f"{t.risk_take_sure_late:g} in the last fifth", left)
             cushion = ""
             if taken and t.risk_take_cushion:
                 chance = self._take_cushion(t, now, left, net)
@@ -1888,6 +1896,7 @@ class ProfitWatcher:
                 held.risk_nudge_hour = spec.nudge_hour_factor
                 held.risk_nudge_units = spec.nudge_units
                 held.risk_long_scales = tuple(spec.curve_risk_long_scales)
+                held.risk_take_sure, held.risk_take_sure_late = spec.curve_take_sure, spec.curve_take_sure_late
                 held.risk_take_cushion = spec.curve_take_cushion
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):

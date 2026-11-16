@@ -207,6 +207,13 @@ LATE_SHARE = 0.2  # the last fifth of a market (three minutes of fifteen): where
 HIGH_BID = 0.95  # 2026-11-14 (user: "I don't think when it's above 95 we need to consider an early sale as long as it has cushion"): from this bid up, a flat bid is held whenever the spot's cushion backs the price, at any time left, as in the last fifth of the market. The user's own number: five cents is all that is left to win.
 
 
+def sure_win(bid: float, left: float, sure: float = -1.0, sure_late: float = -1.0, window: float = 900.0) -> bool:
+    """True when a bet is far enough ahead that the profit take should hold it to settlement (2026-11-15 night, user: "we keep selling our profit at the last second, always taking a fee ... if it stops these sure wins from selling, sure"): the bid is at or over `sure` at any time, or at or over `sure_late` in the last LATE_SHARE of the market. A sale there gives up the cents to a full dollar and pays the fee for protection the market's price already covers: studies/results/2026-11-15-late-take-check.txt, 82 live takes: at a bid of 0.95 and over 0 of 12 saved a bet (sale less hold -7.07), at 0.90 to 0.95 in the last 180 s 0 of 8 (-18.45), while the takes earlier and lower earned +115 and saved 12 bets. Off (-1) by default."""
+    if sure > 0 and bid >= sure:
+        return True
+    return sure_late > 0 and window > 0 and left <= window * LATE_SHARE and bid >= sure_late
+
+
 def confirm_bar(confirm: float, left: float, window: float = 900.0) -> float:
     """The chance the hour view must reach to hold a risk sale (lane field curve_risk_confirm), faded as the close nears (2026-11-15, user: "Yes replay it so it does the fade", after ETH 09:00 YES was held to a full loss: the stop wanted out from 104 s left and the hour view, which is slow, stayed at 0.44 to 0.61 until 37 s left).
     The lane's `confirm` with more than the last LATE_SHARE of the market left, rising straight to 1.0 (the view can never hold) at the close: a dip with time left may still come back, one with a minute left cannot. Same last fifth as the flat hold; replayed on 98 live bets: +$47.32 against the constant bar (5 better, 1 worse), studies/results/2026-11-15-hour-view-fade-replay.txt."""
