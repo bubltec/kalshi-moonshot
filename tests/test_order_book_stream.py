@@ -78,3 +78,14 @@ def test_a_jump_names_what_it_skipped(caplog):
         assert s._book_in_order({"kind": "book_delta", "seq": 4, "sid": 3, "ticker": "X"}) is False
     assert "something_else" in caplog.text and "(3, 'not seen at all')" in caplog.text
     ticks.books.clear()
+
+
+def test_an_update_subscription_reply_takes_a_number_and_is_no_gap():
+    ticks.books.clear()
+    ticks.books.snapshot("M", [(0.4, 1)], [], 1.0)
+    s = KalshiStream(types.SimpleNamespace(), lambda e: None, books=True)
+    s._book_seq[3] = 5
+    s.handle('{"type": "ok", "sid": 3, "seq": 6, "msg": {}}')
+    assert s._book_in_order({"kind": "book_delta", "seq": 7, "sid": 3, "ticker": "M"}) is True
+    assert ticks.books.levels("M", "yes") is not None  # nothing was cleared
+    ticks.books.clear()

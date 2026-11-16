@@ -361,6 +361,8 @@ class KalshiStream:
             self._stray[msg["seq"]] = (msg.get("type"), str((msg.get("msg") or {}).get("market_ticker")))  # a numbered message on the book subscription that is not a book message the code applied: kept so a sequence jump can say what it skipped
             if len(self._stray) > 50:
                 self._stray.pop(next(iter(self._stray)))
+            if msg.get("type") == "ok" and self._book_seq.get(msg["sid"]) == msg["seq"] - 1:
+                self._book_seq[msg["sid"]] = msg["seq"]  # Kalshi's reply to an update_subscription takes the next number on the subscription (2026-11-16: every "jump" so far was one of these): it is not a lost delta
         if event is not None and event["kind"] in {"book_snapshot", "book_delta"}:
             if not self._book_in_order(event):
                 return  # a gap in the sequence: fresh snapshots are on their way, nothing is applied until they arrive
