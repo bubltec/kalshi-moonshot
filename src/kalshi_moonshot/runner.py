@@ -905,12 +905,18 @@ def evaluate(
                 f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
                 else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
             )
-    if spec.entry_spike_view:  # shadow: on passes as well as buys, so the skipped decisions can be scored too
+    if spec.entry_spike_view or spec.entry_spike_min > -90:  # the note carries the reading on passes as well as buys, so the skipped decisions can be scored too
         try:
             sv = side_spike_view(shot)
         except Exception as exc:
             sv = None
             log.warning("spike view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if bet and spec.entry_spike_min > -90 and sv is None:
+            bet = False
+            note = f"the lane buys only when it can read the perp's last 90 s against its 3 hours (needs {spec.entry_spike_min:+g}). {note}"
+        elif bet and spec.entry_spike_min > -90 and sv[0] < spec.entry_spike_min:
+            bet = False
+            note = f"the perp has not moved toward this side: {sv[0]:+.1f} typical moves over the last 90 s, the lane needs {spec.entry_spike_min:+g}. {note}"
         note = f"[spike view z {sv[0]:+.1f}, {sv[1]} of {curverisk.SPIKE_STRETCHES} as large] {note}" if sv is not None else f"[spike view unreadable] {note}"
     if bet and spec.entry_view_scales:
         try:
