@@ -1,0 +1,43 @@
+bets with a result and a perp tape: 527 (live 164); net $-96.85 on $4686
+
+all bets: by the signs of the 3-minute slope and the 13+21-minute slope (side-signed; up = the side's price rising)
+  short up, long up                                    n  255 | won  68% | net   -2.4% | win $ 2.67 loss $ 6.61
+  short down, long up                                  n   65 | won  46% | net   -2.9% | win $ 2.99 loss $ 3.00
+  short up, long down                                  n  137 | won  62% | net   -1.7% | win $ 1.84 loss $ 3.31
+  short down, long down                                n   70 | won  56% | net   +1.9% | win $ 1.34 loss $ 1.52
+
+live only: by the signs of the 3-minute slope and the 13+21-minute slope (side-signed; up = the side's price rising)
+  short up, long up                                    n  109 | won  65% | net   -4.2% | win $ 5.47 loss $12.80
+  short down, long up                                  n   19 | won  53% | net   -2.3% | win $ 7.59 loss $ 9.36
+  short up, long down                                  n   26 | won  65% | net   -3.5% | win $ 6.18 loss $13.57
+  short down, long down                                n   10 | won  60% | net   +4.4% | win $ 5.60 loss $ 6.87
+
+all bets by quintile of R = z3 - z13 (low = the short slope has turned against the long one)
+  quintile 1 (R -2.67 to -0.50)                        n  105 | won  49% | net   -8.1% | win $ 3.00 loss $ 4.50
+  quintile 2 (R -0.50 to +0.12)                        n  105 | won  65% | net   -4.9% | win $ 2.54 loss $ 5.99
+  quintile 3 (R +0.12 to +0.66)                        n  106 | won  67% | net   -0.8% | win $ 2.34 loss $ 4.96
+  quintile 4 (R +0.66 to +1.18)                        n  105 | won  66% | net   -2.0% | win $ 1.86 loss $ 3.98
+  quintile 5 (R +1.19 to +4.22)                        n  106 | won  65% | net   +8.8% | win $ 2.07 loss $ 2.09
+
+all bets by quintile of R = z5 - z21 (low = the short slope has turned against the long one)
+  quintile 1 (R -2.95 to -0.32)                        n  105 | won  48% | net  -13.8% | win $ 3.08 loss $ 5.45
+  quintile 2 (R -0.31 to +0.27)                        n  105 | won  64% | net   +5.5% | win $ 3.21 loss $ 4.08
+  quintile 3 (R +0.28 to +0.73)                        n  106 | won  63% | net   +0.1% | win $ 2.47 loss $ 4.22
+  quintile 4 (R +0.74 to +1.27)                        n  105 | won  68% | net   +0.1% | win $ 1.80 loss $ 3.74
+  quintile 5 (R +1.28 to +3.39)                        n  106 | won  69% | net   -1.8% | win $ 1.36 loss $ 3.41
+
+all bets by how far the side had already run over 13 minutes (z13): extended = a long move already made
+  z13 -99.0 to -0.5                                    n   87 | won  56% | net   -1.5% | win $ 1.54 loss $ 2.14
+  z13 -0.5 to +0.5                                     n  279 | won  65% | net   +3.1% | win $ 2.22 loss $ 3.44
+  z13 +0.5 to +1.5                                     n  135 | won  65% | net   -4.2% | win $ 2.87 loss $ 6.88
+  z13 +1.5 to +99.0                                    n   26 | won  35% | net  -25.0% | win $ 3.43 loss $ 7.08
+
+what skipping the flagged buys would have changed (same bets, their result removed; thresholds chosen after seeing the table above, so said to be so)
+  all bets  extended: z13 at or over +1.5       : skips  26 bets (9 winners, 17 losers), change $  +89.52; the rest: net $   -7.33 (-0.2% on $4328)
+  all bets  rolled over: z5 - z21 under -0.3    : skips 106 bets (51 winners, 55 losers), change $ +145.07; the rest: net $  +48.22 (+1.3% on $3626)
+  all bets  either                              : skips 124 bets (57 winners, 67 losers), change $ +185.15; the rest: net $  +88.30 (+2.6% on $3415)
+  live only extended: z13 at or over +1.5       : skips  13 bets (6 winners, 7 losers), change $  +77.41; the rest: net $  -39.70 (-1.3% on $3019)
+  live only rolled over: z5 - z21 under -0.3    : skips  50 bets (26 winners, 24 losers), change $ +131.78; the rest: net $  +14.67 (+0.6% on $2337)
+  live only either                              : skips  57 bets (30 winners, 27 losers), change $ +159.80; the rest: net $  +42.69 (+2.0% on $2181)
+DONE
+	
