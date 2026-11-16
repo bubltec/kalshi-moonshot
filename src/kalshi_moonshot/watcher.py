@@ -251,6 +251,8 @@ class Target:
     risk_squeeze: float = 0.0  # the most a loss may be short of the max loss and still count as reaching it (lane field squeeze_max)
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
     risk_stop_hold: float = 0.0  # the max-loss stop waits this share of the time left (lane field curve_risk_stop_hold)
+    risk_early_hold: float = 0.0  # no loss sale while more than this share of the market is still to run (lane field curve_risk_early_hold)
+    risk_early_off: bool = False  # a loss sale was wanted early and held: this bet's loss sales stay off to settlement
     risk_at: float = 0.0  # the risk check reads at most once a second
     risk_noted: float = 0.0
     risk_since: float = 0.0  # when the risk began to stay high without a break (0 = not high)
@@ -1067,6 +1069,14 @@ class ProfitWatcher:
         if not stop and (bid < CURVE_MIN_BID or not curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):  # under the minimum bid there is nothing left to sell for, on the line as on the max loss
             t.risk_since = 0.0
             t.risk_held_kind = ""
+            return None
+        if t.risk_early_hold > 0 and pnl < 0 and (t.risk_early_off or curverisk.early_hold(left, 900.0, t.risk_early_hold)):
+            # A loss sale is wanted with most of the market still to run: held, and held to settlement (lane field curve_risk_early_hold). The market-units reading is logged for the forward score, not used.
+            unit_now = self._risk_unit(t, now)
+            reach = unit_now * math.sqrt(left / 60.0) if unit_now and left > 0 else 0.0
+            t.risk_early_off = True
+            self._risk_held(t, r, bid, now, left, pnl, "early hold", f"a loss sale ({'max loss' if stop else 'line'}) was wanted with {left:.0f}s left, over {t.risk_early_hold:g} of the market: held, and this bet's loss sales stay off to settlement; 0.50 less the bid is {f'{(0.5 - net) / reach:.2f}' if reach > 0 else 'n/a'} of what the market typically travels in the time left")
+            t.risk_since = 0.0
             return None
         if t.risk_since <= 0:
             t.risk_since = now
@@ -1908,6 +1918,7 @@ class ProfitWatcher:
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_stop_hold = spec.curve_risk_stop_hold
+                held.risk_early_hold = spec.curve_risk_early_hold
                 held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_max
                 held.risk_nudge_hour = spec.nudge_hour_factor
                 held.risk_nudge_units = spec.nudge_units

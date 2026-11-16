@@ -1190,3 +1190,59 @@ def test_integration_a_held_sure_win_leaves_a_stored_row_so_its_effect_can_be_sc
     assert level(w, 0.96, 450) is None
     rows = held_rows(tmp_path)
     assert rows and any(r["held"].startswith("sure hold: ") for r in rows)
+
+
+# The early hold (2026-11-16, user, on DOGE 09:30 YES bought at 0.59, sold by the max-loss stop at 0.36 with 507 s left, which then won: "we still have a problem with selling early ... before 5 mins remaining it doesn't usually matter"; "Go live with it"):
+# while more than the lane's share of the market is still to run, a loss is not sold, and a bet held this way is held to settlement. studies/results/2026-11-16-stop-early-latch-replay.txt.
+def test_unit_the_early_hold_is_a_share_of_the_market_still_to_run():
+    assert curverisk.early_hold(507.0, 900.0, 0.53)  # DOGE: 507 s left is over 477
+    assert not curverisk.early_hold(470.0, 900.0, 0.53)
+    assert not curverisk.early_hold(880.0, 900.0, 0.0)  # off
+
+
+def test_integration_a_loss_with_most_of_the_market_to_run_is_not_sold(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
+    assert sold_after(w, 0.55, 600, limit=60) is None  # past the max loss from the first quote, 10 minutes left: held
+    t = w.targets.get((TICKER, "risk_only"))
+    assert t is not None and t.risk_early_off
+
+
+def test_integration_a_bet_held_early_is_held_to_settlement_even_when_it_falls_further(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
+    assert sold_after(w, 0.55, 600, limit=10) is None
+    assert sold_after(w, 0.30, 300, limit=120) is None  # five minutes left and deeper: the hold stays (what the replay scored)
+    assert sold_after(w, 0.20, 60, limit=40) is None
+
+
+def test_integration_a_loss_first_reached_later_in_the_market_sells_as_before(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
+    yes_bid(w, 0.80, 600)  # early and fine: nothing wanted, nothing latched
+    assert signals(w) == []
+    took = sold_after(w, 0.55, 450)  # 450 s left is under 477: the stop and its 7.5 s wait, as without the hold
+    assert took is not None and 7 <= took <= 9
+
+
+def test_integration_without_the_setting_an_early_loss_sells_as_before(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5)
+    took = sold_after(w, 0.55, 600)  # 15 s x (600 / 900) = 10 s
+    assert took is not None and 9 <= took <= 11
+
+
+def test_integration_the_early_hold_is_written_down_once_with_the_market_units_reading(tmp_path, monkeypatch):
+    import json
+
+    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
+    assert sold_after(w, 0.55, 600, limit=20) is None
+    rows = [json.loads(x) for x in (tmp_path / "risk_shadow.jsonl").read_text().splitlines()]
+    early = [r for r in rows if "early hold" in str(r.get("held", ""))]
+    assert len(early) == 1 and "stay off to settlement" in early[0]["held"] and "of what the market typically travels" in early[0]["held"]
+
+
+def test_unit_the_early_hold_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
+    import dataclasses
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
+    assert "curve_risk_early_hold" not in lanes.settings_of(base, s)
+    assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, curve_risk_early_hold=0.53), s)

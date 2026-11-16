@@ -1,0 +1,17 @@
+window: since 2026-11-14 17:02 ET; 62 max-loss sales with quotes, 25 more without
+  all              n  62 | what happened $ -712.03 | reach: blocks 43 (16 won), $ -712.75 (  -0.72) | clock: blocks 10 (5 won), $ -667.10 ( +44.93)
+
+by the time left when the live stop sold
+  over 8 min       n  10 | what happened $ -105.53 | reach: blocks 10 (5 won), $  -60.60 ( +44.93) | clock: blocks 10 (5 won), $  -60.60 ( +44.93)
+  5 to 8 min       n  12 | what happened $ -146.95 | reach: blocks 10 (3 won), $ -132.30 ( +14.65) | clock: blocks  0 (0 won), $ -146.95 (  +0.00)
+  3 to 5 min       n  19 | what happened $ -225.70 | reach: blocks 15 (4 won), $ -301.42 ( -75.71) | clock: blocks  0 (0 won), $ -225.70 (  +0.00)
+  under 3 min      n  21 | what happened $ -233.85 | reach: blocks  8 (4 won), $ -218.43 ( +15.42) | clock: blocks  0 (0 won), $ -233.85 (  +0.00)
+
+the reach rule by how far under even the sale was, in reaches (under 1 = blocked)
+  0.0 to 0.5: n 14 | won if held  4 | hold less sale $  -53.12
+  0.5 to 1.0: n 28 | won if held 11 | hold less sale $  +45.67
+  1.0 to 1.5: n 14 | won if held  2 | hold less sale $  -12.40
+  1.5 to 2.5: n  5 | won if held  0 | hold less sale $  -10.03
+  2.5 to 100.0: n  0 | won if held  0 | hold less sale $   +0.00
+
+Notes: run 2026-11-16 about 10:02 ET on the host. A blocked sale is held to settlement. The clock line (8 minutes) was read off the loss-sale table after seeing it. The reach rule blocks 43 of 62 sales and nets about zero (+44.93, +14.65, -75.71, +15.42); its bands are not monotonic. 10 sales and 5 winners carry the clock result.

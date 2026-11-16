@@ -66,6 +66,12 @@ def stopped(pnl: float, q: float, max_loss: float) -> bool:
     return max_loss > 0 and pnl <= -max_loss * q
 
 
+def early_hold(left: float, window: float, share: float) -> bool:
+    """True while more than `share` of the market is still to run: a loss is not sold there (lane field curve_risk_early_hold; 0 = off).
+    2026-11-16, user, on DOGE 09:30 YES bought at 0.59, sold by the max-loss stop at 0.36 with 507 s left after a 34 s wait, which then won: "we still have a problem with selling early. i get that the price dipped, but before 5 mins remaining it doesn't usually matter"; "Go live with it". studies/results/2026-11-16-stop-early-latch-replay.txt: the 10 max-loss sales made with over 8 minutes left (5 went on to win) return +44.93 held to settlement; a longer wait instead of a hold was -9.20 on the same 10 (2026-11-16-stop-wait-time-replay.txt). The 8 minutes (0.53 of a 15-minute market) was read off that table after seeing it. The same hold measured in the market's own movement (0.50 less the bid within its typical minute x sqrt(minutes left)) came out flat (-0.71 on 62 sales: it blocks 43 of them), so it is logged with each hold and not used."""
+    return share > 0 and window > 0 and left > share * window
+
+
 def sale_ok(q: float, line: float, pnl: float, min_profit: float) -> bool:
     """Whether the risk is high and a sale is worth making. A loss is worth cutting once the risk is under the line (a small loss beats a full one). A profit is worth taking when it is at least min_profit * q of the cost: with plenty of cushion the profit has to be worth the fee and the spread, as the risk rises the profit we ask for shrinks toward nothing, because a profit at high risk is the one most likely to vanish."""
     if line <= 0 or q >= line:

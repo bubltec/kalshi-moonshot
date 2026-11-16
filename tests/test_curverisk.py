@@ -78,7 +78,7 @@ CLOSE = 9_900.0
 
 def target(**kw):
     base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_min_profit=0.01, risk_stop_hold=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_squeeze=0.0, risk_unit=None, risk_unit_at=0.0, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
+                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_early_hold=0.0, risk_early_off=False, risk_min_profit=0.01, risk_stop_hold=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_squeeze=0.0, risk_unit=None, risk_unit_at=0.0, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
     base.setdefault("risk_held_kind", "")
     base.setdefault("risk_nudge_units", 0.0)
     base.setdefault("risk_nudge_hour", False)
