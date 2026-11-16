@@ -457,7 +457,7 @@ class TapeRecorder:
         self.extra_tickers: Any = None  # a callable returning more tickers to stream (positions we hold in any market)
         self.market_listeners: list[Any] = []  # called with every lifecycle market event (created, activated, close changed, settled) after the shared list has it; must be fast and never raise
         self.listeners: list[Any] = []  # called with every event after it is stored (must be fast and never raise)
-        self.stream = KalshiStream(client, self._on_kalshi, fills=self.role != "record", on_feed=self._feed_state)  # the recorder has no use for the account's fills: the bot's stream carries them
+        self.stream = KalshiStream(client, self._on_kalshi, fills=self.role != "record", on_feed=self._feed_state, books=self.role != "record" and os.environ.get("KALSHI_BOOKS", "") == "1")  # the recorder has no use for the account's fills: the bot's stream carries them
         # Sports and esports series list a new market every few minutes, and a changed market list reconnects a stream. They get their own connection so the
         # live one (15-minute quotes, settlement indexes, the account's fills) is never dropped for them.
         self.extra_stream = KalshiStream(client, self._on_kalshi, index_feed=False, fills=False)
@@ -492,6 +492,12 @@ class TapeRecorder:
 
     def _on_event(self, e: dict[str, Any]) -> None:
         kind = e.get("kind")
+        if kind == "book_snapshot":  # the order book channel: kept in ticks.books, never written to the tape
+            ticks_mod.books.snapshot(str(e["ticker"]), e["yes"], e["no"], time.time())
+            return
+        if kind == "book_delta":
+            ticks_mod.books.delta(str(e["ticker"]), str(e["side"]), float(e["price"]), float(e["delta"]), time.time())
+            return
         if kind in {"strike", "result", "market"}:
             cache = getattr(self.client, "cache", None)
             if cache is not None:

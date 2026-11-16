@@ -1860,6 +1860,15 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
         price, skip = _resting_price(shot, spec, book)
         if price is None:
             return Placed(skip)
+    ahead_at_bid = None
+    if spec.buy_rest_queue_note or spec.buy_rest_queue_max > 0:
+        # The queue ahead of a bid, from the websocket book: price-time priority puts the shares at better prices first, then the ones already resting at our price. No REST call.
+        from . import ticks
+
+        got = ticks.books.shares_ahead(shot.ticker, shot.side, price)
+        ahead_at_bid = got[1] if got is not None else None
+        if spec.buy_rest_queue_max > 0 and ahead_at_bid is not None and ahead_at_bid > spec.buy_rest_queue_max:
+            return Placed(f"The resting bid was not placed and did not fill: {ahead_at_bid:g} shares ahead of our {count:g}, over the lane's {spec.buy_rest_queue_max:g}; the ask is taken instead.")
     started = time.time()
     try:
         resp = client.buy_resting(shot.ticker, shot.side, count, price, wait, client_order_id=order_key)
@@ -1888,19 +1897,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     filled = spent = fee_paid = 0.0
     seen: set[str] = set()
     deadline = started + wait + 3.0
-    ahead = None
-    queue_text = ""
-    if order_id and (spec.buy_rest_queue_note or spec.buy_rest_queue_max > 0):
-        reader = getattr(client, "order_queue_position", None)
-        ahead = reader(order_id) if reader else None
-        queue_text = f" Queue: {ahead:g} shares ahead of our {count:g}." if ahead is not None else " Queue: not readable."
-        if spec.buy_rest_queue_max > 0 and ahead is not None and ahead > spec.buy_rest_queue_max:
-            try:
-                client.cancel_order(order_id)  # a queue that will not reach us in the wait: drop the bid and let the take at the ask run now, not after the wait
-            except KalshiError:
-                pass
-            queue_text = f" Queue: {ahead:g} shares ahead of our {count:g}, over the lane's {spec.buy_rest_queue_max:g}: the bid was cancelled at once and the ask is taken instead."
-            deadline = time.time() + 2.0  # long enough for a fill that beat the cancel to show
+    queue_text = f" Queue: {ahead_at_bid:g} shares ahead of our {count:g}." if ahead_at_bid is not None else (" Queue: not readable." if spec.buy_rest_queue_note or spec.buy_rest_queue_max > 0 else "")
     while time.time() < deadline and filled < count - 1e-9:
         time.sleep(2.0)
         try:

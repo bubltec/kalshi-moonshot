@@ -166,7 +166,7 @@ class RestClient(Client):
         super().__init__(fills, asks)
         self.rest_fill, self.rested = rest_fill, []
 
-    ahead = None  # the shares the queue reports ahead of the resting bid (None: not readable)
+    ahead = None  # the shares the websocket book shows ahead of the resting bid (None: no book); the test puts them in ticks.books
     cancelled = None
 
     def buy_resting(self, ticker, side, count, price, seconds, client_order_id=None, post_only=True):
@@ -174,7 +174,7 @@ class RestClient(Client):
         return {"order_id": "r1"}
 
     def order_queue_position(self, order_id):
-        return self.ahead
+        raise AssertionError("the queue is never read over REST")
 
     def cancel_order(self, order_id):
         self.cancelled = order_id
@@ -375,13 +375,22 @@ def test_the_real_gate_still_refuses_a_second_ordinary_buy_of_a_held_market(real
     assert risk.check(s, store, shot.ticker, 0.3, max_trade=0.3, allow_held=True).ok is True
 
 
+def book_ahead(shot, n):
+    """Put `n` shares at a better price than any bid into the websocket book (None: no book at all)."""
+    from kalshi_moonshot import ticks
+
+    ticks.books.clear()
+    if n is not None:
+        ticks.books.snapshot(shot.ticker, [(0.99, n)] if shot.side == "yes" else [], [(0.99, n)] if shot.side == "no" else [], 1.0)
+
+
 # ---- the queue (2026-11-16, user: several buy orders did not fill; "there's a queue ... let's try it") ----
 def test_the_queue_position_is_read_once_and_put_in_the_note_for_a_bid_that_misses(setup, monkeypatch):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, buy_rest_queue_note=True)
     monkeypatch.setattr(runner.time, "sleep", lambda x: None)
     client = RestClient(fills=[1.5], asks=[0.30])
-    client.ahead = 240.0
+    book_ahead(shot, 240.0)
     got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
     assert got.filled == 1.5 and client.cancelled is None  # the note only records: it still waited and then took the ask
     assert Store(s.db_path).db is not None
@@ -392,7 +401,7 @@ def test_a_missed_bid_note_carries_the_queue_ahead(setup, monkeypatch):
     spec(buy_rest_seconds=5.0, buy_retries=0, buy_rest_queue_note=True)
     monkeypatch.setattr(runner.time, "sleep", lambda x: None)
     client = RestClient(fills=[1.5], asks=[0.30])
-    client.ahead = 240.0
+    book_ahead(shot, 240.0)
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert got.filled == 0 and "Queue: 240 shares ahead of our 1.5" in got.note
 
@@ -402,9 +411,9 @@ def test_a_long_queue_cancels_the_bid_at_once_and_takes_the_ask(setup, monkeypat
     spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, buy_rest_queue_max=100.0)
     monkeypatch.setattr(runner.time, "sleep", lambda x: None)
     client = RestClient(fills=[1.5], asks=[0.30])
-    client.ahead = 240.0
+    book_ahead(shot, 240.0)
     got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
-    assert client.cancelled == "r1" and got.filled == 1.5 and client.ids == ["k-take"]
+    assert client.rested == [] and got.filled == 1.5 and client.ids == ["k-take"]  # no bid was placed: the ask was taken at once
 
 
 def test_a_short_queue_is_waited_out_as_before(setup, monkeypatch):
@@ -412,7 +421,7 @@ def test_a_short_queue_is_waited_out_as_before(setup, monkeypatch):
     spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, buy_rest_queue_max=100.0)
     monkeypatch.setattr(runner.time, "sleep", lambda x: None)
     client = RestClient(fills=[1.5], asks=[0.30], rest_fill=1.5)
-    client.ahead = 20.0
+    book_ahead(shot, 20.0)
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert client.cancelled is None and got.filled == 1.5 and client.sent == []
 
@@ -422,7 +431,7 @@ def test_an_unreadable_queue_changes_nothing_and_says_so(setup, monkeypatch):
     spec(buy_rest_seconds=5.0, buy_retries=0, buy_rest_queue_max=100.0)
     monkeypatch.setattr(runner.time, "sleep", lambda x: None)
     client = RestClient(fills=[1.5], asks=[0.30])
-    client.ahead = None
+    book_ahead(shot, None)
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert client.cancelled is None and "Queue: not readable" in got.note
 

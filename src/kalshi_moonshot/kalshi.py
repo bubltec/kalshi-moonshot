@@ -417,6 +417,12 @@ class KalshiClient:
         return row
 
     def orderbook(self, ticker: str) -> dict[str, Any]:
+        """A market's order book. With the websocket book on (KALSHI_BOOKS) it is read from the stream's copy and never from REST (user, 2026-11-16); a market the stream has no book for yet reads as empty, so nothing is bought or sold off a book that is not there."""
+        from . import ticks
+
+        if ticks.books.enabled:
+            book = ticks.books.rest_book(ticker, time.time())
+            return book if book is not None else {"orderbook_fp": {"yes_dollars": [], "no_dollars": []}}
         return self._request("GET", f"/markets/{ticker}/orderbook")
 
     # ---- account (signed) ----

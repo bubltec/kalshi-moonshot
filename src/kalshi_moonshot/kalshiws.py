@@ -27,6 +27,8 @@ from typing import Any
 
 from .kalshi import KalshiClient
 
+from . import ticks as books_mod
+
 log = logging.getLogger("moonshot")
 
 WS_URL = "wss://api.elections.kalshi.com/trade-api/ws/v2"
@@ -96,6 +98,24 @@ def parse_message(msg: dict[str, Any], received: float | None = None) -> dict[st
         return {"kind": "fill", "ts": now, "ticker": body["market_ticker"], "side": side, "action": body.get("action") or "",
                 "count": count, "price": price, "taker": bool(body.get("is_taker")),
                 "trade_id": body.get("trade_id") or "", "order_id": body.get("order_id") or ""}
+    if kind == "orderbook_snapshot":  # a market's whole book (the orderbook_delta channel sends one first, and on get_snapshot): a bid book per side, dollar strings
+        ticker = body.get("market_ticker")
+        if not ticker:
+            return None
+
+        def side_levels(rows: Any) -> list[tuple[float, float]]:
+            out = []
+            for row in rows or []:
+                px, qty = _f(row[0]) if len(row) > 0 else None, _f(row[1]) if len(row) > 1 else None
+                if px is not None and qty is not None:
+                    out.append((px, qty))
+            return out
+        return {"kind": "book_snapshot", "ts": now, "ticker": ticker, "yes": side_levels(body.get("yes_dollars_fp")), "no": side_levels(body.get("no_dollars_fp")), "seq": msg.get("seq"), "sid": msg.get("sid")}
+    if kind == "orderbook_delta":  # one price level changed: the signed change in contracts at the price on a side's bid book
+        price, delta = _f(body.get("price_dollars")), _f(body.get("delta_fp"))
+        if not body.get("market_ticker") or price is None or delta is None or body.get("side") not in {"yes", "no"}:
+            return None
+        return {"kind": "book_delta", "ts": now, "ticker": body["market_ticker"], "side": body["side"], "price": price, "delta": delta, "seq": msg.get("seq"), "sid": msg.get("sid")}
     if kind == "cfbenchmarks_value":
         try:
             frame = json.loads(body.get("data") or "{}")
@@ -137,12 +157,14 @@ class KalshiStream:
     """Keeps one connection open, reconnects with backoff, and resubscribes when the market set changes."""
 
     def __init__(self, client: KalshiClient, on_event: Callable[[dict[str, Any]], None],
-                 indices: list[str] | None = None, index_feed: bool = True, fills: bool = True, lifecycle: bool | None = None, on_feed: Callable[[bool], None] | None = None):
+                 indices: list[str] | None = None, index_feed: bool = True, fills: bool = True, lifecycle: bool | None = None, on_feed: Callable[[bool], None] | None = None, books: bool = False):
         """index_feed and fills are off for a stream that only records extra markets: the live stream alone carries the settlement indexes and the account's fills. lifecycle (targets and results of every market, one subscription for the whole exchange) rides on the live stream too; off with KALSHI_LIFECYCLE=0."""
         self.client = client
         self.on_event = on_event
         self.on_feed = on_feed  # called with True when the lifecycle subscription is confirmed on a connection and with False when that connection ends: the market list is only kept from the stream between the two
         self.index_feed, self.fills = index_feed, fills
+        self.books = books  # also subscribe to orderbook_delta for the same markets (the order book kept in ticks.books, not read over REST)
+        self._book_seq: dict[int, int] = {}  # orderbook_delta sid -> the last sequence number seen; a gap asks for fresh snapshots
         self.lifecycle = (index_feed and os.environ.get("KALSHI_LIFECYCLE", "1").strip().lower() not in {"0", "off", "false", "no"}) if lifecycle is None else lifecycle
         self.indices = sorted(set(indices or INDEX_FOR.values()))
         self._tickers: set[str] = set()
@@ -175,7 +197,8 @@ class KalshiStream:
                 want = set(self._tickers)
             if want == self._live:
                 return
-            sids = [self._sids.get("ticker"), self._sids.get("trade")]
+            channels = ("ticker", "trade") + (("orderbook_delta",) if self.books else ())
+            sids = [self._sids.get(c) for c in channels]
             if not self._live:  # nothing subscribed yet (or all dropped): a fresh subscribe
                 if self._sids:
                     return  # a subscribe is already in flight; its ack runs this again
@@ -188,15 +211,22 @@ class KalshiStream:
             if not want:
                 await ws.send(json.dumps({"id": self._cmd(), "cmd": "unsubscribe", "params": {"sids": sids}}))
                 self._live, self._sids = set(), {}
+                books_mod.books.clear()
+                self._book_seq = {}
                 return
             added, removed = sorted(want - self._live), sorted(self._live - want)
-            for channel, sid in zip(("ticker", "trade"), sids, strict=True):
+            for channel, sid in zip(channels, sids, strict=True):
                 for action, tickers in (("add_markets", added), ("delete_markets", removed)):
                     if tickers:
                         params: dict[str, Any] = {"sids": [sid], "action": action, "market_tickers": tickers}
                         if channel == "ticker" and action == "add_markets":
                             params["send_initial_snapshot"] = True
                         await ws.send(json.dumps({"id": self._cmd(), "cmd": "update_subscription", "params": params}))
+                if channel == "orderbook_delta" and added:  # a market added to a running book subscription gets its snapshot by asking for it
+                    await ws.send(json.dumps({"id": self._cmd(), "cmd": "update_subscription", "params": {"sids": [sid], "action": "get_snapshot", "market_tickers": added}}))
+                if channel == "orderbook_delta":
+                    for gone in removed:
+                        books_mod.books.drop(gone)
             self._live = want
         except Exception as exc:
             log.warning("kalshi websocket: could not update subscription (%s); reconnecting", exc)
@@ -234,6 +264,8 @@ class KalshiStream:
                 ) as ws:
                     self._ws = ws
                     self._sids = {}
+                    books_mod.books.clear()  # a new connection starts every book from its snapshot
+                    self._book_seq = {}
                     with self._lock:
                         tickers = sorted(self._tickers)
                     self._live = set(tickers)
@@ -245,6 +277,8 @@ class KalshiStream:
             except Exception as exc:
                 log.warning("kalshi websocket: %s; reconnecting in %.0fs", exc, backoff)
             self._ws, self._live, self._sids = None, set(), {}
+            books_mod.books.clear()
+            self._book_seq = {}
             self._feed(False)
             if self._stop:
                 break
@@ -265,13 +299,33 @@ class KalshiStream:
             out.extend(self._market_subscriptions(tickers))
         return out
 
-    @staticmethod
-    def _market_subscriptions(tickers: list[str]) -> list[dict[str, Any]]:
+    def _market_subscriptions(self, tickers: list[str]) -> list[dict[str, Any]]:
         """Quotes and public trades are separate subscriptions (each has its own sid, which update_subscription needs); a quote snapshot on subscribe spares waiting for a quiet market's next change."""
-        return [
+        out = [
             {"id": 2, "cmd": "subscribe", "params": {"channels": ["ticker"], "market_tickers": tickers, "send_initial_snapshot": True}},
             {"id": 4, "cmd": "subscribe", "params": {"channels": ["trade"], "market_tickers": tickers}},
         ]
+        if self.books:  # the order book, in real time (update_interval_ms 0: one delta per change); it needs the signed connection, which the fills channel already uses
+            out.append({"id": 7, "cmd": "subscribe", "params": {"channels": ["orderbook_delta"], "market_tickers": tickers, "update_interval_ms": 0}})
+        return out
+
+    def _book_in_order(self, event: dict[str, Any]) -> bool:
+        """The orderbook_delta channel numbers its messages per subscription: a missing number means a delta was lost, so the books are no longer trusted. A snapshot is always applied (it replaces a market's whole book); after a gap every live market is asked for a fresh one (update_subscription get_snapshot, as Kalshi's docs say to)."""
+        seq, sid = event.get("seq"), event.get("sid")
+        if not isinstance(seq, int) or not isinstance(sid, int):
+            return True
+        last = self._book_seq.get(sid)
+        self._book_seq[sid] = seq
+        if last is None or seq == last + 1 or event["kind"] == "book_snapshot":
+            return True
+        log.warning("kalshi websocket: orderbook_delta sequence jumped from %s to %s: asking for fresh snapshots", last, seq)
+        books_mod.books.clear()
+        if self._loop is not None and self._ws is not None:
+            with self._lock:
+                live = sorted(self._live)
+            if live:
+                asyncio.run_coroutine_threadsafe(self._ws.send(json.dumps({"id": self._cmd(), "cmd": "update_subscription", "params": {"sids": [sid], "action": "get_snapshot", "market_tickers": live}})), self._loop)
+        return False
 
     def _feed(self, up: bool) -> None:
         if self.on_feed is not None:
@@ -294,12 +348,18 @@ class KalshiStream:
             channel, sid = (msg.get("msg") or {}).get("channel"), (msg.get("msg") or {}).get("sid")
             if channel == "market_lifecycle_v2":
                 self._feed(True)
-            if channel in {"ticker", "trade"} and isinstance(sid, int):
+            wanted = {"ticker", "trade"} | ({"orderbook_delta"} if self.books else set())
+            if channel in wanted and isinstance(sid, int):
                 self._sids[channel] = sid
-                if self._loop is not None and "ticker" in self._sids and "trade" in self._sids:
+                if self._loop is not None and wanted <= set(self._sids):
                     asyncio.run_coroutine_threadsafe(self._sync(), self._loop)  # the wanted set may have moved since the subscribe went out
             return
         event = parse_message(msg)
+        if event is not None and event["kind"] in {"book_snapshot", "book_delta"}:
+            if not self._book_in_order(event):
+                return  # a gap in the sequence: fresh snapshots are on their way, nothing is applied until they arrive
+            self.on_event(event)
+            return
         if event is not None:
             if event["kind"] not in {"strike", "result", "market"}:  # market facts are not a sign the price stream is alive
                 self.last_event_at = event["ts"]

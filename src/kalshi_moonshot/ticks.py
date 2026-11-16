@@ -14,6 +14,7 @@ import time
 from array import array
 from collections import deque
 from collections.abc import Sequence
+from typing import Any
 
 log = logging.getLogger("kalshi_moonshot.ticks")
 
@@ -400,3 +401,77 @@ def reload_from_tape(s, indexes: Sequence[str], now: float | None = None) -> dic
     except Exception:
         log.warning("ticks: the second stage of the reload failed; readers that look back further ask the tape", exc_info=True)
     return report
+
+
+class BookStore:
+    """Each market's order book, kept from Kalshi's orderbook_delta websocket channel (2026-11-16, user: "it has websocket events; don't use the rest calls for the order book, or queue"): a snapshot replaces a market's book, every delta changes one price level (a level that reaches zero is dropped). Prices are dollars, counts are contracts; `yes` and `no` are the two bid books, the way Kalshi lists them (a NO bid at 0.70 is a YES ask at 0.30). A market the stream has not sent, or whose last message is older than max_age, has no book."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._book: dict[str, dict[str, dict[float, float]]] = {}
+        self._at: dict[str, float] = {}
+        self.enabled = False  # set by a stream that subscribed to the channel: KalshiClient.orderbook then reads here instead of REST
+
+    def snapshot(self, ticker: str, yes: Sequence[tuple[float, float]], no: Sequence[tuple[float, float]], ts: float) -> None:
+        with self._lock:
+            self._book[ticker] = {"yes": {round(p, 4): c for p, c in yes if c > 0}, "no": {round(p, 4): c for p, c in no if c > 0}}
+            self._at[ticker] = ts
+
+    def delta(self, ticker: str, side: str, price: float, delta: float, ts: float) -> bool:
+        """Apply one level change; False when the market has no snapshot yet (the change is not applied: the next snapshot will carry it)."""
+        with self._lock:
+            book = self._book.get(ticker)
+            if book is None or side not in book:
+                return False
+            px = round(price, 4)
+            left = book[side].get(px, 0.0) + delta
+            if left > 1e-9:
+                book[side][px] = left
+            else:
+                book[side].pop(px, None)
+            self._at[ticker] = ts
+            return True
+
+    def drop(self, ticker: str) -> None:
+        with self._lock:
+            self._book.pop(ticker, None)
+            self._at.pop(ticker, None)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._book.clear()
+            self._at.clear()
+
+    def age(self, ticker: str, now: float) -> float | None:
+        with self._lock:
+            at = self._at.get(ticker)
+        return None if at is None else now - at
+
+    def levels(self, ticker: str, side: str) -> list[tuple[float, float]] | None:
+        """(price, contracts) of one bid book, best (highest price) first; None when the market has no book."""
+        with self._lock:
+            book = self._book.get(ticker)
+            if book is None:
+                return None
+            return sorted(book[side].items(), reverse=True)
+
+    def rest_book(self, ticker: str, now: float, max_age: float | None = None) -> dict[str, Any] | None:
+        """The book in the shape of Kalshi's REST orderbook answer (strategy.best_bid, best_ask and side_ask_notional read it), or None when the stream has none for this market (the books are cleared when the connection drops or a sequence gap shows, so a book that exists is current; a quiet market sends nothing, so age is not a test unless max_age is given)."""
+        age = self.age(ticker, now)
+        if age is None or (max_age is not None and age > max_age):
+            return None
+        yes, no = self.levels(ticker, "yes") or [], self.levels(ticker, "no") or []
+        return {"orderbook_fp": {"yes_dollars": [[f"{p:.4f}", f"{c:.2f}"] for p, c in sorted(yes)], "no_dollars": [[f"{p:.4f}", f"{c:.2f}"] for p, c in sorted(no)]}}
+
+    def shares_ahead(self, ticker: str, side: str, price: float) -> tuple[float, float] | None:
+        """For a resting buy of `side` at `price` (that side's own price): (the contracts resting at the same price, the contracts at that price or better), both ahead of an order that joins the level now (price-time priority: better prices trade first, then earlier orders at the same price). None when the market has no book."""
+        levels = self.levels(ticker, side)
+        if levels is None:
+            return None
+        px = round(price, 4)
+        same = sum(c for p, c in levels if abs(p - px) < 1e-9)
+        better = sum(c for p, c in levels if p >= px - 1e-9)
+        return same, better
+
+
+books = BookStore()
