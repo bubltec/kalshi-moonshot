@@ -1150,3 +1150,35 @@ def test_unit_the_early_take_changes_a_lanes_version_only_when_it_is_set(tmp_pat
     (tmp_path / "strategies.toml").write_text(base + "curve_take_early_bid=0.95\n")
     s = config.load()
     assert lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)["curve_take_early_seconds"] == "360.0"
+
+
+def test_integration_a_dip_after_a_sure_win_does_not_sell_it_the_hold_is_a_latch_not_a_line(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_sure=0.95")
+    climb(w, 0.82, 0.96, 450)  # past the first six minutes: a sure win, latched (the helpers' events end at 409 s left)
+    assert level(w, 0.96, 450) is None
+    tgt = next(iter(w.targets.values()))
+    assert tgt.risk_sure_latched is True
+    assert sit(w, 0.92, 400, 12) is None  # the bid dips to 0.92, under the 0.95 line but over the take's bar: still the sure win, no sale
+    assert tgt.risk_at > CLOSE - 395 and tgt.risk_sure_latched is True  # and the dip was really read (the check ran at 389 s left)
+    assert sit(w, 0.89, 385, 12) is None  # and to 0.89: nothing sells
+    assert tgt.risk_at > CLOSE - 380 and tgt.risk_sure_latched is True
+
+
+def test_integration_without_the_sure_hold_the_same_bid_of_0_96_is_sold(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true")
+    climb(w, 0.82, 0.96, 450)
+    sig = level(w, 0.96, 450)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")  # as it was; the hold is what keeps it
+
+
+def test_integration_a_fall_far_past_the_markets_own_swing_releases_the_latch(tmp_path, monkeypatch):
+    for k in range(700):  # ten minutes of quotes before the climb, so the market's typical minute can be read (without it the latch stays on by design)
+        mid = 0.82 + (0.004 if k % 2 else -0.004)
+        ticks_mod.mids.note(TICKER, CLOSE - 1200 + k, mid - 0.005, mid + 0.005)
+    w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_sure=0.95")
+    climb(w, 0.82, 0.96, 450)
+    level(w, 0.96, 450)
+    tgt = next(iter(w.targets.values()))
+    assert tgt.risk_sure_latched is True
+    sit(w, 0.30, 400, 6)  # a collapse far past what this market normally moves over the time left (the stop may sell it: the latch is read before)
+    assert tgt.risk_sure_latched is False

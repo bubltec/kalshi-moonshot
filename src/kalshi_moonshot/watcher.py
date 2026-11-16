@@ -241,6 +241,8 @@ class Target:
     risk_take_sure: float = -1.0  # the profit take holds at a bid at or over this (lane field curve_take_sure)
     risk_take_sure_late: float = -1.0  # ... and in the last fifth from this bid (curve_take_sure_late)
     risk_sure_logged: bool = False
+    risk_sure_latched: bool = False  # the bet reached the sure level after the early window: its take stays held through a dip (released only by a fall past the market's own swing)
+    risk_sure_level: float = 0.0
     risk_take_early_bid: float = -1.0  # sell at once at this bid in the first risk_take_early_seconds (lane field curve_take_early_bid)
     risk_take_early_seconds: float = 360.0
     risk_long_scales: tuple = ()  # the minutes the hour view reads its movement over, together (lane field curve_risk_long_scales); empty = the last hour
@@ -1015,11 +1017,17 @@ class ProfitWatcher:
             early = pnl > 0 and bid >= CURVE_MIN_BID and t.risk_take_early_bid > 0 and bid >= t.risk_take_early_bid and 900.0 - left <= t.risk_take_early_seconds
             if early:
                 taken = True  # an early 0.95 is not a sure win: cash it, the re-entry buys back
-            if taken and not early and curverisk.sure_win(bid, left, t.risk_take_sure, t.risk_take_sure_late):
+            # The sure hold is a latch, not a line (2026-11-15 night, user: "if it drops to like 89 for a second it will sell? We don't want that behavior to be a hard stop"): once a bet has been a sure win, a dip does not end it. It is released only by a fall under the level that latched it by more than the market's own swing over the time left (the typical minute x sqrt(left / 60)), the same unit the take's late cap reads; with no reading of the unit it stays latched. The max-loss stop is untouched.
+            if not early and curverisk.sure_win(bid, left, t.risk_take_sure, t.risk_take_sure_late):
+                t.risk_sure_latched = True
+                t.risk_sure_level = t.risk_take_sure if t.risk_take_sure > 0 and bid >= t.risk_take_sure else t.risk_take_sure_late
+            elif t.risk_sure_latched and unit is not None and unit > 0 and left > 0 and bid < t.risk_sure_level - unit * math.sqrt(left / 60.0):
+                t.risk_sure_latched = False
+            if taken and not early and t.risk_sure_latched:
                 taken = False  # a sure win: the bid is far enough up that the sale gives up cents to a dollar and pays a fee for protection the price already carries
                 if not t.risk_sure_logged:
                     t.risk_sure_logged = True
-                    log.info("curve risk: %s %s profit take held, a sure win: bid %.2f is at or over the lane's %s (%.0fs left); held to settlement", t.ticker, t.lane, bid, f"{t.risk_take_sure:g} at any time" if t.risk_take_sure > 0 and bid >= t.risk_take_sure else f"{t.risk_take_sure_late:g} in the last fifth", left)
+                    log.info("curve risk: %s %s profit take held, a sure win (latched at %.2f): bid %.2f, %.0fs left; held to settlement through a dip, released only by a fall past the market's own swing", t.ticker, t.lane, t.risk_sure_level, bid, left)
             cushion = ""
             if early:
                 cushion = f" [early take: the bid {bid:.2f} is at or over the lane's {t.risk_take_early_bid:g} with {900.0 - left:.0f}s of the market gone (the first {t.risk_take_early_seconds:.0f}s): cashed to be bought back]"
