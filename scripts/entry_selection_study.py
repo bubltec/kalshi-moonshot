@@ -83,6 +83,7 @@ def bucket_shape(sh):
 
 
 band = []  # (ask, won, elapsed, shape, ticker)
+no_tape = 0
 mine = []  # (ask, won, elapsed, shape, ts, stake, flips, other ask, live after always)
 for w in wins:
     close = float(w["close_ts"])
@@ -98,6 +99,9 @@ for w in wins:
                 band.append((ask, w["result"] == side, t - opened, bucket_shape(shape(at, opened, t, side)), w["ticker"]))
     for side, (ts_, ask, stake, edge) in by_ticker.get(w["ticker"], ()):
         q = at(ts_)
+        if not q:
+            no_tape += 1  # the tape has no quote for this market (the recorder followed no market from 2026-11-16 00:31 ET): the buy has no path to read and is left out
+            continue
         if not (0.05 < ask < 0.99) and q:
             ask = q[1] if side == "yes" else 1 - q[0]
         if not (0.05 < ask < 0.99):
@@ -123,7 +127,7 @@ def line(name, rows):
     print(f"  {name:46s} n {n:6d} | won {won:4.0%} | ask {ask:.3f} | needs {need:4.0%} | held net per $ {sum(net(r[0], r[1]) for r in rows) / n * 100:+6.1f}%")
 
 
-print(f"window: since 2026-11-14 17:02 ET; {len(mine)} settled live crypto_multiscale buys (of {len(bets)} placed), {len(wins)} settled markets, {len({b[4] for b in band})} of them with a moment in the band")
+print(f"window: since 2026-11-14 17:02 ET; {len(mine)} settled live crypto_multiscale buys (of {len(bets)} placed), {no_tape} more left out with no quotes on the tape, {len(wins)} settled markets, {len({b[4] for b in band})} of them with a moment in the band")
 out = sys.stdout
 if os.environ.get("TAIL") == "2":
     sys.stdout = io.StringIO()  # sections 1 to 6 are computed and not printed
