@@ -946,10 +946,10 @@ class ProfitWatcher:
         return out
 
     def _risk_long(self, t: Target, now: float, left: float) -> float | None:
-        """The long layer's chance that the side pays (curverisk.long_chance, from the market's Kalshi perp and its own last hour), only for a lane that asks for it (curve_risk_confirm), reread every 5 s. None when the lane does not ask or the perp's hour is not there."""
+        """The long layer's chance that the side pays (curverisk.long_chance, from the market's Kalshi perp and its own last hour), only for a lane that asks for it (curve_risk_confirm), reread every second. None when the lane does not ask or the perp's hour is not there."""
         if t.risk_confirm <= 0:
             return None
-        if now - t.risk_long_at < 5.0:
+        if now - t.risk_long_at < 1.0:  # 2026-11-15 night (user: "it's every 5 seconds then. Is that too frequent?"): the cushion in this chance is the perp's newest tick, so a reading 5 s old is 17% of the time left at 30 s to go. Re-read at the risk check's own pace, once a second: a few hundred lookups, about a millisecond per open bet
             return t.risk_long
         t.risk_long_at = now
         kp = perp_index(t.ticker.split("-")[0])

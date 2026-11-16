@@ -1066,3 +1066,17 @@ def test_integration_with_the_market_so_far_scale_the_hour_view_reaches_the_watc
     assert [tuple(x.risk_long_scales) for x in w.targets.values()] == [(0, 15, 60, 180)]
     out = slide(w)
     assert out and out[0].why.startswith("curve risk exit (max loss)")
+
+
+def test_integration_the_hour_view_is_re_read_every_second_not_every_five(tmp_path, monkeypatch):
+    """2026-11-15 night: the chance's cushion is the perp's newest tick, so it was up to 5 s old. A new tick that moves the cushion shows in the next reading a second or two later."""
+    seed_perp(monkeypatch, last_over_open=0.004)
+    w = held(tmp_path, monkeypatch, live=True, confirm=0.4, long_scales="[8,16,32]")
+    t = next(iter(w.targets.values()))
+    now = CLOSE - 110.0  # just after the last seeded tick, so a new tick can be appended
+    first = w._risk_long(t, now, 110.0)
+    assert first is not None
+    assert w._risk_long(t, now + 0.5, 109.5) == first  # inside the second: the cached reading
+    ticks_mod.history.note("KP_BTC", now + 1.8, 100.0 * (1.0 - 0.006))  # the perp drops 0.6% under the open
+    second = w._risk_long(t, now + 2.0, 108.0)
+    assert second is not None and second < first - 0.05  # seen two seconds later, not five
