@@ -1120,3 +1120,33 @@ def test_unit_the_sure_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path
     (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + "curve_take_sure=0.95\n")
     s = config.load()
     assert lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)["curve_take_sure"] == "0.95"
+
+
+# ---- an early 0.95 is cashed, the sure hold starts after six minutes (2026-11-15 night, user: "if it ever hits 95 and we haven't passed 6 mins we should take and let the rebuy kick in") ----
+def test_integration_a_bid_of_0_96_in_the_first_six_minutes_is_taken_even_while_it_is_still_climbing(tmp_path, monkeypatch):
+    (tmp_path / "plain").mkdir()
+    (tmp_path / "early").mkdir()
+    w0 = held(tmp_path / "plain", monkeypatch, live=True, take="true")
+    assert climb(w0, 0.82, 0.96, 700) is None  # without the option: still climbing, nothing sold
+    ticks_mod.mids._rows.clear()
+    w = held(tmp_path / "early", monkeypatch, live=True, take="true", extra="curve_take_early_bid=0.95\ncurve_take_sure=0.95")
+    got = climb(w, 0.82, 0.96, 700)  # 200 s of the market gone: inside the first six minutes
+    sigs = got if got is not None else None
+    assert sigs is not None and "early take" in sigs.why
+
+
+def test_integration_after_six_minutes_the_same_bid_is_a_sure_win_and_is_held(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_early_bid=0.95\ncurve_take_sure=0.95")
+    climb(w, 0.82, 0.96, 450)  # 450 s gone: past the first six minutes
+    assert level(w, 0.96, 450) is None
+
+
+def test_unit_the_early_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    base = LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false')
+    (tmp_path / "strategies.toml").write_text(base)
+    s = config.load()
+    assert "curve_take_early_bid" not in lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
+    (tmp_path / "strategies.toml").write_text(base + "curve_take_early_bid=0.95\n")
+    s = config.load()
+    assert lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)["curve_take_early_seconds"] == "360.0"
