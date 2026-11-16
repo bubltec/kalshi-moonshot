@@ -703,6 +703,35 @@ def quote_wave_features(rows: Sequence[tuple[float, float]], side: str, opened: 
     return _path_features([x / unit for x in seq])
 
 
+FLIP_MIN_QUOTES = 90.0  # seconds of the market's quotes the reading needs, as in the study
+
+
+def quote_led_share(rows: Sequence[tuple[float, float]], side: str, opened: float, at: float) -> float | None:
+    """The share of the market so far in which the bet side was the favorite (its mid over 0.50), from the market's own Kalshi quote on a 1 s grid from the open (or its first quote) to the second before `at`. A side at 0.60 with a share of 0.1 has only just become the favorite: the other side led nine tenths of the market.
+    studies/results/2026-11-16-spike-side.txt (2,325 flips in 5,652 markets since 11-09): a side bought as it entered the band after the other side had led 80% of the market so far won 56% at 0.596 (-8.6%) 3 to 6 minutes in and 55% at 0.598 (-10.8%) 6 to 9 minutes in; from minute 9 the flip held (67% at 0.626, +5.0%). `rows` are (time, YES mid), oldest first. None with under FLIP_MIN_QUOTES seconds of quotes or a newest quote over 10 s old."""
+    ts = [r[0] for r in rows]
+    i = bisect.bisect_right(ts, at) - 1
+    if i < 0 or ts[i] < at - 10.0:
+        return None
+    n = int(at - max(opened, ts[0]))
+    if n < FLIP_MIN_QUOTES:
+        return None
+    led = 0
+    for k in range(n):
+        idx = bisect.bisect_right(ts, at - n + k) - 1
+        if idx < 0:
+            return None
+        mid = rows[idx][1] if side == "yes" else 1.0 - rows[idx][1]
+        led += mid > 0.5
+    return led / n
+
+
+def quote_led_now(ticker: str, side: str, opened: float, now: float | None = None) -> float | None:
+    """quote_led_share from the market's quote mids held in memory (ticks.mids), or None."""
+    now = time.time() if now is None else now
+    return quote_led_share(ticks_mod.mids.rows(ticker), side, opened, now)
+
+
 def quote_wave_now(ticker: str, side: str, opened: float, now: float | None = None) -> dict | None:
     """quote_wave_features from the market's quote mids held in memory (ticks.mids), or None."""
     now = time.time() if now is None else now

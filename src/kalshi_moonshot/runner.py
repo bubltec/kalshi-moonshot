@@ -575,6 +575,22 @@ def evaluate(
             note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
+    if bet and spec.flip_skip_minutes > 0:
+        from . import variants as _variants
+
+        left_s = shot.hours_to_close * 3600.0
+        try:
+            led = _variants.quote_led_now(shot.ticker, shot.side, time.time() + left_s - 900.0)  # 900: a 15-minute market's length, structural
+        except Exception as exc:
+            led = None
+            log.warning("flip unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        if led is None:
+            note = f"[flip unreadable: under 90 s of this market's quotes] {note}"  # no reading is not a reason to sit out: the other gates decide
+        elif 900.0 - left_s < spec.flip_skip_minutes * 60.0 and 1.0 - led >= spec.flip_led_share:
+            bet = False
+            note = f"[flip: led {led:.2f}] the other side led {100 * (1 - led):.0f}% of the market so far and it is {(900.0 - left_s) / 60.0:.1f} minutes in (the lane skips a new favorite before minute {spec.flip_skip_minutes:g}). {note}"
+        else:
+            note = f"[led {led:.2f}] {note}"
     if bet and (spec.wave_amp_min > 0 or spec.wave_pos_max < 1.0 or spec.wave_turn_seconds > 0):
         from . import variants as _variants
 
