@@ -1,0 +1,12 @@
+every distinct buy attempt since the width change, held to settlement at its ask:
+  filled  : attempts 179, settled 135 | paid  66% | held-to-settlement return per $   -7.7%
+  missed  : attempts  77, settled  35 | paid  74% | held-to-settlement return per $   -0.7%
+
+where in the market the attempts fall (minutes into the market): attempts | missed share | held return of the missed
+   0- 3 min: attempts   0 | missed   0% | missed paid   0% return   +0.0% (n 0)
+   3- 6 min: attempts 116 | missed  24% | missed paid  80% return  +11.7% (n 15)
+   6- 9 min: attempts  90 | missed  36% | missed paid  79% return   +2.2% (n 14)
+   9-12 min: attempts  34 | missed  32% | missed paid  50% return  -40.5% (n 4)
+  12-15 min: attempts  16 | missed  38% | missed paid  50% return  -35.3% (n 2)
+DONE
+	
