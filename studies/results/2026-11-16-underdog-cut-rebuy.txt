@@ -1,0 +1,13 @@
+window: 2026-11-09 00:00 ET on; 6345 settled markets, 5688 with quotes
+
+1. how many times the favorite changed in a market (0.55 to count as the favorite)
+   whole market:      0 flips  34%, 1 flips  18%, 2 flips  12%, 3 flips  10%, 4+ flips  26% | at least one:  66%
+   after minute 3:    0 flips  45%, 1 flips  14%, 2 flips  11%, 3 flips   9%, 4+ flips  21% | at least one:  55%
+
+2. a side bought at 0.20 or under in the first three minutes; out at 0.50 if it gets there by the mark, else cut and the other side bought
+  mark = 5 minutes into the market: n 1551 | ask 0.188 | reached 0.50 by the mark   9% | hold to settlement   -7.5% | out at 0.50 or cut at the mark   -9.9% | with the rebuy of the other side  -11.0% per $ of the first stake
+      the 1409 cut: the first leg returned  -24.7%, the rebuy won  84% and returned   -1.2% per $
+  mark = 5 minutes before the close: n 1551 | ask 0.188 | reached 0.50 by the mark  25% | hold to settlement   -7.5% | out at 0.50 or cut at the mark  -13.1% | with the rebuy of the other side  -14.5% per $ of the first stake
+      the 1163 cut: the first leg returned  -64.3%, the rebuy won  68% and returned   -1.8% per $
+
+Notes: run 2026-11-16 about 10:42 ET on the host. The buy is the first second in the first three minutes that a side's ask is 0.20 or under; a buy made later in the dip is not this test. The rebuy uses the same dollars as the first stake. Both readings of "the 5 minute mark" were stated before the run.
