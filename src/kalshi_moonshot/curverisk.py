@@ -165,6 +165,31 @@ def long_chance(ts: list[float], vs: list[float], now: float, ref: float, side: 
     return _N.cdf(cushion / (rate * math.sqrt(left)))
 
 
+SPIKE_LOOK = 90.0  # seconds: the stretch a spike is read over, as in the study
+SPIKE_STRETCHES = 120  # back-to-back stretches of that length before it: 3 hours
+
+
+def spike_view(ts: list[float], vs: list[float], now: float, side: str) -> tuple[float, int] | None:
+    """How big the last 90 seconds were on the 3-hour view of the market's Kalshi perp (2026-11-16, user, on the faded spikes that never came back: "What did their historical view look like? How much of a spike was it? Does the 3 hour view show similar spikes?"; "Yes, log it").
+    Returns (z, similar): z is the perp's log move over the last SPIKE_LOOK seconds in units of its own typical move over that span (the root-mean-square of the SPIKE_STRETCHES back-to-back stretches before it), signed by the side (+ = toward the bet side); similar is how many of those stretches moved as far or further. None without a tick within two minutes of every mark, or with a flat 3 hours.
+    studies/results/2026-11-16-spike-failures-history.txt (1,295 spikes against the market since 11-09): where |z| was under 0.5 the faded side won back half the spike in 88% and holding it made +19.1% (n 124); at 3 and over, 53% and -36.8% (n 68); with 25 or more similar moves in the 3 hours 82% and +6.3% (n 585); with none 45%, and the spiking side won 81% (n 31). SHADOW: a reading for the note, it gates nothing."""
+    if not ts or len(ts) != len(vs):
+        return None
+    levels: list[float] = []
+    for n in range(SPIKE_STRETCHES + 2):
+        at = now - SPIKE_LOOK * n
+        i = bisect.bisect_right(ts, at) - 1
+        if i < 0 or at - ts[i] > 120.0 or vs[i] <= 0:
+            return None
+        levels.append(math.log(vs[i]))
+    last = levels[0] - levels[1]
+    past = [levels[n] - levels[n + 1] for n in range(1, SPIKE_STRETCHES + 1)]
+    rms = math.sqrt(sum(x * x for x in past) / len(past))
+    if rms <= 0:
+        return None
+    return (1.0 if side == "yes" else -1.0) * last / rms, sum(1 for x in past if abs(x) >= abs(last))
+
+
 def side_slopes(ts: list[float], vs: list[float], now: float, side: str, scales: tuple[int, ...] = (3, 5, 13, 21), hour: int = 60) -> dict[int, float] | None:
     """Where the market stands in its wave, side-signed (2026-11-15 night, user: "betting when we shouldn't, and on the wrong side ... crypto moves in waves, directions shift in minutes"): for each scale m minutes, the side's move over the last m minutes in units of that scale's own typical move, z_m = side x (L(now) - L(now - m)) / (s1 x sqrt(m)), s1 the root-mean-square one-minute log move of the last `hour` minutes. Positive = the side's price has been rising at that scale. None without a tick at every minute mark of the last hour and the longest scale, or with a flat hour. studies/results/2026-11-15-rotation-at-entry.txt: buys with z13 of 1.5 or more won 35% (n 26, -25.0%); the bottom fifth of z5 - z21 won 48% (n 105, -14.7%) against 63 to 69% elsewhere."""
     if not ts or len(ts) != len(vs):

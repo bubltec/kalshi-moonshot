@@ -896,6 +896,13 @@ def evaluate(
                 f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
                 else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
             )
+    if spec.entry_spike_view:  # shadow: on passes as well as buys, so the skipped decisions can be scored too
+        try:
+            sv = side_spike(shot)
+        except Exception as exc:
+            sv = None
+            log.warning("spike view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        note = f"[spike view z {sv[0]:+.1f}, {sv[1]} of {curverisk.SPIKE_STRETCHES} as large] {note}" if sv is not None else f"[spike view unreadable] {note}"
     if bet and spec.entry_view_scales:
         try:
             view = side_view(shot, tuple(spec.entry_view_scales))
@@ -1326,6 +1333,19 @@ def side_phase(shot: LongShot, now: float | None = None) -> dict[int, float] | N
     kp = perp_index(shot.series or shot.ticker.split("-")[0])
     got = ticks_mod.history.window(kp, now - 4000.0, now) if kp else None
     return curverisk.side_slopes(got[0], got[1], now, shot.side) if got else None
+
+
+def side_spike(shot: LongShot, now: float | None = None) -> tuple[float, int] | None:
+    """The 3-hour spike reading for the buy's note (lane field entry_spike_view): curverisk.spike_view on the series' Kalshi perp. None when the series has no perp or the 3 hours are not in memory."""
+    from . import ticks as ticks_mod
+    from .watcher import perp_index
+
+    now = time.time() if now is None else now
+    kp = perp_index(shot.series or shot.ticker.split("-")[0])
+    if not kp:
+        return None
+    got = ticks_mod.history.window(kp, now - curverisk.SPIKE_LOOK * (curverisk.SPIKE_STRETCHES + 2) - 130.0, now)
+    return curverisk.spike_view(got[0], got[1], now, shot.side) if got else None
 
 
 def side_view(shot: LongShot, scales: tuple[int, ...], now: float | None = None) -> float | None:
