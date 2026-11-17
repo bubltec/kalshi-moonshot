@@ -259,6 +259,9 @@ class Target:
     loss_wobbles: float = 0.0  # the always-on loss sale (lane field loss_sale_wobbles); 0 = off
     loss_line: float = 0.0  # the bid at or under which it sells, fixed when the bet is first watched (riskscore.loss_line)
     loss_note: str = ""
+    loss_wait_share: float = 0.0  # the most the loss sale waits, as a share of the time left (lane field loss_sale_wait_share); 0 = no wait
+    loss_wait_default: float = 15.0  # the recovery time assumed when the market's hour has too few falls to measure (lane field curve_wait_default)
+    loss_sale_since: float = 0.0  # when the bid was first seen at or under the loss sale's line in the present run of such quotes; 0 = it is over the line. (Not loss_since: that is the hard-loss stop's own clock.)
     risk_never_state: int = 0  # 0 = the look has not happened, 1 = looked and kept, 2 = looked and sells
     risk_drop_units: float = 0.0  # the slow drop check, shadow only (lane field curve_risk_drop); 0 = off
     risk_drop_share: float = 0.25
@@ -547,7 +550,7 @@ class ProfitWatcher:
             )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._loss_sale_hit(t, bid) or self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._risk_quote_hit(t, bid, now) or self._strike_through_hit(t, bid, now, now) or self._cross_take_hit(t, bid) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._late_drop_hit(t, bid, now) or self._settlement_hit(t, bid, now, e)
+            reason = self._loss_sale_hit(t, bid, now) or self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._risk_quote_hit(t, bid, now) or self._strike_through_hit(t, bid, now, now) or self._cross_take_hit(t, bid) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._late_drop_hit(t, bid, now) or self._settlement_hit(t, bid, now, e)
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
                 reason = self._cross_checked(t, bid, now, reason)
             if reason and key not in self._inflight:
@@ -918,11 +921,34 @@ class ProfitWatcher:
             return None
         return curverisk.risk(read.p, net, t.risk_hist if t.risk_history else 1.0, 0.0).q_spot
 
-    def _loss_sale_hit(self, t: Target, bid: float) -> str | None:
-        """The always-on loss sale (lane field loss_sale_wobbles): the bid is at or under the line set when the bet was first watched. One comparison per quote; nothing is read."""
-        if t.loss_line <= 0 or bid <= 0 or bid > t.loss_line + 1e-9 or time.time() < t.retry_after:
+    def _loss_sale_hit(self, t: Target, bid: float, now: float) -> str | None:
+        """The always-on loss sale (lane field loss_sale_wobbles): the bid has been at or under the line set when the bet was first watched, on every quote, for the scaled wait (_loss_wait). A quote over the line starts the count again, so a swing through the line that comes back sells nothing. Memory only."""
+        if t.loss_line <= 0 or bid <= 0:
             return None
-        return f"loss sale: bid {bid:.2f} is at or under the line {t.loss_line:.2f} ({t.loss_note}); {t.entry:.2f} paid"
+        if bid > t.loss_line + 1e-9:
+            t.loss_sale_since = 0.0
+            return None
+        if t.loss_sale_since <= 0:
+            t.loss_sale_since = now
+        held, wait = now - t.loss_sale_since, self._loss_wait(t, bid, now)
+        if held < wait - 1e-9 or time.time() < t.retry_after:
+            return None
+        return f"loss sale: bid {bid:.2f} is at or under the line {t.loss_line:.2f} ({t.loss_note}) and has been for {held:.0f}s of a {wait:.0f}s wait; {t.entry:.2f} paid"
+
+    def _loss_wait(self, t: Target, bid: float, now: float) -> float:
+        """Seconds the loss sale waits, scaled as the max-loss stop's wait is (curverisk.stop_wait): the market's own recovery time from its last hour, less the deeper the bid is under the line, times the share of the market still to run, at most loss_wait_share of the time left. With no close time to scale by it does not wait."""
+        left = t.close_ts - now if t.close_ts > 0 else 0.0
+        if t.loss_wait_share <= 0 or left <= 0:
+            return 0.0
+        base = t.loss_wait_default
+        index = t.shock_index or t.index_id
+        try:
+            stats = variants.comeback_stats(index, now) if index else None
+        except Exception:
+            stats = None
+        if stats is not None and stats[1] >= 5:
+            base = stats[2]
+        return curverisk.stop_wait(bid, t.loss_line, left, base, t.loss_wait_share)
 
     def _arm_loss_sale(self, t: Target, wobbles: float, now: float) -> None:
         """Set the loss sale's line once, from memory: the side's bid now (the bet has just been bought), the market's wobble so far, the price paid."""
@@ -2071,6 +2097,9 @@ class ProfitWatcher:
                     self._shock_logged.add((ticker, lane))
                     log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
             self._arm_loss_sale(held, spec.loss_sale_wobbles, time.time())
+            held.loss_wait_share, held.loss_wait_default = spec.loss_sale_wait_share, spec.curve_wait_default
+            if spec.loss_sale_wobbles > 0 and not held.index_id:
+                held.index_id = strike_index_for(ticker.split("-")[0]) or ""  # the wait reads this market's own recovery time from its index in memory
             if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm

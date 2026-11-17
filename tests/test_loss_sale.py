@@ -100,8 +100,12 @@ def test_integration_the_line_is_armed_from_memory_and_the_bet_is_sold_at_it_and
         F.yes_bid(w, bid, 440)
         assert F.signals(w) == [], f"sold at {bid}, above the line {line:.2f}"
     F.yes_bid(w, round(line - 0.01, 2), 430)
+    assert F.signals(w) == []  # under the line for the first time: the wait starts, nothing sells
+    F.yes_bid(w, round(line - 0.02, 2), 427)
+    assert F.signals(w) == []  # 3 s under: inside the wait (about 7 s with 7 minutes left and a bid just under the line)
+    F.yes_bid(w, round(line - 0.02, 2), 421)
     out = F.signals(w)
-    assert len(out) == 1 and out[0].why.startswith("loss sale: bid ") and "wobbles" in out[0].why
+    assert len(out) == 1 and out[0].why.startswith("loss sale: bid ") and "wobbles" in out[0].why and "s wait" in out[0].why
 
 
 def test_integration_a_cheap_side_is_sold_at_half_the_price_paid(tmp_path, monkeypatch):
@@ -112,6 +116,8 @@ def test_integration_a_cheap_side_is_sold_at_half_the_price_paid(tmp_path, monke
     F.yes_bid(w, 0.45, 400)
     assert F.signals(w) == []
     F.yes_bid(w, 0.38, 395)
+    assert F.signals(w) == []
+    F.yes_bid(w, 0.37, 385)
     out = F.signals(w)
     assert len(out) == 1 and "half the " in out[0].why and " paid" in out[0].why
 
@@ -138,6 +144,7 @@ def test_integration_the_signal_becomes_a_sell_order_at_a_loss_and_the_bet_close
     w = lane_only_loss_sale(tmp_path, monkeypatch, client=c)
     w.targets[(F.TICKER, "risk_only")].loss_line = 0.59
     F.yes_bid(w, 0.55, 430)
+    F.yes_bid(w, 0.55, 418)  # still under after the wait
     job = w._jobs.get_nowait()
     w._sell(*job)
     assert len(c.sold) == 1, "the loss sale raised a signal but no order was placed"
@@ -151,3 +158,59 @@ def test_integration_off_by_default_nothing_is_armed_or_sold(tmp_path, monkeypat
     assert t.loss_line == 0.0 and t.loss_wobbles == 0.0
     F.yes_bid(w, 0.30, 430)
     assert not [j for j in F.signals(w) if j.why.startswith("loss sale")]
+
+
+def test_integration_a_swing_through_the_line_that_comes_back_sells_nothing_and_starts_the_count_again(tmp_path, monkeypatch):
+    """The DOGE bet of 2026-11-17 11:28: bought at 0.31 with 67 s left, the bid was 0.14 a second later and 0.57 nine seconds after that. One quote under the line is not a bet gone wrong."""
+    seed_path(wobble_cents=10)
+    w = lane_only_loss_sale(tmp_path, monkeypatch, client=F.Client(bid=0.80))
+    line = w.targets[(F.TICKER, "risk_only")].loss_line
+    F.yes_bid(w, round(line - 0.10, 2), 440)  # through the line
+    F.yes_bid(w, round(line - 0.12, 2), 438)
+    F.yes_bid(w, round(line + 0.15, 2), 436)  # and back: the count is thrown away
+    F.yes_bid(w, round(line - 0.05, 2), 434)  # under again: a new count from here
+    F.yes_bid(w, round(line - 0.05, 2), 431)  # 3 s into it (9 s after the first quote under the line: had the count not started again, this would sell)
+    assert F.signals(w) == []
+    F.yes_bid(w, round(line - 0.05, 2), 425)
+    assert len(F.signals(w)) == 1
+
+
+def test_integration_with_no_wait_it_sells_on_the_first_quote(tmp_path, monkeypatch):
+    seed_path(wobble_cents=10)
+    w = lane_only_loss_sale(tmp_path, monkeypatch, client=F.Client(bid=0.80), extra="loss_sale_wobbles=2\nloss_sale_wait_share=0")
+    line = w.targets[(F.TICKER, "risk_only")].loss_line
+    F.yes_bid(w, round(line - 0.01, 2), 430)
+    assert len(F.signals(w)) == 1
+
+
+def test_unit_the_wait_is_a_share_of_the_time_left_by_default_and_part_of_the_lanes_logic(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    base = "[lane.a]\nestimator='ladder'\nprice=[0.1,0.9]\nhours=[0.0,1.0]\nloss_sale_wobbles=2\n"
+    (tmp_path / "strategies.toml").write_text(base)
+    s = config.load()
+    a = lanes.lane_specs(s)["a"]
+    assert a.loss_sale_wait_share == 0.25
+    v = lanes.version_of(a, s)
+    (tmp_path / "strategies.toml").write_text(base + "loss_sale_wait_share=0.1\n")
+    s = config.load()
+    assert lanes.version_of(lanes.lane_specs(s)["a"], s) != v
+
+
+def test_integration_the_wait_scales_with_the_time_left_and_how_far_under_the_line_the_bid_is(tmp_path, monkeypatch):
+    """User, 2026-11-17: "it should wait depending on the time remaining"; "always scale". No fixed number of seconds anywhere."""
+    seed_path(wobble_cents=10)
+    w = lane_only_loss_sale(tmp_path, monkeypatch, client=F.Client(bid=0.80))
+    t = w.targets[(F.TICKER, "risk_only")]
+    line = t.loss_line
+    just_under = line - 0.01
+    with_10_min = w._loss_wait(t, just_under, F.CLOSE - 600)
+    with_5_min = w._loss_wait(t, just_under, F.CLOSE - 300)
+    with_1_min = w._loss_wait(t, just_under, F.CLOSE - 60)
+    assert with_10_min > with_5_min > with_1_min > 0  # less time left, less wait
+    assert with_5_min == pytest.approx(with_10_min / 2, rel=0.01) and with_1_min == pytest.approx(with_10_min / 10, rel=0.01)
+    assert w._loss_wait(t, line / 2, F.CLOSE - 600) == pytest.approx(with_10_min * 0.5 / (1 - 0.01 / line), rel=0.01)  # a bid half way from the line to zero waits half the market's recovery time
+    assert w._loss_wait(t, 0.01, F.CLOSE - 600) < 0.5  # a bid near nothing does not wait
+    for left in (600, 300, 60, 10):
+        assert w._loss_wait(t, just_under, F.CLOSE - left) <= 0.25 * left + 1e-9  # never more than the lane's share of the time left
+    t.loss_wait_share = 0.0
+    assert w._loss_wait(t, just_under, F.CLOSE - 600) == 0.0
