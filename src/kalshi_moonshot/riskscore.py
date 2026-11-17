@@ -147,6 +147,13 @@ def low_risk(chances: Sequence[float] | None, max_risk: float) -> bool:
     return bool(chances) and all(1.0 - c <= max_risk for c in chances)
 
 
+def gap_held(chances: Sequence[float] | None, kalshi: Sequence[float] | None, floor: float, ceiling: float) -> bool:
+    """True when the score's chance has been over Kalshi's price for the side by at least `floor` and at most `ceiling` at every look (2026-11-16, user, on the level rule buying only 0.87 to 0.98 sides: "Why such high prices?"; "Ok let's try your suggestion"). The floor is what the buy costs; the ceiling is where the fit stopped being right (a disagreement of 3 to 6 points was the score's to win, one over 6 was Kalshi's: studies/results/2026-11-16-risk-score-fit.txt)."""
+    if not chances or not kalshi or len(chances) != len(kalshi):
+        return False
+    return all(floor <= c - k <= ceiling for c, k in zip(chances, kalshi))
+
+
 def tag(chances: Sequence[float] | None, kalshi: float | None) -> str:
     if not chances:
         return "[risk score unreadable]"
@@ -186,8 +193,8 @@ def gather(series: str, ticker: str, opened: float, now: float) -> tuple[list[fl
     return ts, vs, ticks_mod.mids.rows(ticker), _prev[key], unit
 
 
-def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] = HELD_LOOKS) -> tuple[list[float], float] | None:
-    """(the side's chance at each of `looks` seconds back, Kalshi's mid for the side now) for a running market, or None when any look cannot be read. The target is the index's average over the 60 s before the open (scenario.target: Kalshi's own rule)."""
+def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] = HELD_LOOKS) -> tuple[list[float], float, list[float]] | None:
+    """(the side's chance at each of `looks` seconds back, Kalshi's mid for the side now, Kalshi's mid for the side at each look) for a running market, or None when any look cannot be read. The target is the index's average over the 60 s before the open (scenario.target: Kalshi's own rule)."""
     from . import scenario
 
     opened = close_ts - 900.0
@@ -199,13 +206,12 @@ def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_
     if strike is None or not mids:
         return None
     w = weights(data_dir)
-    out = []
+    out, was = [], []
     for back in looks:
         x = features(ts, vs, now - back, opened, strike, mids, prev)
         if x is None:
             return None
         out.append(chance(x, side, w))
-    mid = next((m for t, m in reversed(mids) if t <= now), None)
-    if mid is None:
-        return None
-    return out, (mid if side == "yes" else 1.0 - mid)
+        p_yes = 1.0 / (1.0 + math.exp(-x[0]))  # the first reading is the logit of Kalshi's YES mid at that look
+        was.append(p_yes if side == "yes" else 1.0 - p_yes)
+    return out, was[0], was

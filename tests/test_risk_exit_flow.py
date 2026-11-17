@@ -1505,11 +1505,11 @@ def test_integration_the_score_holds_a_bet_the_price_alone_would_sell_and_sells_
 
     w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_score=true")
     assert all(t.risk_score for t in w.targets.values())
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.80], 0.45))  # the score still gives the side 80%
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.80], 0.45, [0.45]))  # the score still gives the side 80%
     for n, bid in enumerate([0.44] * 12):
         yes_bid(w, bid, 400 - 10 * n)
     assert signals(w) == []  # the bid is under the 0.50 line; the score is not
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.30], 0.45))  # now the score agrees
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.30], 0.45, [0.45]))  # now the score agrees
     for n, bid in enumerate([0.44] * 12):
         yes_bid(w, bid, 280 - 10 * n)
     assert len(signals(w)) == 1

@@ -932,6 +932,10 @@ def evaluate(
         elif not riskscore.low_risk(rs[0], spec.risk_score_buy):
             bet = False
             note = f"{rs_tag} the lane buys a risk of {100 * spec.risk_score_buy:.0f}% or under that has held for a minute. {note}"
+        elif spec.risk_score_gap_max > 0 and not riskscore.gap_held(rs[0], rs[2], shot.ask + _fee(shot.ask) - rs[1] + spec.risk_score_edge, spec.risk_score_gap_max):
+            bet = False
+            gaps = ", ".join(f"{100 * (c - k):+.1f}" for c, k in zip(rs[0], rs[2]))
+            note = f"{rs_tag} the score is over Kalshi's price by {gaps} points (now, 30 s ago, a minute ago); the lane buys a gap of {100 * (shot.ask + _fee(shot.ask) - rs[1] + spec.risk_score_edge):.1f} (the cost) to {100 * spec.risk_score_gap_max:.0f} points that has held. {note}"
         elif rs[0][0] - (shot.ask + _fee(shot.ask)) < spec.risk_score_edge:
             bet = False
             note = f"{rs_tag} the score's chance {rs[0][0]:.3f} does not clear the ask and its fee ({shot.ask + _fee(shot.ask):.3f}) by the lane's {spec.risk_score_edge:g}. {note}"

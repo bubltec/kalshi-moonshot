@@ -201,3 +201,34 @@ def test_integration_the_reading_makes_no_database_read(tmp_path, monkeypatch):
     out = decide(tmp_path, monkeypatch, now, "risk_score_buy=0.25\nrisk_score_edge=-0.05\nentry_scenario_view=true")
     assert out.action == "bet" and "[risk score: risk " in out.note[:60]
     assert not [q for q in seen if "settled_value" in q]  # the last four markets are no longer asked of the database
+
+
+# The gap rule (lane field risk_score_gap_max; 2026-11-16, user: "Why such high prices?"; "Ok let's try your suggestion").
+def test_unit_the_gap_has_to_sit_between_the_cost_and_the_ceiling_at_every_look():
+    assert riskscore.gap_held([0.64, 0.63, 0.64], [0.60, 0.60, 0.60], 0.025, 0.06)
+    assert not riskscore.gap_held([0.64, 0.61, 0.64], [0.60, 0.60, 0.60], 0.025, 0.06)  # a minute ago it did not clear the cost
+    assert not riskscore.gap_held([0.68, 0.64, 0.64], [0.60, 0.60, 0.60], 0.025, 0.06)  # over the ceiling: Kalshi's price is the one to believe
+    assert not riskscore.gap_held(None, None, 0.0, 0.06) and not riskscore.gap_held([0.6], [0.6, 0.6], 0.0, 0.06)
+
+
+def test_integration_the_gap_lane_buys_a_mid_priced_side_the_score_rates_over_its_price(tmp_path, monkeypatch):
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.66, 0.655, 0.66], 0.615, [0.615, 0.615, 0.615]))
+    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06", ask=0.62)
+    assert out.action == "bet" and "[risk score: risk 34% now" in out.note
+
+
+def test_integration_the_gap_lane_passes_when_the_gap_is_under_the_cost_or_over_the_ceiling(tmp_path, monkeypatch):
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.625, 0.625, 0.625], 0.615, [0.615, 0.615, 0.615]))
+    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06", ask=0.62)
+    assert out.action == "pass" and "the lane buys a gap of" in out.note
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.72, 0.72, 0.72], 0.615, [0.615, 0.615, 0.615]))
+    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06", ask=0.62)
+    assert out.action == "pass" and "the lane buys a gap of" in out.note
+
+
+def test_unit_the_gap_field_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
+    assert "risk_score_gap_max" not in lanes.settings_of(base, s)
+    assert lanes.version_of(dataclasses.replace(base, risk_score_buy=1.0), s) != lanes.version_of(dataclasses.replace(base, risk_score_buy=1.0, risk_score_gap_max=0.06), s)
