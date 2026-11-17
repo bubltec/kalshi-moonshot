@@ -162,6 +162,7 @@ class Worker:
         forecast_fit.start_refit(lambda: self.s)  # idle unless a forecast lane is on
         from . import store as store_mod
 
+        store_mod.queue_decisions()  # a pass's decision row is written by a background thread: an evaluation does not end on an INSERT and a COMMIT
         store_mod.serve_from_memory()  # remembered reads (open bets and the like) are re-read by a background thread once their time is up, not by an evaluation
         from . import calibration
 
@@ -355,6 +356,9 @@ class Worker:
 
     def stop(self) -> None:
         self.stopping = True
+        from . import store as store_mod
+
+        store_mod.flush_decisions(3.0)  # the pass rows still queued are written before the process goes
         if self.discovery is not None:
             self.discovery.stop()
         if self.watcher is not None:

@@ -90,8 +90,11 @@ def worker(tmp_path, client=None, est=None, **over):
 
 
 def drain(w, limit=50):
+    from kalshi_moonshot import store as store_mod
+
     for _ in range(limit):
         if not w.step():
+            store_mod.flush_decisions(5.0)  # the running worker writes its pass rows from a background thread (store.queue_decisions): idle means those are written too
             return
     raise AssertionError("worker never went idle")
 

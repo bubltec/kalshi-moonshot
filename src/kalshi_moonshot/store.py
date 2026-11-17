@@ -338,6 +338,73 @@ _REFRESHING: set[tuple] = set()
 _REFRESH_STORES = threading.local()
 
 
+# ---- decision rows written off the evaluation's thread ----
+# 2026-11-17, user: "why are you waiting on a database?"; "you shouldn't be using the db. everything in current scope for a buy/sell judgement comes from memory". Every evaluation ended by INSERTing its decision row and COMMITting it on the worker's one shared connection, so evaluations stood in line behind each other's writes (on the host at 09:58: a median 45 ms of database per evaluation, 427 ms at the 90th percentile, lock waits up to 591 ms; 99 of 100 evaluations are passes). In the running bot (queue_decisions) a row that is not a bet is handed to a writer thread, which inserts what has gathered and commits once. A bet's row is still written at once: the watcher and the books need it the moment the order is placed, and it comes after the judgement, not in it.
+_DEC_Q: "queue.Queue[tuple[str, Any, dict]]" = queue.Queue()
+_DEC_BG = {"on": False, "started": False}
+_LAST_DEC: dict[tuple[str, str, Any], float] = {}  # (store path, ticker, lane or None for any lane) -> the time of the latest decision logged by this process
+_LAST_DEC_LOCK = threading.Lock()
+_PROC_START = time.time()
+DEC_BATCH = 200
+
+
+def queue_decisions(on: bool = True) -> None:
+    """Turn the background decision writer on (the running bot) or off (tests, the CLI: rows are written at once, as they always were)."""
+    _DEC_BG["on"] = on
+    if on and not _DEC_BG["started"]:
+        _DEC_BG["started"] = True
+        threading.Thread(target=_decision_writer, name="decision-writer", daemon=True).start()
+
+
+def flush_decisions(timeout: float = 5.0) -> bool:
+    """Wait until every queued decision row is written. True when the queue emptied in time."""
+    end = time.monotonic() + timeout
+    while _DEC_Q.unfinished_tasks and time.monotonic() < end:
+        time.sleep(0.01)
+    return not _DEC_Q.unfinished_tasks
+
+
+def _decision_writer() -> None:
+    stores: dict[tuple[str, Any], Store] = {}
+    while True:
+        batch = [_DEC_Q.get()]
+        while len(batch) < DEC_BATCH:
+            try:
+                batch.append(_DEC_Q.get_nowait())
+            except queue.Empty:
+                break
+        for attempt in range(5):
+            try:
+                touched = set()
+                for path, exclude, d in batch:
+                    st = stores.get((path, exclude))
+                    if st is None:
+                        st = stores[(path, exclude)] = Store(path, exclude)
+                    st.db.execute(f"INSERT INTO decisions ({','.join(d)}) VALUES ({','.join('?' for _ in d)})", list(d.values()))
+                    touched.add((path, exclude))
+                for key in touched:
+                    stores[key].db.commit()
+                break
+            except Exception:
+                _log.exception("decision writer: %d rows not written (try %d of 5)", len(batch), attempt + 1)
+                stores.clear()  # a broken connection is not reused
+                time.sleep(1.0)
+        else:
+            _log.error("decision writer: %d decision rows dropped after 5 tries", len(batch))
+        for _ in batch:
+            _DEC_Q.task_done()
+
+
+def _note_decision(path: str, ticker: str, lane: Any, ts: float) -> None:
+    with _LAST_DEC_LOCK:
+        if len(_LAST_DEC) > 60000:  # closed markets pile up: keep the last two hours
+            for k in [k for k, v in _LAST_DEC.items() if v < ts - 7200.0]:
+                del _LAST_DEC[k]
+        for key in ((path, ticker, lane), (path, ticker, None)):
+            if _LAST_DEC.get(key, 0.0) < ts:
+                _LAST_DEC[key] = ts
+
+
 def serve_from_memory(on: bool = True) -> None:
     """In the running bot (2026-11-16, user: "Nothing in per tick computations should do a db read. Ever"): a remembered read whose MEMO_TTL has run out is answered from memory and re-read by a background thread. The TTL exists only to pick up writes by another process; a write in THIS process still makes the next read go to the database, once, right after the bet, sale or settlement that changed the rows (the reader must not act on a book it knows is out of date)."""
     first = not _BACKGROUND["on"] and on
@@ -608,6 +675,10 @@ class Store:
     def add_decision(self, **d: Any) -> int:
         d.setdefault("ts", time.time())
         d.setdefault("version", STRATEGY_VERSION)
+        _note_decision(str(self.path), d["ticker"], d.get("lane"), float(d["ts"]))
+        if _DEC_BG["on"] and d.get("action") != "bet":
+            _DEC_Q.put((str(self.path), self.exclude_versions, d))  # written by the decision-writer thread: the evaluation does not wait on the database
+            return 0
         cols = ",".join(d)
         marks = ",".join("?" for _ in d)
         cur = self.db.execute(f"INSERT INTO decisions ({cols}) VALUES ({marks})", list(d.values()))
@@ -707,6 +778,12 @@ class Store:
 
     def decided_since(self, ticker: str, since_ts: float, lane: str | None = None) -> bool:
         """Whether a decision on the market was logged since `since_ts`: by any lane, or (with `lane`) by that lane alone. The review cooldown asks with the lane's own name (2026-11-15): the paper variants log hundreds of decisions an hour on the same markets, and counted from every lane they kept the live lane's review off 57% of the last two hours."""
+        if _DEC_BG["on"]:  # the running bot: rows are queued, so memory is asked first (outside it the table is read, as it always was)
+            last = _LAST_DEC.get((str(self.path), ticker, lane))
+            if last is not None and last >= since_ts:
+                return True  # this process logged one; its row may still be in the queue
+            if since_ts >= _PROC_START:
+                return False  # every decision since the bot started passed through add_decision: memory is the whole answer
         if lane is None:
             row = self.db.execute("SELECT 1 FROM decisions WHERE ticker=? AND ts>=? LIMIT 1", (ticker, since_ts)).fetchone()
         else:

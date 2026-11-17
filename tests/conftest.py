@@ -24,6 +24,9 @@ def _no_read_memory(monkeypatch):
 
     monkeypatch.setattr(store, "MEMO_TTL", 0.0)
     store._MEMO.clear()
+    store.flush_decisions(2.0)
+    store._LAST_DEC.clear()
+    store.queue_decisions(False)  # the running bot writes pass rows from a background thread; a test reads its rows back at once
     store.serve_from_memory(False)  # a test that starts the worker turns the bot's background reads on; no later test may inherit that
     from kalshi_moonshot import calibration
 
