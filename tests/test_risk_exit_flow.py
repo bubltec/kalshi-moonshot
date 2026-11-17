@@ -1371,3 +1371,129 @@ def test_unit_the_trail_changes_a_lanes_version_only_when_it_is_set(tmp_path, mo
         s = config.load()
         got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
         assert ("curve_take_trail" in got) is bool(extra) and ("curve_take_trail_live" in got) is bool(extra)
+
+
+# ---- the slow drop check, shadow only (2026-11-16, user: "we do need to get another stop in, maybe like some kind of drop check: trend away from position for X amount of time by Y factor of the spot we bought at"; "Yes, shadow it") ----
+# the fixture bet again: YES at 0.81 on a market whose spot index (BRTI) is armed against the strike 100.0. The bid stays at 0.70 throughout, over the line and inside the max loss, so the risk exit itself wants nothing.
+DROP = "would sell (slow drop)"
+
+
+def spot_path(monkeypatch, value_at):
+    """A fresh tick history with the lane's spot index one reading a second from 1500 s before the open's end to the close, `value_at(left)` giving the level."""
+    fresh = ticks_mod.TickHistory()
+    monkeypatch.setattr(ticks_mod, "history", fresh)
+    fresh.warm("BRTI", [(CLOSE - left, value_at(left)) for left in range(2400, 441, -1)], CLOSE - 2400.0)
+    return fresh, value_at
+
+
+def walk(w, path, bid=0.70, to_left=300):
+    """The spot's tick and Kalshi's quote once a second from 440 s left; returns every sale signal raised."""
+    fresh, value_at = path
+    out = []
+    for left in range(440, to_left - 1, -1):
+        fresh.note("BRTI", CLOSE - left, value_at(left))
+        yes_bid(w, bid, left)
+        out += signals(w)
+    return out
+
+
+def quiet(left):
+    return 0.01 * (1 if (left // 45) % 2 else -1)  # a small square wave, so the market has a typical minute to be read in
+
+
+def sliding(left):
+    """Just over the strike until 440 s left, then down two thousandths a second: across the strike ten seconds later and still falling."""
+    return 100.02 + quiet(left) if left > 440 else 100.02 - 0.002 * (440 - left)
+
+
+def dipping(left):
+    """The same market with one 20-second dip under the strike that comes back."""
+    return 99.95 if 400 >= left > 380 else 100.02 + quiet(left)
+
+
+def far_over(left):
+    """The same slide starting far over the strike: it trends away for as long, and never crosses."""
+    return 100.60 + quiet(left) if left > 440 else 100.60 - 0.002 * (440 - left)
+
+
+def drop_rows(tmp_path):
+    import json
+
+    f = tmp_path / "risk_shadow.jsonl"
+    return [x for x in (json.loads(line) for line in f.read_text().splitlines()) if x.get("kind") == "drop"] if f.exists() else []
+
+
+def test_unit_the_drop_is_a_fall_from_the_high_of_the_look_back_with_the_chance_under_half():
+    hist = [(0.0, 2.0), (50.0, 3.0), (100.0, 1.2), (150.0, -0.4)]
+    assert curverisk.drop_fall(hist, 150.0, 120.0) == pytest.approx(3.4)  # the high inside the look back is 3.0
+    assert curverisk.drop_fall(hist, 150.0, 60.0) == pytest.approx(1.6)  # a shorter look back no longer sees it
+    assert curverisk.drop_fall([], 150.0, 60.0) is None and curverisk.drop_fall(hist, 150.0, 0.0) is None
+    assert curverisk.slow_drop(1.6, 0.40, 1.0)
+    assert not curverisk.slow_drop(0.9, 0.40, 1.0)  # under the lane's units
+    assert not curverisk.slow_drop(1.6, 0.55, 1.0)  # the spot is still on the bet's side
+    assert not curverisk.slow_drop(None, 0.40, 1.0) and not curverisk.slow_drop(1.6, 0.40, 0.0)  # no reading; off
+
+
+def test_integration_a_spot_that_slides_across_the_target_and_keeps_going_is_logged_once_and_nothing_sells(tmp_path, monkeypatch, caplog):
+    import logging
+
+    path = spot_path(monkeypatch, sliding)
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_drop=1.0")
+    t = w.targets[(TICKER, "risk_only")]
+    assert t.shock_index == "BRTI" and t.shock_ref == 100.0 and t.risk_drop_units == 1.0 and t.risk_drop_share == 0.25
+    with caplog.at_level(logging.INFO):
+        assert walk(w, path) == []  # shadow: it never raises a sale
+    assert sum(1 for r in caplog.records if DROP in r.getMessage()) == 1
+    rows = drop_rows(tmp_path)
+    assert len(rows) == 1 and rows[0]["live"] is False and rows[0]["bid"] == 0.70
+    assert 300 < rows[0]["left"] < 345  # across the strike from about 430 s left; the fall has to last a quarter of the time left before it counts
+    assert rows[0]["wait"] == pytest.approx(0.25 * rows[0]["left"], abs=0.5)
+
+
+def test_integration_the_drop_check_is_off_by_default(tmp_path, monkeypatch, caplog):
+    import logging
+
+    path = spot_path(monkeypatch, sliding)
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0)
+    with caplog.at_level(logging.INFO):
+        assert walk(w, path) == []
+    assert not any(DROP in r.getMessage() for r in caplog.records) and drop_rows(tmp_path) == []
+
+
+def test_integration_a_dip_under_the_target_that_comes_back_is_not_logged(tmp_path, monkeypatch, caplog):
+    import logging
+
+    path = spot_path(monkeypatch, dipping)
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_drop=1.0")
+    with caplog.at_level(logging.INFO):
+        assert walk(w, path) == []
+    assert not any(DROP in r.getMessage() for r in caplog.records) and drop_rows(tmp_path) == []
+
+
+def test_integration_a_slide_that_stays_on_the_bets_side_of_the_target_is_not_logged(tmp_path, monkeypatch, caplog):
+    import logging
+
+    path = spot_path(monkeypatch, far_over)
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_drop=1.0")
+    with caplog.at_level(logging.INFO):
+        assert walk(w, path) == []
+    assert not any(DROP in r.getMessage() for r in caplog.records) and drop_rows(tmp_path) == []
+
+
+def test_integration_the_drop_check_does_not_stop_or_change_a_real_sale(tmp_path, monkeypatch):
+    path = spot_path(monkeypatch, sliding)
+    w = held(tmp_path, monkeypatch, live=True, extra="curve_risk_drop=1.0")  # the max loss is on, as in the fixture
+    out = walk(w, path, bid=0.40)  # the price has fallen through the max loss
+    assert out and out[0].why.startswith("curve risk exit (max loss)")
+
+
+def test_unit_the_drop_check_is_shadow_so_it_never_changes_a_lanes_version(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    seen = []
+    for extra in ("", "curve_risk_drop=1.0\ncurve_risk_drop_share=0.25\n"):
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + extra)
+        s = config.load()
+        spec = lanes.lane_specs(s)["risk_only"]
+        seen.append(lanes.settings_of(spec, s))
+        assert spec.curve_risk_drop == (1.0 if extra else 0.0)
+    assert seen[0] == seen[1]

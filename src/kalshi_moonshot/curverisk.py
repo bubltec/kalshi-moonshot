@@ -321,3 +321,16 @@ def still_falling(samples: list[tuple[float, float]], now: float, seconds: float
 def stop_miss(net: float, basis: float, q: float, max_loss: float) -> float:
     """How far the bet is from the max-loss stop, per contract in probability: zero or less = at or past it (stopped() is true), positive = that much short of it."""
     return (net - basis) + max_loss * q * basis
+
+
+def drop_fall(hist: list[tuple[float, float]], now: float, look: float) -> float | None:
+    """How far the newest cushion reading (typical minutes on the bet's side of the target) is under the highest one of the last `look` seconds. `hist` is (time, cushion), oldest first. None when there is no reading in the look back."""
+    seen = [c for ts, c in hist if now - look - 1e-9 <= ts <= now]
+    if not seen or look <= 0:
+        return None
+    return max(seen) - seen[-1]
+
+
+def slow_drop(fall: float | None, chance: float, units: float) -> bool:
+    """The slow drop check's condition at one reading (lane field curve_risk_drop, shadow): the cushion has fallen `units` typical minutes or more from its high of the look back, and the curve's own chance that the side pays is under one half (the spot is across the target). The caller asks for it to hold a share of the time left before it counts. The one setting that did not lose on the live commodity bets of 11-09 to 11-13 (studies/results/2026-11-13-drop-sale-time-scaled.txt: 1.0, a quarter, a quarter, chance under 0.5: +$0.87 on 13 sold of 244, one winner sold); it was picked from 20 after the results were seen."""
+    return units > 0 and fall is not None and fall >= units - 1e-9 and chance < 0.5

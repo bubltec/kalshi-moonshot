@@ -249,6 +249,11 @@ class Target:
     risk_take_trail_live: bool = False  # the trail sells (curve_take_trail_live); off = it logs and records a would-sell
     risk_take_peak: float = 0.0  # the highest bid the risk check has seen on this bet
     risk_trail_logged: bool = False
+    risk_drop_units: float = 0.0  # the slow drop check, shadow only (lane field curve_risk_drop); 0 = off
+    risk_drop_share: float = 0.25
+    risk_drop_hist: list = field(default_factory=list)  # (time, the cushion in typical minutes on the bet's side)
+    risk_drop_since: float = 0.0
+    risk_drop_logged: bool = False
     risk_long_scales: tuple = ()  # the minutes the long layer reads its movement over, together (lane field curve_risk_long_scales); empty = the last hour
     risk_nudge_units: float = 0.0  # the squeeze has no cap: the allowed miss is this many typical minutes of the market times how strongly everything agrees (lane field nudge_units; 0 = the cents cap)
     risk_nudge_hour: bool = False  # the squeeze's cap is scaled by the hour's width correction (lane field nudge_hour_factor)
@@ -995,6 +1000,8 @@ class ProfitWatcher:
         if now - t.risk_noted >= 10.0:
             t.risk_noted = now
             log.info("curve risk watch %s %s, %.0fs left: chance %.3f (%s worse; price %.3f, spot %.3f, history x%.2f, long layer %s), line %.2f, result %+.1f%% of cost%s", t.ticker, t.lane, left, r.q, r.worse, r.q_price, r.q_spot, t.risk_hist, "n/a" if long_chance is None else f"{long_chance:.3f}", t.risk_sell, pnl * 100.0, "" if t.risk_live else " [shadow]")
+        if getattr(t, "risk_drop_units", 0.0) > 0:  # shadow only, and off unless the lane sets it
+            self._risk_drop_shadow(t, r, bid, now, left, pnl)
         look = t.risk_take_slope * left  # the look back for the slope shrinks with the time left
         basis = t.entry + fee_per_contract(t.entry)
         net = bid - fee_per_contract(bid)
@@ -1111,6 +1118,32 @@ class ProfitWatcher:
             log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
             self._risk_record(t, r, bid, now, left, pnl, wait, stop, False)
         return None
+
+    def _risk_drop_shadow(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> None:
+        """The slow drop check, shadow only (lane field curve_risk_drop; 2026-11-16, user: "trend away from position for X amount of time by Y factor"; "Yes, shadow it"). Reads the lane's own spot index against its armed reference once a second (curvevalue.read, as the cushion check does), keeps the cushion in typical minutes, and when it has fallen the lane's units from its high of the last share of the time left, with the curve's chance under one half, for that share of the time left, logs one would-sell a bet and records it (kind "drop"). It never sells and never raises a sale: nothing here returns a reason."""
+        if t.risk_drop_units <= 0 or t.risk_drop_logged or t.shock_ref <= 0 or not t.shock_index or left <= 0:
+            return
+        got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
+        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left, t.curve_scales) if got else None
+        if read is None or read.rate_long <= 0:
+            t.risk_drop_since = 0.0  # no reading: the hold starts again when there is one
+            return
+        look = t.risk_drop_share * left
+        t.risk_drop_hist.append((now, read.cushion / (read.rate_long * 60**0.5)))
+        while t.risk_drop_hist and t.risk_drop_hist[0][0] < now - look - 5.0:  # the look back only shrinks as the market runs down
+            t.risk_drop_hist.pop(0)
+        fall = curverisk.drop_fall(t.risk_drop_hist, now, look)
+        chance = curvevalue.phi(read.cushion / (read.rate_long * math.sqrt(left)))  # the 900 s rate alone, as the replay read it (read.p is the lower of two scales)
+        if not curverisk.slow_drop(fall, chance, t.risk_drop_units) or bid < CURVE_MIN_BID:
+            t.risk_drop_since = 0.0
+            return
+        if t.risk_drop_since <= 0:
+            t.risk_drop_since = now
+        if now - t.risk_drop_since < look:
+            return
+        t.risk_drop_logged = True
+        log.info("curve risk shadow: %s %s would sell (slow drop): the cushion is %+.2f typical minutes, %.2f under its high of the last %.0fs (%.0f%% of the time left; asks %.2g), the curve's chance is %.3f, held %.0fs; bid %.2f, %+.1f%% of cost, %.0fs left", t.ticker, t.lane, t.risk_drop_hist[-1][1], fall, look, t.risk_drop_share * 100.0, t.risk_drop_units, chance, now - t.risk_drop_since, bid, pnl * 100.0, left)
+        self._risk_record(t, r, bid, now, left, pnl, look, False, False, kind="drop")
 
     def _risk_held(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, kind: str, why: str) -> None:
         """A live sale the risk exit wanted and something held (2026-11-15: four bets were held to a full loss with the bid at 0.37 to 0.41 when they crossed the max-loss line, and the log said nothing about why). Logged and written to data/risk_shadow.jsonl once as each kind of hold begins; it ends when the sale is no longer wanted."""
@@ -1943,6 +1976,7 @@ class ProfitWatcher:
                 held.risk_take_early_bid, held.risk_take_early_seconds = spec.curve_take_early_bid, spec.curve_take_early_seconds
                 held.risk_take_cushion = spec.curve_take_cushion
                 held.risk_take_trail, held.risk_take_trail_live = spec.curve_take_trail, spec.curve_take_trail_live
+                held.risk_drop_units, held.risk_drop_share = spec.curve_risk_drop, spec.curve_risk_drop_share
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
