@@ -595,7 +595,10 @@ class Store:
         """Read the bet book (every bet row unsettled, or sold in the last hour) and put it in memory unless a newer one is already there."""
         p = str(self.path)
         gen = _GEN.get((p, "bets"), 0)
-        rows = self.db.execute("SELECT * FROM decisions WHERE action='bet' AND (outcome IS NULL OR exit_ts > ?) ORDER BY ts, id", (time.time() - BOOK_KEEP_EXITS,)).fetchall()
+        # two reads, each on its own partial index (idx_decisions_bets_open, idx_decisions_bets_exit). As one statement with an OR it scanned the whole table: 155,127 rows for 16 on the host at 11:36 on 2026-11-17, 64 ms idle and about 600 ms on a busy bet
+        rows = list(self.db.execute("SELECT * FROM decisions WHERE action='bet' AND outcome IS NULL").fetchall())
+        rows += self.db.execute("SELECT * FROM decisions WHERE action='bet' AND exit_ts IS NOT NULL AND exit_ts > ? AND outcome IS NOT NULL", (time.time() - BOOK_KEEP_EXITS,)).fetchall()
+        rows.sort(key=lambda r: (r["ts"], r["id"]))
         with _BOOK_LOCK:
             cur = _BOOK.get(p)
             if cur is None or cur[0] <= gen:
@@ -653,6 +656,9 @@ class Store:
                 if name == "version":
                     # Every row that exists before versions did was made by the old logic.
                     self.db.execute("UPDATE decisions SET version=?", (LEGACY_VERSION,))
+        # the bet book's two reads (rebuild_book), made here and not in SCHEMA: an old database gains exit_ts in the loop above
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_decisions_bets_open ON decisions(ts) WHERE action='bet' AND outcome IS NULL")
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_decisions_bets_exit ON decisions(exit_ts) WHERE action='bet' AND exit_ts IS NOT NULL")
         candle_cols = {r["name"] for r in self.db.execute("PRAGMA table_info(candles)")}
         for col in ("bid_hi", "ask_lo"):
             if col not in candle_cols:
@@ -1154,12 +1160,16 @@ class Store:
         """(side, sale time) of this lane's latest sale of this market for a gain (the sale after its fee over what the position cost, fee included), else None. A sale at a loss is not counted. The cost is what the buy orders in the position's life actually filled at (orders: cost_usd over fill_count, resting bids fill under the ask), and falls back to the decision's ask plus its fee when there are no orders (a paper bet)."""
         from .strategy import fee_per_contract as fee
 
-        rows = self.db.execute(
-            """SELECT ts, side, exit_price, exit_ts, ask FROM decisions
-               WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL AND exit_price IS NOT NULL AND ask IS NOT NULL
-               ORDER BY exit_ts DESC""",
-            (ticker, lane),
-        ).fetchall()
+        book = self._book()
+        if book is not None:  # the running bot: the lane's sales of this market are in the bet book (a sold bet stays in it for an hour); with none, nothing is read at all
+            rows = sorted((r for r in book if r["ticker"] == ticker and _lane_of(r) == lane and r["exit_ts"] is not None and r["exit_price"] is not None and r["ask"] is not None), key=lambda r: -float(r["exit_ts"]))
+        else:
+            rows = self.db.execute(
+                """SELECT ts, side, exit_price, exit_ts, ask FROM decisions
+                   WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL AND exit_price IS NOT NULL AND ask IS NOT NULL
+                   ORDER BY exit_ts DESC""",
+                (ticker, lane),
+            ).fetchall()
         for r in rows:
             side = r["side"] or "yes"
             sold, paid = float(r["exit_price"]), float(r["ask"])

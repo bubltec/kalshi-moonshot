@@ -170,3 +170,26 @@ def test_integration_off_the_table_is_read_as_it_always_was(tmp_path):
     seen = spy(store)
     assert len(store.open_bets()) == 1 and store.holds_sized_bet("A-1", "x")
     assert seen and store_mod._BOOK == {}
+
+
+def test_integration_the_lanes_last_sale_for_a_gain_is_found_in_the_book_and_a_market_with_no_sale_reads_nothing(tmp_path):
+    store = Store(tmp_path / "m.db")
+    now = scenario(store)
+    store.db.execute("UPDATE decisions SET exit_price=0.90 WHERE ticker='E1-C'")  # bought at 0.60, sold at 0.90: a gain
+    store.db.execute("UPDATE decisions SET exit_price=0.30 WHERE ticker='E2-A'")  # sold at a loss: not counted
+    store.db.commit()
+    from_table = {k: store.last_gain_sale(*k) for k in (("E1-C", "x"), ("E2-A", "x"), ("E1-A", "x"), ("NONE", "x"))}
+    assert from_table[("E1-C", "x")] is not None and from_table[("E1-C", "x")][0] == "yes" and from_table[("E2-A", "x")] is None
+    store_mod.serve_from_memory()
+    store.rebuild_book()
+    assert {k: store.last_gain_sale(*k) for k in from_table} == from_table
+    seen = spy(store)
+    assert store.last_gain_sale("E1-A", "x") is None and store.last_gain_sale("NONE", "x") is None and seen == []  # a market the lane has not sold: nothing is asked of the database
+
+
+def test_unit_the_books_two_reads_have_their_indexes(tmp_path):
+    store = Store(tmp_path / "m.db")
+    names = {r["name"] for r in store.db.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()}
+    assert {"idx_decisions_bets_open", "idx_decisions_bets_exit"} <= names
+    plan = " ".join(str(tuple(r)) for r in store.db.execute("EXPLAIN QUERY PLAN SELECT * FROM decisions WHERE action='bet' AND outcome IS NULL").fetchall())
+    assert "idx_decisions_bets_open" in plan  # the open-bets read does not scan the table
