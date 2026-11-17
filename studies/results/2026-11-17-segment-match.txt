@@ -1,0 +1,39 @@
+window: 2026-11-09 on, ET days 11-09, 11-10, 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; 221873 moments (one a minute) on 26 indexes that tick every 30 s: ADAUSD_RTI, BCHUSD_RTI, BNBUSD_RTI, BQ_BRENT, BQ_COPPER, BQ_NATGAS, BQ_WTI, BRTI, DOGEUSD_RTI, ETHUSD_RTI, HYPEUSD_RTI, KP_ADA, KP_BCH, KP_BNB, KP_BTC, KP_DOGE, KP_ETH, KP_HYPE, KP_NEAR, KP_SOL, KP_XRP, KP_ZEC, NEARUSD_RTI, SOLUSD_RTI, XRPUSD_RTI, ZECUSD_RTI
+moves are in the market's own typical 30 s moves; a typical 3 minutes is about 2.4 of them. 'right way' counts only moments where the forecast and the actual move are both at least half a typical 30 s move
+
+THE FORECASTS, every moment
+  what followed the best match               moments  221873 | called the right way  49.9% of 147735 | correlation with the actual move -0.004 | days over 50%: 2 of 8
+  the average of what followed the repeats   moments  204728 | called the right way  49.0% of 102600 | correlation with the actual move -0.011 | days over 50%: 0 of 8
+  no matching: the last 3 minutes continue   moments  221873 | called the right way  49.4% of 148093 | correlation with the actual move -0.010 | days over 50%: 3 of 8
+  no matching: the last 3 minutes reverse    moments  221873 | called the right way  50.6% of 148093 | correlation with the actual move +0.010 | days over 50%: 5 of 8
+
+BY HOW CLOSE THE BEST MATCH IS (thirds of all moments)
+  closest third (within 0.43)                moments   73958 | called the right way  49.5% of  46802 | correlation with the actual move -0.005 | days over 50%: 3 of 8
+  middle (0.43 to 0.60)                      moments   73957 | called the right way  49.9% of  50295 | correlation with the actual move -0.002 | days over 50%: 4 of 8
+  loosest third (over 0.60)                  moments   73958 | called the right way  50.1% of  50638 | correlation with the actual move -0.005 | days over 50%: 3 of 8
+
+BY HOW MANY TIMES THE SHAPE HAS REPEATED IN THE HOUR (non-overlapping windows within 1 typical move)
+  none within the deviation (best match anyway) moments   17145 | called the right way  51.1% of  11629 | correlation with the actual move +0.007 | days over 50%: 4 of 8
+  1 (the repeats' average)                   moments   11659 | called the right way  49.0% of   7999 | correlation with the actual move -0.021 | days over 50%: 3 of 8
+  2 (the repeats' average)                   moments   11752 | called the right way  49.7% of   7452 | correlation with the actual move -0.011 | days over 50%: 3 of 8
+  3 (the repeats' average)                   moments   12983 | called the right way  50.0% of   7621 | correlation with the actual move -0.003 | days over 50%: 4 of 8
+  4 or more (the repeats' average)           moments  168334 | called the right way  48.8% of  79528 | correlation with the actual move -0.010 | days over 50%: 0 of 8
+
+BY HOW MUCH THE CURRENT 3 MINUTES MOVED ABOUT (the path travelled, thirds): a quiet segment, an ordinary one, a busy one
+  quiet, best match                          moments   73958 | called the right way  49.4% of  46651 | correlation with the actual move -0.008 | days over 50%: 2 of 8
+  ordinary, best match                       moments   73957 | called the right way  50.0% of  50196 | correlation with the actual move -0.000 | days over 50%: 4 of 8
+  busy, best match                           moments   73958 | called the right way  50.1% of  50888 | correlation with the actual move -0.004 | days over 50%: 4 of 8
+
+BY DAY, the best match
+  11-09                                      moments   19126 | called the right way  49.6% of  12838 | correlation with the actual move -0.014 | days over 50%: 0 of 1
+  11-10                                      moments   21165 | called the right way  49.8% of  14080 | correlation with the actual move -0.009 | days over 50%: 0 of 1
+  11-11                                      moments   30617 | called the right way  50.7% of  20975 | correlation with the actual move +0.009 | days over 50%: 1 of 1
+  11-12                                      moments   16046 | called the right way  50.4% of  11027 | correlation with the actual move -0.000 | days over 50%: 1 of 1
+  11-13                                      moments   35132 | called the right way  50.0% of  23119 | correlation with the actual move -0.006 | days over 50%: 0 of 1
+  11-14                                      moments   35969 | called the right way  49.8% of  22970 | correlation with the actual move +0.001 | days over 50%: 0 of 1
+  11-15                                      moments   35520 | called the right way  49.2% of  23281 | correlation with the actual move -0.011 | days over 50%: 0 of 1
+  11-16                                      moments   28298 | called the right way  49.5% of  19445 | correlation with the actual move -0.004 | days over 50%: 0 of 1
+
+WHEN THE FORECAST IS LARGE (the best match's next 3 minutes moved at least a typical 3 minutes, and the match is in the closest third)
+  large forecast, close match                moments   21249 | called the right way  49.1% of  16997 | correlation with the actual move -0.006 | days over 50%: 2 of 8
+  large forecast, 2 or 3 repeats             moments    8235 | called the right way  49.6% of   6838 | correlation with the actual move -0.006 | days over 50%: 3 of 8
