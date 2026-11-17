@@ -13,6 +13,7 @@ Window: 2026-11-09 on (the logic was rewritten that Monday; nothing before it is
     .venv/bin/python scripts/risk_attribute_replay.py build     # write data/tape_archive/replay_readings.csv
     .venv/bin/python scripts/risk_attribute_replay.py report    # read it and print the tables (against the result)
     .venv/bin/python scripts/risk_attribute_replay.py held      # the model's call bought and held to settlement (one fee), against no signal
+    .venv/bin/python scripts/risk_attribute_replay.py rest      # the same bets bought by resting a bid for a minute instead of taking the ask
     .venv/bin/python scripts/risk_attribute_replay.py moves     # against the price's move over the next 2 and 5 minutes, as round trips after the spread and the fee
 """
 import csv
@@ -423,7 +424,136 @@ def held() -> None:
     show("the MOVE fit's call (5 minutes), held", mov_trips)
 
 
+def _quotes_15m() -> dict:
+    """ticker -> (times, YES bid, YES ask) arrays, every two-sided quote on the archive, in time order."""
+    parts = defaultdict(list)
+    for f in sorted(glob.glob(f"{ROOT}/quotes/day=*/part-0.parquet")):
+        t = pq.read_table(f, columns=["ts", "ticker", "bid", "ask"])
+        t = t.filter(pc.and_(pc.match_substring(t["ticker"], "15M-"), pc.and_(pc.greater(t["bid"], 0), pc.greater(t["ask"], 0))))
+        tk = np.array(t["ticker"].to_pylist())
+        ts, bid, ask = t["ts"].to_numpy(), t["bid"].to_numpy(), t["ask"].to_numpy()
+        o = np.argsort(tk, kind="stable")
+        tk, ts, bid, ask = tk[o], ts[o], bid[o], ask[o]
+        cuts = np.flatnonzero(tk[1:] != tk[:-1]) + 1
+        for a, b in zip(np.r_[0, cuts], np.r_[cuts, len(tk)]):
+            parts[tk[a]].append((ts[a:b], bid[a:b], ask[a:b]))
+    out = {}
+    for tk, ps in parts.items():
+        ts = np.concatenate([p[0] for p in ps])
+        o = np.argsort(ts, kind="stable")
+        out[tk] = (ts[o], np.concatenate([p[1] for p in ps])[o], np.concatenate([p[2] for p in ps])[o])
+    return out
+
+
+REST_SECONDS = 60.0  # how long the bid rests before it is pulled; fixed before the run
+
+
+def rest() -> None:
+    """The same bets, bought two ways: taking the ask, or resting a bid at the side's own best bid for REST_SECONDS and holding what fills. The archive has quotes, not the order book or the trades, so a fill is read two ways:
+      through  the side's ask came down to our bid or under: the price traded through us, we were filled for certain (and the price was moving against us when it happened)
+      cleared  the side's best bid fell under our bid: the level we were resting on was used up or pulled. Filled if it was used up; an upper bound.
+    The fee: none on a resting buy as the bot treats it (runner.py: "as a maker and is charged no taker fee"), and with the full fee as the worst case."""
+    from kalshi_moonshot.strategy import fee_per_contract
+
+    rows = list(csv.reader(open(OUT)))[1:]
+    rows.sort(key=lambda r: (r[0], int(r[1])))
+    tick = np.array([r[0] for r in rows])
+    ts = np.array([int(r[1]) for r in rows])
+    age = np.array([float(r[2]) for r in rows])
+    y = np.array([float(r[3]) for r in rows])
+    bid = np.array([float(r[4]) for r in rows])
+    ask = np.array([float(r[5]) for r in rows])
+    X = np.array([[float(v) for v in r[6:]] for r in rows])
+    mid = (bid + ask) / 2.0
+    day = np.array([datetime.datetime.fromtimestamp(t, ET).strftime("%m-%d") for t in ts])
+    days = sorted(set(day))[1:]
+    at = {(a, b): i for i, (a, b) in enumerate(zip(tick, ts))}
+    nxt = np.array([at.get((a, b + 300), -1) for a, b in zip(tick, ts)])
+    dm = np.where(nxt >= 0, mid[nxt] - mid, 0.0)
+    zone = np.where(np.abs(X[:, 1]) < 0.5, 0, np.where(np.abs(X[:, 1]) < 1.5, 1, 2))
+    zname = ["on the line (cushion under 0.5)", "fair cushion (0.5 to 1.5)", "wide cushion (over 1.5)"]
+    ok = (bid > 0) & (ask > 0) & (ask < 1) & (bid < 1) & (ask > bid) & (age <= 900.0 - REST_SECONDS - 30.0)
+    quotes = _quotes_15m()
+
+    def trip(i: int, side: int) -> tuple:
+        """(take net, our resting price, filled through, filled cleared, the side won, the price paid taking)."""
+        qt, qb, qa = quotes[tick[i]]
+        a, b = np.searchsorted(qt, ts[i], side="right"), np.searchsorted(qt, ts[i] + REST_SECONDS, side="right")
+        won = y[i] if side > 0 else 1.0 - y[i]
+        if side > 0:
+            price, take = bid[i], ask[i]
+            through, cleared = bool((qa[a:b] <= price + 1e-9).any()), bool((qb[a:b] < price - 1e-9).any())
+        else:
+            price, take = 1.0 - ask[i], 1.0 - bid[i]
+            through, cleared = bool((qb[a:b] >= ask[i] - 1e-9).any()), bool((qa[a:b] > ask[i] + 1e-9).any())
+        c = take + fee_per_contract(take)
+        return (won - c) / c, price, through, cleared or through, won, take
+
+    def show(name: str, bets: list) -> None:
+        def line(label: str, sel: list) -> None:
+            if not sel:
+                return
+            n = len(sel)
+            take = np.array([b[0][0] for b in sel])
+            out = [f"  {label:34s} bets {n:5d} | taking the ask {take.mean():+.4f} per $, ${5 * take.sum():+9.2f}"]
+            for key, k in (("through", 2), ("cleared", 3)):
+                f = [b[0] for b in sel if b[0][k]]
+                if not f:
+                    out.append(f"{key}: none filled")
+                    continue
+                free = np.array([(g[4] - g[1]) / g[1] for g in f])
+                paid = np.array([(g[4] - g[1] - fee_per_contract(g[1])) / (g[1] + fee_per_contract(g[1])) for g in f])
+                missed = np.array([b[0][0] for b in sel if not b[0][k]])
+                out.append(f"{key}: filled {100 * len(f) / n:4.1f}%, won {100 * np.mean([g[4] for g in f]):4.1f}%, {free.mean():+.4f} per $ no fee (${5 * free.sum():+9.2f}), {paid.mean():+.4f} with the fee (${5 * paid.sum():+9.2f}); the unfilled, had they been taken: {missed.mean() if len(missed) else 0.0:+.4f}")
+            print(" | ".join(out))
+
+        print(f"--- {name}")
+        for d in days:
+            line(d, [b for b in bets if b[3] == d])
+        line("all days", bets)
+        print("  by curve shape at the bid (the cushion zone the score itself uses):")
+        for z in range(3):
+            line("  " + zname[z], [b for b in bets if b[1] == z])
+        print("  by the price of the side (taking):")
+        for lo, hi in ((0, 0.35), (0.35, 0.65), (0.65, 0.90), (0.90, 1.01)):
+            line(f"  {lo:.2f} to {min(hi, 1.0):.2f}", [b for b in bets if lo <= b[0][5] < hi])
+        print("  by when in the market:")
+        for lo, hi in ((0, 180), (180, 360), (360, 540), (540, 900)):
+            line(f"  {lo // 60} to {hi // 60} min in", [b for b in bets if lo <= b[2] < hi])
+        print()
+
+    print(f"window: 2026-11-09 on, bets on ET days {', '.join(days[2:])}; whole market, no time or price gate; one bet per market")
+    print(f"each bet is bought two ways: taking the ask and holding, or resting a bid at the side's best bid for {REST_SECONDS:.0f} s and holding what fills. Per dollar staked; dollar totals on $5 stakes")
+    print("the rest time and the bid's price (the side's own best bid) were fixed before the run\n")
+    Xi = np.c_[np.ones(len(X)), X]
+    fav_bets, mov_bets = [], []
+    rng = np.random.default_rng(7)
+    for k in range(2, len(days)):
+        tr, te = ok & np.isin(day, days[:k]), ok & (day == days[k])
+        if tr.sum() < 1000 or not te.sum():
+            continue
+        trm = tr & (nxt >= 0)
+        wm = np.linalg.solve(Xi[trm].T @ Xi[trm] + 1e-3 * np.eye(Xi.shape[1]), Xi[trm].T @ dm[trm])
+        pred = Xi @ wm
+        cutm = np.quantile(np.abs(pred[trm]), 0.9)
+        done_m, done_b = set(), set()
+        idx = np.flatnonzero(te)
+        for i in idx:
+            if tick[i] not in done_m and abs(pred[i]) >= cutm:
+                done_m.add(tick[i])
+                mov_bets.append((trip(i, 1 if pred[i] > 0 else -1), zone[i], age[i], days[k]))
+        for i in rng.permutation(idx):
+            if tick[i] not in done_b:
+                done_b.add(tick[i])
+                fav_bets.append((trip(i, 1 if mid[i] >= 0.5 else -1), zone[i], age[i], days[k]))
+    show("no model: the favorite at a random moment", fav_bets)
+    show("the 5-minute move fit's call", mov_bets)
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["rest"]:
+        rest()
+        sys.exit(0)
     if sys.argv[1:] == ["held"]:
         held()
         sys.exit(0)
