@@ -1,90 +1,119 @@
-window: 2026-11-09 on, ET days 11-09, 11-10, 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; 11282 round trips on 7555 markets; whole market, no other gate
-the buy: a side at 0.60 to 0.75 at the ask whose price rose over 0.5 typical minutes in the last minute. the sale: the first bid 0.20 or more over the price paid, else held to settlement
-per dollar staked, the fee on every leg; 'if held' is the same buys never sold. Dollar totals are on $5 a buy
+window: 2026-11-09 on, ET days 11-09, 11-10, 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; 11282 buys on 7555 markets; whole market, no other gate
+the buy: a side at 0.60 to 0.75 at the ask whose price rose over 0.5 typical minutes in the last minute
+each cell: cents per dollar staked, the fee on every leg, and (days ahead of 8). The same buys under each exit; see the top of scripts/hand_method_replay.py for the exits. All settings fixed before the run
+
+how each exit's buys ended (share of buys)
+  take only    take 74% (avg +27c per $), held 26% (avg -99c per $) | all -5.67c per $, $-3197 on $5 a buy
+  -20          take 48% (avg +27c per $), loss sale 52% (avg -37c per $), held 0% (avg +48c per $) | all -6.50c per $, $-3667 on $5 a buy
+  -10          take 31% (avg +27c per $), loss sale 69% (avg -22c per $), held 0% (avg +53c per $) | all -7.13c per $, $-4023 on $5 a buy
+  -5           take 17% (avg +27c per $), loss sale 83% (avg -14c per $), held 0% (avg +53c per $) | all -7.39c per $, $-4167 on $5 a buy
+  -10, 5 min   take 27% (avg +27c per $), loss sale 68% (avg -22c per $), time 5% (avg +9c per $), held 0% (avg +53c per $) | all -7.13c per $, $-4024 on $5 a buy
+  3 min        take 30% (avg +27c per $), time 68% (avg -20c per $), held 2% (avg -96c per $) | all -6.97c per $, $-3930 on $5 a buy
+  5 min        take 47% (avg +27c per $), time 49% (avg -31c per $), held 4% (avg -98c per $) | all -6.32c per $, $-3567 on $5 a buy
 
 all
-  all                                  trips 11282 | cashed out  74% | held and won    23 | held and lost  2924 (26%) | as traded -0.0567 ($-3196.04) | if held -0.0461 ($-2601.01) | days ahead 0 of 8
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  all                                     11282 |   -5.67 (0) |   -6.50 (0) |   -7.13 (0) |   -7.39 (0) |   -7.13 (0) |   -6.97 (0) |   -6.32 (0) |  -4.61
 
 by side
-  NO                                   trips  5855 | cashed out  76% | held and won    20 | held and lost  1407 (24%) | as traded -0.0336 ($ -984.38) | if held -0.0182 ($ -531.51) | days ahead 1 of 8
-  YES                                  trips  5427 | cashed out  72% | held and won     3 | held and lost  1517 (28%) | as traded -0.0815 ($-2211.66) | if held -0.0763 ($-2069.50) | days ahead 0 of 8
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  NO                                       5855 |   -3.36 (1) |   -5.13 (0) |   -6.53 (0) |   -7.17 (0) |   -6.56 (0) |   -5.34 (0) |   -4.07 (0) |  -1.82
+  YES                                      5427 |   -8.15 (0) |   -7.98 (0) |   -7.78 (0) |   -7.62 (0) |   -7.75 (0) |   -8.72 (0) |   -8.75 (0) |  -7.63
 
 by day
-  11-09                                trips  1611 | cashed out  76% | held and won     3 | held and lost   382 (24%) | as traded -0.0287 ($ -231.20) | if held -0.0190 ($ -152.98) | days ahead 0 of 1
-  11-10                                trips  1837 | cashed out  74% | held and won     2 | held and lost   473 (26%) | as traded -0.0549 ($ -503.81) | if held -0.0327 ($ -299.97) | days ahead 0 of 1
-  11-11                                trips  1859 | cashed out  72% | held and won     4 | held and lost   508 (27%) | as traded -0.0743 ($ -690.57) | if held -0.0496 ($ -461.25) | days ahead 0 of 1
-  11-12                                trips   856 | cashed out  74% | held and won     5 | held and lost   220 (26%) | as traded -0.0519 ($ -222.05) | if held -0.0584 ($ -250.13) | days ahead 0 of 1
-  11-13                                trips  1754 | cashed out  74% | held and won     5 | held and lost   450 (26%) | as traded -0.0534 ($ -468.45) | if held -0.0449 ($ -393.53) | days ahead 0 of 1
-  11-14                                trips  1125 | cashed out  71% | held and won     0 | held and lost   325 (29%) | as traded -0.0951 ($ -535.04) | if held -0.0913 ($ -513.59) | days ahead 0 of 1
-  11-15                                trips  1378 | cashed out  74% | held and won     3 | held and lost   350 (25%) | as traded -0.0499 ($ -343.51) | if held -0.0622 ($ -428.63) | days ahead 0 of 1
-  11-16                                trips   862 | cashed out  75% | held and won     1 | held and lost   216 (25%) | as traded -0.0467 ($ -201.41) | if held -0.0234 ($ -100.92) | days ahead 0 of 1
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  11-09                                    1611 |   -2.87 (0) |   -4.07 (0) |   -5.70 (0) |   -7.19 (0) |   -5.64 (0) |   -5.47 (0) |   -3.48 (0) |  -1.90
+  11-10                                    1837 |   -5.49 (0) |   -5.88 (0) |   -6.70 (0) |   -7.13 (0) |   -6.50 (0) |   -6.41 (0) |   -6.10 (0) |  -3.27
+  11-11                                    1859 |   -7.43 (0) |   -8.11 (0) |   -7.69 (0) |   -7.11 (0) |   -7.57 (0) |   -6.48 (0) |   -6.99 (0) |  -4.96
+  11-12                                     856 |   -5.19 (0) |   -5.94 (0) |   -7.25 (0) |   -7.32 (0) |   -7.30 (0) |   -8.28 (0) |   -5.98 (0) |  -5.84
+  11-13                                    1754 |   -5.34 (0) |   -6.22 (0) |   -6.77 (0) |   -7.42 (0) |   -7.05 (0) |   -6.40 (0) |   -6.27 (0) |  -4.49
+  11-14                                    1125 |   -9.51 (0) |   -6.81 (0) |   -7.09 (0) |   -7.47 (0) |   -6.96 (0) |   -7.82 (0) |   -7.34 (0) |  -9.13
+  11-15                                    1378 |   -4.99 (0) |   -8.24 (0) |   -9.27 (0) |   -8.40 (0) |   -9.18 (0) |   -8.00 (0) |   -7.39 (0) |  -6.22
+  11-16                                     862 |   -4.68 (0) |   -6.82 (0) |   -6.77 (0) |   -7.19 (0) |   -7.29 (0) |   -9.08 (0) |   -8.10 (0) |  -2.34
 
 by the user's time zones
-  1 first 3 minutes                    trips  3174 | cashed out  76% | held and won     7 | held and lost   766 (24%) | as traded -0.0364 ($ -577.55) | if held -0.0317 ($ -503.80) | days ahead 2 of 8
-  2 3 to 10 minutes                    trips  6475 | cashed out  73% | held and won    11 | held and lost  1759 (27%) | as traded -0.0727 ($-2355.09) | if held -0.0599 ($-1938.52) | days ahead 0 of 8
-  3 the close (10 to 15)               trips  1633 | cashed out  75% | held and won     5 | held and lost   399 (24%) | as traded -0.0323 ($ -263.40) | if held -0.0194 ($ -158.69) | days ahead 2 of 8
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  1 first 3 minutes                        3174 |   -3.64 (2) |   -5.93 (1) |   -7.34 (0) |   -7.32 (0) |   -7.49 (0) |   -6.52 (0) |   -5.37 (1) |  -3.17
+  2 3 to 10 minutes                        6475 |   -7.27 (0) |   -7.02 (0) |   -7.31 (0) |   -7.54 (0) |   -7.24 (0) |   -7.62 (0) |   -7.57 (0) |  -5.99
+  3 the close (10 to 15)                   1633 |   -3.23 (2) |   -5.55 (0) |   -6.02 (0) |   -6.92 (0) |   -6.02 (0) |   -5.24 (1) |   -3.25 (2) |  -1.94
 
 by side and time zone
-  NO  1 first 3 minutes                trips  1672 | cashed out  79% | held and won     5 | held and lost   344 (21%) | as traded +0.0072 ($  +59.85) | if held +0.0147 ($ +123.10) | days ahead 4 of 8
-  NO  2 3 to 10 minutes                trips  3381 | cashed out  74% | held and won    11 | held and lost   867 (26%) | as traded -0.0536 ($ -906.94) | if held -0.0364 ($ -615.92) | days ahead 0 of 8
-  NO  3 the close (10 to 15)           trips   802 | cashed out  75% | held and won     4 | held and lost   196 (24%) | as traded -0.0342 ($ -137.29) | if held -0.0096 ($  -38.69) | days ahead 2 of 8
-  YES 1 first 3 minutes                trips  1502 | cashed out  72% | held and won     2 | held and lost   422 (28%) | as traded -0.0849 ($ -637.40) | if held -0.0835 ($ -626.89) | days ahead 2 of 8
-  YES 2 3 to 10 minutes                trips  3094 | cashed out  71% | held and won     0 | held and lost   892 (29%) | as traded -0.0936 ($-1448.15) | if held -0.0855 ($-1322.61) | days ahead 0 of 8
-  YES 3 the close (10 to 15)           trips   831 | cashed out  75% | held and won     1 | held and lost   203 (24%) | as traded -0.0303 ($ -126.10) | if held -0.0289 ($ -120.01) | days ahead 3 of 8
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  NO  1 first 3 minutes                    1672 |   +0.72 (4) |   -4.04 (1) |   -7.32 (0) |   -7.47 (0) |   -7.61 (0) |   -5.34 (0) |   -2.06 (1) |  +1.47
+  NO  2 3 to 10 minutes                    3381 |   -5.36 (0) |   -5.74 (0) |   -6.44 (0) |   -7.16 (0) |   -6.35 (0) |   -5.32 (0) |   -5.23 (0) |  -3.64
+  NO  3 the close (10 to 15)                802 |   -3.42 (2) |   -4.82 (0) |   -5.28 (0) |   -6.63 (0) |   -5.28 (0) |   -5.46 (1) |   -3.39 (2) |  -0.96
+  YES 1 first 3 minutes                    1502 |   -8.49 (2) |   -8.02 (0) |   -7.36 (0) |   -7.17 (0) |   -7.37 (0) |   -7.83 (0) |   -9.05 (0) |  -8.35
+  YES 2 3 to 10 minutes                    3094 |   -9.36 (0) |   -8.42 (0) |   -8.26 (0) |   -7.95 (0) |   -8.20 (0) |  -10.14 (0) |  -10.12 (0) |  -8.55
+  YES 3 the close (10 to 15)                831 |   -3.04 (3) |   -6.26 (0) |   -6.74 (0) |   -7.20 (0) |   -6.74 (0) |   -5.03 (2) |   -3.11 (3) |  -2.89
 
-by the target's place in the 5-minute view, turned to the side bought (room = how far the index sits on the side's own side of the target, within the view)
-  1 little room (under a third)        trips  2474 | cashed out  73% | held and won     4 | held and lost   652 (26%) | as traded -0.0548 ($ -678.48) | if held -0.0392 ($ -485.21) | days ahead 1 of 8
-  2 middle                             trips  5028 | cashed out  73% | held and won     5 | held and lost  1347 (27%) | as traded -0.0679 ($-1707.06) | if held -0.0619 ($-1556.86) | days ahead 0 of 8
-  3 all the room (over two thirds)     trips  3780 | cashed out  75% | held and won    14 | held and lost   925 (24%) | as traded -0.0429 ($ -810.50) | if held -0.0296 ($ -558.94) | days ahead 1 of 8
+TARGET PLACEMENT, the 5-minute view, turned to the side bought (room: how far the index sits on the side's own side of the target, within the view)
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  1 little room (under a third)            2474 |   -5.49 (1) |   -6.95 (0) |   -7.34 (0) |   -7.78 (0) |   -7.27 (0) |   -7.23 (0) |   -6.55 (0) |  -3.92
+  2 middle                                 5028 |   -6.79 (0) |   -6.77 (0) |   -7.32 (0) |   -7.51 (0) |   -7.26 (0) |   -6.84 (0) |   -6.72 (0) |  -6.19
+  3 all the room (over two thirds)         3780 |   -4.29 (1) |   -5.85 (0) |   -6.74 (0) |   -6.96 (0) |   -6.88 (0) |   -6.97 (0) |   -5.65 (0) |  -2.96
 
-by the target's place in the 15-minute view, turned to the side bought (room = how far the index sits on the side's own side of the target, within the view)
-  1 little room (under a third)        trips  2968 | cashed out  72% | held and won     5 | held and lost   837 (28%) | as traded -0.0826 ($-1226.03) | if held -0.0786 ($-1166.23) | days ahead 0 of 8
-  2 middle                             trips  5186 | cashed out  74% | held and won    11 | held and lost  1349 (26%) | as traded -0.0585 ($-1517.64) | if held -0.0410 ($-1063.68) | days ahead 0 of 8
-  3 all the room (over two thirds)     trips  3128 | cashed out  76% | held and won     7 | held and lost   738 (24%) | as traded -0.0289 ($ -452.37) | if held -0.0237 ($ -371.11) | days ahead 2 of 8
+TARGET PLACEMENT, the 15-minute view, turned to the side bought (room: how far the index sits on the side's own side of the target, within the view)
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  1 little room (under a third)            2968 |   -8.26 (0) |   -7.26 (0) |   -7.46 (0) |   -7.75 (0) |   -7.36 (0) |   -7.29 (0) |   -7.21 (0) |  -7.86
+  2 middle                                 5186 |   -5.85 (0) |   -6.06 (0) |   -6.93 (0) |   -7.08 (0) |   -6.90 (0) |   -7.12 (0) |   -6.37 (0) |  -4.10
+  3 all the room (over two thirds)         3128 |   -2.89 (2) |   -6.51 (0) |   -7.16 (0) |   -7.55 (0) |   -7.31 (0) |   -6.40 (0) |   -5.41 (1) |  -2.37
 
-by the target's place in the hour view, turned to the side bought (room = how far the index sits on the side's own side of the target, within the view)
-  1 little room (under a third)        trips  3553 | cashed out  73% | held and won     6 | held and lost   965 (27%) | as traded -0.0729 ($-1294.50) | if held -0.0704 ($-1250.29) | days ahead 0 of 8
-  2 middle                             trips  3986 | cashed out  73% | held and won     8 | held and lost  1066 (27%) | as traded -0.0663 ($-1322.25) | if held -0.0418 ($ -832.43) | days ahead 0 of 8
-  3 all the room (over two thirds)     trips  3743 | cashed out  76% | held and won     9 | held and lost   893 (24%) | as traded -0.0310 ($ -579.29) | if held -0.0277 ($ -518.29) | days ahead 1 of 8
-
-by curve shape at the buy (the cushion zone)
-  1 behind or on the line (under 0.5)  trips  9347 | cashed out  73% | held and won    15 | held and lost  2469 (26%) | as traded -0.0608 ($-2843.42) | if held -0.0511 ($-2388.64) | days ahead 0 of 8
-  2 ahead 0.5 to 1.5                   trips  1896 | cashed out  76% | held and won     8 | held and lost   447 (24%) | as traded -0.0377 ($ -356.97) | if held -0.0231 ($ -219.15) | days ahead 3 of 8
-  3 ahead over 1.5                     trips    39 | cashed out  79% | held and won     0 | held and lost     8 (21%) | as traded +0.0223 ($   +4.35) | if held +0.0348 ($   +6.78) | days ahead 4 of 7
-
-by side and day
-  NO  11-09                            trips   827 | cashed out  79% | held and won     2 | held and lost   172 (21%) | as traded +0.0082 ($  +34.06) | if held +0.0413 ($ +170.89) | days ahead 1 of 1
-  NO  11-10                            trips   927 | cashed out  76% | held and won     2 | held and lost   222 (24%) | as traded -0.0332 ($ -154.11) | if held -0.0297 ($ -137.85) | days ahead 0 of 1
-  NO  11-11                            trips   954 | cashed out  77% | held and won     4 | held and lost   213 (22%) | as traded -0.0121 ($  -57.86) | if held +0.0183 ($  +87.11) | days ahead 0 of 1
-  NO  11-12                            trips   453 | cashed out  75% | held and won     4 | held and lost   111 (25%) | as traded -0.0369 ($  -83.62) | if held -0.0241 ($  -54.56) | days ahead 0 of 1
-  NO  11-13                            trips   888 | cashed out  72% | held and won     5 | held and lost   242 (27%) | as traded -0.0741 ($ -328.99) | if held -0.0355 ($ -157.77) | days ahead 0 of 1
-  NO  11-14                            trips   620 | cashed out  76% | held and won     0 | held and lost   146 (24%) | as traded -0.0276 ($  -85.51) | if held -0.0253 ($  -78.43) | days ahead 0 of 1
-  NO  11-15                            trips   725 | cashed out  76% | held and won     3 | held and lost   174 (24%) | as traded -0.0341 ($ -123.77) | if held -0.0664 ($ -240.74) | days ahead 0 of 1
-  NO  11-16                            trips   461 | cashed out  72% | held and won     0 | held and lost   127 (28%) | as traded -0.0801 ($ -184.57) | if held -0.0521 ($ -120.14) | days ahead 0 of 1
-  YES 11-09                            trips   784 | cashed out  73% | held and won     1 | held and lost   210 (27%) | as traded -0.0677 ($ -265.26) | if held -0.0826 ($ -323.87) | days ahead 0 of 1
-  YES 11-10                            trips   910 | cashed out  72% | held and won     0 | held and lost   251 (28%) | as traded -0.0769 ($ -349.69) | if held -0.0356 ($ -162.12) | days ahead 0 of 1
-  YES 11-11                            trips   905 | cashed out  67% | held and won     0 | held and lost   295 (33%) | as traded -0.1398 ($ -632.70) | if held -0.1212 ($ -548.36) | days ahead 0 of 1
-  YES 11-12                            trips   403 | cashed out  73% | held and won     1 | held and lost   109 (27%) | as traded -0.0687 ($ -138.43) | if held -0.0971 ($ -195.57) | days ahead 0 of 1
-  YES 11-13                            trips   866 | cashed out  76% | held and won     0 | held and lost   208 (24%) | as traded -0.0322 ($ -139.46) | if held -0.0544 ($ -235.76) | days ahead 0 of 1
-  YES 11-14                            trips   505 | cashed out  65% | held and won     0 | held and lost   179 (35%) | as traded -0.1780 ($ -449.53) | if held -0.1723 ($ -435.16) | days ahead 0 of 1
-  YES 11-15                            trips   653 | cashed out  73% | held and won     0 | held and lost   176 (27%) | as traded -0.0673 ($ -219.75) | if held -0.0575 ($ -187.88) | days ahead 0 of 1
-  YES 11-16                            trips   401 | cashed out  78% | held and won     1 | held and lost    89 (22%) | as traded -0.0084 ($  -16.84) | if held +0.0096 ($  +19.21) | days ahead 0 of 1
-
-by side and the 15-minute view
-  NO  1 little room (under a third)    trips  1562 | cashed out  74% | held and won     4 | held and lost   403 (26%) | as traded -0.0524 ($ -408.87) | if held -0.0418 ($ -326.29) | days ahead 1 of 8
-  NO  2 middle                         trips  2725 | cashed out  76% | held and won     9 | held and lost   658 (24%) | as traded -0.0363 ($ -495.22) | if held -0.0198 ($ -270.24) | days ahead 1 of 8
-  NO  3 all the room (over two thirds) trips  1568 | cashed out  77% | held and won     7 | held and lost   346 (22%) | as traded -0.0102 ($  -80.28) | if held +0.0083 ($  +65.02) | days ahead 3 of 8
-  YES 1 little room (under a third)    trips  1406 | cashed out  69% | held and won     1 | held and lost   434 (31%) | as traded -0.1162 ($ -817.16) | if held -0.1195 ($ -839.93) | days ahead 1 of 8
-  YES 2 middle                         trips  2461 | cashed out  72% | held and won     2 | held and lost   691 (28%) | as traded -0.0831 ($-1022.42) | if held -0.0645 ($ -793.44) | days ahead 0 of 8
-  YES 3 all the room (over two thirds) trips  1560 | cashed out  75% | held and won     0 | held and lost   392 (25%) | as traded -0.0477 ($ -372.09) | if held -0.0559 ($ -436.13) | days ahead 2 of 8
+TARGET PLACEMENT, the hour view, turned to the side bought (room: how far the index sits on the side's own side of the target, within the view)
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  1 little room (under a third)            3553 |   -7.29 (0) |   -6.77 (0) |   -7.32 (0) |   -7.47 (0) |   -7.50 (0) |   -7.89 (0) |   -8.04 (0) |  -7.04
+  2 middle                                 3986 |   -6.64 (0) |   -6.91 (0) |   -7.17 (0) |   -7.44 (0) |   -7.01 (0) |   -6.98 (0) |   -6.29 (0) |  -4.18
+  3 all the room (over two thirds)         3743 |   -3.10 (1) |   -5.81 (0) |   -6.91 (0) |   -7.26 (0) |   -6.92 (0) |   -6.08 (0) |   -4.73 (0) |  -2.77
 
 by side and the hour view
-  NO  1 little room (under a third)    trips  2019 | cashed out  75% | held and won     5 | held and lost   495 (25%) | as traded -0.0395 ($ -398.86) | if held -0.0320 ($ -323.23) | days ahead 1 of 8
-  NO  2 middle                         trips  2061 | cashed out  74% | held and won     8 | held and lost   533 (26%) | as traded -0.0563 ($ -579.91) | if held -0.0319 ($ -328.51) | days ahead 1 of 8
-  NO  3 all the room (over two thirds) trips  1775 | cashed out  78% | held and won     7 | held and lost   379 (21%) | as traded -0.0006 ($   -5.61) | if held +0.0135 ($ +120.22) | days ahead 6 of 8
-  YES 1 little room (under a third)    trips  1534 | cashed out  69% | held and won     1 | held and lost   470 (31%) | as traded -0.1168 ($ -895.64) | if held -0.1209 ($ -927.06) | days ahead 0 of 8
-  YES 2 middle                         trips  1925 | cashed out  72% | held and won     0 | held and lost   533 (28%) | as traded -0.0771 ($ -742.34) | if held -0.0524 ($ -503.93) | days ahead 1 of 8
-  YES 3 all the room (over two thirds) trips  1968 | cashed out  74% | held and won     2 | held and lost   514 (26%) | as traded -0.0583 ($ -573.68) | if held -0.0649 ($ -638.51) | days ahead 1 of 8
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  NO  1 little room (under a third)        2019 |   -3.95 (1) |   -5.25 (0) |   -7.09 (0) |   -7.44 (0) |   -7.21 (0) |   -5.32 (0) |   -4.79 (0) |  -3.20
+  NO  2 middle                             2061 |   -5.63 (1) |   -5.46 (0) |   -6.41 (0) |   -7.20 (0) |   -6.35 (0) |   -5.93 (0) |   -4.68 (1) |  -3.19
+  NO  3 all the room (over two thirds)     1775 |   -0.06 (6) |   -4.60 (1) |   -6.04 (0) |   -6.84 (0) |   -6.08 (0) |   -4.70 (0) |   -2.57 (2) |  +1.35
+  YES 1 little room (under a third)        1534 |  -11.68 (0) |   -8.77 (0) |   -7.64 (0) |   -7.51 (0) |   -7.88 (0) |  -11.28 (0) |  -12.32 (0) | -12.09
+  YES 2 middle                             1925 |   -7.72 (1) |   -8.46 (0) |   -7.97 (0) |   -7.69 (0) |   -7.71 (0) |   -8.11 (0) |   -8.02 (1) |  -5.24
+  YES 3 all the room (over two thirds)     1968 |   -5.83 (1) |   -6.90 (0) |   -7.70 (0) |   -7.64 (0) |   -7.68 (0) |   -7.31 (0) |   -6.68 (0) |  -6.49
 
-the cash-outs took a median of 226 s (a quarter under 111 s, a quarter over 385 s)
-markets bought more than once on the same side: 517 of 10757
+SPOT HISTORY: the index's last 15 minutes, waves or a straight run (net move over the path travelled; thirds of the tape)
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  1 waves (bottom third)                   4938 |   -5.41 (0) |   -6.44 (0) |   -6.75 (0) |   -7.32 (0) |   -6.85 (0) |   -6.72 (0) |   -6.01 (0) |  -4.20
+  2 between                                3799 |   -6.23 (1) |   -6.87 (0) |   -7.60 (0) |   -7.48 (0) |   -7.45 (0) |   -7.50 (0) |   -7.04 (0) |  -4.56
+  3 a straight run (top third)             2545 |   -5.32 (1) |   -6.06 (0) |   -7.16 (0) |   -7.38 (0) |   -7.20 (0) |   -6.65 (0) |   -5.87 (0) |  -5.47
+
+the same, with which way it pointed
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  1 away from the side  waves (bottom third)   2261 |   -4.79 (1) |   -6.51 (0) |   -7.24 (0) |   -7.94 (0) |   -7.38 (0) |   -6.12 (0) |   -5.14 (0) |  -3.17
+  1 toward the side     waves (bottom third)   2677 |   -5.94 (0) |   -6.38 (0) |   -6.34 (0) |   -6.81 (0) |   -6.41 (0) |   -7.23 (0) |   -6.75 (0) |  -5.07
+  2 away from the side  between            1355 |   -1.85 (3) |   -6.38 (0) |   -7.00 (0) |   -7.32 (0) |   -6.80 (0) |   -5.86 (0) |   -4.91 (0) |  -1.42
+  2 toward the side     between            2444 |   -8.66 (1) |   -7.15 (0) |   -7.94 (0) |   -7.57 (0) |   -7.81 (0) |   -8.40 (0) |   -8.22 (0) |  -6.31
+  3 away from the side  a straight run (top third)    523 |   -2.99 (1) |   -6.92 (1) |   -7.84 (0) |   -7.97 (0) |   -7.62 (0) |   -5.53 (1) |   -5.89 (1) |  -5.03
+  3 toward the side     a straight run (top third)   2022 |   -5.92 (2) |   -5.84 (0) |   -6.99 (0) |   -7.22 (0) |   -7.09 (0) |   -6.94 (0) |   -5.86 (0) |  -5.59
+
+SPOT HISTORY: jumps or dives in the last hour (the largest one-minute move, in typical minutes; thirds of the tape)
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  1 a calm hour (bottom third)             3875 |   -4.96 (0) |   -6.00 (0) |   -6.93 (0) |   -7.16 (0) |   -6.93 (0) |   -6.57 (0) |   -5.96 (0) |  -4.05
+  2 between                                3895 |   -6.16 (0) |   -6.91 (0) |   -7.26 (0) |   -7.36 (0) |   -7.23 (0) |   -7.32 (0) |   -6.81 (0) |  -4.99
+  3 jumps in the hour (top third)          3512 |   -5.90 (1) |   -6.60 (0) |   -7.21 (0) |   -7.67 (0) |   -7.26 (0) |   -7.01 (0) |   -6.19 (0) |  -4.81
+
+by side and jumps in the hour
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  NO  1 a calm hour (bottom third)         2018 |   -2.01 (4) |   -4.67 (0) |   -6.62 (0) |   -7.52 (0) |   -6.69 (0) |   -5.47 (0) |   -4.35 (2) |  -0.58
+  NO  2 between                            2025 |   -4.45 (2) |   -5.80 (0) |   -6.49 (0) |   -6.95 (0) |   -6.53 (0) |   -5.23 (0) |   -4.24 (0) |  -2.32
+  NO  3 jumps in the hour (top third)      1812 |   -3.65 (1) |   -4.89 (0) |   -6.48 (0) |   -7.03 (0) |   -6.46 (0) |   -5.33 (0) |   -3.58 (1) |  -2.63
+  YES 1 a calm hour (bottom third)         1857 |   -8.17 (1) |   -7.44 (0) |   -7.26 (0) |   -6.76 (0) |   -7.18 (0) |   -7.77 (0) |   -7.71 (0) |  -7.82
+  YES 2 between                            1870 |   -8.01 (2) |   -8.11 (0) |   -8.10 (0) |   -7.80 (0) |   -7.98 (0) |   -9.58 (0) |   -9.59 (0) |  -7.89
+  YES 3 jumps in the hour (top third)      1700 |   -8.29 (0) |   -8.43 (0) |   -7.98 (0) |   -8.36 (0) |   -8.11 (0) |   -8.79 (0) |   -8.96 (0) |  -7.12
+
+by curve shape at the buy (the cushion zone)
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  1 behind or on the line (under 0.5)      9347 |   -6.09 (0) |   -6.83 (0) |   -7.41 (0) |   -7.69 (0) |   -7.37 (0) |   -7.14 (0) |   -6.65 (0) |  -5.11
+  2 ahead 0.5 to 1.5                       1896 |   -3.77 (3) |   -4.74 (0) |   -5.56 (0) |   -5.71 (0) |   -5.75 (0) |   -6.09 (0) |   -4.84 (1) |  -2.31
+  3 ahead over 1.5                           39 |   +2.23 (4) |  -13.23 (0) |  -18.14 (0) |  -16.47 (0) |  -18.14 (0) |   -8.94 (2) |   -0.33 (4) |  +3.48
+
+NO side, all the room in the hour view, by time zone
+                                           buys |   take only |         -20 |         -10 |          -5 |  -10, 5 min |       3 min |       5 min | never sold
+  (everything else)                        9507 |   -6.71 (0) |   -6.85 (0) |   -7.34 (0) |   -7.49 (0) |   -7.33 (0) |   -7.39 (0) |   -7.03 (0) |  -5.72
+  1 first 3 minutes                         533 |   +2.42 (5) |   -4.57 (2) |   -6.62 (0) |   -7.65 (0) |   -6.89 (0) |   -6.13 (2) |   -1.67 (3) |  +2.96
+  2 3 to 10 minutes                        1034 |   -0.62 (2) |   -4.64 (2) |   -5.85 (1) |   -6.36 (0) |   -5.78 (0) |   -4.04 (1) |   -2.81 (2) |  +0.64
+  3 the close (10 to 15)                    208 |   -3.68 (4) |   -4.47 (2) |   -5.51 (2) |   -7.14 (1) |   -5.51 (2) |   -4.32 (4) |   -3.65 (4) |  +0.81
+
+the takes came a median of 226 s after the buy (a quarter under 111 s, a quarter over 385 s)

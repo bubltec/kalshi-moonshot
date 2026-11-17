@@ -91,7 +91,7 @@ def build() -> None:
         w = csv.writer(fh)
         w.writerow(["ticker", "ts", "age", "won", "bid", "ask", *NAMES])
         vw = csv.writer(vh)
-        vw.writerow(["ticker", "ts", "p5", "p15", "p60"])  # the target's place in the index's range over the 5, 15 and 60 minutes ending at the moment (0 = at the bottom of the view, 1 = at the top; under 0 or over 1 = outside it): the views the user reads by hand (2026-11-17)
+        vw.writerow(["ticker", "ts", "p5", "p15", "p60", "jump60", "eff15"])  # jump60: the index's largest one-minute move in the hour ending at the moment, in its typical minutes (a chart with jumps or dives in it). eff15: its net move over the last 15 minutes over the path it travelled, minute by minute, signed (+1 a straight climb, -1 a straight fall, near 0 waves that went nowhere)  # the target's place in the index's range over the 5, 15 and 60 minutes ending at the moment (0 = at the bottom of the view, 1 = at the top; under 0 or over 1 = outside it): the views the user reads by hand (2026-11-17)
         for k, (ticker, (close, won)) in enumerate(sorted(wins.items(), key=lambda kv: kv[1][0])):
             ser = ticker.split("-")[0]
             ix = index_of.get(ser)
@@ -132,7 +132,12 @@ def build() -> None:
                     for m in (5, 15, 60):
                         seg = vs[bisect.bisect_right(ts, now - 60.0 * m):hi]
                         places.append(round((strike - min(seg)) / (max(seg) - min(seg)), 4) if seg and max(seg) > min(seg) else 0.5)
-                    vw.writerow([ticker, int(now), *places])
+                    mk = [riskscore._at(ts, vs, now - 60.0 * k_) for k_ in range(60, -1, -1)]
+                    steps = [math.log(b_ / a_) if a_ and b_ else 0.0 for a_, b_ in zip(mk, mk[1:])]
+                    jump = max(abs(v) for v in steps) / unit
+                    path = sum(abs(v) for v in steps[-15:])
+                    eff = sum(steps[-15:]) / path if path > 0 else 0.0
+                    vw.writerow([ticker, int(now), *places, round(jump, 3), round(eff, 3)])
                     got += 1
                 now += 30.0
             n_rows += got
