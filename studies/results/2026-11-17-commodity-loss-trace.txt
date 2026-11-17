@@ -85,3 +85,4 @@ window: live commodity bets 11-09 00:00:00 ET on; 422 settled with quotes; 141 l
 === one stated rule on the same bets: the bid for our side has been under even (0.50) for a tenth of the time left, without a break; sold at the worse of the next two bids
 
 Notes: the rule (under even for a tenth of the time left) was written after reading the overnight trace, so the overnight row is not a test of it; the two earlier stretches are. The split here is by stretch of time, not by curve shape: a by-shape table is still owed before it is a rule (CLAUDE.md rule 4). The +30s/+60s/+120s columns in the trace print blank (a formatting fault) and are not used.
+The 11-09 to 11-13 rule line printed on one run (n 422 | what happened $-37.14 | with the rule $-35.76 | change $+1.38 | rule sold 87: beat 56, lost to 30) and was cut off on the two reruns, this file's included: treat that row as seen once, not reproduced.
