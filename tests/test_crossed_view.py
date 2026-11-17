@@ -104,4 +104,5 @@ def test_integration_the_tag_leads_the_note_so_the_300_character_cut_keeps_it(tm
     from kalshi_moonshot.store import Store
 
     row = Store(config.load().db_path).db.execute("SELECT reason FROM decisions ORDER BY id DESC LIMIT 1").fetchone()
-    assert row["reason"].startswith("[never crossed: would not buy] ")
+    # 2026-11-17 later the same day: the stored reason leads with what the rules said and the readings follow (runner.stored_reason); the tag is the first of the readings and is inside the cut
+    assert "[never crossed: would not buy]" in row["reason"] and row["reason"].index("[") == row["reason"].index("[never crossed: would not buy]")
