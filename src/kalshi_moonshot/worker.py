@@ -163,6 +163,7 @@ class Worker:
         from . import store as store_mod
 
         store_mod.queue_decisions()  # a pass's decision row is written by a background thread: an evaluation does not end on an INSERT and a COMMIT
+        Store(self.s.db_path, self.s.exclude_versions).rebuild_book()  # the bet book is read once here, before anything is evaluated; from then on whoever writes a bet, a sale or a settlement rebuilds it
         store_mod.serve_from_memory()  # remembered reads (open bets and the like) are re-read by a background thread once their time is up, not by an evaluation
         from . import calibration
 

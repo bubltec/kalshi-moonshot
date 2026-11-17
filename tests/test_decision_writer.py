@@ -156,3 +156,50 @@ def test_integration_an_evaluation_that_passes_ends_without_a_write(tmp_path, mo
     got = Store(s.db_path).db.execute("SELECT action, reason FROM decisions WHERE lane='rs' ORDER BY id").fetchall()
     assert len(got) == 2 and got[1]["action"] == "pass" and "[risk score: risk " in got[1]["reason"]  # the row is there, written by the writer
     assert len(mine) <= 1  # at most the writer's own insert was seen through the spied stores; the evaluation's store issued none
+
+
+def test_integration_with_the_bots_switches_on_an_evaluation_sends_the_database_nothing(tmp_path, monkeypatch):
+    """The whole judgement from memory: the pass row is queued, the bet book and the record are in memory. Lane settings that make the evaluation ask about open bets, the event's other bets and the lane's last sale."""
+    import threading
+
+    from kalshi_moonshot import calibration
+
+    now = time.time()
+    extra = "risk_score_buy=0.01\nreentry_cooldown_seconds=900\nmax_open=5\nentry_scenario_view=true"
+    T.decide(tmp_path, monkeypatch, now, extra)  # cold: the tables and the lane's version row are written once
+    s = config.load()
+    store_mod.queue_decisions()  # what worker.start turns on
+    Store(s.db_path).rebuild_book()
+    store_mod.serve_from_memory()
+    calibration.start_background(lambda: Store(s.db_path), every=3600)
+    T.decide(tmp_path, monkeypatch, now, extra)  # warm
+    seen, me, real = [], threading.get_ident(), Store.__init__
+
+    def spy(self, *a, **k):
+        real(self, *a, **k)
+        inner = self.db
+
+        class W:
+            def execute(_, sql, *args):
+                if threading.get_ident() == me:
+                    seen.append(sql)
+                return inner.execute(sql, *args)
+
+            def commit(_):
+                if threading.get_ident() == me:
+                    seen.append("COMMIT")
+                return inner.commit()
+
+            def __getattr__(_, name):
+                return getattr(inner, name)
+
+        self.db = W()
+
+    monkeypatch.setattr(Store, "__init__", spy)
+    out = T.decide(tmp_path, monkeypatch, now, extra)
+    assert out.action == "pass"
+    mine = [q for q in seen if "INTO windows" not in q and q != "COMMIT"]  # the helper seeds the market's window row itself; nothing else may come from this thread
+    assert mine == [], mine
+    assert store_mod.flush_decisions(5.0)
+    assert Store(s.db_path).db.execute("SELECT count(*) AS n FROM decisions WHERE lane='rs' AND action='pass'").fetchone()["n"] == 3  # and all three rows were recorded
+    calibration.stop_serving()

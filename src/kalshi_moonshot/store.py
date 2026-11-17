@@ -405,12 +405,70 @@ def _note_decision(path: str, ticker: str, lane: Any, ts: float) -> None:
                 _LAST_DEC[key] = ts
 
 
+# ---- the bet book in memory ----
+# 2026-11-17, user: "you shouldn't be using the db. everything in current scope for a buy/sell judgement comes from memory". An evaluation asked four things of the decisions table: the open bets, whether its lane already holds the market, which other markets of the event are bet, and when its lane last sold the market. Each was remembered per market and lane, but every bet, sale and settlement in the process made all of those answers stale at once, and the next evaluation of each market read its own again (with twenty lanes writing paper bets that was most evaluations: on the host at 10:50 every evaluation still spent a median 29 ms in the database, 480 ms at the 90th percentile).
+# In the running bot all four are answered from one list held in memory: every bet row that is unsettled, or was sold in the last hour. The thread that WRITES a bet, a sale or a settlement rebuilds the list (one query, on its own connection, after its commit), so the list is exact the moment the write returns and no evaluation reads. A keeper thread rebuilds it every MEMO_TTL seconds for writes made by another process.
+_BOOK: dict[str, tuple[int, list]] = {}  # store path -> (the "bets" generation it was read at, the rows)
+_BOOK_LOCK = threading.Lock()
+BOOK_KEEP_EXITS = 3600.0  # a sold bet stays in the list this long after its sale (the re-entry cooldown asks about it; the longest cooldown in use is 900 s)
+
+
+def _lane_of(row: Any) -> str:
+    return row["lane"] or "moonshot"
+
+
+def book_open_bets(rows: Sequence[Any]) -> list:
+    """Store.open_bets from the list: per market and lane, the first open bet; in time order."""
+    first: dict[tuple[str, str], Any] = {}
+    for r in rows:
+        if r["outcome"] is None and r["exit_ts"] is None:
+            k = (r["ticker"], _lane_of(r))
+            if k not in first or r["id"] < first[k]["id"]:
+                first[k] = r
+    return sorted(first.values(), key=lambda r: r["ts"])
+
+
+def book_holds_sized(rows: Sequence[Any], ticker: str, lane: str | None) -> bool:
+    return any(r["ticker"] == ticker and r["stake_usd"] is not None and r["outcome"] is None and r["exit_ts"] is None and (lane is None or _lane_of(r) == lane) for r in rows)
+
+
+def book_event_tickers(rows: Sequence[Any], event_ticker: str) -> set[str]:
+    return {r["ticker"] for r in rows if r["event_ticker"] == event_ticker and r["outcome"] is None} if event_ticker else set()
+
+
+def book_last_exit(rows: Sequence[Any], ticker: str, lane: str) -> float | None:
+    got = [float(r["exit_ts"]) for r in rows if r["ticker"] == ticker and _lane_of(r) == lane and r["exit_ts"] is not None]
+    return max(got) if got else None
+
+
+def _book_keeper() -> None:
+    stores: dict[str, Store] = {}
+    while True:
+        time.sleep(max(MEMO_TTL, 1.0))
+        if not _BACKGROUND["on"]:
+            continue
+        for path in list(_BOOK):
+            try:
+                st = stores.get(path)
+                if st is None:
+                    st = stores[path] = Store(path)
+                st.rebuild_book()
+            except Exception:
+                stores.pop(path, None)
+                _log.exception("bet book: the keeper's rebuild failed; the last list stays in use")
+
+
 def serve_from_memory(on: bool = True) -> None:
     """In the running bot (2026-11-16, user: "Nothing in per tick computations should do a db read. Ever"): a remembered read whose MEMO_TTL has run out is answered from memory and re-read by a background thread. The TTL exists only to pick up writes by another process; a write in THIS process still makes the next read go to the database, once, right after the bet, sale or settlement that changed the rows (the reader must not act on a book it knows is out of date)."""
     first = not _BACKGROUND["on"] and on
     _BACKGROUND["on"] = on
+    if not on:
+        _BOOK.clear()
     if first:
         threading.Thread(target=_refresher, name="store-memo", daemon=True).start()
+        if not _BACKGROUND.get("keeper"):
+            _BACKGROUND["keeper"] = True
+            threading.Thread(target=_book_keeper, name="bet-book", daemon=True).start()
 
 
 def _refresher() -> None:
@@ -506,6 +564,30 @@ class Store:
         with _MEMO_LOCK:
             for d in domains:
                 _GEN[(str(self.path), d)] = _GEN.get((str(self.path), d), 0) + 1
+        if _BACKGROUND["on"] and "bets" in domains:  # the writer rebuilds the bet book, so no evaluation has to read after this write
+            try:
+                self.rebuild_book()
+            except Exception:
+                _BOOK.pop(str(self.path), None)  # no list is better than a wrong one: the next reader builds it
+                _log.exception("bet book: the rebuild after a write failed")
+
+    def rebuild_book(self) -> list:
+        """Read the bet book (every bet row unsettled, or sold in the last hour) and put it in memory unless a newer one is already there."""
+        p = str(self.path)
+        gen = _GEN.get((p, "bets"), 0)
+        rows = self.db.execute("SELECT * FROM decisions WHERE action='bet' AND (outcome IS NULL OR exit_ts > ?) ORDER BY ts, id", (time.time() - BOOK_KEEP_EXITS,)).fetchall()
+        with _BOOK_LOCK:
+            cur = _BOOK.get(p)
+            if cur is None or cur[0] <= gen:
+                _BOOK[p] = (gen, rows)
+            return _BOOK[p][1]
+
+    def _book(self) -> list | None:
+        """The bet book when the running bot serves from memory, else None (the table is read, as it always was)."""
+        if not _BACKGROUND["on"]:
+            return None
+        got = _BOOK.get(str(self.path))
+        return got[1] if got is not None else self.rebuild_book()
 
     def _drop_old_grid(self) -> None:
         """The learner's tables gained the exit rule in their key. They are a cache of replays of the tape (grid.update rebuilds them), so an old shape is dropped."""
@@ -728,12 +810,16 @@ class Store:
             (1 if live else 0,),
         ).fetchall()
 
-    @remembers('bets')
     def holds_sized_bet(self, ticker: str, lane: str | None = None) -> bool:
         """A sized bet on this market is already open (so a re-score must not stake it again).
 
-        With `lane`, only that lane's bet counts: two lanes (an A/B pair, say) can each hold the same market.
+        With `lane`, only that lane's bet counts: two lanes (an A/B pair, say) can each hold the same market. From the bet book in the running bot.
         """
+        book = self._book()
+        return book_holds_sized(book, ticker, lane) if book is not None else self._holds_sized_bet_read(ticker, lane)
+
+    @remembers('bets')
+    def _holds_sized_bet_read(self, ticker: str, lane: str | None = None) -> bool:
         row = self.db.execute(
             """SELECT 1 FROM decisions WHERE ticker=? AND action='bet' AND stake_usd IS NOT NULL
                AND outcome IS NULL AND exit_ts IS NULL AND (? IS NULL OR COALESCE(lane,'moonshot')=?) LIMIT 1""",
@@ -879,9 +965,13 @@ class Store:
             f"SELECT lane, ticker, model_p, ask, side, outcome, category FROM decisions WHERE outcome IN ('yes','no') AND model_p IS NOT NULL{extra} ORDER BY ts", args
         ).fetchall()
 
-    @remembers('bets')
     def bet_tickers_in_event(self, event_ticker: str) -> set[str]:
-        """Unresolved paper or real bets in this event. Empty when event_ticker is blank."""
+        """Unresolved paper or real bets in this event. Empty when event_ticker is blank. From the bet book in the running bot."""
+        book = self._book()
+        return book_event_tickers(book, event_ticker) if book is not None else self._bet_tickers_in_event_read(event_ticker)
+
+    @remembers('bets')
+    def _bet_tickers_in_event_read(self, event_ticker: str) -> set[str]:
         if not event_ticker:
             return set()
         rows = self.db.execute(
@@ -1008,8 +1098,12 @@ class Store:
         row = self.db.execute("SELECT strike FROM windows WHERE ticker=?", (ticker,)).fetchone()
         return float(row["strike"]) if row and row["strike"] else None
 
-    @remembers("bets")
     def _last_exit(self, ticker: str, lane: str) -> float | None:
+        book = self._book()
+        return book_last_exit(book, ticker, lane) if book is not None else self._last_exit_read(ticker, lane)
+
+    @remembers("bets")
+    def _last_exit_read(self, ticker: str, lane: str) -> float | None:
         row = self.db.execute(
             """SELECT MAX(exit_ts) AS t FROM decisions
                WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL""",
@@ -1068,9 +1162,13 @@ class Store:
         self.db.commit()
         self.touch("bets")
 
-    @remembers('bets')
     def open_bets(self) -> list[db.Row]:
-        """Unresolved bets not yet stopped out. One row per ticker and lane (that lane's first bet)."""
+        """Unresolved bets not yet stopped out. One row per ticker and lane (that lane's first bet). From the bet book in the running bot."""
+        book = self._book()
+        return book_open_bets(book) if book is not None else self._open_bets_read()
+
+    @remembers('bets')
+    def _open_bets_read(self) -> list[db.Row]:
         return self.db.execute(
             """SELECT d.* FROM decisions d
                JOIN (
