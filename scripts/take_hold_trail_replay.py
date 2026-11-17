@@ -17,20 +17,25 @@ Shapes: where the side's Kalshi mid sat in its own range since the open at the b
 import bisect
 import datetime
 import math
+import os
 
 from kalshi_moonshot import config, curverisk, db, quoteshock, variants
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
 ET = datetime.timezone(datetime.timedelta(hours=-5))
-SINCE = datetime.datetime(2026, 11, 14, 17, 2, tzinfo=ET).timestamp()
-LANE = "crypto_multiscale"
+# 2026-11-17 (user, on the live commodity bets that were ahead and then lost: "Would it?"): the same replay on other lanes and windows. LANE is a SQL LIKE pattern; LIST=1 prints each sale of rule B.
+#     scripts/cloud.sh run scripts/take_hold_trail_replay.py LANE=commodity% SINCE=2026-11-16T21:02 LIST=1
+_when = lambda k, d: datetime.datetime.strptime(os.environ[k], "%Y-%m-%dT%H:%M").replace(tzinfo=ET).timestamp() if os.environ.get(k) else d
+SINCE = _when("SINCE", datetime.datetime(2026, 11, 14, 17, 2, tzinfo=ET).timestamp())
+UNTIL = _when("UNTIL", 9e18)
+LANE = os.environ.get("LANE", "crypto_multiscale")
 SLOPE, SURE, SURE_LATE, EARLY_BID, EARLY_S = 0.08, 0.95, 0.90, 0.95, 360.0  # the lane's live settings
 TRAIL_UNITS = 1.0  # rule B: one typical minute under the peak. Stated before the run
 s = config.load()
 st = db.connect(s.db_path, "main", shared=True)
 tape = db.connect(s.tape_path, "tape", shared=True)
 
-rows = st.execute("SELECT id, ts, ticker, side, ask, stake_usd, contracts, exit_price, exit_ts, exit_reason FROM decisions WHERE lane=? AND mode='trade' AND action='bet' AND stake_usd>0 AND ts>? ORDER BY ts", (LANE, SINCE)).fetchall()
+rows = st.execute("SELECT id, ts, ticker, side, ask, stake_usd, contracts, exit_price, exit_ts, exit_reason FROM decisions WHERE lane LIKE ? AND mode='trade' AND action='bet' AND stake_usd>0 AND ts>? AND ts<? ORDER BY ts", (LANE, SINCE, UNTIL)).fetchall()
 results = {w["ticker"]: (w["result"], float(w["close_ts"])) for w in st.execute("SELECT ticker, close_ts, result FROM windows WHERE close_ts>? AND result IN ('yes','no')", (SINCE,)).fetchall()}
 RULES = ("A", "B", "C")
 out = []  # one dict a bet
@@ -123,7 +128,7 @@ def line(name, rs, rule):
 
 
 NAMES = {"A": "A  hold clock (the bar counts the bet's own time)", "B": "B  trail (ahead, and one typical minute under the peak)", "C": "C  both, whichever sells first"}
-print(f"window: {LANE} live buys since 2026-11-14 17:02 ET; {len(out)} settled with quotes (of {len(rows)} placed; {unsettled} not settled, {skipped} without a usable price or quotes)")
+print(f"window: {LANE} live buys {datetime.datetime.fromtimestamp(SINCE, ET):%m-%d %H:%M} to {datetime.datetime.fromtimestamp(min(UNTIL, datetime.datetime.now().timestamp()), ET):%m-%d %H:%M} ET; {len(out)} settled with quotes (of {len(rows)} placed; {unsettled} not settled, {skipped} without a usable price or quotes)")
 print(f"what happened on them: ${sum(r['actual'] for r in out):+.2f}; {sum(r["n"] for r in out):.0f} contracts bought")
 for rule in RULES:
     print(f"\n=== {NAMES[rule]}")
@@ -141,6 +146,12 @@ for rule in RULES:
     if tk:
         held = sorted(r["sale"][rule][3] for r in tk)
         print(f" the rule's sales: median {held[len(held) // 2]:.0f} s after the buy; {sum(1 for h in held if h < 60)} inside the first minute; median bid {sorted(r['sale'][rule][1] for r in tk)[len(tk) // 2]:.2f}")
+if os.environ.get("LIST"):
+    print("\nrule B's sales, bet by bet")
+    for r in out:
+        if "B" in r["sale"]:
+            v = r["sale"]["B"]
+            print(f"  {datetime.datetime.fromtimestamp(r['ts'], ET):%m-%d %H:%M} {r['ticker'][:28]:28s} sold {v[1]:.2f} at {v[3]:.0f} s held, {v[2]:.0f} s left: ${v[0] * r['n']:+.2f} | actual ${r['actual']:+.2f} ({r['ended']})")
 print("\nthe bet that raised the question")
 for r in out:
     if r["ticker"].startswith("KXXRP15M-26NOV161745"):
