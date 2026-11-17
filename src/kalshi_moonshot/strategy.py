@@ -9,7 +9,7 @@ import math
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 from .commodities import load_instruments, symbol_for
 from .config import Settings
@@ -561,6 +561,59 @@ def one_per_mutex_event(shots: list[LongShot]) -> list[LongShot]:
 def edge(model_p: float, ask: float) -> float:
     """Expected profit per $1 payout contract after the entry fee."""
     return model_p - ask - fee_per_contract(ask)
+
+
+class SideRead(NamedTuple):
+    """One side of a market as the lane's edge rule sees it."""
+
+    side: str
+    worth: float  # the model's chance that this side pays
+    ask: float
+    cost: float  # the ask and its fee: what a contract costs all in
+    edge: float  # worth less cost: over zero, the side is worth more than the bet
+    needs: float | None  # the edge the lane asks for at this price (its scaled bar, else its flat one); None when the lane has no edge bar
+    buyable: bool  # the lane buys this side, and its ask is inside the lane's price range and outside its no-buy range
+    clears: bool  # the lane's edge rule and its chance band both say yes (lanes.wants_bet, lanes.chance_ok): the stretch is not counted
+
+
+class BothSides(NamedTuple):
+    yes: SideRead
+    no: SideRead
+    pick: str | None  # the side the lane's rule would buy; None when neither clears
+
+
+def both_sides(spec: LaneSpec, p_yes: float, yes_bid: float, yes_ask: float) -> BothSides:
+    """Both sides of one market judged together, from one chance and one quote taken at the same moment (2026-11-17, user: "we need a function that determines both sides at the same time", after a market whose YES side was dropped at the screen while only its NO side reached the decisions log).
+    `p_yes`: the model's chance that YES pays; NO's is one minus it. `yes_bid`, `yes_ask`: Kalshi's quote for YES; NO costs one minus the YES bid. Each side gets its worth, its all-in cost, its edge and the edge the lane asks for, by the same rule that decides a buy (lanes.wants_bet, lanes.chance_ok).
+    The two edges add up to minus the spread and both fees, so they cannot both be over zero: at most one side is worth more than the bet, and `pick` is that side when it also clears the lane's bar and the lane may buy it."""
+    from .lanes import chance_ok, no_buy, wants_bet
+
+    def read(side: str, worth: float, ask: float) -> SideRead:
+        live = 0.0 < ask < 1.0
+        cost = ask + fee_per_contract(ask) if live else 1.0
+        e = worth - cost
+        needs = None
+        if spec.needs_model_edge and spec.min_edge_room is not None:
+            needs = spec.min_edge_room * max((1.0 - worth) + e, 0.0)
+        elif spec.needs_model_edge and spec.min_edge is not None:
+            needs = spec.min_edge
+        buyable = live and side in spec.sides and spec.price[0] <= ask <= spec.price[1] and not no_buy(spec, ask)
+        return SideRead(side, worth, ask, cost, e, needs, buyable, live and wants_bet(spec, worth, ask, e) and chance_ok(spec, worth))
+
+    yes = read("yes", p_yes, yes_ask)
+    no = read("no", 1.0 - p_yes, 1.0 - yes_bid)
+    able = [r for r in (yes, no) if r.buyable and r.clears]
+    return BothSides(yes, no, max(able, key=lambda r: r.edge).side if able else None)
+
+
+def both_sides_tag(b: BothSides) -> str:
+    """The two sides in one line for a decision's note."""
+
+    def one(r: SideRead) -> str:
+        needs = "" if r.needs is None else f", needs {r.needs:+.3f}"
+        return f"{r.side.upper()} worth {r.worth:.2f} costs {r.cost:.3f}, edge {r.edge:+.3f}{needs}{'' if r.buyable else ', not a price the lane buys'}"
+
+    return f"[both sides: {one(b.yes)} | {one(b.no)} | {'the rule buys ' + b.pick.upper() if b.pick else 'the rule buys neither'}]"
 
 
 def side_ask_notional(book: dict[str, Any], limit: float, side: str = "yes") -> float:

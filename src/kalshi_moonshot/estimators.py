@@ -33,7 +33,7 @@ from .kalshiws import index_for_series
 from .lanes import CURVE, FORECAST, LADDER, LLM, MARKET, LaneSpec
 from .search import NewsSearch
 from .store import Store
-from .strategy import LongShot, edge, side_prob
+from .strategy import LongShot, both_sides, both_sides_tag, edge, side_prob
 
 log = logging.getLogger("moonshot")
 
@@ -309,7 +309,7 @@ class LadderEstimator:
             else:
                 bar = (f"needs {spec.min_edge:+.1%}" if spec.min_edge is not None else f"needs {spec.min_edge_room:.0%} of the room left" if spec.min_edge_room is not None else "outside the lane's chance band")
                 self.dropped.append({"ticker": shot.ticker, "side": shot.side, "ask": shot.ask, "p": p_side, "edge": e,
-                                     "reason": f"our chance {p_side:.0%} vs ask {shot.ask:.2f}: edge {e:+.1%}, {bar}. {hit[1][:120]}"})
+                                     "reason": f"our chance {p_side:.0%} vs ask {shot.ask:.2f}: edge {e:+.1%}, {bar}. {both_sides_tag(both_sides(spec, hit[0], *((shot.bid, shot.ask) if shot.side == 'yes' else (1.0 - shot.ask, 1.0 - shot.bid))))} {hit[1][:120]}"})
         keep.sort(key=lambda x: x[0], reverse=True)
         return [shot for _, shot in keep]
 

@@ -60,6 +60,8 @@ from .strategy import (
     ask_trend,
     best_ask,
     best_bid,
+    both_sides,
+    both_sides_tag,
     cash_if_losing,
     cash_if_up,
     early_cash,
@@ -514,6 +516,10 @@ def evaluate(
         stretched = stretch_buy(s, spec, shot, cal.p, e)
         if stretched:
             bet, note = True, f"{stretched} {note}"
+    if spec.needs_model_edge:  # both sides of the market from this one chance and this one quote, on the note of buys and passes alike: it shows what the lane's rule made of the side it was not asked about (the decision itself is still the lines above)
+        p_yes = cal.p if shot.side == "yes" else 1.0 - cal.p
+        yes_bid, yes_ask = (shot.bid, shot.ask) if shot.side == "yes" else (1.0 - shot.ask, 1.0 - shot.bid)
+        note = f"{both_sides_tag(both_sides(spec, p_yes, yes_bid, yes_ask))} {note}"
     if not bet:
         note = f"{edge_verdict(spec, cal.p, shot.ask, e) or ''} {note}".strip()  # the edge screen says so in words, as every other rule does
     if bet and not chance_ok(spec, p):
