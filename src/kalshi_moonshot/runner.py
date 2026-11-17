@@ -909,12 +909,19 @@ def evaluate(
                 f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
                 else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
             )
-    if spec.risk_score_buy > 0:  # the lane's own buy rule: a risk that is low and has stayed low, and a chance that clears the costs
+    if spec.entry_scenario_view:  # shadow: a reading for the note, on passes as well as buys
+        try:
+            sc_note = side_scenario(store, shot)
+        except Exception as exc:
+            sc_note = None
+            log.warning("scenario unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        note = f"{sc_note or '[scenario unreadable]'} {note}"
+    if spec.risk_score_buy > 0:  # after the scenario note so its tag leads the note (the stored reason is cut at 300 characters). The lane's own buy rule: a risk that is low and has stayed low, and a chance that clears the costs
         from . import riskscore
         from .strategy import fee_per_contract as _fee
 
         try:
-            rs = riskscore.live(store.db, shot.series or shot.ticker.split("-")[0], shot.ticker, shot.side, time.time() + shot.hours_to_close * 3600.0, time.time(), s.data_dir)
+            rs = riskscore.live(shot.series or shot.ticker.split("-")[0], shot.ticker, shot.side, time.time() + shot.hours_to_close * 3600.0, time.time(), s.data_dir)
         except Exception as exc:
             rs = None
             log.warning("risk score unreadable for %s %s: %s", shot.ticker, shot.side, exc)
@@ -930,13 +937,6 @@ def evaluate(
             note = f"{rs_tag} the score's chance {rs[0][0]:.3f} does not clear the ask and its fee ({shot.ask + _fee(shot.ask):.3f}) by the lane's {spec.risk_score_edge:g}. {note}"
         else:
             note = f"{rs_tag} {note}"
-    if spec.entry_scenario_view:  # shadow: a reading for the note, on passes as well as buys
-        try:
-            sc_note = side_scenario(store, shot)
-        except Exception as exc:
-            sc_note = None
-            log.warning("scenario unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        note = f"{sc_note or '[scenario unreadable]'} {note}"
     spike_on, cushion_on = spec.entry_spike_min > -90, spec.entry_cushion_edge_min > -90
     spike_no = cushion_no = ""  # why each way to buy says no; a buy needs one of the lane's ways to say yes
     if spec.entry_spike_view or spike_on:  # the note carries the reading on passes as well as buys, so the skipped decisions can be scored too
@@ -1439,15 +1439,9 @@ def side_scenario(store: Store, shot: LongShot, now: float | None = None) -> str
     cush = scenario.cushion(ts, vs, now, opening["target"], shot.side, left, unit) if unit else None
     i = bisect.bisect_right(ts, now) - 1
     now_place = {m: got_["place"] for m in scenario.SCOPES if i >= 0 and (got_ := scenario.scope(ts, vs, now, m, vs[i])) is not None}
-    prev: list[tuple[float | None, int | None]] = []
-    for w in store.db.execute("SELECT ticker, close_ts, strike, settled_value FROM windows WHERE series=? AND close_ts<=? AND strike IS NOT NULL ORDER BY close_ts DESC LIMIT 4", (series, opened + 1.0)).fetchall():
-        strike, settled = float(w["strike"] or 0.0), w["settled_value"]
-        if unit and strike > 0 and settled:
-            mg = math.log(float(settled) / strike) / (unit * math.sqrt(15.0))
-        else:
-            mg = scenario.margin(ts, vs, float(w["close_ts"]), strike, unit) if unit else None
-        rows = ticks_mod.mids.rows(w["ticker"])
-        prev.append((mg, scenario.flips([m for _, m in rows]) if rows else None))
+    from . import riskscore
+
+    prev = riskscore.previous(ts, vs, ticks_mod.mids.series_rows(series, opened, 3600.0), opened, unit)  # from memory, no database read
     return scenario.note(opening, cush, now_place, prev)
 
 

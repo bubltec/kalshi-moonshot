@@ -931,7 +931,7 @@ class ProfitWatcher:
         from . import riskscore
 
         try:
-            got = riskscore.live(self.store_factory().db, t.ticker.split("-")[0], t.ticker, t.side, t.close_ts, now, None, (0.0,))
+            got = riskscore.live(t.ticker.split("-")[0], t.ticker, t.side, t.close_ts, now, None, (0.0,))
         except Exception as exc:
             log.warning("risk score unreadable for %s %s: %s", t.ticker, t.lane, exc)
             return None

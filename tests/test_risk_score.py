@@ -165,3 +165,39 @@ def test_unit_the_fields_change_a_lanes_version_only_when_set(tmp_path, monkeypa
     assert "risk_score_buy" not in out and "curve_risk_score" not in out
     assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, risk_score_buy=0.25), s)
     assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, curve_risk_score=True), s)
+
+
+def test_unit_the_last_four_markets_come_from_memory_alone():
+    now = 1_000_000.0
+    opened = now - 480.0
+    ts, vs = index(opened, now, lift=0.004)
+    unit = riskscore.unit_before(ts, vs, opened)
+    series_mids = [(opened - 900.0 + k, 0.30 if k < 400 else 0.70) for k in range(900)]  # the market before this one: NO led, then YES
+    prev = riskscore.previous(ts, vs, series_mids, opened, unit)
+    assert len(prev) == 4 and prev[0][1] == 1 and prev[1][1] is None  # one flip in the last market; no mids held for the one before
+    assert prev[0][0] is not None and abs(prev[0][0]) < 1.0  # it finished near its target: the index was flat before this open
+
+
+def test_integration_the_reading_makes_no_database_read(tmp_path, monkeypatch):
+    now = time.time()
+    seen = []
+    real = Store.__init__
+
+    def spy(self, *a, **k):
+        real(self, *a, **k)
+        inner = self.db
+
+        class Watch:
+            def execute(_, sql, *args):
+                seen.append(sql)
+                return inner.execute(sql, *args)
+
+            def __getattr__(_, name):
+                return getattr(inner, name)
+
+        self.db = Watch()
+
+    monkeypatch.setattr(Store, "__init__", spy)
+    out = decide(tmp_path, monkeypatch, now, "risk_score_buy=0.25\nrisk_score_edge=-0.05\nentry_scenario_view=true")
+    assert out.action == "bet" and "[risk score: risk " in out.note[:60]
+    assert not [q for q in seen if "settled_value" in q]  # the last four markets are no longer asked of the database

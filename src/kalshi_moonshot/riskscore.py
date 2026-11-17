@@ -153,41 +153,45 @@ def tag(chances: Sequence[float] | None, kalshi: float | None) -> str:
     return f"[risk score: risk {100 * (1 - chances[0]):.0f}% now, {100 * (1 - chances[1]):.0f}% 30 s ago, {100 * (1 - chances[2]):.0f}% a minute ago | by Kalshi's price {'n/a' if kalshi is None else format(100 * (1 - kalshi), '.0f') + '%'}]"
 
 
-def gather(db: Any, series: str, ticker: str, opened: float, now: float) -> tuple[list[float], list[float], list[tuple[float, float]], list[tuple[float | None, int | None]], float | None] | None:
-    """What a live reading needs, from memory and the main database: the settlement index's ticks from 61 minutes before the open, this market's mids, the series' last four markets as (margin, flips), and the index's unit. None when the index's history does not reach back that far."""
-    from . import scenario, variants
+def previous(ts: Sequence[float], vs: Sequence[float], series_mids: Sequence[tuple[float, float]], opened: float, unit: float | None) -> list[tuple[float | None, int | None]]:
+    """The series' last four markets as (margin, flips), newest first, from memory alone (2026-11-16, user: "Why is it reading the db for anything? We are supposed to be reading from the memory tape"). A 15-minute series' markets run back to back, so the four before this one closed at `opened`, 15, 30 and 45 minutes earlier. Margin: the index's 60 s average before that close against that market's target (its 60 s average before its own open), in typical moves over 15 minutes. Flips: changes of favorite along that market's mids (`series_mids`: the series' (time, YES mid) rows of the last hour, stitched). Either is None when memory does not hold it."""
+    from . import scenario
+
+    out: list[tuple[float | None, int | None]] = []
+    for k in range(4):
+        close = opened - 900.0 * k  # 900: a 15-minute market's length, structural
+        strike = scenario.target(ts, vs, close - 900.0)
+        mg = scenario.margin(ts, vs, close, strike, unit) if strike and unit else None
+        rows = [m for t, m in series_mids if close - 900.0 < t <= close]
+        out.append((mg, scenario.flips(rows) if len(rows) >= 50 else None))
+    return out
+
+
+def gather(series: str, ticker: str, opened: float, now: float) -> tuple[list[float], list[float], list[tuple[float, float]], list[tuple[float | None, int | None]], float | None] | None:
+    """What a live reading needs, all from memory: the settlement index's ticks from just over an hour and three quarters before the open (the last four markets and the hour before the oldest of them need them), this market's mids, the series' last four markets as (margin, flips), and the index's unit. None when the index's history does not reach an hour before the open."""
+    from . import variants
     from . import ticks as ticks_mod
 
     ix = variants.spot_index(series, "", now)
-    got = ticks_mod.history.window(ix, opened - 3700.0, now) if ix else None
+    got = (ticks_mod.history.window(ix, opened - 6400.0, now) or ticks_mod.history.window(ix, opened - 3700.0, now)) if ix else None
     if not got:
         return None
     ts, vs = got
     unit = unit_before(ts, vs, opened)
     key = (series, int(opened))
-    if key in _prev:
-        return ts, vs, ticks_mod.mids.rows(ticker), _prev[key], unit
-    prev: list[tuple[float | None, int | None]] = []
-    for w in db.execute("SELECT ticker, close_ts, strike, settled_value FROM windows WHERE series=? AND close_ts<=? AND strike IS NOT NULL ORDER BY close_ts DESC LIMIT 4", (series, opened + 1.0)).fetchall():
-        strike, settled = float(w["strike"] or 0.0), w["settled_value"]
-        if unit and strike > 0 and settled:
-            mg: float | None = math.log(float(settled) / strike) / (unit * math.sqrt(15.0))
-        else:
-            mg = scenario.margin(ts, vs, float(w["close_ts"]), strike, unit) if unit else None
-        rows = ticks_mod.mids.rows(w["ticker"])
-        prev.append((mg, scenario.flips([m for _, m in rows]) if rows else None))
-    if len(_prev) > 400:
-        _prev.clear()
-    _prev[key] = prev  # the four finished markets do not change while this one runs: read once per market
-    return ts, vs, ticks_mod.mids.rows(ticker), prev, unit
+    if key not in _prev:
+        if len(_prev) > 400:
+            _prev.clear()
+        _prev[key] = previous(ts, vs, ticks_mod.mids.series_rows(series, opened, 3600.0), opened, unit)  # the four finished markets do not change while this one runs: read once per market
+    return ts, vs, ticks_mod.mids.rows(ticker), _prev[key], unit
 
 
-def live(db: Any, series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] = HELD_LOOKS) -> tuple[list[float], float] | None:
+def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] = HELD_LOOKS) -> tuple[list[float], float] | None:
     """(the side's chance at each of `looks` seconds back, Kalshi's mid for the side now) for a running market, or None when any look cannot be read. The target is the index's average over the 60 s before the open (scenario.target: Kalshi's own rule)."""
     from . import scenario
 
     opened = close_ts - 900.0
-    got = gather(db, series, ticker, opened, now)
+    got = gather(series, ticker, opened, now)
     if got is None:
         return None
     ts, vs, mids, prev, _ = got
