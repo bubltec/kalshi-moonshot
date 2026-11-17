@@ -1626,3 +1626,80 @@ def test_unit_the_never_ahead_sale_changes_a_lanes_version_only_when_it_is_set(t
         (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + extra)
         s = config.load()
         assert ("curve_risk_never_ahead" in lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)) is bool(extra)
+
+
+# ---- the under-even sale (2026-11-17, user, after platinum 09:30, Brent 10:00 and copper 10:15 were each bought near 0.90 and went to zero: "just had 3 zeros in the last hour. we need to fix this") ----
+# the fixture bet: YES bought at 0.81 with 450 s left. The max loss is off and the line is the fixture's 0.5 with its own wait, so these tests keep the long layer out and read the new rule's own reason.
+UNDER = "curve risk exit (under even)"
+UE = "curve_risk_under_even=0.1\ncurve_risk_under_even_live=true"
+
+
+@pytest.fixture
+def low_line(monkeypatch):
+    """The lane's own line at 0.12, as the live commodity lanes run it: a bid of 0.45 is over it, so only the under-even sale can sell there."""
+    import sys
+
+    monkeypatch.setattr(sys.modules[__name__], "LANE", LANE.replace("curve_risk_sell=0.5", "curve_risk_sell=0.12"))
+
+
+def test_unit_under_even_needs_a_favorite_a_bid_under_even_and_a_tenth_of_the_time_left():
+    assert curverisk.under_even(0.45, 0.81, 30.0, 300.0, 0.1)  # 30 s under even with 300 s left
+    assert not curverisk.under_even(0.45, 0.81, 29.0, 300.0, 0.1)  # a second short
+    assert curverisk.under_even(0.45, 0.81, 3.0, 30.0, 0.1)  # late, the wait is short
+    assert not curverisk.under_even(0.50, 0.81, 60.0, 300.0, 0.1)  # at even is not under it
+    assert not curverisk.under_even(0.30, 0.40, 60.0, 300.0, 0.1)  # bought as the cheap side: under even is where it started
+    assert not curverisk.under_even(0.45, 0.81, 60.0, 300.0, 0.0)  # off
+
+
+def test_integration_a_favorite_under_even_for_a_tenth_of_the_time_left_is_sold(tmp_path, monkeypatch, low_line):
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, hold=0, extra=UE)
+    out = quotes(w, flat(0.78, 445, 305) + [(left, 0.45) for left in range(300, 272, -1)])  # under even from 300 s left; at 273 s left it has been 27 s, short of a tenth (27.3 s)
+    assert out == []
+    out = quotes(w, [(272, 0.45)])  # 28 s under, a tenth of 272 s is 27.2 s
+    assert out and out[0].why.startswith(UNDER) and "28s" in out[0].why
+
+
+def test_integration_a_dip_under_even_that_comes_back_starts_the_count_again(tmp_path, monkeypatch, low_line):
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra=UE)
+    path = flat(0.78, 445, 305) + [(left, 0.45) for left in range(300, 285, -1)] + [(284, 0.55)] + [(left, 0.45) for left in range(283, 268, -1)]  # 15 s under, back over, 15 s under: never 27 s in one piece
+    assert not any(j.why.startswith(UNDER) for j in quotes(w, path))
+
+
+def test_integration_the_under_even_sale_is_off_by_default_and_shadow_without_its_live_switch(tmp_path, monkeypatch, caplog, low_line):
+    import json
+    import logging
+
+    w = held(tmp_path, monkeypatch, live=False, max_loss=0)
+    assert quotes(w, flat(0.78, 445, 305) + [(left, 0.45) for left in range(300, 200, -1)]) == []
+    assert not (tmp_path / "risk_shadow.jsonl").exists() or "under even" not in (tmp_path / "risk_shadow.jsonl").read_text()
+    ticks_mod.mids.clear()
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_under_even=0.1")  # the risk exit is live, this rule is not
+    with caplog.at_level(logging.INFO):
+        out = quotes(w, flat(0.78, 445, 305) + [(left, 0.45) for left in range(300, 240, -1)])
+    assert not any(j.why.startswith(UNDER) for j in out)
+    assert sum(1 for rec in caplog.records if f"would sell: {UNDER}" in rec.getMessage()) == 1
+    rows = [json.loads(x) for x in (tmp_path / "risk_shadow.jsonl").read_text().splitlines()]
+    assert [(x["kind"], x["live"]) for x in rows if x.get("kind") == "under even"] == [("under even", False)]
+
+
+def test_integration_the_under_even_sale_is_an_order_at_a_loss_and_the_bet_closes(tmp_path, monkeypatch, low_line):
+    c = Client(bid=0.45)
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    w = held(tmp_path, monkeypatch, live=True, client=c, max_loss=0, extra=UE)
+    job = None
+    for left, bid in flat(0.78, 445, 305) + [(left, 0.45) for left in range(300, 260, -1)]:
+        yes_bid(w, bid, left)
+        if not w._jobs.empty():
+            job = w._jobs.get_nowait()
+            break
+    assert job is not None and job.why.startswith(UNDER)
+    w._sell(*job)
+    assert len(c.sold) == 1 and len(Store(config.load().db_path).open_bets()) == 0
+
+
+def test_unit_the_under_even_sale_changes_a_lanes_version_only_when_it_is_live(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    for extra, shown in (("", False), ("curve_risk_under_even=0.1\n", False), (UE + "\n", True)):
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + extra)
+        s = config.load()
+        assert ("curve_risk_under_even" in lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)) is shown

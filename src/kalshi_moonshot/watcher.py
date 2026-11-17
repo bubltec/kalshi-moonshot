@@ -249,6 +249,10 @@ class Target:
     risk_take_trail_live: bool = False  # the trail sells (curve_take_trail_live); off = it logs and records a would-sell
     risk_take_peak: float = 0.0  # the highest bid the risk check has seen on this bet
     risk_trail_logged: bool = False
+    risk_under_even: float = 0.0  # the share of the time left a favorite's bid must stay under even before it is sold (lane field curve_risk_under_even); 0 = off
+    risk_under_even_live: bool = False
+    risk_under_since: float = 0.0  # when the bid last went under even and stayed
+    risk_under_logged: bool = False
     risk_never_ahead: float = 0.0  # seconds left at which a bet never once in profit is sold (lane field curve_risk_never_ahead); 0 = off
     risk_ever_ahead: bool = False  # the bid less the sell fee has been over the cost at some risk check since the buy
     risk_first_seen: float = 0.0  # when the risk check first read this bet
@@ -1061,6 +1065,10 @@ class ProfitWatcher:
             why = self._risk_never_ahead(t, r, bid, now, left, pnl, net, basis)
             if why:
                 return why
+        if getattr(t, "risk_under_even", 0.0) > 0:
+            why = self._risk_under_even(t, r, bid, now, left, pnl)
+            if why:
+                return why
         if t.risk_take or t.risk_squeeze > 0 or t.risk_nudge_units > 0:
             t.risk_take_hist.append((now, bid))
             while t.risk_take_hist and t.risk_take_hist[0][0] < now - max(60.0, 2.0 * look):
@@ -1173,6 +1181,25 @@ class ProfitWatcher:
             t.risk_logged = True
             log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
             self._risk_record(t, r, bid, now, left, pnl, wait, stop, False)
+        return None
+
+    def _risk_under_even(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> str | None:
+        """The under-even sale (lane field curve_risk_under_even; 2026-11-17, user: "we need to fix this"). Every risk check notes whether the bid is under even; once it has been, without a break, for the lane's share of the time left, a bet bought as the favorite is sold at the bid (live), or logged and recorded once (shadow). A reading back at or over even starts the count again."""
+        if bid >= curverisk.EVEN:
+            t.risk_under_since = 0.0
+            return None
+        if t.risk_under_since <= 0:
+            t.risk_under_since = now
+        if bid < CURVE_MIN_BID or not curverisk.under_even(bid, t.entry, now - t.risk_under_since, left, t.risk_under_even):
+            return None
+        reason = f"curve risk exit (under even): the bid {bid:.2f} has been under even for {now - t.risk_under_since:.0f}s without a break, {t.risk_under_even:.0%} of the {left:.0f}s left or more, on a bet bought at {t.entry:.2f}; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+        if t.risk_live and t.risk_under_even_live:
+            self._risk_record(t, r, bid, now, left, pnl, t.risk_under_even * left, False, True, kind="under even")
+            return reason
+        if not t.risk_under_logged:
+            t.risk_under_logged = True
+            log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, t.risk_under_even * left, False, False, kind="under even")
         return None
 
     def _risk_never_ahead(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, net: float, basis: float) -> str | None:
@@ -2064,6 +2091,7 @@ class ProfitWatcher:
                 held.risk_take_trail, held.risk_take_trail_live = spec.curve_take_trail, spec.curve_take_trail_live
                 held.risk_drop_units, held.risk_drop_share = spec.curve_risk_drop, spec.curve_risk_drop_share
                 held.risk_never_ahead = spec.curve_risk_never_ahead
+                held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]

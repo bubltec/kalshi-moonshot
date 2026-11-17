@@ -323,6 +323,14 @@ def stop_miss(net: float, basis: float, q: float, max_loss: float) -> float:
     return (net - basis) + max_loss * q * basis
 
 
+EVEN = 0.5  # the price at which the market says the side is no longer the favorite: structural, not fitted
+
+
+def under_even(bid: float, entry: float, under_for: float, left: float, share: float) -> bool:
+    """The under-even sale's condition (lane field curve_risk_under_even; 2026-11-17, user, after three live commodity bets bought near 0.90 went to zero inside an hour: "we need to fix this"): a bet bought as the favorite (at or over even) whose bid has now been under even, without a break, for `share` of the time left. The wait shrinks with the clock: 30 s with five minutes to go, 3 s with thirty seconds. Evidence: studies/results/2026-11-17-commodity-loss-trace.txt (live commodity bets: +$6.45 on 48 overnight, +$13.44 on 96 of 11-13 to 11-16, +$1.38 on 422 of 11-09 to 11-13, against what happened) and the seven bets of 11-17 09:20 to 10:20 ET (sells two of the three that went to zero at about 0.40, leaves the four winners; +$8.59)."""
+    return share > 0 and entry >= EVEN and bid < EVEN and left > 0 and under_for >= share * left
+
+
 def never_ahead(ever_ahead: bool, left: float, at: float, bought_left: float, seen_whole: bool, lead: float = 30.0) -> bool:
     """The never-ahead sale's condition at its one look (lane field curve_risk_never_ahead; 2026-11-17, user: "never profitable and 90s left. Let's add that to the live lanes"): `at` seconds or fewer are left, the bet was bought at least `lead` seconds before that mark (`bought_left` is what was left at the buy), every second of it was watched (`seen_whole`: a bet picked up after a restart has an unknown past and is left alone), and its bid after the sell fee was never once over what it cost with the buy fee. Evidence: studies/results/2026-11-17-time-in-profit.txt (150 live commodity bets since 11-13: never in profit at 90 s left, 6 bets, 2 won if held, selling there +$12.84; at 180 s, 14 bets, 6 won, +$18.12; a bet in profit even briefly won 20 of 24 and is not sold)."""
     return at > 0 and left <= at and seen_whole and bought_left >= at + lead and not ever_ahead

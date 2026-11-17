@@ -1,0 +1,30 @@
+
+live commodity bets since 11-13 11:02 ET, settled: 198
+  all                                    n 198 | staked $  1899 | won  82% at 0.832 paid | held to settlement $  -46.00 ( -2.4%)
+  no paper reading within 30 s           n  58 | staked $   557 | won  84% at 0.837 paid | held to settlement $   -8.62 ( -1.5%)
+  curve edge -0.05 or better (paper bar) n  99 | staked $   966 | won  83% at 0.835 paid | held to settlement $  -17.17 ( -1.8%)
+  curve edge under -0.05 (paper refuses) n  41 | staked $   375 | won  78% at 0.816 paid | held to settlement $  -20.21 ( -5.4%)
+    of those, under -0.08                n  26 | staked $   235 | won  77% at 0.800 paid | held to settlement $  -17.39 ( -7.4%)
+  curve edge 0 or better                 n  51 | staked $   505 | won  86% at 0.833 paid | held to settlement $  +12.61 ( +2.5%)
+today from 09:20:
+  09:26 KXPLATINUM15M-26NOV170930- no  edge None LOST $-10.61
+
+## the seven live bets of 11-17 09:20 to 10:20 ET, with the under-even rule
+
+
+KXPLATINUM15M-26NOV170930-30 commodity_industrial NO bought 09:26:08 (11.1 min in, 232s left) paid 0.913 (ask 0.87); last bid before the close 0.010000000000000009
+  crossings of even since the open at the buy: 7 | share led: 0.6759259259259259 | wave: {'amp': 5.788469691305753, 'pos': 1.0, 'since_low': 239.0, 'back': 5.788469691305753}
+  buy note: bought NO 11.62/11.62 @ 0.9075 (prod). stake $9.99 (fixed stake). [spike view z +0.3, 81 of 120 as large] [mtype quiet] [z +1.08] [vol 0.96x] [variety A] spot 1438.7 (2s old), center 1437.19 via offset learned from 15 settled windows (basis -0.10%), 0.08h left, width 0.15% vs ladder n/a -> P(yes) 0.
+  side's bid every 15 s from the open (| marks the buy): -- -- 0.58 0.50 0.50 0.55 0.59 0.60 0.62 0.63 0.65 0.66 0.71 0.60 0.61 0.61 0.49 0.51 0.45 0.44 0.46 0.46 0.41 0.48 0.41 0.44 0.42 0.41 0.30 0.36 0.40 0.48 0.61 0.65 0.73 0.76 0.80 0.72 0.76 0.77 0.81 0.77 0.85 0.80 | 0.86 0.90 0.90 0.92 0.76 0.78 0.94 0.95 0.90 0.96 0.96 0.86 0.90 0.90 0.92 0.40
+  after the buy: under 0.80 at 09:27:00 (180s left); under 0.70 at 09:29:34 (26s left); under 0.50 at 09:29:38 (22s left); under 0.30 at 09:29:46 (14s left); under 0.15 at 09:29:46 (14s left)
+  sold 0.06 at 09:29:50 (10s left): curve risk exit: the chance the side pays is 0.056 (price cushion the worse: price 0.056, spot 0.056, history x1.00), line 0.12, held 3s of a 3s wait; sells at 0.06 for -93.9% of cost, 10s left [socket]
+  RESULT actual $-9.92 | under-even rule: sells 0.41 with 20s left, $-6.05 (change $+3.88)
+
+KXGOLD15M-26NOV170945-45 commodity_precious YES bought 09:38:36 (8.6 min in, 384s left) paid 0.859 (ask 0.89); last bid before the close 0.999
+  crossings of even since the open at the buy: 2 | share led: 0.8087649402390438 | wave: {'amp': 5.108982953998643, 'pos': 0.8187134502923976, 'since_low': 394.0, 'back': 4.182793061753275}
+  buy note: bought YES 11.36/11.36 @ 0.8500 (prod). stake $10.00 (fixed stake). [spike view z -0.1, 105 of 120 as large] [mtype quiet] [z +0.92] [vol 1.10x] [variety F] spot 3869.85 (6s old), center 3867.42 via offset learned from 15 settled windows (basis -0.06%), 0.11h left, width 0.14% vs ladder n/a -> P(yes
+  side's bid every 15 s from the open (| marks the buy): -- 0.58 0.64 0.61 0.58 0.43 0.43 0.45 0.37 0.41 0.38 0.52 0.56 0.57 0.68 0.80 0.84 0.81 0.77 0.79 0.80 0.75 0.70 0.72 0.87 0.94 0.89 0.83 0.84 0.87 0.87 0.82 0.82 0.86 | 0.88 0.78 0.84 0.84 0.85 0.86 0.90 0.89 0.78 0.81 0.77 0.66 0.69 0.72 0.85 0.92 0.88 0.81 0.88 0.94 0.92 0.94 0.95 0.99 1.00 1.00
+  after the buy: under 0.80 at 09:38:41 (379s left); under 0.70 at 09:41:12 (228s left); never under 0.50; never under 0.30; never under 0.15
+  RESULT actual $+1.60 | under-even rule: does not sell
+
+KXPLATINUM15M-26NOV170945-45 commodity_industrial YES bought 09:39:17 (9.3 min in, 342s left) paid 0.900 (ask 0.92); last bid before the close 0.99
