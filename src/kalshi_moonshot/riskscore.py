@@ -109,16 +109,20 @@ def grid(mids: Sequence[tuple[float, float]], opened: float, now: float) -> list
     return out
 
 
-def features(ts: Sequence[float], vs: Sequence[float], now: float, opened: float, strike: float, mids: Sequence[tuple[float, float]], prev: Sequence[tuple[float | None, int | None]]) -> tuple[float, ...] | None:
+def features(ts: Sequence[float], vs: Sequence[float], now: float, opened: float, strike: float, mids: Sequence[tuple[float, float]], prev: Sequence[tuple[float | None, int | None]], whole: bool = False) -> tuple[float, ...] | None:
     """The readings for the YES side at `now`, in NAMES' order. `ts`, `vs`: the settlement index; `mids`: this market's (time, YES mid) rows; `prev`: the series' last four markets as (margin, flips), either None when unread. None when the market is under a minute old, its mid is at an edge (0.03 or under, 0.97 or over), it has had under six marks or no range, the index is stale (over 30 s) or its hour before the open cannot be read."""
     left = opened + 900.0 - now  # 900: a 15-minute market's length, structural
     unit = unit_before(ts, vs, opened)
     g = grid([m for m in mids if m[0] <= now], opened, now)
-    if unit is None or strike <= 0 or left <= 0 or now - opened < 60.0 or len(g) < 7:
+    if unit is None or strike <= 0 or left <= 0 or not g or (not whole and (now - opened < 60.0 or len(g) < 7)):
         return None
     mid = g[-1][1]
     k = bisect.bisect_right(ts, now) - 1
-    if not (0.03 < mid < 0.97) or k < 0 or now - ts[k] > 30.0 or vs[k] <= 0 or max(m for _, m in g) <= min(m for _, m in g):
+    if k < 0 or now - ts[k] > 30.0 or vs[k] <= 0:
+        return None
+    if whole:  # the recorder's reading (riskrecord.py; 2026-11-17, user: "No time or price gates so we can see what attributes are during the whole market"): the first minute and a price at the edge are read too. The lanes' reading keeps its limits: the fit never saw those moments.
+        mid = _clip(mid, 0.001, 0.999)
+    elif not (0.03 < mid < 0.97) or max(m for _, m in g) <= min(m for _, m in g):
         return None
     spot = vs[k]
     lg = math.log(mid / (1.0 - mid))
@@ -233,7 +237,7 @@ def gather(series: str, ticker: str, opened: float, now: float) -> tuple[list[fl
     return ts, vs, ticks_mod.mids.rows(ticker), _prev[key], unit
 
 
-def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] = HELD_LOOKS) -> tuple[list[float], float, list[float], tuple[float, ...]] | None:
+def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] = HELD_LOOKS, whole: bool = False) -> tuple[list[float], float, list[float], tuple[float, ...]] | None:
     """(the side's chance at each of `looks` seconds back, Kalshi's mid for the side now, Kalshi's mid for the side at each look) for a running market, or None when any look cannot be read. The target is the index's average over the 60 s before the open (scenario.target: Kalshi's own rule)."""
     from . import scenario
 
@@ -248,7 +252,7 @@ def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_
     w = weights(data_dir)
     out, was, first = [], [], None
     for back in looks:
-        x = features(ts, vs, now - back, opened, strike, mids, prev)
+        x = features(ts, vs, now - back, opened, strike, mids, prev, whole)
         if x is None:
             return None
         first = first or x

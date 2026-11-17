@@ -315,6 +315,7 @@ CREATE TABLE IF NOT EXISTS risk_readings (
   x TEXT NOT NULL,               -- the fifteen YES readings, riskscore.NAMES' order (JSON list)
   yes_bid REAL,
   yes_ask REAL,
+  age REAL,                      -- seconds since the market opened
   PRIMARY KEY (ticker, ts)
 );
 CREATE INDEX IF NOT EXISTS idx_risk_readings_ts ON risk_readings(ts);
@@ -615,10 +616,10 @@ class Store:
             self.touch("bets")
         return int(cur.lastrowid or 0)
 
-    def add_risk_readings(self, rows: Sequence[tuple[str, float, str, float | None, float | None]]) -> None:
+    def add_risk_readings(self, rows: Sequence[tuple[str, float, str, float | None, float | None, float]]) -> None:
         """Every open market's risk reading at a 30 s mark (riskrecord.py's background thread; never an evaluation). A mark already written is left."""
         for r in rows:
-            self.db.execute("INSERT OR IGNORE INTO risk_readings (ticker, ts, x, yes_bid, yes_ask) VALUES (?,?,?,?,?)", tuple(r))
+            self.db.execute("INSERT OR IGNORE INTO risk_readings (ticker, ts, x, yes_bid, yes_ask, age) VALUES (?,?,?,?,?,?)", tuple(r))
         if rows:
             self.db.commit()
 

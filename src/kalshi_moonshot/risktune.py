@@ -35,6 +35,7 @@ STEPS = (-0.03, 0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10)  # edges of
 MIN_N = 20  # markets a step needs before it can be bought
 PRIOR = 20.0  # bets' worth of "no edge" every step starts with
 MIN_FIT = 3000  # readings a refit needs
+EDGE_LOGIT = math.log(0.97 / 0.03)  # the price logit at the lanes' reading limits (a mid of 0.03 or 0.97)
 KEEP_DAYS = 14.0  # recorded readings older than this are deleted by the tune
 
 _tuning: subprocess.Popen | None = None
@@ -214,7 +215,7 @@ def rebuild(s: Any, now: float | None = None) -> dict[str, Any]:
     lanes = sorted(n for n, sp in lane_specs(s).items() if sp.enabled and sp.risk_score_buy > 0)
     out: dict[str, Any] = {"built_at": now, "days": DAYS, "lanes": lanes}
     current = riskscore.weights(str(s.data_dir))
-    gaps, fits = [], []
+    gaps, fits, whole = [], [], []  # `whole`: every recorded reading, the first minute and the price's edges included: what the attribute report reads
     if lanes:
         main = db.connect(s.db_path, "main", shared=True)
         marks = ",".join("?" for _ in lanes)
@@ -228,11 +229,14 @@ def rebuild(s: Any, now: float | None = None) -> dict[str, Any]:
             fits.append((r["ticker"], float(r["ts"]), r["outcome"] == "yes", rd.get("x") or ()))
     main = db.connect(s.db_path, "main", shared=True)
     try:  # every open market's reading at every 30 s mark (riskrecord.py), with the market's result: the fit's and the attribute report's main record
-        for r in main.execute("SELECT r.ticker, r.ts, r.x, w.result FROM risk_readings r JOIN windows w ON w.ticker = r.ticker WHERE r.ts>? AND w.result IN ('yes','no')", (now - DAYS * 86400.0,)).fetchall():
+        for r in main.execute("SELECT r.ticker, r.ts, r.x, r.age, w.result FROM risk_readings r JOIN windows w ON w.ticker = r.ticker WHERE r.ts>? AND w.result IN ('yes','no')", (now - DAYS * 86400.0,)).fetchall():
             try:
-                fits.append((r["ticker"], float(r["ts"]), r["result"] == "yes", tuple(json.loads(r["x"]))))
+                x = tuple(json.loads(r["x"]))
             except (ValueError, TypeError):
                 continue
+            whole.append((r["ticker"], float(r["ts"]), r["result"] == "yes", x))
+            if x and float(r["age"] or 0.0) >= 60.0 and abs(x[0]) < EDGE_LOGIT:  # the fit takes only the moments a lane's reading can be taken at (riskscore.features' limits)
+                fits.append(whole[-1])
         main.execute("DELETE FROM risk_readings WHERE ts<?", (now - KEEP_DAYS * 86400.0,))
         main.commit()
     except Exception:
@@ -240,7 +244,7 @@ def rebuild(s: Any, now: float | None = None) -> dict[str, Any]:
     table = gap_table(gaps)
     rng = best_range(table)
     new, info = refit(fits, current)
-    out |= {"gap": list(rng) if rng else None, "gap_table": table, "readings": len(gaps), "fit": info, "attributes": attributes(fits, new or current),
+    out |= {"gap": list(rng) if rng else None, "gap_table": table, "readings": len(gaps), "fit": info, "attributes": attributes(whole or fits, new or current),
             "weights": dict(zip(riskscore.NAMES, [round(v, 5) for v in (new or current)]))}
     p = Path(s.data_dir) / "risk_score.json"
     tmp = p.with_suffix(".tmp")

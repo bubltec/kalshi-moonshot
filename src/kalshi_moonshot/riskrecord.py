@@ -4,7 +4,7 @@
 
 Before this only a lane that buys on the score stored its reading, and only when one of its evaluations ran (one paper lane, almost all YES sides, about 200 rows an hour). Here a background thread reads all fifteen attributes (riskscore.NAMES, used in the sum or not) for every open market from the memory tape at each 30 s mark, with the YES bid and ask, and writes them to risk_readings in one batch. It is its own thread with its own store: no evaluation, buy or sale waits on it or reads it. A bet or a sale of any lane, live or paper, is joined to the reading at its 30 s mark by market and time, so nothing is stored per bet. risktune.py reads the table with the markets' results.
 
-A market that cannot be read (its first minute, a mid at 0.03 or under or 0.97 or over, a stale index) has no row at that mark.
+The whole market is read: no time gate and no price gate (2026-11-17, user: "Fully open ... No time or price gates so we can see what attributes are during the whole market"). The first minute and a price at 0.03 or 0.97 and beyond are recorded too, with the market's age so a study can cut by time. Only a market with no quote yet, or whose index is stale (over 30 s) or lacks its hour of history, has no row at a mark. The lanes' own reading keeps its limits, and risktune.py fits only the rows inside them.
 """
 from __future__ import annotations
 
@@ -34,15 +34,15 @@ def open_markets(s: Any, now: float) -> list[tuple[str, str, float]]:
     return [(f"{i.prefix}15M", f"{i.prefix}15M-{stamp}-{t:%M}", close) for i in load_instruments(s.data_dir) if "15M" in i.suffixes]
 
 
-def snapshot(s: Any, now: float) -> list[tuple[str, float, str, float | None, float | None]]:
-    """One row per readable open market: (ticker, the 30 s mark, the fifteen YES readings as JSON, YES bid, YES ask). Memory only."""
+def snapshot(s: Any, now: float) -> list[tuple[str, float, str, float | None, float | None, float]]:
+    """One row per readable open market: (ticker, the 30 s mark, the fifteen YES readings as JSON, YES bid, YES ask, the market's age in seconds). Memory only."""
     from . import ticks as ticks_mod
 
     mark = float(int(now // EVERY) * EVERY)
     out = []
     for series, ticker, close in open_markets(s, now):
         try:
-            got = riskscore.live(series, ticker, "yes", close, now, None, (0.0,))
+            got = riskscore.live(series, ticker, "yes", close, now, None, (0.0,), whole=True)
         except Exception:
             log.exception("risk record: %s could not be read", ticker)
             continue
@@ -50,7 +50,7 @@ def snapshot(s: Any, now: float) -> list[tuple[str, float, str, float | None, fl
             continue
         q = ticks_mod.mids.quotes(ticker)
         bid, ask = (q[-1][1], q[-1][2]) if q else (None, None)
-        out.append((ticker, mark, json.dumps([round(v, 4) for v in got[3]]), bid, ask))
+        out.append((ticker, mark, json.dumps([round(v, 4) for v in got[3]]), bid, ask, round(now - (close - 900.0), 1)))
     return out
 
 

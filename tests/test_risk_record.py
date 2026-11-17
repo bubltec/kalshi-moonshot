@@ -118,8 +118,8 @@ def test_integration_a_mark_is_recorded_from_memory_and_the_tune_reads_it_with_t
     snap = riskrecord.snapshot(s, now)
     assert not seen  # the reading itself asks the database nothing
     assert [r[0] for r in snap] == [ticker]  # the one market with a path in memory; the others have none and are left out
-    _, mark, x, bid, ask = snap[0]
-    assert mark % 30 == 0 and now - 30 < mark <= now and len(json.loads(x)) == len(riskscore.NAMES) and 0 < bid < ask < 1
+    _, mark, x, bid, ask, age = snap[0]
+    assert age == pytest.approx(480.0, abs=1.0) and mark % 30 == 0 and now - 30 < mark <= now and len(json.loads(x)) == len(riskscore.NAMES) and 0 < bid < ask < 1
     store.add_risk_readings(snap)
     store.add_risk_readings(snap)  # the same mark again is left
     assert [q for q in seen if "SELECT" in q.upper()] == []
@@ -128,7 +128,7 @@ def test_integration_a_mark_is_recorded_from_memory_and_the_tune_reads_it_with_t
     out = risktune.rebuild(s, now=now + 1200.0)
     assert out["attributes"][0]["n"] == 0  # the market has no result yet: nothing to score
     inner.execute("INSERT OR REPLACE INTO windows (ticker, series, close_ts, strike, result, fetched_ts) VALUES (?,?,?,?,?,?)", (ticker, "KXBTC15M", close, 100.0, "yes", now))
-    inner.execute("INSERT OR IGNORE INTO risk_readings (ticker, ts, x, yes_bid, yes_ask) VALUES (?,?,?,?,?)", ("KXBTC15M-OLD", now - 20 * 86400.0, x, 0.5, 0.51))
+    inner.execute("INSERT OR IGNORE INTO risk_readings (ticker, ts, x, yes_bid, yes_ask, age) VALUES (?,?,?,?,?,?)", ("KXBTC15M-OLD", now - 20 * 86400.0, x, 0.5, 0.51, 300.0))
     inner.commit()
     out = risktune.rebuild(s, now=now + 1200.0)
     assert out["attributes"][0]["n"] == 1 and {a["name"] for a in out["attributes"]} == set(riskscore.NAMES)
@@ -137,8 +137,26 @@ def test_integration_a_mark_is_recorded_from_memory_and_the_tune_reads_it_with_t
     assert inner.execute("SELECT count(*) AS n FROM risk_readings").fetchone()["n"] == 1  # the reading older than the keep time was deleted
 
 
-def test_integration_an_unreadable_market_writes_nothing(tmp_path, monkeypatch):
-    now = (int(time.time() // 900) * 900) + 30.0  # half a minute in: too young to read
+def test_integration_the_whole_market_is_recorded_and_the_fit_takes_only_what_a_lane_can_read(tmp_path, monkeypatch):
+    now = (int(time.time() // 900) * 900) + 30.0  # half a minute in: a lane's reading is not taken yet, the recorder's is
     s, ticker, close = seed_market(tmp_path, monkeypatch, now)
+    assert riskscore.live("KXBTC15M", ticker, "yes", close, now, None, (0.0,)) is None
+    snap = riskrecord.snapshot(s, now - 5.0)
+    assert [r[0] for r in snap] == [ticker] and snap[0][5] == pytest.approx(25.0, abs=1.0)
+    ticks.mids.note(ticker, now + 0.5, 0.985, 0.995)  # the price goes to the edge: still recorded
+    edge = riskrecord.snapshot(s, now + 20.0)
+    assert len(edge) == 1 and json.loads(edge[0][2])[0] > risktune.EDGE_LOGIT
+    store = Store(s.db_path)
+    store.add_risk_readings(snap + edge)
+    store.db.execute("INSERT OR REPLACE INTO windows (ticker, series, close_ts, strike, result, fetched_ts) VALUES (?,?,?,?,?,?)", (ticker, "KXBTC15M", close, 100.0, "yes", now))
+    store.db.commit()
+    out = risktune.rebuild(s, now=now + 1200.0)
+    assert out["attributes"][0]["n"] == 2 and out["fit"]["readings"] == 0  # both moments are in the report; neither is a moment a lane reads, so neither is in the fit
+
+
+def test_integration_a_market_with_no_quote_writes_nothing(tmp_path, monkeypatch):
+    now = (int(time.time() // 900) * 900) + 300.0
+    s, ticker, close = seed_market(tmp_path, monkeypatch, now)
+    ticks.mids.clear()
     assert riskrecord.snapshot(s, now) == []
     Store(s.db_path).add_risk_readings([])
