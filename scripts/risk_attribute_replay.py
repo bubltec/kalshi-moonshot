@@ -16,6 +16,7 @@ Window: 2026-11-09 on (the logic was rewritten that Monday; nothing before it is
     .venv/bin/python scripts/risk_attribute_replay.py rest      # the same bets bought by resting a bid for a minute instead of taking the ask
     .venv/bin/python scripts/risk_attribute_replay.py moves     # against the price's move over the next 2 and 5 minutes, as round trips after the spread and the fee
 """
+import bisect
 import csv
 import datetime
 import glob
@@ -32,6 +33,7 @@ from kalshi_moonshot import riskscore, scenario, variants
 
 ROOT = "data/tape_archive"
 OUT = f"{ROOT}/replay_readings.csv"
+VIEWS = f"{ROOT}/replay_views.csv"
 ET = ZoneInfo("America/New_York")
 NAMES = riskscore.NAMES
 
@@ -85,9 +87,11 @@ def build() -> None:
 
     n_rows = n_mk = 0
     skipped = defaultdict(int)
-    with open(OUT, "w", newline="") as fh:
+    with open(OUT, "w", newline="") as fh, open(VIEWS, "w", newline="") as vh:
         w = csv.writer(fh)
         w.writerow(["ticker", "ts", "age", "won", "bid", "ask", *NAMES])
+        vw = csv.writer(vh)
+        vw.writerow(["ticker", "ts", "p5", "p15", "p60"])  # the target's place in the index's range over the 5, 15 and 60 minutes ending at the moment (0 = at the bottom of the view, 1 = at the top; under 0 or over 1 = outside it): the views the user reads by hand (2026-11-17)
         for k, (ticker, (close, won)) in enumerate(sorted(wins.items(), key=lambda kv: kv[1][0])):
             ser = ticker.split("-")[0]
             ix = index_of.get(ser)
@@ -123,6 +127,12 @@ def build() -> None:
                 if x is not None:
                     j = int(np.searchsorted(qt, now, side="right")) - 1
                     w.writerow([ticker, int(now), int(now - opened), int(won), round(float(qb[j]), 3), round(float(qa[j]), 3), *[round(v, 4) for v in x]])
+                    hi = bisect.bisect_right(ts, now)
+                    places = []
+                    for m in (5, 15, 60):
+                        seg = vs[bisect.bisect_right(ts, now - 60.0 * m):hi]
+                        places.append(round((strike - min(seg)) / (max(seg) - min(seg)), 4) if seg and max(seg) > min(seg) else 0.5)
+                    vw.writerow([ticker, int(now), *places])
                     got += 1
                 now += 30.0
             n_rows += got
