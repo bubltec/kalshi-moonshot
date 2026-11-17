@@ -73,3 +73,51 @@ def test_two_lanes_rating_the_same_markets_each_get_their_own_record(tmp_path):
     newer = store.calibrator.adjust("newer", "", 0.5, 0.9)
     assert newer.n == 25 and newer.skill is not None and newer.skill < 0  # scored against its own answers, found worse than the market
     assert newer.weight < 0.5
+
+
+# 2026-11-16, user: "Nothing in per tick computations should do a db read. Ever. We can do structured background jobs to build a template for a market but never per tick".
+def test_the_served_record_answers_from_memory_and_matches_the_on_demand_one(tmp_path):
+    from kalshi_moonshot import calibration
+
+    store = Store(tmp_path / "m.db")
+    for i in range(40):
+        store.db.execute(
+            "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, model_p, category, outcome) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (1000.0 + i, f"T{i}", "bet", "paper", 0.60 + 0.01 * (i % 5), "yes", "moonshot", 0.70, "Crypto" if i % 2 else "", "yes" if i % 3 else "no"))
+    store.db.commit()
+    want = [store.calibrator.adjust("moonshot", cat, ask, 0.7) for cat in ("", "Crypto") for ask in (0.61, 0.63, 0.9)]
+    try:
+        calibration.rebuild(store)
+        seen = []
+        inner = store.db
+
+        class Watch:
+            def execute(_, sql, *args):
+                seen.append(sql)
+                return inner.execute(sql, *args)
+
+            def __getattr__(_, name):
+                return getattr(inner, name)
+
+        store.db = Watch()
+        store.generation += 1  # a bet settled: on demand this would reload every settled decision
+        got = [store.calibrator.adjust("moonshot", cat, ask, 0.7) for cat in ("", "Crypto") for ask in (0.61, 0.63, 0.9)]
+        assert got == want and seen == []
+    finally:
+        calibration.stop_serving()
+
+
+def test_the_served_record_changes_only_when_it_is_rebuilt(tmp_path):
+    from kalshi_moonshot import calibration
+
+    store = Store(tmp_path / "m.db")
+    try:
+        calibration.rebuild(store)
+        assert store.calibrator.adjust("moonshot", "", 0.6, 0.7).n == 0
+        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, model_p, outcome) VALUES (1,'T','bet','paper',0.6,'yes','moonshot',0.7,'yes')")
+        store.db.commit()
+        assert store.calibrator.adjust("moonshot", "", 0.6, 0.7).n == 0  # not read per call
+        calibration.rebuild(store)
+        assert store.calibrator.adjust("moonshot", "", 0.6, 0.7).n == 1
+    finally:
+        calibration.stop_serving()

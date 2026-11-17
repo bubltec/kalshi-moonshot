@@ -160,6 +160,9 @@ class Worker:
         from . import forecast_fit
 
         forecast_fit.start_refit(lambda: self.s)  # idle unless a forecast lane is on
+        from . import calibration
+
+        calibration.start_background(lambda: Store(self.s.db_path, self.s.exclude_versions))  # the record adjustment is answered from memory from here on: no evaluation reads the settled decisions
         from . import backup
 
         backup.start_nightly(lambda: self.s)
