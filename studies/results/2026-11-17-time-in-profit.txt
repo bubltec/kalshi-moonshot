@@ -1,0 +1,46 @@
+
+window: commodity% live bets 11-13 11:02 to 11-17 07:28 ET; 150 settled with quotes; what happened $-38.40; 124 won if held
+
+=== 1  at 90 s left, the 125 bets still held (bought at least 30 s earlier), by the share of their held time in profit; 'sold there' sells every bet in the row at that moment
+  never in profit                              n   6 | won if held   2 | what happened $  -44.80 | sold there $  -31.95 | change $  +12.84 | sold   6: beat 5, lost to 1
+  in profit under a quarter of the time        n  24 | won if held  20 | what happened $  -20.54 | sold there $  -45.03 | change $  -24.49 | sold  24: beat 7, lost to 17
+  a quarter to a half                          n  22 | won if held  20 | what happened $  +22.39 | sold there $  +14.52 | change $   -7.87 | sold  22: beat 2, lost to 20
+  over half                                    n  73 | won if held  70 | what happened $  +78.38 | sold there $  +80.46 | change $   +2.08 | sold  73: beat 4, lost to 69
+  not in profit at that moment                 n  27 | won if held  18 | what happened $  -83.79 | sold there $  -95.09 | change $  -11.31 | sold  27: beat 13, lost to 14
+  in profit at that moment                     n  98 | won if held  94 | what happened $ +119.21 | sold there $ +113.08 | change $   -6.13 | sold  98: beat 5, lost to 93
+=== 2  at 90 s left, the bets in profit at that moment, by how many times they had fallen back under the profit point
+  no dip under the profit point                n  36 | won if held  34 | what happened $  +44.60 | sold there $  +49.27 | change $   +4.67 | sold  36: beat 2, lost to 34
+  1 dip                                        n  19 | won if held  18 | what happened $  +16.23 | sold there $  +17.95 | change $   +1.71 | sold  19: beat 1, lost to 18
+  2 dips                                       n  15 | won if held  14 | what happened $  +21.50 | sold there $  +21.21 | change $   -0.29 | sold  15: beat 1, lost to 14
+  3 or more                                    n  28 | won if held  28 | what happened $  +36.88 | sold there $  +24.66 | change $  -12.22 | sold  28: beat 1, lost to 27
+     and those NOT in profit at that moment, by the same count
+  was never in profit                          n   6 | won if held   2 | what happened $  -44.80 | sold there $  -31.95 | change $  +12.84 | sold   6: beat 5, lost to 1
+  no dip counted (in profit, then fell once)   n   7 | won if held   5 | what happened $  -26.53 | sold there $  -29.32 | change $   -2.79 | sold   7: beat 4, lost to 3
+  2 or more dips                               n  14 | won if held  11 | what happened $  -12.46 | sold there $  -33.81 | change $  -21.35 | sold  14: beat 4, lost to 10
+
+=== 1  at 180 s left, the 110 bets still held (bought at least 30 s earlier), by the share of their held time in profit; 'sold there' sells every bet in the row at that moment
+  never in profit                              n  14 | won if held   6 | what happened $  -70.32 | sold there $  -52.20 | change $  +18.12 | sold  14: beat 9, lost to 5
+  in profit under a quarter of the time        n  23 | won if held  20 | what happened $   +2.73 | sold there $  -48.96 | change $  -51.69 | sold  23: beat 5, lost to 18
+  a quarter to a half                          n  22 | won if held  19 | what happened $   +2.37 | sold there $   -7.18 | change $   -9.55 | sold  22: beat 4, lost to 18
+  over half                                    n  51 | won if held  47 | what happened $  +44.32 | sold there $  +53.34 | change $   +9.02 | sold  51: beat 4, lost to 47
+  not in profit at that moment                 n  44 | won if held  31 | what happened $  -74.62 | sold there $ -117.39 | change $  -42.77 | sold  44: beat 17, lost to 27
+  in profit at that moment                     n  66 | won if held  61 | what happened $  +53.71 | sold there $  +62.39 | change $   +8.68 | sold  66: beat 5, lost to 61
+=== 2  at 180 s left, the bets in profit at that moment, by how many times they had fallen back under the profit point
+  no dip under the profit point                n  32 | won if held  30 | what happened $  +32.15 | sold there $  +35.56 | change $   +3.41 | sold  32: beat 2, lost to 30
+  1 dip                                        n   9 | won if held   9 | what happened $  +14.14 | sold there $   +8.22 | change $   -5.92 | sold   9: beat 0, lost to 9
+  2 dips                                       n  12 | won if held  11 | what happened $   +7.97 | sold there $  +11.21 | change $   +3.23 | sold  12: beat 1, lost to 11
+  3 or more                                    n  13 | won if held  11 | what happened $   -0.55 | sold there $   +7.40 | change $   +7.95 | sold  13: beat 2, lost to 11
+     and those NOT in profit at that moment, by the same count
+  was never in profit                          n  14 | won if held   6 | what happened $  -70.32 | sold there $  -52.20 | change $  +18.12 | sold  14: beat 9, lost to 5
+  no dip counted (in profit, then fell once)   n  11 | won if held   8 | what happened $  -14.83 | sold there $  -28.66 | change $  -13.83 | sold  11: beat 4, lost to 7
+  2 or more dips                               n  19 | won if held  17 | what happened $  +10.53 | sold there $  -36.53 | change $  -47.06 | sold  19: beat 4, lost to 15
+
+=== 3  the cut: under a tenth of the held time in profit and the bid 0.30 or more under the price paid; sold at the next bids
+  all                                          n 150 | won if held 124 | what happened $  -38.40 | sold there $  -37.94 | change $   +0.46 | sold  23: beat 15, lost to 8
+  fired with over 300 s left                   n   7 | won if held   3 | what happened $  -45.23 | sold there $  -28.94 | change $  +16.29 | sold   7: beat 6, lost to 1
+  90 to 300 s left                             n  13 | won if held   7 | what happened $  -47.12 | sold there $  -56.93 | change $   -9.82 | sold  13: beat 7, lost to 6
+  under 90 s left                              n   3 | won if held   2 | what happened $  -12.05 | sold there $  -18.06 | change $   -6.01 | sold   3: beat 2, lost to 1
+  paid under 0.80                              n  31 | won if held  20 | what happened $  -24.55 | sold there $  -47.45 | change $  -22.91 | sold   8: beat 4, lost to 4
+  paid 0.80 and over                           n 119 | won if held 104 | what happened $  -13.85 | sold there $   +9.51 | change $  +23.37 | sold  15: beat 11, lost to 4
+  the cut's sales: median bid 0.50, median 232 s left
+DONE
