@@ -574,6 +574,7 @@ class SideRead(NamedTuple):
     needs: float | None  # the edge the lane asks for at this price (its scaled bar, else its flat one); None when the lane has no edge bar
     buyable: bool  # the lane buys this side, and its ask is inside the lane's price range and outside its no-buy range
     clears: bool  # the lane's edge rule and its chance band both say yes (lanes.wants_bet, lanes.chance_ok): the stretch is not counted
+    in_band: bool = True  # the worth is inside the lane's chance band (min_chance to max_chance)
 
 
 class BothSides(NamedTuple):
@@ -598,7 +599,8 @@ def both_sides(spec: LaneSpec, p_yes: float, yes_bid: float, yes_ask: float) -> 
         elif spec.needs_model_edge and spec.min_edge is not None:
             needs = spec.min_edge
         buyable = live and side in spec.sides and spec.price[0] <= ask <= spec.price[1] and not no_buy(spec, ask)
-        return SideRead(side, worth, ask, cost, e, needs, buyable, live and wants_bet(spec, worth, ask, e) and chance_ok(spec, worth))
+        in_band = chance_ok(spec, worth)
+        return SideRead(side, worth, ask, cost, e, needs, buyable, live and wants_bet(spec, worth, ask, e) and in_band, in_band)
 
     yes = read("yes", p_yes, yes_ask)
     no = read("no", 1.0 - p_yes, 1.0 - yes_bid)
@@ -611,7 +613,7 @@ def both_sides_tag(b: BothSides) -> str:
 
     def one(r: SideRead) -> str:
         needs = "" if r.needs is None else f", needs {r.needs:+.3f}"
-        return f"{r.side.upper()} worth {r.worth:.2f} costs {r.cost:.3f}, edge {r.edge:+.3f}{needs}{'' if r.buyable else ', not a price the lane buys'}"
+        return f"{r.side.upper()} worth {r.worth:.2f} costs {r.cost:.3f}, edge {r.edge:+.3f}{needs}{'' if r.buyable else ', not a price the lane buys'}{'' if r.in_band else ', a chance outside the lane' + chr(39) + 's band'}"
 
     return f"[both sides: {one(b.yes)} | {one(b.no)} | {'the rule buys ' + b.pick.upper() if b.pick else 'the rule buys neither'}]"
 
