@@ -43,3 +43,28 @@ def test_integration_a_pass_is_stored_with_its_reason_first(tmp_path, monkeypatc
     assert not row["reason"].startswith("[")
     assert row["reason"].startswith("the lane buys a risk of 1% or under that has held for a minute")  # the rule that turned it down
     assert "[risk score: risk " in row["reason"] and "[scenario" in row["reason"]  # the readings are still there, after it
+
+
+def test_unit_the_edge_screen_says_why_in_words_and_says_nothing_when_it_lets_the_buy_through(tmp_path, monkeypatch):
+    from kalshi_moonshot import lanes
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text("[lane.e]\nestimator='ladder'\nprice=[0.1,0.9]\nhours=[0.0,1.0]\nmin_edge_room=0.08\n[lane.f]\nestimator='ladder'\nprice=[0.1,0.9]\nhours=[0.0,1.0]\nneeds_model_edge=false\n")
+    s = config.load()
+    e, f = lanes.lane_specs(s)["e"], lanes.lane_specs(s)["f"]
+    under = lanes.edge_verdict(e, 0.70, 0.85, -0.159)  # XRP 13:50:41 on 2026-11-17: recorded as a bare "price band"
+    assert under.startswith("edge screen: the model's chance 0.70 is under what the side costs (0.85 and its fee)") and "-0.159" in under
+    short = lanes.edge_verdict(e, 0.64, 0.60, 0.026)  # BTC 13:50:31: an edge, but under 8% of the room
+    assert short.startswith("edge screen: the edge +0.026") and "+0.031" in short and "8% of the room" in short
+    assert lanes.edge_verdict(e, 0.75, 0.64, 0.092) is None  # over the bar: the screen has nothing to say
+    assert lanes.edge_verdict(f, 0.10, 0.60, -0.5) is None  # a lane that asks for no edge
+    for p, ask, edge in ((0.70, 0.85, -0.159), (0.64, 0.60, 0.026), (0.75, 0.64, 0.092), (0.5, 0.5, 0.0)):
+        assert (lanes.edge_verdict(e, p, ask, edge) is None) == lanes.wants_bet(e, p, ask, edge)  # a sentence exactly when the screen says no
+
+
+def test_integration_a_buy_turned_down_at_the_edge_screen_is_stored_saying_so(tmp_path, monkeypatch):
+    monkeypatch.setattr(T, "LANE", T.LANE.replace("always=true\n", ""))  # a lane that needs an edge from its model
+    out = T.decide(tmp_path, monkeypatch, time.time(), "min_edge_room=0.9", ask=0.81)  # the test estimator says 0.90: nowhere near 90% of the room
+    assert out.action == "pass"
+    row = Store(config.load().db_path).db.execute("SELECT reason FROM decisions WHERE lane='rs'").fetchone()
+    assert row["reason"].startswith("edge screen: the edge +") and "90% of the room" in row["reason"]

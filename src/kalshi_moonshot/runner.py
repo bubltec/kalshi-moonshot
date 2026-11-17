@@ -45,6 +45,7 @@ from .lanes import (
     nudge,
     nudge_in_units,
     trend_share,
+    edge_verdict,
     wants_bet,
 )
 from .marketdata import shared_for
@@ -511,6 +512,8 @@ def evaluate(
         stretched = stretch_buy(s, spec, shot, cal.p, e)
         if stretched:
             bet, note = True, f"{stretched} {note}"
+    if not bet:
+        note = f"{edge_verdict(spec, cal.p, shot.ask, e) or ''} {note}".strip()  # the edge screen says so in words, as every other rule does
     if bet and not chance_ok(spec, p):
         bet = False
         note = f"chance {p:.0%} outside the lane's {spec.min_chance:.0%}-{spec.max_chance:.0%}. {note}"

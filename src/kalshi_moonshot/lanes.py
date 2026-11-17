@@ -768,6 +768,22 @@ def wants_bet(spec: LaneSpec, p: float, ask: float, edge: float) -> bool:
     return spec.max_lag is not None or spec.min_edge is not None or spec.min_edge_room is not None
 
 
+def edge_verdict(spec: LaneSpec, p: float, ask: float, edge: float) -> str | None:
+    """Why wants_bet turned the buy down, as one sentence, or None when it did not. The same checks in the same order (2026-11-17, user: "are we flagging why we turn things down?": the edge screen was the one rule that passed in silence, so a pass at it read as a bare "price band")."""
+    if wants_bet(spec, p, ask, edge):
+        return None
+    if spec.max_lag is not None and ask - p > spec.max_lag + 1e-9:
+        return f"edge screen: the model's chance {p:.2f} is {ask - p:.2f} under the price {ask:.2f}; the lane allows {spec.max_lag:.2f}."
+    if spec.min_edge is not None and edge < spec.min_edge:
+        return f"edge screen: the edge {edge:+.3f} (the model's chance {p:.2f} less the price {ask:.2f} and its fee) is under the lane's {spec.min_edge:+.3f}."
+    if spec.min_edge_room is not None:
+        room = (1.0 - p) + edge
+        if edge < 0:
+            return f"edge screen: the model's chance {p:.2f} is under what the side costs ({ask:.2f} and its fee): the edge is {edge:+.3f} and the lane needs +{spec.min_edge_room * room:.3f} ({spec.min_edge_room:.0%} of the room to a sure win)."
+        return f"edge screen: the edge {edge:+.3f} (the model's chance {p:.2f} over the price {ask:.2f} and its fee) is under the +{spec.min_edge_room * room:.3f} the lane needs ({spec.min_edge_room:.0%} of the room to a sure win)."
+    return "edge screen: the lane needs an edge from its model and has no bar set to measure one."
+
+
 def edge_miss(spec: LaneSpec, p: float, ask: float, edge: float) -> float | None:
     """How far the edge is under the scaled bar, in probability: min_edge_room of the room less the edge. None when the lane has no scaled bar, bets always, or fails another bar (the lag bar, the flat edge bar): the stretch only reaches for the scaled bar."""
     if not spec.needs_model_edge or spec.min_edge_room is None:
