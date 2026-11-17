@@ -1,0 +1,25 @@
+Question: which of the risk score's fifteen readings pull the sum, and did each run with the result beyond Kalshi's price?
+Window: crypto_risk_gap's own evaluations, 2026-11-17 00:30 to 06:55 ET. 1,292 readings (one per market per 30 s) on 233 markets, settled.
+Limits: one night, one paper lane, almost all YES-side evaluations, readings inside a market are not independent. A first look, not a fit.
+weight: the 2026-11-16 20:30 fit. spread: standard deviation. pull: |weight| x spread. beyond price: correlation with (YES won - Kalshi's mid).
+
+reading       weight  spread  pull   with result  beyond price  kept in the sum
+price         +0.664  1.596   1.060  +0.676       +0.144        yes
+cushion       +0.461  0.844   0.389  +0.660       +0.153        yes
+flip rate     +0.345  0.376   0.130  +0.493       +0.137        yes
+time          +0.068  1.016   0.069  +0.616       +0.119        yes
+t15           -0.192  0.274   0.053  +0.186       +0.152        no (negative weight, ran with the result)
+t30           -0.207  0.287   0.059  +0.217       +0.168        no (negative weight, ran with the result)
+t60           +0.011  0.295   0.003  +0.175       +0.126        no (pull 0.003)
+margin        +0.201  0.480   0.096  +0.085       +0.082        yes
+flips         +0.033  1.515   0.050  -0.174       -0.186        no (pull 0.05, ran against its weight)
+nudge         +0.027  1.017   0.027  +0.333       +0.087        no (pull 0.03)
+trend3        -0.031  1.024   0.032  +0.359       +0.086        no (negative weight)
+trend15       -0.155  0.870   0.135  +0.537       +0.230        no (negative weight, ran with the result)
+trend5 near   +0.048  0.400   0.019  +0.080       -0.013        no (pull 0.02)
+trend5 mid    +0.074  0.700   0.052  +0.401       +0.123        yes
+trend5 far    +0.156  0.589   0.092  +0.206       +0.032        yes
+
+Answer: seven readings kept (user, 2026-11-17: "remove the weights that are close to zero or negative"). The cut was chosen after seeing this table.
+The kept weights are the old fit's with the others dropped, NOT refit; risktune.py refits the seven from risk_readings (every open market, every 30 s).
+Note: trend15, t15 and t30 ran WITH the result beyond the price on this night while their weights are negative. They may belong in the sum with the other sign; the tune's attribute report will show whether that holds on more than one night.

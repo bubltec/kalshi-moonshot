@@ -26,7 +26,16 @@ from pathlib import Path
 from typing import Any, Sequence
 
 NAMES = ("price", "cushion", "flip rate", "time", "t15", "t30", "t60", "margin", "flips", "nudge", "trend3", "trend15", "trend5 near", "trend5 mid", "trend5 far")
-WEIGHTS = (0.664, 0.461, 0.345, 0.068, -0.192, -0.207, 0.011, 0.201, 0.033, 0.027, -0.031, -0.155, 0.048, 0.074, 0.156)
+USED = ("price", "cushion", "flip rate", "time", "margin", "trend5 mid", "trend5 far")  # the readings the sum adds. 2026-11-17, user: "remove the weights that are close to zero or negative and use them in other ways". Left out: the four with a negative weight (t15, t30, trend3, trend15: on the night of 11-16 each ran WITH the result beyond the price, against its weight's sign) and the four whose pull (weight x spread) was 0.05 or under (t60, flips, nudge, trend5 near). Chosen after seeing those numbers. All fifteen are still read and recorded (riskrecord.py), and risktune.py reports each one against the results, so one that earns a place can be seen.
+_USE = tuple(n in USED for n in NAMES)
+
+
+def masked(w: Sequence[float]) -> tuple[float, ...]:
+    """The weights with every reading outside USED at zero."""
+    return tuple(float(v) if u else 0.0 for v, u in zip(w, _USE))
+
+
+WEIGHTS = masked((0.664, 0.461, 0.345, 0.068, -0.192, -0.207, 0.011, 0.201, 0.033, 0.027, -0.031, -0.155, 0.048, 0.074, 0.156))  # the 2026-11-16 fit of all fifteen, the unused ones dropped; NOT refit without them yet: risktune.py refits the seven from the recorded readings
 STEP = 5.0  # seconds: the grid the market's mids are read on, as in the fit
 HELD_LOOKS = (0.0, 30.0, 60.0)  # the number has to hold at each of these many seconds back: now, half a minute ago, a minute ago
 
@@ -55,7 +64,7 @@ def weights(data_dir: str | None = None) -> tuple[float, ...]:
     """The weights in use: the tuned ones (risktune.py) when the file has a complete set, else the 2026-11-16 fit."""
     got = (tuned(data_dir) or {}).get("weights")
     try:
-        return tuple(float(got[n]) for n in NAMES) if got else WEIGHTS
+        return masked(tuple(float(got[n]) for n in NAMES)) if got else WEIGHTS
     except (KeyError, TypeError, ValueError):
         return WEIGHTS
 

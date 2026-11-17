@@ -6,7 +6,8 @@ Every evaluation of a lane that buys on the risk score writes its reading into t
 
 Two things are tuned, both from the last DAYS of readings:
   gap      the range of the score's lead over Kalshi's price (in points, the least over the three looks, on a side whose price is not lower than a minute ago) that paid when bought at the ask and held, fee included. Readings are put in fixed one-point steps (structural: a cent is the price's own tick); a market's side counts once per step, at its first reading there. A step's result is shrunk toward zero by PRIOR bets' worth. The tuned range is the run of neighbouring steps, each with MIN_N or more markets and a positive shrunk result, that earned the most. No such run: the range is empty and the lane buys nothing until the record shows one (it goes on recording passes, so the record goes on learning).
-  weights  a logistic refit of the fifteen readings on the YES result, one reading per market per 30 s. The newest fifth of the days is held out; the refit replaces the weights in use only when its held-out log-loss is no worse than theirs.
+  weights  a logistic refit of the readings the sum adds (riskscore.USED; the others stay at zero) on the YES result, one reading per market per 30 s, from every open market's recorded readings (riskrecord.py's risk_readings, joined to the markets' results) and the lanes' own rows. The newest fifth of the days is held out; the refit replaces the weights in use only when its held-out log-loss is no worse than theirs.
+  attributes  every one of the fifteen readings against the results, in the sum or not: its spread, its pull (weight x spread) and its correlation with what the price missed (YES won less Kalshi's mid). A report, not a rule: it shows which readings matter on the current record and which pull the wrong way.
 The sale's line is not tuned here: holds are not recorded per reading (that would be a write per tick).
 
     python -m kalshi_moonshot.risktune        # rebuild data/risk_score.json
@@ -34,6 +35,7 @@ STEPS = (-0.03, 0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10)  # edges of
 MIN_N = 20  # markets a step needs before it can be bought
 PRIOR = 20.0  # bets' worth of "no edge" every step starts with
 MIN_FIT = 3000  # readings a refit needs
+KEEP_DAYS = 14.0  # recorded readings older than this are deleted by the tune
 
 _tuning: subprocess.Popen | None = None
 
@@ -157,12 +159,50 @@ def refit(rows: Sequence[tuple[str, float, bool, Sequence[float]]], current: Seq
     test = [(x, won) for ts, x, won in data if ts > cut]
     if not train or not test:
         return None, {"readings": len(data), "why": "no held-out stretch"}
-    new = fit(train, current)
+    current = list(riskscore.masked(current))
+    use = [i for i, n in enumerate(riskscore.NAMES) if n in riskscore.USED]
+
+    def fit_used(d: Sequence[tuple[Sequence[float], bool]], start: Sequence[float]) -> list[float]:
+        """Fit only the readings the sum adds (riskscore.USED); the rest stay at zero."""
+        got = fit([([x[i] for i in use], won) for x, won in d], [start[i] for i in use])
+        out = [0.0] * len(start)
+        for i, v in zip(use, got):
+            out[i] = v
+        return out
+
+    new = fit_used(train, current)
     was, now_, mid = loss(test, current), loss(test, new), loss(test, [1.0] + [0.0] * (len(current) - 1))
     info = {"readings": len(data), "held_out": len(test), "loss_in_use": round(was, 5), "loss_refit": round(now_, 5), "loss_kalshi": round(mid, 5)}
     if not (now_ <= was):
         return None, info | {"why": "the refit was worse held out than the weights in use"}
-    return fit([(x, won) for _, x, won in data], new), info
+    return fit_used([(x, won) for _, x, won in data], new), info
+
+
+def attributes(rows: Sequence[tuple[str, float, bool, Sequence[float]]], w: Sequence[float]) -> list[dict[str, Any]]:
+    """Each reading against the results, used in the sum or not. spread: its standard deviation; pull: weight x spread (how far it moves the sum); beyond_price: its correlation with (YES won - Kalshi's mid), what it knew that the price did not. One reading per market per 30 s. A reading with a negative beyond_price and a positive weight (or the reverse) is pulling the wrong way on this record."""
+    seen: set[tuple[str, int]] = set()
+    xs, res = [], []
+    for ticker, ts, won, x in rows:
+        key = (ticker, int(ts // 30))
+        if key in seen or len(x) != len(riskscore.NAMES):
+            continue
+        seen.add(key)
+        xs.append(x)
+        res.append((1.0 if won else 0.0) - _sig(x[0]))
+    n = len(xs)
+    out = []
+    for i, name in enumerate(riskscore.NAMES):
+        if n < 2:
+            out.append({"name": name, "used": name in riskscore.USED, "n": n})
+            continue
+        col = [x[i] for x in xs]
+        mx, mr = sum(col) / n, sum(res) / n
+        sx = math.sqrt(sum((v - mx) ** 2 for v in col) / n)
+        sr = math.sqrt(sum((v - mr) ** 2 for v in res) / n)
+        cov = sum((a - mx) * (b - mr) for a, b in zip(col, res)) / n
+        out.append({"name": name, "used": name in riskscore.USED, "n": n, "weight": round(w[i], 4), "spread": round(sx, 4), "pull": round(abs(w[i]) * sx, 4),
+                    "beyond_price": round(cov / (sx * sr), 4) if sx > 0 and sr > 0 else 0.0})
+    return out
 
 
 def rebuild(s: Any, now: float | None = None) -> dict[str, Any]:
@@ -186,10 +226,21 @@ def rebuild(s: Any, now: float | None = None) -> dict[str, Any]:
             side = r["side"] or "yes"
             gaps.append((r["ticker"], side, float(r["ts"]), r["outcome"] == side, rd))
             fits.append((r["ticker"], float(r["ts"]), r["outcome"] == "yes", rd.get("x") or ()))
+    main = db.connect(s.db_path, "main", shared=True)
+    try:  # every open market's reading at every 30 s mark (riskrecord.py), with the market's result: the fit's and the attribute report's main record
+        for r in main.execute("SELECT r.ticker, r.ts, r.x, w.result FROM risk_readings r JOIN windows w ON w.ticker = r.ticker WHERE r.ts>? AND w.result IN ('yes','no')", (now - DAYS * 86400.0,)).fetchall():
+            try:
+                fits.append((r["ticker"], float(r["ts"]), r["result"] == "yes", tuple(json.loads(r["x"]))))
+            except (ValueError, TypeError):
+                continue
+        main.execute("DELETE FROM risk_readings WHERE ts<?", (now - KEEP_DAYS * 86400.0,))
+        main.commit()
+    except Exception:
+        log.exception("risk tune: the recorded readings could not be read; the lanes' own rows are used alone")
     table = gap_table(gaps)
     rng = best_range(table)
     new, info = refit(fits, current)
-    out |= {"gap": list(rng) if rng else None, "gap_table": table, "readings": len(gaps), "fit": info,
+    out |= {"gap": list(rng) if rng else None, "gap_table": table, "readings": len(gaps), "fit": info, "attributes": attributes(fits, new or current),
             "weights": dict(zip(riskscore.NAMES, [round(v, 5) for v in (new or current)]))}
     p = Path(s.data_dir) / "risk_score.json"
     tmp = p.with_suffix(".tmp")
@@ -222,5 +273,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     got = rebuild(config.load())
     print(f"readings {got['readings']}; gap {got['gap']}; fit {got['fit']}")
+    for a in got["attributes"]:
+        if a["n"] >= 2:
+            print(f"  {a['name']:12s} {'in the sum' if a['used'] else 'left out  '} weight {a['weight']:+.3f}, spread {a['spread']:.3f}, pull {a['pull']:.3f}, beyond the price {a['beyond_price']:+.3f} (n {a['n']})")
     for t in got["gap_table"]:
         print(f"  gap {t['lo']} to {t['hi']}: n {t['n']}, won {t['won']}, net {t['net']:+.3f}, shrunk {t['shrunk']:+.3f}")
