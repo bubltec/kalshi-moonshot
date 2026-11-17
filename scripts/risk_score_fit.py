@@ -6,6 +6,7 @@ The score is the chance a side LOSES. Factors kept, each for the YES side at a m
   flip rate  the number of times the favorite has changed in THIS market so far, per minute lapsed (user: "a count of the number of times it flipped compared to ... time lapsed"), times the logit of the mid: a market that keeps flipping makes the current leader's price mean less. It replaced the share of the market led, which the user called too rigid
   time       the share of the market gone x the logit of the mid
   trend3 trend15  is the SPOT trending the side's way (user, 2026-11-16: "i think we're missing one thing if the spot is trending in the direction of the side"): the settlement index's travel over the last 3 and the last 15 minutes, in its own typical moves for that long, + = toward YES. The cushion says where the spot is; this says which way it is going
+  trend5 near / mid / far  (user: "the trend should be worth more") the spot's travel over the last 5 minutes, toward YES, given its own weight in three situations: the spot ON THE LINE (the cushion within half a typical remaining move of the target either way), a FAIR cushion (0.5 to 1.5) and a WIDE one (over 1.5). One weight for every situation averages a trend that may matter a lot near the target with one that cannot matter far from it
   nudge      what the nudge reads (user, 2026-11-16: "nudge should be in risk too"): YES's move over the last minute in this market's own typical minutes (the root-mean-square 5 s change of its mid so far, scaled to a minute), + = moving YES's way
   t15 t30 t60  where the target sits in the index's range over the 15, 30 and 60 minutes before the open (0 low, 1 high), centred
   margin     the average finish of the series' last four markets against their targets, in typical moves (+ = above)
@@ -26,9 +27,11 @@ from kalshi_moonshot.lanes import lane_specs
 
 ET = datetime.timezone(datetime.timedelta(hours=-5))
 SINCE = datetime.datetime(2026, 11, 9, 0, 0, tzinfo=ET).timestamp()
-NAMES = ("price", "cushion", "flip rate", "time", "t15", "t30", "t60", "margin", "flips", "nudge", "trend3", "trend15")
+NAMES = ("price", "cushion", "flip rate", "time", "t15", "t30", "t60", "margin", "flips", "nudge", "trend3", "trend15", "trend5 near", "trend5 mid", "trend5 far")
 SHOW = {"KXETH15M-26NOV161600": "yes", "KXDOGE15M-26NOV161815": "no"}  # matched on the start of the ticker
 show_rows = []  # (ticker, time, x, mid)
+zrows = []  # (cushion zone, 5-minute spot trend toward YES, yes won, mid): for the plain table under the fit
+z3rows = []  # the same with the 3-minute trend (user: "if anything the past 3 minutes are worth more than 15")
 s = config.load()
 st = db.connect(s.db_path, "main", shared=True)
 tape = db.connect(s.tape_path, "tape", shared=True)
@@ -99,8 +102,13 @@ for ser in series:
                     k3, k15 = bisect.bisect_right(bt, t - 180.0) - 1, bisect.bisect_right(bt, t - 900.0) - 1  # the index 3 and 15 minutes before this moment
                     tr3 = math.log(bv[k] / bv[k3]) / (unit * math.sqrt(3.0)) if k3 >= 0 else 0.0
                     tr15 = math.log(bv[k] / bv[k15]) / (unit * math.sqrt(15.0)) if k15 >= 0 else 0.0
-                    x = (lg(mid), max(-6.0, min(6.0, cush)), min(1.5, nflips / max((t - opened) / 60.0, 1.0)) * lg(mid), (t - opened) / 900.0 * lg(mid), places[0], places[1], places[2], max(-3.0, min(3.0, pm)), max(-2.0, min(4.0, pf)), max(-3.0, min(3.0, (mid - hist.get(t - 60, mid)) / (math.sqrt(sq / nsq) * math.sqrt(12.0)))) if nsq and sq > 0 else 0.0, max(-4.0, min(4.0, tr3)), max(-4.0, min(4.0, tr15)))
+                    k5 = bisect.bisect_right(bt, t - 300.0) - 1
+                    tr5 = max(-4.0, min(4.0, math.log(bv[k] / bv[k5]) / (unit * math.sqrt(5.0)))) if k5 >= 0 else 0.0
+                    zone = 0 if abs(cush) < 0.5 else 1 if abs(cush) < 1.5 else 2
+                    x = (lg(mid), max(-6.0, min(6.0, cush)), min(1.5, nflips / max((t - opened) / 60.0, 1.0)) * lg(mid), (t - opened) / 900.0 * lg(mid), places[0], places[1], places[2], max(-3.0, min(3.0, pm)), max(-2.0, min(4.0, pf)), max(-3.0, min(3.0, (mid - hist.get(t - 60, mid)) / (math.sqrt(sq / nsq) * math.sqrt(12.0)))) if nsq and sq > 0 else 0.0, max(-4.0, min(4.0, tr3)), max(-4.0, min(4.0, tr15)), tr5 if zone == 0 else 0.0, tr5 if zone == 1 else 0.0, tr5 if zone == 2 else 0.0)
                     rows.append((day, x, w["result"] == "yes", mid, t - opened))
+                    zrows.append((zone, tr5, w["result"] == "yes", mid))
+                    z3rows.append((zone, max(-4.0, min(4.0, tr3)), w["result"] == "yes", mid))
                     key = next((k_ for k_ in SHOW if w["ticker"].startswith(k_)), None)
                     if key:
                         show_rows.append((key, t, x, mid, cush, nflips))
@@ -184,6 +192,20 @@ for _, _, name in BANDS:
         print(f"  {name:30s} n {c[0]:6d}")
         continue
     print(f"  {name:30s} n {c[0]:6d} | Kalshi's mid said {c[2] / c[0]:5.1%} | the score said {c[3] / c[0]:5.1%} | YES actually won {c[1] / c[0]:5.1%}")
+print("\nthe spot's 5-minute trend against the outcome, with no model: by where the spot sits (the cushion) and which way it has been going (YES side)")
+for z, zname in ((0, "ON THE LINE (cushion within 0.5)"), (1, "fair cushion (0.5 to 1.5)"), (2, "wide cushion (over 1.5)")):
+    for lo_, hi_, name in ((-9, -1.0, "trending AWAY from YES (under -1)"), (-1.0, -0.3, "drifting away"), (-0.3, 0.3, "flat"), (0.3, 1.0, "drifting toward"), (1.0, 9, "trending TOWARD YES (over +1)")):
+        rs = [r for r in zrows if r[0] == z and lo_ <= r[1] < hi_]
+        if len(rs) < 300:
+            continue
+        print(f"  {zname:34s} {name:34s} n {len(rs):5d} | Kalshi's mid said YES {sum(r[3] for r in rs) / len(rs):5.1%} | YES actually won {sum(1 for r in rs if r[2]) / len(rs):5.1%}")
+print("\nthe same table with the spot's 3-minute trend")
+for z, zname in ((0, "ON THE LINE (cushion within 0.5)"), (1, "fair cushion (0.5 to 1.5)"), (2, "wide cushion (over 1.5)")):
+    for lo_, hi_, name in ((-9, -1.0, "trending AWAY from YES (under -1)"), (-1.0, -0.3, "drifting away"), (-0.3, 0.3, "flat"), (0.3, 1.0, "drifting toward"), (1.0, 9, "trending TOWARD YES (over +1)")):
+        rs = [r for r in z3rows if r[0] == z and lo_ <= r[1] < hi_]
+        if len(rs) < 300:
+            continue
+        print(f"  {zname:34s} {name:34s} n {len(rs):5d} | Kalshi's mid said YES {sum(r[3] for r in rs) / len(rs):5.1%} | YES actually won {sum(1 for r in rs if r[2]) / len(rs):5.1%}")
 print("\nthe previous four markets: their average finish against their targets, and what the next market did (moments in its first four minutes; YES side)")
 early = [r for r in rows if r[4] <= 240]  # the first readings a market has (a reading needs three minutes of its quotes)
 for lo_, hi_, name in ((-9, -1.0, "finished well BELOW their targets (under -1)"), (-1.0, -0.3, "below (-1 to -0.3)"), (-0.3, 0.3, "about level"), (0.3, 1.0, "above (+0.3 to +1)"), (1.0, 9, "finished well ABOVE (over +1)")):

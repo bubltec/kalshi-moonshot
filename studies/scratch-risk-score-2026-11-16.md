@@ -141,3 +141,13 @@ Two readings added: the settlement index's travel over the last 3 and the last 1
 - Held out, the score is level with Kalshi's mid (0.5032 against 0.5024). On disagreements of 3 to 6 points it was right and the mid was not (50.1% actual, score 50.2%, mid 54.4%; and 45.5% actual, score 45.8%, mid 41.6%); beyond 6 points it overshoots badly.
 
 Weights now: price +0.68, cushion +0.53, flip rate +0.37, last four markets' finish +0.20, target in the 15 min -0.20, in the 30 min -0.20, trend 15 min -0.15, flips of the last four +0.03, nudge +0.03, time +0.01, target in the 60 min +0.01, trend 3 min 0.00.
+
+## The trend split by how close the spot is to the target (20:30)
+
+User: "the trend should be worth more"; "if anything the past 3 minutes are worth more than 15".
+
+The plain table (no model) settles what the trend is worth. On the line, a spot trending away from YES over 5 minutes: YES won 41.5%; trending toward: 55.6%. At a fair cushion: 17.4% against 77.9%. So the trend matters a great deal to the outcome.
+
+And Kalshi's price already has it, cell by cell: 42.5% priced against 41.5% won; 55.7% against 55.6%; 19.1% against 17.4%; 79.4% against 77.9%; 87.5% against 88.2%. The gaps are a point or two at most.
+
+That is why its weight in a score that starts from Kalshi's price is small (5-minute trend: +0.05 on the line, +0.07 at a fair cushion, +0.16 at a wide one). The trend is not unimportant; it is priced.
