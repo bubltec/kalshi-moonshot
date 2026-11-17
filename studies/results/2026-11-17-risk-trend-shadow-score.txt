@@ -1,0 +1,57 @@
+
+window: 11-17 17:09 to 11-17 18:05 ET; 198 tagged decisions, 132 settled with a reading, 15 settled but unreadable, 51 not settled yet
+markets: 41; real buys among them: 0
+
+A. every settled decision with a reading
+  all                                            n 132 | markets  41 | won  29 | avg ask 0.34 | net per contract -0.132 | net per $1 -0.376
+ the risk trend (new, shadow):
+  would buy                                      n  50 | markets  34 | won  15 | avg ask 0.42 | net per contract -0.128 | net per $1 -0.300
+  would not buy                                  n  82 | markets  31 | won  14 | avg ask 0.29 | net per contract -0.135 | net per $1 -0.441
+  anomaly, would sit out                         n   0
+ the price trend over 15 s (old, deciding now):
+  passes (over 0)                                n  40 | markets  28 | won  12 | avg ask 0.41 | net per contract -0.122 | net per $1 -0.290
+  refuses (0 or under)                           n  92 | markets  32 | won  17 | avg ask 0.31 | net per contract -0.137 | net per $1 -0.425
+  unreadable                                     n   0
+ the two together:
+  new would buy, old passes                      n  28 | markets  22 | won  11 | avg ask 0.46 | net per contract -0.079 | net per $1 -0.167
+  new would buy, old refuses                     n  22 | markets  19 | won   4 | avg ask 0.36 | net per contract -0.191 | net per $1 -0.513
+  new would not buy, old passes                  n  12 | markets  10 | won   1 | avg ask 0.30 | net per contract -0.225 | net per $1 -0.729
+  new would not buy, old refuses                 n  70 | markets  29 | won  13 | avg ask 0.29 | net per contract -0.119 | net per $1 -0.391
+
+B. the first decision per market and side only (one row a market side)
+  all                                            n  48 | markets  41 | won  15 | avg ask 0.45 | net per contract -0.155 | net per $1 -0.332
+ the risk trend (new, shadow):
+  would buy                                      n  18 | markets  16 | won   9 | avg ask 0.61 | net per contract -0.126 | net per $1 -0.202
+  would not buy                                  n  30 | markets  27 | won   6 | avg ask 0.36 | net per contract -0.172 | net per $1 -0.463
+  anomaly, would sit out                         n   0
+ the price trend over 15 s (old, deciding now):
+  passes (over 0)                                n  15 | markets  13 | won   9 | avg ask 0.65 | net per contract -0.066 | net per $1 -0.099
+  refuses (0 or under)                           n  33 | markets  29 | won   6 | avg ask 0.36 | net per contract -0.196 | net per $1 -0.518
+  unreadable                                     n   0
+ the two together:
+  new would buy, old passes                      n  12 | markets  10 | won   8 | avg ask 0.67 | net per contract -0.014 | net per $1 -0.021
+  new would buy, old refuses                     n   6 | markets   6 | won   1 | avg ask 0.51 | net per contract -0.351 | net per $1 -0.678
+  new would not buy, old passes                  n   3 | markets   3 | won   1 | avg ask 0.59 | net per contract -0.273 | net per $1 -0.450
+  new would not buy, old refuses                 n  27 | markets  25 | won   5 | avg ask 0.33 | net per contract -0.161 | net per $1 -0.465
+
+C. by the reading's own shape (every settled decision)
+ by the look back (a quarter of the time left):
+  look back 0 to 45 s: would buy                 n   7 | markets   5 | won   3 | avg ask 0.31 | net per contract +0.106 | net per $1 +0.329
+  look back 0 to 45 s: would not buy             n  19 | markets  12 | won   4 | avg ask 0.26 | net per contract -0.064 | net per $1 -0.233
+  look back 45 to 90 s: would buy                n  18 | markets  14 | won   1 | avg ask 0.31 | net per contract -0.264 | net per $1 -0.826
+  look back 45 to 90 s: would not buy            n  31 | markets  18 | won   3 | avg ask 0.28 | net per contract -0.196 | net per $1 -0.670
+  look back 90 to 135 s: would buy               n  14 | markets  12 | won   2 | avg ask 0.37 | net per contract -0.242 | net per $1 -0.628
+  look back 90 to 135 s: would not buy           n  21 | markets  16 | won   4 | avg ask 0.32 | net per contract -0.138 | net per $1 -0.420
+  look back 135 to up s: would buy               n  11 | markets  11 | won   9 | avg ask 0.72 | net per contract +0.089 | net per $1 +0.122
+  look back 135 to up s: would not buy           n  11 | markets  11 | won   3 | avg ask 0.34 | net per contract -0.078 | net per $1 -0.223
+ by the size of the reading (typical moves):
+  risk trend under -2                            n  10 | markets   9 | won   2 | avg ask 0.23 | net per contract -0.039 | net per $1 -0.163
+  risk trend -2 to -1                            n  26 | markets  19 | won   2 | avg ask 0.31 | net per contract -0.251 | net per $1 -0.765
+  risk trend -1 to 0                             n  45 | markets  24 | won  10 | avg ask 0.30 | net per contract -0.089 | net per $1 -0.287
+  risk trend 0 to +1                             n  35 | markets  29 | won  10 | avg ask 0.37 | net per contract -0.092 | net per $1 -0.243
+  risk trend +1 to +2                            n   7 | markets   7 | won   1 | avg ask 0.40 | net per contract -0.272 | net per $1 -0.655
+  risk trend over +2                             n   9 | markets   7 | won   4 | avg ask 0.59 | net per contract -0.158 | net per $1 -0.262
+DONE
+
+
+
