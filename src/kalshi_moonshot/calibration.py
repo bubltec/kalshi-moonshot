@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 PRIOR_STRENGTH = 20.0  # observations the prior (ask, trust) is worth
 BAND_WIDTH = 0.05  # price bucket for the band hit rate
-REBUILD_EVERY = 120.0  # seconds between background rebuilds of the record the bot serves from memory
+REBUILD_EVERY = 900.0  # seconds between background rebuilds of the record the bot serves from memory. A lane's record moves slowly; at 120 s the first version (which also read every column) coincided with 12 s stalls of live commodity evaluations on 2026-11-16 22:52
 MIN_BAND_N = 8  # settled markets in a category band before it overrides the lane-wide band
 
 
@@ -71,11 +71,13 @@ class Summary:
     cats: dict[tuple[int, str], list[int]] = field(default_factory=dict)  # (price bucket, category) -> [hits, markets]
 
 
-def summarize(settled: list[Any]) -> dict[str, Summary]:
+def summarize(settled: list[Any], pause: float = 0.0) -> dict[str, Summary]:
     """Each lane's summary from the settled decisions. One rating per market per lane: a lane's record is its own first look at each market, whatever other lanes rated it before."""
     by_lane: dict[str, list] = {}
-    for r in settled:
+    for i, r in enumerate(settled):
         by_lane.setdefault(r["lane"] or "moonshot", []).append(r)
+        if pause and i % 2000 == 1999:
+            time.sleep(pause)  # the background build steps aside for the threads that trade
     out: dict[str, Summary] = {}
     for lane, rows in by_lane.items():
         sm = Summary()
@@ -101,7 +103,7 @@ _SERVE_LOCK = threading.Lock()
 
 def rebuild(store: Store) -> dict[str, Summary]:
     """Read the settled decisions and replace the served record for this store's database. The one place the running bot reads them; called at start and by the background thread, never from an evaluation."""
-    got = summarize(store.settled_decisions())
+    got = summarize(store.settled_for_record(), pause=0.002)
     with _SERVE_LOCK:
         _SERVED[str(store.path)] = (time.time(), got)
     return got
@@ -147,7 +149,7 @@ class Calibrator:
         gen = self.store.generation
         if self._cache and self._cache[0] == gen:
             return self._cache[1]
-        lanes = summarize(self.store.settled_decisions())
+        lanes = summarize(self.store.settled_for_record())
         self._cache = (gen, lanes)
         return lanes
 

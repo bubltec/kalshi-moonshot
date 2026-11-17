@@ -778,6 +778,13 @@ class Store:
             f"SELECT * FROM decisions WHERE outcome IN ('yes','no'){extra} ORDER BY ts", args
         ).fetchall()
 
+    def settled_for_record(self) -> list[db.Row]:
+        """The settled decisions as the record adjustment needs them: seven short columns, no notes or contexts. settled_decisions drags every column (127 MB on 2026-11-16); building Python rows from that held every other thread of the bot for seconds."""
+        extra, args = self._excluded_sql()
+        return self.db.execute(
+            f"SELECT lane, ticker, model_p, ask, side, outcome, category FROM decisions WHERE outcome IN ('yes','no') AND model_p IS NOT NULL{extra} ORDER BY ts", args
+        ).fetchall()
+
     @remembers('bets')
     def bet_tickers_in_event(self, event_ticker: str) -> set[str]:
         """Unresolved paper or real bets in this event. Empty when event_ticker is blank."""
