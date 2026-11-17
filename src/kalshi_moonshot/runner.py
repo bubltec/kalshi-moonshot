@@ -909,6 +909,27 @@ def evaluate(
                 f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
                 else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
             )
+    if spec.risk_score_buy > 0:  # the lane's own buy rule: a risk that is low and has stayed low, and a chance that clears the costs
+        from . import riskscore
+        from .strategy import fee_per_contract as _fee
+
+        try:
+            rs = riskscore.live(store.db, shot.series or shot.ticker.split("-")[0], shot.ticker, shot.side, time.time() + shot.hours_to_close * 3600.0, time.time(), s.data_dir)
+        except Exception as exc:
+            rs = None
+            log.warning("risk score unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        rs_tag = riskscore.tag(rs[0] if rs else None, rs[1] if rs else None)
+        if rs is None:
+            bet = False
+            note = f"{rs_tag} the lane buys only on a risk it can read. {note}"
+        elif not riskscore.low_risk(rs[0], spec.risk_score_buy):
+            bet = False
+            note = f"{rs_tag} the lane buys a risk of {100 * spec.risk_score_buy:.0f}% or under that has held for a minute. {note}"
+        elif rs[0][0] - (shot.ask + _fee(shot.ask)) < spec.risk_score_edge:
+            bet = False
+            note = f"{rs_tag} the score's chance {rs[0][0]:.3f} does not clear the ask and its fee ({shot.ask + _fee(shot.ask):.3f}) by the lane's {spec.risk_score_edge:g}. {note}"
+        else:
+            note = f"{rs_tag} {note}"
     if spec.entry_scenario_view:  # shadow: a reading for the note, on passes as well as buys
         try:
             sc_note = side_scenario(store, shot)

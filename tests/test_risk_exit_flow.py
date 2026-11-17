@@ -1497,3 +1497,29 @@ def test_unit_the_drop_check_is_shadow_so_it_never_changes_a_lanes_version(tmp_p
         seen.append(lanes.settings_of(spec, s))
         assert spec.curve_risk_drop == (1.0 if extra else 0.0)
     assert seen[0] == seen[1]
+
+
+# The risk exit on the risk score (lane field curve_risk_score; 2026-11-16, user: "all these factors need to build towards that risk score").
+def test_integration_the_score_holds_a_bet_the_price_alone_would_sell_and_sells_when_it_agrees(tmp_path, monkeypatch):
+    from kalshi_moonshot import riskscore
+
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_score=true")
+    assert all(t.risk_score for t in w.targets.values())
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.80], 0.45))  # the score still gives the side 80%
+    for n, bid in enumerate([0.44] * 12):
+        yes_bid(w, bid, 400 - 10 * n)
+    assert signals(w) == []  # the bid is under the 0.50 line; the score is not
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.30], 0.45))  # now the score agrees
+    for n, bid in enumerate([0.44] * 12):
+        yes_bid(w, bid, 280 - 10 * n)
+    assert len(signals(w)) == 1
+
+
+def test_integration_an_unreadable_score_leaves_the_exit_on_the_price(tmp_path, monkeypatch):
+    from kalshi_moonshot import riskscore
+
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_score=true")
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: None)
+    for n, bid in enumerate([0.44] * 12):
+        yes_bid(w, bid, 400 - 10 * n)
+    assert len(signals(w)) == 1

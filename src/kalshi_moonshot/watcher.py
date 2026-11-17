@@ -260,6 +260,7 @@ class Target:
     risk_squeeze: float = 0.0  # the most a loss may be short of the max loss and still count as reaching it (lane field squeeze_max)
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
     risk_stop_hold: float = 0.0  # the max-loss stop waits this share of the time left (lane field curve_risk_stop_hold)
+    risk_score: bool = False  # the risk exit reads riskscore.py's chance in place of the net bid (lane field curve_risk_score)
     risk_early_hold: float = 0.0  # no loss sale while more than this share of the market is still to run (lane field curve_risk_early_hold)
     risk_early_off: bool = False  # a loss sale was wanted early and held: this bet's loss sales stay off to settlement
     risk_at: float = 0.0  # the risk check reads at most once a second
@@ -919,7 +920,22 @@ class ProfitWatcher:
         basis = t.entry + fee_per_contract(t.entry)
         pnl = (net - basis) / basis if basis > 0 else 0.0
         q = min(max(net, 0.0), 1.0)
+        if getattr(t, "risk_score", False):
+            scored = self._risk_score(t, now)
+            if scored is not None:
+                return self._risk_decide(t, curverisk.Risk(scored, q, scored, "score"), bid, now, left, pnl, self._risk_long(t, now, left))
         return self._risk_decide(t, curverisk.Risk(q, q, q, "price"), bid, now, left, pnl, self._risk_long(t, now, left))
+
+    def _risk_score(self, t: Target, now: float) -> float | None:
+        """The chance the side pays by riskscore.py (lane field curve_risk_score), or None when it cannot be read (the exit then reads the bid, as it always has)."""
+        from . import riskscore
+
+        try:
+            got = riskscore.live(self.store_factory().db, t.ticker.split("-")[0], t.ticker, t.side, t.close_ts, now, None, (0.0,))
+        except Exception as exc:
+            log.warning("risk score unreadable for %s %s: %s", t.ticker, t.lane, exc)
+            return None
+        return got[0][0] if got else None
 
     def reconcile_hand_sales(self, s: Settings, store: Store) -> list[str]:
         """Close the bot's record of a live bet the account no longer holds (the user sold it by hand, or bought the other side and Kalshi netted it), so the books agree and the lane may buy the market again. A shortfall has to show on two separate reads of the account, and the bot's last order on the market has to be 20 s old, because the positions read can trail a fill. Returns the log lines of what it closed."""
@@ -1968,6 +1984,7 @@ class ProfitWatcher:
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_stop_hold = spec.curve_risk_stop_hold
                 held.risk_early_hold = spec.curve_risk_early_hold
+                held.risk_score = spec.curve_risk_score
                 held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_max
                 held.risk_nudge_hour = spec.nudge_hour_factor
                 held.risk_nudge_units = spec.nudge_units
