@@ -1,0 +1,75 @@
+window: crypto_multiscale's live bets, 11-09 to 11-16 ET, with quotes on the archive: 595 bets (65 without quotes or a result), $5611 staked; 420 won at settlement
+each bet from its own buy: held, or sold by one loss sale. The profit take and the lane's other exits are not in it. Versions were fixed before the run.
+
+ALL BETS
+  version           sold  of them winners  total losses   $1 a bet  cents per $   as staked  days ahead of hold
+  hold                 0                0           175      -7.18        -1.21     -303.90                    
+  live today         258               83             1     -16.81        -2.83     -348.52              3 of 8
+  quarter wait       228               53            37     -17.94        -3.01     -392.89              2 of 8
+  sliding line       194               19           112     -13.17        -2.21     -346.59              5 of 8
+  last 3 minutes     193               22            87     -12.15        -2.04     -324.19              4 of 8
+  0.12 line          185               10           160     -12.71        -2.14     -367.79              5 of 8
+
+bought in the first 6 minutes
+  version           sold  of them winners  total losses   $1 a bet  cents per $   as staked  days ahead of hold
+  hold                 0                0            88      -4.80        -1.72     -173.62                    
+  live today         132               44             1     -12.53        -4.49     -243.46              2 of 7
+  quarter wait       120               32            15     -14.68        -5.26     -257.69              2 of 7
+  sliding line       102               14            57     -12.60        -4.52     -225.33              2 of 7
+  last 3 minutes     101               16            49     -13.40        -4.80     -238.72              1 of 7
+  0.12 line           95                7            80      -9.59        -3.44     -229.36              3 of 7
+
+bought in minutes 6 to 10
+  version           sold  of them winners  total losses   $1 a bet  cents per $   as staked  days ahead of hold
+  hold                 0                0            62      -8.08        -3.73     -134.53                    
+  live today          89               27             0      -5.90        -2.72      -54.59              5 of 8
+  quarter wait        79               17            13      -8.40        -3.87      -98.24              5 of 8
+  sliding line        65                3            40      -5.13        -2.37      -84.36              5 of 8
+  last 3 minutes      64                3            26      -2.69        -1.24      -54.55              5 of 8
+  0.12 line           64                2            56      -7.66        -3.53     -112.20              6 of 8
+
+bought in the last 5 minutes
+  version           sold  of them winners  total losses   $1 a bet  cents per $   as staked  days ahead of hold
+  hold                 0                0            25      +5.70        +5.76       +4.25                    
+  live today          37               12             0      +1.62        +1.63      -50.47              5 of 8
+  quarter wait        29                4             9      +5.15        +5.20      -36.97              4 of 8
+  sliding line        27                2            15      +4.56        +4.61      -36.90              5 of 8
+  last 3 minutes      28                3            12      +3.94        +3.98      -30.92              4 of 8
+  0.12 line           26                1            24      +4.53        +4.58      -26.24              6 of 8
+
+paid under 0.60
+  version           sold  of them winners  total losses   $1 a bet  cents per $   as staked  days ahead of hold
+  hold                 0                0            47      -6.94        -7.01      -22.47                    
+  live today          57               10             0      -4.71        -4.75      -77.37              4 of 6
+  quarter wait        53                6            10      -5.87        -5.93      -66.68              4 of 6
+  sliding line        50                3            32      -7.49        -7.57      -59.88              4 of 6
+  last 3 minutes      49                5            26      -9.55        -9.65      -83.41              4 of 6
+  0.12 line           50                3            41      -9.30        -9.39      -75.67              4 of 6
+
+paid 0.60 to 0.75
+  version           sold  of them winners  total losses   $1 a bet  cents per $   as staked  days ahead of hold
+  hold                 0                0            88      +8.05        +2.62      -73.13                    
+  live today         133               45             1      -3.71        -1.21      -91.88              3 of 8
+  quarter wait       115               27            22      +0.34        +0.11      -80.92              3 of 8
+  sliding line       100               12            55      +2.70        +0.88      -86.55              5 of 8
+  last 3 minutes      99               12            42      +4.98        +1.62      -53.26              5 of 8
+  0.12 line           94                6            79      +4.33        +1.41      -78.56              6 of 8
+
+paid 0.75 and over
+  version           sold  of them winners  total losses   $1 a bet  cents per $   as staked  days ahead of hold
+  hold                 0                0            40      -8.29        -4.39     -208.30                    
+  live today          68               28             0      -8.40        -4.44     -179.27              4 of 8
+  quarter wait        60               20             5     -12.40        -6.56     -245.30              4 of 8
+  sliding line        44                4            25      -8.37        -4.43     -200.16              5 of 8
+  last 3 minutes      45                5            19      -7.58        -4.01     -187.52              5 of 8
+  0.12 line           41                1            40      -7.75        -4.10     -213.56              6 of 8
+
+the last three days (larger stakes)
+  version           sold  of them winners  total losses   $1 a bet  cents per $   as staked  days ahead of hold
+  hold                 0                0            74     -15.17        -6.51     -319.70                    
+  live today         107               33             0     -16.56        -7.11     -335.12              2 of 3
+  quarter wait        95               21            16     -19.50        -8.37     -383.80              1 of 3
+  sliding line        81                7            47     -17.11        -7.34     -350.99              2 of 3
+  last 3 minutes      83                9            35     -16.67        -7.15     -331.38              2 of 3
+  0.12 line           79                5            72     -19.82        -8.51     -381.38              1 of 3
+
