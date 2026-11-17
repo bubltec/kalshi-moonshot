@@ -200,6 +200,8 @@ def _locked(fn):
             finally:
                 steptime.add("database lock wait", got - asked)
                 steptime.add("database", time.perf_counter() - got)
+                if args and isinstance(args[0], str) and steptime.active():  # 2026-11-17: name the statement in the timing line of the step that ran it, so a read left in an evaluation can be found (user: "you shouldn't be using the db")
+                    steptime.add("sql " + " ".join(args[0].split())[:56], time.perf_counter() - got)
     return wrapper
 
 

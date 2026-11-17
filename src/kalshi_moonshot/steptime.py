@@ -26,6 +26,11 @@ def end() -> None:
     _tl.costs = None
 
 
+def active() -> bool:
+    """Whether this thread is timing a job (so a caller can skip building a label nobody will read)."""
+    return getattr(_tl, "costs", None) is not None
+
+
 def add(name: str, seconds: float) -> None:
     """Add to a running cost on this thread (no-op when no job is being timed)."""
     costs = getattr(_tl, "costs", None)
