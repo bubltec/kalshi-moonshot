@@ -11,7 +11,8 @@ The attributes are riskscore.features(whole=True): the code the live recorder ru
 Window: 2026-11-09 on (the logic was rewritten that Monday; nothing before it is counted).
 
     .venv/bin/python scripts/risk_attribute_replay.py build     # write data/tape_archive/replay_readings.csv
-    .venv/bin/python scripts/risk_attribute_replay.py report    # read it and print the tables
+    .venv/bin/python scripts/risk_attribute_replay.py report    # read it and print the tables (against the result)
+    .venv/bin/python scripts/risk_attribute_replay.py moves     # against the price's move over the next 2 and 5 minutes, as round trips after the spread and the fee
 """
 import csv
 import datetime
@@ -229,5 +230,100 @@ def report() -> None:
             print(f"  {NAMES[i]:13s} {1e4 * drop[i] / cnt:+7.2f}")
 
 
+def moves() -> None:
+    """Round trips instead of results: does an attribute say where the PRICE goes over the next minutes, and does acting on it pay after the spread and the fee on both legs?"""
+    from kalshi_moonshot.strategy import fee_per_contract
+
+    rows = list(csv.reader(open(OUT)))[1:]
+    rows.sort(key=lambda r: (r[0], int(r[1])))
+    tick = np.array([r[0] for r in rows])
+    ts = np.array([int(r[1]) for r in rows])
+    age = np.array([float(r[2]) for r in rows])
+    bid = np.array([float(r[4]) for r in rows])
+    ask = np.array([float(r[5]) for r in rows])
+    X = np.array([[float(v) for v in r[6:]] for r in rows])
+    mid = (bid + ask) / 2.0
+    day = np.array([datetime.datetime.fromtimestamp(t, ET).strftime("%m-%d") for t in ts])
+    days = sorted(set(day))[1:]  # the first ET day is a part day
+    at = {(a, b): i for i, (a, b) in enumerate(zip(tick, ts))}
+    zone = np.where(np.abs(X[:, 1]) < 0.5, 0, np.where(np.abs(X[:, 1]) < 1.5, 1, 2))
+    zname = ["on the line (cushion under 0.5)", "fair cushion (0.5 to 1.5)", "wide cushion (over 1.5)"]
+    print(f"window: 2026-11-09 on, ET days {', '.join(days)}; {len(rows)} readings on {len(set(tick))} markets; whole market, no time or price gate")
+    print("a round trip buys at the ask and sells at the bid some minutes later; the fee is charged on both legs; results are per dollar staked")
+    print("settings (the top tenth of predicted moves, one entry per market) were fixed before the run\n")
+    for minutes in (2, 5):
+        h = minutes * 60
+        nxt = np.array([at.get((a, b + h), -1) for a, b in zip(tick, ts)])
+        ok = (nxt >= 0) & (bid > 0) & (ask > 0) & (ask < 1)
+        dm = np.where(ok, mid[nxt] - mid, 0.0)
+        print(f"===== {minutes} minutes ahead: {int(ok.sum())} readings with a mark {minutes} minutes later")
+        print(f"A. each attribute against the mid's move over the next {minutes} minutes (correlation), by day")
+        print(f"{'attribute':13s} {'all days':>9s} | " + " ".join(f"{d:>6s}" for d in days) + " | days + / -")
+        for i, n in enumerate(NAMES):
+            per = [_corr(X[ok & (day == d), i], dm[ok & (day == d)]) for d in days]
+            print(f"{n:13s} {_corr(X[ok, i], dm[ok]):+9.3f} | " + " ".join(f"{c:+6.3f}" for c in per) + f" | {sum(c > 0.01 for c in per)} / {sum(c < -0.01 for c in per)}")
+
+        def net(i: int, side: int) -> float:
+            """One round trip from reading i: side +1 buys YES at its ask and sells at its bid; -1 buys NO at (1 - YES bid) and sells at (1 - YES ask)."""
+            j = nxt[i]
+            buy, sell = (ask[i], bid[j]) if side > 0 else (1.0 - bid[i], 1.0 - ask[j])
+            if not (0.0 < buy < 1.0) or sell <= 0.0:
+                return float("nan")
+            cost = buy + fee_per_contract(buy)
+            return (sell - fee_per_contract(sell) - cost) / cost
+
+        print(f"\nB. walk-forward: a linear fit of the {minutes}-minute move on the fifteen attributes, from every earlier day; on the next day the first moment in each market whose predicted move is in the top tenth (by size, either way; the cut is the earlier days') is bought on the side the fit points to and sold {minutes} minutes later")
+        print(f"{'day':6s} {'trips':>6s} {'ahead':>6s} {'behind':>6s} {'net per $':>10s} {'net on $5':>10s} | any side, any moment (the cost of a round trip with no signal)")
+        Xi = np.c_[np.ones(len(X)), X]
+        all_trips = []
+        for k in range(2, len(days)):
+            tr, te = ok & np.isin(day, days[:k]), ok & (day == days[k])
+            if tr.sum() < 1000 or not te.sum():
+                continue
+            w = np.linalg.solve(Xi[tr].T @ Xi[tr] + 1e-3 * np.eye(Xi.shape[1]), Xi[tr].T @ dm[tr])
+            cut = np.quantile(np.abs(Xi[tr] @ w), 0.9)
+            pred = Xi @ w
+            done, trips = set(), []
+            for i in np.flatnonzero(te):
+                if tick[i] in done or abs(pred[i]) < cut:
+                    continue
+                v = net(i, 1 if pred[i] > 0 else -1)
+                if v == v:
+                    done.add(tick[i])
+                    trips.append((v, zone[i], age[i], ask[i] if pred[i] > 0 else 1.0 - bid[i], days[k]))
+            rng = np.random.default_rng(7)
+            base = [net(i, 1 if rng.random() < 0.5 else -1) for i in rng.choice(np.flatnonzero(te), size=min(3000, int(te.sum())), replace=False)]
+            base = [b for b in base if b == b]
+            all_trips += trips
+            v = np.array([t[0] for t in trips]) if trips else np.array([0.0])
+            print(f"{days[k]:6s} {len(trips):6d} {int((v > 0).sum()):6d} {int((v <= 0).sum()):6d} {v.mean():+10.4f} {5 * v.sum():+10.2f} | {np.mean(base):+.4f}")
+        if all_trips:
+            v = np.array([t[0] for t in all_trips])
+            print(f"{'all':6s} {len(v):6d} {int((v > 0).sum()):6d} {int((v <= 0).sum()):6d} {v.mean():+10.4f} {5 * v.sum():+10.2f}")
+            print("by curve shape at the buy (the cushion zone the score itself uses):")
+            for z in range(3):
+                u = np.array([t[0] for t in all_trips if t[1] == z])
+                if len(u):
+                    print(f"  {zname[z]:34s} trips {len(u):5d} | ahead {int((u > 0).sum()):5d} | behind {int((u <= 0).sum()):5d} | net per $ {u.mean():+.4f} | on $5 stakes {5 * u.sum():+.2f}")
+            print("by the price paid:")
+            for lo, hi in ((0, 0.10), (0.10, 0.35), (0.35, 0.65), (0.65, 0.90), (0.90, 1.01)):
+                sel = [t for t in all_trips if lo <= t[3] < hi]
+                u = np.array([t[0] for t in sel])
+                if len(u):
+                    pd_ = defaultdict(float)
+                    for t in sel:
+                        pd_[t[4]] += 5 * t[0]
+                    print(f"  paid {lo:.2f} to {min(hi, 1.0):.2f}                  trips {len(u):5d} | ahead {int((u > 0).sum()):5d} | behind {int((u <= 0).sum()):5d} | net per $ {u.mean():+.4f} | middle trip {np.median(u):+.4f} | on $5 stakes {5 * u.sum():+.2f} | days ahead {sum(v > 0 for v in pd_.values())} of {len(pd_)}")
+            print("by when in the market the buy was:")
+            for lo, hi in ((0, 180), (180, 360), (360, 540), (540, 900)):
+                u = np.array([t[0] for t in all_trips if lo <= t[2] < hi])
+                if len(u):
+                    print(f"  {lo // 60:2d} to {hi // 60:2d} min in                    trips {len(u):5d} | ahead {int((u > 0).sum()):5d} | behind {int((u <= 0).sum()):5d} | net per $ {u.mean():+.4f} | on $5 stakes {5 * u.sum():+.2f}")
+        print()
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["moves"]:
+        moves()
+        sys.exit(0)
     (build if sys.argv[1:] == ["build"] else report)()
