@@ -12,7 +12,9 @@ Evidence: none yet. This is a first build, shadow only (lane field curve_risk_li
 from __future__ import annotations
 
 import bisect
+import itertools
 import math
+from collections.abc import Sequence
 from statistics import NormalDist
 from typing import NamedTuple
 
@@ -359,3 +361,40 @@ def drop_fall(hist: list[tuple[float, float]], now: float, look: float) -> float
 def slow_drop(fall: float | None, chance: float, units: float) -> bool:
     """The slow drop check's condition at one reading (lane field curve_risk_drop, shadow): the cushion has fallen `units` typical minutes or more from its high of the look back, and the curve's own chance that the side pays is under one half (the spot is across the target). The caller asks for it to hold a share of the time left before it counts. The one setting that did not lose on the live commodity bets of 11-09 to 11-13 (studies/results/2026-11-13-drop-sale-time-scaled.txt: 1.0, a quarter, a quarter, chance under 0.5: +$0.87 on 13 sold of 244, one winner sold); it was picked from 20 after the results were seen."""
     return units > 0 and fall is not None and fall >= units - 1e-9 and chance < 0.5
+
+
+TREND_STEP = 5.0  # seconds between the marks the risk trend is read on: the grid the market's mids are read on everywhere else (riskscore.STEP)
+TREND_MIN_MOVES = 12  # mark-to-mark moves (a minute of them) the market must have BEFORE the look back for its typical move to be read
+TREND_MIN_SEEN = 100  # readings of the last hour needed before one can be called outside the hour's range
+LONG_WEIGHT = 0.5  # how far the long layer counts when it is the worse cushion: risk()'s own default (the price is trusted more)
+
+
+def risk_trend(marks: Sequence[tuple[float, float | None]], now: float, back: float, step: float = TREND_STEP) -> tuple[float, float] | None:
+    """The buy's risk trend (lane field entry_risk_trend; 2026-11-17, user, on the entry trend check: "it shouldn't even care about the entry trend by itself. its the risk factor"): how far the side's risk number moved over the last `back` seconds, and the market's own typical move for a span that long.
+    `marks`: (time, q) on the `step` grid, oldest first, q the chance the side pays as the exit reads it (risk(): the worse of Kalshi's bid net of the fee and the long layer, the price counted in full), None where it could not be read.
+    The typical move is the root-mean-square of the mark-to-mark moves BEFORE the look back (the move being measured is not part of its own noise), times sqrt(back / step). None when either end has no mark within two steps, the market has under TREND_MIN_MOVES moves before the look back, or it did not move at all."""
+    if back < step or not marks:
+        return None
+    ts = [m[0] for m in marks]
+    i, j = bisect.bisect_right(ts, now) - 1, bisect.bisect_right(ts, now - back) - 1
+    if i < 0 or j < 0 or now - ts[i] > 2.0 * step or now - back - ts[j] > 2.0 * step:
+        return None
+    cur, then = marks[i][1], marks[j][1]
+    if cur is None or then is None:
+        return None
+    moves = [b[1] - a[1] for a, b in itertools.pairwise(marks[: j + 1]) if a[1] is not None and b[1] is not None and b[0] - a[0] <= 1.5 * step]
+    if len(moves) < TREND_MIN_MOVES:
+        return None
+    rms = math.sqrt(sum(m * m for m in moves) / len(moves))
+    if rms <= 0:
+        return None
+    return cur - then, rms * math.sqrt(back / step)
+
+
+def trend_state(z: float, seen: Sequence[float]) -> str:
+    """What a risk trend reading says: "anomaly" when it is outside the 1st to 99th percentile of the series' own readings of the last hour (`seen`, at least TREND_MIN_SEEN of them): no rule is assumed to hold there, the buy sits out and the reading is logged; else "holding" when the risk has not worsened (z at or over zero: the direction, structural) and "worsening" when it has."""
+    if len(seen) >= TREND_MIN_SEEN:
+        ranked = sorted(seen)
+        if z < ranked[int(0.01 * (len(ranked) - 1))] or z > ranked[math.ceil(0.99 * (len(ranked) - 1))]:
+            return "anomaly"
+    return "holding" if z >= 0 else "worsening"

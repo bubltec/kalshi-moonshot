@@ -9,14 +9,16 @@ headlines. Orders are placed only when MODE=trade and the risk gate agrees.
 
 from __future__ import annotations
 
+import bisect
 import contextlib
 import itertools
 import json
-import re
 import logging
 import math
+import re
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -32,20 +34,20 @@ from .lanes import (
     LADDER,
     LaneSpec,
     chance_ok,
+    edge_miss,
+    edge_verdict,
     lane_specs,
     main_lanes,
     no_buy,
+    nudge,
+    nudge_in_units,
     settings_of,
     spec_for,
     stop_drop_for,
     takes_profit,
     tiered_lanes,
-    version_of,
-    edge_miss,
-    nudge,
-    nudge_in_units,
     trend_share,
-    edge_verdict,
+    version_of,
     wants_bet,
 )
 from .marketdata import shared_for
@@ -612,6 +614,24 @@ def evaluate(
             note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
+    risk_tag, risk_read = "", None
+    if spec.entry_risk_trend > 0:  # read here so the note of buys and passes alike carries it; it gates only where the lane says entry_risk_trend_live
+        try:
+            risk_read = risk_trend_read(shot, spec)
+        except Exception as exc:
+            log.warning("risk trend unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        old_tag = ""
+        if not spec.entry_risk_trend_live and spec.entry_trend_seconds > 0 and spec.entry_trend_z is not None:  # shadow: the old check's reading on the same decision, so the two can be scored on the same bets
+            try:
+                old_z = side_trend_z(s, shot, spec.entry_trend_seconds)
+            except Exception:
+                old_z = None
+            old_tag = f" | price trend {old_z:+.1f} over {spec.entry_trend_seconds:.0f}s" if old_z is not None else " | price trend unreadable"
+        if risk_read is None:
+            risk_tag = f"[risk trend unreadable{old_tag}] "
+        else:
+            would = "" if spec.entry_risk_trend_live else ": " + {"holding": "would buy", "worsening": "would not buy", "anomaly": "anomaly, would sit out"}[risk_read[2]]
+            risk_tag = f"[risk trend {risk_read[0]:+.1f} over {risk_read[1]:.0f}s{would}{old_tag}] "
     crossed_tag = ""
     if spec.entry_crossed_view:  # shadow: the reading rides on the note of buys and passes alike, and changes neither
         from . import variants as _variants
@@ -936,7 +956,15 @@ def evaluate(
         if dwell is not None and dwell < spec.min_dwell_seconds:
             bet = False
             note = f"just arrived: this side has been in the price band {dwell:.0f}s and the lane waits {spec.min_dwell_seconds:.0f}s. {note}"
-    if bet and spec.entry_trend_seconds > 0 and spec.entry_trend_z is not None:
+    if bet and spec.entry_risk_trend > 0 and spec.entry_risk_trend_live:  # in place of the price trend checks below
+        if risk_read is None or risk_read[2] != "holding":
+            bet = False
+            note = (
+                f"no risk trend reading: the market is too young, its quotes or its long layer are missing. {note}" if risk_read is None
+                else f"risk trend anomaly: {risk_read[0]:+.1f} typical moves over the last {risk_read[1]:.0f}s is outside this series' last hour of readings, so the lane sits out. {note}" if risk_read[2] == "anomaly"
+                else f"risk worsening: this side's risk moved {risk_read[0]:+.1f} typical moves over the last {risk_read[1]:.0f}s and the lane buys a risk that is holding or improving. {note}"
+            )
+    elif bet and spec.entry_trend_seconds > 0 and spec.entry_trend_z is not None:
         zed = side_trend_z(s, shot, spec.entry_trend_seconds)
         if zed is None or zed <= spec.entry_trend_z:
             bet = False
@@ -1109,7 +1137,7 @@ def evaluate(
             bet = False  # blocked, refused, failed or unfilled: there is no position to track
     if bet and rest_seconds > 0 and not s.is_live(shot.lane, shot.series):
         note = f"{FLOOR_MARK} {rest_seconds:.0f}s: a paper bid at the floor {shot.ask:.2f}, judged on the tape] {note}"  # up front: the reason is cut at 300 characters
-    note = f"{crossed_tag}{note}"
+    note = f"{crossed_tag}{risk_tag}{note}"
     action = "bet" if bet else "pass"
     held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
     _log(
@@ -1551,6 +1579,74 @@ def side_view(shot: LongShot, scales: tuple[int, ...], now: float | None = None)
     if not got or not ref:
         return None
     return curverisk.long_chance(got[0], got[1], now, ref, shot.side, left, scales=tuple(scales), elapsed=max(0.0, 900.0 - left))
+
+
+_risk_marks: dict[tuple[str, tuple[int, ...]], list[tuple[float, float | None, float | None, float | None]]] = {}  # (ticker, long scales) -> (mark time, YES bid, YES ask, the long layer's YES chance): a past mark does not change, so each is read once
+_risk_seen: dict[str, deque[tuple[float, float]]] = {}  # series -> (time, reading) of the last hour: the range an anomaly is judged against
+_risk_seen_at: dict[tuple[str, str], float] = {}  # (ticker, side) -> when its last reading was kept (one per mark)
+
+
+def risk_marks(shot: LongShot, scales: tuple[int, ...], now: float) -> list[tuple[float, float | None, float | None, float | None]]:
+    """The market's marks for the risk trend, every curverisk.TREND_STEP seconds from its open to `now`, from memory alone: Kalshi's YES bid and ask at the mark (the last quote, at most 30 s old) and the long layer's chance that YES pays as it stood then (curverisk.long_chance on the Kalshi perp, read only from ticks at or before the mark). Either is None where it could not be read."""
+    from . import ticks as ticks_mod
+    from .watcher import perp_index
+
+    step = curverisk.TREND_STEP
+    close = now + shot.hours_to_close * 3600.0
+    opened = close - 900.0  # 900: a 15-minute market's length, structural
+    key = (shot.ticker, tuple(scales))
+    marks = _risk_marks.get(key)
+    if marks is None:
+        if len(_risk_marks) > 400:
+            _risk_marks.clear()
+        marks = _risk_marks[key] = []
+    t = (marks[-1][0] + step) if marks else math.ceil(opened / step) * step  # marks sit on the clock's own 5 s grid, so a close time read a second off between calls does not move them
+    if t > now:
+        return marks
+    quotes = ticks_mod.mids.quotes(shot.ticker)
+    qt = [q[0] for q in quotes]
+    kp = perp_index(shot.series or shot.ticker.split("-")[0])
+    reach = max(3700.0, 60.0 * max(max(scales, default=60), 1) + 100.0)
+    got = (ticks_mod.history.window(kp, now - reach - 900.0, now) or ticks_mod.history.window(kp, now - reach, now)) if kp else None
+    ref = ticks_mod.history.first_at_or_after(kp, opened, 60.0) if kp else None
+    while t <= now:
+        i = bisect.bisect_right(qt, t) - 1
+        bid, ask = (quotes[i][1], quotes[i][2]) if i >= 0 and t - quotes[i][0] <= 30.0 else (None, None)
+        long_yes = curverisk.long_chance(got[0], got[1], t, ref, "yes", close - t, scales=tuple(scales), elapsed=max(0.0, t - opened)) if got and ref and close > t else None
+        marks.append((t, bid, ask, long_yes))
+        t += step
+    return marks
+
+
+def risk_trend_read(shot: LongShot, spec: LaneSpec, now: float | None = None) -> tuple[float, float, str] | None:
+    """The buy's risk trend (lane field entry_risk_trend): (the move of the side's risk over the look back in the market's own typical moves, the look back in seconds, "holding" / "worsening" / "anomaly"). The risk is the exit's own number for the side at each mark: curverisk.risk on the bid net of the sell fee and the long layer's chance. The look back is the lane's share of the time left. None when it cannot be read. Memory only."""
+    from .strategy import fee_per_contract
+
+    now = time.time() if now is None else now
+    left = shot.hours_to_close * 3600.0
+    back = spec.entry_risk_trend * left
+    yes = shot.side == "yes"
+    qs: list[tuple[float, float | None]] = []
+    for t, bid, ask, long_yes in risk_marks(shot, tuple(spec.curve_risk_long_scales), now):
+        side_bid = (bid if yes else 1.0 - ask) if bid is not None and ask is not None else None
+        if side_bid is None or long_yes is None or not 0.0 < side_bid < 1.0:
+            qs.append((t, None))
+            continue
+        qs.append((t, curverisk.risk(long_yes if yes else 1.0 - long_yes, side_bid - fee_per_contract(side_bid), 1.0, curverisk.LONG_WEIGHT).q))
+    got = curverisk.risk_trend(qs, now, back)
+    if got is None:
+        return None
+    z = got[0] / got[1]
+    seen = _risk_seen.setdefault(shot.series or shot.ticker.split("-")[0], deque())
+    while seen and seen[0][0] < now - 3600.0:  # the current hour: the range a reading is judged against
+        seen.popleft()
+    state = curverisk.trend_state(z, [v for _, v in seen])
+    if len(_risk_seen_at) > 2000:
+        _risk_seen_at.clear()
+    if now - _risk_seen_at.get((shot.ticker, shot.side), 0.0) >= curverisk.TREND_STEP:
+        _risk_seen_at[(shot.ticker, shot.side)] = now
+        seen.append((now, z))
+    return z, back, state
 
 
 def side_trend_read(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> tuple[float, float] | None:
