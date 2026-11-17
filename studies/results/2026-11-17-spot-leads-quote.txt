@@ -1,0 +1,15 @@
+window: 2026-11-09 to 11-16, 2936 crypto 15-minute markets, 1383988 seconds with the YES mid between 0.15 and 0.85. A typical 5 s index move is 1 unit. The spread (ask less bid) at those seconds: a median 1.0 cents.
+cents the YES mid moved, counted in the direction the index had just moved (+ = the price followed the index)
+
+the index over the last 5 s          seconds  the mid, same 5 s  next 5 s  next 10 s  next 30 s
+under half a unit                     679854              +0.77     +0.04      +0.05      +0.07
+0.5 to 1                              356577              +2.62     +0.05      +0.08      +0.17
+1 to 2                                272776              +4.70     +0.06      +0.10      +0.22
+2 to 3                                 58332              +7.37     -0.06      -0.05      -0.07
+3 and over (a sharp move)              16449             +11.44     -0.08      -0.21      -0.58
+
+only the seconds where the price had NOT yet followed (the mid flat or the other way over the same 5 s): is there a catch-up to sell ahead of?
+the index over the last 5 s          seconds  share of all  next 5 s  next 10 s  next 30 s
+1 to 2                                 13914            5%     +0.24      +0.32      +0.27
+2 to 3                                  1110            2%     +0.28      +0.33      +0.46
+3 and over (a sharp move)                262            2%     +1.30      +0.92      -1.02

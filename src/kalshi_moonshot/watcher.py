@@ -257,13 +257,6 @@ class Target:
     risk_never_ahead: float = 0.0  # seconds left at which a bet never once in profit is sold (lane field curve_risk_never_ahead); 0 = off
     risk_ever_ahead: bool = False  # the bid less the sell fee has been over the cost at some risk check since the buy
     risk_first_seen: float = 0.0  # when the risk check first read this bet
-    loss_wobbles: float = 0.0  # the always-on loss sale (lane field loss_sale_wobbles); 0 = off
-    loss_line: float = 0.0  # the bid at or under which it sells, fixed when the bet is first watched (riskscore.loss_line)
-    loss_note: str = ""
-    loss_spot: bool = False  # the loss sale counts a bid as under its line only while the index is on the wrong side of the target (lane field loss_sale_spot)
-    loss_wait_share: float = 0.0  # the most the loss sale waits, as a share of the time left (lane field loss_sale_wait_share); 0 = no wait
-    loss_wait_default: float = 15.0  # the recovery time assumed when the market's hour has too few falls to measure (lane field curve_wait_default)
-    loss_sale_since: float = 0.0  # when the bid was first seen at or under the loss sale's line in the present run of such quotes; 0 = it is over the line. (Not loss_since: that is the hard-loss stop's own clock.)
     risk_never_state: int = 0  # 0 = the look has not happened, 1 = looked and kept, 2 = looked and sells
     risk_drop_units: float = 0.0  # the slow drop check, shadow only (lane field curve_risk_drop); 0 = off
     risk_drop_share: float = 0.25
@@ -552,7 +545,7 @@ class ProfitWatcher:
             )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._loss_sale_hit(t, bid, now) or self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._risk_quote_hit(t, bid, now) or self._strike_through_hit(t, bid, now, now) or self._cross_take_hit(t, bid) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._late_drop_hit(t, bid, now) or self._settlement_hit(t, bid, now, e)
+            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._risk_quote_hit(t, bid, now) or self._strike_through_hit(t, bid, now, now) or self._cross_take_hit(t, bid) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._late_drop_hit(t, bid, now) or self._settlement_hit(t, bid, now, e)
             if reason and t.cross_gap > 0 and e.get("src") == "poly":
                 reason = self._cross_checked(t, bid, now, reason)
             if reason and key not in self._inflight:
@@ -922,78 +915,6 @@ class ProfitWatcher:
         if read is None:
             return None
         return curverisk.risk(read.p, net, t.risk_hist if t.risk_history else 1.0, 0.0).q_spot
-
-    def _loss_sale_hit(self, t: Target, bid: float, now: float) -> str | None:
-        """The always-on loss sale (lane field loss_sale_wobbles): the bid has been at or under the line set when the bet was first watched, on every quote, for the scaled wait (_loss_wait). A quote over the line starts the count again, so a swing through the line that comes back sells nothing. Memory only."""
-        if t.loss_line <= 0 or bid <= 0:
-            return None
-        if bid > t.loss_line + 1e-9:
-            t.loss_sale_since = 0.0
-            return None
-        spot_note = ""
-        if t.loss_spot:
-            behind = self._spot_behind(t, now)
-            if behind is not None:
-                if not behind[0]:
-                    t.loss_sale_since = 0.0  # the price has dipped but the index is still on the bet's side: not a bet gone wrong
-                    return None
-                spot_note = f", and the index {behind[1]:.6g} is on the wrong side of the target {behind[2]:.6g}"
-        if t.loss_sale_since <= 0:
-            t.loss_sale_since = now
-        held, wait = now - t.loss_sale_since, self._loss_wait(t, bid, now)
-        if held < wait - 1e-9 or time.time() < t.retry_after:
-            return None
-        return f"loss sale: bid {bid:.2f} is at or under the line {t.loss_line:.2f} ({t.loss_note}) and has been for {held:.0f}s of a {wait:.0f}s wait{spot_note}; {t.entry:.2f} paid"
-
-    def _spot_behind(self, t: Target, now: float) -> tuple[bool, float, float] | None:
-        """(the index is on the wrong side of the target for the side held, the index, the target), from memory; None when either cannot be read (no index for the series, no tick in the last 30 s, no target)."""
-        index = t.shock_index or t.index_id
-        strike = ticks_mod.strikes.get(t.ticker) or t.strike or t.shock_ref
-        if not index or not strike or strike <= 0:
-            return None
-        got = ticks_mod.history.window(index, now - 30.0, now)
-        if not got or not got[1]:
-            return None
-        spot = float(got[1][-1])
-        return (spot < strike) if t.side == "yes" else (spot > strike), spot, float(strike)
-
-    def _loss_wait(self, t: Target, bid: float, now: float) -> float:
-        """Seconds the loss sale waits, scaled as the max-loss stop's wait is (curverisk.stop_wait): the market's own recovery time from its last hour, less the deeper the bid is under the line, times the share of the market still to run, at most loss_wait_share of the time left. With no close time to scale by it does not wait."""
-        left = t.close_ts - now if t.close_ts > 0 else 0.0
-        if t.loss_wait_share <= 0 or left <= 0:
-            return 0.0
-        base = t.loss_wait_default
-        index = t.shock_index or t.index_id
-        try:
-            stats = variants.comeback_stats(index, now) if index else None
-        except Exception:
-            stats = None
-        if stats is not None and stats[1] >= 5:
-            base = stats[2]
-        return curverisk.stop_wait(bid, t.loss_line, left, base, t.loss_wait_share)
-
-    def _arm_loss_sale(self, t: Target, wobbles: float, now: float) -> None:
-        """Set the loss sale's line once, from memory: the side's bid now (the bet has just been bought), the market's wobble so far, the price paid."""
-        from . import riskscore
-
-        t.loss_wobbles = wobbles
-        if wobbles <= 0:
-            t.loss_line = 0.0
-            return
-        if t.loss_line > 0:
-            return
-        rows = ticks_mod.mids.quotes(t.ticker)
-        buy_bid, wob = t.cur_bid, None
-        if rows:
-            _, yb, ya = rows[-1]
-            if buy_bid <= 0:
-                buy_bid = yb if t.side == "yes" else 1.0 - ya
-            if t.close_ts > 0:
-                wob = riskscore.wobble([(r[0], (r[1] + r[2]) / 2.0) for r in rows], t.close_ts - 900.0, rows[-1][0])  # up to the market's own latest quote
-        t.loss_line = riskscore.loss_line(buy_bid, wob, t.entry, wobbles)
-        half = riskscore.SALE_SHARE * t.entry
-        t.loss_note = f"half the {t.entry:.2f} paid" if t.loss_line <= half + 1e-9 else f"{wobbles:g} wobbles of {100 * (wob or 0):.1f} cents under the {buy_bid:.2f} bid at the buy"
-        log.info("watcher: loss sale armed on %s %s: sells at a bid of %.2f or under (%s)", t.ticker, t.lane, t.loss_line, t.loss_note)
 
     def _risk_quote_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The single risk exit on Kalshi's own quote (2026-11-13, user: "switch to use kalshis price instead of the external feeds for everything", then "exit first"): for a lane that gives the spot cushion no weight the chance the side pays IS the bid net of the sell fee, so the exit needs no spot feed, reads every quote and acts the second the price moves."""
@@ -2118,11 +2039,6 @@ class ProfitWatcher:
                 if (ticker, lane) not in self._shock_logged:
                     self._shock_logged.add((ticker, lane))
                     log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
-            self._arm_loss_sale(held, spec.loss_sale_wobbles, time.time())
-            held.loss_wait_share, held.loss_wait_default = spec.loss_sale_wait_share, spec.curve_wait_default
-            held.loss_spot = spec.loss_sale_spot
-            if spec.loss_sale_wobbles > 0 and not held.index_id:
-                held.index_id = strike_index_for(ticker.split("-")[0]) or ""  # the wait reads this market's own recovery time from its index in memory
             if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
@@ -2540,7 +2456,7 @@ class ProfitWatcher:
                 bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
             resting_paper = (spec := lane_specs(s).get(lane)) is not None and spec.rest_sell and not s.is_live(lane, ticker.split("-")[0])
-            cut = (why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst", "strike-through", "shock exit", "wrong-side exit", "curve exit", "curve risk exit", "loss sale")) and not runner.is_profit_sale(why)) or (why.startswith("cash-out:") and " under the " in why)
+            cut = (why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst", "strike-through", "shock exit", "wrong-side exit", "curve exit", "curve risk exit")) and not runner.is_profit_sale(why)) or (why.startswith("cash-out:") and " under the " in why)
             if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not resting_paper and not cut:  # a profit-take never sells for a loss after both fees; a peak-crash, a stop, the settlement guard, a last-two-minutes burst, a strike-through sale, a shock exit, a wrong-side exit, the curve exit (all four of its sales: it cuts losses by design, and until 2026-11-10 this veto declined every one below cost, so the time-to-go sale never sold), and a timed drop do (the point is to get out). A paper lane that rests its sale is not re-read at all: its order filled at the target when the bid touched it, so a dipped re-read cannot veto it
                 self._back_off(ticker, lane)
                 return
