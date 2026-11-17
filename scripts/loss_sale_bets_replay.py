@@ -43,15 +43,15 @@ def wobble(qt, qb, qa, ts):
     return v if v > 0 else None
 
 
-def run(times, sb, close, line_at, wait_at):
-    """The first moment the bid has stayed at or under its line for the wait; returns the index or None."""
+def run(times, sb, close, line_at, wait_at, ok_at=None):
+    """The first moment the bid has stayed at or under its line for the wait (and, with `ok_at`, the spot agreed the whole time); returns the index or None."""
     since = None
     for i in range(len(times)):
         left = close - times[i]
         if left <= 0:
             break
         ln = line_at(left)
-        if ln is None or sb[i] > ln + 1e-9 or sb[i] <= 0:
+        if ln is None or sb[i] > ln + 1e-9 or sb[i] <= 0 or (ok_at is not None and not ok_at(times[i])):
             since = None
             continue
         if since is None:
@@ -61,7 +61,23 @@ def run(times, sb, close, line_at, wait_at):
     return None
 
 
-NAMES = ["hold", "live today", "quarter wait", "sliding line", "last 3 minutes", "0.12 line"]
+NAMES = ["hold", "live today", "spot behind", "spot behind 0.5", "spot behind 1.0", "quarter wait", "sliding line", "last 3 minutes", "0.12 line"]
+# 2026-11-17, second run (user: "how can we tweak so it doesn't sell just because of a couple dips?"; "does it care about the price at all? or the amount it dipped?"): the live version reads the price paid and the depth of the dip and nothing else. "spot behind": the same line and wait, but the bid only counts as under the line while the index is on the wrong side of the target for the side (the cushion, in the index's typical moves for the time left, under 0; under -0.5; under -1.0). A dip in the contract's price with the index still on the bet's side is not sold.
+CUSH = {}
+for r_ in list(csv.reader(open(R.OUT)))[1:]:
+    CUSH.setdefault(r_[0], []).append((int(r_[1]), float(r_[7])))
+import bisect  # noqa: E402
+
+
+def cushion_at(tk, side, t):
+    rows_ = CUSH.get(tk)
+    if not rows_:
+        return None
+    i = bisect.bisect_right(rows_, (t, 9e9)) - 1
+    if i < 0 or t - rows_[i][0] > 45:
+        return None
+    return rows_[i][1] if side == "yes" else -rows_[i][1]
+
 bets, skipped = [], 0
 for r in csv.reader(open(f"{R.ROOT}/lane_bets.csv")):
     if len(r) != 5:
@@ -93,9 +109,16 @@ for r in csv.reader(open(f"{R.ROOT}/lane_bets.csv")):
         "last 3 minutes": (lambda left: half if left <= 180.0 else None, quarter),
         "0.12 line": (lambda left: 0.12, quarter),
     }
+    live_wait = lambda b, ln, left: curverisk.stop_wait(b, ln, left, 60.0, 0.25)  # noqa: E731
+
+    def behind(depth):
+        return lambda t_, tk=tk, side=side: (lambda c: c is not None and c < -depth)(cushion_at(tk, side, t_))
+
+    versions |= {"spot behind": (lambda left: near, live_wait, behind(0.0)), "spot behind 0.5": (lambda left: near, live_wait, behind(0.5)), "spot behind 1.0": (lambda left: near, live_wait, behind(1.0))}
     nets, sold = {"hold": held}, {}
-    for name, (line_at, wait_at) in versions.items():
-        i = run(times, sb, close, line_at, wait_at)
+    for name, spec_ in versions.items():
+        line_at, wait_at = spec_[0], spec_[1]
+        i = run(times, sb, close, line_at, wait_at, spec_[2] if len(spec_) > 2 else None)
         if i is None:
             nets[name] = held
         else:
