@@ -1,0 +1,109 @@
+window: the user's own round trips on 15-minute markets, opened 11-11 to 11-16 ET, from the account's fills: 84 trips, $1290 put in, $-143.60 after every fee
+'$1 a trip' counts every trip the same, so a large stake cannot carry a row. Prices and fees are the real fills'.
+
+all
+  all                                trips  84 | ahead  37 ( 44%) | total losses 45 | avg paid 0.26 | put in $  1290 | made $ -143.60 | $1 a trip  -12.88 | median hold  3.0 min
+
+how the trip was closed
+  1 sold before the close            trips  35 | ahead  31 ( 89%) | total losses  2 | avg paid 0.30 | put in $   476 | made $ +305.07 | $1 a trip  +27.78 | median hold  2.1 min
+  2 held to settlement               trips  48 | ahead   6 ( 12%) | total losses 42 | avg paid 0.21 | put in $   766 | made $ -405.46 | $1 a trip  -39.76 | median hold  4.4 min
+  3 part sold, part held             trips   1 | ahead   0 (  0%) | total losses  1 | avg paid 0.78 | put in $    48 | made $  -43.21 | $1 a trip   -0.90 | median hold  4.9 min
+
+by the time zone of the buy
+  1 first 3 minutes                  trips   9 | ahead   7 ( 78%) | total losses  2 | avg paid 0.33 | put in $   191 | made $  +89.21 | $1 a trip   +4.40 | median hold  4.7 min
+  2 3 to 10 minutes                  trips  38 | ahead  19 ( 50%) | total losses 18 | avg paid 0.26 | put in $   599 | made $ -253.03 | $1 a trip   -3.96 | median hold  5.4 min
+  3 the close (10 to 15)             trips  37 | ahead  11 ( 30%) | total losses 25 | avg paid 0.24 | put in $   501 | made $  +20.22 | $1 a trip  -13.32 | median hold  2.0 min
+
+sold before the close, by the time zone of the buy
+  1 first 3 minutes                  trips   7 | ahead   7 (100%) | total losses  0 | avg paid 0.32 | put in $   181 | made $  +99.64 | $1 a trip   +6.59 | median hold  3.9 min
+  2 3 to 10 minutes                  trips  20 | ahead  18 ( 90%) | total losses  1 | avg paid 0.29 | put in $   168 | made $ +110.88 | $1 a trip  +13.58 | median hold  2.2 min
+  3 the close (10 to 15)             trips   8 | ahead   6 ( 75%) | total losses  1 | avg paid 0.32 | put in $   127 | made $  +94.55 | $1 a trip   +7.62 | median hold  0.7 min
+
+held to settlement, by the time zone of the buy
+  1 first 3 minutes                  trips   2 | ahead   0 (  0%) | total losses  2 | avg paid 0.34 | put in $    10 | made $  -10.43 | $1 a trip   -2.18 | median hold 14.9 min
+  2 3 to 10 minutes                  trips  18 | ahead   1 (  6%) | total losses 17 | avg paid 0.22 | put in $   431 | made $ -363.91 | $1 a trip  -17.54 | median hold  7.7 min
+  3 the close (10 to 15)             trips  28 | ahead   5 ( 18%) | total losses 23 | avg paid 0.20 | put in $   326 | made $  -31.12 | $1 a trip  -20.04 | median hold  2.1 min
+
+by the price paid
+  1 under 0.20                       trips  42 | ahead  10 ( 24%) | total losses 31 | avg paid 0.10 | put in $   248 | made $  -33.39 | $1 a trip  -11.12 | median hold  2.8 min
+  2 0.20 to 0.40                     trips  27 | ahead  15 ( 56%) | total losses 11 | avg paid 0.28 | put in $   502 | made $ -125.11 | $1 a trip   -1.87 | median hold  4.7 min
+  3 0.40 to 0.60                     trips   6 | ahead   4 ( 67%) | total losses  2 | avg paid 0.45 | put in $   188 | made $   +7.92 | $1 a trip   -0.26 | median hold  7.1 min
+  4 0.60 to 0.75                     trips   3 | ahead   3 (100%) | total losses  0 | avg paid 0.71 | put in $   103 | made $  +35.48 | $1 a trip   +0.85 | median hold  1.7 min
+  5 0.75 and over                    trips   6 | ahead   5 ( 83%) | total losses  1 | avg paid 0.85 | put in $   250 | made $  -28.50 | $1 a trip   -0.48 | median hold  2.0 min
+
+sold before the close, by the price paid
+  1 under 0.20                       trips  11 | ahead   9 ( 82%) | total losses  1 | avg paid 0.13 | put in $    63 | made $ +137.07 | $1 a trip  +17.18 | median hold  2.1 min
+  2 0.20 to 0.40                     trips  17 | ahead  15 ( 88%) | total losses  1 | avg paid 0.28 | put in $   255 | made $ +148.04 | $1 a trip   +9.36 | median hold  1.9 min
+  3 0.40 to 0.60                     trips   3 | ahead   3 (100%) | total losses  0 | avg paid 0.40 | put in $    85 | made $  +14.63 | $1 a trip   +0.88 | median hold  4.7 min
+  4 0.60 to 0.75                     trips   1 | ahead   1 (100%) | total losses  0 | avg paid 0.72 | put in $     9 | made $   +1.00 | $1 a trip   +0.11 | median hold  1.4 min
+  5 0.75 and over                    trips   3 | ahead   3 (100%) | total losses  0 | avg paid 0.84 | put in $    65 | made $   +4.33 | $1 a trip   +0.26 | median hold  2.0 min
+
+by day
+  11-11                              trips  30 | ahead  14 ( 47%) | total losses 16 | avg paid 0.25 | put in $   689 | made $  -35.21 | $1 a trip   +1.66 | median hold  3.3 min
+  11-12                              trips  33 | ahead  12 ( 36%) | total losses 20 | avg paid 0.23 | put in $   389 | made $ -125.31 | $1 a trip  -12.77 | median hold  3.9 min
+  11-13                              trips   8 | ahead   3 ( 38%) | total losses  4 | avg paid 0.31 | put in $    66 | made $   -4.41 | $1 a trip   -0.23 | median hold  2.8 min
+  11-14                              trips   7 | ahead   5 ( 71%) | total losses  2 | avg paid 0.27 | put in $   109 | made $  +24.83 | $1 a trip   +1.19 | median hold  4.2 min
+  11-15                              trips   2 | ahead   0 (  0%) | total losses  2 | avg paid 0.10 | put in $    10 | made $  -10.07 | $1 a trip   -2.57 | median hold  3.2 min
+  11-16                              trips   4 | ahead   3 ( 75%) | total losses  1 | avg paid 0.47 | put in $    27 | made $   +6.57 | $1 a trip   -0.16 | median hold  1.5 min
+
+by stake
+  1 under $5                         trips  38 | ahead  12 ( 32%) | total losses 25 | avg paid 0.15 | put in $   118 | made $  -28.50 | $1 a trip  -10.45 | median hold  2.2 min
+  2 $5 to $20                        trips  29 | ahead  14 ( 48%) | total losses 14 | avg paid 0.23 | put in $   331 | made $  -10.98 | $1 a trip   -1.01 | median hold  4.7 min
+  3 $20 and over                     trips  17 | ahead  11 ( 65%) | total losses  6 | avg paid 0.52 | put in $   842 | made $ -104.12 | $1 a trip   -1.42 | median hold  4.9 min
+
+the side's price over the minute before the buy (the nudge, in typical minutes), where the tape has it
+  1 falling (under -0.5)             trips  32 | ahead  12 ( 38%) | total losses 18 | avg paid 0.22 | put in $   404 | made $  +67.48 | $1 a trip   -6.08 | median hold  3.5 min
+  2 flat                             trips  29 | ahead  12 ( 41%) | total losses 17 | avg paid 0.24 | put in $   548 | made $ -221.76 | $1 a trip   -8.87 | median hold  5.5 min
+  3 rising (over 0.5)                trips  11 | ahead   8 ( 73%) | total losses  3 | avg paid 0.46 | put in $   255 | made $  +32.69 | $1 a trip   +4.59 | median hold  1.3 min
+
+target placement in the hour view, turned to the side bought, where the tape has it
+  1 little room                      trips  20 | ahead  10 ( 50%) | total losses 10 | avg paid 0.26 | put in $   373 | made $  -91.73 | $1 a trip   +0.98 | median hold  4.6 min
+  2 middle                           trips  30 | ahead  13 ( 43%) | total losses 16 | avg paid 0.26 | put in $   419 | made $   +5.17 | $1 a trip   -6.58 | median hold  2.4 min
+  3 all the room                     trips  22 | ahead   9 ( 41%) | total losses 12 | avg paid 0.28 | put in $   415 | made $  -35.03 | $1 a trip   -4.77 | median hold  3.2 min
+
+target placement in the 15-minute view
+  1 little room                      trips  28 | ahead  13 ( 46%) | total losses 14 | avg paid 0.18 | put in $   355 | made $  -46.39 | $1 a trip   +2.09 | median hold  4.1 min
+  2 middle                           trips  32 | ahead  13 ( 41%) | total losses 19 | avg paid 0.21 | put in $   491 | made $   -5.18 | $1 a trip   -8.07 | median hold  4.0 min
+  3 all the room                     trips  12 | ahead   6 ( 50%) | total losses  5 | avg paid 0.59 | put in $   361 | made $  -70.02 | $1 a trip   -4.38 | median hold  2.2 min
+
+THE SALES: 35 trips sold before the close
+  sold higher than bought: 31 trips, a median +15 cents a contract (a quarter under +9, a quarter over +26), held a median 2.1 min, made $+332.48
+  sold lower than bought:  4 trips, a median -13 cents a contract (a quarter under -18, a quarter over -6), held a median 3.0 min, made $-27.41
+  sales made with this long left in the market: median 4.6 min
+
+every trip sold before the close (buy minute | side | paid -> sold | cents | held | stake | made):
+  11-11 KXPALLADIUM15M min  1.3 | no  | 0.40 -> 0.44 |   +4c |  4.7 min | $ 40.00 | $  +1.83
+  11-11 KXWTI15M       min  1.8 | yes | 0.40 -> 0.50 |  +10c |  8.6 min | $ 40.00 | $ +10.00
+  11-11 KXCOPPER15M    min  2.1 | yes | 0.28 -> 0.37 |   +9c |  0.4 min | $  9.52 | $  +2.05
+  11-11 KXGOLD15M      min  2.4 | yes | 0.35 -> 0.50 |  +15c | 12.0 min | $ 47.82 | $ +18.32
+  11-11 KXGOLD15M      min  2.8 | no  | 0.10 -> 0.55 |  +45c |  2.4 min | $ 10.21 | $ +45.31
+  11-11 KXZEC15M       min  7.6 | yes | 0.21 -> 0.30 |   +9c |  1.9 min | $  4.73 | $  +1.68
+  11-11 KXNATGAS15M    min  8.1 | yes | 0.18 -> 0.81 |  +63c |  3.6 min | $ 18.00 | $ +60.89
+  11-11 KXGOLD15M      min  8.9 | no  | 0.39 -> 0.62 |  +23c |  0.4 min | $ 14.33 | $  +7.23
+  11-11 KXWTI15M       min 10.6 | no  | 0.33 -> 0.46 |  +13c |  1.1 min | $ 14.33 | $  +4.41
+  11-11 KXGOLD15M      min 11.9 | no  | 0.25 -> 0.66 |  +41c |  0.8 min | $ 47.51 | $ +72.79
+  11-11 KXGOLD15M      min 13.6 | no  | 0.26 -> 0.57 |  +31c |  0.3 min | $  9.36 | $ +10.82
+  11-12 KXZEC15M       min  2.1 | no  | 0.40 -> 0.65 |  +25c |  3.9 min | $  4.80 | $  +2.80
+  11-12 KXGOLD15M      min  3.2 | no  | 0.12 -> 0.37 |  +25c |  0.7 min | $  4.71 | $  +9.52
+  11-12 KXBTC15M       min  4.1 | no  | 0.24 -> 0.48 |  +24c |  5.7 min | $  2.74 | $  +2.39
+  11-12 KXGOLD15M      min  4.3 | no  | 0.16 -> 0.25 |   +9c |  0.5 min | $  9.31 | $  +4.69
+  11-12 KXPLATINUM15M  min  4.9 | no  | 0.33 -> 0.50 |  +17c |  2.1 min | $  4.51 | $  +2.11
+  11-12 KXWTI15M       min  5.9 | no  | 0.25 -> 0.37 |  +11c |  6.6 min | $ 12.64 | $  +5.30
+  11-12 KXGOLD15M      min  6.0 | no  | 0.20 -> 0.35 |  +15c |  5.4 min | $ 10.00 | $  +7.50
+  11-12 KXBTC15M       min  7.1 | yes | 0.21 -> 0.13 |   -8c |  4.7 min | $  9.05 | $  -4.29
+  11-12 KXBTC15M       min  7.2 | yes | 0.20 -> 0.01 |  -19c |  5.1 min | $ 20.00 | $ -20.42
+  11-12 KXCOPPER15M    min  8.0 | yes | 0.13 -> 0.40 |  +27c |  2.7 min | $  2.83 | $  +5.33
+  11-12 KXGOLD15M      min  9.5 | no  | 0.03 -> 0.04 |   +1c |  2.1 min | $  4.65 | $  +1.19
+  11-12 KXZEC15M       min 12.5 | yes | 0.19 -> 0.02 |  -17c |  1.3 min | $  2.70 | $  -2.61
+  11-12 KXGOLD15M      min 12.6 | no  | 0.32 -> 0.80 |  +48c |  0.2 min | $  1.60 | $  +2.27
+  11-13 KXBTC15M       min  5.8 | no  | 0.77 -> 0.86 |   +9c |  2.2 min | $  4.50 | $  +0.53
+  11-13 KXBTC15M       min 10.4 | yes | 0.12 -> 0.65 |  +53c |  2.7 min | $  0.94 | $  +3.97
+  11-13 KXBTC15M       min 13.4 | no  | 0.19 -> 0.19 |   +0c |  0.0 min | $  0.78 | $  -0.09
+  11-13 KXBTC15M       min 13.9 | yes | 0.90 -> 0.96 |   +6c |  0.6 min | $ 49.64 | $  +2.99
+  11-14 KXBTC15M       min  3.0 | no  | 0.32 -> 0.55 |  +23c |  1.1 min | $ 28.80 | $ +19.33
+  11-14 KXBTC15M       min  5.0 | yes | 0.37 -> 0.77 |  +40c |  4.6 min | $ 11.10 | $ +11.14
+  11-14 KXBTC15M       min  6.0 | yes | 0.11 -> 0.25 |  +14c |  4.8 min | $  8.40 | $  +8.84
+  11-14 KXBTC15M       min  9.7 | yes | 0.06 -> 0.10 |   +4c |  0.2 min | $  0.06 | $  +0.03
+  11-16 KXGOLD15M      min  3.6 | no  | 0.27 -> 0.50 |  +23c |  1.5 min | $  6.75 | $  +5.41
+  11-16 KXWTI15M       min  7.2 | no  | 0.84 -> 0.92 |   +8c |  2.0 min | $ 10.37 | $  +0.81
+  11-16 KXBRENT15M     min  7.6 | no  | 0.72 -> 0.81 |   +9c |  1.4 min | $  9.47 | $  +1.00

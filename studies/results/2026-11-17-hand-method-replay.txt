@@ -117,3 +117,13 @@ NO side, all the room in the hour view, by time zone
   3 the close (10 to 15)                    208 |   -3.68 (4) |   -4.47 (2) |   -5.51 (2) |   -7.14 (1) |   -5.51 (2) |   -4.32 (4) |   -3.65 (4) |  +0.81
 
 the takes came a median of 226 s after the buy (a quarter under 111 s, a quarter over 385 s)
+
+THE SCORE AS A SELECTOR: among the pattern's buys, which reach +20 before the loss sale at -20. Walk-forward: fit on the days before, scored on the next day; fifths by score, the cuts from the earlier days
+  fifth by score               buys | reached the take | cents per $ | days ahead of 6
+  1 lowest                     1736 |              44% |       -8.92 | 0
+  2                            1689 |              47% |       -7.20 | 0
+  3                            1520 |              48% |       -6.42 | 0
+  4                            1519 |              49% |       -5.78 | 0
+  5 highest                    1370 |              46% |       -7.16 | 0
+  all (the same days)          7834 |              47% |       -7.15 |
+  what the fit leans on (all days, standardized weights, largest first): price +0.52, price paid -0.51, room hour +0.20, t30 +0.12, t60 +0.11, t15 -0.11, room 15 min -0.06, trend5 mid +0.06

@@ -89,7 +89,8 @@ for r in rows:
         free_at[(tk, sg)] = float(times[first_take]) if first_take is not None else 1e18
         p5, p15, p60, jump, eff = views.get((tk, ts), (0.5, 0.5, 0.5, 0.0, 0.0))
         room = [(1.0 - p) if sg > 0 else p for p in (p5, p15, p60)]  # 1 = the index sits at the far edge of the view on the side's own side of the target
-        trips.append(dict(side="YES" if sg > 0 else "NO", nets=nets, how=how, held=held, won=won, age=age, price=price, cush=sg * x[I_CUSH], room=room, tk=tk,
+        feats = [v if j == 8 else sg * v for j, v in enumerate(x)] + room + [jump, sg * eff, age / 900.0, price]  # the fifteen readings turned to the side bought, the three views, the two spot-history measures, the time gone, the price
+        trips.append(dict(feats=feats, side="YES" if sg > 0 else "NO", nets=nets, how=how, held=held, won=won, age=age, price=price, cush=sg * x[I_CUSH], room=room, tk=tk,
                           secs=float(times[first_take]) - ts if first_take is not None else None,
                           day=datetime.datetime.fromtimestamp(ts, ET).strftime("%m-%d"),
                           shape="3 a straight run (top third)" if abs(eff) >= E_HI else "1 waves (bottom third)" if abs(eff) < E_LO else "2 between",
@@ -156,3 +157,35 @@ table("by curve shape at the buy (the cushion zone)", lambda t: "1 behind or on 
 table("NO side, all the room in the hour view, by time zone", lambda t: zone(t) if (t["side"] == "NO" and t["room"][2] >= 2 / 3) else "(everything else)")
 cs = [t["secs"] for t in trips if t["secs"] is not None]
 print(f"the takes came a median of {np.median(cs):.0f} s after the buy (a quarter under {np.percentile(cs, 25):.0f} s, a quarter over {np.percentile(cs, 75):.0f} s)")
+
+
+# THE SCORE AS A SELECTOR (user, 2026-11-17: "the thing is we don't want to take every one. this is what i wanted the risk score to do").
+# Not "will the side win" against Kalshi's price: among the moments that fit the pattern, which ones reach the take before the loss sale. Fit on the pattern's own earlier buys (every day before), scored on the next day; the buys are then put in fifths by the score, the cuts taken from the earlier days.
+print("\nTHE SCORE AS A SELECTOR: among the pattern's buys, which reach +20 before the loss sale at -20. Walk-forward: fit on the days before, scored on the next day; fifths by score, the cuts from the earlier days")
+SEL = "-20"
+F = np.array([t["feats"] for t in trips])
+mu, sd = F.mean(0), F.std(0) + 1e-9
+Z = np.c_[np.ones(len(F)), (F - mu) / sd]
+yv = np.array([1.0 if t["how"][SEL] == "take" else 0.0 for t in trips])
+netv = np.array([t["nets"][SEL] for t in trips])
+dayv = np.array([t["day"] for t in trips])
+buckets = defaultdict(list)
+for k in range(2, len(days)):
+    tr, te = np.isin(dayv, days[:k]), dayv == days[k]
+    w = R._fit(Z[tr], yv[tr], ridge=1.0)
+    cuts = np.quantile(Z[tr] @ w, [0.2, 0.4, 0.6, 0.8])
+    for i in np.flatnonzero(te):
+        buckets[int(np.searchsorted(cuts, Z[i] @ w))].append((days[k], yv[i], netv[i]))
+print(f"  {'fifth by score':26s} {'buys':>6s} | reached the take | cents per $ | days ahead of {len(days) - 2}")
+for b in range(5):
+    got = buckets[b]
+    pd_ = defaultdict(float)
+    for d, _, v in got:
+        pd_[d] += v
+    print(f"  {['1 lowest', '2', '3', '4', '5 highest'][b]:26s} {len(got):6d} | {100 * np.mean([g[1] for g in got]):15.0f}% | {100 * np.mean([g[2] for g in got]):+11.2f} | {sum(v > 0 for v in pd_.values())}")
+allg = [g for b in buckets.values() for g in b]
+print(f"  {'all (the same days)':26s} {len(allg):6d} | {100 * np.mean([g[1] for g in allg]):15.0f}% | {100 * np.mean([g[2] for g in allg]):+11.2f} |")
+names_f = list(N) + ["room 5 min", "room 15 min", "room hour", "jumps in the hour", "run toward the side", "time gone", "price paid"]
+w_all = R._fit(Z, yv, ridge=1.0)
+order = np.argsort(-np.abs(w_all[1:]))
+print("  what the fit leans on (all days, standardized weights, largest first): " + ", ".join(f"{names_f[j]} {w_all[1 + j]:+.2f}" for j in order[:8]))
