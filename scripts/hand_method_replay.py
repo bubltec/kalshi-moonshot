@@ -30,7 +30,11 @@ from kalshi_moonshot.strategy import fee_per_contract as fee  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
 LOW, HIGH, TAKE, RISING = 0.60, 0.75, 0.20, 0.5
-EXITS = [("take only", None, None), ("-20", 0.20, None), ("-10", 0.10, None), ("-5", 0.05, None), ("-10, 5 min", 0.10, 300.0), ("3 min", None, 180.0), ("5 min", None, 300.0)]
+EXITS = [("take only", None, None), ("-20", 0.20, None), ("-5", 0.05, None)]
+# 2026-11-17, second run (user: "Yes, test it"): the loss sale sized to the market's own wobble. One wobble = the side's typical one-minute price move in this market so far (root-mean-square of its 5 s mid moves since the open, times sqrt(12)), read at the buy. The sale: the side's bid that many wobbles under its bid AT THE BUY (the fall, not the spread). And "the reason is gone": the index has moved one typical move against the side since the buy (the cushion one lower), sold at the bid at that 30 s mark.
+WOBBLES = [("1 wobble", 1.0), ("2 wobbles", 2.0), ("3 wobbles", 3.0)]
+SPOT = "spot -1"
+# the earlier run's other exits (-10: -7.13; -10 or 5 min: -7.13; 3 min: -6.97; 5 min: -6.32 cents per dollar) are in the commit of 2026-11-17 "the rising-side catch with loss sales"
 N = R.NAMES
 I_CUSH, I_NUDGE = N.index("cushion"), N.index("nudge")
 
@@ -41,6 +45,24 @@ J_LO, J_HI = np.quantile([float(r[5]) for r in vrows], [1 / 3, 2 / 3])  # thirds
 E_LO, E_HI = np.quantile([abs(float(r[6])) for r in vrows], [1 / 3, 2 / 3])
 rows.sort(key=lambda r: (r[0], int(r[1])))
 quotes = R._quotes_15m()
+cush_marks = defaultdict(list)
+for r_ in rows:
+    cush_marks[r_[0]].append((int(r_[1]), float(r_[6 + I_CUSH])))
+_wob: dict[str, tuple[float, np.ndarray, np.ndarray]] = {}
+
+
+def wobble(tk: str, ts: float) -> float | None:
+    """The side's typical one-minute price move in this market up to `ts` (the same for both sides: a NO mid is one minus the YES mid)."""
+    if tk not in _wob:
+        qt, qb, qa = quotes[tk]
+        g = np.arange(qt[0], qt[-1] + 5.0, 5.0)
+        m = ((qb + qa) / 2.0)[np.clip(np.searchsorted(qt, g, side="right") - 1, 0, len(qt) - 1)]
+        _wob[tk] = (float(qt[0]), np.r_[0.0, np.cumsum(np.diff(m) ** 2)], g)
+    g0, cs, g = _wob[tk]
+    i = int((ts - g0) // 5.0)
+    if i < 6 or i >= len(cs):
+        return None
+    return float(np.sqrt(cs[i] / i) * np.sqrt(12.0))
 
 trips = []
 free_at: dict[tuple[str, int], float] = {}
@@ -86,11 +108,36 @@ for r in rows:
                 nets[name], how[name] = sale(i), why
             else:
                 nets[name], how[name] = held, "held"
+        wb = wobble(tk, ts)
+        bid0 = bid if sg > 0 else 1.0 - ask
+        for name, kk in WOBBLES:
+            cands = [(first_take, "take")] if first_take is not None else []
+            if wb and wb > 0:
+                cut = np.flatnonzero(side_bid <= bid0 - kk * wb + 1e-9)
+                if len(cut):
+                    cands.append((int(cut[0]), "loss sale"))
+            if cands:
+                i, why = min(cands)
+                nets[name], how[name] = sale(i), why
+            else:
+                nets[name], how[name] = held, "held"
+        cands = [(first_take, "take")] if first_take is not None else []
+        c0 = sg * x[I_CUSH]
+        gone = next((mt for mt, cv in cush_marks[tk] if mt > ts and sg * cv <= c0 - 1.0), None)
+        if gone is not None:
+            late = np.flatnonzero(times >= gone)
+            if len(late):
+                cands.append((int(late[0]), "loss sale"))
+        if cands:
+            i, why = min(cands)
+            nets[SPOT], how[SPOT] = sale(i), why
+        else:
+            nets[SPOT], how[SPOT] = held, "held"
         free_at[(tk, sg)] = float(times[first_take]) if first_take is not None else 1e18
         p5, p15, p60, jump, eff = views.get((tk, ts), (0.5, 0.5, 0.5, 0.0, 0.0))
         room = [(1.0 - p) if sg > 0 else p for p in (p5, p15, p60)]  # 1 = the index sits at the far edge of the view on the side's own side of the target
         feats = [v if j == 8 else sg * v for j, v in enumerate(x)] + room + [jump, sg * eff, age / 900.0, price]  # the fifteen readings turned to the side bought, the three views, the two spot-history measures, the time gone, the price
-        trips.append(dict(feats=feats, side="YES" if sg > 0 else "NO", nets=nets, how=how, held=held, won=won, age=age, price=price, cush=sg * x[I_CUSH], room=room, tk=tk,
+        trips.append(dict(feats=feats, wb=wb, side="YES" if sg > 0 else "NO", nets=nets, how=how, held=held, won=won, age=age, price=price, cush=sg * x[I_CUSH], room=room, tk=tk,
                           secs=float(times[first_take]) - ts if first_take is not None else None,
                           day=datetime.datetime.fromtimestamp(ts, ET).strftime("%m-%d"),
                           shape="3 a straight run (top third)" if abs(eff) >= E_HI else "1 waves (bottom third)" if abs(eff) < E_LO else "2 between",
@@ -102,7 +149,9 @@ days = sorted({t["day"] for t in trips})
 print(f"window: 2026-11-09 on, ET days {', '.join(days)}; {len(trips)} buys on {len({t['tk'] for t in trips})} markets; whole market, no other gate")
 print(f"the buy: a side at {LOW:.2f} to {HIGH:.2f} at the ask whose price rose over {RISING} typical minutes in the last minute")
 print("each cell: cents per dollar staked, the fee on every leg, and (days ahead of 8). The same buys under each exit; see the top of scripts/hand_method_replay.py for the exits. All settings fixed before the run\n")
-names = [e[0] for e in EXITS]
+names = [e[0] for e in EXITS] + [w[0] for w in WOBBLES] + [SPOT]
+wbs = np.array([t["wb"] for t in trips if t["wb"]])
+print(f"one wobble (the side's typical one-minute price move at the buy): a median {100 * np.median(wbs):.1f} cents, a quarter of buys under {100 * np.percentile(wbs, 25):.1f}, a quarter over {100 * np.percentile(wbs, 75):.1f}\n")
 
 
 def line(label, sel):
@@ -153,6 +202,8 @@ table("SPOT HISTORY: the index's last 15 minutes, waves or a straight run (net m
 table("the same, with which way it pointed", lambda t: f"{t['shape'][:2]}{t['way']:19s}{t['shape'][1:]}")
 table("SPOT HISTORY: jumps or dives in the last hour (the largest one-minute move, in typical minutes; thirds of the tape)", lambda t: t["jumpy"])
 table("by side and jumps in the hour", lambda t: f"{t['side']:3s} {t['jumpy']}")
+wq1, wq2 = np.quantile(wbs, [1 / 3, 2 / 3])
+table("by how much the market wobbles (one wobble at the buy, thirds of the buys): a calm market, an ordinary one, a jumpy one", lambda t: "(no reading)" if not t["wb"] else f"1 calm (under {100 * wq1:.1f}c)" if t["wb"] < wq1 else f"2 ordinary ({100 * wq1:.1f} to {100 * wq2:.1f}c)" if t["wb"] < wq2 else f"3 jumpy (over {100 * wq2:.1f}c)")
 table("by curve shape at the buy (the cushion zone)", lambda t: "1 behind or on the line (under 0.5)" if t["cush"] < 0.5 else "2 ahead 0.5 to 1.5" if t["cush"] < 1.5 else "3 ahead over 1.5")
 table("NO side, all the room in the hour view, by time zone", lambda t: zone(t) if (t["side"] == "NO" and t["room"][2] >= 2 / 3) else "(everything else)")
 cs = [t["secs"] for t in trips if t["secs"] is not None]

@@ -98,3 +98,57 @@ print(f"  sales made with this long left in the market: median {np.median([900 -
 print("\nevery trip sold before the close (buy minute | side | paid -> sold | cents | held | stake | made):")
 for t in sorted(sold, key=lambda t: (t["day"], t["age"])):
     print(f"  {t['day']} {t['tk'].split('-')[0]:14s} min {t['age'] / 60:4.1f} | {t['side']:3s} | {t['ep']:.2f} -> {t['xp']:.2f} | {100 * t['move']:+4.0f}c | {t['hold'] / 60:4.1f} min | ${t['cost']:6.2f} | ${t['pnl']:+7.2f}")
+
+# THE SAME TRIPS WITH A LOSS SALE THAT IS ALWAYS ON (user, 2026-11-17: "it needs to be able to ... correct a bad buy. this is how we keep losing horribly").
+# Each trip as it was really traded, except that a loss sale applies from the buy to the trip's own end: if it fires first, the trip ends there at the bid (fee included); otherwise nothing changes. So a winner that dipped first is cut too.
+from kalshi_moonshot.strategy import fee_per_contract as fee  # noqa: E402
+
+quotes = R._quotes_15m()
+
+
+def wobble(tk, ts):
+    qt, qb, qa = quotes[tk]
+    g = np.arange(qt[0], min(qt[-1], ts) + 5.0, 5.0)
+    if len(g) < 8:
+        return None
+    m = ((qb + qa) / 2.0)[np.clip(np.searchsorted(qt, g, side="right") - 1, 0, len(qt) - 1)]
+    return float(np.sqrt(np.mean(np.diff(m) ** 2)) * np.sqrt(12.0))
+
+
+print("\nTHE SAME TRIPS WITH A LOSS SALE ALWAYS ON, from the buy to the trip's own end (a trip it does not touch is counted as it really ended)")
+rules = [("as really traded", None), ("bid 1 wobble under the buy's bid", ("w", 1.0)), ("bid 2 wobbles under", ("w", 2.0)), ("bid at half the price paid", ("h", 0.5)), ("the lower of 2 wobbles and half the price", ("b", 2.0))]
+raw = {(r[1], round(float(r[4]), 1)): r for r in csv.reader(open("data/tape_archive/trips.csv")) if len(r) >= 16}
+for name, rule in rules:
+    tot, fired, saved, cut_winners, total_losses, n = 0.0, 0, 0.0, 0, 0, 0
+    for r in raw.values():
+        if r[2] not in ("manual", "mixed") or "15M-" not in r[1] or r[1] not in quotes:
+            continue
+        tk, side, t0, t1, ep, cnt, cost, pnl = r[1], r[3], float(r[4]), float(r[5]), float(r[6]), float(r[8]), float(r[9]), float(r[10])
+        if cost <= 0:
+            continue
+        n += 1
+        out = pnl
+        if rule is not None:
+            qt, qb, qa = quotes[tk]
+            a, b = int(np.searchsorted(qt, t0, side="right")), int(np.searchsorted(qt, t1, side="right"))
+            sb = qb[a:b] if side == "yes" else 1.0 - qa[a:b]
+            if a > 0 and len(sb):
+                bid0 = qb[a - 1] if side == "yes" else 1.0 - qa[a - 1]
+                wb = wobble(tk, t0)
+                lines = []
+                if rule[0] in ("w", "b") and wb:
+                    lines.append(bid0 - rule[1] * wb)
+                if rule[0] in ("h", "b"):
+                    lines.append(0.5 * ep)
+                if lines:
+                    line_ = max(lines) if rule[0] == "b" else lines[0]  # "the lower of": whichever loss is smaller, the line nearer the price
+                    hit = np.flatnonzero(sb <= line_ + 1e-9)
+                    if len(hit) and line_ > 0:
+                        s = max(float(sb[hit[0]]), 0.01)
+                        out = cnt * (s - fee(s)) - cost
+                        fired += 1
+                        saved += out - pnl
+                        cut_winners += pnl > 0
+        tot += out
+        total_losses += out <= -0.9 * cost
+    print(f"  {name:42s} trips {n:3d} | made ${tot:+8.2f} | total losses {total_losses:2d} | the sale fired on {fired:2d} trips ({cut_winners} of them trips that really ended ahead) | change from it ${saved:+8.2f}")

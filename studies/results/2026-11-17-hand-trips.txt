@@ -107,3 +107,10 @@ every trip sold before the close (buy minute | side | paid -> sold | cents | hel
   11-16 KXGOLD15M      min  3.6 | no  | 0.27 -> 0.50 |  +23c |  1.5 min | $  6.75 | $  +5.41
   11-16 KXWTI15M       min  7.2 | no  | 0.84 -> 0.92 |   +8c |  2.0 min | $ 10.37 | $  +0.81
   11-16 KXBRENT15M     min  7.6 | no  | 0.72 -> 0.81 |   +9c |  1.4 min | $  9.47 | $  +1.00
+
+THE SAME TRIPS WITH A LOSS SALE ALWAYS ON, from the buy to the trip's own end (a trip it does not touch is counted as it really ended)
+  as really traded                           trips  79 | made $ -127.64 | total losses 41 | the sale fired on  0 trips (0 of them trips that really ended ahead) | change from it $   +0.00
+  bid 1 wobble under the buy's bid           trips  79 | made $  +36.66 | total losses 23 | the sale fired on 28 trips (7 of them trips that really ended ahead) | change from it $ +164.30
+  bid 2 wobbles under                        trips  79 | made $ -137.54 | total losses 34 | the sale fired on 12 trips (4 of them trips that really ended ahead) | change from it $   -9.90
+  bid at half the price paid                 trips  79 | made $ -159.48 | total losses  2 | the sale fired on 50 trips (10 of them trips that really ended ahead) | change from it $  -31.84
+  the lower of 2 wobbles and half the price  trips  79 | made $ -113.73 | total losses  2 | the sale fired on 50 trips (10 of them trips that really ended ahead) | change from it $  +13.91
