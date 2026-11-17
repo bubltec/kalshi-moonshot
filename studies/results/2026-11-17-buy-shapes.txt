@@ -1,0 +1,206 @@
+
+window: live buys 11-13 11:02 to 11-17 08:13 ET; 525 settled; 102 without a curve reading (under 180 s of quotes before the buy, or the recorder was not writing)
+
+=== commodity, by the price paid a contract (fee in)
+    under 0.58                         n   0
+    0.58 to 0.70                       n  13 | staked $    117 | won  54% at 0.655 paid | held to settlement $  -23.93 (-20.5% of stake) | as traded $  -15.33
+    0.70 to 0.80                       n  33 | staked $    312 | won  76% at 0.764 paid | held to settlement $   -5.94 ( -1.9% of stake) | as traded $  -22.45
+    0.80 to 0.88                       n  77 | staked $    742 | won  82% at 0.843 paid | held to settlement $  -22.95 ( -3.1% of stake) | as traded $  -22.61
+    0.88 and over                      n  68 | staked $    658 | won  93% at 0.906 paid | held to settlement $  +11.48 ( +1.7% of stake) | as traded $  +10.39
+
+=== commodity, all prices
+    all                                n 191 | staked $   1828 | won  83% at 0.841 paid | held to settlement $  -41.34 ( -2.3% of stake) | as traded $  -50.01
+    no curve reading                   n  36 | staked $    327 | won  83% at 0.821 paid | held to settlement $   -0.01 ( -0.0% of stake) | as traded $   -6.31
+  place in its own range since the open
+    top fifth                          n 123 | staked $   1200 | won  85% at 0.862 paid | held to settlement $  -17.70 ( -1.5% of stake) | as traded $  -14.67
+    lower                              n  32 | staked $    301 | won  72% at 0.775 paid | held to settlement $  -23.63 ( -7.9% of stake) | as traded $  -29.03
+  the last 60 s, in typical minutes
+    up half or more                    n  83 | staked $    805 | won  78% at 0.846 paid | held to settlement $  -70.53 ( -8.8% of stake) | as traded $  -59.48
+    flat                               n  69 | staked $    667 | won  87% at 0.848 paid | held to settlement $  +18.05 ( +2.7% of stake) | as traded $   +4.63
+    down half or more                  n   3 | staked $     29 | won 100% at 0.724 paid | held to settlement $  +11.15 (+39.0% of stake) | as traded $  +11.15
+  share of the market it has led
+    under half                         n  17 | staked $    164 | won  65% at 0.806 paid | held to settlement $  -36.55 (-22.3% of stake) | as traded $  -16.41
+    half to 0.9                        n  48 | staked $    466 | won  92% at 0.841 paid | held to settlement $  +41.80 ( +9.0% of stake) | as traded $  +10.37
+    over 0.9                           n  90 | staked $    871 | won  81% at 0.854 paid | held to settlement $  -46.58 ( -5.4% of stake) | as traded $  -37.65
+  crossings of even since the open
+    none                               n  54 | staked $    514 | won  76% at 0.851 paid | held to settlement $  -55.55 (-10.8% of stake) | as traded $  -30.52
+    1 or 2                             n  47 | staked $    457 | won  94% at 0.857 paid | held to settlement $  +42.94 ( +9.4% of stake) | as traded $   +5.06
+    3 or more                          n  54 | staked $    529 | won  80% at 0.828 paid | held to settlement $  -28.72 ( -5.4% of stake) | as traded $  -18.24
+  range since the open, typical minutes
+    under 3                            n  14 | staked $    143 | won  57% at 0.781 paid | held to settlement $  -38.72 (-27.0% of stake) | as traded $  -27.23
+    3 to 6                             n 118 | staked $   1129 | won  84% at 0.846 paid | held to settlement $  -12.20 ( -1.1% of stake) | as traded $  -17.74
+    over 6                             n  23 | staked $    228 | won  91% at 0.879 paid | held to settlement $   +9.59 ( +4.2% of stake) | as traded $   +1.27
+  path since the open
+    choppy (under 0.15)                n  59 | staked $    579 | won  76% at 0.814 paid | held to settlement $  -31.53 ( -5.4% of stake) | as traded $  -47.57
+    0.15 to 0.4                        n  94 | staked $    901 | won  86% at 0.864 paid | held to settlement $  -12.94 ( -1.4% of stake) | as traded $   +1.87
+    straight (over 0.4)                n   2 | staked $     21 | won 100% at 0.868 paid | held to settlement $   +3.14 (+15.3% of stake) | as traded $   +2.00
+  minutes into the market
+    under 7                            n   0
+    7 to 10                            n  90 | staked $    869 | won  81% at 0.843 paid | held to settlement $  -35.69 ( -4.1% of stake) | as traded $  -38.77
+    over 10                            n  65 | staked $    632 | won  85% at 0.847 paid | held to settlement $   -5.65 ( -0.9% of stake) | as traded $   -4.93
+
+=== commodity, paid 0.70 to 0.80
+    all                                n  33 | staked $    312 | won  76% at 0.764 paid | held to settlement $   -5.94 ( -1.9% of stake) | as traded $  -22.45
+    no curve reading                   n   8 | staked $     78 | won  88% at 0.756 paid | held to settlement $  +12.25 (+15.7% of stake) | as traded $   +3.13
+  place in its own range since the open
+    top fifth                          n  14 | staked $    136 | won  71% at 0.768 paid | held to settlement $  -11.83 ( -8.7% of stake) | as traded $  -13.03
+    lower                              n  11 | staked $     98 | won  73% at 0.766 paid | held to settlement $   -6.37 ( -6.5% of stake) | as traded $  -12.55
+  the last 60 s, in typical minutes
+    up half or more                    n  12 | staked $    115 | won  75% at 0.773 paid | held to settlement $   -3.73 ( -3.2% of stake) | as traded $  -10.38
+    flat                               n  11 | staked $    100 | won  64% at 0.762 paid | held to settlement $  -20.48 (-20.6% of stake) | as traded $  -21.22
+    down half or more                  n   2 | staked $     19 | won 100% at 0.759 paid | held to settlement $   +6.02 (+32.0% of stake) | as traded $   +6.02
+  share of the market it has led
+    under half                         n   3 | staked $     31 | won  67% at 0.768 paid | held to settlement $   -3.91 (-12.8% of stake) | as traded $   +3.49
+    half to 0.9                        n  11 | staked $     94 | won 100% at 0.759 paid | held to settlement $  +29.94 (+31.9% of stake) | as traded $   +8.75
+    over 0.9                           n  11 | staked $    109 | won  45% at 0.774 paid | held to settlement $  -44.23 (-40.4% of stake) | as traded $  -37.83
+  crossings of even since the open
+    none                               n   7 | staked $     70 | won  43% at 0.775 paid | held to settlement $  -29.71 (-42.7% of stake) | as traded $  -23.31
+    1 or 2                             n   7 | staked $     70 | won  86% at 0.764 paid | held to settlement $   +7.28 (+10.4% of stake) | as traded $   -5.77
+    3 or more                          n  11 | staked $     94 | won  82% at 0.764 paid | held to settlement $   +4.23 ( +4.5% of stake) | as traded $   +3.50
+  range since the open, typical minutes
+    under 3                            n   4 | staked $     41 | won  50% at 0.759 paid | held to settlement $  -13.70 (-33.7% of stake) | as traded $  -13.70
+    3 to 6                             n  19 | staked $    173 | won  74% at 0.769 paid | held to settlement $  -10.73 ( -6.2% of stake) | as traded $  -16.16
+    over 6                             n   2 | staked $     20 | won 100% at 0.764 paid | held to settlement $   +6.23 (+31.1% of stake) | as traded $   +4.28
+  path since the open
+    choppy (under 0.15)                n  14 | staked $    129 | won  64% at 0.767 paid | held to settlement $  -22.89 (-17.7% of stake) | as traded $  -33.42
+    0.15 to 0.4                        n  11 | staked $    105 | won  82% at 0.767 paid | held to settlement $   +4.69 ( +4.5% of stake) | as traded $   +7.84
+    straight (over 0.4)                n   0
+  minutes into the market
+    under 7                            n   0
+    7 to 10                            n  13 | staked $    123 | won  77% at 0.766 paid | held to settlement $   -1.70 ( -1.4% of stake) | as traded $  -11.60
+    over 10                            n  12 | staked $    111 | won  67% at 0.768 paid | held to settlement $  -16.50 (-14.9% of stake) | as traded $  -13.98
+
+=== commodity, paid 0.80 to 0.88
+    all                                n  77 | staked $    742 | won  82% at 0.843 paid | held to settlement $  -22.95 ( -3.1% of stake) | as traded $  -22.61
+    no curve reading                   n  18 | staked $    161 | won  83% at 0.846 paid | held to settlement $   -7.65 ( -4.7% of stake) | as traded $   -6.51
+  place in its own range since the open
+    top fifth                          n  44 | staked $    438 | won  84% at 0.846 paid | held to settlement $   +3.59 ( +0.8% of stake) | as traded $   +2.01
+    lower                              n  15 | staked $    142 | won  73% at 0.834 paid | held to settlement $  -18.89 (-13.3% of stake) | as traded $  -18.10
+  the last 60 s, in typical minutes
+    up half or more                    n  34 | staked $    339 | won  76% at 0.841 paid | held to settlement $  -25.64 ( -7.6% of stake) | as traded $  -18.13
+    flat                               n  25 | staked $    242 | won  88% at 0.845 paid | held to settlement $  +10.33 ( +4.3% of stake) | as traded $   +2.03
+    down half or more                  n   0
+  share of the market it has led
+    under half                         n   4 | staked $     35 | won  75% at 0.835 paid | held to settlement $   -5.22 (-15.1% of stake) | as traded $   -2.37
+    half to 0.9                        n  19 | staked $    195 | won  89% at 0.847 paid | held to settlement $  +12.00 ( +6.1% of stake) | as traded $   +5.46
+    over 0.9                           n  36 | staked $    350 | won  78% at 0.841 paid | held to settlement $  -22.08 ( -6.3% of stake) | as traded $  -19.19
+  crossings of even since the open
+    none                               n  21 | staked $    206 | won  62% at 0.841 paid | held to settlement $  -49.27 (-23.9% of stake) | as traded $  -30.02
+    1 or 2                             n  17 | staked $    165 | won  94% at 0.840 paid | held to settlement $  +19.65 (+11.9% of stake) | as traded $   -4.07
+    3 or more                          n  21 | staked $    209 | won  90% at 0.847 paid | held to settlement $  +14.31 ( +6.8% of stake) | as traded $  +18.00
+  range since the open, typical minutes
+    under 3                            n   6 | staked $     61 | won  67% at 0.828 paid | held to settlement $  -11.74 (-19.1% of stake) | as traded $   -6.32
+    3 to 6                             n  47 | staked $    462 | won  81% at 0.844 paid | held to settlement $  -13.29 ( -2.9% of stake) | as traded $  -18.36
+    over 6                             n   6 | staked $     56 | won 100% at 0.853 paid | held to settlement $   +9.72 (+17.3% of stake) | as traded $   +8.58
+  path since the open
+    choppy (under 0.15)                n  21 | staked $    209 | won  81% at 0.835 paid | held to settlement $   +0.04 ( +0.0% of stake) | as traded $   +1.58
+    0.15 to 0.4                        n  37 | staked $    361 | won  81% at 0.847 paid | held to settlement $  -17.20 ( -4.8% of stake) | as traded $  -18.40
+    straight (over 0.4)                n   1 | staked $     10 | won 100% at 0.849 paid | held to settlement $   +1.86 (+17.7% of stake) | as traded $   +0.72
+  minutes into the market
+    under 7                            n   0
+    7 to 10                            n  42 | staked $    416 | won  79% at 0.842 paid | held to settlement $  -21.75 ( -5.2% of stake) | as traded $  -26.39
+    over 10                            n  17 | staked $    164 | won  88% at 0.845 paid | held to settlement $   +6.45 ( +3.9% of stake) | as traded $  +10.29
+
+=== crypto_multiscale, by the price paid a contract (fee in)
+    under 0.58                         n  37 | staked $    526 | won  54% at 0.526 paid | held to settlement $   +8.92 ( +1.7% of stake) | as traded $  -10.81
+    0.58 to 0.70                       n 108 | staked $   1638 | won  64% at 0.646 paid | held to settlement $  -46.67 ( -2.8% of stake) | as traded $   +3.80
+    0.70 to 0.80                       n 123 | staked $   2480 | won  68% at 0.756 paid | held to settlement $ -235.83 ( -9.5% of stake) | as traded $ -225.60
+    0.80 to 0.88                       n  57 | staked $   1124 | won  91% at 0.835 paid | held to settlement $ +113.79 (+10.1% of stake) | as traded $  +77.03
+    0.88 and over                      n   9 | staked $    133 | won  89% at 0.904 paid | held to settlement $  -20.46 (-15.4% of stake) | as traded $  -27.68
+
+=== crypto_multiscale, all prices
+    all                                n 334 | staked $   5901 | won  70% at 0.724 paid | held to settlement $ -180.25 ( -3.1% of stake) | as traded $ -183.27
+    no curve reading                   n  66 | staked $    911 | won  68% at 0.715 paid | held to settlement $  -26.50 ( -2.9% of stake) | as traded $  -40.31
+  place in its own range since the open
+    top fifth                          n 144 | staked $   2704 | won  73% at 0.767 paid | held to settlement $ -127.05 ( -4.7% of stake) | as traded $  -75.82
+    lower                              n 124 | staked $   2286 | won  67% at 0.676 paid | held to settlement $  -26.71 ( -1.2% of stake) | as traded $  -67.13
+  the last 60 s, in typical minutes
+    up half or more                    n 115 | staked $   2017 | won  72% at 0.713 paid | held to settlement $  +38.88 ( +1.9% of stake) | as traded $  +33.43
+    flat                               n 112 | staked $   2108 | won  68% at 0.740 paid | held to settlement $ -152.44 ( -7.2% of stake) | as traded $ -133.42
+    down half or more                  n  41 | staked $    865 | won  71% at 0.718 paid | held to settlement $  -40.20 ( -4.6% of stake) | as traded $  -42.97
+  share of the market it has led
+    under half                         n  80 | staked $   1235 | won  68% at 0.671 paid | held to settlement $  +69.11 ( +5.6% of stake) | as traded $ +107.39
+    half to 0.9                        n 103 | staked $   2011 | won  74% at 0.722 paid | held to settlement $   -7.57 ( -0.4% of stake) | as traded $  -68.62
+    over 0.9                           n  85 | staked $   1745 | won  68% at 0.767 paid | held to settlement $ -215.30 (-12.3% of stake) | as traded $ -181.72
+  crossings of even since the open
+    none                               n  47 | staked $    862 | won  60% at 0.770 paid | held to settlement $ -241.63 (-28.0% of stake) | as traded $ -209.23
+    1 or 2                             n  68 | staked $   1343 | won  81% at 0.750 paid | held to settlement $  +99.51 ( +7.4% of stake) | as traded $  +66.14
+    3 or more                          n 153 | staked $   2785 | won  69% at 0.700 paid | held to settlement $  -11.63 ( -0.4% of stake) | as traded $   +0.15
+  range since the open, typical minutes
+    under 3                            n 104 | staked $   1833 | won  60% at 0.673 paid | held to settlement $ -202.70 (-11.1% of stake) | as traded $ -199.22
+    3 to 6                             n 161 | staked $   3076 | won  77% at 0.753 paid | held to settlement $  +68.96 ( +2.2% of stake) | as traded $  +76.52
+    over 6                             n   3 | staked $     81 | won  67% at 0.839 paid | held to settlement $  -20.01 (-24.7% of stake) | as traded $  -20.25
+  path since the open
+    choppy (under 0.15)                n 185 | staked $   3229 | won  67% at 0.696 paid | held to settlement $ -106.38 ( -3.3% of stake) | as traded $  -99.73
+    0.15 to 0.4                        n  81 | staked $   1726 | won  77% at 0.778 paid | held to settlement $  -52.52 ( -3.0% of stake) | as traded $  -46.19
+    straight (over 0.4)                n   2 | staked $     35 | won 100% at 0.871 paid | held to settlement $   +5.15 (+14.8% of stake) | as traded $   +2.96
+  minutes into the market
+    under 7                            n 151 | staked $   2920 | won  68% at 0.722 paid | held to settlement $ -145.59 ( -5.0% of stake) | as traded $  -99.19
+    7 to 10                            n  77 | staked $   1411 | won  74% at 0.756 paid | held to settlement $  -35.52 ( -2.5% of stake) | as traded $  -36.61
+    over 10                            n  40 | staked $    660 | won  70% at 0.676 paid | held to settlement $  +27.35 ( +4.1% of stake) | as traded $   -7.15
+
+=== crypto_multiscale, paid 0.70 to 0.80
+    all                                n 123 | staked $   2480 | won  68% at 0.756 paid | held to settlement $ -235.83 ( -9.5% of stake) | as traded $ -225.60
+    no curve reading                   n  28 | staked $    440 | won  61% at 0.758 paid | held to settlement $  -82.01 (-18.6% of stake) | as traded $  -57.58
+  place in its own range since the open
+    top fifth                          n  57 | staked $   1202 | won  70% at 0.754 paid | held to settlement $  -90.00 ( -7.5% of stake) | as traded $ -102.05
+    lower                              n  38 | staked $    837 | won  71% at 0.758 paid | held to settlement $  -63.82 ( -7.6% of stake) | as traded $  -65.97
+  the last 60 s, in typical minutes
+    up half or more                    n  40 | staked $    812 | won  72% at 0.746 paid | held to settlement $   -0.01 ( -0.0% of stake) | as traded $  -46.16
+    flat                               n  35 | staked $    767 | won  69% at 0.760 paid | held to settlement $ -108.88 (-14.2% of stake) | as traded $  -91.28
+    down half or more                  n  20 | staked $    460 | won  70% at 0.767 paid | held to settlement $  -44.93 ( -9.8% of stake) | as traded $  -30.58
+  share of the market it has led
+    under half                         n  21 | staked $    354 | won  76% at 0.746 paid | held to settlement $  +22.76 ( +6.4% of stake) | as traded $   +6.29
+    half to 0.9                        n  36 | staked $    774 | won  69% at 0.751 paid | held to settlement $  -95.85 (-12.4% of stake) | as traded $  -79.04
+    over 0.9                           n  38 | staked $    911 | won  68% at 0.764 paid | held to settlement $  -80.74 ( -8.9% of stake) | as traded $  -95.27
+  crossings of even since the open
+    none                               n  22 | staked $    514 | won  50% at 0.763 paid | held to settlement $ -168.67 (-32.8% of stake) | as traded $ -163.16
+    1 or 2                             n  27 | staked $    549 | won  89% at 0.756 paid | held to settlement $  +97.07 (+17.7% of stake) | as traded $  +77.55
+    3 or more                          n  46 | staked $    976 | won  70% at 0.752 paid | held to settlement $  -82.23 ( -8.4% of stake) | as traded $  -82.41
+  range since the open, typical minutes
+    under 3                            n  30 | staked $    692 | won  63% at 0.749 paid | held to settlement $ -100.69 (-14.5% of stake) | as traded $ -111.65
+    3 to 6                             n  63 | staked $   1297 | won  75% at 0.759 paid | held to settlement $  -31.22 ( -2.4% of stake) | as traded $  -34.21
+    over 6                             n   2 | staked $     50 | won  50% at 0.776 paid | held to settlement $  -21.91 (-43.6% of stake) | as traded $  -22.15
+  path since the open
+    choppy (under 0.15)                n  58 | staked $   1193 | won  66% at 0.753 paid | held to settlement $ -164.42 (-13.8% of stake) | as traded $ -112.55
+    0.15 to 0.4                        n  37 | staked $    846 | won  78% at 0.761 paid | held to settlement $  +10.60 ( +1.3% of stake) | as traded $  -55.47
+    straight (over 0.4)                n   0
+  minutes into the market
+    under 7                            n  51 | staked $   1157 | won  69% at 0.753 paid | held to settlement $  -83.75 ( -7.2% of stake) | as traded $ -106.35
+    7 to 10                            n  34 | staked $    687 | won  74% at 0.758 paid | held to settlement $  -24.50 ( -3.6% of stake) | as traded $  -33.67
+    over 10                            n  10 | staked $    195 | won  70% at 0.766 paid | held to settlement $  -45.57 (-23.3% of stake) | as traded $  -28.00
+
+=== crypto_multiscale, paid 0.80 to 0.88
+    all                                n  57 | staked $   1124 | won  91% at 0.835 paid | held to settlement $ +113.79 (+10.1% of stake) | as traded $  +77.03
+    no curve reading                   n   6 | staked $     91 | won  83% at 0.810 paid | held to settlement $  -15.65 (-17.2% of stake) | as traded $  -12.88
+  place in its own range since the open
+    top fifth                          n  45 | staked $    897 | won  91% at 0.840 paid | held to settlement $ +100.09 (+11.2% of stake) | as traded $  +60.56
+    lower                              n   6 | staked $    136 | won 100% at 0.823 paid | held to settlement $  +29.35 (+21.6% of stake) | as traded $  +29.35
+  the last 60 s, in typical minutes
+    up half or more                    n  15 | staked $    304 | won  93% at 0.837 paid | held to settlement $  +24.87 ( +8.2% of stake) | as traded $  +30.68
+    flat                               n  30 | staked $    599 | won  90% at 0.840 paid | held to settlement $  +76.86 (+12.8% of stake) | as traded $  +35.18
+    down half or more                  n   6 | staked $    130 | won 100% at 0.825 paid | held to settlement $  +27.71 (+21.3% of stake) | as traded $  +24.05
+  share of the market it has led
+    under half                         n   8 | staked $    147 | won 100% at 0.839 paid | held to settlement $  +28.28 (+19.3% of stake) | as traded $  +24.13
+    half to 0.9                        n  21 | staked $    447 | won  95% at 0.838 paid | held to settlement $  +82.51 (+18.4% of stake) | as traded $  +31.42
+    over 0.9                           n  22 | staked $    439 | won  86% at 0.837 paid | held to settlement $  +18.65 ( +4.2% of stake) | as traded $  +34.36
+  crossings of even since the open
+    none                               n  12 | staked $    172 | won  83% at 0.836 paid | held to settlement $   +1.02 ( +0.6% of stake) | as traded $   +5.88
+    1 or 2                             n  18 | staked $    384 | won  94% at 0.834 paid | held to settlement $  +42.29 (+11.0% of stake) | as traded $  +24.84
+    3 or more                          n  21 | staked $    476 | won  95% at 0.841 paid | held to settlement $  +86.13 (+18.1% of stake) | as traded $  +59.19
+  range since the open, typical minutes
+    under 3                            n   6 | staked $     52 | won 100% at 0.840 paid | held to settlement $   +9.94 (+19.1% of stake) | as traded $   +6.09
+    3 to 6                             n  45 | staked $    981 | won  91% at 0.837 paid | held to settlement $ +119.50 (+12.2% of stake) | as traded $  +83.82
+    over 6                             n   0
+  path since the open
+    choppy (under 0.15)                n  24 | staked $    453 | won  92% at 0.833 paid | held to settlement $  +59.12 (+13.0% of stake) | as traded $  +37.66
+    0.15 to 0.4                        n  25 | staked $    545 | won  92% at 0.839 paid | held to settlement $  +65.17 (+12.0% of stake) | as traded $  +49.28
+    straight (over 0.4)                n   2 | staked $     35 | won 100% at 0.871 paid | held to settlement $   +5.15 (+14.8% of stake) | as traded $   +2.96
+  minutes into the market
+    under 7                            n  30 | staked $    591 | won  93% at 0.838 paid | held to settlement $  +75.27 (+12.7% of stake) | as traded $  +57.36
+    7 to 10                            n  15 | staked $    341 | won  93% at 0.835 paid | held to settlement $  +40.54 (+11.9% of stake) | as traded $  +20.58
+    over 10                            n   6 | staked $    101 | won  83% at 0.847 paid | held to settlement $  +13.63 (+13.5% of stake) | as traded $  +11.97
+DONE
+
+
+
