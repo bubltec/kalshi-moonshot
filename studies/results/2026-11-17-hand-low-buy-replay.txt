@@ -1,0 +1,81 @@
+window: 2026-11-09 on, ET days 11-09, 11-10, 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; 9342 buys on 7660 markets; whole market, no other gate
+the buy: a side at 0.05 to 0.40 at the ask that fell at least 1 typical minute over the two minutes before the last, and did not fall in the last minute
+each cell: cents per dollar staked, the fee on every leg, and (days ahead of 8). 'rested, +20' counts only the buys whose resting bid filled (the share is in the last column). All settings fixed before the run
+
+reached +20 cents: 46% of buys; reached settlement as the winner: 25%; average price paid 0.25
+the +20 takes came a median of 121 s after the buy (a quarter under 57 s, a quarter over 249 s)
+
+all
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  all                                      9342 |   -18.41 (0) |   -15.65 (0) |   -16.04 (0) |    -8.01 (2) |   -16.97 (0) | filled  84%
+
+by side
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  NO                                       4345 |   -17.09 (0) |   -15.23 (0) |   -15.33 (0) |    -4.09 (4) |   -17.57 (0) | filled  83%
+  YES                                      4997 |   -19.55 (0) |   -16.01 (1) |   -16.67 (1) |   -11.41 (2) |   -16.46 (1) | filled  85%
+
+by day
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  11-09                                    1406 |   -22.62 (0) |   -20.87 (0) |   -19.94 (0) |   -15.93 (0) |   -22.09 (0) | filled  83%
+  11-10                                    1478 |   -18.71 (0) |   -15.76 (0) |   -16.94 (0) |    -9.94 (0) |   -17.85 (0) | filled  84%
+  11-11                                    1580 |   -15.64 (0) |   -12.30 (0) |   -12.66 (0) |    -6.03 (0) |   -11.37 (0) | filled  84%
+  11-12                                     753 |   -17.60 (0) |   -15.62 (0) |   -14.75 (0) |    -4.36 (0) |   -15.28 (0) | filled  84%
+  11-13                                    1445 |   -20.93 (0) |   -19.05 (0) |   -19.98 (0) |   -12.08 (0) |   -19.61 (0) | filled  85%
+  11-14                                     889 |   -17.72 (0) |   -13.89 (0) |   -16.51 (0) |    +3.69 (1) |   -16.82 (0) | filled  84%
+  11-15                                    1107 |   -13.10 (0) |    -8.11 (0) |    -8.78 (0) |    +2.13 (1) |   -11.68 (0) | filled  85%
+  11-16                                     684 |   -20.49 (0) |   -19.75 (0) |   -18.17 (0) |   -19.14 (0) |   -22.83 (0) | filled  82%
+
+by the price paid
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  1 0.05 to 0.15                           1709 |   -27.24 (0) |   -21.64 (0) |   -19.96 (1) |   -18.19 (1) |   -24.92 (0) | filled  84%
+  2 0.15 to 0.25                           2539 |   -21.44 (0) |   -21.92 (0) |   -20.92 (0) |   -14.74 (1) |   -23.03 (0) | filled  85%
+  3 0.25 to 0.40                           5094 |   -13.93 (0) |   -10.52 (0) |   -12.30 (0) |    -1.24 (4) |   -11.18 (0) | filled  83%
+
+by the user's time zones
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  1 first 3 minutes                         285 |   -13.26 (1) |   -10.73 (1) |   -15.33 (1) |    -1.53 (3) |    -8.92 (3) | filled  79%
+  2 3 to 10 minutes                        6872 |   -18.63 (0) |   -16.24 (0) |   -16.63 (0) |   -11.18 (1) |   -16.22 (0) | filled  83%
+  3 the close (10 to 15)                   2185 |   -18.39 (0) |   -14.43 (1) |   -14.28 (1) |    +1.13 (4) |   -20.17 (0) | filled  87%
+
+by side and time zone
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  NO  1 first 3 minutes                     147 |    -8.26 (2) |    -2.97 (2) |   -11.13 (2) |   +15.92 (5) |    +0.99 (3) | filled  75%
+  NO  2 3 to 10 minutes                    3162 |   -17.66 (0) |   -16.04 (0) |   -15.90 (0) |    -9.98 (2) |   -16.11 (0) | filled  82%
+  NO  3 the close (10 to 15)               1036 |   -16.60 (0) |   -14.48 (0) |   -14.18 (0) |   +11.05 (5) |   -24.14 (0) | filled  86%
+  YES 1 first 3 minutes                     138 |   -18.59 (0) |   -18.98 (2) |   -19.79 (1) |   -20.12 (3) |   -18.31 (2) | filled  84%
+  YES 2 3 to 10 minutes                    3710 |   -19.45 (0) |   -16.41 (1) |   -17.26 (0) |   -12.21 (2) |   -16.32 (0) | filled  84%
+  YES 3 the close (10 to 15)               1149 |   -19.99 (1) |   -14.38 (1) |   -14.38 (1) |    -7.81 (3) |   -16.67 (1) | filled  88%
+
+by side and price paid
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  NO  1 0.05 to 0.15                        757 |   -27.00 (0) |   -24.88 (0) |   -22.52 (1) |   -16.12 (3) |   -32.40 (1) | filled  83%
+  NO  2 0.15 to 0.25                       1198 |   -20.00 (0) |   -20.22 (0) |   -20.35 (0) |   -12.89 (1) |   -22.93 (1) | filled  84%
+  NO  3 0.25 to 0.40                       2390 |   -12.50 (0) |    -9.67 (1) |   -10.53 (1) |    +4.13 (4) |   -10.04 (1) | filled  82%
+  YES 1 0.05 to 0.15                        952 |   -27.43 (0) |   -19.05 (1) |   -17.92 (1) |   -19.83 (2) |   -19.07 (1) | filled  85%
+  YES 2 0.15 to 0.25                       1341 |   -22.72 (0) |   -23.43 (1) |   -21.42 (0) |   -16.38 (2) |   -23.12 (0) | filled  86%
+  YES 3 0.25 to 0.40                       2704 |   -15.20 (0) |   -11.26 (1) |   -13.87 (0) |    -5.98 (4) |   -12.16 (0) | filled  84%
+
+TARGET PLACEMENT, the 5-minute view, turned to the side bought (room: how far the index sits on the side's own side of the target, within the view)
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  1 little room (under a third)            6772 |   -19.83 (0) |   -17.35 (0) |   -17.06 (0) |   -10.57 (1) |   -18.14 (0) | filled  84%
+  2 middle                                 2253 |   -14.60 (0) |   -10.90 (0) |   -13.30 (0) |    -2.43 (3) |   -13.46 (0) | filled  85%
+  3 all the room (over two thirds)          317 |   -14.99 (2) |   -13.02 (2) |   -13.88 (2) |    +7.05 (5) |   -17.11 (2) | filled  80%
+
+TARGET PLACEMENT, the 15-minute view, turned to the side bought (room: how far the index sits on the side's own side of the target, within the view)
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  1 little room (under a third)            3746 |   -21.94 (0) |   -18.69 (0) |   -17.96 (0) |   -16.95 (0) |   -20.31 (0) | filled  84%
+  2 middle                                 4924 |   -16.35 (0) |   -14.58 (0) |   -15.26 (0) |    -4.56 (2) |   -15.88 (0) | filled  84%
+  3 all the room (over two thirds)          672 |   -13.74 (1) |    -6.53 (2) |   -11.15 (1) |   +16.58 (7) |    -6.30 (2) | filled  83%
+
+TARGET PLACEMENT, the hour view, turned to the side bought (room: how far the index sits on the side's own side of the target, within the view)
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  1 little room (under a third)            3175 |   -19.46 (0) |   -16.74 (0) |   -15.42 (0) |   -10.72 (2) |   -16.99 (0) | filled  84%
+  2 middle                                 3761 |   -18.01 (0) |   -15.11 (0) |   -16.26 (0) |    -9.19 (2) |   -16.76 (0) | filled  84%
+  3 all the room (over two thirds)         2406 |   -17.63 (0) |   -15.06 (0) |   -16.54 (0) |    -2.58 (3) |   -17.27 (0) | filled  84%
+
+by curve shape at the buy (how far the index is from the target, against the side, in typical moves)
+                                           buys |     take +10 |     take +20 | +20 or 5 min |   never sold |  rested, +20 |
+  1 on the line (within 0.5)               4097 |   -14.00 (0) |   -10.72 (0) |   -12.53 (0) |    -1.70 (4) |   -12.34 (0) | filled  83%
+  2 behind 0.5 to 1.5                      4761 |   -20.19 (0) |   -17.20 (0) |   -17.00 (0) |    -9.69 (1) |   -18.03 (0) | filled  85%
+  3 behind over 1.5                         484 |   -38.16 (0) |   -42.15 (0) |   -36.43 (0) |   -44.87 (0) |   -46.03 (0) | filled  82%
+
