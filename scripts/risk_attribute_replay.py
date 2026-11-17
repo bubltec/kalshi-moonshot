@@ -12,6 +12,7 @@ Window: 2026-11-09 on (the logic was rewritten that Monday; nothing before it is
 
     .venv/bin/python scripts/risk_attribute_replay.py build     # write data/tape_archive/replay_readings.csv
     .venv/bin/python scripts/risk_attribute_replay.py report    # read it and print the tables (against the result)
+    .venv/bin/python scripts/risk_attribute_replay.py held      # the model's call bought and held to settlement (one fee), against no signal
     .venv/bin/python scripts/risk_attribute_replay.py moves     # against the price's move over the next 2 and 5 minutes, as round trips after the spread and the fee
 """
 import csv
@@ -322,7 +323,110 @@ def moves() -> None:
         print()
 
 
+def held() -> None:
+    """Buy on the model's call and hold to settlement: one spread crossed, one fee. Two calls, each walk-forward (fit on every earlier day, bought on the next): the RESULT fit (a side whose fitted chance is over its ask plus the fee) and the MOVE fit (the side the 5-minute move fit points to)."""
+    from kalshi_moonshot.strategy import fee_per_contract
+
+    rows = list(csv.reader(open(OUT)))[1:]
+    rows.sort(key=lambda r: (r[0], int(r[1])))
+    tick = np.array([r[0] for r in rows])
+    ts = np.array([int(r[1]) for r in rows])
+    age = np.array([float(r[2]) for r in rows])
+    y = np.array([float(r[3]) for r in rows])
+    bid = np.array([float(r[4]) for r in rows])
+    ask = np.array([float(r[5]) for r in rows])
+    X = np.array([[float(v) for v in r[6:]] for r in rows])
+    mid = (bid + ask) / 2.0
+    day = np.array([datetime.datetime.fromtimestamp(t, ET).strftime("%m-%d") for t in ts])
+    days = sorted(set(day))[1:]
+    at = {(a, b): i for i, (a, b) in enumerate(zip(tick, ts))}
+    nxt = np.array([at.get((a, b + 300), -1) for a, b in zip(tick, ts)])
+    dm = np.where(nxt >= 0, mid[nxt] - mid, 0.0)
+    zone = np.where(np.abs(X[:, 1]) < 0.5, 0, np.where(np.abs(X[:, 1]) < 1.5, 1, 2))
+    zname = ["on the line (cushion under 0.5)", "fair cushion (0.5 to 1.5)", "wide cushion (over 1.5)"]
+    ok = (bid > 0) & (ask > 0) & (ask < 1) & (bid < 1)
+    fee = np.vectorize(fee_per_contract)
+    cost_yes, cost_no = ask + fee(np.clip(ask, 0.01, 0.99)), (1.0 - bid) + fee(np.clip(1.0 - bid, 0.01, 0.99))
+
+    def net(i: int, side: int) -> float:
+        c = cost_yes[i] if side > 0 else cost_no[i]
+        won = y[i] if side > 0 else 1.0 - y[i]
+        return (won - c) / c
+
+    def show(name: str, trips: list) -> None:
+        def line(label: str, sel: list) -> None:
+            u = np.array([t[0] for t in sel])
+            if not len(u):
+                return
+            pd_ = defaultdict(float)
+            for t in sel:
+                pd_[t[4]] += 5 * t[0]
+            print(f"  {label:34s} bets {len(u):5d} | won {int((u > 0).sum()):5d} | lost {int((u <= 0).sum()):5d} | net per $ {u.mean():+.4f} | on $5 stakes {5 * u.sum():+9.2f} | days ahead {sum(v > 0 for v in pd_.values())} of {len(pd_)}")
+
+        print(f"--- {name}")
+        for d in days:
+            line(d, [t for t in trips if t[4] == d])
+        line("all days", trips)
+        print("  by curve shape at the buy (the cushion zone the score itself uses):")
+        for z in range(3):
+            line("  " + zname[z], [t for t in trips if t[1] == z])
+        print("  by the price paid:")
+        for lo, hi in ((0, 0.10), (0.10, 0.35), (0.35, 0.65), (0.65, 0.90), (0.90, 1.01)):
+            line(f"  paid {lo:.2f} to {min(hi, 1.0):.2f}", [t for t in trips if lo <= t[3] < hi])
+        print("  by when in the market the buy was:")
+        for lo, hi in ((0, 180), (180, 360), (360, 540), (540, 720), (720, 900)):
+            line(f"  {lo // 60} to {hi // 60} min in", [t for t in trips if lo <= t[2] < hi])
+        print()
+
+    print(f"window: 2026-11-09 on, ET days {', '.join(days)}; {len(rows)} readings on {len(set(tick))} markets; whole market, no time or price gate")
+    print("a bet buys a side at its ask and holds it to settlement; the fee is charged once; results are per dollar staked; one bet per market (the first moment that qualifies)")
+    print("settings (the top tenth of the call's size, the cut taken from the earlier days) were fixed before the run\n")
+    Xi = np.c_[np.ones(len(X)), X]
+    res_trips, mov_trips, base_trips, fav_trips = [], [], [], []
+    rng = np.random.default_rng(7)
+    for k in range(2, len(days)):
+        tr, te = ok & np.isin(day, days[:k]), ok & (day == days[k])
+        if tr.sum() < 1000 or not te.sum():
+            continue
+        # the RESULT fit: the fitted chance against what the side costs
+        w = _fit(X[tr], y[tr])
+        p = _sig(X @ w)
+        edge_yes, edge_no = p - cost_yes, (1.0 - p) - cost_no
+        best = np.maximum(edge_yes, edge_no)
+        cut = np.quantile(best[tr], 0.9)
+        # the MOVE fit: the predicted 5-minute move of the mid
+        trm = tr & (nxt >= 0)
+        wm = np.linalg.solve(Xi[trm].T @ Xi[trm] + 1e-3 * np.eye(Xi.shape[1]), Xi[trm].T @ dm[trm])
+        pred = Xi @ wm
+        cutm = np.quantile(np.abs(pred[trm]), 0.9)
+        done_r, done_m, done_b = set(), set(), set()
+        idx = np.flatnonzero(te)
+        for i in idx:
+            if tick[i] not in done_r and best[i] >= cut and best[i] > 0:
+                side = 1 if edge_yes[i] >= edge_no[i] else -1
+                done_r.add(tick[i])
+                res_trips.append((net(i, side), zone[i], age[i], cost_yes[i] if side > 0 else cost_no[i], days[k]))
+            if tick[i] not in done_m and abs(pred[i]) >= cutm:
+                side = 1 if pred[i] > 0 else -1
+                done_m.add(tick[i])
+                mov_trips.append((net(i, side), zone[i], age[i], cost_yes[i] if side > 0 else cost_no[i], days[k]))
+        for i in rng.permutation(idx):  # no signal: one random moment per market, a random side
+            if tick[i] not in done_b:
+                side = 1 if rng.random() < 0.5 else -1
+                done_b.add(tick[i])
+                base_trips.append((net(i, side), zone[i], age[i], cost_yes[i] if side > 0 else cost_no[i], days[k]))
+                fs = 1 if mid[i] >= 0.5 else -1  # the same moment, the favorite
+                fav_trips.append((net(i, fs), zone[i], age[i], cost_yes[i] if fs > 0 else cost_no[i], days[k]))
+    show("no signal: one random moment per market, a random side, held", base_trips)
+    show("no signal: the same moments, the favorite, held", fav_trips)
+    show("the RESULT fit's call, held", res_trips)
+    show("the MOVE fit's call (5 minutes), held", mov_trips)
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["held"]:
+        held()
+        sys.exit(0)
     if sys.argv[1:] == ["moves"]:
         moves()
         sys.exit(0)

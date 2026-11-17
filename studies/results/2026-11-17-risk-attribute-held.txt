@@ -1,0 +1,102 @@
+window: 2026-11-09 on, ET days 11-09, 11-10, 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; 255977 readings on 9516 markets; whole market, no time or price gate
+a bet buys a side at its ask and holds it to settlement; the fee is charged once; results are per dollar staked; one bet per market (the first moment that qualifies)
+settings (the top tenth of the call's size, the cut taken from the earlier days) were fixed before the run
+
+--- no signal: one random moment per market, a random side, held
+  11-11                              bets  1569 | won   756 | lost   813 | net per $ -0.1662 | on $5 stakes  -1303.54 | days ahead 0 of 1
+  11-12                              bets   748 | won   379 | lost   369 | net per $ -0.1054 | on $5 stakes   -394.31 | days ahead 0 of 1
+  11-13                              bets  1499 | won   724 | lost   775 | net per $ -0.2178 | on $5 stakes  -1632.07 | days ahead 0 of 1
+  11-14                              bets   864 | won   467 | lost   397 | net per $ -0.0527 | on $5 stakes   -227.69 | days ahead 0 of 1
+  11-15                              bets  1031 | won   526 | lost   505 | net per $ -0.1543 | on $5 stakes   -795.47 | days ahead 0 of 1
+  11-16                              bets   684 | won   344 | lost   340 | net per $ -0.2440 | on $5 stakes   -834.54 | days ahead 0 of 1
+  all days                           bets  6395 | won  3196 | lost  3199 | net per $ -0.1622 | on $5 stakes  -5187.62 | days ahead 0 of 6
+  by curve shape at the buy (the cushion zone the score itself uses):
+    on the line (cushion under 0.5)  bets  2657 | won  1305 | lost  1352 | net per $ -0.0939 | on $5 stakes  -1248.01 | days ahead 1 of 6
+    fair cushion (0.5 to 1.5)        bets  2355 | won  1182 | lost  1173 | net per $ -0.0824 | on $5 stakes   -969.97 | days ahead 2 of 6
+    wide cushion (over 1.5)          bets  1383 | won   709 | lost   674 | net per $ -0.4294 | on $5 stakes  -2969.64 | days ahead 0 of 6
+  by the price paid:
+    paid 0.00 to 0.10                bets   897 | won    14 | lost   883 | net per $ -0.7534 | on $5 stakes  -3379.20 | days ahead 0 of 6
+    paid 0.10 to 0.35                bets  1224 | won   246 | lost   978 | net per $ -0.1228 | on $5 stakes   -751.58 | days ahead 1 of 6
+    paid 0.35 to 0.65                bets  1745 | won   823 | lost   922 | net per $ -0.0811 | on $5 stakes   -707.82 | days ahead 0 of 6
+    paid 0.65 to 0.90                bets  1443 | won  1075 | lost   368 | net per $ -0.0391 | on $5 stakes   -282.00 | days ahead 0 of 6
+    paid 0.90 to 1.00                bets  1086 | won  1038 | lost    48 | net per $ -0.0123 | on $5 stakes    -67.02 | days ahead 0 of 6
+  by when in the market the buy was:
+    0 to 3 min in                    bets   808 | won   408 | lost   400 | net per $ -0.0479 | on $5 stakes   -193.59 | days ahead 2 of 6
+    3 to 6 min in                    bets  1391 | won   697 | lost   694 | net per $ -0.0911 | on $5 stakes   -633.26 | days ahead 0 of 6
+    6 to 9 min in                    bets  1452 | won   730 | lost   722 | net per $ -0.1009 | on $5 stakes   -732.52 | days ahead 2 of 6
+    9 to 12 min in                   bets  1488 | won   736 | lost   752 | net per $ -0.2523 | on $5 stakes  -1877.10 | days ahead 1 of 6
+    12 to 15 min in                  bets  1256 | won   625 | lost   631 | net per $ -0.2788 | on $5 stakes  -1751.14 | days ahead 0 of 6
+
+--- no signal: the same moments, the favorite, held
+  11-11                              bets  1569 | won  1233 | lost   336 | net per $ -0.0228 | on $5 stakes   -178.62 | days ahead 0 of 1
+  11-12                              bets   748 | won   583 | lost   165 | net per $ -0.0155 | on $5 stakes    -57.92 | days ahead 0 of 1
+  11-13                              bets  1499 | won  1193 | lost   306 | net per $ -0.0045 | on $5 stakes    -33.44 | days ahead 0 of 1
+  11-14                              bets   864 | won   665 | lost   199 | net per $ -0.0345 | on $5 stakes   -148.83 | days ahead 0 of 1
+  11-15                              bets  1031 | won   796 | lost   235 | net per $ -0.0188 | on $5 stakes    -97.08 | days ahead 0 of 1
+  11-16                              bets   684 | won   544 | lost   140 | net per $ +0.0147 | on $5 stakes    +50.22 | days ahead 1 of 1
+  all days                           bets  6395 | won  5014 | lost  1381 | net per $ -0.0146 | on $5 stakes   -465.68 | days ahead 1 of 6
+  by curve shape at the buy (the cushion zone the score itself uses):
+    on the line (cushion under 0.5)  bets  2657 | won  1699 | lost   958 | net per $ -0.0176 | on $5 stakes   -234.45 | days ahead 0 of 6
+    fair cushion (0.5 to 1.5)        bets  2355 | won  1954 | lost   401 | net per $ -0.0268 | on $5 stakes   -316.06 | days ahead 1 of 6
+    wide cushion (over 1.5)          bets  1383 | won  1361 | lost    22 | net per $ +0.0123 | on $5 stakes    +84.83 | days ahead 6 of 6
+  by the price paid:
+    paid 0.35 to 0.65                bets  1498 | won   876 | lost   622 | net per $ -0.0071 | on $5 stakes    -53.25 | days ahead 2 of 6
+    paid 0.65 to 0.90                bets  2802 | won  2118 | lost   684 | net per $ -0.0267 | on $5 stakes   -374.55 | days ahead 2 of 6
+    paid 0.90 to 1.00                bets  2095 | won  2020 | lost    75 | net per $ -0.0036 | on $5 stakes    -37.87 | days ahead 2 of 6
+  by when in the market the buy was:
+    0 to 3 min in                    bets   808 | won   518 | lost   290 | net per $ -0.0276 | on $5 stakes   -111.39 | days ahead 3 of 6
+    3 to 6 min in                    bets  1391 | won   981 | lost   410 | net per $ -0.0294 | on $5 stakes   -204.39 | days ahead 2 of 6
+    6 to 9 min in                    bets  1452 | won  1115 | lost   337 | net per $ -0.0138 | on $5 stakes   -100.07 | days ahead 3 of 6
+    9 to 12 min in                   bets  1488 | won  1246 | lost   242 | net per $ -0.0053 | on $5 stakes    -39.49 | days ahead 1 of 6
+    12 to 15 min in                  bets  1256 | won  1154 | lost   102 | net per $ -0.0016 | on $5 stakes    -10.34 | days ahead 2 of 6
+
+--- the RESULT fit's call, held
+  11-11                              bets   420 | won   202 | lost   218 | net per $ -0.1532 | on $5 stakes   -321.79 | days ahead 0 of 1
+  11-12                              bets   270 | won   179 | lost    91 | net per $ +0.0700 | on $5 stakes    +94.44 | days ahead 1 of 1
+  11-13                              bets   499 | won   255 | lost   244 | net per $ -0.1109 | on $5 stakes   -276.61 | days ahead 0 of 1
+  11-14                              bets   312 | won   203 | lost   109 | net per $ +0.0991 | on $5 stakes   +154.58 | days ahead 1 of 1
+  11-15                              bets   386 | won   216 | lost   170 | net per $ -0.0062 | on $5 stakes    -11.99 | days ahead 0 of 1
+  11-16                              bets   284 | won   145 | lost   139 | net per $ -0.0395 | on $5 stakes    -56.06 | days ahead 0 of 1
+  all days                           bets  2171 | won  1200 | lost   971 | net per $ -0.0385 | on $5 stakes   -417.43 | days ahead 2 of 6
+  by curve shape at the buy (the cushion zone the score itself uses):
+    on the line (cushion under 0.5)  bets  1518 | won   747 | lost   771 | net per $ -0.0304 | on $5 stakes   -230.99 | days ahead 3 of 6
+    fair cushion (0.5 to 1.5)        bets   301 | won   144 | lost   157 | net per $ -0.1270 | on $5 stakes   -191.07 | days ahead 1 of 6
+    wide cushion (over 1.5)          bets   352 | won   309 | lost    43 | net per $ +0.0026 | on $5 stakes     +4.62 | days ahead 3 of 6
+  by the price paid:
+    paid 0.00 to 0.10                bets     4 | won     1 | lost     3 | net per $ +3.5966 | on $5 stakes    +71.93 | days ahead 1 of 3
+    paid 0.10 to 0.35                bets   251 | won    57 | lost   194 | net per $ -0.1993 | on $5 stakes   -250.16 | days ahead 1 of 6
+    paid 0.35 to 0.65                bets  1266 | won   622 | lost   644 | net per $ -0.0304 | on $5 stakes   -192.67 | days ahead 4 of 6
+    paid 0.65 to 0.90                bets   443 | won   323 | lost   120 | net per $ -0.0311 | on $5 stakes    -68.87 | days ahead 3 of 6
+    paid 0.90 to 1.00                bets   207 | won   197 | lost    10 | net per $ +0.0216 | on $5 stakes    +22.34 | days ahead 4 of 5
+  by when in the market the buy was:
+    0 to 3 min in                    bets  1239 | won   607 | lost   632 | net per $ -0.0877 | on $5 stakes   -543.51 | days ahead 1 of 6
+    3 to 6 min in                    bets   527 | won   341 | lost   186 | net per $ +0.0664 | on $5 stakes   +174.93 | days ahead 5 of 6
+    6 to 9 min in                    bets   213 | won   141 | lost    72 | net per $ -0.0029 | on $5 stakes     -3.13 | days ahead 3 of 6
+    9 to 12 min in                   bets   114 | won    75 | lost    39 | net per $ -0.0549 | on $5 stakes    -31.29 | days ahead 3 of 6
+    12 to 15 min in                  bets    78 | won    36 | lost    42 | net per $ -0.0370 | on $5 stakes    -14.43 | days ahead 2 of 6
+
+--- the MOVE fit's call (5 minutes), held
+  11-11                              bets   793 | won   364 | lost   429 | net per $ +0.0347 | on $5 stakes   +137.59 | days ahead 1 of 1
+  11-12                              bets   375 | won   230 | lost   145 | net per $ +0.0437 | on $5 stakes    +81.98 | days ahead 1 of 1
+  11-13                              bets   975 | won   376 | lost   599 | net per $ +0.1368 | on $5 stakes   +666.71 | days ahead 1 of 1
+  11-14                              bets   638 | won   292 | lost   346 | net per $ -0.0679 | on $5 stakes   -216.58 | days ahead 0 of 1
+  11-15                              bets   651 | won   400 | lost   251 | net per $ -0.1135 | on $5 stakes   -369.42 | days ahead 0 of 1
+  11-16                              bets   399 | won   266 | lost   133 | net per $ -0.0452 | on $5 stakes    -90.18 | days ahead 0 of 1
+  all days                           bets  3831 | won  1928 | lost  1903 | net per $ +0.0110 | on $5 stakes   +210.09 | days ahead 3 of 6
+  by curve shape at the buy (the cushion zone the score itself uses):
+    on the line (cushion under 0.5)  bets  1411 | won   773 | lost   638 | net per $ +0.0132 | on $5 stakes    +92.94 | days ahead 2 of 6
+    fair cushion (0.5 to 1.5)        bets  1172 | won   453 | lost   719 | net per $ +0.1624 | on $5 stakes   +951.72 | days ahead 4 of 6
+    wide cushion (over 1.5)          bets  1248 | won   702 | lost   546 | net per $ -0.1337 | on $5 stakes   -834.57 | days ahead 1 of 6
+  by the price paid:
+    paid 0.00 to 0.10                bets  1117 | won    27 | lost  1090 | net per $ -0.0117 | on $5 stakes    -65.14 | days ahead 2 of 6
+    paid 0.10 to 0.35                bets   313 | won    70 | lost   243 | net per $ +0.0353 | on $5 stakes    +55.28 | days ahead 3 of 6
+    paid 0.35 to 0.65                bets   841 | won   461 | lost   380 | net per $ +0.0106 | on $5 stakes    +44.78 | days ahead 3 of 6
+    paid 0.65 to 0.90                bets   861 | won   679 | lost   182 | net per $ +0.0378 | on $5 stakes   +162.81 | days ahead 5 of 6
+    paid 0.90 to 1.00                bets   699 | won   691 | lost     8 | net per $ +0.0035 | on $5 stakes    +12.35 | days ahead 5 of 6
+  by when in the market the buy was:
+    0 to 3 min in                    bets   762 | won   486 | lost   276 | net per $ +0.0546 | on $5 stakes   +208.13 | days ahead 5 of 6
+    3 to 6 min in                    bets   689 | won   479 | lost   210 | net per $ +0.0529 | on $5 stakes   +182.27 | days ahead 4 of 6
+    6 to 9 min in                    bets   428 | won   237 | lost   191 | net per $ -0.0598 | on $5 stakes   -128.00 | days ahead 2 of 6
+    9 to 12 min in                   bets   511 | won   174 | lost   337 | net per $ -0.2389 | on $5 stakes   -610.27 | days ahead 1 of 6
+    12 to 15 min in                  bets  1441 | won   552 | lost   889 | net per $ +0.0774 | on $5 stakes   +557.95 | days ahead 2 of 6
+
