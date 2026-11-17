@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import itertools
+import json
 import logging
 import math
 import threading
@@ -413,6 +414,17 @@ def _lane_version(store: Store, s: Settings, lane: str) -> str | None:
         store.note_lane_version(lane, ver, settings_of(spec, s))
         _NOTED.add(key)
     return ver
+
+
+def _risk_factors(shot: LongShot, risk_reading: dict | None) -> dict:
+    """The decision's factors with the risk reading added under "risk" (risktune.py reads it back); nothing when there is no reading."""
+    if not risk_reading:
+        return {}
+    try:
+        base = json.loads(shot.factors) if shot.factors else {}
+    except ValueError:
+        base = {}
+    return {"factors": json.dumps((base if isinstance(base, dict) else {}) | {"risk": risk_reading})}
 
 
 def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
@@ -916,6 +928,7 @@ def evaluate(
             sc_note = None
             log.warning("scenario unreadable for %s %s: %s", shot.ticker, shot.side, exc)
         note = f"{sc_note or '[scenario unreadable]'} {note}"
+    risk_reading = None
     if spec.risk_score_buy > 0:  # after the scenario note so its tag leads the note (the stored reason is cut at 300 characters). The lane's own buy rule: a risk that is low and has stayed low, and a chance that clears the costs
         from . import riskscore
         from .strategy import fee_per_contract as _fee
@@ -926,16 +939,31 @@ def evaluate(
             rs = None
             log.warning("risk score unreadable for %s %s: %s", shot.ticker, shot.side, exc)
         rs_tag = riskscore.tag(rs[0] if rs else None, rs[1] if rs else None)
+        if rs and len(rs) > 3 and rs[3]:
+            from . import risktune
+
+            risk_reading = risktune.reading(rs[3], rs[0], rs[2], shot.ask)  # stored on the decision row this evaluation writes anyway: the tune's record
+        gap_lo, gap_hi, gap_from = spec.risk_score_gap_min, spec.risk_score_gap_max, "the lane's"
+        if spec.risk_score_tuned and spec.risk_score_gap_max > 0:
+            tg = riskscore.tuned_gap(str(s.data_dir))
+            if tg is None:
+                gap_lo = gap_hi = None
+            elif tg is not False:
+                gap_lo, gap_hi, gap_from = tg[0], tg[1], "the record's"
+        cost = (shot.ask + _fee(shot.ask) - rs[1] + spec.risk_score_edge) if rs else 0.0
         if rs is None:
             bet = False
             note = f"{rs_tag} the lane buys only on a risk it can read. {note}"
         elif not riskscore.low_risk(rs[0], spec.risk_score_buy):
             bet = False
             note = f"{rs_tag} the lane buys a risk of {100 * spec.risk_score_buy:.0f}% or under that has held for a minute. {note}"
-        elif spec.risk_score_gap_max > 0 and not riskscore.gap_held(rs[0], rs[2], max(shot.ask + _fee(shot.ask) - rs[1] + spec.risk_score_edge, spec.risk_score_gap_min), spec.risk_score_gap_max):
+        elif spec.risk_score_gap_max > 0 and gap_hi is None:
+            bet = False
+            note = f"{rs_tag} the lane's record shows no gap over Kalshi's price that paid; it buys nothing until one does. {note}"
+        elif spec.risk_score_gap_max > 0 and not riskscore.gap_held(rs[0], rs[2], max(cost, gap_lo), gap_hi):
             bet = False
             gaps = ", ".join(f"{100 * (c - k):+.1f}" for c, k in zip(rs[0], rs[2]))
-            note = f"{rs_tag} the score is over Kalshi's price by {gaps} points (now, 30 s ago, a minute ago); the lane buys a gap of {100 * max(shot.ask + _fee(shot.ask) - rs[1] + spec.risk_score_edge, spec.risk_score_gap_min):.1f} (the cost, or the lane's least gap when that is more) to {100 * spec.risk_score_gap_max:.0f} points that has held, on a side whose price is not lower than a minute ago ({100 * rs[2][-1]:.0f}c then, {100 * rs[2][0]:.0f}c now). {note}"
+            note = f"{rs_tag} the score is over Kalshi's price by {gaps} points (now, 30 s ago, a minute ago); the lane buys a gap of {100 * max(cost, gap_lo):.1f} (the cost, or {gap_from} least gap when that is more) to {100 * gap_hi:.0f} points that has held, on a side whose price is not lower than a minute ago ({100 * rs[2][-1]:.0f}c then, {100 * rs[2][0]:.0f}c now). {note}"
         elif rs[0][0] - (shot.ask + _fee(shot.ask)) < spec.risk_score_edge:
             bet = False
             note = f"{rs_tag} the score's chance {rs[0][0]:.3f} does not clear the ask and its fee ({shot.ask + _fee(shot.ask):.3f}) by the lane's {spec.risk_score_edge:g}. {note}"
@@ -1054,7 +1082,7 @@ def evaluate(
     held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
     _log(
         store, s, shot, model_p=p, edge=e, action=action, reason=note[:300],
-        context=got.context[:1500], cal_p=cal.p, side=shot.side, **held,
+        context=got.context[:1500], cal_p=cal.p, side=shot.side, **held, **_risk_factors(shot, risk_reading),
     )
     return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
 

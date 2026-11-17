@@ -93,6 +93,7 @@ def test_unit_the_weights_file_replaces_the_built_in_fit(tmp_path):
     assert riskscore.weights(str(tmp_path)) == riskscore.WEIGHTS  # no file
     w = {n: 0.0 for n in riskscore.NAMES} | {"price": 1.0}
     (tmp_path / "risk_score.json").write_text(json.dumps({"weights": w}))
+    riskscore._cache["checked"] = -1e9  # the file is looked at once every 30 s: look now
     got = riskscore.weights(str(tmp_path))
     assert got[0] == 1.0 and sum(abs(v) for v in got[1:]) == 0.0
 

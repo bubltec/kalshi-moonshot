@@ -21,6 +21,7 @@ from __future__ import annotations
 import bisect
 import json
 import math
+import time
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -29,23 +30,43 @@ WEIGHTS = (0.664, 0.461, 0.345, 0.068, -0.192, -0.207, 0.011, 0.201, 0.033, 0.02
 STEP = 5.0  # seconds: the grid the market's mids are read on, as in the fit
 HELD_LOOKS = (0.0, 30.0, 60.0)  # the number has to hold at each of these many seconds back: now, half a minute ago, a minute ago
 
-_cache: dict[str, Any] = {"w": None, "mtime": -1.0}
+_cache: dict[str, Any] = {"data": None, "mtime": -1.0, "checked": -1e9, "dir": None}
 _prev: dict[tuple[str, int], list[tuple[float | None, int | None]]] = {}
 
 
-def weights(data_dir: str | None = None) -> tuple[float, ...]:
-    """The fitted weights: data/risk_score.json ({"weights": {name: value}}) when it is there and complete, else the 2026-11-16 fit."""
+def tuned(data_dir: str | None) -> dict[str, Any] | None:
+    """data/risk_score.json as risktune.py last wrote it, from memory; the file is looked at no more than once every 30 s. None when there is none."""
     if not data_dir:
-        return WEIGHTS
-    p = Path(data_dir) / "risk_score.json"
+        return None
+    now = time.monotonic()
+    if now - _cache["checked"] >= 30.0 or _cache["dir"] != data_dir:
+        _cache["checked"], _cache["dir"] = now, data_dir
+        p = Path(data_dir) / "risk_score.json"
+        try:
+            m = p.stat().st_mtime
+            if m != _cache["mtime"]:
+                _cache["data"], _cache["mtime"] = json.loads(p.read_text()), m
+        except (OSError, ValueError):
+            _cache["data"], _cache["mtime"] = None, -1.0
+    return _cache["data"]
+
+
+def weights(data_dir: str | None = None) -> tuple[float, ...]:
+    """The weights in use: the tuned ones (risktune.py) when the file has a complete set, else the 2026-11-16 fit."""
+    got = (tuned(data_dir) or {}).get("weights")
     try:
-        m = p.stat().st_mtime
-        if m != _cache["mtime"]:
-            got = json.loads(p.read_text())["weights"]
-            _cache["w"], _cache["mtime"] = tuple(float(got[n]) for n in NAMES), m
-    except (OSError, ValueError, KeyError, TypeError):
-        return _cache["w"] or WEIGHTS
-    return _cache["w"] or WEIGHTS
+        return tuple(float(got[n]) for n in NAMES) if got else WEIGHTS
+    except (KeyError, TypeError, ValueError):
+        return WEIGHTS
+
+
+def tuned_gap(data_dir: str | None) -> tuple[float, float] | None | bool:
+    """The gap range the record says to buy: (least, most); None when the record was tuned and no gap paid; False when there is no tune to read (the lane's own settings then stand)."""
+    got = tuned(data_dir)
+    if not got or "gap" not in got:
+        return False
+    g = got["gap"]
+    return (float(g[0]), float(g[1])) if g else None
 
 
 def _at(ts: Sequence[float], vs: Sequence[float], t: float) -> float | None:
@@ -203,7 +224,7 @@ def gather(series: str, ticker: str, opened: float, now: float) -> tuple[list[fl
     return ts, vs, ticks_mod.mids.rows(ticker), _prev[key], unit
 
 
-def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] = HELD_LOOKS) -> tuple[list[float], float, list[float]] | None:
+def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] = HELD_LOOKS) -> tuple[list[float], float, list[float], tuple[float, ...]] | None:
     """(the side's chance at each of `looks` seconds back, Kalshi's mid for the side now, Kalshi's mid for the side at each look) for a running market, or None when any look cannot be read. The target is the index's average over the 60 s before the open (scenario.target: Kalshi's own rule)."""
     from . import scenario
 
@@ -216,12 +237,13 @@ def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_
     if strike is None or not mids:
         return None
     w = weights(data_dir)
-    out, was = [], []
+    out, was, first = [], [], None
     for back in looks:
         x = features(ts, vs, now - back, opened, strike, mids, prev)
         if x is None:
             return None
+        first = first or x
         out.append(chance(x, side, w))
         p_yes = 1.0 / (1.0 + math.exp(-x[0]))  # the first reading is the logit of Kalshi's YES mid at that look
         was.append(p_yes if side == "yes" else 1.0 - p_yes)
-    return out, was[0], was
+    return out, was[0], was, first  # `first`: the YES readings now, stored with the decision for the tune

@@ -931,7 +931,7 @@ class ProfitWatcher:
         from . import riskscore
 
         try:
-            got = riskscore.live(t.ticker.split("-")[0], t.ticker, t.side, t.close_ts, now, None, (0.0,))
+            got = riskscore.live(t.ticker.split("-")[0], t.ticker, t.side, t.close_ts, now, str(self.get_settings().data_dir), (0.0,))
         except Exception as exc:
             log.warning("risk score unreadable for %s %s: %s", t.ticker, t.lane, exc)
             return None
@@ -2123,6 +2123,10 @@ class ProfitWatcher:
                 from . import cushionmodel
 
                 cushionmodel.maybe_refit(s)
+            if any(sp.enabled and sp.risk_score_buy > 0 for sp in specs.values()):
+                from . import risktune
+
+                risktune.maybe_refit(s)
             if any(sp.enabled and sp.record_buy for sp in specs.values()):
                 from . import staterecord
 
