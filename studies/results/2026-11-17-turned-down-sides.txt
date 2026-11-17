@@ -1,0 +1,15 @@
+Question (user, 2026-11-17: "and what happened to those markets?"): the sides the live crypto lane turned down, had each been bought at its ask and held.
+Window: crypto_multiscale passes from 12:46 ET (back on the live list) on markets settled by 14:11 ET (the 13:00 to 14:00 closes). One row per market, side and rule (the first look). $20 a side, the fee included.
+The rule is the recorded reason from 13:46 on (when reasons began to be stored whole) and, for the edge screen before that, worked out from the stored model chance, price and edge. "Another rule" is a pass before 13:46 with an edge over the bar: the rule was not recorded.
+Held to settlement is not how the lane trades (it has a profit take and a loss sale). 85 minutes, 132 sides: a first look, not a tested rule.
+
+rule that turned it down                     sides  won   won%  avg price  net per $   on $20 stakes
+edge screen: model below the price              55   26    47%     0.50     -0.060       -65.54
+edge screen: edge under the 8% bar              30   12    40%     0.40     +0.025       +15.09
+price_skip (0.42 to 0.58)                        5    3    60%     0.53     +0.080        +7.96
+swing range (waits for the low)                  6    2    33%     0.73     -0.603       -72.37
+flat market-wide trend                           2    0     0%     0.44     -1.000       -40.00
+another rule (not recorded before 13:46)        34   14    41%     0.37     +0.053       +35.81
+all turned down                                132   57    43%     0.46     -0.045      -119.05
+
+Answer: bought and held, everything the lane turned down would have lost about $119. The sides the edge screen dropped for a model below the price lost 6 cents per dollar. The sides dropped for an edge under the bar, by price_skip, and by the unrecorded rules were about even to slightly ahead, on counts too small to tell from chance.
