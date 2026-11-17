@@ -13,3 +13,15 @@ another rule (not recorded before 13:46)        34   14    41%     0.37     +0.0
 all turned down                                132   57    43%     0.46     -0.045      -119.05
 
 Answer: bought and held, everything the lane turned down would have lost about $119. The sides the edge screen dropped for a model below the price lost 6 cents per dollar. The sides dropped for an edge under the bar, by price_skip, and by the unrecorded rules were about even to slightly ahead, on counts too small to tell from chance.
+
+BY PRICE (user: "average price is useless because we don't buy in the 42-58 range"): the same 132 sides by the price of the side turned down. "price" is the average inside the band, to set beside the share that won.
+price band              sides  won   won%  price  net per $   on $20 stakes
+0.10 to 0.20               17    4    24%    16%    +0.391      +132.88
+0.20 to 0.30               15    4    27%    25%    +0.048       +14.31
+0.30 to 0.42               30   10    33%    36%    -0.071       -42.33
+0.42 to 0.58 (no-buy)      34   14    41%    48%    -0.184      -125.24
+0.58 to 0.70                9    2    22%    63%    -0.651      -117.09
+0.70 to 0.85               24   21    88%    80%    +0.064       +30.50
+
+The edge screen's "model below the price" passes, by price: 0.70 to 0.85: 14 sides, 13 won (+$35); 0.42 to 0.58: 20 sides, 7 won (-$112); 0.58 to 0.70: 3 sides, 0 won; 0.30 to 0.42: 10 sides, 4 won (+$16); 0.20 to 0.30: 3 sides, 0 won; 0.10 to 0.20: 5 sides, 2 won (+$116).
+Reading: the no-buy range would have lost (41% won at 48 cents). The favorites turned down at 0.70 to 0.85 won 88% against a price of 80%, and the model had rated 14 of them below their price. The cheapest band's gain is 4 winners of 17.
