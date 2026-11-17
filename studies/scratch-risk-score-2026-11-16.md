@@ -120,3 +120,11 @@ Weights of the last fit: price +0.68, cushion +0.39, flip rate +0.39, time +0.06
 - On disagreements of up to 6 points the score was the closer one; beyond 6 points Kalshi's mid was.
 - The flip rate's sign is the opposite of the guess: with no flips the price is trusted LESS (weight 0.68), and it is trusted more as the market flips more. A leader that has never been challenged is the one that is a little overpriced.
 - Along ETH 16:00 YES and DOGE 18:15 NO the score's risk stays within 1 to 7 points of Kalshi's own.
+
+## Nudge added to the score; the previous four markets looked at (19:56)
+
+User: "nudge should be in risk too". The nudge's reading (the side's move over the last minute, in the market's own typical minutes) went in as a factor.
+
+- Its fitted weight is about zero and the held-out result did not move (0.5028 against Kalshi's 0.5024). On this data the last minute's move says nothing the price has not already taken in.
+- Previous four markets, by their average finish against their targets: no order. After they finished below their targets YES won 43.8% against a price of 48.1%; after they finished above, 43.3% against 48.1%. Both sides came in under the price.
+- Previous four markets, by how much they flipped: the early favorite won 71.7%, 69.9%, 72.7% and 67.9% from the calmest hour to the most flipping, against prices of about 0.70 to 0.72. Only the most flipping hours (3 and over a market) show the favorite a little short (67.9% against 69.7%).

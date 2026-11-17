@@ -1,15 +1,27 @@
 window: 2026-11-09 00:00 ET on; 84673 moments on days 11-09, 11-10, 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; scored walk-forward on 11-11, 11-12, 11-13, 11-14, 11-15, 11-16
-weights of the last fit (trained on every day before the last): price +0.679, cushion +0.387, flip rate +0.394, time +0.055, t15 -0.420, t30 -0.205, t60 +0.023, margin +0.185, flips +0.032
+weights of the last fit (trained on every day before the last): price +0.660, cushion +0.407, flip rate +0.364, time +0.066, t15 -0.418, t30 -0.207, t60 +0.022, margin +0.184, flips +0.032, nudge +0.025
 log-loss on the held-out days (lower is better): Kalshi's mid 0.5024 | the score 0.5028
 
 where the score and Kalshi's mid disagree, who was right? (YES side, held-out days)
-  score 6+ points UNDER the mid  n   1807 | Kalshi's mid said 54.2% | the score said 46.1% | YES actually won 50.6%
-  3 to 6 under                   n   6536 | Kalshi's mid said 55.6% | the score said 51.5% | YES actually won 51.1%
-  1 to 3 under                   n  11015 | Kalshi's mid said 54.2% | the score said 52.3% | YES actually won 52.4%
-  within 1 point                 n  17615 | Kalshi's mid said 46.1% | the score said 46.2% | YES actually won 47.0%
-  1 to 3 over                    n  13322 | Kalshi's mid said 40.3% | the score said 42.2% | YES actually won 41.6%
-  3 to 6 over                    n   9596 | Kalshi's mid said 41.7% | the score said 45.9% | YES actually won 44.4%
-  score 6+ points OVER the mid   n   3085 | Kalshi's mid said 41.6% | the score said 49.3% | YES actually won 41.4%
+  score 6+ points UNDER the mid  n   1943 | Kalshi's mid said 54.6% | the score said 46.5% | YES actually won 51.0%
+  3 to 6 under                   n   6558 | Kalshi's mid said 55.2% | the score said 51.0% | YES actually won 50.5%
+  1 to 3 under                   n  10896 | Kalshi's mid said 54.4% | the score said 52.5% | YES actually won 53.3%
+  within 1 point                 n  17397 | Kalshi's mid said 46.3% | the score said 46.3% | YES actually won 46.8%
+  1 to 3 over                    n  13373 | Kalshi's mid said 40.0% | the score said 42.0% | YES actually won 41.0%
+  3 to 6 over                    n   9496 | Kalshi's mid said 41.8% | the score said 46.0% | YES actually won 44.7%
+  score 6+ points OVER the mid   n   3313 | Kalshi's mid said 41.6% | the score said 49.3% | YES actually won 42.4%
+
+the previous four markets: their average finish against their targets, and what the next market did (moments in its first four minutes; YES side)
+  finished well BELOW their targets (under -1)   n   234 | Kalshi's mid said YES 55.4% | YES actually won 59.0%
+  below (-1 to -0.3)                             n  1408 | Kalshi's mid said YES 48.1% | YES actually won 43.8%
+  about level                                    n  2807 | Kalshi's mid said YES 47.4% | YES actually won 45.8%
+  above (+0.3 to +1)                             n  1234 | Kalshi's mid said YES 48.1% | YES actually won 43.3%
+  finished well ABOVE (over +1)                  n   119
+and by how much those four markets flipped (average changes of favorite)
+  under 1 flip a market                          n   674 | the early favorite went on to win 71.7% | its average price 0.717
+  1 to 2                                         n  1513 | the early favorite went on to win 69.9% | its average price 0.704
+  2 to 3                                         n  1559 | the early favorite went on to win 72.7% | its average price 0.701
+  3 and over                                     n  2056 | the early favorite went on to win 67.9% | its average price 0.697
 
 the score along two of today's bets (the fit used is from the days before today)
   KXETH15M-26NOV161600 YES: time | side's price | risk by Kalshi's price | risk by the score | cushion for the side | flips so far
@@ -27,14 +39,14 @@ the score along two of today's bets (the fit used is from the days before today)
     15:54:00 | 0.93 |   7% |   7% | +1.48 | 0
     15:54:30 | 0.94 |   6% |   6% | +1.53 | 0
     15:55:00 | 0.97 |   3% |   4% | +1.68 | 0
-    15:55:30 | 0.83 |  17% |  16% | +0.95 | 0
-    15:56:00 | 0.80 |  20% |  20% | +0.71 | 0
-    15:56:30 | 0.61 |  38% |  37% | +0.20 | 0
-    15:57:00 | 0.69 |  31% |  30% | +0.38 | 0
+    15:55:30 | 0.83 |  17% |  17% | +0.95 | 0
+    15:56:00 | 0.80 |  20% |  21% | +0.71 | 0
+    15:56:30 | 0.61 |  38% |  38% | +0.20 | 0
+    15:57:00 | 0.69 |  31% |  31% | +0.38 | 0
     15:57:30 | 0.62 |  38% |  36% | +0.26 | 0
-    15:58:00 | 0.52 |  48% |  45% | +0.05 | 0
+    15:58:00 | 0.52 |  48% |  46% | +0.05 | 0
     15:58:30 | 0.56 |  44% |  41% | +0.15 | 0
-    15:59:00 | 0.89 |  11% |  13% | +0.68 | 0
+    15:59:00 | 0.89 |  11% |  12% | +0.68 | 0
   KXDOGE15M-26NOV161815 NO: time | side's price | risk by Kalshi's price | risk by the score | cushion for the side | flips so far
     18:03:30 | 0.83 |  17% |  19% | +1.53 | 0
     18:04:00 | 0.86 |  14% |  14% | +1.97 | 0
@@ -42,19 +54,19 @@ the score along two of today's bets (the fit used is from the days before today)
     18:05:00 | 0.85 |  15% |  13% | +2.36 | 0
     18:05:30 | 0.80 |  20% |  20% | +1.66 | 0
     18:06:00 | 0.77 |  24% |  24% | +1.44 | 0
-    18:06:30 | 0.66 |  34% |  37% | +0.76 | 0
+    18:06:30 | 0.66 |  34% |  38% | +0.76 | 0
     18:07:00 | 0.73 |  27% |  31% | +0.91 | 0
     18:07:30 | 0.73 |  27% |  29% | +1.06 | 0
-    18:08:00 | 0.76 |  24% |  27% | +1.16 | 0
+    18:08:00 | 0.76 |  24% |  26% | +1.16 | 0
     18:08:30 | 0.56 |  44% |  44% | +0.76 | 0
     18:09:00 | 0.70 |  30% |  34% | +0.78 | 0
-    18:09:30 | 0.58 |  42% |  47% | +0.32 | 0
-    18:10:00 | 0.56 |  44% |  49% | +0.19 | 0
-    18:10:30 | 0.49 |  50% |  56% | -0.03 | 0
-    18:11:00 | 0.22 |  78% |  83% | -1.02 | 1
-    18:12:00 | 0.44 |  56% |  63% | -0.25 | 1
+    18:09:30 | 0.58 |  42% |  46% | +0.32 | 0
+    18:10:00 | 0.56 |  44% |  50% | +0.19 | 0
+    18:10:30 | 0.49 |  50% |  57% | -0.03 | 0
+    18:11:00 | 0.22 |  78% |  84% | -1.02 | 1
+    18:12:00 | 0.44 |  56% |  62% | -0.25 | 1
     18:12:30 | 0.41 |  59% |  66% | -0.35 | 3
     18:13:30 | 0.65 |  36% |  40% | +0.30 | 4
-    18:14:00 | 0.92 |   8% |   9% | +1.32 | 4
+    18:14:00 | 0.92 |   8% |   8% | +1.32 | 4
 
-Notes: run 2026-11-16 19:24 ET on the host with the factors the user kept and the flip rate (flips so far per minute lapsed, times the logit of the mid) in place of the share of the market led. Every reading at or before its moment; walk-forward by day. The previous-four-markets tables came out empty in this run (they asked for moments in the first two minutes, where no reading exists yet) and are left out; the script is corrected to the first four minutes.
+Notes: run 2026-11-16 19:56 ET on the host. Factors: the user's kept list, the flip rate (flips so far per minute lapsed), and the nudge's reading (the side's move over the last minute in the market's own typical minutes). Every reading at or before its moment; walk-forward by day.

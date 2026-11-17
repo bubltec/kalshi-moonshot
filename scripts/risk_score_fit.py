@@ -5,6 +5,7 @@ The score is the chance a side LOSES. Factors kept, each for the YES side at a m
   cushion    the settlement index against the target, in its typical moves for the time left
   flip rate  the number of times the favorite has changed in THIS market so far, per minute lapsed (user: "a count of the number of times it flipped compared to ... time lapsed"), times the logit of the mid: a market that keeps flipping makes the current leader's price mean less. It replaced the share of the market led, which the user called too rigid
   time       the share of the market gone x the logit of the mid
+  nudge      what the nudge reads (user, 2026-11-16: "nudge should be in risk too"): YES's move over the last minute in this market's own typical minutes (the root-mean-square 5 s change of its mid so far, scaled to a minute), + = moving YES's way
   t15 t30 t60  where the target sits in the index's range over the 15, 30 and 60 minutes before the open (0 low, 1 high), centred
   margin     the average finish of the series' last four markets against their targets, in typical moves (+ = above)
   flips      the average number of favorite changes in those four markets, less 2
@@ -24,7 +25,7 @@ from kalshi_moonshot.lanes import lane_specs
 
 ET = datetime.timezone(datetime.timedelta(hours=-5))
 SINCE = datetime.datetime(2026, 11, 9, 0, 0, tzinfo=ET).timestamp()
-NAMES = ("price", "cushion", "flip rate", "time", "t15", "t30", "t60", "margin", "flips")
+NAMES = ("price", "cushion", "flip rate", "time", "t15", "t30", "t60", "margin", "flips", "nudge")
 SHOW = {"KXETH15M-26NOV161600": "yes", "KXDOGE15M-26NOV161815": "no"}  # matched on the start of the ticker
 show_rows = []  # (ticker, time, x, mid)
 s = config.load()
@@ -72,6 +73,7 @@ for ser in series:
         n = fav = 0
         hist = {}
         side_now, nflips = None, 0  # the favorite so far in this market and how often it has changed (0.55 to take the lead)
+        sq, nsq, last_mid = 0.0, 0, None  # for this market's own typical minute so far
         for t in range(int(opened), int(close) - 59, 5):
             i = bisect.bisect_right(qt, t) - 1
             if i < 0:
@@ -79,6 +81,10 @@ for ser in series:
             mid = (q[i][1] + q[i][2]) / 2
             lo, hi = (mid, mid) if lo is None else (min(lo, mid), max(hi, mid))
             hist[t] = mid
+            if last_mid is not None:
+                sq += (mid - last_mid) ** 2
+                nsq += 1
+            last_mid = mid
             lead = "yes" if mid >= 0.55 else "no" if mid <= 0.45 else None
             if lead and side_now and lead != side_now:
                 nflips += 1
@@ -89,7 +95,7 @@ for ser in series:
                 if k >= 0 and t - bt[k] < 30 and back is not None:
                     left = close - t
                     cush = math.log(bv[k] / strike) / (unit * math.sqrt(left / 60.0))
-                    x = (lg(mid), max(-6.0, min(6.0, cush)), min(1.5, nflips / max((t - opened) / 60.0, 1.0)) * lg(mid), (t - opened) / 900.0 * lg(mid), places[0], places[1], places[2], max(-3.0, min(3.0, pm)), max(-2.0, min(4.0, pf)))
+                    x = (lg(mid), max(-6.0, min(6.0, cush)), min(1.5, nflips / max((t - opened) / 60.0, 1.0)) * lg(mid), (t - opened) / 900.0 * lg(mid), places[0], places[1], places[2], max(-3.0, min(3.0, pm)), max(-2.0, min(4.0, pf)), max(-3.0, min(3.0, (mid - hist.get(t - 60, mid)) / (math.sqrt(sq / nsq) * math.sqrt(12.0)))) if nsq and sq > 0 else 0.0)
                     rows.append((day, x, w["result"] == "yes", mid, t - opened))
                     key = next((k_ for k_ in SHOW if w["ticker"].startswith(k_)), None)
                     if key:
