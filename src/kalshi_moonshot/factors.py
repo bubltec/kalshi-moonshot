@@ -170,8 +170,8 @@ def held_minutes(tape: Any, ticker: str, side: str, now: float) -> float | None:
 _local = threading.local()
 
 
-def snapshot_now(s: Any, ticker: str, side: str, close_time: str, entry_factors: str = "", strike: float | None = None) -> str:
-    """JSON of `snapshot_full` as the market stands now, for a buy or a sale. `entry_factors` is the buy's own snapshot, used to carry the strike over to the sale. Empty on any failure."""
+def snapshot_now(s: Any, ticker: str, side: str, close_time: str, entry_factors: str = "", strike: float | None = None, now: float | None = None) -> str:
+    """JSON of `snapshot_full` as the market stands now, for a buy or a sale. `entry_factors` is the buy's own snapshot, used to carry the strike over to the sale. Empty on any failure. `now`: take it as of that moment instead (the decision writer takes a decision's snapshot a moment after the decision, as of the decision's own time: every read is bounded by it)."""
     try:
         close_ts = datetime.fromisoformat(str(close_time)).timestamp()
         if strike is None and entry_factors:
@@ -185,7 +185,7 @@ def snapshot_now(s: Any, ticker: str, side: str, close_time: str, entry_factors:
             weights = forecast.load_weights(s.forecast_weights or f"{s.data_dir}/forecast_h5.json")
         except Exception:
             weights = None  # no weights file: the other features are still worth saving
-        snap = snapshot_full(_local.tape, ticker, side, close_ts, None, strike, weights, curve.load_table(s.data_dir))
+        snap = snapshot_full(_local.tape, ticker, side, close_ts, now, strike, weights, curve.load_table(s.data_dir))
         return json.dumps(snap) if snap else ""
     except Exception as exc:
         _local.tape = None

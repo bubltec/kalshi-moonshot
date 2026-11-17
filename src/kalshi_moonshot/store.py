@@ -356,6 +356,25 @@ def queue_decisions(on: bool = True) -> None:
         threading.Thread(target=_decision_writer, name="decision-writer", daemon=True).start()
 
 
+def writes_in_background() -> bool:
+    return bool(_DEC_BG["on"])
+
+
+def _with_snapshot(d: dict) -> dict:
+    """Take the row's entry snapshot now, as of the row's own time (the caller handed over a job instead of taking it before the evaluation), and merge it under whatever factors the row already carries."""
+    job = d.pop("_factors_job", None)
+    if job is None:
+        return d
+    try:
+        snap = job(float(d["ts"]))
+        if snap:
+            have = d.get("factors")
+            d["factors"] = json.dumps(json.loads(snap) | json.loads(have)) if have else snap
+    except Exception:
+        _log.exception("decision writer: no entry snapshot for %s", d.get("ticker"))
+    return d
+
+
 def flush_decisions(timeout: float = 5.0) -> bool:
     """Wait until every queued decision row is written. True when the queue emptied in time."""
     end = time.monotonic() + timeout
@@ -377,6 +396,7 @@ def _decision_writer() -> None:
             try:
                 touched = set()
                 for path, exclude, d in batch:
+                    _with_snapshot(d)  # once: the job is removed from the row, so a retry does not take it again
                     st = stores.get((path, exclude))
                     if st is None:
                         st = stores[(path, exclude)] = Store(path, exclude)
@@ -761,6 +781,7 @@ class Store:
         if _DEC_BG["on"] and d.get("action") != "bet":
             _DEC_Q.put((str(self.path), self.exclude_versions, d))  # written by the decision-writer thread: the evaluation does not wait on the database
             return 0
+        _with_snapshot(d)  # a bet's row, written here and now: its snapshot is taken after the judgement and the order, not before
         cols = ",".join(d)
         marks = ",".join("?" for _ in d)
         cur = self.db.execute(f"INSERT INTO decisions ({cols}) VALUES ({marks})", list(d.values()))

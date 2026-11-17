@@ -431,6 +431,8 @@ def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
     fields.setdefault("lane_ver", _lane_version(store, s, shot.lane))
     if shot.factors:
         fields.setdefault("factors", shot.factors)
+    if shot.factors_job is not None:
+        fields["_factors_job"] = shot.factors_job  # the entry snapshot is taken by whoever writes the row, as of the decision's time: the evaluation does not read the tape for it
     store.add_decision(
         ticker=shot.ticker, title=shot.title, bid=shot.bid, ask=shot.ask, mode="trade" if s.is_live(shot.lane, shot.series) else "observe",
         close_time=shot.close_time, lane=shot.lane, category=shot.category,

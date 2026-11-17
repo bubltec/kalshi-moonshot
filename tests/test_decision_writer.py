@@ -203,3 +203,42 @@ def test_integration_with_the_bots_switches_on_an_evaluation_sends_the_database_
     assert store_mod.flush_decisions(5.0)
     assert Store(s.db_path).db.execute("SELECT count(*) AS n FROM decisions WHERE lane='rs' AND action='pass'").fetchone()["n"] == 3  # and all three rows were recorded
     calibration.stop_serving()
+
+
+def test_unit_the_entry_snapshot_is_taken_by_the_writer_as_of_the_decisions_time_and_merged(tmp_path, monkeypatch):
+    s, store = mk(tmp_path, monkeypatch)
+    store_mod.queue_decisions()
+    asked = []
+
+    def job(ts):
+        asked.append(ts)
+        return '{"spread": 0.02, "elapsed_min": 4.0}'
+
+    w = Watch(store)
+    store.add_decision(ticker="S1", action="pass", mode="observe", lane="x", ts=1234.5, _factors_job=job)
+    store.add_decision(ticker="S2", action="pass", mode="observe", lane="x", ts=1240.0, factors='{"risk": {"ask": 0.6}, "spread": 0.01}', _factors_job=job)
+    store.add_decision(ticker="S3", action="pass", mode="observe", lane="x", ts=1250.0, _factors_job=lambda ts: (_ for _ in ()).throw(RuntimeError("tape down")))
+    assert w.seen == [] and asked == []  # the evaluation's thread took no snapshot and wrote nothing
+    assert store_mod.flush_decisions(5.0)
+    import json
+
+    got = {r["ticker"]: r["factors"] for r in Store(s.db_path).db.execute("SELECT ticker, factors FROM decisions").fetchall()}
+    assert asked == [1234.5, 1240.0]  # as of each decision's own time
+    assert json.loads(got["S1"]) == {"spread": 0.02, "elapsed_min": 4.0}
+    assert json.loads(got["S2"]) == {"spread": 0.01, "elapsed_min": 4.0, "risk": {"ask": 0.6}}  # what the row already carried wins
+    assert "S3" in got and got["S3"] is None  # a snapshot that fails never loses the row
+
+
+def test_unit_a_bets_snapshot_is_taken_when_its_row_is_written(tmp_path, monkeypatch):
+    s, store = mk(tmp_path, monkeypatch)
+    store_mod.queue_decisions()
+    asked = []
+    store.add_decision(ticker="B1", action="bet", mode="trade", lane="x", ask=0.5, side="yes", stake_usd=1.0, contracts=2.0, ts=99.0, _factors_job=lambda ts: asked.append(ts) or '{"spread": 0.03}')
+    row = Store(s.db_path).db.execute("SELECT factors FROM decisions WHERE ticker='B1'").fetchone()
+    assert asked == [99.0] and row["factors"] == '{"spread": 0.03}'
+
+
+def test_unit_off_a_row_with_a_job_is_still_written_whole(tmp_path, monkeypatch):
+    s, store = mk(tmp_path, monkeypatch)
+    store.add_decision(ticker="P1", action="pass", mode="observe", lane="x", _factors_job=lambda ts: '{"spread": 0.04}')
+    assert Store(s.db_path).db.execute("SELECT factors FROM decisions WHERE ticker='P1'").fetchone()["factors"] == '{"spread": 0.04}'

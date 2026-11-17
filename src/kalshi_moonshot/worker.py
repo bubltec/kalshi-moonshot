@@ -686,9 +686,16 @@ class Worker:
             log.info("skip %s: no longer qualifies (%s)", shot.ticker, why_not)
             return f"skipped: {why_not}"
         view = side_view(m, shot.side)
-        with steptime.step("entry factors"):
-            factors_text = self._entry_factors(shot, spec, _strike(m))
-        shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors=factors_text)
+        from . import store as store_mod
+
+        if store_mod.writes_in_background():  # the running bot: the entry snapshot (four or five reads of the tape) is a record, not part of the judgement, so it is taken when the row is written, as of the decision's time
+            strike_now = _strike(m)
+            shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors="",
+                           factors_job=lambda ts, shot=shot, spec=spec, strike_now=strike_now: self._entry_factors(shot, spec, strike_now, ts))
+        else:
+            with steptime.step("entry factors"):
+                factors_text = self._entry_factors(shot, spec, _strike(m))
+            shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors=factors_text)
         rest_seconds = 0.0
         if floor_bid:
             if spec.entry_move > 0:  # a move lane's bid rests under the live ask, post-only, so it can only fill as a maker
@@ -719,14 +726,14 @@ class Worker:
 
         return db.connect(self.s.tape_path, "tape", shared=True)
 
-    def _entry_factors(self, shot: LongShot, spec, strike: float | None = None) -> str:
+    def _entry_factors(self, shot: LongShot, spec, strike: float | None = None, now: float | None = None) -> str:
         """Every feature we know of at the moment of the buy, saved with the decision so factors, the forecaster and the model can be read against results later. Any market with a tape quote;
         never blocks a decision."""
         if not self.s.tape_enabled:
             return ""
         from . import factors
 
-        return factors.snapshot_now(self.s, shot.ticker, shot.side, shot.close_time, "", strike)
+        return factors.snapshot_now(self.s, shot.ticker, shot.side, shot.close_time, "", strike, now)
 
     # ---- two-level lanes: a slow scoping pass feeds a fast reviewing pass ----
     def _ensure_tiered(self) -> None:

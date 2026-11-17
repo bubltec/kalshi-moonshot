@@ -48,6 +48,7 @@ class LongShot:
     mutually_exclusive: bool = False  # at most one YES in this event can occur
     side: str = "yes"  # contract bought; for "no", ask/bid are NO prices (1 - yes_bid / 1 - yes_ask)
     factors: str = ""  # JSON snapshot of the entry context, saved with the decision (factors.py); empty when the tape had none
+    factors_job: Any = None  # in the running bot the snapshot is not taken before the evaluation: this is called with the decision's time by whoever writes the row (store.add_decision), and returns the JSON
 
 
 def _f(m: dict[str, Any], key: str) -> float:
