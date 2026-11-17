@@ -93,3 +93,15 @@ def test_unit_the_view_is_shadow_and_never_changes_a_lanes_version(tmp_path, mon
         assert spec.entry_crossed_view is bool(extra)
         seen.append(lanes.settings_of(spec, s))
     assert seen[0] == seen[1]
+
+
+def test_integration_the_tag_leads_the_note_so_the_300_character_cut_keeps_it(tmp_path, monkeypatch):
+    """2026-11-17: the first deploy put the tag behind the spike and scenario tags, and the stored reason (cut at 300 characters) lost it on every decision."""
+    now = time.time()
+    seed(steady(now, now - 300.0))
+    out = decide(tmp_path, monkeypatch, now, "entry_crossed_view=true\nentry_spike_view=true")
+    assert out.note.startswith("[never crossed: would not buy] ")
+    from kalshi_moonshot.store import Store
+
+    row = Store(config.load().db_path).db.execute("SELECT reason FROM decisions ORDER BY id DESC LIMIT 1").fetchone()
+    assert row["reason"].startswith("[never crossed: would not buy] ")

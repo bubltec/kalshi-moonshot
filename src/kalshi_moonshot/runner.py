@@ -591,6 +591,7 @@ def evaluate(
             note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
+    crossed_tag = ""
     if spec.entry_crossed_view:  # shadow: the reading rides on the note of buys and passes alike, and changes neither
         from . import variants as _variants
 
@@ -599,7 +600,7 @@ def evaluate(
         except Exception as exc:
             crossed = None
             log.warning("crossed view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        note = (f"[never crossed: would not buy] {note}" if crossed == 0 else f"[crossed {crossed}] {note}") if crossed is not None else f"[crossed view unreadable] {note}"
+        crossed_tag = ("[never crossed: would not buy] " if crossed == 0 else f"[crossed {crossed}] ") if crossed is not None else "[crossed view unreadable] "  # put on the note at the very end, up front: the stored reason is cut at 300 characters and the later tags would push it out (2026-11-17: the first deploy's tag was cut off every stored note)
     if bet and (spec.flip_skip_minutes > 0 or spec.entry_led_max < 1.0):
         from . import variants as _variants
 
@@ -1087,6 +1088,7 @@ def evaluate(
             bet = False  # blocked, refused, failed or unfilled: there is no position to track
     if bet and rest_seconds > 0 and not s.is_live(shot.lane, shot.series):
         note = f"{FLOOR_MARK} {rest_seconds:.0f}s: a paper bid at the floor {shot.ask:.2f}, judged on the tape] {note}"  # up front: the reason is cut at 300 characters
+    note = f"{crossed_tag}{note}"
     action = "bet" if bet else "pass"
     held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
     _log(
