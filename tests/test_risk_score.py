@@ -244,3 +244,14 @@ def test_unit_a_side_bought_cheap_is_not_on_the_sale_line_from_the_start():
     assert riskscore.sale_line(0.25, 0.80) == 0.25
     assert riskscore.sale_line(0.25, 0.24) == 0.12
     assert riskscore.sale_line(0.25, 0.0) == 0.25
+
+
+def test_integration_a_gap_over_the_cost_but_under_the_lanes_least_gap_is_not_bought(tmp_path, monkeypatch):
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.965, 0.965, 0.965], 0.945, [0.945, 0.945, 0.945]))  # two points over the price on a 0.95 side: over its cost
+    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06", ask=0.95)
+    assert out.action == "bet"
+    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06\nrisk_score_gap_min=0.03", ask=0.95)
+    assert out.action == "pass" and "the lane's least gap" in out.note
+    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.66, 0.66, 0.66], 0.615, [0.615, 0.615, 0.615]))  # four and a half points on a 0.62 side
+    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06\nrisk_score_gap_min=0.03", ask=0.62)
+    assert out.action == "bet"
