@@ -323,6 +323,11 @@ def stop_miss(net: float, basis: float, q: float, max_loss: float) -> float:
     return (net - basis) + max_loss * q * basis
 
 
+def never_ahead(ever_ahead: bool, left: float, at: float, bought_left: float, seen_whole: bool, lead: float = 30.0) -> bool:
+    """The never-ahead sale's condition at its one look (lane field curve_risk_never_ahead; 2026-11-17, user: "never profitable and 90s left. Let's add that to the live lanes"): `at` seconds or fewer are left, the bet was bought at least `lead` seconds before that mark (`bought_left` is what was left at the buy), every second of it was watched (`seen_whole`: a bet picked up after a restart has an unknown past and is left alone), and its bid after the sell fee was never once over what it cost with the buy fee. Evidence: studies/results/2026-11-17-time-in-profit.txt (150 live commodity bets since 11-13: never in profit at 90 s left, 6 bets, 2 won if held, selling there +$12.84; at 180 s, 14 bets, 6 won, +$18.12; a bet in profit even briefly won 20 of 24 and is not sold)."""
+    return at > 0 and left <= at and seen_whole and bought_left >= at + lead and not ever_ahead
+
+
 def drop_fall(hist: list[tuple[float, float]], now: float, look: float) -> float | None:
     """How far the newest cushion reading (typical minutes on the bet's side of the target) is under the highest one of the last `look` seconds. `hist` is (time, cushion), oldest first. None when there is no reading in the look back."""
     seen = [c for ts, c in hist if now - look - 1e-9 <= ts <= now]

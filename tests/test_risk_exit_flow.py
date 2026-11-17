@@ -1530,3 +1530,99 @@ def test_integration_a_bet_on_the_score_exit_gets_its_sale_line_from_the_price_p
     assert all(t.risk_sell == pytest.approx(0.5 * t.entry) and t.risk_sell < 0.5 for t in w.targets.values())  # bought at about 0.79 on a lane with a 0.5 line: half the price paid is the lower
     w = held(tmp_path, monkeypatch, live=True, max_loss=0)
     assert all(t.risk_sell == 0.5 for t in w.targets.values())  # without the score exit the lane's line stands
+
+
+# ---- the never-ahead sale (2026-11-17, user: "Ok so 'never profitable and 90s left.' Let's add that to the live lanes") ----
+# the fixture bet: YES bought at 0.81 with 450 s left, about 0.821 with the fee. A bid of 0.78 is under cost and over every other line of the risk exit (max loss off), so nothing else sells it.
+NEVER = "curve risk exit (never ahead)"
+
+
+def quotes(w, bids_by_left):
+    """Kalshi's quote at each (seconds left, bid) in turn; returns every sale signal raised."""
+    out = []
+    for left, bid in bids_by_left:
+        yes_bid(w, bid, left)
+        out += signals(w)
+    return out
+
+
+def flat(bid, from_left, to_left, step=5):
+    return [(left, bid) for left in range(from_left, to_left - 1, -step)]
+
+
+def test_unit_never_ahead_needs_the_mark_a_whole_view_a_buy_before_it_and_no_profit_ever():
+    assert curverisk.never_ahead(False, 90.0, 90.0, 450.0, True)
+    assert not curverisk.never_ahead(False, 91.0, 90.0, 450.0, True)  # before the mark
+    assert not curverisk.never_ahead(True, 90.0, 90.0, 450.0, True)  # it was in profit once
+    assert not curverisk.never_ahead(False, 90.0, 90.0, 110.0, True)  # bought under 30 s before the mark
+    assert not curverisk.never_ahead(False, 90.0, 90.0, 450.0, False)  # not watched from the buy
+    assert not curverisk.never_ahead(False, 90.0, 0.0, 450.0, True)  # off
+
+
+def test_integration_a_bet_never_in_profit_is_sold_at_the_mark_and_not_before(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_never_ahead=90")
+    assert quotes(w, flat(0.78, 445, 95)) == []  # under cost the whole way, and nothing sells before the mark
+    out = quotes(w, [(90, 0.78)])
+    assert out and out[0].why.startswith(NEVER) and "sells at 0.78" in out[0].why
+
+
+def test_integration_a_bet_that_was_in_profit_once_is_kept(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_never_ahead=90")
+    path = flat(0.78, 445, 305) + [(300, 0.86)] + flat(0.78, 295, 10)  # one reading over cost after the fee, then under it to the end
+    assert quotes(w, path) == []
+    assert w.targets[(TICKER, "risk_only")].risk_never_state == 1
+
+
+def test_integration_the_rule_is_off_by_default(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0)
+    assert quotes(w, flat(0.78, 445, 10)) == []
+
+
+def test_integration_a_bet_bought_just_before_the_mark_is_kept(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_never_ahead=430")  # the fixture buy is at 450 s left: 20 s before this mark
+    assert quotes(w, flat(0.78, 445, 10)) == []
+
+
+def test_integration_a_bet_first_seen_long_after_its_buy_is_kept_its_past_is_unknown(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_never_ahead=90")
+    assert quotes(w, flat(0.78, 300, 10)) == []  # the first reading comes 150 s after the buy, as after a restart
+
+
+def test_integration_the_sale_signal_stays_until_the_bet_is_sold(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_never_ahead=90")
+    quotes(w, flat(0.78, 445, 95))
+    assert quotes(w, [(90, 0.78)])[0].why.startswith(NEVER)
+    t = w.targets[(TICKER, "risk_only")]
+    assert t.risk_never_state == 2  # the first order may not go through: the look is not repeated and the decision stands
+
+
+def test_integration_in_shadow_it_logs_once_records_and_sells_nothing(tmp_path, monkeypatch, caplog):
+    import json
+    import logging
+
+    w = held(tmp_path, monkeypatch, live=False, max_loss=0, extra="curve_risk_never_ahead=90")
+    with caplog.at_level(logging.INFO):
+        assert quotes(w, flat(0.78, 445, 10)) == []
+    assert sum(1 for r in caplog.records if f"would sell: {NEVER}" in r.getMessage()) == 1
+    rows = [json.loads(x) for x in (tmp_path / "risk_shadow.jsonl").read_text().splitlines()]
+    assert [(x["kind"], x["live"], x["bid"], x["left"]) for x in rows if x.get("kind") == "never ahead"] == [("never ahead", False, 0.78, 90.0)]
+
+
+def test_integration_the_never_ahead_sale_is_an_order_at_a_loss_and_the_bet_closes(tmp_path, monkeypatch):
+    c = Client(bid=0.78)
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
+    w = held(tmp_path, monkeypatch, live=True, client=c, max_loss=0, extra="curve_risk_never_ahead=90")
+    for left, bid in flat(0.78, 445, 90):
+        yes_bid(w, bid, left)
+    job = w._jobs.get_nowait()
+    assert job.why.startswith(NEVER)
+    w._sell(*job)
+    assert len(c.sold) == 1 and len(Store(config.load().db_path).open_bets()) == 0
+
+
+def test_unit_the_never_ahead_sale_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    for extra in ("", "curve_risk_never_ahead=90\n"):
+        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + extra)
+        s = config.load()
+        assert ("curve_risk_never_ahead" in lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)) is bool(extra)

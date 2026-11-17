@@ -249,6 +249,10 @@ class Target:
     risk_take_trail_live: bool = False  # the trail sells (curve_take_trail_live); off = it logs and records a would-sell
     risk_take_peak: float = 0.0  # the highest bid the risk check has seen on this bet
     risk_trail_logged: bool = False
+    risk_never_ahead: float = 0.0  # seconds left at which a bet never once in profit is sold (lane field curve_risk_never_ahead); 0 = off
+    risk_ever_ahead: bool = False  # the bid less the sell fee has been over the cost at some risk check since the buy
+    risk_first_seen: float = 0.0  # when the risk check first read this bet
+    risk_never_state: int = 0  # 0 = the look has not happened, 1 = looked and kept, 2 = looked and sells
     risk_drop_units: float = 0.0  # the slow drop check, shadow only (lane field curve_risk_drop); 0 = off
     risk_drop_share: float = 0.25
     risk_drop_hist: list = field(default_factory=list)  # (time, the cushion in typical minutes on the bet's side)
@@ -1021,6 +1025,10 @@ class ProfitWatcher:
         look = t.risk_take_slope * left  # the look back for the slope shrinks with the time left
         basis = t.entry + fee_per_contract(t.entry)
         net = bid - fee_per_contract(bid)
+        if getattr(t, "risk_never_ahead", 0.0) > 0:
+            why = self._risk_never_ahead(t, r, bid, now, left, pnl, net, basis)
+            if why:
+                return why
         if t.risk_take or t.risk_squeeze > 0 or t.risk_nudge_units > 0:
             t.risk_take_hist.append((now, bid))
             while t.risk_take_hist and t.risk_take_hist[0][0] < now - max(60.0, 2.0 * look):
@@ -1133,6 +1141,30 @@ class ProfitWatcher:
             t.risk_logged = True
             log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
             self._risk_record(t, r, bid, now, left, pnl, wait, stop, False)
+        return None
+
+    def _risk_never_ahead(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, net: float, basis: float) -> str | None:
+        """The never-ahead sale (lane field curve_risk_never_ahead; 2026-11-17, user: "never profitable and 90s left"). Every risk check notes whether the bet is in profit; at the lane's mark it looks once: a bet bought 30 s or more before the mark, watched the whole time and never once in profit is sold at the bid (when the risk exit is live; in shadow it is logged and recorded once). A bet that passes the look is never sold by this rule; one that fails keeps its sale signal until it is sold."""
+        if t.risk_first_seen <= 0:
+            t.risk_first_seen = now
+        if net > basis:
+            t.risk_ever_ahead = True
+        if t.risk_never_state == 0 and left <= t.risk_never_ahead:
+            bought_left = (15.0 - t.opened_min) * 60.0 if t.opened_min < 1e8 else -1.0  # what was left at the buy; unknown = the rule does not apply
+            seen_whole = bought_left > 0 and t.risk_first_seen <= t.close_ts - bought_left + 30.0
+            hit = curverisk.never_ahead(t.risk_ever_ahead, left, t.risk_never_ahead, bought_left, seen_whole)
+            t.risk_never_state = 2 if hit else 1
+            if not hit:
+                log.info("curve risk: %s %s kept at the never-ahead look (%.0fs left): %s", t.ticker, t.lane, left, "it has been in profit since the buy" if t.risk_ever_ahead else "bought under 30 s before the mark" if 0 < bought_left < t.risk_never_ahead + 30.0 else "not watched from the buy (a restart or no buy time): its past is unknown")
+        if t.risk_never_state != 2 or bid < CURVE_MIN_BID:
+            return None
+        reason = f"curve risk exit (never ahead): with {left:.0f}s left (the look is at {t.risk_never_ahead:.0f}s) the bet has not once been worth more than its {basis:.3f} cost since the buy; sells at {bid:.2f} ({net:.3f} after the fee) for {pnl * 100.0:+.1f}% of cost"
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="never ahead")
+            return reason
+        t.risk_never_state = 1  # shadow: said once
+        log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+        self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="never ahead")
         return None
 
     def _risk_drop_shadow(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> None:
@@ -1998,6 +2030,7 @@ class ProfitWatcher:
                 held.risk_take_cushion = spec.curve_take_cushion
                 held.risk_take_trail, held.risk_take_trail_live = spec.curve_take_trail, spec.curve_take_trail_live
                 held.risk_drop_units, held.risk_drop_share = spec.curve_risk_drop, spec.curve_risk_drop_share
+                held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
