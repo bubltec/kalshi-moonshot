@@ -98,6 +98,14 @@ if not BRIEF:
         print(row(x) + (f" | sold by the lane at {float(x['r']['exit_price']):.2f}: {(x['r']['exit_reason'] or '')[:60]}" if x["sold"] else " | held to zero"))
         pts = [(t, b) for t, b in x["path"] if (t - int(x["t0"])) % 30 == 1]
         print("      every 30 s: " + " ".join(f"{b:.2f}" for _, b in pts))
+        ahead = [(t, b - fee(b) - x["basis"]) for t, b in x["path"] if b - fee(b) - x["basis"] > 0]  # seconds the bet could have been sold for more than it cost, fee in (2026-11-17, user: "Did either of the 2 scenarios above ever have profit? If so when in the time line?")
+        if ahead:
+            best = max(ahead, key=lambda v: v[1])
+            pk = max(x["path"], key=lambda v: v[1])
+            print(f"      in profit {len(ahead)}s of {len(x['path'])}s held: first {ahead[0][0] - x['t0']:.0f}s after the buy ({x['close'] - ahead[0][0]:.0f}s left), last {ahead[-1][0] - x['t0']:.0f}s after ({x['close'] - ahead[-1][0]:.0f}s left); best {best[1]:+.3f} a contract (${best[1] * x['n']:+.2f}) at a bid of {pk[1]:.2f}, {best[0] - x['t0']:.0f}s after the buy with {x['close'] - best[0]:.0f}s left")
+        else:
+            pk = max(x["path"], key=lambda v: v[1])
+            print(f"      never in profit after the fee: the highest bid was {pk[1]:.2f} against {x['basis']:.2f} paid, {pk[0] - x['t0']:.0f}s after the buy with {x['close'] - pk[0]:.0f}s left")
     print("\n=== the bets that did not lose (same columns)")
     for x in winners:
         if x["first"] is not None or (x["unit"] and x["fall"] / x["unit"] >= 2):
