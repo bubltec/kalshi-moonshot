@@ -239,7 +239,8 @@ class Target:
     risk_take_held: bool = False  # the cushion has already been logged as holding this bet's take
     risk_take_slope: float = 0.08  # the look back for the slope as a share of the time left: no profit sale while the bid is still sloping up over it (lane field curve_take_slope_share)
     risk_take_sure: float = -1.0  # the profit take holds at a bid at or over this (lane field curve_take_sure)
-    risk_take_sure_late: float = -1.0  # ... and in the last fifth from this bid (curve_take_sure_late)
+    risk_take_sure_late: float = -1.0  # ... and in the last part of the market from this bid (curve_take_sure_late)
+    risk_take_sure_slide: float = -1.0  # ... or, sliding with the time left up to 1.00 at this share of the market (curve_take_sure_slide)
     risk_sure_logged: bool = False
     risk_sure_latched: bool = False  # the bet reached the sure level after the early window: its take stays held through a dip (released only by a fall past the market's own swing)
     risk_sure_level: float = 0.0
@@ -1122,9 +1123,9 @@ class ProfitWatcher:
             if early:
                 taken = True  # an early 0.95 is not a sure win: cash it, the re-entry buys back
             # The sure hold is a latch, not a line (2026-11-15 night, user: "if it drops to like 89 for a second it will sell? We don't want that behavior to be a hard stop"): once a bet has been a sure win, a dip does not end it. It is released only by a fall under the level that latched it by more than the market's own swing over the time left (the typical minute x sqrt(left / 60)), the same unit the take's late cap reads; with no reading of the unit it stays latched. The max-loss stop is untouched.
-            if not early and curverisk.sure_win(bid, left, t.risk_take_sure, t.risk_take_sure_late):
+            if not early and curverisk.sure_win(bid, left, t.risk_take_sure, t.risk_take_sure_late, slide=t.risk_take_sure_slide):
                 t.risk_sure_latched = True
-                t.risk_sure_level = t.risk_take_sure if t.risk_take_sure > 0 and bid >= t.risk_take_sure else t.risk_take_sure_late
+                t.risk_sure_level = t.risk_take_sure if t.risk_take_sure > 0 and bid >= t.risk_take_sure else (curverisk.sure_bar(left, t.risk_take_sure_late, slide=t.risk_take_sure_slide) or t.risk_take_sure_late)
             elif t.risk_sure_latched and unit is not None and unit > 0 and left > 0 and bid < t.risk_sure_level - unit * math.sqrt(left / 60.0):
                 t.risk_sure_latched = False
             if taken and not early and t.risk_sure_latched:
@@ -2115,6 +2116,7 @@ class ProfitWatcher:
                 held.risk_nudge_units = spec.nudge_units
                 held.risk_long_scales = tuple(spec.curve_risk_long_scales)
                 held.risk_take_sure, held.risk_take_sure_late = spec.curve_take_sure, spec.curve_take_sure_late
+                held.risk_take_sure_slide = spec.curve_take_sure_slide
                 held.risk_take_early_bid, held.risk_take_early_seconds = spec.curve_take_early_bid, spec.curve_take_early_seconds
                 held.risk_take_cushion = spec.curve_take_cushion
                 held.risk_take_trail, held.risk_take_trail_live = spec.curve_take_trail, spec.curve_take_trail_live

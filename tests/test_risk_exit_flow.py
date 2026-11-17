@@ -1703,3 +1703,51 @@ def test_unit_the_under_even_sale_changes_a_lanes_version_only_when_it_is_live(t
         (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + extra)
         s = config.load()
         assert ("curve_risk_under_even" in lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)) is shown
+
+
+# The sure hold, time based with no cut-off (2026-11-17, user, after cashing out KXNEAR15M-26NOV171500 by hand at about 0.95 with over four minutes left: "we want the sure win, but it should be time based"; "if there's 90s left and we are in the 90s, probably a good chance of winning"; "5 mins left? that is too much time"; "do not use hard limits").
+def test_unit_the_sliding_bar_rises_with_the_time_left_and_has_no_step():
+    bar = lambda left: curverisk.sure_bar(left, 0.90, slide=1 / 3)  # noqa: E731
+    assert bar(0) == pytest.approx(0.90) and bar(60) == pytest.approx(0.92) and bar(90) == pytest.approx(0.93) and bar(180) == pytest.approx(0.96)
+    assert bar(300) == pytest.approx(1.0) and bar(700) == pytest.approx(1.0)  # five minutes or more: nothing is sure
+    steps = [bar(k + 1) - bar(k) for k in range(0, 299)]
+    assert max(steps) - min(steps) < 1e-9 and min(steps) > 0  # a straight line: one second more left always asks the same little more
+    assert curverisk.sure_bar(90, 0.90, slide=-1.0) is None and curverisk.sure_bar(90, -1.0, slide=1 / 3) is None  # off
+
+
+def test_unit_a_sure_win_by_the_sliding_bar():
+    sw = lambda bid, left: curverisk.sure_win(bid, left, -1.0, 0.90, slide=1 / 3)  # noqa: E731
+    assert sw(0.94, 90) and not sw(0.92, 90)  # 90 s left: the bar is 0.93
+    assert sw(0.91, 20) and not sw(0.89, 20)
+    assert not sw(0.957, 282)  # the NEAR bet: the bar is 0.994 with 282 s left
+    assert not sw(0.999, 300) and not sw(0.999, 700)  # no bid is a sure win with five minutes or more left
+    assert curverisk.sure_win(0.92, 150.0, -1.0, 0.90) and not curverisk.sure_win(0.92, 400.0, -1.0, 0.90)  # a lane without the slide: as it always was
+
+
+def test_integration_in_the_90s_with_minutes_left_it_sells_and_near_the_close_it_holds(tmp_path, monkeypatch):
+    extra = "curve_take_sure=-1\ncurve_take_sure_late=0.90\ncurve_take_sure_slide=0.333"
+    (tmp_path / "early").mkdir()
+    (tmp_path / "late").mkdir()
+    w = held(tmp_path / "early", monkeypatch, live=True, take="true", extra=extra)
+    assert w.targets[(TICKER, "risk_only")].risk_take_sure_slide == 0.333
+    assert climb(w, 0.82, 0.95, 400) is None
+    sig = level(w, 0.95, 400)
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")  # over six minutes left: the gain is taken
+    ticks_mod.mids._rows.clear()
+    w2 = held(tmp_path / "late", monkeypatch, live=True, take="true", extra=extra)
+    assert climb(w2, 0.82, 0.95, 85) is None
+    assert level(w2, 0.95, 85) is None  # 85 s left, the bar is under 0.93: held to settlement
+
+
+def test_unit_the_slide_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    base = LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false')
+    (tmp_path / "strategies.toml").write_text(base)
+    s = config.load()
+    v0 = lanes.version_of(lanes.lane_specs(s)["risk_only"], s)
+    (tmp_path / "strategies.toml").write_text(base + "curve_take_sure_slide=-1\n")
+    s = config.load()
+    assert lanes.version_of(lanes.lane_specs(s)["risk_only"], s) == v0
+    (tmp_path / "strategies.toml").write_text(base + "curve_take_sure_slide=0.333\n")
+    s = config.load()
+    assert lanes.version_of(lanes.lane_specs(s)["risk_only"], s) != v0

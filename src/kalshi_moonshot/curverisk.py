@@ -251,10 +251,22 @@ LATE_SHARE = 0.2  # the last fifth of a market (three minutes of fifteen): where
 HIGH_BID = 0.95  # 2026-11-14 (user: "I don't think when it's above 95 we need to consider an early sale as long as it has cushion"): from this bid up, a flat bid is held whenever the spot's cushion backs the price, at any time left, as in the last fifth of the market. The user's own number: five cents is all that is left to win.
 
 
-def sure_win(bid: float, left: float, sure: float = -1.0, sure_late: float = -1.0, window: float = 900.0) -> bool:
+def sure_bar(left: float, sure_late: float, window: float = 900.0, slide: float = -1.0) -> float | None:
+    """The bid at or over which a bet counts as a sure win with `left` seconds to go, when the lane slides it (lane field curve_take_sure_slide), else None.
+    2026-11-17, user, after cashing out KXNEAR15M-26NOV171500 by hand at about 0.95 with over four minutes left while the bot held it as a sure win: "we want the sure win, but it should be time based"; "if there's 90s left and we are in the 90s, probably a good chance of winning"; "5 mins left? that is too much time"; and, on a version with a cut-off at 90 s: "do not use hard limits".
+    No step anywhere: the bar is `sure_late` at the close and rises in a straight line to 1.00 (nothing is sure) when `slide` of the market is still to run. With sure_late 0.90 and slide a third of a 15-minute market: 0.90 at the close, 0.92 with a minute left, 0.93 with 90 s, 0.96 with three minutes, 1.00 from five minutes out."""
+    if sure_late <= 0 or slide <= 0 or window <= 0:
+        return None
+    return sure_late + (1.0 - sure_late) * min(1.0, max(left, 0.0) / (window * slide))
+
+
+def sure_win(bid: float, left: float, sure: float = -1.0, sure_late: float = -1.0, window: float = 900.0, slide: float = -1.0) -> bool:
     """True when a bet is far enough ahead that the profit take should hold it to settlement (2026-11-15 night, user: "we keep selling our profit at the last second, always taking a fee ... if it stops these sure wins from selling, sure"): the bid is at or over `sure` at any time, or at or over `sure_late` in the last LATE_SHARE of the market. A sale there gives up the cents to a full dollar and pays the fee for protection the market's price already covers: studies/results/2026-11-15-late-take-check.txt, 82 live takes: at a bid of 0.95 and over 0 of 12 saved a bet (sale less hold -7.07), at 0.90 to 0.95 in the last 180 s 0 of 8 (-18.45), while the takes earlier and lower earned +115 and saved 12 bets. Off (-1) by default."""
     if sure > 0 and bid >= sure:
         return True
+    bar = sure_bar(left, sure_late, window, slide)
+    if bar is not None:
+        return bar < 1.0 and bid >= bar  # the sliding bar: no bid is a sure win while the bar is at 1.00
     return sure_late > 0 and window > 0 and left <= window * LATE_SHARE and bid >= sure_late
 
 
