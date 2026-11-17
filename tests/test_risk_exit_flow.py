@@ -1520,6 +1520,13 @@ def test_integration_an_unreadable_score_leaves_the_exit_on_the_price(tmp_path, 
 
     w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_score=true")
     monkeypatch.setattr(riskscore, "live", lambda *a, **k: None)
-    for n, bid in enumerate([0.44] * 12):
+    for n, bid in enumerate([0.36] * 12):
         yes_bid(w, bid, 400 - 10 * n)
     assert len(signals(w)) == 1
+
+
+def test_integration_a_bet_on_the_score_exit_gets_its_sale_line_from_the_price_paid(tmp_path, monkeypatch):
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_score=true")
+    assert all(t.risk_sell == pytest.approx(0.5 * t.entry) and t.risk_sell < 0.5 for t in w.targets.values())  # bought at about 0.79 on a lane with a 0.5 line: half the price paid is the lower
+    w = held(tmp_path, monkeypatch, live=True, max_loss=0)
+    assert all(t.risk_sell == 0.5 for t in w.targets.values())  # without the score exit the lane's line stands

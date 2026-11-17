@@ -151,7 +151,17 @@ def gap_held(chances: Sequence[float] | None, kalshi: Sequence[float] | None, fl
     """True when the score's chance has been over Kalshi's price for the side by at least `floor` and at most `ceiling` at every look (2026-11-16, user, on the level rule buying only 0.87 to 0.98 sides: "Why such high prices?"; "Ok let's try your suggestion"). The floor is what the buy costs; the ceiling is where the fit stopped being right (a disagreement of 3 to 6 points was the score's to win, one over 6 was Kalshi's: studies/results/2026-11-16-risk-score-fit.txt)."""
     if not chances or not kalshi or len(chances) != len(kalshi):
         return False
+    if kalshi[0] < kalshi[-1]:
+        return False  # the side's price is lower than at the oldest look: the gap is the price falling away from a number that follows it more slowly, not the number rating the side higher (2026-11-16 23:21: the lane's first four buys were sides in the middle of a fall; ZEC bought at 0.23 was 0.12 two minutes later)
     return all(floor <= c - k <= ceiling for c, k in zip(chances, kalshi))
+
+
+SALE_SHARE = 0.5  # a side bought under twice the lane's line is sold at half the price paid instead: structural (it keeps the buy and the sale from contradicting each other), not a tuned number
+
+
+def sale_line(line: float, entry: float) -> float:
+    """The chance at or under which a loss is sold (lane field curve_risk_score): the lane's line, or half the price paid when that is lower. A side bought at 0.80 is sold at the lane's 0.25 (a risk of 75% that has stayed); a side bought at 0.24 would sit on that line from its first second (2026-11-16 23:23: ZEC bought at 0.23 was sold two minutes later), so it is sold at 0.12."""
+    return min(line, SALE_SHARE * entry) if entry > 0 else line
 
 
 def tag(chances: Sequence[float] | None, kalshi: float | None) -> str:

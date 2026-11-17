@@ -232,3 +232,15 @@ def test_unit_the_gap_field_changes_a_lanes_version_only_when_set(tmp_path, monk
     base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
     assert "risk_score_gap_max" not in lanes.settings_of(base, s)
     assert lanes.version_of(dataclasses.replace(base, risk_score_buy=1.0), s) != lanes.version_of(dataclasses.replace(base, risk_score_buy=1.0, risk_score_gap_max=0.06), s)
+
+
+def test_unit_a_gap_made_by_a_falling_price_is_not_a_gap():
+    assert not riskscore.gap_held([0.30, 0.33, 0.36], [0.26, 0.29, 0.32], 0.025, 0.06)  # the side fell 6 cents in the minute; the number followed more slowly
+    assert riskscore.gap_held([0.36, 0.36, 0.36], [0.32, 0.32, 0.32], 0.025, 0.06)
+    assert riskscore.gap_held([0.38, 0.36, 0.35], [0.34, 0.32, 0.31], 0.025, 0.06)  # rising with the number over it
+
+
+def test_unit_a_side_bought_cheap_is_not_on_the_sale_line_from_the_start():
+    assert riskscore.sale_line(0.25, 0.80) == 0.25
+    assert riskscore.sale_line(0.25, 0.24) == 0.12
+    assert riskscore.sale_line(0.25, 0.0) == 0.25

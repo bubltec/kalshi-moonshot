@@ -1985,6 +1985,10 @@ class ProfitWatcher:
                 held.risk_stop_hold = spec.curve_risk_stop_hold
                 held.risk_early_hold = spec.curve_risk_early_hold
                 held.risk_score = spec.curve_risk_score
+                if spec.curve_risk_score and held.risk_sell > 0:
+                    from . import riskscore
+
+                    held.risk_sell = riskscore.sale_line(spec.curve_risk_sell, held.entry)
                 held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_max
                 held.risk_nudge_hour = spec.nudge_hour_factor
                 held.risk_nudge_units = spec.nudge_units
