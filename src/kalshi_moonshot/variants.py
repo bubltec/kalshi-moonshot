@@ -726,6 +726,30 @@ def quote_led_share(rows: Sequence[tuple[float, float]], side: str, opened: floa
     return led / n
 
 
+def quote_crossings(rows: Sequence[tuple[float, float]], opened: float, at: float) -> int | None:
+    """How many times the market's own Kalshi mid crossed even (0.50) from its open (or its first quote) to `at`, on a 5 s grid that carries the last quote forward. A count of 0 means the side that is the favorite now has been the favorite the whole way: never tested. The same for either side, since one side's mid is one less the other's. `rows` are (time, YES mid), oldest first. None with under QUOTE_WAVE_MIN seconds of quotes or a newest quote over 10 s old.
+    studies/results/2026-11-17-buy-shapes.txt (live buys 11-13 to 11-17, held to settlement, fee in): crypto_multiscale with no crossing 47 bets, 60% won at 0.770 paid, -28.0% of stake; with 1 or 2, 68 bets, 81% at 0.750, +7.4%; the same direction on 11-09 to 11-13 (-8.2% and +9.0%). The commodity lanes agree on 11-13 to 11-17 and not before."""
+    ts = [r[0] for r in rows]
+    i = bisect.bisect_right(ts, at) - 1
+    if i < 0 or ts[i] < at - 10.0:
+        return None
+    start = max(opened, ts[0])
+    n = int(at - start)
+    if n < QUOTE_WAVE_MIN:
+        return None
+    grid = []
+    for k in range(0, n + 1, 5):
+        idx = max(bisect.bisect_right(ts, start + k) - 1, 0)
+        grid.append(rows[idx][1])
+    return sum(1 for a, b in itertools.pairwise(grid) if (a - 0.5) * (b - 0.5) < 0)
+
+
+def quote_crossings_now(ticker: str, opened: float, now: float | None = None) -> int | None:
+    """quote_crossings from the market's quote mids held in memory (ticks.mids), or None."""
+    now = time.time() if now is None else now
+    return quote_crossings(ticks_mod.mids.rows(ticker), opened, now)
+
+
 def quote_led_now(ticker: str, side: str, opened: float, now: float | None = None) -> float | None:
     """quote_led_share from the market's quote mids held in memory (ticks.mids), or None."""
     now = time.time() if now is None else now

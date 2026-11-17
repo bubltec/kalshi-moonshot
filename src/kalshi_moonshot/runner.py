@@ -591,6 +591,15 @@ def evaluate(
             note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
+    if spec.entry_crossed_view:  # shadow: the reading rides on the note of buys and passes alike, and changes neither
+        from . import variants as _variants
+
+        try:
+            crossed = _variants.quote_crossings_now(shot.ticker, time.time() + shot.hours_to_close * 3600.0 - 900.0)  # 900: a 15-minute market's length, structural
+        except Exception as exc:
+            crossed = None
+            log.warning("crossed view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
+        note = (f"[never crossed: would not buy] {note}" if crossed == 0 else f"[crossed {crossed}] {note}") if crossed is not None else f"[crossed view unreadable] {note}"
     if bet and (spec.flip_skip_minutes > 0 or spec.entry_led_max < 1.0):
         from . import variants as _variants
 
