@@ -228,6 +228,7 @@ class Target:
     curve_comeback_hold: float = 240.0
     risk_sell: float = -1.0  # lane curve_risk_sell (-1 = off): the single risk exit's line (curverisk.py)
     risk_live: bool = False
+    risk_line_live: bool = True  # false: the line sale is logged and recorded, not made (lane field curve_risk_line_live); the max loss and the profit side are not affected
     risk_spot_weight: float = 0.5
     risk_history: bool = True
     risk_max_loss: float = 0.5
@@ -1144,7 +1145,7 @@ class ProfitWatcher:
             self._risk_held(t, r, bid, now, left, pnl, "early hold", f"a loss sale ({'max loss' if stop else 'line'}) was wanted with {left:.0f}s left, over {t.risk_early_hold:g} of the market: held, and this bet's loss sales stay off to settlement; 0.50 less the bid is {f'{(0.5 - net) / reach:.2f}' if reach > 0 else 'n/a'} of what the market typically travels in the time left")
             return None
         reason = f"curve risk exit{' (max loss)' if stop else ''}: the chance the side pays is {r.q:.3f} ({r.worse} cushion the worse: price {r.q_price:.3f}, spot {r.q_spot:.3f}, history x{t.risk_hist:.2f}), line {t.risk_sell:.2f}, held {now - t.risk_since:.0f}s of a {wait:.0f}s wait; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left{squeezed}"
-        if t.risk_live:
+        if t.risk_live and (stop or getattr(t, "risk_line_live", True)):  # the line sale has its own switch (lane field curve_risk_line_live); the max loss does not go through it
             self._risk_record(t, r, bid, now, left, pnl, wait, stop, True)  # a live signal is kept on disk too: the container log is lost at every rebuild, and an exit that did not happen has to be explainable afterward
             return reason
         if not t.risk_logged:
@@ -2042,6 +2043,7 @@ class ProfitWatcher:
                     log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
             if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
+                held.risk_line_live = spec.curve_risk_line_live
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_stop_hold = spec.curve_risk_stop_hold
                 held.risk_early_hold = spec.curve_risk_early_hold
