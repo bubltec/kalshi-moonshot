@@ -109,3 +109,14 @@ Reading: these factors do not tell us a bet's worth better than its price does. 
 By kind: the curve exit's margin sale was +$16.03 on 30 crypto sales and -$41.77 on 68 commodity sales (79% of those would have won). The shock exit that ran beside it was -$27.84 on 58 crypto sales. The risk exit's profit take was +$45.73 on 114; its max-loss stop -$22.95 on 117 crypto sales and +$16.23 on 31 commodity sales.
 
 Reading: the old stack was not doing better. The part of either exit that has earned its place is the profit take. Loss sales of every kind land near zero against holding.
+
+## The score with the factors the user kept (19:24)
+
+Dropped at the user's word: place in its own range, the long layer, what was paid, what is at stake. "Whether the side just flipped" replaced by the flip rate: flips so far in this market per minute lapsed (user: "not time left, time lapsed"), acting on how much the price is trusted.
+
+Weights of the last fit: price +0.68, cushion +0.39, flip rate +0.39, time +0.06, target in the 15 min -0.42, in the 30 min -0.21, in the 60 min +0.02, last four markets' finish +0.19.
+
+- Held out it equals Kalshi's mid overall (0.5028 against 0.5024).
+- On disagreements of up to 6 points the score was the closer one; beyond 6 points Kalshi's mid was.
+- The flip rate's sign is the opposite of the guess: with no flips the price is trusted LESS (weight 0.68), and it is trusted more as the market flips more. A leader that has never been challenged is the one that is a little overpriced.
+- Along ETH 16:00 YES and DOGE 18:15 NO the score's risk stays within 1 to 7 points of Kalshi's own.
