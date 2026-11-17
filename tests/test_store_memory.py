@@ -70,3 +70,17 @@ def test_unit_off_by_default_an_answer_past_its_time_is_read_again(tmp_path, mon
     seen = spy(store)
     store.open_bets()
     assert seen != []
+
+
+def test_integration_settling_a_market_reads_that_market_only(tmp_path):
+    store = Store(tmp_path / "m.db")
+    for k in range(5):
+        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, model_p, outcome, title) VALUES (?,?,?,?,?,?,?,?,?,?)", (float(k), f"M-{k}", "bet", "paper", 0.6, "yes", "x", 0.7, "yes", "t"))
+    store.db.commit()
+    assert [r["ticker"] for r in store.settled_decisions(tickers=["M-3"])] == ["M-3"]
+    assert store.settled_decisions(tickers=[]) == [] and len(store.settled_decisions()) == 5
+    seen = spy(store)
+    store.rag.db = store.db
+    store.rag.index_settled(["M-3"])
+    reads = [q for q in seen if q.lstrip().upper().startswith("SELECT") and "FROM decisions" in q]
+    assert reads and all("ticker IN" in q for q in reads)

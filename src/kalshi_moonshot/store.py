@@ -765,9 +765,15 @@ class Store:
         self.generation += 1
         self.rag.index_settled([ticker])
 
-    def settled_decisions(self, include_excluded: bool = False) -> list[db.Row]:
-        """Settled decisions, minus excluded versions unless asked for everything."""
+    def settled_decisions(self, include_excluded: bool = False, tickers: Iterable[str] | None = None) -> list[db.Row]:
+        """Settled decisions, minus excluded versions unless asked for everything. `tickers` narrows the read to those markets: the case index asks for one market at each settlement, and without this it loaded every settled decision each time (132,508 rows on 2026-11-16, on three connections at once)."""
         extra, args = ("", []) if include_excluded else self._excluded_sql()
+        if tickers is not None:
+            wanted = sorted(set(tickers))
+            if not wanted:
+                return []
+            extra += f" AND ticker IN ({','.join('?' for _ in wanted)})"
+            args = list(args) + wanted
         return self.db.execute(
             f"SELECT * FROM decisions WHERE outcome IN ('yes','no'){extra} ORDER BY ts", args
         ).fetchall()

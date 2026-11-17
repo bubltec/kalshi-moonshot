@@ -178,7 +178,7 @@ class Rag:
             return
         marks = ",".join("?" for _ in tickers)
         self.db.execute(f"DELETE FROM rag_cases WHERE ticker IN ({marks})", tickers)
-        rows = [r for r in self.store.settled_decisions() if r["ticker"] in set(tickers)]
+        rows = self.store.settled_decisions(tickers=tickers)  # only these markets: not every settled decision, filtered here
         self.db.executemany(
             "INSERT INTO rag_cases (title, body, ticker, series, category, lane, outcome, settled_ts) "
             "VALUES (?,?,?,?,?,?,?,?)",
