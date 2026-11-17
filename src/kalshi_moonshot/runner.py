@@ -428,14 +428,14 @@ def _risk_factors(shot: LongShot, risk_reading: dict | None) -> dict:
     return {"factors": json.dumps((base if isinstance(base, dict) else {}) | {"risk": risk_reading})}
 
 
-REASON_MAX = 600  # characters of a decision's stored reason (300 until 2026-11-17)
+REASON_MAX = 4000  # a bound, not a cut: a decision's whole note is stored (a long one is about 900 characters). Until 2026-11-17 the first 300 were kept, a limit from when a note was one sentence; the column is text and was never the constraint (user: "why is it limited to 300chars? why don't we fix that??!")
 _TAG = re.compile(r"\[[^\[\]]*\]")
 
 
 def stored_reason(note: str) -> str:
     """The decision's note as it is stored: what the rules SAID first, the bracketed readings after it.
     2026-11-17, user: "my only issue is the number of buys. are we flagging why we turn things down?" We were not. Every gate and every shadow view puts its text at the front of the note, the views last, and the note was cut at 300 characters: on the live crypto lane's 142 passes of its first 40 minutes back, all 300 were the crossed, spike-view and scenario readings and not one row said why the buy was turned down.
-    A reading in square brackets describes the market; a sentence outside them is a rule's verdict. The verdicts are kept in their order and put first, then the readings. A paper floor bid's mark stays at the very front: paperfill.py looks for it."""
+    A reading in square brackets describes the market; a sentence outside them is a rule's verdict. The verdicts are kept in their order and put first, then the readings, and the whole note is stored. A paper floor bid's mark stays at the very front: paperfill.py looks for it."""
     tags = _TAG.findall(note)
     text = " ".join(_TAG.sub(" ", note).split())
     floor = [x for x in tags if x.startswith(FLOOR_MARK)]

@@ -28,9 +28,12 @@ def test_unit_a_floor_bids_mark_stays_at_the_front_and_nothing_is_lost_in_a_shor
     assert runner.stored_reason("[only a reading]") == "[only a reading]"
 
 
-def test_unit_a_long_note_is_cut_from_the_readings_not_from_the_verdict():
-    got = runner.stored_reason(f"{VIEWS} {VIEWS} the lane holds at most 2 on a side.")
-    assert got.startswith("the lane holds at most 2 on a side. [crossed 8]") and len(got) == runner.REASON_MAX
+def test_unit_the_whole_note_is_stored_and_only_a_runaway_one_is_bounded_from_the_readings_end():
+    note = f"{VIEWS} {VIEWS} {VIEWS} the lane holds at most 2 on a side."  # about 900 characters: an ordinary long note
+    got = runner.stored_reason(note)
+    assert got.startswith("the lane holds at most 2 on a side. [crossed 8]") and got.count("[scenario") == 3 and len(got) == len(" ".join(note.split()))  # nothing is dropped
+    runaway = runner.stored_reason(" ".join([VIEWS] * 30) + " the verdict.")
+    assert runaway.startswith("the verdict. ") and len(runaway) == runner.REASON_MAX
 
 
 def test_integration_a_pass_is_stored_with_its_reason_first(tmp_path, monkeypatch):
