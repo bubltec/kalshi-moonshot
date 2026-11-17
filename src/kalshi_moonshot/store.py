@@ -7,6 +7,8 @@ retrieve similar past cases. Prices are not stored in that index.
 from __future__ import annotations
 
 import json
+import logging
+import queue
 import shutil
 import sqlite3
 import threading
@@ -18,6 +20,8 @@ from typing import Any
 from . import db
 from .calibration import Calibrator
 from .rag import Rag
+
+_log = logging.getLogger(__name__)
 
 # Bump this whenever filters, prompt, or model logic change enough that old decisions
 # should not be scored together with new ones. Every new decision is tagged with it.
@@ -318,12 +322,50 @@ _MEMO: dict[tuple, tuple[tuple[int, ...], float, Any]] = {}
 _MEMO_LOCK = threading.Lock()
 
 
+_BACKGROUND = {"on": False}  # the running bot turns this on (serve_from_memory): a remembered answer whose time is up is still served, and re-read by the refresher thread, not by the caller
+_REFRESH: "queue.Queue[tuple]" = queue.Queue()
+_REFRESHING: set[tuple] = set()
+_REFRESH_STORES = threading.local()
+
+
+def serve_from_memory(on: bool = True) -> None:
+    """In the running bot (2026-11-16, user: "Nothing in per tick computations should do a db read. Ever"): a remembered read whose MEMO_TTL has run out is answered from memory and re-read by a background thread. The TTL exists only to pick up writes by another process; a write in THIS process still makes the next read go to the database, once, right after the bet, sale or settlement that changed the rows (the reader must not act on a book it knows is out of date)."""
+    first = not _BACKGROUND["on"] and on
+    _BACKGROUND["on"] = on
+    if first:
+        threading.Thread(target=_refresher, name="store-memo", daemon=True).start()
+
+
+def _refresher() -> None:
+    while True:
+        key, fn, path, exclude, args, kw = _REFRESH.get()
+        try:
+            if not _BACKGROUND["on"]:
+                continue
+            stores = getattr(_REFRESH_STORES, "by_path", None)
+            if stores is None:
+                stores = _REFRESH_STORES.by_path = {}
+            store = stores.get((path, exclude))
+            if store is None:
+                store = stores[(path, exclude)] = Store(path, exclude)
+            gens = tuple(_GEN.get((path, d), 0) for d in fn.__memo_domains__)
+            val = fn(store, *args, **dict(kw))
+            with _MEMO_LOCK:
+                _MEMO[key] = (gens, time.monotonic(), val)
+        except Exception:
+            _log.exception("store: background re-read of %s failed; the next caller reads it", fn.__name__)
+            with _MEMO_LOCK:
+                _MEMO.pop(key, None)
+        finally:
+            _REFRESHING.discard(key)
+
+
 def _remembered(fn: Any) -> Any:
     """Answer a hot read from memory while nothing it depends on has been written.
 
     Each method names the domains it reads ("bets": the decisions rows; "orders": the orders rows). Every write through this module bumps its domains' generation (touch), so a remembered answer is used only while no
-    write has happened in this process since it was read, and for at most MEMO_TTL seconds. The generation is read BEFORE the query, so a write that lands during it leaves the entry stale rather than fresh."""
-
+    write has happened in this process since it was read, and for at most MEMO_TTL seconds. The generation is read BEFORE the query, so a write that lands during it leaves the entry stale rather than fresh.
+    In the running bot (serve_from_memory) an answer past its MEMO_TTL is still returned and the refresher thread re-reads it: the caller does not wait on the database."""
     domains: tuple[str, ...] = fn.__memo_domains__
 
     def wrapper(self: Store, *args: Any, **kw: Any) -> Any:
@@ -333,6 +375,11 @@ def _remembered(fn: Any) -> Any:
         hit = _MEMO.get(key)
         if hit is not None and hit[0] == gens and now - hit[1] < MEMO_TTL:
             val = hit[2]
+        elif hit is not None and hit[0] == gens and _BACKGROUND["on"]:
+            val = hit[2]  # nothing in this process wrote: serve it, and let the refresher look for another process's writes
+            if key not in _REFRESHING:
+                _REFRESHING.add(key)
+                _REFRESH.put((key, fn, str(self.path), self.exclude_versions, args, tuple(sorted(kw.items()))))
         else:
             val = fn(self, *args, **kw)
             with _MEMO_LOCK:

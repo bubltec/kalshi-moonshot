@@ -160,6 +160,9 @@ class Worker:
         from . import forecast_fit
 
         forecast_fit.start_refit(lambda: self.s)  # idle unless a forecast lane is on
+        from . import store as store_mod
+
+        store_mod.serve_from_memory()  # remembered reads (open bets and the like) are re-read by a background thread once their time is up, not by an evaluation
         from . import calibration
 
         calibration.start_background(lambda: Store(self.s.db_path, self.s.exclude_versions))  # the record adjustment is answered from memory from here on: no evaluation reads the settled decisions

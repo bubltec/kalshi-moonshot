@@ -24,6 +24,10 @@ def _no_read_memory(monkeypatch):
 
     monkeypatch.setattr(store, "MEMO_TTL", 0.0)
     store._MEMO.clear()
+    store.serve_from_memory(False)  # a test that starts the worker turns the bot's background reads on; no later test may inherit that
+    from kalshi_moonshot import calibration
+
+    calibration.stop_serving()
 
 
 @pytest.fixture(autouse=True)
