@@ -198,6 +198,24 @@ def sale_line(line: float, entry: float) -> float:
     return min(line, SALE_SHARE * entry) if entry > 0 else line
 
 
+def wobble(mids: Sequence[tuple[float, float]], opened: float, now: float) -> float | None:
+    """The market's typical one-minute price move so far: the root-mean-square of its 5 s mid moves since the open, times sqrt(12). The same for both sides (a NO mid is one minus the YES mid). None with under six marks or a flat path. On the 2026-11-09 to 11-16 tape a side at 0.60 to 0.75 wobbles a median 12 cents a minute."""
+    g = grid([m for m in mids if m[0] <= now], opened, now)
+    if len(g) < 7:
+        return None
+    sq = sum((b - a) ** 2 for (_, a), (_, b) in zip(g, g[1:]))
+    return math.sqrt(sq / (len(g) - 1)) * math.sqrt(60.0 / STEP) if sq > 0 else None
+
+
+def loss_line(buy_bid: float, wob: float | None, entry: float, wobbles: float) -> float:
+    """The bid at or under which a held bet is sold at a loss (lane field loss_sale_wobbles; 2026-11-17, user: "We have to have a sale because total losses are devastating"; "it needs to be able to ... correct a bad buy"; and, of the lines tested, "2 wobbles or half"). The nearer to the price of two lines: `wobbles` typical minutes of the market under the side's bid at the buy (the fall, not the spread), and half the price paid (SALE_SHARE). The wobble line follows each market (wide in a jumpy one); the half-price line is what covers a cheap side, which cannot fall two wobbles. With no wobble reading the half-price line stands alone, so a bet is never without one.
+    studies/results/2026-11-17-hand-trips.txt: on the user's own 79 trips this line took the total losses from 41 to 2 for +$14; studies/results/2026-11-17-hand-method-wobble-exit.txt: on 11,282 replayed buys a loss sale costs about a cent per dollar and its size moves the result by under half a cent."""
+    half = SALE_SHARE * entry if entry > 0 else 0.0
+    if wob is None or wob <= 0 or wobbles <= 0 or buy_bid <= 0:
+        return half
+    return max(buy_bid - wobbles * wob, half)
+
+
 def tag(chances: Sequence[float] | None, kalshi: float | None) -> str:
     if not chances:
         return "[risk score unreadable]"
