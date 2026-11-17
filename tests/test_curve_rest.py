@@ -55,7 +55,7 @@ def test_the_guard_sells_at_the_bid_late_when_the_chance_is_under_one_half(monke
 
 
 def test_the_rule_is_off_by_default_and_quiet_in_the_last_seconds(monkeypatch):
-    assert run(monkeypatch, target(curve_rest=-1.0), [(0.50, 0.99)] * 20)[1] is None
+    assert run(monkeypatch, target(curve_rest=-1.0, curve_behind_last=-1.0, curve_drop_units=-1.0, curve_gap=-1.0), [(0.50, 0.99)] * 20)[1] is None  # off: no resting sale, no margin sale, no time-to-go (since 2026-11-17 time-to-go alone arms the curve exit, so "off" has to say it is off too)
     assert run(monkeypatch, target(rest_price=0.60), [(0.50, 0.99)] * 3, start=CLOSE - 5)[1] is None
 
 

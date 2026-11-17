@@ -104,3 +104,50 @@ def test_a_recovery_resets_the_time_to_go_clock(monkeypatch):
             sold = i
             break
     assert sold is not None and sold >= 25 + 30  # the clock restarted when the cushion recovered
+
+
+# The loss-side sales without the margin sale (2026-11-17, user: "lets. fix the curve exit, because WTI just landed 2 0s"; the margin sale had been turned off on the commodity lanes because it sold 25 winners of 27, and the time-to-go sale hung on it).
+def test_time_to_go_sells_a_bet_behind_its_target_with_the_margin_sale_off(monkeypatch):
+    t = target(curve_margin=-1.0)  # no margin sale on the lane; time-to-go on (curve_behind_last = 240)
+    assert run(monkeypatch, t, [-1.6] * 5, bid=0.45, p=0.30, rate=None) == (None, None)  # 900 s left: not in the last four minutes yet
+    t2 = target(curve_margin=-1.0)
+    monkeypatch.setattr(watcher.ticks_mod.history, "window", lambda *a, **k: ([0.0], [1.0]))
+    monkeypatch.setattr(watcher.log, "info", lambda *a, **k: None)
+    stats(monkeypatch, None)
+    monkeypatch.setattr(curvevalue, "read", lambda *a, **k: curvevalue.Curve(0.30, -1.6 * UNIT, RATE, RATE))
+    reason = watcher.ProfitWatcher._curve_hit(me(), t2, 0.45, CLOSE - 200.0, CLOSE - 200.0)  # 200 s left, the curve's chance 0.30, deep under the target: no wait
+    assert reason is not None and reason.startswith("curve exit (time to go)")
+
+
+def test_with_the_margin_sale_off_a_bid_far_over_the_curves_chance_is_not_sold(monkeypatch):
+    """The sale that sold 25 winners of 27 on the commodity lanes: bid 0.89 against a curve chance of 0.67."""
+    t = target(curve_margin=-1.0)
+    monkeypatch.setattr(watcher.ticks_mod.history, "window", lambda *a, **k: ([0.0], [1.0]))
+    monkeypatch.setattr(watcher.log, "info", lambda *a, **k: None)
+    stats(monkeypatch, (0.6, 10, 5.0))
+    monkeypatch.setattr(curvevalue, "read", lambda *a, **k: curvevalue.Curve(0.67, 0.4 * UNIT, RATE, RATE))
+    w = me()
+    for k in range(120):  # two minutes with the bid 0.21 over the curve's chance, inside the last four minutes
+        now = CLOSE - 200.0 + k
+        assert watcher.ProfitWatcher._curve_hit(w, t, 0.89, now, now) is None
+    t_on = target(curve_margin=0.06)
+    sold = [watcher.ProfitWatcher._curve_hit(w, t_on, 0.89, CLOSE - 200.0 + k, CLOSE - 200.0 + k) for k in range(120)]
+    assert any(s and s.startswith("curve exit: bid") for s in sold)  # with the margin sale on, the same readings sell
+
+
+def test_with_nothing_set_the_curve_exit_reads_nothing(monkeypatch):
+    t = target(curve_margin=-1.0, curve_behind_last=-1.0)
+    called = []
+    monkeypatch.setattr(watcher.ticks_mod.history, "window", lambda *a, **k: called.append(1) or ([0.0], [1.0]))
+    assert watcher.ProfitWatcher._curve_hit(me(), t, 0.45, CLOSE - 200.0, CLOSE - 200.0) is None and called == []
+
+
+def test_a_lane_with_only_time_to_go_set_gets_a_watched_position(tmp_path, monkeypatch):
+    from kalshi_moonshot import config, lanes
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    base = "[lane.a]\nestimator='ladder'\nprice=[0.1,0.9]\nhours=[0.0,1.0]\n"
+    (tmp_path / "strategies.toml").write_text(base)
+    assert not lanes.takes_profit(lanes.lane_specs(config.load())["a"])
+    (tmp_path / "strategies.toml").write_text(base + "curve_behind_last=240\n")
+    assert lanes.takes_profit(lanes.lane_specs(config.load())["a"])

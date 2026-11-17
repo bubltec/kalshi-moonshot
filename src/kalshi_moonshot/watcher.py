@@ -809,7 +809,8 @@ class ProfitWatcher:
 
     def _curve_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """The curve exit (2026-11-10, user: enable on commodity_multiscale; curvevalue.py): sell when the bid after the sell fee is at least the curve's own chance that this side pays plus the lane's margin, for curve_exit_persist seconds. Reads the in-memory index ticks once a second. Takes profit and cuts losses with the one rule; the lane's shock, late-drop and value exits are off. Each decision logs its curve reading."""
-        if (t.curve_margin < 0 and t.curve_rest <= 0) or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.curve_at < 1.0:
+        # 2026-11-17 (user: "lets. fix the curve exit, because WTI just landed 2 0s"): the time-to-go, trajectory and gap sales run without the margin sale (curve_margin < 0). They hung on it, so turning off the sale that sold winners turned off the ones that cut losers
+        if (t.curve_margin < 0 and t.curve_rest <= 0 and not (t.curve_behind_last > 0 or t.curve_drop_units > 0 or t.curve_gap > 0)) or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.curve_at < 1.0:
             return None
         left = t.close_ts - now
         if t.curve_rest > 0:
@@ -873,7 +874,7 @@ class ProfitWatcher:
                     return f"curve exit (market disagrees): the curve's chance {read.p:.3f} is {-over:.3f} over the bid {bid:.2f} ({net:.3f} after the fee) for {now - t.curve_gap_since:.0f}s (sells at {t.curve_gap:g} for {t.curve_gap_persist:g}s); cushion {tm:+.2f} typical minutes, {left:.0f}s left"
             else:
                 t.curve_gap_since = 0.0
-        if over < margin:
+        if t.curve_margin < 0 or over < margin:  # no margin sale on this lane, or the bid is not that far over the curve's chance
             t.curve_since = 0.0
             return None
         if t.curve_since <= 0:
@@ -2062,7 +2063,7 @@ class ProfitWatcher:
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
-            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
+            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_behind_last > 0 or spec.curve_drop_units > 0 or spec.curve_gap > 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
                 sid = (variants.spot_index(series_name, spec.spot_source) if spec.spot_source == "kalshi" else None) or biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
@@ -2078,7 +2079,7 @@ class ProfitWatcher:
                     held.curve_rest = spec.curve_rest
                     if spec.curve_rest > 0:
                         held.curve_behind_last, held.curve_behind_chance = spec.curve_behind_last, spec.curve_behind_chance
-                    if spec.curve_exit >= 0:
+                    if spec.curve_exit >= 0 or spec.curve_behind_last > 0 or spec.curve_drop_units > 0 or spec.curve_gap > 0:
                         held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
                         held.curve_near = spec.curve_exit_near
                         held.curve_wait_share, held.curve_wait_severe, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_severe, spec.curve_wait_default
