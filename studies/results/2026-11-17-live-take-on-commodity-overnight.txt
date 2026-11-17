@@ -1,0 +1,91 @@
+
+window: commodity% live buys 11-16 21:02 to 11-17 06:45 ET; 53 settled with quotes (of 53 placed; 0 not settled, 0 without a usable price or quotes)
+what happened on them: $-32.94; 637 contracts bought
+
+=== A  hold clock (the bar counts the bet's own time)
+  all                          n  53 | what happened $  -32.94 | with the rule $  -44.14 | change $  -11.20 | rule sold first   8: beat 0, lost to 8
+ by the side's own curve at the buy
+  top fifth of its range       n  35 | what happened $  -13.21 | with the rule $  -23.31 | change $  -10.10 | rule sold first   7: beat 0, lost to 7
+  lower in its range           n  17 | what happened $  -20.56 | with the rule $  -21.66 | change $   -1.10 | rule sold first   1: beat 0, lost to 1
+  no reading                   n   1 | what happened $   +0.83 | with the rule $   +0.83 | change $   +0.00 | rule sold first   0: beat 0, lost to 0
+ by how far into the market the buy was
+  bought in the first third    n   0
+  bought in the middle third   n  36 | what happened $  -25.74 | with the rule $  -35.48 | change $   -9.74 | rule sold first   7: beat 0, lost to 7
+  bought in the last third     n  17 | what happened $   -7.20 | with the rule $   -8.66 | change $   -1.46 | rule sold first   1: beat 0, lost to 1
+ by how the bet actually ended
+  the lane's profit take       n   0
+  the lane's loss sale         n   0
+  another sale                 n   5 | what happened $  -46.77 | with the rule $  -46.77 | change $   +0.00 | rule sold first   0: beat 0, lost to 0
+  held and won                 n  41 | what happened $  +82.24 | with the rule $  +71.03 | change $  -11.20 | rule sold first   8: beat 0, lost to 8
+  held to zero                 n   7 | what happened $  -68.40 | with the rule $  -68.40 | change $   +0.00 | rule sold first   0: beat 0, lost to 0
+ the rule's sales: median 75 s after the buy; 3 inside the first minute; median bid 0.91
+
+=== B  trail (ahead, and one typical minute under the peak)
+  all                          n  53 | what happened $  -32.94 | with the rule $  -32.20 | change $   +0.74 | rule sold first   4: beat 1, lost to 3
+ by the side's own curve at the buy
+  top fifth of its range       n  35 | what happened $  -13.21 | with the rule $  -16.67 | change $   -3.46 | rule sold first   1: beat 0, lost to 1
+  lower in its range           n  17 | what happened $  -20.56 | with the rule $  -16.36 | change $   +4.20 | rule sold first   3: beat 1, lost to 2
+  no reading                   n   1 | what happened $   +0.83 | with the rule $   +0.83 | change $   +0.00 | rule sold first   0: beat 0, lost to 0
+ by how far into the market the buy was
+  bought in the first third    n   0
+  bought in the middle third   n  36 | what happened $  -25.74 | with the rule $  -34.62 | change $   -8.88 | rule sold first   3: beat 0, lost to 3
+  bought in the last third     n  17 | what happened $   -7.20 | with the rule $   +2.42 | change $   +9.62 | rule sold first   1: beat 1, lost to 0
+ by how the bet actually ended
+  the lane's profit take       n   0
+  the lane's loss sale         n   0
+  another sale                 n   5 | what happened $  -46.77 | with the rule $  -46.77 | change $   +0.00 | rule sold first   0: beat 0, lost to 0
+  held and won                 n  41 | what happened $  +82.24 | with the rule $  +73.36 | change $   -8.88 | rule sold first   3: beat 0, lost to 3
+  held to zero                 n   7 | what happened $  -68.40 | with the rule $  -58.78 | change $   +9.62 | rule sold first   1: beat 1, lost to 0
+ the rule's sales: median 240 s after the buy; 0 inside the first minute; median bid 0.75
+
+=== C  both, whichever sells first
+  all                          n  53 | what happened $  -32.94 | with the rule $  -39.94 | change $   -7.00 | rule sold first  11: beat 1, lost to 10
+ by the side's own curve at the buy
+  top fifth of its range       n  35 | what happened $  -13.21 | with the rule $  -23.31 | change $  -10.10 | rule sold first   7: beat 0, lost to 7
+  lower in its range           n  17 | what happened $  -20.56 | with the rule $  -17.46 | change $   +3.10 | rule sold first   4: beat 1, lost to 3
+  no reading                   n   1 | what happened $   +0.83 | with the rule $   +0.83 | change $   +0.00 | rule sold first   0: beat 0, lost to 0
+ by how far into the market the buy was
+  bought in the first third    n   0
+  bought in the middle third   n  36 | what happened $  -25.74 | with the rule $  -40.90 | change $  -15.16 | rule sold first   9: beat 0, lost to 9
+  bought in the last third     n  17 | what happened $   -7.20 | with the rule $   +0.96 | change $   +8.16 | rule sold first   2: beat 1, lost to 1
+ by how the bet actually ended
+  the lane's profit take       n   0
+  the lane's loss sale         n   0
+  another sale                 n   5 | what happened $  -46.77 | with the rule $  -46.77 | change $   +0.00 | rule sold first   0: beat 0, lost to 0
+  held and won                 n  41 | what happened $  +82.24 | with the rule $  +65.62 | change $  -16.62 | rule sold first  10: beat 0, lost to 10
+  held to zero                 n   7 | what happened $  -68.40 | with the rule $  -58.78 | change $   +9.62 | rule sold first   1: beat 1, lost to 0
+ the rule's sales: median 134 s after the buy; 3 inside the first minute; median bid 0.86
+
+=== L  the profit take as live on crypto_multiscale (2026-11-17, user: "That profit logic sounds like the old profit that didn't work. Not the new one"): the bar on the market clock, the slope check, the sure hold, the early 0.95, and the trail; no cushion check, no buy-back
+  all                          n  53 | what happened $  -32.94 | with the rule $  -35.69 | change $   -2.75 | rule sold first   8: beat 1, lost to 7
+ by the side's own curve at the buy
+  top fifth of its range       n  35 | what happened $  -13.21 | with the rule $  -20.16 | change $   -6.95 | rule sold first   5: beat 0, lost to 5
+  lower in its range           n  17 | what happened $  -20.56 | with the rule $  -16.36 | change $   +4.20 | rule sold first   3: beat 1, lost to 2
+  no reading                   n   1 | what happened $   +0.83 | with the rule $   +0.83 | change $   +0.00 | rule sold first   0: beat 0, lost to 0
+ by how far into the market the buy was
+  bought in the first third    n   0
+  bought in the middle third   n  36 | what happened $  -25.74 | with the rule $  -38.11 | change $  -12.37 | rule sold first   7: beat 0, lost to 7
+  bought in the last third     n  17 | what happened $   -7.20 | with the rule $   +2.42 | change $   +9.62 | rule sold first   1: beat 1, lost to 0
+ by how the bet actually ended
+  the lane's profit take       n   0
+  the lane's loss sale         n   0
+  another sale                 n   5 | what happened $  -46.77 | with the rule $  -46.77 | change $   +0.00 | rule sold first   0: beat 0, lost to 0
+  held and won                 n  41 | what happened $  +82.24 | with the rule $  +69.87 | change $  -12.37 | rule sold first   7: beat 0, lost to 7
+  held to zero                 n   7 | what happened $  -68.40 | with the rule $  -58.78 | change $   +9.62 | rule sold first   1: beat 1, lost to 0
+ the rule's sales: median 227 s after the buy; 0 inside the first minute; median bid 0.92
+
+rule L's sales, bet by bet
+  11-16 22:22 KXWTI15M-26NOV162230-30      sold 0.92 at 218 s held, 253 s left: $+1.01 | actual $+2.00 (held and won)
+  11-16 22:37 KXWTI15M-26NOV162245-45      sold 0.85 at 148 s held, 320 s left: $+0.27 | actual $+2.36 (held and won)
+  11-16 22:52 KXSILVER15M-26NOV162300-00   sold 0.94 at 227 s held, 240 s left: $+0.77 | actual $+1.51 (held and won)
+  11-17 00:07 KXSILVER15M-26NOV170015-15   sold 0.92 at 276 s held, 199 s left: $+1.31 | actual $+2.34 (held and won)
+  11-17 00:07 KXWTI15M-26NOV170015-15      sold 0.75 at 129 s held, 320 s left: $-0.30 | actual $+3.16 (held and won)
+  11-17 02:07 KXSILVER15M-26NOV170215-15   sold 0.94 at 199 s held, 277 s left: $+0.75 | actual $+1.48 (held and won)
+  11-17 02:08 KXBRENT15M-26NOV170215-15    sold 0.75 at 393 s held, 16 s left: $-0.67 | actual $+2.66 (held and won)
+  11-17 05:25 KXCOPPER15M-26NOV170530-30   sold 0.67 at 240 s held, 50 s left: $+0.07 | actual $-9.55 (held to zero)
+
+the bet that raised the question
+DONE
+
+
+

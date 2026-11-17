@@ -37,7 +37,7 @@ tape = db.connect(s.tape_path, "tape", shared=True)
 
 rows = st.execute("SELECT id, ts, ticker, side, ask, stake_usd, contracts, exit_price, exit_ts, exit_reason FROM decisions WHERE lane LIKE ? AND mode='trade' AND action='bet' AND stake_usd>0 AND ts>? AND ts<? ORDER BY ts", (LANE, SINCE, UNTIL)).fetchall()
 results = {w["ticker"]: (w["result"], float(w["close_ts"])) for w in st.execute("SELECT ticker, close_ts, result FROM windows WHERE close_ts>? AND result IN ('yes','no')", (SINCE,)).fetchall()}
-RULES = ("A", "B", "C")
+RULES = ("A", "B", "C", "L")
 out = []  # one dict a bet
 skipped = unsettled = 0
 for r in rows:
@@ -98,7 +98,9 @@ for r in rows:
         a = gain > 0 and bid >= 0.05 and curverisk.take_profit(gain, room, left, own, fee(bid), unit) and not curverisk.still_rising(hist, float(t), look, unit, False)
         a = early or (a and not latched)
         b = gain > fee(bid) and bid >= 0.05 and unit is not None and unit > 0 and bid <= peak - TRAIL_UNITS * unit and not latched
-        for name, hit in (("A", a), ("B", b), ("C", a or b)):
+        lv = gain > 0 and bid >= 0.05 and curverisk.take_profit(gain, room, left, 900.0, fee(bid), unit) and not curverisk.still_rising(hist, float(t), look, unit, False)
+        lv = early or (lv and not latched)  # the take as the crypto lane runs it live: the bar on the MARKET's clock
+        for name, hit in (("A", a), ("B", b), ("C", a or b), ("L", lv or b)):
             if hit and name not in sale:
                 fills = [x for x in (bid_at(t + 1), bid_at(t + 2)) if x is not None]
                 fill = min(fills) if fills else bid
@@ -127,7 +129,7 @@ def line(name, rs, rule):
     print(f"  {name:28s} n {len(rs):3d} | what happened ${a:+8.2f} | with the rule ${b:+8.2f} | change ${b - a:+8.2f} | rule sold first {len(tk):3d}: beat {beat}, lost to {lost}")
 
 
-NAMES = {"A": "A  hold clock (the bar counts the bet's own time)", "B": "B  trail (ahead, and one typical minute under the peak)", "C": "C  both, whichever sells first"}
+NAMES = {"A": "A  hold clock (the bar counts the bet's own time)", "B": "B  trail (ahead, and one typical minute under the peak)", "C": "C  both, whichever sells first", "L": "L  the profit take as live on crypto_multiscale (2026-11-17, user: \"That profit logic sounds like the old profit that didn't work. Not the new one\"): the bar on the market clock, the slope check, the sure hold, the early 0.95, and the trail; no cushion check, no buy-back"}
 print(f"window: {LANE} live buys {datetime.datetime.fromtimestamp(SINCE, ET):%m-%d %H:%M} to {datetime.datetime.fromtimestamp(min(UNTIL, datetime.datetime.now().timestamp()), ET):%m-%d %H:%M} ET; {len(out)} settled with quotes (of {len(rows)} placed; {unsettled} not settled, {skipped} without a usable price or quotes)")
 print(f"what happened on them: ${sum(r['actual'] for r in out):+.2f}; {sum(r["n"] for r in out):.0f} contracts bought")
 for rule in RULES:
@@ -147,10 +149,10 @@ for rule in RULES:
         held = sorted(r["sale"][rule][3] for r in tk)
         print(f" the rule's sales: median {held[len(held) // 2]:.0f} s after the buy; {sum(1 for h in held if h < 60)} inside the first minute; median bid {sorted(r['sale'][rule][1] for r in tk)[len(tk) // 2]:.2f}")
 if os.environ.get("LIST"):
-    print("\nrule B's sales, bet by bet")
+    print(f"\nrule {os.environ['LIST'] if os.environ['LIST'] != '1' else 'B'}'s sales, bet by bet")
     for r in out:
-        if "B" in r["sale"]:
-            v = r["sale"]["B"]
+        if os.environ["LIST"] in r["sale"] or (os.environ["LIST"] == "1" and "B" in r["sale"]):
+            v = r["sale"][os.environ["LIST"] if os.environ["LIST"] in r["sale"] else "B"]
             print(f"  {datetime.datetime.fromtimestamp(r['ts'], ET):%m-%d %H:%M} {r['ticker'][:28]:28s} sold {v[1]:.2f} at {v[3]:.0f} s held, {v[2]:.0f} s left: ${v[0] * r['n']:+.2f} | actual ${r['actual']:+.2f} ({r['ended']})")
 print("\nthe bet that raised the question")
 for r in out:
