@@ -128,3 +128,16 @@ User: "nudge should be in risk too". The nudge's reading (the side's move over t
 - Its fitted weight is about zero and the held-out result did not move (0.5028 against Kalshi's 0.5024). On this data the last minute's move says nothing the price has not already taken in.
 - Previous four markets, by their average finish against their targets: no order. After they finished below their targets YES won 43.8% against a price of 48.1%; after they finished above, 43.3% against 48.1%. Both sides came in under the price.
 - Previous four markets, by how much they flipped: the early favorite won 71.7%, 69.9%, 72.7% and 67.9% from the calmest hour to the most flipping, against prices of about 0.70 to 0.72. Only the most flipping hours (3 and over a market) show the favorite a little short (67.9% against 69.7%).
+
+## The spot's trend toward the side (20:15)
+
+User: "i think we're missing one thing if the spot is trending in the direction of the side"; "what does it mean if it is trending towards, away or flat".
+
+Two readings added: the settlement index's travel over the last 3 and the last 15 minutes, in its own typical moves for that long, signed toward the side.
+
+- Last 3 minutes: weight +0.002. Nothing: the price has it.
+- Last 15 minutes: weight -0.15. It gives back: a spot that has travelled toward the side over 15 minutes makes the side a little LESS likely than its price says; one that has travelled away, a little more.
+- It shares its information with the target's place in the 15-minute scope, whose weight fell from -0.42 to -0.20 when this went in. Both say "it ran this way over the last quarter hour".
+- Held out, the score is level with Kalshi's mid (0.5032 against 0.5024). On disagreements of 3 to 6 points it was right and the mid was not (50.1% actual, score 50.2%, mid 54.4%; and 45.5% actual, score 45.8%, mid 41.6%); beyond 6 points it overshoots badly.
+
+Weights now: price +0.68, cushion +0.53, flip rate +0.37, last four markets' finish +0.20, target in the 15 min -0.20, in the 30 min -0.20, trend 15 min -0.15, flips of the last four +0.03, nudge +0.03, time +0.01, target in the 60 min +0.01, trend 3 min 0.00.
