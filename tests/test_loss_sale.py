@@ -214,3 +214,92 @@ def test_integration_the_wait_scales_with_the_time_left_and_how_far_under_the_li
         assert w._loss_wait(t, just_under, F.CLOSE - left) <= 0.25 * left + 1e-9  # never more than the lane's share of the time left
     t.loss_wait_share = 0.0
     assert w._loss_wait(t, just_under, F.CLOSE - 600) == 0.0
+
+
+# The spot has to agree (lane field loss_sale_spot; 2026-11-17, user: "how can we tweak so it doesn't sell just because of a couple dips?"; "Yes, on paper").
+def seed_spot(value, until_left=380, strike=100.0):
+    from kalshi_moonshot import variants
+
+    ticks_mod.strikes.note(F.TICKER, strike)
+    ix = variants.crypto_index("KXBTC15M")
+    for k in range(0, 900 - until_left + 1, 2):
+        ticks_mod.history.note(ix, F.CLOSE - 900.0 + k, value)
+
+
+def spot_lane(tmp_path, monkeypatch):
+    return lane_only_loss_sale(tmp_path, monkeypatch, client=F.Client(bid=0.80), extra="loss_sale_wobbles=2\nloss_sale_spot=true")
+
+
+def under_the_line_for_a_while(w, line):
+    F.yes_bid(w, round(line - 0.05, 2), 430)
+    F.yes_bid(w, round(line - 0.05, 2), 421)
+    F.yes_bid(w, round(line - 0.05, 2), 410)
+    return F.signals(w)
+
+
+def test_integration_a_dip_with_the_index_still_on_the_bets_side_is_not_sold(tmp_path, monkeypatch):
+    seed_path(wobble_cents=10)
+    seed_spot(100.4)  # YES held; the index is over the 100 target
+    w = spot_lane(tmp_path, monkeypatch)
+    t = w.targets[(F.TICKER, "risk_only")]
+    assert t.loss_spot and w._spot_behind(t, F.CLOSE - 430) == (False, 100.4, 100.0)
+    assert under_the_line_for_a_while(w, t.loss_line) == []  # the price dipped well under the line and stayed: the index says the bet has not gone wrong
+    ticks_mod.history.clear()
+    ticks_mod.strikes.clear()
+
+
+def test_integration_with_the_index_behind_the_target_it_sells_and_says_so(tmp_path, monkeypatch):
+    seed_path(wobble_cents=10)
+    seed_spot(99.6)  # under the target: behind for YES
+    w = spot_lane(tmp_path, monkeypatch)
+    t = w.targets[(F.TICKER, "risk_only")]
+    out = under_the_line_for_a_while(w, t.loss_line)
+    assert len(out) == 1 and "the index 99.6 is on the wrong side of the target 100" in out[0].why
+    ticks_mod.history.clear()
+    ticks_mod.strikes.clear()
+
+
+def test_integration_the_index_coming_back_to_the_bets_side_starts_the_count_again(tmp_path, monkeypatch):
+    from kalshi_moonshot import variants
+
+    seed_path(wobble_cents=10)
+    seed_spot(99.6, until_left=432)
+    w = spot_lane(tmp_path, monkeypatch)
+    t = w.targets[(F.TICKER, "risk_only")]
+    ix = variants.crypto_index("KXBTC15M")
+    F.yes_bid(w, round(t.loss_line - 0.05, 2), 430)  # under the line, index behind: the count starts
+    ticks_mod.history.note(ix, F.CLOSE - 425.0, 100.3)  # the index crosses back over the target
+    F.yes_bid(w, round(t.loss_line - 0.05, 2), 421)
+    assert F.signals(w) == [] and t.loss_sale_since == 0.0
+    ticks_mod.history.note(ix, F.CLOSE - 415.0, 99.5)  # and falls back under it
+    F.yes_bid(w, round(t.loss_line - 0.05, 2), 414)  # a new count from here
+    F.yes_bid(w, round(t.loss_line - 0.05, 2), 409)  # 5 s into it: 21 s after the first quote under the line, which would have sold
+    assert F.signals(w) == []
+    ticks_mod.history.note(ix, F.CLOSE - 404.0, 99.5)
+    F.yes_bid(w, round(t.loss_line - 0.05, 2), 403)
+    assert len(F.signals(w)) == 1
+    ticks_mod.history.clear()
+    ticks_mod.strikes.clear()
+
+
+def test_integration_with_no_index_in_memory_the_sale_still_applies(tmp_path, monkeypatch):
+    seed_path(wobble_cents=10)
+    w = spot_lane(tmp_path, monkeypatch)
+    t = w.targets[(F.TICKER, "risk_only")]
+    assert w._spot_behind(t, F.CLOSE - 430) is None
+    out = under_the_line_for_a_while(w, t.loss_line)
+    assert len(out) == 1 and "wrong side" not in out[0].why  # never left without a line
+
+
+def test_unit_the_spot_check_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    base = "[lane.a]\nestimator='ladder'\nprice=[0.1,0.9]\nhours=[0.0,1.0]\nloss_sale_wobbles=2\n"
+    (tmp_path / "strategies.toml").write_text(base)
+    s = config.load()
+    v = lanes.version_of(lanes.lane_specs(s)["a"], s)
+    (tmp_path / "strategies.toml").write_text(base + "loss_sale_spot=false\n")
+    s = config.load()
+    assert lanes.version_of(lanes.lane_specs(s)["a"], s) == v
+    (tmp_path / "strategies.toml").write_text(base + "loss_sale_spot=true\n")
+    s = config.load()
+    assert lanes.version_of(lanes.lane_specs(s)["a"], s) != v

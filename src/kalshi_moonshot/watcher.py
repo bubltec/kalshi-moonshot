@@ -260,6 +260,7 @@ class Target:
     loss_wobbles: float = 0.0  # the always-on loss sale (lane field loss_sale_wobbles); 0 = off
     loss_line: float = 0.0  # the bid at or under which it sells, fixed when the bet is first watched (riskscore.loss_line)
     loss_note: str = ""
+    loss_spot: bool = False  # the loss sale counts a bid as under its line only while the index is on the wrong side of the target (lane field loss_sale_spot)
     loss_wait_share: float = 0.0  # the most the loss sale waits, as a share of the time left (lane field loss_sale_wait_share); 0 = no wait
     loss_wait_default: float = 15.0  # the recovery time assumed when the market's hour has too few falls to measure (lane field curve_wait_default)
     loss_sale_since: float = 0.0  # when the bid was first seen at or under the loss sale's line in the present run of such quotes; 0 = it is over the line. (Not loss_since: that is the hard-loss stop's own clock.)
@@ -929,12 +930,32 @@ class ProfitWatcher:
         if bid > t.loss_line + 1e-9:
             t.loss_sale_since = 0.0
             return None
+        spot_note = ""
+        if t.loss_spot:
+            behind = self._spot_behind(t, now)
+            if behind is not None:
+                if not behind[0]:
+                    t.loss_sale_since = 0.0  # the price has dipped but the index is still on the bet's side: not a bet gone wrong
+                    return None
+                spot_note = f", and the index {behind[1]:.6g} is on the wrong side of the target {behind[2]:.6g}"
         if t.loss_sale_since <= 0:
             t.loss_sale_since = now
         held, wait = now - t.loss_sale_since, self._loss_wait(t, bid, now)
         if held < wait - 1e-9 or time.time() < t.retry_after:
             return None
-        return f"loss sale: bid {bid:.2f} is at or under the line {t.loss_line:.2f} ({t.loss_note}) and has been for {held:.0f}s of a {wait:.0f}s wait; {t.entry:.2f} paid"
+        return f"loss sale: bid {bid:.2f} is at or under the line {t.loss_line:.2f} ({t.loss_note}) and has been for {held:.0f}s of a {wait:.0f}s wait{spot_note}; {t.entry:.2f} paid"
+
+    def _spot_behind(self, t: Target, now: float) -> tuple[bool, float, float] | None:
+        """(the index is on the wrong side of the target for the side held, the index, the target), from memory; None when either cannot be read (no index for the series, no tick in the last 30 s, no target)."""
+        index = t.shock_index or t.index_id
+        strike = ticks_mod.strikes.get(t.ticker) or t.strike or t.shock_ref
+        if not index or not strike or strike <= 0:
+            return None
+        got = ticks_mod.history.window(index, now - 30.0, now)
+        if not got or not got[1]:
+            return None
+        spot = float(got[1][-1])
+        return (spot < strike) if t.side == "yes" else (spot > strike), spot, float(strike)
 
     def _loss_wait(self, t: Target, bid: float, now: float) -> float:
         """Seconds the loss sale waits, scaled as the max-loss stop's wait is (curverisk.stop_wait): the market's own recovery time from its last hour, less the deeper the bid is under the line, times the share of the market still to run, at most loss_wait_share of the time left. With no close time to scale by it does not wait."""
@@ -2099,6 +2120,7 @@ class ProfitWatcher:
                     log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
             self._arm_loss_sale(held, spec.loss_sale_wobbles, time.time())
             held.loss_wait_share, held.loss_wait_default = spec.loss_sale_wait_share, spec.curve_wait_default
+            held.loss_spot = spec.loss_sale_spot
             if spec.loss_sale_wobbles > 0 and not held.index_id:
                 held.index_id = strike_index_for(ticker.split("-")[0]) or ""  # the wait reads this market's own recovery time from its index in memory
             if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
