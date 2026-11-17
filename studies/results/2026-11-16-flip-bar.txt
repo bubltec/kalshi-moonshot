@@ -1,0 +1,27 @@
+
+window: 2026-11-09 00:00 ET to the end of the tape; 6741 settled markets, 6073 with quotes, 10556 favorite-in-band moments
+
+minutes 4 and 6: by the share of the market so far the other side led
+  under 20% (this side led throughout)     n  3391 | won  69% at 0.710 |   -4.1% per $
+  20 to 50%                                n  1209 | won  67% at 0.689 |   -4.4% per $
+  50 to 65% (ZEC 21:30 was here)           n   411 | won  64% at 0.665 |   -5.9% per $
+  65 to 80%                                n   301 | won  56% at 0.655 |  -16.2% per $
+  80% and over (the live rule's bar)       n   206 | won  63% at 0.628 |   -2.0% per $
+
+minute 8: by the share of the market so far the other side led
+  under 20% (this side led throughout)     n  1193 | won  66% at 0.717 |   -9.4% per $
+  20 to 50%                                n   578 | won  68% at 0.700 |   -4.7% per $
+  50 to 65% (ZEC 21:30 was here)           n   213 | won  63% at 0.683 |   -9.0% per $
+  65 to 80%                                n   169 | won  62% at 0.679 |  -11.1% per $
+  80% and over (the live rule's bar)       n   127 | won  63% at 0.651 |   -6.4% per $
+
+minutes 10 and 12: by the share of the market so far the other side led
+  under 20% (this side led throughout)     n  1162 | won  65% at 0.716 |  -11.5% per $
+  20 to 50%                                n   747 | won  69% at 0.707 |   -3.5% per $
+  50 to 65% (ZEC 21:30 was here)           n   278 | won  68% at 0.698 |   -4.6% per $
+  65 to 80%                                n   282 | won  70% at 0.685 |   -1.1% per $
+  80% and over (the live rule's bar)       n   289 | won  68% at 0.674 |   -1.6% per $
+DONE
+
+
+
