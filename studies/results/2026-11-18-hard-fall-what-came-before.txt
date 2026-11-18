@@ -1,0 +1,20 @@
+window: 2026-11-09 to 2026-11-16; 2862 first falls of a favourite with a path before them. Per contract, fee in. Medians: efficiency 0.04, reversals 3, share of the market as favourite 0.26
+  all                                                  falls 2862 | sell at once 0.435 | 30 s later 0.443 | hold 0.469 (47% came back) | hold less sell +0.034
+--- had the side been under even before?
+  yes: it lost the lead before and won it back         falls 2341 | sell at once 0.435 | 30 s later 0.443 | hold 0.468 (47% came back) | hold less sell +0.033
+  no: a favourite all along                            falls  521 | sell at once 0.434 | 30 s later 0.444 | hold 0.474 (47% came back) | hold less sell +0.040
+--- how straight was its path before the fall?
+  straighter than the median (0.04)                    falls 1431 | sell at once 0.436 | 30 s later 0.441 | hold 0.485 (48% came back) | hold less sell +0.049
+  the median or more wandering                         falls 1431 | sell at once 0.434 | 30 s later 0.445 | hold 0.454 (45% came back) | hold less sell +0.020
+--- how many reversals before the fall?
+  more than the median (3)                             falls 1425 | sell at once 0.434 | 30 s later 0.433 | hold 0.442 (44% came back) | hold less sell +0.008
+  the median or fewer                                  falls 1437 | sell at once 0.436 | 30 s later 0.453 | hold 0.496 (50% came back) | hold less sell +0.060
+--- how long had it been a favourite?
+  longer than the median (26% of the market so far)    falls 1431 | sell at once 0.434 | 30 s later 0.433 | hold 0.479 (48% came back) | hold less sell +0.045
+  the median or shorter                                falls 1431 | sell at once 0.436 | 30 s later 0.453 | hold 0.459 (46% came back) | hold less sell +0.023
+--- a favourite all along, by the time left
+  all along, over 3 min left                           falls  369 | sell at once 0.441 | 30 s later 0.459 | hold 0.512 (51% came back) | hold less sell +0.071
+  all along, 1 to 3 min left                           falls  152 | sell at once 0.418 | 30 s later 0.407 | hold 0.382 (38% came back) | hold less sell -0.036
+  lost it before, over 3 min left                      falls 1147 | sell at once 0.445 | 30 s later 0.452 | hold 0.491 (49% came back) | hold less sell +0.046
+  lost it before, 1 to 3 min left                      falls 1194 | sell at once 0.426 | 30 s later 0.434 | hold 0.446 (45% came back) | hold less sell +0.021
+DONE
