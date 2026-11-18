@@ -1,0 +1,41 @@
+
+window: Tue 2026-11-17 00:00 ET to now; 164 live commodity bets; the step: risk at or under 25% at the buy, 30 s before and 60 s before; weights in use: tuned
+--- all
+  kept       bets   67 | right side   52 ( 78%) | avg ask 0.89 | staked   660.37 | net   -65.22
+  refused    bets   57 | right side   44 ( 77%) | avg ask 0.83 | staked   562.02 | net   -55.71
+  no reading bets   40 | right side   29 ( 72%) | avg ask 0.82 | staked   386.11 | net   -65.35
+--- lane: commodity_energy
+  kept       bets    8 | right side    5 ( 62%) | avg ask 0.88 | staked    81.20 | net   -20.03
+  refused    bets    7 | right side    5 ( 71%) | avg ask 0.84 | staked    62.23 | net   -19.49
+  no reading bets    4 | right side    2 ( 50%) | avg ask 0.82 | staked    39.98 | net   -26.49
+--- lane: commodity_industrial
+  kept       bets   17 | right side   11 ( 65%) | avg ask 0.90 | staked   164.18 | net   -36.83
+  refused    bets   15 | right side   11 ( 73%) | avg ask 0.84 | staked   151.55 | net   -26.71
+  no reading bets   18 | right side   13 ( 72%) | avg ask 0.85 | staked   173.87 | net   -32.73
+--- lane: commodity_natgas
+  kept       bets    7 | right side    7 (100%) | avg ask 0.92 | staked    70.91 | net    +1.50
+  refused    bets    2 | right side    1 ( 50%) | avg ask 0.88 | staked    15.20 | net    -6.60
+  no reading bets    2 | right side    2 (100%) | avg ask 0.68 | staked    21.18 | net    +9.50
+--- lane: commodity_precious
+  kept       bets   15 | right side   11 ( 73%) | avg ask 0.88 | staked   150.58 | net   -17.36
+  refused    bets   20 | right side   17 ( 85%) | avg ask 0.81 | staked   202.43 | net    +5.20
+  no reading bets   11 | right side    9 ( 82%) | avg ask 0.82 | staked   101.51 | net    -3.07
+--- lane: commodity_wti
+  kept       bets   20 | right side   18 ( 90%) | avg ask 0.87 | staked   193.50 | net    +7.50
+  refused    bets   13 | right side   10 ( 77%) | avg ask 0.83 | staked   130.60 | net    -8.11
+  no reading bets    5 | right side    3 ( 60%) | avg ask 0.82 | staked    49.58 | net   -12.56
+--- shape: fair cushion (0.5 to 1.5)
+  kept       bets   47 | right side   32 ( 68%) | avg ask 0.88 | staked   459.18 | net   -86.99
+  refused    bets   47 | right side   35 ( 74%) | avg ask 0.84 | staked   466.51 | net   -73.27
+--- shape: no reading
+  no reading bets   40 | right side   29 ( 72%) | avg ask 0.82 | staked   386.11 | net   -65.35
+--- shape: on the line (cushion under 0.5)
+  kept       bets    4 | right side    4 (100%) | avg ask 0.86 | staked    41.10 | net    +5.99
+  refused    bets    9 | right side    8 ( 89%) | avg ask 0.74 | staked    90.78 | net   +17.28
+--- shape: wide cushion (over 1.5)
+  kept       bets   16 | right side   16 (100%) | avg ask 0.90 | staked   160.09 | net   +15.78
+  refused    bets    1 | right side    1 (100%) | avg ask 0.94 | staked     4.72 | net    +0.28
+DONE
+
+
+
