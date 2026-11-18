@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import bisect
 import math
+from collections.abc import Sequence
 from statistics import NormalDist
-
-import numpy as np
 
 _N = NormalDist()
 SPAN = 900  # seconds: the static reading's look back, as quoteshock.UNIT_SPAN
@@ -23,7 +22,7 @@ CLIP = 0.01  # (c) a mid is held this far inside 0 and 1 before it is turned int
 CAP = 0.5  # no estimate is over half a unit of probability a second: a bound, the price cannot move more than 1 in total
 
 
-def grid(rows: list[tuple[float, float]], now: float, n: int = SPAN) -> np.ndarray | None:
+def grid(rows: list[tuple[float, float]], now: float, n: int = SPAN) -> list[float] | None:
     """The mid on a one-second grid for the last n seconds ending at `now`, carrying the last quote forward (as quoteshock.typical_minute). None when there are no quotes that old or the newest is over 10 s stale."""
     if not rows or rows[-1][0] < now - 10.0:
         return None
@@ -34,14 +33,14 @@ def grid(rows: list[tuple[float, float]], now: float, n: int = SPAN) -> np.ndarr
     idx = [bisect.bisect_right(ts, now - n + k) - 1 for k in range(n + 1)]
     if idx[0] < 0:
         return None
-    return np.array([rows[i][1] for i in idx], dtype=float)
+    return [float(rows[i][1]) for i in idx]  # plain floats: the bot's image has no numpy (2026-11-18, a numpy import here stopped the exit watcher from starting)
 
 
-def _rms(seq: np.ndarray) -> float | None:
-    d = np.diff(seq)
-    if len(d) < 1:
+def _rms(seq: Sequence[float]) -> float | None:
+    d = [b - a for a, b in zip(seq, seq[1:], strict=False)]
+    if not d:
         return None
-    v = float(np.mean(d * d))
+    v = sum(x * x for x in d) / len(d)
     return math.sqrt(v) if v > 0 else None
 
 
@@ -49,14 +48,14 @@ def _bound(x: float | None) -> float | None:
     return None if x is None or not math.isfinite(x) or x <= 0 else min(x, CAP)
 
 
-def static_rate(seq: np.ndarray, left: float = 0.0) -> float | None:
+def static_rate(seq: Sequence[float], left: float = 0.0) -> float | None:
     """(a) The exit's unit as it is today: the root-mean-square one-second change over the last SPAN seconds (typical minute / sqrt(60)), carried to any horizon as it is, by sqrt(horizon) for a move and not at all for a per-second rate. Ignores the time left."""
     if len(seq) - 1 < MIN_HISTORY:
         return None
     return _bound(_rms(seq[-(SPAN + 1) :]))
 
 
-def windowed_rate(seq: np.ndarray, left: float, share: float = SHARE, floor: int = FLOOR) -> float | None:
+def windowed_rate(seq: Sequence[float], left: float, share: float = SHARE, floor: int = FLOOR) -> float | None:
     """(b) The same trailing reading over a window that is `share` of the time left (never under `floor` seconds, never over SPAN), so it shortens toward the close and is read from the market's latest moves."""
     if len(seq) - 1 < MIN_HISTORY or left <= 0:
         return None
@@ -64,16 +63,14 @@ def windowed_rate(seq: np.ndarray, left: float, share: float = SHARE, floor: int
     return _bound(_rms(seq[-(w + 1) :]))
 
 
-def implied_rate(seq: np.ndarray, left: float, horizon: float = HORIZON, span: int = SPAN) -> float | None:
+def implied_rate(seq: Sequence[float], left: float, horizon: float = HORIZON, span: int = SPAN) -> float | None:
     """(c) The model-implied one. The price is p = Phi(z), z = c / sqrt(time left), c the cushion the price implies in its own units. The cushion's one-second move has a rate r (the root-mean-square of its changes over the last `span` seconds: the market's own trailing spot-equivalent rate, read from the price because the archive holds no spot); then the price moves about phi(z) * r / sqrt(time left) a second, which rises on its own as the time runs out. Evaluated at the middle of the stretch ahead (time left less half the horizon, never under half of it)."""
     if len(seq) - 1 < MIN_HISTORY or left <= 0:
         return None
     s = seq[-(span + 1) :]
     n = len(s)
-    lefts = left + np.arange(n - 1, -1, -1, dtype=float)  # time left at each grid second
-    p = np.clip(s, CLIP, 1.0 - CLIP)
-    z = np.array([_N.inv_cdf(float(x)) for x in p])
-    c = z * np.sqrt(lefts)
+    z = [_N.inv_cdf(min(max(float(x), CLIP), 1.0 - CLIP)) for x in s]
+    c = [zi * math.sqrt(left + (n - 1 - k)) for k, zi in enumerate(z)]  # the cushion at each grid second: z x sqrt(the time left then)
     r = _rms(c)
     if r is None:
         return None
@@ -82,7 +79,7 @@ def implied_rate(seq: np.ndarray, left: float, horizon: float = HORIZON, span: i
     return _bound(phi * r / math.sqrt(mid_left))
 
 
-def mixed_rate(seq: np.ndarray, left: float) -> float | None:
+def mixed_rate(seq: Sequence[float], left: float) -> float | None:
     """(d) The geometric mean of (b) and (c): the latest raw moves and the model's own time sensitivity, each counting as a factor of the other, none picked."""
     b, c = windowed_rate(seq, left), implied_rate(seq, left)
     if b is None or c is None:
