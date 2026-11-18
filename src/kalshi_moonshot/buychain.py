@@ -12,7 +12,7 @@ Where it runs:
   the review   (runner.lane_shots) asks the steps that need no model estimate, in order, up to the first one that does. The sides left are the lane's candidates; the estimator's own screen (the ladder's) is NOT run for a lane with a chain, so the ladder no longer decides which side is looked at.
   the decision (runner.evaluate) asks every step, in order, of both sides, with the estimate in hand. The candidate is bought when it is alive at the end, and the decision's note carries what each step said of each side.
 
-The steps read the lane's existing settings (its price range, risk_score_buy, entry_risk_trend, entry_trend_seconds, min_edge_room); none has a number of its own here. A new step is one function with @step("name") and its name added to lanes.BUY_STEPS. A chain can be given a name and shared: a [module.<name>] table in strategies.toml holds `steps` (and any lane settings as its defaults), and a lane takes it with buy_module = "<name>" (lanes._with_module). Memory only: no step reads the database.
+The steps read the lane's existing settings (its price range, risk_score_buy, entry_risk_trend, entry_trend_seconds, min_edge_room, buy_curve_edge_min); none has a number of its own here. A new step is one function with @step("name") and its name added to lanes.BUY_STEPS. A chain can be given a name and shared: a [module.<name>] table in strategies.toml holds `steps` (and any lane settings as its defaults), and a lane takes it with buy_module = "<name>" (lanes._with_module). Memory only: no step reads the database.
 """
 
 from __future__ import annotations
@@ -114,6 +114,54 @@ def price_trend_step(ctx: Ctx, shot: LongShot) -> Check:
     if z is None:
         return Check(False, f"no quote {seconds:.0f}s back")
     return Check(z > bar, f"price trend {z:+.1f} over {seconds:.0f}s, needs over {bar:+.1f}")
+
+
+def kalshi_index(series: str, now: float) -> str | None:
+    """The tape index of Kalshi's own price for the series' underlying: a coin's settlement index, a commodity's perp reference while it is ticking. None when only the outside feed could answer (variants.spot_index falls back to it): a step that reads Kalshi's price does not read that."""
+    from . import variants
+
+    index = variants.spot_index(series, "kalshi", now)
+    if index and not variants.crypto_index(series) and index == variants.biquote_index(series):
+        return None
+    return index
+
+
+@step("perp_worth")
+def perp_worth_step(ctx: Ctx, shot: LongShot) -> Check:
+    """Kalshi's own price puts the side's chance within reach of the ask (2026-11-18, user, on the commodity lanes' gates: "these are model concepts, they shouldn't be lane options"): the chance read from the Kalshi perp reference (variants.curve_edge_now, source "kalshi": the reading the lane option buy_curve_edge_min has gated on in runner.evaluate) is no more than the lane's buy_curve_edge_min under the ask. It needs no model estimate. No reading is a no."""
+    from . import ticks as ticks_mod
+    from . import variants
+
+    floor = ctx.spec.buy_curve_edge_min
+    if floor <= -1.0:
+        return Check(False, "the lane sets no allowance (buy_curve_edge_min)")
+    series = shot.series or shot.ticker.split("-")[0]
+    if kalshi_index(series, ctx.now) is None:
+        return Check(False, "Kalshi's perp reference is silent, so its chance cannot be read")
+    ce = variants.curve_edge_now(series, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker), now=ctx.now, source="kalshi")
+    if ce is None:
+        return Check(False, "the perp's chance cannot be read (short history, a stale tick or no reference)")
+    if ce[1] < floor:
+        return Check(False, f"the perp's chance {ce[0]:.3f} is {-ce[1]:.3f} under the ask {shot.ask:.2f}, the lane allows {-floor:g}")
+    return Check(True, f"the perp's chance {ce[0]:.3f} against the ask {shot.ask:.2f} ({ce[1]:+.3f}, the lane allows {floor:+g})")
+
+
+@step("calm")
+def calm_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The market is inside its own recent range (CLAUDE.md rule 3; 2026-11-18, in place of the lane option max_vol_rel, a fixed 1.6 times normal per lane): no when the curve of Kalshi's own price is in the anomaly state, which is a path efficiency outside the 1st to 99th percentile of that market's own readings of the last hours, or a typical minute over three times its median (curveexit.state, the cutoffs redone hourly from the ticks in memory). No rule is assumed to hold there, so the side sits out and the note says what was read. It has no setting. A state that cannot be read yet is a no."""
+    from . import curveexit
+
+    series = shot.series or shot.ticker.split("-")[0]
+    index = kalshi_index(series, ctx.now)
+    if index is None:
+        return Check(False, "Kalshi's perp reference is silent, so the market's state cannot be read")
+    state, r, cuts = curveexit.state_now(index, ctx.now)
+    if r is None or cuts is None:
+        return Check(False, "the market's state cannot be read yet (under three hours of ticks in memory, or a stale one)")
+    read = f"typical minute {r['unit'] / cuts['unit_med']:.2f}x its median, efficiency {r['eff']:.2f} (its own range {cuts['p01']:.2f} to {cuts['p99']:.2f})"
+    if state == "anomaly":
+        return Check(False, f"anomaly: {read}; no rule is assumed to hold, the side sits out")
+    return Check(True, f"{state}: {read}")
 
 
 @step("ladder", needs_estimate=True)

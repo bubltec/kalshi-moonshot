@@ -108,10 +108,22 @@ def _cuts_for(index_id: str, now: float) -> dict[str, float] | None:
             break
     c = cuts_from(got[0], got[1], now) if got else None
     with _lock:
-        _cuts_at[index_id] = now
+        _cuts_at[index_id] = now if c else now - 3540.0  # no cutoffs yet (a start still warming its ticks): look again in a minute, not in an hour
         if c:
             _cuts[index_id] = c
     return c
+
+
+def state_now(index_id: str, now: float) -> tuple[str, dict[str, float] | None, dict[str, float] | None]:
+    """The state of one index's curve at this moment against its own cutoffs (state), with the reading and the cutoffs it was judged by; ("unknown", None, ...) when the ticks cannot say. Memory only: the ticks in memory, the cutoffs redone at most hourly. The buy chain's `calm` step reads this."""
+    from . import ticks as ticks_mod
+
+    got = ticks_mod.history.window(index_id, now - 1500.0, now)
+    r = readings(got[0], got[1], "yes", now) if got else None  # the efficiency and the typical minute are the same for both sides
+    if r is None:
+        return "unknown", None, None
+    cuts = _cuts_for(index_id, now)
+    return state(r, cuts), r, cuts
 
 
 def _load_seen(path: Path, now: float) -> None:

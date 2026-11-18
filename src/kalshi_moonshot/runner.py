@@ -816,7 +816,7 @@ def evaluate(
             elif abs(trend) < flat_bar:
                 bet = False
                 note = f"the market-wide 60-minute trend is flat ({trend:+.2f}%, inside {flat_bar:.3g}%, {flat_from}); the lane sits these out. {note}"
-    if bet and spec.buy_curve_edge_min > -1.0:
+    if bet and spec.buy_curve_edge_min > -1.0 and "perp_worth" not in spec.buy_chain:  # a lane whose chain asks the perp_worth step has had this same check there
         from . import ticks as ticks_mod
         from . import variants as _variants
 
