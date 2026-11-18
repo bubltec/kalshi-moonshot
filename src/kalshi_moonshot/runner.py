@@ -176,7 +176,11 @@ def lane_shots(
         return []  # nothing to rate this lane with (e.g. no price feed): do not queue dead work
     cands = lane_candidates(markets, spec, s, now)
     estimator = (estimators or {}).get(spec.estimator)
-    if estimator is not None:
+    if spec.buy_chain:  # the lane's own steps put the sides forward, in its order; the estimator's screen (the ladder's) is not asked which side to look at
+        from . import buychain
+
+        cands = buychain.screen(buychain.Ctx(s, spec, None, now.timestamp()), cands)
+    elif estimator is not None:
         cands = estimator.screen(cands, markets, spec, s, now)
     pool = _apply_event_info(client, cands[: spec.shortlist * 3])
     out: list[LongShot] = []
@@ -340,7 +344,12 @@ def review_lane(
         shadow.snapshot(store, s, markets, spec.shadow_suffix, getattr(ladder, "pricer", None), now)
     wide = replace(spec, shortlist=spec.shortlist * 3)
     shots = lane_shots(s, client, markets, wide, estimators, now)
-    dropped = getattr((estimators or {}).get(spec.estimator), "dropped", None)
+    if spec.buy_chain:
+        from . import buychain
+
+        dropped = buychain.DROPPED.pop(wide.name, None)
+    else:
+        dropped = getattr((estimators or {}).get(spec.estimator), "dropped", None)
     if dropped:
         store.log_screened(spec.name, dropped, now.timestamp())
     if spec.cooldown_minutes:
@@ -511,7 +520,8 @@ def evaluate(
     if not spec.record_adjust:
         cal = Calibration(p, 1.0, cal.band_p, cal.band_n, cal.skill, cal.n)  # the lane bets on its estimator's own chance: the adjustment is noted, not applied
     e = edge(cal.p, shot.ask)
-    bet = wants_bet(spec, cal.p, shot.ask, e)
+    chain = bool(spec.buy_chain)  # the lane's own steps decide, in its order (buychain.py): this edge rule, the no-buy check, the risk score rule and the trend checks below are steps there and are not asked again here
+    bet = True if chain else wants_bet(spec, cal.p, shot.ask, e)
     note = why if not adjusted_note else f"{why} | {adjusted_note}" if spec.record_adjust else f"{why} | record adjustment off for this lane, betting on {p:.2f} (it would have read: {adjusted_note})"
     if not bet and (spec.stretch_max > 0 or spec.nudge_units > 0):
         stretched = stretch_buy(s, spec, shot, cal.p, e)
@@ -525,7 +535,13 @@ def evaluate(
         note = f"{both_sides_tag(both)} {note}"
     if not bet:
         note = f"{edge_verdict(spec, cal.p, shot.ask, e) or ''} {note}".strip()  # the edge screen says so in words, as every other rule does
-    if bet and not chance_ok(spec, p):
+    if chain:
+        from . import buychain
+
+        p_yes = cal.p if shot.side == "yes" else 1.0 - cal.p
+        bet, chain_note = buychain.decide(buychain.Ctx(s, spec, p_yes), shot)
+        note = f"{chain_note} {note}"
+    if bet and not chain and not chance_ok(spec, p):
         bet = False
         note = f"chance {p:.0%} outside the lane's {spec.min_chance:.0%}-{spec.max_chance:.0%}. {note}"
     if bet and spec.min_model_edge > -90 and p - shot.ask < spec.min_model_edge:
@@ -580,7 +596,7 @@ def evaluate(
             if why_not:
                 bet = False
                 note = f"market skipped: {why_not}. {note}"
-    if bet and no_buy(spec, shot.ask):
+    if bet and not chain and no_buy(spec, shot.ask):
         bet = False
         note = f"no-buy range: the {shot.side} ask {shot.ask:.2f} is inside the lane's {spec.price_skip[0]:.2f} to {spec.price_skip[1]:.2f}, where it does not buy. {note}"
     if bet and (spec.min_vol_rel > 0 or spec.max_vol_rel > 0):
@@ -624,7 +640,7 @@ def evaluate(
         else:
             note = f"[z {snap['z']:+.2f}] {note}"
     risk_tag, risk_read = "", None
-    if spec.entry_risk_trend > 0:  # read here so the note of buys and passes alike carries it; it gates only where the lane says entry_risk_trend_live
+    if spec.entry_risk_trend > 0 and not chain:  # read here so the note of buys and passes alike carries it; it gates only where the lane says entry_risk_trend_live
         try:
             risk_read = risk_trend_read(shot, spec)
         except Exception as exc:
@@ -973,7 +989,9 @@ def evaluate(
         if dwell is not None and dwell < spec.min_dwell_seconds:
             bet = False
             note = f"just arrived: this side has been in the price band {dwell:.0f}s and the lane waits {spec.min_dwell_seconds:.0f}s. {note}"
-    if bet and spec.entry_risk_trend > 0 and spec.entry_risk_trend_live:  # in place of the price trend checks below
+    if chain:
+        pass  # the trend is a step of the chain where the lane names one
+    elif bet and spec.entry_risk_trend > 0 and spec.entry_risk_trend_live:  # in place of the price trend checks below
         if risk_read is None or risk_read[2] != "holding":
             bet = False
             note = (
@@ -1005,7 +1023,7 @@ def evaluate(
             log.warning("scenario unreadable for %s %s: %s", shot.ticker, shot.side, exc)
         note = f"{sc_note or '[scenario unreadable]'} {note}"
     risk_reading = None
-    if spec.risk_score_buy > 0:  # after the scenario note so its tag leads the note (the stored reason is cut at 300 characters). The lane's own buy rule: a risk that is low and has stayed low, and a chance that clears the costs
+    if spec.risk_score_buy > 0 and not chain:  # after the scenario note so its tag leads the note (the stored reason is cut at 300 characters). The lane's own buy rule: a risk that is low and has stayed low, and a chance that clears the costs
         from . import riskscore
         from .strategy import fee_per_contract as _fee
 
