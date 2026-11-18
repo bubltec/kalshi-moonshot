@@ -1,0 +1,13 @@
+window: 2026-11-09 to 2026-11-16, every 15-minute market with a result; 2862 first falls of a favourite (bid at or over 0.70 inside the last 15 s, now under 0.50, a minute or more left). Values are per contract, fee in. Median fall: 2.0 typical minutes of the market
+  all                                        falls 2862 | fell from 0.76 to 0.45 | sell at once 0.435 | +10s 0.441 (48% better) | +20s 0.441 (49% better) | +30s 0.443 (49% better) | +60s 0.440 (48% better) | hold 0.469 (47% paid)
+--- by how hard the fall was, in the market's own typical minutes
+  harder than the median (2.0)               falls 1431 | fell from 0.79 to 0.44 | sell at once 0.419 | +10s 0.420 (46% better) | +20s 0.422 (47% better) | +30s 0.424 (48% better) | +60s 0.420 (46% better) | hold 0.443 (44% paid)
+  the median or softer                       falls 1431 | fell from 0.74 to 0.47 | sell at once 0.451 | +10s 0.461 (50% better) | +20s 0.460 (50% better) | +30s 0.462 (50% better) | +60s 0.459 (50% better) | hold 0.495 (50% paid)
+--- by the time left
+  over 5 min left                            falls  805 | fell from 0.74 to 0.46 | sell at once 0.446 | +10s 0.460 (51% better) | +20s 0.460 (52% better) | +30s 0.462 (52% better) | +60s 0.462 (53% better) | hold 0.513 (51% paid)
+  3 to 5 min left                            falls  711 | fell from 0.76 to 0.46 | sell at once 0.441 | +10s 0.445 (47% better) | +20s 0.441 (47% better) | +30s 0.444 (49% better) | +60s 0.441 (46% better) | hold 0.477 (48% paid)
+  1 to 3 min left                            falls 1346 | fell from 0.78 to 0.44 | sell at once 0.425 | +10s 0.427 (47% better) | +20s 0.430 (48% better) | +30s 0.431 (48% better) | +60s 0.425 (46% better) | hold 0.439 (44% paid)
+--- hard falls only, by the time left
+  hard, over 3 min left                      falls  709 | fell from 0.77 to 0.45 | sell at once 0.432 | +10s 0.436 (47% better) | +20s 0.436 (47% better) | +30s 0.438 (50% better) | +60s 0.436 (49% better) | hold 0.484 (48% paid)
+  hard, 1 to 3 min left                      falls  722 | fell from 0.82 to 0.42 | sell at once 0.407 | +10s 0.404 (45% better) | +20s 0.409 (48% better) | +30s 0.411 (47% better) | +60s 0.405 (43% better) | hold 0.403 (40% paid)
+DONE
