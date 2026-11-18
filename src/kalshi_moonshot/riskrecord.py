@@ -20,7 +20,7 @@ from . import riskscore
 
 log = logging.getLogger(__name__)
 
-EVERY = 30.0  # seconds between readings: the score's own look spacing (riskscore.HELD_LOOKS)
+EVERY = 30.0  # seconds between readings: the score's own look spacing (riskscore.LOOK_SHARES, at the open)
 _ET = ZoneInfo("America/New_York")
 
 

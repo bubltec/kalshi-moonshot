@@ -74,7 +74,7 @@ def test_unit_low_risk_has_to_have_held_at_every_look():
     ts, vs = index(opened, now, lift=0.004)
     steady = riskscore.held(ts, vs, now, opened, 100.0, mids(opened, now), [], "yes")
     assert riskscore.low_risk(steady, 0.25)
-    fresh = riskscore.held(ts, vs, now, opened, 100.0, mids(opened, now, flip_at=440), [], "yes")  # YES only took the lead 40 s ago
+    fresh = riskscore.held(ts, vs, now, opened, 100.0, mids(opened, now, flip_at=460), [], "yes")  # YES only took the lead 20 s ago, inside the 28 s look back for 420 s left
     assert fresh is not None and 1.0 - fresh[0] <= 0.25 and not riskscore.low_risk(fresh, 0.25)
     assert not riskscore.low_risk(None, 0.25)
 
@@ -129,23 +129,18 @@ def decide(tmp_path, monkeypatch, now, extra, level=0.80, lift=0.004, flip_at=No
 
 
 def test_integration_a_low_risk_that_has_held_is_bought_and_the_note_carries_the_number(tmp_path, monkeypatch):
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25\nrisk_score_edge=-0.05")
+    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25")
     assert out.action == "bet" and "[risk score: risk " in out.note and "by Kalshi's price" in out.note
 
 
 def test_integration_a_coin_flip_is_not_bought(tmp_path, monkeypatch):
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25\nrisk_score_edge=-0.05", level=0.50, lift=0.0, ask=0.51)
-    assert out.action == "pass" and "that has held for a minute" in out.note
+    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25", level=0.50, lift=0.0, ask=0.51)
+    assert out.action == "pass" and "that has held over its looks back" in out.note
 
 
 def test_integration_a_side_that_only_just_took_the_lead_is_not_bought(tmp_path, monkeypatch):
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25\nrisk_score_edge=-0.05", flip_at=440)
-    assert out.action == "pass" and "that has held for a minute" in out.note
-
-
-def test_integration_a_chance_that_does_not_clear_the_costs_is_not_bought(tmp_path, monkeypatch):
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25\nrisk_score_edge=0.0", ask=0.95)
-    assert out.action == "pass" and "does not clear the ask and its fee" in out.note
+    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25", flip_at=460)
+    assert out.action == "pass" and "that has held over its looks back" in out.note
 
 
 def test_integration_with_no_reading_the_lane_does_not_buy(tmp_path, monkeypatch):
@@ -199,7 +194,7 @@ def test_integration_the_reading_makes_no_database_read(tmp_path, monkeypatch):
         self.db = Watch()
 
     monkeypatch.setattr(Store, "__init__", spy)
-    out = decide(tmp_path, monkeypatch, now, "risk_score_buy=0.25\nrisk_score_edge=-0.05\nentry_scenario_view=true")
+    out = decide(tmp_path, monkeypatch, now, "risk_score_buy=0.25\nentry_scenario_view=true")
     assert out.action == "bet" and "[risk score: risk " in out.note[:60]
     assert not [q for q in seen if "settled_value" in q]  # the last four markets are no longer asked of the database
 

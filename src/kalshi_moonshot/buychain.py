@@ -74,7 +74,7 @@ def price_step(ctx: Ctx, shot: LongShot) -> Check:
 
 @step("risk_score")
 def risk_score_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The risk score favours the side: its risk (riskscore.py) is at or under the lane's level (risk_score_buy) now, 30 s ago and a minute ago."""
+    """The risk score favours the side: its risk (riskscore.py) is at or under the lane's level (risk_score_buy) now and at two looks back that scale with the time left (riskscore.looks_for)."""
     from . import riskscore
 
     level = ctx.spec.risk_score_buy
@@ -85,7 +85,7 @@ def risk_score_step(ctx: Ctx, shot: LongShot) -> Check:
         return Check(False, "no risk score yet (a market under a minute old, a price at the edge or a stale index)")
     risks = ", ".join(f"{100 * (1 - c):.0f}%" for c in rs[0])
     if not riskscore.low_risk(rs[0], level):
-        return Check(False, f"risk {risks} (now, 30 s ago, a minute ago), over the lane's {100 * level:.0f}%")
+        return Check(False, f"risk {risks} (now and two looks back that scale with the time left), over the lane's {100 * level:.0f}%")
     return Check(True, f"risk {risks}, at or under {100 * level:.0f}% and held")
 
 

@@ -57,7 +57,7 @@ def seed(tmp_path, monkeypatch, n=60, gap=0.035, win_every=1, tuned="true"):
 
 
 def test_integration_every_evaluation_stores_its_reading_on_the_decision_row(tmp_path, monkeypatch):
-    out = T.decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25\nrisk_score_edge=-0.05")  # real readings, seeded index and mids
+    out = T.decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25")  # real readings, seeded index and mids
     assert out.action == "bet"
     row = Store(config.load().db_path).db.execute("SELECT factors FROM decisions ORDER BY id DESC LIMIT 1").fetchone()
     got = json.loads(row["factors"])["risk"]

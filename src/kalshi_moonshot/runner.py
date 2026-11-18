@@ -1039,8 +1039,6 @@ def evaluate(
     risk_reading = None
     if spec.risk_score_buy > 0 and not chain:  # after the scenario note so its tag leads the note (the stored reason is cut at 300 characters). The lane's own buy rule: a risk that is low and has stayed low, and a chance that clears the costs
         from . import riskscore
-        from .strategy import fee_per_contract as _fee
-
         try:
             rs = riskscore.live(shot.series or shot.ticker.split("-")[0], shot.ticker, shot.side, time.time() + shot.hours_to_close * 3600.0, time.time(), s.data_dir)
         except Exception as exc:
@@ -1056,10 +1054,7 @@ def evaluate(
             note = f"{rs_tag} the lane buys only on a risk it can read. {note}"
         elif not riskscore.low_risk(rs[0], spec.risk_score_buy):
             bet = False
-            note = f"{rs_tag} the lane buys a risk of {100 * spec.risk_score_buy:.0f}% or under that has held for a minute. {note}"
-        elif rs[0][0] - (shot.ask + _fee(shot.ask)) < spec.risk_score_edge:
-            bet = False
-            note = f"{rs_tag} the score's chance {rs[0][0]:.3f} does not clear the ask and its fee ({shot.ask + _fee(shot.ask):.3f}) by the lane's {spec.risk_score_edge:g}. {note}"
+            note = f"{rs_tag} the lane buys a risk of {100 * spec.risk_score_buy:.0f}% or under that has held over its looks back. {note}"
         else:
             note = f"{rs_tag} {note}"
     spike_on, cushion_on = spec.entry_spike_min > -90, spec.entry_cushion_edge_min > -90

@@ -8,7 +8,7 @@ from kalshi_moonshot.estimators import Estimate
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
 
-LANE = "[lane.rf]\nestimator='market'\nprice=[0.10,0.85]\nprice_skip=[0.45,0.57]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nneeds_model_edge=true\nmin_edge_room=0.12\nrisk_score_buy=0.25\nrisk_score_edge={edge}\n"
+LANE = "[lane.rf]\nestimator='market'\nprice=[0.10,0.85]\nprice_skip=[0.45,0.57]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nneeds_model_edge=true\nmin_edge_room=0.12\nrisk_score_buy=0.25\n"
 
 
 @pytest.fixture(autouse=True)
@@ -26,10 +26,10 @@ class Fixed:
         return Estimate(self.p, "fixed")
 
 
-def decide(tmp_path, monkeypatch, worth_yes, score, edge=-1.0, ask=0.80):
+def decide(tmp_path, monkeypatch, worth_yes, score, ask=0.80):
     """One YES candidate at `ask`: the ladder has YES worth `worth_yes`, the risk score has had it at `score` now, 30 s ago and a minute ago."""
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(edge=edge))
+    (tmp_path / "strategies.toml").write_text(LANE)
     monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([score] * 3, ask - 0.005, [ask - 0.005] * 3))
     s = config.load()
     store = Store(s.db_path)
@@ -56,18 +56,10 @@ def test_integration_the_ladder_alone_does_not_buy_the_score_has_to_favour_the_s
     assert out.action == "pass" and "risk of 25% or under" in out.note
 
 
-def test_integration_the_scores_own_cost_check_is_off_so_the_worth_is_judged_once(tmp_path, monkeypatch):
-    held = decide(tmp_path, monkeypatch, worth_yes=0.92, score=0.78)  # the score's chance 0.78 is under the 0.80 ask and its fee
-    assert held.action == "bet", held.note
-    (tmp_path / "strict").mkdir()
-    strict = decide(tmp_path / "strict", monkeypatch, worth_yes=0.92, score=0.78, edge=0.0)  # with the score's own check on, the same side is refused
-    assert strict.action == "pass"
-
-
 def test_integration_a_side_outside_the_live_lanes_prices_is_not_a_candidate_price(tmp_path, monkeypatch):
     from kalshi_moonshot import lanes
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(edge=-1.0))
+    (tmp_path / "strategies.toml").write_text(LANE)
     sp = lanes.spec_for(config.load(), "rf")
     assert sp.price == (0.10, 0.85) and lanes.no_buy(sp, 0.50) and not lanes.no_buy(sp, 0.80)

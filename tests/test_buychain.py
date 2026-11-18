@@ -9,7 +9,7 @@ from kalshi_moonshot.estimators import Estimate
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
 
-LANE = "[lane.ch]\nestimator='market'\nprice=[0.10,0.85]\nprice_skip=[0.45,0.57]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nmax_spread=0.05\nmin_volume=0\nneeds_model_edge=true\nmin_edge_room=0.12\nrisk_score_buy=0.25\nrisk_score_edge=0.0\nbuy_chain={chain}\n"
+LANE = "[lane.ch]\nestimator='market'\nprice=[0.10,0.85]\nprice_skip=[0.45,0.57]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nmax_spread=0.05\nmin_volume=0\nneeds_model_edge=true\nmin_edge_room=0.12\nrisk_score_buy=0.25\nbuy_chain={chain}\n"
 RISK_FIRST = "['risk_score','price','ladder']"
 
 
@@ -126,7 +126,7 @@ def test_integration_the_chain_replaces_the_lanes_older_rules_so_none_is_asked_t
 
 def test_integration_a_lane_with_no_chain_decides_as_it_always_has(tmp_path, monkeypatch):
     out = decide(tmp_path, monkeypatch, worth_yes=0.92, chain="[]", yes_score=0.78)
-    assert out.action == "pass" and "[chain" not in out.note and "the score's chance" in out.note  # the older risk score rule, with its own cost check
+    assert out.action == "bet" and "[chain" not in out.note  # the older risk score rule, which has no cost check since risk_score_edge went (a chain lane has the ladder step for the worth)
 
 
 def market(now, yes_bid=0.79, yes_ask=0.80):

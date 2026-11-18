@@ -37,7 +37,12 @@ def masked(w: Sequence[float]) -> tuple[float, ...]:
 
 WEIGHTS = masked((0.664, 0.461, 0.345, 0.068, -0.192, -0.207, 0.011, 0.201, 0.033, 0.027, -0.031, -0.155, 0.048, 0.074, 0.156))  # the 2026-11-16 fit of all fifteen, the unused ones dropped; NOT refit without them yet: risktune.py refits the seven from the recorded readings
 STEP = 5.0  # seconds: the grid the market's mids are read on, as in the fit
-HELD_LOOKS = (0.0, 30.0, 60.0)  # the number has to hold at each of these many seconds back: now, half a minute ago, a minute ago
+LOOK_SHARES = (0.0, 1.0 / 30.0, 1.0 / 15.0)  # the number has to hold at each of these shares of the TIME LEFT back: now, then 30 s back with 15 minutes left and 15 s back with 7.5 left, then 60 s and 30 s (2026-11-18, user: "a minute is a long time in a 15 minute market"; "maybe like 0, 15, 30"; "and that should scale with time"; "since volatility increases as time runs out"; "early in the market, 0, 30, 60 or even higher makes sense"). The first version (2026-11-16) used 0, 30 and 60 seconds whatever the time left; the user had not asked for that. Structural: the shares are the user's own 0/30/60 at the open
+
+
+def looks_for(left: float) -> tuple[float, ...]:
+    """The seconds back the number must hold at, for a market with `left` seconds to go (LOOK_SHARES of the time left)."""
+    return tuple(max(0.0, left) * x for x in LOOK_SHARES)
 
 _cache: dict[str, Any] = {"data": None, "mtime": -1.0, "checked": -1e9, "dir": None}
 _prev: dict[tuple[str, int], list[tuple[float | None, int | None]]] = {}
@@ -156,10 +161,11 @@ def chance(x: Sequence[float], side: str, w: Sequence[float] = WEIGHTS) -> float
     return p if side == "yes" else 1.0 - p
 
 
-def held(ts: Sequence[float], vs: Sequence[float], now: float, opened: float, strike: float, mids: Sequence[tuple[float, float]], prev: Sequence[tuple[float | None, int | None]], side: str, w: Sequence[float] = WEIGHTS) -> list[float] | None:
-    """The side's chance now, 30 s ago and 60 s ago (HELD_LOOKS), each read only from ticks at or before its own moment. None when any of the three cannot be read: a number that cannot be shown to have held has not held."""
+def held(ts: Sequence[float], vs: Sequence[float], now: float, opened: float, strike: float, mids: Sequence[tuple[float, float]], prev: Sequence[tuple[float | None, int | None]], side: str, w: Sequence[float] = WEIGHTS, looks: Sequence[float] | None = None) -> list[float] | None:
+    """The side's chance now and at the two looks back (looks_for the time left), each read only from ticks at or before its own moment. None when any of the three cannot be read: a number that cannot be shown to have held has not held."""
+    looks = looks_for(opened + 900.0 - now) if looks is None else looks
     out = []
-    for back in HELD_LOOKS:
+    for back in looks:
         x = features(ts, vs, now - back, opened, strike, mids, prev)
         if x is None:
             return None
@@ -183,7 +189,7 @@ def sale_line(line: float, entry: float) -> float:
 def tag(chances: Sequence[float] | None, kalshi: float | None) -> str:
     if not chances:
         return "[risk score unreadable]"
-    return f"[risk score: risk {100 * (1 - chances[0]):.0f}% now, {100 * (1 - chances[1]):.0f}% 30 s ago, {100 * (1 - chances[2]):.0f}% a minute ago | by Kalshi's price {'n/a' if kalshi is None else format(100 * (1 - kalshi), '.0f') + '%'}]"
+    return f"[risk score: risk {100 * (1 - chances[0]):.0f}% now, {100 * (1 - chances[1]):.0f}% a short look back, {100 * (1 - chances[2]):.0f}% a longer one | by Kalshi's price {'n/a' if kalshi is None else format(100 * (1 - kalshi), '.0f') + '%'}]"
 
 
 def previous(ts: Sequence[float], vs: Sequence[float], series_mids: Sequence[tuple[float, float]], opened: float, unit: float | None) -> list[tuple[float | None, int | None]]:
@@ -219,10 +225,11 @@ def gather(series: str, ticker: str, opened: float, now: float) -> tuple[list[fl
     return ts, vs, ticks_mod.mids.rows(ticker), _prev[key], unit
 
 
-def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] = HELD_LOOKS, whole: bool = False) -> tuple[list[float], float, list[float], tuple[float, ...]] | None:
+def live(series: str, ticker: str, side: str, close_ts: float, now: float, data_dir: str | None = None, looks: Sequence[float] | None = None, whole: bool = False) -> tuple[list[float], float, list[float], tuple[float, ...]] | None:
     """(the side's chance at each of `looks` seconds back, Kalshi's mid for the side now, Kalshi's mid for the side at each look) for a running market, or None when any look cannot be read. The target is the index's average over the 60 s before the open (scenario.target: Kalshi's own rule)."""
     from . import scenario
 
+    looks = looks_for(close_ts - now) if looks is None else looks  # the default: shares of the time left
     opened = close_ts - 900.0
     got = gather(series, ticker, opened, now)
     if got is None:
