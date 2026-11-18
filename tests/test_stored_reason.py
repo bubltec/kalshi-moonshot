@@ -41,7 +41,7 @@ def test_integration_a_pass_is_stored_with_its_reason_first(tmp_path, monkeypatc
     assert out.action == "pass" and out.note.lstrip().startswith("[")  # the note in hand still leads with the readings
     row = Store(config.load().db_path).db.execute("SELECT reason FROM decisions WHERE lane='rs'").fetchone()
     assert not row["reason"].startswith("[")
-    assert row["reason"].startswith("the lane buys a risk of 1% or under that has held for a minute")  # the rule that turned it down
+    assert row["reason"].startswith("the lane buys a risk of 1% or under that has held over its looks back")  # the rule that turned it down
     assert "[risk score: risk " in row["reason"] and "[scenario" in row["reason"]  # the readings are still there, after it
 
 
