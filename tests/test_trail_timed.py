@@ -105,3 +105,18 @@ def test_integration_an_error_in_the_step_itself_does_not_stop_the_trail(tmp_pat
         out = tick(w, 0.86, 249)
     assert out and out[0].why.startswith("curve risk exit (profit take): trail") and rows(tmp_path) == []
     assert len([r for r in caplog.records if "trail_timed step failed" in r.getMessage()]) == 1
+
+
+def test_integration_after_the_trail_it_is_never_asked_on_the_sale_and_just_ahead_of_it_it_is(tmp_path, monkeypatch):
+    # 2026-11-18: both paper chains named it AFTER `trail` and wrote no row in two hours: the trail's sale ends the walk before the step is asked
+    out = {}
+    for name, chain in (("after", "['profit_take','trail','trail_timed']"), ("ahead", "['profit_take','trail_timed','trail']")):
+        (tmp_path / name).mkdir()
+        ticks_mod.mids._rows.clear()
+        w = lane(tmp_path / name, monkeypatch, chain=chain)
+        run_up(w)
+        tick(w, 0.89, 250)
+        out[name] = tick(w, 0.86, 249)
+    assert out["after"] and out["ahead"]  # the trail sells either way
+    assert [x for x in rows(tmp_path / "after") if x["hit_static"]] == []
+    assert [x for x in rows(tmp_path / "ahead") if x["hit_static"]]
