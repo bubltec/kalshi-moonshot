@@ -36,6 +36,7 @@ from . import (
     paperfill,
     pathshape,
     perpref,
+    pricevol,
     quoteshock,
     runner,
     sellchain,
@@ -257,6 +258,10 @@ class Target:
     risk_min_profit: float = 0.01
     risk_unit: float | None = None
     risk_unit_at: float = 0.0
+    risk_unit_timed: float | None = None  # the time-aware typical minute (pricevol.implied_rate), read at most every 5 s (sell step trail_timed, shadow)
+    risk_unit_timed_at: float = 0.0
+    trail_timed_last: tuple = (False, False)  # the (static, time-aware) trail verdicts last written for this bet
+    trail_timed_failed: bool = False  # the trail_timed step raised on this bet and the one warning has been written
     risk_take: bool = False  # the profit take (lane field curve_take)
     risk_take_cushion: bool = False  # the spot's cushion is asked before the take sells (lane field curve_take_cushion)
     risk_take_held: bool = False  # the cushion has already been logged as holding this bet's take
@@ -1044,6 +1049,20 @@ class ProfitWatcher:
             t.risk_unit = quoteshock.typical_minute(ticks_mod.mids.rows(t.ticker), now)
         return t.risk_unit
 
+    def _risk_unit_timed(self, t: Target, now: float, left: float) -> float | None:
+        """The time-aware typical minute of the price (pricevol.implied_rate x sqrt(60)): the price's one-second move over the next 30 s implied by its own cushion and the time left, so it rises toward the close where _risk_unit stays a 15-minute average. Memory only, read at most every 5 s and kept on the target; None with too little history, and None (never an error) on any failure. SHADOW: only the trail_timed step reads it."""
+        if now - t.risk_unit_timed_at >= 5.0:
+            t.risk_unit_timed_at = now
+            try:
+                seq = pricevol.grid(ticks_mod.mids.rows(t.ticker), now)
+                t.risk_unit_timed = pricevol.unit_of(pricevol.implied_rate(seq, left)) if seq is not None else None
+            except Exception as e:
+                t.risk_unit_timed = None
+                if not t.trail_timed_failed:
+                    t.trail_timed_failed = True
+                    log.warning("curve risk shadow: the time-aware unit failed on %s %s: %r", t.ticker, t.lane, e)
+        return t.risk_unit_timed
+
     def _risk_decide(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, long_chance: float | None = None) -> str | None:
         """The sale decision both risk paths share: the watch line every 10 s, then the sale's steps in the bet's own order (sellchain.py; lane field sell_chain, or the default order: never ahead, under even, the profit take, the trail, the long layer's hold, the loss sale). A step answers a sale (returned), a hold (nothing is sold on this check) or nothing (the next step is asked). A lane with no chain gets the default order and its reasons as they always were; a lane with a chain gets the chain's note at the end of its sale reason."""
         if now - t.risk_noted >= 10.0:
@@ -1186,6 +1205,32 @@ class ProfitWatcher:
                 log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
                 self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="trail")
         return None
+
+    def _sell_trail_timed(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step trail_timed, SHADOW ONLY: it never sells and never holds (2026-11-18, user: "as time expires the volatility rate increases"; "so having a static volatility number is pointless"). It asks the trail's own question (curverisk.trail_hit, under the same conditions as _sell_trail) twice: with the exit's static typical minute and with the time-aware one (_risk_unit_timed), and writes one row (kind "trail_timed" in data/risk_shadow.jsonl) each time the pair of verdicts changes on the bet, with both units, both verdicts, the bet's high and `would_differ`. scripts/trail_timed_score.py scores the rows where they differ. Not in the default order: only a lane whose chain names it is asked. Memory only; an error is logged once a bet and the next step is asked."""
+        try:
+            ProfitWatcher._trail_timed_read(self, t, r, bid, now, left, pnl, c)
+        except Exception as e:
+            if not t.trail_timed_failed:
+                t.trail_timed_failed = True
+                log.warning("curve risk shadow: the trail_timed step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
+        return None
+
+    def _trail_timed_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> None:
+        """The trail_timed step's body (see _sell_trail_timed, which catches whatever this raises)."""
+        ProfitWatcher._sell_shared(self, t, bid, now, left, pnl, c)
+        if not t.risk_take or t.risk_take_trail <= 0:
+            return
+        gain, _room, rebuy, unit, _bar = ProfitWatcher._sell_take_state(self, t, bid, now, left, c)
+        timed = self._risk_unit_timed(t, now, left)
+        stands = not c.taken and not c.early and not t.risk_sure_latched and bid >= CURVE_MIN_BID
+        hit_static = stands and curverisk.trail_hit(gain, rebuy, bid, t.risk_take_peak, unit, t.risk_take_trail)
+        hit_timed = stands and curverisk.trail_hit(gain, rebuy, bid, t.risk_take_peak, timed, t.risk_take_trail)
+        pair = (bool(hit_static), bool(hit_timed))
+        if pair == t.trail_timed_last:
+            return
+        t.trail_timed_last = pair
+        self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="trail_timed", extra={"unit_static": round(unit, 5) if unit else None, "unit_timed": round(timed, 5) if timed else None, "hit_static": pair[0], "hit_timed": pair[1], "would_differ": pair[0] != pair[1], "high": round(t.risk_take_peak, 4), "units": t.risk_take_trail})
 
     def _sell_long_hold(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step long_hold (lane field curve_risk_confirm): a hold. While the long layer's chance is at or over its bar the walk ends here with no sale, so no step after it is asked; a loss sale that was wanted is logged as held."""
