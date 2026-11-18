@@ -205,7 +205,7 @@ def gather(series: str, ticker: str, opened: float, now: float) -> tuple[list[fl
     from . import variants
     from . import ticks as ticks_mod
 
-    ix = variants.spot_index(series, "", now)
+    ix = variants.spot_index(series, "kalshi", now)  # Kalshi's own price for the underlying: a coin's settlement index, a commodity's Kalshi perp reference (the outside feed only while the perp is silent). 2026-11-18: this asked for the old default, which for a commodity is the outside feed, so commodity readings (taken since 11-17) had a cushion measured on a price Kalshi does not settle on (user: "why isn't it reading kalshi?"; "Yes, fix it"). The target stays the same index's own average before the open, so a basis between the perp and the settlement price cancels
     got = (ticks_mod.history.window(ix, opened - 6400.0, now) or ticks_mod.history.window(ix, opened - 3700.0, now)) if ix else None
     if not got:
         return None

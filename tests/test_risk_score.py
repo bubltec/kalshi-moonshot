@@ -208,3 +208,45 @@ def test_unit_a_side_bought_cheap_is_not_on_the_sale_line_from_the_start():
     assert riskscore.sale_line(0.25, 0.80) == 0.25
     assert riskscore.sale_line(0.25, 0.24) == 0.12
     assert riskscore.sale_line(0.25, 0.0) == 0.25
+
+
+# The feed (2026-11-18, user: "why isn't it reading kalshi?"; "Yes, fix it"): the score reads Kalshi's own price for the underlying. A commodity's readings had come from the outside feed since 11-17.
+def gold(now, perp_lift, feed_lift, perp_until=None):
+    """A gold market 420 s from its close, with the Kalshi perp reference and the outside feed telling different stories; the perp's ticks stop at `perp_until` when given."""
+    from kalshi_moonshot import perpref
+
+    opened = now - 480.0
+    ticks.mids.clear()
+    ticks.history.clear()
+    riskscore._prev.clear()
+    for ts, v in zip(*index(opened, now, lift=perp_lift)):
+        if perp_until is None or ts <= perp_until:
+            ticks.history.note(perpref.index_for_series("KXGOLD15M"), ts, v)
+    for ts, v in zip(*index(opened, now, lift=feed_lift)):
+        ticks.history.note(variants.biquote_index("KXGOLD15M"), ts, v)
+    for ts, mid in mids(opened, now, level=0.80):
+        ticks.mids.note("KXGOLD15M-7", ts, mid - 0.005, mid + 0.005)
+    return opened
+
+
+def cushion_of(now, opened):
+    got = riskscore.live("KXGOLD15M", "KXGOLD15M-7", "yes", opened + 900.0, now, whole=True)
+    assert got is not None
+    return got[3][riskscore.NAMES.index("cushion")]
+
+
+def test_integration_a_commoditys_cushion_is_read_from_the_kalshi_perp_not_the_outside_feed():
+    now = time.time()
+    up = cushion_of(now, gold(now, perp_lift=0.004, feed_lift=-0.004))  # the perp is over its open, the outside feed under its own
+    down = cushion_of(now, gold(now, perp_lift=-0.004, feed_lift=0.004))
+    assert up > 0 > down  # the reading follows the perp both times
+
+
+def test_integration_while_the_perp_is_silent_the_outside_feed_is_the_fallback():
+    now = time.time()
+    opened = gold(now, perp_lift=0.004, feed_lift=-0.004, perp_until=now - 120.0)  # no perp tick for two minutes (variants.PERP_FRESH is 30 s)
+    assert cushion_of(now, opened) < 0  # the feed's story, the only live one
+
+
+def test_unit_a_coin_still_reads_its_own_settlement_index():
+    assert variants.spot_index("KXBTC15M", "kalshi", time.time()) == variants.crypto_index("KXBTC15M") == variants.spot_index("KXBTC15M", "", time.time())

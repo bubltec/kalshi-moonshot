@@ -1545,7 +1545,7 @@ def side_scenario(store: Store, shot: LongShot, now: float | None = None) -> str
     series = shot.series or shot.ticker.split("-")[0]
     left = shot.hours_to_close * 3600.0
     opened = now + left - 900.0  # 900: a 15-minute market's length, structural
-    ix = variants.spot_index(series, "", now)
+    ix = variants.spot_index(series, "kalshi", now)  # Kalshi's own price, as riskscore.gather (2026-11-18)
     got = ticks_mod.history.window(ix, opened - 3700.0, now) if ix else None
     if not got:
         return None
