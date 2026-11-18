@@ -1,0 +1,16 @@
+Question (user, 2026-11-17, on KXBTC15M 18:45 NO bought at 0.59 on a model chance of 0.72: 'so something is wrong with the ladder then'; 'it never should have suggested that, at that time'): when the ladder model's chance and Kalshi's ask disagree, which is nearer to what happened?
+Window: crypto_multiscale decisions since Mon 2026-11-09 00:00 ET with a model chance, an ask and a settled market; one row per market, side and minute. Rows inside a market are not independent (markets are counted), the model's width changed during the window (11-14), and these are decisions that got past the screen, so they lean to sides the model liked. No settings chosen after seeing it; the gap buckets are fixed in the query.
+won_minus_ask over 0: the model's disagreement held something. won_minus_model under 0: the model overstated the side.
+
+            gap            |   n   | markets | avg_ask | avg_model |  won  | won_minus_ask | won_minus_model |  fee  
+---------------------------+-------+---------+---------+-----------+-------+---------------+-----------------+-------
+ 1 model 10+ under the ask |  1090 |     948 |   0.687 |     0.456 | 0.671 |        -0.017 |           0.215 | 0.014
+ 2 model 3 to 10 under     |  1480 |    1178 |   0.699 |     0.641 | 0.699 |         0.001 |           0.058 | 0.013
+ 3 within 3 of the ask     | 12245 |    4538 |   0.681 |     0.681 | 0.661 |        -0.020 |          -0.020 | 0.014
+ 4 model 3 to 10 over      |  2086 |    1461 |   0.658 |     0.720 | 0.678 |         0.021 |          -0.042 | 0.014
+ 5 model 10+ over the ask  |  1305 |     882 |   0.581 |     0.743 | 0.607 |         0.026 |          -0.136 | 0.014
+(5 rows)
+
+
+
+
