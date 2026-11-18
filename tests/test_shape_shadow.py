@@ -9,7 +9,7 @@ import pytest
 
 from kalshi_moonshot import pathshape, sellchain, watcher
 from kalshi_moonshot import ticks as ticks_mod
-from tests.test_risk_exit_flow import CLOSE, TICKER, held, signals, yes_bid
+from tests.test_risk_exit_flow import CLOSE, TICKER, climb, held, level, signals, yes_bid
 
 SERIES = TICKER.split("-")[0]
 UNIT = 0.02  # a market whose typical minute is two cents
@@ -228,3 +228,33 @@ def test_integration_an_exit_modules_steps_may_name_shape(tmp_path, monkeypatch)
     w = held(tmp_path, monkeypatch, live=True, extra="exit_module='rt'\n\n[exit.rt]\nsteps=['shape','profit_take','trail']\n[exit.rt.profit]\n[exit.rt.loss]")
     assert w.targets[(TICKER, "risk_only")].sell_chain == ("shape", "profit_take", "trail") and w.targets[(TICKER, "risk_only")].bought_ts == CLOSE - 450
     assert run(w, FALL) == [] and rows(tmp_path)
+
+
+def test_integration_an_error_in_the_shape_step_does_not_stop_the_profit_take(tmp_path, monkeypatch, caplog):
+    """A shadow step must not be able to stop a sale: with the shape reading raising on every check, shape first in a chain takes the gain exactly as the profit take alone does."""
+    def broken(*a, **k):
+        raise RuntimeError("a bad path")
+
+    monkeypatch.setattr(pathshape, "shape", broken)
+    out = []
+    with caplog.at_level(logging.WARNING, logger="moonshot"):
+        for name, chain in (("alone", "['profit_take']"), ("both", "['shape','profit_take']")):
+            (tmp_path / name).mkdir()
+            ticks_mod.mids._rows.clear()
+            w = held(tmp_path / name, monkeypatch, live=True, take="true", extra=f"sell_chain={chain}")
+            assert climb(w, 0.82, 0.92, 700) is None
+            out.append(level(w, 0.92, 700))
+    alone, both = out
+    assert alone is not None and both is not None and alone.why.startswith("curve risk exit (profit take)")
+    assert both.why == alone.why.replace("[sell chain lane: profit_take | sold at profit_take]", "[sell chain lane: shape > profit_take | sold at profit_take]")
+    assert rows(tmp_path / "both") == []  # no shape row
+    warned = [r.getMessage() for r in caplog.records if "the shape step failed" in r.getMessage()]
+    assert len(warned) == 1 and TICKER in warned[0] and "risk_only" in warned[0] and "a bad path" in warned[0]  # once a bet, not once a check
+
+
+def test_integration_an_error_in_the_shape_step_does_not_stop_a_loss_sale_either(tmp_path, monkeypatch):
+    monkeypatch.setattr(pathshape, "shape", lambda *a, **k: 1 / 0)
+    seed(0.002)
+    w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['shape','loss']")
+    got = run(w, FALL)
+    assert got and got[0].why.startswith("curve risk exit (max loss)") and rows(tmp_path) == []
