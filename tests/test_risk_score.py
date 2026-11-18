@@ -204,55 +204,7 @@ def test_integration_the_reading_makes_no_database_read(tmp_path, monkeypatch):
     assert not [q for q in seen if "settled_value" in q]  # the last four markets are no longer asked of the database
 
 
-# The gap rule (lane field risk_score_gap_max; 2026-11-16, user: "Why such high prices?"; "Ok let's try your suggestion").
-def test_unit_the_gap_has_to_sit_between_the_cost_and_the_ceiling_at_every_look():
-    assert riskscore.gap_held([0.64, 0.63, 0.64], [0.60, 0.60, 0.60], 0.025, 0.06)
-    assert not riskscore.gap_held([0.64, 0.61, 0.64], [0.60, 0.60, 0.60], 0.025, 0.06)  # a minute ago it did not clear the cost
-    assert not riskscore.gap_held([0.68, 0.64, 0.64], [0.60, 0.60, 0.60], 0.025, 0.06)  # over the ceiling: Kalshi's price is the one to believe
-    assert not riskscore.gap_held(None, None, 0.0, 0.06) and not riskscore.gap_held([0.6], [0.6, 0.6], 0.0, 0.06)
-
-
-def test_integration_the_gap_lane_buys_a_mid_priced_side_the_score_rates_over_its_price(tmp_path, monkeypatch):
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.66, 0.655, 0.66], 0.615, [0.615, 0.615, 0.615]))
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06", ask=0.62)
-    assert out.action == "bet" and "[risk score: risk 34% now" in out.note
-
-
-def test_integration_the_gap_lane_passes_when_the_gap_is_under_the_cost_or_over_the_ceiling(tmp_path, monkeypatch):
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.625, 0.625, 0.625], 0.615, [0.615, 0.615, 0.615]))
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06", ask=0.62)
-    assert out.action == "pass" and "the lane buys a gap of" in out.note
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.72, 0.72, 0.72], 0.615, [0.615, 0.615, 0.615]))
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06", ask=0.62)
-    assert out.action == "pass" and "the lane buys a gap of" in out.note
-
-
-def test_unit_the_gap_field_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
-    assert "risk_score_gap_max" not in lanes.settings_of(base, s)
-    assert lanes.version_of(dataclasses.replace(base, risk_score_buy=1.0), s) != lanes.version_of(dataclasses.replace(base, risk_score_buy=1.0, risk_score_gap_max=0.06), s)
-
-
-def test_unit_a_gap_made_by_a_falling_price_is_not_a_gap():
-    assert not riskscore.gap_held([0.30, 0.33, 0.36], [0.26, 0.29, 0.32], 0.025, 0.06)  # the side fell 6 cents in the minute; the number followed more slowly
-    assert riskscore.gap_held([0.36, 0.36, 0.36], [0.32, 0.32, 0.32], 0.025, 0.06)
-    assert riskscore.gap_held([0.38, 0.36, 0.35], [0.34, 0.32, 0.31], 0.025, 0.06)  # rising with the number over it
-
-
 def test_unit_a_side_bought_cheap_is_not_on_the_sale_line_from_the_start():
     assert riskscore.sale_line(0.25, 0.80) == 0.25
     assert riskscore.sale_line(0.25, 0.24) == 0.12
     assert riskscore.sale_line(0.25, 0.0) == 0.25
-
-
-def test_integration_a_gap_over_the_cost_but_under_the_lanes_least_gap_is_not_bought(tmp_path, monkeypatch):
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.965, 0.965, 0.965], 0.945, [0.945, 0.945, 0.945]))  # two points over the price on a 0.95 side: over its cost
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06", ask=0.95)
-    assert out.action == "bet"
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06\nrisk_score_gap_min=0.03", ask=0.95)
-    assert out.action == "pass" and "the lane's least gap" in out.note
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.66, 0.66, 0.66], 0.615, [0.615, 0.615, 0.615]))  # four and a half points on a 0.62 side
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=1.0\nrisk_score_gap_max=0.06\nrisk_score_gap_min=0.03", ask=0.62)
-    assert out.action == "bet"

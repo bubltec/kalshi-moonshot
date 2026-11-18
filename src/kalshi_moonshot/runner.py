@@ -1037,27 +1037,12 @@ def evaluate(
             from . import risktune
 
             risk_reading = risktune.reading(rs[3], rs[0], rs[2], shot.ask)  # stored on the decision row this evaluation writes anyway: the tune's record
-        gap_lo, gap_hi, gap_from = spec.risk_score_gap_min, spec.risk_score_gap_max, "the lane's"
-        if spec.risk_score_tuned and spec.risk_score_gap_max > 0:
-            tg = riskscore.tuned_gap(str(s.data_dir))
-            if tg is None:
-                gap_lo = gap_hi = None
-            elif tg is not False:
-                gap_lo, gap_hi, gap_from = tg[0], tg[1], "the record's"
-        cost = (shot.ask + _fee(shot.ask) - rs[1] + spec.risk_score_edge) if rs else 0.0
         if rs is None:
             bet = False
             note = f"{rs_tag} the lane buys only on a risk it can read. {note}"
         elif not riskscore.low_risk(rs[0], spec.risk_score_buy):
             bet = False
             note = f"{rs_tag} the lane buys a risk of {100 * spec.risk_score_buy:.0f}% or under that has held for a minute. {note}"
-        elif spec.risk_score_gap_max > 0 and gap_hi is None:
-            bet = False
-            note = f"{rs_tag} the lane's record shows no gap over Kalshi's price that paid; it buys nothing until one does. {note}"
-        elif spec.risk_score_gap_max > 0 and not riskscore.gap_held(rs[0], rs[2], max(cost, gap_lo), gap_hi):
-            bet = False
-            gaps = ", ".join(f"{100 * (c - k):+.1f}" for c, k in zip(rs[0], rs[2]))
-            note = f"{rs_tag} the score is over Kalshi's price by {gaps} points (now, 30 s ago, a minute ago); the lane buys a gap of {100 * max(cost, gap_lo):.1f} (the cost, or {gap_from} least gap when that is more) to {100 * gap_hi:.0f} points that has held, on a side whose price is not lower than a minute ago ({100 * rs[2][-1]:.0f}c then, {100 * rs[2][0]:.0f}c now). {note}"
         elif rs[0][0] - (shot.ask + _fee(shot.ask)) < spec.risk_score_edge:
             bet = False
             note = f"{rs_tag} the score's chance {rs[0][0]:.3f} does not clear the ask and its fee ({shot.ask + _fee(shot.ask):.3f}) by the lane's {spec.risk_score_edge:g}. {note}"

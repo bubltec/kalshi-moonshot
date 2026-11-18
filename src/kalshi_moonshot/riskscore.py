@@ -69,15 +69,6 @@ def weights(data_dir: str | None = None) -> tuple[float, ...]:
         return WEIGHTS
 
 
-def tuned_gap(data_dir: str | None) -> tuple[float, float] | None | bool:
-    """The gap range the record says to buy: (least, most); None when the record was tuned and no gap paid; False when there is no tune to read (the lane's own settings then stand)."""
-    got = tuned(data_dir)
-    if not got or "gap" not in got:
-        return False
-    g = got["gap"]
-    return (float(g[0]), float(g[1])) if g else None
-
-
 def _at(ts: Sequence[float], vs: Sequence[float], t: float) -> float | None:
     i = bisect.bisect_right(ts, t) - 1
     return vs[i] if i >= 0 and vs[i] > 0 else None
@@ -179,15 +170,6 @@ def held(ts: Sequence[float], vs: Sequence[float], now: float, opened: float, st
 def low_risk(chances: Sequence[float] | None, max_risk: float) -> bool:
     """True when the side's risk (1 - chance) is at or under `max_risk` at every look: low, and it has stayed low."""
     return bool(chances) and all(1.0 - c <= max_risk for c in chances)
-
-
-def gap_held(chances: Sequence[float] | None, kalshi: Sequence[float] | None, floor: float, ceiling: float) -> bool:
-    """True when the score's chance has been over Kalshi's price for the side by at least `floor` and at most `ceiling` at every look (2026-11-16, user, on the level rule buying only 0.87 to 0.98 sides: "Why such high prices?"; "Ok let's try your suggestion"). The floor is what the buy costs; the ceiling is where the fit stopped being right (a disagreement of 3 to 6 points was the score's to win, one over 6 was Kalshi's: studies/results/2026-11-16-risk-score-fit.txt)."""
-    if not chances or not kalshi or len(chances) != len(kalshi):
-        return False
-    if kalshi[0] < kalshi[-1]:
-        return False  # the side's price is lower than at the oldest look: the gap is the price falling away from a number that follows it more slowly, not the number rating the side higher (2026-11-16 23:21: the lane's first four buys were sides in the middle of a fall; ZEC bought at 0.23 was 0.12 two minutes later)
-    return all(floor <= c - k <= ceiling for c, k in zip(chances, kalshi))
 
 
 SALE_SHARE = 0.5  # a side bought under twice the lane's line is sold at half the price paid instead: structural (it keeps the buy and the sale from contradicting each other), not a tuned number
