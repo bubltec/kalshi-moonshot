@@ -5,12 +5,16 @@ One question, same bets (CLAUDE.md rule 4): every bet the shape step (sell step 
 """
 import datetime
 import json
+import os
 import pathlib
 
 from kalshi_moonshot import config, db
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
 ET = datetime.timezone(datetime.timedelta(hours=-5))
+KIND = os.environ.get("KIND", "shape")  # "shape_timed": score the time-based step (its `buy` is the shape over its window, `quarter` the shape since the buy)
+SHAPES = [x for x in os.environ.get("SHAPES", "").split(",") if x]
+ONLY = os.environ.get("LANE")  # optional: score one lane, e.g. LANE=crypto_risk_score
 s = config.load()
 f = pathlib.Path(s.data_dir) / "risk_shadow.jsonl"
 recs = {}
@@ -19,7 +23,7 @@ for text in f.read_text().splitlines() if f.exists() else []:
         x = json.loads(text)
     except ValueError:
         continue
-    if x.get("kind") == "shape":
+    if x.get("kind") == KIND:
         recs.setdefault((x["ticker"], x["lane"]), []).append(x)
 now = datetime.datetime.now(ET)
 if not recs:
@@ -29,9 +33,6 @@ if not recs:
 since = min(x["ts"] for v in recs.values() for x in v)
 st = db.connect(s.db_path, "main", shared=True)
 results = {w["ticker"]: (w["result"], float(w["close_ts"])) for w in st.execute("SELECT ticker, close_ts, result FROM windows WHERE close_ts>? AND result IN ('yes','no')", (since - 900.0,)).fetchall()}
-import os
-SHAPES = [x for x in os.environ.get("SHAPES", "").split(",") if x]
-ONLY = os.environ.get("LANE")  # optional: score one lane, e.g. LANE=crypto_risk_score
 rows = st.execute("SELECT ts, ticker, lane, mode, side, ask, stake_usd, contracts, exit_price, exit_ts, exit_reason FROM decisions WHERE action='bet' AND stake_usd>0 AND ts>? ORDER BY ts", (since - 900.0,)).fetchall()
 rows = [r for r in rows if not ONLY or r["lane"] == ONLY]
 out, unsettled, seen_keys = [], 0, set()

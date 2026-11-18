@@ -30,12 +30,14 @@ from collections import deque
 from collections.abc import Sequence
 from typing import NamedTuple
 
-LOOKS = ("buy", "quarter")  # the two look-backs: since the buy; a share of the time left
+LOOKS = ("buy", "quarter", "timed")  # the two look-backs: since the buy; a share of the time left
 QUARTER = 0.25  # the second look-back's share of the time left (the share the buy's risk trend reads); it shortens toward the close
 MIN_QUOTES = 6  # quotes a window needs before it is judged
 COVER = 0.8  # the share of the window the quotes must span
 MIN_SEEN = 20  # earlier readings of the series this hour before "most" and "a lot" can be said
 MIN_SEEN_RANGE = 100  # readings before one can be called outside the hour's range (curverisk.TREND_MIN_SEEN)
+TIMED_SHARE = 0.1  # sell step shape_timed: the bet must have been behind, and its path flat or trending against, for this share of the time left (2026-11-18, user: "they should be time based where it waits or has to exhibit the behavior for a certain time relative to the time remaining"). A FIRST SETTING chosen without a test, not fitted: it is a tenth of the time left, 90 s at the open, 45 s with 7.5 minutes left
+TIMED_FLOOR = 90.0  # the time left counts as no less than this (the user's cap on the volatility looks, "around 90s left", applied here too): from 90 s to the close the wait stays 9 s
 STEP = 5.0  # seconds between readings (curverisk.TREND_STEP)
 HOUR = 3600.0
 WOULD_SELL = ("trend_against", "flat")  # the user's rule, on the since-the-buy shape
@@ -138,6 +140,11 @@ def note(series: str, look: str, now: float, got: Shape) -> None:
     """Keep a reading in the series' hour (one that could be measured: it has a typical move)."""
     if got.typical > 0:
         SEEN.setdefault((series, look), deque()).append((now, got.net_z, got.eff, got.ground_z))
+
+
+def timed_window(left: float) -> float:
+    """The seconds a bet must have been behind, with its path flat or trending against, for the shape_timed step: TIMED_SHARE of the time left, the time left counted as no less than TIMED_FLOOR."""
+    return TIMED_SHARE * max(left, TIMED_FLOOR)
 
 
 def would_sell(buy_shape: str) -> bool:

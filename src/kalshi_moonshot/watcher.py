@@ -251,6 +251,10 @@ class Target:
     shape_pairs: set = field(default_factory=set)  # the (since-the-buy shape, quarter shape) pairs already written for this bet
     shape_would: bool = False  # the one "would sell" log line has been written
     shape_failed: bool = False  # the shape step raised on this bet and the one warning has been written
+    timed_since: float = 0.0  # shape_timed: when the bet last went behind and has stayed behind (0 = not behind)
+    timed_at: float = 0.0  # shape_timed: when the shape was last read (once every pathshape.STEP seconds)
+    timed_done: bool = False  # shape_timed: its one row has been written for this bet
+    timed_failed: bool = False  # the shape_timed step raised on this bet and the one warning has been written
     risk_line_live: bool = True  # false: the line sale is logged and recorded, not made (lane field curve_risk_line_live); the max loss and the profit side are not affected
     risk_spot_weight: float = 0.5
     risk_history: bool = True
@@ -1259,11 +1263,52 @@ class ProfitWatcher:
                 log.warning("curve risk shadow: the shape step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
         return None
 
-    def _shape_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> None:
-        """The shape step's body (see _sell_shape, which catches whatever this raises)."""
+    @staticmethod
+    def _shape_path_note(t: Target, bid: float, now: float) -> None:
+        """Put this check's bid on the bet's path (shared by the shape steps; one entry a check even when both are asked)."""
         if not t.shape_path:  # the first check: the watcher's own last two minutes of this side's bids come first
             t.shape_path.extend((ts, b) for ts, b in t.history if ts < now and b > 0)
-        t.shape_path.append((now, bid))
+        if not t.shape_path or t.shape_path[-1][0] != now:
+            t.shape_path.append((now, bid))
+
+    def _sell_shape_timed(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step shape_timed, SHADOW ONLY: it never sells and never holds (2026-11-18, user: "they should be time based where it waits or has to exhibit the behavior for a certain time relative to the time remaining"). The `shape` step marks a bet the first moment it is behind with a flat or falling path; this one asks that the bet has stayed behind, and its path over that same stretch is flat or trending against, for pathshape.timed_window(left) seconds (a tenth of the time left, the time left counted as no less than 90 s). It writes one row (kind "shape_timed" in data/risk_shadow.jsonl) the first time both hold: `buy` is the shape over the window, `quarter` the shape since the buy. A bet that comes back ahead starts over. scripts/shape_shadow_score.py KIND=shape_timed scores it. Not in the default order; an error is logged once a bet and the next step is asked."""
+        try:
+            ProfitWatcher._shape_timed_read(self, t, r, bid, now, left, pnl)
+        except Exception as e:
+            if not t.timed_failed:
+                t.timed_failed = True
+                log.warning("curve risk shadow: the shape_timed step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
+        return None
+
+    def _shape_timed_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> None:
+        """The shape_timed step's body (see _sell_shape_timed, which catches whatever this raises)."""
+        ProfitWatcher._shape_path_note(t, bid, now)
+        if pnl >= 0:
+            t.timed_since = 0.0  # back ahead: the wait starts over
+            return
+        if t.timed_since <= 0:
+            t.timed_since = now
+        if t.timed_done or now - t.timed_at < pathshape.STEP:
+            return
+        t.timed_at = now
+        window = pathshape.timed_window(left)
+        series = t.ticker.split("-")[0]
+        unit = self._risk_unit(t, now)
+        path = list(t.shape_path)
+        got = pathshape.shape(path, now - window, now, unit, pathshape.seen_of(series, "timed", now))
+        pathshape.note(series, "timed", now, got)
+        behind_for = now - t.timed_since
+        if behind_for < window or not pathshape.would_sell(got.shape):
+            return
+        t.timed_done = True
+        since = pathshape.shape(path, t.bought_ts, now, unit, pathshape.seen_of(series, "buy", now)) if t.bought_ts > 0 else pathshape.Shape("unknown")
+        log.info("curve risk shadow: %s %s would sell (shape_timed): behind %+.1f%% of cost for %.0fs (a window of %.0fs, a tenth of the time left) and its path over that window is %s; bid %.2f, %.0fs left", t.ticker, t.lane, pnl * 100.0, behind_for, window, got.shape, bid, left)
+        self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="shape_timed", extra={"would_sell": True, "buy": got.row(), "quarter": since.row(), "window": round(window, 1), "behind_for": round(behind_for, 1), "share": pathshape.TIMED_SHARE, "unit": round(unit, 5) if unit else None})
+
+    def _shape_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> None:
+        """The shape step's body (see _sell_shape, which catches whatever this raises)."""
+        ProfitWatcher._shape_path_note(t, bid, now)
         if now - t.shape_at < pathshape.STEP:
             return
         t.shape_at = now

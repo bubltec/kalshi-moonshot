@@ -14,6 +14,7 @@ The steps:
   long_hold     a HOLD: while the long layer says the side is likely to pay, no step after it is asked (curve_risk_confirm)
   loss          the max loss, the line, their wait and the early hold together (curve_risk_max_loss, curve_risk_sell, ...): they share one wait and one latch
   shape         SHADOW ONLY, never sells: while a bet is behind it records the shape of the bet's own price path (flat, trend against or for, wavy; pathshape.py) since the buy and over a quarter of the time left, and whether the user's rule would sell (kind "shape" in data/risk_shadow.jsonl). Not in the default order; put it first in a chain, since a sale or a hold ends the walk
+  shape_timed   SHADOW ONLY, never sells or holds: the bet has been behind for a share of the time left (pathshape.timed_window) and its path over that same stretch is flat or trending against (pathshape.py); one row (kind "shape_timed" in data/risk_shadow.jsonl) the first time both hold, with the bid it would sell at. Not in the default order
   trail_timed   SHADOW ONLY, never sells or holds: the trail's condition (curverisk.trail_hit) read twice, with the exit's static typical minute and with the time-aware one (pricevol.implied_rate: the price's one-second move implied by its cushion and the time left, which rises toward the close); one row (kind "trail_timed" in data/risk_shadow.jsonl) each time the pair of verdicts changes, with both units and `would_differ`. Not in the default order
 
 Each step reads the lane's existing settings and is off when its setting is off, as it always was; none has a number of its own here. The step bodies are methods of the watcher (ProfitWatcher._sell_<name>): they use its helpers and the bet's state. This module holds the names, the default order, the check of a lane's chain and the note a sale carries.
@@ -28,7 +29,7 @@ A chain can be given a name and shared: an exit module ([exit.<name>] in strateg
 from __future__ import annotations
 
 DEFAULT = ("never_ahead", "under_even", "profit_take", "trail", "long_hold", "loss")  # the order a lane with no chain is asked: the risk exit's order before the chain existed
-SELL_STEPS = (*DEFAULT, "shape", "trail_timed")  # the steps a lane may name in sell_chain; the watcher holds one method for each (_sell_<name>). `shape` and `trail_timed` are shadow only and asked only where a chain names them
+SELL_STEPS = (*DEFAULT, "shape", "shape_timed", "trail_timed")  # the steps a lane may name in sell_chain; the watcher holds one method for each (_sell_<name>). `shape` and `trail_timed` are shadow only and asked only where a chain names them
 KEEP = 900  # what Store.mark_exited keeps of a sale's reason
 
 
