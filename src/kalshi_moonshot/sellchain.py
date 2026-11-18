@@ -13,6 +13,7 @@ The steps:
   trail         a bet ahead is sold once its bid has come off its high by the market's own swing (curve_take_trail)
   long_hold     a HOLD: while the long layer says the side is likely to pay, no step after it is asked (curve_risk_confirm)
   loss          the max loss, the line, their wait and the early hold together (curve_risk_max_loss, curve_risk_sell, ...): they share one wait and one latch
+  shape         SHADOW ONLY, never sells: while a bet is behind it records the shape of the bet's own price path (flat, trend against or for, wavy; pathshape.py) since the buy and over a quarter of the time left, and whether the user's rule would sell (kind "shape" in data/risk_shadow.jsonl). Not in the default order; put it first in a chain, since a sale or a hold ends the walk
 
 Each step reads the lane's existing settings and is off when its setting is off, as it always was; none has a number of its own here. The step bodies are methods of the watcher (ProfitWatcher._sell_<name>): they use its helpers and the bet's state. This module holds the names, the default order, the check of a lane's chain and the note a sale carries.
 
@@ -25,8 +26,8 @@ A chain can be given a name and shared: an exit module ([exit.<name>] in strateg
 
 from __future__ import annotations
 
-SELL_STEPS = ("never_ahead", "under_even", "profit_take", "trail", "long_hold", "loss")  # the steps a lane may name in sell_chain; the watcher holds one method for each (_sell_<name>)
-DEFAULT = SELL_STEPS  # the order a lane with no chain is asked: the risk exit's order before the chain existed
+DEFAULT = ("never_ahead", "under_even", "profit_take", "trail", "long_hold", "loss")  # the order a lane with no chain is asked: the risk exit's order before the chain existed
+SELL_STEPS = (*DEFAULT, "shape")  # the steps a lane may name in sell_chain; the watcher holds one method for each (_sell_<name>). `shape` is shadow only and asked only where a chain names it
 KEEP = 900  # what Store.mark_exited keeps of a sale's reason
 
 
