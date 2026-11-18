@@ -1,0 +1,146 @@
+window: 2026-11-09 to 2026-11-16; 52410 resting bids on 5723 markets. One contract a bet, no fee on either leg. Average spread 0.017.
+=== kind fill (first in the queue): all bets
+  sale 1 cents higher            bets  43721 | avg buy 0.126 | sale filled  66.0% (needs about  89%) | net  -1268.81 (-0.0290 a bet, -23.1% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  43721 | avg buy 0.126 | sale filled  57.5% (needs about  81%) | net  -1391.58 (-0.0318 a bet, -25.3% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  43721 | avg buy 0.126 | sale filled  52.2% (needs about  74%) | net  -1461.42 (-0.0334 a bet, -26.6% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  43721 | avg buy 0.126 | sale filled  44.9% (needs about  65%) | net  -1535.72 (-0.0351 a bet, -27.9% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  43721 | avg buy 0.126 | sale filled  37.9% (needs about  55%) | net  -1582.82 (-0.0362 a bet, -28.8% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  43721 | avg buy 0.126 | sale filled  34.5% (needs about  50%) | net  -1595.35 (-0.0365 a bet, -29.0% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  43721 | avg buy 0.126 | sale filled  28.9% (needs about  41%) | net  -1547.91 (-0.0354 a bet, -28.2% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  43721 | avg buy 0.126 | sale filled  25.2% (needs about  35%) | net  -1472.91 (-0.0337 a bet, -26.8% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  43721 | avg buy 0.126 | sale filled  20.4% (needs about  27%) | net  -1319.21 (-0.0302 a bet, -24.0% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  43721 | avg buy 0.126 | sale filled  15.3% (needs about  19%) | net   -987.06 (-0.0226 a bet, -18.0% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  43721 | avg buy 0.126 | paid  11.6%                      | net   -421.15 (-0.0096 a bet,  -7.7% of the money in) | days positive 1 of 8
+=== strict fill (last in the queue): all bets
+  sale 1 cents higher            bets  41264 | avg buy 0.129 | sale filled  61.8% (needs about  89%) | net  -1412.02 (-0.0342 a bet, -26.6% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  41264 | avg buy 0.129 | sale filled  55.4% (needs about  81%) | net  -1480.55 (-0.0359 a bet, -27.9% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  41264 | avg buy 0.129 | sale filled  50.7% (needs about  75%) | net  -1531.74 (-0.0371 a bet, -28.9% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  41264 | avg buy 0.129 | sale filled  44.0% (needs about  66%) | net  -1581.72 (-0.0383 a bet, -29.8% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  41264 | avg buy 0.129 | sale filled  37.3% (needs about  56%) | net  -1620.49 (-0.0393 a bet, -30.5% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  41264 | avg buy 0.129 | sale filled  34.1% (needs about  51%) | net  -1624.97 (-0.0394 a bet, -30.6% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  41264 | avg buy 0.129 | sale filled  28.7% (needs about  42%) | net  -1575.44 (-0.0382 a bet, -29.7% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  41264 | avg buy 0.129 | sale filled  25.2% (needs about  36%) | net  -1493.77 (-0.0362 a bet, -28.1% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  41264 | avg buy 0.129 | sale filled  20.3% (needs about  28%) | net  -1350.81 (-0.0327 a bet, -25.5% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  41264 | avg buy 0.129 | sale filled  15.3% (needs about  19%) | net  -1033.72 (-0.0251 a bet, -19.5% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  41264 | avg buy 0.129 | paid  11.7%                      | net   -490.47 (-0.0119 a bet,  -9.2% of the money in) | days positive 1 of 8
+=== kind fill: buy 0.00 to 0.10
+  sale 1 cents higher            bets  20462 | avg buy 0.056 | sale filled  56.8% (needs about  82%) | net   -344.24 (-0.0168 a bet, -30.1% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  20462 | avg buy 0.056 | sale filled  44.8% (needs about  70%) | net   -398.40 (-0.0195 a bet, -34.8% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  20462 | avg buy 0.056 | sale filled  38.4% (needs about  62%) | net   -415.53 (-0.0203 a bet, -36.3% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  20462 | avg buy 0.056 | sale filled  30.2% (needs about  50%) | net   -435.93 (-0.0213 a bet, -38.1% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  20462 | avg buy 0.056 | sale filled  23.4% (needs about  39%) | net   -446.45 (-0.0218 a bet, -39.0% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  20462 | avg buy 0.056 | sale filled  20.4% (needs about  34%) | net   -453.45 (-0.0222 a bet, -39.6% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  20462 | avg buy 0.056 | sale filled  15.9% (needs about  26%) | net   -440.15 (-0.0215 a bet, -38.4% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  20462 | avg buy 0.056 | sale filled  13.3% (needs about  21%) | net   -419.61 (-0.0205 a bet, -36.6% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  20462 | avg buy 0.056 | sale filled  10.2% (needs about  15%) | net   -373.40 (-0.0182 a bet, -32.6% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  20462 | avg buy 0.056 | sale filled   7.5% (needs about  10%) | net   -265.54 (-0.0130 a bet, -23.2% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  20462 | avg buy 0.056 | paid   5.1%                      | net   -105.15 (-0.0051 a bet,  -9.2% of the money in) | days positive 2 of 8
+=== kind fill: buy 0.10 to 0.20
+  sale 1 cents higher            bets  14360 | avg buy 0.153 | sale filled  72.2% (needs about  94%) | net   -499.42 (-0.0348 a bet, -22.8% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  14360 | avg buy 0.153 | sale filled  66.1% (needs about  88%) | net   -543.75 (-0.0379 a bet, -24.8% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  14360 | avg buy 0.153 | sale filled  61.5% (needs about  83%) | net   -570.12 (-0.0397 a bet, -26.0% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  14360 | avg buy 0.153 | sale filled  53.9% (needs about  75%) | net   -610.13 (-0.0425 a bet, -27.8% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  14360 | avg buy 0.153 | sale filled  46.5% (needs about  65%) | net   -625.34 (-0.0435 a bet, -28.5% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  14360 | avg buy 0.153 | sale filled  42.5% (needs about  60%) | net   -636.08 (-0.0443 a bet, -29.0% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  14360 | avg buy 0.153 | sale filled  35.9% (needs about  50%) | net   -615.64 (-0.0429 a bet, -28.0% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  14360 | avg buy 0.153 | sale filled  31.3% (needs about  43%) | net   -590.22 (-0.0411 a bet, -26.9% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  14360 | avg buy 0.153 | sale filled  25.2% (needs about  33%) | net   -533.04 (-0.0371 a bet, -24.3% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  14360 | avg buy 0.153 | sale filled  18.5% (needs about  23%) | net   -440.06 (-0.0306 a bet, -20.0% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  14360 | avg buy 0.153 | paid  14.1%                      | net   -170.91 (-0.0119 a bet,  -7.8% of the money in) | days positive 1 of 8
+=== kind fill: buy 0.20 to 0.30
+  sale 1 cents higher            bets   8899 | avg buy 0.242 | sale filled  77.0% (needs about  96%) | net   -425.15 (-0.0478 a bet, -19.7% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets   8899 | avg buy 0.242 | sale filled  73.0% (needs about  92%) | net   -449.43 (-0.0505 a bet, -20.9% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets   8899 | avg buy 0.242 | sale filled  69.2% (needs about  89%) | net   -475.77 (-0.0535 a bet, -22.1% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets   8899 | avg buy 0.242 | sale filled  63.9% (needs about  83%) | net   -489.66 (-0.0550 a bet, -22.7% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets   8899 | avg buy 0.242 | sale filled  57.1% (needs about  75%) | net   -511.03 (-0.0574 a bet, -23.7% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets   8899 | avg buy 0.242 | sale filled  54.0% (needs about  71%) | net   -505.82 (-0.0568 a bet, -23.5% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets   8899 | avg buy 0.242 | sale filled  47.4% (needs about  62%) | net   -492.12 (-0.0553 a bet, -22.8% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets   8899 | avg buy 0.242 | sale filled  42.8% (needs about  55%) | net   -463.08 (-0.0520 a bet, -21.5% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets   8899 | avg buy 0.242 | sale filled  35.9% (needs about  45%) | net   -412.77 (-0.0464 a bet, -19.2% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets   8899 | avg buy 0.242 | sale filled  28.2% (needs about  33%) | net   -281.46 (-0.0316 a bet, -13.1% of the money in) | days positive 0 of 8
+  no sale (settles)              bets   8899 | avg buy 0.242 | paid  22.6%                      | net   -145.09 (-0.0163 a bet,  -6.7% of the money in) | days positive 2 of 8
+=== kind fill: spread 1 cent when the bid goes in
+  sale 1 cents higher            bets  24974 | avg buy 0.113 | sale filled  62.4% (needs about  87%) | net   -699.93 (-0.0280 a bet, -24.8% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  24974 | avg buy 0.113 | sale filled  53.1% (needs about  78%) | net   -774.27 (-0.0310 a bet, -27.4% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  24974 | avg buy 0.113 | sale filled  48.0% (needs about  71%) | net   -809.31 (-0.0324 a bet, -28.7% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  24974 | avg buy 0.113 | sale filled  40.9% (needs about  62%) | net   -838.05 (-0.0336 a bet, -29.7% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  24974 | avg buy 0.113 | sale filled  34.0% (needs about  52%) | net   -871.70 (-0.0349 a bet, -30.9% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  24974 | avg buy 0.113 | sale filled  30.8% (needs about  47%) | net   -884.42 (-0.0354 a bet, -31.3% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  24974 | avg buy 0.113 | sale filled  25.7% (needs about  38%) | net   -855.82 (-0.0343 a bet, -30.3% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  24974 | avg buy 0.113 | sale filled  22.3% (needs about  32%) | net   -824.83 (-0.0330 a bet, -29.2% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  24974 | avg buy 0.113 | sale filled  18.0% (needs about  25%) | net   -732.99 (-0.0294 a bet, -26.0% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  24974 | avg buy 0.113 | sale filled  13.7% (needs about  17%) | net   -538.06 (-0.0215 a bet, -19.1% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  24974 | avg buy 0.113 | paid  10.3%                      | net   -256.47 (-0.0103 a bet,  -9.1% of the money in) | days positive 2 of 8
+=== kind fill: spread 2 cents or more when the bid goes in
+  sale 1 cents higher            bets  18747 | avg buy 0.143 | sale filled  70.7% (needs about  91%) | net   -568.88 (-0.0303 a bet, -21.3% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  18747 | avg buy 0.143 | sale filled  63.4% (needs about  84%) | net   -617.31 (-0.0329 a bet, -23.1% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  18747 | avg buy 0.143 | sale filled  57.9% (needs about  78%) | net   -652.11 (-0.0348 a bet, -24.4% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  18747 | avg buy 0.143 | sale filled  50.1% (needs about  69%) | net   -697.68 (-0.0372 a bet, -26.1% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  18747 | avg buy 0.143 | sale filled  43.0% (needs about  59%) | net   -711.11 (-0.0379 a bet, -26.6% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  18747 | avg buy 0.143 | sale filled  39.4% (needs about  55%) | net   -710.93 (-0.0379 a bet, -26.6% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  18747 | avg buy 0.143 | sale filled  33.1% (needs about  45%) | net   -692.10 (-0.0369 a bet, -25.9% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  18747 | avg buy 0.143 | sale filled  29.2% (needs about  39%) | net   -648.08 (-0.0346 a bet, -24.2% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  18747 | avg buy 0.143 | sale filled  23.5% (needs about  30%) | net   -586.21 (-0.0313 a bet, -21.9% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  18747 | avg buy 0.143 | sale filled  17.5% (needs about  21%) | net   -449.00 (-0.0240 a bet, -16.8% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  18747 | avg buy 0.143 | paid  13.4%                      | net   -164.68 (-0.0088 a bet,  -6.2% of the money in) | days positive 2 of 8
+=== strict fill: buy 0.00 to 0.10
+  sale 1 cents higher            bets  18638 | avg buy 0.057 | sale filled  50.5% (needs about  83%) | net   -390.24 (-0.0209 a bet, -36.5% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  18638 | avg buy 0.057 | sale filled  41.9% (needs about  71%) | net   -414.98 (-0.0223 a bet, -38.8% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  18638 | avg buy 0.057 | sale filled  36.4% (needs about  62%) | net   -425.33 (-0.0228 a bet, -39.8% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  18638 | avg buy 0.057 | sale filled  29.1% (needs about  51%) | net   -437.63 (-0.0235 a bet, -40.9% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  18638 | avg buy 0.057 | sale filled  22.5% (needs about  40%) | net   -449.38 (-0.0241 a bet, -42.0% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  18638 | avg buy 0.057 | sale filled  19.6% (needs about  35%) | net   -454.57 (-0.0244 a bet, -42.5% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  18638 | avg buy 0.057 | sale filled  15.5% (needs about  27%) | net   -438.26 (-0.0235 a bet, -41.0% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  18638 | avg buy 0.057 | sale filled  13.0% (needs about  22%) | net   -418.80 (-0.0225 a bet, -39.2% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  18638 | avg buy 0.057 | sale filled  10.0% (needs about  16%) | net   -381.69 (-0.0205 a bet, -35.7% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  18638 | avg buy 0.057 | sale filled   7.4% (needs about  10%) | net   -280.01 (-0.0150 a bet, -26.2% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  18638 | avg buy 0.057 | paid   5.0%                      | net   -140.36 (-0.0075 a bet, -13.1% of the money in) | days positive 1 of 8
+=== strict fill: buy 0.10 to 0.20
+  sale 1 cents higher            bets  13932 | avg buy 0.153 | sale filled  68.9% (needs about  94%) | net   -557.25 (-0.0400 a bet, -26.1% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  13932 | avg buy 0.153 | sale filled  63.7% (needs about  88%) | net   -584.77 (-0.0420 a bet, -27.4% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  13932 | avg buy 0.153 | sale filled  59.3% (needs about  83%) | net   -607.48 (-0.0436 a bet, -28.5% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  13932 | avg buy 0.153 | sale filled  52.4% (needs about  75%) | net   -636.01 (-0.0457 a bet, -29.8% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  13932 | avg buy 0.153 | sale filled  45.3% (needs about  65%) | net   -646.37 (-0.0464 a bet, -30.3% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  13932 | avg buy 0.153 | sale filled  41.5% (needs about  60%) | net   -652.10 (-0.0468 a bet, -30.6% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  13932 | avg buy 0.153 | sale filled  35.1% (needs about  50%) | net   -632.42 (-0.0454 a bet, -29.7% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  13932 | avg buy 0.153 | sale filled  30.7% (needs about  43%) | net   -603.38 (-0.0433 a bet, -28.3% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  13932 | avg buy 0.153 | sale filled  24.7% (needs about  33%) | net   -552.07 (-0.0396 a bet, -25.9% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  13932 | avg buy 0.153 | sale filled  18.1% (needs about  23%) | net   -463.59 (-0.0333 a bet, -21.8% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  13932 | avg buy 0.153 | paid  13.8%                      | net   -204.17 (-0.0147 a bet,  -9.6% of the money in) | days positive 1 of 8
+=== strict fill: buy 0.20 to 0.30
+  sale 1 cents higher            bets   8694 | avg buy 0.242 | sale filled  74.7% (needs about  96%) | net   -464.53 (-0.0534 a bet, -22.1% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets   8694 | avg buy 0.242 | sale filled  71.1% (needs about  92%) | net   -480.80 (-0.0553 a bet, -22.8% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets   8694 | avg buy 0.242 | sale filled  67.7% (needs about  89%) | net   -498.93 (-0.0574 a bet, -23.7% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets   8694 | avg buy 0.242 | sale filled  62.7% (needs about  83%) | net   -508.08 (-0.0584 a bet, -24.1% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets   8694 | avg buy 0.242 | sale filled  56.2% (needs about  75%) | net   -524.74 (-0.0604 a bet, -24.9% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets   8694 | avg buy 0.242 | sale filled  53.2% (needs about  71%) | net   -518.30 (-0.0596 a bet, -24.6% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets   8694 | avg buy 0.242 | sale filled  46.7% (needs about  62%) | net   -504.76 (-0.0581 a bet, -24.0% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets   8694 | avg buy 0.242 | sale filled  42.3% (needs about  55%) | net   -471.59 (-0.0542 a bet, -22.4% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets   8694 | avg buy 0.242 | sale filled  35.6% (needs about  45%) | net   -417.05 (-0.0480 a bet, -19.8% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets   8694 | avg buy 0.242 | sale filled  28.0% (needs about  33%) | net   -290.12 (-0.0334 a bet, -13.8% of the money in) | days positive 0 of 8
+  no sale (settles)              bets   8694 | avg buy 0.242 | paid  22.5%                      | net   -145.94 (-0.0168 a bet,  -6.9% of the money in) | days positive 2 of 8
+=== strict fill: spread 1 cent when the bid goes in
+  sale 1 cents higher            bets  23743 | avg buy 0.116 | sale filled  58.6% (needs about  88%) | net   -765.22 (-0.0322 a bet, -27.8% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  23743 | avg buy 0.116 | sale filled  51.9% (needs about  79%) | net   -800.67 (-0.0337 a bet, -29.1% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  23743 | avg buy 0.116 | sale filled  47.2% (needs about  72%) | net   -825.68 (-0.0348 a bet, -30.0% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  23743 | avg buy 0.116 | sale filled  40.6% (needs about  62%) | net   -850.16 (-0.0358 a bet, -30.9% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  23743 | avg buy 0.116 | sale filled  33.8% (needs about  52%) | net   -884.39 (-0.0372 a bet, -32.2% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  23743 | avg buy 0.116 | sale filled  30.7% (needs about  47%) | net   -892.55 (-0.0376 a bet, -32.5% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  23743 | avg buy 0.116 | sale filled  25.7% (needs about  39%) | net   -862.15 (-0.0363 a bet, -31.4% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  23743 | avg buy 0.116 | sale filled  22.4% (needs about  33%) | net   -828.80 (-0.0349 a bet, -30.1% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  23743 | avg buy 0.116 | sale filled  18.1% (needs about  25%) | net   -738.97 (-0.0311 a bet, -26.9% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  23743 | avg buy 0.116 | sale filled  13.7% (needs about  18%) | net   -556.52 (-0.0234 a bet, -20.2% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  23743 | avg buy 0.116 | paid  10.4%                      | net   -281.88 (-0.0119 a bet, -10.3% of the money in) | days positive 2 of 8
+=== strict fill: spread 2 cents or more when the bid goes in
+  sale 1 cents higher            bets  17521 | avg buy 0.146 | sale filled  66.2% (needs about  91%) | net   -646.80 (-0.0369 a bet, -25.3% of the money in) | days positive 0 of 8
+  sale 2 cents higher            bets  17521 | avg buy 0.146 | sale filled  60.2% (needs about  85%) | net   -679.88 (-0.0388 a bet, -26.6% of the money in) | days positive 0 of 8
+  sale 3 cents higher            bets  17521 | avg buy 0.146 | sale filled  55.5% (needs about  79%) | net   -706.06 (-0.0403 a bet, -27.6% of the money in) | days positive 0 of 8
+  sale 5 cents higher            bets  17521 | avg buy 0.146 | sale filled  48.7% (needs about  70%) | net   -731.56 (-0.0418 a bet, -28.6% of the money in) | days positive 0 of 8
+  sale 8 cents higher            bets  17521 | avg buy 0.146 | sale filled  42.1% (needs about  60%) | net   -736.10 (-0.0420 a bet, -28.8% of the money in) | days positive 0 of 8
+  sale 10 cents higher           bets  17521 | avg buy 0.146 | sale filled  38.7% (needs about  55%) | net   -732.42 (-0.0418 a bet, -28.6% of the money in) | days positive 0 of 8
+  sale 15 cents higher           bets  17521 | avg buy 0.146 | sale filled  32.7% (needs about  46%) | net   -713.29 (-0.0407 a bet, -27.9% of the money in) | days positive 0 of 8
+  sale 20 cents higher           bets  17521 | avg buy 0.146 | sale filled  28.9% (needs about  40%) | net   -664.97 (-0.0380 a bet, -26.0% of the money in) | days positive 0 of 8
+  sale 30 cents higher           bets  17521 | avg buy 0.146 | sale filled  23.3% (needs about  31%) | net   -611.84 (-0.0349 a bet, -23.9% of the money in) | days positive 0 of 8
+  sale 50 cents higher           bets  17521 | avg buy 0.146 | sale filled  17.5% (needs about  22%) | net   -477.20 (-0.0272 a bet, -18.7% of the money in) | days positive 0 of 8
+  no sale (settles)              bets  17521 | avg buy 0.146 | paid  13.4%                      | net   -208.59 (-0.0119 a bet,  -8.2% of the money in) | days positive 2 of 8
+DONE
