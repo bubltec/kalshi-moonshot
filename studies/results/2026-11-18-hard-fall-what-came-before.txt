@@ -17,4 +17,13 @@ window: 2026-11-09 to 2026-11-16; 2862 first falls of a favourite with a path be
   all along, 1 to 3 min left                           falls  152 | sell at once 0.418 | 30 s later 0.407 | hold 0.382 (38% came back) | hold less sell -0.036
   lost it before, over 3 min left                      falls 1147 | sell at once 0.445 | 30 s later 0.452 | hold 0.491 (49% came back) | hold less sell +0.046
   lost it before, 1 to 3 min left                      falls 1194 | sell at once 0.426 | 30 s later 0.434 | hold 0.446 (45% came back) | hold less sell +0.021
+--- by the number of reversals before the fall (user: "i think it depends on how many waves too, did we count?")
+  none reversal(s)                                     falls  385 | sell at once 0.439 | 30 s later 0.489 | hold 0.535 (54% came back) | hold less sell +0.096
+  1 reversal(s)                                        falls  299 | sell at once 0.437 | 30 s later 0.454 | hold 0.518 (52% came back) | hold less sell +0.081
+  2 reversal(s)                                        falls  360 | sell at once 0.434 | 30 s later 0.432 | hold 0.503 (50% came back) | hold less sell +0.069
+  3 reversal(s)                                        falls  393 | sell at once 0.434 | 30 s later 0.437 | hold 0.435 (44% came back) | hold less sell +0.001
+  4 reversal(s)                                        falls  320 | sell at once 0.436 | 30 s later 0.435 | hold 0.484 (48% came back) | hold less sell +0.048
+  5 or 6 reversal(s)                                   falls  595 | sell at once 0.436 | 30 s later 0.438 | hold 0.410 (41% came back) | hold less sell -0.026
+  7 to 9 reversal(s)                                   falls  433 | sell at once 0.428 | 30 s later 0.423 | hold 0.450 (45% came back) | hold less sell +0.022
+  10 or more reversal(s)                               falls   77 | sell at once 0.437 | 30 s later 0.442 | hold 0.468 (47% came back) | hold less sell +0.031
 DONE

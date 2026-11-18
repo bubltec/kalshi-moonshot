@@ -99,4 +99,7 @@ show("all along, over 3 min left", [e for e in ev if not e["under"] and e["left"
 show("all along, 1 to 3 min left", [e for e in ev if not e["under"] and e["left"] <= 180])
 show("lost it before, over 3 min left", [e for e in ev if e["under"] and e["left"] > 180])
 show("lost it before, 1 to 3 min left", [e for e in ev if e["under"] and e["left"] <= 180])
+print("--- by the number of reversals before the fall (user: \"i think it depends on how many waves too, did we count?\")")
+for lo, hi, name in ((0, 0, "none"), (1, 1, "1"), (2, 2, "2"), (3, 3, "3"), (4, 4, "4"), (5, 6, "5 or 6"), (7, 9, "7 to 9"), (10, 999, "10 or more")):
+    show(f"{name} reversal(s)", [e for e in ev if lo <= e["turns"] <= hi])
 print("DONE")
