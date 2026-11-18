@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import overrides
+from . import overrides, sellchain
 from .config import Settings
 
 # Paper twin of the commodity lane. It reads Polymarket and never places an order, even if named in LIVE_LANES.
@@ -197,6 +197,7 @@ class LaneSpec:
     wave_pos_min: float = 0.0  # with the wave rule: buy only when the side sits at or above this fraction of its range (0 = off). With wave_quote and wave_pos_max 0.8, 0.2 is "off its low and not at its high": the three positions that paid in the table above (at its low +1.9%, at its high +3.5%)
     buy_module: str = ""  # 2026-11-17 (user: "we should be able to have multiple modules. And assign a lane to a module"): the name of a module in strategies.toml ([module.<name>]: `steps`, a `label`, and any lane settings as its defaults). The lane's buy_chain is the module's steps. Empty = no module
     exit_module: str = ""  # 2026-11-18 (user: "we need a sell module which covers profit and loss"; "you mentioned it above, exit module ... do that"): the name of an exit module in strategies.toml ([exit.<name>], with a `profit` and a `loss` part); its exit settings are this lane's unless the lane writes its own (_with_exit). The name itself decides nothing
+    sell_chain: tuple[str, ...] = ()  # 2026-11-18 (user: "we also need to build a sell module, since we're refactoring this flow"): the risk exit's sale as named steps in the lane's own order (sellchain.py), e.g. ["profit_take", "trail", "long_hold", "loss"]. On every risk check the steps are asked in order: a step sells, holds (nothing is sold on that check) or passes to the next. A step left out is not asked; each step still reads its own settings (curve_take, curve_risk_sell, ...). A lane on an exit module that holds `steps` takes them as its chain. Empty = the default order (never_ahead, under_even, profit_take, trail, long_hold, loss), which is what every lane did before the chain, with its sale reasons unchanged; a lane with a chain gets the chain and the step that sold at the end of its sale reason
     buy_chain: tuple[str, ...] = ()  # 2026-11-17 (user: "ladder should not be the entry point"; "the risk score makes way more sense to go FIRST"; "you need to write new code that is modular and can fit in logic in any order"): the buy as named steps in the lane's own order (buychain.py), e.g. ["risk_score", "price", "ladder"]. Both sides start alive; each step is asked of the sides still alive, a no puts a side out, and a side alive after the last step is bought. With a chain set the estimator's own screen is not run in the review (the first step puts the sides forward) and the steps replace this lane's edge rule, no-buy check, risk score rule and trend checks in the decision; the steps read those same settings. Empty = the lane decides as it always has
     entry_risk_trend: float = 0.0  # 2026-11-17 SHADOW until entry_risk_trend_live (user, on the entry trend check and its fixed 2-minute noise window: "it shouldn't even care about the entry trend by itself. its the risk factor"; "i want to build something that replaces it"; of the two risk numbers, "Exit's risk factor"): above 0, the buy reads the direction of the side's risk as the exit reads it (curverisk.risk: the worse of Kalshi's bid net of the fee and the long layer, the price counted in full) over a look back of this share of the TIME LEFT, in the market's own typical move for that span (the moves before the look back). In shadow every decision's note carries the reading, what it would do and the old price trend beside it, and nothing is gated. A first setting, not fitted. 0 = off
     entry_risk_trend_live: bool = False  # true: the risk trend decides in place of entry_trend_z / entry_trend_min (a buy needs a risk that is holding or improving; a worsening one, an anomaly or no reading is not bought). The live switch is the user's
@@ -419,12 +420,13 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed", "value_exit_bid", "price_skip"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series", "ms_rule", "buy_chain"):
+    for key in ("series", "sides", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series", "ms_rule", "buy_chain", "sell_chain"):
         if key in row:
             row[key] = tuple(row[key])
     bad = [x for x in row.get("buy_chain", ()) if x not in BUY_STEPS]
     if bad or len(set(row.get("buy_chain", ()))) != len(row.get("buy_chain", ())):
         raise ValueError(f"lane {name!r}: buy_chain names {bad or 'a step twice'}; the steps are {', '.join(BUY_STEPS)}, each at most once")
+    sellchain.check(row.get("sell_chain", ()), f"lane {name!r}")
     for window in row.get("blackout_et", ()):
         try:
             parse_window(window)
@@ -512,6 +514,8 @@ def _with_exit(row: dict[str, Any], name: str, exits: dict[str, Any]) -> dict[st
         [exit.risk_exit.loss]
         curve_risk_sell = 0.10           # the settings that sell a loss, or hold one
 
+    A module may also hold `steps` at the top: the sale's steps in the order they are asked (sellchain.py), which become the lane's sell_chain; a lane on such a module does not also write sell_chain. Without `steps` the lane is on the default order.
+
     Every setting the module writes is the lane's unless the lane writes its own. A module must have both parts (either may be empty: the part is then the defaults), holds exit settings only, each in the part it belongs to (exit_part), and writes none twice. Many lanes may name one module; a lane names at most one."""
     module = row.get("exit_module")
     if not module:
@@ -520,6 +524,13 @@ def _with_exit(row: dict[str, Any], name: str, exits: dict[str, Any]) -> dict[st
         raise ValueError(f"lane {name!r}: exit_module = {module!r}, which is not an exit module in strategies.toml (it has: {', '.join(sorted(exits)) or 'none'})")
     mod = dict(exits[module])
     mod.pop("label", None)
+    steps = mod.pop("steps", None)  # the sale's steps in the module's order (sellchain.py); a module without them leaves the lane on the default order
+    if steps is not None:
+        if "sell_chain" in row:
+            raise ValueError(f"lane {name!r}: it names exit_module {module!r}, which has `steps`, and writes sell_chain too; the module's steps are the chain")
+        if not steps:
+            raise ValueError(f"exit module {module!r}: `steps` is empty; leave the line out for the default order, or name the steps (of {', '.join(sellchain.SELL_STEPS)})")
+        sellchain.check(steps, f"exit module {module!r}")
     flat: dict[str, Any] = {}
     for part in EXIT_PARTS:
         got = mod.pop(part, None)
@@ -538,7 +549,7 @@ def _with_exit(row: dict[str, Any], name: str, exits: dict[str, Any]) -> dict[st
         if k in flat:
             raise ValueError(f"exit module {module!r}: {k!r} is written twice (at the top and in a part)")
         flat[k] = v
-    return {**flat, **row}
+    return {**flat, **row, "sell_chain": list(steps)} if steps is not None else {**flat, **row}
 
 
 def lane_specs_from(s: Settings, strategies_toml: str | None, overrides_json: str | None = None) -> dict[str, LaneSpec]:
@@ -671,7 +682,7 @@ _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "buy_rest_top_up", "min_edge_room", "record_adjust", "curve_shadow", "confidence_shadow", "accumulate_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
     "exit_module", "risk_score_buy", "risk_score_edge", "curve_risk_score", "curve_take_sure_slide",
-    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_source", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "value_exit", "value_exit_bid", "value_exit_gain_x", "value_exit_high", "value_exit_high_left", "value_exit_min_gain", "entry_checks_exit", "rebuy_opposite_after_gain_seconds", "shock_memory", "shock_persist", "hour_drift_q", "buy_curve_edge_min", "buy_flat_trend_pct", "buy_flat_trend_share", "nudge_hour_factor", "nudge_units", "curve_risk_long_scales", "curve_risk_line_live", "buy_chain", "buy_module", "curve_risk_early_hold", "entry_run_max", "entry_rotation_min", "entry_view_scales", "entry_spike_view", "entry_crossed_view", "entry_risk_trend", "entry_risk_trend_live", "entry_spike_min", "entry_cushion_edge_min", "entry_scenario_view", "curve_take_sure", "curve_take_sure_late", "curve_take_early_bid", "curve_risk_drop", "curve_risk_drop_share", "curve_risk_never_ahead", "curve_risk_under_even", "curve_risk_under_even_live", "curve_take_trail", "curve_take_trail_live", "price_skip", "curve_take_early_seconds", "buy_rest_queue_note", "buy_rest_queue_max", "buy_rest_queue_quantile", "buy_rest_queue_hours", "perp_lead_buy", "curve_exit", "curve_exit_scales", "curve_exit_persist", "curve_exit_last", "curve_exit_near", "curve_drop_units", "curve_drop_seconds", "curve_drop_margin_units", "curve_drop_persist", "curve_rest", "curve_gap", "curve_gap_persist", "curve_risk_sell", "curve_risk_live", "curve_risk_spot_weight", "curve_risk_history", "curve_risk_max_loss", "curve_risk_min_profit", "curve_risk_stop_hold", "curve_take", "curve_take_slope_share", "curve_take_cushion", "stretch_max", "squeeze_max", "curve_risk_confirm", "curve_behind_last", "curve_behind_chance", "late_drop_units", "late_drop_seconds", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "wave_quote", "flip_skip_minutes", "flip_led_share", "entry_led_max", "wave_pos_min", "wave_turn_seconds", "wave_turn_back", "wave_market_gate", "curve_wait_share", "curve_wait_severe", "curve_wait_default", "curve_drop_comeback", "curve_drop_comeback_min", "curve_drop_comeback_hold", "spot_source", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_source", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "value_exit", "value_exit_bid", "value_exit_gain_x", "value_exit_high", "value_exit_high_left", "value_exit_min_gain", "entry_checks_exit", "rebuy_opposite_after_gain_seconds", "shock_memory", "shock_persist", "hour_drift_q", "buy_curve_edge_min", "buy_flat_trend_pct", "buy_flat_trend_share", "nudge_hour_factor", "nudge_units", "curve_risk_long_scales", "curve_risk_line_live", "buy_chain", "buy_module", "sell_chain", "curve_risk_early_hold", "entry_run_max", "entry_rotation_min", "entry_view_scales", "entry_spike_view", "entry_crossed_view", "entry_risk_trend", "entry_risk_trend_live", "entry_spike_min", "entry_cushion_edge_min", "entry_scenario_view", "curve_take_sure", "curve_take_sure_late", "curve_take_early_bid", "curve_risk_drop", "curve_risk_drop_share", "curve_risk_never_ahead", "curve_risk_under_even", "curve_risk_under_even_live", "curve_take_trail", "curve_take_trail_live", "price_skip", "curve_take_early_seconds", "buy_rest_queue_note", "buy_rest_queue_max", "buy_rest_queue_quantile", "buy_rest_queue_hours", "perp_lead_buy", "curve_exit", "curve_exit_scales", "curve_exit_persist", "curve_exit_last", "curve_exit_near", "curve_drop_units", "curve_drop_seconds", "curve_drop_margin_units", "curve_drop_persist", "curve_rest", "curve_gap", "curve_gap_persist", "curve_risk_sell", "curve_risk_live", "curve_risk_spot_weight", "curve_risk_history", "curve_risk_max_loss", "curve_risk_min_profit", "curve_risk_stop_hold", "curve_take", "curve_take_slope_share", "curve_take_cushion", "stretch_max", "squeeze_max", "curve_risk_confirm", "curve_behind_last", "curve_behind_chance", "late_drop_units", "late_drop_seconds", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "wave_quote", "flip_skip_minutes", "flip_led_share", "entry_led_max", "wave_pos_min", "wave_turn_seconds", "wave_turn_back", "wave_market_gate", "curve_wait_share", "curve_wait_severe", "curve_wait_default", "curve_drop_comeback", "curve_drop_comeback_min", "curve_drop_comeback_hold", "spot_source", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
 })
 
 
@@ -764,6 +775,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out["price_skip"] = repr(spec.price_skip)
     if spec.buy_chain:  # reported only when set, so a lane without a chain keeps the version it had
         out["buy_chain"] = repr(spec.buy_chain)
+    if spec.sell_chain:  # reported only when set, so a lane without a sell chain keeps the version it had
+        out["sell_chain"] = repr(spec.sell_chain)
     if not spec.curve_risk_line_live:  # reported only when the line sale is off, so every other lane keeps the version it had
         out["curve_risk_line_live"] = "False"
     if spec.curve_risk_under_even > 0 and spec.curve_risk_under_even_live:  # in shadow it changes nothing the lane does

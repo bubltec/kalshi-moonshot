@@ -35,6 +35,12 @@ Things found while simplifying the bot that still need revising. Started 2026-11
 15. **Look rate after deploy.** The look rate is now 5 s for every lane; three paper lanes had 20 to 30 s. Check the host's load after the deploy.
 16. **A test that depends on the time of day.** `tests/test_history.py::test_the_bot_schedules_history_at_a_priority_below_trading` passed at 10:05 ET and failed from about 10:40 ET on 2026-11-18 on the same code (it also fails on the commit before, with no data folder). Find what it reads from the clock and pin it.
 
+### Sell logic
+19. **Sale rules outside the sell chain.** The sell chain (`sellchain.py`) covers the risk exit's decision only. `watcher.ProfitWatcher.on_event` still asks every other sale rule in one fixed `or` chain on each quote (the stop, the fast crash, the drop, the bounce, the spike take, unstable, hover, then the risk exit, strike-through, the cross take, the shock, wrong side, the late drop, the settlement guard), and a second one on each spot tick (shock, wrong side, the value exit, the curve exit, the risk exit). No lane can order or leave out those; most are off on every current lane. Decide which are still used, remove the rest (CLAUDE.md rule 8), and bring what remains into the chain.
+20. **The `loss` step is four rules in one.** The max loss, the line, their wait and the early hold share one wait and one latch (`t.risk_since`), so they were moved as one step. Splitting them needs the wait made a thing of its own first.
+21. **A chain lane's shadow and held records do not name the step.** The note is on a sale's reason only. The rows in `data/risk_shadow.jsonl` (would-sell, held) carry `kind` for some rules and nothing for the profit take and the line.
+22. **The two paper exit modules now have `steps`**, so `crypto_risk_score` and `crypto_low_swing` report `sell_chain` in their settings: each lane's version changes at the next deploy. `round_trip` has no `loss` step: a loser can no longer be sold at a bid of 0.05 (the 0.04 line could be reached there after the fee).
+
 ## Done
 
 - 2026-11-18 `5747b19`: a paper lane's own price was handed to model lanes as the model's chance.
@@ -45,3 +51,4 @@ Things found while simplifying the bot that still need revising. Started 2026-11
 - 2026-11-18 `213dc1a`: the risk score reads Kalshi's perp on commodities (not deployed at the time of writing).
 - 2026-11-18: the lane switch `entry_socket` removed (the socket is how two-level lanes run); the look rate is one global setting, `ENTRY_MIN_GAP_SECONDS` (not deployed at the time of writing).
 - 2026-11-18 `c55fc97`: buy steps `perp_worth` (the Kalshi perp check as a step) and `calm` (the anomaly state of rule 3 in place of a fixed `max_vol_rel`); module `commodity_model`, exit module `commodity_exit` and paper lane `commodity_model` in the lane file (not deployed at the time of writing; needs `--build` and the lane in `PAPER_LANE_NAMES`).
+- 2026-11-18: the sell chain. The risk exit's decision as named steps (`never_ahead`, `under_even`, `profit_take`, `trail`, `long_hold`, `loss`) a lane asks in its own order: lane field `sell_chain`, or `steps` in its exit module (`sellchain.py`; the step bodies are `ProfitWatcher._sell_<name>`, moved out of `_risk_decide`). No chain = the old order and the old reasons; a chain lane's sale reason ends with the chain and the step that sold. Not deployed at the time of writing: the lane file now names `steps` in two exit modules, so it needs `--build` (an old image refuses it).

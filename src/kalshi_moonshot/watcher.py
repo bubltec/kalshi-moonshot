@@ -37,6 +37,7 @@ from . import (
     perpref,
     quoteshock,
     runner,
+    sellchain,
     settlement,
     variants,
     widthfit,
@@ -115,6 +116,18 @@ def perp_index(series: str) -> str | None:
     base = series.removeprefix("KX").removesuffix("15M")
     ix = f"KP_{base}"
     return ix if ix in perpref.FEEDS and series.endswith("15M") else None
+
+
+class _SellWalk:
+    """What the sale's steps share on one risk check (ProfitWatcher._risk_decide): the readings every step may use, and what a step computed for the steps after it. Made new on every check."""
+
+    __slots__ = ("allowed", "bar", "basis", "early", "gain", "hour_scale", "long_chance", "look", "net", "rebuy", "room", "shared", "squeezed", "take_state", "taken", "unit")
+
+    def __init__(self, look: float, basis: float, net: float, long_chance: float | None) -> None:
+        self.look, self.basis, self.net, self.long_chance = look, basis, net, long_chance
+        self.shared, self.allowed, self.squeezed, self.hour_scale = False, 0.0, "", 1.0  # the slope history and the squeeze allowance (_sell_shared)
+        self.take_state, self.gain, self.room, self.rebuy, self.unit, self.bar = False, 0.0, 0.0, 0.0, None, 0.0  # the gain's readings (_sell_take_state)
+        self.taken, self.early = False, False  # what the profit take decided on this check, for the trail
 
 
 @dataclass
@@ -228,6 +241,8 @@ class Target:
     curve_comeback_hold: float = 240.0
     risk_sell: float = -1.0  # lane curve_risk_sell (-1 = off): the single risk exit's line (curverisk.py)
     risk_live: bool = False
+    sell_chain: tuple = ()  # the sale's steps in the lane's own order (lane field sell_chain, or its exit module's steps; sellchain.py); empty = the default order, and the sale reasons as they always were
+    sell_module: str = ""  # the lane's exit module, named in a chain lane's sale note
     risk_line_live: bool = True  # false: the line sale is logged and recorded, not made (lane field curve_risk_line_live); the max loss and the profit side are not affected
     risk_spot_weight: float = 0.5
     risk_history: bool = True
@@ -1023,7 +1038,7 @@ class ProfitWatcher:
         return t.risk_unit
 
     def _risk_decide(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, long_chance: float | None = None) -> str | None:
-        """The sale decision both risk paths share: the watch line every 10 s, the max loss (sells at once), the line (sells after the scaled wait), and in shadow one logged and recorded would-sell per bet (data/risk_shadow.jsonl, for scoring against what the bet really got)."""
+        """The sale decision both risk paths share: the watch line every 10 s, then the sale's steps in the bet's own order (sellchain.py; lane field sell_chain, or the default order: never ahead, under even, the profit take, the trail, the long layer's hold, the loss sale). A step answers a sale (returned), a hold (nothing is sold on this check) or nothing (the next step is asked). A lane with no chain gets the default order and its reasons as they always were; a lane with a chain gets the chain's note at the end of its sale reason."""
         if now - t.risk_noted >= 10.0:
             t.risk_noted = now
             log.info("curve risk watch %s %s, %.0fs left: chance %.3f (%s worse; price %.3f, spot %.3f, history x%.2f, long layer %s), line %.2f, result %+.1f%% of cost%s", t.ticker, t.lane, left, r.q, r.worse, r.q_price, r.q_spot, t.risk_hist, "n/a" if long_chance is None else f"{long_chance:.3f}", t.risk_sell, pnl * 100.0, "" if t.risk_live else " [shadow]")
@@ -1032,14 +1047,39 @@ class ProfitWatcher:
         look = t.risk_take_slope * left  # the look back for the slope shrinks with the time left
         basis = t.entry + fee_per_contract(t.entry)
         net = bid - fee_per_contract(bid)
+        c = _SellWalk(look, basis, net, long_chance)
+        chain = tuple(getattr(t, "sell_chain", ()) or ())
+        for name in sellchain.order_of(chain):
+            got = _SELL[name](self, t, r, bid, now, left, pnl, c)
+            if got is sellchain.HOLD:
+                return None
+            if got:
+                return sellchain.tagged(got, chain, getattr(t, "sell_module", ""), name) if chain else got
+        return None
+
+    def _sell_never_ahead(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step never_ahead: the never-ahead sale (_risk_never_ahead), asked only of a lane that sets curve_risk_never_ahead."""
+        net, basis = c.net, c.basis
         if getattr(t, "risk_never_ahead", 0.0) > 0:
             why = self._risk_never_ahead(t, r, bid, now, left, pnl, net, basis)
             if why:
                 return why
+        return None
+
+    def _sell_under_even(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step under_even: the under-even sale (_risk_under_even), asked only of a lane that sets curve_risk_under_even."""
         if getattr(t, "risk_under_even", 0.0) > 0:
             why = self._risk_under_even(t, r, bid, now, left, pnl)
             if why:
                 return why
+        return None
+
+    def _sell_shared(self, t: Target, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> None:
+        """What the profit take, the trail, the long hold and the loss sale share, done once a check by the first of them that is asked (in the default order: after never_ahead and under_even, as before the chain): the bid goes into the slope's history and the squeeze allowance is read."""
+        if c.shared:
+            return
+        c.shared = True
+        look = c.look
         if t.risk_take or t.risk_squeeze > 0 or t.risk_nudge_units > 0:
             t.risk_take_hist.append((now, bid))
             while t.risk_take_hist and t.risk_take_hist[0][0] < now - max(60.0, 2.0 * look):
@@ -1054,69 +1094,107 @@ class ProfitWatcher:
                 allowed = nudge_in_units(t.risk_nudge_units, unit_now, 1.0 if sliding else 0.0, curverisk.squeeze_clock(left, 900.0), hour_scale)
             else:
                 allowed = nudge(t.risk_squeeze, 1.0 if sliding else 0.0, curverisk.squeeze_clock(left, 900.0), hour_scale)
-        if t.risk_take:  # the profit take comes before the long layer: a bet that is well ahead is the one to cash, whatever the hour says
+        c.allowed, c.squeezed, c.hour_scale = allowed, squeezed, hour_scale
+
+    def _sell_take_state(self, t: Target, bid: float, now: float, left: float, c: _SellWalk) -> tuple[float, float, float, float | None, float]:
+        """What the profit take and the trail share, done once a check by the first of them that is asked: the gain, the room, the fee to buy back, the market's typical minute, the take's bar, and the bet's high since the buy. (gain, room, rebuy, unit, bar)."""
+        if not c.take_state:
+            c.take_state = True
+            net, basis = c.net, c.basis
             gain = net - basis
             room, rebuy = 1.0 - basis, fee_per_contract(bid)
             unit = self._risk_unit(t, now)
             bar = curverisk.take_bar(gain, room, left, 900.0, unit)
             t.risk_take_peak = max(t.risk_take_peak, bid)
-            wants = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit)
-            flat_ok = wants and (left <= 900.0 * curverisk.LATE_SHARE or bid >= curverisk.HIGH_BID) and curverisk.flat_holds(net, self._take_cushion(t, now, left, net), unit, left)  # in the last fifth a flat bid is held while the spot's cushion backs the price; a thin cushion sells (user, 2026-11-14)
-            taken = wants and not curverisk.still_rising(t.risk_take_hist, now, look, unit, flat_ok)
-            early = pnl > 0 and bid >= CURVE_MIN_BID and t.risk_take_early_bid > 0 and bid >= t.risk_take_early_bid and 900.0 - left <= t.risk_take_early_seconds
-            if early:
-                taken = True  # an early 0.95 is not a sure win: cash it, the re-entry buys back
-            # The sure hold is a latch, not a line (2026-11-15 night, user: "if it drops to like 89 for a second it will sell? We don't want that behavior to be a hard stop"): once a bet has been a sure win, a dip does not end it. It is released only by a fall under the level that latched it by more than the market's own swing over the time left (the typical minute x sqrt(left / 60)), the same unit the take's late cap reads; with no reading of the unit it stays latched. The max-loss stop is untouched.
-            if not early and curverisk.sure_win(bid, left, t.risk_take_sure, t.risk_take_sure_late, slide=t.risk_take_sure_slide):
-                t.risk_sure_latched = True
-                t.risk_sure_level = t.risk_take_sure if t.risk_take_sure > 0 and bid >= t.risk_take_sure else (curverisk.sure_bar(left, t.risk_take_sure_late, slide=t.risk_take_sure_slide) or t.risk_take_sure_late)
-            elif t.risk_sure_latched and unit is not None and unit > 0 and left > 0 and bid < t.risk_sure_level - unit * math.sqrt(left / 60.0):
-                t.risk_sure_latched = False
-            if taken and not early and t.risk_sure_latched:
-                taken = False  # a sure win: the bid is far enough up that the sale gives up cents to a dollar and pays a fee for protection the price already carries
-                self._risk_held(t, r, bid, now, left, pnl, "sure hold", f"a profit take was wanted at a bid of {bid:.2f} and held: a sure win latched at {t.risk_sure_level:g}, held to settlement")  # a stored row (data/risk_shadow.jsonl), so the hold's effect can be scored on the bets it touched
-                if not t.risk_sure_logged:
-                    t.risk_sure_logged = True
-                    log.info("curve risk: %s %s profit take held, a sure win (latched at %.2f): bid %.2f, %.0fs left; held to settlement through a dip, released only by a fall past the market's own swing", t.ticker, t.lane, t.risk_sure_level, bid, left)
-            cushion = ""
-            if early:
-                cushion = f" [early take: the bid {bid:.2f} is at or over the lane's {t.risk_take_early_bid:g} with {900.0 - left:.0f}s of the market gone (the first {t.risk_take_early_seconds:.0f}s): cashed to be bought back]"
-            elif taken and t.risk_take_cushion:
-                chance = self._take_cushion(t, now, left, net)
-                if chance is not None and curverisk.cushion_holds(chance, net, curverisk.CUSHION_NUDGE):
-                    taken = False  # the spot's cushion says the bet is worth more held than sold
-                    if not t.risk_take_held:
-                        t.risk_take_held = True
-                        log.info("curve risk: %s %s profit take held by the cushion: the spot's chance %.3f is over (or within the allowance of) the %.3f the sale pays (bid %.2f, %.0fs left)", t.ticker, t.lane, chance, net, bid, left)
-                elif chance is not None:
-                    cushion = f" [cushion: the spot's chance {chance:.3f} is not within {curverisk.CUSHION_NUDGE:g} of the {net:.3f} the sale pays]"
-                else:
-                    cushion = " [cushion: no spot reading, so the check did not apply]"  # 2026-11-14: SOL 21:45 sold with the check on and a chance over the bid; a sale has to say whether the check ran
-            if taken:
-                used = 1.0 - left / 900.0
-                reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room against a bar of {bar / max(room, 1e-9) * 100.0:.0f}% ({'half the room: what is left to win is inside this market swing over the time left' if bar < used * room - 1e-9 else f'{used * 100.0:.0f}% of the market is gone'}, {left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost{cushion}"
-                if t.risk_live:
-                    self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True)
-                    return reason
-                if not t.risk_logged:
-                    t.risk_logged = True
-                    log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
-                    self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False)
-            if not taken and not early and not t.risk_sure_latched and bid >= CURVE_MIN_BID and curverisk.trail_hit(gain, rebuy, bid, t.risk_take_peak, unit, t.risk_take_trail):
-                # The trail: the bet is ahead and has come off its high by the market's own swing. It needs no bar (the bar asks for more the later it is, and a late buy starts under a high one), and the cushion check does not hold it: the replay it rests on had none.
-                reason = f"curve risk exit (profit take): trail: the bet is {gain:.3f} a contract ahead and the bid {bid:.2f} is {t.risk_take_peak - bid:.2f} under its {t.risk_take_peak:.2f} high since the buy, at least {t.risk_take_trail:g} typical minute(s) of this market ({unit:.3f}); {left:.0f}s left"
-                if t.risk_live and t.risk_take_trail_live:
-                    self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="trail")
-                    return reason
-                if not t.risk_trail_logged:
-                    t.risk_trail_logged = True
-                    log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
-                    self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="trail")
+            c.gain, c.room, c.rebuy, c.unit, c.bar = gain, room, rebuy, unit, bar
+        return c.gain, c.room, c.rebuy, c.unit, c.bar
+
+    def _sell_profit_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step profit_take (lane field curve_take): a gain over its bar is taken once the bid has stopped rising; with it the early-bid take, the sure-win latch and the cushion hold. In shadow (curve_risk_live off) it logs and records one would-sell and sells nothing."""
+        ProfitWatcher._sell_shared(self, t, bid, now, left, pnl, c)
+        if not t.risk_take:  # the profit take comes before the long layer: a bet that is well ahead is the one to cash, whatever the hour says
+            return None
+        gain, room, rebuy, unit, bar = ProfitWatcher._sell_take_state(self, t, bid, now, left, c)
+        look, net = c.look, c.net
+        wants = pnl > 0 and bid >= CURVE_MIN_BID and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit)
+        flat_ok = wants and (left <= 900.0 * curverisk.LATE_SHARE or bid >= curverisk.HIGH_BID) and curverisk.flat_holds(net, self._take_cushion(t, now, left, net), unit, left)  # in the last fifth a flat bid is held while the spot's cushion backs the price; a thin cushion sells (user, 2026-11-14)
+        taken = wants and not curverisk.still_rising(t.risk_take_hist, now, look, unit, flat_ok)
+        early = pnl > 0 and bid >= CURVE_MIN_BID and t.risk_take_early_bid > 0 and bid >= t.risk_take_early_bid and 900.0 - left <= t.risk_take_early_seconds
+        if early:
+            taken = True  # an early 0.95 is not a sure win: cash it, the re-entry buys back
+        # The sure hold is a latch, not a line (2026-11-15 night, user: "if it drops to like 89 for a second it will sell? We don't want that behavior to be a hard stop"): once a bet has been a sure win, a dip does not end it. It is released only by a fall under the level that latched it by more than the market's own swing over the time left (the typical minute x sqrt(left / 60)), the same unit the take's late cap reads; with no reading of the unit it stays latched. The max-loss stop is untouched.
+        if not early and curverisk.sure_win(bid, left, t.risk_take_sure, t.risk_take_sure_late, slide=t.risk_take_sure_slide):
+            t.risk_sure_latched = True
+            t.risk_sure_level = t.risk_take_sure if t.risk_take_sure > 0 and bid >= t.risk_take_sure else (curverisk.sure_bar(left, t.risk_take_sure_late, slide=t.risk_take_sure_slide) or t.risk_take_sure_late)
+        elif t.risk_sure_latched and unit is not None and unit > 0 and left > 0 and bid < t.risk_sure_level - unit * math.sqrt(left / 60.0):
+            t.risk_sure_latched = False
+        if taken and not early and t.risk_sure_latched:
+            taken = False  # a sure win: the bid is far enough up that the sale gives up cents to a dollar and pays a fee for protection the price already carries
+            self._risk_held(t, r, bid, now, left, pnl, "sure hold", f"a profit take was wanted at a bid of {bid:.2f} and held: a sure win latched at {t.risk_sure_level:g}, held to settlement")  # a stored row (data/risk_shadow.jsonl), so the hold's effect can be scored on the bets it touched
+            if not t.risk_sure_logged:
+                t.risk_sure_logged = True
+                log.info("curve risk: %s %s profit take held, a sure win (latched at %.2f): bid %.2f, %.0fs left; held to settlement through a dip, released only by a fall past the market's own swing", t.ticker, t.lane, t.risk_sure_level, bid, left)
+        cushion = ""
+        if early:
+            cushion = f" [early take: the bid {bid:.2f} is at or over the lane's {t.risk_take_early_bid:g} with {900.0 - left:.0f}s of the market gone (the first {t.risk_take_early_seconds:.0f}s): cashed to be bought back]"
+        elif taken and t.risk_take_cushion:
+            chance = self._take_cushion(t, now, left, net)
+            if chance is not None and curverisk.cushion_holds(chance, net, curverisk.CUSHION_NUDGE):
+                taken = False  # the spot's cushion says the bet is worth more held than sold
+                if not t.risk_take_held:
+                    t.risk_take_held = True
+                    log.info("curve risk: %s %s profit take held by the cushion: the spot's chance %.3f is over (or within the allowance of) the %.3f the sale pays (bid %.2f, %.0fs left)", t.ticker, t.lane, chance, net, bid, left)
+            elif chance is not None:
+                cushion = f" [cushion: the spot's chance {chance:.3f} is not within {curverisk.CUSHION_NUDGE:g} of the {net:.3f} the sale pays]"
+            else:
+                cushion = " [cushion: no spot reading, so the check did not apply]"  # 2026-11-14: SOL 21:45 sold with the check on and a chance over the bid; a sale has to say whether the check ran
+        c.taken, c.early = taken, early  # the trail reads these when it is asked after this step
+        if taken:
+            used = 1.0 - left / 900.0
+            reason = f"curve risk exit (profit take): the bet is {gain:.3f} a contract ahead, {gain / max(room, 1e-9) * 100.0:.0f}% of its {room:.3f} room against a bar of {bar / max(room, 1e-9) * 100.0:.0f}% ({'half the room: what is left to win is inside this market swing over the time left' if bar < used * room - 1e-9 else f'{used * 100.0:.0f}% of the market is gone'}, {left:.0f}s left), more than the {rebuy:.3f} fee to buy it back; the bid is no longer sloping up over {look:.0f}s ({t.risk_take_slope:.0%} of the time left; typical minute {t.risk_unit or 0.0:.3f}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost{cushion}"
+            if t.risk_live:
+                self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True)
+                return reason
+            if not t.risk_logged:
+                t.risk_logged = True
+                log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+                self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False)
+        return None
+
+    def _sell_trail(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step trail (lane field curve_take_trail, on a lane with curve_take): a bet ahead is sold once its bid has come off its high since the buy by the market's own swing. It stands aside when the profit take, asked before it on this check, took the gain or took it early, and while the sure-win latch is set; with no profit_take step before it those are false."""
+        ProfitWatcher._sell_shared(self, t, bid, now, left, pnl, c)
+        if not t.risk_take:
+            return None
+        gain, _room, rebuy, unit, _bar = ProfitWatcher._sell_take_state(self, t, bid, now, left, c)
+        taken, early = c.taken, c.early
+        if not taken and not early and not t.risk_sure_latched and bid >= CURVE_MIN_BID and curverisk.trail_hit(gain, rebuy, bid, t.risk_take_peak, unit, t.risk_take_trail):
+            # The trail: the bet is ahead and has come off its high by the market's own swing. It needs no bar (the bar asks for more the later it is, and a late buy starts under a high one), and the cushion check does not hold it: the replay it rests on had none.
+            reason = f"curve risk exit (profit take): trail: the bet is {gain:.3f} a contract ahead and the bid {bid:.2f} is {t.risk_take_peak - bid:.2f} under its {t.risk_take_peak:.2f} high since the buy, at least {t.risk_take_trail:g} typical minute(s) of this market ({unit:.3f}); {left:.0f}s left"
+            if t.risk_live and t.risk_take_trail_live:
+                self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="trail")
+                return reason
+            if not t.risk_trail_logged:
+                t.risk_trail_logged = True
+                log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+                self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="trail")
+        return None
+
+    def _sell_long_hold(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step long_hold (lane field curve_risk_confirm): a hold. While the long layer's chance is at or over its bar the walk ends here with no sale, so no step after it is asked; a loss sale that was wanted is logged as held."""
+        ProfitWatcher._sell_shared(self, t, bid, now, left, pnl, c)
+        long_chance = c.long_chance
         if t.risk_confirm > 0 and long_chance is not None and long_chance >= curverisk.confirm_bar(t.risk_confirm, left):
             t.risk_since = 0.0  # the long layer says the bet is likely to stay on its side: a dip in the price alone does not sell it
             if bid >= CURVE_MIN_BID and (curverisk.stopped(pnl, r.q, t.risk_max_loss) or curverisk.sale_ok(r.q, t.risk_sell, pnl, t.risk_min_profit)):
                 self._risk_held(t, r, bid, now, left, pnl, "long layer", f"the sale was wanted but the long layer's chance {long_chance:.3f} is at or over its bar {curverisk.confirm_bar(t.risk_confirm, left):.3f}")
-            return None
+            return sellchain.HOLD
+        return None
+
+    def _sell_loss(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step loss: the max loss (with the squeeze), the line, their scaled wait and the early hold, which share one wait and one latch. The line sale has its own live switch (curve_risk_line_live); in shadow one would-sell is logged and recorded."""
+        ProfitWatcher._sell_shared(self, t, bid, now, left, pnl, c)
+        net, basis, allowed, squeezed, hour_scale = c.net, c.basis, c.allowed, c.squeezed, c.hour_scale
         stop = curverisk.stopped(pnl, r.q, t.risk_max_loss)  # the max loss
         if not stop and allowed > 0 and t.risk_max_loss > 0:
             miss = curverisk.stop_miss(net, basis, r.q, t.risk_max_loss)
@@ -2044,6 +2122,7 @@ class ProfitWatcher:
             if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
                 held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.risk_line_live = spec.curve_risk_line_live
+                held.sell_chain, held.sell_module = tuple(spec.sell_chain), spec.exit_module
                 held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_stop_hold = spec.curve_risk_stop_hold
                 held.risk_early_hold = spec.curve_risk_early_hold
@@ -2651,6 +2730,9 @@ class ProfitWatcher:
 
     def stop(self) -> None:
         self._stop.set()
+
+
+_SELL = {name: getattr(ProfitWatcher, "_sell_" + name) for name in sellchain.SELL_STEPS}  # a sell step's name -> its method, taken off the class and called with the watcher handed in (as the risk exit's own tests call _risk_decide, on a stand-in watcher)
 
 
 def wanted(s: Settings) -> bool:
