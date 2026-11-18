@@ -1,0 +1,56 @@
+window: 2026-11-09 to 2026-11-16; 49725 moments on 5681 markets (every 10 s of the last 4 minutes, a side's ask at or under 0.30, the favourite changed in the 5 minutes before). Bought at the ask, sale 0.20 higher, no fee on either leg; one contract a moment; an unsold bet counted at its settlement. Average spread at the moment 0.017. FILL=rest: the buy rests at the side's bid and counts only if the ask later came down to it (5659 moments never filled and are left out); the sale is looked for after the fill.
+  all                                moments  49725 on  5681 markets | avg buy 0.126 | burst  22.4% (needs about 35%) | net  -2106.88 (-0.042 each) | days positive 0 of 8 | median wait 56 s
+--- by the buy price
+  buy 0.02 to 0.10                   moments  23158 on  5024 markets | avg buy 0.057 | burst  11.0% (needs about 21%) | net   -606.32 (-0.026 each) | days positive 0 of 8 | median wait 59 s
+  buy 0.10 to 0.15                   moments   7937 on  3533 markets | avg buy 0.127 | burst  24.6% (needs about 39%) | net   -348.99 (-0.044 each) | days positive 0 of 8 | median wait 57 s
+  buy 0.15 to 0.20                   moments   8574 on  3560 markets | avg buy 0.177 | burst  30.6% (needs about 47%) | net   -506.88 (-0.059 each) | days positive 0 of 8 | median wait 54 s
+  buy 0.20 to 0.25                   moments   6981 on  3104 markets | avg buy 0.229 | burst  38.2% (needs about 53%) | net   -447.21 (-0.064 each) | days positive 0 of 8 | median wait 56 s
+  buy 0.25 to 0.30                   moments   3075 on  1888 markets | avg buy 0.270 | burst  43.4% (needs about 57%) | net   -197.49 (-0.064 each) | days positive 0 of 8 | median wait 54 s
+--- by the time left
+  180 to 240 s left                  moments  14449 on  3619 markets | avg buy 0.144 | burst  26.8% (needs about 39%) | net   -595.26 (-0.041 each) | days positive 0 of 8 | median wait 90 s
+  120 to 180 s left                  moments  14331 on  3656 markets | avg buy 0.130 | burst  24.3% (needs about 36%) | net   -563.00 (-0.039 each) | days positive 0 of 8 | median wait 65 s
+  60 to 120 s left                   moments  13074 on  3630 markets | avg buy 0.117 | burst  20.9% (needs about 34%) | net   -528.87 (-0.040 each) | days positive 0 of 8 | median wait 38 s
+  0 to 60 s left                     moments   7871 on  2922 markets | avg buy 0.102 | burst  13.1% (needs about 30%) | net   -419.76 (-0.053 each) | days positive 0 of 8 | median wait 17 s
+--- by the changes of favourite in the five minutes before
+  changes 1                          moments   9892 on  1859 markets | avg buy 0.117 | burst  19.5% (needs about 33%) | net   -456.32 (-0.046 each) | days positive 0 of 8 | median wait 61 s
+  changes 2                          moments   7414 on  1566 markets | avg buy 0.120 | burst  19.8% (needs about 34%) | net   -329.92 (-0.044 each) | days positive 0 of 8 | median wait 60 s
+  changes 3 or 4                     moments  11077 on  2122 markets | avg buy 0.124 | burst  22.5% (needs about 35%) | net   -445.02 (-0.040 each) | days positive 0 of 8 | median wait 56 s
+  changes 5 to 8                     moments  12281 on  2187 markets | avg buy 0.130 | burst  24.3% (needs about 36%) | net   -475.88 (-0.039 each) | days positive 0 of 8 | median wait 58 s
+  changes 9 or more                  moments   9061 on  1490 markets | avg buy 0.139 | burst  24.7% (needs about 38%) | net   -399.75 (-0.044 each) | days positive 0 of 8 | median wait 50 s
+--- by the seconds since the favourite last changed
+  since 0 to 15 s                    moments   2047 on  1543 markets | avg buy 0.180 | burst  26.4% (needs about 45%) | net   -142.85 (-0.070 each) | days positive 0 of 8 | median wait 27 s
+  since 15 to 30 s                   moments   3323 on  2226 markets | avg buy 0.166 | burst  26.4% (needs about 43%) | net   -190.59 (-0.057 each) | days positive 0 of 8 | median wait 42 s
+  since 30 to 60 s                   moments   6970 on  2873 markets | avg buy 0.153 | burst  25.8% (needs about 40%) | net   -352.62 (-0.051 each) | days positive 0 of 8 | median wait 49 s
+  since 60 to 120 s                  moments  12508 on  3167 markets | avg buy 0.130 | burst  23.3% (needs about 36%) | net   -525.06 (-0.042 each) | days positive 0 of 8 | median wait 57 s
+  since 120 to 300 s                 moments  24877 on  3738 markets | avg buy 0.107 | burst  20.1% (needs about 32%) | net   -895.77 (-0.036 each) | days positive 0 of 8 | median wait 64 s
+--- by reach (fifths of all moments)
+  reach under 0.77                   moments   9945 on  2503 markets | avg buy 0.155 | burst  29.8% (needs about 41%) | net   -370.38 (-0.037 each) | days positive 0 of 8 | median wait 79 s
+  reach 0.77 to 0.87                 moments   9945 on  3416 markets | avg buy 0.140 | burst  27.4% (needs about 38%) | net   -368.00 (-0.037 each) | days positive 0 of 8 | median wait 68 s
+  reach 0.87 to 0.99                 moments   9945 on  3681 markets | avg buy 0.126 | burst  22.7% (needs about 35%) | net   -424.37 (-0.043 each) | days positive 0 of 8 | median wait 55 s
+  reach 0.99 to 1.19                 moments   9945 on  3550 markets | avg buy 0.112 | burst  18.2% (needs about 33%) | net   -464.11 (-0.047 each) | days positive 0 of 8 | median wait 43 s
+  reach over 1.19                    moments   9945 on  3091 markets | avg buy 0.097 | burst  13.7% (needs about 29%) | net   -480.03 (-0.048 each) | days positive 0 of 8 | median wait 23 s
+--- by slope30 (fifths of all moments)
+  slope30 under -1.20                moments   9945 on  3929 markets | avg buy 0.142 | burst  22.9% (needs about 39%) | net   -525.75 (-0.053 each) | days positive 0 of 8 | median wait 46 s
+  slope30 -1.20 to -0.60             moments   9945 on  4028 markets | avg buy 0.127 | burst  23.4% (needs about 36%) | net   -394.83 (-0.040 each) | days positive 0 of 8 | median wait 61 s
+  slope30 -0.60 to -0.25             moments   9945 on  3924 markets | avg buy 0.112 | burst  20.2% (needs about 33%) | net   -386.17 (-0.039 each) | days positive 0 of 8 | median wait 59 s
+  slope30 -0.25 to 0.00              moments  10304 on  3711 markets | avg buy 0.102 | burst  18.8% (needs about 30%) | net   -361.90 (-0.035 each) | days positive 0 of 8 | median wait 62 s
+  slope30 over 0.00                  moments   9586 on  3369 markets | avg buy 0.150 | burst  26.7% (needs about 40%) | net   -438.24 (-0.046 each) | days positive 0 of 8 | median wait 54 s
+--- by lift (fifths of all moments)
+  lift under 0.00                    moments  15257 on  4981 markets | avg buy 0.103 | burst  18.1% (needs about 30%) | net   -588.13 (-0.039 each) | days positive 0 of 8 | median wait 62 s
+  lift 0.00 to 0.05                  moments   4633 on  2807 markets | avg buy 0.080 | burst  14.8% (needs about 26%) | net   -142.53 (-0.031 each) | days positive 0 of 8 | median wait 61 s
+  lift 0.05 to 0.16                  moments   9945 on  4191 markets | avg buy 0.109 | burst  20.3% (needs about 32%) | net   -364.13 (-0.037 each) | days positive 0 of 8 | median wait 61 s
+  lift 0.16 to 0.38                  moments   9945 on  4030 markets | avg buy 0.137 | burst  24.7% (needs about 38%) | net   -445.65 (-0.045 each) | days positive 0 of 8 | median wait 54 s
+  lift over 0.38                     moments   9945 on  3349 markets | avg buy 0.189 | burst  32.2% (needs about 47%) | net   -566.44 (-0.057 each) | days positive 0 of 8 | median wait 51 s
+--- by drop (fifths of all moments)
+  drop under 0.55                    moments   9945 on  2795 markets | avg buy 0.116 | burst  20.8% (needs about 33%) | net   -382.82 (-0.038 each) | days positive 0 of 8 | median wait 62 s
+  drop 0.55 to 1.04                  moments   9945 on  3240 markets | avg buy 0.118 | burst  21.9% (needs about 34%) | net   -375.12 (-0.038 each) | days positive 0 of 8 | median wait 60 s
+  drop 1.04 to 1.62                  moments   9945 on  3467 markets | avg buy 0.129 | burst  24.2% (needs about 36%) | net   -384.97 (-0.039 each) | days positive 0 of 8 | median wait 60 s
+  drop 1.62 to 2.43                  moments   9945 on  3529 markets | avg buy 0.137 | burst  24.4% (needs about 38%) | net   -429.30 (-0.043 each) | days positive 0 of 8 | median wait 55 s
+  drop over 2.43                     moments   9945 on  3225 markets | avg buy 0.131 | burst  20.5% (needs about 36%) | net   -534.67 (-0.054 each) | days positive 0 of 8 | median wait 42 s
+--- by swing (fifths of all moments)
+  swing under 0.84                   moments   9945 on  2469 markets | avg buy 0.082 | burst  15.0% (needs about 26%) | net   -321.43 (-0.032 each) | days positive 0 of 8 | median wait 71 s
+  swing 0.84 to 1.28                 moments   9945 on  3045 markets | avg buy 0.125 | burst  23.2% (needs about 35%) | net   -390.12 (-0.039 each) | days positive 0 of 8 | median wait 63 s
+  swing 1.28 to 1.81                 moments   9945 on  3200 markets | avg buy 0.143 | burst  26.7% (needs about 38%) | net   -397.32 (-0.040 each) | days positive 0 of 8 | median wait 59 s
+  swing 1.81 to 2.57                 moments   9945 on  3393 markets | avg buy 0.145 | burst  25.8% (needs about 39%) | net   -434.54 (-0.044 each) | days positive 0 of 8 | median wait 52 s
+  swing over 2.57                    moments   9945 on  3118 markets | avg buy 0.136 | burst  21.1% (needs about 37%) | net   -563.48 (-0.057 each) | days positive 0 of 8 | median wait 42 s
+DONE

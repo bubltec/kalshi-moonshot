@@ -1,0 +1,53 @@
+window: 2026-11-09 to 2026-11-16; 12358 15-minute markets with a result; 7296 rises (ask at or under 0.30, then the same side's bid 0.20 or more over it, inside the last 4 minutes).
+  all markets                            markets 12358 | a side at or under 0.30 in 12357 | at least one rise  3778 (30.6% of markets, 30.6% of those with a low side) | two or more 1994 (16.1%) | rises  7296 (0.59 a market)
+--- by changes of favourite in the five minutes before the four-minute mark
+  changes none                           markets  7560 | a side at or under 0.30 in  7560 | at least one rise  1617 (21.4% of markets, 21.4% of those with a low side) | two or more  860 (11.4%) | rises  3193 (0.42 a market)
+  changes 1                              markets   853 | a side at or under 0.30 in   853 | at least one rise   340 (39.9% of markets, 39.9% of those with a low side) | two or more  186 (21.8%) | rises   649 (0.76 a market)
+  changes 2                              markets   702 | a side at or under 0.30 in   702 | at least one rise   276 (39.3% of markets, 39.3% of those with a low side) | two or more  133 (18.9%) | rises   502 (0.72 a market)
+  changes 3 or 4                         markets  1072 | a side at or under 0.30 in  1072 | at least one rise   465 (43.4% of markets, 43.4% of those with a low side) | two or more  231 (21.5%) | rises   860 (0.80 a market)
+  changes 5 to 8                         markets  1207 | a side at or under 0.30 in  1206 | at least one rise   581 (48.1% of markets, 48.2% of those with a low side) | two or more  318 (26.3%) | rises  1127 (0.93 a market)
+  changes 9 or more                      markets   964 | a side at or under 0.30 in   964 | at least one rise   499 (51.8% of markets, 51.8% of those with a low side) | two or more  266 (27.6%) | rises   965 (1.00 a market)
+--- by the cheaper side's ask at the mark
+  low side 0.00 to 0.05                  markets  4128 | a side at or under 0.30 in  4128 | at least one rise   186 ( 4.5% of markets,  4.5% of those with a low side) | two or more   82 ( 2.0%) | rises   334 (0.08 a market)
+  low side 0.05 to 0.15                  markets  2911 | a side at or under 0.30 in  2911 | at least one rise   750 (25.8% of markets, 25.8% of those with a low side) | two or more  392 (13.5%) | rises  1475 (0.51 a market)
+  low side 0.15 to 0.30                  markets  2558 | a side at or under 0.30 in  2558 | at least one rise  1288 (50.4% of markets, 50.4% of those with a low side) | two or more  707 (27.6%) | rises  2580 (1.01 a market)
+  low side 0.30 to 0.40                  markets  1426 | a side at or under 0.30 in  1426 | at least one rise   830 (58.2% of markets, 58.2% of those with a low side) | two or more  444 (31.1%) | rises  1560 (1.09 a market)
+  low side 0.40 to 0.51                  markets  1294 | a side at or under 0.30 in  1293 | at least one rise   704 (54.4% of markets, 54.4% of those with a low side) | two or more  361 (27.9%) | rises  1311 (1.01 a market)
+--- by the swing over those five minutes, in typical minutes (fifths)
+  swing under 1.7                        markets  2472 | a side at or under 0.30 in  2471 | at least one rise   425 (17.2% of markets, 17.2% of those with a low side) | two or more  221 ( 8.9%) | rises   794 (0.32 a market)
+  swing 1.7 to 2.3                       markets  2471 | a side at or under 0.30 in  2471 | at least one rise   798 (32.3% of markets, 32.3% of those with a low side) | two or more  416 (16.8%) | rises  1511 (0.61 a market)
+  swing 2.3 to 2.8                       markets  2472 | a side at or under 0.30 in  2472 | at least one rise   900 (36.4% of markets, 36.4% of those with a low side) | two or more  482 (19.5%) | rises  1768 (0.72 a market)
+  swing 2.8 to 3.6                       markets  2471 | a side at or under 0.30 in  2471 | at least one rise   885 (35.8% of markets, 35.8% of those with a low side) | two or more  470 (19.0%) | rises  1709 (0.69 a market)
+  swing over 3.6                         markets  2472 | a side at or under 0.30 in  2472 | at least one rise   770 (31.1% of markets, 31.1% of those with a low side) | two or more  405 (16.4%) | rises  1514 (0.61 a market)
+--- by the typical minute (fifths)
+  unit under 0.089                       markets  2472 | a side at or under 0.30 in  2472 | at least one rise   231 ( 9.3% of markets,  9.3% of those with a low side) | two or more  118 ( 4.8%) | rises   448 (0.18 a market)
+  unit 0.089 to 0.114                    markets  2471 | a side at or under 0.30 in  2471 | at least one rise   552 (22.3% of markets, 22.3% of those with a low side) | two or more  298 (12.1%) | rises  1105 (0.45 a market)
+  unit 0.114 to 0.134                    markets  2472 | a side at or under 0.30 in  2472 | at least one rise   881 (35.6% of markets, 35.6% of those with a low side) | two or more  466 (18.9%) | rises  1709 (0.69 a market)
+  unit 0.134 to 0.159                    markets  2471 | a side at or under 0.30 in  2470 | at least one rise   994 (40.2% of markets, 40.2% of those with a low side) | two or more  513 (20.8%) | rises  1942 (0.79 a market)
+  unit over 0.159                        markets  2472 | a side at or under 0.30 in  2472 | at least one rise  1120 (45.3% of markets, 45.3% of those with a low side) | two or more  599 (24.2%) | rises  2092 (0.85 a market)
+--- changes of favourite x the cheaper side's ask at the mark
+  no change, low side 0.00 to 0.15       markets  5763 | a side at or under 0.30 in  5763 | at least one rise   679 (11.8% of markets, 11.8% of those with a low side) | two or more  346 ( 6.0%) | rises  1333 (0.23 a market)
+  no change, low side 0.15 to 0.30       markets  1231 | a side at or under 0.30 in  1231 | at least one rise   615 (50.0% of markets, 50.0% of those with a low side) | two or more  336 (27.3%) | rises  1234 (1.00 a market)
+  no change, low side 0.30 to 0.51       markets   559 | a side at or under 0.30 in   559 | at least one rise   319 (57.1% of markets, 57.1% of those with a low side) | two or more  178 (31.8%) | rises   622 (1.11 a market)
+  1 or 2, low side 0.00 to 0.15          markets   551 | a side at or under 0.30 in   551 | at least one rise   120 (21.8% of markets, 21.8% of those with a low side) | two or more   59 (10.7%) | rises   209 (0.38 a market)
+  1 or 2, low side 0.15 to 0.30          markets   437 | a side at or under 0.30 in   437 | at least one rise   197 (45.1% of markets, 45.1% of those with a low side) | two or more  111 (25.4%) | rises   399 (0.91 a market)
+  1 or 2, low side 0.30 to 0.51          markets   559 | a side at or under 0.30 in   559 | at least one rise   298 (53.3% of markets, 53.3% of those with a low side) | two or more  149 (26.7%) | rises   542 (0.97 a market)
+  3 or more, low side 0.00 to 0.15       markets   725 | a side at or under 0.30 in   725 | at least one rise   137 (18.9% of markets, 18.9% of those with a low side) | two or more   69 ( 9.5%) | rises   267 (0.37 a market)
+  3 or more, low side 0.15 to 0.30       markets   890 | a side at or under 0.30 in   890 | at least one rise   476 (53.5% of markets, 53.5% of those with a low side) | two or more  260 (29.2%) | rises   947 (1.06 a market)
+  3 or more, low side 0.30 to 0.51       markets  1602 | a side at or under 0.30 in  1601 | at least one rise   917 (57.2% of markets, 57.3% of those with a low side) | two or more  478 (29.8%) | rises  1707 (1.07 a market)
+--- by day (markets with a change of favourite before the mark)
+  2026-11-09                             markets   622 | a side at or under 0.30 in   622 | at least one rise   277 (44.5% of markets, 44.5% of those with a low side) | two or more  145 (23.3%) | rises   511 (0.82 a market)
+  2026-11-10                             markets   837 | a side at or under 0.30 in   837 | at least one rise   377 (45.0% of markets, 45.0% of those with a low side) | two or more  205 (24.5%) | rises   729 (0.87 a market)
+  2026-11-11                             markets   820 | a side at or under 0.30 in   819 | at least one rise   354 (43.2% of markets, 43.2% of those with a low side) | two or more  179 (21.8%) | rises   653 (0.80 a market)
+  2026-11-12                             markets   477 | a side at or under 0.30 in   477 | at least one rise   231 (48.4% of markets, 48.4% of those with a low side) | two or more  113 (23.7%) | rises   426 (0.89 a market)
+  2026-11-13                             markets   866 | a side at or under 0.30 in   866 | at least one rise   420 (48.5% of markets, 48.5% of those with a low side) | two or more  209 (24.1%) | rises   774 (0.89 a market)
+  2026-11-14                             markets   330 | a side at or under 0.30 in   330 | at least one rise   129 (39.1% of markets, 39.1% of those with a low side) | two or more   65 (19.7%) | rises   261 (0.79 a market)
+  2026-11-15                             markets   363 | a side at or under 0.30 in   363 | at least one rise   157 (43.3% of markets, 43.3% of those with a low side) | two or more   91 (25.1%) | rises   300 (0.83 a market)
+  2026-11-16                             markets   483 | a side at or under 0.30 in   483 | at least one rise   216 (44.7% of markets, 44.7% of those with a low side) | two or more  127 (26.3%) | rises   449 (0.93 a market)
+--- the rises themselves
+  the low: median 0.16 (a quarter under 0.08, a quarter over 0.23) | from the low to the sale price: median 19 s (a quarter under 8 s, a quarter over 37 s)
+  low set with 180 to 240 s left:  2396 rises | median low 0.16 | median time to the sale price 34 s
+  low set with 120 to 180 s left:  1692 rises | median low 0.17 | median time to the sale price 24 s
+  low set with 60 to 120 s left:  1830 rises | median low 0.16 | median time to the sale price 13 s
+  low set with 0 to 60 s left:  1378 rises | median low 0.14 | median time to the sale price 5 s
+DONE
