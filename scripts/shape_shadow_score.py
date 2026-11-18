@@ -29,7 +29,11 @@ if not recs:
 since = min(x["ts"] for v in recs.values() for x in v)
 st = db.connect(s.db_path, "main", shared=True)
 results = {w["ticker"]: (w["result"], float(w["close_ts"])) for w in st.execute("SELECT ticker, close_ts, result FROM windows WHERE close_ts>? AND result IN ('yes','no')", (since - 900.0,)).fetchall()}
+import os
+SHAPES = [x for x in os.environ.get("SHAPES", "").split(",") if x]
+ONLY = os.environ.get("LANE")  # optional: score one lane, e.g. LANE=crypto_risk_score
 rows = st.execute("SELECT ts, ticker, lane, mode, side, ask, stake_usd, contracts, exit_price, exit_ts, exit_reason FROM decisions WHERE action='bet' AND stake_usd>0 AND ts>? ORDER BY ts", (since - 900.0,)).fetchall()
+rows = [r for r in rows if not ONLY or r["lane"] == ONLY]
 out, unsettled, seen_keys = [], 0, set()
 for r in rows:
     key = (r["ticker"], r["lane"])
@@ -52,7 +56,7 @@ for r in rows:
     mine = [x for x in recs[key] if float(r["ts"]) < x["ts"] < end and x["side"] == r["side"]]
     if not mine:
         continue
-    flag = next((x for x in mine if x.get("would_sell")), None)
+    flag = next((x for x in mine if x.get("would_sell") and (not SHAPES or x["buy"]["shape"] in SHAPES)), None)  # SHAPES=trend_against: the variant that waits for that shape (a rule chosen after seeing the results)
     rule = ((float(flag["bid"]) - fee(float(flag["bid"])) - basis) * n) if flag else None
     out.append({"r": r, "live": r["mode"] == "trade", "won": won, "sold": sold, "actual": actual, "rule": rule, "flag": flag, "stake": stake,
                 "buy": flag["buy"]["shape"] if flag else None, "quarter": flag["quarter"]["shape"] if flag else None,
@@ -70,6 +74,8 @@ def line(name, rs):
     print(f"  {name:44s} n {len(rs):3d} | staked ${sum(x['stake'] for x in rs):8.2f} | won if held {sum(1 for x in rs if x['won']):3d} | what happened ${a:+8.2f} | with the rule ${b:+8.2f} | change ${b - a:+7.2f} | would sell {len(tk):2d}: beat {beat}, lost to {lost}")
 
 
+first_flat = [x for x in out if x["buy"] == "flat"]
+print(f"flat at the first would-sell: {len(first_flat)} bets, of which {sum(1 for x in first_flat if 'trend_against' in x['shown'])} later showed a trend_against row while behind")
 print(f"window: bets with a shape row, first row {datetime.datetime.fromtimestamp(since, ET):%m-%d %H:%M} ET to {now:%m-%d %H:%M} ET; {len(out)} bets settled and scored, {unsettled} not settled; shape rows on file for {len(recs)} bets")
 if not out:
     print("no bet with a shape row has settled yet: nothing to score.")
