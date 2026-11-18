@@ -1,0 +1,10 @@
+window: held-out days 11-10, 11-11, 11-12, 11-13, 11-14, 11-15, 11-16; 26543 moments of a side with a bid of 0.80 to 0.92 and 90 s or more left; crypto series; weights fitted on earlier days only
+flips (its bid under 0.50 at one of the next two 30 s marks): 554 (2.1%) at an average price 0.862 (a price of 0.86 says about 14% lose, to the end)
+  score under the price by more than 0.9 points or least over it (lowest third) n   8848 | flip rate  2.1% | avg price 0.859 | avg score chance 0.840
+  middle third                                                                n   8847 | flip rate  2.3% | avg price 0.866 | avg score chance 0.864
+  score over the price the most (highest third)                               n   8848 | flip rate  1.8% | avg price 0.862 | avg score chance 0.882
+--- by time left
+  1.5 to 3 min left    n   2028 | flip rate 10.5% | lowest third 10.8% | highest third 10.2%
+  3 to 7 min left      n   9520 | flip rate  2.7% | lowest third  2.9% | highest third  2.5%
+  over 7 min left      n  14995 | flip rate  0.6% | lowest third  0.4% | highest third  0.9%
+DONE
