@@ -120,3 +120,44 @@ def test_integration_after_the_trail_it_is_never_asked_on_the_sale_and_just_ahea
     assert out["after"] and out["ahead"]  # the trail sells either way
     assert [x for x in rows(tmp_path / "after") if x["hit_static"]] == []
     assert [x for x in rows(tmp_path / "ahead") if x["hit_static"]]
+
+
+def timed_lane(tmp_path, monkeypatch, chain="['trail']", timed="true"):
+    return held(tmp_path, monkeypatch, live=True, take="true", extra=f"sell_chain={chain}\ncurve_take_trail=1.0\ncurve_take_trail_live=true\ncurve_take_trail_timed={timed}")
+
+
+def fall(w):
+    run_up(w)
+    return tick(w, 0.89, 250) + tick(w, 0.86, 249)  # one, then four cents off the 0.90 high: every sale either tick makes
+
+
+def test_integration_the_trail_reads_the_time_aware_minute_when_the_lane_says_so(tmp_path, monkeypatch):
+    # 2026-11-18 (user: "Yes, live", on commodity): the trail's own unit is the time-aware one, so a wide time-aware minute holds a fall the static minute sells
+    monkeypatch.setattr(pricevol, "implied_rate", lambda seq, left, **k: 0.05)  # a time-aware minute of 0.39: four cents is nothing
+    (tmp_path / "static").mkdir()
+    (tmp_path / "timed").mkdir()
+    assert fall(timed_lane(tmp_path / "static", monkeypatch, timed="false"))  # the static minute: sold
+    ticks_mod.mids._rows.clear()
+    assert fall(timed_lane(tmp_path / "timed", monkeypatch)) == []  # the time-aware minute: held
+
+
+def test_integration_a_narrow_time_aware_minute_sells_and_the_sale_says_so(tmp_path, monkeypatch):
+    monkeypatch.setattr(pricevol, "implied_rate", lambda seq, left, **k: 0.001)  # a minute of 0.008: four cents is five of them
+    got = fall(timed_lane(tmp_path, monkeypatch))
+    assert got and "time-aware typical minute" in got[0].why and "[sell chain" in got[0].why
+
+
+def test_integration_with_no_time_aware_minute_the_trail_uses_the_static_one(tmp_path, monkeypatch):
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit_timed", lambda self, t, now, left: None)
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    a = fall(timed_lane(tmp_path / "a", monkeypatch))
+    ticks_mod.mids._rows.clear()
+    b = fall(timed_lane(tmp_path / "b", monkeypatch, timed="false"))
+    assert a and b and a[0].why.replace(" time-aware", "") == b[0].why  # the same sale, the same number
+
+
+def test_unit_the_lane_field_is_on_the_spec_and_in_the_lane_version_only_when_set():
+    from kalshi_moonshot import lanes
+
+    assert lanes.LaneSpec.__dataclass_fields__["curve_take_trail_timed"].default is False

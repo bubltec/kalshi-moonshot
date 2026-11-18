@@ -276,6 +276,7 @@ class Target:
     risk_take_early_seconds: float = 360.0
     risk_take_trail: float = 0.0  # the profit take's trail: typical minutes under the peak at which a bet that is ahead is sold (lane field curve_take_trail); 0 = off
     risk_take_trail_live: bool = False  # the trail sells (curve_take_trail_live); off = it logs and records a would-sell
+    risk_take_trail_timed: bool = False  # the trail reads the time-aware typical minute (lane field curve_take_trail_timed), the static one when that has too little history
     risk_take_peak: float = 0.0  # the highest bid the risk check has seen on this bet
     risk_trail_logged: bool = False
     risk_under_even: float = 0.0  # the share of the time left a favorite's bid must stay under even before it is sold (lane field curve_risk_under_even); 0 = off
@@ -1194,9 +1195,14 @@ class ProfitWatcher:
             return None
         gain, _room, rebuy, unit, _bar = ProfitWatcher._sell_take_state(self, t, bid, now, left, c)
         taken, early = c.taken, c.early
+        timed_note = ""
+        if t.risk_take_trail_timed:  # the time-aware minute where there is one; the static minute when it has too little history (None, or an error already logged)
+            timed = self._risk_unit_timed(t, now, left)
+            if timed:
+                unit, timed_note = timed, " time-aware"
         if not taken and not early and not t.risk_sure_latched and bid >= CURVE_MIN_BID and curverisk.trail_hit(gain, rebuy, bid, t.risk_take_peak, unit, t.risk_take_trail):
             # The trail: the bet is ahead and has come off its high by the market's own swing. It needs no bar (the bar asks for more the later it is, and a late buy starts under a high one), and the cushion check does not hold it: the replay it rests on had none.
-            reason = f"curve risk exit (profit take): trail: the bet is {gain:.3f} a contract ahead and the bid {bid:.2f} is {t.risk_take_peak - bid:.2f} under its {t.risk_take_peak:.2f} high since the buy, at least {t.risk_take_trail:g} typical minute(s) of this market ({unit:.3f}); {left:.0f}s left"
+            reason = f"curve risk exit (profit take): trail: the bet is {gain:.3f} a contract ahead and the bid {bid:.2f} is {t.risk_take_peak - bid:.2f} under its {t.risk_take_peak:.2f} high since the buy, at least {t.risk_take_trail:g}{timed_note} typical minute(s) of this market ({unit:.3f}); {left:.0f}s left"
             if t.risk_live and t.risk_take_trail_live:
                 self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="trail")
                 return reason
@@ -2231,6 +2237,7 @@ class ProfitWatcher:
                 held.risk_take_early_bid, held.risk_take_early_seconds = spec.curve_take_early_bid, spec.curve_take_early_seconds
                 held.risk_take_cushion = spec.curve_take_cushion
                 held.risk_take_trail, held.risk_take_trail_live = spec.curve_take_trail, spec.curve_take_trail_live
+                held.risk_take_trail_timed = spec.curve_take_trail_timed
                 held.risk_drop_units, held.risk_drop_share = spec.curve_risk_drop, spec.curve_risk_drop_share
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
