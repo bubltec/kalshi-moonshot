@@ -1,0 +1,59 @@
+window: 2026-11-09 to 2026-11-16; 1349 favourites on 1183 commodity markets (first quote at 0.60 to 0.92 at a 30 s mark with 3 to 13 min left, one a market and side), held to settlement, taker fee on the buy, one contract each.
+  all                                bets  1349 | win  64.7% vs avg ask  67.8c | lost  476 | net   -61.92 ( -6.8 per $100 staked) | days positive 0 of 8
+--- by the ask
+  ask 0.60 to 0.70                   bets   940 | win  59.7% vs avg ask  63.5c | lost  379 | net   -51.28 ( -8.6 per $100 staked) | days positive 0 of 8
+  ask 0.70 to 0.80                   bets   280 | win  72.1% vs avg ask  73.6c | lost   78 | net    -7.86 ( -3.8 per $100 staked) | days positive 3 of 8
+  ask 0.80 to 0.86                   bets    54 | win  77.8% vs avg ask  82.2c | lost   12 | net    -2.96 ( -6.7 per $100 staked) | days positive 2 of 8
+  ask 0.86 to 0.92                   bets    75 | win  90.7% vs avg ask  89.8c | lost    7 | net    +0.17 ( +0.3 per $100 staked) | days positive 6 of 8
+--- by flips (changes of favourite so far)
+  flips 0                            bets    66 | win  80.3% vs avg ask  81.2c | lost   13 | net    -1.26 ( -2.3 per $100 staked) | days positive 2 of 8
+  flips 1                            bets   191 | win  66.0% vs avg ask  67.9c | lost   65 | net    -6.53 ( -5.0 per $100 staked) | days positive 2 of 8
+  flips 2 or 3                       bets   245 | win  62.4% vs avg ask  67.7c | lost   92 | net   -16.60 (-10.0 per $100 staked) | days positive 0 of 8
+  flips 4 to 6                       bets   292 | win  65.8% vs avg ask  67.0c | lost  100 | net    -8.11 ( -4.1 per $100 staked) | days positive 3 of 8
+  flips 7 or more                    bets   555 | win  62.9% vs avg ask  66.7c | lost  206 | net   -29.42 ( -8.0 per $100 staked) | days positive 0 of 8
+--- by range5 (fifths of all bets)
+  range5 under 2.51                  bets   270 | win  65.6% vs avg ask  65.8c | lost   93 | net    -4.72 ( -2.7 per $100 staked) | days positive 4 of 8
+  range5 2.51 to 3.03                bets   270 | win  66.7% vs avg ask  66.6c | lost   90 | net    -4.01 ( -2.2 per $100 staked) | days positive 5 of 8
+  range5 3.03 to 3.54                bets   269 | win  59.9% vs avg ask  66.3c | lost  108 | net   -21.57 (-12.1 per $100 staked) | days positive 1 of 8
+  range5 3.54 to 4.24                bets   270 | win  61.5% vs avg ask  68.3c | lost  104 | net   -22.53 (-12.2 per $100 staked) | days positive 2 of 8
+  range5 over 4.24                   bets   270 | win  70.0% vs avg ask  72.0c | lost   81 | net    -9.10 ( -4.7 per $100 staked) | days positive 2 of 8
+--- by eff5 (fifths of all bets)
+  eff5 under 0.04                    bets   270 | win  63.3% vs avg ask  64.2c | lost   99 | net    -6.54 ( -3.8 per $100 staked) | days positive 3 of 8
+  eff5 0.04 to 0.07                  bets   270 | win  64.4% vs avg ask  66.3c | lost   96 | net    -9.16 ( -5.1 per $100 staked) | days positive 3 of 8
+  eff5 0.07 to 0.11                  bets   269 | win  61.7% vs avg ask  67.5c | lost  103 | net   -19.62 (-10.8 per $100 staked) | days positive 1 of 8
+  eff5 0.11 to 0.16                  bets   270 | win  63.0% vs avg ask  69.0c | lost  100 | net   -20.13 (-10.8 per $100 staked) | days positive 1 of 8
+  eff5 over 0.16                     bets   270 | win  71.1% vs avg ask  72.2c | lost   78 | net    -6.47 ( -3.3 per $100 staked) | days positive 3 of 8
+--- by drop180 (fifths of all bets)
+  drop180 under 0.00                 bets   478 | win  65.3% vs avg ask  68.5c | lost  166 | net   -22.40 ( -6.8 per $100 staked) | days positive 1 of 8
+  drop180 0.00 to 0.08               bets    62 | win  74.2% vs avg ask  69.7c | lost   16 | net    +1.90 ( +4.4 per $100 staked) | days positive 4 of 8
+  drop180 0.08 to 0.22               bets   269 | win  61.3% vs avg ask  66.9c | lost  104 | net   -19.15 (-10.6 per $100 staked) | days positive 1 of 8
+  drop180 0.22 to 0.48               bets   270 | win  61.5% vs avg ask  66.3c | lost  104 | net   -17.06 ( -9.5 per $100 staked) | days positive 1 of 8
+  drop180 over 0.48                  bets   270 | win  68.1% vs avg ask  68.7c | lost   86 | net    -5.22 ( -2.8 per $100 staked) | days positive 3 of 8
+--- by slope60 (fifths of all bets)
+  slope60 under 0.74                 bets   270 | win  67.0% vs avg ask  68.2c | lost   89 | net    -7.10 ( -3.9 per $100 staked) | days positive 2 of 8
+  slope60 0.74 to 1.29               bets   270 | win  61.1% vs avg ask  64.4c | lost  105 | net   -13.15 ( -7.6 per $100 staked) | days positive 4 of 8
+  slope60 1.29 to 1.81               bets   269 | win  62.5% vs avg ask  66.4c | lost  101 | net   -14.74 ( -8.3 per $100 staked) | days positive 1 of 8
+  slope60 1.81 to 2.52               bets   270 | win  62.2% vs avg ask  68.6c | lost  102 | net   -21.24 (-11.5 per $100 staked) | days positive 2 of 8
+  slope60 over 2.52                  bets   270 | win  70.7% vs avg ask  71.5c | lost   79 | net    -5.69 ( -2.9 per $100 staked) | days positive 3 of 8
+--- by unit (fifths of all bets)
+  unit under 10.35                   bets   270 | win  71.1% vs avg ask  69.6c | lost   78 | net    +0.21 ( +0.1 per $100 staked) | days positive 5 of 8
+  unit 10.35 to 11.42                bets   270 | win  60.0% vs avg ask  66.2c | lost  108 | net   -20.79 (-11.6 per $100 staked) | days positive 0 of 8
+  unit 11.42 to 12.53                bets   269 | win  58.4% vs avg ask  66.5c | lost  112 | net   -25.93 (-14.5 per $100 staked) | days positive 1 of 8
+  unit 12.53 to 13.83                bets   270 | win  63.0% vs avg ask  67.4c | lost  100 | net   -16.11 ( -8.9 per $100 staked) | days positive 2 of 8
+  unit over 13.83                    bets   270 | win  71.1% vs avg ask  69.4c | lost   78 | net    +0.70 ( +0.4 per $100 staked) | days positive 3 of 8
+--- by left (fifths of all bets)
+  left under 270                     bets   299 | win  70.6% vs avg ask  69.6c | lost   88 | net    -1.41 ( -0.7 per $100 staked) | days positive 3 of 8
+  left 270 to 360                    bets   253 | win  63.2% vs avg ask  67.5c | lost   93 | net   -14.54 ( -8.5 per $100 staked) | days positive 2 of 8
+  left 360 to 450                    bets   347 | win  63.7% vs avg ask  67.3c | lost  126 | net   -17.72 ( -7.6 per $100 staked) | days positive 4 of 8
+  left 450 to 510                    bets   182 | win  62.6% vs avg ask  66.6c | lost   68 | net   -10.05 ( -8.3 per $100 staked) | days positive 3 of 8
+  left over 510                      bets   268 | win  62.3% vs avg ask  67.6c | lost  101 | net   -18.19 (-10.0 per $100 staked) | days positive 2 of 8
+--- by series (a label, not a rule)
+  KXBRENT15M                         bets   185 | win  63.8% vs avg ask  68.2c | lost   67 | net   -10.95 ( -8.7 per $100 staked) | days positive 2 of 8
+  KXWTI15M                           bets   194 | win  60.3% vs avg ask  66.9c | lost   77 | net   -15.67 (-12.1 per $100 staked) | days positive 1 of 8
+  KXNATGAS15M                        bets   188 | win  67.0% vs avg ask  67.9c | lost   62 | net    -4.35 ( -3.4 per $100 staked) | days positive 3 of 8
+  KXGOLD15M                          bets   168 | win  57.1% vs avg ask  67.0c | lost   72 | net   -19.18 (-17.0 per $100 staked) | days positive 0 of 8
+  KXSILVER15M                        bets   169 | win  65.1% vs avg ask  67.4c | lost   59 | net    -6.38 ( -5.6 per $100 staked) | days positive 1 of 8
+  KXCOPPER15M                        bets   141 | win  70.2% vs avg ask  70.5c | lost   42 | net    -2.35 ( -2.4 per $100 staked) | days positive 2 of 8
+  KXPLATINUM15M                      bets   151 | win  66.2% vs avg ask  67.7c | lost   51 | net    -4.44 ( -4.3 per $100 staked) | days positive 4 of 8
+  KXPALLADIUM15M                     bets   153 | win  69.9% vs avg ask  67.5c | lost   46 | net    +1.39 ( +1.3 per $100 staked) | days positive 4 of 8
+DONE
