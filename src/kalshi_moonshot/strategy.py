@@ -618,6 +618,22 @@ def both_sides_tag(b: BothSides) -> str:
     return f"[both sides: {one(b.yes)} | {one(b.no)} | {'the rule buys ' + b.pick.upper() if b.pick else 'the rule buys neither'}]"
 
 
+def agreed_pick(b: BothSides, trends: dict[str, str | None]) -> str | None:
+    """The side where worth and trend agree (2026-11-17, user, on KXBTC15M 18:45, whose NO side the model rated worth 0.72 for 0.62 while NO's own risk had worsened two typical moves: "it never should have suggested that, at that time"; "Build the note"): the side the lane's edge rule would buy (both_sides' pick) when that side's risk trend says "holding" (runner.risk_trend_read: the risk has held or improved over the look back). None when the rule buys neither, or when the picked side's risk is worsening, an anomaly or unreadable. `trends`: side -> the risk trend's state, None where it could not be read."""
+    return b.pick if b.pick is not None and trends.get(b.pick) == "holding" else None
+
+
+def agreed_tag(b: BothSides, reads: dict[str, tuple[float, float, str] | None]) -> str:
+    """Worth and trend for both sides in one line for a decision's note. `reads`: side -> runner.risk_trend_read's (reading, look back, state), None when unreadable."""
+
+    def one(r: SideRead) -> str:
+        got = reads.get(r.side)
+        return f"{r.side.upper()} edge {r.edge:+.3f}, risk trend {'unreadable' if got is None else f'{got[0]:+.1f} {got[2]}'}"
+
+    pick = agreed_pick(b, {k: (v[2] if v is not None else None) for k, v in reads.items()})
+    return f"[worth and trend: {one(b.yes)} | {one(b.no)} | agree on {pick.upper() if pick else 'neither'}]"
+
+
 def side_ask_notional(book: dict[str, Any], limit: float, side: str = "yes") -> float:
     """Dollars of the given contract for sale at or under limit (its own price).
 

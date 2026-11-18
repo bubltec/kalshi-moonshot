@@ -60,6 +60,7 @@ from .strategy import (
     ask_trend,
     best_ask,
     best_bid,
+    agreed_tag,
     both_sides,
     both_sides_tag,
     cash_if_losing,
@@ -516,10 +517,12 @@ def evaluate(
         stretched = stretch_buy(s, spec, shot, cal.p, e)
         if stretched:
             bet, note = True, f"{stretched} {note}"
+    both = None
     if spec.needs_model_edge:  # both sides of the market from this one chance and this one quote, on the note of buys and passes alike: it shows what the lane's rule made of the side it was not asked about (the decision itself is still the lines above)
         p_yes = cal.p if shot.side == "yes" else 1.0 - cal.p
         yes_bid, yes_ask = (shot.bid, shot.ask) if shot.side == "yes" else (1.0 - shot.ask, 1.0 - shot.bid)
-        note = f"{both_sides_tag(both_sides(spec, p_yes, yes_bid, yes_ask))} {note}"
+        both = both_sides(spec, p_yes, yes_bid, yes_ask)
+        note = f"{both_sides_tag(both)} {note}"
     if not bet:
         note = f"{edge_verdict(spec, cal.p, shot.ask, e) or ''} {note}".strip()  # the edge screen says so in words, as every other rule does
     if bet and not chance_ok(spec, p):
@@ -638,6 +641,14 @@ def evaluate(
         else:
             would = "" if spec.entry_risk_trend_live else ": " + {"holding": "would buy", "worsening": "would not buy", "anomaly": "anomaly, would sit out"}[risk_read[2]]
             risk_tag = f"[risk trend {risk_read[0]:+.1f} over {risk_read[1]:.0f}s{would}{old_tag}] "
+        if both is not None:  # shadow, gates nothing: the side the edge rule picks, checked against that side's own risk trend. The other side is read here too, so the line is the same whichever side the lane was asked about
+            other = replace(shot, side="no" if shot.side == "yes" else "yes", bid=round(1.0 - shot.ask, 4), ask=round(1.0 - shot.bid, 4))
+            try:
+                other_read = risk_trend_read(other, spec, keep=False)
+            except Exception as exc:
+                other_read = None
+                log.warning("risk trend unreadable for %s %s: %s", other.ticker, other.side, exc)
+            risk_tag += agreed_tag(both, {shot.side: risk_read, other.side: other_read}) + " "
     crossed_tag = ""
     if spec.entry_crossed_view:  # shadow: the reading rides on the note of buys and passes alike, and changes neither
         from . import variants as _variants
@@ -1624,7 +1635,7 @@ def risk_marks(shot: LongShot, scales: tuple[int, ...], now: float) -> list[tupl
     return marks
 
 
-def risk_trend_read(shot: LongShot, spec: LaneSpec, now: float | None = None) -> tuple[float, float, str] | None:
+def risk_trend_read(shot: LongShot, spec: LaneSpec, now: float | None = None, keep: bool = True) -> tuple[float, float, str] | None:
     """The buy's risk trend (lane field entry_risk_trend): (the move of the side's risk over the look back in the market's own typical moves, the look back in seconds, "holding" / "worsening" / "anomaly"). The risk is the exit's own number for the side at each mark: curverisk.risk on the bid net of the sell fee and the long layer's chance. The look back is the lane's share of the time left. None when it cannot be read. Memory only."""
     from .strategy import fee_per_contract
 
@@ -1649,7 +1660,7 @@ def risk_trend_read(shot: LongShot, spec: LaneSpec, now: float | None = None) ->
     state = curverisk.trend_state(z, [v for _, v in seen])
     if len(_risk_seen_at) > 2000:
         _risk_seen_at.clear()
-    if now - _risk_seen_at.get((shot.ticker, shot.side), 0.0) >= curverisk.TREND_STEP:
+    if keep and now - _risk_seen_at.get((shot.ticker, shot.side), 0.0) >= curverisk.TREND_STEP:  # keep=False: a second look at the other side for the note, not added to the hour's range
         _risk_seen_at[(shot.ticker, shot.side)] = now
         seen.append((now, z))
     return z, back, state

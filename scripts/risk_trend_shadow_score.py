@@ -93,4 +93,30 @@ print(" refused by the old check alone (reason: trending against; every gate bef
 old_no = [x for x in got if not x["bet"] and x["why"].startswith("trending against")]
 line("new would buy (it would add these)", [x for x in old_no if x["new"] == "would buy"])
 line("new would not buy (both refuse)", [x for x in old_no if x["new"] != "would buy"])
+print("\nE. worth and trend together (the note \"[worth and trend: ... | agree on X]\", on decisions from 2026-11-17 19:30 ET on): the side the edge rule picks, scored as a buy at its all-in cost held to settlement, split by whether that side's own risk trend agreed. One row per market (its first decision with a pick).")
+BOTH = re.compile(r"\[both sides: YES worth [0-9.]+ costs ([0-9.]+).*?\| NO worth [0-9.]+ costs ([0-9.]+).*?\| the rule buys (YES|NO|neither)\]")
+AGREE = re.compile(r"\[worth and trend: .*?\| agree on (YES|NO|neither)\]")
+picks, seen_e = {"agree": [], "trend against": []}, set()
+for r in rows:
+    reason = r["reason"] or ""
+    mb, ma = BOTH.search(reason), AGREE.search(reason)
+    if not mb or not ma or mb.group(3) == "neither" or r["outcome"] not in ("yes", "no") or r["ticker"] in seen_e:
+        continue
+    seen_e.add(r["ticker"])
+    side = mb.group(3).lower()
+    cost = float(mb.group(1) if side == "yes" else mb.group(2))
+    won = r["outcome"] == side
+    picks["agree" if ma.group(1).lower() == side else "trend against"].append({"tk": r["ticker"], "ask": cost, "net": (1.0 if won else 0.0) - cost, "won": won})
+
+
+def line_cost(label, xs):
+    if not xs:
+        print(f"  {label:<46} n   0")
+        return
+    net = sum(x["net"] for x in xs)
+    print(f"  {label:<46} n {len(xs):>3} | won {sum(x['won'] for x in xs):>3} | avg cost {sum(x['ask'] for x in xs) / len(xs):.2f} | net per contract {net / len(xs):+.3f} | net per $1 {net / sum(x['ask'] for x in xs):+.3f}")
+
+
+line_cost("the rule's pick, its trend agrees", picks["agree"])
+line_cost("the rule's pick, its trend is against", picks["trend against"])
 print("DONE")
