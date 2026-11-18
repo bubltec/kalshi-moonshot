@@ -160,3 +160,64 @@ def test_the_lane_version_changes_only_when_a_chain_is_set(tmp_path, monkeypatch
 
     assert "buy_chain" not in version("[]") and version(RISK_FIRST) != version("[]")
     assert version(RISK_FIRST) != version("['ladder','price','risk_score']")  # the order is part of what the lane does
+
+
+# Modules: a named chain in strategies.toml that lanes are assigned to (2026-11-17, user: "we should be able to have multiple modules. And assign a lane to a module").
+BASE = "estimator='market'\nprice=[0.10,0.85]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nmax_spread=0.05\nmin_volume=0\nneeds_model_edge=true\nmin_edge_room=0.12\n"
+MODULES = "[module.risk_first]\nlabel='the risk score picks the side, the ladder checks the worth last'\nsteps=['risk_score','price','ladder']\nrisk_score_buy=0.25\n\n[module.ladder_first]\nsteps=['ladder','price']\n\n"
+
+
+def load(tmp_path, monkeypatch, text):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(text)
+    s = config.load()
+    return s, lanes.lane_specs(s)
+
+
+def test_unit_lanes_are_assigned_to_modules_and_take_their_steps(tmp_path, monkeypatch):
+    _, got = load(tmp_path, monkeypatch, MODULES + f"[lane.a]\n{BASE}buy_module='risk_first'\n\n[lane.b]\n{BASE}buy_module='ladder_first'\n\n[lane.c]\n{BASE}buy_module='risk_first'\n\n[lane.d]\n{BASE}")
+    assert got["a"].buy_chain == ("risk_score", "price", "ladder") and got["a"].buy_module == "risk_first"
+    assert got["b"].buy_chain == ("ladder", "price") and got["b"].buy_module == "ladder_first"
+    assert got["c"].buy_chain == got["a"].buy_chain  # two lanes on one module
+    assert got["d"].buy_chain == () and got["d"].buy_module == ""  # a lane with no module decides as it always has
+
+
+def test_unit_a_modules_settings_are_the_lanes_unless_the_lane_writes_its_own(tmp_path, monkeypatch):
+    _, got = load(tmp_path, monkeypatch, MODULES + f"[lane.a]\n{BASE}buy_module='risk_first'\n\n[lane.b]\n{BASE}buy_module='risk_first'\nrisk_score_buy=0.4\n")
+    assert got["a"].risk_score_buy == 0.25 and got["b"].risk_score_buy == 0.4
+
+
+def test_unit_a_module_reaches_a_lane_through_inherit(tmp_path, monkeypatch):
+    _, got = load(tmp_path, monkeypatch, MODULES + f"[lane.a]\n{BASE}buy_module='risk_first'\n\n[lane.twin]\ninherit='a'\nfixed_stake=2.0\n")
+    assert got["twin"].buy_chain == ("risk_score", "price", "ladder") and got["twin"].buy_module == "risk_first"
+
+
+@pytest.mark.parametrize("text,word", [
+    (MODULES + f"[lane.a]\n{BASE}buy_module='nope'\n", "not a module"),
+    (MODULES + f"[lane.a]\n{BASE}buy_module='risk_first'\nbuy_chain=['price']\n", "writes buy_chain too"),
+    (f"[module.empty]\nlabel='x'\n\n[lane.a]\n{BASE}buy_module='empty'\n", "needs `steps`"),
+    (f"[module.bad]\nsteps=['risk_score','ladders']\n\n[lane.a]\n{BASE}buy_module='bad'\n", "buy_chain names"),
+    (f"[module.bad]\nsteps=['price']\nnot_a_setting=1\n\n[lane.a]\n{BASE}buy_module='bad'\n", "unknown field"),
+    (f"[module.bad]\nsteps=['price']\ninherit='a'\n\n[lane.a]\n{BASE}buy_module='bad'\n", "does not name"),
+])
+def test_unit_a_lane_file_with_a_bad_module_does_not_load(tmp_path, monkeypatch, text, word):
+    with pytest.raises(ValueError, match=word):
+        load(tmp_path, monkeypatch, text)
+
+
+def test_unit_the_modules_name_is_not_what_the_lane_does_its_steps_are(tmp_path, monkeypatch):
+    s, got = load(tmp_path, monkeypatch, MODULES + "[module.same_steps]\nsteps=['risk_score','price','ladder']\nrisk_score_buy=0.25\n\n" + f"[lane.a]\n{BASE}buy_module='risk_first'\n\n[lane.b]\n{BASE}buy_module='same_steps'\n\n[lane.c]\n{BASE}buy_module='ladder_first'\n")
+    va, vb, vc = (lanes.settings_of(got[n], s) for n in "abc")
+    assert va == vb and va != vc
+
+
+def test_integration_a_lane_on_a_module_buys_by_its_steps_and_the_note_names_the_module(tmp_path, monkeypatch):
+    monkeypatch.setattr(riskscore, "live", lambda series, ticker, side, *a, **k: ([0.80 if side == "yes" else 0.20] * 3, 0.5, [0.5] * 3))
+    s, _ = load(tmp_path, monkeypatch, MODULES + f"[lane.ch]\n{BASE}price_skip=[0.45,0.57]\nbuy_module='risk_first'\n")
+    store = Store(s.db_path)
+    regime.reset()
+    now = time.time()
+    store.db.execute("INSERT OR REPLACE INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-7", "KXBTC15M", now + 400.0, 100.0, now))
+    store.db.commit()
+    out = runner.evaluate(s, None, None, store, shot(), estimators={"market": Fixed(0.92)})
+    assert out.action == "bet" and "[chain risk_first: risk_score > price > ladder |" in out.note

@@ -12,7 +12,7 @@ Where it runs:
   the review   (runner.lane_shots) asks the steps that need no model estimate, in order, up to the first one that does. The sides left are the lane's candidates; the estimator's own screen (the ladder's) is NOT run for a lane with a chain, so the ladder no longer decides which side is looked at.
   the decision (runner.evaluate) asks every step, in order, of both sides, with the estimate in hand. The candidate is bought when it is alive at the end, and the decision's note carries what each step said of each side.
 
-The steps read the lane's existing settings (its price range, risk_score_buy, entry_risk_trend, entry_trend_seconds, min_edge_room); none has a number of its own here. A new step is one function with @step("name") and its name added to lanes.BUY_STEPS. Memory only: no step reads the database.
+The steps read the lane's existing settings (its price range, risk_score_buy, entry_risk_trend, entry_trend_seconds, min_edge_room); none has a number of its own here. A new step is one function with @step("name") and its name added to lanes.BUY_STEPS. A chain can be given a name and shared: a [module.<name>] table in strategies.toml holds `steps` (and any lane settings as its defaults), and a lane takes it with buy_module = "<name>" (lanes._with_module). Memory only: no step reads the database.
 """
 
 from __future__ import annotations
@@ -164,7 +164,7 @@ def walk(ctx: Ctx, shot: LongShot, order: tuple[str, ...]) -> Trail:
     return Trail(shot.side, True, tuple(said))
 
 
-def describe(order: tuple[str, ...], trails: list[Trail]) -> str:
+def describe(order: tuple[str, ...], trails: list[Trail], module: str = "") -> str:
     """Both sides' walks in one line for a decision's note: the order, then for each side every step asked and what it said."""
 
     def one(t: Trail) -> str:
@@ -172,7 +172,7 @@ def describe(order: tuple[str, ...], trails: list[Trail]) -> str:
         end = "passed every step" if t.alive and len(t.said) == len(order) else "alive so far" if t.alive else f"out at {t.said[-1][0]}"
         return f"{t.side.upper()} {end}: {steps}" if steps else f"{t.side.upper()} {end}"
 
-    return f"[chain {' > '.join(order)} | {' | '.join(one(t) for t in trails)}]"
+    return f"[chain {module + ': ' if module else ''}{' > '.join(order)} | {' | '.join(one(t) for t in trails)}]"
 
 
 def decide(ctx: Ctx, shot: LongShot) -> tuple[bool, str]:
@@ -181,7 +181,7 @@ def decide(ctx: Ctx, shot: LongShot) -> tuple[bool, str]:
     mine = walk(ctx, shot, order)
     theirs = walk(ctx, other_side(shot), order)
     trails = [mine, theirs] if shot.side == "yes" else [theirs, mine]
-    return mine.alive, describe(order, trails)
+    return mine.alive, describe(order, trails, ctx.spec.buy_module)
 
 
 DROPPED: dict[str, list[dict[str, Any]]] = {}  # lane -> the sides its last review's steps turned down, with why (runner.review_lane writes them to screen_log)
