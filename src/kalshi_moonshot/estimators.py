@@ -71,6 +71,9 @@ class Estimator(Protocol):
     ) -> list[LongShot]: ...
 
 
+PRICE_BAND = "price band"  # the note of an estimate that is the lane's own ask, not a model's chance
+
+
 class EstimateShare:
     """One estimate per (estimator, market), reused by every lane that asks within `ttl` seconds.
 
@@ -99,6 +102,10 @@ class EstimateShare:
                 return hit[1]
             self.misses += 1
         got = compute()
+        if getattr(got, "why", "") == PRICE_BAND:
+            # 2026-11-17: a "price band" estimate is not an estimate of the market: it is the asking lane's own ask, for a lane that bets the price and needs no model (commodities.CommodityPricer.estimate). Kept here, it was handed within the minute to lanes that DO need the model, as the model's chance.
+            # KXBTC15M-26NOV171845: the live lane bought NO at 0.59 on a "chance" of 0.72 that was NO's price a minute earlier, read by a paper lane. The side had fallen 13 cents and that fall was read as an edge; sold at 0.05 for -$19.88. So it is never kept and never handed on.
+            return got
         with self._lock:
             self._got[key] = (self._clock(), got)
             if len(self._got) > 2000:  # drop what has aged out; a few thousand markets at most are ever live

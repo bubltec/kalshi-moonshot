@@ -1,0 +1,23 @@
+Question (2026-11-17, found while checking the paper lane crypto_risk_score, whose three bets carried "price band" as the model's note): where does a lane that needs the model get a "price band" chance, and did the live lane buy on one?
+
+Finding: estimators.EstimateShare keeps one estimate per (estimator, market) for ESTIMATE_SHARE_SECONDS (60) and hands it to every lane that asks. For a lane that bets the price and needs no model, commodities.CommodityPricer.estimate returns that lane's own ask as the chance, note "price band". That was kept and handed, within the minute, to lanes that DO need the model. Their "model chance" was then a market price up to a minute old, and their edge was how far the side had moved since: a side that had just fallen read as worth more than it cost.
+
+The bet that shows it, KXBTC15M-26NOV171845, crypto_multiscale, live:
+  18:36:20  NO bid 0.72 (tape)
+  18:37:20  bought NO at 0.59; note: "price band | record adjustment off for this lane, betting on 0.72"; both sides: "NO worth 0.72 costs 0.617, edge +0.103 ... the rule buys NO"
+  the 0.72 is NO's price a minute earlier. The ladder was never asked. Sold at 0.05, -$19.88 on $21.93.
+
+Live bets since 2026-11-16 12:00 ET with a settled market, by where the model's chance in the note came from (host, moonshot.decisions, mode trade). "other" = the note does not show either (most notes before 2026-11-17 were cut at 300 characters):
+ crypto_multiscale    | a market price stood in for the model (price band) |   11 | staked 263.40 | net -29.25
+ crypto_multiscale    | the ladder's own number                            |    4 | staked  62.97 | net  -9.06
+ crypto_multiscale    | other                                              |   21 | staked 445.24 | net  -7.60
+ commodity lanes (5)  | a market price stood in for the model              |    0
+ commodity lanes (5)  | the ladder's own number                            |   62 | staked 618.62 | net -16.21
+ commodity lanes (5)  | other                                              |   91 | staked 900.58 | net -79.30
+So of the 15 live crypto bets whose note shows the source, 11 were bought on another lane's price, not on the ladder.
+
+This also explains the mismatch noted on KXHYPE15M-26NOV171730 (the decision said the model had NO at 0.20, the screen five seconds later said 28%): the decision's number was a shared price, the screen's was the ladder.
+
+Fix: a "price band" estimate is never kept in the share and never handed on (estimators.EstimateShare.get). tests/test_estimate_share.py: two unit tests and one through runner.evaluate that reproduces the BTC buy without the fix and passes on it with.
+
+Not checked: how many of the "other" bets were also bought on a shared price; the earlier ladder-against-the-market study (2026-11-17-ladder-chance-vs-market.txt) mixed both sources under "model", so its picture of the ladder is partly this.
