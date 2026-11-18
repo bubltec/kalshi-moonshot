@@ -1,0 +1,26 @@
+
+window: readings from 2026-11-17 to now, 1215 crypto markets with a result; the lane's risk rule (risk at or under 25% held a minute), the ask 0.57 to 0.85, one a market and side, held to settlement, fee in, weights tuned
+--- rule alone, by the ask
+  ask 0.57 to 0.65                             bets    0
+  ask 0.65 to 0.70                             bets    0
+  ask 0.70 to 0.75                             bets   16 | win  75.0% vs avg ask  72.9c | net   +0.12 ( +1.0 per $100 staked)
+  ask 0.75 to 0.80                             bets  134 | win  72.4% vs avg ask  77.6c | net   -8.62 ( -8.2 per $100 staked)
+  ask 0.80 to 0.85                             bets  524 | win  80.0% vs avg ask  82.9c | net  -20.43 ( -4.6 per $100 staked)
+--- rule alone, asks under 0.80 by the score's cushion zone
+  on the line (cushion under 0.5)              bets   17 | win  88.2% vs avg ask  76.5c | net   +1.78 (+13.4 per $100 staked)
+  fair cushion (0.5 to 1.5)                    bets  130 | win  70.8% vs avg ask  77.2c | net   -9.94 ( -9.8 per $100 staked)
+  wide cushion (over 1.5)                      bets    3 | win  66.7% vs avg ask  76.7c | net   -0.34 (-14.4 per $100 staked)
+--- rule + edge 0.01, by the ask
+  ask 0.57 to 0.65                             bets    0
+  ask 0.65 to 0.70                             bets    0
+  ask 0.70 to 0.75                             bets   13 | win  84.6% vs avg ask  72.7c | net   +1.37 (+14.2 per $100 staked)
+  ask 0.75 to 0.80                             bets   13 | win  61.5% vs avg ask  76.6c | net   -2.12 (-21.0 per $100 staked)
+  ask 0.80 to 0.85                             bets   30 | win  83.3% vs avg ask  82.6c | net   -0.07 ( -0.3 per $100 staked)
+--- rule + edge 0.01, asks under 0.80 by the score's cushion zone
+  on the line (cushion under 0.5)              bets    3 | win 100.0% vs avg ask  74.7c | net   +0.72 (+31.6 per $100 staked)
+  fair cushion (0.5 to 1.5)                    bets   22 | win  72.7% vs avg ask  74.6c | net   -0.70 ( -4.2 per $100 staked)
+  wide cushion (over 1.5)                      bets    1 | win   0.0% vs avg ask  76.0c | net   -0.77 (-100.0 per $100 staked)
+DONE
+
+
+
