@@ -33,6 +33,7 @@ Things found while simplifying the bot that still need revising. Started 2026-11
 17. **The live commodity lanes' exit is written twice.** `[exit.commodity_exit]` is a copy of `commodity_energy`'s exit settings (checked equal on all 74 exit settings, 2026-11-18). Point the five live lanes at the module so there is one copy; until then a change to one must be made to the other.
 18. **A test fails on its own.** `tests/test_history.py::test_the_bot_schedules_history_at_a_priority_below_trading` (3 windows, expects 5) fails on `9a82fb3`, before the commodity model.
 15. **Look rate after deploy.** The look rate is now 5 s for every lane; three paper lanes had 20 to 30 s. Check the host's load after the deploy.
+16. **A test that depends on the time of day.** `tests/test_history.py::test_the_bot_schedules_history_at_a_priority_below_trading` passed at 10:05 ET and failed from about 10:40 ET on 2026-11-18 on the same code (it also fails on the commit before, with no data folder). Find what it reads from the clock and pin it.
 
 ## Done
 
