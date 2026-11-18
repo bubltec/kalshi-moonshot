@@ -39,10 +39,12 @@ WEIGHTS = masked((0.664, 0.461, 0.345, 0.068, -0.192, -0.207, 0.011, 0.201, 0.03
 STEP = 5.0  # seconds: the grid the market's mids are read on, as in the fit
 LOOK_SHARES = (0.0, 1.0 / 30.0, 1.0 / 15.0)  # the number has to hold at each of these shares of the TIME LEFT back: now, then 30 s back with 15 minutes left and 15 s back with 7.5 left, then 60 s and 30 s (2026-11-18, user: "a minute is a long time in a 15 minute market"; "maybe like 0, 15, 30"; "and that should scale with time"; "since volatility increases as time runs out"; "early in the market, 0, 30, 60 or even higher makes sense"). The first version (2026-11-16) used 0, 30 and 60 seconds whatever the time left; the user had not asked for that. Structural: the shares are the user's own 0/30/60 at the open
 
+LOOK_FLOOR = 90.0  # the scale stops shrinking at this many seconds left (2026-11-18, user: "maybe the scale should cap at some point, around 90s left"): the looks are 0, 3 and 6 s from there to the close, not a few seconds of noise. A structural cap, the user's number
+
 
 def looks_for(left: float) -> tuple[float, ...]:
-    """The seconds back the number must hold at, for a market with `left` seconds to go (LOOK_SHARES of the time left)."""
-    return tuple(max(0.0, left) * x for x in LOOK_SHARES)
+    """The seconds back the number must hold at, for a market with `left` seconds to go (LOOK_SHARES of the time left, the time left counted as no less than LOOK_FLOOR)."""
+    return tuple(max(left, LOOK_FLOOR) * x for x in LOOK_SHARES)
 
 _cache: dict[str, Any] = {"data": None, "mtime": -1.0, "checked": -1e9, "dir": None}
 _prev: dict[tuple[str, int], list[tuple[float | None, int | None]]] = {}

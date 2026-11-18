@@ -245,3 +245,10 @@ def test_integration_while_the_perp_is_silent_the_outside_feed_is_the_fallback()
 
 def test_unit_a_coin_still_reads_its_own_settlement_index():
     assert variants.spot_index("KXBTC15M", "kalshi", time.time()) == variants.crypto_index("KXBTC15M") == variants.spot_index("KXBTC15M", "", time.time())
+
+
+def test_unit_the_looks_scale_with_the_time_left_and_stop_shrinking_at_90_seconds():
+    assert riskscore.looks_for(900.0) == pytest.approx((0.0, 30.0, 60.0))
+    assert riskscore.looks_for(450.0) == pytest.approx((0.0, 15.0, 30.0))
+    assert riskscore.looks_for(90.0) == pytest.approx((0.0, 3.0, 6.0))
+    assert riskscore.looks_for(20.0) == pytest.approx((0.0, 3.0, 6.0)) and riskscore.looks_for(-5.0) == pytest.approx((0.0, 3.0, 6.0))
