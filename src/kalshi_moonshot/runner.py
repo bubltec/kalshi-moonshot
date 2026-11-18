@@ -13,6 +13,7 @@ import bisect
 import contextlib
 import itertools
 import json
+from pathlib import Path
 import logging
 import math
 import re
@@ -489,8 +490,11 @@ def evaluate(
     before_order: Callable[[], None] | None = None,
     share: EstimateShare | None = None,
     rest_seconds: float = 0.0,
+    dry: bool = False,
 ) -> Outcome:
     """Rate one market, log the decision, and place an order if allowed.
+
+    dry: decide only. No order, no decision row, no shadow row of the lane's own (the lane field buy_redecide_shadow asks for one more decision of a market whose resting buy missed, to record what it would have done).
 
     The lane's spec names the estimator and the bet rule. The estimate is then weighed against
     our own settled record (calibration.py) before the rule is applied.
@@ -513,10 +517,11 @@ def evaluate(
     except Exception as exc:  # model down, bad JSON, timeout: skip, never trade blind
         if raise_model_errors:
             raise
-        _log(
-            store, s, shot, model_p=None, edge=None, action="pass",
-            reason=f"model error: {exc}"[:200], context=getattr(exc, "context", "")[:1500],
-        )
+        if not dry:
+            _log(
+                store, s, shot, model_p=None, edge=None, action="pass",
+                reason=f"model error: {exc}"[:200], context=getattr(exc, "context", "")[:1500],
+            )
         return Outcome(
             shot.ticker, shot.title, shot.ask, None, None, "pass", f"model error: {exc}", shot.lane
         )
@@ -891,11 +896,13 @@ def evaluate(
         if ok_mod:
             from . import timerecord
 
-            timerecord.shadow(s, store, shot, spec, shot.ask)
+            if not dry:
+                timerecord.shadow(s, store, shot, spec, shot.ask)
             ok_time, why_time = timerecord.allows(store, shot, spec, s=s)
             from . import hotcheck
 
-            hotcheck.shadow(s, shot, spec, shot.ask)
+            if not dry:
+                hotcheck.shadow(s, shot, spec, shot.ask)
             ok_hot, why_hot = hotcheck.allows(spec)
             if ok_time and ok_hot:
                 note = f"[{why_mod}] {note}"
@@ -1149,13 +1156,19 @@ def evaluate(
             note = f"not sized: {sized.why}. {note}"
         else:
             note = f"{sized.why}. {note}"
-    if bet and s.is_live(shot.lane, shot.series):
+    if bet and dry:
+        note = f"[dry: a decision to buy, nothing ordered] {note}"
+    elif bet and s.is_live(shot.lane, shot.series):
+        _MISS.missed = False
         with contextlib.nullcontext() if rest_seconds > 0 or spec.buy_rest_seconds > 0 else _ORDER_LOCK:  # a resting buy waits for its fill: it must not hold every other lane's order
             placed = place(
                 s, client, store, shot, note, sized.contracts,
                 order_key=order_key, before_order=before_order, rest_seconds=rest_seconds,
             )
         note = placed.note
+        if spec.buy_redecide_shadow and getattr(_MISS, "missed", False):
+            _MISS.missed = False
+            _redecide_shadow(s, client, est, store, shot, spec, placed, searcher=searcher, quant=quant, estimators=estimators, share=share)
         if placed.filled > 0:
             # Record what actually filled, not what was asked for: a partial fill is a smaller bet.
             # Keep the fraction. int(1.28) stored a 1.28-contract fill as 1, so the win was booked at $1.
@@ -1167,11 +1180,40 @@ def evaluate(
     note = f"{crossed_tag}{risk_tag}{note}"
     action = "bet" if bet else "pass"
     held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
+    if dry:
+        return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
     _log(
         store, s, shot, model_p=p, edge=e, action=action, reason=stored_reason(note),
         context=got.context[:1500], cal_p=cal.p, side=shot.side, **held, **_risk_factors(shot, risk_reading),
     )
     return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
+
+
+
+def _redecide_shadow(s: Settings, client: KalshiClient, est, store: Store, shot: LongShot, spec: LaneSpec, placed: Placed, **kw: Any) -> None:
+    """A live resting buy rested its time and filled nothing (lane field buy_redecide_shadow; user, 2026-11-18: "shouldn't another tick have gone by with another choice?"): decide the market once more as it is NOW, with every gate and no order and no decision row (evaluate(dry=True)), and write what it would have done beside what the live lane did, as one row of kind "redecide" in data/risk_shadow.jsonl. It runs after the live lane's own order flow is over, so it cannot hold up a buy, and it never raises: whatever fails is logged once as a warning and the buy goes on as it was."""
+    import json
+    from dataclasses import replace as _replace
+
+    try:
+        book = client.orderbook(shot.ticker)
+        ask_now = best_ask(book, shot.side)
+        bid_now = best_bid(book, shot.side)
+        row: dict[str, Any] = {
+            "ts": round(time.time(), 2), "kind": "redecide", "lane": shot.lane, "ticker": shot.ticker, "side": shot.side, "live": s.is_live(shot.lane, shot.series),
+            "decided_ask": shot.ask, "rest_price": round(max(0.01, shot.ask - spec.buy_rest_below), 4), "ask_now": ask_now, "bid_now": bid_now,
+            "live_filled": round(placed.filled, 4), "live_cost": round(placed.cost, 4), "live_price": round(placed.cost / placed.filled, 4) if placed.filled > 0 else None,
+        }
+        if ask_now is None:
+            row.update(would="none", why="the book has no ask")
+        else:
+            fresh = _replace(shot, ask=ask_now, bid=bid_now if bid_now is not None else shot.bid, factors="", factors_job=None)
+            out = evaluate(s, client, est, store, fresh, kw.get("searcher"), quant=kw.get("quant"), estimators=kw.get("estimators"), share=kw.get("share"), dry=True)
+            row.update(would="bet" if out.action == "bet" else "pass", would_rest=round(max(0.01, ask_now - spec.buy_rest_below), 4) if out.action == "bet" else None, why=out.note[:300])
+        with open(Path(s.data_dir) / "risk_shadow.jsonl", "a") as f:
+            f.write(json.dumps(row) + "\n")
+    except Exception as exc:
+        log.warning("redecide shadow failed on %s %s and is passed over: %r", shot.ticker, shot.lane, exc)
 
 
 # Kalshi keeps a separate balance for each exchange_index a market trades on. A market whose index holds no cash refuses
@@ -1862,6 +1904,9 @@ class Placed(NamedTuple):
     price: float = 0.0  # a resting buy's own price, which can differ from the ask it was planned at (0 = not a resting buy)
 
 
+_MISS = threading.local()  # set by place() on this thread when a resting bid rested its time and filled nothing, read by evaluate() right after (lane field buy_redecide_shadow)
+
+
 _LANE_LOCKS: dict[str, threading.Lock] = {}
 _LANE_LOCKS_GUARD = threading.Lock()
 _ORDER_LOCK = threading.Lock()  # the risk check, the order and its ledger row happen as one step for an immediate buy: two workers cannot both pass a global cap and then both buy
@@ -1997,6 +2042,7 @@ def place(
             note = _rest_take_profit(s, client, store, shot, lane_spec, placed.filled, entry)
             if note:
                 return Placed(f"{placed.note} {note}", placed.filled, placed.cost, placed.price)
+        _MISS.missed = placed.filled <= 0 and "did not fill" in placed.note  # a bid that rested its time and filled nothing
         if placed.filled > 0 or not lane_spec.buy_rest_then_take or "did not fill" not in placed.note:
             return placed  # a refusal or a skip is not a miss: only a bid that rested its time and filled nothing falls back to the ask
         again = _requote(s, client, store, shot, lane_spec, count)

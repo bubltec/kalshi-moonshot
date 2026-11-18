@@ -484,3 +484,14 @@ def test_a_bid_over_the_lanes_own_cutoff_is_skipped_for_the_ask(setup, monkeypat
     assert client.rested and got.filled == 1.5  # a shallow queue rests as usual, and the fill is recorded
     assert queuehist.cutoff(s.data_dir, sp.name, 0.5, 3.0) is not None
     queuehist.reset()
+
+
+def test_place_says_when_a_resting_bid_rested_its_time_and_filled_nothing(setup, monkeypatch):
+    # read by evaluate() for the lane field buy_redecide_shadow (2026-11-18)
+    s, store, shot, spec = setup
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0)
+    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
+    runner.place(s, RestClient(fills=[1.5], asks=[0.30]), store, shot, "why", 1.5, order_key="k")
+    assert runner._MISS.missed is True  # the bid missed (the lane then took the ask)
+    runner.place(s, RestClient(fills=[], asks=[0.30], rest_fill=1.5), store, shot, "why", 1.5, order_key="k2")
+    assert runner._MISS.missed is False  # the bid filled
