@@ -755,7 +755,7 @@ class Worker:
     def _driven(self, spec) -> bool:
         """True when this lane's scope and review run on the stream's events and not on a timer (2026-11-14, user: "we need to get rid of these timers"): the lane reviews on a socket quote (entry_socket) and the market list is kept from the lifecycle channel. While the stream is down the timers run as before."""
         cache = getattr(self.client, "cache", None)
-        return bool(spec.entry_socket and cache is not None and hasattr(cache, "fed") and cache.fed())
+        return bool(tiered(spec) and cache is not None and hasattr(cache, "fed") and cache.fed())
 
     def _start_market_events(self) -> None:
         """A thread that turns the stream's market events into scope runs: a new or reopened market, or a changed close, scopes the lanes that trade its series at once; the stream coming up scopes every lane, and the stream going down puts the timers back."""

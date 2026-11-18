@@ -245,6 +245,7 @@ class Settings:
 
     # --- which lanes run ---
     paper_named: frozenset[str] = frozenset()  # lanes kept running on paper although paper_lanes is False (PAPER_LANE_NAMES)
+    entry_min_gap_seconds: float = 5.0  # a two-level lane reviews one event off the socket no more often than this (ENTRY_MIN_GAP_SECONDS). One number for every lane since 2026-11-18 (user: "move the look-rate number out of the lanes into one global setting"); it was a lane setting of the same name, 5 on most lanes
     paper_lanes: bool = True  # False = a lane not named in LIVE_LANES is switched off, not paper-traded: the live host runs only what is live. No effect while LIVE_LANES is empty (then every lane is live)
     tape_role: str = "both"  # who writes the Kalshi side of the tape: "both" (this process streams and writes, as always), "memory" (this process streams for its own memory and leaves the Kalshi rows to the recorder process) or "record" (this process is the recorder: the Kalshi streams, nothing else; `python -m kalshi_moonshot record`)
 
@@ -378,6 +379,7 @@ def load() -> Settings:
         paper_lanes=_b("PAPER_LANES", True),
         tape_role=os.environ.get("TAPE_ROLE", "both").strip().lower() if os.environ.get("TAPE_ROLE", "both").strip().lower() in {"both", "memory", "record"} else "both",
         paper_named=_paper_named(),
+        entry_min_gap_seconds=max(0.0, _f("ENTRY_MIN_GAP_SECONDS", 5.0)),
         fast_live=_b("COMMODITY_15M_LIVE", False),
         data_dir=data_dir,
         key_id=os.environ.get("KALSHI_KEY_ID", "").strip(),

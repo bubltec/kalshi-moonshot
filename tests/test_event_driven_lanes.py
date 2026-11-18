@@ -27,7 +27,7 @@ def make(tmp_path):
     client = CachedClient(live_event())
     w = Worker(s, client, None, Store(s.db_path), None, quant=live_quant())
     spec = lanes.lane_specs(s)["commodity"]
-    assert spec.entry_socket
+    assert lanes.tiered(spec)
     return s, w, client, spec
 
 
@@ -41,7 +41,7 @@ def test_a_lane_is_stream_driven_only_while_the_stream_is_confirmed(tmp_path):
     assert not w._driven(spec)
     client.cache.feed(True)
     assert w._driven(spec)
-    assert not w._driven(replace(spec, entry_socket=False))  # a lane with no socket trigger keeps its timers
+    assert not w._driven(replace(spec, review_minutes=None))  # a lane that is not two-level keeps its timers
     client.cache.feed(False)
     assert not w._driven(spec)
 
@@ -157,7 +157,7 @@ def test_an_index_tick_reviews_the_events_that_index_settles_when_their_quote_is
     w2._hist[ticker] = __import__("collections").deque([(time.time(), 0.40, 0.45)])  # not in the band
     w2.on_event(index_event("BRTI"))
     assert w2._jobs.qsize() == 0
-    assert spec.entry_socket
+    assert lanes.tiered(spec)
 
 
 def test_a_window_opening_or_closing_scopes_the_lane_even_with_no_created_event(tmp_path):

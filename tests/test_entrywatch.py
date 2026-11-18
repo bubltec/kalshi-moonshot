@@ -9,11 +9,11 @@ from kalshi_moonshot.store import Store
 from tests.test_two_level import Client, live_event, live_quant, settings
 
 EVENT = "KXGOLDD-26OCT19"
+GAP = __import__("types").SimpleNamespace(entry_min_gap_seconds=2.0)  # the only setting these watchers read: the look rate (a lane setting until 2026-11-18)
 
 
 def socket_settings(tmp_path):
-    (tmp_path / "strategies.toml").write_text('[lane.commodity]\nentry_socket = true\n')
-    return settings(tmp_path)
+    return settings(tmp_path)  # a two-level lane (the built-in commodity lane) reviews on the socket; there is no switch
 
 
 def quote(bid, ask, ticker=f"{EVENT}-T3970"):
@@ -27,23 +27,23 @@ def watcher(s, client):
     )
 
 
-def test_entry_socket_needs_a_two_level_lane(tmp_path):
-    (tmp_path / "strategies.toml").write_text('[lane.x]\nestimator = "llm"\nprice = [0.1, 0.2]\nhours = [1, 2]\nseries = ["A"]\nentry_socket = true\n')
-    with pytest.raises(ValueError, match="entry_socket needs review_minutes"):
+def test_a_two_level_lane_reviews_on_the_socket_and_there_is_no_switch(tmp_path):
+    """2026-11-18, user: "the whole app should be running on the socket"; the lane switch entry_socket is gone."""
+    assert entrywatch.wanted(settings(tmp_path))  # the built-in commodity lane is two-level
+    (tmp_path / "strategies.toml").write_text('[lane.commodity]\nentry_socket = false\n')
+    with pytest.raises(ValueError, match="unknown field"):
+        lanes.lane_specs(settings(tmp_path))
+    (tmp_path / "strategies.toml").write_text('[lane.commodity]\nentry_min_gap_seconds = 30\n')
+    with pytest.raises(ValueError, match="unknown field"):
         lanes.lane_specs(settings(tmp_path))
 
 
-def test_a_two_level_lane_reviews_on_the_socket_unless_it_says_not_to(tmp_path):
-    assert entrywatch.wanted(settings(tmp_path))  # the default: the commodity lane is two-level, so it is on with nothing set
-    assert lanes.lane_specs(settings(tmp_path))["commodity"].entry_socket is True
-    (tmp_path / "strategies.toml").write_text('[lane.commodity]\nentry_socket = false\n')
-    s = settings(tmp_path)
-    assert not entrywatch.wanted(s) and lanes.lane_specs(s)["commodity"].entry_socket is False
+def test_the_look_rate_is_one_global_setting(tmp_path, monkeypatch):
+    assert settings(tmp_path).entry_min_gap_seconds == 5.0
+    monkeypatch.setenv("ENTRY_MIN_GAP_SECONDS", "12")
+    from kalshi_moonshot import config
 
-
-def test_a_lane_that_is_not_two_level_never_gets_the_socket_by_default(tmp_path):
-    (tmp_path / "strategies.toml").write_text('[lane.x]\nestimator = "llm"\nprice = [0.1, 0.2]\nhours = [1, 2]\nseries = ["A"]\n')
-    assert not lanes.lane_specs(settings(tmp_path))["x"].entry_socket
+    assert config.load().entry_min_gap_seconds == 12.0
 
 
 def test_the_band_check_looks_at_either_side_the_lane_may_buy():
@@ -106,8 +106,8 @@ def test_a_quote_out_of_range_queues_nothing(tmp_path):
     assert w._jobs.qsize() == 0
 
 
-def test_a_lane_with_entry_socket_off_is_ignored(tmp_path):
-    (tmp_path / "strategies.toml").write_text('[lane.commodity]\nentry_socket = false\n')
+def test_a_lane_that_is_switched_off_is_ignored(tmp_path):
+    (tmp_path / "strategies.toml").write_text('[lane.commodity]\nenabled = false\n')
     s = settings(tmp_path)
     w = watcher(s, Client(live_event()))
     w.watch = {("commodity", EVENT): {"close": (datetime.now(UTC) + timedelta(minutes=5)).isoformat()}}
@@ -138,7 +138,7 @@ def test_refresh_loads_the_watchlists_of_socket_lanes_only(tmp_path):
 
 
 def _approach_watcher():
-    w = entrywatch.EntryWatcher(lambda: None, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
+    w = entrywatch.EntryWatcher(lambda: GAP, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
     spec = lanes.LaneSpec("x", "ladder", "x", (0.76, 0.92), (0, 1), 0.05, 0.0, sides=("yes", "no"), entry_approach=0.10, entry_arm_seconds=30.0)
     return w, spec
 
@@ -185,7 +185,7 @@ def test_a_side_that_is_not_gaining_is_not_armed_and_an_old_arming_is_reset():
 
 
 def full_lane_settings(tmp_path, cap):
-    (tmp_path / "strategies.toml").write_text(f'[lane.commodity]\nentry_socket = true\nmax_open = {cap}\n')
+    (tmp_path / "strategies.toml").write_text(f'[lane.commodity]\nmax_open = {cap}\n')
     return settings(tmp_path)
 
 
@@ -238,7 +238,7 @@ def test_arming_a_side_in_a_full_lane_prepares_no_shot(tmp_path):
 
 
 def _move_watcher(**kw):
-    w = entrywatch.EntryWatcher(lambda: None, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
+    w = entrywatch.EntryWatcher(lambda: GAP, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
     spec = lanes.LaneSpec("x", "ladder", "x", (0.03, 0.70), (0, 1), 0.06, 0.0, sides=("yes", "no"), entry_move=0.40, entry_move_seconds=3.0, entry_arm_seconds=10.0, **kw)
     return w, spec
 
@@ -302,7 +302,7 @@ CLOSE = 100_000.0
 
 def _late_watcher(path, strike=100.0, agree=4):
     """A watcher that has seen one index tick a second from the window's open to minute 12, following `path(t)` (seconds before the close -> index value)."""
-    w = entrywatch.EntryWatcher(lambda: None, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
+    w = entrywatch.EntryWatcher(lambda: GAP, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
     spec = lanes.LaneSpec("x", "ladder", "x", (0.5, 0.99), (0, 0.1), 0.10, 0.0, sides=("yes", "no"), late_steps=5, late_agree=agree, late_min_z=0.8)
     ring = w._idx.setdefault("BRTI", entrywatch.deque(maxlen=2400))
     for sec in range(900, 180, -1):
@@ -374,7 +374,7 @@ def test_prune_forgets_markets_that_are_over_and_keeps_live_ones():
 
 
 def test_the_refresh_thread_prunes_every_pass():
-    w = entrywatch.EntryWatcher(lambda: None, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
+    w = entrywatch.EntryWatcher(lambda: GAP, None, lambda: None, lambda store: {})  # type: ignore[arg-type]
     w._hist["GONE"] = entrywatch.deque([(1.0, 0.4, 0.5)], maxlen=400)
     w.refresh = lambda: w._stop.set()  # type: ignore[method-assign]
     w._run_refresh()

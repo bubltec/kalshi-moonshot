@@ -1,8 +1,8 @@
 """Look at a watched market the moment its streamed quote moves into a lane's buying range.
 
 A 15-minute contract can cross into its price band and out again between two polled reviews. The slow scoping pass
-still decides which events are worth watching; this listener sits on the tape recorder's socket and, for a lane that sets
-`entry_socket = true`, notices a quote that puts one side of a watched event inside the lane's price band and entry window.
+still decides which events are worth watching; this listener sits on the tape recorder's socket and, for a two-level lane
+(one with review_minutes), notices a quote that puts one side of a watched event inside the lane's price band and entry window.
 
 A hit runs the lane's own review on that one event (runner.review_lane: the same filters, estimator, cooldown and
 one-per rule as the polled review) and queues the same `evaluate` jobs, so sizing, risk limits and paper-versus-live
@@ -10,7 +10,7 @@ are untouched. The polled review keeps running as the fallback if the socket dro
 
 A lane with `entry_approach` also rests a buy at its price floor while a side is climbing toward that floor. The bid
 sits until it fills or `entry_arm_seconds` runs out, and Kalshi cancels it then. Nothing is spent unless it fills.
-Nothing here starts unless a tiered lane sets `entry_socket`.
+Nothing here starts unless a two-level lane is on (the lane switch entry_socket was removed 2026-11-18: the socket is how these lanes run).
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ GAIN_LOOKBACK = (5.0, 25.0)  # a side is gaining when its mid is above what it w
 
 
 def wanted(s: Settings) -> bool:
-    return any(spec.entry_socket and tiered(spec) for spec in lane_specs(s).values() if spec.enabled)
+    return any(tiered(spec) for spec in lane_specs(s).values() if spec.enabled)
 
 
 def event_of(ticker: str) -> str:
@@ -134,7 +134,7 @@ class EntryWatcher:
         hist.append((float(e["ts"]), float(e["bid"]), float(e["ask"])))
         for lane, event, info in hits:
             spec = specs.get(lane)
-            if spec is None or not spec.enabled or not spec.entry_socket:
+            if spec is None or not spec.enabled or not tiered(spec):
                 continue
             if spec.late_steps > 0:
                 continue  # a late-trend lane buys on the index's ticks (_on_index), never on a quote entering a band
@@ -145,7 +145,7 @@ class EntryWatcher:
                 self._last[(lane, event)] = time.time()  # the armed buy is on its way: the timed path must not queue a second review
                 continue
             key = (lane, event)
-            if key in self._pending or time.time() - self._last.get(key, 0.0) < spec.entry_min_gap_seconds:
+            if key in self._pending or time.time() - self._last.get(key, 0.0) < s.entry_min_gap_seconds:
                 continue
             if in_band(spec, float(e["bid"]), float(e["ask"])) and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 self._pending.add(key)
@@ -161,14 +161,14 @@ class EntryWatcher:
             hits = [(lane, ev, info) for (lane, ev), info in self.watch.items() if index_for_series(str(info.get("series", ""))) == idx]
         for lane, event, info in hits:
             spec = specs.get(lane)
-            if spec is None or not spec.enabled or not spec.entry_socket or spec.late_steps > 0 or spec.entry_move > 0 or spec.entry_approach > 0:
+            if spec is None or not spec.enabled or not tiered(spec) or spec.late_steps > 0 or spec.entry_move > 0 or spec.entry_approach > 0:
                 continue  # those lanes have their own triggers
             rows = self._hist.get(str(info.get("ticker", "")))
             if not rows:
                 continue
             _, bid, ask = rows[-1]
             key = (lane, event)
-            if key in self._pending or time.time() - self._last.get(key, 0.0) < spec.entry_min_gap_seconds:
+            if key in self._pending or time.time() - self._last.get(key, 0.0) < s.entry_min_gap_seconds:
                 continue
             if in_band(spec, bid, ask) and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 self._pending.add(key)
@@ -301,7 +301,7 @@ class EntryWatcher:
         """A YES mid that has moved `entry_move` within `entry_move_seconds` and is at the far end of that move: queue a resting buy of the side that fell (YES fell: buy YES; YES rose: NO fell, buy NO)."""
         ticker, ts = str(e["ticker"]), float(e["ts"])
         key = (lane, ticker)
-        if time.time() - self._moved.get(key, 0.0) < max(spec.entry_min_gap_seconds, spec.entry_arm_seconds + 5.0):
+        if time.time() - self._moved.get(key, 0.0) < max(self.get_settings().entry_min_gap_seconds, spec.entry_arm_seconds + 5.0):
             return
         mids = [(r[0], (r[1] + r[2]) / 2.0) for r in self._hist.get(ticker, ()) if ts - spec.entry_move_seconds <= r[0] <= ts]
         if len(mids) < 2:
@@ -369,7 +369,7 @@ class EntryWatcher:
             if arm is not None and ts - arm["t"] > spec.entry_arm_seconds:
                 del self._armed[key]
                 arm = None
-            if arm is not None and time.time() - float(arm.get("offered") or 0.0) >= spec.entry_min_gap_seconds and arm["shot"] is not None and price > lo + 1e-9 and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
+            if arm is not None and time.time() - float(arm.get("offered") or 0.0) >= self.get_settings().entry_min_gap_seconds and arm["shot"] is not None and price > lo + 1e-9 and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
                 arm["offered"] = time.time()
                 self._arm_jobs.put(("fire", key, replace(arm["shot"], ask=round(lo, 4), bid=round(max(lo - 0.01, 0.01), 4))))
             if arm is None and max(lo - spec.entry_approach, 0.01) <= price < lo and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))) and self._gaining(e["ticker"], side, ts):
@@ -446,12 +446,12 @@ class EntryWatcher:
         return self.client
 
     def refresh(self) -> None:
-        """Reload which events each entry_socket lane is watching."""
+        """Reload which events each two-level lane is watching."""
         s = self.get_settings()
         store = self.store_factory()
         fresh: dict[tuple[str, str], dict[str, Any]] = {}
         for spec in lane_specs(s).values():
-            if spec.enabled and spec.entry_socket and tiered(spec):
+            if spec.enabled and tiered(spec):
                 for event, info in store.watch(spec.name).items():
                     fresh[(spec.name, event)] = info
         with self._lock:
@@ -463,7 +463,7 @@ class EntryWatcher:
 
         s = self.get_settings()
         spec = lane_specs(s).get(lane)
-        if spec is None or not spec.enabled or not spec.entry_socket:
+        if spec is None or not spec.enabled or not tiered(spec):
             return 0
         store = self.store_factory()
         if lane_full(store, spec, {event}):
