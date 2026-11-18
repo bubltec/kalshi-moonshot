@@ -1177,6 +1177,8 @@ def evaluate(
     held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
     if dry:
         return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
+    if bet and spec.stake_vol_shadow and s.is_live(shot.lane, shot.series):
+        _stake_vol_shadow(s, shot, sized)
     _log(
         store, s, shot, model_p=p, edge=e, action=action, reason=stored_reason(note),
         context=got.context[:1500], cal_p=cal.p, side=shot.side, **held, **_risk_factors(shot, risk_reading),
@@ -1209,6 +1211,24 @@ def _redecide_shadow(s: Settings, client: KalshiClient, est, store: Store, shot:
             f.write(json.dumps(row) + "\n")
     except Exception as exc:
         log.warning("redecide shadow failed on %s %s and is passed over: %r", shot.ticker, shot.lane, exc)
+
+
+
+def _stake_vol_shadow(s: Settings, shot: LongShot, sized: Sizing) -> None:
+    """One row of kind "stake_vol" in data/risk_shadow.jsonl for a live bet on a lane with stake_vol_shadow (user, 2026-11-18: "scale the bet by lane volatility too"; "Yes, shadow it"): the market's own typical minute at the buy, the price and the stake that was actually used. Memory only (the quote mids already held), changes no stake, never raises: a reading that cannot be made writes no row."""
+    from . import quoteshock
+    from . import ticks as ticks_mod
+
+    try:
+        now = time.time()
+        unit = quoteshock.typical_minute(ticks_mod.mids.rows(shot.ticker), now)
+        if unit is None or unit <= 0:
+            return
+        row = {"ts": round(now, 2), "kind": "stake_vol", "lane": shot.lane, "ticker": shot.ticker, "side": shot.side, "live": True, "ask": shot.ask, "stake": round(float(sized.cost_usd), 4), "contracts": round(float(sized.contracts), 4), "unit": round(float(unit), 5), "left": round(shot.hours_to_close * 3600.0, 1)}
+        with open(Path(s.data_dir) / "risk_shadow.jsonl", "a") as f:
+            f.write(json.dumps(row) + "\n")
+    except Exception as exc:
+        log.warning("stake_vol shadow failed on %s %s and is passed over: %r", shot.ticker, shot.lane, exc)
 
 
 # Kalshi keeps a separate balance for each exchange_index a market trades on. A market whose index holds no cash refuses

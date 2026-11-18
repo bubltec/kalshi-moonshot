@@ -141,3 +141,65 @@ def test_unit_a_dry_decision_orders_nothing_and_logs_no_decision_and_says_what_t
     monkeypatch.setattr(runner, "place", missing_place()[0])
     real = runner.evaluate(s, Book(0.78), None, store, shot(), estimators={"market": Fixed(0.92)})
     assert real.action == dry.action and decisions(store) == 1
+
+
+# ---- the volatility stake shadow (lane field stake_vol_shadow; 2026-11-18, user: "scale the bet by lane volatility too"; "Yes, shadow it") ----
+
+
+def vol_world(tmp_path, monkeypatch, on=True):
+    s, store = world(tmp_path, monkeypatch, shadow=False)
+    if on:
+        (tmp_path / "strategies.toml").write_text((tmp_path / "strategies.toml").read_text() + "stake_vol_shadow=true\n")
+        s = config.load()
+    from kalshi_moonshot import quoteshock
+
+    monkeypatch.setattr(quoteshock, "typical_minute", lambda rows, now, span=900.0: 0.1085)
+    return s, store
+
+
+def vol_rows(tmp_path):
+    f = tmp_path / "risk_shadow.jsonl"
+    return [x for x in map(json.loads, f.read_text().splitlines()) if x.get("kind") == "stake_vol"] if f.exists() else []
+
+
+def filled_place(s, client, store, shot, why, count, **k):
+    return runner.Placed("bought YES 1/1 resting at 0.79", 1.0, 0.79, 0.79)
+
+
+def test_integration_a_live_bet_on_a_lane_with_the_field_writes_the_markets_typical_minute_and_the_stake_used(tmp_path, monkeypatch):
+    s, store = vol_world(tmp_path, monkeypatch)
+    monkeypatch.setattr(runner, "place", filled_place)
+    out = runner.evaluate(s, Book(0.78), None, store, shot(), estimators={"market": Fixed(0.92)})
+    assert out.action == "bet"
+    got = vol_rows(tmp_path)
+    assert len(got) == 1 and got[0]["lane"] == "ch" and got[0]["ticker"] == "KXBTC15M-7" and got[0]["live"] is True
+    assert got[0]["unit"] == pytest.approx(0.1085) and got[0]["stake"] == pytest.approx(0.79) and got[0]["ask"] == 0.80 and got[0]["left"] > 0
+
+
+def test_integration_a_lane_without_the_field_writes_no_stake_row(tmp_path, monkeypatch):
+    s, store = vol_world(tmp_path, monkeypatch, on=False)
+    monkeypatch.setattr(runner, "place", filled_place)
+    assert runner.evaluate(s, Book(0.78), None, store, shot(), estimators={"market": Fixed(0.92)}).action == "bet"
+    assert vol_rows(tmp_path) == []
+
+
+def test_integration_a_market_with_too_little_history_writes_no_stake_row_and_still_buys(tmp_path, monkeypatch):
+    from kalshi_moonshot import quoteshock
+
+    s, store = vol_world(tmp_path, monkeypatch)
+    monkeypatch.setattr(quoteshock, "typical_minute", lambda *a, **k: None)  # under five minutes of quotes: no reading
+    monkeypatch.setattr(runner, "place", filled_place)
+    assert runner.evaluate(s, Book(0.78), None, store, shot(), estimators={"market": Fixed(0.92)}).action == "bet"
+    assert vol_rows(tmp_path) == []
+
+
+def test_integration_a_dry_decision_and_a_failing_reading_never_touch_the_live_bet(tmp_path, monkeypatch, caplog):
+    s, store = vol_world(tmp_path, monkeypatch)
+    from kalshi_moonshot import quoteshock
+
+    monkeypatch.setattr(runner, "place", filled_place)
+    runner.evaluate(s, Book(0.78), None, store, shot(), estimators={"market": Fixed(0.92)}, dry=True)
+    assert vol_rows(tmp_path) == []  # a dry decision is no bet
+    monkeypatch.setattr(quoteshock, "typical_minute", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("ticks down")))
+    out = runner.evaluate(s, Book(0.78), None, store, shot(), estimators={"market": Fixed(0.92)})
+    assert out.action == "bet" and vol_rows(tmp_path) == [] and "stake_vol shadow failed" in caplog.text
