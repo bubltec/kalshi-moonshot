@@ -84,7 +84,7 @@ for f in days:
                 path = path[~np.isnan(path)]
                 won = result == side
                 held = (1.0 if won else 0.0) - a - fee(a)
-                row = {"day": day, "ticker": ticker, "ask": a, "left": float(left), "flips": float(flips), "won": won, "held": held}
+                row = {"day": day, "ticker": ticker, "ask": a, "left": float(left), "flips": float(flips), "won": won, "held": held, "unit": unit * 100.0}
 
                 def first(mask):
                     ix = np.flatnonzero(mask)
