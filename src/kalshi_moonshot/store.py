@@ -1183,12 +1183,14 @@ class Store:
                 return side, float(r["exit_ts"])
         return None
 
-    def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None, factors: str = "") -> None:
+    def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None, factors: str = "", side: str | None = None) -> None:
+        """Write a sale on the lane's open bets on this market. With `side`, only the bets on that side: a lane may have an open row on each side of one market (a paper lane logs the other side unstaked while it holds the first), and one side's sale price is not the other's. 2026-11-18: HYPE 03:30, the NO bet's sale at 0.17 was written on the YES row too, bought 40 s earlier at 0.79. The other side's row stays open and gets its own exit or its settlement."""
         self.db.execute(
             """UPDATE decisions SET exit_price=?, exit_ts=?, exit_reason=?, exit_factors=?
                WHERE ticker=? AND action='bet' AND outcome IS NULL AND exit_ts IS NULL
-                 AND (? IS NULL OR COALESCE(lane,'moonshot')=?)""",
-            (price, time.time(), reason[:900], factors or None, ticker, lane, lane),  # 900, not 300 (2026-11-14): a profit take's reason carries the typical minute and the cushion note at its end, which the cut dropped
+                 AND (? IS NULL OR COALESCE(lane,'moonshot')=?)
+                 AND (? IS NULL OR COALESCE(side,'yes')=?)""",
+            (price, time.time(), reason[:900], factors or None, ticker, lane, lane, side, side),  # 900, not 300 (2026-11-14): a profit take's reason carries the typical minute and the cushion note at its end, which the cut dropped
         )
         self.db.commit()
         self.touch("bets")

@@ -2263,7 +2263,7 @@ class ProfitWatcher:
                 log.debug("watcher: could not book the resting sell on %s", row["ticker"], exc_info=True)
                 continue
             if new > 0 and total > 0 and store.net_contracts(row["ticker"], s.env) < 0.005:
-                store.mark_exited(row["ticker"], avg, f"resting take-profit filled at {avg:.4f} (no taker fee)", lane)
+                store.mark_exited(row["ticker"], avg, f"resting take-profit filled at {avg:.4f} (no taker fee)", lane, side=row["side"] or "yes")
                 line = f"sold {total:g} {row['ticker']} resting @ {avg:.4f} (no taker fee)"
                 log.info("watcher: %s", line)
                 self.sold.append(line)
@@ -2573,7 +2573,7 @@ class ProfitWatcher:
         log.info("watcher: %s", line)
         self.sold.append(line)
         if filled >= pos.count - 0.005:
-            store.mark_exited(ticker, avg, why, manual.LANE)
+            store.mark_exited(ticker, avg, why, manual.LANE, side=pos.side)
         if filled < pos.count - 0.005:
             self._back_off(ticker, manual.LANE)
 

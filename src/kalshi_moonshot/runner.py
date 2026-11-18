@@ -2499,7 +2499,7 @@ def close_by_hand(s: Settings, store: Store, row: Any, real: float, bid: float) 
         if gone <= 0:
             return None
         if store.net_contracts(row["ticker"], s.env) < 0.005:
-            store.mark_exited(row["ticker"], bid, f"closed by hand: the account no longer holds these contracts (booked at the bid {bid:.2f} when the bot noticed, not at your fill)", lane)
+            store.mark_exited(row["ticker"], bid, f"closed by hand: the account no longer holds these contracts (booked at the bid {bid:.2f} when the bot noticed, not at your fill)", lane, side=side)
             return f"{row['ticker']}: closed by hand, {gone:g} contracts written off at the bid {bid:.2f}"
         return f"{row['ticker']}: {gone:g} contracts sold by hand, {real:g} still held"
 
@@ -2532,7 +2532,7 @@ def exit_position(
             from . import manualrest
 
             price = manualrest.rest_fill_price(why) or price  # a resting ask fills at its own price, not the bid this re-read catches
-            store.mark_exited(row["ticker"], price, why, lane, seen)
+            store.mark_exited(row["ticker"], price, why, lane, seen, side=side)
             return f"paper-sold {row['ticker']} @ {price:.2f}. {why}"
         # A resting take-profit sell may be working on this position: cancel it and book whatever it filled
         # before selling anything ourselves, or the two orders would race for the same contracts.
@@ -2542,13 +2542,13 @@ def exit_position(
         if real is not None and real < count - 0.05 and book_hand_sale(s, store, row["ticker"], side, real, bid) > 0:
             count = round(store.net_contracts(row["ticker"], s.env), 2)
             if count < 0.005:
-                store.mark_exited(row["ticker"], bid, f"closed by hand: the account no longer holds these contracts (booked at the bid {bid:.2f} when the bot noticed, not at your fill). {why}", lane, seen)
+                store.mark_exited(row["ticker"], bid, f"closed by hand: the account no longer holds these contracts (booked at the bid {bid:.2f} when the bot noticed, not at your fill). {why}", lane, seen, side=side)
                 return f"{row['ticker']}: closed by hand, nothing left to sell. {why}"
         if count < 0.005 and rest_filled > 0:
-            store.mark_exited(row["ticker"], rest_avg, f"resting take-profit filled at {rest_avg:.4f} (no taker fee)", lane, seen)
+            store.mark_exited(row["ticker"], rest_avg, f"resting take-profit filled at {rest_avg:.4f} (no taker fee)", lane, seen, side=side)
             return f"sold {rest_filled:g} {row['ticker']} resting @ {rest_avg:.4f} (no taker fee); the {why} sale found nothing left"
         if count <= 0:
-            store.mark_exited(row["ticker"], bid, why, lane, seen)
+            store.mark_exited(row["ticker"], bid, why, lane, seen, side=side)
             return f"paper-sold {row['ticker']} @ {bid:.2f} (no live fill). {why}"
         limit = max(0.01, round(bid - slip, 2))
         profit, floor = is_profit_sale(why), 0.0
@@ -2609,7 +2609,7 @@ def exit_position(
             avg = proceeds / sold if sold > 0 else avg
             filled = sold
         if store.net_contracts(row["ticker"], s.env) < 0.005:
-            store.mark_exited(row["ticker"], avg if filled else bid, why, lane, seen)
+            store.mark_exited(row["ticker"], avg if filled else bid, why, lane, seen, side=side)
             return f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
         return f"partial exit {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
 
