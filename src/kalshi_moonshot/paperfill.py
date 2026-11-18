@@ -9,7 +9,6 @@ was already at it when the order went in. A filled bet is repriced to the bid; a
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import Any
 
@@ -18,8 +17,6 @@ from .fillmodel import simulate_taker_buy
 from .lanes import lane_specs
 from .store import Store
 from .strategy import fee_per_contract
-
-log = logging.getLogger(__name__)
 
 FLOOR_MARK = "[floor-bid"  # runner.evaluate puts this at the front of a paper buy that a live lane would have rested at its floor
 MARK = "[rest-v2"
@@ -38,7 +35,7 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
         return out
     for lane, spec in specs.items():
         rows = store.db.execute(
-            f"""SELECT id, ts, ticker, side, ask, bid, reason, action, stake_usd, close_time, title, category, event_ticker FROM decisions
+            f"""SELECT id, ts, ticker, side, ask, reason, action, stake_usd FROM decisions
                 WHERE lane=? AND mode='observe' AND exit_ts IS NULL AND (action='bet' OR COALESCE(reason,'') LIKE '%{OLD_MARK}%')
                   AND ts < ? AND ts > ? AND COALESCE(reason,'') NOT LIKE '%{MARK}%'""",
             (lane, now - GRACE, now - 24 * 3600),
@@ -103,47 +100,9 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                     (f"{reason} {MARK}: a resting bid at {price:.2f} would not have filled, {why}]", r["id"]),
                 )
                 out["missed"] += 1
-                if spec.buy_redecide > 0:
-                    _redecide(s, store, spec, r, window, now)
         store.db.commit()
         store.touch("bets")
     return out
-
-
-def _redecide(s: Settings, store: Store, spec: Any, r: Any, window: float, now: float) -> bool:
-    """A resting buy that missed is decided again (lane field buy_redecide; user, 2026-11-18: "shouldn't another tick have gone by with another choice?"): queue a fresh evaluation of the market for this lane, which re-reads the market, runs every gate at the price now and, if it still buys, rests a new bid. At most buy_redecide times a market and side, counted from the misses already on record, and only while the market has time for another rest window and the judge's sweep (three of them). Memory of the lane's cooldown is bypassed on purpose: the cooldown is about deciding on a market, not about a bid that never traded. Returns whether a job was queued."""
-    import datetime
-    from dataclasses import asdict
-
-    from .jobs import Jobs
-    from .strategy import LongShot
-
-    try:
-        close = datetime.datetime.fromisoformat(str(r["close_time"]).replace("Z", "+00:00")).timestamp()
-    except (ValueError, TypeError):
-        return False
-    left = close - now
-    if left < 3.0 * (window + GRACE):
-        return False
-    misses = store.db.execute(
-        "SELECT COUNT(*) FROM decisions WHERE lane=? AND ticker=? AND side=? AND action='pass' AND reason LIKE ?", (spec.name, r["ticker"], r["side"], f"%{MARK}: a resting bid%would not have filled%")
-    ).fetchone()[0]
-    if misses > spec.buy_redecide:
-        return False
-    shot = LongShot(
-        ticker=r["ticker"], title=r["title"] or "", rules="", bid=float(r["bid"] or 0.0), ask=float(r["ask"]), volume=0.0, close_time=str(r["close_time"]), hours_to_close=left / 3600.0,
-        lane=spec.name, series=r["ticker"].split("-")[0], category=r["category"] or "", event_ticker=r["event_ticker"] or "", side=r["side"],
-    )
-    try:
-        from .worker import job_priority
-
-        priority = job_priority(s, spec)
-    except Exception:
-        priority = 0
-    made = Jobs(store).enqueue("evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{spec.name}:{r['ticker']}", expires_in=2.0 * (window + GRACE), max_attempts=s.job_max_attempts, priority=priority)
-    if made:
-        log.info("paper resting buy %s %s %s missed (miss %d of at most %d more): decided again", spec.name, r["ticker"], r["side"], misses, spec.buy_redecide)
-    return made is not None
 
 
 def _take_after_rest(spec: Any, r: Any, quotes: Any, window: float) -> float | None:
