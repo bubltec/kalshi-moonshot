@@ -45,6 +45,7 @@ Things found while simplifying the bot that still need revising. Started 2026-11
 
 ### The risk engine
 - **Readings belong in the risk engine, not beside it.** User, 2026-11-16: "all these factors need to build towards that risk score"; 2026-11-18: "are we building these as pieces of the modules for risk engine?" Today the buy and sell chains hold separate steps next to the risk score (`perp_worth`, `calm`, the shadow `shape`, the risk trend), each with its own yes or no. The shape the user described is: the lane's gates say what is eligible, the risk engine gives one number for the side from all its readings, and that number is what the buy and the sale both ask. So a reading that proves itself in shadow (the look-back shape, the Kalshi perp's agreement, the calm state) becomes a reading of the risk score (`riskscore.NAMES`, fitted with the rest), and its separate step is removed.
+- **The risk score does not see flip risk on a late favourite.** On 26,543 held-out moments of a side at 0.80 to 0.92, the score's view against Kalshi's price did not separate flips (2.1% / 2.3% / 1.8% by thirds); the time left did (0.6% over 7 min, 2.7% at 3 to 7, 10.5% inside 3 min). `studies/results/2026-11-18-risk-score-flip-check.txt`. Make flip risk a reading the score carries (the share of the remaining time a fall of that size needs), then rerun this check.
 
 ## Done
 
