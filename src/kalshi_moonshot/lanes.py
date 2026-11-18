@@ -577,6 +577,42 @@ def strategies_path(data_dir: Path) -> Path:
     return data_dir / "strategies.toml"
 
 
+def recorder_lanes(s: Settings) -> list[tuple[str, tuple[str, ...]]]:
+    """What the tape recorder needs of the lane file, and nothing else: (lane, its series) for every lane that is on and two-level (2026-11-18, user: "it should only parse what it needs to record. so the updates to it are less often").
+
+    The recorder runs in its own container on an image a bot deploy does not replace. It used to load every lane in full, so a lane file that named a setting its older image did not know was refused, the recorder followed no markets and the tape stopped (2026-11-16, and again 2026-11-18 08:16 to 09:00 ET on `exit_module`). Here only three settings are read from each lane, raw from the file: `enabled`, `review_minutes` (set = a two-level lane) and `series`, through `inherit`, the lane's buy module's defaults and the built-in lanes, with the admin page's `enabled` on top. Every other setting, table and value in the file is ignored, known to this image or not."""
+    path = strategies_path(s.data_dir)
+    return _recorder_lanes(s, path.read_text() if path.is_file() else None, overrides.load_text(s.data_dir))
+
+
+@lru_cache(maxsize=4)
+def _recorder_lanes(s: Settings, text: str | None, changes: str | None) -> list[tuple[str, tuple[str, ...]]]:
+    doc = tomllib.loads(text) if text else {}
+    rows, modules = doc.get("lane") or {}, doc.get("module") or {}
+    base = builtin_lanes(s)
+    try:
+        page = (json.loads(changes or "{}").get("lanes") or {})
+    except (ValueError, AttributeError):
+        page = {}
+    out = []
+    for name in sorted(set(base) | set(rows)):
+        try:
+            row = _inherited(rows, name) if name in rows else {}
+        except ValueError:
+            row = dict(rows[name])  # an inherit this image cannot follow: the lane's own lines
+        mod = modules.get(row.get("buy_module") or "") or {}
+        mod = mod if isinstance(mod, dict) else {}
+
+        def val(key: str, default: Any, row: dict[str, Any] = row, mod: dict[str, Any] = mod, name: str = name) -> Any:
+            return row[key] if key in row else mod[key] if key in mod else getattr(base[name], key) if name in base else default
+
+        enabled = (page.get(name) or {}).get("enabled", val("enabled", True)) if isinstance(page.get(name), dict) else val("enabled", True)
+        series = val("series", ())
+        if enabled is True and val("review_minutes", None) is not None:
+            out.append((name, tuple(str(x) for x in series) if isinstance(series, list | tuple) else ()))
+    return out
+
+
 def lane_specs(s: Settings) -> dict[str, LaneSpec]:
     """Lanes for these settings, with DATA_DIR/strategies.toml applied. Cached per file content."""
     path = strategies_path(s.data_dir)

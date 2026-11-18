@@ -251,6 +251,13 @@ def watched(s: Settings) -> set[str] | None:
     if not s.watch_series:
         return None
     out = set(s.watch_series) | set(s.tape_extra_series)
+    if s.tape_role == "record":  # the recorder process reads only what it records by (lanes.recorder_lanes): a lane setting its image does not know cannot stop the tape
+        from .lanes import recorder_lanes
+
+        for name, series in recorder_lanes(s):
+            if s.live_lanes is None or name in s.live_lanes:
+                out |= set(series) if series else {i.prefix + suffix for i in load_instruments(s.data_dir) for suffix in i.suffixes}
+        return out
     for spec in tiered_lanes(s):
         if s.live_lanes is None or spec.name in s.live_lanes:
             out |= set(_all_series(spec, s))
