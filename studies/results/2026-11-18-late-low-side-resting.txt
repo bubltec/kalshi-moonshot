@@ -1,0 +1,86 @@
+window: 2026-11-09 to 2026-11-16; 52410 resting bids on 5723 markets (every 10 s of the last 4 minutes, a side's ask at or under 0.30, the favourite changed in the 5 minutes before). The bid rests at the side's bid; on a fill the sale rests 0.20 higher; no fee; one contract a bid. Average spread 0.017.
+  bid rests to the close, kind fill            bids  52410 | filled  51089 (97.5%) on  5711 markets | avg buy 0.125 | sale filled  24.9% (needs about 35%) | net  -1731.15 (-0.034 a filled bet) | days positive 0 of 8
+  bid rests to the close, strict fill          bids  52410 | filled  50946 (97.2%) on  5711 markets | avg buy 0.125 | sale filled  24.3% (needs about 35%) | net  -1836.30 (-0.036 a filled bet) | days positive 0 of 8
+  bid rests an eighth of the time left, kind   bids  52410 | filled  43721 (83.4%) on  5623 markets | avg buy 0.126 | sale filled  25.2% (needs about 35%) | net  -1472.91 (-0.034 a filled bet) | days positive 0 of 8
+  bid rests an eighth of the time left, strict bids  52410 | filled  41264 (78.7%) on  5605 markets | avg buy 0.129 | sale filled  25.2% (needs about 36%) | net  -1493.77 (-0.036 a filled bet) | days positive 0 of 8
+=== bid rests to the close, kind fill
+  --- by the buy price
+  buy 0.00 to 0.10                             bids  24538 | filled  24182 (98.5%) on  5087 markets | avg buy 0.056 | sale filled  13.4% (needs about 21%) | net   -483.81 (-0.020 a filled bet) | days positive 0 of 8
+  buy 0.10 to 0.15                             bids   8221 | filled   8026 (97.6%) on  3554 markets | avg buy 0.127 | sale filled  27.8% (needs about 39%) | net   -286.01 (-0.036 a filled bet) | days positive 0 of 8
+  buy 0.15 to 0.20                             bids   9012 | filled   8686 (96.4%) on  3583 markets | avg buy 0.177 | sale filled  33.9% (needs about 47%) | net   -419.78 (-0.048 a filled bet) | days positive 0 of 8
+  buy 0.20 to 0.30                             bids  10639 | filled  10195 (95.8%) on  3552 markets | avg buy 0.242 | sale filled  42.6% (needs about 55%) | net   -541.55 (-0.053 a filled bet) | days positive 0 of 8
+  --- by the time left when the bid goes in
+  180 to 240 s left                            bids  15018 | filled  14699 (97.9%) on  3662 markets | avg buy 0.143 | sale filled  29.2% (needs about 38%) | net   -482.05 (-0.033 a filled bet) | days positive 0 of 8
+  120 to 180 s left                            bids  15001 | filled  14660 (97.7%) on  3704 markets | avg buy 0.129 | sale filled  27.1% (needs about 36%) | net   -440.87 (-0.030 a filled bet) | days positive 0 of 8
+  60 to 120 s left                             bids  13786 | filled  13422 (97.4%) on  3678 markets | avg buy 0.116 | sale filled  23.7% (needs about 33%) | net   -429.43 (-0.032 a filled bet) | days positive 0 of 8
+  0 to 60 s left                               bids   8605 | filled   8308 (96.5%) on  2999 markets | avg buy 0.099 | sale filled  15.6% (needs about 30%) | net   -378.80 (-0.046 a filled bet) | days positive 0 of 8
+  --- by the changes of favourite in the five minutes before
+  changes 1 or 2                               bids  18327 | filled  17907 (97.7%) on  2852 markets | avg buy 0.116 | sale filled  22.6% (needs about 33%) | net   -650.76 (-0.036 a filled bet) | days positive 0 of 8
+  changes 3 or 4                               bids  11705 | filled  11405 (97.4%) on  2163 markets | avg buy 0.122 | sale filled  25.1% (needs about 34%) | net   -362.39 (-0.032 a filled bet) | days positive 0 of 8
+  changes 5 or more                            bids  22378 | filled  21777 (97.3%) on  3014 markets | avg buy 0.133 | sale filled  26.8% (needs about 37%) | net   -718.01 (-0.033 a filled bet) | days positive 0 of 8
+  --- by the spread when the bid goes in
+  spread 1 cent                                bids  28589 | filled  28059 (98.1%) on  5043 markets | avg buy 0.112 | sale filled  21.8% (needs about 32%) | net   -944.62 (-0.034 a filled bet) | days positive 0 of 8
+  spread 2 cents                               bids  13401 | filled  13046 (97.4%) on  4045 markets | avg buy 0.131 | sale filled  27.5% (needs about 36%) | net   -392.26 (-0.030 a filled bet) | days positive 0 of 8
+  spread 3 or 4 cents                          bids   7910 | filled   7592 (96.0%) on  2638 markets | avg buy 0.155 | sale filled  29.9% (needs about 41%) | net   -321.22 (-0.042 a filled bet) | days positive 0 of 8
+  spread 5 cents or more                       bids   2510 | filled   2392 (95.3%) on   970 markets | avg buy 0.143 | sale filled  31.9% (needs about 40%) | net    -73.06 (-0.031 a filled bet) | days positive 0 of 8
+=== bid rests to the close, strict fill
+  --- by the buy price
+  buy 0.00 to 0.10                             bids  24538 | filled  24125 (98.3%) on  5085 markets | avg buy 0.056 | sale filled  12.7% (needs about 21%) | net   -521.12 (-0.022 a filled bet) | days positive 0 of 8
+  buy 0.10 to 0.15                             bids   8221 | filled   7998 (97.3%) on  3550 markets | avg buy 0.127 | sale filled  27.0% (needs about 39%) | net   -304.14 (-0.038 a filled bet) | days positive 0 of 8
+  buy 0.15 to 0.20                             bids   9012 | filled   8660 (96.1%) on  3579 markets | avg buy 0.177 | sale filled  33.2% (needs about 47%) | net   -440.77 (-0.051 a filled bet) | days positive 0 of 8
+  buy 0.20 to 0.30                             bids  10639 | filled  10163 (95.5%) on  3548 markets | avg buy 0.242 | sale filled  41.9% (needs about 55%) | net   -570.27 (-0.056 a filled bet) | days positive 0 of 8
+  --- by the time left when the bid goes in
+  180 to 240 s left                            bids  15018 | filled  14646 (97.5%) on  3650 markets | avg buy 0.143 | sale filled  28.4% (needs about 38%) | net   -520.48 (-0.036 a filled bet) | days positive 0 of 8
+  120 to 180 s left                            bids  15001 | filled  14609 (97.4%) on  3698 markets | avg buy 0.129 | sale filled  26.3% (needs about 36%) | net   -477.10 (-0.033 a filled bet) | days positive 0 of 8
+  60 to 120 s left                             bids  13786 | filled  13391 (97.1%) on  3676 markets | avg buy 0.116 | sale filled  23.1% (needs about 33%) | net   -452.91 (-0.034 a filled bet) | days positive 0 of 8
+  0 to 60 s left                               bids   8605 | filled   8300 (96.5%) on  2998 markets | avg buy 0.099 | sale filled  15.3% (needs about 30%) | net   -385.82 (-0.046 a filled bet) | days positive 0 of 8
+  --- by the changes of favourite in the five minutes before
+  changes 1 or 2                               bids  18327 | filled  17845 (97.4%) on  2848 markets | avg buy 0.116 | sale filled  21.7% (needs about 33%) | net   -693.90 (-0.039 a filled bet) | days positive 0 of 8
+  changes 3 or 4                               bids  11705 | filled  11366 (97.1%) on  2158 markets | avg buy 0.122 | sale filled  24.5% (needs about 34%) | net   -381.27 (-0.034 a filled bet) | days positive 0 of 8
+  changes 5 or more                            bids  22378 | filled  21735 (97.1%) on  3012 markets | avg buy 0.133 | sale filled  26.2% (needs about 36%) | net   -761.13 (-0.035 a filled bet) | days positive 0 of 8
+  --- by the spread when the bid goes in
+  spread 1 cent                                bids  28589 | filled  28000 (97.9%) on  5038 markets | avg buy 0.112 | sale filled  21.3% (needs about 32%) | net   -987.01 (-0.035 a filled bet) | days positive 0 of 8
+  spread 2 cents                               bids  13401 | filled  13008 (97.1%) on  4042 markets | avg buy 0.131 | sale filled  26.7% (needs about 36%) | net   -424.06 (-0.033 a filled bet) | days positive 0 of 8
+  spread 3 or 4 cents                          bids   7910 | filled   7558 (95.5%) on  2633 markets | avg buy 0.155 | sale filled  28.9% (needs about 41%) | net   -343.74 (-0.045 a filled bet) | days positive 0 of 8
+  spread 5 cents or more                       bids   2510 | filled   2380 (94.8%) on   969 markets | avg buy 0.143 | sale filled  30.7% (needs about 40%) | net    -81.50 (-0.034 a filled bet) | days positive 0 of 8
+=== bid rests an eighth of the time left, kind
+  --- by the buy price
+  buy 0.00 to 0.10                             bids  24538 | filled  20462 (83.4%) on  4878 markets | avg buy 0.056 | sale filled  13.3% (needs about 21%) | net   -419.61 (-0.021 a filled bet) | days positive 0 of 8
+  buy 0.10 to 0.15                             bids   8221 | filled   6911 (84.1%) on  3318 markets | avg buy 0.127 | sale filled  28.0% (needs about 39%) | net   -241.08 (-0.035 a filled bet) | days positive 0 of 8
+  buy 0.15 to 0.20                             bids   9012 | filled   7449 (82.7%) on  3383 markets | avg buy 0.177 | sale filled  34.3% (needs about 47%) | net   -349.14 (-0.047 a filled bet) | days positive 0 of 8
+  buy 0.20 to 0.30                             bids  10639 | filled   8899 (83.6%) on  3411 markets | avg buy 0.242 | sale filled  42.8% (needs about 55%) | net   -463.08 (-0.052 a filled bet) | days positive 0 of 8
+  --- by the time left when the bid goes in
+  180 to 240 s left                            bids  15018 | filled  12900 (85.9%) on  3481 markets | avg buy 0.144 | sale filled  29.4% (needs about 39%) | net   -417.16 (-0.032 a filled bet) | days positive 0 of 8
+  120 to 180 s left                            bids  15001 | filled  12770 (85.1%) on  3542 markets | avg buy 0.129 | sale filled  27.3% (needs about 36%) | net   -379.76 (-0.030 a filled bet) | days positive 0 of 8
+  60 to 120 s left                             bids  13786 | filled  11524 (83.6%) on  3546 markets | avg buy 0.116 | sale filled  23.7% (needs about 33%) | net   -373.22 (-0.032 a filled bet) | days positive 0 of 8
+  0 to 60 s left                               bids   8605 | filled   6527 (75.9%) on  2864 markets | avg buy 0.100 | sale filled  15.6% (needs about 30%) | net   -302.77 (-0.046 a filled bet) | days positive 0 of 8
+  --- by the changes of favourite in the five minutes before
+  changes 1 or 2                               bids  18327 | filled  15234 (83.1%) on  2723 markets | avg buy 0.118 | sale filled  22.9% (needs about 33%) | net   -556.60 (-0.037 a filled bet) | days positive 0 of 8
+  changes 3 or 4                               bids  11705 | filled   9675 (82.7%) on  2040 markets | avg buy 0.123 | sale filled  25.3% (needs about 35%) | net   -307.62 (-0.032 a filled bet) | days positive 0 of 8
+  changes 5 or more                            bids  22378 | filled  18812 (84.1%) on  2958 markets | avg buy 0.134 | sale filled  27.1% (needs about 37%) | net   -608.69 (-0.032 a filled bet) | days positive 0 of 8
+  --- by the spread when the bid goes in
+  spread 1 cent                                bids  28589 | filled  24974 (87.4%) on  4894 markets | avg buy 0.113 | sale filled  22.3% (needs about 32%) | net   -824.83 (-0.033 a filled bet) | days positive 0 of 8
+  spread 2 cents                               bids  13401 | filled  10873 (81.1%) on  3836 markets | avg buy 0.134 | sale filled  28.2% (needs about 37%) | net   -327.88 (-0.030 a filled bet) | days positive 0 of 8
+  spread 3 or 4 cents                          bids   7910 | filled   6106 (77.2%) on  2451 markets | avg buy 0.156 | sale filled  30.1% (needs about 42%) | net   -258.21 (-0.042 a filled bet) | days positive 0 of 8
+  spread 5 cents or more                       bids   2510 | filled   1768 (70.4%) on   832 markets | avg buy 0.149 | sale filled  31.6% (needs about 41%) | net    -61.99 (-0.035 a filled bet) | days positive 0 of 8
+=== bid rests an eighth of the time left, strict
+  --- by the buy price
+  buy 0.00 to 0.10                             bids  24538 | filled  18638 (76.0%) on  4825 markets | avg buy 0.057 | sale filled  13.0% (needs about 22%) | net   -418.80 (-0.022 a filled bet) | days positive 0 of 8
+  buy 0.10 to 0.15                             bids   8221 | filled   6682 (81.3%) on  3283 markets | avg buy 0.127 | sale filled  27.4% (needs about 39%) | net   -247.26 (-0.037 a filled bet) | days positive 0 of 8
+  buy 0.15 to 0.20                             bids   9012 | filled   7250 (80.4%) on  3358 markets | avg buy 0.177 | sale filled  33.7% (needs about 47%) | net   -356.12 (-0.049 a filled bet) | days positive 0 of 8
+  buy 0.20 to 0.30                             bids  10639 | filled   8694 (81.7%) on  3394 markets | avg buy 0.242 | sale filled  42.3% (needs about 55%) | net   -471.59 (-0.054 a filled bet) | days positive 0 of 8
+  --- by the time left when the bid goes in
+  180 to 240 s left                            bids  15018 | filled  12273 (81.7%) on  3427 markets | avg buy 0.146 | sale filled  29.2% (needs about 39%) | net   -430.15 (-0.035 a filled bet) | days positive 0 of 8
+  120 to 180 s left                            bids  15001 | filled  12065 (80.4%) on  3499 markets | avg buy 0.132 | sale filled  27.1% (needs about 37%) | net   -392.68 (-0.033 a filled bet) | days positive 0 of 8
+  60 to 120 s left                             bids  13786 | filled  10858 (78.8%) on  3511 markets | avg buy 0.119 | sale filled  23.7% (needs about 34%) | net   -376.13 (-0.035 a filled bet) | days positive 0 of 8
+  0 to 60 s left                               bids   8605 | filled   6068 (70.5%) on  2825 markets | avg buy 0.103 | sale filled  15.8% (needs about 31%) | net   -294.81 (-0.049 a filled bet) | days positive 0 of 8
+  --- by the changes of favourite in the five minutes before
+  changes 1 or 2                               bids  18327 | filled  14061 (76.7%) on  2681 markets | avg buy 0.122 | sale filled  22.8% (needs about 34%) | net   -564.70 (-0.040 a filled bet) | days positive 0 of 8
+  changes 3 or 4                               bids  11705 | filled   9074 (77.5%) on  2015 markets | avg buy 0.126 | sale filled  25.4% (needs about 35%) | net   -309.72 (-0.034 a filled bet) | days positive 0 of 8
+  changes 5 or more                            bids  22378 | filled  18129 (81.0%) on  2940 markets | avg buy 0.135 | sale filled  26.9% (needs about 37%) | net   -619.35 (-0.034 a filled bet) | days positive 0 of 8
+  --- by the spread when the bid goes in
+  spread 1 cent                                bids  28589 | filled  23743 (83.0%) on  4839 markets | avg buy 0.116 | sale filled  22.4% (needs about 33%) | net   -828.80 (-0.035 a filled bet) | days positive 0 of 8
+  spread 2 cents                               bids  13401 | filled  10176 (75.9%) on  3767 markets | avg buy 0.138 | sale filled  28.2% (needs about 38%) | net   -336.68 (-0.033 a filled bet) | days positive 0 of 8
+  spread 3 or 4 cents                          bids   7910 | filled   5728 (72.4%) on  2407 markets | avg buy 0.158 | sale filled  29.6% (needs about 42%) | net   -263.20 (-0.046 a filled bet) | days positive 0 of 8
+  spread 5 cents or more                       bids   2510 | filled   1617 (64.4%) on   810 markets | avg buy 0.153 | sale filled  31.0% (needs about 42%) | net    -65.09 (-0.040 a filled bet) | days positive 0 of 8
+DONE
