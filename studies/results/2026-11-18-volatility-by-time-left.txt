@@ -1,0 +1,12 @@
+window: 2026-11-09 to 2026-11-16; root-mean-square one-second change of the mid, in cents, by the time left
+  time left            |  near even (lead under 0.80) |  favourite (lead 0.80 to 0.92)
+  first 1 min          |  1.71c  x0.91 of 7-10 min  (n   199,795) |  2.15c  x1.93 of 7-10 min  (n     4,025)
+  10 to 14 min left    |  1.64c  x0.87 of 7-10 min  (n 1,522,857) |  1.07c  x0.96 of 7-10 min  (n   291,566)
+  7 to 10              |  1.88c  x1.00 of 7-10 min  (n 1,012,211) |  1.12c  x1.00 of 7-10 min  (n   447,965)
+  5 to 7               |  2.15c  x1.14 of 7-10 min  (n   510,581) |  1.25c  x1.12 of 7-10 min  (n   293,970)
+  3 to 5               |  2.70c  x1.44 of 7-10 min  (n   395,762) |  1.60c  x1.44 of 7-10 min  (n   252,824)
+  2 to 3               |  3.49c  x1.86 of 7-10 min  (n   143,579) |  2.02c  x1.81 of 7-10 min  (n   103,621)
+  1 to 2               |  4.78c  x2.54 of 7-10 min  (n   100,065) |  2.85c  x2.56 of 7-10 min  (n    78,038)
+  30 to 60 s           |  7.23c  x3.84 of 7-10 min  (n    28,887) |  4.46c  x4.00 of 7-10 min  (n    25,242)
+  last 30 s            | 10.22c  x5.44 of 7-10 min  (n    13,092) |  6.68c  x5.99 of 7-10 min  (n    11,255)
+DONE
