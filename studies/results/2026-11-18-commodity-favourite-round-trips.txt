@@ -1,0 +1,33 @@
+window: 2026-11-09 to 2026-11-16; 4584 commodity favourites on 3531 markets (first quote at 0.60 to 0.92, 3 to 13 min left), one contract each, taker fee on the buy; a bet not sold is held to settlement.
+  held to settlement             bets  4584 | net   -85.45 ( -2.6 per $100) | win 71.4% vs avg ask 71.9c
+  held, buy with NO fee (maker)  bets  4584 | net   -23.49 ( -0.7 per $100) | the fee on the buy is 61.96 of the 85.45 lost | days positive 4 of 8
+  up 0.5 taker                   bets  4584 | sold  4001 (of those   81% would have won) | net  -218.81 ( -6.6 per $100) | held   -85.45 | beat holding  748, lost to it 3253 | days positive 0 of 8
+  up 0.5 resting                 bets  4584 | sold  4001 (of those   81% would have won) | net  -238.55 ( -7.2 per $100) | held   -85.45 | beat holding  748, lost to it 3253 | days positive 0 of 8
+  up 1 taker                     bets  4584 | sold  3582 (of those   85% would have won) | net  -184.30 ( -5.6 per $100) | held   -85.45 | beat holding  528, lost to it 3054 | days positive 0 of 8
+  up 1 resting                   bets  4584 | sold  3582 (of those   85% would have won) | net  -202.13 ( -6.1 per $100) | held   -85.45 | beat holding  528, lost to it 3054 | days positive 0 of 8
+  up 2 taker                     bets  4584 | sold  2332 (of those   91% would have won) | net  -125.35 ( -3.8 per $100) | held   -85.45 | beat holding  215, lost to it 2117 | days positive 0 of 8
+  up 2 resting                   bets  4584 | sold  2332 (of those   91% would have won) | net  -137.51 ( -4.2 per $100) | held   -85.45 | beat holding  215, lost to it 2117 | days positive 0 of 8
+  up 3 taker                     bets  4584 | sold   989 (of those   94% would have won) | net   -96.80 ( -2.9 per $100) | held   -85.45 | beat holding   59, lost to it  930 | days positive 2 of 8
+  up 3 resting                   bets  4584 | sold   989 (of those   94% would have won) | net  -100.71 ( -3.1 per $100) | held   -85.45 | beat holding   59, lost to it  930 | days positive 2 of 8
+  cash 0.95 taker                bets  4584 | sold  3310 (of those   96% would have won) | net  -113.01 ( -3.4 per $100) | held   -85.45 | beat holding  138, lost to it 3172 | days positive 1 of 8
+  cash 0.95 resting              bets  4584 | sold  3310 (of those   96% would have won) | net  -112.95 ( -3.4 per $100) | held   -85.45 | beat holding  138, lost to it 3172 | days positive 1 of 8
+  cash 0.97 taker                bets  4584 | sold  3163 (of those   98% would have won) | net  -115.95 ( -3.5 per $100) | held   -85.45 | beat holding   62, lost to it 3101 | days positive 1 of 8
+  cash 0.97 resting              bets  4584 | sold  3163 (of those   98% would have won) | net  -118.34 ( -3.6 per $100) | held   -85.45 | beat holding   62, lost to it 3101 | days positive 1 of 8
+  trail 1 taker                  bets  4584 | sold  1643 (of those   79% would have won) | net  -131.31 ( -4.0 per $100) | held   -85.45 | beat holding  351, lost to it 1292 | days positive 0 of 8
+  trail 2 taker                  bets  4584 | sold   360 (of those   73% would have won) | net   -91.70 ( -2.8 per $100) | held   -85.45 | beat holding   98, lost to it  262 | days positive 2 of 8
+--- the best rule on all bets, chosen after seeing the table: trail 2 taker
+--- by the ask
+  ask 0.60 to 0.70               bets  2263 | sold   305 (of those   71% would have won) | net   -65.85 ( -4.6 per $100) | held   -62.27 | beat holding   89, lost to it  216 | days positive 2 of 8
+  ask 0.70 to 0.80               bets  1217 | sold    46 (of those   80% would have won) | net    -1.15 ( -0.1 per $100) | held    +0.18 | beat holding    9, lost to it   37 | days positive 5 of 8
+  ask 0.80 to 0.86               bets   519 | sold     7 (of those  100% would have won) | net   -26.06 ( -6.1 per $100) | held   -24.93 | beat holding    0, lost to it    7 | days positive 3 of 8
+  ask 0.86 to 0.92               bets   585 | sold     2 (of those  100% would have won) | net    +1.37 ( +0.3 per $100) | held    +1.56 | beat holding    0, lost to it    2 | days positive 3 of 8
+--- by the time left at the buy
+  170 to 300 s left              bets   299 | sold    14 (of those   57% would have won) | net    +0.17 ( +0.1 per $100) | held    -1.41 | beat holding    6, lost to it    8 | days positive 3 of 8
+  300 to 450 s left              bets   477 | sold    30 (of those   60% would have won) | net   -26.66 ( -8.3 per $100) | held   -29.35 | beat holding   12, lost to it   18 | days positive 1 of 8
+  450 to 600 s left              bets  1158 | sold   109 (of those   70% would have won) | net   -41.42 ( -5.3 per $100) | held   -40.62 | beat holding   33, lost to it   76 | days positive 2 of 8
+  600 to 781 s left              bets  2650 | sold   207 (of those   77% would have won) | net   -23.79 ( -1.2 per $100) | held   -14.07 | beat holding   47, lost to it  160 | days positive 4 of 8
+--- by flips (changes of favourite so far)
+  flips 0 or 1                   bets  2215 | sold   169 (of those   75% would have won) | net   -10.87 ( -0.7 per $100) | held    -7.59 | beat holding   42, lost to it  127 | days positive 4 of 8
+  flips 2 to 6                   bets  1480 | sold   116 (of those   72% would have won) | net   -50.23 ( -4.9 per $100) | held   -46.89 | beat holding   32, lost to it   84 | days positive 1 of 8
+  flips 7 or more                bets   889 | sold    75 (of those   68% would have won) | net   -30.60 ( -5.1 per $100) | held   -30.96 | beat holding   24, lost to it   51 | days positive 0 of 8
+DONE
