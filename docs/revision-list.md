@@ -5,8 +5,8 @@ Things found while simplifying the bot that still need revising. Started 2026-11
 ## Open
 
 ### Model ideas written as lane options
-1. **Commodity buy model.** The commodity lanes gate buys with `min_cushion_z`, `max_vol_rel`, `buy_curve_edge_min`, `entry_elapsed` (user: "these are model concepts, they shouldn't be lane options"; "they are also antiquated, lets revise them in a new model for commodities"). Proposed: a buy module the lanes point at: `price`, then `risk_score`, then a new `perp_worth` step (Kalshi's perp chance against the ask). On paper beside the live lanes first.
-2. **Volatility as an anomaly state.** `max_vol_rel = 1.6` is a fixed number per lane. A market far outside its own normal is the anomaly state of rule 3: handle it once in the model.
+1. **Commodity buy model: on paper, not judged.** Built 2026-11-18 (see Done): module `commodity_model` (`price`, `risk_score`, `perp_worth`, `calm`) on the paper lane `commodity_model`. Still open: score it against the five live lanes on the same markets after a week of bets; the live lanes still carry `min_cushion_z`, `max_vol_rel`, `buy_curve_edge_min` and `entry_elapsed` as lane options until the user moves them. The risk score's 25% level is unproven on commodities.
+2. **What the paper lane leaves out, to decide.** `commodity_model` has none of the live lanes' `skip_varieties`, `max_spot_crosses = 4`, `require_spot_center_agree`, `min_cushion_z`. It keeps `entry_elapsed = [7, 14]` as a lane gate (a fixed number; a model concept by the user's list). It asks no model (`estimator = "market"`), so its `model_p` is the ask.
 3. **Settings that gate nothing.** On the commodity lanes: `entry_trend_seconds` (no bar set), `entry_spike_view`, `entry_spike_seconds` (notes only). On every 15-minute lane: `min_age_minutes` (not applied to 15-minute markets at all). Remove the lines, then the options if no lane needs them.
 
 ### Lane file size
@@ -25,10 +25,13 @@ Things found while simplifying the bot that still need revising. Started 2026-11
 10. Rerun the ladder-against-market study on rows after 2026-11-17 22:47 ET (before that, crypto `model_p` is mostly a stale price).
 11. Rerun `scripts/risk_trend_shadow_score.py` after a day or more of tags; score the line sale's "would sell" records.
 12. Score the live commodity lanes' Kalshi perp check (live since 2026-11-18 09:43 ET) on the bets that follow.
+16. Score the `calm` step: how often it says anomaly, and what the markets it sat out did (its reading is in every decision's note and in the screen log).
 
 ### Records and tooling
 13. **Unstaked repeat rows inflate counts.** A paper lane's "right side" counts must use rows with a stake only. Two rows from the night of 11-17 still carry another side's sale.
 14. **Host access.** Every read of the host goes through AWS sign-in, which expires. An MCP server behind the admin site's login (as the GREED project has) would let Claude read decisions and tape without it.
+17. **The live commodity lanes' exit is written twice.** `[exit.commodity_exit]` is a copy of `commodity_energy`'s exit settings (checked equal on all 74 exit settings, 2026-11-18). Point the five live lanes at the module so there is one copy; until then a change to one must be made to the other.
+18. **A test fails on its own.** `tests/test_history.py::test_the_bot_schedules_history_at_a_priority_below_trading` (3 windows, expects 5) fails on `9a82fb3`, before the commodity model.
 15. **Look rate after deploy.** The look rate is now 5 s for every lane; three paper lanes had 20 to 30 s. Check the host's load after the deploy.
 
 ## Done
@@ -40,3 +43,4 @@ Things found while simplifying the bot that still need revising. Started 2026-11
 - 2026-11-18 `b8df717`: the recorder reads only what it records by; a new lane field cannot stop the tape.
 - 2026-11-18 `213dc1a`: the risk score reads Kalshi's perp on commodities (not deployed at the time of writing).
 - 2026-11-18: the lane switch `entry_socket` removed (the socket is how two-level lanes run); the look rate is one global setting, `ENTRY_MIN_GAP_SECONDS` (not deployed at the time of writing).
+- 2026-11-18 `c55fc97`: buy steps `perp_worth` (the Kalshi perp check as a step) and `calm` (the anomaly state of rule 3 in place of a fixed `max_vol_rel`); module `commodity_model`, exit module `commodity_exit` and paper lane `commodity_model` in the lane file (not deployed at the time of writing; needs `--build` and the lane in `PAPER_LANE_NAMES`).
