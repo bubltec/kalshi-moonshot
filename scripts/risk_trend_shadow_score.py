@@ -13,7 +13,7 @@ from kalshi_moonshot.strategy import fee_per_contract
 ET = datetime.timezone(datetime.timedelta(hours=-5))
 s = config.load()
 st = db.connect(s.db_path, "main", shared=True)
-rows = st.execute("SELECT ts, ticker, side, action, ask, outcome, reason FROM decisions WHERE lane='crypto_multiscale' AND reason LIKE '%[risk trend%' ORDER BY ts").fetchall()
+rows = st.execute("SELECT ts, ticker, side, action, ask, outcome, reason, exit_price, contracts, stake_usd, mode FROM decisions WHERE lane='crypto_multiscale' AND reason LIKE '%[risk trend%' ORDER BY ts").fetchall()
 TAG = re.compile(r"\[risk trend ([+-][0-9.]+) over (\d+)s: ([a-z, ]+?)(?: \| price trend (?:([+-][0-9.]+) over \d+s|unreadable))?\]")
 UNREAD = re.compile(r"\[risk trend unreadable(?: \| price trend (?:([+-][0-9.]+) over \d+s|unreadable))?\]")
 
@@ -29,7 +29,7 @@ for r in rows:
         continue
     ask = float(r["ask"])
     net = (1.0 if r["outcome"] == r["side"] else 0.0) - ask - fee_per_contract(ask)
-    got.append({"ts": float(r["ts"]), "tk": r["ticker"], "side": r["side"], "z": float(m.group(1)), "back": float(m.group(2)), "new": m.group(3).strip(), "old": None if m.group(4) is None else float(m.group(4)), "ask": ask, "net": net, "won": r["outcome"] == r["side"], "bet": r["action"] == "bet"})
+    got.append({"ts": float(r["ts"]), "tk": r["ticker"], "side": r["side"], "z": float(m.group(1)), "back": float(m.group(2)), "new": m.group(3).strip(), "old": None if m.group(4) is None else float(m.group(4)), "ask": ask, "net": net, "won": r["outcome"] == r["side"], "bet": r["action"] == "bet", "why": reason[:16], "exit": r["exit_price"], "n": r["contracts"], "cost": r["stake_usd"], "mode": r["mode"]})
 
 first = min((g["ts"] for g in got), default=0.0)
 last = max((g["ts"] for g in got), default=0.0)
@@ -81,4 +81,16 @@ for lo, hi in ((0, 45), (45, 90), (90, 135), (135, 999)):
 print(" by the size of the reading (typical moves):")
 for lo, hi, name in ((-99, -2, "under -2"), (-2, -1, "-2 to -1"), (-1, 0, "-1 to 0"), (0, 1, "0 to +1"), (1, 2, "+1 to +2"), (2, 99, "over +2")):
     line(f"risk trend {name}", [x for x in got if lo <= x["z"] < hi])
+
+print("\nD. only the decisions the trend check itself decided (2026-11-17, user: \"is this considering the existing buy conditions? or is this running abstract from them?\"). A to C score every moment the lane looked at, most of them turned down by the edge screen, which no trend check would change. What replacing the old check changes is these two groups:")
+print(" real buys (every other gate passed and the old check passed): what the new check would have done with each, and what the bet really made (its own exit or settlement, fees in)")
+for verdict in ("would buy", "would not buy"):
+    xs = [x for x in got if x["bet"] and x["new"] == verdict and x["cost"]]
+    real = sum((float(x["n"]) * (float(x["exit"]) - fee_per_contract(float(x["exit"]))) if x["exit"] is not None else (float(x["n"]) if x["won"] else 0.0)) - float(x["cost"]) for x in xs)
+    held = sum((float(x["n"]) if x["won"] else 0.0) - float(x["cost"]) for x in xs)
+    print(f"  new {verdict:<14} n {len(xs):>3} | staked ${sum(float(x['cost']) for x in xs):8.2f} | really made ${real:+8.2f} | held to settlement ${held:+8.2f}")
+print(" refused by the old check alone (reason: trending against; every gate before it had passed, the gates after it did not run): scored as a buy at the ask held to settlement")
+old_no = [x for x in got if not x["bet"] and x["why"].startswith("trending against")]
+line("new would buy (it would add these)", [x for x in old_no if x["new"] == "would buy"])
+line("new would not buy (both refuse)", [x for x in old_no if x["new"] != "would buy"])
 print("DONE")
