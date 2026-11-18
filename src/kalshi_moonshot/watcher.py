@@ -34,6 +34,7 @@ from . import (
     manual,
     manualrest,
     paperfill,
+    pathshape,
     perpref,
     quoteshock,
     runner,
@@ -243,6 +244,12 @@ class Target:
     risk_live: bool = False
     sell_chain: tuple = ()  # the sale's steps in the lane's own order (lane field sell_chain, or its exit module's steps; sellchain.py); empty = the default order, and the sale reasons as they always were
     sell_module: str = ""  # the lane's exit module, named in a chain lane's sale note
+    bought_ts: float = 0.0  # when the bet was bought (its decision's time): the start of the shape step's since-the-buy look-back
+    shape_path: deque = field(default_factory=lambda: deque(maxlen=1200))  # (time, our side's bid) on every risk check since the bet was first watched: the path the shape step reads (sell step `shape`, pathshape.py); kept only on a lane whose chain names the step
+    shape_at: float = 0.0  # when the shape was last read (once every pathshape.STEP seconds)
+    shape_pairs: set = field(default_factory=set)  # the (since-the-buy shape, quarter shape) pairs already written for this bet
+    shape_would: bool = False  # the one "would sell" log line has been written
+    shape_failed: bool = False  # the shape step raised on this bet and the one warning has been written
     risk_line_live: bool = True  # false: the line sale is logged and recorded, not made (lane field curve_risk_line_live); the max loss and the profit side are not affected
     risk_spot_weight: float = 0.5
     risk_history: bool = True
@@ -1191,6 +1198,42 @@ class ProfitWatcher:
             return sellchain.HOLD
         return None
 
+    def _sell_shape(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step shape, SHADOW ONLY: it never sells and never holds (2026-11-18, user: "if the path is wavy it means there's likely a comeback"; "if look back is trend or flat, and we're losing, we should probably exit"; "we need to test these concepts"). It keeps the bet's own bid path on every check, reads the path's shape (pathshape.shape) on two look-backs, since the buy and a quarter of the time left, adds each reading to its series' hour, and, while the bet is behind, writes one row to data/risk_shadow.jsonl (kind "shape") the first time each pair of shapes is seen on the bet. would_sell is the user's rule on the since-the-buy shape: trend against the bet or flat. Not in the default order: only a lane whose chain names it is asked. Memory only."""
+        try:  # a shadow step must not be able to stop a sale: an error here is logged once a bet and the next step is asked
+            ProfitWatcher._shape_read(self, t, r, bid, now, left, pnl)
+        except Exception as e:
+            if not getattr(t, "shape_failed", False):
+                t.shape_failed = True
+                log.warning("curve risk shadow: the shape step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
+        return None
+
+    def _shape_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> None:
+        """The shape step's body (see _sell_shape, which catches whatever this raises)."""
+        if not t.shape_path:  # the first check: the watcher's own last two minutes of this side's bids come first
+            t.shape_path.extend((ts, b) for ts, b in t.history if ts < now and b > 0)
+        t.shape_path.append((now, bid))
+        if now - t.shape_at < pathshape.STEP:
+            return
+        t.shape_at = now
+        unit = self._risk_unit(t, now)
+        series = t.ticker.split("-")[0]
+        path = list(t.shape_path)
+        got = {}
+        for look, start in (("buy", t.bought_ts), ("quarter", now - pathshape.QUARTER * left)):
+            got[look] = pathshape.shape(path, start, now, unit, pathshape.seen_of(series, look, now)) if start > 0 else pathshape.Shape("unknown")
+            pathshape.note(series, look, now, got[look])
+        pair = (got["buy"].shape, got["quarter"].shape)
+        if pnl >= 0 or pair in t.shape_pairs:  # asked only of a bet that is behind; one row for each pair of shapes
+            return
+        t.shape_pairs.add(pair)
+        would = pathshape.would_sell(got["buy"].shape)
+        if would and not t.shape_would:
+            t.shape_would = True
+            b = got["buy"]
+            log.info("curve risk shadow: %s %s would sell (shape): behind %+.1f%% of cost and its path since the buy is %s (net %+.3f over %.0fs, a typical move %.3f, path efficiency %.2f, %d reversals); the last quarter of the time left is %s; bid %.2f, %.0fs left", t.ticker, t.lane, pnl * 100.0, b.shape, b.net, b.window, b.typical, b.eff, b.reversals, got["quarter"].shape, bid, left)
+        self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="shape", extra={"would_sell": would, "buy": got["buy"].row(), "quarter": got["quarter"].row(), "unit": round(unit, 5) if unit else None})
+
     def _sell_loss(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step loss: the max loss (with the squeeze), the line, their scaled wait and the early hold, which share one wait and one latch. The line sale has its own live switch (curve_risk_line_live); in shadow one would-sell is logged and recorded."""
         ProfitWatcher._sell_shared(self, t, bid, now, left, pnl, c)
@@ -1309,7 +1352,7 @@ class ProfitWatcher:
         log.info("curve risk held %s %s, %.0fs left: %s (bid %.2f, %+.1f%% of cost, chance %.3f)", t.ticker, t.lane, left, why, bid, pnl * 100.0, r.q)
         self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, held=f"{kind}: {why}")
 
-    def _risk_record(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, wait: float, stop: bool, live: bool, held: str = "", kind: str = "") -> None:
+    def _risk_record(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, wait: float, stop: bool, live: bool, held: str = "", kind: str = "", extra: dict[str, Any] | None = None) -> None:
         """Append one risk-exit signal to data/risk_shadow.jsonl (ticker, lane, bid, chance, result, time left, max-loss or line, live or shadow). Never raises."""
         try:
             from pathlib import Path
@@ -1319,6 +1362,8 @@ class ProfitWatcher:
                 row["held"] = held
             if kind:
                 row["kind"] = kind
+            if extra:
+                row.update(extra)
             with open(Path(self.get_settings().data_dir) / "risk_shadow.jsonl", "a") as f:  # the watcher's own settings, not config.reload(): that rebinds the process-wide settings
                 f.write(json.dumps(row) + "\n")
         except OSError:
@@ -2031,6 +2076,7 @@ class ProfitWatcher:
                 float(row["ask"] or 0.0),
             )
             tg0 = fresh[(ticker, lane)]
+            tg0.bought_ts = tg0.bought_ts or float(row["ts"] or 0.0)
             if not tg0.entry_filled:  # the price paid is what the buy filled at (a take chases the ask, a resting bid fills under it): the exits' "never a loss after both fees" is judged against it
                 filled_at = store.entry_fill(ticker, tg0.side, float(row["ts"] or 0.0))
                 if filled_at:
