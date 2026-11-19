@@ -1,0 +1,18 @@
+
+window: 11-09 00:00 ET to now; 727 live commodity bets with the dip read (89 left out for no quotes). Dip = the side's bid under its 90 s high at the buy, in the market's own typical minutes.
+  all                            bets  727 | avg ask  83.0c win  82.8% | held   -8.42 ( -1.4 per $100) | as traded  -20.86 ( -3.5 per $100) | ended under 0.10:  65 | per $100 held, first half  +1.5, second  -4.2
+--- by the dip (cuts chosen after seeing the readings)
+  no dip (0)                     bets  162 | avg ask  84.4c win  85.8% | held   +0.87 ( +0.6 per $100) | as traded   +2.01 ( +1.5 per $100) | ended under 0.10:  13 | per $100 held, first half  -0.5, second  +1.8
+  under 1 typical minute         bets  504 | avg ask  83.5c win  82.7% | held   -8.51 ( -2.0 per $100) | as traded  -18.15 ( -4.3 per $100) | ended under 0.10:  43 | per $100 held, first half  +1.8, second  -5.3
+  1 to 2 typical minutes         bets   54 | avg ask  76.6c win  79.6% | held   +1.01 ( +2.4 per $100) | as traded   -1.45 ( -3.5 per $100) | ended under 0.10:   5 | per $100 held, first half  +8.9, second  -7.7
+  2 or more typical minutes      bets    7
+--- fifths of the dip
+  fifth 1 (0.00 to 0.00)         bets  145 | avg ask  84.2c win  85.5% | held   +0.65 ( +0.5 per $100) | as traded   +2.38 ( +1.9 per $100) | ended under 0.10:  12 | per $100 held, first half  -0.5, second  +1.8
+  fifth 2 (0.00 to 0.16)         bets  145 | avg ask  84.8c win  88.3% | held   +3.77 ( +3.1 per $100) | as traded   +0.79 ( +0.6 per $100) | ended under 0.10:   8 | per $100 held, first half  -0.1, second  +5.0
+  fifth 3 (0.16 to 0.34)         bets  146 | avg ask  83.8c win  82.9% | held   -2.66 ( -2.2 per $100) | as traded   -3.10 ( -2.5 per $100) | ended under 0.10:   8 | per $100 held, first half  +6.3, second -10.0
+  fifth 4 (0.35 to 0.64)         bets  145 | avg ask  83.3c win  81.4% | held   -4.17 ( -3.4 per $100) | as traded   -7.85 ( -6.5 per $100) | ended under 0.10:  16 | per $100 held, first half  +1.9, second  -7.8
+  fifth 5 (0.64 to 3.97)         bets  146 | avg ask  79.1c win  76.0% | held   -6.01 ( -5.2 per $100) | as traded  -13.08 (-11.3 per $100) | ended under 0.10:  21 | per $100 held, first half  +0.2, second -12.1
+DONE
+
+
+
