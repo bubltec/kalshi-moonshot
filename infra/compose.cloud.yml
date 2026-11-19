@@ -54,7 +54,7 @@ services:
     volumes:
       - /mnt/moonshot/pgdata:/var/lib/postgresql
     shm_size: 256mb
-    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "synchronous_commit=on", "-c", "max_connections=60"]
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "synchronous_commit=on", "-c", "max_connections=150"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U moonshot -d moonshot"]
       interval: 5s
