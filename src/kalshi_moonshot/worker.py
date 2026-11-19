@@ -25,7 +25,7 @@ from typing import Any
 from . import jobs as jobs_mod
 from . import lanes as lanes_mod
 from . import manual as manual_mod
-from . import reqstats, runner, steptime
+from . import orderkeys, reqstats, runner, steptime
 from . import ticks as ticks_mod
 from .commodities import CommodityPricer
 from .config import Settings
@@ -243,9 +243,22 @@ class Worker:
         )
         self.recorder.listeners.append(w.on_event)
         w.client_for = self._venue  # the same review, on the lane's own venue
+        w.evaluate = self.evaluate_shot  # each hit is evaluated on its market's own thread, in memory: no job row (orderkeys.py has the order id)
+        threading.Thread(target=self._seed_order_keys, name="order-keys-seed", daemon=True).start()
         w.start()
         self.entry_watcher = w
         log.info("entry watcher on: reviewing a watched event as soon as its socket quote or index ticks into the lane's price band")
+
+    def _seed_order_keys(self) -> None:
+        """A background job: the orders already sent, so a buy's order id after a restart is never one Kalshi has seen (orderkeys.py)."""
+        while not self.stopping:
+            try:
+                counts = Store(self.s.db_path, self.s.exclude_versions).order_counts(self.s.env, time.time() - 3 * 86400)
+                orderkeys.seed(self.s.env, counts)
+                return
+            except Exception:
+                log.exception("order keys: could not read the orders table; no socket buy until it can be read")
+                time.sleep(5.0)
 
     def _start_settlement_edge(self) -> None:
         """Log, as paper bets, the side whose exact settlement chance beats its ask in the last 150 s of every crypto 15-minute market (settlement_edge.py). Measure only; its own thread."""
@@ -625,8 +638,33 @@ class Worker:
                 manual_mod.buying_end(ticker)
 
     def _evaluate(self, job: Job) -> str:
+        """The database-queue path (a lane on timers while the feed is down, and the CLI): the order id comes from the job, so a rerun after a crash cannot buy twice."""
+        order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{self.s.env}/{job.created_ts}/{job.id}"))
+        return self._evaluate_shot(
+            LongShot(**job.payload["shot"]), order_key, raise_model_errors=not job.last_attempt,
+            before_order=lambda: self.jobs.checkpoint(job.id, PLACING),
+        )
+
+    def evaluate_shot(self, shot: LongShot) -> str:
+        """The socket path (entrywatch.py): the buy module's evaluation of one shot on its market's own thread, no job row. A live lane reads the real market; a paper lane may use the shared cache. The order id is derived before the order is sent and is the same after a restart (orderkeys.py); the decision and order rows are written behind."""
         s = self.s
-        shot = LongShot(**job.payload["shot"])
+        if not orderkeys.ready():
+            return f"skip {shot.ticker}: the order ids are not seeded from the orders table yet"
+        live = s.is_live(shot.lane)
+        if live and shot.ticker:
+            manual_mod.buying_begin(shot.ticker)  # the fill reaches the account before the order reaches the books: until then the position must not be read as hand-placed
+        try:
+            with shared_for(self._venue(shot.lane), 0.0 if live else s.discovery_eval_age, s.discovery_enabled):
+                return self._evaluate_shot(
+                    shot, orderkeys.key(s.env, shot.lane, shot.ticker, shot.side), raise_model_errors=False,
+                    before_order=lambda: orderkeys.begin(s.env, shot.ticker, shot.side),
+                )
+        finally:
+            if live and shot.ticker:
+                manual_mod.buying_end(shot.ticker)
+
+    def _evaluate_shot(self, shot: LongShot, order_key: str, raise_model_errors: bool, before_order: Callable[[], None]) -> str:
+        s = self.s
         if ticks_mod.reload_pending():
             return f"skip {shot.ticker}: memory is still reloading from the tape after the restart (no buy is decided on empty history)"
         client = self._venue(shot.lane)
@@ -664,15 +702,13 @@ class Worker:
             with steptime.step("entry factors"):
                 factors_text = self._entry_factors(shot, spec, _strike(m))
             shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors=factors_text)
-        # Same job, same order id: if the process dies after sending, a rerun cannot buy twice.
-        order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
         with runner.lane_lock(shot.lane):  # evaluations of one lane run one after another, so its checks (lane full, cooling down, other side taken) see each other's bets
             out = runner.evaluate(
                 s, client, self.est, self.store, shot, self.searcher,
                 quant=self.quant, estimators=self.estimators(), share=self.share,
-                raise_model_errors=not job.last_attempt,
+                raise_model_errors=raise_model_errors,
                 order_key=order_key,
-                before_order=lambda: self.jobs.checkpoint(job.id, PLACING),
+                before_order=before_order,
             )
         print(runner.format_outcome(out), flush=True)
         if out.action == "bet":

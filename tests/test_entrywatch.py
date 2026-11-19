@@ -230,3 +230,50 @@ def test_a_review_reads_the_listing_through_the_shared_cache(tmp_path):
     entrywatch.EntryWatcher(lambda: s, client, lambda: Store(s.db_path), lambda store: build_estimators(None, None, None, live_quant())).review("commodity", EVENT)
     if s.discovery_enabled and s.discovery_max_age > 0:
         assert seen == [("enter", s.discovery_max_age), ("exit", s.discovery_max_age)]
+
+
+def test_each_market_has_its_own_thread_and_a_slow_one_blocks_no_other(tmp_path):
+    import threading
+
+    s = socket_settings(tmp_path)
+    w = watcher(s, Client(live_event()))
+    other = "KXGOLDD-26OCT20"
+    soon = (datetime.now(UTC) + timedelta(minutes=5)).isoformat()
+    w.watch = {("commodity", EVENT): {"close": soon}, ("commodity", other): {"close": soon}}
+    gate, done = threading.Event(), []
+
+    def review(lane, event):
+        if event == EVENT:
+            gate.wait(5.0)  # a slow order on this market
+        done.append(event)
+        return 0
+
+    w.review = review
+    w.start()
+    try:
+        w.on_event(quote(0.85, 0.87))
+        w.on_event(quote(0.85, 0.87, ticker=f"{other}-T3970"))
+        for _ in range(200):
+            if other in done:
+                break
+            time.sleep(0.01)
+        assert other in done and EVENT not in done  # the other market was looked at while the first still waited
+        names = {t.name for t in threading.enumerate()}
+        assert f"entry-commodity-{EVENT}" in names and f"entry-commodity-{other}" in names
+    finally:
+        gate.set()
+        w.stop()
+
+
+def test_a_hit_is_evaluated_in_memory_with_no_job_row(tmp_path):
+    s = socket_settings(tmp_path)
+    store = Store(s.db_path)
+    runner.scope_lane(s, Client(live_event()), store, lanes.spec_for(s, "commodity"))
+    w = watcher(s, Client(live_event()))
+    seen = []
+    w.evaluate = lambda shot: seen.append(shot.ticker) or "bet"
+    assert w.review("commodity", EVENT) == 1
+    assert len(seen) == 1
+    from kalshi_moonshot.jobs import Jobs
+
+    assert Jobs(store).claim() is None  # nothing went through the database queue

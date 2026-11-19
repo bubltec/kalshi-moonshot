@@ -6,7 +6,9 @@
   - a tick of the index that settles it arrives (the perp feed: the risk score reads the index as well as the quote, and Kalshi's quote may sit still while the index moves).
 Every tick asks the entry logic; the lane's filter (price, window, spread) and the buy module's steps say yes or no, so no rule is kept in this file.
 
-A hit runs the lane's own review on that one event (runner.review_lane: the same filters, buy-module screen, cooldown and one-per rule as the polled review) and queues the same `evaluate` jobs, so the buy module's steps, sizing, limits and paper-versus-live are untouched. A look at one event is taken no more often than ENTRY_MIN_GAP_SECONDS. The thread decides nothing about what to buy: every rule is a step of the lane's buy module.
+A hit runs the lane's own review on that one event (runner.review_lane: the same filters, buy-module screen, cooldown and one-per rule as the polled review) and hands each shot to the buy module's evaluation (runner.evaluate: the steps, sizing, limits and paper-versus-live are untouched).
+
+Each (lane, event) has its own thread and its own queue in memory (2026-11-19, user: "each market should have its own thread so nothing should be blocked"): the socket only offers the key, the market's thread reviews and evaluates, and a slow order on one market never delays another. The evaluation is a hook set by the worker (`evaluate`); with none set (tests, the CLI) a hit queues `evaluate` jobs in the database as before, which is also what the worker's timers do while the feed is down. A look at one event is taken no more often than ENTRY_MIN_GAP_SECONDS. The thread decides nothing about what to buy: every rule is a step of the lane's buy module.
 
 The first version of this file (removed with the module strip, 2026-11-19, which left the lanes on timers) also carried the lane options entry_move, entry_approach and the late-trend lane; they were lane rules outside the modules and are not rebuilt here.
 """
@@ -34,6 +36,8 @@ from . import store as store_mod
 from .store import Store
 
 log = logging.getLogger("moonshot")
+
+IDLE_SECONDS = 120.0  # a market's own thread ends after this long without a look (structural: windows are minutes long, a new market starts a new thread)
 
 
 
@@ -88,6 +92,7 @@ class EntryWatcher:
         self.get_settings = get_settings
         self.client = client
         self.client_for: Callable[[str], Any] | None = None  # the lane's venue; None keeps self.client for every lane
+        self.evaluate: Callable[[Any], str] | None = None  # the buy module's evaluation of one shot, run on the market's own thread (worker.evaluate_shot); None = queue `evaluate` jobs in the database
         self.store_factory = store_factory
         self.estimators = estimators
         self.watch: dict[tuple[str, str], dict[str, Any]] = {}  # (lane, event) -> the scoping pass's info for it
@@ -97,6 +102,8 @@ class EntryWatcher:
         self._last: dict[tuple[str, str], float] = {}
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
+        self._on = False  # started and not stopped
+        self._qs: dict[tuple[str, str], queue.SimpleQueue] = {}  # (lane, event) -> that market's queue; its thread lives while it has work
         self.reviewed: list[str] = []  # log lines, newest last (also logged)
         self._hist: dict[str, deque[tuple[float, float, float]]] = {}  # ticker -> (time, YES bid, YES ask), the last half minute
         self._pruned = 0.0
@@ -104,7 +111,7 @@ class EntryWatcher:
 
     def alive(self) -> bool:
         """True while the review thread runs: the worker leaves a lane to the socket only while this holds, so a dead thread puts the timers back (2026-11-19 outage)."""
-        return bool(self._threads) and not self._stop.is_set() and all(t.is_alive() for t in self._threads)
+        return self._on and not self._stop.is_set()
 
     # ---- socket side: must be fast and never raise ----
     def on_event(self, e: dict[str, Any]) -> None:
@@ -143,7 +150,19 @@ class EntryWatcher:
         if key in self._pending or time.time() - self._last.get(key, 0.0) < s.entry_min_gap_seconds:
             return
         self._pending.add(key)
-        self._jobs.put(key)
+        self._dispatch(key)
+
+    def _dispatch(self, key: tuple[str, str]) -> None:
+        """Put the key on its market's own queue (starting that market's thread if it has none); before start() on the shared queue, which the tests read."""
+        if not self._on:
+            self._jobs.put(key)
+            return
+        with self._lock:
+            q = self._qs.get(key)
+            if q is None:
+                q = self._qs[key] = queue.SimpleQueue()
+                threading.Thread(target=self._run_market, args=(key, q), name=f"entry-{key[0]}-{key[1]}", daemon=True).start()
+            q.put(key)
 
     def _watched(self) -> dict[tuple[str, str], dict[str, Any]]:
         """The watched events, from memory: the scoping pass puts them there (Store.set_watch), a restart loads them once (start). No table read on a tick. `self.watch`, when a test or a caller sets it, wins."""
@@ -187,7 +206,7 @@ class EntryWatcher:
                 store.watch(spec.name)  # reads the table once and remembers it
 
     def review(self, lane: str, event: str) -> int:
-        """Run the lane's review on one event and queue its evaluations. Returns how many were queued."""
+        """Run the lane's review on one event and evaluate (or queue the evaluation of) each shot. Returns how many were handed on."""
         from .jobs import Jobs
 
         s = self.get_settings()
@@ -200,41 +219,71 @@ class EntryWatcher:
         book = self._book(lane)
         with shared_for(book, s.discovery_max_age, s.discovery_enabled):  # the listing (strike, status) is read from the shared cache, not asked of Kalshi on every price move
             shots = runner.review_lane(s, book, store, spec, self.estimators(store), only={event})
-        jobs = Jobs(store)
-        every = (spec.review_minutes or 2.0) * 60
         queued = 0
-        for shot in shots:
-            made = jobs.enqueue(
-                "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
-                expires_in=max(60.0, 2 * every), max_attempts=s.job_max_attempts, priority=job_priority(s, spec),
-            )
-            queued += 1 if made else 0
+        if self.evaluate is not None:
+            for shot in shots:
+                started = time.perf_counter()
+                try:
+                    self.evaluate(shot)
+                    queued += 1
+                except Exception:
+                    log.exception("entry watcher: evaluation of %s %s failed", lane, shot.ticker)
+                steptime.tick_record("buy evaluate", (time.perf_counter() - started) * 1000.0)
+        else:
+            jobs = Jobs(store)
+            every = (spec.review_minutes or 2.0) * 60
+            for shot in shots:
+                made = jobs.enqueue(
+                    "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
+                    expires_in=max(60.0, 2 * every), max_attempts=s.job_max_attempts, priority=job_priority(s, spec),
+                )
+                queued += 1 if made else 0
         if shots:
-            line = f"{lane} {event}: socket tick in range, queued {queued} of {len(shots)} evaluation(s)"
+            line = f"{lane} {event}: socket tick in range, {'evaluated' if self.evaluate is not None else 'queued'} {queued} of {len(shots)} evaluation(s)"
             log.info("entry watcher: %s", line)
             self.reviewed.append(line)
             del self.reviewed[:-200]
         return queued
 
+    def _look(self, key: tuple[str, str]) -> None:
+        """One look at one event, timed: the review (the lane's filters and the buy module's screen) of a tick. The evaluation inside it is timed on its own."""
+        try:
+            self._last[key] = time.time()
+            with steptime.tick("buy review"):
+                self.review(*key)
+        except KalshiError as exc:
+            log.warning("entry watcher: could not review %s (%s)", key[1], exc)
+        except Exception:
+            log.exception("entry watcher: review of %s failed", key[1])
+        finally:
+            self._pending.discard(key)
+        line = steptime.tick_report()
+        if line:
+            log.info(line)
+
+    def _run_market(self, key: tuple[str, str], q: queue.SimpleQueue) -> None:
+        """The thread of one (lane, event): takes that market's looks one after another and ends after IDLE_SECONDS without one (a market's window is short). It ends only with its queue empty and under the lock that puts to it, so no look is lost."""
+        while not self._stop.is_set():
+            try:
+                q.get(timeout=IDLE_SECONDS)
+            except queue.Empty:
+                with self._lock:
+                    if q.empty():
+                        self._qs.pop(key, None)
+                        return
+                continue
+            self._look(key)
+        with self._lock:
+            self._qs.pop(key, None)
+
     def _run_reviews(self) -> None:
+        """The shared queue, used before the per-market threads exist (tests, and the CLI): one look at a time."""
         while not self._stop.is_set():
             try:
                 key = self._jobs.get(timeout=1.0)
             except queue.Empty:
                 continue
-            try:
-                self._last[key] = time.time()
-                with steptime.tick("buy review"):  # the entry logic for one tick: the lane's filters and the buy module's screen, up to the queued evaluation (budget: 60 ms)
-                    self.review(*key)
-                line = steptime.tick_report()
-                if line:
-                    log.info(line)
-            except KalshiError as exc:
-                log.warning("entry watcher: could not review %s (%s)", key[1], exc)
-            except Exception:
-                log.exception("entry watcher: review of %s failed", key[1])
-            finally:
-                self._pending.discard(key)
+            self._look(key)
 
     def start(self) -> None:
         if self._threads:
@@ -243,10 +292,11 @@ class EntryWatcher:
             self.refresh()
         except Exception:
             log.exception("entry watcher: could not load the saved watchlists")
-        for fn, name in ((self._run_reviews, "entry-review"),):
-            th = threading.Thread(target=fn, name=name, daemon=True)
-            th.start()
-            self._threads.append(th)
+        self._on = True
+        th = threading.Thread(target=self._run_reviews, name="entry-review", daemon=True)  # drains anything offered before start
+        th.start()
+        self._threads.append(th)
 
     def stop(self) -> None:
         self._stop.set()
+        self._on = False

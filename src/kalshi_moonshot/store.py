@@ -1044,6 +1044,11 @@ class Store:
         self.db.commit()
         self.touch("orders")
 
+    def order_counts(self, env: str, since_ts: float) -> dict[tuple[str, str], int]:
+        """Orders sent since `since_ts` by market and side, {(ticker, side): n}: the seed of the buy order ids (orderkeys.py). A background job reads it once at start."""
+        rows = self.db.execute("SELECT ticker, contract, COUNT(*) AS n FROM orders WHERE env=? AND ts>=? GROUP BY ticker, contract", (env, since_ts)).fetchall()
+        return {(r["ticker"], r["contract"] or ""): int(r["n"]) for r in rows}
+
     @remembers('orders')
     def last_order_ts(self, ticker: str, env: str) -> float:
         """When the bot last placed an order on this market (0 if never): a positions read can trail a fill by a few seconds."""
