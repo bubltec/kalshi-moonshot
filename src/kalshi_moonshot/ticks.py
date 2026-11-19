@@ -261,7 +261,7 @@ def warm_from_tape(s, indexes: Sequence[str], now: float, hours: float = 8.0, un
         return 0
     start = now - hours * 3600.0
     end = now if until is None else until  # the second stage of the reload loads only what is older than the first
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     total = 0
     for index_id in indexes:
         try:
@@ -299,7 +299,7 @@ def _quote_rows(s, now: float, hours: float) -> list[tuple[str, float, float, fl
     if not db.tape_exists(s.tape_path):
         return []
     tickers = recent_15m_tickers(s, now, hours)
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     rows: list[tuple[str, float, float, float]] = []
     try:
         for k in range(0, len(tickers), 100):

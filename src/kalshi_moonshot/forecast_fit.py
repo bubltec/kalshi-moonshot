@@ -79,7 +79,7 @@ def _scales(ticks: dict[str, tuple[list[float], list[float]]]) -> dict[str, dict
 
 def collect(s: Settings, horizon: int, before: float | None = None) -> tuple[list[list[float]], list[float], float, dict[str, dict[str, float]]]:
     """(slice moves per moment, the move that followed, the latest window close used, the coin scales)."""
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     store = Store(s.db_path, s.exclude_versions)
     ticks: dict[str, tuple[list[float], list[float]]] = {}
     for ix in {index_for_series(x) for x in CRYPTO} - {None}:
@@ -175,7 +175,7 @@ def _mid(row: Any, side: str) -> float:
 
 def review(s: Settings, lane: str, hours: float = 24.0) -> list[str]:
     """What the lane's forecasts were worth: for each decision that saved one, the move of the side's mid over that forecast's horizon."""
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     store = Store(s.db_path, s.exclude_versions)
     rows = store.db.execute("SELECT ts, ticker, side, action, close_time, context FROM decisions WHERE lane=? AND ts>? AND context LIKE '{%' ORDER BY ts", (lane, time.time() - hours * 3600.0)).fetchall()
     got: list[tuple[float, float, float | None, str]] = []
@@ -274,7 +274,7 @@ def order_variants(ask: float, bid: float, d30: float, path: list[float], win: b
 
 def review_orders(s: Settings, lane: str, hours: float = 24.0) -> list[str]:
     """For the forecast lane's settled decisions that bought: what each order style would have returned from the same moment (replayed on the tape)."""
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     store = Store(s.db_path, s.exclude_versions)
     rows = store.db.execute("SELECT ts, ticker, side, outcome, context FROM decisions WHERE lane=? AND action='bet' AND ts>? AND outcome IN ('yes','no') AND context LIKE '{%' ORDER BY ts",
                             (lane, time.time() - hours * 3600.0)).fetchall()
@@ -318,7 +318,7 @@ def compare(s: Settings, lane: str = "crypto_favorite", days: float = 4.0, horiz
     the context at the time, including what the language-model lanes thought of the same market. `out_path` saves that list as JSON for the model to read."""
     from .factors import bet_roi
 
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     store = Store(s.db_path, s.exclude_versions)
     rows = store.db.execute("SELECT ts, ticker, side, ask, outcome, exit_price, exit_reason FROM decisions WHERE lane=? AND mode='trade' AND action='bet' AND outcome IN ('yes','no') AND ts>? ORDER BY ts",
                             (lane, time.time() - days * 86400.0)).fetchall()

@@ -138,7 +138,7 @@ def train(s: Any, now: float | None = None) -> dict[str, Any] | None:
     from .store import Store
 
     now = time.time() if now is None else now
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     store = Store(s.db_path, s.exclude_versions)
     wins = store.db.execute(
         "SELECT ticker, series, close_ts, result, strike FROM windows WHERE result IN ('yes','no') AND strike IS NOT NULL AND close_ts>? ORDER BY close_ts", (now - TRAIN_DAYS * 86400,)

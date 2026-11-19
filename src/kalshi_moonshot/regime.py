@@ -28,7 +28,7 @@ log = logging.getLogger("kalshi_moonshot.regime")
 def favorite_won(s: Settings, ticker: str, close_ts: float, result: str) -> bool | None:
     if ticker in _won:
         return _won[ticker]
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     rows = tape.execute(
         "SELECT bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid>0 AND ask>0 ORDER BY ts",
         (ticker, close_ts - LEFT[0], close_ts - LEFT[1]),

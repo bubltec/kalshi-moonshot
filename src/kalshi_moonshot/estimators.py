@@ -152,7 +152,7 @@ class ForecastEstimator:
         if getattr(self._local, "tape", None) is None:
             from . import db
 
-            self._local.tape = db.connect(s.tape_path, "tape", shared=True)
+            self._local.tape = db.reader(s.tape_path)
         return self._local.tape
 
     def _gates(self, s: Settings, shot: LongShot, moves: list[float]) -> list[str]:
@@ -218,7 +218,7 @@ class CurveEstimator:
         if getattr(self._local, "tape", None) is None:
             from . import db
 
-            self._local.tape = db.connect(s.tape_path, "tape", shared=True)
+            self._local.tape = db.reader(s.tape_path)
         return self._local.tape
 
     def estimate(self, client: Any, s: Settings, shot: LongShot) -> Estimate:

@@ -754,6 +754,7 @@ class Worker:
             )
         print(runner.format_outcome(out), flush=True)
         if out.action == "bet":
+            with memguard.allowed():  # arming the sell watcher for the new position reads the orders table; it comes after the order, not in the judgement
                 self._watch_new_position(out.ticker)
         return f"{out.action} {out.ticker}"
 
@@ -761,7 +762,7 @@ class Worker:
         """A read connection to the tape. Each thread that reads it opens its own."""
         from . import db
 
-        return db.connect(self.s.tape_path, "tape", shared=True)
+        return db.reader(self.s.tape_path)
 
     def _entry_factors(self, shot: LongShot, spec, strike: float | None = None, now: float | None = None) -> str:
         """Every feature we know of at the moment of the buy, saved with the decision so factors, the forecaster and the model can be read against results later. Any market with a tape quote;

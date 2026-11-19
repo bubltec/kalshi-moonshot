@@ -42,7 +42,7 @@ class KalshiPerpFeed:
         if getattr(self._local, "db", None) is None:
             from . import config, db
 
-            self._local.db = db.connect(config.reload().tape_path, "tape", shared=True)
+            self._local.db = db.reader(config.reload().tape_path)
         return self._local.db
 
     def _memory(self, index_id: str) -> tuple[float, float] | None:

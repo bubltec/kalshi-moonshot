@@ -356,7 +356,7 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
     if not rules:
         return []
     store = Store(s.db_path, s.exclude_versions)
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     t0 = now - TRAIN_DAYS * 86400.0
     g0 = int(t0 - max(3500, lookback_seconds(kind) + 200))
     g1 = int(now) + 2

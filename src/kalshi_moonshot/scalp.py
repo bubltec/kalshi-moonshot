@@ -34,7 +34,7 @@ STEP = 30.0
 
 def build_cases(s: Settings, max_windows: int = 600) -> int:
     """Replay the finished windows that have no attempts saved yet. Returns how many attempts were added."""
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     store = Store(s.db_path, s.exclude_versions)
     try:
         weights: forecast.Weights | None = forecast.load_weights(s.forecast_weights or f"{s.data_dir}/forecast_h5.json")

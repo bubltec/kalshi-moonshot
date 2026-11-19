@@ -684,7 +684,7 @@ def _load_quotes(s: Settings, ticker: str, start: float, end: float) -> list[tup
         return [(ts, bid, ask) for ts, bid, ask in got if bid > 0 and ask > 0]
     rows: list[tuple[float, float, float]] = []
     try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
+        tape = database.reader(s.tape_path)
         rows = [(float(ts), float(bid), float(ask)) for ts, bid, ask in tape.execute(
             "SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts",
             (ticker, end, start),
@@ -712,7 +712,7 @@ def arm_stop_history(s: Settings, ticker: str, now: float | None = None) -> None
         return
     start = now - tape_mod.STOP_SECONDS
     try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
+        tape = database.reader(s.tape_path)
         rows = [(float(ts), float(bid), float(ask)) for ts, bid, ask in tape.execute(
             "SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts<=? AND ts>? AND bid > 0 AND ask > 0 ORDER BY ts",
             (ticker, now, start),
@@ -734,7 +734,7 @@ def arm_feed_history(s: Settings, symbol: str, now: float | None = None) -> None
         return
     start = now - tape_mod.STOP_SECONDS
     try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
+        tape = database.reader(s.tape_path)
         rows = [(float(ts), float(px)) for ts, px in tape.execute(
             "SELECT ts, px FROM feed_ticks WHERE symbol=? AND ts<=? AND ts>? ORDER BY ts", (symbol, now, start),
         )]
@@ -755,7 +755,7 @@ def arm_index_history(s: Settings, index_id: str, now: float | None = None) -> N
         return
     start = now - tape_mod.INDEX_SECONDS
     try:
-        tape = database.connect(s.tape_path, "tape", shared=True)
+        tape = database.reader(s.tape_path)
         rows = [(float(ts), float(value)) for ts, value in tape.execute(
             "SELECT ts, value FROM index_ticks WHERE index_id=? AND ts<=? AND ts>? AND value > 0 ORDER BY ts",
             (index_id, now, start),

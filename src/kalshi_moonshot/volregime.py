@@ -94,7 +94,7 @@ class VolRegime:
 
         if not db.tape_exists(s.tape_path):
             return
-        tape = db.connect(s.tape_path, "tape", shared=True)
+        tape = db.reader(s.tape_path)
         for coin, (index, look) in spec.items():
             try:
                 rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND ts<=? AND value>0 ORDER BY ts", (index, now - BASE_LOOK - look, now)).fetchall()

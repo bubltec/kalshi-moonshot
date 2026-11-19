@@ -427,6 +427,26 @@ def connect(path: Path | str, kind: str = "main", *, shared: bool = False, timeo
     return conn
 
 
+_READERS: dict[tuple, list] = {}
+_READER_LOCK = threading.Lock()
+READER_POOL = 4  # connections shared by every thread that only reads the tape (structural: Postgres is set to 60 clients in all)
+
+
+def reader(path: Path | str, kind: str = "tape") -> Any:
+    """A connection for READING the tape (or the store) from any thread, taken from a small pool shared by the whole process. 2026-11-19 21:53: a connection for each thread (thread-locals in factors, estimators and kalshifeed, and a new one on every call in runner and ticks) held 54 of the server's 60 clients once the entry path ran on a thread for each market. Each connection serialises its own statements, so four readers answer four reads at a time. Writers keep their own connection (tape.py)."""
+    key = (database_url() if use_postgres() else str(path), kind)
+    with _READER_LOCK:
+        pool = _READERS.setdefault(key, [])
+        for i, c in enumerate(pool):
+            if getattr(getattr(c, "conn", None), "closed", False):
+                pool[i] = connect(path, kind, shared=True)
+        if len(pool) < READER_POOL:
+            pool.append(connect(path, kind, shared=True))
+            return pool[-1]
+        pool.append(pool.pop(0))  # round robin
+        return pool[-1]
+
+
 def tape_exists(path: Path | str) -> bool:
     """Whether a tape has been recorded: a file for SQLite, a populated schema for Postgres."""
     if not use_postgres():

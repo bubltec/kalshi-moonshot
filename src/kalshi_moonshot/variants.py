@@ -257,7 +257,7 @@ def scoreboard(s: Settings, days: float = 12.0, recent_days: float = 3.0, now: f
     """Every settled or sold live bet of the favorite lanes, read as a variety at its buy and totalled by (asset class, side, variety). Each total carries all bets and the latest `recent_days` alone.
     Crypto reads the settlement index against the strike; commodities read BiQuote against its own price at the window open (the strike a Kalshi commodity market uses is a different feed's)."""
     now = time.time() if now is None else now
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     store = Store(s.db_path, s.exclude_versions)
     rows = store.db.execute(
         "SELECT d.ts, d.lane, d.ticker, d.side, d.ask, d.stake_usd, d.exit_price, d.outcome, w.close_ts, w.strike, w.series FROM decisions d JOIN windows w ON w.ticker = d.ticker "
@@ -343,7 +343,7 @@ def favorites(s: Settings, start: float, end: float) -> Iterator[dict]:
     """Every crypto and commodity window that closed in (start, end] and has a result, as its favorite (favorite_entry) read as a variety at the moment of the buy: the features, the side, the price, whether it won, what a $10 ticket
     made with the taker fee, and what the flip (the other side) would have made. One dict per window, whether or not a lane bought it. Commodities are read against BiQuote's price at the window open."""
     load_custom(s)
-    tape = db.connect(s.tape_path, "tape", shared=True)
+    tape = db.reader(s.tape_path)
     store = Store(s.db_path, s.exclude_versions)
     windows = store.db.execute(
         "SELECT ticker, series, close_ts, strike, result FROM windows WHERE close_ts > ? AND close_ts <= ? AND result IN ('yes','no') AND strike > 0 ORDER BY close_ts", (start, end),
@@ -479,7 +479,7 @@ def snapshot_now(s: Settings, series: str, side: str, left_seconds: float, now: 
         opened = close - 900.0
         ref = ticks_mod.history.first_at_or_after(index, opened - 5.0, 25.0)
         if ref is None:
-            tape = db.connect(s.tape_path, "tape", shared=True)
+            tape = db.reader(s.tape_path)
             row = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts LIMIT 1", (index, opened - 5.0, opened + 20.0)).fetchone()
             ref = float(row[0]) if row else None
         if ref is None:
@@ -488,7 +488,7 @@ def snapshot_now(s: Settings, series: str, side: str, left_seconds: float, now: 
         return None
     got = ticks_mod.history.window(index, now - LOOK - 40.0, now)
     if got is None:
-        tape = db.connect(s.tape_path, "tape", shared=True)
+        tape = db.reader(s.tape_path)
         rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index, now - LOOK - 40.0, now)).fetchall()
         got = ([float(r[0]) for r in rows], [float(r[1]) for r in rows])
     snap = snapshot(got[0], got[1], ref, side, now, close)

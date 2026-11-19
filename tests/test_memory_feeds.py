@@ -154,3 +154,20 @@ def test_a_socket_review_never_asks_kalshi(tmp_path):
 
     shots = runner.review_lane(s, Memory(live_event()), store, spec, build_estimators(None, store, None, live_quant()), memory=True)
     assert len(shots) == 1
+
+
+def test_tape_readers_come_from_a_small_pool_not_one_connection_per_thread(tmp_path):
+    """2026-11-19 21:53: 54 of the server's 60 clients were idle connections held by threads that had read the tape once."""
+    import threading
+
+    from kalshi_moonshot import db
+
+    got = []
+
+    def grab():
+        got.append(db.reader(tmp_path / "tape.db"))
+
+    threads = [threading.Thread(target=grab) for _ in range(50)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert len({id(c) for c in got}) <= db.READER_POOL

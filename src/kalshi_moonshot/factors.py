@@ -179,7 +179,7 @@ def snapshot_now(s: Any, ticker: str, side: str, close_time: str, entry_factors:
         if getattr(_local, "tape", None) is None:
             from . import db
 
-            _local.tape = db.connect(s.tape_path, "tape", shared=True)
+            _local.tape = db.reader(s.tape_path)
         weights = None
         try:
             weights = forecast.load_weights(s.forecast_weights or f"{s.data_dir}/forecast_h5.json")
