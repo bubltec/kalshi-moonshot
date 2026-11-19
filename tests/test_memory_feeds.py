@@ -241,3 +241,21 @@ def test_bets_that_land_together_rebuild_the_book_once_each_round_and_every_bet_
     [t.join() for t in threads]
     assert len(store._book()) == 12  # every bet is in the book once all have returned
     assert len(reads) < 12
+
+
+def test_warming_builds_the_feeds_bars_for_every_instrument_before_the_first_buy(tmp_path):
+    from kalshi_moonshot import commodities as cm
+    from kalshi_moonshot.config import load
+
+    s = type(load())(**{**load().__dict__, "data_dir": tmp_path})
+    asked = []
+
+    class Feed:
+        def series(self, symbol):
+            asked.append(symbol)
+            if symbol.endswith("0"):
+                raise cm.CommodityError("no ticks")  # one instrument with no ticks does not stop the rest
+            return None
+
+    n = cm.CommodityPricer(Feed()).warm(s)
+    assert asked and n == len([x for x in asked if not x.endswith("0")])

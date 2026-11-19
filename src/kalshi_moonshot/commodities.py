@@ -509,6 +509,17 @@ class CommodityPricer:
         self._width_tried = 0.0
         self._tried: dict[str, float] = {}  # series -> when learn_windows last looked
 
+    def warm(self, s: Settings) -> int:
+        """Build the price feed's bars for every instrument now (a background job at start), so the first buy after a restart does not wait for hours of ticks to be read: the first read of an instrument took 16 s on the host (2026-11-19 23:36). Returns how many were built."""
+        built = 0
+        for inst in load_instruments(s.data_dir):
+            try:
+                self.feed.series(inst.symbol)
+                built += 1
+            except Exception:
+                logging.getLogger("moonshot").debug("warm: no bars for %s", inst.symbol, exc_info=True)
+        return built
+
     def price_markets(
         self, markets: list[dict[str, Any]], s: Settings, now: datetime | None = None
     ) -> dict[str, tuple[float, str]]:
