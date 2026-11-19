@@ -1,0 +1,31 @@
+window: 2026-11-09 to 2026-11-16; 1349 commodity favourites; efficiency cut at its median 0.092; volatility cut in thirds.
+  all                                          bets  1349 | avg ask  67.8c | win  64.7% ( -3.1 vs ask) | net   -61.92 ( -6.8 per $100) | days positive 0 of 8
+--- volatility low (under 11.1c)
+  all bets                                     bets   450 | avg ask  68.2c | win  66.2% ( -1.9 vs ask) | net   -15.32 ( -5.0 per $100) | days positive 2 of 8
+  trending                                     bets   259 | avg ask  69.7c | win  66.0% ( -3.7 vs ask) | net   -13.27 ( -7.3 per $100) | days positive 2 of 8
+  trending, the side gaining (drift5 over 0)   bets   247 | avg ask  68.9c | win  65.2% ( -3.8 vs ask) | net   -12.86 ( -7.6 per $100) | days positive 2 of 8
+  trending, the side losing (drift5 at or under 0) bets    12
+  calm or choppy                               bets   191 | avg ask  66.1c | win  66.5% ( +0.4 vs ask) | net    -2.05 ( -1.6 per $100) | days positive 5 of 8
+  calm or choppy, the side gaining (drift5 over 0) bets   149 | avg ask  64.9c | win  65.8% ( +0.9 vs ask) | net    -0.99 ( -1.0 per $100) | days positive 5 of 8
+  calm or choppy, the side losing (drift5 at or under 0) bets    42 | avg ask  70.2c | win  69.0% ( -1.2 vs ask) | net    -1.06 ( -3.6 per $100) | days positive 2 of 8
+--- volatility middle (11.1 to 12.9c)
+  all bets                                     bets   449 | avg ask  66.8c | win  60.8% ( -6.0 vs ask) | net   -33.69 (-11.2 per $100) | days positive 0 of 8
+  trending                                     bets   216 | avg ask  69.3c | win  63.9% ( -5.4 vs ask) | net   -14.83 ( -9.9 per $100) | days positive 2 of 8
+  trending, the side gaining (drift5 over 0)   bets   216 | avg ask  69.3c | win  63.9% ( -5.4 vs ask) | net   -14.83 ( -9.9 per $100) | days positive 2 of 8
+  trending, the side losing (drift5 at or under 0) bets     0
+  calm or choppy                               bets   233 | avg ask  64.4c | win  57.9% ( -6.5 vs ask) | net   -18.86 (-12.6 per $100) | days positive 1 of 8
+  calm or choppy, the side gaining (drift5 over 0) bets   204 | avg ask  64.7c | win  56.4% ( -8.3 vs ask) | net   -20.23 (-15.3 per $100) | days positive 1 of 8
+  calm or choppy, the side losing (drift5 at or under 0) bets    29
+--- volatility high (over 12.9c)
+  all bets                                     bets   450 | avg ask  68.5c | win  67.1% ( -1.4 vs ask) | net   -12.91 ( -4.2 per $100) | days positive 2 of 8
+  trending                                     bets   199 | avg ask  71.6c | win  69.3% ( -2.3 vs ask) | net    -7.30 ( -5.1 per $100) | days positive 1 of 8
+  trending, the side gaining (drift5 over 0)   bets   199 | avg ask  71.6c | win  69.3% ( -2.3 vs ask) | net    -7.30 ( -5.1 per $100) | days positive 1 of 8
+  trending, the side losing (drift5 at or under 0) bets     0
+  calm or choppy                               bets   251 | avg ask  66.0c | win  65.3% ( -0.7 vs ask) | net    -5.61 ( -3.4 per $100) | days positive 1 of 8
+  calm or choppy, the side gaining (drift5 over 0) bets   220 | avg ask  66.4c | win  65.9% ( -0.5 vs ask) | net    -4.52 ( -3.1 per $100) | days positive 4 of 8
+  calm or choppy, the side losing (drift5 at or under 0) bets    31 | avg ask  63.2c | win  61.3% ( -1.9 vs ask) | net    -1.08 ( -5.5 per $100) | days positive 2 of 8
+--- the ask we paid, by volatility (share of bets in each price band)
+  low (under 11.1c)            0.60-0.70:   73%  0.70-0.80:   12%  0.80-0.86:    3%  0.86-0.92:   11%
+  middle (11.1 to 12.9c)       0.60-0.70:   74%  0.70-0.80:   20%  0.80-0.86:    4%  0.86-0.92:    3%
+  high (over 12.9c)            0.60-0.70:   62%  0.70-0.80:   30%  0.80-0.86:    5%  0.86-0.92:    3%
+DONE
