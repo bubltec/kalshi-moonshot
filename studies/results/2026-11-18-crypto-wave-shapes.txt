@@ -1,0 +1,73 @@
+window: 2026-11-09 to 2026-11-16; 560 favourite sets of four or more coins (one a window and way) at the first 60 s mark with 4 to 13 minutes left, the lane's band 0.60 to 0.85
+  all lose (75% or more lost)    sets  116 (20.7%) | coins in a set  5.1 | mean share lost  90.8%
+  mixed                          sets   88 (15.7%) | coins in a set  5.3 | mean share lost  51.0%
+  all win (25% or fewer lost)    sets  356 (63.6%) | coins in a set  5.1 | mean share lost   4.3%
+--- the mean of each reading by label
+                                   slope3   range5     eff5   flips5     disp      age     left        n
+  all lose (75% or more lost)        0.97     3.10     0.07     5.33     5.88     5.90   454.66     5.12
+  mixed                              0.97     3.14     0.07     4.16     5.88     5.69   467.05     5.34
+  all win (25% or fewer lost)        1.15     3.21     0.07     5.01     5.86     6.01   448.15     5.13
+--- the set's mean side mid from 5 minutes before the mark to 5 after, by label (the wave's shape)
+                                     -5m     -4m     -3m     -2m     -1m     +0m     +1m     +2m     +3m     +4m     +5m
+  all lose (75% or more lost)      0.566   0.569   0.586   0.588   0.633   0.715   0.661   0.590   0.490   0.421   0.333
+  mixed                            0.557   0.580   0.609   0.646   0.677   0.731   0.698   0.677   0.656   0.635   0.595
+  all win (25% or fewer lost)      0.544   0.565   0.583   0.613   0.647   0.732   0.760   0.790   0.824   0.854   0.887
+--- the share of sets that went 'all lose', by fifths of each reading known at the mark
+  all sets: 20.7% went all lose; mean share of the set's coins lost 29.5%
+  by slope3
+    under -0.07          sets  112 | all lose  24.1% | all win  58.0% | mean share lost  33.9%
+    -0.07 to 0.67        sets  112 | all lose  22.3% | all win  58.9% | mean share lost  32.8%
+    0.67 to 1.44         sets  112 | all lose  16.1% | all win  65.2% | mean share lost  26.6%
+    1.44 to 2.27         sets  112 | all lose  20.5% | all win  67.9% | mean share lost  27.0%
+    over 2.27            sets  112 | all lose  20.5% | all win  67.9% | mean share lost  27.4%
+  by range5
+    under 2.49           sets  112 | all lose  19.6% | all win  60.7% | mean share lost  30.3%
+    2.49 to 2.91         sets  112 | all lose  24.1% | all win  60.7% | mean share lost  31.9%
+    2.91 to 3.31         sets  112 | all lose  23.2% | all win  64.3% | mean share lost  31.2%
+    3.31 to 3.78         sets  112 | all lose  22.3% | all win  60.7% | mean share lost  30.6%
+    over 3.78            sets  112 | all lose  14.3% | all win  71.4% | mean share lost  23.6%
+  by eff5
+    under 0.03           sets  112 | all lose  23.2% | all win  54.5% | mean share lost  34.3%
+    0.03 to 0.05         sets  112 | all lose  20.5% | all win  69.6% | mean share lost  26.8%
+    0.05 to 0.08         sets  112 | all lose  27.7% | all win  56.2% | mean share lost  35.8%
+    0.08 to 0.11         sets  112 | all lose  16.1% | all win  71.4% | mean share lost  24.8%
+    over 0.11            sets  112 | all lose  16.1% | all win  66.1% | mean share lost  26.0%
+  by flips5
+    under 0.66           sets  112 | all lose  12.5% | all win  67.0% | mean share lost  24.9%
+    0.66 to 3.25         sets  113 | all lose  23.9% | all win  59.3% | mean share lost  32.6%
+    3.25 to 5.60         sets  112 | all lose  19.6% | all win  61.6% | mean share lost  30.7%
+    5.60 to 8.27         sets  111 | all lose  25.2% | all win  66.7% | mean share lost  29.1%
+    over 8.27            sets  112 | all lose  22.3% | all win  63.4% | mean share lost  30.3%
+  by disp
+    under 4.17           sets  112 | all lose  18.8% | all win  65.2% | mean share lost  26.4%
+    4.17 to 5.44         sets  112 | all lose  19.6% | all win  62.5% | mean share lost  30.8%
+    5.44 to 6.48         sets  112 | all lose  24.1% | all win  64.3% | mean share lost  31.2%
+    6.48 to 7.52         sets  112 | all lose  22.3% | all win  61.6% | mean share lost  31.1%
+    over 7.52            sets  112 | all lose  18.8% | all win  64.3% | mean share lost  28.0%
+  by age
+    under 4.70           sets  112 | all lose  22.3% | all win  58.0% | mean share lost  32.4%
+    4.70 to 5.70         sets  115 | all lose  20.9% | all win  65.2% | mean share lost  29.2%
+    5.70 to 6.26         sets  109 | all lose  17.4% | all win  67.0% | mean share lost  27.5%
+    6.26 to 7.45         sets  112 | all lose  25.0% | all win  58.0% | mean share lost  32.2%
+    over 7.45            sets  112 | all lose  17.9% | all win  69.6% | mean share lost  26.3%
+  by left
+    under 360.00         sets  117 | all lose  18.8% | all win  71.8% | mean share lost  25.7%
+    360.00 to 420.00     sets  140 | all lose  20.7% | all win  60.7% | mean share lost  30.7%
+    420.00 to 480.00     sets  104 | all lose  24.0% | all win  59.6% | mean share lost  32.5%
+    480.00 to 540.00     sets  199 | all lose  20.1% | all win  62.8% | mean share lost  29.4%
+  by n
+    under 4.00           sets  222 | all lose  22.5% | all win  66.7% | mean share lost  28.4%
+    4.00 to 5.00         sets  158 | all lose  19.6% | all win  60.8% | mean share lost  30.8%
+    5.00 to 6.00         sets   90 | all lose  17.8% | all win  63.3% | mean share lost  29.3%
+    over 6.00            sets   90 | all lose  21.1% | all win  61.1% | mean share lost  30.5%
+--- waiting one minute: the set's mean side mid one minute AFTER the mark less its value at the mark (known 60 s after the buy would have been placed)
+    fell 0.05 or more    sets  162 | all lose  33.3% | all win  45.1% | mean share lost  43.3% | mean side mid at the mark 0.723, a minute later 0.575
+    fell under 0.05      sets   80 | all lose  25.0% | all win  55.0% | mean share lost  35.3% | mean side mid at the mark 0.728, a minute later 0.702
+    rose under 0.03      sets   61 | all lose  19.7% | all win  59.0% | mean share lost  32.0% | mean side mid at the mark 0.745, a minute later 0.761
+    rose 0.03 or more    sets  257 | all lose  11.7% | all win  79.0% | mean share lost  18.4% | mean side mid at the mark 0.727, a minute later 0.828
+--- waiting two minutes: the same, two minutes after the mark
+    fell 0.05 or more    sets  176 | all lose  40.3% | all win  37.5% | mean share lost  50.9% | mean side mid at the mark 0.722, two minutes later 0.520
+    fell under 0.05      sets   46 | all lose  21.7% | all win  69.6% | mean share lost  26.2% | mean side mid at the mark 0.745, two minutes later 0.717
+    rose under 0.05      sets   73 | all lose  20.5% | all win  58.9% | mean share lost  31.6% | mean side mid at the mark 0.738, two minutes later 0.763
+    rose 0.05 or more    sets  265 | all lose   7.5% | all win  81.1% | mean share lost  15.4% | mean side mid at the mark 0.726, two minutes later 0.864
+DONE
