@@ -1,6 +1,6 @@
 window: 11-09 04:50 to 11-16 23:50 UTC; 4584 commodity favourites over 119 clock hours; periods with a full 3-hour lead-in (20+ markets): 115. Periods chosen after seeing the data.
 every reading is the median over the markets that closed in the 3 hours before the hour; per kind: the median of those hourly medians (25th to 75th)
-  all markets, whole tape: unit 10.44, flips 3.00, contested 0.34, decisive 0.28, eff 0.10, range 0.61
+  all markets, whole tape: unit 10.44, flips 3.00, contested 0.34, decisive 0.28, eff 0.10, range 0.61, volume 22758.56, trades 1215.00, busy 0.36, imbalance 0.14, spread 2.24
   loss hours (worst fifth by net per $100): hours 23, bets 875, lost 322, markets in lead-in median 96
       unit       median  10.244  (  9.564 to  11.263)
       flips      median   3.000  (  2.000 to   4.000)
@@ -8,6 +8,11 @@ every reading is the median over the markets that closed in the 3 hours before t
       decisive   median   0.284  (  0.270 to   0.296)
       eff        median   0.101  (  0.091 to   0.105)
       range      median   0.617  (  0.580 to   0.635)
+      volume     median 22842.420  (20218.003 to 25367.407)
+      trades     median 1317.000  (1168.750 to 1507.000)
+      busy       median   0.376  (  0.317 to   0.396)
+      imbalance  median   0.138  (  0.124 to   0.145)
+      spread     median   2.134  (  2.001 to   2.182)
   clean hours (best fifth by net per $100): hours 23, bets 780, lost 153, markets in lead-in median 72
       unit       median  10.262  (  8.872 to  10.898)
       flips      median   3.000  (  2.000 to   4.250)
@@ -15,6 +20,11 @@ every reading is the median over the markets that closed in the 3 hours before t
       decisive   median   0.283  (  0.263 to   0.321)
       eff        median   0.093  (  0.087 to   0.105)
       range      median   0.600  (  0.561 to   0.623)
+      volume     median 25571.795  (19814.562 to 30377.353)
+      trades     median 1335.500  (1063.750 to 1549.000)
+      busy       median   0.392  (  0.318 to   0.427)
+      imbalance  median   0.132  (  0.117 to   0.147)
+      spread     median   2.158  (  2.062 to   2.407)
   other hours: hours 69, bets 2689, lost 777, markets in lead-in median 96
       unit       median  10.527  (  9.688 to  11.246)
       flips      median   3.000  (  2.000 to   4.000)
@@ -22,6 +32,11 @@ every reading is the median over the markets that closed in the 3 hours before t
       decisive   median   0.282  (  0.265 to   0.296)
       eff        median   0.095  (  0.087 to   0.101)
       range      median   0.619  (  0.592 to   0.639)
+      volume     median 22209.985  (19621.840 to 25317.575)
+      trades     median 1221.000  (1021.500 to 1421.500)
+      busy       median   0.359  (  0.315 to   0.391)
+      imbalance  median   0.138  (  0.128 to   0.159)
+      spread     median   2.275  (  2.156 to   2.438)
 --- the hours themselves (a label for reading, not a rule)
   11-09 06:00 UTC  clean bets  37 lost  7 net/100   +3.5 | unit 8.76 flips 1.5 contested 0.22 decisive 0.341 eff 0.10 range 0.53
   11-09 07:00 UTC  clean bets  35 lost  7 net/100  +10.3 | unit 8.57 flips 1.0 contested 0.22 decisive 0.331 eff 0.10 range 0.54

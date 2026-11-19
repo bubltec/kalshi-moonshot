@@ -11,6 +11,11 @@ For each period the shape is read from Kalshi's own quotes over the 3 hours BEFO
   decisive   mean |mid - 0.5| over the market's seconds
   eff        path efficiency of the mid over the whole market (net move over the sum of one-second moves)
   range      high less low of the mid
+  volume     contracts traded in the market (Kalshi's printed trades, tape flow_1s)
+  trades     number of trades
+  busy       share of seconds with a trade
+  imbalance  |YES volume less NO volume| over volume (one-sided flow)
+  spread     mean ask less bid, cents
   markets    how many markets closed in the window
 Also each hour's own typical minute against that market's own 8-day median is not used: the comparison is between period kinds. Reported per kind: hours, bets, losses, and the median of each reading (and the 25th to 75th share). Nothing is keyed on a market name; the pooled commodity markets are the sample.
 Tape: data/tape_archive/quotes, 2026-11-09 to the last archived day, results windows.csv.
@@ -31,6 +36,9 @@ res = {r[0]: (float(r[1]), r[2]) for r in csv.reader(open("data/tape_archive/win
 bets, mk = [], []
 days = sorted(glob.glob("data/tape_archive/quotes/day=*/part-0.parquet"))
 for f in days:
+    fl = pq.read_table(f.replace("/quotes/", "/flow_1s/"), columns=["ts", "ticker", "yes_vol", "no_vol", "n"])
+    fl = fl.filter(pc.match_substring(fl["ticker"], "15M-")).to_pandas()
+    flow = {tk: x for tk, x in fl.groupby("ticker", sort=False)}
     t = pq.read_table(f, columns=["ts", "ticker", "bid", "ask"])
     t = t.filter(pc.match_substring(t["ticker"], "15M-"))
     df = t.to_pandas()
@@ -61,7 +69,12 @@ for f in days:
             continue
         unit = float(np.sqrt(np.mean(dd * dd)) * math.sqrt(60.0)) * 100.0
         moves = float(np.abs(dd).sum())
-        mk.append({"close": close, "unit": unit, "flips": float(len(cts)), "contested": float(np.mean((m > 0.30) & (m < 0.70))), "decisive": float(np.mean(np.abs(m - 0.5))),
+        fx = flow.get(ticker)
+        vol = float((fx["yes_vol"] + fx["no_vol"]).sum()) if fx is not None else 0.0
+        tr = float(fx["n"].sum()) if fx is not None else 0.0
+        busy = float((fx["yes_vol"] + fx["no_vol"] > 0).sum()) / 900.0 if fx is not None else 0.0
+        imb = (abs(float(fx["yes_vol"].sum()) - float(fx["no_vol"].sum())) / vol) if vol > 0 else 0.0
+        mk.append({"volume": vol, "trades": tr, "busy": busy, "imbalance": imb, "spread": float(np.mean(ya - yb)) * 100.0, "close": close, "unit": unit, "flips": float(len(cts)), "contested": float(np.mean((m > 0.30) & (m < 0.70))), "decisive": float(np.mean(np.abs(m - 0.5))),
                    "eff": (abs(m[-1] - m[0]) / moves) if moves > 0 else 1.0, "range": float(m.max() - m.min())})
         d2 = d * d
         taken = set()
@@ -90,7 +103,7 @@ g = g[g["n"] >= 15].copy()
 g["per100"] = 100.0 * g["net"] / g["stake"]
 q20, q80 = g["per100"].quantile(0.2), g["per100"].quantile(0.8)
 g["kind"] = np.where(g["per100"] <= q20, "loss hours (worst fifth by net per $100)", np.where(g["per100"] >= q80, "clean hours (best fifth by net per $100)", "other hours"))
-READ = ("unit", "flips", "contested", "decisive", "eff", "range")
+READ = ("unit", "flips", "contested", "decisive", "eff", "range", "volume", "trades", "busy", "imbalance", "spread")
 rows = []
 for hour, r in g.iterrows():
     h0 = hour * 3600
