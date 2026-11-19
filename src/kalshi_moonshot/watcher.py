@@ -283,6 +283,10 @@ class Target:
     risk_take_trail_timed: bool = False  # the trail reads the time-aware typical minute (lane field curve_take_trail_timed), the static one when that has too little history
     risk_take_peak: float = 0.0  # the highest bid the risk check has seen on this bet
     risk_trail_logged: bool = False
+    risk_late_tight: float = 0.0  # typical minutes under its high since the buy at which a bet is sold in the last share of the market, ahead or not (lane field curve_risk_late_tight); 0 = off
+    risk_late_tight_share: float = 1.0 / 6.0  # the share of the market's 900 s at its end where late_tight applies
+    risk_late_tight_live: bool = False
+    risk_late_tight_logged: bool = False
     risk_under_even: float = 0.0  # the share of the time left a favorite's bid must stay under even before it is sold (lane field curve_risk_under_even); 0 = off
     risk_under_even_live: bool = False
     risk_under_since: float = 0.0  # when the bid last went under even and stayed
@@ -1214,6 +1218,27 @@ class ProfitWatcher:
                 t.risk_trail_logged = True
                 log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
                 self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="trail")
+        return None
+
+    def _sell_late_tight(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step late_tight (lane field curve_risk_late_tight; 2026-11-19, user: "i dont think high volatility means we don't buy, but i think it means we tighten our selling"; "build the new step as a module"). In the last share of the market (curve_risk_late_tight_share of its 900 s) a bet, ahead or not, is sold at the bid once its bid is curve_risk_late_tight typical minutes of its own market under its highest bid since the buy: the trail's question without the trail's need to be ahead. A sale by a step before it stands (put it after `trail`). It sells where curve_risk_late_tight_live and the risk exit are live; otherwise it logs one would-sell a bet and records it (kind "late tight" in data/risk_shadow.jsonl). It reads the bid, the high since the buy and the exit's typical minute: no model, no coin, no market. Needs the lane's profit take on (that keeps the high since the buy)."""
+        if t.risk_late_tight <= 0 or not t.risk_take:
+            return None
+        ProfitWatcher._sell_shared(self, t, bid, now, left, pnl, c)
+        _gain, _room, _rebuy, unit, _bar = ProfitWatcher._sell_take_state(self, t, bid, now, left, c)
+        if not unit or unit <= 0 or bid < CURVE_MIN_BID or left > 900.0 * t.risk_late_tight_share or t.risk_take_peak <= 0:
+            return None
+        if bid > t.risk_take_peak - t.risk_late_tight * unit + 1e-9:
+            return None
+        reason = f"curve risk exit (late tight): the bid {bid:.2f} is {t.risk_take_peak - bid:.2f} under its {t.risk_take_peak:.2f} high since the buy, at least {t.risk_late_tight:g} typical minute(s) of this market ({unit:.3f}), with {left:.0f}s left of the last {900.0 * t.risk_late_tight_share:.0f}s; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+        extra = {"high": round(t.risk_take_peak, 4), "unit": round(unit, 5), "units": t.risk_late_tight}
+        if t.risk_live and t.risk_late_tight_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="late tight", extra=extra)
+            return reason
+        if not t.risk_late_tight_logged:
+            t.risk_late_tight_logged = True
+            log.info("curve risk shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="late tight", extra=extra)
         return None
 
     def _sell_trail_timed(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
@@ -2286,6 +2311,7 @@ class ProfitWatcher:
                 held.risk_drop_units, held.risk_drop_share = spec.curve_risk_drop, spec.curve_risk_drop_share
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
+                held.risk_late_tight, held.risk_late_tight_share, held.risk_late_tight_live = spec.curve_risk_late_tight, spec.curve_risk_late_tight_share, spec.curve_risk_late_tight_live
                 held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
             if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_behind_last > 0 or spec.curve_drop_units > 0 or spec.curve_gap > 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
