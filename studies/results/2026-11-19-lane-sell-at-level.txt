@@ -1,0 +1,18 @@
+Question (2026-11-19, user: "taking profit when we can is important, especially fee free"): on crypto_risk_score's settled bets since the 11-18 18:31 ET push (212 bets), what would selling the whole bet the first time its side's bid reaches a level have netted, against what happened (held to settlement, or the lane's own profit take)? Fee 0.07 p (1-p) on the buy and on the sell, at the level; no fee at settlement. Bid after the buy from moonshot.risk_readings (about 20 readings a bet, so the max is a floor: the real bid may have touched the level between readings). Levels are a study's, fixed prices, not a rule; a live rule would be in the market's own variance units.
+
+Run on the host through scripts/cloud.sh sql (query in the commit message / chat 2026-11-19).
+
+Result, net dollars over the 212 bets (stake about $5 each):
+  hold / the lane's own exits      -175.4
+  sell at bid >= 0.85              -144.2   (+31.2)
+  sell at bid >= 0.90              -156.3   (+19.1)
+  sell at bid >= 0.95              -170.5   (+4.9)
+  sell at bid >= 0.97              -159.3   (+16.1)
+
+Bets by outcome and how far the side's bid went after the buy:
+  won, held (92):        avg max bid 0.985, touched 0.90 in 87
+  won, sold (34):        avg max 0.999 (the lane's own profit takes)
+  lost, held (71):       avg max 0.789, touched 0.85 in 24, touched 0.90 in 12, touched 0.95 in 2
+  lost, sold (15):       avg max 0.930 (exited, mostly profit takes that dodged a loss)
+
+Caveats: 1.5 days, one window, levels chosen by looking; wins also give up the last 10-15 cents when sold at 0.85-0.90 (that is the cost the +31 already includes).
