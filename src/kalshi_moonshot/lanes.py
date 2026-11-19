@@ -60,6 +60,7 @@ class LaneSpec:
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
     shares_markets: bool = False  # main-scan lane that also takes markets another lane took (for A/B controls); never consumes them
     reentry_cooldown_seconds: float = 0.0  # after this lane exits a market, wait this long before it may buy that market again (0 = no wait)
+    rebuy_opposite_after_gain_seconds: float = 0.0  # 2026-11-08 (user, HYPE 09:15: the value exit sold YES at 0.67 for a gain and the lane bought YES again 94 s later at 0.67 and lost $2.22; "a 60-ish sell is great but we might want to rebuy if confidence continues to increase"); put back 2026-11-19 (user: "Put it back", after the cleanup took it out): after this lane exits one side of a market for a gain (the sale after its fee over the price paid after its fee), it may not buy that SAME side again for this many seconds; the opposite side goes through the lane's usual buy chain at once, and its own gain sale starts the same wait on its side. After the wait the side is open again. A sale at a loss sets no limit (0 = off). Read by the buy step `cooldown` (buychain.py; name it in a buy module's steps and set this in the module, with reentry_cooldown_seconds), from the bet book in memory (Store.last_gain_sale), not the database. A fixed number, set by the user, not read from the curve
     buy_rest_seconds: float = 0.0  # buy with a post-only RESTING order instead of an immediate one: it waits this many seconds at buy_rest_below under the ask and is dropped if unfilled (no fallback). A resting order that fills pays no taker fee; replay says it mostly fills on dips (0 = buy at the ask)
     stake_vol_shadow: bool = False  # 2026-11-18 SHADOW (user: "and maybe we could scale the bet by lane volatility too"; "Yes, shadow it"): every live bet writes one row (kind "stake_vol" in data/risk_shadow.jsonl) with the market's own typical minute at the buy (quoteshock.typical_minute: sqrt(60) times the rms one-second move of its mid over the last 15 minutes), the stake and the price. Changes no stake. scripts/stake_vol_shadow_score.py scores a stake of the lane's stake times (median typical minute of the earlier rows over this one, limited to 0.5 to 2) against the flat stake. Evidence: studies/results/2026-11-18-commodity-stake-by-volatility.txt (4,584 commodity favourites, held: flat -2.74 per $100, scaled -2.19; the wildest third of markets lost 4.65, the quietest 0.54). Retire under rule 6 if it scores negative
     buy_redecide_shadow: bool = False  # 2026-11-18 SHADOW (user, on the commodity buys: "if it doesn't fill 1-2c under in a few seconds, shouldn't another tick have gone by with another choice?"; "Yes, shadow option"): when a LIVE resting buy rests its time and fills nothing, run the lane's whole buy decision once more on the market as it is now, without ordering and without logging a decision, and record what it would have done (kind "redecide" in data/risk_shadow.jsonl: the price it would have rested at, or the gate that said no) beside what the live lane did (took the ask, or bought nothing). Changes nothing the lane does. Scored forward by scripts/redecide_shadow_score.py against the live lane's own result; retire under rule 6 if it scores negative
@@ -236,7 +237,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "state_record", "curve_model", "context_score", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "curve_model", "context_score", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
 
 
 def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:
@@ -471,6 +472,8 @@ def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
         out.pop("curve_risk_late_tight", None), out.pop("curve_risk_late_tight_share", None), out.pop("curve_risk_late_tight_live", None)
     if not (spec.curve_risk_under_even > 0 and spec.curve_risk_under_even_live):
         out.pop("curve_risk_under_even", None), out.pop("curve_risk_under_even_live", None)
+    if not spec.rebuy_opposite_after_gain_seconds:  # off, the lane buys what it always did: no lane that leaves it off gets a new version
+        out.pop("rebuy_opposite_after_gain_seconds", None)
     if not spec.curve_risk_shape_live:  # off, the shape_timed step only records and changes nothing the lane does: no lane that leaves it off gets a new version
         out.pop("curve_risk_shape_live", None)
     return out

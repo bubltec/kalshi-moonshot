@@ -1118,11 +1118,35 @@ class Store:
         ).fetchone()
         return float(row["t"]) if row and row["t"] is not None else None
 
+    def last_exit_ts(self, ticker: str, lane: str) -> float | None:
+        """When this lane last sold this market (a gain or a loss), else None; from the bet book in memory in the running bot."""
+        return self._last_exit(ticker, lane)
+
     def exited_within(self, ticker: str, lane: str, seconds: float, now: float | None = None) -> float:
         """Seconds still to wait if this lane sold this market less than `seconds` ago, else 0."""
         now = time.time() if now is None else now
         last = self._last_exit(ticker, lane)
         return max(0.0, last + seconds - now) if last is not None else 0.0
+
+    def last_gain_sale(self, ticker: str, lane: str) -> tuple[str, float] | None:
+        """(side, sale time) of this lane's latest sale of this market for a gain (the sale after its fee over the price paid after its fee), else None. A sale at a loss is not counted. Read from the bet book in memory in the running bot (a sold bet stays in it for an hour); a plain query only where there is no book (scripts, tests). The cost is the ask paid with its fee: no orders are read, so nothing here touches the database in the running bot (2026-11-19, put back after the cleanup)."""
+        from .strategy import fee_per_contract as fee
+
+        book = self._book()
+        if book is not None:
+            rows = sorted((r for r in book if r["ticker"] == ticker and _lane_of(r) == lane and r["exit_ts"] is not None and r["exit_price"] is not None and r["ask"] is not None), key=lambda r: -float(r["exit_ts"]))
+        else:
+            rows = self.db.execute(
+                """SELECT ts, side, exit_price, exit_ts, ask FROM decisions
+                   WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL AND exit_price IS NOT NULL AND ask IS NOT NULL
+                   ORDER BY exit_ts DESC""",
+                (ticker, lane),
+            ).fetchall()
+        for r in rows:
+            sold, paid = float(r["exit_price"]), float(r["ask"])
+            if sold - fee(sold) > paid + fee(paid):
+                return (r["side"] or "yes"), float(r["exit_ts"])
+        return None
 
     def entry_fill(self, ticker: str, side: str, since_ts: float) -> float | None:
         """The price per contract a position actually filled at, fee excluded (what the exits compare a bid with), from the buy orders on this market and contract from since_ts (a few seconds before the bet) on: (cost_usd - fee_usd) over fill_count, a top-up counted. None when there are no filled buy orders (a paper bet): the caller keeps the decision's ask. The decision's ask is not this: a take chases the ask by the lane's slip, and a resting bid fills under it."""

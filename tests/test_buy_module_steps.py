@@ -121,7 +121,7 @@ def test_unit_the_review_asks_the_steps_that_need_no_estimate_and_stops_at_the_f
 
 LANES_FILE = Path(__file__).resolve().parents[1] / "data" / "strategies.toml"
 LIVE = ("commodity_energy", "commodity_wti", "commodity_natgas", "commodity_precious", "commodity_industrial")
-SELLING = ("shock_", "wrong_side", "burst_", "cash_", "scalp_", "trail_", "stop_", "value_exit", "strike_through", "drop_", "bounce_", "take_profit", "late_drop", "settlement_", "watch_at", "watch_loss", "watch_ride", "watch_patient", "unstable_", "hover_", "spike_", "rest_sell", "rebuy_")
+SELLING = ("shock_", "wrong_side", "burst_", "cash_", "scalp_", "trail_", "stop_", "value_exit", "strike_through", "drop_", "bounce_", "take_profit", "late_drop", "settlement_", "watch_at", "watch_loss", "watch_ride", "watch_patient", "unstable_", "hover_", "spike_", "rest_sell")
 
 
 def test_unit_no_lane_setting_sells_outside_an_exit_module():
@@ -234,3 +234,17 @@ def test_unit_time_to_go_restarts_when_the_chance_comes_back_and_does_not_act_ou
     assert w._sell_time_to_go(t, RISK, 0.30, now + 60, 140.0, -0.5, None) is None  # the wait starts again
     assert w._sell_time_to_go(t, RISK, 0.30, now + 80, 120.0, -0.5, None) is None
     assert w._sell_time_to_go(t, RISK, 0.30, CLOSE - 400, 400.0, -0.5, None) is None  # outside the last 240 s
+
+
+def test_unit_cooldown_blocks_a_market_the_lane_just_sold_on_either_side(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    store = Store(config.load().db_path)
+    now = time.time()
+    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time, exit_ts, exit_price) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (now - 200, TICKER, "bet", "observe", 0.8, "yes", "x", 1, 1, "2099-01-01T00:00:00Z", now - 30, 0.9))
+    store.db.commit()
+    sp = spec(reentry_cooldown_seconds=90)
+    for side in ("yes", "no"):
+        got = ask("cooldown", sp, shot(side), p_yes=0.9, store=store)
+        assert got.ok is False and "30s ago" in got.why
+    assert ask("cooldown", spec(reentry_cooldown_seconds=20), p_yes=0.9, store=store).ok is True  # past its wait
+    assert ask("cooldown", spec(), p_yes=0.9, store=store).ok is False  # a lane that sets no wait: the step is a no, as every step of a lane that sets nothing for it
