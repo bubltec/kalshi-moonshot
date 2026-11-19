@@ -284,6 +284,12 @@ def curve_model_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
+@step("context_score")
+def context_score_step(ctx: Ctx, shot: LongShot) -> Check:
+    """SHADOW, never says no (2026-11-19, user: "yes", to a shadow step for the readings together): the context score (contextscore.py) is read when the bet's row is written, from the readings the row carries, and put in its note (runner._log asks for it when the lane's chain names this step). It asks nothing of the market itself."""
+    return Check(True, "context score read when the row is written (shadow)")
+
+
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""

@@ -163,4 +163,14 @@ order = np.argsort(-np.abs(mfull[0][1:]))
 print(f"  ridge lambda {lam_full}; weight > 0 raises the chance of winning beyond what the price says")
 for i in order[:14]:
     print(f"    {names[i]:24s} {mfull[0][1 + i]:+.3f}   sign kept in {int(signs[i])} of 200")
+print("=== what the skipped 20% look like (the 60/40 test bets the model likes least, against the other 80%)")
+risk = ask[te] - p_model
+order = te[np.argsort(-risk)]
+k20 = int(round(0.2 * len(te)))
+out, keep = order[:k20], order[k20:]
+col = {nm: cols[i] for i, nm in enumerate(names)}
+for nm in ("ask", "left", "dip_90", "imbalance", "vol", "log_activity_60", "held_min", "rise_30", "range_90", "model_p_side"):
+    if nm in col:
+        print(f"  {nm:16s} skipped {np.mean(col[nm][out]):9.3f} | kept {np.mean(col[nm][keep]):9.3f}")
+print(f"  share of the skipped bets bought at 0.88 or more: {np.mean(ask[out] >= 0.88):.0%}; of the kept: {np.mean(ask[keep] >= 0.88):.0%}")
 print("DONE")

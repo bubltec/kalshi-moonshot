@@ -1276,6 +1276,10 @@ class ProfitWatcher:
                 from . import staterecord
 
                 staterecord.maybe_refit(s)
+            if any(sp.enabled and "context_score" in sp.buy_chain for sp in specs.values()):
+                from . import contextscore
+
+                contextscore.maybe_refit(s)
         except Exception:
             log.warning("watcher: refitting a buy step's model failed", exc_info=True)
         finally:

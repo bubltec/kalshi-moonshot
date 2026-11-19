@@ -35,4 +35,16 @@
     vol                      -0.011   sign kept in 180 of 200
     rise_30                  +0.011   sign kept in 174 of 200
     held_min                 -0.011   sign kept in 181 of 200
+=== what the skipped 20% look like (the 60/40 test bets the model likes least, against the other 80%)
+  ask              skipped     0.831 | kept     0.857
+  left             skipped   323.172 | kept   348.463
+  dip_90           skipped     0.065 | kept     0.043
+  imbalance        skipped    -0.131 | kept     0.090
+  vol              skipped     1.132 | kept     1.090
+  log_activity_60  skipped     7.432 | kept     7.279
+  held_min         skipped     6.122 | kept     5.731
+  rise_30          skipped     0.028 | kept     0.025
+  range_90         skipped     0.174 | kept     0.148
+  model_p_side     skipped     0.720 | kept     0.754
+  share of the skipped bets bought at 0.88 or more: 23%; of the kept: 46%
 DONE

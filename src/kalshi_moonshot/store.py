@@ -363,15 +363,22 @@ def writes_in_background() -> bool:
 def _with_snapshot(d: dict) -> dict:
     """Take the row's entry snapshot now, as of the row's own time (the caller handed over a job instead of taking it before the evaluation), and merge it under whatever factors the row already carries."""
     job = d.pop("_factors_job", None)
-    if job is None:
-        return d
-    try:
-        snap = job(float(d["ts"]))
-        if snap:
-            have = d.get("factors")
-            d["factors"] = json.dumps(json.loads(snap) | json.loads(have)) if have else snap
-    except Exception:
-        _log.exception("decision writer: no entry snapshot for %s", d.get("ticker"))
+    score = d.pop("_context_score", False)
+    if job is not None:
+        try:
+            snap = job(float(d["ts"]))
+            if snap:
+                have = d.get("factors")
+                d["factors"] = json.dumps(json.loads(snap) | json.loads(have)) if have else snap
+        except Exception:
+            _log.exception("decision writer: no entry snapshot for %s", d.get("ticker"))
+    if score and d.get("action") == "bet":
+        try:
+            from . import config, contextscore
+
+            contextscore.annotate(d, config.load())
+        except Exception:
+            _log.debug("decision writer: no context score for %s", d.get("ticker"), exc_info=True)
     return d
 
 
