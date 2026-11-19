@@ -102,6 +102,7 @@ class Worker:
         self.quant = quant
         self.recorder: Any = None
         self.watcher: Any = None
+        self.entry_watcher: Any = None
         self.settlement_edge: Any = None
         self.discovery: Any = None
         self._hot_local = threading.local()  # the discovery thread's own store connection
@@ -203,6 +204,7 @@ class Worker:
             self.recorder.start()
             log.info("tape recorder on: %s (kept %.0f days)", self.s.tape_path, self.s.tape_keep_days)
             self._start_watcher()
+            self._start_entry_watcher()
             self._start_market_events()
             self._start_settlement_edge()
         except Exception:
@@ -227,6 +229,23 @@ class Worker:
         w.start()
         self.watcher = w
         log.info("take-profit watcher on: selling from the live socket when a lane's level is hit")
+
+    def _start_entry_watcher(self) -> None:
+        """Review a watched event the moment a streamed quote or its settlement index ticks (entrywatch.py; user, 2026-11-19: "entry is supposed to be on a thread based on the websocket")."""
+        from . import entrywatch
+
+        if self.recorder is None or self.entry_watcher is not None or not entrywatch.wanted(self.s):
+            return
+        db_path = self.s.db_path
+        w = entrywatch.EntryWatcher(
+            lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions),
+            lambda store: build_estimators(self.est, store, self.searcher, self.quant),
+        )
+        self.recorder.listeners.append(w.on_event)
+        w.client_for = self._venue  # the same review, on the lane's own venue
+        w.start()
+        self.entry_watcher = w
+        log.info("entry watcher on: reviewing a watched event as soon as its socket quote or index ticks into the lane's price band")
 
     def _start_settlement_edge(self) -> None:
         """Log, as paper bets, the side whose exact settlement chance beats its ask in the last 150 s of every crypto 15-minute market (settlement_edge.py). Measure only; its own thread."""
@@ -680,7 +699,7 @@ class Worker:
         turned on by a settings change)."""
         for spec in tiered_lanes(self.s):
             if self._driven(spec):
-                continue  # kept by the stream's events: no timer keeps it alive (see _on_market_event)
+                continue  # kept by the stream's events (see _on_market_event). The skip holds only while the entry watcher's threads are alive and the feed is up: a dead thread makes the lane undriven and this puts its timers back
             now = time.time()
             self.jobs.ensure(
                 f"lane_scope:{spec.name}", now, max_attempts=self.s.job_max_attempts,
@@ -692,9 +711,10 @@ class Worker:
             )
 
     def _driven(self, spec) -> bool:
-        """True when this lane's scope and review run on the stream's events and not on a timer (2026-11-14, user: "we need to get rid of these timers"): the lane reviews on a socket quote (entry_socket) and the market list is kept from the lifecycle channel. While the stream is down the timers run as before."""
-        # 2026-11-19 OUTAGE FIX: no lane is driven by the stream any more. The socket entry watcher (entrywatch.py) that reviewed a watched event on a quote entering the lane's band was deleted with the options of the modules-only strip (commit 5a6b04f swept its deletion into a study commit, bfd6160 removed its wiring in worker.py); a "driven" lane had no timer and nothing left to wake it, so after the 11:15 ET restart NO lane reviewed past its scope pass (jobs "queued 0 of 0", no decision row from any lane for an hour). The timers review and scope the lanes again (review_minutes, scope_minutes) until the quote-driven review is rebuilt.
-        return False
+        """True when this lane's review runs on the stream (the entry watcher: a socket quote or index tick) and its scope on the stream's market events, with no timer behind them. Only while the feed is up and the entry watcher's threads are alive: otherwise the timers run as before. 2026-11-19 OUTAGE: a lane marked driven with no thread behind it had no timer and nothing to wake it; no lane reviewed for an hour. Now the lane counts as driven only while the entry watcher's threads are alive (EntryWatcher.alive), and _ensure_tiered puts the timers back the moment they are not."""
+        cache = getattr(self.client, "cache", None)
+        w = self.entry_watcher
+        return bool(tiered(spec) and w is not None and w.alive() and cache is not None and hasattr(cache, "fed") and cache.fed())
 
     def _start_market_events(self) -> None:
         """A thread that turns the stream's market events into scope runs: a new or reopened market, or a changed close, scopes the lanes that trade its series at once; the stream coming up scopes every lane, and the stream going down puts the timers back."""
@@ -767,7 +787,7 @@ class Worker:
         spec = self._tiered_spec(job)
         if spec is None:
             return "lane off or not two-level; not rescheduled"
-        if not self._driven(spec):  # a lane the stream drives is scoped by its events, not by this timer
+        if not self._driven(spec):  # a lane the stream drives is scoped by its market events, not by a timer (user, 2026-11-19: "nothing should be running off a timer unless its a background job for database calculations")
             self.jobs.ensure(
                 job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
                 max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec),
@@ -786,7 +806,7 @@ class Worker:
         if spec is None:
             return "lane off or not two-level; not rescheduled"
         every = (spec.review_minutes or 2.0) * 60
-        if not self._driven(spec):  # a lane the stream drives is reviewed on a socket quote or an index tick, not by this timer
+        if not self._driven(spec):  # a lane the stream drives is reviewed on a socket quote or an index tick, not by a timer
             self.jobs.ensure(
                 job.kind, time.time() + every, max_attempts=self.s.job_max_attempts,
                 priority=job_priority(self.s, spec),

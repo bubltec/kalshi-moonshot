@@ -344,6 +344,13 @@ _DEC_Q: "queue.Queue[tuple[str, Any, dict]]" = queue.Queue()
 _DEC_BG = {"on": False, "started": False}
 _LAST_DEC: dict[tuple[str, str, Any], float] = {}  # (store path, ticker, lane or None for any lane) -> the time of the latest decision logged by this process
 _LAST_DEC_LOCK = threading.Lock()
+_WATCH: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}  # (store path, lane) -> the lane's watchlist, kept in memory: set_watch writes it first, watch() reads it
+
+
+def watched_in_memory(path: str) -> dict[tuple[str, str], dict[str, Any]]:
+    """Every (lane, event) this process watches for the store at `path`, with the scoping pass's info for it. Memory only."""
+    key = str(path)
+    return {(lane, ev): info for (p, lane), events in list(_WATCH.items()) if p == key for ev, info in list(events.items())}
 _PROC_START = time.time()
 DEC_BATCH = 200
 
@@ -914,6 +921,7 @@ class Store:
     def set_watch(self, lane: str, events: dict[str, dict[str, Any]]) -> None:
         """Replace a lane's watchlist."""
         now = time.time()
+        _WATCH[(str(self.path), lane)] = {ev: dict(info) for ev, info in events.items()}  # memory first: the entry thread reads this, never the table
         self.db.execute("DELETE FROM watchlist WHERE lane=?", (lane,))
         self.db.executemany(
             "INSERT INTO watchlist (lane, event_ticker, payload, scoped_ts) VALUES (?,?,?,?)",
@@ -922,12 +930,19 @@ class Store:
         self.db.commit()
 
     def watch(self, lane: str) -> dict[str, dict[str, Any]]:
+        """A lane's watchlist. Served from memory once this process has scoped the lane or read the table once (user, 2026-11-19: no db calls on the entry path; the table is the copy that survives a restart)."""
+        got = _WATCH.get((str(self.path), lane))
+        if got is not None:
+            return {ev: dict(info) for ev, info in got.items()}
         rows = self.db.execute(
             "SELECT event_ticker, payload FROM watchlist WHERE lane=?", (lane,)
         ).fetchall()
-        return {r["event_ticker"]: json.loads(r["payload"] or "{}") for r in rows}
+        out = {r["event_ticker"]: json.loads(r["payload"] or "{}") for r in rows}
+        _WATCH[(str(self.path), lane)] = {ev: dict(info) for ev, info in out.items()}
+        return out
 
     def unwatch(self, lane: str, event_ticker: str) -> None:
+        _WATCH.get((str(self.path), lane), {}).pop(event_ticker, None)
         self.db.execute(
             "DELETE FROM watchlist WHERE lane=? AND event_ticker=?", (lane, event_ticker)
         )
