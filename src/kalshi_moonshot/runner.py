@@ -1043,11 +1043,15 @@ def _top_up(s: Settings, client: KalshiClient, store: Store, shot: LongShot, cos
     try:
         idx = _EXCHANGE_OF.get(shot.series)
         if idx is None:
-            raw = client.market(shot.ticker).get("exchange_index")
+            m = client.market_memory(shot.ticker) if hasattr(client, "market_memory") else None
+            with memguard.allowed():  # the exchange shard of a market is not in the stream's listing: asked once for a series and kept (_EXCHANGE_OF)
+                raw = (m if m is not None and m.get("exchange_index") is not None else client.market(shot.ticker)).get("exchange_index")
             if raw is None:
                 return None
             idx = _EXCHANGE_OF[shot.series] = int(raw)
-        if client.shard_balances().get(idx, 0.0) + 1e-9 >= cost:
+        with memguard.allowed():  # a funds check on the exchange the order trades on, made only when SHARD_TOPUP_TARGET_USD is set: part of sending the order, not of the judgement (the cash is not in the balance snapshot per exchange yet)
+            have = client.shard_balances().get(idx, 0.0)
+        if have + 1e-9 >= cost:
             _UNFUNDED.pop(idx, None)
             return None
         note = _fill_shard(s, client, store, idx, cost, f"top up for {shot.ticker}")

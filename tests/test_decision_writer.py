@@ -229,12 +229,19 @@ def test_unit_the_entry_snapshot_is_taken_by_the_writer_as_of_the_decisions_time
     assert "S3" in got and got["S3"] is None  # a snapshot that fails never loses the row
 
 
-def test_unit_a_bets_snapshot_is_taken_when_its_row_is_written(tmp_path, monkeypatch):
+def test_unit_a_bets_snapshot_is_taken_behind_as_of_the_rows_time(tmp_path, monkeypatch):
+    """2026-11-19: the row is written at once without it; the write-behind thread takes it as of the row's time and updates the row."""
     s, store = mk(tmp_path, monkeypatch)
     store_mod.queue_decisions()
     asked = []
     store.add_decision(ticker="B1", action="bet", mode="trade", lane="x", ask=0.5, side="yes", stake_usd=1.0, contracts=2.0, ts=99.0, _factors_job=lambda ts: asked.append(ts) or '{"spread": 0.03}')
-    row = Store(s.db_path).db.execute("SELECT factors FROM decisions WHERE ticker='B1'").fetchone()
+    deadline = time.monotonic() + 5.0
+    row = None
+    while time.monotonic() < deadline:
+        row = Store(s.db_path).db.execute("SELECT factors FROM decisions WHERE ticker='B1'").fetchone()
+        if row and row["factors"]:
+            break
+        time.sleep(0.02)
     assert asked == [99.0] and row["factors"] == '{"spread": 0.03}'
 
 

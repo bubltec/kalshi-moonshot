@@ -825,6 +825,8 @@ class Store:
         if _DEC_BG["on"] and d.get("action") != "bet":
             _DEC_Q.put((str(self.path), self.exclude_versions, d))  # written by the decision-writer thread: the evaluation does not wait on the database
             return 0
+        if _DEC_BG["on"] and d.get("action") == "bet" and (d.get("_factors_job") is not None or d.get("_context_score")):
+            return self._add_bet_now(d)
         _with_snapshot(d)  # a bet's row, written here and now: its snapshot is taken after the judgement and the order, not before
         cols = ",".join(d)
         marks = ",".join("?" for _ in d)
@@ -833,6 +835,29 @@ class Store:
         if d.get("action") == "bet":
             self.touch("bets")
         return int(cur.lastrowid or 0)
+
+    def _add_bet_now(self, d: dict[str, Any]) -> int:
+        """A bet's row is written at once (the watcher and the books need it the moment the order is placed), WITHOUT its entry snapshot: the snapshot is five reads of the tape, so it is taken by the write-behind thread as of the row's own time and put on the row with an UPDATE (2026-11-19: those reads were inside the buy decision, 45 of them in an hour)."""
+        extra = {k: d.pop(k) for k in ("_factors_job", "_context_score") if k in d}
+        cols = ",".join(d)
+        marks = ",".join("?" for _ in d)
+        cur = self.db.execute(f"INSERT INTO decisions ({cols}) VALUES ({marks})", list(d.values()))
+        self.db.commit()
+        row_id = int(cur.lastrowid or 0)
+        self.touch("bets")
+        base = dict(d)
+
+        def fill(st: "Store") -> None:
+            full = _with_snapshot(dict(base, **extra))
+            changed = {k: v for k, v in full.items() if k not in base or base[k] != v}
+            if changed and row_id:
+                st.db.execute(f"UPDATE decisions SET {','.join(k + '=?' for k in changed)} WHERE id=?", [*changed.values(), row_id])
+                st.db.commit()
+                st.touch("bets")
+
+        if not self.behind(fill):
+            fill(self)
+        return row_id
 
     def add_risk_readings(self, rows: Sequence[tuple[str, float, str, float | None, float | None, float]]) -> None:
         """Every open market's risk reading at a 30 s mark (riskrecord.py's background thread; never an evaluation). A mark already written is left."""

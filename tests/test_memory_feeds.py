@@ -171,3 +171,16 @@ def test_tape_readers_come_from_a_small_pool_not_one_connection_per_thread(tmp_p
     [t.start() for t in threads]
     [t.join() for t in threads]
     assert len({id(c) for c in got}) <= db.READER_POOL
+
+
+def test_a_bets_row_is_written_at_once_and_its_snapshot_is_filled_in_behind(tmp_path):
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    store_mod._DEC_BG["on"] = True
+    sent = []
+    store.behind = lambda fn: sent.append(fn) or True
+    with memguard.decision("buy"):  # the snapshot's reads would raise here
+        rid = store.add_decision(ticker="KX-1", action="bet", mode="observe", lane="a", side="yes", stake_usd=1.0, contracts=2, _factors_job=lambda ts: '{"spread": 0.02}')
+    assert rid > 0 and store.db.execute("SELECT factors FROM decisions WHERE id=?", (rid,)).fetchone()["factors"] in (None, "")
+    sent[0](store)  # the write-behind thread
+    assert '"spread": 0.02' in store.db.execute("SELECT factors FROM decisions WHERE id=?", (rid,)).fetchone()["factors"]
