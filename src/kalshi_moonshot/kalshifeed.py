@@ -6,6 +6,7 @@ Symbols are written "kp:KP_BTC" in instruments.toml. The price is a proxy for wh
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from typing import Any
@@ -14,6 +15,7 @@ from .commodities import CommodityError, Series
 
 PREFIX = "kp:"
 MEMORY_FRESH = 10.0  # seconds: an in-memory tick older than this is not used as the newest price (the tape is asked instead)
+log = logging.getLogger("moonshot")
 BARS_TTL = 60.0  # seconds a built set of bars is reused
 BAR_SECONDS = 300  # the pricer's volatility reads 5-minute closes, as the Hyperliquid feed gives
 BAR_HOURS = 6.0  # 72 five-minute bars
@@ -35,6 +37,7 @@ class KalshiPerpFeed:
         self._bars: dict[str, tuple[float, list[float], list[float]]] = {}
         self._minutes: dict[str, tuple[float, dict[int, float]]] = {}
         self._lock = threading.Lock()
+        self._flights: dict[tuple[int, str], threading.Lock] = {}
 
     def _db(self) -> Any:
         if self._tape is not None:
@@ -44,6 +47,37 @@ class KalshiPerpFeed:
 
             self._local.db = db.reader(config.reload().tape_path)
         return self._local.db
+
+    def _kept(self, store: dict, key: str, build: Any) -> Any:
+        """A built set (bars, minute closes) from `store`, rebuilt by `build` (a read of hours of ticks from the tape). Fresh: used. Older than BARS_TTL: the old set is still used and ONE background thread rebuilds it, so a buy never waits on the read (2026-11-19: with a thread for each market, every thread that found the set expired read the tape itself, 2 s each, up to 42 s queued). Never built (the first time in this process): one caller reads while the others wait for that read, not for their own."""
+        with self._lock:
+            hit = store.get(key)
+            gate = self._flights.setdefault((id(store), key), threading.Lock())
+        if hit and time.time() - hit[0] < BARS_TTL:
+            return hit
+        if hit:
+            if gate.acquire(blocking=False):
+                def refresh() -> None:
+                    try:
+                        got = build()
+                        with self._lock:
+                            store[key] = got
+                    except Exception:
+                        log.debug("perp feed: background rebuild of %s failed", key, exc_info=True)
+                    finally:
+                        gate.release()
+
+                threading.Thread(target=refresh, name="perp-bars", daemon=True).start()
+            return hit
+        with gate:
+            with self._lock:
+                hit = store.get(key)
+            if hit and time.time() - hit[0] < BARS_TTL:
+                return hit
+            got = build()
+            with self._lock:
+                store[key] = got
+            return got
 
     def _memory(self, index_id: str) -> tuple[float, float] | None:
         """The newest in-memory tick of this index (the socket's, noted as it arrives), if it is fresh. None when memory has nothing recent: a process with no stream, a feed that is only on the tape, or a stalled socket."""
@@ -84,13 +118,11 @@ class KalshiPerpFeed:
         tick = self.latest(symbol)
         if tick is None:
             raise CommodityError(f"no Kalshi perp price recorded for {index_id}")
-        with self._lock:
-            hit = self._bars.get(index_id)
-        if not hit or time.time() - hit[0] >= BARS_TTL:
+        def build() -> tuple[float, list[float], list[float]]:
             closes, times = _closes(self._rows(index_id, BAR_HOURS), BAR_SECONDS)
-            hit = (time.time(), closes, times)
-            with self._lock:
-                self._bars[index_id] = hit
+            return (time.time(), closes, times)
+
+        hit = self._kept(self._bars, index_id, build)
         return Series(last=tick[0], last_ts=tick[1], closes=hit[1], times=hit[2])
 
     def ticks(self, symbol: str, hours: float) -> tuple[list[float], list[float]]:
@@ -101,12 +133,8 @@ class KalshiPerpFeed:
     def minute_closes(self, symbol: str, hours: float = 4.0) -> dict[int, float]:
         """Close of each 1-minute bar, keyed by the unix second it opened."""
         index_id = symbol.removeprefix(PREFIX)
-        with self._lock:
-            hit = self._minutes.get(index_id)
-        if hit and time.time() - hit[0] < BARS_TTL:
-            return hit[1]
-        closes, times = _closes(self._rows(index_id, hours), 60)
-        out = {int(t): c for t, c in zip(times, closes, strict=True)}
-        with self._lock:
-            self._minutes[index_id] = (time.time(), out)
-        return out
+        def build() -> tuple[float, dict[int, float]]:
+            closes, times = _closes(self._rows(index_id, hours), 60)
+            return (time.time(), {int(t): c for t, c in zip(times, closes, strict=True)})
+
+        return self._kept(self._minutes, index_id, build)[1]

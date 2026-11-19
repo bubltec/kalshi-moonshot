@@ -708,6 +708,8 @@ class Worker:
         if live and shot.ticker:
             manual_mod.buying_begin(shot.ticker)  # the fill reaches the account before the order reaches the books: until then the position must not be read as hand-placed
         try:
+            steptime.begin()
+            began = time.perf_counter()
             with memguard.decision("buy"), shared_for(self._venue(shot.lane), 0.0 if live else s.discovery_eval_age, s.discovery_enabled):
                 return self._evaluate_shot(
                     shot, orderkeys.key(s.env, shot.lane, shot.ticker, shot.side), raise_model_errors=False,
@@ -717,6 +719,10 @@ class Worker:
             log.info("skip %s %s: %s", shot.lane, shot.ticker, exc)
             return f"skipped: {exc}"
         finally:
+            took = (time.perf_counter() - began) * 1000.0 if "began" in locals() else 0.0
+            if took > steptime.TICK_BUDGET_MS:  # over the budget: where the time went (steps and the statements that took it), as the job path's "buy timing" line says
+                log.info("buy timing (socket) %s %s: %.0f ms. %s", shot.lane, shot.ticker, took, steptime.breakdown_ms())
+            steptime.end()
             if live and shot.ticker:
                 manual_mod.buying_end(shot.ticker)
 

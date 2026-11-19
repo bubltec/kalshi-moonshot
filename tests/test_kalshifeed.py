@@ -130,3 +130,34 @@ def test_every_series_the_live_crypto_lane_lists_has_an_instrument_the_ladder_ca
         pytest.skip("no crypto_multiscale lane")
     missing = [s for s in lane["series"] if cm.symbol_for(s) is None or not cm.symbol_for(s).startswith("kp:")]
     assert missing == [] and len(lane["series"]) == 11
+
+
+def test_an_expired_set_of_bars_is_served_while_one_thread_rebuilds_it(tmp_path, monkeypatch):
+    """2026-11-19: with a thread for each market, every thread that found the bars expired read hours of ticks itself (2 s each, up to 42 s queued)."""
+    import threading
+    import time as _time
+
+    from kalshi_moonshot import kalshifeed
+
+    feed = KalshiPerpFeed(_tape(tmp_path, [(i, "KP_BTC", 100.0 + i) for i in range(10)]).db)
+    built = []
+    gate = threading.Event()
+
+    def build():
+        built.append(1)
+        gate.wait(3.0)
+        return (_time.time(), [1.0], [2.0])
+
+    store = {"KP_BTC": (_time.time() - kalshifeed.BARS_TTL - 5, [9.0], [8.0])}
+    t0 = _time.time()
+    for _ in range(5):
+        assert feed._kept(store, "KP_BTC", build)[1] == [9.0]  # the old set, at once
+    assert _time.time() - t0 < 1.0
+    _time.sleep(0.1)
+    assert len(built) == 1  # one rebuild, not five
+    gate.set()
+    for _ in range(100):
+        if store["KP_BTC"][1] == [1.0]:
+            break
+        _time.sleep(0.02)
+    assert store["KP_BTC"][1] == [1.0]
