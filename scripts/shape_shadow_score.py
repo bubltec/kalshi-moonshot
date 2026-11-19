@@ -116,4 +116,25 @@ for label, since_ts in (("all scored bets", 0), ("since the push (11-18 18:31 ET
     for sh in ("trend_against", "flat"):
         line(f"  wave windows, first would-sell {sh}", [x for x in wv if x["flag"] and x["buy"] == sh])
         line(f"  other windows, first would-sell {sh}", [x for x in ot if x["flag"] and x["buy"] == sh])
+
+print("\n=== flat and trend_against sales by the CUSHION at the flag (a study's cut, after seeing the results; user, 2026-11-19: \"theres factors to consider when flat\"): cushion = the risk score's chance the side pays at the flag (the row's q) less what the sale pays, the bid net of its fee. Positive = the model says the bet is worth more held than sold (a cushion under it); negative = the sale pays more than the model thinks the bet is worth (little or no cushion). Thirds of the cushion over all flagged bets, then the sign.")
+fl = [x for x in out if x["flag"]]
+cu = lambda x: float(x["flag"]["q"]) - (float(x["flag"]["bid"]) - fee(float(x["flag"]["bid"])))  # noqa: E731
+if len(fl) >= 30:
+    cuts = sorted(cu(x) for x in fl)
+    c1, c2 = cuts[len(cuts) // 3], cuts[2 * len(cuts) // 3]
+    print(f"  cushion thirds cut at {c1:+.3f} and {c2:+.3f} (all {len(fl)} flagged bets)")
+    for shp in ("flat", "trend_against"):
+        sub = [x for x in fl if x["buy"] == shp]
+        print(f"  -- first would-sell {shp}: {len(sub)} bets")
+        line("  cushion lowest third (sale pays more)", [x for x in sub if cu(x) <= c1])
+        line("  cushion middle third", [x for x in sub if c1 < cu(x) <= c2])
+        line("  cushion highest third (model says hold)", [x for x in sub if cu(x) > c2])
+        line("  cushion under zero", [x for x in sub if cu(x) < 0])
+        line("  cushion zero or over", [x for x in sub if cu(x) >= 0])
+    print("  -- by the seconds left at the flag, flat only: over 600 | 300 to 600 | under 300")
+    sub = [x for x in fl if x["buy"] == "flat"]
+    line("  flat, over 600 s left", [x for x in sub if float(x["flag"]["left"]) > 600])
+    line("  flat, 300 to 600 s left", [x for x in sub if 300 < float(x["flag"]["left"]) <= 600])
+    line("  flat, under 300 s left", [x for x in sub if float(x["flag"]["left"]) <= 300])
 print("DONE")
