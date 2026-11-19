@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from kalshi_moonshot import buychain, config, lanes, runner, ticks, variants, volregime, watcher
+from kalshi_moonshot import buychain, config, curverisk, lanes, runner, ticks, variants, volregime, watcher
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
 
@@ -179,3 +179,58 @@ def test_integration_a_step_that_says_no_keeps_the_buy_out_and_the_note_names_it
     monkeypatch.setattr(runner, "side_spike", lambda *a, **k: (0.02, 0.05))
     out = runner.evaluate(s, None, None, store, sh, estimators={"market": Fixed(0.9)})
     assert out.action == "bet" and "spike yes" in out.note
+
+
+# ---- the time_to_go sell step: time based, a one-moment dip does not sell (2026-11-19, user) ----
+RISK = curverisk.Risk(0.3, 0.3, 0.3, "price")
+
+
+def _ttg(tmp_path, monkeypatch):
+    from tests.test_risk_exit_flow import held
+
+    return held(tmp_path, monkeypatch, live=True, extra="sell_chain=['time_to_go']\ncurve_risk_time_to_go=240\ncurve_risk_time_to_go_wait_share=0.25")
+
+
+def _read(monkeypatch, p):
+    from kalshi_moonshot import curvevalue
+
+    class R:
+        pass
+
+    r = R()
+    r.p, r.cushion, r.rate_long = p, -0.001, 0.0001
+    monkeypatch.setattr(curvevalue, "read", lambda *a, **k: r)
+    monkeypatch.setattr(variants, "comeback_stats", lambda *a, **k: None)
+    monkeypatch.setattr(ticks.history, "window", lambda *a, **k: ([0.0], [1.0]))
+
+
+def test_unit_time_to_go_waits_a_share_of_the_time_left_and_a_dip_never_shortens_it(tmp_path, monkeypatch):
+    from tests.test_risk_exit_flow import CLOSE, TICKER
+
+    w = _ttg(tmp_path, monkeypatch)
+    t = w.targets[(TICKER, "risk_only")]
+    t.shock_ref, t.shock_index = 100.0, "IDX"
+    _read(monkeypatch, 0.1)  # deep under the target
+    now = CLOSE - 200
+    first = w._sell_time_to_go(t, RISK, 0.30, now, 200.0, -0.5, None)
+    assert first is None  # not at the first look: a one-moment dip
+    assert w._sell_time_to_go(t, RISK, 0.30, now + 30, 170.0, -0.5, None) is None  # 30 s of a 50 s wait (a quarter of 200 s)
+    got = w._sell_time_to_go(t, RISK, 0.30, now + 51, 149.0, -0.5, None)
+    assert got and got.startswith("curve risk exit (time to go)")
+
+
+def test_unit_time_to_go_restarts_when_the_chance_comes_back_and_does_not_act_outside_its_window(tmp_path, monkeypatch):
+    from tests.test_risk_exit_flow import CLOSE, TICKER
+
+    w = _ttg(tmp_path, monkeypatch)
+    t = w.targets[(TICKER, "risk_only")]
+    t.shock_ref, t.shock_index = 100.0, "IDX"
+    now = CLOSE - 200
+    _read(monkeypatch, 0.1)
+    assert w._sell_time_to_go(t, RISK, 0.30, now, 200.0, -0.5, None) is None
+    _read(monkeypatch, 0.8)  # the market recovered
+    assert w._sell_time_to_go(t, RISK, 0.60, now + 40, 160.0, -0.5, None) is None and t.risk_go_since == 0.0
+    _read(monkeypatch, 0.1)
+    assert w._sell_time_to_go(t, RISK, 0.30, now + 60, 140.0, -0.5, None) is None  # the wait starts again
+    assert w._sell_time_to_go(t, RISK, 0.30, now + 80, 120.0, -0.5, None) is None
+    assert w._sell_time_to_go(t, RISK, 0.30, CLOSE - 400, 400.0, -0.5, None) is None  # outside the last 240 s

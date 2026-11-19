@@ -194,6 +194,10 @@ class Target:
     risk_take_trail_timed: bool = False  # the trail reads the time-aware typical minute (lane field curve_take_trail_timed), the static one when that has too little history
     risk_take_peak: float = 0.0  # the highest bid the risk check has seen on this bet
     risk_trail_logged: bool = False
+    risk_time_to_go: float = 0.0  # seconds before the close in which time_to_go may sell (lane field curve_risk_time_to_go); 0 = off
+    risk_time_to_go_chance: float = 0.5
+    risk_time_to_go_wait_share: float = 0.25
+    risk_go_since: float = 0.0  # when the curve chance first went under the bar and stayed (0 = not under)
     risk_late_tight: float = 0.0  # typical minutes under its high since the buy at which a bet is sold in the last share of the market, ahead or not (lane field curve_risk_late_tight); 0 = off
     risk_late_tight_share: float = 1.0 / 6.0  # the share of the market's 900 s at its end where late_tight applies
     risk_late_tight_live: bool = False
@@ -719,6 +723,35 @@ class ProfitWatcher:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="late tight", extra=extra)
         return None
 
+    TTG_DEFAULT = 15.0  # seconds of recovery assumed when the market's last hour has under 5 fast falls to measure
+    TTG_MIN_LEFT = 8.0  # an order would land after the close
+
+    def _sell_time_to_go(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step time_to_go (lane field curve_risk_time_to_go; the curve exit's time-to-go sale of 2026-11-17, user: "now lets. fix the curve exit, because WTI just landed 2 0s", as a step 2026-11-19): in the last curve_risk_time_to_go seconds a bet whose curve chance that the side pays is under curve_risk_time_to_go_chance is sold at the bid once that has held for a wait. TIME BASED: the chance must stay under the bar without a break for a wait that is at least the market's own median seconds for a fast fall to regain half over the last hour (15 s with under 5 falls) and at least curve_risk_time_to_go_wait_share of the time left; how deep the dip is never shortens it. A chance that comes back over the bar restarts the wait."""
+        if t.risk_time_to_go <= 0 or bid <= 0 or not (self.TTG_MIN_LEFT <= left <= t.risk_time_to_go) or t.shock_ref <= 0 or not t.shock_index:
+            t.risk_go_since = 0.0
+            return None
+        got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
+        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left, t.curve_scales) if got else None
+        if read is None or read.p >= t.risk_time_to_go_chance:
+            t.risk_go_since = 0.0
+            return None
+        tm = read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0
+        base = self.TTG_DEFAULT
+        stats = variants.comeback_stats(t.shock_index, now)
+        if stats is not None and stats[1] >= 5:
+            base = stats[2]
+        wait = max(base, t.risk_time_to_go_wait_share * max(left, 0.0))  # time based (2026-11-19, user: "make it time based. that recent loss we had was unacceptable for it to have sold"): the old sale shortened its wait the deeper the dip and sold a one-moment dip (WTI 09:45 YES at 0.28, back to 0.81 in 75 s); here a dip never shortens the wait, which is at least the market's own recovery time and a share of the time left
+        if t.risk_go_since <= 0:
+            t.risk_go_since = now
+        if now - t.risk_go_since < wait:
+            return None
+        reason = f"curve risk exit (time to go): the curve's chance is {read.p:.3f}, under {t.risk_time_to_go_chance:g}, with {left:.0f}s left; held {now - t.risk_go_since:.0f}s of a {wait:.0f}s wait that scales with the time left ({tm:+.2f} typical minutes under the target); bid {bid:.2f}"
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, wait, False, True, kind="time to go", extra={"chance": round(read.p, 4), "cushion_units": round(tm, 3)})
+            return reason
+        return None
+
     def _sell_trail_timed(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step trail_timed, SHADOW ONLY: it never sells and never holds (2026-11-18, user: "as time expires the volatility rate increases"; "so having a static volatility number is pointless"). It asks the trail's own question (curverisk.trail_hit, under the same conditions as _sell_trail) twice: with the exit's static typical minute and with the time-aware one (_risk_unit_timed), and writes one row (kind "trail_timed" in data/risk_shadow.jsonl) each time the pair of verdicts changes on the bet, with both units, both verdicts, the bet's high and `would_differ`. scripts/trail_timed_score.py scores the rows where they differ. Not in the default order: only a lane whose chain names it is asked. Memory only; an error is logged once a bet and the next step is asked."""
         try:
@@ -1165,6 +1198,7 @@ class ProfitWatcher:
                 held.risk_take_trail_timed = spec.curve_take_trail_timed
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
+                held.risk_time_to_go, held.risk_time_to_go_chance, held.risk_time_to_go_wait_share = spec.curve_risk_time_to_go, spec.curve_risk_time_to_go_chance, spec.curve_risk_time_to_go_wait_share
                 held.risk_late_tight, held.risk_late_tight_share, held.risk_late_tight_live = spec.curve_risk_late_tight, spec.curve_risk_late_tight_share, spec.curve_risk_late_tight_live
                 series_name = ticker.split("-")[0]
                 sid = (variants.spot_index(series_name, spec.spot_source) if spec.spot_source == "kalshi" else None) or biquote_index(series_name) or index_for_series(series_name) or ""
