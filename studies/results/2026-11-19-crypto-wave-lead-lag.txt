@@ -1,0 +1,36 @@
+window: 2026-11-09 to 2026-11-16; 560 favourite sets (one a window and way), band 0.60 to 0.85, 4 to 13 minutes left
+--- 1. at the mark: leaders (earlier half to jump) and laggers (later half)
+  all coins in sets                  coins  2892 | mean ask 0.736 | share lost  29.7% | net per $100   -6.1
+  leaders                            coins  1337 | mean ask 0.742 | share lost  29.3% | net per $100   -6.4
+  laggers                            coins  1337 | mean ask 0.731 | share lost  29.7% | net per $100   -5.6
+--- 2. by the spread of the set's jump times (seconds, std), thirds
+  tight (spread 0 to 16 s): sets 187, all lose 16.6%
+    leaders                          coins   430 | mean ask 0.735 | share lost  26.3% | net per $100   -1.5
+    laggers                          coins   430 | mean ask 0.731 | share lost  26.3% | net per $100   -0.9
+  middle (spread 16 to 54 s): sets 186, all lose 21.0%
+    leaders                          coins   459 | mean ask 0.751 | share lost  30.5% | net per $100   -9.0
+    laggers                          coins   459 | mean ask 0.736 | share lost  30.1% | net per $100   -6.7
+  wide (spread 54 to 999 s): sets 187, all lose 24.6%
+    leaders                          coins   448 | mean ask 0.740 | share lost  31.0% | net per $100   -8.5
+    laggers                          coins   448 | mean ask 0.727 | share lost  32.6% | net per $100   -9.0
+--- 3. a minute after the mark: leaders' mean side move over the minute, then buy at that moment's ask
+  leaders fell (move < 0): sets 243, all lose 30.5%, mean share lost 40.6%
+    laggers at the mark + 60 s       coins   588 | mean ask 0.631 | share lost  40.6% | net per $100   -8.1
+    leaders at the mark + 60 s       coins   588 | mean ask 0.633 | share lost  41.0% | net per $100   -9.0
+    whole set at the mark + 60 s     coins  1266 | mean ask 0.632 | share lost  40.8% | net per $100   -8.5
+    laggers at the mark              coins   588 | mean ask 0.727 | share lost  40.6% | net per $100  -19.9
+  leaders flat or rose (move >= 0): sets 317, all lose 13.2%, mean share lost 21.0%
+    laggers at the mark + 60 s       coins   749 | mean ask 0.812 | share lost  21.1% | net per $100   -4.0
+    leaders at the mark + 60 s       coins   747 | mean ask 0.827 | share lost  20.2% | net per $100   -4.6
+    whole set at the mark + 60 s     coins  1624 | mean ask 0.818 | share lost  21.1% | net per $100   -4.7
+    laggers at the mark              coins   749 | mean ask 0.735 | share lost  21.1% | net per $100   +5.5
+--- 4. cut of the leaders' move into thirds (known at the mark + 60 s)
+  leaders fell most (move up to -0.033): sets 188, all lose 33.5%
+    laggers at the mark + 60 s       coins   456 | mean ask 0.607 | share lost  42.5% | net per $100   -7.7
+    whole set at the mark + 60 s     coins   986 | mean ask 0.607 | share lost  42.8% | net per $100   -8.0
+  middle (move up to +0.064): sets 185, all lose 17.8%
+    laggers at the mark + 60 s       coins   440 | mean ask 0.756 | share lost  30.0% | net per $100   -8.8
+    whole set at the mark + 60 s     coins   945 | mean ask 0.762 | share lost  30.2% | net per $100   -9.7
+  leaders rose most (move up to +9.000): sets 187, all lose 10.7%
+    laggers at the mark + 60 s       coins   441 | mean ask 0.838 | share lost  16.1% | net per $100   -0.9
+    whole set at the mark + 60 s     coins   959 | mean ask 0.846 | share lost  15.7% | net per $100   -1.4
