@@ -1,0 +1,24 @@
+
+window: 11-09 00:00 ET to now; 720 live commodity bets with the vol tag and tape quotes (81 left out for no quotes). Rule less actual per contract; 'sold' = the rule's sale came before what really happened; 'sold bets that won' = sales of bets that went on to win.
+vol tag: low 0.29, thirds at 0.86 and 1.16, high 1.60
+lost bets whose side bid was still within 5c of the buy price with 150 s (a sixth of the window) left: 36 of 121 lost
+rule active from: 450.0 s left or fewer
+actual: net of the exit leg per contract 0.813; lost bets 121
+--- low vol third: 240 bets, avg ask 82.8c, won 87.1%
+   K 1: sold  142 | rule less actual    -6.90 ( -3.5 per $100) | beat   41 lost  100 | sold bets that won  111 of 142
+   K 1.5: sold  113 | rule less actual    -5.54 ( -2.8 per $100) | beat   41 lost   71 | sold bets that won   82 of 113
+   K 2: sold   90 | rule less actual    -4.16 ( -2.1 per $100) | beat   35 lost   51 | sold bets that won   60 of 90
+   K 3: sold   66 | rule less actual    -2.76 ( -1.4 per $100) | beat   33 lost   32 | sold bets that won   38 of 66
+--- middle third: 240 bets, avg ask 82.6c, won 80.0%
+   K 1: sold  153 | rule less actual    +1.22 ( +0.6 per $100) | beat   58 lost   95 | sold bets that won  107 of 153
+   K 1.5: sold  132 | rule less actual    -0.20 ( -0.1 per $100) | beat   54 lost   76 | sold bets that won   87 of 132
+   K 2: sold  106 | rule less actual    +1.67 ( +0.8 per $100) | beat   48 lost   54 | sold bets that won   62 of 106
+   K 3: sold   76 | rule less actual    +2.38 ( +1.2 per $100) | beat   40 lost   34 | sold bets that won   36 of 76
+--- high vol third: 240 bets, avg ask 84.2c, won 82.5%
+   K 1: sold  140 | rule less actual    +5.98 ( +3.0 per $100) | beat   59 lost   81 | sold bets that won   99 of 140
+   K 1.5: sold  121 | rule less actual    +5.13 ( +2.5 per $100) | beat   57 lost   63 | sold bets that won   80 of 121
+   K 2: sold  105 | rule less actual    +1.71 ( +0.8 per $100) | beat   51 lost   53 | sold bets that won   65 of 105
+   K 3: sold   76 | rule less actual    +1.92 ( +0.9 per $100) | beat   45 lost   30 | sold bets that won   38 of 76
+--- all: 720 bets, avg ask 83.2c, won 83.2%
+   K 1: sold  435 | rule less actual    +0.29 ( +0.0 per $100) | beat  158 lost  276 | sold bets that won  317 of 435
+   K 1.5: sold  366 | rule less actual    -0.60 ( -0.1 per $100) | beat  152 lost  210 | sold bets that won  249 of 366Cannot perform start session: EOF
