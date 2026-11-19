@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from . import curverisk, factors, risk, shadow, steptime
+from . import curverisk, factors, memguard, restbuys, risk, shadow, steptime
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
@@ -1404,7 +1404,9 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     filled = spent = fee_paid = 0.0
     seen: set[str] = set()
     deadline = started + wait + 3.0
-    while time.time() < deadline and filled < count - 1e-9:
+    if restbuys.live(client):  # the socket feeds fills and quotes: wait on them, no sleeping and no polling
+        filled, spent, fee_paid, price = _rest_wait(s, client, shot, spec, count, order_key, order_id, price, started, deadline)
+    while time.time() < deadline and filled < count - 1e-9 and not restbuys.live(client):
         time.sleep(2.0)
         try:
             rows = client.portfolio_rows("/portfolio/fills", "fills", int(started) - 5, pages=1)
@@ -1426,6 +1428,90 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     if filled <= 0:
         return Placed(f"resting buy at {price:.2f} for {wait:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought.")
     return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}. {why}", filled, spent, price)
+
+
+REST_FOLLOW_MAX = 3  # the most times one resting buy is cancelled and placed again (structural: each is two requests)
+
+
+def _own_fills(client: Any, shot: LongShot, order_ids: set[str], since: float) -> tuple[float, float, float]:
+    """(contracts, dollars including fee, fee) the account's fills list shows for these order ids. The one read of Kalshi a resting buy makes, after its orders are done (a reconciliation of an order already sent, not a judgement)."""
+    from . import account
+
+    filled = spent = fee_paid = 0.0
+    seen: set[str] = set()
+    with memguard.allowed():
+        try:
+            rows = client.portfolio_rows("/portfolio/fills", "fills", int(since) - 5, pages=1)
+        except KalshiError:
+            return 0.0, 0.0, 0.0
+    for f in rows:
+        row = account.fill_row(f)
+        if row is None or row[9] not in order_ids or row[0] in seen:
+            continue
+        seen.add(row[0])
+        n, yes_price, fee = float(row[4]), float(row[5]), float(row[7] or 0.0)
+        own = yes_price if shot.side == "yes" else 1.0 - yes_price
+        filled += n
+        spent += own * n + fee
+        fee_paid += fee
+    return filled, spent, fee_paid
+
+
+def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: float, order_key: str | None, order_id: str, price: float, deadline: float, since: float, n: int, rest: Any) -> tuple[str, float] | str | None:
+    """One quote on a resting buy's market asks where the order should sit now (lane field buy_rest_follow). From memory (the stream's book): None = leave it; "withdrawn" = the order was cancelled and is not placed again; (order id, price) = it was cancelled and placed again, lower, for what is left unfilled."""
+    book = client.orderbook(shot.ticker)  # the stream's copy of the book, never a request
+    live_ask = best_ask(book, shot.side) if book else None
+    if live_ask is None:
+        return None
+    withdraw = live_ask < spec.price[0] - 1e-9
+    want = round(max(0.01, live_ask - spec.buy_rest_below), 4)
+    if not withdraw and want >= price - 1e-9:
+        return None  # a risen ask never raises the price
+    try:
+        client.cancel_order(order_id)
+    except KalshiError as exc:
+        log.warning("resting buy %s %s: could not cancel to follow the ask (%s)", shot.ticker, shot.side, exc)
+        return None
+    done, _, _ = _own_fills(client, shot, rest.order_ids, since)  # a fill that beat the cancel is in the account's list
+    left = round(count - done, 2)
+    if withdraw or left * want < s.min_order_usd or time.time() >= deadline - 1.0:
+        log.info("resting buy %s %s: %s", shot.ticker, shot.side, f"withdrawn, the ask fell to {live_ask:.2f} under the lane's {spec.price[0]:.2f} floor" if withdraw else "cancelled, what is left is under the minimum or out of time")
+        return "withdrawn"
+    try:
+        resp = client.buy_resting(shot.ticker, shot.side, left, want, max(1.0, deadline - 3.0 - time.time()), client_order_id=f"{order_key}-f{n}" if order_key else None)
+    except KalshiError as exc:
+        log.warning("resting buy %s %s: could not place again at %.2f (%s)", shot.ticker, shot.side, want, exc)
+        return "withdrawn"
+    new_id = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
+    log.info("resting buy %s %s: the ask fell to %.2f, the order moved from %.2f to %.2f for %g", shot.ticker, shot.side, live_ask, price, want, left)
+    return new_id, want
+
+
+def _rest_wait(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: float, order_key: str | None, order_id: str, price: float, started: float, deadline: float) -> tuple[float, float, float, float]:
+    """Wait for a resting buy on the socket: a streamed fill or quote wakes the thread; a complete fill ends the wait; each quote asks the follow rule when the lane has one. Returns what filled (read from the account once, after) and the order's last price."""
+    rest = restbuys.open(shot.ticker, count, order_id)
+    follows = 0
+    seen = 0
+    try:
+        while time.time() < deadline and rest.filled < count - 1e-9:
+            seen = rest.wait(seen, deadline - time.time())
+            if rest.filled >= count - 1e-9 or time.time() >= deadline:
+                break
+            if spec.buy_rest_follow and follows < REST_FOLLOW_MAX:
+                moved = _rest_follow(s, client, shot, spec, count, order_key, order_id, price, deadline, started, follows, rest)
+                if moved == "withdrawn":
+                    break
+                if moved is not None:
+                    follows += 1
+                    order_id, price = moved  # type: ignore[misc]
+                    rest.add_order(order_id)
+    finally:
+        restbuys.close(rest)
+    filled, spent, fee = _own_fills(client, shot, rest.order_ids, started)
+    if rest.filled > filled + 1e-9:  # the account's list can trail the stream by a moment: what the stream said was filled stands (a resting fill is a maker's, no fee), the account sync settles the figures
+        extra = rest.filled - filled
+        filled, spent = rest.filled, spent + extra * (price if shot.side == "yes" else price)
+    return filled, spent, fee, price
 
 
 def _hours_left(close_time: str, now: datetime | None = None) -> float | None:

@@ -206,6 +206,9 @@ class Worker:
             self.recorder = TapeRecorder(self.client, self.s, getattr(self.quant, "feed", None))
             self.recorder.start()
             log.info("tape recorder on: %s (kept %.0f days)", self.s.tape_path, self.s.tape_keep_days)
+            from . import restbuys
+
+            self.recorder.listeners.append(restbuys.on_event)  # a streamed fill or quote wakes the resting buy waiting on it
             self._start_watcher()
             self._start_entry_watcher()
             self._start_market_events()
