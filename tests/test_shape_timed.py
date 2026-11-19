@@ -27,7 +27,7 @@ def test_unit_the_wait_is_a_tenth_of_the_time_left_and_stops_shrinking_at_90_sec
 
 def test_integration_a_steady_fall_gets_one_row_only_after_the_wait_and_no_sale(tmp_path, monkeypatch, caplog):
     seed(0.002)
-    w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['shape_timed']")
+    w = held(tmp_path, monkeypatch, live=False, extra="sell_chain=['shape_timed']")  # a lane whose risk exit is not live: the step records only
     with caplog.at_level(logging.INFO, logger="moonshot"):
         assert run(w, FALL[:30]) == []  # 30 s behind: under the 45 s a market with 449 s left asks
         assert rows(tmp_path, kind="shape_timed") == []
