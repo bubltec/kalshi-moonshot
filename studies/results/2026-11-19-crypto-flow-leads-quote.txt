@@ -1,0 +1,27 @@
+window: 2026-11-09 to 2026-11-16; 91269 marks (5 s apart, 2-14.5 min into a window, 6+ coins)
+joint flow z: mean +0.01, sd 1.14; corr(flow, past move) +0.121, corr(flow, next 15 s) +0.022, corr(flow, next 30 s) +0.019; corr(past move, next 15 s) +0.030
+--- A. all marks (91269 marks)
+  bottom 5%  n  4564 flow  -2.58 | past -0.113 | next 15 s -0.023 | next 30 s -0.034
+  5-20%      n 13690 flow  -1.18 | past -0.042 | next 15 s -0.010 | next 30 s -0.013
+  20-40%     n 18254 flow  -0.47 | past -0.014 | next 15 s -0.010 | next 30 s -0.016
+  40-60%     n 18253 flow  +0.01 | past -0.008 | next 15 s -0.005 | next 30 s -0.016
+  60-80%     n 18254 flow  +0.50 | past +0.001 | next 15 s -0.002 | next 30 s -0.004
+  80-95%     n 13690 flow  +1.19 | past +0.028 | next 15 s +0.005 | next 30 s -0.001
+  top 5%     n  4564 flow  +2.65 | past +0.141 | next 15 s +0.016 | next 30 s +0.024
+--- B. the quote has not moved (|past 15 s| under 0.3 typical minutes) (58699 marks)
+  bottom 5%  n  2935 flow  -2.61 | past -0.018 | next 15 s -0.007 | next 30 s -0.016
+  5-20%      n  8805 flow  -1.19 | past -0.011 | next 15 s -0.003 | next 30 s -0.005
+  20-40%     n 11740 flow  -0.48 | past -0.004 | next 15 s -0.007 | next 30 s -0.016
+  40-60%     n 11739 flow  +0.01 | past -0.002 | next 15 s -0.002 | next 30 s -0.012
+  60-80%     n 11740 flow  +0.49 | past -0.004 | next 15 s +0.002 | next 30 s +0.000
+  80-95%     n  8805 flow  +1.19 | past +0.002 | next 15 s +0.001 | next 30 s -0.006
+  top 5%     n  2935 flow  +2.68 | past +0.017 | next 15 s +0.017 | next 30 s +0.017
+--- C. by day, in B: top 5% and bottom 5% of joint flow, the next 30 s joint move (typical minutes)
+  2026-11-09 top n  386 next 30 s -0.001 | bottom n  413 next 30 s -0.009
+  2026-11-10 top n  472 next 30 s -0.003 | bottom n  399 next 30 s -0.010
+  2026-11-11 top n  421 next 30 s +0.043 | bottom n  489 next 30 s -0.024
+  2026-11-12 top n  227 next 30 s +0.025 | bottom n  209 next 30 s -0.022
+  2026-11-13 top n  393 next 30 s +0.012 | bottom n  427 next 30 s -0.020
+  2026-11-14 top n  435 next 30 s +0.023 | bottom n  399 next 30 s -0.037
+  2026-11-15 top n  372 next 30 s +0.054 | bottom n  408 next 30 s +0.010
+  2026-11-16 top n  229 next 30 s -0.024 | bottom n  191 next 30 s -0.013
