@@ -43,8 +43,6 @@ def cmd_scan(s: config.Settings, args: argparse.Namespace) -> int:
     client = _client(s)
     results = runner.scan(s, client, est, store, searcher, quant=CommodityPricer())
     _print_scan(results)
-    for line in runner.stop_loss_pass(s, client, store):
-        print(line)
     print(f"\n{len(results)} evaluated, mode={s.mode}, env={s.env}")
     return 0
 
@@ -952,18 +950,6 @@ def cmd_variants(s: config.Settings, args: argparse.Namespace) -> int:
     """How each variety of favorite (the spot's path against the strike over the last five minutes) has paid, by asset class and side (read-only)."""
     from . import variants
 
-    if args.tune:
-        now = time.time()
-        added = variants.refresh_ledger(s, now)
-        for cls in ("crypto", "commodity"):
-            skips = variants.ledger.skips(cls, now, args.hours, args.prior_weight, args.min_loss, args.min_n)
-            print(f"{cls}: skip {list(skips)} (last {args.hours:g}h blended with the older ledger, {len(variants.ledger)} favorites held, {added} added now)")
-            recent, older = variants.ledger.cells(now - args.hours * 3600.0, now, cls), variants.ledger.cells(0.0, now - args.hours * 3600.0, cls)
-            for key in sorted(recent):
-                n, net = recent[key]
-                n0, net0 = older.get(key, (0, 0.0))
-                print(f"  {key[2]}-{key[1]:3} last {args.hours:g}h {n:4d} bets {net / n:+6.2f}   older {n0:5d} bets {(net0 / n0 if n0 else 0.0):+6.2f}")
-        return 0
     if args.market:
         print("\n".join(variants.market_report(s, args.days, args.recent_days, args.min_n)))
     else:
@@ -1195,10 +1181,6 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--days", type=float, default=12.0)
             p.add_argument("--recent-days", type=float, default=3.0, help="the latest stretch shown next to the whole")
             p.add_argument("--min-n", type=int, default=5, help="hide cells with fewer bets than this")
-            p.add_argument("--tune", action="store_true", help="the skip list a lane with skip_varieties_auto would use right now, with the cells behind it (also scores any windows the ledger has not seen)")
-            p.add_argument("--hours", type=float, default=6.0, help="with --tune: the recent stretch")
-            p.add_argument("--prior-weight", type=float, default=15.0)
-            p.add_argument("--min-loss", type=float, default=0.10)
             p.add_argument("--market", action="store_true", help="every crypto window's favorite, whether or not a lane bought it (keeps the observation going while the choppy rule has the lanes paused); use --days 6 --recent-days 1")
         if name == "scalp-cases":
             p.add_argument("--max-windows", type=int, default=600, help="finished windows to replay this run")

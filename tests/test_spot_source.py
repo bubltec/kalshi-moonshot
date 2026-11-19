@@ -35,18 +35,3 @@ def test_a_stale_perp_reference_is_not_a_live_spot():
     finally:
         ticks.history.clear()
 
-
-def test_the_wave_reads_the_perp_reference_when_the_lane_asks_for_it():
-    import math
-
-    now = time.time()
-    ticks.history.clear()
-    try:
-        for k in range(341):
-            t = now - 340.0 + k
-            ticks.history.note("KP_SPX", t, 13300.0 * math.exp(0.0003 * math.sin((t - now) / 20.0 - math.pi / 2)))
-        assert variants.wave_now("KXINX15M", "yes", now) is None  # the default reading has no BiQuote ticks here
-        got = variants.wave_now("KXINX15M", "yes", now, source="kalshi")
-        assert got is not None and got["amp"] > 2.0
-    finally:
-        ticks.history.clear()

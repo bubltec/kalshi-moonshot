@@ -53,26 +53,6 @@ def test_unit_at_most_one_side_is_ever_worth_more_than_the_bet(tmp_path, monkeyp
             assert not (b.yes.clears and b.no.clears)
 
 
-def test_unit_a_side_the_lane_may_not_buy_is_never_the_pick(tmp_path, monkeypatch):
-    _, capped = spec(tmp_path, monkeypatch, "")
-    b = both_sides(capped, 0.999, 0.955, 0.96)  # YES clears the bar at a price over the lane's 0.95
-    assert b.yes.clears and not b.yes.buyable and b.pick is None
-    _, skip = spec(tmp_path, monkeypatch, "price_skip=[0.45,0.57]")
-    b = both_sides(skip, 0.80, 0.49, 0.50)  # YES at 0.50 is in the no-buy range
-    assert b.yes.clears and not b.yes.buyable and b.pick is None
-    _, yes_only = spec(tmp_path, monkeypatch, sides="['yes']")
-    b = both_sides(yes_only, 0.60, 0.80, 0.83)
-    assert b.no.clears and not b.no.buyable and b.pick is None  # the lane does not buy NO
-
-
-def test_unit_a_worth_outside_the_lanes_chance_band_does_not_clear_and_the_tag_says_so(tmp_path, monkeypatch):
-    _, sp = spec(tmp_path, monkeypatch, "max_chance=0.96")
-    b = both_sides(sp, 0.03, 0.14, 0.16)  # NO worth 0.97 for 0.86: over the edge bar, over the lane's 0.96 (crypto_flip_wide 18:18:06 on the host)
-    assert b.no.edge > b.no.needs and not b.no.in_band and not b.no.clears and b.pick is None
-    assert "a chance outside the lane's band" in both_sides_tag(b)
-    assert "a chance outside" not in both_sides_tag(both_sides(sp, 0.10, 0.14, 0.16))
-
-
 def test_unit_a_side_with_no_quote_is_not_buyable(tmp_path, monkeypatch):
     _, sp = spec(tmp_path, monkeypatch)
     b = both_sides(sp, 0.5, 0.0, 0.40)  # no YES bid: NO has no ask

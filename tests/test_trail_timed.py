@@ -4,9 +4,9 @@ import logging
 
 import pytest
 
-from kalshi_moonshot import pricevol, sellchain, watcher
+from kalshi_moonshot import pricevol, watcher
 from kalshi_moonshot import ticks as ticks_mod
-from tests.test_risk_exit_flow import TICKER, held, run_up, signals, tick
+from tests.test_risk_exit_flow import TICKER, held, run_up, tick
 
 
 @pytest.fixture(autouse=True)
@@ -23,11 +23,6 @@ def rows(tmp_path):
 
 def lane(tmp_path, monkeypatch, chain="['trail_timed','profit_take','trail']", live_trail=True):
     return held(tmp_path, monkeypatch, live=True, take="true", extra=f"sell_chain={chain}\ncurve_take_trail=1.0\ncurve_take_trail_live={'true' if live_trail else 'false'}")
-
-
-def test_unit_trail_timed_is_a_step_a_chain_may_name_and_not_in_the_default_order():
-    assert "trail_timed" in sellchain.SELL_STEPS and "trail_timed" not in sellchain.DEFAULT and "trail_timed" not in sellchain.order_of(())
-    assert callable(watcher._SELL["trail_timed"])
 
 
 def test_integration_it_records_both_verdicts_both_units_and_never_sells(tmp_path, monkeypatch):

@@ -1,6 +1,6 @@
 import pytest
 
-from kalshi_moonshot import config, lanes, watcher
+from kalshi_moonshot import config, watcher
 
 
 def target(**kw):
@@ -42,24 +42,6 @@ def test_it_does_nothing_when_not_in_profit_even_if_the_market_swings():
 def test_a_small_gain_under_the_minimum_does_not_trigger():
     w = feed(target(unstable_gain=0.10), [(1000.0, 0.52), (1005.0, 0.58), (1008.0, 0.55)])  # up 5-10%, under the 10% asked
     assert w._jobs.empty()
-
-
-def test_it_is_off_by_default_everywhere():
-    s = config.load()
-    assert s.manual_exit_unstable_gain == 0.0
-    assert all(spec.unstable_gain == 0.0 for spec in lanes.lane_specs(s).values() if spec.name != "fx_favorite_unstable")
-    w = feed(target(unstable_gain=0.0), [(1000.0, 0.52), (1005.0, 0.60), (1008.0, 0.57)])
-    assert w._jobs.empty()
-
-
-def test_a_lane_that_only_uses_it_is_still_watched_and_its_version_differs():
-    s = config.load()
-    base = lanes.LaneSpec(name="x", estimator="ladder", label="x", max_spread=0.05, min_volume=0.0, price=(0.1, 0.9), hours=(0, 1))
-    from dataclasses import replace
-
-    on = replace(base, unstable_gain=0.03, unstable_range=0.06)
-    assert not lanes.takes_profit(base) and lanes.takes_profit(on)
-    assert lanes.version_of(base, s) != lanes.version_of(on, s)  # turning it on is a new version of the lane
 
 
 def test_hand_placed_positions_take_the_settings_from_the_environment(tmp_path, monkeypatch):

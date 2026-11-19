@@ -98,34 +98,6 @@ def test_a_paper_lane_is_sized_from_the_paper_balance_not_the_real_one(tmp_path)
     assert store.bankroll.read(client, s, live=False).source == "paper"
 
 
-def test_stop_loss_only_sells_for_real_on_live_lanes(tmp_path):
-    close = (datetime.now(UTC) + timedelta(minutes=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    s = settings(tmp_path, live_lanes=frozenset({"steady"}), stop_loss_enabled=True,
-                 stop_loss_hours=1.0, stop_loss_drop=0.3)
-    store = Store(s.db_path)
-    for ticker, lane in (("KXP-1", "moonshot"), ("KXL-1", "steady")):
-        store.add_decision(ticker=ticker, title="t", bid=0.4, ask=0.5, model_p=0.9, edge=0.1,
-                           action="bet", mode="trade", close_time=close, lane=lane)
-        store.add_order(ticker=ticker, env="demo", count=2, price=0.5, fill_count=2,
-                        cost_usd=1.0, fee_usd=0.0)
-
-    class C:
-        def __init__(self):
-            self.sold: list[str] = []
-
-        def market(self, ticker):
-            return {"yes_bid_dollars": "0.2000", "yes_ask_dollars": "0.2500"}
-
-        def sell_yes_ioc(self, ticker, count, price, client_order_id=None):
-            self.sold.append(ticker)
-            return {"fill_count": count, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
-
-    c = C()
-    notes = runner.stop_loss_pass(s, c, store)
-    assert c.sold == ["KXL-1"]  # the live lane sells for real
-    assert any("paper-sold KXP-1" in n for n in notes)  # the paper lane only records it
-
-
 @pytest.mark.parametrize("mode", ["observe", "trade"])
 def test_commodity_is_live_only_when_named(tmp_path, mode):
     s = settings(tmp_path, mode=mode, live_lanes=frozenset({"commodity"}))

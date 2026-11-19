@@ -5,10 +5,9 @@ from kalshi_moonshot import config, lanes
 EXAMPLE = Path(__file__).resolve().parent.parent / "strategies.example.toml"
 
 
-def test_the_example_lanes_parse_and_the_control_matches_steady():
+def test_the_example_lane_loads_and_buys_and_sells_only_through_modules():
     s = config.load()
-    specs = lanes.lane_specs_from(s, EXAMPLE.read_text())
-    raw, steady = specs["steady_raw"], specs["steady"]
-    assert not raw.needs_model_edge and raw.fixed_stake == 2.0
-    for field in ("price", "hours", "max_spread", "min_volume", "trend", "lookback_hours", "min_trend", "sides", "one_per"):
-        assert getattr(raw, field) == getattr(steady, field), field
+    spec = lanes.lane_specs_from(s, EXAMPLE.read_text())["example"]
+    assert spec.buy_module == "favourite" and spec.buy_chain == ("price", "vol_regime", "cushion", "price_trend", "spike")
+    assert spec.exit_module == "hold_and_trail" and spec.sell_chain == ("under_even", "trail")
+    assert spec.max_vol_rel == 1.6 and spec.curve_take_trail == 1.0 and spec.curve_risk_under_even == 0.1

@@ -209,14 +209,3 @@ def test_integration_the_risk_score_still_picks_the_side_before_the_perp_is_aske
     out = decide(tmp_path, monkeypatch, yes_score=0.60)  # a risk of 40%: the side is out before the perp is read
     assert out.action == "pass" and "YES out at risk_score" in out.note and "perp_worth" not in out.note.split("|")[1]
 
-
-def test_integration_a_lane_that_writes_the_option_and_no_chain_is_gated_as_before(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text("[lane.cm]\nestimator='market'\nalways=true\nprice=[0.60,0.92]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=5.0\nseries=['KXSILVER15M']\nmax_spread=0.05\nmin_volume=0\nspot_source='kalshi'\nbuy_curve_edge_min=-0.05\n")
-    s = config.load()
-    store = Store(s.db_path)
-    regime.reset()
-    now = time.time()
-    perp(now, drift_bp=-10.0)
-    out = runner.evaluate(s, None, None, store, shot(), estimators={"market": Fixed()})
-    assert out.action == "pass" and "[curve edge" in out.note

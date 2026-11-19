@@ -2,7 +2,7 @@
 
 scripts/state_record_walkforward.py (studies/results/2026-11-07-state-record-walkforward.txt): on the later days, buying the moments whose (5-minute variety, 60-minute variety) state had paid at least 0.20 per dollar staked on the earlier days, at that price band, beat the price (153 buys, +3.39 per $10 ticket, positive in both halves and both classes) and beat the fixed 60m D + 5m F rule it replaces. Only three test days existed, so this runs on paper first.
 The state is the pair of letters (variants.scale_letter) at SCALES; the record is every settled market of the trailing days read at the lane's own entry window and price band, one reading per market side, state and price band, net of the taker fee, held to the result. The record is rebuilt daily from the tape in a separate low-priority process. The state never names a coin or an asset class.
-A lane with record_buy reads the state at the buy and buys when the record, shrunk toward zero by K readings, is at least record_min per dollar with at least record_min_n earlier markets behind it.
+A lane whose buy module has the state_record step reads the state at the buy and buys when the record, shrunk toward zero by K readings, is at least record_min per dollar with at least record_min_n earlier markets behind it.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def load(s: Any) -> dict[str, Any] | None:
 
 
 def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float = 0.0) -> tuple[bool, str]:
-    """Whether a record_buy lane would buy this market side at `ask` now: (True, the note tag) or (False, why not). The state is read again from the in-memory ticks (the spot may have moved since the decision, `waited` seconds ago) and looked up in the record at the price asked."""
+    """Whether a state_record lane would buy this market side at `ask` now: (True, the note tag) or (False, why not). The state is read again from the in-memory ticks (the spot may have moved since the decision, `waited` seconds ago) and looked up in the record at the price asked."""
     from . import ticks as ticks_mod
     from . import variants
 
@@ -110,10 +110,10 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
 
 
 def _window_rules(specs: dict[str, Any]) -> dict[str, tuple[float, float, float, float, float]]:
-    """Per series, the entry window (seconds in), price band and spread cap of the record_buy lane that trades it: the record reads the moments the lane could buy."""
+    """Per series, the entry window (seconds in), price band and spread cap of the state_record lane that trades it: the record reads the moments the lane could buy."""
     out: dict[str, tuple[float, float, float, float, float]] = {}
     for sp in specs.values():
-        if not (sp.enabled and sp.record_buy):
+        if not (sp.enabled and "state_record" in sp.buy_chain):
             continue
         for series in sp.series:
             lo = max(sp.entry_elapsed[0] * 60.0, 900.0 - sp.hours[1] * 3600.0)  # the lane's own window: minutes in, and hours to the close
@@ -126,7 +126,7 @@ def _window_rules(specs: dict[str, Any]) -> dict[str, tuple[float, float, float,
 
 
 def build(s: Any, now: float | None = None) -> dict[str, Any] | None:
-    """The record from the tape: every settled window of the record_buy lanes' series in the trailing TRAIN_DAYS, read every MOMENT_STEP seconds inside the lane's entry window."""
+    """The record from the tape: every settled window of the state_record lanes' series in the trailing TRAIN_DAYS, read every MOMENT_STEP seconds inside the lane's entry window."""
     from . import db, variants
     from .kalshiws import RECORD_ONLY
     from .lanes import lane_specs

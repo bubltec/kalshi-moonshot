@@ -1,8 +1,8 @@
 import pytest
 
-from kalshi_moonshot import config, lanes, watcher
+from kalshi_moonshot import config, watcher
 from kalshi_moonshot.store import Store
-from kalshi_moonshot.strategy import spike_hit, take_profit_hit
+from kalshi_moonshot.strategy import take_profit_hit
 
 
 def test_take_profit_rules():
@@ -11,14 +11,6 @@ def test_take_profit_rules():
     assert take_profit_hit(0.60, 0.99, x=3.0) is None  # 3x of 60c is above $1: this rule cannot apply
     assert take_profit_hit(0.80, 0.95, at=0.95) is not None
     assert take_profit_hit(0.96, 0.97, at=0.95) is None  # already paid more than the level
-
-
-def test_spike_needs_a_rise_inside_the_window_and_a_profit():
-    hist = [(100.0, 0.20), (110.0, 0.22), (120.0, 0.34)]
-    assert spike_hit(hist, 120.0, 0.25, 0.10, 30.0) is not None
-    assert spike_hit(hist, 120.0, 0.40, 0.10, 30.0) is None  # still under the price paid
-    assert spike_hit(hist, 120.0, 0.25, 0.10, 5.0) is None  # the low was outside the window
-    assert spike_hit(hist[:1], 100.0, 0.25, 0.10, 30.0) is None
 
 
 @pytest.fixture
@@ -55,42 +47,6 @@ def quote(bid, ask, ts=1000.0):
     return {"kind": "quote", "ticker": "KXBTC15M-1", "bid": bid, "ask": ask, "ts": ts}
 
 
-def test_the_watcher_follows_only_bets_whose_lane_takes_profit(setup):
-    w, *_ = make(setup, 0.9)
-    assert set(w.targets) == {("KXBTC15M-1", "late_ticket")} and lanes.takes_profit(lanes.lane_specs(setup[0])["late_ticket"])
-
-
-def test_a_quote_at_the_level_queues_a_sale_and_a_low_one_does_not(setup):
-    w, *_ = make(setup, 0.9)
-    w.on_event(quote(0.60, 0.62))
-    assert w._jobs.empty()
-    w.on_event(quote(0.90, 0.92, ts=1001.0))
-    assert w._jobs.get_nowait()[:2] == ("KXBTC15M-1", "late_ticket")
-
-
-def test_the_sale_rereads_the_market_and_marks_the_paper_exit(setup):
-    w, _s, store = make(setup, 0.90)
-    w._inflight.add(("KXBTC15M-1", "late_ticket"))
-    w._sell("KXBTC15M-1", "late_ticket", "take-profit test")
-    assert store.open_bets() == []
-    row = store.db.execute("SELECT exit_price FROM decisions WHERE ticker='KXBTC15M-1'").fetchone()
-    assert row["exit_price"] == pytest.approx(0.90) and not w._inflight
-
-
-def test_no_sale_if_the_market_no_longer_shows_a_profit(setup):
-    w, _s, store = make(setup, 0.28)  # below the 0.30 paid by the time we look
-    w._sell("KXBTC15M-1", "late_ticket", "stale socket quote")
-    assert len(store.open_bets()) == 1
-
-
-def test_the_watcher_starts_only_for_a_take_profit_or_a_stop_loss(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("STOP_LOSS_ENABLED", "false")
-    assert not watcher.wanted(config.load())  # no default lane takes profit, and the stop-loss is off
-    monkeypatch.setenv("STOP_LOSS_ENABLED", "true")
-    assert watcher.wanted(config.load())  # the stop-loss runs on the socket now
-
-
 def test_peak_crash_needs_the_gain_first_then_the_fall():
     from kalshi_moonshot.strategy import trail_hit
 
@@ -104,77 +60,10 @@ def trail_watcher(setup):
     s, _store = setup
     (s.data_dir / "strategies.toml").write_text(
         "[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.4]\nhours=[0.0,1.0]\n"
-        "trail_activate=0.10\ntrail_drop=0.05\ntrail_confirm_seconds=10\ntrail_hold_seconds=3\n")
+        "trail_drop=0.05\ntrail_confirm_seconds=10\ntrail_hold_seconds=3\n")
     w = watcher.ProfitWatcher(lambda: s, FakeClient(0.33), lambda: Store(s.db_path))
     w.refresh()
     return w
-
-
-def test_a_held_dip_from_the_peak_sells(setup):
-    w = trail_watcher(setup)
-    for ts, bid in ((0.0, 0.40), (5.0, 0.41), (10.0, 0.34)):  # entry 0.30; the 0.41 peak held 5s; then down 7c
-        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
-    w.check_timers(1015.0)  # only 5s down: ride on
-    assert w._jobs.empty()
-    w.on_event(quote(0.35, 0.37, ts=1016.0))  # still below the line (0.36)
-    w.check_timers(1021.0)  # 11s down
-    assert w._jobs.get_nowait()[:2] == ("KXBTC15M-1", "late_ticket")
-
-
-def test_a_dip_that_heals_quickly_is_ignored(setup):
-    w = trail_watcher(setup)
-    for ts, bid in ((0.0, 0.40), (5.0, 0.41), (10.0, 0.34), (12.0, 0.40)):  # dips for 2 seconds only
-        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
-    w.check_timers(1040.0)
-    assert w._jobs.empty()
-
-
-def test_one_thin_tick_does_not_set_the_peak(setup):
-    w = trail_watcher(setup)
-    for ts, bid in ((0.0, 0.40), (5.0, 0.60), (6.0, 0.42)):  # 0.60 lasted one second: not a peak
-        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
-    assert w.targets[("KXBTC15M-1", "late_ticket")].peak == pytest.approx(0.40)
-    w.on_event(quote(0.38, 0.40, ts=1020.0))  # 0.42 held 14s: now it is
-    assert w.targets[("KXBTC15M-1", "late_ticket")].peak == pytest.approx(0.42)
-
-
-def test_no_sale_while_the_trail_has_not_armed(setup):
-    w = trail_watcher(setup)
-    for ts, bid in ((0.0, 0.31), (5.0, 0.32), (10.0, 0.25)):  # never 10% above the 0.30 paid
-        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
-    w.check_timers(1060.0)
-    assert w._jobs.empty()
-
-def test_a_spike_must_also_clear_the_minimum_gain():
-    hist = [(100.0, 0.28), (110.0, 0.30), (120.0, 0.40)]
-    assert spike_hit(hist, 120.0, 0.39, 0.10, 30.0, 0.0) is not None  # up 1c on 39c: the old behavior sold this
-    assert spike_hit(hist, 120.0, 0.39, 0.10, 30.0, 0.10) is None  # needs 43c or more
-    assert spike_hit([(100.0, 0.20), (120.0, 0.34)], 120.0, 0.30, 0.10, 30.0, 0.10) is not None  # up 13%
-
-
-def test_a_declined_sale_is_not_rechecked_every_second(setup):
-    import time
-
-    w = trail_watcher(setup)  # entry 0.30
-    for ts, bid in ((0.0, 0.40), (5.0, 0.41), (10.0, 0.34)):
-        w.on_event(quote(bid, bid + 0.02, ts=1000.0 + ts))
-    w.check_timers(1021.0)
-    assert w._jobs.get_nowait()[:2] == ("KXBTC15M-1", "late_ticket")
-    w._inflight.clear()
-    w.client = FakeClient(0.40)  # the dip has already healed by the time we look: the sale is declined
-    w._sell("KXBTC15M-1", "late_ticket", "peak-crash: bid 0.34 is 0.07 off its 0.41 peak")
-    assert w.targets[("KXBTC15M-1", "late_ticket")].retry_after > time.time()
-    w.check_timers(time.time() + 5)  # inside the back-off: no new sale is queued
-    assert w._jobs.empty()
-    w.check_timers(time.time() + 30)  # after it: the dip is still there, so it is looked at again
-    assert not w._jobs.empty()
-
-
-def test_a_spike_that_faded_before_the_sale_is_not_sold(setup):
-    w, _s, store = make(setup, 0.31)  # entry 0.30; fresh bid 0.31 is under the 10% minimum gain (0.33)
-    w._inflight.add(("KXBTC15M-1", "late_ticket"))
-    w._sell("KXBTC15M-1", "late_ticket", "spike: bid 0.40 is up 0.12 in 30s (paid 0.30)")
-    assert len(store.open_bets()) == 1
 
 
 def stop_watcher(setup, bid=0.80):
@@ -188,19 +77,6 @@ def stop_watcher(setup, bid=0.80):
     w = watcher.ProfitWatcher(lambda: s, FakeClient(bid), lambda: Store(s.db_path))
     w.refresh()
     return w
-
-
-def test_the_stop_loss_fires_on_the_first_socket_tick_under_the_line(setup):
-    w = stop_watcher(setup)
-    t = w.targets[("KXBTC15M-1", "late_ticket")]
-    assert t.stop_drop == pytest.approx(0.50)
-    import time as _time
-
-    now = _time.time()
-    w.on_event(quote(0.55, 0.57, ts=now))  # 31% under the 0.80 paid: no stop at the 50% default
-    assert w._jobs.empty()
-    w.on_event(quote(0.39, 0.41, ts=now + 1))  # 51% under: the stop
-    assert "stop-loss" in w._jobs.get_nowait()[2]
 
 
 def test_the_stop_sale_goes_through_below_cost(setup):
@@ -221,167 +97,11 @@ def test_an_hourly_market_is_only_stopped_in_its_last_hour(setup):
     assert w._jobs.empty()
 
 
-def test_a_bid_that_holds_counts_as_a_peak_even_when_quotes_keep_arriving(tmp_path, monkeypatch):
-    from kalshi_moonshot import watcher as w_mod
-
-    t = w_mod.Target("KXBTC15M-1", "late_ticket", "yes", 0.30, 0.0, 0.0, 0.0, 30.0, 0.10, 0.10, 0.04, 10.0, 0.12, 3.0, 0.30)
-    w = w_mod.ProfitWatcher(lambda: None, None, lambda: None)
-    for ts, bid in ((1000.0, 0.30), (1001.0, 0.50), (1002.0, 0.50), (1003.0, 0.50), (1004.0, 0.50), (1005.0, 0.50), (1006.0, 0.45)):
-        w._track_peak(t, bid, ts)  # a quote every second, the bid unchanged at 0.50 for five of them
-    assert t.peak == 0.50
-    t2 = w_mod.Target("KXBTC15M-2", "late_ticket", "yes", 0.30, 0.0, 0.0, 0.0, 30.0, 0.10, 0.10, 0.04, 10.0, 0.12, 3.0, 0.30)
-    for ts, bid in ((1000.0, 0.30), (1001.0, 0.50), (1002.0, 0.40), (1003.0, 0.50), (1004.0, 0.30)):
-        w._track_peak(t2, bid, ts)  # flickering every second: no bid stands 3 s, so no peak
-    assert t2.peak == 0.30
-
-
-def test_a_profit_take_must_clear_both_fees(setup):
-    w, _s, store = make(setup, 0.31)  # a cent over the 0.30 paid, but the entry and sale fees cost about 3c together
-    w._sell("KXBTC15M-1", "late_ticket", "spike: bid rose")
-    assert w.sold == [] and len(store.open_bets()) == 1
-    w, _s, store = make(setup, 0.40)
-    w._sell("KXBTC15M-1", "late_ticket", "spike: bid rose")
-    assert len(w.sold) == 1
-
-
 def test_a_fixed_take_profit_covers_the_entries_a_multiple_cannot_reach():
     assert take_profit_hit(0.80, 0.99, x=1.5, at=0.99) is not None  # 1.5x of 80c is above $1, so the fixed price is what sells
     assert take_profit_hit(0.80, 0.98, x=1.5, at=0.99) is None
     assert take_profit_hit(0.50, 0.75, x=1.5, at=0.99) is not None  # a cheap entry still sells at 1.5x, long before the fixed price
     assert take_profit_hit(0.99, 0.99, x=1.5, at=0.99) is None  # already paid the level
-
-
-def test_the_socket_covers_a_position_only_while_its_quotes_are_arriving(setup):
-    w, *_ = make(setup, 0.9)
-    key = ("KXBTC15M-1", "late_ticket")
-    assert not w.covers(*key, now=1000.0)  # a target that has seen no quote is not being covered
-    w.on_event(quote(0.60, 0.62, ts=1000.0))
-    assert w.covers(*key, now=1010.0)
-    assert not w.covers(*key, now=1000.0 + watcher.SOCKET_QUIET + 1)  # quiet for too long: the sweep takes over
-    assert w.covers(*key, beat=1000.0 + watcher.SOCKET_QUIET, now=1000.0 + watcher.SOCKET_QUIET + 1)  # a quiet market on a live stream stays covered
-    assert not w.covers("KXBTC15M-2", "late_ticket", now=1010.0)
-
-
-def test_an_armed_position_gets_its_spot_history_from_the_tape_so_a_restart_does_not_blind_the_shock_exit():
-    import time as _time
-    from collections import deque
-    from types import SimpleNamespace
-
-    from kalshi_moonshot import watcher
-
-    now = _time.time()
-
-    class Tape:
-        def execute(self, sql, params):
-            assert params[0] == "BQ_GOLD" and params[1] < now  # the last SHOCK_KEEP seconds of that index
-            return SimpleNamespace(fetchall=lambda: [(now - 100.0 + k, 4100.0 + k * 0.01) for k in range(100)])
-
-    fake = SimpleNamespace(_shock_hist={"BQ_GOLD": deque()}, _tape_db=lambda: Tape())
-    watcher.ProfitWatcher._seed_shock_history(fake, "BQ_GOLD")
-    hist = fake._shock_hist["BQ_GOLD"]
-    assert len(hist) == 100 and now - hist[0][0] > 60.0  # more than the 60 s the shock exit looks back over
-    watcher.ProfitWatcher._seed_shock_history(fake, "BQ_GOLD")  # a history that has ticks is left alone
-    assert len(hist) == 100
-    none = SimpleNamespace(_shock_hist={"BQ_GOLD": deque()}, _tape_db=lambda: None)
-    watcher.ProfitWatcher._seed_shock_history(none, "BQ_GOLD")
-    assert not none._shock_hist["BQ_GOLD"]  # no tape: nothing seeded, no error
-
-
-def test_the_crossing_take_sells_a_gain_only_in_a_market_that_has_crossed_the_strike():
-    import time as _time
-    from types import SimpleNamespace
-
-    from kalshi_moonshot import watcher
-
-    now = _time.time()
-    t = watcher.Target.__new__(watcher.Target)
-    for k, v in {"cross_take": 0.10, "cross_min": 1, "cross_n": 0, "cross_sign": 0, "entry": 0.60, "strike": 100.0, "close_ts": now + 300.0, "index_id": "IDX"}.items():
-        setattr(t, k, v)
-    me = SimpleNamespace()
-    assert watcher.ProfitWatcher._cross_take_hit(me, t, 0.75) is None  # up 15c, but the market has not crossed: hold
-    t.cross_n = 1
-    assert watcher.ProfitWatcher._cross_take_hit(me, t, 0.65) is None  # crossed, but the gain is only 5c
-    got = watcher.ProfitWatcher._cross_take_hit(me, t, 0.71)
-    assert got and "crossed the strike 1 times" in got
-
-    class Tape:
-        def execute(self, sql, params):
-            vals = [(100.5,), (100.2,), (99.8,), (99.6,), (100.3,), (100.4,)]  # above, above, below, below, above, above: two crossings
-            return SimpleNamespace(fetchall=lambda: vals)
-
-    t2 = watcher.Target.__new__(watcher.Target)
-    for k, v in {"cross_take": 0.10, "cross_min": 1, "cross_n": 0, "cross_sign": 0, "entry": 0.60, "strike": 100.0, "close_ts": now + 300.0, "index_id": "IDX", "ticker": "X"}.items():
-        setattr(t2, k, v)
-    fake = SimpleNamespace(_tape_db=lambda: Tape())
-    watcher.ProfitWatcher._seed_crossings(fake, t2)
-    assert t2.cross_n == 2 and t2.cross_sign == 1
-
-
-def test_a_lane_whose_only_exit_is_the_crossing_take_is_still_armed(setup):
-    import os
-    from pathlib import Path
-
-    s, _store = setup
-    (Path(os.environ["DATA_DIR"]) / "strategies.toml").write_text("[lane.late_ticket]\nestimator='ladder'\nprice=[0.05,0.4]\nhours=[0.0,1.0]\ncross_take=0.10\n")
-    assert lanes.takes_profit(lanes.lane_specs(s)["late_ticket"])  # 2026-11-05: it was False, so no position of such a lane was ever watched and the take never ran
-
-    class Client(FakeClient):
-        def market(self, ticker):
-            return {**super().market(ticker), "floor_strike": "100.0", "close_time": "2099-01-01T00:00:00Z"}
-
-    w = watcher.ProfitWatcher(lambda: s, Client(0.5), lambda: Store(s.db_path))
-    w.refresh()
-    t = w.targets[("KXBTC15M-1", "late_ticket")]
-    assert t.cross_take == 0.10 and t.strike == 100.0 and t.index_id
-
-
-def test_the_value_exit_sells_a_bid_that_is_over_the_curve_chance_and_holds_otherwise(monkeypatch):
-    import time
-    from types import SimpleNamespace
-
-    from kalshi_moonshot import confidence
-
-    now = time.time()
-    t = watcher.Target(ticker="KXETH15M-X", lane="crypto_multiscale", side="yes", entry=0.31, x=0.0, at=0.0, spike_cents=0.0, spike_seconds=0.0)
-    t.value_exit, t.shock_index, t.shock_ref, t.close_ts = 0.02, "ETHUSD_RTI", 2237.13, now + 80
-    fake = SimpleNamespace(get_settings=lambda: None)
-    monkeypatch.setattr(confidence, "load_model", lambda s: {"w": [0.0], "mu": {}, "sd": {}})
-    monkeypatch.setattr(watcher.ticks_mod.history, "window", lambda *a: ([1.0], [2237.3]))
-    monkeypatch.setattr(confidence, "features_at", lambda *a: {"x": 1.0})
-    monkeypatch.setattr(confidence, "vector", lambda f, mu, sd: [0.0])
-    monkeypatch.setattr(confidence, "predict", lambda w, x: 0.40)  # the curve says YES pays 40%
-    why = watcher.ProfitWatcher._value_hit(fake, t, 0.63, now, now)
-    assert why and why.startswith("value exit") and "0.63" in why
-    t.value_at = 0.0
-    assert watcher.ProfitWatcher._value_hit(fake, t, 0.41, now, now) is None  # a bid at the chance: nothing to give away
-    t.value_at = 0.0
-    assert watcher.ProfitWatcher._value_hit(fake, t, 0.80, now, now) is None  # above the band the study did not support
-    t.value_at = 0.0
-    t.entry = 0.60  # bought dear: the bid is over the curve chance but under the price paid after both fees
-    assert watcher.ProfitWatcher._value_hit(fake, t, 0.45, now, now) is None
-    t.entry = 0.31
-    t.value_at = 0.0
-    t.side = "no"
-    monkeypatch.setattr(confidence, "predict", lambda w, x: 0.60)  # YES 60% = NO 40%
-    assert watcher.ProfitWatcher._value_hit(fake, t, 0.63, now, now)
-
-
-def test_a_position_is_watched_at_the_price_its_buy_filled_at_not_the_decision_ask(setup):
-    s, store = setup
-    store.db.execute("UPDATE decisions SET ask=0.63, ts=100.0")
-    store.db.commit()
-    w = watcher.ProfitWatcher(lambda: s, FakeClient(0.5), lambda: Store(s.db_path))
-    w.refresh()
-    t = w.targets[("KXBTC15M-1", "late_ticket")]
-    assert t.entry == 0.63 and not t.entry_filled  # no orders yet (a paper bet, or the order not recorded yet): the ask
-    store.add_order(ts=101.0, ticker="KXBTC15M-1", env="prod", count=4.33, price=0.68, fill_count=4.33, cost_usd=2.883347, fee_usd=0.068847, order_id="o1", side="buy", contract="yes")
-    w.refresh()
-    assert t.entry_filled and abs(t.entry - 0.65) < 1e-6  # the take chased 0.63 to a 0.68 limit and filled at 0.65 before the fee
-    store.add_order(ts=102.0, ticker="KXBTC15M-1", env="prod", count=4.33, price=0.67, fill_count=4.33, cost_usd=-2.834418, fee_usd=0.066682, order_id="o2", side="sell", contract="yes")
-    store.add_order(ts=103.0, ticker="KXBTC15M-1", env="prod", count=1.0, price=0.9, fill_count=1.0, cost_usd=0.9, fee_usd=0.0, order_id="o3", side="buy", contract="no")
-    t.entry_filled = False
-    w.refresh()
-    assert abs(t.entry - 0.65) < 1e-6  # a sell order and the other contract are not part of the cost
 
 
 def test_the_store_reads_the_fill_price_without_the_fee_and_none_without_orders(setup):
@@ -397,43 +117,7 @@ def _extreme(entry, gain_x=2.0, high=0.95, high_left=420.0, min_gain=0.10):
     import time
 
     now = time.time()
-    t = watcher.Target(ticker="KXSOL15M-X", lane="crypto_multiscale", side="yes", entry=entry, x=0.0, at=0.0, spike_cents=0.0, spike_seconds=0.0)
+    t = watcher.Target(ticker="KXSOL15M-X", lane="crypto_multiscale", side="yes", entry=entry, x=0.0, at=0.0)
     t.value_gain_x, t.value_high, t.value_high_left, t.value_min_gain = gain_x, high, high_left, min_gain
     return t, now
 
-
-def test_the_extreme_profit_value_exit_ignores_a_small_gain_and_sells_a_doubling():
-    from types import SimpleNamespace
-
-    fake = SimpleNamespace(get_settings=lambda: None)
-    for entry, bid, sells in ((0.20, 0.40, True), (0.30, 0.60, True), (0.40, 0.80, True), (0.20, 0.38, False), (0.50, 0.54, False), (0.31, 0.63, True)):
-        t, now = _extreme(entry)
-        t.close_ts = now + 600
-        why = watcher.ProfitWatcher._value_hit(fake, t, bid, now, now)
-        assert bool(why) == sells, (entry, bid, why)  # 0.50 bought and 0.54 a fortnight-second later is no profit worth a fee; 0.31 to 0.63 (ETH 07:30) is a doubling
-    t, now = _extreme(0.20)
-    t.close_ts = now + 600
-    why = watcher.ProfitWatcher._value_hit(fake, t, 0.40, now, now)
-    assert why.startswith("value exit") and "2.0x" in why
-
-
-def test_the_extreme_profit_value_exit_sells_a_95_bid_only_with_over_seven_minutes_left():
-    from types import SimpleNamespace
-
-    fake = SimpleNamespace(get_settings=lambda: None)
-    t, now = _extreme(0.60)  # a doubling is impossible from 0.60: only the high-price rule applies
-    t.close_ts = now + 500
-    assert watcher.ProfitWatcher._value_hit(fake, t, 0.95, now, now)
-    t.value_at = 0.0
-    assert watcher.ProfitWatcher._value_hit(fake, t, 0.94, now, now) is None  # under the line
-    t.value_at, t.close_ts = 0.0, now + 400
-    assert watcher.ProfitWatcher._value_hit(fake, t, 0.97, now, now) is None  # under seven minutes left: hold to the close
-    t2, now2 = _extreme(0.94)
-    t2.close_ts = now2 + 600
-    assert watcher.ProfitWatcher._value_hit(fake, t2, 0.96, now2, now2) is None  # bought at 0.94: a 2c gain before the fees is garbage, under the 10c floor
-    t4, now4 = _extreme(0.97)
-    t4.close_ts = now4 + 600
-    assert watcher.ProfitWatcher._value_hit(fake, t4, 0.97, now4, now4) is None  # bought at the line: no gain at all
-    t3, now3 = _extreme(0.60)
-    t3.close_ts = now3 + 600
-    assert watcher.ProfitWatcher._value_hit(fake, t3, 0.95, now3, now3 - 10.0) is None  # a quote ten seconds old is not a bid

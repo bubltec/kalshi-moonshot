@@ -63,41 +63,6 @@ def risk(p_spot: float, net_bid: float, hist: float = 1.0, spot_weight: float = 
     return Risk(q_price - w * (q_price - q_spot), q_spot, q_price, "spot")
 
 
-def stopped(pnl: float, q: float, max_loss: float) -> bool:
-    """The loss the bet may carry, scaled by the risk: max_loss * q of the cost. With plenty of cushion (q near 1) the bet may dip the whole of max_loss before it is cut; as the risk rises (q falls) the loss we accept shrinks with it, so a bet at q 0.5 is cut at half the dip. At or past that depth the exit sells at once, whatever the wait."""
-    return max_loss > 0 and pnl <= -max_loss * q
-
-
-def early_hold(left: float, window: float, share: float) -> bool:
-    """True while more than `share` of the market is still to run: a loss is not sold there (lane field curve_risk_early_hold; 0 = off).
-    2026-11-16, user, on DOGE 09:30 YES bought at 0.59, sold by the max-loss stop at 0.36 with 507 s left after a 34 s wait, which then won: "we still have a problem with selling early. i get that the price dipped, but before 5 mins remaining it doesn't usually matter"; "Go live with it". studies/results/2026-11-16-stop-early-latch-replay.txt: the 10 max-loss sales made with over 8 minutes left (5 went on to win) return +44.93 held to settlement; a longer wait instead of a hold was -9.20 on the same 10 (2026-11-16-stop-wait-time-replay.txt). The 8 minutes (0.53 of a 15-minute market) was read off that table after seeing it. The same hold measured in the market's own movement (0.50 less the bid within its typical minute x sqrt(minutes left)) came out flat (-0.71 on 62 sales: it blocks 43 of them), so it is logged with each hold and not used."""
-    return share > 0 and window > 0 and left > share * window
-
-
-def sale_ok(q: float, line: float, pnl: float, min_profit: float) -> bool:
-    """Whether the risk is high and a sale is worth making. A loss is worth cutting once the risk is under the line (a small loss beats a full one). A profit is worth taking when it is at least min_profit * q of the cost: with plenty of cushion the profit has to be worth the fee and the spread, as the risk rises the profit we ask for shrinks toward nothing, because a profit at high risk is the one most likely to vanish."""
-    if line <= 0 or q >= line:
-        return False
-    return pnl >= min_profit * q or pnl < 0.0
-
-
-def wait(q: float, line: float, left: float, base: float, share: float) -> float:
-    """Seconds the risk must stay high before the sale: the market's own recovery time (`base`), less the further q is under the line (zero at q = 0), never more than `share` of the time left."""
-    severity = min(1.0, max(0.0, (line - q) / line)) if line > 0 else 1.0
-    return max(0.0, min(base * (1.0 - severity), share * max(left, 0.0)))
-
-
-def stop_wait(q: float, line: float, left: float, base: float, share: float, window: float = 900.0) -> float:
-    """Seconds the max-loss stop waits before it sells (lane field curve_risk_stop_hold = `share`; 0 = sells at once).
-    Until 2026-11-14 it was `share` of the time left and nothing else: 100 s with three and a half minutes left, 270 s with nine, the same at 2 cents past the stop as at 40. Three bets rode to nothing inside that wait (ZEC 18:37, BTC 16:35, BTC 18:28). User: "The stops wait sounds incomplete"; "Is it missing a cap or something?"; "it also needs to be scaled on time left. Just like the nudge behavior we added".
-    Now: the market's own recovery time (`base`: the median seconds its fast falls took to regain half of themselves over the last hour, or the lane's default), less the deeper the chance `q` is under the lane's `line` (none at q = 0), times the share of the market still to run (left / window: with less time left there is less time for a dip to come back, so less patience), and never over `share` of the time left."""
-    if share <= 0 or left <= 0:
-        return 0.0
-    severity = min(1.0, max(0.0, (line - q) / line)) if line > 0 else 0.0
-    clock = min(1.0, max(0.0, left / window)) if window > 0 else 1.0
-    return max(0.0, min(base * (1.0 - severity) * clock, share * left))
-
-
 def hour_rate(ts: list[float], vs: list[float], now: float, hours: float = 1.0) -> float | None:
     """How much this index has been moving over the last hour, per square-root second in log terms: the root-mean-square of its one-minute moves over that hour, over sqrt(60). Times sqrt(seconds) it is the typical move over that many seconds. None when the hour has under MIN_MOVES one-minute moves on record.
     The one reading of volatility for both ends of a bet (2026-11-14, user, on a ladder width read from six hours of bars times a multiplier fitted on six hours of outcomes: "These markets shift in behavior hourly if you're looking at 6 hours to base a decision on right now that is totally irrelevant"): the exit's long layer (long_chance) and the ladder's width for a market priced from the Kalshi perp (commodities.price_event)."""
@@ -281,14 +246,6 @@ def confirm_bar(confirm: float, left: float, window: float = 900.0) -> float:
     return confirm + (1.0 - confirm) * clock
 
 
-def squeeze_clock(left: float, window: float = 900.0) -> float:
-    """The clock's share for the squeeze, 0 to 1 (2026-11-14, user: "squeeze shouldn't even apply at 6 minutes in, i thought we covered this"; earlier "at that time distance it should be nonexistent"). Nothing in the first half of the market, then rising to all of it at the close: a linear share of the market gone still allowed 0.8 of a cent six minutes in."""
-    if window <= 0:
-        return 0.0
-    used = min(max(1.0 - left / window, 0.0), 1.0)
-    return max(0.0, 2.0 * used - 1.0)
-
-
 def flat_holds(net_bid: float, chance: float | None, unit: float | None, left: float) -> bool:
     """True when the spot's cushion backs the price well enough for a flat bid to be held late (2026-11-14, user: "flat and low cushion is an acceptable sell"; "slopping upward with high cushion is not"; on SOL NO 15:30, back at 0.95 with 30 s left on a curve chance of 0.61, which lost at the bell).
     The gap is what the sale pays net of its fee less the curve's chance that the side pays (the cushion check's own two numbers); the cushion is thin when that gap is more than the market's swing over the time left (the typical minute x sqrt(left / 60), the late cap's own yardstick). With no reading of the chance or the unit the cushion is unknown and a flat bid is not held."""
@@ -332,11 +289,6 @@ def still_falling(samples: list[tuple[float, float]], now: float, seconds: float
     return start - bid > noise and bid - low < noise
 
 
-def stop_miss(net: float, basis: float, q: float, max_loss: float) -> float:
-    """How far the bet is from the max-loss stop, per contract in probability: zero or less = at or past it (stopped() is true), positive = that much short of it."""
-    return (net - basis) + max_loss * q * basis
-
-
 EVEN = 0.5  # the price at which the market says the side is no longer the favorite: structural, not fitted
 
 
@@ -348,19 +300,6 @@ def under_even(bid: float, entry: float, under_for: float, left: float, share: f
 def never_ahead(ever_ahead: bool, left: float, at: float, bought_left: float, seen_whole: bool, lead: float = 30.0) -> bool:
     """The never-ahead sale's condition at its one look (lane field curve_risk_never_ahead; 2026-11-17, user: "never profitable and 90s left. Let's add that to the live lanes"): `at` seconds or fewer are left, the bet was bought at least `lead` seconds before that mark (`bought_left` is what was left at the buy), every second of it was watched (`seen_whole`: a bet picked up after a restart has an unknown past and is left alone), and its bid after the sell fee was never once over what it cost with the buy fee. Evidence: studies/results/2026-11-17-time-in-profit.txt (150 live commodity bets since 11-13: never in profit at 90 s left, 6 bets, 2 won if held, selling there +$12.84; at 180 s, 14 bets, 6 won, +$18.12; a bet in profit even briefly won 20 of 24 and is not sold)."""
     return at > 0 and left <= at and seen_whole and bought_left >= at + lead and not ever_ahead
-
-
-def drop_fall(hist: list[tuple[float, float]], now: float, look: float) -> float | None:
-    """How far the newest cushion reading (typical minutes on the bet's side of the target) is under the highest one of the last `look` seconds. `hist` is (time, cushion), oldest first. None when there is no reading in the look back."""
-    seen = [c for ts, c in hist if now - look - 1e-9 <= ts <= now]
-    if not seen or look <= 0:
-        return None
-    return max(seen) - seen[-1]
-
-
-def slow_drop(fall: float | None, chance: float, units: float) -> bool:
-    """The slow drop check's condition at one reading (lane field curve_risk_drop, shadow): the cushion has fallen `units` typical minutes or more from its high of the look back, and the curve's own chance that the side pays is under one half (the spot is across the target). The caller asks for it to hold a share of the time left before it counts. The one setting that did not lose on the live commodity bets of 11-09 to 11-13 (studies/results/2026-11-13-drop-sale-time-scaled.txt: 1.0, a quarter, a quarter, chance under 0.5: +$0.87 on 13 sold of 244, one winner sold); it was picked from 20 after the results were seen."""
-    return units > 0 and fall is not None and fall >= units - 1e-9 and chance < 0.5
 
 
 TREND_STEP = 5.0  # seconds between the marks the risk trend is read on: the grid the market's mids are read on everywhere else (riskscore.STEP)

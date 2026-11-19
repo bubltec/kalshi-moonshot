@@ -92,10 +92,3 @@ def hour_k(now_ts: float) -> float:
 
 NUDGE_FLOOR = 0.5  # a wild hour (k of 2 and over) halves the nudge at most
 
-
-def nudge_scale(k: float) -> float:
-    """How much of its cap a nudge may use this hour (2026-11-15, user: the hourly factor should affect the nudge amount). k is under 1 when the hour's results were more decisive than its own movement and over 1 when less: a near miss of a bar means more when the market has been decisive, so the nudge keeps its whole cap at k of 1 or under and shrinks as 1 / k above it, to NUDGE_FLOOR. The lane's cap stays the ceiling."""
-    if k <= 1.0:
-        return 1.0
-    return max(NUDGE_FLOOR, 1.0 / k)
-

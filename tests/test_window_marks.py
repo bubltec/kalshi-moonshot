@@ -7,7 +7,6 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from kalshi_moonshot import commodities as cm
-from kalshi_moonshot import lanes, runner
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.worker import Worker
 from tests.test_commodities import NOW, WindowFeed, boundary_world, feed_series, settings
@@ -101,18 +100,6 @@ def test_a_new_start_learns_from_the_history_rows_before_any_stream_event(tmp_pa
     store.db.commit()
     pricer = cm.CommodityPricer(WindowFeed(feed_series(price=57.0, age_s=3), minutes))
     assert pricer.learn_windows(store, s, NOW) == 1
-
-
-def test_a_lane_scope_reads_no_settled_markets_from_kalshi(tmp_path, monkeypatch):
-    from tests.test_event_driven_lanes import make
-
-    s, w, client, _ = make(tmp_path)
-    seen = []
-    quant = w.quant
-    monkeypatch.setattr(quant, "learn_windows", lambda source, *a, **k: seen.append(source) or 0)
-    store = Store(s.db_path)
-    runner.scope_lane(s, client, store, lanes.lane_specs(s)["commodity"], quant=quant)
-    assert seen and all(src is store for src in seen) and src_is_not_client(seen, client)
 
 
 def src_is_not_client(seen, client):

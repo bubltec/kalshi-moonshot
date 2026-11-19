@@ -56,14 +56,6 @@ def seed(tmp_path, monkeypatch, n=60, gap=0.035, win_every=1, tuned="true"):
     return s
 
 
-def test_integration_every_evaluation_stores_its_reading_on_the_decision_row(tmp_path, monkeypatch):
-    out = T.decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25")  # real readings, seeded index and mids
-    assert out.action == "bet"
-    row = Store(config.load().db_path).db.execute("SELECT factors FROM decisions ORDER BY id DESC LIMIT 1").fetchone()
-    got = json.loads(row["factors"])["risk"]
-    assert len(got["x"]) == len(riskscore.NAMES) and len(got["c"]) == 3 and len(got["k"]) == 3 and got["ask"] == pytest.approx(0.81)
-
-
 def test_integration_the_tune_reads_the_lanes_rows_and_writes_the_weights(tmp_path, monkeypatch):
     s = seed(tmp_path, monkeypatch)  # sixty settled readings on the lane's own decision rows
     out = risktune.rebuild(s)

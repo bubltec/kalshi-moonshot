@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import bisect
 import contextlib
-import itertools
 import json
-from pathlib import Path
 import logging
 import math
 import re
@@ -23,6 +21,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, NamedTuple
 
 from . import curverisk, factors, risk, shadow, steptime
@@ -34,25 +33,15 @@ from .kalshi import MARKET_PAGES, KalshiClient, KalshiError, KalshiRateLimited
 from .lanes import (
     LADDER,
     LaneSpec,
-    chance_ok,
-    edge_miss,
     edge_verdict,
     lane_specs,
     main_lanes,
-    no_buy,
-    nudge,
-    nudge_in_units,
     settings_of,
     spec_for,
-    stop_drop_for,
-    takes_profit,
     tiered_lanes,
-    trend_share,
     version_of,
     wants_bet,
 )
-from .marketdata import shared_for
-from .paperfill import FLOOR_MARK
 from .search import NewsSearch
 from .sizing import Sizing, size_bet
 from .store import Store
@@ -61,36 +50,18 @@ from .strategy import (
     ask_trend,
     best_ask,
     best_bid,
-    agreed_tag,
     both_sides,
     both_sides_tag,
-    cash_if_losing,
-    cash_if_up,
-    early_cash,
     edge,
     falling_reason,
-    flip,
-    hard_loss,
     lane_candidates,
     lane_reject_reason,
     one_per_mutex_event,
     order_fee,
-    price_shape,
     rising,
-    scalp_hit,
     side_ask_notional,
     side_prob,
-    stop_loss_hit,
-    stop_wait,
-    take_profit_hit,
-    watch_trend,
 )
-
-
-def variants_crypto(series: str) -> bool:
-    from . import variants
-
-    return bool(variants.crypto_index(series))
 
 
 log = logging.getLogger("moonshot")
@@ -440,17 +411,6 @@ def _lane_version(store: Store, s: Settings, lane: str) -> str | None:
     return ver
 
 
-def _risk_factors(shot: LongShot, risk_reading: dict | None) -> dict:
-    """The decision's factors with the risk reading added under "risk" (risktune.py reads it back); nothing when there is no reading."""
-    if not risk_reading:
-        return {}
-    try:
-        base = json.loads(shot.factors) if shot.factors else {}
-    except ValueError:
-        base = {}
-    return {"factors": json.dumps((base if isinstance(base, dict) else {}) | {"risk": risk_reading})}
-
-
 REASON_MAX = 4000  # a bound, not a cut: a decision's whole note is stored (a long one is about 900 characters). Until 2026-11-17 the first 300 were kept, a limit from when a note was one sentence; the column is text and was never the constraint (user: "why is it limited to 300chars? why don't we fix that??!")
 _TAG = re.compile(r"\[[^\[\]]*\]")
 
@@ -461,9 +421,7 @@ def stored_reason(note: str) -> str:
     A reading in square brackets describes the market; a sentence outside them is a rule's verdict. The verdicts are kept in their order and put first, then the readings, and the whole note is stored. A paper floor bid's mark stays at the very front: paperfill.py looks for it."""
     tags = _TAG.findall(note)
     text = " ".join(_TAG.sub(" ", note).split())
-    floor = [x for x in tags if x.startswith(FLOOR_MARK)]
-    rest = [x for x in tags if not x.startswith(FLOOR_MARK)]
-    return " ".join(x for x in (" ".join(floor), text, " ".join(rest)) if x)[:REASON_MAX]
+    return " ".join(x for x in (text, " ".join(tags)) if x)[:REASON_MAX]
 
 
 def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
@@ -489,7 +447,6 @@ def evaluate(
     order_key: str | None = None,
     before_order: Callable[[], None] | None = None,
     share: EstimateShare | None = None,
-    rest_seconds: float = 0.0,
     dry: bool = False,
 ) -> Outcome:
     """Rate one market, log the decision, and place an order if allowed.
@@ -532,13 +489,9 @@ def evaluate(
     if not spec.record_adjust:
         cal = Calibration(p, 1.0, cal.band_p, cal.band_n, cal.skill, cal.n)  # the lane bets on its estimator's own chance: the adjustment is noted, not applied
     e = edge(cal.p, shot.ask)
-    chain = bool(spec.buy_chain)  # the lane's own steps decide, in its order (buychain.py): this edge rule, the no-buy check, the risk score rule and the trend checks below are steps there and are not asked again here
+    chain = bool(spec.buy_chain)  # the lane's buy module decides, step by step in its order (buychain.py); a lane with none (the old LLM lanes) keeps the edge screen
     bet = True if chain else wants_bet(spec, cal.p, shot.ask, e)
     note = why if not adjusted_note else f"{why} | {adjusted_note}" if spec.record_adjust else f"{why} | record adjustment off for this lane, betting on {p:.2f} (it would have read: {adjusted_note})"
-    if not bet and (spec.stretch_max > 0 or spec.nudge_units > 0):
-        stretched = stretch_buy(s, spec, shot, cal.p, e)
-        if stretched:
-            bet, note = True, f"{stretched} {note}"
     both = None
     if spec.needs_model_edge:  # both sides of the market from this one chance and this one quote, on the note of buys and passes alike: it shows what the lane's rule made of the side it was not asked about (the decision itself is still the lines above)
         p_yes = cal.p if shot.side == "yes" else 1.0 - cal.p
@@ -551,14 +504,8 @@ def evaluate(
         from . import buychain
 
         p_yes = cal.p if shot.side == "yes" else 1.0 - cal.p
-        bet, chain_note = buychain.decide(buychain.Ctx(s, spec, p_yes), shot)
+        bet, chain_note = buychain.decide(buychain.Ctx(s, spec, p_yes, store=store, why=why), shot)
         note = f"{chain_note} {note}"
-    if bet and not chain and not chance_ok(spec, p):
-        bet = False
-        note = f"chance {p:.0%} outside the lane's {spec.min_chance:.0%}-{spec.max_chance:.0%}. {note}"
-    if bet and spec.min_model_edge > -90 and p - shot.ask < spec.min_model_edge:
-        bet = False
-        note = f"the model's chance {p:.2f} is {shot.ask - p:.2f} under the price {shot.ask:.2f} (the lane needs it within {-spec.min_model_edge:.2f}). {note}"
     if bet and shot.mutually_exclusive:
         others = store.bet_tickers_in_event(shot.event_ticker) - {shot.ticker}
         if others:
@@ -567,468 +514,17 @@ def evaluate(
     if bet and spec.reentry_cooldown_seconds and (left := store.exited_within(shot.ticker, shot.lane, spec.reentry_cooldown_seconds)) > 0:
         bet = False
         note = f"cooling down: this lane sold {shot.ticker} {spec.reentry_cooldown_seconds - left:.0f}s ago and waits {spec.reentry_cooldown_seconds:.0f}s before buying it again. {note}"
-    if bet and (blocked := _buy_again_block(store, spec, shot)):
-        bet = False
-        note = f"{blocked}. {note}"
     if bet and spec.max_open > 0:
         open_now = sum(1 for r in store.open_bets() if (r["lane"] or "moonshot") == shot.lane and r["ticker"] != shot.ticker)
         if open_now >= spec.max_open:
             bet = False
             note = f"lane full: {open_now} bets already open (the lane holds at most {spec.max_open}). {note}"
-    skips = spec.skip_varieties
-    if bet and spec.skip_varieties_auto:
-        from . import variants
-
-        cls = "crypto" if variants.crypto_index(shot.series) else "commodity" if variants.biquote_index(shot.series) else None  # a market with no index (a Treasury yield) has no class in the ledger
-        if cls is not None:
-            skips = tuple(dict.fromkeys((*skips, *variants.ledger.skips(cls, time.time(), spec.auto_hours, spec.auto_prior_weight, spec.auto_min_loss, spec.auto_min_n))))
-    if bet and skips:
-        from . import ticks as ticks_mod
-        from . import variants
-
-        try:
-            kind = variants.variety_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
-        except Exception as exc:  # a tape that cannot say is no reason to skip
-            kind = None
-            log.warning("variety unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if kind is None:
-            log.info("variety of %s %s: could not be read (no reference price near the window open or no strike, or too few recent ticks), so it is not skipped", shot.ticker, shot.side)
-        else:
-            log.info("variety of %s %s %s: %s", shot.ticker, shot.lane, shot.side, kind)
-            note = f"[variety {kind}] {note}"
-        if kind is not None and variants.skipped(skips, kind, shot.side):
-            bet = False
-            note = f"variety {kind} ({variants.NAMES[kind]}): this lane does not buy it. {note}"
-    if bet and spec.skip_markets_auto:
-        from . import variants
-
-        mcls = "crypto" if variants.crypto_index(shot.series) else "commodity" if variants.biquote_index(shot.series) else None
-        if mcls is not None:
-            why_not = variants.ledger.market_skip(mcls, variants.coin_of(shot.series), shot.ask, time.time(), spec.auto_market_hours, spec.auto_market_prior, spec.auto_market_min_loss, spec.auto_market_min_n)
-            if why_not:
-                bet = False
-                note = f"market skipped: {why_not}. {note}"
-    if bet and not chain and no_buy(spec, shot.ask):
-        bet = False
-        note = f"no-buy range: the {shot.side} ask {shot.ask:.2f} is inside the lane's {spec.price_skip[0]:.2f} to {spec.price_skip[1]:.2f}, where it does not buy. {note}"
-    if bet and (spec.min_vol_rel > 0 or spec.max_vol_rel > 0):
-        from . import variants, volregime
-
-        vrel = volregime.regime.rel(variants.coin_of(shot.series))
-        lo, hi = spec.min_vol_rel, spec.max_vol_rel
-        if spec.auto_vol_gate:
-            vcls = "crypto" if variants.crypto_index(shot.series) else "commodity"
-            lo = volregime.thresholds.get_min(vcls, lo) if lo > 0 else 0.0
-            hi = volregime.thresholds.get_max(vcls, hi) if hi > 0 else 0.0
-        if vrel is None:
-            bet = False
-            note = f"volatility regime unknown for {variants.coin_of(shot.series)}. {note}"
-        elif (lo > 0 and vrel < lo) or (hi > 0 and vrel > hi):
-            bet = False
-            note = f"volatility regime {vrel:.2f}x its normal is outside the lane's {lo:g}-{hi:g}. {note}"
-        else:
-            note = f"[vol {vrel:.2f}x] {note}"
-    if bet and (spec.max_cushion_z < 90 or spec.min_cushion_z > -90 or spec.max_spot_crosses > 0):
-        from . import ticks as ticks_mod
-        from . import variants
-
-        try:
-            snap = variants.snapshot_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
-        except Exception as exc:
-            snap = None
-            log.warning("cushion unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if snap is None:
-            bet = False
-            note = f"cushion unreadable for {shot.ticker}. {note}"
-        elif snap["z"] > spec.max_cushion_z:
-            bet = False
-            note = f"cushion z {snap['z']:+.2f} is above the lane's {spec.max_cushion_z:g}. {note}"
-        elif snap["z"] < spec.min_cushion_z:
-            bet = False
-            note = f"cushion z {snap['z']:+.2f} is under the lane's {spec.min_cushion_z:g} (waits for a bigger cushion). {note}"
-        elif spec.max_spot_crosses > 0 and snap["crosses"] >= spec.max_spot_crosses:
-            bet = False
-            note = f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses}). {note}"
-        else:
-            note = f"[z {snap['z']:+.2f}] {note}"
-    risk_tag, risk_read = "", None
-    if spec.entry_risk_trend > 0 and not chain:  # read here so the note of buys and passes alike carries it; it gates only where the lane says entry_risk_trend_live
-        try:
-            risk_read = risk_trend_read(shot, spec)
-        except Exception as exc:
-            log.warning("risk trend unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        old_tag = ""
-        if not spec.entry_risk_trend_live and spec.entry_trend_seconds > 0 and spec.entry_trend_z is not None:  # shadow: the old check's reading on the same decision, so the two can be scored on the same bets
-            try:
-                old_z = side_trend_z(s, shot, spec.entry_trend_seconds)
-            except Exception:
-                old_z = None
-            old_tag = f" | price trend {old_z:+.1f} over {spec.entry_trend_seconds:.0f}s" if old_z is not None else " | price trend unreadable"
-        if risk_read is None:
-            risk_tag = f"[risk trend unreadable{old_tag}] "
-        else:
-            would = "" if spec.entry_risk_trend_live else ": " + {"holding": "would buy", "worsening": "would not buy", "anomaly": "anomaly, would sit out"}[risk_read[2]]
-            risk_tag = f"[risk trend {risk_read[0]:+.1f} over {risk_read[1]:.0f}s{would}{old_tag}] "
-        if both is not None:  # shadow, gates nothing: the side the edge rule picks, checked against that side's own risk trend. The other side is read here too, so the line is the same whichever side the lane was asked about
-            other = replace(shot, side="no" if shot.side == "yes" else "yes", bid=round(1.0 - shot.ask, 4), ask=round(1.0 - shot.bid, 4))
-            try:
-                other_read = risk_trend_read(other, spec, keep=False)
-            except Exception as exc:
-                other_read = None
-                log.warning("risk trend unreadable for %s %s: %s", other.ticker, other.side, exc)
-            risk_tag += agreed_tag(both, {shot.side: risk_read, other.side: other_read}) + " "
-    crossed_tag = ""
-    if spec.entry_crossed_view:  # shadow: the reading rides on the note of buys and passes alike, and changes neither
-        from . import variants as _variants
-
-        try:
-            crossed = _variants.quote_crossings_now(shot.ticker, time.time() + shot.hours_to_close * 3600.0 - 900.0)  # 900: a 15-minute market's length, structural
-        except Exception as exc:
-            crossed = None
-            log.warning("crossed view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        crossed_tag = ("[never crossed: would not buy] " if crossed == 0 else f"[crossed {crossed}] ") if crossed is not None else "[crossed view unreadable] "  # put on the note at the very end, up front: the stored reason is cut at 300 characters and the later tags would push it out (2026-11-17: the first deploy's tag was cut off every stored note)
-    if bet and (spec.flip_skip_minutes > 0 or spec.entry_led_max < 1.0):
-        from . import variants as _variants
-
-        left_s = shot.hours_to_close * 3600.0
-        try:
-            led = _variants.quote_led_now(shot.ticker, shot.side, time.time() + left_s - 900.0)  # 900: a 15-minute market's length, structural
-        except Exception as exc:
-            led = None
-            log.warning("flip unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if led is None and spec.entry_led_max < 1.0:
-            bet = False
-            note = f"[led unreadable: under 90 s of this market's quotes] the lane buys only a side whose share of the lead it can read. {note}"
-        elif led is None:
-            note = f"[flip unreadable: under 90 s of this market's quotes] {note}"  # no reading is not a reason to sit out: the other gates decide
-        elif led > spec.entry_led_max:
-            bet = False
-            note = f"[led {led:.2f}] this side led {100 * led:.0f}% of the market so far; the lane buys a side that led {100 * spec.entry_led_max:.0f}% or less (the one that trailed). {note}"
-        elif spec.flip_skip_minutes > 0 and 900.0 - left_s < spec.flip_skip_minutes * 60.0 and 1.0 - led >= spec.flip_led_share:
-            bet = False
-            note = f"[flip: led {led:.2f}] the other side led {100 * (1 - led):.0f}% of the market so far and it is {(900.0 - left_s) / 60.0:.1f} minutes in (the lane skips a new favorite before minute {spec.flip_skip_minutes:g}). {note}"
-        else:
-            note = f"[led {led:.2f}] {note}"
-    if bet and (spec.wave_amp_min > 0 or spec.wave_pos_max < 1.0 or spec.wave_pos_min > 0 or spec.wave_turn_seconds > 0):
-        from . import variants as _variants
-
-        try:
-            wave = _variants.quote_wave_now(shot.ticker, shot.side, time.time() + shot.hours_to_close * 3600.0 - 900.0) if spec.wave_quote else _variants.wave_now(shot.series, shot.side, source=spec.spot_source)  # 900: a 15-minute market's length, structural
-        except Exception as exc:
-            wave = None
-            log.warning("wave unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if wave is None and spec.wave_quote:
-            note = f"[wave unreadable: under three minutes of this market's quotes] {note}"  # no reading is not a reason to sit out: the other gates decide
-        elif wave is None:
-            bet = False
-            note = f"the last five minutes of the index are unreadable for the wave rule. {note}"
-        elif wave["amp"] < spec.wave_amp_min:
-            bet = False
-            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the swing is under the lane's {spec.wave_amp_min:g} typical minutes. {note}"
-        elif wave["pos"] < spec.wave_pos_min:
-            bet = False
-            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the buy is under {spec.wave_pos_min:g} of the range: the side is still at its low. {note}"
-        elif wave["pos"] > spec.wave_pos_max:
-            bet = False
-            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f}] the buy is above {spec.wave_pos_max:g} of the swing's range (waits for the low). {note}"
-        elif spec.wave_turn_seconds > 0 and (wave["since_low"] < spec.wave_turn_seconds or wave["back"] < spec.wave_turn_back):
-            bet = False
-            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f} low {wave['since_low']:.0f}s ago, back {wave['back']:+.2f}] the slide has not levelled out: the lane waits {spec.wave_turn_seconds:g}s off the low and {spec.wave_turn_back:g} typical minutes back. {note}"
-        else:
-            note = f"[wave amp {wave['amp']:.1f} pos {wave['pos']:.2f} low {wave['since_low']:.0f}s ago, back {wave['back']:+.2f}] {note}"
-            if spec.wave_market_gate:
-                try:
-                    mw = _variants.market_wave_now(shot.side)
-                except Exception as exc:
-                    mw = None
-                    log.warning("market-wide wave unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-                if mw is None:
-                    bet = False
-                    note = f"the market-wide path is unreadable (fewer than four coins have five minutes of history); the lane waits for it. {note}"
-                elif mw["amp"] >= spec.wave_amp_min and mw["since_low"] < spec.wave_turn_seconds:
-                    bet = False
-                    note = f"[market-wide amp {mw['amp']:.1f} low {mw['since_low']:.0f}s ago, back {mw['back']:+.2f}] the whole market is still running against this side: the lane buys a coin's own swing, not a tide. {note}"
-                else:
-                    note = f"[market-wide amp {mw['amp']:.1f} low {mw['since_low']:.0f}s ago, back {mw['back']:+.2f}] {note}"
-    if bet and spec.hour_drift_q >= 0:
-        from . import ticks as ticks_mod
-        from . import variants as _variants
-
-        try:
-            drift = _variants.hour_drift_now(shot.series, shot.side, spec.hour_drift_q)
-        except Exception as exc:
-            drift = None
-            log.warning("hour drift unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        drift_ok = drift is not None and drift[0] <= drift[1]
-        perp = None
-        if not drift_ok and spec.perp_lead_buy:
-            try:
-                perp = _variants.perp_rule_now(shot.series, shot.side, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker) or 0.0)
-            except Exception as exc:
-                log.warning("perp rule unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if drift_ok:
-            note = f"[rule hour-drift: {drift[0]:+.1f} typical minutes with the bet, cutoff {drift[1]:+.1f} at {spec.hour_drift_q:.0%} of {drift[2]} readings] {note}"
-        elif perp is not None and perp["ok"]:
-            note = f"[rule perp-lead: lead {perp['lead']:+.2f} (cutoff {perp['lead_cut']:+.2f}), cushion {perp['cushion']:+.2f} (cutoff {perp['cushion_cut']:+.2f}), efficiency {perp['eff']:.2f} (under {perp['eff_cut']:.2f}); hour drift {'unreadable' if drift is None else f'{drift[0]:+.1f} vs cutoff {drift[1]:+.1f}'}] {note}"
-        else:
-            bet = False
-            why_drift = "cannot be read (history under five hours or a stale tick)" if drift is None else f"{drift[0]:+.1f} typical minutes with the bet is above this market's own {spec.hour_drift_q:.0%} cutoff {drift[1]:+.1f} ({drift[2]} readings)"
-            why_perp = "" if not spec.perp_lead_buy else (" The perp-lead rule cannot be read here." if perp is None else f" The perp-lead rule fails: lead {perp['lead']:+.2f} (needs over {perp['lead_cut']:+.2f}), cushion {perp['cushion']:+.2f} (over {perp['cushion_cut']:+.2f}), efficiency {perp['eff']:.2f} (under {perp['eff_cut']:.2f}).")
-            note = f"the hour's drift {why_drift}; the lane buys only when the hour has run against the bet{' or the perp leads' if spec.perp_lead_buy else ''}.{why_perp} {note}"
     if shot.series:
         from . import marketprofile as _marketprofile
 
         mtype = _marketprofile.type_of(shot.series)
         if mtype:
             note = f"[mtype {mtype}] {note}"
-    if bet and spec.pretrend_min > -50:
-        from . import variants as _variants
-
-        try:
-            pre = _variants.pretrend_now(shot.series, shot.side, spec.pretrend_seconds, spec.pretrend_gap)
-        except Exception as exc:
-            pre = None
-            log.warning("pretrend unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if pre is None:
-            bet = False
-            note = f"the index history is too short to read the trend before the last {spec.pretrend_gap:g} s. {note}"
-        elif pre < spec.pretrend_min:
-            bet = False
-            note = f"[pretrend {pre:+.2f}] the spot's drift toward this side before the last {spec.pretrend_gap:g} s is under the lane's {spec.pretrend_min:g} typical minutes. {note}"
-        else:
-            note = f"[pretrend {pre:+.2f}] {note}"
-    if variants_crypto(shot.series):
-        from . import variants as _variants
-
-        try:
-            trend = _variants.broad_trend_now()
-        except Exception:
-            trend = None
-        if trend is not None:
-            note = f"[trend60 {trend:+.1f}%] {note}"
-        flat_bar, flat_from = spec.buy_flat_trend_pct, "the lane's fixed cutoff"
-        if spec.buy_flat_trend_share > 0:  # the cutoff scales with this hour's own typical move; the fixed number is the fallback when the hour cannot be read
-            try:
-                own = _variants.broad_trend_bar(spec.buy_flat_trend_share)
-            except Exception:
-                own = None
-            if own is not None:
-                flat_bar, flat_from = own, f"{spec.buy_flat_trend_share:.0%} of this hour's own typical move"
-        if bet and flat_bar > 0:
-            if trend is None:
-                bet = False
-                note = f"the market-wide 60-minute trend is unreadable; the lane does not buy without it. {note}"
-            elif abs(trend) < flat_bar:
-                bet = False
-                note = f"the market-wide 60-minute trend is flat ({trend:+.2f}%, inside {flat_bar:.3g}%, {flat_from}); the lane sits these out. {note}"
-    if bet and spec.buy_curve_edge_min > -1.0 and "perp_worth" not in spec.buy_chain:  # a lane whose chain asks the perp_worth step has had this same check there
-        from . import ticks as ticks_mod
-        from . import variants as _variants
-
-        try:
-            ce = _variants.curve_edge_now(shot.series, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker), source=spec.spot_source)
-        except Exception as exc:
-            ce = None
-            log.warning("curve edge unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if ce is None:
-            bet = False
-            note = f"the curve's chance cannot be read (no index, short history, a stale tick or no reference); the lane does not buy without it. {note}"
-        elif ce[1] < spec.buy_curve_edge_min:
-            bet = False
-            note = f"[curve edge {ce[1]:+.3f}] the curve's chance {ce[0]:.3f} is {-ce[1]:.3f} under the ask {shot.ask:.2f} (the lane allows {-spec.buy_curve_edge_min:g}). {note}"
-        else:
-            note = f"[curve edge {ce[1]:+.3f}] {note}"
-    if bet and (spec.trend_down_max < 0 or spec.trend_up_min > 0):
-        from . import variants as _variants
-
-        try:
-            trend = _variants.broad_trend_now()
-        except Exception:
-            trend = None
-        if trend is None:
-            bet = False
-            note = f"the market-wide 60-minute trend is unreadable. {note}"
-        else:
-            down_ok = spec.trend_down_max < 0 and shot.side == "no" and trend <= spec.trend_down_max
-            up_ok = spec.trend_up_min > 0 and shot.side == "yes" and trend >= spec.trend_up_min
-            if not (down_ok or up_ok):
-                bet = False
-                rules = []
-                if spec.trend_down_max < 0:
-                    rules.append(f"NO while the market-wide 60-minute move is {spec.trend_down_max:g}% or lower")
-                if spec.trend_up_min > 0:
-                    rules.append(f"YES while it is {spec.trend_up_min:g}% or higher")
-                note = f"the lane buys {' and '.join(rules)} (it is {trend:+.1f}%, this is {shot.side.upper()}). {note}"
-    if bet and spec.ms_rule:
-        from . import ticks as ticks_mod
-        from . import variants
-
-        scales = tuple(dict.fromkeys(term.partition(":")[0] for term in spec.ms_rule))
-        try:
-            ms = variants.multiscale_now(s, shot.series, shot.side, shot.hours_to_close * 3600.0, scales, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
-        except Exception as exc:
-            ms = None
-            log.warning("multi-scale varieties unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if ms is None:
-            bet = False
-            note = f"multi-scale varieties unreadable for {shot.ticker}. {note}"
-        else:
-            letters = {sc: v["variety"] for sc, v in ms.items()}
-            tag = " ".join(f"{sc} {letters[sc]}" for sc in scales)
-            if variants.ms_rule_ok(spec.ms_rule, letters):
-                note = f"[ms {tag}] {note}"
-            else:
-                bet = False
-                note = f"multi-scale varieties {tag} do not match the lane's {', '.join(spec.ms_rule)}. {note}"
-    if bet and spec.record_buy:
-        from . import staterecord
-
-        ok_rec, why_rec = staterecord.admits(s, store, shot, spec, shot.ask)
-        if ok_rec:
-            note = f"[{why_rec}] {note}"
-        else:
-            bet = False
-            note = f"{why_rec} {note}"
-    if bet and spec.model_buy:
-        from . import curvemodel
-
-        ok_mod, why_mod = curvemodel.admits(s, store, shot, spec, shot.ask)
-        if ok_mod:
-            from . import timerecord
-
-            if not dry:
-                timerecord.shadow(s, store, shot, spec, shot.ask)
-            ok_time, why_time = timerecord.allows(store, shot, spec, s=s)
-            from . import hotcheck
-
-            if not dry:
-                hotcheck.shadow(s, shot, spec, shot.ask)
-            ok_hot, why_hot = hotcheck.allows(spec)
-            if ok_time and ok_hot:
-                note = f"[{why_mod}] {note}"
-            else:
-                bet = False
-                note = f"{why_time or why_hot} {note}"
-        else:
-            bet = False
-            note = f"{why_mod} {note}"
-    if spec.tick_buy:  # every look is a reading of the side's own gap history, so it runs whether or not the earlier gates passed
-        from . import tickgap
-        from . import ticks as ticks_mod
-
-        try:
-            tv = tickgap.decide(s, shot.series, shot.ticker, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker), spec)
-        except Exception as exc:
-            tv = None
-            log.warning("tick gap unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if tv is None:
-            bet = False
-            note = f"tick gap: unreadable. {note}"
-        elif tv.ok:
-            note = f"[{tv.note}] {note}"
-        else:
-            bet = False
-            note = f"{tv.note} {note}"
-    if bet and spec.skip_other_varieties:
-        from . import ticks as ticks_mod
-        from . import variants
-
-        other = "no" if shot.side == "yes" else "yes"
-        try:
-            osnap = variants.snapshot_now(s, shot.series, other, shot.hours_to_close * 3600.0, strike=ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
-        except Exception as exc:
-            osnap = None
-            log.warning("variety of the other side unreadable for %s: %s", shot.ticker, exc)
-        if osnap is None:
-            bet = False
-            note = f"variety of the other side unreadable for {shot.ticker}. {note}"
-        elif variants.skipped(spec.skip_other_varieties, osnap["variety"], other):
-            bet = False
-            note = f"the favorite is variety {osnap['variety']} ({variants.NAMES[osnap['variety']]}): the lane does not buy against it. {note}"
-        else:
-            note = f"[favorite {osnap['variety']}] {note}"
-    stake_factor = 1.0
-    if bet and spec.require_spot_center_agree:
-        from . import commodities
-        from . import ticks as ticks_mod
-
-        pair = commodities.parse_spot_center(why)
-        strike = ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker)
-        if pair is not None and strike:
-            side_yes = shot.side == "yes"
-            spot_on, center_on = ((x >= strike) if side_yes else (x < strike) for x in pair)
-            if not (spot_on and center_on):
-                if spec.disagree_stake_factor > 0:
-                    stake_factor = spec.disagree_stake_factor
-                    note = f"[stake x{stake_factor:g}: the spot {pair[0]:.6g} and the corrected center {pair[1]:.6g} do not both sit on the {shot.side.upper()} side of the {strike:.6g} strike] {note}"
-                else:
-                    bet = False
-                    note = f"the spot {pair[0]:.6g} and the corrected center {pair[1]:.6g} do not both sit on the {shot.side.upper()} side of the {strike:.6g} strike. {note}"
-    if bet and spec.max_crossings >= 0:
-        from . import ticks as ticks_mod
-
-        crossed = ticks_mod.mids.crossings(shot.ticker, time.time(), spec.crossings_seconds)
-        if crossed is None:
-            bet = False
-            note = f"crossings unknown: not enough quote history for {shot.ticker} in the last {spec.crossings_seconds:.0f}s. {note}"
-        elif crossed > spec.max_crossings:
-            bet = False
-            note = f"choppy chart: the price crossed 50c {crossed} times in the last {spec.crossings_seconds:.0f}s (the lane allows {spec.max_crossings}). {note}"
-        else:
-            note = f"[{crossed} crossings] {note}"
-    if bet and spec.choppy_floor > 0:
-        from . import regime
-
-        is_choppy, rate, counted = regime.choppy(s, store, spec.choppy_series or spec.series, spec.choppy_hours, spec.choppy_floor)
-        if is_choppy:
-            left = shot.hours_to_close * 3600.0
-            choppy_why = (
-                "buying nothing" if spec.choppy_skip
-                else f"buying only in the last {spec.choppy_left_max:.0f}s" if spec.choppy_left_max > 0 and left > spec.choppy_left_max
-                else f"buying only at {spec.choppy_price_min:.2f} or more" if spec.choppy_price_min > 0 and shot.ask < spec.choppy_price_min
-                else None
-            )
-            if choppy_why:
-                bet = False
-                note = f"choppy market: the favorites won {rate:.0%} of the last {counted} windows ({spec.choppy_hours:g}h), under {spec.choppy_floor:.0%}, so the lane is {choppy_why}. {note}"
-    if bet and spec.max_same_side > 0:
-        window = shot.ticker.split("-")[1] if shot.ticker.count("-") >= 2 else None
-        same_lanes = {shot.lane, *spec.same_side_lanes}
-        same = sum(1 for r in store.open_bets() if window and (r["lane"] or "moonshot") in same_lanes and r["side"] == shot.side and r["ticker"] != shot.ticker and r["ticker"].count("-") >= 2 and r["ticker"].split("-")[1] == window)
-        if same >= spec.max_same_side:
-            bet = False
-            note = f"same side held: {same} of this lane's bets are already {shot.side.upper()} in this window (the lane holds at most {spec.max_same_side}). {note}"
-    if bet and spec.min_dwell_seconds > 0:
-        dwell = dwell_seconds(s, shot, spec.price[0])
-        if dwell is not None and dwell < spec.min_dwell_seconds:
-            bet = False
-            note = f"just arrived: this side has been in the price band {dwell:.0f}s and the lane waits {spec.min_dwell_seconds:.0f}s. {note}"
-    if chain:
-        pass  # the trend is a step of the chain where the lane names one
-    elif bet and spec.entry_risk_trend > 0 and spec.entry_risk_trend_live:  # in place of the price trend checks below
-        if risk_read is None or risk_read[2] != "holding":
-            bet = False
-            note = (
-                f"no risk trend reading: the market is too young, its quotes or its long layer are missing. {note}" if risk_read is None
-                else f"risk trend anomaly: {risk_read[0]:+.1f} typical moves over the last {risk_read[1]:.0f}s is outside this series' last hour of readings, so the lane sits out. {note}" if risk_read[2] == "anomaly"
-                else f"risk worsening: this side's risk moved {risk_read[0]:+.1f} typical moves over the last {risk_read[1]:.0f}s and the lane buys a risk that is holding or improving. {note}"
-            )
-    elif bet and spec.entry_trend_seconds > 0 and spec.entry_trend_z is not None:
-        zed = side_trend_z(s, shot, spec.entry_trend_seconds)
-        if zed is None or zed <= spec.entry_trend_z:
-            bet = False
-            note = (
-                f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if zed is None
-                else f"trending against: this side moved {zed:+.1f} typical moves over the last {spec.entry_trend_seconds:.0f}s and the lane needs more than {spec.entry_trend_z:+.1f}. {note}"
-            )
-    elif bet and spec.entry_trend_seconds > 0:
-        moved = side_trend(s, shot, spec.entry_trend_seconds)
-        if moved is None or moved < spec.entry_trend_min:
-            bet = False
-            note = (
-                f"no reference: no quote {spec.entry_trend_seconds:.0f}s back. {note}" if moved is None
-                else f"trending against: this side's price moved {100 * moved:+.1f}c over the last {spec.entry_trend_seconds:.0f}s and the lane needs {100 * spec.entry_trend_min:+.1f}c. {note}"
-            )
     if spec.entry_scenario_view:  # shadow: a reading for the note, on passes as well as buys
         try:
             sc_note = side_scenario(store, shot)
@@ -1036,105 +532,14 @@ def evaluate(
             sc_note = None
             log.warning("scenario unreadable for %s %s: %s", shot.ticker, shot.side, exc)
         note = f"{sc_note or '[scenario unreadable]'} {note}"
-    risk_reading = None
-    if spec.risk_score_buy > 0 and not chain:  # after the scenario note so its tag leads the note (the stored reason is cut at 300 characters). The lane's own buy rule: a risk that is low and has stayed low, and a chance that clears the costs
-        from . import riskscore
-        try:
-            rs = riskscore.live(shot.series or shot.ticker.split("-")[0], shot.ticker, shot.side, time.time() + shot.hours_to_close * 3600.0, time.time(), s.data_dir)
-        except Exception as exc:
-            rs = None
-            log.warning("risk score unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        rs_tag = riskscore.tag(rs[0] if rs else None, rs[1] if rs else None)
-        if rs and len(rs) > 3 and rs[3]:
-            from . import risktune
-
-            risk_reading = risktune.reading(rs[3], rs[0], rs[2], shot.ask)  # stored on the decision row this evaluation writes anyway: the tune's record
-        if rs is None:
-            bet = False
-            note = f"{rs_tag} the lane buys only on a risk it can read. {note}"
-        elif not riskscore.low_risk(rs[0], spec.risk_score_buy):
-            bet = False
-            note = f"{rs_tag} the lane buys a risk of {100 * spec.risk_score_buy:.0f}% or under that has held over its looks back. {note}"
-        else:
-            note = f"{rs_tag} {note}"
-    spike_on, cushion_on = spec.entry_spike_min > -90, spec.entry_cushion_edge_min > -90
-    spike_no = cushion_no = ""  # why each way to buy says no; a buy needs one of the lane's ways to say yes
-    if spec.entry_spike_view or spike_on:  # the note carries the reading on passes as well as buys, so the skipped decisions can be scored too
+    if spec.entry_spike_view:  # shadow: the note carries the reading on passes as well as buys, so the skipped decisions can be scored too
         try:
             sv = side_spike_view(shot)
         except Exception as exc:
             sv = None
             log.warning("spike view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if spike_on and sv is None:
-            spike_no = f"the lane buys only when it can read the perp's last 90 s against its 3 hours (needs {spec.entry_spike_min:+g})"
-        elif spike_on and sv[0] < spec.entry_spike_min:
-            spike_no = f"the perp has not moved toward this side: {sv[0]:+.1f} typical moves over the last 90 s, the lane needs {spec.entry_spike_min:+g}"
         note = f"[spike view z {sv[0]:+.1f}, {sv[1]} of {curverisk.SPIKE_STRETCHES} as large] {note}" if sv is not None else f"[spike view unreadable] {note}"
-    if cushion_on:
-        try:
-            ce = side_cushion_edge(s, shot, spec.entry_cushion_edge_min)
-        except Exception as exc:
-            ce = None
-            log.warning("cushion edge unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        if ce is None:
-            cushion_no = "the cushion's chance cannot be read (no perp, under 3 hours of it, no fitted model for this time left, or no reference at the open)"
-            note = f"[cushion unreadable] {note}"
-        else:
-            if ce[2] < ce[3]:
-                cushion_no = f"the cushion's chance {ce[1]:.3f} is {ce[2]:+.3f} against what the price needs, and the lane asks +{ce[3]:.3f} with this much time left"
-            note = f"[cushion {ce[0]:+.1f}, chance {ce[1]:.3f}, edge {ce[2]:+.3f} against +{ce[3]:.3f} needed] {note}"
-    if bet and (spike_on or cushion_on):
-        if (spike_on and not spike_no) or (cushion_on and not cushion_no):
-            note = f"[buy on the {'spike' if spike_on and not spike_no else 'cushion'}] {note}"
-        else:
-            bet = False
-            note = f"{'; and '.join(x for x in (spike_no, cushion_no) if x)}. {note}"
-    if bet and spec.entry_view_scales:
-        try:
-            view = side_view(shot, tuple(spec.entry_view_scales))
-        except Exception as exc:
-            view = None
-            log.warning("entry view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
-        note = f"[entry view {view:.3f} at {','.join(str(m) for m in spec.entry_view_scales)} min] {note}" if view is not None else f"[entry view unreadable] {note}"  # shadow: written down, gates nothing
-    if bet and (spec.entry_run_max > 0 or spec.entry_rotation_min > -90):
-        slopes = side_phase(shot)
-        if slopes is None:
-            note = f"[phase unreadable: no full hour of the perp's ticks] {note}"  # no reading is not a reason to sit out: the other gates decide
-        else:
-            note = f"[phase z13 {slopes[13]:+.1f}, z5-z21 {slopes[5] - slopes[21]:+.1f}] {note}"
-            if spec.entry_run_max > 0 and slopes[13] >= spec.entry_run_max:
-                bet = False
-                note = f"already run: this side moved {slopes[13]:+.1f} typical moves over the last 13 minutes (the lane skips at {spec.entry_run_max:g} or more). {note}"
-            elif spec.entry_rotation_min > -90 and slopes[5] - slopes[21] < spec.entry_rotation_min:
-                bet = False
-                note = f"rolled over: this side's 5-minute move ({slopes[5]:+.1f}) is {slopes[21] - slopes[5]:+.1f} under its 21-minute move ({slopes[21]:+.1f}) in their own units (the lane needs {spec.entry_rotation_min:+.1f} or more). {note}"
-    if bet and spec.entry_spike_seconds > 0:
-        rose, swung = side_spike(s, shot, spec.entry_spike_seconds)
-        if (rose is not None and rose >= spec.entry_spike_rise) or (swung is not None and swung >= spec.entry_spike_range):
-            bet = False
-            note = f"spike: this side's price rose {100 * (rose or 0):+.0f}c and its bid swung {100 * (swung or 0):.0f}c over the last {spec.entry_spike_seconds:.0f}s (the lane skips {100 * spec.entry_spike_rise:.0f}c / {100 * spec.entry_spike_range:.0f}c). {note}"
-    if bet and spec.entry_bounce_rise > 0:
-        rise30, dip90 = side_bounce(s, shot)
-        if rise30 is not None and dip90 is not None and rise30 >= spec.entry_bounce_rise and dip90 >= spec.entry_bounce_dip:
-            bet = False
-            note = f"bounce: this side's ask rose {100 * rise30:.0f}c over the last 30s after its bid dipped {100 * dip90:.0f}c inside 90s (the lane skips {100 * spec.entry_bounce_rise:.0f}c / {100 * spec.entry_bounce_dip:.0f}c). {note}"
-    if bet and spec.entry_spot_ticks > 0:
-        aligned = spot_ticks_aligned(s, shot, spec.entry_spot_ticks)
-        if aligned is False:
-            bet = False
-            note = f"against the coin: its last {spec.entry_spot_ticks} spot price changes did not all go {'up' if shot.side == 'yes' else 'down'}. {note}"
-    if bet and spec.entry_spot_seconds > 0:
-        moved_spot = spot_move(s, shot, spec.entry_spot_seconds)
-        if moved_spot is not None and moved_spot <= 0:
-            bet = False
-            note = f"against the coin: its price moved {'down' if shot.side == 'yes' else 'up'} or stood still over the last {spec.entry_spot_seconds:.0f}s. {note}"
-    if bet and spec.stake_price_full > 0:
-        lo = spec.price[0]
-        if shot.ask < spec.stake_price_full and spec.stake_price_full > lo:
-            share = max(0.0, (shot.ask - lo) / (spec.stake_price_full - lo))
-            price_factor = spec.stake_price_min_factor + (1.0 - spec.stake_price_min_factor) * share
-            stake_factor *= price_factor
-            note = f"[stake x{price_factor:.2f} for a price of {shot.ask:.2f}, full at {spec.stake_price_full:.2f}] {note}"
+    stake_factor = 1.0
     sized = Sizing(0, 0.0, "")
     if bet:
         with steptime.step("balance read"):
@@ -1142,7 +547,7 @@ def evaluate(
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
             balance.open_by_lane.get(shot.lane, 0.0), stake_factor, fractional=s.fractional_stake and not _NO_FRACTION,
-            maker_price=shot.ask if rest_seconds > 0 else (round(max(0.01, shot.ask - spec.buy_rest_below), 4) if spec.buy_rest_seconds > 0 else None),
+            maker_price=round(max(0.01, shot.ask - spec.buy_rest_below), 4) if spec.buy_rest_seconds > 0 else None,
         )
         if store.holds_sized_bet(shot.ticker, shot.lane) and not s.is_live(shot.lane, shot.series):
             sized = Sizing(0, 0.0, "already holding this market (paper)")
@@ -1155,10 +560,10 @@ def evaluate(
         note = f"[dry: a decision to buy, nothing ordered] {note}"
     elif bet and s.is_live(shot.lane, shot.series):
         _MISS.missed = False
-        with contextlib.nullcontext() if rest_seconds > 0 or spec.buy_rest_seconds > 0 else _ORDER_LOCK:  # a resting buy waits for its fill: it must not hold every other lane's order
+        with contextlib.nullcontext() if spec.buy_rest_seconds > 0 else _ORDER_LOCK:  # a resting buy waits for its fill: it must not hold every other lane's order
             placed = place(
                 s, client, store, shot, note, sized.contracts,
-                order_key=order_key, before_order=before_order, rest_seconds=rest_seconds,
+                order_key=order_key, before_order=before_order,
             )
         note = placed.note
         if spec.buy_redecide_shadow and getattr(_MISS, "missed", False):
@@ -1170,9 +575,6 @@ def evaluate(
             sized = Sizing(round(placed.filled, 2), placed.cost, sized.why)
         else:
             bet = False  # blocked, refused, failed or unfilled: there is no position to track
-    if bet and rest_seconds > 0 and not s.is_live(shot.lane, shot.series):
-        note = f"{FLOOR_MARK} {rest_seconds:.0f}s: a paper bid at the floor {shot.ask:.2f}, judged on the tape] {note}"  # up front: the reason is cut at 300 characters
-    note = f"{crossed_tag}{risk_tag}{note}"
     action = "bet" if bet else "pass"
     held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
     if dry:
@@ -1181,7 +583,7 @@ def evaluate(
         _stake_vol_shadow(s, shot, sized)
     _log(
         store, s, shot, model_p=p, edge=e, action=action, reason=stored_reason(note),
-        context=got.context[:1500], cal_p=cal.p, side=shot.side, **held, **_risk_factors(shot, risk_reading),
+        context=got.context[:1500], cal_p=cal.p, side=shot.side, **held,
     )
     return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
 
@@ -1356,95 +758,6 @@ def arm_index_history(s: Settings, index_id: str, now: float | None = None) -> N
     tape_mod.recent.arm_index(index_id, start, rows)
 
 
-def _stop_quotes(s: Settings, ticker: str, start: float, end: float) -> list[tuple[float, float, float]]:
-    """Quotes for a stop check. A watch that already loaded its 15 minutes answers from memory."""
-    from . import tape as tape_mod
-
-    got = tape_mod.recent.stop_quotes(ticker, start, end)
-    return got if got is not None else _load_quotes(s, ticker, start, end)
-
-
-def dwell_seconds(s: Settings, shot: LongShot, floor: float, now: float | None = None) -> float | None:
-    """How many seconds the side we would buy has been at or above `floor` (the lane's lowest price), from the tape's quotes of the last 15 minutes. None when the tape has nothing to say."""
-    now = time.time() if now is None else now
-    rows = list(reversed(_load_quotes(s, shot.ticker, now - 900.0, now)))
-    if not rows:
-        return None
-    since = now  # the earliest quote of the unbroken run at or above the floor, newest first
-    for ts, bid, ask in rows:
-        price = ask if shot.side == "yes" else 1.0 - bid
-        if price < floor:
-            return now - since
-        since = ts
-    return now - since
-
-
-def high_since(s: Settings, ticker: str, side: str, since: float, now: float | None = None) -> float | None:
-    """The side's highest bid on the tape since `since`. None when the tape has nothing to say."""
-    now = time.time() if now is None else now
-    rows = _stop_quotes(s, ticker, since - 1e-6, now)
-    prices = [bid if side == "yes" else 1.0 - ask for _ts, bid, ask in rows]
-    return max(prices) if prices else None
-
-
-def under_line(s: Settings, ticker: str, side: str, line: float, now: float | None = None) -> tuple[float, float] | None:
-    """(seconds the side's bid has stayed at or below `line`, lowest bid of that run), from the last 15 minutes of tape. None when the tape has nothing under the line. The socket watcher measures the same run live; this is its backstop."""
-    now = time.time() if now is None else now
-    rows = list(reversed(_stop_quotes(s, ticker, now - 900.0, now)))
-    if not rows:
-        return None
-    since = now
-    low: float | None = None
-    for ts, bid, ask in rows:  # newest first: stop at the first print back above the line
-        price = float(bid) if side == "yes" else 1.0 - float(ask)
-        if price > line + 1e-9:
-            break
-        since = float(ts)
-        low = price if low is None else min(low, price)
-    if low is None:
-        return 0.0, 0.0  # the newest print is already above the line, so this visit has not started
-    return now - since, low
-
-
-def below_line_seconds(s: Settings, ticker: str, side: str, line: float, now: float | None = None) -> float | None:
-    """How many seconds the side's bid has been unbroken at or below `line`. None when the tape has nothing to say."""
-    visit = under_line(s, ticker, side, line, now)
-    return None if visit is None else visit[0]
-
-
-def scalp_sweep_hit(s: Settings, spec: LaneSpec, ticker: str, side: str, entry: float, bid: float, opened: float, now: float) -> str | None:
-    """The scalp exit for the periodic sweep, which has the tape instead of a live socket: the bid is scalp_dip under the high since the bet, and has been for scalp_dip_seconds
-    (from the tape; if the tape cannot say how long, no sale on a guess). The socket watcher applies the same rule to its own timer."""
-    arms = [p for p in (spec.scalp_at, entry + spec.scalp_up if spec.scalp_up > 0 else 0.0) if p > 0]
-    if not arms:
-        return None
-    high = high_since(s, ticker, side, opened, now)
-    why = None if high is None else scalp_hit(bid, high, min(arms), spec.scalp_dip)
-    if why is None or high is None or spec.scalp_dip_seconds <= 0:
-        return why
-    if spec.scalp_dip_hard > 0 and high - bid >= spec.scalp_dip_hard - 1e-9:
-        return f"{why} (hard drop)"
-    held = below_line_seconds(s, ticker, side, high - spec.scalp_dip, now)
-    return f"{why} for {held:.0f}s" if held is not None and held >= spec.scalp_dip_seconds else None
-
-
-def _hovering(s: Settings, ticker: str, side: str, bid: float, now: float) -> bool:
-    """The last 3 seconds barely moved, and there is more than one print. The socket uses the same test."""
-    rows = _load_quotes(s, ticker, now - 3.0, now)
-    points = [(ts, qbid if side == "yes" else 1.0 - ask) for ts, qbid, ask in rows]
-    recent = [b for ts, b in points if now - 3.0 <= ts <= now and b > 0]
-    return len(recent) >= 2 and price_shape(points, now, bid) == "hover"
-
-
-def _not_a_downtrend(s: Settings, ticker: str, side: str, bid: float, now: float, *, hold_at: float | None = 0.50) -> bool:
-    """True when the last 3 seconds are a spike or a hover, or the bid is still at `hold_at` or above, so the stop holds. hold_at None skips that price check."""
-    if hold_at is not None and bid >= hold_at:
-        return True
-    rows = _load_quotes(s, ticker, now - 30.0, now)
-    points = [(ts, qbid if side == "yes" else 1.0 - ask) for ts, qbid, ask in rows]
-    return price_shape(points, now, bid) != "trend"
-
-
 def side_trend(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
     """How far the price of the side we would buy (the mid of its bid and ask, in its own terms) has moved over the last `seconds`, from the tape's quotes. None when the tape has no quote that far back or none lately. A lane that asks for this check treats None as no buy: it has nothing to compare."""
     from . import tape as tape_mod
@@ -1488,27 +801,6 @@ def side_spike(s: Settings, shot: LongShot, seconds: float, now: float | None = 
     return rose, (max(inside) - min(inside) if inside else None)
 
 
-def side_bounce(s: Settings, shot: LongShot, now: float | None = None) -> tuple[float | None, float | None]:
-    """(how far the side's ask has risen over the last 30 s, how far its bid dipped under where it stood 90 s ago), from the tape's quotes, the same two numbers the decision's factors record as rise_30 and dip_90. None for both without a quote 90 s back or one lately."""
-    now = time.time() if now is None else now
-    rows = _load_quotes(s, shot.ticker, now - 150.0, now)
-    if not rows or now - rows[-1][0] > 30.0:
-        return None, None
-
-    def ask(r: Any) -> float:
-        return r[2] if shot.side == "yes" else 1.0 - r[1]
-
-    def bid(r: Any) -> float:
-        return r[1] if shot.side == "yes" else 1.0 - r[2]
-
-    back90 = [i for i, r in enumerate(rows) if r[0] <= now - 90.0]
-    back30 = [r for r in rows if r[0] <= now - 30.0]
-    if not back90 or not back30:
-        return None, None
-    i = back90[-1]
-    return ask(rows[-1]) - ask(back30[-1]), max(0.0, bid(rows[i]) - min(bid(r) for r in rows[i:]))
-
-
 SPOT_STALE = 30.0  # a spot price older than this says nothing about now
 SPOT_LOOKBACK = 40.0  # seconds of spot prices read to find the last changes
 
@@ -1521,60 +813,6 @@ def _spot_symbols(series: str) -> list[str]:
     if not inst or contract_priced(inst) or inst.startswith("kp:"):  # a Kalshi perp reference is an index on the tape, not a feed_ticks symbol
         return []
     return [inst]
-
-
-def _memory_feed(symbol: str, start: float, end: float) -> list[tuple[float, float]]:
-    """Spot prices held for a decision. Never opens the tape: a watch answers from its copy, and otherwise from the live snapshot."""
-    from . import tape as tape_mod
-
-    if tape_mod.recent.feed_armed(symbol):
-        got = tape_mod.recent.feed_rows(symbol, start, end)
-        return list(got) if got is not None else tape_mod.recent.feed_tail(symbol, start, end)
-    got = tape_mod.recent.feed(symbol, start, end)
-    if got is not None:
-        return list(got)
-    return tape_mod.recent.feed_tail(symbol, start, end)
-
-
-def _spot_prices(_s: Settings, shot: LongShot, seconds: float, now: float) -> list[tuple[float, float]]:
-    """(ts, price) of the underlying over the last `seconds`, oldest first, from memory. [] when there is no price newer than SPOT_STALE."""
-    for symbol in _spot_symbols(shot.series or shot.ticker.split("-")[0]):
-        rows = _memory_feed(symbol, now - seconds, now)
-        if rows and now - rows[-1][0] <= SPOT_STALE:
-            return rows
-    return []
-
-
-def spot_ticks_aligned(s: Settings, shot: LongShot, ticks: int, now: float | None = None) -> bool | None:
-    """Whether the underlying's last `ticks` price changes (repeated prices skipped) all moved the way this bet goes: up for YES, down for NO. None when the tape has no fresh price or too few changes to say."""
-    now = time.time() if now is None else now
-    prices = _spot_prices(s, shot, SPOT_LOOKBACK, now)
-    changes = [b[1] - a[1] for a, b in itertools.pairwise(prices) if b[1] != a[1]]
-    if len(changes) < ticks:
-        return None
-    sign = 1.0 if shot.side == "yes" else -1.0
-    return all(sign * c > 0 for c in changes[-ticks:])
-
-
-def spot_move(s: Settings, shot: LongShot, seconds: float, now: float | None = None) -> float | None:
-    """The underlying's net move over the last `seconds`, signed so that positive goes the way this bet goes (up for YES, down for NO). None when the tape has no fresh price or none that far back."""
-    now = time.time() if now is None else now
-    prices = _spot_prices(s, shot, seconds + 60.0, now)
-    old = [p for t, p in prices if t <= now - seconds]
-    if not prices or not old:
-        return None
-    return (prices[-1][1] - old[-1]) * (1.0 if shot.side == "yes" else -1.0)
-
-
-def side_phase(shot: LongShot, now: float | None = None) -> dict[int, float] | None:
-    """The side's slopes at 3, 5, 13 and 21 minutes in each scale's own units (curverisk.side_slopes), from the Kalshi perp's ticks held in memory; None when the series has no perp or the hour is not all there."""
-    from . import ticks as ticks_mod
-    from .watcher import perp_index
-
-    now = time.time() if now is None else now
-    kp = perp_index(shot.series or shot.ticker.split("-")[0])
-    got = ticks_mod.history.window(kp, now - 4000.0, now) if kp else None
-    return curverisk.side_slopes(got[0], got[1], now, shot.side) if got else None
 
 
 def side_spike_view(shot: LongShot, now: float | None = None) -> tuple[float, int] | None:
@@ -1593,7 +831,6 @@ def side_spike_view(shot: LongShot, now: float | None = None) -> tuple[float, in
 def side_scenario(store: Store, shot: LongShot, now: float | None = None) -> str | None:
     """The market's scenario as a tag for the note (lane field entry_scenario_view; scenario.py): the target and its place in the 15, 30 and 60 minute scopes before the open, the cushion and the spot's place in each scope now, and the series' last four markets. None when the series has no spot index, the hour before the open is not in memory, or the target cannot be read."""
     import bisect
-    import math
 
     from . import scenario, variants
     from . import ticks as ticks_mod
@@ -1619,32 +856,6 @@ def side_scenario(store: Store, shot: LongShot, now: float | None = None) -> str
 
     prev = riskscore.previous(ts, vs, ticks_mod.mids.series_rows(series, opened, 3600.0), opened, unit)  # from memory, no database read
     return scenario.note(opening, cush, now_place, prev)
-
-
-def side_cushion_edge(s: Settings, shot: LongShot, base: float, now: float | None = None) -> tuple[float, float, float, float] | None:
-    """(cushion, chance, edge, edge needed) for the buy's second way in (lane field entry_cushion_edge_min = `base`): the cushion of the series' Kalshi perp against its level at the market's open, the chance cushionmodel makes of Kalshi's mid and that cushion, that chance less the ask and its fee, and the edge the lane asks with this much time left. None when any part cannot be read."""
-    from . import cushionmodel
-    from . import ticks as ticks_mod
-    from .strategy import fee_per_contract
-    from .watcher import perp_index
-
-    now = time.time() if now is None else now
-    kp = perp_index(shot.series or shot.ticker.split("-")[0])
-    left = shot.hours_to_close * 3600.0
-    if not kp or left <= 0:
-        return None
-    got = ticks_mod.history.window(kp, now - cushionmodel.LOOK * (cushionmodel.STRETCHES + 2) - 130.0, now)
-    ref = ticks_mod.history.first_at_or_after(kp, now + left - 900.0, 60.0)  # 900: a 15-minute market's length, structural
-    if not got or not ref:
-        return None
-    cush = cushionmodel.cushion(got[0], got[1], now, ref, "yes", left)
-    if cush is None:
-        return None
-    cush = cush if shot.side == "yes" else -cush
-    p = cushionmodel.chance(cushionmodel.load(s), (shot.bid + shot.ask) / 2.0, cush, left)
-    if p is None:
-        return None
-    return cush, p, p - (shot.ask + fee_per_contract(shot.ask)), cushionmodel.edge_needed(base, left)
 
 
 def side_view(shot: LongShot, scales: tuple[int, ...], now: float | None = None) -> float | None:
@@ -1774,34 +985,6 @@ def z_of(move: float, sd: float) -> float:
     if sd <= 1e-6:  # a market whose price never changed lately: no move is no gain, a move is a big one
         return 0.0 if abs(move) < 1e-9 else math.copysign(10.0, move)
     return move / sd
-
-
-def stretch_buy(s: Settings, spec: LaneSpec, shot: LongShot, p: float, e: float, now: float | None = None) -> str | None:
-    """The stretch for a buy that missed the scaled edge bar (lane field stretch_max): the note to put on the bet when the miss is inside the nudge the lane allows, else None. The nudge is a cent or two at most, scaled by how far the side has moved its way over the last minute and by the share of a 15-minute market still to run (lanes.nudge). A lane without the squeeze gets no stretch: the pair works together."""
-    if spec.nudge_units <= 0 and (spec.stretch_max <= 0 or spec.squeeze_max <= 0):
-        return None
-    miss = edge_miss(spec, p, shot.ask, e)
-    if miss is None or miss <= 0:
-        return None
-    seconds = 60.0  # the stretch reads the side's last minute, whatever span the lane's trend check looks back over (2026-11-14: that check moved to three minutes and the nudge was not meant to)
-    zed = side_trend_z(s, shot, seconds, now)
-    sd = None
-    if spec.nudge_units > 0:  # the market's own 60 s move is the unit of a nudge with no cap
-        got = side_trend_read(s, shot, seconds, now)
-        sd = got[1] if got is not None else None
-    time_share = min(max(float(shot.hours_to_close) * 3600.0 / 900.0, 0.0), 1.0)
-    hour_scale = 1.0
-    if spec.nudge_hour_factor:
-        from . import widthfit
-
-        hour_scale = widthfit.nudge_scale(widthfit.hour_k(time.time() if now is None else now))
-    if spec.nudge_units > 0:  # no cap: the allowed miss is the market's own 60 s move times how strongly everything agrees
-        allowed = nudge_in_units(spec.nudge_units, sd, trend_share(zed), time_share, hour_scale)
-    else:
-        allowed = nudge(spec.stretch_max, trend_share(zed), time_share, hour_scale)
-    if not miss < allowed:
-        return None
-    return f"[stretch buy: the edge is {miss:.3f} under the bar, inside a nudge of {allowed:.3f} ({f'no cap: {allowed / sd:.2f} of the side 60 s typical move of {sd:.3f}' if spec.nudge_units > 0 and sd else f'at most {spec.stretch_max:g}'}; the side moved {zed:+.1f} typical moves its way over {seconds:.0f}s, {time_share:.0%} of the market still to run{f'; the hour factor scales the nudge by {hour_scale:.2f}' if spec.nudge_hour_factor else ''})]"
 
 
 def _day_start(now: float) -> float:
@@ -1984,13 +1167,8 @@ def buy_limit(spec: LaneSpec | None, ticker: str, side: str, decision_ask: float
 def place(
     s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float,
     order_key: str | None = None, before_order: Callable[[], None] | None = None,
-    rest_seconds: float = 0.0,
 ) -> Placed:
-    """Send the order for `count` contracts (sized by sizing.py) if the book and risk gate agree.
-
-    `rest_seconds` rests a post-only bid at `shot.ask` for that long instead of taking the ask. The bid is sent only when the ask is already above that price, so it cannot take a cheaper book, and the exchange cancels it when the time runs out."""
-    if rest_seconds > 0:
-        return _place_floor_bid(s, client, store, shot, why, count, rest_seconds, order_key, before_order)
+    """Send the order for `count` contracts (sized by sizing.py) if the book and risk gate agree."""
     cost = shot.ask * count + order_fee(shot.ask, count)
     if cost + 1e-9 < s.min_order_usd:
         return Placed(f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum")
@@ -2009,15 +1187,6 @@ def place(
         offered = side_ask_notional(book, limit, shot.side)
     except KalshiError as exc:
         return Placed(f"skipped: could not read the book ({exc})")
-    if lane_spec is not None and getattr(lane_spec, "price_skip", (0.0, 0.0))[1] > 0:
-        live = best_ask(book, shot.side)
-        if no_buy(lane_spec, live):
-            return Placed(f"skipped: the {shot.side} ask is now {live:.2f}, inside the lane's no-buy range {lane_spec.price_skip[0]:.2f} to {lane_spec.price_skip[1]:.2f} (it was {shot.ask:.2f} when the lane decided)")
-        if shot.ask < lane_spec.price_skip[0] - 1e-9 and limit >= lane_spec.price_skip[0] - 1e-9:
-            limit = round(max(shot.ask, lane_spec.price_skip[0] - 0.01), 4)  # an order decided under the range does not pay its way up into it
-            cost = limit * count + order_fee(limit, count)
-            cap = cost
-            offered = side_ask_notional(book, limit, shot.side)
     if lane_spec is not None and lane_spec.buy_max_move > 0:
         fresh = best_ask(book, shot.side)
         if fresh is not None and fresh < shot.ask - lane_spec.buy_max_move - 1e-9:
@@ -2052,11 +1221,6 @@ def place(
         placed = _place_resting(s, client, store, shot, why, count, lane_spec, order_key, book)
         if 0 < placed.filled < count - 1e-9 and lane_spec.buy_rest_then_take and lane_spec.buy_rest_top_up:
             placed = _top_up_rest(s, client, store, shot, lane_spec, placed, count, order_key)
-        if placed.filled > 0:
-            entry = placed.price or round(max(0.01, shot.ask - lane_spec.buy_rest_below), 4)  # a post-only buy fills at its own limit, so this is the price paid
-            note = _rest_take_profit(s, client, store, shot, lane_spec, placed.filled, entry)
-            if note:
-                return Placed(f"{placed.note} {note}", placed.filled, placed.cost, placed.price)
         _MISS.missed = placed.filled <= 0 and "did not fill" in placed.note  # a bid that rested its time and filled nothing
         if placed.filled > 0 or not lane_spec.buy_rest_then_take or "did not fill" not in placed.note:
             return placed  # a refusal or a skip is not a miss: only a bid that rested its time and filled nothing falls back to the ask
@@ -2111,10 +1275,7 @@ def place(
         limit = again
         key = f"{order_key}-r{attempt}" if order_key else None  # a new id: Kalshi refuses one it has seen, even on an order that filled nothing
         log.info("buy %s %s: nothing filled, trying again at %.2f (try %d of %d)", shot.ticker, shot.side, limit, attempt + 1, retries + 1)
-    rest_note = _rest_take_profit(s, client, store, shot, lane_spec, filled, avg) if filled > 0 else ""
-    return Placed(
-        f"bought {shot.side.upper()} {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}" + (f" {rest_note}" if rest_note else ""), filled, spent
-    )
+    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} @ {avg:.4f} ({s.env}). {why}", filled, spent)
 
 
 def _top_up_rest(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec, placed: Placed, count: float, order_key: str | None) -> Placed:
@@ -2145,24 +1306,6 @@ def _top_up_rest(s: Settings, client: KalshiClient, store: Store, shot: LongShot
     return Placed(f"{placed.note} Topped up {more:g} more at {avg:.4f}, fee ${fee:.4f}.", placed.filled + more, spent, blended)
 
 
-def _buy_again_block(store: Store, spec: LaneSpec, shot: LongShot) -> str | None:
-    """Why a buy that the other gates passed must still not go in, else None: the side this lane last sold for a gain waits out rebuy_opposite_after_gain_seconds (the other side goes through the usual gate at once), and with entry_checks_exit a buy is skipped while the lane's own spot exit (variants.spot_exit_now) would sell it at once. Called by evaluate and again by _requote, so a resting bid that is taken at the fresh ask some seconds later is held to the same two rules."""
-    if spec.rebuy_opposite_after_gain_seconds and (gain := store.last_gain_sale(shot.ticker, shot.lane)) is not None and shot.side == gain[0] and (wait := gain[1] + spec.rebuy_opposite_after_gain_seconds - time.time()) > 0:
-        return f"not buying back yet: this lane sold {shot.side} of {shot.ticker} for a gain {spec.rebuy_opposite_after_gain_seconds - wait:.0f}s ago; only the other side may be bought for {wait:.0f}s more"
-    if spec.entry_checks_exit:
-        from . import ticks as ticks_mod
-        from . import variants
-
-        try:
-            left = datetime.fromisoformat(str(shot.close_time)).timestamp() - time.time()
-        except (TypeError, ValueError):
-            left = shot.hours_to_close * 3600.0
-        stuck = variants.spot_exit_now(spec, shot.series, shot.side, left, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker))
-        if stuck:
-            return f"not buying: {stuck}"
-    return None
-
-
 GAVE_UP: dict[tuple[str, str], str] = {}  # why the last second try on a market and side was not placed, for the decision note
 
 
@@ -2182,8 +1325,6 @@ def _requote_why(s: Settings, client: KalshiClient, store: Store, shot: LongShot
         return None, "the book could not be read"
     if ask is None or ask < spec.price[0] - 1e-9 or ask > spec.price[1] + 1e-9:
         return None, ("the book has no ask" if ask is None else f"the ask {ask:.2f} is outside the lane's price band")
-    if no_buy(spec, ask):
-        return None, f"the ask {ask:.2f} is inside the lane's no-buy range {spec.price_skip[0]:.2f} to {spec.price_skip[1]:.2f}"
     if ask > shot.ask + max(0.0, spec.buy_retry_chase) + 1e-9:  # a market that ran away is not chased
         return None, f"the ask ran from {shot.ask:.2f} to {ask:.2f}, more than the chase of {spec.buy_retry_chase:g}"
     limit = buy_limit(spec, shot.ticker, shot.side, shot.ask, ask)
@@ -2192,46 +1333,6 @@ def _requote_why(s: Settings, client: KalshiClient, store: Store, shot: LongShot
         log.info("buy limit %s %s %s (the take after a resting bid): decided at %.2f, the book's ask %.2f, the stream's ask %s (last tick %s), limit %.4f", shot.lane, shot.ticker, shot.side, shot.ask, ask, f"{seen[0]:.2f}" if seen else "silent", f"{seen[1]:+.2f}" if seen else "-", limit)
     if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
         return None, f"the limit {limit:.2f} is over the decided ask {shot.ask:.2f} plus the slip and the chase"
-    if spec.model_buy:  # the curve model must still say buy
-        from . import curvemodel
-
-        ok_mod, why_mod = curvemodel.admits(s, store, shot, spec, limit, waited=float(spec.buy_rest_seconds))
-        if not ok_mod:
-            log.info("buy %s %s: the resting bid did not fill and the curve model no longer says buy at %.2f (%s)", shot.ticker, shot.side, limit, why_mod)
-            return None, f"the curve model no longer says buy at {limit:.2f} ({why_mod})"
-        from . import timerecord
-
-        ok_time, why_time = timerecord.allows(store, shot, spec, s=s)
-        if not ok_time:
-            log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, why_time)
-            return None, str(why_time)
-        from . import hotcheck
-
-        ok_hot, why_hot = hotcheck.allows(spec)
-        if not ok_hot:
-            log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, why_hot)
-            return None, str(why_hot)
-    if getattr(spec, "tick_buy", False):  # the gap at the bid's price must still clear this side's own cutoff
-        from . import tickgap
-        from . import ticks as ticks_mod
-
-        try:
-            still = tickgap.recheck(shot.series, shot.side, shot.hours_to_close * 3600.0 - float(spec.buy_rest_seconds), limit, ticks_mod.strikes.get(shot.ticker) or store.window_strike(shot.ticker), spec)
-        except Exception:
-            still = False
-        if not still:
-            log.info("buy %s %s: the resting bid did not fill and the curve's gap no longer clears this side's own cutoff at %.2f", shot.ticker, shot.side, limit)
-            return None, f"the curve's gap no longer clears this side's own cutoff at {limit:.2f}"
-    if spec.record_buy:  # the curve must still say buy: the spot may have moved out of the state that cleared the record while the bid rested
-        from . import staterecord
-
-        ok_rec, why_rec = staterecord.admits(s, store, shot, spec, limit, waited=float(spec.buy_rest_seconds))
-        if not ok_rec:
-            log.info("buy %s %s: the resting bid did not fill and the curve no longer clears the record at %.2f (%s)", shot.ticker, shot.side, limit, why_rec)
-            return None, f"the curve no longer clears the record at {limit:.2f} ({why_rec})"
-    if blocked := _buy_again_block(store, spec, shot):
-        log.info("buy %s %s: the resting bid did not fill and %s", shot.ticker, shot.side, blocked)
-        return None, str(blocked)
     cost = limit * count + order_fee(limit, count)
     verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store), allow_held=topping_up)  # a top-up's first part is already a position: the holding check would refuse every one
     if not verdict.ok:
@@ -2254,48 +1355,7 @@ def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) 
         if lowered < price:
             log.info("resting buy %s %s: the ask fell from %.2f to %.2f, resting at %.2f instead of %.2f", shot.ticker, shot.side, shot.ask, live_ask, lowered, price)
             price = lowered
-    if no_buy(spec, price):
-        return None, f"skipped: a resting buy at {price:.2f} would sit inside the lane's no-buy range {spec.price_skip[0]:.2f} to {spec.price_skip[1]:.2f}"
     return price, ""
-
-
-def _place_floor_bid(
-    s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, seconds: float,
-    order_key: str | None, before_order: Callable[[], None] | None,
-) -> Placed:
-    """Rest a post-only bid at `shot.ask` for `seconds`. Nothing is bought when the ask is not above that price: that bid would take the book instead of waiting."""
-    price = round(shot.ask, 4)
-    if no_buy(lane_specs(s).get(shot.lane), price):
-        return Placed(f"bid at {price:.2f} not placed: it is inside the lane's no-buy range")
-    cost = price * count  # a bid that rests pays no taker fee; the fill records whatever fee did come back
-    if cost + 1e-9 < s.min_order_usd:
-        return Placed(f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum")
-    try:
-        with steptime.step("order book"):
-            book = client.orderbook(shot.ticker)
-    except KalshiError as exc:
-        return Placed(f"skipped: could not read the book ({exc})")
-    live = best_ask(book, shot.side)
-    if live is None or live <= price + 1e-9:
-        shown = "missing" if live is None else f"{live:.2f}"
-        return Placed(f"bid at {price:.2f} not placed: the ask is {shown}, so that bid would take the book")
-    with steptime.step("risk check"):
-        verdict = risk.check(
-            s, store, shot.ticker, cost, max_trade=cost,
-            event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store),
-        )
-    if not verdict.ok:
-        return Placed(f"blocked by risk: {verdict.reason}")
-    with steptime.step("top up"):
-        topped = _top_up(s, client, store, shot, cost)
-    if topped:
-        return Placed(topped)
-    if before_order:
-        before_order()
-    spec = lane_specs(s).get(shot.lane)
-    if spec is None:
-        return Placed("skipped: the lane is gone")
-    return _place_resting(s, client, store, shot, why, count, spec, order_key, book, price=price, seconds=seconds, hold_price=True)
 
 
 def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None, book: dict[str, Any] | None = None, price: float | None = None, seconds: float | None = None, hold_price: bool = False) -> Placed:
@@ -2309,18 +1369,6 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
         price, skip = _resting_price(shot, spec, book)
         if price is None:
             return Placed(skip)
-    ahead_at_bid = None
-    queue_cut = spec.buy_rest_queue_max if spec.buy_rest_queue_max > 0 else None
-    if spec.buy_rest_queue_note or queue_cut is not None or spec.buy_rest_queue_quantile > 0:
-        # The queue ahead of a bid, from the websocket book: price-time priority puts the shares at better prices first, then the ones already resting at our price. No REST call.
-        from . import queuehist, ticks
-
-        got = ticks.books.shares_ahead(shot.ticker, shot.side, price)
-        ahead_at_bid = got[1] if got is not None else None
-        if queue_cut is None and spec.buy_rest_queue_quantile > 0:
-            queue_cut = queuehist.cutoff(s.data_dir, spec.name, spec.buy_rest_queue_quantile, spec.buy_rest_queue_hours)  # None until enough of this lane's bids have filled
-        if queue_cut is not None and ahead_at_bid is not None and ahead_at_bid > queue_cut:
-            return Placed(f"The resting bid was not placed and did not fill: {ahead_at_bid:g} shares ahead of our {count:g}, over the lane's {queue_cut:g}; the ask is taken instead.")
     started = time.time()
     try:
         resp = client.buy_resting(shot.ticker, shot.side, count, price, wait, client_order_id=order_key)
@@ -2349,7 +1397,6 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     filled = spent = fee_paid = 0.0
     seen: set[str] = set()
     deadline = started + wait + 3.0
-    queue_text = f" Queue: {ahead_at_bid:g} shares ahead of our {count:g}." if ahead_at_bid is not None else (" Queue: not readable." if spec.buy_rest_queue_note or spec.buy_rest_queue_max > 0 or spec.buy_rest_queue_quantile > 0 else "")
     while time.time() < deadline and filled < count - 1e-9:
         time.sleep(2.0)
         try:
@@ -2369,112 +1416,9 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     store.add_order(
         ticker=shot.ticker, env=s.env, count=count, price=price, fill_count=filled, cost_usd=spent, fee_usd=fee_paid, order_id=order_id, contract=shot.side,
     )
-    if ahead_at_bid is not None:
-        from . import queuehist
-
-        queuehist.record(s.data_dir, spec.name, shot.ticker, ahead_at_bid, filled > 0)
     if filled <= 0:
-        return Placed(f"resting buy at {price:.2f} for {wait:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought.{queue_text}")
-    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}.{queue_text} {why}", filled, spent, price)
-
-
-def rest_target_price(spec: LaneSpec, entry: float) -> float | None:
-    """The price a resting take-profit sell sits at: the lane's take-profit multiple of the price paid, or its fixed price.
-
-    None when the lane has no target, or none the bid could ever reach: the same test take_profit_hit makes
-    (a multiple that would need $1.00 or more is not a target, it is holding to settlement)."""
-    if entry <= 0:
-        return None
-    if spec.take_profit_x > 0 and entry * spec.take_profit_x < 1.0:
-        return round(min(0.99, entry * spec.take_profit_x), 4)
-    if spec.take_profit_at > 0 and entry < spec.take_profit_at:
-        return round(min(0.99, spec.take_profit_at), 4)
-    return None
-
-
-def _rest_take_profit(s: Settings, client: KalshiClient, store: Store, shot: LongShot, spec: LaneSpec | None, filled: float, entry: float) -> str:
-    """Rest this lane's take-profit sell on the book, post-only, until the market closes. Returns a note for the bet's log line ('' = nothing rested).
-
-    The order is placed before the price reaches the target, which is the whole point: when the bid gets there it fills
-    as a maker and is charged no taker fee, instead of the watcher noticing and crossing the book. It is reduce-only, so
-    it can never sell more than the buy just filled. Any other exit (a stop, a crash) cancels it first and sells what is
-    left itself (exit_position). A refusal (the bid is already at the target, so post-only will not cross to it, or the
-    API balks at the order) is only a note: the watcher still sells at the target the immediate way. Never raises: the
-    buy has already filled, and losing the resting sell must not lose the bet's bookkeeping with it.
-    """
-    if spec is None or not spec.rest_sell or filled <= 0:
-        return ""
-    price = rest_target_price(spec, entry)
-    if price is None:
-        return ""
-    try:
-        close = datetime.fromisoformat(shot.close_time)
-    except (TypeError, ValueError):
-        return ""  # no known close, no honest expiry: the watcher sells at the target instead
-    if close.tzinfo is None:
-        close = close.replace(tzinfo=UTC)
-    seconds = close.timestamp() - time.time() - 5.0  # die with the market; Kalshi cancels orders at the close anyway
-    if seconds < 30:
-        return ""  # no time for a resting order to mean anything; the watcher sells at the target itself
-    try:
-        resp = client.sell_resting(shot.ticker, shot.side, round(filled, 2), price, seconds)
-    except KalshiError as exc:
-        return f"resting take-profit at {price:.2f} refused ({exc}); the watcher will sell at the target instead."
-    order_id = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
-    if not order_id:
-        return f"resting take-profit at {price:.2f} sent but Kalshi named no order; the watcher will sell at the target instead."
-    store.add_order(
-        ticker=shot.ticker, env=s.env, count=round(filled, 2), price=price, fill_count=0.0,
-        cost_usd=0.0, fee_usd=0.0, order_id=order_id, side="rest", contract=shot.side,
-    )
-    return f"take-profit rests at {price:.2f} until the close (order {order_id}): if the bid reaches it, it sells with no taker fee."
-
-
-def _book_resting_fills(s: Settings, client: KalshiClient, store: Store, ticker: str, cancel: bool = False) -> tuple[float, float, float]:
-    """Book what the resting take-profit sell on this ticker has filled, as ordinary sell orders. Returns (newly booked, booked in all, their average fill price).
-
-    Fills are read from Kalshi's fills list, matched by order id; each carries the fee Kalshi actually charged
-    (none, for an order that rested first), which is what gets recorded. With `cancel`, the order is cancelled
-    first and then retired: whatever filled before the cancel landed is booked here, and the caller sells what
-    is left itself. Never raises: a fills read that fails just books nothing this time.
-    """
-    from . import account
-
-    rest = store.rest_sell(ticker, s.env)
-    if rest is None:
-        return 0.0, 0.0, 0.0
-    order_id = rest["order_id"]
-    if cancel and store.working_rest_sell(ticker, s.env) is not None:
-        with contextlib.suppress(KalshiError):
-            client.cancel_order(order_id)
-    booked, _ = store.booked_rest_sell(order_id)
-    new = 0.0
-    fills: list[tuple] = []
-    with contextlib.suppress(KalshiError):
-        for f in client.portfolio_rows("/portfolio/fills", "fills", int(float(rest["ts"])) - 5, pages=1):
-            row = account.fill_row(f)
-            if row is not None and row[9] == order_id:
-                fills.append(row)
-    fills.sort(key=lambda r: r[1])
-    skip = booked
-    for r in fills:
-        n = float(r[4])
-        if skip >= n - 1e-9:
-            skip -= n
-            continue
-        take = n - max(skip, 0.0)
-        skip = 0.0
-        own = float(r[5]) if (rest["contract"] or "yes") == "yes" else 1.0 - float(r[5])
-        fee = float(r[7] or 0.0) * (take / n if n else 0.0)
-        store.add_order(
-            ticker=ticker, env=s.env, count=take, price=round(own, 4), fill_count=take,
-            cost_usd=-(own * take - fee), fee_usd=fee, order_id=order_id, side="sell", contract=rest["contract"] or "yes",
-        )
-        new += take
-    if cancel:
-        store.retire_rest_sell(order_id)
-    total, avg = store.booked_rest_sell(order_id)
-    return new, total, avg
+        return Placed(f"resting buy at {price:.2f} for {wait:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought.")
+    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}. {why}", filled, spent, price)
 
 
 def _hours_left(close_time: str, now: datetime | None = None) -> float | None:
@@ -2574,22 +1518,11 @@ def exit_position(
         seen = factors.snapshot_now(s, row["ticker"], side, row["close_time"], row["factors"] or "")  # the context at the moment of the sale, saved with the exit
         if not s.is_live(lane, row["ticker"].split("-")[0]):
             price = bid
-            if why.startswith("take-profit"):
-                # A lane that rests its sale (rest_sell) would have filled at the target the moment the bid touched
-                # it, so the paper sale books the target, not the bid this re-read happens to catch. Booking the
-                # re-read bid would grade the resting sell by a slippage it does not have.
-                spec = lane_specs(s).get(lane)
-                target = rest_target_price(spec, float(row["ask"] or 0.0)) if spec is not None and spec.rest_sell else None
-                if target is not None:
-                    price = target
             from . import manualrest
 
             price = manualrest.rest_fill_price(why) or price  # a resting ask fills at its own price, not the bid this re-read catches
             store.mark_exited(row["ticker"], price, why, lane, seen, side=side)
             return f"paper-sold {row['ticker']} @ {price:.2f}. {why}"
-        # A resting take-profit sell may be working on this position: cancel it and book whatever it filled
-        # before selling anything ourselves, or the two orders would race for the same contracts.
-        _new, rest_filled, rest_avg = _book_resting_fills(s, client, store, row["ticker"], cancel=True)
         count = round(store.net_contracts(row["ticker"], s.env), 2)
         real = account_count(client, row["ticker"], side) if count > 0 else None  # what the account really holds: the user may have sold some by hand (2026-11-13: 100 sell orders in 77 s for 1.72 contracts that were gone)
         if real is not None and real < count - 0.05 and book_hand_sale(s, store, row["ticker"], side, real, bid) > 0:
@@ -2597,9 +1530,6 @@ def exit_position(
             if count < 0.005:
                 store.mark_exited(row["ticker"], bid, f"closed by hand: the account no longer holds these contracts (booked at the bid {bid:.2f} when the bot noticed, not at your fill). {why}", lane, seen, side=side)
                 return f"{row['ticker']}: closed by hand, nothing left to sell. {why}"
-        if count < 0.005 and rest_filled > 0:
-            store.mark_exited(row["ticker"], rest_avg, f"resting take-profit filled at {rest_avg:.4f} (no taker fee)", lane, seen, side=side)
-            return f"sold {rest_filled:g} {row['ticker']} resting @ {rest_avg:.4f} (no taker fee); the {why} sale found nothing left"
         if count <= 0:
             store.mark_exited(row["ticker"], bid, why, lane, seen, side=side)
             return f"paper-sold {row['ticker']} @ {bid:.2f} (no live fill). {why}"
@@ -2665,146 +1595,6 @@ def exit_position(
             store.mark_exited(row["ticker"], avg if filled else bid, why, lane, seen, side=side)
             return f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
         return f"partial exit {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
-
-
-def stop_loss_pass(
-    s: Settings,
-    client: KalshiClient,
-    store: Store,
-    *,
-    now: datetime | None = None,
-    before_order: Callable[[], None] | None = None,
-    client_for: Callable[[str], KalshiClient] | None = None,
-    socket_covers: Callable[[str, str], bool] | None = None,
-) -> list[str]:
-    """Check every open bet. Sell (or paper-sell) those that hit the stop or a take-profit level. Returns log lines.
-
-    Take-profit is also watched live on the socket (watcher.py); this pass is the slower backstop for it.
-    The loss exits (the hard loss, the 50c watch, the generic stop) are the socket's alone while `socket_covers(ticker, lane)` says its
-    price events are reaching that position: this pass reads REST and the tape, a second price source for the same rule. It decides a loss
-    only for a position the socket is not covering (no stream, or the stream has gone quiet).
-    """
-    specs = lane_specs(s)
-    now = now or datetime.now(UTC)
-    notes: list[str] = []
-    for row in store.open_bets():
-        spec = specs.get(row["lane"] or "moonshot")
-        profit_on = spec is not None and takes_profit(spec)
-        stop_on = (
-            s.stop_loss_enabled
-            and (spec is None or spec.stop_loss)
-            and not (row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast)
-        )
-        if not (stop_on or profit_on):
-            continue  # a 15-minute window is held to settlement (STOP_LOSS_15M=false) unless it takes profit
-        hours = _hours_left(row["close_time"], now)
-        if hours is None:
-            continue
-        book = client_for(row["lane"] or "moonshot") if client_for is not None else client
-        try:
-            # A paper bet may be read from the shared market cache; a real one always asks the venue, because a sale is priced from what it reads.
-            with shared_for(book, 0.0 if row["mode"] == "trade" else s.discovery_eval_age, s.discovery_enabled):
-                m = book.market(row["ticker"])
-        except KalshiError as exc:
-            notes.append(f"stop {row['ticker']}: market lookup failed ({exc})")
-            continue
-        if m.get("result") in {"yes", "no"}:
-            continue
-        side = row["side"] or "yes"
-        arm_stop_history(s, row["ticker"], now.timestamp())
-        quoted = flip(m) if side == "no" else m
-        bid = 0.0
-        with contextlib.suppress(TypeError, ValueError):
-            bid = float(quoted.get("yes_bid_dollars") or 0.0)
-        entry = float(row["ask"] or 0.0)
-        why = None
-        fifteen = row["ticker"].split("-")[0].endswith("15M")
-        if profit_on and spec is not None:
-            why = take_profit_hit(entry, bid, spec.take_profit_x, spec.take_profit_at)
-            if not why:
-                why = scalp_sweep_hit(s, spec, row["ticker"], side, entry, bid, float(row["ts"] or 0.0), now.timestamp())
-        if not why and spec is not None and spec.cash_up_minute > 0 and fifteen:
-            why = cash_if_up(entry, bid, 15.0 - hours * 60.0, spec.cash_up_minute, spec.cash_drop)
-        left = hours * 3600.0
-        if not why and spec is not None and spec.cash_left_seconds > 0 and 0 <= left <= spec.cash_left_seconds:
-            why = cash_if_losing(entry, bid, left, spec.cash_left_seconds, _hovering(s, row["ticker"], side, bid, now.timestamp()))
-        if not why and spec is not None and spec.cash_before_minute > 0 and fifteen and row["close_time"]:
-            with contextlib.suppress(TypeError, ValueError):
-                close = datetime.fromisoformat(row["close_time"]).timestamp()
-                opened = 15.0 - (close - float(row["ts"])) / 60.0
-                why = early_cash(
-                    entry, bid, opened, 15.0 - hours * 60.0,
-                    before=spec.cash_before_minute, leave=spec.cash_leave_minute,
-                    hovering=_hovering(s, row["ticker"], side, bid, now.timestamp()),
-                )
-        owned = False
-        loss_on = stop_on and not (socket_covers is not None and socket_covers(row["ticker"], row["lane"] or "moonshot"))
-        if not why and loss_on and spec is not None and left > 0:
-            if spec.watch_loss > 0 and entry > 0 and bid <= entry * (1.0 - spec.watch_loss):
-                owned = True
-                visit = under_line(s, row["ticker"], side, entry * (1.0 - spec.watch_loss), now.timestamp())
-                why = hard_loss(
-                    entry, bid, 0.0 if visit is None else visit[0], spec.watch_loss, spec.watch_loss_seconds,
-                    low=0.0 if visit is None else visit[1], lift=spec.watch_loss_lift,
-                )
-            elif spec.watch_at > 0 and entry > spec.watch_at and bid <= spec.watch_at:
-                owned = True
-                trend = not _not_a_downtrend(s, row["ticker"], side, bid, now.timestamp(), hold_at=None)
-                dipped = below_line_seconds(s, row["ticker"], side, spec.watch_at, now.timestamp())
-                why = watch_trend(
-                    entry, bid, left, 0.0 if dipped is None else dipped, line=spec.watch_at,
-                    ride=spec.watch_ride_seconds, patient_left=spec.watch_patient_left, trend=trend,
-                )
-        if not why and loss_on and not owned:
-            why = stop_loss_hit(entry, bid, hours, s.stop_loss_hours, stop_drop_for(spec, s))
-        if not why:
-            continue
-        if why.startswith("take-profit") and store.working_rest_sell(row["ticker"], s.env) is not None:
-            continue  # a resting sell is working this target: it fills with no taker fee, or not at all; crossing the book here would only pay the fee it exists to avoid
-        if why.startswith("stop-loss") and "(watched)" not in why:
-            # The same calculated wait the socket watcher applies (strategy.stop_wait), measured on the
-            # tape: a backstop that sold mid-dip would rob the watcher of rebounds it is waiting for.
-            # Last 2 minutes: sell only a downtrend that is already under 50c (strategy.price_shape).
-            # A visit under 50c already waited, above.
-            if fifteen and hours * 3600.0 <= 120 and _not_a_downtrend(s, row["ticker"], side, bid, now.timestamp()):
-                continue
-            wait = stop_wait(spec.stop_confirm_seconds if spec is not None else 0.0, hours * 3600.0, fifteen)
-            if wait > 0:
-                dipped = below_line_seconds(s, row["ticker"], side, entry * (1.0 - stop_drop_for(spec, s)), now.timestamp())
-                if dipped is not None and dipped < wait:
-                    continue
-        notes.append(exit_position(s, book, store, row, bid, why, before_order, slip=EXIT_SLIP + (0.03 if why.startswith("stop-loss") else 0.0)))
-    return notes
-
-
-def next_stop_loss_at(s: Settings, store: Store, now: float | None = None) -> float | None:
-    """When to check again. None if nothing is open."""
-    now = time.time() if now is None else now
-    soonest: float | None = None
-    fast = False
-    specs = lane_specs(s)
-    for row in store.open_bets():
-        spec = specs.get(row["lane"] or "moonshot")
-        if spec is not None and takes_profit(spec) and _hours_left(row["close_time"]) is not None:
-            soonest, fast = now, True  # a take-profit bet is checked every minute (the live watcher is faster)
-            continue
-        if (
-            not s.stop_loss_enabled
-            or (spec is not None and not spec.stop_loss)
-            or (row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast)
-        ):
-            continue
-        hours = _hours_left(row["close_time"])
-        if hours is None:
-            continue
-        close_ts = now + hours * 3600
-        window = close_ts - s.stop_loss_hours * 3600
-        soonest = window if soonest is None else min(soonest, window)
-    if soonest is None:
-        return None
-    if soonest <= now:
-        return now + (60.0 if fast else s.stop_loss_check_minutes * 60)
-    return soonest
 
 
 RESOLVE_BATCH = 100  # markets asked for in one request when resolving

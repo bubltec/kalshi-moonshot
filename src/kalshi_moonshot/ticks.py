@@ -364,7 +364,6 @@ def reload_from_tape(s, indexes: Sequence[str], now: float | None = None) -> dic
     """Fill memory from the tape at start-up, in two stages, and say how complete it is.
     Stage 1 (FIRST_STAGE_HOURS of every index, and the last hour of every 15-minute market's quotes) is what the decisions read; buys are released the moment it is in memory. Stage 2, behind it and without holding anything, adds the rest of the 8 hours of index ticks for the readers that look further back (the volatility regime, the daily profile); a reader that wants more than is there yet asks the tape, as it did before the reload existed (ticks.history.window returns None).
     Until 2026-11-14 it was one load of 8 hours (about 700,000 ticks) with everything waiting on it: 74 s and 104 s at the 16:16 and 18:31 restarts. Reports the rows loaded, the seconds each stage took, and the longest hole in the last hour of quotes (a stretch of HOLE_MIN seconds or more in which no 15-minute market quoted: the recorder was down). Never raises: a failed reload still lets the bot trade."""
-    from . import db
 
     began = time.time()
     now = began if now is None else now
@@ -463,15 +462,6 @@ class BookStore:
         yes, no = self.levels(ticker, "yes") or [], self.levels(ticker, "no") or []
         return {"orderbook_fp": {"yes_dollars": [[f"{p:.4f}", f"{c:.2f}"] for p, c in sorted(yes)], "no_dollars": [[f"{p:.4f}", f"{c:.2f}"] for p, c in sorted(no)]}}
 
-    def shares_ahead(self, ticker: str, side: str, price: float) -> tuple[float, float] | None:
-        """For a resting buy of `side` at `price` (that side's own price): (the contracts resting at the same price, the contracts at that price or better), both ahead of an order that joins the level now (price-time priority: better prices trade first, then earlier orders at the same price). None when the market has no book."""
-        levels = self.levels(ticker, side)
-        if levels is None:
-            return None
-        px = round(price, 4)
-        same = sum(c for p, c in levels if abs(p - px) < 1e-9)
-        better = sum(c for p, c in levels if p >= px - 1e-9)
-        return same, better
 
 
 books = BookStore()

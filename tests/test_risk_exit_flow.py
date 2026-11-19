@@ -18,19 +18,13 @@ sides=['yes']
 price=[0.70,0.90]
 hours=[0.0,0.26]
 timed_suffix='15M'
-stop_loss=false
-curve_risk_sell=0.5
 curve_risk_live={live}
 curve_risk_spot_weight=0.0
 curve_risk_history=false
 curve_risk_confirm={confirm}
-curve_risk_stop_hold={hold}
-curve_risk_max_loss={max_loss}
 curve_take={take}
 curve_take_slope_share={share}
 curve_take_cushion={cushion}
-stretch_max={stretch}
-squeeze_max={squeeze}
 """
 
 
@@ -64,9 +58,9 @@ class Client:
         return {"fill_count": got, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
 
 
-def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false', nudge_hour='false', nudge_units=0, long_scales='', extra=''):
+def held(tmp_path, monkeypatch, live, client=None, reason=None, confirm=-1, hold=0, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false', nudge_hour='false', long_scales='', extra=''):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion) + f"nudge_hour_factor={nudge_hour}\nnudge_units={nudge_units}\n" + (f"curve_risk_long_scales={long_scales}\n" if long_scales else "") + (extra + "\n" if extra else ""))
+    (tmp_path / "strategies.toml").write_text(LANE.format(live="true" if live else "false", confirm=confirm, hold=hold, take=take, stretch=stretch, share=share, squeeze=squeeze, max_loss=max_loss, cushion=cushion) + (f"curve_risk_long_scales={long_scales}\n" if long_scales else "") + ("" if "sell_chain" in extra else "sell_chain=['never_ahead','under_even','profit_take','trail','long_hold']\n") + (extra + "\n" if extra else ""))
     s = config.load()
     store = Store(s.db_path)
     store.db.execute(
@@ -99,7 +93,7 @@ PATH = [0.77, 0.74, 0.72, 0.70, 0.68, 0.66, 0.64, 0.62, 0.60, 0.56]
 def test_a_lane_with_only_the_risk_exit_gets_a_watched_position_with_the_exit_armed(tmp_path, monkeypatch):
     w = held(tmp_path, monkeypatch, live=True)
     t = w.targets.get((TICKER, "risk_only"))
-    assert t is not None and t.risk_sell == 0.5 and t.risk_live and t.risk_spot_weight == 0.0 and t.close_ts > 0
+    assert t is not None and t.sell_chain and t.risk_live and t.risk_spot_weight == 0.0 and t.close_ts > 0
 
 
 def test_in_shadow_it_sells_nothing(tmp_path, monkeypatch):
@@ -110,7 +104,7 @@ def test_in_shadow_it_sells_nothing(tmp_path, monkeypatch):
 
 
 def test_the_lanes_that_trade_live_are_all_watched(tmp_path, monkeypatch):
-    """Guards the live config itself: every lane in LIVE_LANES must be one the watcher tracks (takes_profit), or it has no exits at all (the 09:45 break). Reads the Mac's lane file and .env as text only, with settings from a scratch data dir."""
+    """Guards the live config itself: every lane in LIVE_LANES must be one the watcher tracks (an exit module), or it has no exits at all (the 09:45 break). Reads the Mac's lane file and .env as text only, with settings from a scratch data dir."""
     root = Path(__file__).resolve().parents[1]
     toml, env = root / "data" / "strategies.toml", root / ".env"
     if not toml.exists() or not env.exists():
@@ -121,7 +115,7 @@ def test_the_lanes_that_trade_live_are_all_watched(tmp_path, monkeypatch):
         pytest.skip("LIVE_LANES is blank")
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     specs = lanes.lane_specs_from(config.load(), toml.read_text())
-    unwatched = [n for n in names if n in specs and not lanes.takes_profit(specs[n])]
+    unwatched = [n for n in names if n in specs and not specs[n].sell_chain]
     assert unwatched == [], f"live lanes with no watched exit: {unwatched}"
 
 
@@ -349,15 +343,6 @@ def test_integration_a_dip_that_recovers_inside_the_wait_does_not_sell_and_the_c
         assert signals(w) == []
 
 
-def test_unit_the_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    for hold in (0, 0.5):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=hold, take='false', stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false'))
-        s = config.load()
-        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
-        assert ("curve_risk_stop_hold" in got) is (hold > 0)
-
-
 # ---- helpers: a market's own quote history, and a bid that sits ----
 @pytest.fixture(autouse=True)
 def _clean_mids():
@@ -496,15 +481,6 @@ def test_integration_the_take_sale_is_executed_as_an_order(tmp_path, monkeypatch
     assert len(Store(config.load().db_path).open_bets()) == 0
 
 
-def test_unit_the_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    for take in ("false", "true"):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take=take, stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false'))
-        s = config.load()
-        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
-        assert ("curve_take" in got) is (take == "true")
-
-
 # ---- the stretch is for buys only (2026-11-14, user: "I only want the stretch for buying") ----
 def test_integration_a_lane_with_the_stretch_set_does_not_sell_a_near_miss_of_the_takes_bar(tmp_path, monkeypatch):
     feed_history(0.013, from_left=1300, to_left=480)  # a swinging market: the removed stretch sale would have fired here
@@ -605,18 +581,6 @@ def test_integration_the_hour_view_still_holds_a_squeezed_sale(tmp_path, monkeyp
     assert slid(w, TO_59, 120) is None
 
 
-def test_unit_the_squeeze_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    for squeeze in (0, 0.02):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="false", stretch=0, share=0.015, squeeze=squeeze, max_loss=0.5, cushion='false'))
-        s = config.load()
-        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
-        assert ("squeeze_max" in got) is (squeeze > 0)
-
-
-
-
-
 # ---- the late cap on the profit take's bar (2026-11-14, user, on a SOL NO back at 0.96 with 30 s left that lost at the bell: "Yes we should have cashed that out") ----
 def late_recovery(w):
     """With two minutes left the bet sits just in profit, climbs toward 0.96 and sits there (79% of its room made, 0.04 left to win); returns the first sale signal, on the way up or at the top."""
@@ -705,15 +669,6 @@ def test_integration_the_cushion_only_holds_the_profit_take_not_the_stop(tmp_pat
     seed_spot(monkeypatch, 0.008)
     w = held(tmp_path, monkeypatch, live=True, take="true", cushion="true", hold=0)
     assert [s for s in (slide(w) or []) if "profit take" in s.why] == []  # a loss is no profit take, so the check never applies to it
-
-
-def test_unit_the_cushion_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
-    for cushion in ("false", "true"):
-        monkeypatch.setenv("DATA_DIR", str(tmp_path))
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=-1, hold=0, take="true", stretch=0, share=0.08, squeeze=0, max_loss=0.5, cushion=cushion))
-        s = config.load()
-        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
-        assert ("curve_take_cushion" in got) is (cushion == "true")
 
 
 def test_integration_in_a_swinging_market_a_steady_small_climb_is_still_a_slope(tmp_path, monkeypatch):
@@ -865,14 +820,14 @@ def hour_fit(monkeypatch, k):
 # ---- no fixed cap: the squeeze's allowed miss is the market's own typical minute times how strongly everything agrees (2026-11-15, user: "remove the cap, it needs to hold its own logically. Maybe the high nudge is a good indication") ----
 def test_integration_without_a_cap_a_near_miss_that_is_not_sliding_still_waits(tmp_path, monkeypatch):
     feed_history(0.013, from_left=1300, to_left=121)
-    w = held(tmp_path, monkeypatch, live=True, squeeze=0, nudge_units=1.0, **NO_HOLDS)
+    w = held(tmp_path, monkeypatch, live=True, squeeze=0, **NO_HOLDS)
     assert slid(w, SIT + [0.59] + [0.70] * 14, 120) is None  # the history share is zero: nothing is allowed
 
 
 def test_integration_without_a_cap_the_clock_still_shrinks_it_early_in_the_market(tmp_path, monkeypatch):
     (tmp_path / "early").mkdir()
     feed_history(0.013, from_left=1300, to_left=671)
-    early = slid(held(tmp_path / "early", monkeypatch, live=True, squeeze=0, nudge_units=1.0, **NO_HOLDS), [0.78] * 60 + TO_60[len(SIT):] + [0.60] * 30, 670)
+    early = slid(held(tmp_path / "early", monkeypatch, live=True, squeeze=0, **NO_HOLDS), [0.78] * 60 + TO_60[len(SIT):] + [0.60] * 30, 670)
     assert early is None  # ten minutes left: the clock share is near zero, so is the nudge
 
 
@@ -927,16 +882,6 @@ def test_integration_a_bid_of_0_92_is_sold_early_and_held_late_with_the_late_hol
     assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
 
 
-def test_unit_the_sure_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false'))
-    s = config.load()
-    assert "curve_take_sure" not in lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
-    (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + "curve_take_sure=0.95\n")
-    s = config.load()
-    assert lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)["curve_take_sure"] == "0.95"
-
-
 # ---- an early 0.95 is cashed, the sure hold starts after six minutes (2026-11-15 night, user: "if it ever hits 95 and we haven't passed 6 mins we should take and let the rebuy kick in") ----
 def test_integration_a_bid_of_0_96_in_the_first_six_minutes_is_taken_even_while_it_is_still_climbing(tmp_path, monkeypatch):
     (tmp_path / "plain").mkdir()
@@ -954,17 +899,6 @@ def test_integration_after_six_minutes_the_same_bid_is_a_sure_win_and_is_held(tm
     w = held(tmp_path, monkeypatch, live=True, take="true", extra="curve_take_early_bid=0.95\ncurve_take_sure=0.95")
     climb(w, 0.82, 0.96, 450)  # 450 s gone: past the first six minutes
     assert level(w, 0.96, 450) is None
-
-
-def test_unit_the_early_take_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    base = LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false')
-    (tmp_path / "strategies.toml").write_text(base)
-    s = config.load()
-    assert "curve_take_early_bid" not in lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
-    (tmp_path / "strategies.toml").write_text(base + "curve_take_early_bid=0.95\n")
-    s = config.load()
-    assert lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)["curve_take_early_seconds"] == "360.0"
 
 
 def test_integration_a_dip_after_a_sure_win_does_not_sell_it_the_hold_is_a_latch_not_a_line(tmp_path, monkeypatch):
@@ -1005,39 +939,6 @@ def test_integration_a_held_sure_win_leaves_a_stored_row_so_its_effect_can_be_sc
     assert level(w, 0.96, 450) is None
     rows = held_rows(tmp_path)
     assert rows and any(r["held"].startswith("sure hold: ") for r in rows)
-
-
-# The early hold (2026-11-16, user, on DOGE 09:30 YES bought at 0.59, sold by the max-loss stop at 0.36 with 507 s left, which then won: "we still have a problem with selling early ... before 5 mins remaining it doesn't usually matter"; "Go live with it"):
-# while more than the lane's share of the market is still to run, a loss is not sold, and a bet held this way is held to settlement. studies/results/2026-11-16-stop-early-latch-replay.txt.
-def test_unit_the_early_hold_is_a_share_of_the_market_still_to_run():
-    assert curverisk.early_hold(507.0, 900.0, 0.53)  # DOGE: 507 s left is over 477
-    assert not curverisk.early_hold(470.0, 900.0, 0.53)
-    assert not curverisk.early_hold(880.0, 900.0, 0.0)  # off
-
-
-def test_integration_a_bet_held_early_is_held_to_settlement_even_when_it_falls_further(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
-    assert sold_after(w, 0.55, 600, limit=20) is None  # the 10 s wait runs out and the sale is held instead
-    assert sold_after(w, 0.30, 300, limit=120) is None  # five minutes left and deeper: the hold stays (what the replay scored)
-    assert sold_after(w, 0.20, 60, limit=40) is None
-
-
-def test_unit_the_early_hold_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
-    import dataclasses
-
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
-    assert "curve_risk_early_hold" not in lanes.settings_of(base, s)
-    assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, curve_risk_early_hold=0.53), s)
-
-
-def test_integration_the_long_layer_holding_an_early_sale_does_not_switch_the_stop_off(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, confirm=0.4, hold=0.5, extra="curve_risk_early_hold=0.53")
-    seed_perp(monkeypatch, 1.004)  # the perp is over its open: the long layer holds the sale
-    assert sold_after(w, 0.55, 600, limit=30) is None
-    t = w.targets.get((TICKER, "risk_only"))
-    assert t is not None and not t.risk_early_off  # held by the long layer, not by the early hold: no latch
 
 
 # ---- the profit take's trail (2026-11-16, user, on KXXRP15M-26NOV161745 NO bought at 0.60, up to 0.80 with five minutes left, short of the take's bar, sold at 0.25: "we should be tracking every market that we buy with a trail") ----
@@ -1134,15 +1035,6 @@ def test_integration_the_trail_sale_is_executed_as_a_profit_sale_and_the_bet_clo
     assert len(Store(config.load().db_path).open_bets()) == 0
 
 
-def test_unit_the_trail_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    for extra in ("", "curve_take_trail=1.0\n"):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + extra)
-        s = config.load()
-        got = lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)
-        assert ("curve_take_trail" in got) is bool(extra) and ("curve_take_trail_live" in got) is bool(extra)
-
-
 # ---- the slow drop check, shadow only (2026-11-16, user: "we do need to get another stop in, maybe like some kind of drop check: trend away from position for X amount of time by Y factor of the spot we bought at"; "Yes, shadow it") ----
 # the fixture bet again: YES at 0.81 on a market whose spot index (BRTI) is armed against the strike 100.0. The bid stays at 0.70 throughout, over the line and inside the max loss, so the risk exit itself wants nothing.
 DROP = "would sell (slow drop)"
@@ -1193,33 +1085,6 @@ def drop_rows(tmp_path):
     return [x for x in (json.loads(line) for line in f.read_text().splitlines()) if x.get("kind") == "drop"] if f.exists() else []
 
 
-def test_unit_the_drop_is_a_fall_from_the_high_of_the_look_back_with_the_chance_under_half():
-    hist = [(0.0, 2.0), (50.0, 3.0), (100.0, 1.2), (150.0, -0.4)]
-    assert curverisk.drop_fall(hist, 150.0, 120.0) == pytest.approx(3.4)  # the high inside the look back is 3.0
-    assert curverisk.drop_fall(hist, 150.0, 60.0) == pytest.approx(1.6)  # a shorter look back no longer sees it
-    assert curverisk.drop_fall([], 150.0, 60.0) is None and curverisk.drop_fall(hist, 150.0, 0.0) is None
-    assert curverisk.slow_drop(1.6, 0.40, 1.0)
-    assert not curverisk.slow_drop(0.9, 0.40, 1.0)  # under the lane's units
-    assert not curverisk.slow_drop(1.6, 0.55, 1.0)  # the spot is still on the bet's side
-    assert not curverisk.slow_drop(None, 0.40, 1.0) and not curverisk.slow_drop(1.6, 0.40, 0.0)  # no reading; off
-
-
-def test_integration_a_spot_that_slides_across_the_target_and_keeps_going_is_logged_once_and_nothing_sells(tmp_path, monkeypatch, caplog):
-    import logging
-
-    path = spot_path(monkeypatch, sliding)
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_drop=1.0")
-    t = w.targets[(TICKER, "risk_only")]
-    assert t.shock_index == "BRTI" and t.shock_ref == 100.0 and t.risk_drop_units == 1.0 and t.risk_drop_share == 0.25
-    with caplog.at_level(logging.INFO):
-        assert walk(w, path) == []  # shadow: it never raises a sale
-    assert sum(1 for r in caplog.records if DROP in r.getMessage()) == 1
-    rows = drop_rows(tmp_path)
-    assert len(rows) == 1 and rows[0]["live"] is False and rows[0]["bid"] == 0.70
-    assert 300 < rows[0]["left"] < 345  # across the strike from about 430 s left; the fall has to last a quarter of the time left before it counts
-    assert rows[0]["wait"] == pytest.approx(0.25 * rows[0]["left"], abs=0.5)
-
-
 def test_integration_the_drop_check_is_off_by_default(tmp_path, monkeypatch, caplog):
     import logging
 
@@ -1228,46 +1093,6 @@ def test_integration_the_drop_check_is_off_by_default(tmp_path, monkeypatch, cap
     with caplog.at_level(logging.INFO):
         assert walk(w, path) == []
     assert not any(DROP in r.getMessage() for r in caplog.records) and drop_rows(tmp_path) == []
-
-
-def test_integration_a_dip_under_the_target_that_comes_back_is_not_logged(tmp_path, monkeypatch, caplog):
-    import logging
-
-    path = spot_path(monkeypatch, dipping)
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_drop=1.0")
-    with caplog.at_level(logging.INFO):
-        assert walk(w, path) == []
-    assert not any(DROP in r.getMessage() for r in caplog.records) and drop_rows(tmp_path) == []
-
-
-def test_integration_a_slide_that_stays_on_the_bets_side_of_the_target_is_not_logged(tmp_path, monkeypatch, caplog):
-    import logging
-
-    path = spot_path(monkeypatch, far_over)
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_drop=1.0")
-    with caplog.at_level(logging.INFO):
-        assert walk(w, path) == []
-    assert not any(DROP in r.getMessage() for r in caplog.records) and drop_rows(tmp_path) == []
-
-
-def test_unit_the_drop_check_is_shadow_so_it_never_changes_a_lanes_version(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    seen = []
-    for extra in ("", "curve_risk_drop=1.0\ncurve_risk_drop_share=0.25\n"):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + extra)
-        s = config.load()
-        spec = lanes.lane_specs(s)["risk_only"]
-        seen.append(lanes.settings_of(spec, s))
-        assert spec.curve_risk_drop == (1.0 if extra else 0.0)
-    assert seen[0] == seen[1]
-
-
-# The risk exit on the risk score (lane field curve_risk_score; 2026-11-16, user: "all these factors need to build towards that risk score").
-def test_integration_a_bet_on_the_score_exit_gets_its_sale_line_from_the_price_paid(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_score=true")
-    assert all(t.risk_sell == pytest.approx(0.5 * t.entry) and t.risk_sell < 0.5 for t in w.targets.values())  # bought at about 0.79 on a lane with a 0.5 line: half the price paid is the lower
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0)
-    assert all(t.risk_sell == 0.5 for t in w.targets.values())  # without the score exit the lane's line stands
 
 
 # ---- the never-ahead sale (2026-11-17, user: "Ok so 'never profitable and 90s left.' Let's add that to the live lanes") ----
@@ -1356,14 +1181,6 @@ def test_integration_the_never_ahead_sale_is_an_order_at_a_loss_and_the_bet_clos
     assert job.why.startswith(NEVER)
     w._sell(*job)
     assert len(c.sold) == 1 and len(Store(config.load().db_path).open_bets()) == 0
-
-
-def test_unit_the_never_ahead_sale_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    for extra in ("", "curve_risk_never_ahead=90\n"):
-        (tmp_path / "strategies.toml").write_text(LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false') + extra)
-        s = config.load()
-        assert ("curve_risk_never_ahead" in lanes.settings_of(lanes.lane_specs(s)["risk_only"], s)) is bool(extra)
 
 
 # ---- the under-even sale (2026-11-17, user, after platinum 09:30, Brent 10:00 and copper 10:15 were each bought near 0.90 and went to zero: "just had 3 zeros in the last hour. we need to fix this") ----
@@ -1485,16 +1302,3 @@ def test_integration_in_the_90s_with_minutes_left_it_sells_and_near_the_close_it
     assert climb(w2, 0.82, 0.95, 85) is None
     assert level(w2, 0.95, 85) is None  # 85 s left, the bar is under 0.93: held to settlement
 
-
-def test_unit_the_slide_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    base = LANE.format(live="true", confirm=0.4, hold=0, take="true", stretch=0, share=0.015, squeeze=0, max_loss=0.5, cushion='false')
-    (tmp_path / "strategies.toml").write_text(base)
-    s = config.load()
-    v0 = lanes.version_of(lanes.lane_specs(s)["risk_only"], s)
-    (tmp_path / "strategies.toml").write_text(base + "curve_take_sure_slide=-1\n")
-    s = config.load()
-    assert lanes.version_of(lanes.lane_specs(s)["risk_only"], s) == v0
-    (tmp_path / "strategies.toml").write_text(base + "curve_take_sure_slide=0.333\n")
-    s = config.load()
-    assert lanes.version_of(lanes.lane_specs(s)["risk_only"], s) != v0

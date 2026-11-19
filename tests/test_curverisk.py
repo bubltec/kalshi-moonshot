@@ -1,7 +1,6 @@
 import pytest
 """The single risk exit (curverisk.py, 2026-11-13, user): the worse of the price cushion and the spot cushion, widened by the hour's jumps, sold within a max loss or min profit, with a wait that scales with the time left."""
 
-import json
 import math
 import random
 import tempfile
@@ -48,36 +47,11 @@ def test_history_factor_is_one_for_an_even_hour_and_larger_when_the_hour_is_bunc
     assert curverisk.history_factor(list(map(float, range(3700))), [100.0] * 3700, 3699.0) == 1.0  # flat: nothing to read
 
 
-def test_a_sale_needs_high_risk_and_a_loss_or_a_profit_that_shrinks_with_the_risk():
-    assert curverisk.sale_ok(0.40, 0.50, -0.20, 0.05)  # a small loss
-    assert curverisk.sale_ok(0.40, 0.50, -0.70, 0.05)  # a deep one is cut too
-    assert curverisk.sale_ok(0.40, 0.50, 0.10, 0.05)  # a profit
-    assert not curverisk.sale_ok(0.60, 0.50, -0.20, 0.05)  # risk is low: hold
-    assert not curverisk.sale_ok(0.45, 0.50, 0.01, 0.10)  # asked 0.10 * 0.45 = 0.045, got 0.01
-    assert curverisk.sale_ok(0.10, 0.50, 0.02, 0.10)  # at q 0.10 the ask is 0.01: taken
-    assert not curverisk.sale_ok(0.10, -1.0, -0.1, 0.05)  # off
-
-
-def test_the_loss_we_carry_shrinks_with_the_risk():
-    assert not curverisk.stopped(-0.30, 0.9, 0.5)  # q 0.9: limit 45%
-    assert curverisk.stopped(-0.46, 0.9, 0.5)
-    assert curverisk.stopped(-0.30, 0.5, 0.5)  # q 0.5: limit 25%
-    assert not curverisk.stopped(-0.20, 0.5, 0.5) and not curverisk.stopped(-0.99, 0.5, 0.0)
-
-
-def test_the_wait_scales_with_the_time_left_and_how_far_under_the_line():
-    assert curverisk.wait(0.45, 0.5, 600.0, 40.0, 0.25) == 40.0 * (1 - 0.1)  # just under the line: nearly the whole recovery time
-    assert curverisk.wait(0.25, 0.5, 600.0, 40.0, 0.25) == 20.0  # half way to zero: half
-    assert curverisk.wait(0.0, 0.5, 600.0, 40.0, 0.25) == 0.0
-    assert curverisk.wait(0.45, 0.5, 60.0, 40.0, 0.25) == 15.0  # a quarter of the time left caps it: 60 s left cannot wait 36 s
-    assert curverisk.wait(0.45, 0.5, 20.0, 40.0, 0.25) == 5.0
-
-
 CLOSE = 9_900.0
 
 
 def target(**kw):
-    base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180", curve_wait_share=0.25, curve_wait_default=15.0,
+    base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180",
                 risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_early_hold=0.0, risk_early_off=False, risk_min_profit=0.01, risk_stop_hold=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_squeeze=0.0, risk_unit=None, risk_unit_at=0.0, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
     base.setdefault("risk_held_kind", "")
     base.setdefault("risk_nudge_units", 0.0)
@@ -106,47 +80,6 @@ def run(monkeypatch, t, bid, p, seconds=30, left0=100.0, tmp=None):
         if out:
             return i, out, logged
     return None, None, logged
-
-
-def test_the_hours_history_is_read_from_the_kalshi_perp_not_the_spot_feed(monkeypatch):
-    assert watcher.perp_index("KXWTI15M") == "KP_WTI" and watcher.perp_index("KXBTC15M") == "KP_BTC" and watcher.perp_index("KXBTCD") is None and watcher.perp_index("KXNOPE15M") is None
-    rng = random.Random(3)
-    sts, svs = ticks(3700, rng, spike_every=300)
-    spiky = ([x + 6100.0 for x in sts], svs)  # the last tick lands just before now = 9,800
-    asked = []
-
-    def window(index, a, b):
-        asked.append(index)
-        return spiky if index == "KP_WTI" else ([0.0], [1.0])
-
-    monkeypatch.setattr(watcher.ticks_mod.history, "window", window)
-    monkeypatch.setattr(curvevalue, "read", lambda *a, **k: curvevalue.Curve(0.85, 0.0, 1e-4, 1e-4))
-    monkeypatch.setattr(watcher.variants, "comeback_stats", lambda *a, **k: None)
-    monkeypatch.setattr(watcher.log, "info", lambda *a, **k: None)
-    t = target(risk_history=True, risk_live=True)
-    me = SimpleNamespace()
-    me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
-    me._risk_record = lambda *a, **k: watcher.ProfitWatcher._risk_record(me, *a, **k)
-    me._risk_held = lambda *a: watcher.ProfitWatcher._risk_held(me, *a)
-    me._risk_long = lambda *a: watcher.ProfitWatcher._risk_long(me, *a)
-    me.get_settings = lambda: SimpleNamespace(data_dir=Path(tempfile.mkdtemp()))
-    watcher.ProfitWatcher._risk_hit(me, t, 0.80, CLOSE - 100.0, CLOSE - 100.0)
-    assert "KP_WTI" in asked and t.risk_hist > 1.5
-
-
-def test_the_spot_path_leaves_a_price_only_lane_alone_and_the_quote_path_a_spot_lane(monkeypatch):
-    me = SimpleNamespace()
-    assert watcher.ProfitWatcher._risk_hit(me, target(risk_spot_weight=0.0, risk_live=True), 0.30, CLOSE - 100.0, CLOSE - 100.0) is None
-    assert watcher.ProfitWatcher._risk_quote_hit(me, target(risk_spot_weight=0.5, risk_live=True), 0.30, CLOSE - 100.0) is None
-
-
-def test_a_lane_with_only_the_risk_exit_still_gets_a_watched_position():
-    from kalshi_moonshot import lanes
-
-    def spec(**kw):
-        return lanes.LaneSpec("x", "ladder", "x", (0.70, 0.97), (0, 1), 0.05, 0.0, **kw)
-
-    assert lanes.takes_profit(spec(curve_risk_sell=0.5)) and not lanes.takes_profit(spec())
 
 
 def test_long_chance_reads_the_cushion_against_the_hours_own_movement():
@@ -263,14 +196,6 @@ def test_unit_still_falling_is_a_slide_that_has_lasted_not_one_bad_print():
     assert curverisk.still_falling(slide, 10.0, 0.0, 0.10) is False
 
 
-def test_unit_stop_miss_is_zero_at_the_stop_and_positive_short_of_it():
-    # cost 0.80, max loss 0.5 x q: the stop is where net - 0.80 = -0.5 * net * 0.80, a net bid of 0.571
-    assert curverisk.stop_miss(0.5714, 0.80, 0.5714, 0.5) == pytest.approx(0.0, abs=1e-3)
-    assert curverisk.stop_miss(0.60, 0.80, 0.60, 0.5) == pytest.approx(0.04)
-    assert curverisk.stop_miss(0.50, 0.80, 0.50, 0.5) < 0
-    assert (curverisk.stop_miss(0.56, 0.80, 0.56, 0.5) <= 0) is curverisk.stopped((0.56 - 0.80) / 0.80, 0.56, 0.5)
-
-
 # ---- the late cap on the profit take's bar (2026-11-14, user, on a SOL NO back at 0.96 with 30 s left that lost at the bell: "Yes we should have cashed that out") ----
 def test_unit_late_in_a_swinging_market_the_bar_is_half_the_room_once_more_is_made_than_is_left():
     # the SOL bet: room 0.20, 0.157 made, 30 s left, a typical minute of 0.15 (a swing of 0.106 over 30 s against 0.043 left to win)
@@ -293,38 +218,6 @@ def test_unit_early_the_clocks_bar_is_already_lower_and_nothing_changes():
     for unit in (None, 0.01, 0.15):
         assert curverisk.take_bar(0.05, 0.20, 800, 900, unit) == pytest.approx(0.20 * (1 - 800 / 900))
     assert curverisk.take_bar(0.05, 0.0, 800, 900, 0.15) == float("inf")
-
-
-# ---- the stop's wait: capped by the market's recovery time, shorter with depth, scaled by the time left (2026-11-14) ----
-def test_unit_stop_wait_is_the_recovery_time_cut_by_depth_and_by_the_clock():
-    assert curverisk.stop_wait(0.60, 0.5, 900, 40.0, 0.5) == pytest.approx(40.0)  # over the line at the open: the whole recovery time
-    assert curverisk.stop_wait(0.60, 0.5, 450, 40.0, 0.5) == pytest.approx(20.0)  # half the market gone: half the patience
-    assert curverisk.stop_wait(0.25, 0.5, 450, 40.0, 0.5) == pytest.approx(10.0)  # and half way from the line to nothing: half again
-    assert curverisk.stop_wait(0.0, 0.5, 450, 40.0, 0.5) == 0.0  # priced at nothing: no wait
-    assert curverisk.stop_wait(0.44, 0.5, 215, 40.0, 0.5) == pytest.approx(40.0 * 0.88 * 215 / 900)  # the ZEC bet at 18:41:25: about 8 s; it was 107 s
-
-
-def test_unit_stop_wait_never_exceeds_the_lanes_share_of_the_time_left_and_zero_is_at_once():
-    assert curverisk.stop_wait(0.60, 0.5, 450, 400.0, 0.5) == pytest.approx(200.0)  # a market whose falls take long to come back: capped at... its own clock-scaled time, here 200 s
-    assert curverisk.stop_wait(0.60, 0.5, 450, 4000.0, 0.5) == pytest.approx(225.0)  # and never over half the time left
-    assert curverisk.stop_wait(0.60, 0.5, 450, 40.0, 0.0) == 0.0  # the lane has no wait: the stop sells at once
-    assert curverisk.stop_wait(0.60, 0.5, 0, 40.0, 0.5) == 0.0
-    assert curverisk.stop_wait(0.60, 0.0, 450, 40.0, 0.5) == pytest.approx(20.0)  # a lane with no line: no depth to read, the clock still applies
-
-
-def test_unit_the_squeeze_clock_is_nothing_in_the_first_half_of_a_market():
-    # 2026-11-14 (user: "squeeze shouldn't even apply at 6 minutes in"): none until the market is half gone, then rising to all of it at the close
-    assert curverisk.squeeze_clock(900.0) == 0.0
-    assert curverisk.squeeze_clock(540.0) == 0.0  # six minutes in: it was 0.4 of the cap before
-    assert curverisk.squeeze_clock(450.0) == 0.0  # the half way point
-    assert abs(curverisk.squeeze_clock(300.0) - 1.0 / 3.0) < 1e-9
-    assert abs(curverisk.squeeze_clock(120.0) - (2.0 * (1.0 - 120.0 / 900.0) - 1.0)) < 1e-9
-    assert curverisk.squeeze_clock(0.0) == 1.0
-    assert curverisk.squeeze_clock(-5.0) == 1.0 and curverisk.squeeze_clock(500.0, 0.0) == 0.0
-    from kalshi_moonshot.lanes import nudge
-
-    assert nudge(0.02, 1.0, curverisk.squeeze_clock(540.0)) == 0.0  # six minutes in the nudge does not exist
-    assert nudge(0.02, 1.0, curverisk.squeeze_clock(120.0)) > 0.014  # with two minutes left it is about three quarters of the cap
 
 
 def test_unit_the_hour_views_hold_fades_over_the_last_fifth_of_the_market():

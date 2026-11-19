@@ -4,9 +4,9 @@ import time
 
 import pytest
 
-from kalshi_moonshot import curverisk, lanes, runner, ticks
+from kalshi_moonshot import curverisk, runner, ticks
 from kalshi_moonshot.watcher import perp_index
-from tests.test_flip_rule import decide, seed
+from tests.entry_helpers_flip import seed
 
 STEP = curverisk.TREND_STEP
 
@@ -108,96 +108,3 @@ def setup(level, after=lambda k: 0.5):
     perp(now, opened, after)
     return now
 
-
-def test_integration_shadow_a_risk_that_improved_is_tagged_would_buy_and_the_bet_goes_in(tmp_path, monkeypatch):
-    now = setup(RISING)
-    out = decide(tmp_path, monkeypatch, now, SHADOW)
-    assert out.action == "bet" and "[risk trend +" in out.note and "over 150s: would buy]" in out.note  # a quarter of the 600 s left
-
-
-def test_integration_shadow_a_risk_that_worsened_is_tagged_would_not_buy_and_nothing_is_gated(tmp_path, monkeypatch):
-    now = setup(FALLING)
-    out = decide(tmp_path, monkeypatch, now, SHADOW)
-    assert out.action == "bet" and "[risk trend -" in out.note and "would not buy]" in out.note
-
-
-def test_integration_shadow_carries_the_old_price_trend_reading_beside_it(tmp_path, monkeypatch):
-    now = setup(RISING)
-    out = decide(tmp_path, monkeypatch, now, SHADOW + "\nentry_trend_seconds=15\nentry_trend_z=0.0")
-    assert "[risk trend +" in out.note and "| price trend " in out.note
-
-
-def test_integration_shadow_changes_no_decision(tmp_path, monkeypatch):
-    for level in (RISING, FALLING):
-        now = setup(level)
-        with_it = decide(tmp_path, monkeypatch, now, SHADOW + "\nentry_trend_seconds=15\nentry_trend_z=0.0")
-        without = decide(tmp_path, monkeypatch, now, "entry_trend_seconds=15\nentry_trend_z=0.0")
-        assert with_it.action == without.action
-
-
-def test_integration_the_long_layer_alone_can_worsen_the_risk_while_the_price_is_flat(tmp_path, monkeypatch):
-    now = setup(FLAT, after=lambda k: 0.0 if k < 150 else -0.004 * (k - 150))  # the perp falls 0.6% through its open over the look back; Kalshi's price has not moved
-    out = decide(tmp_path, monkeypatch, now, SHADOW)
-    assert "[risk trend -" in out.note and "would not buy]" in out.note
-    runner._risk_marks.clear()
-    now = setup(FLAT)  # the same flat price with the perp well over its open: the risk is the price, and it held
-    assert "would not buy" not in decide(tmp_path, monkeypatch, now, SHADOW).note
-
-
-def test_integration_the_other_side_reads_the_mirror(tmp_path, monkeypatch):
-    now = setup(FALLING, after=lambda k: -0.5)  # YES falling, the perp under its open: NO's risk is improving
-    out = decide(tmp_path, monkeypatch, now, SHADOW, side="no")
-    assert "[risk trend +" in out.note and "would buy]" in out.note
-
-
-def test_integration_live_a_worsening_risk_is_not_bought_and_the_note_says_why(tmp_path, monkeypatch):
-    now = setup(FALLING)
-    out = decide(tmp_path, monkeypatch, now, LIVE)
-    assert out.action == "pass" and "risk worsening" in out.note and "150s" in out.note
-
-
-def test_integration_live_an_improving_risk_is_bought_and_the_old_check_no_longer_decides(tmp_path, monkeypatch):
-    now = setup(RISING)
-    old_alone = decide(tmp_path, monkeypatch, now, "entry_trend_seconds=15\nentry_trend_z=0.0")
-    assert old_alone.action == "pass" and "no reference" in old_alone.note  # the old check has no tape here and refuses
-    out = decide(tmp_path, monkeypatch, now, LIVE + "\nentry_trend_seconds=15\nentry_trend_z=0.0")
-    assert out.action == "bet" and "[risk trend +" in out.note and "would" not in out.note
-
-
-def test_integration_a_market_too_young_to_read_is_tagged_unreadable_and_live_does_not_buy_it(tmp_path, monkeypatch):
-    now = time.time()
-    opened = now - 100.0
-    seed(quotes(now, opened, RISING))
-    perp(now, opened, lambda k: 0.5)
-    shadow = decide(tmp_path, monkeypatch, now, SHADOW, left=800.0)
-    assert shadow.action == "bet" and "[risk trend unreadable]" in shadow.note
-    live = decide(tmp_path, monkeypatch, now, LIVE, left=800.0)
-    assert live.action == "pass" and "no risk trend reading" in live.note
-
-
-def test_integration_no_long_layer_means_no_reading(tmp_path, monkeypatch):
-    now = setup(RISING)
-    ticks.history.clear()
-    assert "[risk trend unreadable]" in decide(tmp_path, monkeypatch, now, SHADOW).note
-
-
-def test_integration_live_an_anomaly_sits_out(tmp_path, monkeypatch):
-    now = setup(RISING)
-    runner._risk_seen["KXBTC15M"] = runner.deque((now - 10.0, -0.2 + 0.004 * k) for k in range(101))  # the hour's readings ran from -0.2 to +0.2
-    out = decide(tmp_path, monkeypatch, now, LIVE)
-    assert out.action == "pass" and "risk trend anomaly" in out.note
-
-
-def test_the_lane_version_changes_only_when_the_gate_is_live(tmp_path, monkeypatch):
-    from kalshi_moonshot import config
-    from tests.test_flip_rule import LANE
-
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-
-    def version(extra):
-        (tmp_path / "strategies.toml").write_text(LANE.format(extra=extra))
-        s = config.load()
-        return lanes.settings_of(lanes.spec_for(s, "fl"), s)
-
-    assert version(SHADOW) == version("")  # shadow changes nothing the lane does
-    assert version(LIVE) != version("")

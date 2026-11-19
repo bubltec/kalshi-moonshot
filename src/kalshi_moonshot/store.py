@@ -1041,36 +1041,9 @@ class Store:
     # Placed as an orders row with side='rest' and fill_count 0 (it holds nothing yet); each fill is booked as an
     # ordinary side='sell' row under the same order_id. Retiring one (cancelled, or given up on) zeroes its count.
 
-    @remembers('orders')
-    def rest_sell(self, ticker: str, env: str) -> db.Row | None:
-        """The latest resting sell placed on this ticker, working or not."""
-        return self.db.execute(
-            "SELECT * FROM orders WHERE ticker=? AND env=? AND side='rest' ORDER BY id DESC LIMIT 1", (ticker, env)
-        ).fetchone()
 
-    @remembers('orders')
-    def booked_rest_sell(self, order_id: str) -> tuple[float, float]:
-        """Contracts of a resting sell already booked as sold, and their average fill price."""
-        row = self.db.execute(
-            "SELECT COALESCE(SUM(fill_count), 0) AS n, COALESCE(SUM(price * fill_count), 0) AS pv FROM orders WHERE order_id=? AND side='sell'",
-            (order_id,),
-        ).fetchone()
-        n = float(row["n"])
-        return n, (float(row["pv"]) / n if n > 0 else 0.0)
 
-    def working_rest_sell(self, ticker: str, env: str) -> db.Row | None:
-        """The resting sell still working on this ticker: placed, not retired, and not yet fully filled."""
-        row = self.rest_sell(ticker, env)
-        if row is None or float(row["count"]) <= 0:
-            return None
-        booked, _ = self.booked_rest_sell(row["order_id"])
-        return row if booked < float(row["count"]) - 1e-9 else None
 
-    def retire_rest_sell(self, order_id: str) -> None:
-        """Mark a resting sell no longer working, so nothing keeps waiting for it or stands down for it."""
-        self.db.execute("UPDATE orders SET count=0 WHERE order_id=? AND side='rest'", (order_id,))
-        self.db.commit()
-        self.touch("orders")
 
     def net_cost(self, ticker: str, env: str) -> float:
         """Dollars the bot's own orders have put into this ticker (buys cost, sales return), fees included in the order cost."""
@@ -1156,32 +1129,6 @@ class Store:
         price = (float(row["cost"]) - float(row["fee"])) / float(row["n"])
         return price if 0.0 < price < 1.0 else None
 
-    def last_gain_sale(self, ticker: str, lane: str) -> tuple[str, float] | None:
-        """(side, sale time) of this lane's latest sale of this market for a gain (the sale after its fee over what the position cost, fee included), else None. A sale at a loss is not counted. The cost is what the buy orders in the position's life actually filled at (orders: cost_usd over fill_count, resting bids fill under the ask), and falls back to the decision's ask plus its fee when there are no orders (a paper bet)."""
-        from .strategy import fee_per_contract as fee
-
-        book = self._book()
-        if book is not None:  # the running bot: the lane's sales of this market are in the bet book (a sold bet stays in it for an hour); with none, nothing is read at all
-            rows = sorted((r for r in book if r["ticker"] == ticker and _lane_of(r) == lane and r["exit_ts"] is not None and r["exit_price"] is not None and r["ask"] is not None), key=lambda r: -float(r["exit_ts"]))
-        else:
-            rows = self.db.execute(
-                """SELECT ts, side, exit_price, exit_ts, ask FROM decisions
-                   WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND action='bet' AND exit_ts IS NOT NULL AND exit_price IS NOT NULL AND ask IS NOT NULL
-                   ORDER BY exit_ts DESC""",
-                (ticker, lane),
-            ).fetchall()
-        for r in rows:
-            side = r["side"] or "yes"
-            sold, paid = float(r["exit_price"]), float(r["ask"])
-            filled = self.db.execute(
-                "SELECT COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(SUM(fill_count), 0) AS n FROM orders "
-                "WHERE ticker=? AND COALESCE(contract,'yes')=? AND COALESCE(side,'buy')='buy' AND ts>=? AND ts<=?",
-                (ticker, side, float(r["ts"]) - 5.0, float(r["exit_ts"])),
-            ).fetchone()
-            cost = float(filled["cost"]) / float(filled["n"]) if filled and float(filled["n"]) > 0 else paid + fee(paid)
-            if sold - fee(sold) > cost:
-                return side, float(r["exit_ts"])
-        return None
 
     def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None, factors: str = "", side: str | None = None) -> None:
         """Write a sale on the lane's open bets on this market. With `side`, only the bets on that side: a lane may have an open row on each side of one market (a paper lane logs the other side unstaked while it holds the first), and one side's sale price is not the other's. 2026-11-18: HYPE 03:30, the NO bet's sale at 0.17 was written on the YES row too, bought 40 s earlier at 0.79. The other side's row stays open and gets its own exit or its settlement."""

@@ -567,24 +567,6 @@ def _path_features(path: Sequence[float]) -> dict:
     return {"amp": hi - lo, "pos": (path[-1] - lo) / (hi - lo) if hi > lo else 0.5, "since_low": float(len(path) - 1 - low_at), "back": path[-1] - lo}
 
 
-def market_wave_now(side: str, now: float | None = None) -> dict | None:
-    """The same swing reading on the market as a whole (2026-11-11, user: "that wave is also something the logic is supposed to be adapting to"): the average of the five traded coins' own paths (each in its own typical minutes, signed for the bet side), read from Kalshi's settlement indexes. A bet in the
-    coin's own swing sees a flat market-wide path; a bet in a tide sees one that is still running. None when fewer than four coins have the history."""
-    now = time.time() if now is None else now
-    paths = []
-    for ser in BROAD_SERIES:
-        index = crypto_index(ser)
-        got = ticks_mod.history.window(index, now - 340.0, now) if index else None
-        path = _wave_path(got[0], got[1], side, now) if got and got[0] else None
-        if path is not None:
-            paths.append(path)
-    if len(paths) < 4:
-        return None
-    n = min(len(p) for p in paths)
-    mean = [sum(p[-n:][k] for p in paths) / len(paths) for k in range(n)]
-    return _path_features(mean) | {"coins": float(len(paths))}
-
-
 _comeback_memo: dict[str, tuple[int, tuple[float, int, float] | None]] = {}
 
 
@@ -667,16 +649,6 @@ def spot_index(series: str, source: str = "", now: float | None = None) -> str |
     return biquote_index(series)
 
 
-def wave_now(series: str, side: str, now: float | None = None, source: str = "") -> dict | None:
-    """wave_features from the in-memory ticks of the series' spot index (a coin's index, or the feed a commodity or stock-index series reads), or None. The wave is a shape of the spot's own path, so it is read the same way on any market that has one."""
-    index = spot_index(series, source, now)
-    if not index:
-        return None
-    now = time.time() if now is None else now
-    got = ticks_mod.history.window(index, now - 340.0, now)
-    return wave_features(got[0], got[1], side, now) if got else None
-
-
 QUOTE_WAVE_MIN = 180.0  # seconds of the market's own quotes a reading needs: the three minutes the study's reading needed (studies/results/2026-11-16-entry-selection.txt)
 
 
@@ -744,56 +716,6 @@ def quote_crossings(rows: Sequence[tuple[float, float]], opened: float, at: floa
     return sum(1 for a, b in itertools.pairwise(grid) if (a - 0.5) * (b - 0.5) < 0)
 
 
-def quote_crossings_now(ticker: str, opened: float, now: float | None = None) -> int | None:
-    """quote_crossings from the market's quote mids held in memory (ticks.mids), or None."""
-    now = time.time() if now is None else now
-    return quote_crossings(ticks_mod.mids.rows(ticker), opened, now)
-
-
-def quote_led_now(ticker: str, side: str, opened: float, now: float | None = None) -> float | None:
-    """quote_led_share from the market's quote mids held in memory (ticks.mids), or None."""
-    now = time.time() if now is None else now
-    return quote_led_share(ticks_mod.mids.rows(ticker), side, opened, now)
-
-
-def quote_wave_now(ticker: str, side: str, opened: float, now: float | None = None) -> dict | None:
-    """quote_wave_features from the market's quote mids held in memory (ticks.mids), or None."""
-    now = time.time() if now is None else now
-    return quote_wave_features(ticks_mod.mids.rows(ticker), side, opened, now)
-
-
-def pretrend_features(ts: Sequence[float], values: Sequence[float], side: str, at: float, span: float = 420.0, gap: float = 90.0) -> float | None:
-    """The bet side's drift over the span seconds that end gap seconds before the buy, in typical minutes (2026-11-06, user: a jumpy stretch is read by the trend before it). The index on a 1 s grid for 900 s; the unit is the root-mean-square one-second move times sqrt(60). Positive = the spot moved toward the bet's side. None when the history does not cover span + gap seconds."""
-    i = bisect.bisect_right(ts, at) - 1
-    if i < 0 or ts[i] < at - 10.0 or ts[0] > at - span - gap - 10.0:
-        return None
-    n = int(min(900.0, at - ts[0] - 1.0))
-    seq = []
-    for k in range(n + 1):
-        idx = bisect.bisect_right(ts, at - n + k) - 1
-        if idx < 0:
-            return None
-        seq.append(math.log(values[idx]))
-    sq = sum((b - a) ** 2 for a, b in itertools.pairwise(seq))
-    if sq <= 0 or n < 300:
-        return None
-    unit = math.sqrt(sq / n) * math.sqrt(60.0)
-    end, start = n - int(gap), n - int(gap) - int(span)
-    if start < 0:
-        return None
-    return (1.0 if side == "yes" else -1.0) * (seq[end] - seq[start]) / unit
-
-
-def pretrend_now(series: str, side: str, span: float = 420.0, gap: float = 90.0, now: float | None = None) -> float | None:
-    """pretrend_features from the in-memory index ticks of a coin, or None."""
-    index = crypto_index(series)
-    if not index:
-        return None
-    now = time.time() if now is None else now
-    got = ticks_mod.history.window(index, now - 910.0, now)
-    return pretrend_features(got[0], got[1], side, now, span, gap) if got else None
-
-
 def unit_index(index: str, now: float | None = None, span: float = 900.0) -> float | None:
     """The market's typical minute right now, as a log move: the root-mean-square one-second move over the last `span` seconds times sqrt(60), from the in-memory ticks on a 1 s grid. None when the history is under 300 s or stale."""
     now = time.time() if now is None else now
@@ -854,138 +776,12 @@ def hour_drift_from(ts: Sequence[float], vs: Sequence[float], now: float, side: 
     return reads[0], ordered[min(len(ordered) - 1, int(q * len(ordered)))], len(reads)
 
 
-def hour_drift_now(series: str, side: str, q: float, now: float | None = None) -> tuple[float, float, int] | None:
-    """hour_drift_from for a series' index, from the in-memory ticks (warmed from the tape for 8 hours), or None."""
-    now = time.time() if now is None else now
-    index = crypto_index(series) or biquote_index(series)
-    if not index:
-        return None
-    for hours in (7.5, 5.5):
-        got = ticks_mod.history.window(index, now - hours * 3600.0, now)
-        if got:
-            return hour_drift_from(got[0], got[1], now, side, q)
-    return None
-
-
 def _quantile(xs: Sequence[float], q: float) -> float:
     ordered = sorted(xs)
     return ordered[min(len(ordered) - 1, int(q * len(ordered)))]
 
 
-def perp_rule_from(ts: Sequence[float], vs: Sequence[float], pts: Sequence[float], pvs: Sequence[float], now: float, side: str, strike: float,
-                   q_lead: float = 0.75, q_cush: float = 0.75, q_eff: float = 0.50) -> dict[str, float] | None:
-    """The perp-lead underdog rule (2026-11-10, user: live, buy on either rule; studies/results/2026-11-10-underdog-walkforward.txt, 'perp_lead60>q75 & cushion>q75 & eff<q50': 217 tape states, +8.1% a dollar, se 8.4, both halves). Reads, signed with the bet and in the typical minute (rms one-second log move of the last 900 s times sqrt(60)) of the index: the perp's 60 s move minus the index's 60 s move (the perp running ahead of the settlement index), the cushion (spot to strike), and the path efficiency of the last 300 s. The rule passes when the lead is over the q_lead quantile of this market's own readings of the last 55 minutes, the cushion is over the q_cush quantile of this market's own wrong-side cushions at 0.5-7.5 minutes into its last windows (the strike taken as the index at each window open), and the path is under the q_eff quantile of its own efficiency readings of the last hours (choppy). Returns the readings and cutoffs with 'ok', or None when the perp or index history is too short or stale (then the rule does not pass)."""
-    if not ts or len(ts) != len(vs) or not pts or len(pts) != len(pvs) or strike <= 0:
-        return None
-    j = bisect.bisect_right(ts, now) - 1
-    jp = bisect.bisect_right(pts, now) - 1
-    if j < 0 or jp < 0 or now - ts[j] > 10.0 or now - pts[jp] > 60.0 or ts[0] > now - 7200.0:
-        return None
-    base = int(ts[0])
-    n = int(now) - base
-    g: list[float] = []
-    i = 0
-    last = vs[0]  # see hour_drift_from: the first second takes the first tick's value
-    for t in range(n + 1):
-        while i < len(ts) and ts[i] <= base + t:
-            last = vs[i]
-            i += 1
-        if last is None or last <= 0:
-            return None
-        g.append(math.log(last))
-    sq, ab = [0.0], [0.0]
-    for a, b in itertools.pairwise(g):
-        sq.append(sq[-1] + (b - a) ** 2)
-        ab.append(ab[-1] + abs(b - a))
-
-    def unit(t: int) -> float | None:
-        v = (sq[t] - sq[t - 900]) / 900.0 if t >= 900 else 0.0
-        return math.sqrt(v) * math.sqrt(60.0) if v > 0 else None
-
-    sign = 1.0 if side == "yes" else -1.0
-    span = int(min(3300.0, now - pts[0])) - 1
-    if span < 1100:
-        return None
-    pg: list[float] = []
-    i = 0
-    last = pvs[0]
-    p0 = int(now) - span
-    for t in range(span + 1):
-        while i < len(pts) and pts[i] <= p0 + t:
-            last = pvs[i]
-            i += 1
-        if last is None or last <= 0:
-            return None
-        pg.append(math.log(last))
-    off = n - span  # pg[x] is the perp at index time off + x
-
-    def lead(t: int) -> float | None:
-        u = unit(t)
-        x = t - off
-        return ((pg[x] - pg[x - 60]) - (g[t] - g[t - 60])) * sign / u if u and x >= 60 else None
-
-    u_now = unit(n)
-    lead_now = lead(n)
-    if u_now is None or lead_now is None:
-        return None
-    leads = [v for t in range(off + 60, n - 9, 10) if (v := lead(t)) is not None]
-    cushions = []
-    first_open = ((base + 1800) // 900 + 1) * 900
-    for t_open in range(int(now) // 900 * 900 - 900, max(first_open, int(now) - 6 * 3600) - 1, -900):
-        k0 = t_open - base
-        if k0 < 1800 or k0 + 450 > n:
-            continue
-        for t in range(k0 + 30, k0 + 451, 30):
-            u = unit(t)
-            if u:
-                c = (g[t] - g[k0]) * sign / u
-                if c < 0:
-                    cushions.append(c)
-    effs = []
-    for t in range(max(900, n - 6 * 3600), n + 1, 30):
-        path = ab[t] - ab[t - 300]
-        if path > 0:
-            effs.append(abs(g[t] - g[t - 300]) / path)
-    path_now = ab[n] - ab[n - 300]
-    if len(leads) < 100 or len(cushions) < 60 or len(effs) < 120 or path_now <= 0:
-        return None
-    cush_now = (g[n] - math.log(strike)) * sign / u_now
-    eff_now = abs(g[n] - g[n - 300]) / path_now
-    lead_cut, cush_cut, eff_cut = _quantile(leads, q_lead), _quantile(cushions, q_cush), _quantile(effs, q_eff)
-    ok = lead_now > lead_cut and cush_now > cush_cut and eff_now < eff_cut
-    return {"ok": float(ok), "lead": lead_now, "lead_cut": lead_cut, "cushion": cush_now, "cushion_cut": cush_cut, "eff": eff_now, "eff_cut": eff_cut, "n_lead": float(len(leads)), "n_cushion": float(len(cushions)), "n_eff": float(len(effs))}
-
-
 PERP_COINS = ("BTC", "ETH", "SOL", "XRP", "DOGE")
-
-
-def perp_rule_now(series: str, side: str, strike: float, now: float | None = None) -> dict[str, float] | None:
-    """perp_rule_from for a crypto series with a Hyperliquid perp, from the in-memory ticks ("hl:<coin>" keeps an hour), or None."""
-    now = time.time() if now is None else now
-    index = crypto_index(series)
-    coin = coin_of(series)
-    if not index or coin not in PERP_COINS:
-        return None
-    got = None
-    for hours in (7.5, 5.5):
-        got = ticks_mod.history.window(index, now - hours * 3600.0, now)
-        if got:
-            break
-    perp = None
-    for secs in (3500.0, 2200.0, 1300.0):
-        perp = ticks_mod.history.window("hl:" + coin, now - secs, now)
-        if perp:
-            break
-    if not got or not perp:
-        return None
-    return perp_rule_from(got[0], got[1], perp[0], perp[1], now, side, strike)
-
-
-def pretrend_index(index: str, side: str, span: float = 420.0, gap: float = 90.0, now: float | None = None) -> float | None:
-    """pretrend_features for an index id (a commodity's BiQuote index as well as a coin's), from the in-memory ticks, or None."""
-    now = time.time() if now is None else now
-    got = ticks_mod.history.window(index, now - 910.0, now)
-    return pretrend_features(got[0], got[1], side, now, span, gap) if got else None
 
 
 MS_LOOKS = {"1m": 60.0, "2m": 120.0, "5m": 300.0, "15m": 900.0, "60m": 3600.0}
@@ -995,73 +791,7 @@ BROAD_SERIES = ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M")
 _broad_memo: tuple[int, float | None] = (0, None)
 
 
-def broad_trend_now(now: float | None = None) -> float | None:
-    """The market-wide 60-minute move, in percent: the average of the five traded coins' change over the last hour, from the in-memory index ticks only (2026-11-05, user: every coin was trending down together, and a regime like that
-    can shift, so it is read on every decision and recorded). Over 11-02 to 11-05 it stayed within +-1% in 94% of the 15-minute market times, so a move of several percent is outside what the rules were fitted on.
-    Cached for 30 s. None when any coin's history does not cover the hour."""
-    global _broad_memo
-    now = time.time() if now is None else now
-    if _broad_memo[0] == int(now // 30):
-        return _broad_memo[1]
-    moves = []
-    for ser in BROAD_SERIES:
-        index = crypto_index(ser)
-        got = ticks_mod.history.window(index, now - 3700.0, now) if index else None
-        if got is None or not got[0] or got[0][0] > now - 3500.0 or got[0][-1] < now - 30.0:
-            _broad_memo = (int(now // 30), None)
-            return None
-        i = bisect.bisect_left(got[0], now - 3600.0)
-        moves.append(100.0 * (got[1][-1] / got[1][min(i, len(got[1]) - 1)] - 1.0))
-    out = sum(moves) / len(moves)
-    _broad_memo = (int(now // 30), out)
-    return out
-
-
 _hour_move_memo: tuple[int, float | None] = (0, None)
-
-
-def broad_hour_move(now: float | None = None) -> float | None:
-    """The market-wide typical 60-minute move, in percent, from the CURRENT hour's own one-minute moves only (2026-11-15, user: not six hours, the current hour): for each of the five coins the root-mean-square of its last 60 one-minute log changes times sqrt(60), averaged over the coins. How far the market has been moving around within the hour, whatever it netted. Cached for 30 s. None when any coin has no tick within a minute of any of the 61 minute marks."""
-    global _hour_move_memo
-    now = time.time() if now is None else now
-    if _hour_move_memo[0] == int(now // 30):
-        return _hour_move_memo[1]
-    sigmas = []
-    for ser in BROAD_SERIES:
-        index = crypto_index(ser)
-        got = ticks_mod.history.window(index, now - 3700.0, now) if index else None
-        if got is None or not got[0]:
-            _hour_move_memo = (int(now // 30), None)
-            return None
-        ts, vs = got
-        marks = []
-        for k in range(61):
-            t = now - 60.0 * k
-            i = bisect.bisect_right(ts, t) - 1
-            if i < 0 or t - ts[i] > 60.0:
-                _hour_move_memo = (int(now // 30), None)
-                return None
-            marks.append(math.log(vs[i]))
-        changes = [marks[k] - marks[k + 1] for k in range(60)]
-        sigmas.append(100.0 * math.sqrt(sum(c * c for c in changes) / len(changes)) * math.sqrt(60.0))
-    out = sum(sigmas) / len(sigmas)
-    _hour_move_memo = (int(now // 30), out)
-    return out
-
-
-def broad_trend_bar(share: float, now: float | None = None) -> float | None:
-    """The flat-trend cutoff from the market's own current hour (CLAUDE.md rule 1 and 2): `share` of this hour's typical move (broad_hour_move), in percent. A net 60-minute move under it is flat for the way the market has actually been moving, not by a fixed number: a trend that nets little while the market swung around a lot is flat, and the same net move in a quiet hour is a real one. None when the hour cannot be read."""
-    move = broad_hour_move(now)
-    return None if move is None else share * move
-
-
-def ms_rule_ok(rule: Sequence[str], letters: dict[str, str]) -> bool:
-    """Whether every "scale:letters" term of a lane's ms_rule holds ("60m:D", "5m:EF" = the 5-minute variety is E or F)."""
-    for term in rule:
-        scale, _, allowed = term.partition(":")
-        if letters.get(scale) is None or letters[scale] not in allowed:
-            return False
-    return True
 
 
 def curve_edge_now(series: str, side: str, left_seconds: float, price: float, strike: float | None, now: float | None = None, source: str = "") -> tuple[float, float] | None:
@@ -1087,41 +817,6 @@ def curve_edge_now(series: str, side: str, left_seconds: float, price: float, st
         return None
     read = curvevalue.read(ts, vs, now, ref, side, left_seconds, "900")
     return None if read is None else (read.p, read.p - price)
-
-
-def spot_exit_now(spec: Any, series: str, side: str, left_seconds: float, strike: float | None, now: float | None = None) -> str | None:
-    """Whether the lane's own spot exits (watcher._shock_hit: shock_units, cross_units) would sell a bet on `side` at this moment, as a reason, else None. Same reading: the typical minute from the last 15 minutes, the worst `shock_seconds` move over `shock_memory` seconds, the cushion to the strike on the bet's side, only inside the last `shock_last` seconds. None also when the lane has no such exit, the series is not a crypto coin, or the ticks cannot say (a caller that buys on None is making no claim)."""
-    index = crypto_index(series)
-    if not index or not strike or strike <= 0 or left_seconds <= 3 or left_seconds > spec.shock_last or (spec.shock_units <= 0 and spec.cross_units < 0):
-        return None
-    now = time.time() if now is None else now
-    unit = unit_index(index, now)
-    got = ticks_mod.history.window(index, now - spec.shock_seconds - max(spec.shock_memory, 0.0) - 10.0, now)
-    if unit is None or not got or now - got[0][-1] > 10.0:
-        return None
-    ts, vs = got
-
-    def at(t: float) -> float:
-        i = bisect.bisect_right(ts, t) - 1
-        return vs[i] if i >= 0 else 0.0
-
-    sign = 1.0 if side == "yes" else -1.0
-    spot = vs[-1]
-    if spot <= 0:
-        return None
-    unit_bp = unit * 1e4
-    margin = math.log(spot / strike) * sign * 1e4
-    worst = 0.0
-    for k in range(int(max(spec.shock_memory, 1.0)) + 1):
-        t = now - k
-        a, b = at(t), at(t - spec.shock_seconds)
-        if a > 0 and b > 0:
-            worst = min(worst, math.log(a / b) * sign * 1e4)
-    if spec.shock_units > 0 and worst <= -spec.shock_units * unit_bp and margin <= spec.shock_margin_units * unit_bp:
-        return f"the spike exit would sell it at once: {-worst:.1f} bp against the side in {spec.shock_seconds:.0f}s, {margin:+.1f} bp from the strike, {left_seconds:.0f}s left"
-    if spec.cross_units >= 0 and margin <= spec.cross_units * unit_bp:
-        return f"the cross exit would sell it at once: {margin:+.1f} bp from the strike, {left_seconds:.0f}s left"
-    return None
 
 
 def multiscale_now(s: Settings, series: str, side: str, left_seconds: float, scales: Sequence[str], now: float | None = None, strike: float | None = None) -> dict[str, dict] | None:
@@ -1208,63 +903,13 @@ class Ledger:
                     c[1] += r["pnl"]
         return {k: (int(n), net) for k, (n, net) in out.items()}
 
-    def skips(self, cls: str, now: float, hours: float = 6.0, prior_weight: float = 15.0, min_loss: float = 0.10, min_n: int = 5) -> tuple[str, ...]:
-        """The "variety-side" cells a lane should not buy right now.
 
-        A cell's recent record (the last `hours`) is blended with its longer record (everything older in the ledger) as a prior worth `prior_weight` bets, so a handful of recent bets can move a cell but not flip it
-        on noise. It is skipped when the blend loses `min_loss` or more a $10 bet and the recent window holds at least `min_n` of its favorites. A cell with fewer than MIN_PRIOR older favorites is never skipped."""
-        cut = now - hours * 3600.0
-        recent = self.cells(cut, now, cls)
-        older = self.cells(0.0, cut, cls)
-        out = []
-        for key, (n, net) in sorted(recent.items()):
-            if n < min_n:
-                continue
-            m_recent = net / n
-            n_old, net_old = older.get(key, (0, 0.0))
-            if n_old < MIN_PRIOR:
-                continue  # a new or rare variety (a freshly added letter) has no record to blend with: five recent bets are not enough to skip it
-            post = (n * m_recent + prior_weight * (net_old / n_old)) / (n + prior_weight)
-            if post <= -min_loss:
-                out.append(f"{key[2]}-{key[1]}")
-        return tuple(out)
-
-    def market_skip(self, cls: str, coin: str, ask: float, now: float, hours: float = 48.0, prior_weight: float = 30.0, min_loss: float = 0.30, min_n: int = 20, cell_min_n: int = 12, cell_min_loss: float = 0.40) -> str | None:
-        """Why a favorite of this market at this price should not be bought right now, or None.
-
-        Varieties pool every market of a class, but the markets differ: over 2026-11-02/04 Brent favorites beat their price by 5.8 points and palladium's lost to it by 6.3. So the ledger is also read per market, over a longer
-        stretch (`hours`, a market's quality moves slowly): the market's mean result a $10 bet is blended with its class's as a prior worth `prior_weight` bets, and the market is skipped when that blend loses `min_loss` or more
-        (and it has `min_n` favorites). Then the same is done for the market's price band (market_band), blended toward the market's own blend: a band that loses `cell_min_loss` or more is skipped even when the market is not."""
-        start = now - hours * 3600.0
-        with self._lock:
-            rows = [r for r in self.rows if start < r["close_ts"] <= now and r["cls"] == cls and "coin" in r and "ask" in r]
-        if len(rows) < min_n:
-            return None
-        class_mean = sum(r["pnl"] for r in rows) / len(rows)
-        mine = [r for r in rows if r["coin"] == coin]
-        coin_post = class_mean
-        if mine:
-            coin_post = (sum(r["pnl"] for r in mine) + prior_weight * class_mean) / (len(mine) + prior_weight)
-            if len(mine) >= min_n and coin_post <= -min_loss:
-                return f"{coin} has lost {coin_post:+.2f} a $10 favorite over the last {hours:g}h ({len(mine)} favorites, class mean {class_mean:+.2f})"
-        band = market_band(ask)
-        cell = [r for r in mine if market_band(r["ask"]) == band]
-        if len(cell) >= cell_min_n:
-            cell_post = (sum(r["pnl"] for r in cell) + prior_weight * coin_post) / (len(cell) + prior_weight)
-            if cell_post <= -cell_min_loss:
-                return f"{coin} favorites priced {band} have lost {cell_post:+.2f} a $10 bet over the last {hours:g}h ({len(cell)} favorites)"
-        return None
 
     def __len__(self) -> int:
         return len(self.rows)
 
 
 ledger = Ledger()
-
-
-def market_band(ask: float) -> str:
-    """The price band a favorite's cell is judged in."""
-    return ".78-.82" if ask < 0.82 else ".82-.87" if ask < 0.87 else ".87+"
 
 
 def coin_of(series: str) -> str:

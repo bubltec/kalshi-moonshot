@@ -143,18 +143,18 @@ def test_integration_an_evaluation_that_passes_ends_without_a_write(tmp_path, mo
 
         self.db = W()
 
-    out = T.decide(tmp_path, monkeypatch, now, "risk_score_buy=0.01")  # once with the writer off: the lane's version row and the like are written
+    out = T.decide(tmp_path, monkeypatch, now, "buy_chain=['risk_score']\nrisk_score_buy=0.01")  # once with the writer off: the lane's version row and the like are written
     assert out.action == "pass"
     store_mod.queue_decisions()
     monkeypatch.setattr(Store, "__init__", spy)
     main_thread_seen_before = len(seen)
-    out = T.decide(tmp_path, monkeypatch, now, "risk_score_buy=0.01")
+    out = T.decide(tmp_path, monkeypatch, now, "buy_chain=['risk_score']\nrisk_score_buy=0.01")
     assert out.action == "pass"
     mine = [q for q in seen[main_thread_seen_before:] if "INSERT INTO decisions" in q]
     assert store_mod.flush_decisions(5.0)
     s = config.load()
     got = Store(s.db_path).db.execute("SELECT action, reason FROM decisions WHERE lane='rs' ORDER BY id").fetchall()
-    assert len(got) == 2 and got[1]["action"] == "pass" and "[risk score: risk " in got[1]["reason"]  # the row is there, written by the writer
+    assert len(got) == 2 and got[1]["action"] == "pass" and "chain risk_score" in got[1]["reason"]  # the row is there, written by the writer
     assert len(mine) <= 1  # at most the writer's own insert was seen through the spied stores; the evaluation's store issued none
 
 
@@ -165,7 +165,7 @@ def test_integration_with_the_bots_switches_on_an_evaluation_sends_the_database_
     from kalshi_moonshot import calibration
 
     now = time.time()
-    extra = "risk_score_buy=0.01\nreentry_cooldown_seconds=900\nmax_open=5\nentry_scenario_view=true"
+    extra = "buy_chain=['risk_score']\nrisk_score_buy=0.01\nreentry_cooldown_seconds=900\nmax_open=5\nentry_scenario_view=true"
     T.decide(tmp_path, monkeypatch, now, extra)  # cold: the tables and the lane's version row are written once
     s = config.load()
     store_mod.queue_decisions()  # what worker.start turns on

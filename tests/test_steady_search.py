@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 
@@ -292,13 +292,6 @@ def test_falling_ask_is_a_crash_not_noise():
     assert strategy.falling_reason(None, 0.02) is None
 
 
-def test_stop_loss_needs_both_little_time_and_a_30_percent_drop():
-    assert strategy.stop_loss_hit(0.20, 0.10, hours_left=0.5, hours=1.0, drop=0.30)
-    assert strategy.stop_loss_hit(0.20, 0.10, hours_left=2.0, hours=1.0, drop=0.30) is None
-    assert strategy.stop_loss_hit(0.20, 0.18, hours_left=0.5, hours=1.0, drop=0.30) is None
-    assert strategy.stop_loss_hit(0.20, 0.00, hours_left=0.5, hours=1.0, drop=0.30) is None
-
-
 def test_evaluate_does_not_bet_the_other_side_of_a_mutex_event(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     s = config.load()
@@ -315,44 +308,6 @@ def test_evaluate_does_not_bet_the_other_side_of_a_mutex_event(tmp_path, monkeyp
     fen = shot(ticker="FEN", ask=0.10, bid=0.09, lane="moonshot")
     out = runner.evaluate(s, Client(), Est(), store, fen)
     assert out.action == "pass" and "other side already taken" in out.note
-
-
-def test_paper_stop_loss_exits_and_trade_stop_loss_sells(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    close = (datetime.now(UTC) + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    class Client:
-        def __init__(self):
-            self.sold = []
-
-        def market(self, ticker):
-            return {"ticker": ticker, "yes_bid_dollars": "0.10", "close_time": close, "status": "active"}
-
-        def sell_yes_ioc(self, ticker, count, price, client_order_id=None):
-            self.sold.append((ticker, count, price))
-            return {"fill_count": count, "average_fill_price": price, "average_fee_paid": 0.0, "order_id": "s"}
-
-    client = Client()
-    obs = settings(mode="observe", stop_loss_enabled=True, stop_loss_hours=1.0, stop_loss_drop=0.30)
-    store = Store(tmp_path / "obs.db")
-    store.add_decision(ticker="PTK", title="Petkim", ask=0.20, action="bet", mode="observe",
-                       close_time=close)
-    notes = runner.stop_loss_pass(obs, client, store)
-    assert notes and "paper-sold" in notes[0]
-    assert store.open_bets() == []
-    assert client.sold == []
-
-    tr = settings(mode="trade", env="demo", allow_real_money=False, stop_loss_enabled=True,
-                  stop_loss_hours=1.0, stop_loss_drop=0.30)
-    live = Store(tmp_path / "tr.db")
-    live.add_decision(ticker="PTK", title="Petkim", ask=0.20, action="bet", mode="trade",
-                      close_time=close)
-    live.add_order(ticker="PTK", env="demo", count=2, price=0.20, fill_count=2,
-                   cost_usd=0.40, fee_usd=0.01, side="buy")
-    notes = runner.stop_loss_pass(tr, client, live)
-    assert client.sold == [("PTK", 2, 0.05)]  # the bid was 0.10; a stop-loss order is limited 5c under it so it still fills
-    assert live.net_contracts("PTK", "demo") == 0
-    assert live.open_bets() == []
 
 
 def test_report_uses_the_stop_loss_price_not_settlement():

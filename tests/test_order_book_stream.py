@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import types
 
-from kalshi_moonshot import kalshiws, ticks
+from kalshi_moonshot import ticks
 from kalshi_moonshot.kalshi import KalshiClient
 from kalshi_moonshot.kalshiws import KalshiStream, parse_message
 from kalshi_moonshot.strategy import best_ask, best_bid
@@ -29,14 +29,6 @@ def test_the_rest_shaped_book_reads_like_the_rest_answer():
     assert best_bid(book, "yes") == 0.40 and best_bid(book, "no") == 0.58
     assert best_ask(book, "yes") == 0.42  # the NO bid at 0.58 is a YES ask at 0.42
     assert fresh().rest_book("NONE", 150.0) is None
-
-
-def test_shares_ahead_count_better_prices_and_the_same_level():
-    b = fresh()
-    assert b.shares_ahead("M", "yes", 0.40) == (10, 10)
-    assert b.shares_ahead("M", "yes", 0.39) == (0, 10)
-    assert b.shares_ahead("M", "yes", 0.38) == (5, 15)
-    assert b.shares_ahead("NONE", "yes", 0.4) is None
 
 
 def test_messages_parse():

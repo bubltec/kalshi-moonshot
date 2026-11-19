@@ -3,9 +3,9 @@ import json
 
 import pytest
 
-from kalshi_moonshot import config, lanes, sellchain, watcher
+from kalshi_moonshot import config, lanes, watcher
 from kalshi_moonshot import ticks as ticks_mod
-from tests.test_risk_exit_flow import TICKER, held, run_up, tick
+from tests.test_risk_exit_flow import held, run_up, tick
 
 
 @pytest.fixture(autouse=True)
@@ -26,11 +26,6 @@ def rows(tmp_path):
 
 def lane(tmp_path, monkeypatch, live="true", chain="['late_tight']", k="3.0", extra=""):
     return held(tmp_path, monkeypatch, live=True, take="true", extra=f"sell_chain={chain}\ncurve_risk_late_tight={k}\ncurve_risk_late_tight_live={live}\n{extra}")
-
-
-def test_unit_late_tight_is_a_step_a_chain_may_name_and_not_in_the_default_order():
-    assert "late_tight" in sellchain.SELL_STEPS and "late_tight" not in sellchain.DEFAULT and "late_tight" not in sellchain.order_of(())
-    assert callable(watcher._SELL["late_tight"])
 
 
 def test_unit_the_fields_default_off_shadow_and_a_sixth_of_the_market_and_belong_to_the_loss_part_of_an_exit_module():

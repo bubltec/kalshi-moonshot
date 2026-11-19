@@ -1,12 +1,11 @@
 """The risk score (riskscore.py; lane fields risk_score_buy, risk_score_edge, curve_risk_score): 2026-11-16, user: "all these factors need to build towards that risk score"; "I thought you were putting our new logic up as a lane"."""
-import dataclasses
 import json
 import math
 import time
 
 import pytest
 
-from kalshi_moonshot import config, lanes, regime, riskscore, runner, ticks, variants
+from kalshi_moonshot import config, regime, riskscore, runner, ticks, variants
 from kalshi_moonshot.estimators import Estimate
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
@@ -128,39 +127,9 @@ def decide(tmp_path, monkeypatch, now, extra, level=0.80, lift=0.004, flip_at=No
     return runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
 
 
-def test_integration_a_low_risk_that_has_held_is_bought_and_the_note_carries_the_number(tmp_path, monkeypatch):
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25")
-    assert out.action == "bet" and "[risk score: risk " in out.note and "by Kalshi's price" in out.note
-
-
-def test_integration_a_coin_flip_is_not_bought(tmp_path, monkeypatch):
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25", level=0.50, lift=0.0, ask=0.51)
-    assert out.action == "pass" and "that has held over its looks back" in out.note
-
-
-def test_integration_a_side_that_only_just_took_the_lead_is_not_bought(tmp_path, monkeypatch):
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25", flip_at=460)
-    assert out.action == "pass" and "that has held over its looks back" in out.note
-
-
-def test_integration_with_no_reading_the_lane_does_not_buy(tmp_path, monkeypatch):
-    out = decide(tmp_path, monkeypatch, time.time(), "risk_score_buy=0.25", seed=False)
-    assert out.action == "pass" and "[risk score unreadable]" in out.note
-
-
 def test_integration_off_by_default_nothing_is_read(tmp_path, monkeypatch):
     out = decide(tmp_path, monkeypatch, time.time(), "")
     assert out.action == "bet" and "risk score" not in out.note
-
-
-def test_unit_the_fields_change_a_lanes_version_only_when_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
-    out = lanes.settings_of(base, s)
-    assert "risk_score_buy" not in out and "curve_risk_score" not in out
-    assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, risk_score_buy=0.25), s)
-    assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, curve_risk_score=True), s)
 
 
 def test_unit_the_last_four_markets_come_from_memory_alone():
@@ -172,37 +141,6 @@ def test_unit_the_last_four_markets_come_from_memory_alone():
     prev = riskscore.previous(ts, vs, series_mids, opened, unit)
     assert len(prev) == 4 and prev[0][1] == 1 and prev[1][1] is None  # one flip in the last market; no mids held for the one before
     assert prev[0][0] is not None and abs(prev[0][0]) < 1.0  # it finished near its target: the index was flat before this open
-
-
-def test_integration_the_reading_makes_no_database_read(tmp_path, monkeypatch):
-    now = time.time()
-    seen = []
-    real = Store.__init__
-
-    def spy(self, *a, **k):
-        real(self, *a, **k)
-        inner = self.db
-
-        class Watch:
-            def execute(_, sql, *args):
-                seen.append(sql)
-                return inner.execute(sql, *args)
-
-            def __getattr__(_, name):
-                return getattr(inner, name)
-
-        self.db = Watch()
-
-    monkeypatch.setattr(Store, "__init__", spy)
-    out = decide(tmp_path, monkeypatch, now, "risk_score_buy=0.25\nentry_scenario_view=true")
-    assert out.action == "bet" and "[risk score: risk " in out.note[:60]
-    assert not [q for q in seen if "settled_value" in q]  # the last four markets are no longer asked of the database
-
-
-def test_unit_a_side_bought_cheap_is_not_on_the_sale_line_from_the_start():
-    assert riskscore.sale_line(0.25, 0.80) == 0.25
-    assert riskscore.sale_line(0.25, 0.24) == 0.12
-    assert riskscore.sale_line(0.25, 0.0) == 0.25
 
 
 # The feed (2026-11-18, user: "why isn't it reading kalshi?"; "Yes, fix it"): the score reads Kalshi's own price for the underlying. A commodity's readings had come from the outside feed since 11-17.

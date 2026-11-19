@@ -1,6 +1,5 @@
 import pytest
 
-from kalshi_moonshot import config, lanes, runner
 from kalshi_moonshot.store import Store
 
 
@@ -29,11 +28,3 @@ def test_a_second_buy_after_an_exit_is_still_a_held_position(store):
     order(store, "buy", 18)  # a second lane buys the same market after that exit
     assert store.open_position_tickers("prod") == {"KXUSDJPY15M-1"}  # so a third buy is refused by the risk gate
 
-
-def test_the_stop_loss_can_be_turned_off_per_lane(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    toml = "[lane.ticket]\nestimator='ladder'\nprice=[0.05,0.4]\nhours=[0.0,1.0]\nstop_loss=false\n"
-    spec = lanes.lane_specs_from(config.load(), toml)["ticket"]
-    assert spec.stop_loss is False
-    assert lanes.lane_specs_from(config.load(), None)["commodity"].stop_loss is True
-    assert runner.lane_specs  # the pass reads each lane's flag

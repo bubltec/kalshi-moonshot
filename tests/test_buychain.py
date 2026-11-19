@@ -9,7 +9,7 @@ from kalshi_moonshot.estimators import Estimate
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
 
-LANE = "[lane.ch]\nestimator='market'\nprice=[0.10,0.85]\nprice_skip=[0.45,0.57]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nmax_spread=0.05\nmin_volume=0\nneeds_model_edge=true\nmin_edge_room=0.12\nrisk_score_buy=0.25\nbuy_chain={chain}\n"
+LANE = "[lane.ch]\nestimator='market'\nprice=[0.10,0.85]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nmax_spread=0.05\nmin_volume=0\nneeds_model_edge=true\nmin_edge_room=0.12\nrisk_score_buy=0.25\nbuy_chain={chain}\n"
 RISK_FIRST = "['risk_score','price','ladder']"
 
 
@@ -153,15 +153,6 @@ def test_integration_in_the_review_a_lane_with_no_chain_still_goes_through_the_e
     assert est.screened == 1
 
 
-def test_the_lane_version_changes_only_when_a_chain_is_set(tmp_path, monkeypatch):
-    def version(chain):
-        s = settings(tmp_path, monkeypatch, chain=chain)
-        return lanes.settings_of(lanes.spec_for(s, "ch"), s)
-
-    assert "buy_chain" not in version("[]") and version(RISK_FIRST) != version("[]")
-    assert version(RISK_FIRST) != version("['ladder','price','risk_score']")  # the order is part of what the lane does
-
-
 # Modules: a named chain in strategies.toml that lanes are assigned to (2026-11-17, user: "we should be able to have multiple modules. And assign a lane to a module").
 BASE = "estimator='market'\nprice=[0.10,0.85]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nmax_spread=0.05\nmin_volume=0\nneeds_model_edge=true\nmin_edge_room=0.12\n"
 MODULES = "[module.risk_first]\nlabel='the risk score picks the side, the ladder checks the worth last'\nsteps=['risk_score','price','ladder']\nrisk_score_buy=0.25\n\n[module.ladder_first]\nsteps=['ladder','price']\n\n"
@@ -213,7 +204,7 @@ def test_unit_the_modules_name_is_not_what_the_lane_does_its_steps_are(tmp_path,
 
 def test_integration_a_lane_on_a_module_buys_by_its_steps_and_the_note_names_the_module(tmp_path, monkeypatch):
     monkeypatch.setattr(riskscore, "live", lambda series, ticker, side, *a, **k: ([0.80 if side == "yes" else 0.20] * 3, 0.5, [0.5] * 3))
-    s, _ = load(tmp_path, monkeypatch, MODULES + f"[lane.ch]\n{BASE}price_skip=[0.45,0.57]\nbuy_module='risk_first'\n")
+    s, _ = load(tmp_path, monkeypatch, MODULES + f"[lane.ch]\n{BASE}buy_module='risk_first'\n")
     store = Store(s.db_path)
     regime.reset()
     now = time.time()

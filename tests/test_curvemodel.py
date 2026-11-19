@@ -1,12 +1,8 @@
-import json
 import math
 import random
-import time
 
-from kalshi_moonshot import config, curvemodel, regime, runner, ticks, variants
+from kalshi_moonshot import config, curvemodel
 from kalshi_moonshot.estimators import Estimate
-from kalshi_moonshot.store import Store
-from kalshi_moonshot.strategy import LongShot
 
 
 class Fixed:
@@ -51,45 +47,6 @@ def test_the_fit_learns_a_planted_slope_and_the_bar_is_a_quantile_of_the_trainin
     lo = curvemodel.predict(model, [0.0] * 6 + [-2.0] + [0.0] * 11, 0.4)
     assert hi > lo + 0.8
     assert model["cuts"]["0.05"] > model["cuts"]["0.2"] > model["cuts"]["0.5"]
-
-
-def test_a_model_buy_lane_buys_only_what_the_model_likes(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text("[lane.mod]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_top=0.2\n")
-    s = config.load()
-    store = Store(s.db_path)
-    regime.reset()
-    ticks.history.clear()
-    curvemodel._cache.update(mtime=None, data=None)
-    now = time.time()
-    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-7", "KXBTC15M", now + 400.0, 100.0, now))
-    store.db.commit()
-    index = variants.crypto_index("KXBTC15M")
-    ts, vs = _ticks(now, drift=0.0)
-    for t, v in zip(ts, vs, strict=True):
-        ticks.history.note(index, t, v)
-    shot = LongShot("KXBTC15M-7", "t", "", 0.40, 0.41, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="mod", series="KXBTC15M", side="yes")
-    names = curvemodel.NAMES
-    base = {"built_at": now, "n": 5000, "names": names, "mu": [0.0] * 19, "sd": [1.0] * 19, "train_days": 9.0, "mean_net": -0.05}
-    try:
-        none = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert none.action == "pass" and "no model fitted yet" in none.note
-        like = {**base, "w": [0.5] + [0.0] * 19, "cuts": {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}}  # predicts +0.5 everywhere: above the 0.2 bar
-        (tmp_path / "curve_model.json").write_text(json.dumps(like))
-        curvemodel._cache.update(mtime=None, data=None)
-        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert ok.action == "bet" and "curve model +0.50 per $1" in ok.note
-        dislike = {**base, "w": [0.1] + [0.0] * 19, "cuts": {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}}  # +0.1: positive but under the bar
-        (tmp_path / "curve_model.json").write_text(json.dumps(dislike))
-        curvemodel._cache.update(mtime=None, data=None)
-        low = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert low.action == "pass" and "under the bar" in low.note
-        ticks.history.clear()
-        unread = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert unread.action == "pass" and "no tick history" in unread.note
-    finally:
-        ticks.history.clear()
-        curvemodel._cache.update(mtime=None, data=None)
 
 
 def test_the_time_left_readings_shrink_a_cushion_that_has_more_time_to_be_lost():
@@ -146,80 +103,11 @@ def test_the_curvature_readings_are_level_slope_and_curvature_per_window_and_fli
     assert curvemodel.features_curvature(g[: 34 * 60 - 5], sq[: 34 * 60 - 5], 34 * 60 - 6, strike, 1) is None  # a window the history does not cover: no reading, never a guess
 
 
-def test_a_curvature_model_is_fitted_named_and_waited_for_by_a_lane_that_wants_it(tmp_path, monkeypatch):
-    random.seed(8)
-    rows = [([random.gauss(0, 1) for _ in range(9)], random.uniform(0.3, 0.7), random.gauss(0, 0.5)) for _ in range(3100)]
-    model = curvemodel.fit(rows, kind="curvature")
-    assert model["kind"] == "curvature" and len(model["mu"]) == 10 and model["names"] == [*curvemodel.QUAD_NAMES, "ask"]
-    assert curvemodel.fit([(r[0] + [0.0] * 9, r[1], r[2]) for r in rows])["kind"] == "fibonacci"  # the default kind
-
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text("[lane.mod]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_top=0.2\nmodel_features='curvature'\n")
-    s = config.load()
-    store = Store(s.db_path)
-    regime.reset()
-    ticks.history.clear()
-    curvemodel._cache.update(mtime=None, data=None)
-    now = time.time()
-    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-7", "KXBTC15M", now + 400.0, 100.0, now))
-    store.db.commit()
-    index = variants.crypto_index("KXBTC15M")
-    ts, vs = _ticks(now, drift=0.0)
-    for t, v in zip(ts, vs, strict=True):
-        ticks.history.note(index, t, v)
-    shot = LongShot("KXBTC15M-7", "t", "", 0.40, 0.41, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="mod", series="KXBTC15M", side="yes")
-    cuts = {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}
-    try:
-        fib = {"built_at": now, "n": 5000, "names": curvemodel.NAMES, "mu": [0.0] * 19, "sd": [1.0] * 19, "train_days": 9.0, "mean_net": -0.05, "w": [0.5] + [0.0] * 19, "cuts": cuts}
-        (tmp_path / "curve_model.json").write_text(json.dumps(fib))
-        wait = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert wait.action == "pass" and "waiting for the refit" in wait.note  # the fitted model reads Fibonacci readings, the lane wants curvature
-        cur = {"kind": "curvature", "built_at": now, "n": 5000, "names": [*curvemodel.QUAD_NAMES, "ask"], "mu": [0.0] * 10, "sd": [1.0] * 10, "train_days": 9.0, "mean_net": -0.05, "w": [0.5] + [0.0] * 10, "cuts": cuts}
-        (tmp_path / "curve_model.json").write_text(json.dumps(cur))
-        curvemodel._cache.update(mtime=None, data=None)
-        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert ok.action == "bet" and "curve model +0.50 per $1" in ok.note
-    finally:
-        ticks.history.clear()
-        curvemodel._cache.update(mtime=None, data=None)
-
-
 def test_the_buy_bar_for_a_share_between_the_stored_quantiles_is_interpolated():
     model = {"cuts": {"0.05": 0.09, "0.1": 0.06, "0.2": 0.02, "0.3": -0.006, "0.5": -0.047}}
     assert curvemodel.cut_for(model, 0.10) == 0.06 and curvemodel.cut_for(model, 0.2) == 0.02  # a stored quantile is used as it is
     assert abs(curvemodel.cut_for(model, 0.15) - 0.04) < 1e-9  # halfway between the 0.10 and 0.20 bars
     assert curvemodel.cut_for(model, 0.01) == 0.09 and curvemodel.cut_for(model, 0.9) == -0.047  # clamped at the ends
-
-
-def test_a_commodity_is_read_against_its_own_index_price_at_the_window_open(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text("[lane.mod]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXGOLD15M']\nmodel_buy=true\nmodel_top=0.2\n")
-    s = config.load()
-    store = Store(s.db_path)
-    regime.reset()
-    ticks.history.clear()
-    curvemodel._cache.update(mtime=None, data=None)
-    now = time.time()
-    index = variants.biquote_index("KXGOLD15M")
-    assert index and not variants.crypto_index("KXGOLD15M")
-    shot = LongShot("KXGOLD15M-7", "t", "", 0.40, 0.41, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="mod", series="KXGOLD15M", side="yes")
-    like = {"built_at": now, "n": 5000, "names": curvemodel.NAMES, "mu": [0.0] * 19, "sd": [1.0] * 19, "train_days": 9.0, "mean_net": -0.05, "w": [0.5] + [0.0] * 19, "cuts": {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}}
-    (tmp_path / "curve_model.json").write_text(json.dumps(like))
-    try:
-        ts, vs = _ticks(now, drift=0.0)
-        for t, v in zip(ts, vs, strict=True):
-            ticks.history.note(index, t, v)
-        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})  # no window row, no Kalshi strike: the index's own open price is the reference
-        assert ok.action == "bet" and "curve model +0.50 per $1" in ok.note
-        ticks.history.clear()
-        for t, v in zip(ts, vs, strict=True):
-            if not now - 540.0 < t < now - 440.0:  # a gap in the ticks around the window open (500 s in): the open price cannot be read
-                ticks.history.note(index, t, v)
-        no_open = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert no_open.action == "pass" and "known yet" in no_open.note
-    finally:
-        ticks.history.clear()
-        curvemodel._cache.update(mtime=None, data=None)
 
 
 def test_a_paced_job_sleeps_for_the_share_of_time_it_may_not_use(monkeypatch):
@@ -252,99 +140,6 @@ def test_the_daily_refit_is_paced_and_a_study_is_not(monkeypatch, tmp_path):
     curvemodel.main()
     assert seen["duty"] == curvemodel.PACE_DUTY < 1.0
     assert default == 1.0
-
-
-def test_a_curvature_lane_needs_only_34_minutes_of_history_and_a_fibonacci_one_55(tmp_path, monkeypatch):
-    assert curvemodel.lookback_seconds("curvature") == 34 * 60 and curvemodel.lookback_seconds("fibonacci") == 55 * 60
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text("[lane.mod]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_top=0.2\nmodel_features='curvature'\n")
-    s = config.load()
-    store = Store(s.db_path)
-    regime.reset()
-    ticks.history.clear()
-    curvemodel._cache.update(mtime=None, data=None)
-    now = time.time()
-    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-7", "KXBTC15M", now + 400.0, 100.0, now))
-    store.db.commit()
-    index = variants.crypto_index("KXBTC15M")
-    ts, vs = _ticks(now, n=2300, drift=0.0)  # 38 minutes of ticks: enough for the curvature readings, short of the 55 minutes the old check demanded
-    for t, v in zip(ts, vs, strict=True):
-        ticks.history.note(index, t, v)
-    shot = LongShot("KXBTC15M-7", "t", "", 0.40, 0.41, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="mod", series="KXBTC15M", side="yes")
-    cuts = {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}
-    cur = {"kind": "curvature", "built_at": now, "n": 5000, "names": [*curvemodel.QUAD_NAMES, "ask"], "mu": [0.0] * 10, "sd": [1.0] * 10, "train_days": 9.0, "mean_net": -0.05, "w": [0.5] + [0.0] * 10, "cuts": cuts}
-    try:
-        (tmp_path / "curve_model.json").write_text(json.dumps(cur))
-        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert ok.action == "bet" and "curve model +0.50 per $1" in ok.note
-        fib = {"built_at": now, "n": 5000, "names": curvemodel.NAMES, "mu": [0.0] * 19, "sd": [1.0] * 19, "train_days": 9.0, "mean_net": -0.05, "w": [0.5] + [0.0] * 19, "cuts": cuts}
-        (tmp_path / "strategies.toml").write_text((tmp_path / "strategies.toml").read_text().replace("model_features='curvature'", "model_features='fibonacci'"))
-        (tmp_path / "curve_model.json").write_text(json.dumps(fib))
-        curvemodel._cache.update(mtime=None, data=None)
-        s = config.load()
-        short = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert short.action == "pass" and ("55-minute look-back" in short.note or "no tick history" in short.note)  # the Fibonacci readings still need the full 55 minutes
-    finally:
-        ticks.history.clear()
-        curvemodel._cache.update(mtime=None, data=None)
-
-
-def test_a_lane_in_its_own_model_category_reads_its_own_model_file_and_never_the_shared_one(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(
-        "[lane.main]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_top=0.2\n"
-        "[lane.dog]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_top=0.2\nmodel_category='dog'\n"
-    )
-    s = config.load()
-    store = Store(s.db_path)
-    regime.reset()
-    ticks.history.clear()
-    curvemodel._cache.update(mtime=None, data=None)
-    curvemodel._category_cache.clear()
-    assert curvemodel.categories(s) == ["", "dog"]
-    assert curvemodel.model_path(s, "dog").name == "curve_model_dog.json" and curvemodel.model_path(s).name == "curve_model.json"
-    now = time.time()
-    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-7", "KXBTC15M", now + 400.0, 100.0, now))
-    store.db.commit()
-    index = variants.crypto_index("KXBTC15M")
-    ts, vs = _ticks(now, drift=0.0)
-    for t, v in zip(ts, vs, strict=True):
-        ticks.history.note(index, t, v)
-    shot = LongShot("KXBTC15M-7", "t", "", 0.40, 0.41, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="dog", series="KXBTC15M", side="yes")
-    cuts = {"0.05": 0.4, "0.1": 0.3, "0.2": 0.2, "0.3": 0.1, "0.5": 0.0}
-    base = {"built_at": now, "n": 5000, "names": curvemodel.NAMES, "mu": [0.0] * 19, "sd": [1.0] * 19, "train_days": 9.0, "mean_net": -0.05, "cuts": cuts}
-    try:
-        (tmp_path / "curve_model.json").write_text(json.dumps({**base, "w": [0.5] + [0.0] * 19}))  # the shared model likes everything
-        no_category = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert no_category.action == "pass" and "no model fitted yet for the dog category" in no_category.note  # the shared file is not the dog category's model
-        (tmp_path / "curve_model_dog.json").write_text(json.dumps({**base, "w": [0.5] + [0.0] * 19}))
-        ok = runner.evaluate(s, None, None, store, shot, estimators={"market": Fixed()})
-        assert ok.action == "bet" and "curve model +0.50 per $1" in ok.note
-    finally:
-        ticks.history.clear()
-        curvemodel._cache.update(mtime=None, data=None)
-        curvemodel._category_cache.clear()
-
-
-def test_the_refit_starts_when_any_category_has_no_model_or_an_old_one(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(
-        "[lane.main]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nseries=['KXBTC15M']\nmodel_buy=true\n[lane.dog]\nestimator='market'\nprice=[0.05,0.95]\nhours=[0.0,1.0]\nseries=['KXBTC15M']\nmodel_buy=true\nmodel_category='dog'\n"
-    )
-    s = config.load()
-    curvemodel._cache.update(mtime=None, data=None)
-    curvemodel._category_cache.clear()
-    started = []
-    monkeypatch.setattr(curvemodel.subprocess, "Popen", lambda *a, **k: started.append(a) or type("P", (), {"poll": lambda self: None})())
-    monkeypatch.setattr(curvemodel, "_fitting", None)
-    now = time.time()
-    (tmp_path / "curve_model.json").write_text(json.dumps({"built_at": now, "n": 1}))  # the shared model is fresh, the dog category has none
-    try:
-        assert curvemodel.maybe_refit(s, now) is True and len(started) == 1
-    finally:
-        curvemodel._cache.update(mtime=None, data=None)
-        curvemodel._category_cache.clear()
-        curvemodel._fitting = None
 
 
 def test_curvature2_splits_the_bend_by_sign_and_damps_the_cushion_by_motion():

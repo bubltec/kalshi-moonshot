@@ -18,7 +18,6 @@ import logging
 import math
 import os
 import queue
-import re
 import threading
 import time
 from collections import deque
@@ -42,29 +41,21 @@ from . import (
     sellchain,
     settlement,
     variants,
-    widthfit,
 )
 from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
 from .kalshi import KalshiClient, KalshiError
-from .kalshiws import index_for_series, strike_index_for
-from .lanes import LaneSpec, lane_specs, nudge, nudge_in_units, stop_drop_for, takes_profit
+from .kalshiws import index_for_series
+from .lanes import LaneSpec, lane_specs
 from .store import Store
 from .strategy import (
-    cash_if_losing,
-    cash_if_up,
-    early_cash,
     fee_per_contract,
     flip,
-    hard_loss,
     price_shape,
-    scalp_hit,
-    spike_hit,
     stop_wait,
     take_profit_hit,
     trail_hit,
-    watch_trend,
 )
 
 log = logging.getLogger("moonshot")
@@ -96,11 +87,6 @@ HISTORY_KEEP = 120.0  # seconds of bids kept per market, for the spike rule
 FILL_SETTLE = 3.0  # seconds after a fill before positions are read: the bot's own bet must be on the books first, or it would look hand-placed
 
 
-
-def burst_bid_collapsed(why: str, bid: float) -> bool:
-    """True when a burst sale's fresh bid is more than BURST_BID_SLACK under the favorite's bid printed in its reason (the bid that triggered it)."""
-    m = re.search(r"the favorite's bid (\d*\.?\d+)", why)
-    return why.startswith("burst") and m is not None and bid < float(m.group(1)) - BURST_BID_SLACK
 
 class SellSignal(NamedTuple):
     """A watcher's call to sell a held position; the sell worker acts on it. A plain 3-tuple underneath, so it unpacks as (ticker, lane, why)."""
@@ -137,11 +123,8 @@ class Target:
     lane: str
     side: str
     entry: float  # price paid, in the side's own terms
-    x: float
-    at: float
-    spike_cents: float
-    spike_seconds: float
-    spike_min_gain: float = 0.10
+    x: float = 0.0  # a hand-placed cheap buy's take level (manual_cheap_take_x); lanes set none
+    at: float = 0.0
     trail_activate: float = 0.0
     trail_drop: float = 0.0
     trail_confirm: float = 10.0
@@ -159,88 +142,19 @@ class Target:
     unstable_gain: float = 0.0  # sell when up this fraction after fees and the bid is swinging (0 = off)
     unstable_range: float = 0.0
     unstable_seconds: float = 20.0
-    hover_dip: float = 0.0  # sell at the first net profit once the bid has dipped to this price or lower since entry (0 = off)
     low: float = 1.0  # lowest bid seen since this position was opened
     stop_confirm: float = 0.0  # the bid must stay past the stop line this many seconds before the stop sells (0 = at once)
     stop_since: float | None = None  # when the bid first fell past the stop line and has stayed there
-    loss_since: float | None = None  # when the bid first reached the hard-loss line and has stayed there
-    loss_low: float = 0.0  # the worst bid of that visit. A bounce of watch_loss_lift off it is held
     stop_ref: float = 0.0  # price the stop is measured from when it is not the price paid (a hand-placed buy: the bid it could be sold at)
     stop_from: float = 0.0  # ... but only once this unix time is reached (an hourly market is only stopped in its last STOP_LOSS_HOURS)
     trail_progress: float = 0.0  # >0: the crash exit arms once the bid has covered this share of the way from the price paid to $1.00, instead of trail_activate
     spot_sigma: float = 0.0  # the crash exit holds while spot is more than this many sigma on the winning side of the strike (0 = off)
     trail_giveback: float = 0.0  # >0: the crash exit sells once this share of the gain (peak over price paid) is given back, instead of trail_drop (0 = the fixed drop)
-    settle_guard: float = 0.0  # sell in the last 150 s when the exact settlement chance falls this far under the bid (settlement.py; 0 = off)
-    burst_exit: bool = False  # after that sale, log a paper bet on the other side (never an order)
     strike: float = 0.0  # the market's target
     close_ts: float = 0.0
     opened_min: float = 1e9  # minutes into the window when this buy was placed
-    cash_before: float = 0.0  # early_cash: a buy opened before this minute is sold early (0 = off)
-    cash_leave: float = 0.0
-    cash_up: float = 0.0  # cash_if_up: sell once the window reaches this minute and the bid is above the price paid (0 = off)
-    cash_drop: float = 0.0  # ...or this fraction under the price paid (0 = off)
-    cash_left: float = 0.0  # cash_if_losing: with this many seconds left, sell a hover still under the price paid (0 = off)
-    cash_at: float = 0.0
-    watch_at: float = 0.0  # watch_trend: start watching once the bid prints this (0 = off)
-    watch_ride: float = 0.0  # the ride at watch_patient seconds left
-    watch_patient: float = 420.0
-    watch_loss: float = 0.0  # hard_loss fraction of the price paid (0 = off)
-    watch_loss_seconds: float = 3.0
-    watch_loss_lift: float = 0.0  # hard_loss: a bounce this far off loss_low is held (0 = off)
-    cross_gap: float = 0.0  # lane stop_cross_gap: skip a sale on a Polymarket bid this far under the Kalshi bid (0 = off)
-    cross_logged: float = 0.0  # when the last skipped sale was logged
-    scalp_at: float = 0.0  # scalp_hit: follow the high once the bid prints this price (0 = off)
-    scalp_up: float = 0.0  # or once the bid is this far above the price paid (0 = off)
-    scalp_dip: float = 0.03
-    scalp_dip_hard: float = LaneSpec.scalp_dip_hard  # a fall this far under the high sells at once (lane scalp_dip_hard; 0 = off)
-    scalp_dip_seconds: float = LaneSpec.scalp_dip_seconds  # the dip must hold this long before it sells (lane scalp_dip_seconds)
-    scalp_dip_since: float | None = None  # when the bid first went scalp_dip under the high and has stayed there
-    scalp_high: float = 0.0  # the highest bid since the arm printed
-    cash_out: float = 0.0  # lane cash_out_at: sell the moment the bid is at or under this price (0 = off)
-    strike_through: float = 0.0  # lane strike_through_sale, in percent of the strike (0.003 = 0.003%). 0 = off. This far through starts a watch; it does not sell
-    strike_through_seconds: float = 0.0  # that watch only looks in the last this many seconds
-    shock_bp: float = 0.0  # lane shock_bp (0 = off), with its seconds, cushion and last-seconds window
-    shock_seconds: float = 60.0
-    shock_margin_bp: float = 5.0
-    shock_units: float = 0.0  # lane shock_units: the move in typical minutes (replaces shock_bp)
-    shock_margin_units: float = 0.0
-    cross_units: float = -1.0  # lane cross_units: sell when the cushion is at or under this many typical minutes (-1 = off)
-    shock_bid_max: float = 0.0  # the highest bid the shock exit sells into (0 = SHOCK_BID[1])
-    shock_last: float = 120.0
-    value_exit: float = 0.0  # lane value_exit (0 = off): sell while the bid after the fee is this far over the curve's chance that the side pays
-    value_bid: tuple = (0.30, 0.70)
-    value_gain_x: float = 0.0  # lane value_exit_gain_x: the extreme-profit mode (the bid at this multiple of the price paid)
-    value_high: float = 0.0  # lane value_exit_high: ...or the bid at this price with more than value_high_left seconds left
-    value_high_left: float = 420.0
-    value_min_gain: float = 0.0  # lane value_exit_min_gain: dollars per contract the sale must clear after both fees
-    value_at: float = 0.0  # the value check looks at most once a second
-    value_noted: float = 0.0
     entry_filled: bool = False  # entry is the price the buy orders actually filled at (store.entry_fill), not the decision's ask
-    shock_trend_hold: float = -99.0  # lane shock_trend_hold: no shock sale while the pre-spike trend is this far with the bet (-99 = off)
-    shock_memory: float = 0.0  # lane shock_memory: seconds a shock stays in mind (0 = the latest move only)
-    shock_persist: float = 0.0  # lane shock_persist: seconds the shock condition must hold before the sale (0 = at once)
-    late_units: float = 0.0  # lane late_drop_units (0 = off)
-    curve_margin: float = -1.0  # lane curve_exit (-1 = off): the margin over the curve's own value of holding (curvevalue.py)
-    curve_persist: float = 5.0
     curve_scales: str = "900+180"
-    curve_last: float = 900.0
-    curve_near: float = -1.0  # lane curve_exit_near (-1 = fixed): the curve sale's margin at the close; the margin runs from curve_margin at 900 s left down to this
-    curve_since: float = 0.0  # when the curve condition began to hold without a break (0 = not holding)
-    curve_at: float = 0.0  # the curve check reads at most once a second
-    curve_noted: float = 0.0
-    curve_drop_units: float = -1.0  # lane curve_drop_units (-1 = off): the curve exit's trajectory sale
-    curve_drop_seconds: float = 120.0
-    curve_drop_margin: float = 0.5
-    curve_drop_persist: float = 5.0
-    curve_drop_since: float = 0.0
-    curve_wait_share: float = -1.0  # lane curve_wait_share (-1 = off): the curve sale and time-to-go wait by the market's own recovery time, less with a deeper drop, never over this share of the time left
-    curve_wait_severe: float = 1.5
-    curve_wait_default: float = 15.0
-    go_since: float = 0.0
-    curve_comeback: float = -1.0  # lane curve_drop_comeback (-1 = off): hold the trajectory sale while the coin's own hour says its falls come back (variants.comeback_rate)
-    curve_comeback_min: int = 5
-    curve_comeback_hold: float = 240.0
-    risk_sell: float = -1.0  # lane curve_risk_sell (-1 = off): the single risk exit's line (curverisk.py)
     risk_live: bool = False
     sell_chain: tuple = ()  # the sale's steps in the lane's own order (lane field sell_chain, or its exit module's steps; sellchain.py); empty = the default order, and the sale reasons as they always were
     sell_module: str = ""  # the lane's exit module, named in a chain lane's sale note
@@ -254,10 +168,8 @@ class Target:
     timed_at: float = 0.0  # shape_timed: when the shape was last read (once every pathshape.STEP seconds)
     timed_done: bool = False  # shape_timed: its one row has been written for this bet
     timed_failed: bool = False  # the shape_timed step raised on this bet and the one warning has been written
-    risk_line_live: bool = True  # false: the line sale is logged and recorded, not made (lane field curve_risk_line_live); the max loss and the profit side are not affected
     risk_spot_weight: float = 0.5
     risk_history: bool = True
-    risk_max_loss: float = 0.5
     risk_min_profit: float = 0.01
     risk_unit: float | None = None
     risk_unit_at: float = 0.0
@@ -294,20 +206,9 @@ class Target:
     risk_ever_ahead: bool = False  # the bid less the sell fee has been over the cost at some risk check since the buy
     risk_first_seen: float = 0.0  # when the risk check first read this bet
     risk_never_state: int = 0  # 0 = the look has not happened, 1 = looked and kept, 2 = looked and sells
-    risk_drop_units: float = 0.0  # the slow drop check, shadow only (lane field curve_risk_drop); 0 = off
-    risk_drop_share: float = 0.25
-    risk_drop_hist: list = field(default_factory=list)  # (time, the cushion in typical minutes on the bet's side)
-    risk_drop_since: float = 0.0
-    risk_drop_logged: bool = False
     risk_long_scales: tuple = ()  # the minutes the long layer reads its movement over, together (lane field curve_risk_long_scales); empty = the last hour
-    risk_nudge_units: float = 0.0  # the squeeze has no cap: the allowed miss is this many typical minutes of the market times how strongly everything agrees (lane field nudge_units; 0 = the cents cap)
-    risk_nudge_hour: bool = False  # the squeeze's cap is scaled by the hour's width correction (lane field nudge_hour_factor)
-    risk_squeeze: float = 0.0  # the most a loss may be short of the max loss and still count as reaching it (lane field squeeze_max)
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
-    risk_stop_hold: float = 0.0  # the max-loss stop waits this share of the time left (lane field curve_risk_stop_hold)
     risk_score: bool = False  # the risk exit reads riskscore.py's chance in place of the net bid (lane field curve_risk_score)
-    risk_early_hold: float = 0.0  # no loss sale while more than this share of the market is still to run (lane field curve_risk_early_hold)
-    risk_early_off: bool = False  # a loss sale was wanted early and held: this bet's loss sales stay off to settlement
     risk_at: float = 0.0  # the risk check reads at most once a second
     risk_noted: float = 0.0
     risk_since: float = 0.0  # when the risk began to stay high without a break (0 = not high)
@@ -320,76 +221,16 @@ class Target:
     risk_long_missing: bool = False  # logged once: no long layer at all
     risk_logged: bool = False
     risk_held_kind: str = ""  # what last held a sale this bet's risk exit wanted ("long layer", "wait"), so the hold is logged once as it begins
-    comeback_noted: float = 0.0
-    hold_since: float = 0.0  # when the comeback hold began (0 = none)
-    hold_ref: float = 0.0  # the cushion (typical minutes) when it began
-    hold_fall: float = 0.0  # how far it had fallen (typical minutes)
-    curve_rest: float = -1.0  # lane curve_rest (-1 = off): the curve exit as a resting ask, simulated on paper (manualrest.plan)
     rest_price: float = 0.0  # the ask now working (0 = none)
-    rest_at: float = 0.0  # when it was last priced
-    curve_gap: float = -1.0  # lane curve_gap (-1 = off): the curve exit's market-disagrees sale
-    curve_gap_persist: float = 15.0
-    curve_gap_since: float = 0.0
-    curve_behind_last: float = -1.0  # lane curve_behind_last (-1 = off): the curve exit's time-to-go sale
-    curve_behind_chance: float = 0.5
-    curve_cush: deque = field(default_factory=deque)  # (time, cushion in typical minutes), the last curve_drop_seconds of them
-    late_seconds: float = 30.0  # lane late_drop_seconds
-    late_bids: deque = field(default_factory=lambda: deque(maxlen=400))  # (second, bid) one a second, forward-filled, for the late-drop exit
-    shock_since: float = 0.0  # when the shock condition began to hold without a break (0 = not holding)
-    shock_seen: float = 0.0  # when _shock_hit last read this bet
-    shock_moves: deque = field(default_factory=lambda: deque(maxlen=900))  # (time, shock_seconds move in bp) while within shock_last + shock_memory of the close
-    shock_log_only: bool = False  # lane shock_log_only: write shock_log rows, never sell
-    shock_would: bool = False  # the would-fire row of a log-only watch is written once
-    shock_logged: float = 0.0  # lowest worst-move already written to shock_log for this bet
     shock_index: str = ""  # the index it reads
-    shock_source: str = "index"  # lane shock_source: "index" reads the spot index, "quote" reads the contract's own mid (quoteshock.py), for a market with no spot feed
-    wrong_bp: float = 0.0  # lane wrong_side_bp (0 = off): sell once the spot sits this far on the wrong side of shock_ref for wrong_seconds, for a position whose variety at the buy is in wrong_varieties
-    wrong_seconds: float = 15.0
-    wrong_last: float = 0.0  # lane wrong_side_last: act only inside this many seconds before the close (0 = the whole window)
-    wrong_since: float = 0.0  # when the spot first went that far wrong and has stayed
     variety: str = ""  # the variants.py letter at the buy
-    shock_noted: float = 0.0  # when the shock watch last wrote its line to the log (at most one every 10 s)
     shock_ref: float = 0.0  # the price the cushion is measured from: the strike (crypto) or the index's own price at the window open (commodities)
-    strike_through_rearm: bool = False  # lane strike_through_rearm: a return to the winning side restarts the watch instead of holding to the close
     through_kept: bool = False  # the index came back to the winning side after a cross: hold this position to the close
-    cross_take: float = 0.0  # lane cross_take: sell a gain once the bid is this many dollars over the price paid AND the index has crossed the strike cross_min times in this window; otherwise hold (0 = off)
-    cross_min: int = 1
-    cross_n: int = 0  # strike crossings of the index since the window opened
-    cross_sign: int = 0  # which side of the strike the last index reading was on (+1 above, -1 below)
     through_on: bool = False  # a cross has armed the watch and the index is still through
-    through_worst: float = 0.0  # the deepest through-fraction of this visit
-    through_best: float = 0.0  # the closest the index has come back toward the strike since that low
-    through_best_ts: float = 0.0  # when that recovery last improved, or when the low was set if it has not
-    through_bounce: bool = False  # the index has moved back toward the strike since the low
     checked: set[int] = field(default_factory=set)  # check-in marks (checkins.MARKS) already handled for this position
-    through_since: float = 0.0  # when the current stretch at or past the 0.003% marker began. 0 = not in one
-    scalp_high_ts: float = 0.0  # when that high last rose
-    scalp_plateau: float = 0.0  # lane scalp_plateau_seconds: sell a bid that has made no new high for this long (0 = off)
     index_id: str = ""  # the settlement index of this market
-    settle_checked: float = 0.0  # the guard looks at most once a second
     cur_bid: float = 0.0  # the latest bid and the opposite side's ask, from the socket
     cur_other_ask: float = 0.0
-    burst_logged: bool = False  # one burst log per held market
-    burst_share: float = LaneSpec.burst_share  # the share of the 3 s of dollars that must be against the holder for a burst to sell it (lane burst_share; 0 = off)
-    drop_cents: float = 0.0  # sell when the bid falls this far inside drop_seconds in the burst window (lane drop_cents; 0 = off)
-    drop_seconds: float = LaneSpec.drop_seconds
-    drop_was: float = LaneSpec.drop_was
-    drop_confirm: float = 0.0
-    drop_stay: float = 0.0
-    drop_window: float = LaneSpec.drop_window
-    bounce_fall: float = 0.0  # sell into the first bounce: the bid fell this far under the price paid, then bounced bounce_up off its low (lane bounce_fall; 0 = off)
-    bounce_up: float = LaneSpec.bounce_up
-    drop_armed_at: float | None = None  # when a fall was found and is waiting out drop_confirm
-    drop_high: float = 0.0  # the bid it fell from
-    burst_favorite: float = LaneSpec.burst_favorite  # the held side's bid must be at least this for a burst to sell it (lane burst_favorite)
-    burst_window: float = LaneSpec.burst_window  # ...in the last this many seconds (lane burst_window)...
-    burst_min_left: float = LaneSpec.burst_min_left  # ...and not in the last this many (lane burst_min_left)
-    burst_ratio: float = 0.0  # the burst exit as a multiple of this market's own normal 3 s of dollars (lane burst_ratio; 0 = off, burst_bar applies)
-    burst_min_dollars: float = 50.0  # ...and at least this many dollars (lane burst_min_dollars)
-    burst_bar: float = 0.0  # the dollars bought against the held favorite in 3 s that sell it (burst_dollars; 0 = the older multiple-of-normal rule)
-    burst_spot_edge: float = LaneSpec.burst_spot_edge  # a burst sells only when spot's own chance for this side is not more than this far over the sale price (lane burst_spot_edge; 0 = off)
-    burst_resell: bool = False  # the burst sale filled nothing: the next burst sells again (the log and the other-side buy stay once)
-    flip_hint: tuple[float, float] = (0.0, 0.0)  # (the other side's ask, its chance) at the moment the guard fired
     history: deque = field(default_factory=lambda: deque(maxlen=400))
 
 
@@ -418,52 +259,13 @@ def crash_fast(t: Target) -> float:
     return max(t.trail_fast, crash_drop(t)) if t.trail_giveback > 0 and t.trail_fast > 0 else t.trail_fast
 
 
-def side_bid(side: str, yes_bid: float, yes_ask: float) -> float:
-    """The price we could sell the contract we hold at, from a YES-book quote."""
-    return yes_bid if side == "yes" else 1.0 - yes_ask
-
-
 def _burst_category(ticker: str) -> str:
     return "Crypto" if ticker.split("-")[0][2:].startswith(("BTC", "ETH", "SOL", "XRP", "DOGE")) else "Other"
 
 
-def _side_burst(book: dict[int, list[float]], sec: int, idx: int) -> tuple[float, float, float]:
-    """This side's taker contracts in the last 3 seconds, its own median second of the 2 minutes before, and that 5x-style ratio."""
-    vol = 0.0
-    for k in range(3):
-        r = book.get(sec - k)
-        if r:
-            vol += r[idx]
-    per = sorted(book.get(sec - 3 - k, (0.0, 0.0))[idx] for k in range(120))
-    base = (per[59] + per[60]) / 2.0
-    return vol, base, vol / (3.0 * base + 1.0)
-
-
-def _side_dollar_ratio(book: dict[int, list[float]], sec: int, idx: int) -> float:
-    """The same burst measured in DOLLARS (contracts x the price paid). A cheap side buys many more contracts per dollar as its price falls, so a side sliding from 30c to 3c bursts in contracts with no extra money behind it:
-    on the moonshot's 61 settled tickets the winners' median dollar ratio was 8.7 against 3.4 for the losers (contracts: 11.3 against 9.7), and BTC's was 1.6."""
-    vol = 0.0
-    for k in range(3):
-        r = book.get(sec - k)
-        if r and len(r) > idx + 2:
-            vol += r[idx + 2]
-    per = sorted((book.get(sec - 3 - k) or [0.0] * 4)[idx + 2] if len(book.get(sec - 3 - k) or [0.0] * 4) > idx + 2 else 0.0 for k in range(120))
-    base = (per[59] + per[60]) / 2.0
-    return vol / (3.0 * base + 0.01)
-
-
-def _market_normal_dollars(book: dict[int, list[float]], sec: int) -> float:
-    """This market's normal 3 seconds in dollars: the median second of the 120 seconds before the last 3, with both sides' takers counted, times 3."""
-    per = sorted(((r[2] + r[3]) if (r := book.get(sec - 3 - k)) and len(r) > 3 else 0.0) for k in range(120))
-    return 3.0 * (per[59] + per[60]) / 2.0
-
-
-def _is_side_burst(vol: float, base: float, ratio: float) -> bool:
-    return ratio >= BURST_RATIO and vol >= BURST_FLOOR and base >= BURST_MIN_NORMAL
-
-
-def _side_ask(side: str, yes_bid: float, yes_ask: float) -> float:
-    return yes_ask if side == "yes" else 1.0 - yes_bid
+def side_bid(side: str, yes_bid: float, yes_ask: float) -> float:
+    """The price we could sell the contract we hold at, from a YES-book quote."""
+    return yes_bid if side == "yes" else 1.0 - yes_ask
 
 
 class ProfitWatcher:
@@ -478,10 +280,8 @@ class ProfitWatcher:
         self._varieties: dict[tuple[str, str], str] = {}  # (ticker, lane) -> its variety at the buy
         self._shock_logged: set[tuple[str, str]] = set()  # shock exits already reported as armed or not
         self._shock_refs: dict[tuple[str, str], float] = {}  # (ticker, index) -> the price its shock exit measures the cushion from
-        self._shock_hist: dict[str, deque] = {}  # index -> (time, value) ticks of the last SHOCK_KEEP seconds, kept only for the indexes a shock exit reads
         self._spot = self._model.spot  # settlement index -> (time, latest value), from the socket's index ticks
         self._tls = threading.local()
-        self._flow: dict[str, dict[int, list[float]]] = {}  # ticker -> second -> [YES-taker contracts, NO-taker contracts], the last 125 seconds
         self.hold_value = hold_value  # (open bet, store) -> the model's calibrated chance this position pays, or None if unknown
         self.get_settings = get_settings
         self.client = client
@@ -541,17 +341,6 @@ class ProfitWatcher:
             if src is not None:
                 self._spot_src[idx] = src
             self._spot[idx] = (now, float(e["value"]))
-            hist = self._shock_hist.get(idx)
-            if hist is not None:
-                hist.append((now, float(e["value"])))
-                while hist and now - hist[0][0] > SHOCK_KEEP:
-                    hist.popleft()
-                self._shock_on_index(idx, now)
-            self._cross_on_index(idx, now)
-            self._strike_through_on_index(idx, now)  # the watch follows the index tick: a long stay through sells at any time, and the last minute still sells a failed bounce
-            return
-        if e.get("kind") == "trade" and e.get("ticker") and e.get("count"):
-            self._on_trade(e)
             return
         if e.get("kind") != "quote" or e.get("bid") is None or e.get("ask") is None:
             return
@@ -570,106 +359,14 @@ class ProfitWatcher:
             if t.lane == manual.LANE and t.stop_confirm and not t.stop_ref and bid > 0:
                 t.stop_ref = min(t.entry, bid)  # hand-placed: measure the stop from what it could be sold for, not the ask paid (the spread is not a loss)
             self._track_peak(t, bid, now)
-            minute_now = (15.0 - (t.close_ts - now) / 60.0) if t.close_ts > 0 else None
-            left = (t.close_ts - now) if t.close_ts > 0 else None
-            recent = [b for ts, b in t.history if now - 3.0 <= ts <= now and b > 0]
-            hovering = len(recent) >= 2 and price_shape(list(t.history), now, bid) == "hover"
-            why = (f"cash-out: bid {bid:.2f} is at the {t.cash_out:.2f} line, {t.entry:.2f} paid" if t.cash_out > 0 and 0 < bid <= t.cash_out + 1e-9 else None) or take_profit_hit(t.entry, bid, t.x, t.at) or cash_if_up(t.entry, bid, minute_now, t.cash_up, t.cash_drop) or self._scalp(t, bid, now) or cash_if_losing(t.entry, bid, left, t.cash_left, hovering) or early_cash(
-                t.entry, bid, t.opened_min, minute_now, before=t.cash_before, leave=t.cash_leave, hovering=hovering,
-            ) or spike_hit(
-                list(t.history), now, t.entry, t.spike_cents, t.spike_seconds, t.spike_min_gain
-            )
             key = (t.ticker, t.lane)
             fast = self._fast_crash(t, bid)
-            reason = self._stop_hit(t, bid, now) or fast or self._drop_hit(t, bid, now) or self._bounce_hit(t, bid, now) or why or self._unstable_hit(t, bid, now) or self._hover_hit(t, bid) or self._risk_quote_hit(t, bid, now) or self._strike_through_hit(t, bid, now, now) or self._cross_take_hit(t, bid) or self._shock_hit(t, bid, now, now) or self._wrong_side_hit(t, bid, now, now) or self._late_drop_hit(t, bid, now) or self._settlement_hit(t, bid, now, e)
-            if reason and t.cross_gap > 0 and e.get("src") == "poly":
-                reason = self._cross_checked(t, bid, now, reason)
+            reason = self._stop_hit(t, bid, now) or fast or take_profit_hit(t.entry, bid, t.x, t.at) or self._unstable_hit(t, bid, now) or self._risk_quote_hit(t, bid, now)
             if reason and key not in self._inflight:
                 self._inflight.add(key)
                 self._queue_sell(SellSignal(t.ticker, t.lane, reason))
 
-    def _on_trade(self, e: dict[str, Any]) -> None:
-        """A trade on a market we hold. Per second it keeps the contracts traded by YES takers and NO takers over the last two minutes. On the first burst against a held favorite (the last 3 seconds' volume a multiple of the market's own
-        normal second, most of it against the holder, and that normal itself at least BURST_MIN_NORMAL) in the last burst_window seconds (the lane's setting) it sells the favorite — that is the peak-crash exit (the bid is still 80c+, volume is dumping, and holding
-        those last two minutes lost). A 300-contract print on a silent book is not a crash: the ratio is only meaningful once the market actually trades. It also logs the opposite side as a paper bet (lane burst_flip) and, when burst_buy is set,
-        buys a dollar of it. Any 15-minute market, not only crypto. Only for a lane that asked for flips (burst_exit)."""
-        tk, now = e["ticker"], float(e["ts"])
-        sec = int(now)
-        book = self._flow.setdefault(tk, {})
-        row = book.setdefault(sec, [0.0, 0.0, 0.0, 0.0])  # YES-taker contracts, NO-taker contracts, then the dollars they paid (a NO taker pays 1 - the YES price)
-        yes_taker = e.get("taker") == "yes"
-        row[0 if yes_taker else 1] += float(e["count"])
-        yes_px = float(e.get("price") or 0.0)
-        count = float(e["count"])
-        paid = yes_px if yes_taker else 1.0 - yes_px  # what the taker paid for the side they bought
-        row[2 if yes_taker else 3] += count * paid
-        for old in [k for k in book if k < sec - 125]:
-            del book[old]
-        with self._lock:
-            held = [t for (ticker, _), t in self.targets.items() if ticker == tk and t.burst_exit and (not t.burst_logged or t.burst_resell)]
-        for t in held:
-            idx = 1 if t.side == "yes" else 0  # NO takers against a YES holder, YES takers against a NO holder
-            if t.burst_ratio > 0:
-                # The burst as a multiple of this market's own normal 3 s of dollars (scripts/burst_exit_replay2.py, 2026-10-30), with the lane's floor on the held side's bid and the one-sided share below
-                if t.cur_bid < t.burst_favorite or t.cur_other_ask <= 0 or not (t.burst_min_left <= t.close_ts - now <= t.burst_window):
-                    continue
-                against = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
-                base = max(_market_normal_dollars(book, sec), 1.0)
-                ratio = against / base
-                hit = against >= t.burst_ratio * base and against >= t.burst_min_dollars
-                if hit and t.burst_share > 0:
-                    with_holder = sum((book.get(sec - k) or [0.0] * 4)[(1 - idx) + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > (1 - idx) + 2)
-                    hit = against / (against + with_holder + 1e-9) >= t.burst_share
-            elif t.burst_bar > 0:
-                # The moonshot's identifier (burst_exit_study, 2026-10-27): at least $X bought AGAINST a 90c favorite in 3 s. Absolute dollars, not a multiple of normal, and a bar per family: the contract-multiple rule sold metals and energy winners early (-2.3c a contract against holding).
-                if t.cur_bid < t.burst_favorite or t.cur_other_ask <= 0 or not (t.burst_min_left <= t.close_ts - now <= t.burst_window):
-                    continue
-                against = sum((book.get(sec - k) or [0.0] * 4)[idx + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > idx + 2)
-                base, ratio, hit = t.burst_bar, against / t.burst_bar, against >= t.burst_bar
-                if hit and t.burst_share > 0:
-                    with_holder = sum((book.get(sec - k) or [0.0] * 4)[(1 - idx) + 2] for k in range(3) if len(book.get(sec - k) or [0.0] * 4) > (1 - idx) + 2)
-                    hit = against / (against + with_holder + 1e-9) >= t.burst_share  # the held side being bought as hard is not a crash
-            else:
-                if not (BURST_BAND[0] <= t.cur_bid <= BURST_BAND[1]) or t.cur_other_ask <= 0 or not (t.burst_min_left <= t.close_ts - now <= t.burst_window):
-                    continue
-                against, base, ratio = _side_burst(book, sec, idx)
-                hit = _is_side_burst(against, base, ratio)
-            if hit:
-                t.burst_logged = True
-                t.burst_resell = False
-                other = "no" if t.side == "yes" else "yes"
-                if t.burst_ratio > 0:
-                    reason = (f"burst: ${against:.0f} bought against the {t.side} holder in 3 s, {ratio:.1f}x this market's normal ${base:.0f} (bar {t.burst_ratio:.0f}x), the favorite's bid {t.cur_bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}")
-                elif t.burst_bar > 0:
-                    reason = (f"burst: ${against:.0f} bought against the {t.side} holder in 3 s (bar ${t.burst_bar:.0f}), the favorite's bid {t.cur_bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}")
-                else:
-                    reason = (f"burst: {ratio:.0f}x this side's normal volume against the {t.side} holder ({against:.0f} contracts in 3 s), the favorite's bid {t.cur_bid:.2f}; the {other} side costs {t.cur_other_ask:.2f}")
-                key = (t.ticker, t.lane)
-                if key not in self._inflight:
-                    self._inflight.add(key)
-                    self._queue_sell(SellSignal(t.ticker, t.lane, reason))  # sell the favorite: the burst is the peak crashing in the last two minutes
 
-    def _cross_checked(self, t: Target, bid: float, now: float, reason: str) -> str | None:
-        """A sale decided on a Polymarket bid is held back when Kalshi's bid for the same side and market is more than the lane's stop_cross_gap above it: Polymarket prints bids that are not real (exactly 0.15 on markets Kalshi has at 0.75), and a stop sold into one.
-        Kalshi's bid is the tape's newest quote for the ticker, at most CROSS_STALE seconds old; with none, the sale goes ahead."""
-        from . import tape as tape_mod
-
-        if tape_mod.recent.stop_armed(t.ticker):
-            got = tape_mod.recent.stop_quotes(t.ticker, now - CROSS_STALE, now)
-        else:
-            got = tape_mod.recent.quotes(t.ticker, now - CROSS_STALE, now)
-            if got is None:
-                got = tape_mod.recent.quote_tail(t.ticker, now - CROSS_STALE, now)
-        book = None if not got else (float(got[-1][1]), float(got[-1][2]))
-        if book is None:
-            return reason
-        ref = side_bid(t.side, book[0], book[1])
-        if ref - bid <= t.cross_gap:
-            return reason
-        if now - t.cross_logged > 30.0:
-            t.cross_logged = now
-            log.warning("watcher: not selling %s %s on a Polymarket bid of %.2f: Kalshi's bid is %.2f (%s)", t.ticker, t.side, bid, ref, reason[:80])
-        return None
 
     def _market_static(self, ticker: str) -> dict[str, Any]:
         """A market read for its fixed fields (close time, strike): kept for ten minutes where the client can, so the 3-second refresh does not ask again."""
@@ -681,84 +378,11 @@ class ProfitWatcher:
             self._tls.tape = self.tape_factory()
         return getattr(self._tls, "tape", None)
 
-    def _strike_through_clear(self, t: Target) -> None:
-        t.through_on = False
-        t.through_worst = t.through_best = t.through_best_ts = t.through_since = 0.0
-        t.through_bounce = False
 
-    def _strike_through_on_index(self, index_id: str, now: float) -> None:
-        """A held favorite whose index has crossed the strike. The latest bid is used only when it printed within a second of this tick; an older bid is from before the cross."""
-        with self._lock:
-            hits = [t for t in self.targets.values() if t.index_id == index_id and t.strike_through > 0]
-        for t in hits:
-            if t.last_ts <= 0 or t.cur_bid <= 0:
-                continue
-            reason = self._strike_through_hit(t, t.cur_bid, now, t.last_ts)
-            key = (t.ticker, t.lane)
-            if reason and key not in self._inflight:
-                self._inflight.add(key)
-                self._queue_sell(SellSignal(t.ticker, t.lane, reason))
 
-    def _seed_crossings(self, t: Target) -> None:
-        """Count the strike crossings of the index since the window opened, from the tape, so a position armed mid-window (or after a restart) knows how choppy the market has been (2026-11-05, user: take the profit in a market that keeps crossing)."""
-        tape = self._tape_db()
-        if tape is None or t.strike <= 0 or t.close_ts <= 0 or not t.index_id:
-            return
-        try:
-            rows = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts>=? AND ts<=? AND value>0 ORDER BY ts", (t.index_id, t.close_ts - 900.0, time.time())).fetchall()
-        except Exception:
-            log.debug("watcher: could not seed the crossings for %s", t.ticker, exc_info=True)
-            return
-        sign = 0
-        for (value,) in rows:
-            s_ = 1 if float(value) > t.strike else -1
-            if sign and s_ != sign:
-                t.cross_n += 1
-            sign = s_
-        t.cross_sign = sign
 
-    def _cross_take_hit(self, t: Target, bid: float) -> str | None:
-        """Sell a gain once the market has been crossing: the bid is cross_take over the price paid and the index has crossed the strike cross_min times. With no crossing yet the position is held (the study of 121 crypto gains
-        sold early: 0 crossings, holding paid +7.3c a contract more; 1-2 crossings, selling paid +8.2c more)."""
-        if t.cross_take <= 0 or t.cross_n < t.cross_min or bid <= 0 or t.entry <= 0 or bid < t.entry + t.cross_take - 1e-9:
-            return None
-        return f"cross take: bid {bid:.2f} is {bid - t.entry:.2f} over the {t.entry:.2f} paid and the index has crossed the strike {t.cross_n} times"
 
-    def _cross_on_index(self, index_id: str, now: float) -> None:
-        with self._lock:
-            hits = [t for t in self.targets.values() if t.index_id == index_id and t.cross_take > 0 and t.strike > 0]
-        spot = self._spot.get(index_id)
-        if spot is None:
-            return
-        for t in hits:
-            sign = 1 if spot[1] > t.strike else -1
-            if t.cross_sign and sign != t.cross_sign:
-                t.cross_n += 1
-            t.cross_sign = sign
-            if t.last_ts <= 0 or t.cur_bid <= 0:
-                continue
-            reason = self._cross_take_hit(t, t.cur_bid)
-            key = (t.ticker, t.lane)
-            if reason and key not in self._inflight:
-                self._inflight.add(key)
-                self._queue_sell(SellSignal(t.ticker, t.lane, reason))
 
-    def _seed_shock_history(self, index_id: str) -> None:
-        """Fill an empty shock history from the tape (2026-11-05): the history was built only from live ticks, so a restart left every open position with no spot history and the shock exit unusable for the first minute
-        ("not usable: 17s of history" on a gold NO that then lost 0.92 -> 0). The last SHOCK_KEEP seconds of the index are read once, on the thread that arms the position. A history that already has ticks is left alone."""
-        hist = self._shock_hist.get(index_id)
-        if hist is None or hist:
-            return
-        tape = self._tape_db()
-        if tape is None:
-            return
-        try:
-            rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts>? AND value>0 ORDER BY ts", (index_id, time.time() - SHOCK_KEEP)).fetchall()
-        except Exception:
-            log.debug("watcher: could not seed the shock history for %s", index_id, exc_info=True)
-            return
-        for ts, value in rows:
-            hist.append((float(ts), float(value)))
 
     def _shock_reference(self, t: Target, index_id: str) -> float:
         """What the shock exit measures the cushion from. A BiQuote commodity price differs from Kalshi's strike by a dollar or two, so it is read against the same index's own price when the window opened (the tape); a crypto settlement index is read against the strike itself."""
@@ -784,144 +408,13 @@ class ProfitWatcher:
             self._shock_refs[(t.ticker, index_id)] = ref
         return ref
 
-    def _entry_variety(self, t: Target, index_id: str, ref: float, bought_at: float) -> str:
-        """The variants.py letter of a position at its buy, from the index ticks of the five minutes before it (the tape). Empty when the tape cannot say."""
-        key = (t.ticker, t.lane)
-        if key in self._varieties:
-            return self._varieties[key]
-        tape = self._tape_db()
-        if tape is None:
-            return ""
-        try:
-            rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index_id, bought_at - variants.LOOK - 40.0, bought_at)).fetchall()
-            snap = variants.snapshot([float(r[0]) for r in rows], [float(r[1]) for r in rows], ref, t.side, bought_at, t.close_ts)
-        except Exception:
-            return ""
-        out = snap["variety"] if snap else ""
-        if out:
-            self._varieties[key] = out
-            log.info("watcher: %s %s is variety %s (%s) at its buy", t.ticker, t.lane, out, variants.NAMES[out])
-        return out
 
-    def _wrong_side_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
-        """The wrong-side exit: the spot has stayed wrong_bp basis points on the losing side of its reference for wrong_seconds, on a position whose variety at the buy asked for it. Sells only a bid in SHOCK_BID, like the shock exit."""
-        if t.wrong_bp <= 0 or t.shock_ref <= 0 or t.close_ts <= 0 or not t.shock_index:
-            return None
-        left = t.close_ts - now
-        if left <= SETTLE_LAST:
-            return None
-        if t.wrong_last > 0 and left > t.wrong_last:
-            t.wrong_since = 0.0  # the clock starts inside the last-seconds window
-            return None
-        spot = self._spot.get(t.shock_index)
-        if spot is None:
-            return None
-        spot_ts, value = spot
-        if value <= 0 or now - spot_ts > THROUGH_SPOT:
-            return None
-        sign = 1.0 if t.side == "yes" else -1.0
-        cushion = math.log(value / t.shock_ref) * sign * 1e4
-        if cushion > -t.wrong_bp:
-            t.wrong_since = 0.0
-            return None
-        if t.wrong_since <= 0:
-            t.wrong_since = now
-            return None
-        if now - t.wrong_since < t.wrong_seconds or bid < SHOCK_BID[0] or bid > SHOCK_BID[1] or quote_ts < spot_ts - THROUGH_QUOTE:
-            return None
-        return f"wrong-side exit: spot {-cushion:.1f} bp on the wrong side of its window-open price for {now - t.wrong_since:.0f}s (variety {t.variety}), {left:.0f}s left, bid {bid:.2f}"
 
-    def _shock_on_index(self, index_id: str, now: float) -> None:
-        with self._lock:
-            hits = [t for t in self.targets.values() if t.shock_index == index_id and (t.shock_bp > 0 or t.shock_units > 0 or t.cross_units >= 0 or t.wrong_bp > 0 or t.value_exit > 0 or t.value_gain_x > 0 or t.value_high > 0 or t.curve_margin >= 0 or t.curve_rest > 0 or t.risk_sell > 0)]
-        for t in hits:
-            if t.last_ts <= 0 or t.cur_bid <= 0:
-                continue
-            reason = self._shock_hit(t, t.cur_bid, now, t.last_ts) or self._wrong_side_hit(t, t.cur_bid, now, t.last_ts) or self._value_hit(t, t.cur_bid, now, t.last_ts) or self._curve_hit(t, t.cur_bid, now, t.last_ts) or self._risk_hit(t, t.cur_bid, now, t.last_ts)
-            key = (t.ticker, t.lane)
-            if reason and key not in self._inflight:
-                self._inflight.add(key)
-                self._queue_sell(SellSignal(t.ticker, t.lane, reason))
 
-    def _curve_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
-        """The curve exit (2026-11-10, user: enable on commodity_multiscale; curvevalue.py): sell when the bid after the sell fee is at least the curve's own chance that this side pays plus the lane's margin, for curve_exit_persist seconds. Reads the in-memory index ticks once a second. Takes profit and cuts losses with the one rule; the lane's shock, late-drop and value exits are off. Each decision logs its curve reading."""
-        # 2026-11-17 (user: "lets. fix the curve exit, because WTI just landed 2 0s"): the time-to-go, trajectory and gap sales run without the margin sale (curve_margin < 0). They hung on it, so turning off the sale that sold winners turned off the ones that cut losers
-        if (t.curve_margin < 0 and t.curve_rest <= 0 and not (t.curve_behind_last > 0 or t.curve_drop_units > 0 or t.curve_gap > 0)) or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.curve_at < 1.0:
-            return None
-        left = t.close_ts - now
-        if t.curve_rest > 0:
-            return self._curve_rest_hit(t, bid, now, quote_ts, left)
-        go = t.curve_behind_last > 0 and CURVE_GO_MIN_LEFT <= left <= t.curve_behind_last and bid > 0 and now - quote_ts <= 5.0  # the time-to-go sale acts later and at lower bids than the other sales
-        quiet = left <= CURVE_MIN_LEFT or left > t.curve_last or now - quote_ts > 5.0
-        if quiet and not go:
-            t.curve_since = 0.0
-            return None
-        t.curve_at = now
-        got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
-        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left, t.curve_scales) if got else None
-        if read is None:
-            t.curve_since = 0.0
-            return None
-        tm = read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0
-        wait = self._scaled_wait(t, now, left, tm) if t.curve_wait_share > 0 else None
-        if go and read.p < t.curve_behind_chance and wait is not None:
-            if t.go_since <= 0:
-                t.go_since = now
-            if now - t.go_since >= wait:
-                return f"curve exit (time to go): the curve's chance is {read.p:.3f}, under {t.curve_behind_chance:g}, with {left:.0f}s left; held {now - t.go_since:.0f}s of a {wait:.0f}s wait that scales with the time left and how far under the target it is ({tm:+.2f} typical minutes); bid {bid:.2f}"
-        elif go and read.p < t.curve_behind_chance:
-            return f"curve exit (time to go): the curve's chance is {read.p:.3f}, under {t.curve_behind_chance:g}, with {left:.0f}s left (sells in the last {t.curve_behind_last:g}s); bid {bid:.2f}, cushion {read.cushion * 1e4:+.1f} bp"
-        if not (go and read.p < t.curve_behind_chance):
-            t.go_since = 0.0
-        if quiet:
-            t.curve_since = 0.0
-            return None
-        net = bid - fee_per_contract(bid)
-        over = net - read.p
-        margin = t.curve_margin if t.curve_near < 0 else t.curve_near + (t.curve_margin - t.curve_near) * (min(max(left, 0.0), 900.0) / 900.0) ** 0.5  # the margin shrinks with the square root of the time left
-        if now - t.curve_noted >= 10.0:
-            t.curve_noted = now
-            log.info("curve exit watch %s %s, %.0fs left: bid %.2f (%.3f after the fee), curve chance %.3f, over by %+.3f (sells at %+.3f for %.0fs); cushion %+.2f typical minutes", t.ticker, t.lane, left, bid, net, read.p, over, margin, wait if wait is not None else t.curve_persist, read.cushion / (read.rate_long * 60**0.5) if read.rate_long > 0 else 0.0)
-        if t.hold_since > 0:
-            ended = self._comeback_expired(t, now, left, tm, bid)
-            if ended:
-                return ended
-        if t.curve_drop_units > 0:
-            # the trajectory sale: the cushion fell curve_drop_units typical minutes over curve_drop_seconds and now sits at or under the margin
-            t.curve_cush.append((now, tm))
-            while t.curve_cush and now - t.curve_cush[0][0] > t.curve_drop_seconds + 1.0:
-                t.curve_cush.popleft()
-            first_ts, first_tm = t.curve_cush[0]
-            if now - first_ts >= t.curve_drop_seconds - 1.0 and tm <= t.curve_drop_margin and first_tm - tm >= t.curve_drop_units:
-                if t.curve_drop_since <= 0:
-                    t.curve_drop_since = now
-                if now - t.curve_drop_since >= t.curve_drop_persist and t.curve_comeback > 0 and self._comeback_holds(t, now, left, tm, first_tm - tm):
-                    t.curve_drop_since = now  # held: look again at the next reading, not at once
-                elif now - t.curve_drop_since >= t.curve_drop_persist:
-                    return f"curve exit (trajectory): the cushion fell {first_tm - tm:.2f} typical minutes over {now - first_ts:.0f}s to {tm:+.2f} (sells at a fall of {t.curve_drop_units:g} to {t.curve_drop_margin:g} or under, held {now - t.curve_drop_since:.0f}s); bid {bid:.2f}, curve chance {read.p:.3f}, {left:.0f}s left"
-            else:
-                t.curve_drop_since = 0.0
-        if t.curve_gap > 0:
-            # the market-disagrees sale: the bid sits far under the curve's chance, so the spot reading is the one in doubt
-            if -over >= t.curve_gap:
-                if t.curve_gap_since <= 0:
-                    t.curve_gap_since = now
-                if now - t.curve_gap_since >= t.curve_gap_persist:
-                    return f"curve exit (market disagrees): the curve's chance {read.p:.3f} is {-over:.3f} over the bid {bid:.2f} ({net:.3f} after the fee) for {now - t.curve_gap_since:.0f}s (sells at {t.curve_gap:g} for {t.curve_gap_persist:g}s); cushion {tm:+.2f} typical minutes, {left:.0f}s left"
-            else:
-                t.curve_gap_since = 0.0
-        if t.curve_margin < 0 or over < margin:  # no margin sale on this lane, or the bid is not that far over the curve's chance
-            t.curve_since = 0.0
-            return None
-        if t.curve_since <= 0:
-            t.curve_since = now
-        if now - t.curve_since < (wait if wait is not None else t.curve_persist):
-            return None
-        return f"curve exit: bid {bid:.2f} ({net:.3f} after the fee) is {over:+.3f} over the curve's {read.p:.3f} chance that the side pays (margin {margin:.3f} with {left:.0f}s left, held {now - t.curve_since:.0f}s); cushion {read.cushion * 1e4:+.1f} bp, rates {read.rate_long * 60**0.5 * 1e4:.1f} / {read.rate_short * 60**0.5 * 1e4:.1f} bp a typical minute (900 s / 180 s), {left:.0f}s left"
 
     def _risk_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
         """The single risk exit on the spot's tick (curverisk.py, 2026-11-13, user), for a lane that gives the spot cushion a weight: the chance the side pays is the worse of Kalshi's own bid and the curve's spot chance (the price counted in full), widened by the market's last hour of jumps from its Kalshi perp. A lane with no spot weight is read on Kalshi's quote instead (_risk_quote_hit)."""
-        if t.risk_sell <= 0 or t.risk_spot_weight <= 0 or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.risk_at < 1.0 or time.time() < t.retry_after:
+        if not t.sell_chain or t.risk_spot_weight <= 0 or t.close_ts <= 0 or t.shock_ref <= 0 or not t.shock_index or now - t.risk_at < 1.0 or time.time() < t.retry_after:
             return None
         left = t.close_ts - now
         if left <= CURVE_MIN_LEFT or bid <= 0 or now - quote_ts > 5.0:
@@ -955,7 +448,7 @@ class ProfitWatcher:
 
     def _risk_quote_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The single risk exit on Kalshi's own quote (2026-11-13, user: "switch to use kalshis price instead of the external feeds for everything", then "exit first"): for a lane that gives the spot cushion no weight the chance the side pays IS the bid net of the sell fee, so the exit needs no spot feed, reads every quote and acts the second the price moves."""
-        if t.risk_sell <= 0 or t.risk_spot_weight > 0 or t.close_ts <= 0 or now - t.risk_at < 1.0 or time.time() < t.retry_after:
+        if not t.sell_chain or t.risk_spot_weight > 0 or t.close_ts <= 0 or now - t.risk_at < 1.0 or time.time() < t.retry_after:
             return None
         left = t.close_ts - now
         if left <= CURVE_MIN_LEFT or bid <= 0:
@@ -1075,20 +568,17 @@ class ProfitWatcher:
         """The sale decision both risk paths share: the watch line every 10 s, then the sale's steps in the bet's own order (sellchain.py; lane field sell_chain, or the default order: never ahead, under even, the profit take, the trail, the long layer's hold, the loss sale). A step answers a sale (returned), a hold (nothing is sold on this check) or nothing (the next step is asked). A lane with no chain gets the default order and its reasons as they always were; a lane with a chain gets the chain's note at the end of its sale reason."""
         if now - t.risk_noted >= 10.0:
             t.risk_noted = now
-            log.info("curve risk watch %s %s, %.0fs left: chance %.3f (%s worse; price %.3f, spot %.3f, history x%.2f, long layer %s), line %.2f, result %+.1f%% of cost%s", t.ticker, t.lane, left, r.q, r.worse, r.q_price, r.q_spot, t.risk_hist, "n/a" if long_chance is None else f"{long_chance:.3f}", t.risk_sell, pnl * 100.0, "" if t.risk_live else " [shadow]")
-        if getattr(t, "risk_drop_units", 0.0) > 0:  # shadow only, and off unless the lane sets it
-            self._risk_drop_shadow(t, r, bid, now, left, pnl)
+            log.info("curve risk watch %s %s, %.0fs left: chance %.3f (%s worse; price %.3f, spot %.3f, history x%.2f, long layer %s), result %+.1f%% of cost%s", t.ticker, t.lane, left, r.q, r.worse, r.q_price, r.q_spot, t.risk_hist, "n/a" if long_chance is None else f"{long_chance:.3f}", pnl * 100.0, "" if t.risk_live else " [shadow]")
         look = t.risk_take_slope * left  # the look back for the slope shrinks with the time left
         basis = t.entry + fee_per_contract(t.entry)
         net = bid - fee_per_contract(bid)
         c = _SellWalk(look, basis, net, long_chance)
-        chain = tuple(getattr(t, "sell_chain", ()) or ())
-        for name in sellchain.order_of(chain):
+        for name in t.sell_chain:
             got = _SELL[name](self, t, r, bid, now, left, pnl, c)
             if got is sellchain.HOLD:
                 return None
             if got:
-                return sellchain.tagged(got, chain, getattr(t, "sell_module", ""), name) if chain else got
+                return sellchain.tagged(got, t.sell_chain, t.sell_module, name)
         return None
 
     def _sell_never_ahead(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
@@ -1383,31 +873,6 @@ class ProfitWatcher:
         self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="never ahead")
         return None
 
-    def _risk_drop_shadow(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> None:
-        """The slow drop check, shadow only (lane field curve_risk_drop; 2026-11-16, user: "trend away from position for X amount of time by Y factor"; "Yes, shadow it"). Reads the lane's own spot index against its armed reference once a second (curvevalue.read, as the cushion check does), keeps the cushion in typical minutes, and when it has fallen the lane's units from its high of the last share of the time left, with the curve's chance under one half, for that share of the time left, logs one would-sell a bet and records it (kind "drop"). It never sells and never raises a sale: nothing here returns a reason."""
-        if t.risk_drop_units <= 0 or t.risk_drop_logged or t.shock_ref <= 0 or not t.shock_index or left <= 0:
-            return
-        got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
-        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left, t.curve_scales) if got else None
-        if read is None or read.rate_long <= 0:
-            t.risk_drop_since = 0.0  # no reading: the hold starts again when there is one
-            return
-        look = t.risk_drop_share * left
-        t.risk_drop_hist.append((now, read.cushion / (read.rate_long * 60**0.5)))
-        while t.risk_drop_hist and t.risk_drop_hist[0][0] < now - look - 5.0:  # the look back only shrinks as the market runs down
-            t.risk_drop_hist.pop(0)
-        fall = curverisk.drop_fall(t.risk_drop_hist, now, look)
-        chance = curvevalue.phi(read.cushion / (read.rate_long * math.sqrt(left)))  # the 900 s rate alone, as the replay read it (read.p is the lower of two scales)
-        if not curverisk.slow_drop(fall, chance, t.risk_drop_units):
-            t.risk_drop_since = 0.0
-            return
-        if t.risk_drop_since <= 0:
-            t.risk_drop_since = now
-        if now - t.risk_drop_since < look:
-            return
-        t.risk_drop_logged = True
-        log.info("curve risk shadow: %s %s would sell (slow drop): the cushion is %+.2f typical minutes, %.2f under its high of the last %.0fs (%.0f%% of the time left; asks %.2g), the curve's chance is %.3f, held %.0fs; bid %.2f, %+.1f%% of cost, %.0fs left", t.ticker, t.lane, t.risk_drop_hist[-1][1], fall, look, t.risk_drop_share * 100.0, t.risk_drop_units, chance, now - t.risk_drop_since, bid, pnl * 100.0, left)
-        self._risk_record(t, r, bid, now, left, pnl, look, False, False, kind="drop")
 
     def _risk_held(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, kind: str, why: str) -> None:
         """A live sale the risk exit wanted and something held (2026-11-15: four bets were held to a full loss with the bid at 0.37 to 0.41 when they crossed the max-loss line, and the log said nothing about why). Logged and written to data/risk_shadow.jsonl once as each kind of hold begins; it ends when the sale is no longer wanted."""
@@ -1422,7 +887,7 @@ class ProfitWatcher:
         try:
             from pathlib import Path
 
-            row = {"ts": now, "ticker": t.ticker, "lane": t.lane, "side": t.side, "entry": t.entry, "bid": bid, "q": round(r.q, 4), "worse": r.worse, "pnl": round(pnl, 4), "left": round(left, 1), "wait": round(wait, 1), "stop": stop, "line": t.risk_sell, "live": live}
+            row = {"ts": now, "ticker": t.ticker, "lane": t.lane, "side": t.side, "entry": t.entry, "bid": bid, "q": round(r.q, 4), "worse": r.worse, "pnl": round(pnl, 4), "left": round(left, 1), "wait": round(wait, 1), "stop": stop, "live": live}
             if held:
                 row["held"] = held
             if kind:
@@ -1434,377 +899,20 @@ class ProfitWatcher:
         except OSError:
             log.warning("curve risk: could not write data/risk_shadow.jsonl")
 
-    def _scaled_wait(self, t: Target, now: float, left: float, tm: float) -> float:
-        """Seconds the curve sale and time-to-go wait before selling (lane field curve_wait_share): the market's own median seconds for a fast fall to regain half of itself over the last hour (curve_wait_default when it has under 5 falls),
-        less the deeper the spot is under the target (typical minutes under it over curve_wait_severe: zero at that depth), and never more than curve_wait_share of the time left."""
-        base = t.curve_wait_default
-        got = variants.comeback_stats(t.shock_index, now)
-        if got is not None and got[1] >= 5:
-            base = got[2]
-        severity = max(0.0, -tm)
-        scale = 1.0 - min(1.0, severity / max(t.curve_wait_severe, 1e-9))
-        return max(0.0, min(base * scale, t.curve_wait_share * max(left, 0.0)))
 
     COMEBACK_BACK_SECONDS = 120.0  # the window the comeback rate was measured over (variants.comeback_rate)
 
-    def _comeback_holds(self, t: Target, now: float, left: float, tm: float, fall: float) -> bool:
-        """The trajectory sale's hold (lane field curve_drop_comeback): True while this coin's own last hour says its fast falls usually come back (variants.comeback_rate at or over the lane's share, with enough falls) and there is time left for one to. Starts the hold: its start, the cushion and the size of the fall are kept so _comeback_expired can end it."""
-        if t.curve_comeback <= 0 or left <= t.curve_comeback_hold:
-            return False
-        got = variants.comeback_rate(t.shock_index, now)
-        if got is None or got[1] < t.curve_comeback_min or got[0] < t.curve_comeback:
-            return False
-        if t.hold_since <= 0:
-            t.hold_since, t.hold_ref, t.hold_fall = now, tm, fall
-        if now - t.comeback_noted >= 10.0:
-            t.comeback_noted = now
-            log.info("curve exit held %s %s, %.0fs left: the trajectory sale would fire, but %.0f%% of %d falls this hour came back by half within 120 s (the lane holds at %.0f%%)", t.ticker, t.lane, left, got[0] * 100, got[1], t.curve_comeback * 100)
-        return True
 
-    def _comeback_expired(self, t: Target, now: float, left: float, tm: float, bid: float) -> str | None:
-        """The end of a comeback hold, checked on every reading while it lasts (the hold is a bet that the dip comes back, so it has to be called when it does not): the cushion regained half the fall (the bet paid, the hold ends with no sale); it fell another whole fall under where the hold began (a slide, not a dip); or the 120 s the rate was measured over passed without it coming back, or the lane's last seconds began. The last three sell at the bid, as the trajectory sale would have."""
-        if t.hold_since <= 0:
-            return None
-        if tm - t.hold_ref >= 0.5 * t.hold_fall:
-            t.hold_since = 0.0
-            log.info("curve exit hold ended %s %s: the cushion came back to %+.2f from %+.2f (half the fall of %.2f regained); no sale", t.ticker, t.lane, tm, t.hold_ref, t.hold_fall)
-            return None
-        held = now - t.hold_since
-        if tm <= t.hold_ref - t.hold_fall:
-            why = f"it kept falling: the cushion is {tm:+.2f}, another whole fall ({t.hold_fall:.2f}) under {t.hold_ref:+.2f} where the hold began"
-        elif held >= self.COMEBACK_BACK_SECONDS:
-            why = f"no comeback in {held:.0f}s: the cushion is {tm:+.2f}, under half of the fall of {t.hold_fall:.2f} regained from {t.hold_ref:+.2f}"
-        elif left <= t.curve_comeback_hold:
-            why = f"{left:.0f}s left: the hold ends and the cushion is {tm:+.2f}, not back from {t.hold_ref:+.2f}"
-        else:
-            return None
-        t.hold_since = 0.0
-        return f"curve exit (trajectory, comeback hold over): {why}; bid {bid:.2f}"
 
-    def _curve_rest_hit(self, t: Target, bid: float, now: float, quote_ts: float, left: float) -> str | None:
-        """The curve exit as a resting ask (lane field curve_rest; 2026-11-11, a shadow lane to compare with the multiscale lanes): the ask sits at the curve's chance + curve_rest * sqrt(seconds left / 900) (the 900 s rate, as the buy gate reads it), repriced every manualrest.REPRICE_EVERY seconds, never at or under the bid. The bet is sold when the bid reaches the ask, at the ask's price. The lane's time-to-go sale (curve_behind_last, curve_behind_chance) is the guard, at the bid. Simulated: nothing is placed on the book."""
-        if left < CURVE_MIN_LEFT or left > 900.0 or bid <= 0 or now - quote_ts > 5.0:
-            return None
-        t.curve_at = now
-        if t.rest_price > 0 and bid >= t.rest_price - 1e-9:
-            return f"{manualrest.REST_PREFIX}: filled at {t.rest_price:.2f} when the bid reached it ({bid:.2f}), {left:.0f}s left; the ask was priced {now - t.rest_at:.0f}s ago at the curve's chance + {t.curve_rest:g} * sqrt(time left / 900). No taker fee."
-        got = ticks_mod.history.window(t.shock_index, now - 1000.0, now)
-        read = curvevalue.read(got[0], got[1], now, t.shock_ref, t.side, left, "900") if got else None
-        if read is None:
-            return None  # no reading: the ask already working stands
-        if t.curve_behind_last > 0 and left <= t.curve_behind_last and read.p < t.curve_behind_chance:
-            return f"curve exit (time to go): the curve's chance is {read.p:.3f}, under {t.curve_behind_chance:g}, with {left:.0f}s left (sells in the last {t.curve_behind_last:g}s); bid {bid:.2f}, the resting ask at {t.rest_price:.2f} is withdrawn"
-        if t.rest_price <= 0 or now - t.rest_at >= manualrest.REPRICE_EVERY:
-            action, price = manualrest.plan(read.p, left, bid, t.curve_rest, 0.0)
-            if action == "rest":
-                if abs(price - t.rest_price) >= 0.005:
-                    log.info("curve rest %s %s, %.0fs left: ask %.2f (was %.2f), curve chance %.3f, bid %.2f", t.ticker, t.lane, left, price, t.rest_price, read.p, bid)
-                t.rest_price, t.rest_at = price, now
-        return None
 
-    def _late_drop_hit(self, t: Target, bid: float, now: float) -> str | None:
-        """The late-drop exit (2026-11-10, user: implement 30 s / 1 unit and push). Samples the held bid once a second (forward-filled) and, in the last late_drop_seconds, sells when the bid has fallen from its highest of the last 60 s by late_drop_units of its own typical minute (rms one-second bid change over up to 300 s, times sqrt(60)). Needs 20 seconds of the last 60 and 100 one-second changes, as in scripts/late_drop_exit_replay.py. Reads no model, no coin, no market."""
-        if t.late_units <= 0 or t.close_ts <= 0 or bid <= 0:
-            return None
-        sec = int(now)
-        if not t.late_bids:
-            for ts, b in t.history:
-                if b > 0 and (not t.late_bids or int(ts) > t.late_bids[-1][0]):
-                    t.late_bids.append((int(ts), b))
-        last = t.late_bids[-1] if t.late_bids else None
-        if last is not None and sec - last[0] > 300:
-            t.late_bids.clear()
-            last = None
-        if last is not None:
-            for k in range(last[0] + 1, sec):
-                t.late_bids.append((k, last[1]))
-        if last is None or sec > last[0]:
-            t.late_bids.append((sec, bid))
-        elif t.late_bids:
-            t.late_bids[-1] = (sec, bid)
-        left = t.close_ts - now
-        if left > t.late_seconds or left <= 0 or bid < SHOCK_BID[0] or time.time() < t.retry_after:
-            return None
-        series = [b for s_, b in t.late_bids if s_ >= sec - 300]
-        win = [b for s_, b in t.late_bids if sec - 60 <= s_ < sec]
-        if len(win) < 20 or len(series) < 100:
-            return None
-        unit = math.sqrt(sum((y - x) ** 2 for x, y in zip(series, series[1:], strict=False)) / (len(series) - 1) * 60.0)
-        high = max(win)
-        if unit <= 0 or high - bid < t.late_units * unit:
-            return None
-        return f"late drop: bid {bid:.2f} is {high - bid:.2f} under its {high:.2f} high of the last minute, {(high - bid) / unit:.1f} typical minutes of the bid ({unit:.3f}), {left:.0f}s left"
 
-    def _value_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
-        """The value exit (2026-11-08, user: a fix, live at once): sell while the bid, after the sell fee, is over the curve's own chance that this side pays by the lane's margin. The chance is confidence.py's model (price, the spot's distance to the strike in typical minutes, 60 s drift, bounce, path efficiency, range, time left), read from the index history now. Never sells for a loss after both fees (the profit-take rule above). Without the model, the history or a fresh spot the exit does not fire."""
-        from . import confidence
 
-        extreme = t.value_gain_x > 0 or t.value_high > 0
-        if (t.value_exit <= 0 and not extreme) or t.close_ts <= 0 or now - t.value_at < 1.0 or (not extreme and (t.shock_ref <= 0 or not t.shock_index)):
-            return None
-        left = t.close_ts - now
-        if extreme:  # 2026-11-08 (user): loose until an extreme profit. No curve chance here: the bid doubles, or sits at the high price early enough
-            if left <= SETTLE_LAST or now - quote_ts > 5.0 or bid <= 0 or t.entry <= 0:
-                return None
-            t.value_at = now
-            why = None
-            if t.value_gain_x > 0 and t.entry * t.value_gain_x < 1.0 and bid >= t.entry * t.value_gain_x - 1e-9:
-                why = f"value exit: bid {bid:.2f} is {bid / t.entry:.1f}x the {t.entry:.2f} paid (at {t.value_gain_x:.1f}x), {left:.0f}s left"
-            elif t.value_high > 0 and bid >= t.value_high - 1e-9 and left > t.value_high_left:
-                why = f"value exit: bid {bid:.2f} is at the {t.value_high:.2f} line with {left:.0f}s left (over {t.value_high_left:.0f}s)"
-            if why is None or bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry)) <= max(t.value_min_gain, 0.0):
-                return None  # not extreme yet, or not a gain worth the fees (never a loss after both fees; value_exit_min_gain over that)
-            return why
-        if left <= SETTLE_LAST or not (t.value_bid[0] <= bid <= t.value_bid[1]) or now - quote_ts > 5.0:
-            return None
-        t.value_at = now
-        model = confidence.load_model(self.get_settings())
-        got = ticks_mod.history.window(t.shock_index, now - 3750.0, now)
-        if model is None or not got:
-            return None
-        ask = min(0.99, bid + 0.01)
-        yes_bid, yes_ask = (bid, ask) if t.side == "yes" else (max(0.01, 1.0 - ask), 1.0 - bid)
-        f = confidence.features_at(got[0], got[1], now, t.shock_ref, left, yes_bid, yes_ask)
-        if f is None:
-            return None
-        p_yes = confidence.predict(model["w"], confidence.vector(f, model["mu"], model["sd"]))
-        p_side = p_yes if t.side == "yes" else 1.0 - p_yes
-        over = bid - fee_per_contract(bid) - p_side
-        if now - t.value_noted >= 10.0:
-            t.value_noted = now
-            log.info("watcher: value watch %s %s, %.0fs left: bid %.2f, curve chance %.2f, over by %+.3f (sells at %+.3f)", t.ticker, t.lane, left, bid, p_side, over, t.value_exit)
-        if over < t.value_exit:
-            return None
-        if bid - fee_per_contract(bid) <= t.entry + fee_per_contract(t.entry):
-            return None  # a profit-take: never a sale for a loss after both fees (the sale path checks too, but this keeps a declined sale from being queued every second)
-        return f"value exit: bid {bid:.2f} after the fee is {over:.3f} over the curve's chance {p_side:.2f} that the {t.side} side pays, {left:.0f}s left"
 
-    def _shock_note(self, t: Target, now: float, text: str) -> None:
-        """One log line every 10 s while a shock watch is inside its last-seconds window: what it sees, so a position it did not sell can be explained afterwards."""
-        if now - t.shock_noted >= 10.0:
-            t.shock_noted = now
-            log.info("watcher: shock watch %s %s, %.0fs left: %s", t.ticker, t.lane, t.close_ts - now, text)
 
-    def _shock_log(self, t: Target, now: float, margin: float, move: float, worst: float, bid: float, fired: int) -> None:
-        """fired: 0 not sold, 1 sold, 2 would have sold (a log-only watch). One shock_log row per new low of the move against this bet (3 bp or worse, and 1 bp under the last row), and one when the exit fires."""
-        if not fired and (worst > -SHOCK_LOG_MIN or worst > t.shock_logged - 1.0):
-            return
-        t.shock_logged = min(t.shock_logged, worst)
-        try:
-            store = self.store_factory()
-            store.db.execute(
-                "INSERT INTO shock_log (ts, ticker, lane, series, side, left_s, entry, bid, cushion_bp, move_bp, worst_bp, fired) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (now, t.ticker, t.lane, t.ticker.split("-")[0], t.side, round(t.close_ts - now, 2), t.entry, bid, round(margin, 2), round(move, 2), round(worst, 2), fired),
-            )
-            store.db.commit()
-        except Exception as exc:  # a log row must never stop an exit
-            log.warning("watcher: shock_log write failed for %s: %s", t.ticker, exc)
 
-    def _shock_reading(self, t: Target, now: float, left: float) -> tuple[float, float, float, Callable[[], float | None], str] | None:
-        """What the shock exit reads, from the lane's source: (time of the newest reading, cushion, the shock_seconds move against the bet, a function giving the typical minute in the same units or None, the unit's name). "index": the spot index in basis points against shock_ref. "quote": the contract's own mid in per-mille of probability (quoteshock.py). None, with a note inside the last-seconds window, when it cannot be read."""
-        if t.shock_source == "quote":
-            r = quoteshock.read(ticks_mod.mids.rows(t.ticker), t.side, now, t.shock_seconds)
-            if isinstance(r, str):
-                if left <= t.shock_last:
-                    self._shock_note(t, now, f"not usable: {r}")
-                return None
-            return r.ts, r.margin, r.move, (lambda: r.unit), "pm"
-        spot = self._spot.get(t.shock_index)
-        hist = self._shock_hist.get(t.shock_index)
-        if spot is None or not hist:
-            if left <= t.shock_last:
-                self._shock_note(t, now, f"no spot or no history for {t.shock_index}")
-            return None
-        spot_ts, value = spot
-        then = now - t.shock_seconds
-        if value <= 0 or now - spot_ts > THROUGH_SPOT or hist[0][0] > then:
-            if left <= t.shock_last:
-                self._shock_note(t, now, f"not usable: spot {now - spot_ts:.1f}s old, {now - hist[0][0]:.0f}s of history")
-            return None
-        past = next((v for ts, v in reversed(hist) if ts <= then), 0.0)
-        if past <= 0:
-            return None
-        sign = 1.0 if t.side == "yes" else -1.0
-        margin = math.log(value / t.shock_ref) * sign * 1e4
-        move = math.log(value / past) * sign * 1e4
-        return spot_ts, margin, move, (lambda: (u * 1e4) if (u := variants.unit_index(t.shock_index, now)) is not None else None), "bp"
 
-    def _shock_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
-        """The shock exit: in the last shock_last seconds, the spot has moved shock_bp basis points against this bet over the last shock_seconds and sits within shock_margin_bp of the reference, so a sale is better than the close. Needs a bid in SHOCK_BID, a fresh spot and a quote that is not older than the tick."""
-        quote = t.shock_source == "quote"
-        if (t.shock_bp <= 0 and t.shock_units <= 0 and t.cross_units < 0) or t.close_ts <= 0 or (not quote and (t.shock_ref <= 0 or not t.shock_index)):
-            return None
-        left = t.close_ts - now
-        if left <= SETTLE_LAST or left > t.shock_last + max(t.shock_memory, 0.0):
-            return None
-        got = self._shock_reading(t, now, left)
-        if got is None:
-            return None
-        spot_ts, margin, move, unit_of, lab = got
-        hist = self._shock_hist.get(t.shock_index) if not quote else None
-        value = self._spot[t.shock_index][1] if not quote else 0.0
-        sign = 1.0 if t.side == "yes" else -1.0
-        worst = move
-        if t.shock_memory > 0:  # a shock before the last-seconds window still counts inside it
-            t.shock_moves.append((now, move))
-            while t.shock_moves and now - t.shock_moves[0][0] > t.shock_memory:
-                t.shock_moves.popleft()
-            worst = min(m for _, m in t.shock_moves)
-        if left > t.shock_last:
-            return None
-        bp, margin_bp = t.shock_bp, t.shock_margin_bp
-        unit_bp = 0.0
-        if t.shock_units > 0 or t.cross_units >= 0:  # the lane reads the move in the market's own variance: the threshold is that many typical minutes right now
-            unit_bp = unit_of()
-            if unit_bp is None:
-                self._shock_note(t, now, f"not usable: the typical minute of {t.shock_index if not quote else t.ticker} cannot be read (history under 300 s or stale)")
-                return None
-            if t.shock_units > 0:
-                bp = t.shock_units * unit_bp
-            if t.shock_margin_units > 0:
-                margin_bp = t.shock_margin_units * unit_bp
-        self._shock_log(t, now, margin, move, worst, bid, 0)
-        if now - t.shock_seen > SHOCK_PERSIST_GAP:  # a gap in the readings breaks a run
-            t.shock_since = 0.0
-        t.shock_seen = now
-        if bid < SHOCK_BID[0] or bid > (t.shock_bid_max or SHOCK_BID[1]) or quote_ts < spot_ts - THROUGH_QUOTE:
-            self._shock_note(t, now, f"not usable: bid {bid:.2f}, quote {spot_ts - quote_ts:.1f}s older than the tick; cushion {margin:+.1f} {lab}, worst move {worst:+.1f} {lab}")
-            t.shock_since = 0.0
-            return None
-        self._shock_note(t, now, f"cushion {margin:+.1f} {lab}, {t.shock_seconds:.0f}s move {move:+.1f} {lab} (worst in {t.shock_memory:.0f}s {worst:+.1f}), bid {bid:.2f} (sells at -{bp:.1f} {lab} or worse with a cushion of {margin_bp:.1f} {lab} or less)")
-        moved = bp > 0 and worst <= -bp and margin <= margin_bp
-        margin_x = margin
-        if left < 60.0 and t.cross_units >= 0 and not quote:  # settlement is the 60 s average of the index: in the last minute part of it is known, the rest is taken at the spot now (the lane no longer sells a one-tick touch of the strike that the average would not carry)
-            known = [v for ts_, v in hist if t.close_ts - 60.0 <= ts_ <= now]
-            if known:
-                secs = min(60.0, max(1.0, 60.0 - left))
-                proj = (sum(known) / len(known) * secs + value * (60.0 - secs)) / 60.0
-                margin_x = math.log(proj / t.shock_ref) * sign * 1e4
-        crossed = t.cross_units >= 0 and not quote and margin_x <= t.cross_units * unit_bp
-        spiked = bp > 0 and worst <= -bp  # the move alone; the cushion may flicker around the strike without breaking the hold (KXSILVER15M-26NOV100600: cushion swung -0.4..+5 bp, the 20 s run never completed, the bet was lost whole where the old rule sold at 0.60)
-        if t.shock_persist > 0 and spiked and not (moved or crossed):
-            if t.shock_since <= 0:
-                t.shock_since = now
-            return None
-        if not (moved or crossed):
-            t.shock_since = 0.0
-            return None
-        if t.shock_trend_hold > -50 and not quote:
-            trend = variants.pretrend_index(t.shock_index, t.side, 420.0, 90.0, now)
-            if trend is not None and trend >= t.shock_trend_hold:
-                self._shock_note(t, now, f"held: the spot's trend before the spike is {trend:+.2f} typical minutes with the bet (the lane holds at {t.shock_trend_hold:g} or more); {-worst:.1f} bp spike, bid {bid:.2f}")
-                t.shock_since = 0.0
-                return None
-        if t.shock_persist > 0:  # the whole condition must have held, unbroken, for shock_persist seconds
-            if t.shock_since <= 0:
-                t.shock_since = now
-            if now - t.shock_since < t.shock_persist:
-                self._shock_note(t, now, f"holding for {t.shock_persist:.0f}s before selling: the condition has held {now - t.shock_since:.0f}s, bid {bid:.2f}")
-                return None
-        if t.shock_log_only:
-            if not t.shock_would:
-                t.shock_would = True
-                self._shock_log(t, now, margin, move, worst, bid, 2)
-            return None
-        self._shock_log(t, now, margin, move, worst, bid, 1)
-        if moved and not quote and t.ticker.split("-")[0].endswith("15M"):
-            from . import breadthcheck
 
-            breadthcheck.shadow_fire(self.get_settings(), t.ticker, t.lane, t.side, now, bid, left, margin, worst)  # shadow only: the breadth of the shock across the crypto indexes, logged
-        if crossed and not moved:  # the spot is on the wrong side of the strike, or within cross_units typical minutes of it, with the bid still worth selling into
-            return f"shock exit: the settlement is {margin_x:+.1f} bp from the strike ({t.cross_units:g} typical minutes = {t.cross_units * unit_bp:.1f} bp; spot {margin:+.1f}), {left:.0f}s left, bid {bid:.2f}"
-        what = "the contract's mid" if quote else "spot"
-        return f"shock exit: {what} moved {-worst:.1f} {lab} against us in {t.shock_seconds:.0f}s (now {move:+.1f}) and is {margin:+.1f} {lab} from the {'even line' if quote else 'strike'}, {left:.0f}s left, bid {bid:.2f}"
 
-    def _strike_through_hit(self, t: Target, bid: float, now: float, quote_ts: float) -> str | None:
-        """A cross of strike_through percent starts a watch. It does not sell.
-        Back on the winning side, the position is held to the close. A stretch that stays through for THROUGH_STAY seconds sells at any time left. In the last strike_through_seconds the same watch also sells a turn back down, or a pause of half that window. A bid still priced as a win (0.99 or more) is left to settle. 0 = off."""
-        if t.through_kept or t.strike_through <= 0 or t.strike_through_seconds <= 0 or t.strike <= 0 or t.close_ts <= 0 or not t.index_id:
-            return None
-        left = t.close_ts - now
-        if left <= SETTLE_LAST:
-            return None
-        spot = self._spot.get(t.index_id)
-        if spot is None:
-            return None
-        spot_ts, value = spot
-        if value <= 0 or now - spot_ts > THROUGH_SPOT:
-            return None
-        through = (t.strike - value) / t.strike if t.side == "yes" else (value - t.strike) / t.strike
-        line = t.strike_through / 100.0
-        pause = t.strike_through_seconds / 2.0
-        if through <= 0:
-            if t.through_on:
-                if not t.strike_through_rearm:
-                    t.through_kept = True  # back on the winning side before the stay ran out: hold this position to the close
-                self._strike_through_clear(t)  # with re-arm the next cross starts a new watch and a new stay clock
-            return None
-        if through >= line:
-            if t.through_since <= 0:
-                t.through_since = now  # the 45s clock counts only a continuous stretch past the marker
-        else:
-            t.through_since = 0.0
-        stayed = t.through_since > 0 and now - t.through_since >= THROUGH_STAY
-        if not t.through_on:
-            if through < line:
-                return None
-            t.through_on, t.through_worst, t.through_best, t.through_best_ts, t.through_bounce = True, through, through, now, False
-            return None  # 0.003% starts the watch, including the stay clock
-        in_window = left <= t.strike_through_seconds
-        fell = False
-        if in_window:
-            if through < t.through_best:
-                t.through_best, t.through_best_ts, t.through_bounce = through, now, True
-            else:
-                fell = t.through_bounce and through > t.through_best
-                if not fell and through > t.through_worst:
-                    t.through_worst, t.through_best, t.through_best_ts, t.through_bounce = through, through, now, False
-        if not stayed and not (in_window and (fell or now - t.through_best_ts >= pause)):
-            return None
-        if bid <= 0 or bid >= 0.99 or quote_ts < spot_ts - THROUGH_QUOTE:
-            return None
-        if fell:
-            return f"strike-through: index fell back to {through * 100:.4f}% through the strike after a bounce, {left:.0f}s left, bid {bid:.2f}"
-        if stayed and not in_window:
-            return f"strike-through: index stayed {through * 100:.4f}% through the strike, {left:.0f}s left, bid {bid:.2f}"
-        return f"strike-through: index paused {through * 100:.4f}% through the strike, {left:.0f}s left, bid {bid:.2f}"
-
-    def _settlement_hit(self, t: Target, bid: float, now: float, e: dict[str, Any]) -> str | None:
-        """The last-minute guard. Kalshi settles a 15-minute crypto market on the 60-second average of the index at the close, so in the last 150 seconds the chance this side finishes ahead can be computed exactly from the spot, the locked part
-        of the average and the spot's volatility (settlement.py). When that chance falls `settle_guard` under what the bid pays, holding is worth less than selling, and this says sell. It looks at most once a second, never raises,
-        and says nothing when the index ticks or the strike are missing (an unwatched guard is better than a wrong sale)."""
-        if t.settle_guard <= 0 or t.strike <= 0 or t.close_ts <= 0 or not t.index_id or bid <= 0:
-            return None
-        left = t.close_ts - now
-        if not (SETTLE_LAST <= left <= SETTLE_WINDOW) or now - t.settle_checked < 1.0:
-            return None
-        t.settle_checked = now
-        p_yes = self._model.chance_yes(t.index_id, t.strike, t.close_ts, now)
-        spot = self._spot.get(t.index_id)
-        if p_yes is None or spot is None:
-            return None
-        p_hold = p_yes if t.side == "yes" else 1.0 - p_yes
-        if p_hold >= bid - t.settle_guard:
-            return None
-        ask_other = (1.0 - float(e["bid"])) if t.side == "yes" else float(e["ask"])
-        t.flip_hint = (ask_other, 1.0 - p_hold)
-        return f"settlement-guard: {left:.0f} s left, the chance this side finishes ahead is {p_hold:.2f} against a bid of {bid:.2f} (spot {spot[1]:.2f} on a target of {t.strike:.2f})"
-
-    def _paper_flip(self, store: Store, row: Any, t: Target, m: dict[str, Any]) -> None:
-        """After a settlement-guard sale: log what buying the OTHER side at that moment would have been, as a paper decision in the lane `settlement_flip` (a bet when it costs 5-25c and its chance beats its ask by 5 points, else a pass).
-        The market's result settles it like any decision; it is never an order."""
-        try:
-            ask_o, p_o = t.flip_hint
-            if ask_o <= 0:
-                return
-            other = "no" if (row["side"] or "yes") == "yes" else "yes"
-            edge = p_o - ask_o
-            bet = 0.05 <= ask_o <= 0.25 and edge >= 0.05
-            store.add_decision(ticker=row["ticker"], title=str(m.get("title") or ""), bid=0.0, ask=round(ask_o, 4), model_p=round(p_o, 4), edge=round(edge, 4), action="bet" if bet else "pass", mode="observe",
-                               reason=f"settlement flip: {other} costs {ask_o:.2f}, the settlement chance is {p_o:.2f}" + ("" if bet else " (outside 5-25c or under a 5-point edge)"), close_time=str(row["close_time"] or ""), lane="settlement_flip",
-                               category="Crypto", event_ticker=str(row["event_ticker"] or ""), side=other, contracts=1.0, stake_usd=round(ask_o, 4))
-        except Exception:
-            log.debug("settlement flip: could not log for %s", row["ticker"], exc_info=True)
 
     def _on_fill(self, e: dict[str, Any]) -> None:
         """A buy on the account (from the app or the bot): enroll the market now instead of at the next position poll. Only queues; never raises."""
@@ -1908,18 +1016,6 @@ class ProfitWatcher:
             contracts=count, stake_usd=stake,
         )
 
-    def _hover_hit(self, t: Target, bid: float) -> str | None:
-        """Hovering near the strike, then a profit: the bid has been down at `hover_dip` or lower since entry and now sells for more than the cost. Take it
-        before the price drifts back. A position that never dipped runs on to its target."""
-        if t.hover_dip <= 0 or bid <= 0 or t.entry <= 0 or t.low > t.hover_dip + 1e-9:
-            return None
-        if time.time() < t.retry_after:
-            return None
-        cost = t.entry + fee_per_contract(t.entry)
-        net = bid - runner.EXIT_SLIP - fee_per_contract(bid)
-        if net <= cost:
-            return None
-        return f"hover: bid dipped to {t.low:.2f} and is back to {bid:.2f}, up {net / cost - 1:.0%} after fees"
 
     def _unstable_hit(self, t: Target, bid: float, now: float) -> str | None:
         """Up in profit while the market is unstable: the bid is at least `unstable_gain` over the cost (after the sale fee) and has swung
@@ -1950,31 +1046,6 @@ class ProfitWatcher:
         t.last_bid, t.last_ts = bid, now
         t.below_since = self._since(t, bid, now)
 
-    def _scalp(self, t: Target, bid: float, now: float) -> str | None:
-        """Armed at scalp_at, or scalp_up above the price paid, whichever is reached first. A new high rides; a dip of scalp_dip from that high sells once the bid has stayed that far under it for
-        scalp_dip_seconds. A bid back inside the dip, or a new high, starts the count again. The clock loop calls this too, so a quiet market (no quotes) still sells a dip that has held."""
-        arms = [p for p in (t.scalp_at, t.entry + t.scalp_up if t.scalp_up > 0 else 0.0) if p > 0]
-        arm = min(arms) if arms else 0.0
-        if arm <= 0 or t.scalp_dip <= 0 or bid <= 0:
-            return None
-        if bid + 1e-9 >= arm:
-            if bid > t.scalp_high + 1e-9 or t.scalp_high_ts <= 0:
-                t.scalp_high_ts = now
-            t.scalp_high = max(t.scalp_high, bid)
-        hit = scalp_hit(bid, t.scalp_high, arm, t.scalp_dip)
-        if hit is None:
-            t.scalp_dip_since = None
-            if t.scalp_plateau > 0 and t.scalp_high >= arm - 1e-9 and bid + 1e-9 >= arm and t.scalp_high_ts > 0 and now - t.scalp_high_ts >= t.scalp_plateau:
-                return f"scalp: plateau, no new high over {t.scalp_high:.2f} for {now - t.scalp_high_ts:.0f}s, bid {bid:.2f}"
-            return None
-        if t.scalp_dip_seconds <= 0:
-            return hit
-        if t.scalp_dip_hard > 0 and t.scalp_high - bid >= t.scalp_dip_hard - 1e-9:
-            return f"{hit} (hard drop)"  # a sharp reversal does not wait: the bid keeps falling while the count runs
-        if t.scalp_dip_since is None:
-            t.scalp_dip_since = now
-        held = now - t.scalp_dip_since
-        return f"{hit} for {held:.0f}s" if held >= t.scalp_dip_seconds else None
 
     def _stop_hit(self, t: Target, bid: float, now: float) -> str | None:
         """The stop-loss, on the socket: the bid is `stop_drop` under the price paid (and, for an hourly market, the last hour has begun)."""
@@ -1983,31 +1054,6 @@ class ProfitWatcher:
         if time.time() < t.retry_after:
             return None
         ref = t.stop_ref or t.entry
-        left = t.close_ts - now if t.close_ts else None
-        open_market = left is not None and left > 0
-        if open_market and t.watch_loss > 0 and ref > 0 and bid <= ref * (1.0 - t.watch_loss):
-            if t.loss_since is None:
-                t.loss_since = now
-                t.loss_low = bid
-            elif bid < t.loss_low:
-                t.loss_low = bid
-            hit = hard_loss(
-                ref, bid, now - t.loss_since, t.watch_loss, t.watch_loss_seconds, low=t.loss_low, lift=t.watch_loss_lift,
-            )
-            return f"{hit} (socket)" if hit else None
-        t.loss_since = None
-        t.loss_low = 0.0
-        if open_market and t.watch_at > 0 and ref > t.watch_at and bid <= t.watch_at:
-            if t.stop_since is None:
-                t.stop_since = now
-            trend = price_shape(list(t.history), now, bid) == "trend"
-            hit = watch_trend(
-                ref, bid, left, now - t.stop_since, line=t.watch_at,
-                ride=t.watch_ride, patient_left=t.watch_patient, trend=trend,
-            )
-            return f"{hit} (socket)" if hit else None  # this visit is being watched: a hover or a spike is not the 45% line's sale
-        if t.watch_at > 0 and bid > t.watch_at:
-            t.stop_since = None
         if now < t.stop_from:
             return None
         if bid > ref * (1 - t.stop_drop) + 1e-9:
@@ -2031,40 +1077,7 @@ class ProfitWatcher:
         held = f" for {now - t.stop_since:.0f}s" if wait else ""
         return f"stop-loss: bid {bid:.2f} is {1 - bid / ref:.0%} under the {ref:.2f} {'mark' if t.stop_ref else 'paid'}{held} (socket)"
 
-    def _bounce_hit(self, t: Target, bid: float, now: float) -> str | None:
-        """Sell into the first bounce of a losing bet. The bid has fallen `bounce_fall` or more under the price paid (`t.low` is the lowest bid since the position opened) and has now bounced `bounce_up` or more off that low: the
-        first recovery is the best price a falling bet gets back (scripts/exit_tradeoff.py). Not in the last `burst_min_left` seconds, where a sale has nothing left to catch."""
-        if t.bounce_fall <= 0 or bid <= 0 or t.entry <= 0 or t.close_ts <= 0:
-            return None
-        left = t.close_ts - now
-        if left < t.burst_min_left or t.entry - t.low + 1e-9 < t.bounce_fall or bid - t.low + 1e-9 < t.bounce_up:
-            return None
-        return f"bounce: bid fell to {t.low:.2f} (paid {t.entry:.2f}) and bounced to {bid:.2f}, {bid - t.low:.2f} off the low, with {left:.0f} s left"
 
-    def _drop_hit(self, t: Target, bid: float, now: float) -> str | None:
-        """A fast fall in the held side's own bid, whatever the taker flow. The burst exit needs dollars bought against the holder; a thinning book falls with almost none (scripts/drop_exit_study.py). In the last `drop_window` seconds, a bid `drop_cents` under its highest of the last `drop_seconds`, when it had been a favorite (`drop_was`) in the last minute, is a fall.
-        With `drop_confirm` the fall only arms the exit: it sells if the bid is still `drop_stay` under the high that many seconds later, and lets a bounce go (a spike)."""
-        if t.drop_cents <= 0 or bid <= 0 or t.close_ts <= 0:
-            return None
-        left = t.close_ts - now
-        if not (t.burst_min_left <= left <= t.drop_window):
-            t.drop_armed_at = None
-            return None
-        if t.drop_armed_at is not None:
-            if now - t.drop_armed_at < t.drop_confirm:
-                return None
-            armed, high = t.drop_armed_at, t.drop_high
-            t.drop_armed_at = None
-            if high - bid + 1e-9 < (t.drop_stay or t.drop_cents):
-                return None  # it bounced back: a spike, not a flip
-            return f"drop: bid {bid:.2f} is still {high - bid:.2f} under {high:.2f} {now - armed:.0f} s after it fell, with {left:.0f} s left"
-        high = max((b for ts, b in t.history if now - t.drop_seconds <= ts <= now), default=0.0)
-        if high - bid + 1e-9 < t.drop_cents or max((b for ts, b in t.history if now - 60.0 <= ts <= now), default=0.0) < t.drop_was:
-            return None
-        if t.drop_confirm > 0:
-            t.drop_armed_at, t.drop_high = now, high
-            return None
-        return f"drop: bid {bid:.2f} fell {high - bid:.2f} in {t.drop_seconds:.0f} s from {high:.2f} with {left:.0f} s left"
 
     def _fast_crash(self, t: Target, bid: float) -> str | None:
         """A gap down: the position was armed (up trail_activate on a held peak) and the bid is now trail_fast below that peak."""
@@ -2093,19 +1106,13 @@ class ProfitWatcher:
                         self._checks.put_nowait((t, mark, now, self._spot.get(t.index_id) if t.index_id else None))  # the tape read happens on its own thread, never here
         for t in targets:
             key = (t.ticker, t.lane)
-            if (t.scalp_dip_since is not None or (t.scalp_plateau > 0 and t.scalp_high_ts > 0)) and t.last_ts and key not in self._inflight:
-                why = self._scalp(t, t.last_bid, now)  # a dip that has held 3 s while no quote arrived
-                if why:
-                    self._inflight.add(key)
-                    self._queue_sell(SellSignal(t.ticker, t.lane, why))
-                    continue
             if not t.last_ts or (t.trail_drop <= 0 and t.stop_drop <= 0):
                 continue
             if now - t.bid_since >= t.trail_hold:
                 t.peak = max(t.peak, t.last_bid)
             t.below_since = self._since(t, t.last_bid, now)
             key = (t.ticker, t.lane)
-            fast = self._stop_hit(t, t.last_bid, now) or self._fast_crash(t, t.last_bid) or (self._drop_hit(t, t.cur_bid, now) if t.drop_armed_at is not None else None)
+            fast = self._stop_hit(t, t.last_bid, now) or self._fast_crash(t, t.last_bid)
             if fast and key not in self._inflight:
                 self._inflight.add(key)
                 self._queue_sell(SellSignal(t.ticker, t.lane, fast))
@@ -2125,126 +1132,30 @@ class ProfitWatcher:
         fresh: dict[tuple[str, str], Target] = {}
         for row in store.open_bets():
             spec = specs.get(row["lane"] or "moonshot")
-            stop_on = (
-                spec is not None and s.stop_loss_enabled and spec.stop_loss
-                and not (row["ticker"].split("-")[0].endswith("15M") and not s.stop_loss_fast)
-            )
-            if spec is None or not (takes_profit(spec) or stop_on):
+            if spec is None or not spec.sell_chain:  # a lane sells only through its exit module's steps (sellchain.py); a bet of a lane with none is not watched
                 continue
-            guard = spec.settlement_guard > 0 and row["ticker"].split("-")[0].endswith("15M") and index_for_series(row["ticker"].split("-")[0]) is not None
             ticker, lane = row["ticker"], row["lane"] or "moonshot"
             with self._lock:
                 old = self.targets.get((ticker, lane))
-            fresh[(ticker, lane)] = old or Target(
-                ticker, lane, row["side"] or "yes", float(row["ask"] or 0.0), spec.take_profit_x, spec.take_profit_at,
-                spec.spike_cents, spec.spike_seconds, spec.spike_min_gain, spec.trail_activate, spec.trail_drop, spec.trail_confirm_seconds, spec.trail_fast_drop, spec.trail_hold_seconds,
-                float(row["ask"] or 0.0),
-            )
-            tg0 = fresh[(ticker, lane)]
-            tg0.bought_ts = tg0.bought_ts or float(row["ts"] or 0.0)
-            if not tg0.entry_filled:  # the price paid is what the buy filled at (a take chases the ask, a resting bid fills under it): the exits' "never a loss after both fees" is judged against it
-                filled_at = store.entry_fill(ticker, tg0.side, float(row["ts"] or 0.0))
-                if filled_at:
-                    tg0.entry, tg0.entry_filled = filled_at, True
-            fresh[(ticker, lane)].unstable_gain = spec.unstable_gain
-            if fresh[(ticker, lane)].close_ts <= 0 and row["close_time"]:
-                with contextlib.suppress(TypeError, ValueError):
-                    fresh[(ticker, lane)].close_ts = datetime.fromisoformat(row["close_time"]).timestamp()
-            flip = spec.burst_exit and ticker.split("-")[0].endswith("15M")  # volume bursts are watched on every 15-minute market, not only crypto
-            if guard or flip:
-                tg = fresh[(ticker, lane)]
-                tg.settle_guard, tg.burst_exit = (spec.settlement_guard if guard else 0.0), spec.burst_exit and flip
-                btc = ticker.split("-")[0].startswith("KXBTC")
-                tg.burst_bar = 0.0 if (btc and spec.burst_dollars_btc < 0) else (spec.burst_dollars_btc if (btc and spec.burst_dollars_btc > 0) else spec.burst_dollars)
-                tg.burst_favorite, tg.burst_window, tg.burst_min_left, tg.burst_share = spec.burst_favorite, spec.burst_window, spec.burst_min_left, spec.burst_share
-                tg.burst_ratio, tg.burst_min_dollars = spec.burst_ratio, spec.burst_min_dollars
-                tg.burst_spot_edge = spec.burst_spot_edge
-                tg.index_id = (index_for_series(ticker.split("-")[0]) or "") if guard else ""
-                if tg.close_ts <= 0 or (guard and tg.strike <= 0):
-                    try:
-                        mk = self._market_static(ticker)
-                        tg.strike = float(mk.get("floor_strike") or 0.0)
-                        tg.close_ts = datetime.fromisoformat(str(mk.get("close_time"))).timestamp()
-                    except (TypeError, ValueError, KalshiError):
-                        tg.settle_guard = 0.0  # no strike or close time: better unguarded than guarded on a guess
-                        tg.burst_exit = False
-            fresh[(ticker, lane)].unstable_range = spec.unstable_range
-            fresh[(ticker, lane)].unstable_seconds = spec.unstable_seconds
-            fresh[(ticker, lane)].hover_dip = spec.hover_dip
-            fresh[(ticker, lane)].trail_progress = spec.trail_progress if spec.trail_progress is not None else s.crash_progress
-            fresh[(ticker, lane)].trail_giveback = spec.trail_giveback if spec.trail_giveback is not None else s.crash_giveback
-            fresh[(ticker, lane)].spot_sigma = spec.trail_spot_sigma if spec.trail_spot_sigma is not None else s.crash_spot_sigma
+            fresh[(ticker, lane)] = old or Target(ticker, lane, row["side"] or "yes", float(row["ask"] or 0.0), peak=float(row["ask"] or 0.0))
             held = fresh[(ticker, lane)]
-            held.cash_before, held.cash_leave, held.cash_at = spec.cash_before_minute, spec.cash_leave_minute, spec.cash_at
-            held.cash_up, held.cash_drop, held.cash_left = spec.cash_up_minute, spec.cash_drop, spec.cash_left_seconds
-            held.watch_at = spec.watch_at
-            held.bounce_fall, held.bounce_up = spec.bounce_fall, spec.bounce_up
-            held.drop_cents, held.drop_seconds, held.drop_was = spec.drop_cents, spec.drop_seconds, spec.drop_was
-            held.drop_confirm, held.drop_stay, held.drop_window = spec.drop_confirm, spec.drop_stay, spec.drop_window
-            held.watch_ride, held.watch_patient = spec.watch_ride_seconds, spec.watch_patient_left
-            held.watch_loss, held.watch_loss_seconds, held.watch_loss_lift = spec.watch_loss, spec.watch_loss_seconds, spec.watch_loss_lift
-            held.cross_gap = spec.stop_cross_gap
-            held.scalp_at, held.scalp_up, held.scalp_dip, held.scalp_dip_seconds = spec.scalp_at, spec.scalp_up, spec.scalp_dip, spec.scalp_dip_seconds
-            held.scalp_dip_hard = spec.scalp_dip_hard
-            held.scalp_plateau = spec.scalp_plateau_seconds
-            held.cash_out = spec.cash_out_at
-            held.strike_through = spec.strike_through_sale
-            held.strike_through_seconds = spec.strike_through_seconds
-            held.strike_through_rearm = spec.strike_through_rearm
-            if spec.cross_take > 0 and ticker.split("-")[0].endswith("15M"):
-                held.cross_take, held.cross_min = spec.cross_take, spec.cross_min
-                held.index_id = held.index_id or (strike_index_for(ticker.split("-")[0]) or "")
-                if held.index_id and (held.strike <= 0 or held.close_ts <= 0):
-                    try:
-                        mk = self._market_static(ticker)
-                        held.strike = float(mk.get("floor_strike") or 0.0)
-                        held.close_ts = datetime.fromisoformat(str(mk.get("close_time"))).timestamp()
-                    except (TypeError, ValueError, KalshiError):
-                        held.cross_take = 0.0  # no strike: the sale stays off rather than guessing
-                if held.cross_take > 0 and not held.cross_n:
-                    self._seed_crossings(held)
-            if spec.strike_through_sale > 0 and spec.strike_through_seconds > 0 and ticker.split("-")[0].endswith("15M"):
-                held.index_id = held.index_id or (strike_index_for(ticker.split("-")[0]) or "")
-                if held.index_id and (held.strike <= 0 or held.close_ts <= 0):
-                    try:
-                        mk = self._market_static(ticker)
-                        held.strike = float(mk.get("floor_strike") or 0.0)
-                        held.close_ts = datetime.fromisoformat(str(mk.get("close_time"))).timestamp()
-                    except (TypeError, ValueError, KalshiError):
-                        held.strike_through = 0.0  # no strike: the sale stays off rather than guessing which side is through
-            if row["close_time"] and str(row["ticker"]).split("-")[0].endswith("15M"):
+            held.bought_ts = held.bought_ts or float(row["ts"] or 0.0)
+            if not held.entry_filled:  # the price paid is what the buy filled at (a take chases the ask, a resting bid fills under it): the exits' "never a loss after both fees" is judged against it
+                filled_at = store.entry_fill(ticker, held.side, float(row["ts"] or 0.0))
+                if filled_at:
+                    held.entry, held.entry_filled = filled_at, True
+            if row["close_time"]:
                 with contextlib.suppress(TypeError, ValueError):
                     close = datetime.fromisoformat(row["close_time"]).timestamp()
-                    held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0
-                    held.late_units, held.late_seconds = spec.late_drop_units, spec.late_drop_seconds
+                    held.opened_min = 15.0 - (close - float(row["ts"])) / 60.0  # minutes into the 15-minute window when this buy was placed
                     if held.close_ts <= 0:
                         held.close_ts = close
-                    if held.close_ts <= 0:
-                        held.close_ts = close
-            if spec.shock_source == "quote" and spec.shock_units > 0 and spec.shock_seconds > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M") and ticker.split("-")[0] not in spec.shock_off_series:
-                held.shock_source = "quote"  # the contract's own mid is the spot (quoteshock.py): no index, no reference price to arm
-                held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = 0.0, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
-                held.shock_persist = spec.shock_persist
-                held.shock_units, held.shock_margin_units, held.cross_units = spec.shock_units, spec.shock_margin_units, -1.0
-                held.shock_bid_max, held.shock_log_only = spec.shock_bid_max, spec.shock_log_only
-                if (ticker, lane) not in self._shock_logged:
-                    self._shock_logged.add((ticker, lane))
-                    log.info("watcher: quote shock exit armed on %s %s: the contract's mid against even over %.0fs, sells at %.1f typical minutes with a cushion of %.1f or less (last %.0fs)", ticker, lane, spec.shock_seconds, spec.shock_units, spec.shock_margin_units, spec.shock_last)
-            if spec.curve_risk_sell > 0 and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
-                held.risk_sell, held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_sell, spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
-                held.risk_line_live = spec.curve_risk_line_live
+            if held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):  # the risk exit reads Kalshi's own quote: it needs no spot reference, so it is armed whether or not one exists (2026-11-13, user: "exit first")
+                held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.sell_chain, held.sell_module = tuple(spec.sell_chain), spec.exit_module
-                held.risk_max_loss, held.risk_min_profit, held.risk_confirm = spec.curve_risk_max_loss, spec.curve_risk_min_profit, spec.curve_risk_confirm
-                held.risk_stop_hold = spec.curve_risk_stop_hold
-                held.risk_early_hold = spec.curve_risk_early_hold
+                held.risk_min_profit, held.risk_confirm = spec.curve_risk_min_profit, spec.curve_risk_confirm
                 held.risk_score = spec.curve_risk_score
-                if spec.curve_risk_score and held.risk_sell > 0:
-                    from . import riskscore
-
-                    held.risk_sell = riskscore.sale_line(spec.curve_risk_sell, held.entry)
-                held.risk_take, held.risk_take_slope, held.risk_squeeze = spec.curve_take, spec.curve_take_slope_share, spec.squeeze_max
-                held.risk_nudge_hour = spec.nudge_hour_factor
-                held.risk_nudge_units = spec.nudge_units
+                held.risk_take, held.risk_take_slope = spec.curve_take, spec.curve_take_slope_share
                 held.risk_long_scales = tuple(spec.curve_risk_long_scales)
                 held.risk_take_sure, held.risk_take_sure_late = spec.curve_take_sure, spec.curve_take_sure_late
                 held.risk_take_sure_slide = spec.curve_take_sure_slide
@@ -2252,59 +1163,21 @@ class ProfitWatcher:
                 held.risk_take_cushion = spec.curve_take_cushion
                 held.risk_take_trail, held.risk_take_trail_live = spec.curve_take_trail, spec.curve_take_trail_live
                 held.risk_take_trail_timed = spec.curve_take_trail_timed
-                held.risk_drop_units, held.risk_drop_share = spec.curve_risk_drop, spec.curve_risk_drop_share
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.risk_late_tight, held.risk_late_tight_share, held.risk_late_tight_live = spec.curve_risk_late_tight, spec.curve_risk_late_tight_share, spec.curve_risk_late_tight_live
-                held.curve_wait_share, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_default
-            if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.value_exit > 0 or spec.value_exit_gain_x > 0 or spec.value_exit_high > 0 or spec.curve_exit >= 0 or spec.curve_behind_last > 0 or spec.curve_drop_units > 0 or spec.curve_gap > 0 or spec.curve_rest > 0 or spec.curve_risk_sell > 0) and held.close_ts > 0 and ticker.split("-")[0].endswith("15M"):
                 series_name = ticker.split("-")[0]
                 sid = (variants.spot_index(series_name, spec.spot_source) if spec.spot_source == "kalshi" else None) or biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0
                 if (ticker, lane) not in self._shock_logged and (ref > 0 or sid):
                     self._shock_logged.add((ticker, lane))
                     if ref > 0:
-                        log.info("watcher: spot exits armed on %s %s: read %s against %.4f (shock %.0f bp over %.0fs within %.0f bp; wrong side %.0f bp for %.0fs on %s)", ticker, lane, sid, ref, spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.wrong_side_bp, spec.wrong_side_seconds, "".join(spec.wrong_side_varieties) or "-")
+                        log.info("watcher: the risk exit reads %s against %.4f on %s %s", sid, ref, ticker, lane)
                     else:
-                        log.warning("watcher: spot exits NOT armed on %s %s: no reference price for %s (%s)", ticker, lane, sid, "no tape" if self._tape_db() is None else "no tick near the window open")
+                        log.warning("watcher: the risk exit has NO spot reference on %s %s: no reference price for %s (%s)", ticker, lane, sid, "no tape" if self._tape_db() is None else "no tick near the window open")
                 if ref > 0:
                     held.shock_index, held.shock_ref = sid, ref
-                    held.shock_trend_hold = spec.shock_trend_hold
-                    held.curve_rest = spec.curve_rest
-                    if spec.curve_rest > 0:
-                        held.curve_behind_last, held.curve_behind_chance = spec.curve_behind_last, spec.curve_behind_chance
-                    if spec.curve_exit >= 0 or spec.curve_behind_last > 0 or spec.curve_drop_units > 0 or spec.curve_gap > 0:
-                        held.curve_margin, held.curve_persist, held.curve_last, held.curve_scales = spec.curve_exit, spec.curve_exit_persist, spec.curve_exit_last, spec.curve_exit_scales
-                        held.curve_near = spec.curve_exit_near
-                        held.curve_wait_share, held.curve_wait_severe, held.curve_wait_default = spec.curve_wait_share, spec.curve_wait_severe, spec.curve_wait_default
-                        held.curve_comeback, held.curve_comeback_min, held.curve_comeback_hold = spec.curve_drop_comeback, spec.curve_drop_comeback_min, spec.curve_drop_comeback_hold
-                        held.curve_drop_units, held.curve_drop_seconds, held.curve_drop_margin, held.curve_drop_persist = spec.curve_drop_units, spec.curve_drop_seconds, spec.curve_drop_margin_units, spec.curve_drop_persist
-                        held.curve_gap, held.curve_gap_persist, held.curve_behind_last, held.curve_behind_chance = spec.curve_gap, spec.curve_gap_persist, spec.curve_behind_last, spec.curve_behind_chance
-                    held.value_exit, held.value_bid = spec.value_exit, spec.value_exit_bid
-                    held.value_gain_x, held.value_high, held.value_high_left, held.value_min_gain = spec.value_exit_gain_x, spec.value_exit_high, spec.value_exit_high_left, spec.value_exit_min_gain
-                    self._shock_hist.setdefault(sid, deque())
-                    self._seed_shock_history(sid)
-                    if (spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0) and spec.shock_seconds > 0 and ticker.split("-")[0] not in spec.shock_off_series:
-                        held.shock_bp, held.shock_seconds, held.shock_margin_bp, held.shock_last, held.shock_memory = spec.shock_bp, spec.shock_seconds, spec.shock_margin_bp, spec.shock_last, spec.shock_memory
-                        held.shock_persist = spec.shock_persist
-                        held.shock_units, held.shock_margin_units, held.cross_units = spec.shock_units, spec.shock_margin_units, spec.cross_units
-                        held.shock_bid_max = spec.shock_bid_max
-                        held.shock_log_only = spec.shock_log_only
-                    if spec.wrong_side_bp > 0 and spec.wrong_side_seconds > 0 and (not spec.wrong_side_series or ticker.split("-")[0] in spec.wrong_side_series):
-                        if spec.wrong_side_varieties:
-                            held.variety = self._entry_variety(held, sid, ref, float(row["ts"]))
-                        if not spec.wrong_side_varieties or held.variety in spec.wrong_side_varieties:
-                            held.wrong_bp, held.wrong_seconds, held.wrong_last = spec.wrong_side_bp, spec.wrong_side_seconds, spec.wrong_side_last
-            if stop_on:
-                fresh[(ticker, lane)].stop_drop = stop_drop_for(spec, s)
-                fresh[(ticker, lane)].stop_confirm = spec.stop_confirm_seconds
-                try:
-                    close = datetime.fromisoformat(row["close_time"]).timestamp()
-                    fresh[(ticker, lane)].stop_from = close - (spec.stop_from_seconds if spec.stop_from_seconds > 0 else s.stop_loss_hours * 3600)  # a lane may keep its stop quiet until this many seconds remain
-                    if fresh[(ticker, lane)].close_ts <= 0:
-                        fresh[(ticker, lane)].close_ts = close  # the stop's wait is calculated from the time left; the settlement guard's own close (from the market) wins when it set one
-                except (TypeError, ValueError):
-                    fresh[(ticker, lane)].stop_from = 0.0
+                    held.curve_scales = spec.curve_exit_scales
         if s.manual_exit and getattr(self.client, "authed", False):
             self._add_manual(s, store, fresh)
             try:
@@ -2319,21 +1192,17 @@ class ProfitWatcher:
         with self._lock:
             self.targets = fresh
             self._inflight.intersection_update(fresh)  # a sale signal for a market that has since ended
-        now = time.time()
-        for tk in [tk for tk, b in list(self._flow.items()) if max(list(b), default=0) < now - 300.0]:
-            self._flow.pop(tk, None)  # a market that stopped trading five minutes ago: the ledger only trims itself when a trade arrives, so a closed window's rows would stay for good
-        self._book_resting(store, s)
         try:
             self.reconcile_hand_sales(s, store)
         except Exception:
             log.warning("watcher: the hand-sale check failed this cycle", exc_info=True)
-        if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties_auto or sp.skip_varieties or sp.skip_markets_auto or sp.min_vol_rel > 0 or sp.max_vol_rel > 0 for sp in lane_specs(s).values()):
+        if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties or sp.max_vol_rel > 0 for sp in lane_specs(s).values()):
             self._ledger_at = time.time()
             threading.Thread(target=self._refresh_ledger, args=(s,), daemon=True, name="variety-ledger").start()  # the scoreboard reads days of ticks: off the refresh cycle and at low priority
         if time.time() - self._curve_at >= 5.0 and not self._curve_busy:
             self._curve_at = time.time()
             self._curve_busy = True
-            threading.Thread(target=self._curve_shadow, args=(s, lane_specs(s)), daemon=True, name="curve-shadow").start()  # reads minutes of ticks per bet: off the refresh cycle
+            threading.Thread(target=self._refit_models, args=(s, lane_specs(s)), daemon=True, name="refit-models").start()  # off the refresh cycle
         if time.time() - self._paper_rest_at >= 10.0:
             self._paper_rest_at = time.time()
             try:
@@ -2345,59 +1214,23 @@ class ProfitWatcher:
             except Exception:
                 log.debug("watcher: paper resting judgement failed", exc_info=True)
 
-    def _curve_shadow(self, s: Settings, specs: dict[str, LaneSpec]) -> None:
-        """The curve-read sell-and-flip, shadow only (curveexit.py): log a signal on a curve_shadow lane's open bet, and once an hour score the signals that settled."""
+    def _refit_models(self, s: Settings, specs: dict[str, LaneSpec]) -> None:
+        """Rebuild what a buy step reads from the tape, as its own low-priority work: the risk score's fit (risk_score and risk_trend steps) the curve model (curve_model step) and the state record (state_record step)."""
         try:
-            if any(sp.curve_shadow for sp in specs.values()):
-                from . import curveexit
-
-                store = self.store_factory()
-                curveexit.shadow_pass(s, store, self._tape_db(), specs)
-                curveexit.run_score(s, store)
-            if any(sp.enabled and sp.accumulate_shadow for sp in specs.values()):
-                from . import accumulator
-
-                store = self.store_factory()
-                strike_of = lambda tk: self._market_static(tk).get("floor_strike")  # noqa: E731
-                accumulator.shadow_pass(s, store, self._tape_db(), specs, strike_of)
-                accumulator.run_score(s, store)
-            if any(sp.enabled and sp.model_buy for sp in specs.values()):
-                from . import curvemodel
-
-                curvemodel.maybe_refit(s)
-                from . import timerecord
-
-                timerecord.run_score(s, self.store_factory())
-
-                from . import breadthcheck
-
-                breadthcheck.run_score(s, self.store_factory())
-
-                from . import hotcheck
-
-                hotcheck.refresh(self._tape_db())
-                hotcheck.run_score(s, self.store_factory())
-            if any(sp.enabled and sp.entry_cushion_edge_min > -90 for sp in specs.values()):
-                from . import cushionmodel
-
-                cushionmodel.maybe_refit(s)
             if any(sp.enabled and sp.risk_score_buy > 0 for sp in specs.values()):
                 from . import risktune
 
                 risktune.maybe_refit(s)
-            if any(sp.enabled and sp.record_buy for sp in specs.values()):
+            if any(sp.enabled and "curve_model" in sp.buy_chain for sp in specs.values()):
+                from . import curvemodel
+
+                curvemodel.maybe_refit(s)
+            if any(sp.enabled and "state_record" in sp.buy_chain for sp in specs.values()):
                 from . import staterecord
 
                 staterecord.maybe_refit(s)
-            if any(sp.confidence_shadow for sp in specs.values()):
-                from . import confidence
-
-                store = self.store_factory()
-                confidence.maybe_refit(s)
-                confidence.shadow_pass(s, store, self._tape_db(), specs, lambda tk: self._market_static(tk).get("floor_strike"))
-                confidence.run_score(s, store)
         except Exception:
-            log.warning("watcher: the curve shadow pass failed", exc_info=True)
+            log.warning("watcher: refitting a buy step's model failed", exc_info=True)
         finally:
             self._curve_busy = False
 
@@ -2429,36 +1262,11 @@ class ProfitWatcher:
 
             marketreview.run(s, Store(s.db_path, s.exclude_versions), marketprofile.snapshot())
             added = variants.refresh_ledger(s)
-            if not volregime.thresholds.tuned_at:
-                volregime.thresholds.load(s.data_dir)
-            if time.time() - volregime.thresholds.tuned_at >= volregime.TUNE_EVERY and added >= 0:
-                volregime.retune(s)
             if added:
                 log.info("watcher: variety ledger +%d favorites (%d held)", added, len(variants.ledger))
         except Exception:
             log.warning("watcher: refreshing the variety ledger failed", exc_info=True)
 
-    def _book_resting(self, store: Store, s: Settings) -> None:
-        """Book fills of resting take-profit sells (runner._rest_take_profit) and close the bets they finish.
-
-        A fill can land at any moment, long after the order was placed; this is what notices it. Runs on the
-        refresh cycle, so a fill is on the books within a few seconds. A partial fill is booked and the rest
-        of the order keeps working; nothing here sells anything itself.
-        """
-        for row in store.open_bets():
-            lane = row["lane"] or "moonshot"
-            if not s.is_live(lane, row["ticker"].split("-")[0]) or store.working_rest_sell(row["ticker"], s.env) is None:
-                continue
-            try:
-                new, total, avg = runner._book_resting_fills(s, self.client, store, row["ticker"])
-            except Exception:
-                log.debug("watcher: could not book the resting sell on %s", row["ticker"], exc_info=True)
-                continue
-            if new > 0 and total > 0 and store.net_contracts(row["ticker"], s.env) < 0.005:
-                store.mark_exited(row["ticker"], avg, f"resting take-profit filled at {avg:.4f} (no taker fee)", lane, side=row["side"] or "yes")
-                line = f"sold {total:g} {row['ticker']} resting @ {avg:.4f} (no taker fee)"
-                log.info("watcher: %s", line)
-                self.sold.append(line)
 
     def _rest_manual(self, s: Settings, store: Store, fresh: dict[tuple[str, str], Target]) -> None:
         """The resting curve sell on hand-opened 15-minute positions (manualrest.py; MANUAL_REST_CURVE, 0 = off): an ask at the curve's chance plus a margin that
@@ -2516,8 +1324,8 @@ class ProfitWatcher:
                 old.stop_ref, old.stop_since = 0.0, None
             if old is None:
                 old = Target(
-                    p.ticker, manual.LANE, p.side, p.entry, 0.0, 0.0, 0.0, 30.0, 0.10, s.manual_exit_activate, s.manual_exit_drop,
-                    10.0, s.manual_exit_fast, 3.0, p.entry,
+                    p.ticker, manual.LANE, p.side, p.entry, trail_activate=s.manual_exit_activate, trail_drop=s.manual_exit_drop,
+                    trail_fast=s.manual_exit_fast, peak=p.entry,
                 )
                 self._arm_stop(s, old)
             old.trail_progress = s.crash_progress
@@ -2572,10 +1380,6 @@ class ProfitWatcher:
         with self._lock:
             return {tk for (tk, lane) in self.targets if lane == manual.LANE}
 
-    def _stop_guard(self, lane: str) -> bool:
-        """Whether this lane's stop may be held back by the model's opinion. Only a lane that asks for it (stop_guard = true); never a hand-placed position."""
-        spec = lane_specs(self.get_settings()).get(lane)
-        return False if spec is None else spec.stop_guard
 
     def _back_off(self, ticker: str, lane: str, seconds: float = RETRY_AFTER) -> None:
         """A declined sale is not re-checked for RETRY_AFTER seconds, so a position sitting under its price costs no API calls."""
@@ -2584,29 +1388,10 @@ class ProfitWatcher:
         if t is not None:
             t.retry_after = time.time() + seconds
 
-    def _burst_spot_holds(self, t: Target, ticker: str, side: str, bid: float) -> bool:
-        """A burst sells on order flow alone, and a one-second wick in the reference price looks the same as a crash. When spot's own chance that this side pays is more than `burst_spot_edge` over what the sale gets (the bid less its fee), the
-        sale is worth less than holding, so wait: the next burst may sell again, and the stop-loss still protects the downside. Unknown spot means no opinion: the sale goes ahead."""
-        if t.burst_spot_edge <= 0 or self.spot_side is None or bid <= 0:
-            return False
-        try:
-            p = self.spot_side(ticker, side)
-        except Exception as exc:
-            log.debug("watcher: no spot opinion for %s (%s)", ticker, exc)
-            return False
-        sale = bid - fee_per_contract(bid)
-        if p is None or p <= sale + t.burst_spot_edge:
-            return False
-        log.info("watcher: holding %s through the burst: spot gives this side a %.0f%% chance against a sale at %.2f, so the dip is a wick", ticker, 100 * p, sale)
-        t.burst_resell = True
-        self._back_off(ticker, t.lane)
-        return True
 
     def _spot_holds(self, t: Target | None, ticker: str, side: str, why: str, bid: float = 0.0) -> bool:
         """A crash exit protects a profit from a collapse. While spot is still comfortably on the winning side of the strike (more than
         `spot_sigma` sigma) a bid that dipped is noise, so wait and look again. Unknown spot means no opinion: the exit goes ahead."""
-        if t is not None and why.startswith("burst"):
-            return self._burst_spot_holds(t, ticker, side, bid)
         if t is None or t.spot_sigma <= 0 or self.spot_side is None or not why.startswith("peak-crash"):
             return False
         try:
@@ -2637,8 +1422,6 @@ class ProfitWatcher:
             row = next((r for r in store.open_bets() if r["ticker"] == ticker and (r["lane"] or "moonshot") == lane), None)
             if row is None:
                 return
-            if why.startswith("take-profit") and store.working_rest_sell(ticker, s.env) is not None:
-                return  # a resting sell is working this target (runner._rest_take_profit): it fills with no taker fee, or its own life ends at the close and this rule takes over again; crossing the book here would only pay the fee it exists to avoid
             book = self._book(lane)
             m = book.market(ticker)
             read = time.time()
@@ -2650,9 +1433,8 @@ class ProfitWatcher:
             with contextlib.suppress(TypeError, ValueError):
                 bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
-            resting_paper = (spec := lane_specs(s).get(lane)) is not None and spec.rest_sell and not s.is_live(lane, ticker.split("-")[0])
-            cut = (why.startswith(("peak-crash", "stop-loss", "settlement-guard", "burst", "strike-through", "shock exit", "wrong-side exit", "curve exit", "curve risk exit")) and not runner.is_profit_sale(why)) or (why.startswith("cash-out:") and " under the " in why)
-            if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not resting_paper and not cut:  # a profit-take never sells for a loss after both fees; a peak-crash, a stop, the settlement guard, a last-two-minutes burst, a strike-through sale, a shock exit, a wrong-side exit, the curve exit (all four of its sales: it cuts losses by design, and until 2026-11-10 this veto declined every one below cost, so the time-to-go sale never sold), and a timed drop do (the point is to get out). A paper lane that rests its sale is not re-read at all: its order filled at the target when the bid touched it, so a dipped re-read cannot veto it
+            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit")) and not runner.is_profit_sale(why)
+            if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not cut:  # a profit take never sells for a loss after both fees; the crash exit, the stop and the risk exit's sales do (the point is to get out)
                 self._back_off(ticker, lane)
                 return
             if bid <= 0:
@@ -2664,8 +1446,7 @@ class ProfitWatcher:
                 return
             if self._spot_holds(tgt, ticker, side, why, bid):
                 return
-            hard_stop = why.startswith("stop-loss") and not self._stop_guard(lane)  # a lane may ask for a stop that no model opinion can hold back
-            if why.startswith(("peak-crash", "stop-loss")) and self.hold_value is not None and not hard_stop:
+            if why.startswith(("peak-crash", "stop-loss")) and self.hold_value is not None:
                 # A cash-out or stop is only worth it when there is a real chance of loss: if holding is worth more than the bid we
                 # would sell at, the dip is noise (a near-decided contract jitters), so keep the position and look again shortly.
                 try:
@@ -2680,9 +1461,6 @@ class ProfitWatcher:
                     return
             with self._lock:
                 t = self.targets.get((ticker, lane))
-            if t is not None and why.startswith("spike") and bid < entry * (1 + t.spike_min_gain) - 1e-9:
-                self._back_off(ticker, lane)  # the spike has faded below the minimum gain by the time we looked: keep holding
-                return
             heal = (t.peak - crash_fast(t)) if (t is not None and "fast exit" in why) else (t.peak - crash_drop(t) if t is not None else 0.0)
             if t is not None and t.trail_drop > 0 and why.startswith("peak-crash") and bid > heal + 0.01:
                 t.below_since = None  # the dip has already healed; keep riding
@@ -2691,10 +1469,6 @@ class ProfitWatcher:
             # The socket is the freshest price (REST can show an older quote), so anchor the order to the lower of the two.
             if t is not None and t.last_ts and time.time() - t.last_ts < 5.0 and t.last_bid > 0:
                 bid = min(bid, t.last_bid)
-            if burst_bid_collapsed(why, bid):
-                log.info("watcher: holding %s: the bid read %.2f is more than %.2f under the burst's trigger bid, so a thin book flickered; looking again", ticker, bid, BURST_BID_SLACK)
-                self._back_off(ticker, lane, seconds=1.0)
-                return
             slip = runner.EXIT_SLIP + (0.02 if "fast exit" in why else 0.0) + (0.03 if why.startswith("stop-loss") else 0.0)  # a collapse needs the surest fill
             ordering = time.time()
             line = runner.exit_position(s, book, store, row, bid, why + " [socket]", slip=slip)
@@ -2708,10 +1482,6 @@ class ProfitWatcher:
                     self._back_off(ticker, lane, seconds=min(60.0, 2.0 ** t.sell_misses))
                 else:
                     t.sell_misses = 0
-            if why.startswith("burst") and t is not None and line.startswith("partial exit"):
-                t.burst_resell = True  # the burst sale did not finish: the next burst tries again
-            if why.startswith("settlement-guard") and t is not None and t.burst_exit and line.startswith(("sold", "paper-sold")):
-                self._paper_flip(store, row, t, m)
         except KalshiError as exc:
             log.warning("watcher: could not sell %s (%s)", ticker, exc)
         finally:
@@ -2849,6 +1619,6 @@ _SELL = {name: getattr(ProfitWatcher, "_sell_" + name) for name in sellchain.SEL
 
 
 def wanted(s: Settings) -> bool:
-    """True when any enabled lane asks for a take-profit, or has a stop-loss for the socket to watch."""
-    return s.manual_exit or any((takes_profit(spec) or (s.stop_loss_enabled and spec.stop_loss)) for spec in lane_specs(s).values() if spec.enabled)
+    """True when hand-placed positions are watched, or any enabled lane has an exit module for the socket to run."""
+    return s.manual_exit or any(spec.sell_chain for spec in lane_specs(s).values() if spec.enabled)
 

@@ -7,7 +7,7 @@ from collections import deque
 
 import pytest
 
-from kalshi_moonshot import pathshape, sellchain, watcher
+from kalshi_moonshot import pathshape
 from kalshi_moonshot import ticks as ticks_mod
 from tests.test_risk_exit_flow import CLOSE, TICKER, climb, held, level, signals, yes_bid
 
@@ -117,12 +117,6 @@ def test_unit_the_series_hour_drops_readings_older_than_an_hour():
     assert len(pathshape.SEEN[("S", "buy")]) == 1
 
 
-def test_unit_shape_is_a_step_a_chain_may_name_and_is_not_in_the_default_order():
-    assert "shape" in sellchain.SELL_STEPS and "shape" not in sellchain.DEFAULT and "shape" not in sellchain.order_of(())
-    sellchain.check(("shape", "profit_take"), "lane 'a'")
-    assert callable(watcher._SELL["shape"])
-
-
 # ---- integration: lane file -> watcher -> signals and rows ----
 def seed(step):
     """The market before the buy: 450 s of its own quotes, one a second, moving `step` up and down (its typical minute is step * sqrt(60)); and its series' hour of shape readings."""
@@ -197,13 +191,6 @@ def test_integration_a_lane_without_shape_in_its_chain_writes_no_shape_row(tmp_p
         w = held(tmp_path / name, monkeypatch, live=False, extra=extra)
         run(w, FALL)
         assert rows(tmp_path / name) == [] and len(w.targets[(TICKER, "risk_only")].shape_path) == 0
-
-
-def test_integration_an_exit_modules_steps_may_name_shape(tmp_path, monkeypatch):
-    seed(0.002)
-    w = held(tmp_path, monkeypatch, live=True, extra="exit_module='rt'\n\n[exit.rt]\nsteps=['shape','profit_take','trail']\n[exit.rt.profit]\n[exit.rt.loss]")
-    assert w.targets[(TICKER, "risk_only")].sell_chain == ("shape", "profit_take", "trail") and w.targets[(TICKER, "risk_only")].bought_ts == CLOSE - 450
-    assert run(w, FALL) == [] and rows(tmp_path)
 
 
 def test_integration_an_error_in_the_shape_step_does_not_stop_the_profit_take(tmp_path, monkeypatch, caplog):

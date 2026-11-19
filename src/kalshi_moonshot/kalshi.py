@@ -539,16 +539,6 @@ class KalshiClient:
         resp = self._request("POST", "/portfolio/events/orders", json=body, auth=True)
         return resp if side == "yes" else _as_no(resp)
 
-    def order_queue_position(self, order_id: str) -> float | None:
-        """The shares ahead of one resting order in its price level's queue (Kalshi's queue is price-time priority: `queue_position_fp`, the contracts that must trade before this order starts to fill), or None when it cannot be read (the order is gone, or the call failed). 2026-11-16, user: several buy orders did not fill; one read per resting buy."""
-        try:
-            got = self._request("GET", f"/portfolio/orders/{order_id}/queue_position", auth=True)
-        except KalshiError:
-            return None
-        try:
-            return float(got.get("queue_position_fp", got.get("queue_position")))
-        except (TypeError, ValueError, AttributeError):
-            return None
 
     def cancel_order(self, order_id: str) -> dict[str, Any]:
         """Cancel one open order by id. Kalshi answers with the order's last state; a fill that beat the cancel is on it (and in the fills list)."""

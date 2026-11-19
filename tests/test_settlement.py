@@ -3,7 +3,6 @@ import json
 import math
 import queue
 import time
-from datetime import UTC, datetime
 
 import pytest
 
@@ -89,7 +88,7 @@ def _through_watcher(tmp_path, monkeypatch, sale=0.003, seconds=60, rearm=False)
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(
         "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\n"
-        f"strike_through_sale={sale}\nstrike_through_seconds={seconds}\nstrike_through_rearm={str(rearm).lower()}\nsettlement_guard=0\nburst_exit=false\n"
+        f"strike_through_seconds={seconds}\nstrike_through_rearm={str(rearm).lower()}\nsettlement_guard=0\nburst_exit=false\n"
         "series=['KXBTC15M']\nalways=true\n"
     )
     s = config.load()
@@ -109,25 +108,6 @@ def _through_watcher(tmp_path, monkeypatch, sale=0.003, seconds=60, rearm=False)
     return w, s, store, 2_000_000.0
 
 
-def test_the_guard_arms_only_a_lane_that_asks_for_it(tmp_path, monkeypatch):
-    w, *_ = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.settle_guard == 0.10 and t.strike == 100.0 and t.close_ts == 2_000_000.0 and t.index_id == "BRTI"
-
-
-def test_strike_through_sale_stays_out_of_a_lane_until_it_is_set(tmp_path, monkeypatch):
-    from kalshi_moonshot import lanes
-
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    plain = lanes.LaneSpec(name="x", estimator="ladder", label="x", max_spread=0.05, min_volume=0.0, price=(0.1, 0.9), hours=(0, 1))
-    assert "strike_through_sale" not in lanes.settings_of(plain, s) and not lanes.takes_profit(plain)
-    on = lanes.LaneSpec(**{**plain.__dict__, "strike_through_sale": 0.003, "strike_through_seconds": 45.0})
-    out = lanes.settings_of(on, s)
-    assert out["strike_through_sale"] == "0.003" and out["strike_through_seconds"] == "45.0" and lanes.takes_profit(on)
-    assert lanes.version_of(plain, s) == lanes.version_of(lanes.LaneSpec(**plain.__dict__), s)
-
-
 def _clear_through(t):
     t.through_kept = t.through_on = t.through_bounce = False
     t.through_worst = t.through_best = t.through_best_ts = t.through_since = 0.0
@@ -137,7 +117,7 @@ def _shock_watcher(tmp_path, monkeypatch, extra=""):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(
         "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nshock_bp=8\nshock_seconds=60\nshock_margin_bp=5\nshock_last=120\n"
-        f"settlement_guard=0\nburst_exit=false\nseries=['KXBTC15M']\nalways=true\n{extra}"
+        f"burst_exit=false\nseries=['KXBTC15M']\nalways=true\n{extra}"
     )
     s = config.load()
     store = Store(s.db_path)
@@ -156,68 +136,6 @@ def _shock_watcher(tmp_path, monkeypatch, extra=""):
     return w, 2_000_000.0
 
 
-def test_a_shock_exit_sells_when_the_spot_jumps_against_a_thin_cushion(tmp_path, monkeypatch):
-    w, close = _shock_watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.shock_bp == 8 and t.shock_index == "BRTI" and t.shock_ref == 100.0
-    for k in range(125, 50, -5):  # the spot sits 10 bp above the strike for a minute (a YES is safe)
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": close - 50.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - 50, "value": 100.01})  # 9 bp down in 60 s, 1 bp above the strike
-    sell = w._jobs.get_nowait()
-    assert sell.why.startswith("shock exit") and "0.62" in sell.why
-    rows = Store(config.load().db_path).db.execute("SELECT series, side, bid, fired, worst_bp FROM shock_log WHERE ticker='KXBTC15M-1'").fetchall()
-    assert rows and rows[-1]["fired"] == 1 and rows[-1]["series"] == "KXBTC15M" and rows[-1]["worst_bp"] <= -8
-
-
-def test_a_shock_exit_is_not_armed_on_a_series_the_lane_turns_it_off_for(tmp_path, monkeypatch):
-    w, _ = _shock_watcher(tmp_path, monkeypatch, extra="shock_off_series=['KXBTC15M']\n")
-    t = next(iter(w.targets.values()))
-    assert t.shock_bp == 0
-
-
-def test_a_log_only_shock_watch_writes_a_would_fire_row_and_never_sells(tmp_path, monkeypatch):
-    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_log_only=true\n")
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.shock_log_only
-    for k in range(125, 50, -5):
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": close - 50.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - 50, "value": 100.01})
-    assert w._jobs.empty()
-    rows = Store(config.load().db_path).db.execute("SELECT fired FROM shock_log WHERE ticker='KXBTC15M-1'").fetchall()
-    assert [r["fired"] for r in rows][-1] == 2
-
-
-def test_a_shock_exit_ignores_a_small_move_a_wide_cushion_and_a_bid_outside_its_range(tmp_path, monkeypatch):
-    w, close = _shock_watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    for k in range(125, 50, -5):
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
-    now = close - 50
-    w._spot["BRTI"] = (now, 100.07)
-    assert w._shock_hit(t, 0.62, now, now) is None  # 3 bp down: not a shock
-    w._spot["BRTI"] = (now, 100.01)
-    assert w._shock_hit(t, 0.95, now, now) is None  # the market is not worried: a bid over 0.89 is left alone
-    assert w._shock_hit(t, 0.03, now, now) is None  # a bid under 0.05 has already priced the loss
-    assert w._shock_hit(t, 0.62, close - 130, close - 130) is None  # outside the last 120 s
-    t.shock_ref = 99.0  # a cushion of 100+ bp: the jump is no threat
-    assert w._shock_hit(t, 0.62, now, now) is None
-    t.shock_ref = 100.0
-    assert w._shock_hit(t, 0.62, now, now) is not None
-    t.side = "no"  # a NO is helped by the same move
-    assert w._shock_hit(t, 0.62, now, now) is None
-
-
-def test_a_shock_exit_waits_for_a_full_lookback_of_history(tmp_path, monkeypatch):
-    w, close = _shock_watcher(tmp_path, monkeypatch)
-    for k in range(25, 50, -5):  # only 25 s of ticks since the watcher started
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - 110 + (25 - k), "value": 100.10})
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": close - 79.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - 79, "value": 100.01})
-    assert w._jobs.empty()
-
-
 def _wrong_side_world(tmp_path, monkeypatch, before, extra="", varieties="wrong_side_varieties=['G']\n"):
     """A KXCOPPER15M YES bought 437 s before the close; `before` is the 5 minutes of BiQuote ticks ahead of the buy as (seconds before the close, value)."""
     from kalshi_moonshot import db
@@ -225,7 +143,7 @@ def _wrong_side_world(tmp_path, monkeypatch, before, extra="", varieties="wrong_
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(
         "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nwrong_side_bp=5\nwrong_side_seconds=15\n"
-        f"{varieties}{extra}settlement_guard=0\nburst_exit=false\nstop_loss=false\nwatch_loss=0\nseries=['KXCOPPER15M']\nalways=true\n"
+        f"{varieties}{extra}burst_exit=false\nstop_loss=false\nwatch_loss=0\nseries=['KXCOPPER15M']\nalways=true\n"
     )
     s = config.load()
     close = 2_000_000.0
@@ -257,53 +175,6 @@ def _feed(w, close, sec, value, bid):
     w.on_event({"kind": "index", "index_id": "BQ_COPPER", "ts": close - sec, "value": value})
 
 
-def test_a_wrong_side_exit_sells_an_oscillating_position_that_stays_wrong_for_long_enough(tmp_path, monkeypatch):
-    chop = [(740 - 2 * k, 100.03 if (k // 10) % 2 else 99.97) for k in range(151)]  # a tick every 2 s that crosses the open price every 20 s: variety G
-    w, close = _wrong_side_world(tmp_path, monkeypatch, chop)
-    t = w.targets[("KXCOPPER15M-1", "guarded")]
-    assert t.variety == "G" and t.wrong_bp == 5 and t.shock_ref == 100.0
-    _feed(w, close, 400, 99.94, 0.40)  # 6 bp on the wrong side: the clock starts
-    assert w._jobs.empty()
-    _feed(w, close, 392, 99.94, 0.38)  # 8 s later: not long enough
-    assert w._jobs.empty()
-    _feed(w, close, 384, 99.94, 0.35)  # 16 s: sell
-    sell = w._jobs.get_nowait()
-    assert sell.why.startswith("wrong-side exit") and "variety G" in sell.why and "0.35" in sell.why
-
-
-def test_a_wrong_side_exit_in_the_last_seconds_starts_its_clock_there_and_only_for_its_series(tmp_path, monkeypatch):
-    calm = [(740 - 2 * k, 100.01) for k in range(151)]
-    w, close = _wrong_side_world(tmp_path, monkeypatch, calm, extra="wrong_side_last=120\nwrong_side_series=['KXCOPPER15M']\n", varieties="")
-    t = w.targets[("KXCOPPER15M-1", "guarded")]
-    assert t.wrong_bp == 5 and t.wrong_last == 120
-    _feed(w, close, 300, 99.94, 0.40)  # wrong side, but 300 s out: no clock yet
-    _feed(w, close, 125, 99.94, 0.38)
-    assert w._jobs.empty() and t.wrong_since == 0.0
-    _feed(w, close, 110, 99.94, 0.36)  # inside the last 120 s: the clock starts
-    assert w._jobs.empty()
-    _feed(w, close, 94, 99.94, 0.34)  # 16 s later: sell
-    assert w._jobs.get_nowait().why.startswith("wrong-side exit")
-    w2, _ = _wrong_side_world(tmp_path / "b", monkeypatch, calm, extra="wrong_side_series=['KXWTI15M']\n", varieties="") if (tmp_path / "b").mkdir() is None else (None, None)
-    assert w2.targets[("KXCOPPER15M-1", "guarded")].wrong_bp == 0
-
-
-def test_a_wrong_side_exit_waits_while_the_spot_comes_back_and_skips_other_varieties(tmp_path, monkeypatch):
-    chop = [(740 - 2 * k, 100.03 if (k // 10) % 2 else 99.97) for k in range(151)]
-    w, close = _wrong_side_world(tmp_path, monkeypatch, chop)
-    _feed(w, close, 400, 99.94, 0.40)
-    _feed(w, close, 392, 100.02, 0.60)  # back on the right side: the clock resets
-    _feed(w, close, 384, 99.94, 0.40)
-    _feed(w, close, 376, 99.94, 0.38)  # 8 s into the new stretch
-    assert w._jobs.empty()
-    calm = [(740 - 2 * k, 100.20 + 0.0004 * (k % 2)) for k in range(151)]  # a steady cushion far above the open price: variety B
-    w2, close = _wrong_side_world(tmp_path / "b", monkeypatch, calm) if (tmp_path / "b").mkdir() is None else (None, None)
-    t2 = w2.targets[("KXCOPPER15M-1", "guarded")]
-    assert t2.variety == "B" and t2.wrong_bp == 0
-    _feed(w2, close, 400, 99.94, 0.40)
-    _feed(w2, close, 380, 99.94, 0.30)
-    assert w2._jobs.empty()
-
-
 def _fade_after_a_shock(w, close, sell_expected):
     """A YES whose spot sits 20 bp over the strike, drops 19 bp between 200 and 190 s left (a shock) and then sits 1 bp over it, bid 0.55."""
     t = w.targets[("KXBTC15M-1", "guarded")]
@@ -319,219 +190,11 @@ def _fade_after_a_shock(w, close, sell_expected):
     return t, fired
 
 
-def test_a_shock_exit_with_memory_sells_a_shock_that_came_just_before_its_window(tmp_path, monkeypatch):
-    w, close = _shock_watcher(tmp_path, monkeypatch, "shock_memory=120\n")
-    assert w.targets[("KXBTC15M-1", "guarded")].shock_memory == 120
-    _, fired = _fade_after_a_shock(w, close, True)
-    assert fired[0] <= 120 and fired[1].startswith("shock exit") and "bid 0.55" in fired[1]
-
-
-def test_a_shock_exit_without_memory_forgets_a_shock_once_it_is_older_than_its_lookback(tmp_path, monkeypatch):
-    w, close = _shock_watcher(tmp_path, monkeypatch)
-    _fade_after_a_shock(w, close, False)  # by 120 s left the 60 s lookback no longer reaches the drop
-
-
-def test_a_lane_without_a_shock_setting_gets_no_shock_exit(tmp_path, monkeypatch):
-    from kalshi_moonshot import lanes
-
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    plain = lanes.LaneSpec(name="x", estimator="ladder", label="x", max_spread=0.05, min_volume=0.0, price=(0.1, 0.9), hours=(0, 1))
-    assert "shock_bp" not in lanes.settings_of(plain, s) and not lanes.takes_profit(plain)
-    on = lanes.LaneSpec(**{**plain.__dict__, "shock_bp": 8.0})
-    assert lanes.settings_of(on, s)["shock_bp"] == "8.0" and lanes.takes_profit(on)
-
-
-def test_a_strike_through_watches_the_cross_and_sells_when_the_bounce_fails(tmp_path, monkeypatch):
-    w, _s, store, close = _through_watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.strike == 100.0 and t.index_id == "BRTI" and t.strike_through == 0.003 and t.strike_through_seconds == 60
-    pause = t.strike_through_seconds / 2
-    now = close - 50  # 50s left, inside the 60s window
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.40, "ask": 0.41, "ts": now - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 100.5})  # still on the winning side of a YES
-    assert w._jobs.empty()
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.93, "ask": 0.94, "ts": now + 7})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 10, "value": 99.996})  # 0.004% through starts the watch; the old bid is not a sale
-    assert w._jobs.empty() and t.through_on
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": now + 20 - 0.4})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 20, "value": 99.996})  # ten seconds under is still inside the half-window
-    assert w._jobs.empty()
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.62, "ask": 0.63, "ts": now + 10 + pause - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 10 + pause, "value": 99.996})  # still 0.004% through, and half the window has run out
-    sell = w._jobs.get_nowait()
-    assert sell.why.startswith("strike-through") and "0.62" in sell.why
-    assert w._strike_through_hit(t, 0.62, close - 90, close - 90) is None  # 90s left: outside the window
-    t.strike_through = 0
-    w._spot["BRTI"] = (close - 50, 99.996)
-    assert w._strike_through_hit(t, 0.62, close - 50, close - 50) is None  # 0 turns the sale off
-    t.strike_through = 0.003
-    _clear_through(t)
-    w._spot["BRTI"] = (close - 40, 99.996)
-    assert w._strike_through_hit(t, 1.0, close - 40, close - 40) is None  # the cross only arms the watch
-    w._spot["BRTI"] = (close - 40 + pause, 99.996)
-    assert w._strike_through_hit(t, 1.0, close - 40 + pause, close - 40 + pause) is None  # a $1 bid is still a win
-    _clear_through(t)
-    t.side = "no"
-    w._spot["BRTI"] = (close - 40, 100.004)  # 0.004% through a NO
-    assert w._strike_through_hit(t, 0.54, close - 40, close - 40) is None
-    w._spot["BRTI"] = (close - 40 + pause, 100.004)
-    assert w._strike_through_hit(t, 0.54, close - 40 + pause, close - 40 + pause).startswith("strike-through")
-    w._inflight.add(("KXBTC15M-1", "guarded"))
-    w.client.market = lambda ticker: {"ticker": ticker, "yes_bid_dollars": "0.62", "yes_ask_dollars": "0.63", "title": "t", "close_time": "2099-01-01T00:00:00Z"}
-    t.side = "yes"
-    w._sell("KXBTC15M-1", "guarded", "strike-through: test")  # 0.62 under the 0.90 paid: a profit-take would refuse this
-    assert [r for r in store.open_bets() if r["lane"] == "guarded"] == []
-    assert store.db.execute("SELECT exit_price FROM decisions WHERE lane='guarded'").fetchone()["exit_price"] == pytest.approx(0.62)
-
-
-def test_a_stay_through_sells_before_the_last_minute_and_a_shorter_dip_is_held(tmp_path, monkeypatch):
-    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    now = close - 300  # five minutes left: outside the last-minute sale
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.85, "ask": 0.86, "ts": now - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 99.996})  # 0.004% through starts the stay clock
-    assert w._jobs.empty()
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.84, "ask": 0.85, "ts": now + 34 - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 34, "value": 99.996})  # 34s is the dip that came back and paid
-    assert w._jobs.empty()
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 40, "value": 100.01})  # back on the winning side before 45s
-    assert t.through_kept and w._jobs.empty()
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.83, "ask": 0.84, "ts": now + 40 + watcher.THROUGH_STAY - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 40 + watcher.THROUGH_STAY, "value": 99.990})
-    assert w._jobs.empty()  # kept to the close, so the later stay is not a sale
-    _clear_through(t)
-    later = close - 280
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.85, "ask": 0.86, "ts": later - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": later, "value": 99.996})
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.80, "ask": 0.81, "ts": later + watcher.THROUGH_STAY - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": later + watcher.THROUGH_STAY, "value": 99.996})
-    sell = w._jobs.get_nowait()
-    assert sell.why.startswith("strike-through") and "0.80" in sell.why
-
-
-def test_a_strike_through_sells_when_the_bounce_turns_back_down(tmp_path, monkeypatch):
-    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch)
-    now = close - 50
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.40, "ask": 0.41, "ts": now - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 99.980})  # 0.020% through starts the watch
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 2, "value": 99.990})  # back to 0.010% through: the bounce
-    assert w._jobs.empty()
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.55, "ask": 0.56, "ts": now + 3 - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 3, "value": 99.988})  # 0.002% worse than the bounce, short of another 0.003%
-    sell = w._jobs.get_nowait()
-    assert sell.why.startswith("strike-through") and "0.55" in sell.why
-
-
-def test_a_strike_through_that_comes_back_to_the_winning_side_is_held(tmp_path, monkeypatch):
-    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    now = close - 50
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.32, "ask": 0.35, "ts": now - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now, "value": 99.9815})  # 0.0185% through: the watch starts, the sharp drop is not a sale
-    assert w._jobs.empty() and t.through_on and not t.through_kept
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 6, "value": 99.9868})  # a bounce back toward the strike, still under
-    assert w._jobs.empty() and t.through_bounce
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 11, "value": 100.002})  # back on the winning side
-    assert t.through_kept and w._jobs.empty()
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.20, "ask": 0.22, "ts": now + 20 - 0.2})
-    w.on_event({"kind": "index", "index_id": "BRTI", "ts": now + 20, "value": 99.990})  # through again later: the position is already kept to the close
-    assert w._jobs.empty()
-
-
-def test_the_guard_sells_when_the_chance_falls_under_the_bid_and_stays_quiet_otherwise(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
-    w.tape_factory = lambda: _Tape(close, fall_at=close - 70)  # the index falls from 70 s before the close
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    now = close - 100  # 100 s left, spot still at 100.0: the chance is about even, the bid says 0.90
-    w._spot["BRTI"] = (now, 100.0)
-    assert w._settlement_hit(t, 0.90, now, {"bid": 0.90, "ask": 0.91}) is not None  # even odds against a 0.90 bid: cash out
-    t.settle_checked = 0.0
-    far = close - 400  # outside the 150 s window: no look at all
-    w._spot["BRTI"] = (far, 100.0)
-    assert w._settlement_hit(t, 0.90, far, {"bid": 0.90, "ask": 0.91}) is None
-    t.settle_checked = 0.0
-    w._spot["BRTI"] = (now, 120.0)  # the spot far above the strike: holding is worth the bid
-    assert w._settlement_hit(t, 0.90, now, {"bid": 0.90, "ask": 0.91}) is None
-    t.settle_checked = 0.0
-    w._spot.clear()  # no index tick at all: say nothing
-    assert w._settlement_hit(t, 0.90, now, {"bid": 0.90, "ask": 0.91}) is None
-
-
-def test_the_guard_sale_goes_through_even_at_a_loss_and_logs_a_paper_flip(tmp_path, monkeypatch):
-    w, _s, store, _close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    t.flip_hint = (0.12, 0.31)  # the other side costs 12c and the settlement chance says 31%
-    w._inflight.add(("KXBTC15M-1", "guarded"))
-    w.client.market = lambda ticker: {"ticker": ticker, "yes_bid_dollars": "0.60", "yes_ask_dollars": "0.62", "title": "t", "close_time": "2099-01-01T00:00:00Z"}
-    w._sell("KXBTC15M-1", "guarded", "settlement-guard: test")  # the bid 0.60 is under the price paid 0.90: a profit-take would refuse; the guard must not
-    assert [r for r in store.open_bets() if r["lane"] == "guarded"] == []  # (the logged paper flip is itself an open paper bet in its own lane)
-    ex = store.db.execute("SELECT exit_price FROM decisions WHERE lane='guarded'").fetchone()
-    assert ex["exit_price"] == pytest.approx(0.60)
-    flip = store.db.execute("SELECT side, action, ask, model_p FROM decisions WHERE lane='settlement_flip'").fetchone()
-    assert flip["side"] == "no" and flip["action"] == "bet" and flip["ask"] == pytest.approx(0.12)
-
-
 def _quiet_minute(w, now, per_second=40, ticker="KXBTC15M-1"):
     """Two minutes of ordinary trading before `now`: 40 contracts a second, half and half."""
     for k in range(125, 4, -1):
         w.on_event({"kind": "trade", "ticker": ticker, "ts": now - k, "count": per_second / 2, "taker": "yes", "price": 0.9})
         w.on_event({"kind": "trade", "ticker": ticker, "ts": now - k, "count": per_second / 2, "taker": "no", "price": 0.9})
-
-
-def test_a_burst_is_volume_against_the_markets_own_normal_not_a_fixed_number(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    _quiet_minute(w, now)
-    assert t.cur_bid == pytest.approx(0.90) and t.cur_other_ask == pytest.approx(0.10)
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 100, "taker": "no", "price": 0.5})  # twice a normal second, but under the floor: nothing
-    assert w._jobs.empty()
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})  # 700 against in 2 s: about 6x the normal 3 s, nearly all of it against the YES holder
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})  # still one log
-    assert not w._jobs.empty() and w._jobs.get_nowait()[2].startswith("burst:")  # last 120 s: sell the favorite, that is the peak-crash exit
-
-
-def test_a_burst_before_the_last_two_minutes_is_not_an_exit(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
-    now = close - 200  # 200 s left: holding still paid on the burst_flip record; the exit only fires in the last 120 s
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    _quiet_minute(w, now)
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    assert w._jobs.empty()
-
-
-def test_a_silent_book_cannot_five_times_its_own_silence(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    _quiet_minute(w, now, per_second=0)  # no trades: the median second is 0, so 5x would be 5x of nothing
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    assert w._jobs.empty()
-
-
-def test_a_300_contract_print_on_a_thin_gold_book_is_not_a_crash(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch, ticker="KXGOLD15M-1")
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXGOLD15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    _quiet_minute(w, now, per_second=2, ticker="KXGOLD15M-1")  # copper/natgas-like: a handful of contracts a second
-    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 1, "count": 324, "taker": "no", "price": 0.5})  # today's copper "358x" print
-    assert w._jobs.empty()
-
-
-def test_a_burst_on_gold_with_a_real_baseline_sells(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch, ticker="KXGOLD15M-1")
-    t = w.targets[("KXGOLD15M-1", "guarded")]
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXGOLD15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    assert t.cur_bid == pytest.approx(0.90)
-    _quiet_minute(w, now, ticker="KXGOLD15M-1")
-    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 1, "count": 600, "taker": "no", "price": 0.5})
-    w.on_event({"kind": "trade", "ticker": "KXGOLD15M-1", "ts": now + 2, "count": 9000, "taker": "no", "price": 0.5})
-    assert not w._jobs.empty() and w._jobs.get_nowait()[2].startswith("burst:")
 
 
 def _buy_inline(w):
@@ -596,24 +259,6 @@ def _sat_cheap(w, at, bid=0.90, ask=0.91, ticker="KXBTC15M-1"):
 
 
 
-def test_the_same_volume_in_a_busy_market_is_not_a_burst(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    _quiet_minute(w, now, per_second=1500)  # a market that normally trades 1,500 contracts a second
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 3000, "taker": "no", "price": 0.5})  # the fixed bar of 3,000 would have fired; against this market it is ordinary
-
-
-def test_trading_with_the_holder_or_a_favorite_that_is_not_one_is_not_a_burst(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
-    now = close - 120
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.90, "ask": 0.91, "ts": now - 130})
-    _quiet_minute(w, now)
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 1, "count": 5000, "taker": "yes", "price": 0.9})  # YES takers are with a YES holder
-    w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.40, "ask": 0.41, "ts": now + 5})  # no longer a favorite
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now + 6, "count": 20000, "taker": "no", "price": 0.5})
-
-
 def test_the_settlement_edge_logs_the_underpriced_side_once_per_bar(tmp_path, monkeypatch):
     from kalshi_moonshot import settlement_edge
 
@@ -663,25 +308,6 @@ def test_the_settlement_edge_stays_quiet_outside_the_window_or_without_a_spot(tm
 
 
 
-def test_dwell_counts_the_seconds_a_side_has_been_in_the_band(tmp_path):
-    from kalshi_moonshot import db, runner
-    from kalshi_moonshot.strategy import LongShot
-
-    class S:
-        tape_path = str(tmp_path / "tape.db")
-
-    tape = db.connect(S.tape_path, "tape", shared=True)
-    tape.execute("CREATE TABLE IF NOT EXISTS quotes (ts REAL NOT NULL, ticker TEXT NOT NULL, bid REAL, ask REAL, last REAL, sts INTEGER, bid_size REAL, ask_size REAL)")
-    for ts, bid, ask in ((100.0, 0.60, 0.62), (110.0, 0.69, 0.71), (125.0, 0.72, 0.74), (140.0, 0.74, 0.76)):
-        tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (?,?,?,?)", (ts, "KXBTC15M-1", bid, ask))
-    tape.commit()
-    yes = LongShot("KXBTC15M-1", "", "", 0.74, 0.76, 0.0, "", 0.1, side="yes")
-    assert runner.dwell_seconds(S, yes, 0.70, now=145.0) == pytest.approx(35.0)  # under the band at t=100, in it from the quote at 110: 35 s
-    assert runner.dwell_seconds(S, yes, 0.70, now=112.0) == pytest.approx(2.0)
-    no = LongShot("KXBTC15M-1", "", "", 0.24, 0.26, 0.0, "", 0.1, side="no")  # the NO side costs 1 - bid: 0.40 .. 0.26: never in a 0.70 band
-    assert runner.dwell_seconds(S, no, 0.70, now=145.0) == pytest.approx(0.0)
-
-
 def test_side_trend_is_the_move_of_the_sides_mid_over_the_window(tmp_path):
     from kalshi_moonshot import db, runner
     from kalshi_moonshot.strategy import LongShot
@@ -723,80 +349,6 @@ def test_trend_in_the_markets_own_units(tmp_path):
     assert runner.side_trend_z(S, yes, 10.0, now=5000.0) is None  # no recent quote
 
 
-def test_a_lane_with_max_open_waits_when_it_is_full(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.estimators import Estimate
-    from kalshi_moonshot.strategy import LongShot
-
-    w, s, store, _close = _watcher(tmp_path, monkeypatch)
-    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nmax_open=2\nfixed_stake=2.0\nseries=['KXBTC15M']\n")
-    s = config.load()
-
-    class Fixed:
-        def estimate(self, client, settings, shot):
-            return Estimate(0.9, "fixed")
-
-    shot = LongShot("KXBTC15M-9", "t", "", 0.88, 0.90, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXBTC15M", side="yes")
-    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, "KXBTC15M-2", "bet", "observe", 0.90, "yes", "guarded", 3, 2.7, "2099-01-01T00:00:00Z"))
-    store.db.commit()  # the fixture already holds KXBTC15M-1: two open, the lane's cap
-    out = runner.evaluate(s, w.client, None, store, shot, estimators={"market": Fixed()})
-    assert out.action == "pass" and "lane full" in out.note
-
-
-def test_a_lane_with_max_same_side_skips_the_third_bet_on_one_side_of_a_window(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.estimators import Estimate
-    from kalshi_moonshot.strategy import LongShot
-
-    w, s, store, _close = _watcher(tmp_path, monkeypatch)
-    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nmax_same_side=2\nfixed_stake=2.0\nseries=['KXBTC15M','KXETH15M','KXDOGE15M']\n")
-    s = config.load()
-
-    class Fixed:
-        def estimate(self, client, settings, shot):
-            return Estimate(0.9, "fixed")
-
-    def held(ticker, side):
-        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, ticker, "bet", "observe", 0.90, side, "guarded", 3, 2.7, "2099-01-01T00:00:00Z"))
-
-    held("KXBTC15M-26NOV021607-07", "yes")
-    held("KXETH15M-26NOV021607-07", "yes")
-    held("KXBTC15M-26NOV021622-22", "yes")  # another window: not counted
-    store.db.commit()
-    third = LongShot("KXDOGE15M-26NOV021607-07", "t", "", 0.88, 0.90, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXDOGE15M", side="yes")
-    out = runner.evaluate(s, w.client, None, store, third, estimators={"market": Fixed()})
-    assert out.action == "pass" and "same side held" in out.note
-    other_side = LongShot("KXDOGE15M-26NOV021607-07", "t", "", 0.88, 0.90, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXDOGE15M", side="no")
-    out = runner.evaluate(s, w.client, None, store, other_side, estimators={"market": Fixed()})
-    assert "same side held" not in out.note
-
-
-def test_max_same_side_can_count_the_bets_of_other_lanes_together(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.estimators import Estimate
-    from kalshi_moonshot.strategy import LongShot
-
-    w, s, store, _close = _watcher(tmp_path, monkeypatch)
-    (tmp_path / "strategies.toml").write_text(
-        "[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nmax_same_side=2\nsame_side_lanes=['sibling']\nfixed_stake=2.0\nseries=['KXBTC15M','KXSOL15M']\n"
-    )
-    s = config.load()
-
-    class Fixed:
-        def estimate(self, client, settings, shot):
-            return Estimate(0.9, "fixed")
-
-    def held(ticker, lane):
-        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, ticker, "bet", "observe", 0.90, "yes", lane, 3, 2.7, "2099-01-01T00:00:00Z"))
-
-    held("KXBTC15M-26NOV021607-07", "guarded")
-    held("KXETH15M-26NOV021607-07", "sibling")  # another lane, same window and side: counts
-    store.db.commit()
-    third = LongShot("KXSOL15M-26NOV021607-07", "t", "", 0.88, 0.90, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXSOL15M", side="yes")
-    out = runner.evaluate(s, w.client, None, store, third, estimators={"market": Fixed()})
-    assert out.action == "pass" and "same side held" in out.note
-
-
 def _variety_world(tmp_path, monkeypatch, ticks, extra="skip_varieties=['G', 'A-yes']"):
     import time as _time
 
@@ -821,37 +373,6 @@ def _copper_shot(side="yes", ask=0.86):
     from kalshi_moonshot.strategy import LongShot
 
     return LongShot("KXCOPPER15M-9", "t", "", ask - 0.01, ask, 437.0 / 3600.0, "2099-01-01T00:00:00Z", 437.0 / 3600.0, lane="guarded", series="KXCOPPER15M", side=side)
-
-
-def test_a_lane_skips_the_varieties_on_its_list_and_buys_the_rest(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.estimators import Estimate
-
-    class Fixed:
-        def estimate(self, client, settings, shot):
-            return Estimate(0.9, "fixed")
-
-    chop = [100.03 if (k // 10) % 2 else 99.97 for k in range(151)]  # crosses the open price every 20 s: variety G
-    w, s, store = _variety_world(tmp_path, monkeypatch, chop)
-    out = runner.evaluate(s, w.client, None, store, _copper_shot("yes"), estimators={"market": Fixed()})
-    assert out.action == "pass" and "variety G" in out.note and "does not buy it" in out.note
-    calm = [100.20 + 0.0004 * (k % 2) for k in range(151)]  # a steady cushion far above the open price: variety B
-    w2, s2, store2 = _variety_world(tmp_path / "b", monkeypatch, calm) if (tmp_path / "b").mkdir() is None else (None, None, None)
-    ok = runner.evaluate(s2, w2.client, None, store2, _copper_shot("yes"), estimators={"market": Fixed()})
-    assert "does not buy it" not in ok.note
-
-
-def test_a_lane_buys_when_the_variety_cannot_be_read(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.estimators import Estimate
-
-    class Fixed:
-        def estimate(self, client, settings, shot):
-            return Estimate(0.9, "fixed")
-
-    w, s, store = _variety_world(tmp_path, monkeypatch, [])  # no ticks at all
-    out = runner.evaluate(s, w.client, None, store, _copper_shot("yes"), estimators={"market": Fixed()})
-    assert "does not buy it" not in out.note
 
 
 def _choppy_world(tmp_path, monkeypatch, lane_extra):
@@ -880,71 +401,6 @@ def _choppy_shot(left_seconds, ask):
     from kalshi_moonshot.strategy import LongShot
 
     return LongShot("KXBTC15M-99", "t", "", ask - 0.01, ask, left_seconds / 3600.0, "2099-01-01T00:00:00Z", left_seconds / 3600.0, lane="guarded", series="KXBTC15M", side="yes")
-
-
-def test_a_choppy_market_limits_buys_to_the_last_seconds_and_a_higher_price(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.estimators import Estimate
-
-    class Fixed:
-        def estimate(self, client, settings, shot):
-            return Estimate(0.9, "fixed")
-
-    w, s, store = _choppy_world(tmp_path, monkeypatch, "choppy_floor=0.8\nchoppy_left_max=300\nchoppy_price_min=0.82")
-    early = runner.evaluate(s, w.client, None, store, _choppy_shot(420, 0.85), estimators={"market": Fixed()})
-    assert early.action == "pass" and "choppy market" in early.note and "last 300s" in early.note
-    cheap = runner.evaluate(s, w.client, None, store, _choppy_shot(200, 0.80), estimators={"market": Fixed()})
-    assert cheap.action == "pass" and "choppy market" in cheap.note and "0.82 or more" in cheap.note
-    late = runner.evaluate(s, w.client, None, store, _choppy_shot(200, 0.85), estimators={"market": Fixed()})
-    assert "choppy market" not in late.note
-
-
-def test_a_choppy_market_can_skip_every_buy_and_a_calm_one_changes_nothing(tmp_path, monkeypatch):
-    from kalshi_moonshot import regime, runner
-    from kalshi_moonshot.estimators import Estimate
-
-    class Fixed:
-        def estimate(self, client, settings, shot):
-            return Estimate(0.9, "fixed")
-
-    w, s, store = _choppy_world(tmp_path, monkeypatch, "choppy_floor=0.8\nchoppy_skip=true")
-    out = runner.evaluate(s, w.client, None, store, _choppy_shot(200, 0.85), estimators={"market": Fixed()})
-    assert out.action == "pass" and "buying nothing" in out.note
-    rate, n = regime.favorite_rate(s, store, ("KXBTC15M",), 12.0)
-    assert n == 14 and rate == pytest.approx(4 / 14)
-    regime.reset()
-    store.db.execute("UPDATE windows SET result='yes'")  # the favorites all won: calm
-    store.db.commit()
-    calm = runner.evaluate(s, w.client, None, store, _choppy_shot(420, 0.85), estimators={"market": Fixed()})
-    assert "choppy market" not in calm.note
-
-
-def test_a_resting_buy_reports_what_filled_and_the_fee_charged(tmp_path, monkeypatch):
-    import dataclasses
-
-    from kalshi_moonshot import lanes, runner
-    from kalshi_moonshot.strategy import LongShot
-
-    _w, s, store, _close = _watcher(tmp_path, monkeypatch)
-    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
-
-    class C:
-        def __init__(self):
-            self.sent = []
-
-        def buy_resting(self, ticker, side, count, price, seconds, client_order_id=None, post_only=True):
-            self.sent.append((side, count, price, seconds))
-            return {"order_id": "o1"}
-
-        def portfolio_rows(self, path, key, min_ts=None, pages=1):
-            return [{"fill_id": "f1", "market_ticker": "KXBTC15M-9", "count_fp": "2", "yes_price_dollars": "0.1900", "no_price_dollars": "0.8100", "fee_cost": "0", "ts": 1.0, "book_side": "ask", "is_taker": False, "order_id": "o1", "action": "buy", "side": "no"}]
-
-    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], buy_rest_seconds=20.0, buy_rest_below=0.01)
-    shot = LongShot("KXBTC15M-9", "t", "", 0.18, 0.82, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXBTC15M", side="no")
-    c = C()
-    out = runner._place_resting(s, c, store, shot, "why", 2.0, spec, None)
-    assert c.sent == [("no", 2.0, pytest.approx(0.81), 20.0)]
-    assert out.filled == 2.0 and out.cost == pytest.approx(1.62) and "fee $0.0000" in out.note
 
 
 def test_a_postgres_connection_serves_one_thread_at_a_time():
@@ -1046,35 +502,6 @@ def test_the_gap_report_puts_paper_and_live_side_by_side(tmp_path, monkeypatch):
     assert "x  (version v1)" in text and "live    2 bets" in text and "paper   2 bets" in text and "paper wins +50 points more than live" in text
 
 
-def test_a_sale_that_fills_nothing_is_retried_lower_against_a_fresh_book(tmp_path, monkeypatch):
-    from kalshi_moonshot import runner
-
-    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
-    _w, s, store, _close = _watcher(tmp_path, monkeypatch)
-    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)
-    store.add_order(ticker="KXBTC15M-1", env=s.env, count=2.0, price=0.90, fill_count=2.0, cost_usd=1.8, fee_usd=0.0, order_id="b", contract="yes")
-    row = next(r for r in store.open_bets() if r["ticker"] == "KXBTC15M-1")
-
-    class C:
-        def __init__(self):
-            self.sells = []
-
-        def sell_yes_ioc(self, ticker, count, price):
-            self.sells.append((round(count, 2), price))
-            if len(self.sells) < 3:
-                return {"fill_count": "0", "order_id": f"s{len(self.sells)}"}  # the first two find no bid at their price
-            return {"fill_count": f"{count}", "average_fill_price": "0.70", "average_fee_paid": "0", "order_id": "s3"}
-
-        def orderbook(self, ticker):
-            return {"orderbook_fp": {"yes_dollars": [["0.55", "10"], ["0.72", "4"]], "no_dollars": []}}
-
-    c = C()
-    line = runner.exit_position(s, c, store, row, 0.80, "burst: test", slip=0.02)
-    assert line.startswith("sold 2")
-    assert c.sells[0] == (2.0, 0.78) and c.sells[1] == (2.0, 0.70) and c.sells[2][1] == 0.67  # 0.72 - 0.02, then 0.72 - 0.05
-    assert store.net_contracts("KXBTC15M-1", s.env) < 0.005
-
-
 def test_best_bid_reads_the_side_of_the_book_it_sells_into():
     from kalshi_moonshot.strategy import best_bid
 
@@ -1082,78 +509,6 @@ def test_best_bid_reads_the_side_of_the_book_it_sells_into():
     assert best_bid(book, "yes") == 0.61  # a zero-size row is not a bid
     assert best_bid(book, "no") == 0.30
     assert best_bid({"orderbook_fp": {"yes_dollars": [], "no_dollars": []}}, "yes") is None
-
-
-def test_a_lane_can_keep_its_stop_quiet_until_the_last_minutes(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nsettlement_guard=0.0\nburst_exit=false\nseries=['KXBTC15M']\nalways=true\nstop_loss=true\nstop_loss_at=0.45\nstop_from_seconds=180\n")
-    s = config.load()
-    store = Store(s.db_path)
-    close = time.time() + 600.0
-    iso = datetime.fromtimestamp(close, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (1.0, "KXBTC15M-1", "bet", "observe", 0.80, "yes", "guarded", 3, 2.4, iso))
-    store.db.commit()
-
-    class Client:
-        def market(self, ticker):
-            return {"ticker": ticker}
-
-    w = watcher.ProfitWatcher(lambda: s, Client(), lambda: Store(s.db_path))
-    w.refresh()
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.stop_from == pytest.approx(close - 180.0, abs=2.0)
-    assert w._stop_hit(t, 0.30, time.time()) is None  # 10 minutes out the dip is ignored
-    assert w._stop_hit(t, 0.30, close - 170.0) is not None  # inside the last three minutes it sells (the last two have their own rule: a hover or spike is not sold, and this test has no price history to call a trend)
-
-
-def test_a_resting_buy_is_sized_to_its_own_price_and_spends_the_whole_stake(tmp_path, monkeypatch):
-    from kalshi_moonshot import lanes, sizing
-
-    _w, s, _store, _close = _watcher(tmp_path, monkeypatch)
-    spec = lanes.lane_specs(s)["guarded"]
-    spec = __import__("dataclasses").replace(spec, fixed_stake=2.0, max_bet_pct=1.0, max_exposure_pct=1.0)
-    at_ask = sizing.size_bet(spec, s, 0.9, 0.90, 100.0, 100.0, 0.0, fractional=True)
-    resting = sizing.size_bet(spec, s, 0.9, 0.90, 100.0, 100.0, 0.0, fractional=True, maker_price=0.89)
-    assert at_ask.contracts == pytest.approx(2.20) and at_ask.cost_usd == pytest.approx(2.0, abs=0.05)  # the ask plus the taker fee
-    assert resting.contracts == pytest.approx(2.24) and resting.cost_usd == pytest.approx(1.9936)  # 2.24 contracts at the resting 0.89, no fee
-
-
-
-
-
-
-def test_a_side_sliding_to_a_cheaper_price_is_not_a_dollar_burst():
-    sec = 1000
-    book = {}
-    for k in range(4, 125):  # a quiet side: 10 contracts a second at 30c = $3 a second
-        book[sec - k] = [10.0, 0.0, 3.0, 0.0]
-    for k in range(3):  # the price has fallen to 3c: the same $3 a second buys 100 contracts, ten times the count
-        book[sec - k] = [100.0, 0.0, 3.0, 0.0]
-    contracts = watcher._side_burst(book, sec, 0)
-    assert contracts[2] > 5.0  # in contracts it looks like a 10x burst
-    assert watcher._side_dollar_ratio(book, sec, 0) < 2.0  # in dollars the money behind it is the same as before
-    for k in range(3):  # real money: $30 a second
-        book[sec - k] = [1000.0, 0.0, 30.0, 0.0]
-    assert watcher._side_dollar_ratio(book, sec, 0) >= 5.0
-
-
-
-
-def test_the_burst_exit_can_use_the_moonshot_dollars_instead_of_a_multiple(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    t.burst_bar = 400.0
-    t.cur_bid, t.cur_other_ask, t.side = 0.93, 0.08, "yes"
-    now = close - 60
-    sec = int(now)
-    book = {sec: [0.0, 5000.0, 0.0, 250.0]}  # NO takers (against the YES holder) bought $250 in the last 3 s: under the $400 bar, however many contracts it was
-    w._flow["KXBTC15M-1"] = book
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.92})
-    assert w._jobs.empty()
-    book[sec - 1] = [0.0, 3000.0, 0.0, 200.0]  # $450+ in all
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.92})
-    job = w._jobs.get_nowait()
-    assert job[2].startswith("burst: $4")
 
 
 def _queued_hunt(tmp_path, monkeypatch):
@@ -1194,15 +549,6 @@ def _queued_hunt(tmp_path, monkeypatch):
 
 
 
-
-
-def test_the_flow_ledger_drops_a_market_that_stopped_trading(tmp_path, monkeypatch):
-    w, _s, _store, _close = _watcher(tmp_path, monkeypatch)
-    sec = int(time.time())
-    w._flow["KXOLD15M-1"] = {sec - 900: [5.0, 5.0, 1.0, 1.0]}
-    w._flow["KXLIVE15M-1"] = {sec - 2: [5.0, 5.0, 1.0, 1.0]}
-    w.refresh()
-    assert "KXOLD15M-1" not in w._flow and "KXLIVE15M-1" in w._flow
 
 
 def _hunt_job(w, h, spec, side="no", ask=0.05):
@@ -1272,25 +618,6 @@ def _dollar_hunt(tmp_path, monkeypatch, *, yes_bid, yes_ask, left=60.0, baseline
 
 
 
-def test_the_burst_exit_favorite_and_window_are_the_lanes_settings(tmp_path, monkeypatch):
-    w, _s, _store, close = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    t.burst_bar = 400.0
-    t.cur_bid, t.cur_other_ask, t.side = 0.85, 0.16, "yes"  # an 85c favorite
-    now = close - 60
-    sec = int(now)
-    w._flow["KXBTC15M-1"] = {sec: [0.0, 6000.0, 0.0, 455.0]}
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.84})
-    assert w._jobs.empty()  # under the default 90c favorite: not sold
-    t.burst_favorite = 0.80
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.84})
-    assert w._jobs.get_nowait().why.startswith("burst: $4")
-    t.burst_logged = False
-    t.burst_window = 30.0  # this lane only sells in the last 30 s, and 60 remain
-    w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.84})
-    assert w._jobs.empty()
-
-
 def _book(yes_bids=(), no_bids=()):
     return {"orderbook_fp": {"yes_dollars": [[str(p), "100"] for p in yes_bids], "no_dollars": [[str(p), "100"] for p in no_bids]}}
 
@@ -1330,69 +657,6 @@ def _resting(tmp_path, monkeypatch, *, book, shot_ask=0.82, fill_yes_price="0.21
     c = C()
     out = runner._place_resting(s, c, store, shot, "why", 2.0, spec, None, book)
     return c.sent, out
-
-
-def test_a_resting_buy_never_sits_at_or_over_the_ask_it_would_cross(tmp_path, monkeypatch):
-    # read at 0.82 for NO, but the book now offers NO at 0.80 (best YES bid 0.20): 0.81 would have crossed and been refused
-    sent, out = _resting(tmp_path, monkeypatch, book=_book(yes_bids=(0.20,)))
-    assert sent == [("no", 2.0, pytest.approx(0.79))]  # 1c under the ask as it is now
-    assert out.filled == 2.0 and out.price == pytest.approx(0.79)
-
-
-def test_a_resting_buy_keeps_its_price_when_the_ask_has_not_fallen(tmp_path, monkeypatch):
-    sent, out = _resting(tmp_path, monkeypatch, book=_book(yes_bids=(0.18,)), fill_yes_price="0.1900")  # NO is offered at 0.82, as read
-    assert sent == [("no", 2.0, pytest.approx(0.81))] and out.price == pytest.approx(0.81)
-
-
-def test_a_resting_buy_is_not_raised_when_the_ask_has_risen(tmp_path, monkeypatch):
-    sent, _out = _resting(tmp_path, monkeypatch, book=_book(yes_bids=(0.10,)), fill_yes_price="0.1900")  # NO is offered at 0.90 now
-    assert sent == [("no", 2.0, pytest.approx(0.81))]  # still the price the lane planned: a higher one would only cost more
-
-
-def test_a_resting_buy_is_skipped_when_the_ask_has_left_the_lanes_band(tmp_path, monkeypatch):
-    sent, out = _resting(tmp_path, monkeypatch, book=_book(yes_bids=(0.30,)))  # NO is offered at 0.70, under the lane's 0.76 floor
-    assert sent == [] and out.filled == 0 and out.note.startswith("skipped:") and "0.70" in out.note and "0.82" in out.note and "0.76" in out.note
-
-
-def test_a_resting_buy_with_no_book_is_priced_as_before(tmp_path, monkeypatch):
-    sent, out = _resting(tmp_path, monkeypatch, book=None, fill_yes_price="0.1900")
-    assert sent == [("no", 2.0, pytest.approx(0.81))] and out.price == pytest.approx(0.81)
-    sent, out = _resting(tmp_path, monkeypatch, book=_book(), fill_yes_price="0.1900")  # an empty book has no ask to cross
-    assert sent == [("no", 2.0, pytest.approx(0.81))]
-
-
-def test_a_repriced_resting_buy_rests_its_take_profit_from_the_price_it_paid(tmp_path, monkeypatch):
-    import dataclasses
-    from types import SimpleNamespace
-
-    from kalshi_moonshot import lanes, runner
-    from kalshi_moonshot.strategy import LongShot
-
-    _w, s, store, _close = _watcher(tmp_path, monkeypatch)
-    spec = dataclasses.replace(lanes.lane_specs(s)["guarded"], buy_rest_seconds=20.0, buy_rest_below=0.01, price=(0.76, 0.92))
-    monkeypatch.setattr(runner, "lane_specs", lambda settings: {"guarded": spec})
-    book = _book(yes_bids=(0.20,))  # NO is offered at 0.80 now; the shot below was read at 0.82
-
-    class C:
-        def orderbook(self, ticker):
-            return book
-
-    monkeypatch.setattr(runner.risk, "check", lambda *a, **k: SimpleNamespace(ok=True, reason=""))
-    monkeypatch.setattr(runner, "_top_up", lambda *a, **k: None)
-    seen = {}
-
-    def fake_resting(settings, client, st, shot, why, count, sp, key, live_book=None):
-        seen["book"] = live_book
-        return runner.Placed("bought NO 2/2 resting at 0.79", 2.0, 1.58, 0.79)
-
-    entries = []
-    monkeypatch.setattr(runner, "_place_resting", fake_resting)
-    monkeypatch.setattr(runner, "_rest_take_profit", lambda settings, client, st, shot, sp, filled, entry: (entries.append(entry) or ""))
-    shot = LongShot("KXBTC15M-9", "t", "", 0.81, 0.82, 10.0, "2099-01-01T00:00:00Z", 0.1, lane="guarded", series="KXBTC15M", side="no")
-    out = runner.place(s, C(), store, shot, "why", 2.0)
-    assert out.filled == 2.0
-    assert seen["book"] is book  # the book place() already read is the one the resting buy is priced against
-    assert entries == [pytest.approx(0.79)]  # the take-profit counts from what was paid, not from the planned 0.81
 
 
 def _resting_retry(tmp_path, monkeypatch, *, first_book, answers, fresh_book=None, fresh_error=False, shot_ask=0.83, order_key=None, ids=None):
@@ -1445,47 +709,6 @@ def _cross():
     return KalshiError('POST /portfolio/events/orders -> 400: {"error":{"code":"invalid_order","message":"invalid order","details":"post only cross"}}')
 
 
-def test_a_post_only_cross_is_tried_once_more_against_a_fresh_book(tmp_path, monkeypatch):
-    # the book read first still showed NO at 0.83; by the time the order landed it was 0.82 (best YES bid 0.18) and 0.82 crossed
-    sent, out, reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.18,)), answers=[_cross(), {"order_id": "o1"}])
-    assert sent == [pytest.approx(0.82), pytest.approx(0.81)]  # the second order rests 1c under the ask as the fresh book has it
-    assert reads == ["KXBTC15M-9"] and out.filled == 2.0 and out.price == pytest.approx(0.81)
-
-
-def test_a_second_post_only_cross_is_a_refusal_not_a_loop(tmp_path, monkeypatch):
-    sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.18,)), answers=[_cross(), _cross(), {"order_id": "never"}])
-    assert len(sent) == 2 and out.filled == 0 and out.note.startswith("resting buy refused") and "post only cross" in out.note
-
-
-def test_a_refusal_that_is_not_a_cross_is_not_retried(tmp_path, monkeypatch):
-    from kalshi_moonshot.kalshi import KalshiError
-
-    sent, out, reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.18,)), answers=[KalshiError("POST /portfolio/events/orders -> 400: insufficient_balance")])
-    assert len(sent) == 1 and reads == [] and out.note.startswith("resting buy refused") and out.filled == 0
-
-
-def test_a_retry_after_a_cross_skips_if_the_fresh_ask_has_left_the_band(tmp_path, monkeypatch):
-    sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.30,)), answers=[_cross(), {"order_id": "never"}])
-    assert len(sent) == 1 and out.filled == 0 and out.note.startswith("skipped:") and "0.70" in out.note  # NO is 0.70 now, under the 0.76 floor
-
-
-def test_a_retry_that_cannot_read_the_book_reports_the_refusal(tmp_path, monkeypatch):
-    sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), answers=[_cross(), {"order_id": "never"}], fresh_error=True)
-    assert len(sent) == 1 and out.filled == 0 and out.note.startswith("resting buy refused") and "post only cross" in out.note
-
-
-def test_the_retry_after_a_cross_uses_a_new_client_order_id(tmp_path, monkeypatch):
-    # the scan path gives every order a stable key. Kalshi remembers the id of the order it rejected, so sending the same key again is a duplicate (409) and the retry never lands
-    ids = []
-    sent, out, _reads = _resting_retry(tmp_path, monkeypatch, first_book=_book(yes_bids=(0.17,)), fresh_book=_book(yes_bids=(0.18,)), answers=[_cross(), {"order_id": "o1"}], order_key="KXBTC15M-9-guarded", ids=ids)
-    assert len(sent) == 2 and out.filled == 2.0  # the retry went through
-    assert ids[0] == "KXBTC15M-9-guarded" and ids[1] != ids[0] and ids[1].startswith("KXBTC15M-9-guarded")  # a different id, derived from the same key so a re-run of the job repeats it, not doubles up
-
-
-
-
-
-
 def _burst_exit(tmp_path, monkeypatch, *, with_holder, share):
     """A YES holder at an 85c bid; $455 bought AGAINST it (NO takers) in 3 s, and `with_holder` dollars bought WITH it (YES takers). Returns the sell signals queued."""
     w, _s, _store, close = _watcher(tmp_path, monkeypatch)
@@ -1497,23 +720,6 @@ def _burst_exit(tmp_path, monkeypatch, *, with_holder, share):
     w._flow["KXBTC15M-1"] = {sec: [0.0, 6000.0, with_holder, 455.0]}  # [YES contracts, NO contracts, YES dollars, NO dollars]
     w.on_event({"kind": "trade", "ticker": "KXBTC15M-1", "ts": now, "count": 10, "taker": "no", "price": 0.84})
     return w._jobs.qsize()
-
-
-def test_a_burst_where_the_held_side_is_also_being_bought_is_not_a_crash(tmp_path, monkeypatch):
-    # the setting off: any $455 against the holder sells, however hard the holder's own side is being bought
-    assert _burst_exit(tmp_path, monkeypatch, with_holder=0.0, share=0.0) == 1
-    assert _burst_exit(tmp_path, monkeypatch, with_holder=1500.0, share=0.0) == 1
-    # the holder's side pumped ($1,500 with it against $455 against: 23% of the dollars): a lane that wants a one-sided burst holds
-    assert _burst_exit(tmp_path, monkeypatch, with_holder=1500.0, share=0.75) == 0
-    # one-sided ($455 against, $50 with: 90%) sells
-    assert _burst_exit(tmp_path, monkeypatch, with_holder=50.0, share=0.75) == 1
-    assert _burst_exit(tmp_path, monkeypatch, with_holder=0.0, share=0.75) == 1  # nothing bought with the holder at all
-
-
-def test_the_burst_share_defaults_to_off():
-    from kalshi_moonshot.lanes import LaneSpec
-
-    assert LaneSpec.burst_share == 0.0
 
 
 def _spot_tape(tmp_path, rows, symbol="hl:xyz:GOLD"):
@@ -1534,57 +740,6 @@ def _shot(side):
     return LongShot("KXGOLD15M-1", "", "", 0.74, 0.76, 0.0, "", 0.1, side=side, series="KXGOLD15M")
 
 
-def test_spot_ticks_must_all_go_the_way_of_the_bet(tmp_path):
-    from kalshi_moonshot import runner
-
-    S = _spot_tape(tmp_path, [(100.0, 100.0), (101.0, 100.5), (102.0, 100.5), (103.0, 101.0), (104.0, 101.2)])  # changes (a repeated price skipped): +0.5, +0.5, +0.2
-    assert runner.spot_ticks_aligned(S, _shot("yes"), 3, now=105.0) is True
-    assert runner.spot_ticks_aligned(S, _shot("no"), 3, now=105.0) is False  # a DOWN bet needs the coin falling
-    assert runner.spot_ticks_aligned(S, _shot("yes"), 4, now=105.0) is None  # only three changes on the tape: no opinion
-    (tmp_path / "b").mkdir()
-    S2 = _spot_tape(tmp_path / "b", [(100.0, 100.0), (101.0, 100.4), (102.0, 100.2), (103.0, 100.6)])
-    assert runner.spot_ticks_aligned(S2, _shot("yes"), 3, now=104.0) is False  # up, down, up: not three ups
-
-
-def test_a_stale_spot_price_gives_no_opinion(tmp_path):
-    from kalshi_moonshot import runner
-
-    S = _spot_tape(tmp_path, [(100.0, 100.0), (101.0, 100.5), (102.0, 101.0), (103.0, 101.5)])
-    assert runner.spot_ticks_aligned(S, _shot("yes"), 3, now=104.0) is True
-    assert runner.spot_ticks_aligned(S, _shot("yes"), 3, now=300.0) is None  # the last price is minutes old
-    assert runner.spot_move(S, _shot("yes"), 2.0, now=300.0) is None
-
-
-def test_spot_move_is_signed_by_the_bets_direction(tmp_path):
-    from kalshi_moonshot import runner
-
-    S = _spot_tape(tmp_path, [(100.0, 100.0), (103.0, 99.0), (106.0, 101.0)])
-    assert runner.spot_move(S, _shot("yes"), 5.0, now=107.0) == pytest.approx(1.0)  # 100 five seconds back (the tick at 100), 101 now: up 1
-    assert runner.spot_move(S, _shot("no"), 5.0, now=107.0) == pytest.approx(-1.0)  # the same rise is against a DOWN bet
-    assert runner.spot_move(S, _shot("yes"), 50.0, now=107.0) is None  # nothing that far back
-
-
-def test_crypto_spot_is_not_read_from_an_exchange(tmp_path):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.strategy import LongShot
-
-    S = _spot_tape(tmp_path, [(100.0, 100.0), (101.0, 100.5), (102.0, 101.0), (103.0, 101.5)], symbol="kraken:BTC/USD")
-    shot = LongShot("KXBTC15M-1", "", "", 0.74, 0.76, 0.0, "", 0.1, side="yes", series="KXBTC15M")
-    assert runner.spot_ticks_aligned(S, shot, 3, now=104.0) is None
-
-
-def test_a_lane_without_the_spot_settings_ignores_them():
-    from kalshi_moonshot.lanes import LaneSpec
-
-    assert LaneSpec.entry_spot_ticks == 0 and LaneSpec.entry_spot_seconds == 0.0  # off unless a lane sets them
-
-
-
-
-
-
-
-
 def _return_then_second_stay(w, close):
     now = close - 300
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.85, "ask": 0.86, "ts": now - 0.2})
@@ -1595,149 +750,6 @@ def _return_then_second_stay(w, close):
     w.on_event({"kind": "index", "index_id": "BRTI", "ts": again, "value": 99.996})  # a second cross
     w.on_event({"kind": "quote", "ticker": "KXBTC15M-1", "bid": 0.80, "ask": 0.81, "ts": again + watcher.THROUGH_STAY - 0.2})
     w.on_event({"kind": "index", "index_id": "BRTI", "ts": again + watcher.THROUGH_STAY, "value": 99.996})
-
-
-def test_a_rearmed_strike_through_sells_a_second_stay_after_a_return(tmp_path, monkeypatch):
-    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch, rearm=True)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.strike_through_rearm
-    _return_then_second_stay(w, close)
-    assert not t.through_kept
-    sell = w._jobs.get_nowait()
-    assert sell.why.startswith("strike-through") and "0.80" in sell.why
-
-
-def test_without_rearm_a_return_holds_the_bet_to_the_close(tmp_path, monkeypatch):
-    w, _s, _store, close = _through_watcher(tmp_path, monkeypatch)
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert not t.strike_through_rearm
-    _return_then_second_stay(w, close)
-    assert t.through_kept and w._jobs.empty()
-
-
-def test_a_crypto_lane_skips_what_the_ledger_shows_losing_and_only_when_it_asks_for_it(tmp_path, monkeypatch):
-    import time as _time
-
-    from kalshi_moonshot import regime, runner, ticks, variants
-    from kalshi_moonshot.estimators import Estimate
-    from kalshi_moonshot.strategy import LongShot
-
-    class Fixed:
-        def estimate(self, client, settings, shot):
-            return Estimate(0.9, "fixed")
-
-    regime.reset()
-    ticks.history.clear()
-    variants.ledger.__init__()
-    w, s, store, _close = _watcher(tmp_path, monkeypatch)
-    now = _time.time()
-    (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\nskip_varieties_auto=true\n")
-    s = config.load()
-    variants.ledger.add([{"ticker": f"x{k}", "cls": "crypto", "side": "yes", "variety": "B", "close_ts": now - 1800 + k, "pnl": -4.0} for k in range(8)])  # the last half hour: B-yes has lost 8 times
-    variants.ledger.add([{"ticker": f"o{k}", "cls": "crypto", "side": "yes", "variety": "B", "close_ts": now - 20 * 3600 + k, "pnl": -4.0} for k in range(12)])  # and it lost earlier too: there is a record to blend with
-    store.db.execute("INSERT INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXBTC15M-9", "KXBTC15M", now + 437.0, 100.0, now))
-    store.db.commit()
-    index = variants.crypto_index("KXBTC15M")
-    for k in range(176):  # 20 bp over the strike and steady: variety B, read from memory (the history reaches back past the 340 s the read asks for)
-        ticks.history.note(index, now - 350.0 + k * 2.0, 100.20 + 0.0004 * (k % 2))
-    shot = LongShot("KXBTC15M-9", "t", "", 0.85, 0.86, 437.0 / 3600.0, "2099-01-01T00:00:00Z", 437.0 / 3600.0, lane="guarded", series="KXBTC15M", side="yes")
-    try:
-        out = runner.evaluate(s, w.client, None, store, shot, estimators={"market": Fixed()})
-        assert out.action == "pass" and "variety B" in out.note and "does not buy it" in out.note
-        (tmp_path / "strategies.toml").write_text("[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXBTC15M']\n")  # without the setting the ledger is not read
-        ok = runner.evaluate(config.load(), w.client, None, store, shot, estimators={"market": Fixed()})
-        assert "does not buy it" not in ok.note
-    finally:
-        ticks.history.clear()
-        variants.ledger.__init__()
-
-
-def test_a_shock_exit_holds_when_the_trend_before_the_spike_is_with_the_bet(tmp_path, monkeypatch):
-    from kalshi_moonshot import variants
-
-    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_trend_hold=0.5\n")
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.shock_trend_hold == 0.5
-    for k in range(125, 50, -5):
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
-    now = close - 50
-    w._spot["BRTI"] = (now, 100.01)
-    monkeypatch.setattr(variants, "pretrend_index", lambda *a, **k: 1.2)  # the hour line runs with the bet: the spike is noise
-    assert w._shock_hit(t, 0.62, now, now) is None
-    monkeypatch.setattr(variants, "pretrend_index", lambda *a, **k: 0.1)  # no trend: sell as before
-    assert w._shock_hit(t, 0.62, now, now) is not None
-    monkeypatch.setattr(variants, "pretrend_index", lambda *a, **k: None)  # unreadable history: sell as before
-    assert w._shock_hit(t, 0.62, now, now) is not None
-
-
-def test_a_shock_exit_in_typical_minutes_scales_with_the_markets_own_variance(tmp_path, monkeypatch):
-    from kalshi_moonshot import variants
-
-    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_units=1.0\nshock_margin_units=0.6\n")
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.shock_units == 1.0 and t.shock_margin_units == 0.6
-    for k in range(125, 50, -5):
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
-    now = close - 50
-    w._spot["BRTI"] = (now, 100.01)  # 9 bp down in 60 s, 1 bp above the strike
-    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0020)  # a 20 bp typical minute: 9 bp is under one of them
-    assert w._shock_hit(t, 0.62, now, now) is None
-    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0005)  # a 5 bp typical minute: 9 bp is nearly two
-    assert w._shock_hit(t, 0.62, now, now) is not None
-    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: None)  # variance unreadable: no assumption, no sale
-    assert w._shock_hit(t, 0.62, now, now) is None
-
-
-def test_a_strike_cross_sells_a_spot_on_the_wrong_side_whatever_the_move_was(tmp_path, monkeypatch):
-    from kalshi_moonshot import variants
-
-    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_units=2.0\nshock_margin_units=0.6\ncross_units=0.0\n")
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.cross_units == 0.0
-    for k in range(200, 100, -5):
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
-    now = close - 100  # more than a minute left: the settlement average has not started, the cross reads the spot
-    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0010)  # a 10 bp typical minute: the shock needs a 20 bp move
-    w._spot["BRTI"] = (now, 100.01)  # 9 bp down, 1 bp above the strike: no shock, no cross
-    assert w._shock_hit(t, 0.62, now, now) is None
-    w._spot["BRTI"] = (now, 99.99)  # 1 bp under the strike: the cross sells although the move is still under the shock bar
-    got = w._shock_hit(t, 0.62, now, now)
-    assert got is not None and "from the strike" in got
-    assert w._shock_hit(t, 0.03, now, now) is None  # the bid under the shock floor: nothing left to sell into
-    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: None)  # variance unreadable: no assumption, no sale
-    assert w._shock_hit(t, 0.62, now, now) is None
-
-
-def test_in_the_last_minute_the_cross_reads_the_projected_settlement_average_not_one_tick(tmp_path, monkeypatch):
-    from kalshi_moonshot import variants
-
-    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_units=2.0\nshock_margin_units=0.6\ncross_units=0.0\n")
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0010)
-    for k in range(125, 47, -1):  # the last minute so far sat well above the strike (a YES bet is winning)
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
-    now = close - 47
-    w._spot["BRTI"] = (now, 99.99)  # one tick touches 1 bp under the strike: the settlement average is still above it
-    assert w._shock_hit(t, 0.62, now, now) is None
-    w._shock_hist["BRTI"].clear()  # the minute so far sat under the strike: the average agrees with the spot
-    for k in range(125, 47, -1):
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 99.90})
-    w._spot["BRTI"] = (now, 99.99)
-    assert w._shock_hit(t, 0.62, now, now) is not None
-
-
-def test_a_lane_without_cross_units_does_not_sell_a_cross(tmp_path, monkeypatch):
-    from kalshi_moonshot import variants
-
-    w, close = _shock_watcher(tmp_path, monkeypatch, extra="shock_units=2.0\nshock_margin_units=0.6\n")
-    t = w.targets[("KXBTC15M-1", "guarded")]
-    assert t.cross_units == -1.0
-    for k in range(125, 50, -5):
-        w.on_event({"kind": "index", "index_id": "BRTI", "ts": close - k, "value": 100.10})
-    now = close - 50
-    monkeypatch.setattr(variants, "unit_index", lambda *a, **k: 0.0010)
-    w._spot["BRTI"] = (now, 99.99)
-    assert w._shock_hit(t, 0.62, now, now) is None
 
 
 def test_the_typical_minute_is_read_from_the_ticks_on_a_one_second_grid(monkeypatch):

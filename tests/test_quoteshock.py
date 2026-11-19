@@ -50,7 +50,7 @@ def _watcher(tmp_path, monkeypatch, side="yes"):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(
         "[lane.tq]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nshock_source='quote'\nshock_units=1.0\nshock_margin_units=0.6\nshock_seconds=60\nshock_last=300\nshock_memory=0\n"
-        "settlement_guard=0\nburst_exit=false\nseries=['KX10YRRATE15M']\nalways=true\n"
+        "burst_exit=false\nseries=['KX10YRRATE15M']\nalways=true\n"
     )
     s = config.load()
     store = Store(s.db_path)
@@ -75,96 +75,6 @@ def _feed(ticker, rows):
         ticks.mids.note(ticker, ts, mid - 0.005, mid + 0.005)
 
 
-def test_a_lane_with_a_quote_source_arms_with_no_index_and_no_reference_price(tmp_path, monkeypatch):
-    w = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KX10YRRATE15M-1", "tq")]
-    assert t.shock_source == "quote" and t.shock_units == 1.0 and t.shock_margin_units == 0.6 and t.shock_index == "" and t.cross_units < 0
-
-
-def test_the_quote_shock_sells_a_fast_fall_into_a_contested_price(tmp_path, monkeypatch):
-    w = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KX10YRRATE15M-1", "tq")]
-    now = CLOSE - 120
-    _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.80)) + _rows(now - 59, now, lambda s: 0.50))
-    why = w._shock_hit(t, 0.49, now, now)
-    assert why and why.startswith("shock exit") and "contract's mid" in why
-
-
-def test_the_quote_shock_leaves_a_fall_that_ends_far_from_even_and_a_quiet_market(tmp_path, monkeypatch):
-    w = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KX10YRRATE15M-1", "tq")]
-    now = CLOSE - 120
-    _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.95)) + _rows(now - 59, now, lambda s: 0.80))
-    assert w._shock_hit(t, 0.79, now, now) is None  # a big fall, but the side is still well ahead
-    ticks.mids.clear()
-    _feed(t.ticker, _rows(now - 700, now, _jitter(0.50)))
-    assert w._shock_hit(t, 0.49, now, now) is None  # contested but not moving against us
-
-
-def test_the_quote_shock_does_nothing_without_enough_quote_history_or_outside_its_window(tmp_path, monkeypatch):
-    w = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KX10YRRATE15M-1", "tq")]
-    now = CLOSE - 120
-    _feed(t.ticker, _rows(now - 100, now - 60, _jitter(0.80)) + _rows(now - 59, now, lambda s: 0.50))
-    assert w._shock_hit(t, 0.49, now, now) is None  # under five minutes of quotes: the typical minute cannot be read
-    ticks.mids.clear()
-    early = CLOSE - 400
-    _feed(t.ticker, _rows(early - 700, early - 60, _jitter(0.80)) + _rows(early - 59, early, lambda s: 0.50))
-    assert w._shock_hit(t, 0.49, early, early) is None  # earlier than shock_last (300 s)
-
-
-def test_a_no_holder_sells_when_the_yes_mid_jumps_up(tmp_path, monkeypatch):
-    w = _watcher(tmp_path, monkeypatch, side="no")
-    t = w.targets[("KX10YRRATE15M-1", "tq")]
-    now = CLOSE - 120
-    _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.20)) + _rows(now - 59, now, lambda s: 0.50))
-    assert (w._shock_hit(t, 0.49, now, now) or "").startswith("shock exit")
-
-
-def test_shock_persist_holds_the_sale_until_the_condition_has_lasted(tmp_path, monkeypatch):
-    w = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KX10YRRATE15M-1", "tq")]
-    t.shock_persist, t.shock_memory = 20.0, 120.0
-    now = CLOSE - 150
-    _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.80)) + _rows(now - 59, now, lambda s: 0.50))
-    assert w._shock_hit(t, 0.49, now, now) is None  # the run starts
-    _feed(t.ticker, _rows(now + 1, now + 10, lambda s: 0.50))
-    assert w._shock_hit(t, 0.49, now + 10, now + 10) is None  # 10 s: not yet
-    _feed(t.ticker, _rows(now + 11, now + 20, lambda s: 0.50))
-    why = w._shock_hit(t, 0.49, now + 20, now + 20)  # 20 s: sold
-    assert why and why.startswith("shock exit")
-
-
-def test_shock_persist_restarts_when_the_condition_breaks_or_the_readings_gap(tmp_path, monkeypatch):
-    w = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KX10YRRATE15M-1", "tq")]
-    t.shock_persist, t.shock_memory = 20.0, 120.0
-    now = CLOSE - 150
-    _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.80)) + _rows(now - 59, now, lambda s: 0.50))
-    assert w._shock_hit(t, 0.49, now, now) is None
-    _feed(t.ticker, _rows(now + 1, now + 10, lambda s: 0.50))
-    assert w._shock_hit(t, 0.49, now + 10, now + 10) is None
-    _feed(t.ticker, _rows(now + 11, now + 14, lambda s: 0.50))
-    assert w._shock_hit(t, 0.93, now + 14, now + 14) is None  # the bid left the band: the run is over
-    _feed(t.ticker, _rows(now + 15, now + 24, lambda s: 0.50))
-    assert w._shock_hit(t, 0.49, now + 24, now + 24) is None  # a new run began here, 0 s old
-    _feed(t.ticker, _rows(now + 25, now + 40, lambda s: 0.50))
-    assert w._shock_hit(t, 0.49, now + 40, now + 40) is None  # 16 s without a reading: the run restarted here
-    _feed(t.ticker, _rows(now + 41, now + 50, lambda s: 0.50))
-    assert w._shock_hit(t, 0.49, now + 50, now + 50) is None
-    _feed(t.ticker, _rows(now + 51, now + 60, lambda s: 0.50))
-    assert (w._shock_hit(t, 0.49, now + 60, now + 60) or "").startswith("shock exit")  # 20 s after that restart
-
-
-def test_a_lane_without_shock_persist_sells_on_the_first_reading(tmp_path, monkeypatch):
-    w = _watcher(tmp_path, monkeypatch)
-    t = w.targets[("KX10YRRATE15M-1", "tq")]
-    assert t.shock_persist == 0.0
-    now = CLOSE - 120
-    _feed(t.ticker, _rows(now - 700, now - 60, _jitter(0.80)) + _rows(now - 59, now, lambda s: 0.50))
-    assert (w._shock_hit(t, 0.49, now, now) or "").startswith("shock exit")
-
-
 def _late(tmp_path, monkeypatch, bids, units=1.0):
     w = _watcher(tmp_path, monkeypatch)
     t = w.targets[("KX10YRRATE15M-1", "tq")]
@@ -177,18 +87,3 @@ def _late(tmp_path, monkeypatch, bids, units=1.0):
             return hit, sec
     return None, None
 
-
-def test_late_drop_sells_a_bid_that_falls_in_the_last_thirty_seconds(tmp_path, monkeypatch):
-    # KXSILVER15M-26NOV100600: 0.98 with 25 s left, 0.73 at 15 s, 0.40 at 4 s; held to zero.
-    calm = [(CLOSE - 400 + i, 0.90 + (0.004 if i % 2 else -0.004)) for i in range(0, 370)]
-    fall = [(CLOSE - 30 + i, 0.93) for i in range(0, 10)] + [(CLOSE - 20 + i, 0.60) for i in range(0, 20)]
-    why, sec = _late(tmp_path, monkeypatch, calm + fall)
-    assert why and why.startswith("late drop") and CLOSE - sec <= 30
-
-
-def test_late_drop_ignores_a_drop_earlier_than_the_window_and_a_calm_bid(tmp_path, monkeypatch):
-    early = [(CLOSE - 400 + i, 0.90 + (0.004 if i % 2 else -0.004)) for i in range(0, 300)] + [(CLOSE - 100 + i, 0.50) for i in range(0, 60)]
-    assert _late(tmp_path, monkeypatch, early)[0] is None
-    calm = [(CLOSE - 400 + i, 0.90 + (0.004 if i % 2 else -0.004)) for i in range(0, 399)]
-    assert _late(tmp_path, monkeypatch, calm)[0] is None
-    assert _late(tmp_path, monkeypatch, [(CLOSE - 400 + i, 0.90 + (0.004 if i % 2 else -0.004)) for i in range(0, 370)] + [(CLOSE - 20 + i, 0.50) for i in range(0, 15)], units=0.0)[0] is None

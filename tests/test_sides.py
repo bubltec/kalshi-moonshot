@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from kalshi_moonshot import config, report, runner
+from kalshi_moonshot import config, report
 from kalshi_moonshot.kalshi import _as_no
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import flip, side_ask_notional, side_prob
@@ -110,45 +110,6 @@ def open_bet(store, side, ask):
     )
 
 
-def test_stop_loss_exits_a_no_position_by_its_own_price(tmp_path):
-    s = settings(tmp_path, mode="trade", env="demo")
-    store = Store(s.db_path)
-    open_bet(store, "no", 0.90)
-    store.add_order(ticker="KXC-1", env="demo", count=2, price=0.90, fill_count=2,
-                    cost_usd=1.8, fee_usd=0.0, contract="no")
-    # YES jumped to 0.80/0.85, so NO is now worth about 0.15-0.20: down >30% from 0.90
-    client = StopClient(yes_bid="0.8000", yes_ask="0.8500")
-    notes = runner.stop_loss_pass(s, client, store)
-    assert client.sold_yes == [] and len(client.sold_no) == 1
-    assert client.sold_no[0][2] == pytest.approx(0.10)  # NO bid = 1 - YES ask = 0.15, a stop-loss order is limited 5c under it
-    assert any("sold" in n for n in notes)
-
-
-def test_the_sweep_leaves_a_loss_to_the_socket_while_the_socket_covers_it(tmp_path):
-    s = settings(tmp_path, mode="trade", env="demo")
-    store = Store(s.db_path)
-    open_bet(store, "no", 0.90)
-    store.add_order(ticker="KXC-1", env="demo", count=2, price=0.90, fill_count=2,
-                    cost_usd=1.8, fee_usd=0.0, contract="no")
-    covered = StopClient(yes_bid="0.8000", yes_ask="0.8500")
-    assert runner.stop_loss_pass(s, covered, store, socket_covers=lambda ticker, lane: True) == []
-    assert covered.sold_no == []  # the socket decides this one
-    uncovered = StopClient(yes_bid="0.8000", yes_ask="0.8500")
-    runner.stop_loss_pass(s, uncovered, store, socket_covers=lambda ticker, lane: False)
-    assert len(uncovered.sold_no) == 1  # the socket is not covering it: the backstop sells
-
-
-def test_stop_loss_leaves_a_no_position_alone_when_it_is_winning(tmp_path):
-    s = settings(tmp_path, mode="trade", env="demo")
-    store = Store(s.db_path)
-    open_bet(store, "no", 0.90)
-    store.add_order(ticker="KXC-1", env="demo", count=2, price=0.90, fill_count=2,
-                    cost_usd=1.8, fee_usd=0.0, contract="no")
-    client = StopClient(yes_bid="0.0200", yes_ask="0.0400")  # NO worth ~0.96-0.98
-    assert runner.stop_loss_pass(s, client, store) == []
-    assert client.sold_no == []
-
-
 # ---- moonshots are about price and payout, not which contract carries them ----
 def test_a_cheap_no_is_a_moonshot_too():
     from kalshi_moonshot import lanes, strategy
@@ -233,27 +194,6 @@ def fifteen_bet(store, ticker, side="yes", ask=0.80):
     close = (datetime.now(UTC) + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     store.add_decision(ticker=ticker, title="t", bid=ask - 0.02, ask=ask, model_p=0.95, edge=0.05, action="bet",
                        mode="observe", close_time=close, lane="commodity", side=side)
-
-
-def test_the_stop_loss_can_leave_15_minute_windows_to_settle(tmp_path):
-    s_on = settings(tmp_path, stop_loss_fast=True)
-    s_off = settings(tmp_path, stop_loss_fast=False)
-    store = Store(s_on.db_path)
-    fifteen_bet(store, "KXGOLD15M-X-15")
-    fifteen_bet(store, "KXGOLDH-Y-T4000")
-
-    class C:
-        def market(self, ticker):
-            return {"yes_bid_dollars": "0.3000", "yes_ask_dollars": "0.3200"}  # down 62% from 0.80
-
-    on = runner.stop_loss_pass(s_on, C(), store)
-    assert sum("paper-sold" in n for n in on) == 2  # both are stopped out today
-    store = Store(tmp_path / "off.db")
-    fifteen_bet(store, "KXGOLD15M-X-15")
-    fifteen_bet(store, "KXGOLDH-Y-T4000")
-    off = runner.stop_loss_pass(s_off, C(), store)
-    assert [n for n in off if "KXGOLD15M" in n] == []  # the 15-minute window rides to settlement
-    assert any("KXGOLDH" in n and "paper-sold" in n for n in off)  # an hourly market still gets its stop
 
 
 def test_the_default_keeps_todays_stop_loss_behavior(monkeypatch):

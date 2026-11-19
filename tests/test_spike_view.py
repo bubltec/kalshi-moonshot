@@ -1,15 +1,14 @@
 """The 3-hour spike reading in the buy's note (lane field entry_spike_view), shadow: 2026-11-16, user, on the faded spikes that never came back: "What did their historical view look like? How much of a spike was it? Does the 3 hour view show similar spikes?"; "Yes, log it"."""
-import dataclasses
 import math
 import time
 
 import pytest
 
-from kalshi_moonshot import config, curverisk, lanes, regime, runner, ticks, variants
+from kalshi_moonshot import config, curverisk, regime, runner, ticks, variants
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
 
-from tests.test_entry_phase import Fixed, LANE, seed  # noqa: F401  (the same lane file and perp seeding)
+from tests.entry_helpers_phase import Fixed, LANE, seed  # noqa: F401  (the same lane file and perp seeding)
 
 
 def perp(now, jump_pct=0.0, noise_pct=0.01, minutes=200):
@@ -79,13 +78,6 @@ def test_integration_the_buy_note_carries_the_reading_and_the_bet_still_goes_in(
     assert out.action == "bet" and "[spike view z " in out.note and "of 120 as large]" in out.note
 
 
-def test_integration_a_pass_carries_the_reading_too(tmp_path, monkeypatch):
-    now = time.time()
-    seed(now, run_pct=0.5, minutes=300)  # the side has run: the entry-phase gate passes on it
-    out = decide(tmp_path, monkeypatch, now, "entry_spike_view=true\nentry_run_max=0.1")
-    assert out.action == "pass" and "[spike view " in out.note
-
-
 def test_integration_with_no_perp_the_note_says_unreadable_and_the_buy_goes_in(tmp_path, monkeypatch):
     now = time.time()
     ticks.history.clear()
@@ -99,19 +91,11 @@ def test_integration_off_by_default_nothing_is_read(tmp_path, monkeypatch):
     assert "[spike view" not in decide(tmp_path, monkeypatch, now, "").note
 
 
-def test_unit_the_field_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
-    assert "entry_spike_view" not in lanes.settings_of(base, s)
-    assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, entry_spike_view=True), s)
-
-
 # The spike rule (lane field entry_spike_min), 2026-11-16, user: "we need a different rule for those"; "Go live with it". studies/results/2026-11-16-band-by-spike-view.txt.
 def seed_jump(now, jump_pct):
     """The crypto indexes as the entry tests seed them, and the BTC perp with `jump_pct` percent added over the last 90 seconds."""
     from kalshi_moonshot.watcher import perp_index
-    from tests.test_entry_phase import path
+    from tests.entry_helpers_phase import path
 
     ticks.history.clear()
     for ser in variants.BROAD_SERIES:
@@ -120,38 +104,3 @@ def seed_jump(now, jump_pct):
     for ts, v in perp(now, jump_pct=jump_pct):
         ticks.history.note(perp_index("KXBTC15M"), ts, v)
 
-
-def test_integration_a_side_the_perp_has_just_moved_toward_is_bought(tmp_path, monkeypatch):
-    now = time.time()
-    seed_jump(now, 0.3)
-    out = decide(tmp_path, monkeypatch, now, "entry_spike_min=1.5")
-    assert out.action == "bet" and "[spike view z +" in out.note
-
-
-def test_integration_a_still_perp_is_not_bought(tmp_path, monkeypatch):
-    now = time.time()
-    seed_jump(now, 0.0)
-    out = decide(tmp_path, monkeypatch, now, "entry_spike_min=1.5")
-    assert out.action == "pass" and "the perp has not moved toward this side" in out.note and "[spike view z " in out.note
-
-
-def test_integration_a_move_against_the_side_is_not_bought(tmp_path, monkeypatch):
-    now = time.time()
-    seed_jump(now, 0.3)  # up: against a NO bet
-    out = decide(tmp_path, monkeypatch, now, "entry_spike_min=1.5", side="no")
-    assert out.action == "pass" and "the perp has not moved toward this side: -" in out.note
-
-
-def test_integration_with_no_reading_the_spike_rule_does_not_buy(tmp_path, monkeypatch):
-    now = time.time()
-    ticks.history.clear()
-    out = decide(tmp_path, monkeypatch, now, "entry_spike_min=1.5")
-    assert out.action == "pass" and "can read the perp" in out.note and "[spike view unreadable]" in out.note
-
-
-def test_unit_the_spike_rule_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
-    assert "entry_spike_min" not in lanes.settings_of(base, s)
-    assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, entry_spike_min=1.5), s)

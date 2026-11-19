@@ -1,4 +1,4 @@
-from kalshi_moonshot import config, lanes, watcher
+from kalshi_moonshot import config, watcher
 
 
 def target(sigma=0.5):
@@ -51,15 +51,6 @@ def test_off_means_off():
     assert w._spot_holds(t, "KXBTC15M-1", "yes", CRASH) is False
 
 
-def test_default_is_half_a_sigma_and_follows_the_lane(monkeypatch):
-    monkeypatch.delenv("CRASH_SPOT_SIGMA")
-    s = config.load()
-    assert s.crash_spot_sigma == 0.5
-    spec = lanes.lane_specs(s)["commodity"]
-    assert spec.trail_spot_sigma is None
-    assert lanes.settings_of(spec, s)["crash_spot_sigma"] == "0.5"
-
-
 BURST = "burst: $623 bought against the yes holder in 3 s (bar $400), the favorite's bid 0.51; the no side costs 0.49"
 
 
@@ -67,13 +58,6 @@ def burst_watcher(p, edge=0.05):
     w, t = watcher_with(p)
     t.burst_spot_edge = edge
     return w, t
-
-
-def test_a_burst_is_held_when_spot_says_the_side_is_worth_more_than_the_sale():
-    w, t = burst_watcher(0.70)  # sale 0.49 less its fee, chance 0.70
-    assert w._spot_holds(t, "KXBTC15M-1", "yes", BURST, 0.49) is True
-    assert t.burst_resell is True  # the next burst may still sell it
-    assert t.retry_after > 0
 
 
 def test_a_burst_sells_when_spot_agrees_with_the_bid_or_has_no_opinion():

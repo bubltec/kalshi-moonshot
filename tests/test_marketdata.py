@@ -171,43 +171,6 @@ def test_discovery_spaces_its_requests_across_the_cycle(monkeypatch):
     assert waits == [8.0] * 5  # 50 s x 0.8 / 5 series: the request budget is never held for a burst
 
 
-def test_the_stop_backstop_reads_paper_bets_from_the_cache_but_real_ones_from_kalshi(tmp_path, monkeypatch):
-    from contextlib import contextmanager
-
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.store import Store
-
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    store = Store(s.db_path, frozenset())
-    for ticker, mode in (("KXBTCD-A", "observe"), ("KXBTCD-B", "trade")):
-        store.db.execute(
-            "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (1.0, ticker, "bet", mode, 0.80, "yes", "commodity", 6, 4.9, "2099-01-01T00:00:00Z"),
-        )
-    store.db.commit()
-
-    class C:
-        def __init__(self):
-            self.age, self.reads = 0.0, {}
-
-        @contextmanager
-        def shared(self, age):
-            prev, self.age = self.age, age
-            try:
-                yield
-            finally:
-                self.age = prev
-
-        def market(self, ticker):
-            self.reads[ticker] = self.age
-            return {"ticker": ticker, "yes_bid_dollars": "0.78", "yes_ask_dollars": "0.80", "close_time": "2099-01-01T00:00:00Z"}
-
-    c = C()
-    runner.stop_loss_pass(s, c, store)
-    assert c.reads == {"KXBTCD-A": 10.0, "KXBTCD-B": 0.0}
-
-
 def test_the_fast_tier_lists_the_hot_series_in_order_up_to_its_cap(monkeypatch):
     class C:
         def __init__(self):

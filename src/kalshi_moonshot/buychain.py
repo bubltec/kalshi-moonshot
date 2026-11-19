@@ -23,7 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any, NamedTuple
 
-from .lanes import BUY_STEPS, LaneSpec, chance_ok, edge_verdict, no_buy, wants_bet
+from .lanes import BUY_STEPS, LaneSpec, edge_verdict, wants_bet
 from .strategy import LongShot, edge, fee_per_contract
 
 log = logging.getLogger("moonshot")
@@ -42,6 +42,8 @@ class Ctx:
     spec: LaneSpec
     p_yes: float | None = None
     now: float = field(default_factory=time.time)
+    store: Any = None  # the books, at a decision only (the review has none): a step that counts the lane's open bets, or needs a window's strike the tick memory lacks
+    why: str = ""  # the estimator's note on the market, at a decision only
 
 
 Step = Callable[[Ctx, LongShot], Check]
@@ -61,14 +63,12 @@ def step(name: str, needs_estimate: bool = False) -> Callable[[Step], Step]:
 
 @step("price")
 def price_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The side's ask is inside the lane's price range and outside its no-buy range, and the lane buys that side."""
+    """The side's ask is inside the lane's price range, and the lane buys that side."""
     lo, hi = ctx.spec.price
     if shot.side not in ctx.spec.sides:
         return Check(False, f"the lane does not buy {shot.side.upper()}")
     if not lo <= shot.ask <= hi:
         return Check(False, f"ask {shot.ask:.2f} is outside the lane's {lo:g} to {hi:g}")
-    if no_buy(ctx.spec, shot.ask):
-        return Check(False, f"ask {shot.ask:.2f} is in the lane's no-buy range {ctx.spec.price_skip[0]:g} to {ctx.spec.price_skip[1]:g}")
     return Check(True, f"ask {shot.ask:.2f}")
 
 
@@ -104,16 +104,16 @@ def risk_trend_step(ctx: Ctx, shot: LongShot) -> Check:
 
 @step("price_trend")
 def price_trend_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The side's price has gained over the lane's span (entry_trend_seconds) by more than entry_trend_z of the market's own typical moves: the check every lane ran before the chain."""
+    """The side's price has not moved against it over the lane's span (entry_trend_seconds): it gained at least entry_trend_min dollars (0 = no loss) since a quote that long ago. No quote that far back is a no."""
     from . import runner
 
-    seconds, bar = ctx.spec.entry_trend_seconds, ctx.spec.entry_trend_z or 0.0
+    seconds, bar = ctx.spec.entry_trend_seconds, ctx.spec.entry_trend_min
     if seconds <= 0:
         return Check(False, "the lane sets no span (entry_trend_seconds)")
-    z = runner.side_trend_z(ctx.s, shot, seconds, ctx.now)
-    if z is None:
+    moved = runner.side_trend(ctx.s, shot, seconds, ctx.now)
+    if moved is None:
         return Check(False, f"no quote {seconds:.0f}s back")
-    return Check(z > bar, f"price trend {z:+.1f} over {seconds:.0f}s, needs over {bar:+.1f}")
+    return Check(moved >= bar, f"price moved {100 * moved:+.1f}c over {seconds:.0f}s, needs {100 * bar:+.1f}c")
 
 
 def kalshi_index(series: str, now: float) -> str | None:
@@ -138,7 +138,7 @@ def perp_worth_step(ctx: Ctx, shot: LongShot) -> Check:
     series = shot.series or shot.ticker.split("-")[0]
     if kalshi_index(series, ctx.now) is None:
         return Check(False, "Kalshi's perp reference is silent, so its chance cannot be read")
-    ce = variants.curve_edge_now(series, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker), now=ctx.now, source="kalshi")
+    ce = variants.curve_edge_now(series, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot), now=ctx.now, source="kalshi")
     if ce is None:
         return Check(False, "the perp's chance cannot be read (short history, a stale tick or no reference)")
     if ce[1] < floor:
@@ -164,6 +164,126 @@ def calm_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(True, f"{state}: {read}")
 
 
+def _window_strike(ctx: Ctx, shot: LongShot) -> float | None:
+    """The market's target when the tick memory lacks it: the books', at a decision."""
+    return ctx.store.window_strike(shot.ticker) if ctx.store is not None else None
+
+
+@step("variety")
+def variety_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The side's curve variety at this moment (variants.py: its cushion, slope, crossings and volatility, lettered) is not one the lane skips (skip_varieties: "G" either side, "A-yes" one). A variety that cannot be read is not skipped (no reference price near the window open, no strike, too few ticks)."""
+    from . import ticks as ticks_mod
+    from . import variants
+
+    skips = ctx.spec.skip_varieties
+    if not skips:
+        return Check(False, "the lane names no varieties to skip (skip_varieties)")
+    kind = variants.variety_now(ctx.s, shot.series, shot.side, shot.hours_to_close * 3600.0, now=ctx.now, strike=ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot))
+    if kind is None:
+        return Check(True, "variety not readable (no reference price near the window open or no strike, or too few recent ticks), so not skipped")
+    if variants.skipped(skips, kind, shot.side):
+        return Check(False, f"variety {kind} ({variants.NAMES[kind]}), which the lane does not buy")
+    return Check(True, f"variety {kind}")
+
+
+@step("vol_regime")
+def vol_regime_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The market's volatility over the last hours is not more than max_vol_rel times its own normal (volregime.py). A market whose regime is not known yet is a no."""
+    from . import variants, volregime
+
+    hi = ctx.spec.max_vol_rel
+    if hi <= 0:
+        return Check(False, "the lane sets no ceiling (max_vol_rel)")
+    coin = variants.coin_of(shot.series)
+    vrel = volregime.regime.rel(coin)
+    if vrel is None:
+        return Check(False, f"volatility regime unknown for {coin}")
+    return Check(vrel <= hi, f"volatility {vrel:.2f}x its normal, the lane allows {hi:g}")
+
+
+@step("cushion")
+def cushion_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The spot's distance to the strike, in the market's own typical moves, is at least min_cushion_z, and the spot has crossed the strike fewer than max_spot_crosses times in five minutes (variants.snapshot_now). A cushion that cannot be read is a no."""
+    from . import ticks as ticks_mod
+    from . import variants
+
+    spec = ctx.spec
+    if spec.min_cushion_z <= -90 and spec.max_spot_crosses <= 0:
+        return Check(False, "the lane sets no cushion or crossing limit (min_cushion_z, max_spot_crosses)")
+    snap = variants.snapshot_now(ctx.s, shot.series, shot.side, shot.hours_to_close * 3600.0, now=ctx.now, strike=ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot))
+    if snap is None:
+        return Check(False, "the cushion cannot be read")
+    if snap["z"] < spec.min_cushion_z:
+        return Check(False, f"cushion z {snap['z']:+.2f} is under the lane's {spec.min_cushion_z:g}")
+    if spec.max_spot_crosses > 0 and snap["crosses"] >= spec.max_spot_crosses:
+        return Check(False, f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses})")
+    return Check(True, f"cushion z {snap['z']:+.2f}, {int(snap['crosses'])} crossings")
+
+
+@step("spike")
+def spike_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The side's price has not just run: over the last entry_spike_seconds it rose less than entry_spike_rise and its bid swung less than entry_spike_range (dollars). A span with no quotes is not a spike."""
+    from . import runner
+
+    seconds = ctx.spec.entry_spike_seconds
+    if seconds <= 0:
+        return Check(False, "the lane sets no span (entry_spike_seconds)")
+    rose, swung = runner.side_spike(ctx.s, shot, seconds, ctx.now)
+    if (rose is not None and rose >= ctx.spec.entry_spike_rise) or (swung is not None and swung >= ctx.spec.entry_spike_range):
+        return Check(False, f"price rose {100 * (rose or 0):+.0f}c and its bid swung {100 * (swung or 0):.0f}c over {seconds:.0f}s (the lane skips {100 * ctx.spec.entry_spike_rise:.0f}c / {100 * ctx.spec.entry_spike_range:.0f}c)")
+    return Check(True, f"no spike over {seconds:.0f}s")
+
+
+@step("center_agree", needs_estimate=True)
+def center_agree_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The ladder's spot and its corrected center both sit on the side's side of the strike (commodities.parse_spot_center on the estimator's note). A note with no such pair, or a market with no strike, is not held to it."""
+    from . import commodities
+    from . import ticks as ticks_mod
+
+    if not ctx.spec.require_spot_center_agree:
+        return Check(False, "the lane does not ask the spot and the center to agree (require_spot_center_agree)")
+    pair = commodities.parse_spot_center(ctx.why)
+    strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
+    if pair is None or not strike:
+        return Check(True, "no spot and center pair to compare")
+    side_yes = shot.side == "yes"
+    spot_on, center_on = ((x >= strike) if side_yes else (x < strike) for x in pair)
+    if not (spot_on and center_on):
+        return Check(False, f"the spot {pair[0]:.6g} and the corrected center {pair[1]:.6g} do not both sit on the {shot.side.upper()} side of the {strike:.6g} strike")
+    return Check(True, f"spot {pair[0]:.6g} and center {pair[1]:.6g} agree on {shot.side.upper()}")
+
+
+@step("same_side", needs_estimate=True)
+def same_side_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The lane does not already hold max_same_side bets on this side in this window (the part of the ticker after the series): a cap on how many of its bets can lose together."""
+    cap = ctx.spec.max_same_side
+    if cap <= 0:
+        return Check(False, "the lane sets no cap (max_same_side)")
+    if ctx.store is None or shot.ticker.count("-") < 2:
+        return Check(True, "no bets to count")
+    window = shot.ticker.split("-")[1]
+    same = sum(1 for r in ctx.store.open_bets() if (r["lane"] or "moonshot") == shot.lane and r["side"] == shot.side and r["ticker"] != shot.ticker and r["ticker"].count("-") >= 2 and r["ticker"].split("-")[1] == window)
+    return Check(same < cap, f"{same} of the lane's bets already {shot.side.upper()} in this window, the lane holds at most {cap}")
+
+
+@step("state_record", needs_estimate=True)
+def state_record_step(ctx: Ctx, shot: LongShot) -> Check:
+    """CLAUDE.md rule 8: the side's curve state (varieties at several scales) paid on its own record: its shrunk net per dollar staked at the buy's price band is at least record_min over at least record_min_n earlier markets (staterecord.py). No record built yet, or an unreadable state, is a no."""
+    from . import staterecord
+
+    ok, why = staterecord.admits(ctx.s, ctx.store, shot, ctx.spec, shot.ask)
+    return Check(ok, why)
+
+
+@step("curve_model", needs_estimate=True)
+def curve_model_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The curve model (curvemodel.py: the spot's curve at nine Fibonacci look-backs, fitted daily on the tape) predicts a net per dollar for the side that is in the top model_top share of its training moments and over zero. No fitted model, or a curve that cannot be read, is a no."""
+    from . import curvemodel
+
+    ok, why = curvemodel.admits(ctx.s, ctx.store, shot, ctx.spec, shot.ask)
+    return Check(ok, why)
+
+
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""
@@ -172,8 +292,6 @@ def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     p = ctx.p_yes if shot.side == "yes" else 1.0 - ctx.p_yes
     e = edge(p, shot.ask)
     cost = shot.ask + fee_per_contract(shot.ask)
-    if not chance_ok(ctx.spec, p):
-        return Check(False, f"worth {p:.2f} is outside the lane's chance band {ctx.spec.min_chance:g} to {ctx.spec.max_chance:g}")
     if not wants_bet(ctx.spec, p, shot.ask, e):
         room = (1.0 - p) + e
         needs = f", needs {ctx.spec.min_edge_room * room:+.3f}" if ctx.spec.min_edge_room is not None else ""

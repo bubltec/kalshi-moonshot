@@ -1,15 +1,14 @@
 """The market's scenario as a recorded reading (scenario.py, lane field entry_scenario_view): 2026-11-16, user: "build a structured buy scenario every 15 mins ... based on the previous hour of ... markets"; "where the current target is in comparison with the hour or 15 min scope"; "15, 30, 60"; "Yes, build it"."""
-import dataclasses
 import math
 import time
 
 import pytest
 
-from kalshi_moonshot import config, lanes, regime, runner, scenario, ticks, variants
+from kalshi_moonshot import config, regime, runner, scenario, ticks, variants
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
 
-from tests.test_entry_phase import Fixed, LANE  # noqa: F401
+from tests.entry_helpers_phase import Fixed, LANE  # noqa: F401
 
 
 def spot(end, minutes=80, level=100.0, slope_pct=0.0, wiggle_pct=0.02, step=5):
@@ -136,10 +135,3 @@ def test_integration_with_no_index_in_memory_the_note_says_unreadable_and_the_bu
 def test_integration_off_by_default_nothing_is_read(tmp_path, monkeypatch):
     assert "[scenario" not in decide(tmp_path, monkeypatch, time.time(), "").note
 
-
-def test_unit_the_field_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    s = config.load()
-    base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
-    assert "entry_scenario_view" not in lanes.settings_of(base, s)
-    assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, entry_scenario_view=True), s)

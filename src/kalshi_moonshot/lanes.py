@@ -59,14 +59,6 @@ class LaneSpec:
     needs_model_edge: bool = True  # the model must see an edge over the price before the lane buys (min_edge, min_edge_room, max_lag). False = the lane buys whatever passes its other gates, with no minimum edge from a model. Until 2026-11-16 this was `always` with the opposite sense (user: "lets re-work that concept. because 'always' means nothing"); a lane file may still say `always`. On the live crypto lane's 157 bets with the screen off (11-15 16:31 on), the 19 it would have passed made +1.10 and the 138 it would have dropped -175.35, though the model's edge does not sort the bets: the screen mostly buys an eighth as often (studies/results/2026-11-16-edge-screen-record.txt)
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
     shares_markets: bool = False  # main-scan lane that also takes markets another lane took (for A/B controls); never consumes them
-    min_chance: float = 0.0  # bet only when the estimator's chance that the contract pays is in [min_chance, max_chance]
-    max_chance: float = 1.0  # (the estimate before calibration; for a ladder lane this is a distance to the strike)
-    unstable_gain: float = 0.0  # sell when the position is up at least this fraction (after fees) AND the bid is swinging (see unstable_range); 0 = off
-    unstable_range: float = 0.0  # ... the bid's high-low over unstable_seconds, in dollars
-    unstable_seconds: float = 20.0
-    hover_dip: float = 0.0  # sell at the first profit (after fees) once the bid has dipped to this price or lower since entry, i.e. hovered near the strike; 0 = off
-    entry_checks_exit: bool = False  # 2026-11-08 (user, XRP 09:30 and 7 more: bought with the spot already behind the strike and sold 0-5 s later by the cross exit; "lets do 1"): skip a buy when this lane's own spot exits (shock_units, cross_units) would sell it at this moment, so the buy and the sale read the same state (variants.spot_exit_now)
-    rebuy_opposite_after_gain_seconds: float = 0.0  # 2026-11-08 (user, HYPE 09:15: the value exit sold YES at 0.67 for a gain and the lane bought YES again 94 s later at 0.67 and lost $2.22; "a 60-ish sell is great but we might want to rebuy if confidence continues to increase"): after this lane exits one side of a market for a gain (the sale after its fee over the price paid after its fee), it may not buy that side again for this many seconds; the opposite side goes through the lane's usual gate at once, and its own gain sale starts the same wait on its side. After the wait the side is open again. A sale at a loss sets no limit (0 = off). A fixed number, set by the user, not read from the curve
     reentry_cooldown_seconds: float = 0.0  # after this lane exits a market, wait this long before it may buy that market again (0 = no wait)
     buy_rest_seconds: float = 0.0  # buy with a post-only RESTING order instead of an immediate one: it waits this many seconds at buy_rest_below under the ask and is dropped if unfilled (no fallback). A resting order that fills pays no taker fee; replay says it mostly fills on dips (0 = buy at the ask)
     stake_vol_shadow: bool = False  # 2026-11-18 SHADOW (user: "and maybe we could scale the bet by lane volatility too"; "Yes, shadow it"): every live bet writes one row (kind "stake_vol" in data/risk_shadow.jsonl) with the market's own typical minute at the buy (quoteshock.typical_minute: sqrt(60) times the rms one-second move of its mid over the last 15 minutes), the stake and the price. Changes no stake. scripts/stake_vol_shadow_score.py scores a stake of the lane's stake times (median typical minute of the earlier rows over this one, limited to 0.5 to 2) against the flat stake. Evidence: studies/results/2026-11-18-commodity-stake-by-volatility.txt (4,584 commodity favourites, held: flat -2.74 per $100, scaled -2.19; the wildest third of markets lost 4.65, the quietest 0.54). Retire under rule 6 if it scores negative
@@ -75,60 +67,13 @@ class LaneSpec:
     paper_fill_model: bool = False  # a PAPER bet of this taker lane is judged on the tape after the fact (paperfill.settle_taker, fillmodel.py): refilled at the ask the tape shows within the lane's limit, or turned into a pass when the ask was over it. Calibrated on the ordinary lanes (0.4-0.9c price error); not for burst lanes
     buy_rest_then_take: bool = False  # when the resting buy fills nothing, buy at the fresh ask instead of dropping the bet (the way buy_retries re-prices: the lane's price band, buy_retry_chase and the risk gate still apply). Fills pay no fee; the runners a resting bid misses are still bought
     buy_rest_top_up: bool = False  # 2026-11-06: when the resting buy fills only part of the order (0.42 of 11.36 palladium, 4.73 of 11.76 Brent), buy the rest at the fresh ask under the same guards as buy_rest_then_take (price band, buy_retry_chase, risk gate). Needs buy_rest_then_take. A partial fill pays no fee on its part; the rest pays the taker fee
-    buy_rest_queue_note: bool = False  # 2026-11-16 (user: several buy orders did not fill, "there's a queue ... check the api docs"; "yes that sounds excellent let's try it"): read the resting buy's queue position once after it is placed (Kalshi's queue is price-time priority: the shares ahead of it) and put it in the decision note, so fill against queue can be scored. One GET per resting buy
-    buy_rest_queue_quantile: float = 0.0  # 2026-11-16 (user: build the queue maximum): skip a resting bid whose queue ahead is deeper than this quantile (0.8 = deeper than 80% of them) of the queue ahead of this lane's own FILLED bids over the last buy_rest_queue_hours (queuehist.py); no cutoff, and no skip, until 10 filled bids are on record. Used when buy_rest_queue_max is not set
-    buy_rest_queue_hours: float = 3.0  # the window of that history
-    buy_rest_queue_max: float = -1.0  # cancel the resting buy at once when more than this many shares are ahead of it and take the ask instead (buy_rest_then_take), instead of waiting buy_rest_seconds in a queue that will not reach it; -1 = off. Set from the fill-against-queue record, not guessed
-    curve_shadow: bool = False  # 2026-11-06: log, never act, the curve-read sell-and-flip on this lane's open bets in their last five minutes (curveexit.py): the bounce off the best spot level in typical minutes, the path-efficiency state against the market's own cutoffs, the sale and the other-side buy it would make, scored when the market settles
-    confidence_shadow: bool = False  # 2026-11-06: log, never act, the curve-read chance this lane's open crypto bets settle their way, at 300, 180 and 90 s left, against the market price (confidence.py); refit daily from the tape; scored when the market settles
-    accumulate_shadow: bool = False  # 2026-11-07 (user: add to a winning bet late): log, never act, the late add-on on this lane's open bets (accumulator.py): the first moment the held side's ask is 0.85-0.99 with 5-120 s left, with the cushion's z for the seconds left and its 13 and 55 minute slopes. Scored per variant; studies/results/2026-11-07-accumulator.txt
     max_open: int = 0  # at most this many bets of this lane open at once, across all its markets (0 = no limit); the next candidate waits until one closes
     max_same_side: int = 0  # at most this many of this lane's open bets on the same side of the same 15-minute window (BTC, ETH and DOGE YES together is one bet on one move); 0 = no limit. 2026-11-02 replay, 30 days of crypto_favorite: the 3rd same-side bet in a window won 13 of 22 for -$46.6, the 1st and 2nd won 82-86%
-    same_side_lanes: tuple[str, ...] = ()  # lanes whose open bets count toward max_same_side together with this lane's own (empty = this lane alone), so two lanes on one coin family share one cap
-    shock_bp: float = 0.0  # shock exit: in the last shock_last seconds, sell when the spot has moved this many basis points against the bet over the last shock_seconds and is within shock_margin_bp of the strike (0 = off). Commodities read BiQuote against its price at the window open, crypto reads the settlement index against the strike. 2026-11-03 replay of 259 held commodity bets over 12 days: 60 s, 8 bp, 5 bp +$44; crypto gaps in seconds, so it sold only for a few cents there
-    shock_seconds: float = 60.0
-    shock_margin_bp: float = 5.0
-    shock_source: str = "index"  # 2026-11-09 (user: the shock exit for the treasury lane, modular for any lane): what the shock exit reads. "index" = the market's spot index against its strike or open price (quoteshock.py not used); "quote" = the contract's own mid (the held side's mid as the spot, 0.50 as the strike, the typical minute of the mid), for a market with no spot feed. shock_units and shock_margin_units apply to either; cross_units, the trend hold and the breadth shadow are index-only
-    shock_units: float = 0.0  # 2026-11-06: the shock exit in the market's own variance. Sell when the spot has moved this many typical minutes against the bet over shock_seconds (a typical minute: the rms 1 s move of the last 15 minutes times sqrt(60), read live from the market's ticks). Replaces shock_bp when set; if the typical minute cannot be read the exit does not fire (no assumption)
-    shock_margin_units: float = 0.0  # ...and the cushion in typical minutes (0 = use shock_margin_bp)
-    cross_units: float = -1.0  # 2026-11-07 (user: SOL 09:30 had no exit): also sell, in the last shock_last seconds, when the cushion is at or under this many typical minutes from the strike (0 = the spot is on the wrong side of it) and the bid is in the shock band, whatever the move was. -1 = off. studies/results/2026-11-07-strike-cross-replay.txt
-    shock_last: float = 120.0
-    value_exit: float = 0.0  # 2026-11-08 (user: ETH 07:30 YES bought at 0.31 was bid 0.63 seven seconds later and settled 0; "why isn't this built into our exit rule?"): sell a 15-minute crypto bet while the bid, after the sell fee, is this many dollars over the curve's own chance that the side pays (confidence.py: the same curve, time-left and price model the confidence shadow reads) and the bid is inside value_exit_bid. 0 = off. studies/results/2026-11-07-hold-value-exit.txt: margin 0.02 sold 809 times, +$30.0 against holding, halves +0.020/+0.054 per contract (bid 0.30-0.70 both halves positive, over 0.70 about zero)
-    value_exit_bid: tuple[float, float] = (0.30, 0.70)  # the bid band the value exit exits into: the study's band where it paid in both halves (chosen after seeing the results)
-    value_exit_gain_x: float = 0.0  # 2026-11-08 (user: the profit sale exits for a garbage profit, 0.50 bought and sold at 0.54 fourteen seconds later; it should be loose until an extreme profit): the extreme-profit mode of the value exit. Sell only when the bid is at least this multiple of the price the buy filled at (2.0: 20 to 40, 30 to 60, 40 to 80); the curve-chance test is then not used. 0 = off
-    value_exit_high: float = 0.0  # ...or when the bid is at or over this price (0.95) with more than value_exit_high_left seconds left (a near-certain win taken early, a lock rather than a wait for the close). 0 = off
-    value_exit_high_left: float = 420.0  # seconds that must be left for the value_exit_high sale (7 minutes)
-    value_exit_min_gain: float = 0.0  # ...and in this mode never for less than this many dollars per contract after both fees (the sale after its fee over the price paid after its fee): no garbage profit. 0 = any gain over the fees
-    late_drop_units: float = 0.0  # 2026-11-10 (user: "30 s, 1 unit sounds good, implement and push"): in the last late_drop_seconds the held bid is sold when it has fallen from its highest of the last 60 s by this many of its own typical minutes (rms one-second bid change over up to 300 s, times sqrt(60)). 0 = off. studies/results/2026-11-10-zero-loss.txt: on 716 favorite bets 30 s / 1 unit turned 54 of 90 whole-stake losses into partial ones for -$1.80 net held-to-result (43 winners sold); crypto_multiscale +$3.8 (settings chosen after seeing the results)
-    late_drop_seconds: float = 30.0  # lane late_drop_seconds: the window before the close in which late_drop_units applies
-    hour_drift_q: float = -1.0  # 2026-11-10 (user: live now): buy only when the hour's drift signed with the bet (in the typical minute of that hour) is at or under this quantile of the same index's own readings over its last hours (variants.hour_drift_from); -1 = off. The bet leaning against the hour's move is the one that paid: studies/results/2026-11-10-underdog-walkforward.txt, 8 test days, q 0.25 +7.1% a dollar (se 3.3) against -7.0% for every underdog state, both halves. No data = no buy
-    perp_lead_buy: bool = False  # 2026-11-10 (user: live, buy on either rule): with hour_drift_q set, a market the hour-drift gate refuses is still bought when the perp-lead rule passes (variants.perp_rule_from: the Hyperliquid perp running ahead of the index, the cushion near the strike, a choppy path, each against this market's own recent readings). BTC, ETH, SOL, XRP, DOGE only. studies/results/2026-11-10-underdog-walkforward.txt: +8.1% a dollar on 217 tape states (se 8.4), both halves; inside its standard error, so each buy's note says which rule passed
     buy_curve_edge_min: float = -9.0  # 2026-11-11 (user: "within 0.05 and not flat looks good lets implement that now"): buy only when the curve's chance that the side pays (curvevalue.read, 900 s rate) minus the ask is at least this (-0.05 = the chance may sit up to 5 cents under the price); -9 = off. No reading = no buy. studies/results/2026-11-11-multiscale-buy-filters.txt: on 308 crypto_multiscale bets, with the flat-trend skip, 212 kept made +$56.43 (+10.8% per $) against +$29.79 buying all, better per dollar on each of the 5 days it changed; six days of bets and one bad day (11-08) carries most of it; a cutoff picked day by day lost, so this one is fixed, not tuned. The study measured the price paid; the gate reads the ask, so it is slightly stricter.
-    buy_flat_trend_pct: float = -1.0  # skip a buy while the market-wide 60-minute trend (variants.broad_trend_now, crypto only) is within this many percent of zero (0.05 = the decision tag reads 0.0%); -1 = off. Same study: the 37 flat-trend bets lost $14.90, negative in both halves. A rounded reading, not yet a cutoff from the market's own history (rule 2)
-    buy_flat_trend_share: float = -1.0  # 2026-11-15 (user: the flat-trend cutoff should scale, and not from six hours, the current hour): the same skip, but a market-wide 60-minute trend is flat when it is inside this share of THIS HOUR's own typical move (0.25 = under a quarter of how far the five coins have been moving within the hour: the root-mean-square of their last 60 one-minute moves x sqrt(60), variants.broad_trend_bar). A choppy hour that netted little is flat; the same net move in a quiet hour is not. Replaces buy_flat_trend_pct when the hour can be read, which stays the fallback; -1 = off
-    curve_exit: float = -1.0  # 2026-11-10 (user: enable on commodity_multiscale; curvevalue.py): the curve exit's margin, -1 = off. Sell when the bid after the sell fee is at least the curve's own chance that the side pays (the pessimistic one over the 900 s and 180 s horizon-scale rates) plus this margin, held curve_exit_persist seconds. Replaces the shock, late-drop and value exits on a lane that sets it
     curve_exit_scales: str = "900+180"  # which horizon-scale rates the curve exit reads: "900+180" the lower chance of the 900 s and 180 s rates, "900" the 900 s rate alone
-    curve_exit_persist: float = 5.0  # seconds the whole condition must hold before the sale
-    curve_exit_last: float = 900.0  # act only in the last this-many seconds before the close
-    curve_exit_near: float = -1.0  # 2026-11-11 (user: "that number 0.15 -- it needs to scale with time left"): the curve sale's margin AT the close; -1 = a fixed margin. With it set, the margin is curve_exit_near + (curve_exit - curve_exit_near) * sqrt(seconds left / 900): wide far from the close, where a sale gives up the remaining upside, narrow near it, where little upside is left and a flip costs the stake (sqrt because what the remaining time can move scales with its square root, as the curve's chance does). studies/results/2026-11-11-curve-margin-time.txt: crypto_multiscale, 312 bets, 0.15 to 0.00 made +$1.51 against holding (halves +0.59 / +0.92) where the fixed 0.15 made -$4.89; on commodity_multiscale no scaled setting beat its fixed 0.06
-    curve_drop_units: float = -1.0  # 2026-11-10 (user: the curve exit needs a shock term that reads the cushion's trajectory; five crypto YES bets lost together while the bid stayed under the curve's chance all the way down): the curve exit's trajectory sale, -1 = off, needs curve_exit on. Also sell when the cushion has fallen this many typical minutes over the last curve_drop_seconds and now sits at or under curve_drop_margin_units, held curve_drop_persist seconds. In the lane's own variance units. scripts/curve_trajectory_replay.py, studies/results/2026-11-10-curve-trajectory.txt
-    curve_drop_seconds: float = 120.0
-    curve_drop_margin_units: float = 0.5
-    curve_drop_persist: float = 5.0
-    curve_rest: float = -1.0  # 2026-11-11 (user: "a new lane that's a shadow for now", to compare with the multiscale lanes after it runs a bit): the curve exit as a RESTING ask (manualrest.plan) instead of a sale at the bid. The ask sits at the curve's chance + this * sqrt(seconds left / 900), repriced every 15 s; the bet is sold when the bid reaches it, at the ask's price with no taker fee. With it on, the curve sale at the bid, the trajectory and the gap sales are off for the lane; the time-to-go sale (curve_behind_last) is its guard. PAPER ONLY for now: the sale is simulated from the bid; a live lane would need the real order placement manualrest.ManualRest does for hand-opened positions. -1 = off.
-    curve_drop_comeback: float = -1.0  # 2026-11-11 (user, on the XRP sale of 12:08 that sold a one-minute dip and then won: "based on the hour curve we should have been able to tell it is going to return and wasn't a gradual down"): the trajectory sale is held while this coin's own last hour says its fast falls usually come back, i.e. the share of its falls as fast as the sale's trigger that regained half within 120 s (variants.comeback_rate) is at least this, over at least curve_drop_comeback_min falls. 0.5 = more often than not. -1 = off. The last curve_drop_comeback_hold seconds are not held (time-to-go and the curve sale still act)
-    curve_wait_share: float = -1.0  # 2026-11-11 (user: "the exit wait needs to scale with time left and how severe a drop. in this case it barely fell below the target"; "we shouldn't be looking at specific times"): the curve sale and time-to-go wait before selling, and the wait is not a fixed number of seconds. wait = this market's own median seconds for a fast fall to regain half of itself over the last hour (variants.comeback_stats; curve_wait_default when the hour has under 5 falls), times (1 - how far under the target the spot is, in typical minutes, over curve_wait_severe), and never more than this share of the time left. A drop well under the target waits nothing; a shallow one with plenty of time left waits the market's usual recovery time. -1 = off (curve_exit_persist as before, and time-to-go exits at once). 0.25 = at most a quarter of the time left
-    curve_wait_severe: float = 1.5  # typical minutes under the target at which the wait is zero (the same size as the trajectory sale's trigger)
-    curve_wait_default: float = 15.0  # seconds of recovery assumed when the market's last hour has under 5 fast falls to measure
-    curve_drop_comeback_min: int = 5  # falls needed in the hour before the rate is trusted (fewer: the sale is not held); a sample-size floor, not fitted
-    curve_drop_comeback_hold: float = 240.0  # the hold applies only with more than this many seconds left (a dip needs time to come back)
-    curve_gap: float = -1.0  # 2026-11-10 (user: reading the contract's own price "should be built into the curve exit logic"; KXPLATINUM15M-26NOV101830 YES at 0.92 lost $10.75 with the BiQuote spot above the strike while the settlement source fell under it and the bid went 0.89 -> 0.50): the curve exit's market-disagrees sale, -1 = off, needs curve_exit on. Also sell when the curve's chance is at least this far ABOVE the bid net of the fee for curve_gap_persist seconds: the market prices the position far under what our spot says, so our reading is the one in doubt. scripts/curve_quote_term_replay.py, studies/results/2026-11-10-curve-quote-term.txt
-    curve_gap_persist: float = 15.0
-    curve_risk_sell: float = -1.0  # 2026-11-13 (user: "our risk factor is what the exit should be ... the worse of the price cushion and the spot cushion, factored by the curve's event history in the past hour and time remaining"): the single risk exit (curverisk.py), -1 = off. Sell when the chance the side pays, read as the worse of Kalshi's bid net of the fee and the curve's spot chance (the price counted in full, the spot only curve_risk_spot_weight of the way), widened by the market's own last hour of jumps, is under this line. SHADOW unless curve_risk_live. Needs the lane's spot reference armed like curve_exit.
     curve_risk_live: bool = False  # false: log "curve risk shadow: would sell" and sell nothing; true: the sale is made
     curve_risk_spot_weight: float = 0.5  # how far a spot alarm counts when it is the worse cushion (1 = as much as the price, 0 = not at all); the price is trusted more
     curve_risk_history: bool = True  # widen the spot cushion by the hour's jumpiness (curverisk.history_factor), read from the market's Kalshi perp reference (the long-horizon layer)
-    curve_risk_max_loss: float = 0.5  # the loss a bet may carry, as a share of its cost, at full cushion: scaled by the risk (loss limit = this * q), so it tightens as q falls. At the limit the exit exits at once (0 = off)
     curve_take: bool = False  # 2026-11-14 (user: "why not just use the bet?"; "earlier in the market is a better favor to sell for profit, since we can always buy back"): the profit take. A bet exits for a gain once the gain is at least the share of its own room (1 less its all-in cost) that the market's time has used up, and more than the fee to buy it back (curverisk.take_profit); and not while the bid is still sloping up (curve_take_slope_share). Off by default. Shadow first: set on a paper lane, scored on its round trips against holding. Not fitted
     curve_take_slope_share: float = 0.08  # the look back for the profit take's slope, as a share of the TIME LEFT (2026-11-14, user, after two live sales fired on a pause of a few seconds in a climb: "I think the 10s look back depends on how much time is left. It needs to be based on the time left"): 58 s with 12 minutes left, 24 s with five, 5 s with one. The bet is not sold while the bid has risen over that look back by more than the market's own noise for it (typical minute x sqrt(look back / 60)) and sits within that noise of its high (curverisk.still_rising). Replaces the fixed 10 s (curve_take_slope_seconds). 0.08 is the user's number ("Let's bump the look back to 8%"); it was 0.05 for an hour, unpushed
     curve_take_cushion: bool = False  # 2026-11-14 (user: "we just need a cushion check before we decide to sell (in the profit flow)"): the profit take also asks the spot's cushion. The curve's chance that the side pays, from the spot's distance to the strike over the time left in the market's own variance (the hour's jumps widen it, as in the risk reading), is held against what the sale pays net of its fee; when the cushion's chance is the larger the take does not sell (curverisk.cushion_holds). With no spot reading the take goes as before. Off by default: scored on the bets that follow, studies/results/2026-11-14-profit-take-score.txt
@@ -142,186 +87,38 @@ class LaneSpec:
     curve_risk_late_tight: float = 0.0  # 2026-11-19 (user, on KXPLATINUM15M-26NOV190200 NO bought 0.90 and sold 0.25 and KXCOPPER15M-26NOV190230 YES sold 0.29, both lost in the last minute or two: "i dont think high volatility means we don't buy, but i think it means we tighten our selling"; "this is a lead and we should note it"; "build the new step as a module"): the sell step late_tight. In the last curve_risk_late_tight_share of the market a bet is sold at the bid once its bid is this many typical minutes of its own market (the exit's static one) under its highest bid since the buy, AHEAD OR NOT (the trail needs the bet ahead). 0 = off. It sells only where curve_risk_late_tight_live and the lane's risk exit are live, else it logs one would-sell a bet and records it (data/risk_shadow.jsonl, kind "late tight"). Evidence (a lead, settings chosen after seeing it): studies/results/2026-11-19-commodity-tight-sell-last150.txt, 715 live commodity bets, K 3 in the last 150 s: +$6.60 against what happened (beat 92, lost 50), total-loss bets (ending under 0.10) 65 to 15, all losses -$92.58 to -$78.72, gains +$78.60 to +$71.34
     curve_risk_late_tight_share: float = 1.0 / 6.0  # the share of the market's 900 s at the end of which late_tight applies (a sixth is 150 s, the study's window; a share, so it is not fixed seconds)
     curve_risk_late_tight_live: bool = False  # late_tight sells; off = it logs and records a would-sell and sells nothing
-    curve_risk_drop: float = 0.0  # 2026-11-16 SHADOW ONLY (user: "we do need to get another stop in, maybe like some kind of drop check: trend away from position for X amount of time by Y factor of the spot we bought at"; "Yes, shadow it"): the slow drop check on the risk exit, 0 = off. Logs "would sell" once a bet and records it in data/risk_shadow.jsonl (kind "drop") when the spot's cushion on the bet's side has fallen this many typical minutes from its high of the last curve_risk_drop_share of the time left, the curve's chance that the side pays is under one half, and both have held for that same share of the time left. It exits nothing: there is no live switch yet. Evidence: studies/results/2026-11-13-drop-sale-time-scaled.txt (the faster versions sold winners and lost $6 to $103 on 244 live commodity bets; this one +$0.87 on 13 sold, chosen after seeing the 20 results)
     curve_risk_never_ahead: float = 0.0  # 2026-11-17 LIVE where set (user: "Ok so 'never profitable and 90s left.' Let's add that to the live lanes"): seconds left at which the risk exit exits a bet that was never once in profit (its bid less the sell fee over its cost with the buy fee) since the buy; 0 = off. One look a bet, at the mark; only bets bought 30 s or more before it and watched the whole time. It exits when the lane's risk exit is live (curve_risk_live), else it logs a would-sell and records it (data/risk_shadow.jsonl, kind "never ahead"). The long layer does not hold it. Evidence: studies/results/2026-11-17-time-in-profit.txt (6 bets at 90 s, 2 won if held, selling +$12.84 against what happened; small count, scored forward and retired under rule 6 if it turns negative)
     curve_risk_under_even: float = 0.0  # 2026-11-17 (user, on platinum 09:30, Brent 10:00 and copper 10:15, each bought near 0.90 and sold at 0.06 or settled at zero: "just had 3 zeros in the last hour. we need to fix this"): the risk exit exits a bet bought as the favorite once its bid has been under even (0.50) without a break for this share of the time left; 0 = off. It exits where curve_risk_under_even_live and the lane's risk exit are both live, else it logs one would-sell a bet and records it (data/risk_shadow.jsonl, kind "under even"). The long layer does not hold it. Evidence in curverisk.under_even
     curve_risk_under_even_live: bool = False
-    curve_risk_line_live: bool = True  # 2026-11-17 LIVE where false (user, on KXBTC15M 18:45: NO bought at 0.59 was sold by the line at 0.05 with 273 s left and was back at 0.62 three minutes later, then settled a winner: "it sold it way too early, cause it came back down"; "disable the 12c sale"): false turns off the risk exit's LINE sale alone (a losing bet under curve_risk_sell after its wait). It logs "would sell" once a bet and records it in data/risk_shadow.jsonl, and exits nothing. The rest of the risk exit (the profit take, its trail, the max loss, never-ahead, under-even) is untouched: those hang on curve_risk_sell being over 0, which is why the line is not switched off there
-    curve_risk_drop_share: float = 0.25  # the look back and the hold of the slow drop check, each as a share of the time left
     curve_take_early_seconds: float = 360.0  # the first six minutes of the market
-    stretch_max: float = 0.0  # the buy's stretch, an ADJUSTMENT not a rule (user, 2026-11-14: "It is a new lever but it's an adjustment not a feature. And it needs to consider time left and history ... They just nudge each decision ... It should be a tiny factor. Like 1-2c. Maybe less"). The most, in probability (0.02 = two cents; 0 = off), by which a buy may miss the scaled edge bar (min_edge_room) and still be bet. The nudge actually allowed is this times the history (how far the side has moved its way over the last minute, in its own typical moves: none at 0, all of it at 1 or more, none past 3, which is an anomaly) times the time (the share of the market still to run: all of it at the open, none at the close). lanes.nudge. The bet's note carries "[stretch buy"
-    squeeze_max: float = 0.0  # the sale's squeeze, the mirror of the stretch and as small (same user message). The most, in probability, by which a loss may be short of the max loss's depth and still count as reaching it. The nudge actually allowed is this times the history (the bid is sliding over the look back: curverisk.still_falling, all or nothing) times the time (the share of the market already gone: none at the open, all of it at the close). Nothing else about the sale changes: the long layer and the stop's wait still apply. The sale's note carries "[squeeze". History of the day it was built: three larger versions that made it an exit of its own, one of them live for fifteen minutes, all removed
-    nudge_hour_factor: bool = False  # 2026-11-15 (user: the hourly factor should affect the nudge amount): the stretch and the squeeze scale their cap by the hour's width correction k (widthfit.nudge_scale: the whole cap at k of 1 or under, 1/k above it, down to half). Off = the nudges as they were
-    nudge_units: float = 0.0  # 2026-11-15 (user: remove the cap, the nudge has to hold its own logically; maybe a high nudge is a good indication): the stretch and the squeeze have no fixed cap. A near miss of a bar passes when it is under nudge_units x the market's own typical move (the buy: the side's 60 s move; the sale: its typical minute) x the history share x the clock x the hour factor. 1 = the whole typical move at full agreement, which each factor shrinks. 0 = off, the cents caps (stretch_max, squeeze_max) as they were. Each nudged note carries its size in typical moves so a big nudge can be scored against a small one
     curve_risk_long_scales: tuple[int, ...] = ()  # 2026-11-15 (user: the long layer should look further, but keep the current hour's context: 15, 30, 60, 120 and 180 minutes): the minutes the long layer (curve_risk_confirm) reads its movement over, together as a geometric mean of each scale's rate (curverisk.multiscale_rate); 0 = the market so far (its open to now) and a negative number reaches back that many minutes past the open, every window ending now: [0, -15, -75, -255] is the user's design of 2026-11-15 night (the market so far, then each next segment 15, 60 and 180 minutes longer). Empty = the last hour alone, as it was. studies/results/2026-11-15-multiscale-hour-check.txt
-    curve_risk_early_hold: float = 0.0  # 2026-11-16 LIVE on crypto_multiscale (user: "we still have a problem with selling early ... before 5 mins remaining it doesn't usually matter"; "Go live with it"): while more than this share of the market is still to run, the risk exit does not sell a bet at a loss (curverisk.early_hold), and a bet held this way keeps the hold to settlement: its loss sales stay off (that is what the replay scored). The profit take is untouched. 0 = off; 0.53 = 8 of 15 minutes. studies/results/2026-11-16-stop-early-latch-replay.txt: +44.93 on the 10 max-loss sales made with over 8 minutes left (5 went on to win). A fixed share, read off the table after seeing it; each hold logs the market-units reading so that version can be scored forward. Retired if its score turns negative
-    curve_risk_stop_hold: float = 0.0  # 2026-11-14 (user, after a NEAR NO bought at 0.56 with 295 s left was sold at 0.29 eighteen seconds later and then won: "A 57c bet should be able to deal with a dip for a moment with 5 mins remaining"): the max-loss stop waits this share of the TIME LEFT before it exits (0.5 = half of it), the whole condition, long layer included, holding the whole wait; 0 = exits at once. The wait shrinks as the market closes. studies/results/2026-11-14-stop-replay-real-bets.txt: on 49 live crypto bets (19 stopped live) 0.5 returned -16.38 against -29.86 for the live stop and -19.89 for holding; the middle curve shape was -0.23 against the live stop, the other two thirds +5.21 and +8.49. A share chosen before that run, not fitted; a small sample. 2026-11-14 evening: the wait is no longer this share of the time left alone; that is now only its upper limit. The wait is the market's own recovery time, less the deeper the chance is under the line, times the share of the market still to run (curverisk.stop_wait), after three bets rode to nothing inside a wait of 100 s or more. The same evening the swing hold (curve_risk_swing, a loss under 1.5 x the contract's typical minute x sqrt(minutes left) was never sold) was removed: the exit's loss side is two gates, the long layer and this wait (user: "3 gates that should be 2"). On today's 39 live bets the two gates returned +29.53 against +9.29 for all three and +1.98 as it happened (studies/results/2026-11-14-stop-wait-replay.txt)
     curve_risk_min_profit: float = 0.01  # the profit asked for before a sale at high risk, as a share of the cost, scaled by the risk (this * q): shrinks toward nothing as q falls. A loss is cut at any depth once the risk is under the line
     curve_risk_confirm: float = -1.0  # 2026-11-13 (user, after a live sale of a bet that dipped briefly, never crossed the strike and won: "the long layer showed it likely staying positive"): a risk sale (the max loss and the line) also needs the long layer's chance (the Kalshi perp's cushion over its open, against its own last hour of movement: curverisk.long_chance) to be under this. -1 = price alone. studies/results/2026-11-13-risk-hour-replay.txt: 0.4 cut the cost against holding from -$31 to -$13 on crypto and from -$83 to -$58 on the commodity favorites (first look; still negative against holding)
-    curve_behind_last: float = -1.0  # 2026-11-10 (user: "we just need to make sure we don't have those 0.00 exits ... why isn't it considering its time to go if time is running out"): the curve exit's time-to-go sale, -1 = off, needs curve_exit on. In the last this-many seconds (down to 8 s before the close), sell a position whose curve chance is under one half, at whatever the bid is. It turns a 0.00 result into a small recovery; it is not a profit rule. scripts/zero_exit_study.py, studies/results/2026-11-10-zero-exit.txt
-    curve_behind_chance: float = 0.5  # the time-to-go sale exits when the curve chance is under this (0.5 = behind the strike; lower waits for a position that is further gone). studies/results/2026-11-10-favorites-stack.txt
-    shock_persist: float = 0.0  # 2026-11-09 (user: "improve the exit", live as a fix): the shock exit exits only once its whole condition (the move, the cushion, the bid band, the last-seconds window) has held for this many consecutive seconds, so a spike that reverses at once is not sold. 0 = sell on the first reading. studies/results/2026-11-09-shock-exit-improve.txt: on 511 favorite-lane bets 20 s with 1.5 typical minutes, cushion 0.3, last 180 s added +$22 over the current rule, positive in both halves and all three curve shapes (settings chosen after seeing the results); on crypto no variant held up
-    shock_memory: float = 0.0  # seconds a shock is remembered: the worst shock_seconds move seen in this many seconds counts, not only the latest one (0 = only the latest). The shock can come just before the last-seconds window and fade (Brent, 2026-11-03: -12 bp at 125 s left, -8 by 120); with 120 s of memory the replay on 324 held commodity bets gave +$38 against +$15 for the latest move alone, and nothing on crypto
-    wrong_side_bp: float = 0.0  # wrong-side exit: sell once the spot has sat this many basis points on the wrong side of its window-open price (the strike for crypto) for wrong_side_seconds straight (0 = off). Only for a position whose variety at the buy is in wrong_side_varieties (variants.py). 2026-11-03 replay of 76 held commodity bets read as G (oscillating): 5 bp for 15 s sold 15, 14 of them losers, +$20; the near varieties lost money on it and crypto gained nothing
-    wrong_side_seconds: float = 15.0
-    wrong_side_varieties: tuple[str, ...] = ()  # empty = any variety
-    wrong_side_last: float = 0.0  # only in the last this-many seconds before the close, and the wrong-side clock starts inside them (0 = the whole window)
-    wrong_side_series: tuple[str, ...] = ()  # only these series (empty = the lane's own). 2026-11-03 replay of 63 held WTI bets: 1 bp for 10 s in the last 120 s sold 11, 10 of them total losses, +$19 against holding; other commodities +$21 at best, mostly near zero
-    shock_bid_max: float = 0.0  # the shock exit exits only a bid at or under this (0 = 0.89, the built-in ceiling). Lower it to leave a position alone while the market still prices it as a likely winner: 2026-11-04 a silver NO was sold at 0.89 with 36 s left and won
-    shock_log_only: bool = False  # the shock watch runs and writes shock_log (a would-fire row is fired=2) but never exits, so a lane can collect the data without trading on it. Not part of the lane version
-    shock_off_series: tuple[str, ...] = ()  # series the shock exit does not act on, e.g. KXBRENT15M: its spot makes sharp 8 bp moves that reverse, so a 2026-11-03 replay sold 8 times for 3 losers saved and 5 winners cut, -$17.9 vs holding at every cushion
     skip_varieties: tuple[str, ...] = ()  # varieties (variants.py letters) this lane does not buy: "G" on either side, "A-yes" on one side. Read at the decision from BiQuote against its window-open price, so commodities only; an unreadable one is not skipped. 2026-11-03 walk-forward on the lanes' live bets: the cells that paid in training were the same in three folds and left out G and A-yes, which then lost $49, $19 and $9 in the test period
-    max_crossings: int = -1  # buy only when the market's mid crossed 50c at most this many times in the last crossings_seconds (a yield or price crossing its target), read from the quotes held in memory (ticks.MidHistory). 0 = a calm chart only; -1 = off. History too short to say = no buy. 2026-11-04: 88 treasury favorites with no crossing won 93%, those with two or more 74-83%
-    crossings_seconds: float = 300.0
-    skip_varieties_auto: bool = False  # also skip the varieties the in-memory ledger (variants.Ledger) shows losing right now for the asset class of the series: the last auto_hours of settled favorites, blended with the older ledger as a prior. The ledger is refreshed every few minutes by the watcher and read without a query; crypto reads its settlement index against the window strike
-    auto_vol_gate: bool = False  # the volatility levels of this lane follow the recorded favorites: min_vol_rel / max_vol_rel are only the starting values, and every 12 hours the class level tuned from the last 7 days replaces them (volregime.tune_thresholds)
-    disagree_stake_factor: float = 0.0  # with require_spot_center_agree: 0 = skip a bet where the spot and the corrected center disagree; above 0 = play it at this share of the stake. 2026-11-04: those 94 bets won 79% but at 0.78-0.90 prices they lose a little every band, so a quarter stake keeps the winners and cuts the loss (+$40.8 against +$54.4 for skipping)
     require_spot_center_agree: bool = False  # buy only when the raw spot AND the offset-corrected center are both on the bet's side of the strike. 2026-11-04, 672 live commodity bets: both on our side 88% won, +$0.24 a bet; where they disagreed 94 bets netted -$54 (industrial -$52 on 59, precious -$11 on 25; energy +$8 on 10, so energy leaves it off). Unreadable = no change
-    min_vol_rel: float = 0.0  # buy only when the coin's volatility over the last 6 h is at least this many times its 72 h normal (volregime.py). 0 = off. 1.3 is the wild regime: favorites priced 0.82+ lose to their underdog there. No reading = no buy
     max_vol_rel: float = 0.0  # buy only when it is at most this (a calm regime: below 0.7 favorites won 87%). 0 = off. No reading = no buy
-    skip_other_varieties: tuple[str, ...] = ()  # skip when the OTHER side (the favorite, for an underdog buy) is one of these varieties at the buy. "B" = far from the strike and flat: 2026-11-04 study of wild-regime underdogs, a far-and-flat favorite saw 1 underdog win in 42 (none on 5 of 6 days, none in the first half), the rest 30 in 157. Unreadable = no buy
-    max_cushion_z: float = 99.0  # buy only when the bet's side has a cushion of at most this many typical moves (variants snapshot z, the bet's side: negative = the side is behind the strike). -1 = the other side leads by one or more. 99 = off. Unreadable = no buy
     min_cushion_z: float = -99.0  # 2026-11-05 (user): buy only when the bet's side has a cushion of at least this many typical moves left (variants.snapshot z). -99 = off. Commodity states since 11-02 (17,900 moments): cushion under 0.5 lost -$0.4 to -$1.45 a $10 bet in both halves, 1.0-1.5 made +$0.24, 1.5+ made +$0.26 to +$0.53 (studies/results/2026-11-05-entry-state-map.txt)
-    ms_rule: tuple[str, ...] = ()  # 2026-11-05 (user): buy only when the variety at each named scale is one of the letters given: ("60m:D", "5m:F") = the 60-minute variety is D and the 5-minute variety is F (scales 1m 2m 5m 15m 60m). studies/results/2026-11-05-multiscale-varieties.txt. Unreadable = no buy
-    record_buy: bool = False  # 2026-11-07 (user: the main strategy): buy any curve state whose own recorded result pays. The state is the 5-minute and 60-minute varieties read at the buy; the record (staterecord.py) is every settled market of the trailing days at this lane's entry window and price band, rebuilt daily. Needs a record of at least record_min per dollar staked behind at least record_min_n earlier markets
-    record_min: float = 0.20  # the shrunk record, net per dollar staked after the fee, a state needs to be bought (studies/results/2026-11-07-state-record-walkforward.txt: 0.20 +3.39 per $10 ticket, 0.10 +2.01, 0.05 +0.66, 0.00 -0.67; chosen after the results)
-    record_min_n: int = 15  # earlier markets a state needs at the buy's price band
-    model_buy: bool = False  # 2026-11-07 (user: go live): buy a market side when the curve model (curvemodel.py: slope and variability of the spot's distance to the strike at 1, 2, 3, 5, 8, 13, 21, 34 and 55 minutes, fit daily on the trailing days) predicts a net per dollar in the top model_top share of its training moments and above zero. studies/results/2026-11-07-state-record-fibonacci.txt
-    model_top: float = 0.20  # the share of training moments the lane buys: 0.05, 0.10, 0.20, 0.30 or 0.50 (the walk-forward: top 5% +1.53 per $10 ticket, 10% +1.06, 20% +0.71, every moment -0.34)
-    model_category: str = ""  # 2026-11-09 (user: the model on an underdog lane): which fitted curve model this lane reads. "" is the shared one (curve_model.json); a name gives the lane's group its own model file (curve_model_<name>.json), fitted from the training moments of that group's lanes only, with its own buy bar. A lane that buys a different price range or window must have its own group: the shared bar is a quantile of the shared training moments
-    model_features: str = "fibonacci"  # 2026-11-08 (user: switch to the curvature model): which readings the curve model fits and buys on. "fibonacci": slope and variability of the cushion at 1, 2, 3, 5, 8, 13, 21, 34, 55 minutes (18 readings). "curvature": a parabola over the last 5, 13 and 34 minutes, its level, slope and curvature (9 readings). studies/results/2026-11-08-curve-simplify.txt: at the best 5% the curvature set netted +0.008 +/- 0.024 per $1 against -0.044 +/- 0.024 for the Fibonacci one (both within noise). One daily refit fits the kind the model_buy lanes ask for; until it has, a lane that wants a different kind passes
-    timing_gate: bool = False  # 2026-11-08 (user: the problem is when you buy it): sit out the moments (two-minute buckets of the 15-minute window) in which this lane's own settled bets of the last 7 days have a negative shrunk net per dollar staked over at least 8 bets (timerecord.py). Every model_buy lane logs the would-skip in shadow whether or not this is on; the live switch is the user's
-    hot_gate: bool = False  # 2026-11-08 (user: go ahead after studies/results/2026-11-08-regime-sitout.txt): sit out while 5 or more of the nine crypto indexes run at 1.5x or more of their own normal volatility (hotcheck.py). Every model_buy lane logs the would-skip in shadow (hot_shadow.jsonl) whether or not this is on; the live switch is the user's
-    min_model_edge: float = -99.0  # 2026-11-05 (user: it bought YES at 0.87 when its own model said 0.70): buy only when the model's chance the contract pays minus the ask is at least this (-0.05 = the model may sit up to 5 cents under the price). -99 = off. 697 live commodity bets since 11-02: model 5+ cents under the price won 84-85% and lost 3.8% / 1.0% of the stake (403 bets, -$60); within 5 cents or above won 89% and made +3.5% to +5.0% (294 bets, +$99)
-    trend_down_max: float = 0.0  # 2026-11-05 (user: bank on a steady market-wide downtrend): when below 0, buy only the NO side and only while the five coins' average 60-minute move (variants.broad_trend_now) is at or under this percent (-1.0 = down 1% or more). 0 = off. Unreadable = no buy
-    trend_up_min: float = 0.0  # the same for an uptrend: when above 0, buy only the YES side while that move is at or over this percent. 0 = off
-    wave_amp_min: float = 0.0  # 2026-11-05 (user: apply the wave to the underdog): buy only when the bet side's price path over the last 3 minutes ranged at least this many typical minutes (variants.wave_features amp). 0 = off. 2 = the wild underdog setting: 19.2% won, +$3.85 a $10 bet on 292 setups against 12.7% and -$0.66 under it
-    wave_pos_max: float = 1.0  # and only when the buy sits at or below this fraction of that range (0 = at the bet side's low swing). 1 = off. 0.5 = the lower half: 19.1% won against 13.4% in the upper half (studies/results/2026-11-05-swing-shape-wave.txt)
-    wave_quote: bool = False  # 2026-11-16 (user: "Yes, on paper", after studies/results/2026-11-16-entry-selection.txt): an option on the wave rule, not a new gate. The wave (amp, pos, since_low, back) is read from the market's own Kalshi quote since its open (variants.quote_wave_now: the side's mid in its own range so far), not from the spot's last 3 minutes. With it, wave_pos_max 0.8 skips a buy in the top fifth of the side's own range. A market with under three minutes of quotes has no reading: the buy goes ahead and its note says so. PAPER first, scored forward. 2026-11-16 13:55: live on crypto_multiscale (user: "Yes, go live", then "Keep it"). The week does not support it as a selector: in the 0.57 to 0.82 band a side loses about 5% at every position in its range (studies/results/2026-11-16-top-of-range-fine.txt); it is kept to buy that band less often
-    flip_skip_minutes: float = 0.0  # 2026-11-16 LIVE on crypto_multiscale (user, on DOGE 09:30 YES bought at 0.59 at the top of an 80-second spike 3.6 minutes in and stopped out at 0.36: "It bought the wrong side tho ... the history shows a likely outcome"; "this makes sense to go live now"): before this minute of the market, skip a buy of a side that has only just become the favorite: the OTHER side led (its mid over 0.50) for flip_led_share or more of the market so far (variants.quote_led_now, the market's own Kalshi quote). 0 = off. studies/results/2026-11-16-spike-side.txt: such buys won 56% at 0.596 (-8.6%, n 899) 3 to 6 minutes in and 55% at 0.598 (-10.8%, n 621) 6 to 9 minutes in; from minute 9 the flip held (+5.0%, n 805), so the rule stops there. The study took the first flip in a market; the rule reads every buy. Under 90 s of quotes = no reading: the buy goes ahead and its note says so
-    entry_led_max: float = 1.0  # 2026-11-16 PAPER (user: "ok sounds good what you suggested", the paper lane that buys the trailing side late): buy only a side that led (its mid over 0.50) for at most this share of the market so far (variants.quote_led_now, the same reading as the flip rule); 1 = off. With no reading the lane does not buy: the state it buys is not known. studies/results/2026-11-16-buy-state-table.txt (5,000 markets since 11-09, any price, held to settlement at the ask): a side that led under 20% of the market, in the second half and off its low, made +10.8% (low), +11.3% (middle), +6.3% (high); the same states lose 2 to 4% in the first half, and a side that led 80% or more loses in every position
-    wave_pos_min: float = 0.0  # with the wave rule: buy only when the side sits at or above this fraction of its range (0 = off). With wave_quote and wave_pos_max 0.8, 0.2 is "off its low and not at its high": the three positions that paid in the table above (at its low +1.9%, at its high +3.5%)
     buy_module: str = ""  # 2026-11-17 (user: "we should be able to have multiple modules. And assign a lane to a module"): the name of a module in strategies.toml ([module.<name>]: `steps`, a `label`, and any lane settings as its defaults). The lane's buy_chain is the module's steps. Empty = no module
     exit_module: str = ""  # 2026-11-18 (user: "we need a sell module which covers profit and loss"; "you mentioned it above, exit module ... do that"): the name of an exit module in strategies.toml ([exit.<name>], with a `profit` and a `loss` part); its exit settings are this lane's unless the lane writes its own (_with_exit). The name itself decides nothing
     sell_chain: tuple[str, ...] = ()  # 2026-11-18 (user: "we also need to build a sell module, since we're refactoring this flow"): the risk exit's sale as named steps in the lane's own order (sellchain.py), e.g. ["profit_take", "trail", "long_hold", "loss"]. On every risk check the steps are asked in order: a step sells, holds (nothing is sold on that check) or passes to the next. A step left out is not asked; each step still reads its own settings (curve_take, curve_risk_sell, ...). A lane on an exit module that holds `steps` takes them as its chain. Empty = the default order (never_ahead, under_even, profit_take, trail, long_hold, loss), which is what every lane did before the chain, with its sale reasons unchanged; a lane with a chain gets the chain and the step that sold at the end of its sale reason
     buy_chain: tuple[str, ...] = ()  # 2026-11-17 (user: "ladder should not be the entry point"; "the risk score makes way more sense to go FIRST"; "you need to write new code that is modular and can fit in logic in any order"): the buy as named steps in the lane's own order (buychain.py), e.g. ["risk_score", "price", "ladder"]. Both sides start alive; each step is asked of the sides still alive, a no puts a side out, and a side alive after the last step is bought. With a chain set the estimator's own screen is not run in the review (the first step puts the sides forward) and the steps replace this lane's edge rule, no-buy check, risk score rule and trend checks in the decision; the steps read those same settings. Empty = the lane decides as it always has
     entry_risk_trend: float = 0.0  # 2026-11-17 SHADOW until entry_risk_trend_live (user, on the entry trend check and its fixed 2-minute noise window: "it shouldn't even care about the entry trend by itself. its the risk factor"; "i want to build something that replaces it"; of the two risk numbers, "Exit's risk factor"): above 0, the buy reads the direction of the side's risk as the exit reads it (curverisk.risk: the worse of Kalshi's bid net of the fee and the long layer, the price counted in full) over a look back of this share of the TIME LEFT, in the market's own typical move for that span (the moves before the look back). In shadow every decision's note carries the reading, what it would do and the old price trend beside it, and nothing is gated. A first setting, not fitted. 0 = off
-    entry_risk_trend_live: bool = False  # true: the risk trend decides in place of entry_trend_z / entry_trend_min (a buy needs a risk that is holding or improving; a worsening one, an anomaly or no reading is not bought). The live switch is the user's
-    entry_crossed_view: bool = False  # 2026-11-17 SHADOW (user: "Yes, shadow it", on "no buy of a side that never crossed 50c"): the note of every decision that reaches this point carries how many times the market's own mid crossed even since its open (variants.quote_crossings_now), and "[never crossed: would not buy]" when that is 0. It gates nothing. studies/results/2026-11-17-buy-shapes.txt: crypto_multiscale's 47 such buys won 60% at 0.770 paid (-$241.63 held to settlement) against 81% at 0.750 (+$99.51) for 68 with 1 or 2 crossings; one of seven shape families looked at, so it is scored forward before it gates
-    flip_led_share: float = 0.8  # the share of the market so far the other side must have led for the buy to count as a flip (the study's 80%, stated before its run)
-    wave_turn_seconds: float = 0.0  # 2026-11-11 (user: "lets work on the buy logic first"; the trough trade they make by hand: sloping against the side, "keep watching until it starts to even out", then a resting buy): buy only when the bet side's path last stood at its low of the last 3 minutes at least this many seconds ago (variants.wave_features since_low), so a slide still running is not bought. 0 = off. A stated choice, not fitted: 60 on the underdog shadow lane, to be scored forward on its own paper round trips
-    wave_turn_back: float = 0.0  # and only when the path has come back at least this many typical minutes off that low (wave_features back). 0.25 on the shadow lane
-    wave_market_gate: bool = False  # 2026-11-11 (user: "that wave is also something the logic is supposed to be adapting to"; "Yes, build it"): with a wave rule, buy only on a coin's OWN swing. The market-wide path (the five traded coins' paths averaged, variants.market_wave_now) must be flat (under wave_amp_min typical minutes of swing) or already levelled out for the bet's side (its low at least wave_turn_seconds ago); a tide still running against the bet is not a trough. No new numbers: the same swing size and wait the wave rule already uses. Crypto series only
     spot_source: str = ""  # 2026-11-11 (user: "a new curve analysis based on kalshi's data only"): "kalshi" = this lane reads the spot for its curve readings (wave, curve edge, the curve exit's chance) from Kalshi's own prices: a coin's settlement index, else Kalshi's perp reference price for the underlying while it is ticking, the external feed only as a fallback (variants.spot_index). "" = as before (settlement index, else BiQuote). Does not reach the curve model's own features (model_buy), the hot-market gate or the hour-drift gate, which still read the older index
-    tick_buy: bool = False  # 2026-11-12 (user: "design per-tick first"; docs/per-tick-curve-design.md; tickgap.py): buy when the curve's chance minus the ask and fee (the gap) is at or above this side's own cutoff and has been for tick_buy_persist seconds. A reading outside the side's own range is an anomaly: logged, not bought. Replaces the model gate (model_buy off on such a lane)
-    tick_buy_quantile: float = 0.80  # the cutoff: this quantile of the side's own gap readings over tick_buy_hours (floored at 0). Stated before results, not tuned
-    tick_buy_hours: float = 6.0  # the window of the side's own readings the cutoffs come from, refitted hourly
-    tick_buy_persist: float = 5.0  # seconds the gap must stay at or above the cutoff
-    pretrend_min: float = -99.0  # 2026-11-06 (user: the jumpy stretch is read by the trend before it): buy only when the bet side's spot drift over the pretrend_seconds ending pretrend_gap seconds before the buy is at least this many typical minutes (the coin's own 15-minute rms move per minute, from the in-memory ticks). -99 = off. 613 live crypto bets since 10-28: trend with us +$64.62 (+2.6%, n=314), the rest -$162.52 (studies/results/2026-11-06-pretrend.txt)
-    shock_trend_hold: float = -99.0  # 2026-11-06 (user: when a market is spiky, read the hour line before the spike): the shock exit does not sell while the bet side's spot drift over the 420 s ending 90 s before now is at least this many typical minutes (the trend is with us). -99 = off. Commodity shock sales made with the trend sold $6.32 under holding (33 sales); with no trend they saved $10.22 (15)
-    stake_price_full: float = 0.0  # 2026-11-06 (user: lower prices lose more, so scale the stake with the price): at or above this ask the stake is full; below it the stake falls in a straight line to stake_price_min_factor at the lane's lowest price. 0 = off (a flat stake at every price)
-    stake_price_min_factor: float = 0.25
-    pretrend_seconds: float = 420.0
-    pretrend_gap: float = 90.0
     max_spot_crosses: int = 0  # buy only when the spot crossed the strike fewer than this many times in the last five minutes (4 = the oscillating variety G). 0 = off. Commodity states: 4+ crossings lost $0.59 a bet in both halves
-    skip_markets_auto: bool = False  # also skip a market (gold, palladium, ETH...) or a market's price band that the ledger shows losing over auto_market_hours, judged against its asset class (variants.Ledger.market_skip). Varieties pool every market of a class; the markets differ
-    auto_market_hours: float = 48.0  # the stretch a market is judged over: its quality moves slowly, so this is longer than auto_hours
-    auto_market_prior: float = 30.0  # bets of the class mean a market's record is blended with
-    auto_market_min_loss: float = 0.30  # dollars lost per $10 favorite (after the blend) before a whole market is skipped
-    auto_market_min_n: int = 20  # favorites of the market needed in the stretch before it can be skipped
-    auto_hours: float = 6.0  # the recent stretch the auto skip judges, in hours: the markets shift in 3-6 hour periods
-    auto_prior_weight: float = 15.0  # how many bets of the older record the recent stretch is blended with (higher = slower to change its mind)
-    auto_min_loss: float = 0.10  # dollars lost per $10 bet (after the blend) before a variety is skipped
-    auto_min_n: int = 5  # recent favorites of the variety needed before it can be skipped
-    choppy_floor: float = 0.0  # a choppy market: the favorites (the side with an ask in 0.78-0.92 from minute 7) of choppy_series settled in the last choppy_hours have won less often than this (regime.py). 0 = no choppy rules. While choppy the next three settings apply
-    choppy_hours: float = 12.0
-    choppy_series: tuple[str, ...] = ()  # whose favorites are counted; empty = this lane's own series. The crypto lanes count all five coins together: one coin's 2 hours alone is too few windows
-    choppy_left_max: float = 0.0  # while choppy, buy only with this many seconds left or fewer (0 = no limit)
-    choppy_price_min: float = 0.0  # while choppy, the ask has to be at least this
-    choppy_skip: bool = False  # while choppy, buy nothing. 2026-11-03 replay, five coins over 9 days: skipping choppy windows beat buying in the last 300 s at 82c+ (+$253 against +$185)
-    min_dwell_seconds: float = 0.0  # buy a side only after its price has been inside the lane's band this long (the tape's quotes). Buying the moment it crosses 70c lost 28% on 85 bets; waiting 30 s+ about 4% (0 = buy at once)
     entry_trend_seconds: float = 0.0  # buy only when the side's price (mid of the tape's bid and ask, in its own terms) has not fallen over the last this many seconds by more than entry_trend_min (0 = no check). A market that is falling when we would buy lost 16-18% over 7 days; one flat or rising lost 0-5%
     entry_trend_min: float = 0.0  # the least the side's price must have changed over entry_trend_seconds, in dollars (0.0 = not falling; 0.01 = up a cent)
     entry_spike_seconds: float = 0.0  # no buy on a spike (2026-11-02): the side's price (mid) has risen by entry_spike_rise or more over the last this many seconds, or its bid has swung by entry_spike_range or more inside them (0 = off). 242 settled live commodity bets in dollars: rise over 90 s of 30c+ -$44.5 on $149 (-30%), swing of 30c+ -$34.9 on $248, the rest +$73 on $1,289
-    entry_run_max: float = -1.0  # 2026-11-15 night (user: "I would like to see if we can do that too", the entry-phase improvement): skip a buy when the side has already run this many typical moves over the last 13 minutes (curverisk.side_slopes z13, from the Kalshi perp's own tape, in the hour's own one-minute noise); -1 = off. Buying near the top of a wave: z13 of 1.5 or more won 35% (n 26, -25.0%), studies/results/2026-11-15-rotation-at-entry.txt. Chosen after seeing the table; scored forward on paper first
-    entry_view_scales: tuple[int, ...] = ()  # 2026-11-16 (user: [0, 15, 60, 180] was meant for the ENTRY, the log ladder for the held bet's long layer): the minutes the buy's view reads its movement over, together (curverisk.multiscale_rate; 0 = the market so far). SHADOW: the chance the side pays on that view is written into the buy's note as [entry view 0.xxx] and gates nothing; it is scored forward against the bets that follow before any bar is chosen. Empty = off.
     entry_spike_view: bool = False  # 2026-11-16 SHADOW (user: "Yes, log it"): the note of every decision that reaches the buy gates carries how big the last 90 s were on the 3-hour view of the market's Kalshi perp, as [spike view z +1.2, 34 of 120 as large] (curverisk.spike_view; z signed toward the bet side). It gates nothing and is scored forward against the bets that follow. studies/results/2026-11-16-spike-failures-history.txt
-    entry_spike_min: float = -99.0  # 2026-11-16 LIVE on crypto_multiscale (user, after the top-of-range skip turned out to select nothing in the band: "we need a different rule for those"; "Go live with it"): buy only when the market's Kalshi perp has just moved toward the side: the spike view's z (curverisk.spike_view: the perp's move over the last 90 s in its own typical 90 s moves of the last 3 hours, signed toward the bet side) is at least this; -99 = off. With no reading (no perp, or under 3 hours of it in memory) the lane does not buy. studies/results/2026-11-16-band-by-spike-view.txt, 56,959 moments in the lane's band over 3,237 markets since 11-09, held to settlement, fee in, the band as a whole -5.0%: z under -0.5 about -12%; still (-0.5 to +0.5) -7.0%; +0.5 to +1.5 +1.8%; +1.5 to +3 +7.6% (1,156 markets); +3 and over +15.0% (160 markets). Not tested: whether the ask is still there in the seconds after the perp moves. Scored forward; retired if its score turns negative
-    entry_cushion_edge_min: float = -99.0  # 2026-11-16 LIVE on crypto_multiscale (user: "it should matter what kind of cushion it has ... fine to buy flat at a high prediction (> 70) and less than 3 mins left"; "needs to be based on the spot cushion and time remaining"; "the more time remaining the more cushion it needs"; "Go live with it"): a second way to buy, beside the spike rule: the chance cushionmodel makes of Kalshi's own mid and the spot's cushion (the Kalshi perp against its level at the market's open, in typical moves for the time left), less the ask and its fee, is at least this at 3 minutes left and more with more time left (cushionmodel.edge_needed: x sqrt(time left / 3 min)); -99 = off. A lane with both rules buys when either says yes; the note says which. studies/results/2026-11-16-cushion-calibration.txt, walk-forward on four held-out days: an edge of +0.03 to +0.06 made +5.0% (1,849 markets), +0.06 to +0.10 +6.0%, +0.10 and over +31.5%; under +0.03 lost 4 to 17%. The weights are refitted daily from the tape. Scored forward; retired if its score turns negative
+    model_top: float = 0.20  # the curve_model step: buy a side whose predicted net per dollar is in the top this share of the training moments (curvemodel.py) ...
+    model_category: str = ""  # ... on the model fitted for this category of lanes ("" is the shared one) ...
+    model_features: str = "fibonacci"  # ... which reads these curve readings
+    record_min: float = 0.20  # the state_record step: the state's recorded net per dollar staked (shrunk toward zero) must be at least this ...
+    record_min_n: int = 15  # ... and be read over at least this many earlier markets at the buy's price band (staterecord.py)
     risk_score_buy: float = 0.0  # 2026-11-16 PAPER (user: "all these factors need to build towards that risk score"; "I thought you were putting our new logic up as a lane"): above 0, the lane buys a side only while its risk by riskscore.py (Kalshi's price moved by the curve's readings) is at or under this now and at two looks back that scale with the time left (a thirtieth and a fifteenth of it). No price or minute band is needed beside it. 0 = off. Not shown to pay: the number equalled Kalshi's mid held out
     curve_risk_score: bool = False  # 2026-11-16 PAPER: the risk exit's chance is riskscore.py's number in place of the bid net of its fee, so the line (curve_risk_sell) and its wait act on a risk that is high and has stayed high; an unreadable score falls back to the bid
     entry_scenario_view: bool = False  # 2026-11-16 SHADOW (user: "build a structured buy scenario every 15 mins ... based on the previous hour of ... markets"; "we are building our scenario"; "Yes, build it"): every decision that reaches the buy gates notes the market's scenario (scenario.py): the target's place in the index's range over the 15, 30 and 60 minutes before the open, the drift across each, the cushion now in typical remaining moves, where the spot sits in each range now, and the last four markets' finishing margin and flips. It gates nothing: the labels are scored on the markets that follow before any becomes a rule
-    entry_rotation_min: float = -99.0  # skip a buy when the short slope has turned against the longer one: z5 - z21 (the side's 5-minute move over its 21-minute move, each in its own units) under this; -99 = off. The bottom fifth of z5 - z21 (under -0.3) won 48% (n 105, -14.7%) against 63 to 69% elsewhere. Same table, same caution
     entry_spike_rise: float = 0.30  # dollars, the rise that counts as a spike
     entry_spike_range: float = 0.30  # dollars, the bid swing that counts as a spike
-    entry_bounce_rise: float = 0.0  # no buy on a bounce (2026-11-02): the side's ask has risen by this much (dollars) over the last 30 s AND its bid had dipped by entry_bounce_dip or more from where it stood 90 s ago (0 = off). 170 settled live crypto bets in dollars: rise 10c+ with a dip 10c+ lost $39.8 on $218 (-18%), negative in both halves of the time
-    entry_bounce_dip: float = 0.10  # dollars, the dip that makes the rise a bounce
-    entry_spot_ticks: int = 0  # buy only when the UNDERLYING's last this many price changes (the spot feed in the tape: an up-and-down market's YES is up, NO is down) all moved the way the bet goes, up for YES and down for NO (0 = off). Judged by the coin, not by the contract's own quote, which trails it. No spot price in the last 30 s means no opinion
-    entry_spot_seconds: float = 0.0  # the same idea by time: the underlying's net move over the last this many seconds must be in the bet's direction (0 = off)
-    entry_trend_z: float | None = None  # the same check in the market's own units: the move over entry_trend_seconds divided by that market's typical move over the same span (the standard deviation of its changes over the previous 2 minutes) must be MORE than this (0 = the side must be gaining; negative allows a fall of that many typical moves). Replaces entry_trend_min when set; None = off
-    stop_loss_at: float = 0.0  # this lane's own stop, as a fraction under the price paid (0 = the global STOP_LOSS_DROP)
-    stop_confirm_seconds: float = 0.0  # the LONGEST the stop waits for a dipped bid to recover before selling (0 = at once); the actual wait is calculated from the time left — strategy.stop_wait, fitted in scripts/stop_wait_study.py
-    stop_guard: bool = False  # True = the model's opinion may hold the stop back; the default is a hard stop that exits whatever the model thinks it is worth
-    settlement_guard: float = 0.0  # OFF: 377 live sales, 88% would have won, -8.3c vs holding. Same job as the burst exit, worse signal. The watcher still has the code; 0.10 would turn it back on
-    burst_exit: bool = False  # watch held 15-minute bets for a volume burst against the holder in the last 120 s and SELL the favorite (watcher.py: that is the peak-crash exit); also log the other side as a paper bet in burst_flip. A silent book cannot 5x itself (BURST_MIN_NORMAL)
-    burst_ratio: float = 0.0  # the burst EXIT as a multiple of the market's own normal: sell when the dollars bought against the holder in 3 s are at least this many times this market's normal 3 s (the median second of the 120 s before, both sides, times 3). A bar that grows in a busy market and shrinks in a quiet one. 0 = off (burst_dollars, the flat bar, applies). When set it replaces burst_dollars
-    burst_min_dollars: float = 50.0  # ...and at least this many dollars, so a dead market's ordinary print is not a crash
-    burst_dollars: float = 0.0  # the burst EXIT of a lane with burst_exit, in dollars: sell the held 90c+ favorite in the last 120 s when at least this many dollars are bought against it in 3 s (0 = the older multiple-of-normal rule). Per family from burst_exit_study: crypto 400, currencies 50, metals/energy 400
-    burst_dollars_btc: float = 0.0  # the same for BTC: a bar of its own, or -1 to keep the older rule (it beat holding by 5.3c on BTC; the dollar bar did not)
-    burst_favorite: float = 0.90  # the burst EXIT of a lane with burst_exit and burst_dollars exits the held side only while its bid is at least this (a favorite)
-    drop_cents: float = 0.0  # a held favorite whose bid falls this many dollars within drop_seconds, in the burst window, is SOLD whatever the taker flow (0 = off). A book that thins gives a fall with almost no taker dollars, which the burst exit cannot see (KXCOPPER15M-26OCT301000: 0.85 -> 0.55 in four seconds, then 0). scripts/drop_exit_study.py: 0.25 in 3 s sold better than holding by about 10c a contract; 0.10-0.15 did not beat holding
-    bounce_fall: float = 0.0  # sell into the first bounce (0 = off): once the held bid has fallen this far under the price paid and then bounces bounce_up off its low, sell, any time up to burst_min_left before the close (scripts/exit_tradeoff.py: ~half the losing dollars cut at about zero net cost, at the price of selling most positions)
-    bounce_up: float = 0.04  # ...how far the bid must bounce off its low for the sale
-    drop_seconds: float = 3.0  # ...measured against the highest bid of the last this many seconds
-    drop_was: float = 0.76  # ...and only when the bid had been at least this in the last 60 s, so it is a favorite that is falling and not a long shot sliding
-    drop_confirm: float = 0.0  # a fall only ARMS the exit; it exits when the bid is still drop_stay under the fall's high this many seconds later (0 = sell at once). A spike bounces back inside seconds, a flip does not (scripts/drop_flip_vs_spike_study.py: waiting 4-6 s lifted selling over holding from about 0 to +0.05 a contract on both halves of the data)
-    drop_stay: float = 0.0  # ...how far under the high the bid must still be at the check (0 = drop_cents)
-    drop_window: float = 120.0  # the exit watches the last this many seconds before the close (burst_min_left is the other end). Falls before the last three minutes did not pay in the replay
-    burst_share: float = 0.0  # the burst exit also needs this share of the last 3 s of dollars to have been bought AGAINST the held side (0 = the dollar bar alone). A burst where the held side is being bought as hard is two-way trading or a pump of the side we hold, not a crash (scripts/burst_floor_study.py)
-    burst_spot_edge: float = 0.0  # a burst exits only when spot's own chance that the held side pays is NOT more than this many points over what the sale gets (the bid less its fee); over that the dip is a wick in the price and it holds (0 = off, order flow alone decides). commodity: a one-second spike in the reference price crashed a 0.96 bid to 0.43 and sold a bet that went on to win
-    burst_window: float = 120.0  # ...in the last this many seconds. Past that, holding still paid (burst_flip record: last 120 s sold +6 to +8c vs holding -5 to -8c; at 2-5 min holding was still ahead)
-    burst_min_left: float = 10.0  # ...and not in the last this many (a sale sent later lands after the close)
-    stop_from_seconds: float = 0.0  # the stop-loss acts only once this many seconds remain before the close (0 = whenever the hour rule allows). Replay of 6,299 favorites bets: holding through early dips until 3 minutes left helped commodity +1.2 and fx +1.1 points per dollar (within the error), cost crypto 1.1
-    stop_loss: bool = True  # False = no stop-loss for this lane (a $1 ticket's loss is already capped; its spread alone can look like a 30% drop)
-    take_profit_x: float = 0.0  # sell when the bid reaches this multiple of the price paid (0 = off); watched live on the socket
-    take_profit_at: float = 0.0  # sell when the bid reaches this price (0 = off)
-    cash_before_minute: float = 0.0  # a 15-minute buy opened before this minute of the window is cashed out early (0 = off; strategy.early_cash)
-    cash_leave_minute: float = 9.0  # that buy is sold once the window reaches this minute, while the bid is still above the price paid
-    cash_up_minute: float = 0.0  # once the window reaches this minute, sell if the bid is above the price paid (0 = off; strategy.cash_if_up)
-    cash_drop: float = 0.0  # ...and sell when the bid is this fraction under the price paid (0.30 = down 30%). 0 = off. A smaller dip is left to the other exit
-    cash_left_seconds: float = 0.0  # with this many seconds left, sell a hover that is still under the price paid (0 = off; strategy.cash_if_losing). A bid still above the price paid is held
-    cash_at: float = 0.95  # or sooner, the moment the bid prints this
-    cash_out_at: float = 0.0  # sell the moment the bid is at or under this price (0 = off): a cash-out line in dollars, so a bet that has collapsed returns what is left of it. Not a fraction of the price paid
-    strike_through_sale: float = 0.0  # percent of the strike (0.003 = 0.003%). A cross this far through starts a watch: a return to the winning side is held to the close, a stay of 45s through exits at any time, and in the last strike_through_seconds a turn back down or a pause of half that window also exits. 0 = off
-    strike_through_seconds: float = 60.0  # the faster bounce sale only looks this close to the close. A 45s stay through exits with more time left. 0 = off
-    cross_take: float = 0.0  # 2026-11-05 (user): sell a gain once the bid is this many dollars over the price paid AND the index has crossed the strike cross_min times in this window; hold it otherwise (0 = off). 121 crypto gains the user sold early: with no crossing holding paid +7.3c a contract more, with 1-2 crossings selling paid +8.2c more
-    cross_min: int = 1  # crossings of the strike the cross_take sale needs
-    strike_through_rearm: bool = False  # after the index comes back to the winning side the watch starts over (a second cross gets its own stay clock) instead of holding the bet to the close. 2026-11-02 replay on the 5 Hz index, 200 live crypto_favorite bets: +$100.9 re-arming against +$84.3 holding after a return
-    watch_at: float = 0.0  # a favorite is watched once the bid prints this (0 = off; the moonshot lanes leave it off). A downtrend that stays there is sold after watch_ride_seconds, scaled by the time left (strategy.watch_trend). A hover or a spike is held
-    watch_patient_left: float = 420.0  # watch_ride_seconds is the wait when at least this many seconds remain; less time left shortens the wait in proportion
-    watch_ride_seconds: float = 0.0  # how long a visit under watch_at may last, at watch_patient_left, before a downtrend is abandoned (0 = a downtrend exits as soon as the last 3 seconds say so)
-    watch_loss: float = 0.0  # hard stop: sell when the bid has lost this fraction of the price paid (0.75 keeps about a quarter). 0 = off. Checked the whole 15-minute window, ahead of the 45% line
-    stop_cross_gap: float = 0.0  # a Polymarket lane: do not sell on a Polymarket bid that is more than this many dollars under the Kalshi bid for the same side and market (0 = off). Polymarket prints a bid of exactly 0.15 on markets Kalshi has at 0.75: the stops sold healthy bets into it
-    watch_loss_seconds: float = 3.0  # once that line prints, this many seconds before a sale. A print back above the line restarts it
-    watch_loss_lift: float = 0.0  # a bounce this far off the low of that visit is held (0 = any price still under the line can sell once the seconds have passed)
-    scalp_at: float = 0.0  # once the bid prints this price, follow the high (0 = off). A climb keeps riding (strategy.scalp_hit)
-    scalp_up: float = 0.0  # or once the bid is this far above the price paid (0 = off). Whichever arm is set and reached first
-    scalp_dip: float = 0.03  # sell when the bid is this far under that high...
-    scalp_dip_hard: float = 0.0  # a fall this far under the high exits at once, without waiting scalp_dip_seconds: in a sharp reversal the bid keeps falling while the wait runs (0 = off). 6c was best in scripts/scalp_dip_study.py
-    scalp_dip_seconds: float = 3.0  # ...and has stayed that far under it for this many seconds (0 = on the first print). A dip that recovers sooner is noise, not a reversal
-    scalp_plateau_seconds: float = 0.0  # once armed, sell when the bid has made no new high for this many seconds (a plateau) and is still at or over the arm (0 = off)
-    rest_sell: bool = False  # rest the take-profit sell on the book from the moment a live buy fills (post-only, so no taker fee) instead of having the watcher cross the book when the bid gets there; needs take_profit_x or take_profit_at. A stop or crash exit cancels it first and exits what is left
-    trail_activate: float = 0.0  # peak-crash exit, when trail_progress is 0: once the bid has been this fraction above the price paid (0.10 = up 10%) ...
-    trail_progress: float | None = None  # arm the crash exit once the bid has covered this share of the way from the price paid to $1.00; None = the global CRASH_PROGRESS, 0 = use trail_activate (a gain on the price paid) instead
-    trail_spot_sigma: float | None = None  # the crash exit waits while spot is still this many sigma on the winning side of the strike; None = the global CRASH_SPOT_SIGMA, 0 = off
-    trail_giveback: float | None = None  # the crash exit exits once this share of the gain (peak over price paid) is gone; None = the global CRASH_GIVEBACK, 0 = the fixed trail_drop instead
-    trail_drop: float = 0.0  # ... sell when it falls this many dollars from its peak (0 = off; watched live on the socket only)
-    trail_fast_drop: float = 0.0  # ... but sell at once, with no wait, when the bid is this far (dollars) below the peak: a gap down is not noise (0 = off)
-    trail_confirm_seconds: float = 10.0  # ... and has stayed that far down this long (a dip of a second or two is noise)
-    trail_hold_seconds: float = 3.0  # a bid counts toward the peak only once it has held this long (one thin-book tick is not a peak)
-    spike_cents: float = 0.0  # sell, while in profit, when the bid has risen this much (dollars) within spike_seconds (0 = off)
-    spike_seconds: float = 30.0
-    spike_min_gain: float = 0.10  # a spike exits only when the bid is also this fraction above the price paid (0.10 = up 10%)
     min_return: float = 0.0  # a win must pay at least this much on the stake, after the fee
     max_bet_pct: float = 0.02  # one bet, share of equity (see sizing.py)
     max_exposure_pct: float = 0.25  # all open bets in the lane, share of equity
@@ -337,16 +134,6 @@ class LaneSpec:
     scope_minutes: float | None = None  # with review_minutes: slow pass that builds the watchlist
     review_minutes: float | None = None  # fast pass over the watchlist; None = the main scan only
     cooldown_minutes: float = 0.0  # skip a market decided on this recently
-    entry_approach: float = 0.0  # arm a side when its price is within this many dollars UNDER the lane's floor and gaining (entrywatch.py). The watch then rests a buy AT the floor; it is not a take of the ask (0 = off)
-    entry_arm_seconds: float = 30.0  # the resting floor bid is canceled after this many seconds if it has not filled. An arm that never got its bid out is dropped then too, and may be armed again
-    entry_move: float = 0.0  # a socket move trigger: when YES moves this many dollars within entry_move_seconds either way, rest a buy on the side that FELL (a YES fall buys YES, a YES rise buys NO). Needs entry_socket; the taker path is off for the lane (0 = off)
-    entry_move_seconds: float = 3.0  # the span the move is measured over
-    entry_move_below: float = 0.02  # the move buy rests this far under the fallen side's ask (post-only, no taker fee if it fills) for entry_arm_seconds
-    late_steps: int = 0  # a late-window trend lane (entrywatch.py): the settlement index over minutes 9-12 is sampled in this many equal steps (odd, so no split vote); 0 = off
-    late_agree: int = 0  # steps that must agree for a trend (0 = a bare majority). Fewer than this is "mixed": the lane passes
-    late_min_z: float = 0.8  # the index's distance from the strike, in units of the coin's usual move over the time left (sigma over minutes 9-12 times the square root of seconds left), on the trend's side
-    late_from_minute: float = 12.0  # the buy is the first time in this part of the window that the index sets a new high of the whole window (up trend, above the strike) or a new low (down trend, below it)
-    late_to_minute: float = 14.0
     buy_max_move: float = 0.0  # skip a buy when the order book's ask on the side has FALLEN more than this many dollars under the ask the decision was made at (0 = off). A job can wait many seconds behind the shared request budget between deciding and ordering; a Gold NO decided at 0.86 was bought at 0.24 eight seconds before the close, after the side had collapsed
     buy_retries: int = 0  # when an immediate buy fills nothing, read the book again and send it once more, up to this many times, right away (0 = no retry). The next signal on the market comes a median 108 s later and about 3.7c dearer
     buy_retry_chase: float = 0.0  # how many dollars over the first limit a retry may pay (0 = never above it). The lane's price band and the risk gate still apply
@@ -360,7 +147,6 @@ class LaneSpec:
     timed_suffix: str = ""  # series ending in this are fixed-length windows with an entry window
     timed_minutes: float = 15.0  # length of such a window
     entry_elapsed: tuple[float, float] = (0.0, 1e9)  # bet only this many minutes after it opens
-    price_skip: tuple[float, float] = (0.0, 0.0)  # 2026-11-16 STOPGAP (user: "a hard stop on buying from 42-58 while we figure out a better solution"; on the flat result of the middle: "i know they are break even, but that's useless"): a hole in the price band. The lane does not buy a side whose ask is inside this range, rests no bid inside it and lets no order fill inside it (no_buy; runner.evaluate, place, _resting_price, _requote_why, _place_floor_bid). (0, 0) = off. A fixed range, the user's own numbers, not a reading of the curve: it stands until a rule in the market's own units replaces it. Live buys since 11-09 at 0.42 to 0.58: crypto 91 bets +$0.90 on $577, commodity 24 bets +$0.53 (a query in chat, no results file)
     blackout_et: tuple[str, ...] = ()  # no new entries inside these New York clock windows, each "HH:MM-HH:MM" (a window may cross midnight), or "SERIES@HH:MM-HH:MM" to bar just that series (e.g. "KXNATGAS15M@17:00-18:00", the CME daily break on a thin feed). Open bets are still managed and sold
     shadow_suffix: str = ""  # series ending in this are only measured (see shadow.py), never bet
     enabled: bool = True
@@ -409,10 +195,6 @@ def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
 
 
 def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
-    if "settlement_flip" in row:  # the burst exit's old name
-        if "burst_exit" in row:
-            raise ValueError(f"lane {name!r}: set burst_exit or its old name settlement_flip, not both")
-        row = {("burst_exit" if k == "settlement_flip" else k): v for k, v in row.items()}
     if "always" in row:  # the old name of needs_model_edge, with the opposite sense
         if "needs_model_edge" in row:
             raise ValueError(f"lane {name!r}: set needs_model_edge or its old name always, not both")
@@ -422,10 +204,10 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     if unknown:
         raise ValueError(f"lane {name!r}: unknown field(s) {sorted(unknown)}")
     row = dict(row)
-    for key in ("price", "hours", "entry_elapsed", "value_exit_bid", "price_skip"):
+    for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "blackout_et", "choppy_series", "same_side_lanes", "wrong_side_varieties", "wrong_side_series", "skip_varieties", "skip_other_varieties", "shock_off_series", "ms_rule", "buy_chain", "sell_chain"):
+    for key in ("series", "sides", "blackout_et", "skip_varieties", "buy_chain", "sell_chain"):
         if key in row:
             row[key] = tuple(row[key])
     bad = [x for x in row.get("buy_chain", ()) if x not in BUY_STEPS]
@@ -450,7 +232,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "state_record", "curve_model", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
 
 
 def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:
@@ -494,8 +276,8 @@ def _with_module(row: dict[str, Any], name: str, modules: dict[str, Any]) -> dic
 
 
 EXIT_PARTS = ("profit", "loss")
-_EXIT_PREFIXES = ("curve_", "value_exit", "cross_", "stop_", "take_profit", "trail_", "crossings_seconds")  # the lane settings that are about selling
-_PROFIT_PREFIXES = ("curve_take", "take_profit", "trail_", "value_exit", "cross_take", "cross_min")  # the ones that sell a gain
+_EXIT_PREFIXES = ("curve_",)  # the lane settings that are about selling
+_PROFIT_PREFIXES = ("curve_take",)  # the ones that sell a gain
 _PROFIT_FIELDS = ("curve_risk_min_profit",)  # the least gain the risk exit's profit take exits
 
 
@@ -519,7 +301,7 @@ def _with_exit(row: dict[str, Any], name: str, exits: dict[str, Any]) -> dict[st
         [exit.risk_exit.loss]
         curve_risk_sell = 0.10           # the settings that sell a loss, or hold one
 
-    A module may also hold `steps` at the top: the sale's steps in the order they are asked (sellchain.py), which become the lane's sell_chain; a lane on such a module does not also write sell_chain. Without `steps` the lane is on the default order.
+    A module holds `steps` at the top: the sale's steps in the order they are asked (sellchain.py), which become the lane's sell_chain; a lane on a module does not also write sell_chain.
 
     Every setting the module writes is the lane's unless the lane writes its own. A module must have both parts (either may be empty: the part is then the defaults), holds exit settings only, each in the part it belongs to (exit_part), and writes none twice. Many lanes may name one module; a lane names at most one."""
     module = row.get("exit_module")
@@ -529,13 +311,12 @@ def _with_exit(row: dict[str, Any], name: str, exits: dict[str, Any]) -> dict[st
         raise ValueError(f"lane {name!r}: exit_module = {module!r}, which is not an exit module in strategies.toml (it has: {', '.join(sorted(exits)) or 'none'})")
     mod = dict(exits[module])
     mod.pop("label", None)
-    steps = mod.pop("steps", None)  # the sale's steps in the module's order (sellchain.py); a module without them leaves the lane on the default order
-    if steps is not None:
-        if "sell_chain" in row:
-            raise ValueError(f"lane {name!r}: it names exit_module {module!r}, which has `steps`, and writes sell_chain too; the module's steps are the chain")
-        if not steps:
-            raise ValueError(f"exit module {module!r}: `steps` is empty; leave the line out for the default order, or name the steps (of {', '.join(sellchain.SELL_STEPS)})")
-        sellchain.check(steps, f"exit module {module!r}")
+    steps = mod.pop("steps", None)  # the sale's steps in the module's order (sellchain.py)
+    if not steps:
+        raise ValueError(f"exit module {module!r}: it needs `steps`, the sale's steps in order (of {', '.join(sellchain.SELL_STEPS)})")
+    if "sell_chain" in row:
+        raise ValueError(f"lane {name!r}: it names exit_module {module!r}, which has `steps`, and writes sell_chain too; the module's steps are the chain")
+    sellchain.check(steps, f"exit module {module!r}")
     flat: dict[str, Any] = {}
     for part in EXIT_PARTS:
         got = mod.pop(part, None)
@@ -554,7 +335,7 @@ def _with_exit(row: dict[str, Any], name: str, exits: dict[str, Any]) -> dict[st
         if k in flat:
             raise ValueError(f"exit module {module!r}: {k!r} is written twice (at the top and in a part)")
         flat[k] = v
-    return {**flat, **row, "sell_chain": list(steps)} if steps is not None else {**flat, **row}
+    return {**flat, **row, "sell_chain": list(steps)}
 
 
 def lane_specs_from(s: Settings, strategies_toml: str | None, overrides_json: str | None = None) -> dict[str, LaneSpec]:
@@ -571,8 +352,6 @@ def lane_specs_from(s: Settings, strategies_toml: str | None, overrides_json: st
                 f"lane {spec.name!r}: review_minutes needs `series` or `needs_instrument`, "
                 "because a fast pass can only fetch what it can name"
             )
-        if spec.late_steps and (spec.late_steps < 3 or spec.late_steps % 2 == 0 or spec.late_agree > spec.late_steps or not tiered(spec)):
-            raise ValueError(f"lane {spec.name!r}: late_steps must be an odd number of 3 or more, late_agree at most that, on a two-level lane (review_minutes)")
     if not s.paper_lanes and s.live_lanes is not None:
         # The live host runs only what is live. A switched-off lane keeps its spec, so a bet it left open is still stopped and sold.
         lanes = {name: spec if name in s.live_lanes or name in s.paper_named else replace(spec, enabled=False) for name, spec in lanes.items()}
@@ -669,188 +448,24 @@ def spec_for(s: Settings, name: str) -> LaneSpec:
     return lanes[name]
 
 
-def no_buy(spec: LaneSpec | None, price: float | None) -> bool:
-    """True when `price` is inside the lane's no-buy range (lane field price_skip), both ends included."""
-    if spec is None or price is None:
-        return False
-    lo, hi = getattr(spec, "price_skip", (0.0, 0.0))  # a stand-in spec without the field has no range
-    return hi > 0 and lo - 1e-9 <= price <= hi + 1e-9
-
-
-def stop_drop_for(spec: LaneSpec | None, s: Any) -> float:
-    """How far under the price paid this lane's stop sits."""
-    return spec.stop_loss_at if spec is not None and spec.stop_loss_at else s.stop_loss_drop
-
-
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
-    "buy_rest_top_up", "buy_redecide_shadow", "stake_vol_shadow", "min_edge_room", "record_adjust", "curve_shadow", "confidence_shadow", "accumulate_shadow", "paper_fill_model", "buy_slip", "entry_move", "entry_move_seconds", "entry_move_below", "cash_out_at", "late_steps", "late_agree", "late_min_z", "late_from_minute", "late_to_minute", "scalp_plateau_seconds", "buy_max_move", "buy_retries", "buy_retry_chase", "buy_rest_then_take",
-    "exit_module", "risk_score_buy", "curve_risk_score", "curve_take_sure_slide",
-    "blackout_et", "max_same_side", "same_side_lanes", "shock_bp", "shock_source", "shock_units", "shock_margin_units", "cross_units", "shock_bid_max", "shock_seconds", "shock_margin_bp", "shock_last", "value_exit", "value_exit_bid", "value_exit_gain_x", "value_exit_high", "value_exit_high_left", "value_exit_min_gain", "entry_checks_exit", "rebuy_opposite_after_gain_seconds", "shock_memory", "shock_persist", "hour_drift_q", "buy_curve_edge_min", "buy_flat_trend_pct", "buy_flat_trend_share", "nudge_hour_factor", "nudge_units", "curve_risk_long_scales", "curve_risk_line_live", "buy_chain", "buy_module", "sell_chain", "curve_risk_early_hold", "entry_run_max", "entry_rotation_min", "entry_view_scales", "entry_spike_view", "entry_crossed_view", "entry_risk_trend", "entry_risk_trend_live", "entry_spike_min", "entry_cushion_edge_min", "entry_scenario_view", "curve_take_sure", "curve_take_sure_late", "curve_take_early_bid", "curve_risk_drop", "curve_risk_drop_share", "curve_risk_never_ahead", "curve_risk_under_even", "curve_risk_under_even_live", "curve_risk_late_tight", "curve_risk_late_tight_share", "curve_risk_late_tight_live", "curve_take_trail", "curve_take_trail_live", "price_skip", "curve_take_early_seconds", "buy_rest_queue_note", "buy_rest_queue_max", "buy_rest_queue_quantile", "buy_rest_queue_hours", "perp_lead_buy", "curve_exit", "curve_exit_scales", "curve_exit_persist", "curve_exit_last", "curve_exit_near", "curve_drop_units", "curve_drop_seconds", "curve_drop_margin_units", "curve_drop_persist", "curve_rest", "curve_gap", "curve_gap_persist", "curve_risk_sell", "curve_risk_live", "curve_risk_spot_weight", "curve_risk_history", "curve_risk_max_loss", "curve_risk_min_profit", "curve_risk_stop_hold", "curve_take", "curve_take_slope_share", "curve_take_cushion", "stretch_max", "squeeze_max", "curve_risk_confirm", "curve_behind_last", "curve_behind_chance", "late_drop_units", "late_drop_seconds", "shock_off_series", "shock_log_only", "wrong_side_bp", "wrong_side_seconds", "wrong_side_varieties", "wrong_side_last", "wrong_side_series", "skip_varieties", "choppy_floor", "choppy_hours", "choppy_series", "choppy_left_max", "choppy_price_min", "choppy_skip", "bounce_fall", "bounce_up", "burst_buy_pct", "burst_ratio", "burst_min_dollars", "drop_cents", "drop_seconds", "drop_was", "drop_confirm", "drop_stay", "drop_window", "drop_buy", "drop_buy_max", "hunt_contracts", "hunt_contracts_by", "hunt_sell_over", "hunt_buy_under", "strike_through_sale", "strike_through_seconds", "cross_take", "cross_min", "wave_amp_min", "wave_pos_max", "wave_quote", "flip_skip_minutes", "flip_led_share", "entry_led_max", "wave_pos_min", "wave_turn_seconds", "wave_turn_back", "wave_market_gate", "curve_wait_share", "curve_wait_severe", "curve_wait_default", "curve_drop_comeback", "curve_drop_comeback_min", "curve_drop_comeback_hold", "spot_source", "pretrend_min", "pretrend_seconds", "pretrend_gap", "shock_trend_hold", "stake_price_full", "stake_price_min_factor",  # reported by settings_of only when a lane sets one, so a lane without a blackout keeps the version it had
+    "buy_redecide_shadow", "stake_vol_shadow", "record_adjust", "paper_fill_model", "buy_slip", "buy_max_move", "buy_retries", "buy_retry_chase",
+    "buy_module", "exit_module", "entry_spike_view", "entry_scenario_view",
 })
 
 
-# The record gate, the nearest-neighbour gate, the learned grid and the stake scaling were removed on 2026-11-14 (no lane set any of them). Their fourteen settings were part of every lane's fingerprint at these defaults; they stay in it as constants so the removal does not change a version.
-_RETIRED_SETTINGS = {
-    "gate_by": "'band'", "gate_from": "()", "gate_min_n": "30", "gate_pool": "30.0", "gate_z": "1.0",
-    "grid": "False", "grid_min_n": "30", "grid_rule": "'trail'", "grid_z": "3.0",
-    "knn": "False", "knn_k": "300", "knn_min_n": "25.0", "knn_rule": "'trail'", "knn_z": "3.0",
-    "stop_model": "False",
-}
-
-
 def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
-    """Everything that decides what this lane buys, how much, and how it gets out, including the global rules that reach it."""
+    """Everything that decides what this lane buys, how much, and how it gets out, including the global rules that reach it (2026-11-19: rebuilt when the rules outside the buy and sell modules were removed, so every lane has a new version from that day)."""
     out = {f.name: repr(getattr(spec, f.name)) for f in fields(spec) if f.name not in _NOT_LOGIC}
-    out["settlement_flip"] = out.pop("burst_exit")  # the old name, so no lane's version changes with the rename
-    out["always"] = repr(not spec.needs_model_edge)  # the old name and sense of needs_model_edge, for the same reason
-    out.pop("needs_model_edge")
-    out.update(_RETIRED_SETTINGS)  # settings of rules that no longer exist, at the value every lane carried, so removing dead code is not a new version of every lane
-    out["effective_stop"] = repr(stop_drop_for(spec, s) if spec.stop_loss else None)
-    out["crash_spot_sigma"] = repr(spec.trail_spot_sigma if spec.trail_spot_sigma is not None else s.crash_spot_sigma)
-    out["crash_giveback"] = repr(spec.trail_giveback if spec.trail_giveback is not None else s.crash_giveback)
-    progress = spec.trail_progress if spec.trail_progress is not None else s.crash_progress
-    out["crash_progress"] = repr(progress)
-    if spec.trail_drop > 0 and progress > 0:
-        out["trail_activate"] = repr(0.1)  # arming follows the progress rule, so a declared trail_activate is unused; held at the value every lane carried so existing versions stay continuous
-    out["stops_on_15m"] = repr(s.stop_loss_fast)
     out["kelly_fraction"] = repr(None if spec.fixed_stake else s.kelly_fraction)
-    if spec.blackout_et:
-        out["blackout_et"] = repr(spec.blackout_et)
-    if spec.max_same_side:
-        out["max_same_side"] = repr(spec.max_same_side)
-        if spec.same_side_lanes:
-            out["same_side_lanes"] = repr(spec.same_side_lanes)
-    if spec.shock_bp and not spec.shock_log_only:
-        out["shock_bp"], out["shock_seconds"], out["shock_margin_bp"], out["shock_last"] = repr(spec.shock_bp), repr(spec.shock_seconds), repr(spec.shock_margin_bp), repr(spec.shock_last)
-        if spec.shock_memory:
-            out["shock_memory"] = repr(spec.shock_memory)
-    if spec.shock_off_series:
-        out["shock_off_series"] = repr(spec.shock_off_series)
-    if spec.skip_varieties:
-        out["skip_varieties"] = repr(spec.skip_varieties)
-    if spec.wrong_side_bp:
-        out["wrong_side_bp"], out["wrong_side_seconds"], out["wrong_side_varieties"] = repr(spec.wrong_side_bp), repr(spec.wrong_side_seconds), repr(spec.wrong_side_varieties)
-    if spec.choppy_floor:
-        out["choppy_floor"], out["choppy_hours"], out["choppy_series"] = repr(spec.choppy_floor), repr(spec.choppy_hours), repr(spec.choppy_series)
-        out["choppy_left_max"], out["choppy_price_min"], out["choppy_skip"] = repr(spec.choppy_left_max), repr(spec.choppy_price_min), repr(spec.choppy_skip)
-    if spec.drop_cents:
-        out["drop_cents"], out["drop_seconds"], out["drop_was"] = repr(spec.drop_cents), repr(spec.drop_seconds), repr(spec.drop_was)
-        if spec.drop_confirm or spec.drop_stay or spec.drop_window != 120.0:
-            out["drop_confirm"], out["drop_stay"], out["drop_window"] = repr(spec.drop_confirm), repr(spec.drop_stay), repr(spec.drop_window)
-    if spec.entry_move:
-        out["entry_move"], out["entry_move_seconds"], out["entry_move_below"] = repr(spec.entry_move), repr(spec.entry_move_seconds), repr(spec.entry_move_below)
-    if spec.cash_out_at:
-        out["cash_out_at"] = repr(spec.cash_out_at)
-    if spec.late_steps:
-        out["late_steps"], out["late_agree"], out["late_min_z"] = repr(spec.late_steps), repr(spec.late_agree), repr(spec.late_min_z)
-        out["late_from_minute"], out["late_to_minute"] = repr(spec.late_from_minute), repr(spec.late_to_minute)
-    if spec.scalp_plateau_seconds:
-        out["scalp_plateau_seconds"] = repr(spec.scalp_plateau_seconds)
-    if spec.bounce_fall:
-        out["bounce_fall"], out["bounce_up"] = repr(spec.bounce_fall), repr(spec.bounce_up)
-    if spec.burst_ratio:
-        out["burst_ratio"] = repr(spec.burst_ratio)
-        out["burst_min_dollars"] = repr(spec.burst_min_dollars)
-    if not spec.record_adjust:  # reported only when off, so every other lane keeps the version it had
-        out["record_adjust"] = "False"
-    if spec.min_edge_room is not None:  # reported only when set, so a lane without it keeps the version it had
-        out["min_edge_room"] = repr(spec.min_edge_room)
-    if spec.curve_risk_sell > 0 and spec.curve_risk_live:  # shadow changes nothing the lane does, so only a live risk exit changes its version
-        out["curve_risk_sell"], out["curve_risk_spot_weight"], out["curve_risk_history"] = repr(spec.curve_risk_sell), repr(spec.curve_risk_spot_weight), repr(spec.curve_risk_history)
-        out["curve_risk_max_loss"], out["curve_risk_min_profit"] = repr(spec.curve_risk_max_loss), repr(spec.curve_risk_min_profit)
-        out["curve_risk_confirm"] = repr(spec.curve_risk_confirm)
-        if spec.curve_take:  # reported only when set, so a lane without it keeps the version it had
-            out["curve_take"] = "True"
-            out["curve_take_slope_share"] = repr(spec.curve_take_slope_share)
-        if spec.curve_take_cushion:  # reported only when set, so a lane without it keeps the version it had
-            out["curve_take_cushion"] = "True"
-        if spec.curve_risk_stop_hold > 0:  # reported only when set, so a lane without it keeps the version it had
-            out["curve_risk_stop_hold"] = repr(spec.curve_risk_stop_hold)
-    if spec.squeeze_max > 0:  # reported only when set, so a lane without it keeps the version it had
-        out["squeeze_max"] = repr(spec.squeeze_max)
-    if spec.nudge_units > 0:  # reported only when set, so a lane without it keeps the version it had
-        out["nudge_units"] = repr(spec.nudge_units)
-    if spec.curve_risk_long_scales:
-        out["curve_risk_long_scales"] = repr(spec.curve_risk_long_scales)
-    if spec.curve_take_sure > 0:
-        out["curve_take_sure"] = repr(spec.curve_take_sure)
-    if spec.price_skip[1] > 0:  # reported only when set, so a lane without it keeps the version it had
-        out["price_skip"] = repr(spec.price_skip)
-    if spec.buy_chain:  # reported only when set, so a lane without a chain keeps the version it had
-        out["buy_chain"] = repr(spec.buy_chain)
     chain = tuple(x for x in spec.sell_chain if not (x == "late_tight" and not (spec.curve_risk_late_tight > 0 and spec.curve_risk_late_tight_live)))  # late_tight in shadow changes nothing the lane does, so it is not part of the version
-    if chain:  # reported only when set, so a lane without a sell chain keeps the version it had
-        out["sell_chain"] = repr(chain)
-    if not spec.curve_risk_line_live:  # reported only when the line sale is off, so every other lane keeps the version it had
-        out["curve_risk_line_live"] = "False"
-    if spec.curve_risk_under_even > 0 and spec.curve_risk_under_even_live:  # in shadow it changes nothing the lane does
-        out["curve_risk_under_even"] = repr(spec.curve_risk_under_even)
-    if spec.curve_risk_late_tight > 0 and spec.curve_risk_late_tight_live:  # in shadow it changes nothing the lane does
-        out["curve_risk_late_tight"] = repr(spec.curve_risk_late_tight)
-        out["curve_risk_late_tight_share"] = repr(spec.curve_risk_late_tight_share)
-    if spec.curve_risk_never_ahead > 0:  # reported only when set, so a lane without it keeps the version it had
-        out["curve_risk_never_ahead"] = repr(spec.curve_risk_never_ahead)
-    if spec.curve_take_trail > 0:  # reported only when set, so a lane without it keeps the version it had
-        out["curve_take_trail"] = repr(spec.curve_take_trail)
-        out["curve_take_trail_live"] = repr(spec.curve_take_trail_live)
-        if spec.curve_take_trail_timed:
-            out["curve_take_trail_timed"] = "True"
-    if spec.curve_take_sure_late > 0:
-        out["curve_take_sure_late"] = repr(spec.curve_take_sure_late)
-    if spec.buy_rest_queue_note:
-        out["buy_rest_queue_note"] = "True"
-    if spec.buy_rest_queue_max > 0:
-        out["buy_rest_queue_max"] = repr(spec.buy_rest_queue_max)
-    if spec.buy_rest_queue_quantile > 0:
-        out["buy_rest_queue_quantile"] = repr(spec.buy_rest_queue_quantile)
-    if spec.curve_take_early_bid > 0:
-        out["curve_take_early_bid"] = repr(spec.curve_take_early_bid)
-        out["curve_take_early_seconds"] = repr(spec.curve_take_early_seconds)
-    if spec.entry_risk_trend > 0 and spec.entry_risk_trend_live:  # in shadow it changes nothing the lane does
-        out["entry_risk_trend"] = repr(spec.entry_risk_trend)
-    if spec.entry_spike_view:
-        out["entry_spike_view"] = "True"
-    if spec.entry_scenario_view:
-        out["entry_scenario_view"] = "True"
-    if spec.risk_score_buy > 0:
-        out["risk_score_buy"] = repr(spec.risk_score_buy)
-    if spec.curve_risk_score:
-        out["curve_risk_score"] = "True"
-    if spec.curve_take_sure_slide > 0:  # reported only when set, so every other lane keeps the version it had
-        out["curve_take_sure_slide"] = repr(spec.curve_take_sure_slide)
-    if spec.entry_spike_min > -90:
-        out["entry_spike_min"] = repr(spec.entry_spike_min)
-    if spec.entry_cushion_edge_min > -90:
-        out["entry_cushion_edge_min"] = repr(spec.entry_cushion_edge_min)
-    if spec.entry_view_scales:
-        out["entry_view_scales"] = repr(spec.entry_view_scales)
-    if spec.curve_risk_early_hold > 0:
-        out["curve_risk_early_hold"] = repr(spec.curve_risk_early_hold)
-    if spec.entry_led_max < 1.0:
-        out["entry_led_max"] = repr(spec.entry_led_max)
-    if spec.wave_pos_min > 0:
-        out["wave_pos_min"] = repr(spec.wave_pos_min)
-    if spec.flip_skip_minutes > 0:
-        out["flip_skip_minutes"] = repr(spec.flip_skip_minutes)
-        out["flip_led_share"] = repr(spec.flip_led_share)
-    if spec.wave_quote:  # reported only with the option, so a lane that reads the spot wave keeps the version it had
-        out["wave_quote"] = "True"
-        out["wave_pos_max"] = repr(spec.wave_pos_max)
-    if spec.entry_run_max > 0:
-        out["entry_run_max"] = repr(spec.entry_run_max)
-    if spec.entry_rotation_min > -90:
-        out["entry_rotation_min"] = repr(spec.entry_rotation_min)
-    if spec.nudge_hour_factor:
-        out["nudge_hour_factor"] = "True"
-    if spec.stretch_max > 0:
-        out["stretch_max"] = repr(spec.stretch_max)
-    if spec.strike_through_sale > 0:
-        out["strike_through_sale"] = repr(spec.strike_through_sale)
-        out["strike_through_seconds"] = repr(spec.strike_through_seconds)
-        if spec.strike_through_rearm:
-            out["strike_through_rearm"] = "true"
+    out["sell_chain"] = repr(chain)
+    if not (spec.curve_risk_late_tight > 0 and spec.curve_risk_late_tight_live):  # in shadow it changes nothing the lane does
+        out.pop("curve_risk_late_tight", None), out.pop("curve_risk_late_tight_share", None), out.pop("curve_risk_late_tight_live", None)
+    if not (spec.curve_risk_under_even > 0 and spec.curve_risk_under_even_live):
+        out.pop("curve_risk_under_even", None), out.pop("curve_risk_under_even_live", None)
     return out
 
 
@@ -890,12 +505,6 @@ def version_of(spec: LaneSpec, s: Any) -> str:
     return hashlib.sha1(json.dumps(settings_of(spec, s), sort_keys=True).encode()).hexdigest()[:8]
 
 
-def takes_profit(spec: LaneSpec) -> bool:
-    return spec.cash_out_at > 0 or spec.settlement_guard > 0 or spec.take_profit_x > 0 or spec.take_profit_at > 0 or spec.unstable_gain > 0 or spec.hover_dip > 0 or spec.trail_drop > 0 or spec.spike_cents > 0 or spec.scalp_at > 0 or spec.scalp_up > 0 or spec.cash_up_minute > 0 or spec.cash_drop > 0 or spec.cash_left_seconds > 0 or spec.drop_cents > 0 or spec.bounce_fall > 0 or spec.strike_through_sale > 0 or spec.shock_bp > 0 or spec.shock_units > 0 or spec.cross_units >= 0 or spec.wrong_side_bp > 0 or spec.cross_take > 0 or spec.value_exit > 0 or spec.curve_rest > 0 or spec.curve_exit >= 0 or spec.curve_behind_last > 0 or spec.curve_drop_units > 0 or spec.curve_gap > 0 or spec.curve_risk_sell > 0  # the risk exit needs a watched target as the margin sale does (found 2026-11-13: with curve_exit off the watcher never tracked the bet, so the risk exit never ran)
-
-
-def chance_ok(spec: LaneSpec, p: float) -> bool:
-    return spec.min_chance - 1e-9 <= p <= spec.max_chance + 1e-9
 
 
 def wants_bet(spec: LaneSpec, p: float, ask: float, edge: float) -> bool:
@@ -927,40 +536,8 @@ def edge_verdict(spec: LaneSpec, p: float, ask: float, edge: float) -> str | Non
     return "edge screen: the lane needs an edge from its model and has no bar set to measure one."
 
 
-def edge_miss(spec: LaneSpec, p: float, ask: float, edge: float) -> float | None:
-    """How far the edge is under the scaled bar, in probability: min_edge_room of the room less the edge. None when the lane has no scaled bar, bets always, or fails another bar (the lag bar, the flat edge bar): the stretch only reaches for the scaled bar."""
-    if not spec.needs_model_edge or spec.min_edge_room is None:
-        return None
-    if spec.max_lag is not None and ask - p > spec.max_lag + 1e-9:
-        return None
-    if spec.min_edge is not None and edge < spec.min_edge:
-        return None
-    room = (1.0 - p) + edge
-    return spec.min_edge_room * room - edge if room > 1e-9 else None
 
 
-ANOMALY_Z = 3.0  # a move over this many typical moves is its own state: no nudge (CLAUDE.md rule 3)
-
-
-def nudge(cap: float, history: float, time_share: float, scale: float = 1.0) -> float:
-    """How far a decision may miss its bar and still pass, in probability: the lane's cap (a cent or two) scaled down by how strongly the recent history agrees and by the clock, each a share from 0 to 1. Zero whenever either says no. The buy's stretch and the sale's squeeze are both this and nothing more."""
-    if cap <= 0:
-        return 0.0
-    return cap * min(max(history, 0.0), 1.0) * min(max(time_share, 0.0), 1.0) * min(max(scale, 0.0), 1.0)  # scale: the hour's width factor (widthfit.nudge_scale), 1 when the lane does not ask for it
-
-
-def nudge_in_units(units: float, unit: float | None, history: float, time_share: float, scale: float = 1.0) -> float:
-    """How far a decision may miss its bar and still pass with no fixed cap: `units` typical moves of the market itself, shrunk by how strongly the history agrees, by the clock and by the hour's width factor (each 0 to 1). 0 when the unit cannot be read."""
-    if units <= 0 or unit is None or unit <= 0:
-        return 0.0
-    return units * unit * min(max(history, 0.0), 1.0) * min(max(time_share, 0.0), 1.0) * min(max(scale, 0.0), 1.0)
-
-
-def trend_share(zed: float | None) -> float:
-    """The history share for a buy's stretch: how far the side has moved its own way lately, in its typical moves. 0 at no move or a move against, rising to 1 at one typical move, and 0 again past ANOMALY_Z."""
-    if zed is None or zed <= 0 or zed > ANOMALY_Z:
-        return 0.0
-    return min(zed, 1.0)
 
 
 def scaled_edge(p: float, edge: float) -> float:

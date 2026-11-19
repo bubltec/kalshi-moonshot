@@ -196,22 +196,6 @@ def test_a_resting_bid_that_fills_nothing_falls_back_to_the_ask(setup, monkeypat
     assert client.rested and got.filled == 1.5 and client.ids == ["k-take"]
 
 
-def test_a_record_lane_takes_the_ask_after_a_missed_bid_only_while_the_curve_still_clears_the_record(setup, monkeypatch):
-    from kalshi_moonshot import staterecord
-
-    s, store, shot, spec = setup
-    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, record_buy=True)
-    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
-    monkeypatch.setattr(staterecord, "admits", lambda *a, **k: (True, "state FD, record +0.30 per $1 over 286 markets"))
-    client = RestClient(fills=[1.5], asks=[0.30])
-    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
-    assert got.filled == 1.5 and client.ids == ["k-take"]  # the state still clears the bar: the ask is taken
-    monkeypatch.setattr(staterecord, "admits", lambda *a, **k: (False, "state record: state GD, record +0.02 per $1 over 1397 markets is under the lane's 0.2 over 15 markets."))
-    client = RestClient(fills=[1.5], asks=[0.30])
-    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k2")
-    assert got.filled == 0 and client.sent == []  # the spot moved out of the state while the bid rested: nothing is bought
-
-
 def test_a_resting_bid_that_fills_is_not_followed_by_a_buy(setup, monkeypatch):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0)
@@ -267,19 +251,6 @@ def test_the_top_up_does_not_chase_a_market_that_ran_away(setup, monkeypatch):
     client = RestClient(fills=[1.0], asks=[0.30, 0.40], rest_fill=0.5)
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert got.filled == 0.5 and client.sent == []
-
-
-def test_the_curve_is_checked_at_the_most_the_take_can_pay_not_at_the_bare_ask(setup, monkeypatch):
-    from kalshi_moonshot import curvemodel
-
-    s, store, shot, spec = setup
-    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, model_buy=True, buy_slip=0.03, buy_retry_chase=0.05)
-    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
-    seen = []
-    monkeypatch.setattr(curvemodel, "admits", lambda s_, st_, sh_, sp_, price, **k: (seen.append(price) or True, "ok"))
-    client = RestClient(fills=[1.5], asks=[0.30])
-    runner.place(s, client, store, shot, "why", 1.5, order_key="k")
-    assert seen and abs(seen[0] - 0.33) < 1e-9  # ask 0.30 + slip 0.03: the price the order may pay
 
 
 def _spec(tmp_path, monkeypatch, **kw):
@@ -387,7 +358,7 @@ def book_ahead(shot, n):
 # ---- the queue (2026-11-16, user: several buy orders did not fill; "there's a queue ... let's try it") ----
 def test_the_queue_position_is_read_once_and_put_in_the_note_for_a_bid_that_misses(setup, monkeypatch):
     s, store, shot, spec = setup
-    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, buy_rest_queue_note=True)
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0)
     monkeypatch.setattr(runner.time, "sleep", lambda x: None)
     client = RestClient(fills=[1.5], asks=[0.30])
     book_ahead(shot, 240.0)
@@ -396,44 +367,14 @@ def test_the_queue_position_is_read_once_and_put_in_the_note_for_a_bid_that_miss
     assert Store(s.db_path).db is not None
 
 
-def test_a_missed_bid_note_carries_the_queue_ahead(setup, monkeypatch):
-    s, store, shot, spec = setup
-    spec(buy_rest_seconds=5.0, buy_retries=0, buy_rest_queue_note=True)
-    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
-    client = RestClient(fills=[1.5], asks=[0.30])
-    book_ahead(shot, 240.0)
-    got = runner.place(s, client, store, shot, "why", 1.5)
-    assert got.filled == 0 and "Queue: 240 shares ahead of our 1.5" in got.note
-
-
-def test_a_long_queue_cancels_the_bid_at_once_and_takes_the_ask(setup, monkeypatch):
-    s, store, shot, spec = setup
-    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, buy_rest_queue_max=100.0)
-    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
-    client = RestClient(fills=[1.5], asks=[0.30])
-    book_ahead(shot, 240.0)
-    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
-    assert client.rested == [] and got.filled == 1.5 and client.ids == ["k-take"]  # no bid was placed: the ask was taken at once
-
-
 def test_a_short_queue_is_waited_out_as_before(setup, monkeypatch):
     s, store, shot, spec = setup
-    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, buy_rest_queue_max=100.0)
+    spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0)
     monkeypatch.setattr(runner.time, "sleep", lambda x: None)
     client = RestClient(fills=[1.5], asks=[0.30], rest_fill=1.5)
     book_ahead(shot, 20.0)
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert client.cancelled is None and got.filled == 1.5 and client.sent == []
-
-
-def test_an_unreadable_queue_changes_nothing_and_says_so(setup, monkeypatch):
-    s, store, shot, spec = setup
-    spec(buy_rest_seconds=5.0, buy_retries=0, buy_rest_queue_max=100.0)
-    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
-    client = RestClient(fills=[1.5], asks=[0.30])
-    book_ahead(shot, None)
-    got = runner.place(s, client, store, shot, "why", 1.5)
-    assert client.cancelled is None and "Queue: not readable" in got.note
 
 
 def test_without_the_options_the_queue_is_never_read(setup, monkeypatch):
@@ -445,45 +386,6 @@ def test_without_the_options_the_queue_is_never_read(setup, monkeypatch):
     client.order_queue_position = lambda oid: called.append(oid)
     got = runner.place(s, client, store, shot, "why", 1.5)
     assert called == [] and "Queue" not in got.note
-
-
-# ---- the queue cutoff from the lane's own filled bids (2026-11-16, user: "build that") ----
-def test_the_cutoff_is_a_quantile_of_the_filled_bids_queue_and_needs_ten_fills(tmp_path):
-    from kalshi_moonshot import queuehist
-
-    queuehist.reset()
-    now = 1_000_000.0
-    for i in range(9):
-        queuehist.record(tmp_path, "L", "T", 10.0 * (i + 1), True, now - 60)
-    assert queuehist.cutoff(tmp_path, "L", 0.8, 3.0, now) is None  # nine fills: no cutoff, no skip
-    queuehist.record(tmp_path, "L", "T", 100.0, True, now - 50)
-    queuehist.record(tmp_path, "L", "T", 5000.0, False, now - 40)  # a miss is not part of the cutoff
-    assert queuehist.cutoff(tmp_path, "L", 0.8, 3.0, now) == 82.0
-    assert queuehist.cutoff(tmp_path, "OTHER", 0.8, 3.0, now) is None  # per lane
-    assert queuehist.cutoff(tmp_path, "L", 0.8, 3.0, now + 4 * 3600) is None  # older than the window
-    queuehist.reset()
-    assert queuehist.cutoff(tmp_path, "L", 0.8, 3.0, now) == 82.0  # reloaded from the file
-
-
-def test_a_bid_over_the_lanes_own_cutoff_is_skipped_for_the_ask(setup, monkeypatch):
-    from kalshi_moonshot import queuehist
-
-    s, store, shot, spec = setup
-    sp = spec(buy_rest_seconds=5.0, buy_rest_then_take=True, buy_retries=0, buy_rest_queue_quantile=0.8)
-    monkeypatch.setattr(runner.time, "sleep", lambda x: None)
-    queuehist.reset()
-    for i in range(10):
-        queuehist.record(s.data_dir, sp.name, "T", 10.0 * (i + 1), True)
-    client = RestClient(fills=[1.5], asks=[0.30])
-    book_ahead(shot, 500.0)
-    got = runner.place(s, client, store, shot, "why", 1.5, order_key="k")
-    assert client.rested == [] and got.filled == 1.5 and client.ids == ["k-take"]
-    client = RestClient(fills=[1.5], asks=[0.30], rest_fill=1.5)
-    book_ahead(shot, 20.0)
-    got = runner.place(s, client, store, shot, "why", 1.5)
-    assert client.rested and got.filled == 1.5  # a shallow queue rests as usual, and the fill is recorded
-    assert queuehist.cutoff(s.data_dir, sp.name, 0.5, 3.0) is not None
-    queuehist.reset()
 
 
 def test_place_says_when_a_resting_bid_rested_its_time_and_filled_nothing(setup, monkeypatch):

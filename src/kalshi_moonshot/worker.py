@@ -4,7 +4,6 @@ scan      fetch the markets in the window, shortlist both lanes, queue one `eval
           and make sure the next scan is scheduled (so a crash never ends the loop)
 evaluate  re-read the market's current price, ask the model, log the decision, maybe order
 resolve   record the outcome of markets that settled
-stop_loss sell (or paper-sell) open bets that are under 1h from close and down 30%
 review    once an hour, tighten a setting when the scorecard makes that clear
 
 Stop it at any time. Finished work stays finished; running work is picked up again on start.
@@ -30,10 +29,9 @@ from . import reqstats, runner, steptime
 from . import ticks as ticks_mod
 from .commodities import CommodityPricer
 from .config import Settings
-from .entrywatch import lane_full, quote_keys
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
-from .kalshi import KalshiClient, KalshiError, KalshiRateLimited, snap_price
+from .kalshi import KalshiClient, KalshiError, KalshiRateLimited
 from .lanes import POLY_LANES, job_priority, lane_specs, spec_for, tiered, tiered_lanes
 from .marketdata import Discovery, shared_for
 from .search import NewsSearch
@@ -44,7 +42,6 @@ log = logging.getLogger("moonshot")
 # Jobs that are long and not needed to trade (downloading history, resolving settled markets, syncing fills, the broad scan, the hourly review). They run on their own thread,
 # so a 40-second job can never hold up a live lane's review or evaluation, and their requests are throttled to a third of the budget.
 MAINTENANCE = frozenset({"scan", "resolve", "review", "history", "account_sync", "patterns"})
-SELL_KINDS = frozenset({"stop_loss"})  # the stop-loss sweep. With SELL_WORKERS above 0 it runs on its own thread: behind scopes and reviews it waited 5 minutes
 BUY_KINDS = frozenset({"evaluate"})  # the job that sizes and places a buy. With BUY_WORKERS above 0 these run on their own threads, so a lane scope or review (or another lane's slow buy) never queues a buy behind it
 SLOW_JOB_SECONDS = 10.0  # a job that runs longer than this is logged with how long it ran, so a slow stage can be found in the logs
 BUY_POLL = 0.5  # seconds a buy worker sleeps when no buy is due
@@ -75,7 +72,6 @@ def knobs(s: Settings) -> tuple:
         s.min_hours_to_close, s.min_edge, s.scan_pages, s.shortlist, s.scan_interval_minutes,
         s.model, tuple(sorted(s.skip_categories)), s.skip_numeric, tuple(sorted(s.exclude_versions)),
         s.max_rps, s.page_size, s.job_max_attempts, s.moonshot_max_drop,
-        s.stop_loss_enabled, s.stop_loss_hours, s.stop_loss_drop,
         s.steady_enabled, s.steady_min_price, s.steady_max_price, s.steady_min_trend,
         s.steady_max_lag,
         s.review_enabled, tuple(sorted(s.rag_skip_lanes)),
@@ -106,7 +102,6 @@ class Worker:
         self.quant = quant
         self.recorder: Any = None
         self.watcher: Any = None
-        self.entry_watcher: Any = None
         self.settlement_edge: Any = None
         self.discovery: Any = None
         self._hot_local = threading.local()  # the discovery thread's own store connection
@@ -118,7 +113,6 @@ class Worker:
         self.last_progress = time.time()  # when a job last finished, for the watchdog heartbeat (heartbeat.py)
         self.share = EstimateShare()  # one estimate per market, reused by every lane that asks soon after
         self._split = False  # True once run_forever has started the maintenance thread: the main loop then leaves those jobs to it
-        self._sell_threads = 0  # how many dedicated sell workers run_forever started
         self._lane_threads: set[str] = set()  # the live lanes whose scope and review jobs run on a thread of their own (run_forever)
         self._buy_threads = 0  # how many dedicated buy workers run_forever started: while it is above 0 the main loop leaves evaluate jobs to them
 
@@ -209,7 +203,6 @@ class Worker:
             self.recorder.start()
             log.info("tape recorder on: %s (kept %.0f days)", self.s.tape_path, self.s.tape_keep_days)
             self._start_watcher()
-            self._start_entry_watcher()
             self._start_market_events()
             self._start_settlement_edge()
         except Exception:
@@ -234,23 +227,6 @@ class Worker:
         w.start()
         self.watcher = w
         log.info("take-profit watcher on: selling from the live socket when a lane's level is hit")
-
-    def _start_entry_watcher(self) -> None:
-        """Re-review a watched event the moment a streamed quote enters a lane's price band (only lanes with entry_socket = true)."""
-        from . import entrywatch
-
-        if self.recorder is None or self.entry_watcher is not None or not entrywatch.wanted(self.s):
-            return
-        db_path = self.s.db_path
-        w = entrywatch.EntryWatcher(
-            lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions),
-            lambda store: build_estimators(self.est, store, self.searcher, self.quant),
-        )
-        self.recorder.listeners.append(w.on_event)
-        w.client_for = self._venue  # the same review, on the lane's own venue
-        w.start()
-        self.entry_watcher = w
-        log.info("entry watcher on: reviewing a watched event as soon as its socket quote enters the lane's price band")
 
     def _start_settlement_edge(self) -> None:
         """Log, as paper bets, the side whose exact settlement chance beats its ask in the last 150 s of every crypto 15-minute market (settlement_edge.py). Measure only; its own thread."""
@@ -303,7 +279,7 @@ class Worker:
         return store.calibrator.adjust(spec.name, row["category"] or "", ask, side_prob(p_yes, side), spec.trust).p
 
     def _held_for_watching(self) -> set[str]:
-        """Tickers of open bets whose lane has a take-profit or peak-crash rule: the socket should stream them."""
+        """Tickers of open bets whose lane has an exit module: the socket should stream them."""
         from . import lanes
 
         specs = lanes.lane_specs(self.s)
@@ -312,9 +288,7 @@ class Worker:
             if (row["lane"] or "") in POLY_LANES:
                 continue  # Polymarket bets are quoted by the Polymarket socket, not Kalshi's
             spec = specs.get(row["lane"] or "moonshot")
-            stop_on = spec is not None and self.s.stop_loss_enabled and spec.stop_loss and not (
-                row["ticker"].split("-")[0].endswith("15M") and not self.s.stop_loss_fast)
-            if spec is not None and (lanes.takes_profit(spec) or stop_on):
+            if spec is not None and spec.sell_chain:
                 out.add(row["ticker"])
         return out
 
@@ -364,8 +338,6 @@ class Worker:
             self.discovery.stop()
         if self.watcher is not None:
             self.watcher.stop()
-        if self.entry_watcher is not None:
-            self.entry_watcher.stop()
         if self.recorder is not None:
             self.recorder.stop()
 
@@ -378,9 +350,6 @@ class Worker:
         for i in range(self.s.buy_workers):
             threading.Thread(target=self._buy_loop, name=f"buy-job-{i}", daemon=True).start()
         self._buy_threads = self.s.buy_workers
-        for i in range(self.s.sell_workers):
-            threading.Thread(target=self._sell_loop, name=f"sell-job-{i}", daemon=True).start()
-        self._sell_threads = self.s.sell_workers
         if self._buy_threads:
             log.info("%d buy worker(s) run evaluate jobs apart from scans and reviews", self._buy_threads)
         if self.s.live_lane_threads and self.s.live_lanes is not None:
@@ -444,23 +413,11 @@ class Worker:
         """The job kinds the live lane threads own, left out of the main loop."""
         return frozenset(f"{p}:{n}" for n in self._lane_threads for p in ("lane_scope", "lane_review"))
 
-    def _sell_loop(self) -> None:
-        """A sell worker: claims only the stop-loss sweep, so what holds up a sale is another sale, never a scan, review or scope."""
-        while not self.stopping:
-            try:
-                job = self.jobs.claim(kinds=SELL_KINDS)
-                if job is not None:
-                    self.run_job(job)
-                    continue
-            except Exception:
-                log.exception("sell worker")
-            time.sleep(BUY_POLL)
-
     def step(self) -> bool:
         """Claim and run one due job. Returns False when nothing was due."""
         self.refresh()
         self._housekeeping()
-        left_out = (MAINTENANCE | (BUY_KINDS if self._buy_threads else frozenset()) | (SELL_KINDS if self._sell_threads else frozenset()) | self.lane_kinds()) if self._split else None
+        left_out = (MAINTENANCE | (BUY_KINDS if self._buy_threads else frozenset()) | self.lane_kinds()) if self._split else None
         job = self.jobs.claim(exclude=left_out)
         if job is None:
             return False
@@ -511,7 +468,7 @@ class Worker:
     def run_job(self, job: Job) -> None:
         handlers = {
             "scan": self.do_scan, "evaluate": self.do_evaluate,
-            "resolve": self.do_resolve, "stop_loss": self.do_stop_loss,
+            "resolve": self.do_resolve,
             "review": self.do_review, "history": self.do_history, "account_sync": self.do_account_sync, "patterns": self.do_patterns,
         }
         steptime.begin()
@@ -567,7 +524,6 @@ class Worker:
             )
             queued += 1 if made else 0
         self.jobs.enqueue("resolve", dedupe_key="resolve", max_attempts=s.job_max_attempts)
-        self._schedule_stop_loss()
         self._ensure_tiered()
         return f"{len(markets)} markets, queued {queued} of {len(shots)} evaluations"
 
@@ -597,8 +553,6 @@ class Worker:
 
     def _on_poly_quote(self, event: dict) -> None:
         """A Polymarket price, handed to the same entry and exit listeners the Kalshi socket uses."""
-        if self.entry_watcher is not None:
-            self.entry_watcher.on_event(event)
         if self.watcher is not None:
             self.watcher.on_event(event)
 
@@ -666,12 +620,6 @@ class Worker:
         spec = spec_for(s, shot.lane)
         m.setdefault("event_ticker", shot.event_ticker)
         why_not = lane_reject_reason(side_view(m, shot.side), spec, s, now)
-        floor_bid = bool(job.payload.get("floor_bid"))
-        if floor_bid and why_not and why_not.startswith("ask outside"):
-            live_ask = _price(side_view(m, shot.side), "yes_ask_dollars")
-            lo, hi = spec.price
-            if lo - spec.entry_approach - 1e-9 <= live_ask <= hi + 1e-9:
-                why_not = None
         if not why_not and spec.trend == "not_falling":
             try:
                 candles = client.candlesticks(shot.series, shot.ticker, spec.lookback_hours)
@@ -696,13 +644,6 @@ class Worker:
             with steptime.step("entry factors"):
                 factors_text = self._entry_factors(shot, spec, _strike(m))
             shot = replace(shot, bid=_price(view, "yes_bid_dollars"), ask=_price(view, "yes_ask_dollars"), factors=factors_text)
-        rest_seconds = 0.0
-        if floor_bid:
-            if spec.entry_move > 0:  # a move lane's bid rests under the live ask, post-only, so it can only fill as a maker
-                shot = replace(shot, ask=snap_price(max(0.01, shot.ask - spec.entry_move_below)))
-            else:
-                shot = replace(shot, ask=spec.price[0])  # the bid is the floor, not whatever the ask has run to
-            rest_seconds = spec.entry_arm_seconds
         # Same job, same order id: if the process dies after sending, a rerun cannot buy twice.
         order_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"moonshot/{s.env}/{job.created_ts}/{job.id}"))
         with runner.lane_lock(shot.lane):  # evaluations of one lane run one after another, so its checks (lane full, cooling down, other side taken) see each other's bets
@@ -712,12 +653,10 @@ class Worker:
                 raise_model_errors=not job.last_attempt,
                 order_key=order_key,
                 before_order=lambda: self.jobs.checkpoint(job.id, PLACING),
-                rest_seconds=rest_seconds,
             )
         print(runner.format_outcome(out), flush=True)
         if out.action == "bet":
-            self._schedule_stop_loss()
-            self._watch_new_position(out.ticker)
+                self._watch_new_position(out.ticker)
         return f"{out.action} {out.ticker}"
 
     def _open_tape(self) -> Any:
@@ -859,8 +798,6 @@ class Worker:
             shots = runner.review_lane(self.s, venue, self.store, spec, self.estimators())
         queued = 0
         for shot in shots:
-            if lane_full(self.store, spec, quote_keys(shot.ticker)):
-                continue  # an evaluation would only answer "lane full" (runner.evaluate), after reading the market
             made = self.jobs.enqueue(
                 "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
                 expires_in=max(60.0, 2 * every), max_attempts=self.s.job_max_attempts,
@@ -876,26 +813,6 @@ class Worker:
         n = runner.resolve(self.client, self.store, client_for=lambda ticker: self._venue(self.store.decision_lane(ticker)))
         log.info("resolved %d settled markets", n)
         return f"{n} resolved"
-
-    def _socket_covers(self, ticker: str, lane: str) -> bool:
-        """Whether the live socket is deciding this position's loss exit (watcher.covers). False with no watcher, so the sweep keeps its old job."""
-        w, rec = self.watcher, self.recorder
-        if w is None:
-            return False
-        beat = max((getattr(x, "last_event_at", None) or 0.0) for x in (getattr(rec, "stream", None), getattr(rec, "extra_stream", None)))
-        return w.covers(ticker, lane, beat)
-
-    def do_stop_loss(self, job: Job) -> str:
-        notes = runner.stop_loss_pass(
-            self.s, self.client, self.store,
-            before_order=lambda: self.jobs.checkpoint(job.id, PLACING),
-            client_for=self._venue,
-            socket_covers=self._socket_covers,
-        )
-        for line in notes:
-            log.info("%s", line)
-        self._schedule_stop_loss()
-        return f"{len(notes)} stop-loss action(s)"
 
     def do_account_sync(self, job: Job) -> str:
         """Keep a local copy of your fills and settlements, for analysis. Read-only, low priority."""
@@ -962,9 +879,3 @@ class Worker:
     def _schedule_review(self) -> None:
         every = self.s.review_interval_minutes * 60
         self.jobs.ensure("review", time.time() + every, max_attempts=self.s.job_max_attempts)
-
-    def _schedule_stop_loss(self) -> None:
-        nxt = runner.next_stop_loss_at(self.s, self.store)
-        if nxt is None:
-            return
-        self.jobs.ensure("stop_loss", nxt, max_attempts=self.s.job_max_attempts)

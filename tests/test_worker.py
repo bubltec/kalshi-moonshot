@@ -252,35 +252,6 @@ def test_one_lane_gets_one_lock_and_lanes_do_not_share(tmp_path):
     assert runner.lane_lock("a") is not runner.lane_lock("b")
 
 
-def test_the_main_loop_leaves_the_stop_sweep_to_the_sell_worker(tmp_path):
-    from kalshi_moonshot.worker import BUY_KINDS, MAINTENANCE, SELL_KINDS
-
-    w = worker(tmp_path)
-    w.jobs.enqueue("stop_loss", {}, run_at=1.0)
-    w._split = True
-    w._buy_threads = 3
-    w._sell_threads = 1
-    assert w.jobs.claim(exclude=MAINTENANCE | BUY_KINDS | SELL_KINDS) is None
-    assert w.jobs.claim(kinds=SELL_KINDS).kind == "stop_loss"
-
-
-def test_a_sell_worker_runs_only_the_stop_sweep(tmp_path):
-    w = worker(tmp_path)
-    w.jobs.enqueue("evaluate", {"shot": {}}, run_at=1.0)
-    w.jobs.enqueue("stop_loss", {}, run_at=1.0)
-    ran: list[str] = []
-
-    def record(job):
-        ran.append(job.kind)
-        w.jobs.complete(job.id, "")
-        w.stopping = True
-
-    w.run_job = record
-    w._sell_loop()
-    assert ran == ["stop_loss"]
-    assert status(w, "evaluate") == {"pending": 1}
-
-
 def test_changing_the_request_rate_keeps_the_same_client_open(tmp_path):
     from kalshi_moonshot.kalshi import KalshiClient
 
@@ -327,22 +298,6 @@ def test_a_live_lane_is_queued_ahead_of_a_paper_lane_whatever_the_priority_numbe
     assert job_priority(s, live) == 46 + LIVE_BOOST > job_priority(s, paper) == 48
     s_all = SimpleNamespace(live_lanes=None, is_live=lambda name, series="": True)  # an empty LIVE_LANES means every lane: nothing to rank
     assert job_priority(s_all, live) == 46
-
-
-def test_the_main_loop_leaves_a_live_lanes_scope_and_review_to_its_own_thread(tmp_path):
-    from kalshi_moonshot.worker import BUY_KINDS, MAINTENANCE, SELL_KINDS
-
-    w = worker(tmp_path)
-    w._split = True
-    w._buy_threads = 3
-    w._sell_threads = 1
-    w._lane_threads = {"live_a"}
-    w.jobs.enqueue("lane_scope:live_a", {}, run_at=1.0)
-    w.jobs.enqueue("lane_review:live_a", {}, run_at=1.0)
-    w.jobs.enqueue("lane_scope:paper_b", {}, run_at=1.0)
-    left_out = MAINTENANCE | BUY_KINDS | SELL_KINDS | w.lane_kinds()
-    assert w.jobs.claim(exclude=left_out).kind == "lane_scope:paper_b"  # the main loop keeps the paper lane
-    assert w.jobs.claim(exclude=left_out) is None  # and nothing of the live lane's
 
 
 def test_a_live_lane_thread_runs_only_its_own_lanes_jobs(tmp_path):

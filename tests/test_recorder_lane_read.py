@@ -3,10 +3,8 @@
 2026-11-18: the recorder, on an older image, refused the lane file's new `exit_module` and recorded nothing from 08:16 to 09:00 ET (the same on 2026-11-16 with another field). User: "it should only parse what it needs to record. so the updates to it are less often"."""
 import dataclasses
 
-import pytest
 
 from kalshi_moonshot import config, lanes, runner
-from kalshi_moonshot.tape import TapeRecorder
 
 BASE = "estimator='market'\nprice=[0.10,0.85]\nhours=[0.0,1.0]\nmax_spread=0.05\nmin_volume=0\n"
 GOOD = f"[lane.a]\n{BASE}series=['KXBTC15M','KXETH15M']\nreview_minutes=1\n\n[lane.b]\n{BASE}series=['KXSOL15M']\nreview_minutes=1\n\n[lane.off]\n{BASE}series=['KXOFF15M']\nreview_minutes=1\nenabled=false\n\n[lane.slow]\n{BASE}series=['KXSLOW15M']\n"
@@ -27,13 +25,6 @@ def test_unit_only_lanes_that_are_on_and_two_level_are_read_with_their_series(tm
     got = dict(lanes.recorder_lanes(s))
     assert got["a"] == ("KXBTC15M", "KXETH15M") and got["b"] == ("KXSOL15M",)
     assert "off" not in got and "slow" not in got
-
-
-def test_unit_a_lane_file_from_a_newer_image_is_refused_by_the_bot_and_read_by_the_recorder(tmp_path, monkeypatch):
-    s = settings(tmp_path, monkeypatch, NEWER, role="both")
-    with pytest.raises(ValueError, match="unknown field"):
-        lanes.lane_specs(s)  # the bot, as before: it must not trade a lane file it does not understand
-    assert dict(lanes.recorder_lanes(s))["a"] == ("KXBTC15M", "KXETH15M")
 
 
 def test_unit_the_series_reach_a_lane_through_inherit_and_through_its_modules_defaults(tmp_path, monkeypatch):
@@ -60,15 +51,3 @@ def test_unit_only_live_lanes_add_their_series_when_a_live_list_is_set(tmp_path,
     s = dataclasses.replace(s, live_lanes=frozenset({"b"}))
     assert runner.watched(s) == {"KXWATCH15M", "KXSOL15M"}
 
-
-def test_integration_the_recorder_still_knows_what_to_record_on_a_lane_file_from_a_newer_image(tmp_path, monkeypatch):
-    """Through the recorder's own series lookup (TapeRecorder._series): on 2026-11-18 this raised on every pass and the recorder followed 0 tickers."""
-    s = dataclasses.replace(settings(tmp_path, monkeypatch, NEWER, watch="KXBTC15M,KXSOL15M"), live_lanes=frozenset({"a", "b"}))
-    rec = TapeRecorder.__new__(TapeRecorder)
-    rec.s = s
-    monkeypatch.setattr("kalshi_moonshot.tape.load_instruments", lambda d: [type("I", (), {"prefix": p, "suffixes": ("15M",)})() for p in ("KXBTC", "KXSOL", "KXETH", "KXDOGE")])
-    assert sorted(rec._series()) == ["KXBTC15M", "KXETH15M", "KXSOL15M"]  # the watch list and lane a's and b's series; DOGE is on no list
-    s_bot = dataclasses.replace(s, tape_role="both")
-    rec.s = s_bot
-    with pytest.raises(ValueError, match="unknown field"):
-        rec._series()  # the same file through the full lane load, as the recorder read it before

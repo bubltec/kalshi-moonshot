@@ -184,32 +184,6 @@ def test_the_last_minute_answers_the_trend_before_it_is_written(tmp_path):
     recent.clear()
 
 
-def test_a_watch_loads_its_stop_history_once(tmp_path):
-    from kalshi_moonshot import runner
-
-    recent.clear()
-    tape = Tape(tmp_path / "tape.db")
-    now = time.time()
-    tape.add({"kind": "quote", "ts": now - 40, "ticker": "STOP-1", "bid": 0.30, "ask": 0.32, "last": 0.31, "sts": 1})
-    tape.add({"kind": "quote", "ts": now - 10, "ticker": "STOP-1", "bid": 0.28, "ask": 0.30, "last": 0.29, "sts": 1})
-    tape.flush()
-
-    class S:
-        tape_path = str(tmp_path / "tape.db")
-
-    runner.arm_stop_history(S, "STOP-1", now)
-    tape.db.execute("DELETE FROM quotes")
-    tape.db.commit()
-    seconds, low = runner.under_line(S, "STOP-1", "yes", 0.40, now)
-    assert seconds == 40 and abs(low - 0.28) < 1e-9  # the deleted rows are still in the watch
-    tape.add({"kind": "quote", "ts": now, "ticker": "STOP-1", "bid": 0.22, "ask": 0.24, "last": 0.23, "sts": 1})
-    _seconds, low = runner.under_line(S, "STOP-1", "yes", 0.40, now)
-    assert abs(low - 0.22) < 1e-9  # a quote after the load extends the same visit
-    runner.arm_stop_history(S, "STOP-1", now)  # the database is empty now; the first load stands
-    assert runner.under_line(S, "STOP-1", "yes", 0.40, now)[1] == low
-    recent.clear()
-
-
 def test_a_watched_market_answers_a_trend_from_memory(tmp_path):
     from kalshi_moonshot import runner
     from kalshi_moonshot.strategy import LongShot
@@ -311,23 +285,3 @@ def test_side_spike_reads_the_rise_and_the_swing_of_the_side(tmp_path):
     assert abs(runner.side_spike(S, no, 90.0, now=now)[0] + 0.32) < 1e-9  # the NO side fell
     recent.clear()
 
-
-def test_side_bounce_reads_the_rise_after_a_dip(tmp_path):
-    from kalshi_moonshot import runner
-    from kalshi_moonshot.strategy import LongShot
-
-    recent.clear()
-    tape = Tape(tmp_path / "tape.db")
-    now = time.time()
-    for ts, bid, ask in ((now - 100, 0.84, 0.85), (now - 60, 0.72, 0.74), (now - 35, 0.73, 0.75), (now - 2, 0.85, 0.86)):
-        tape.add({"kind": "quote", "ts": ts, "ticker": "BNC-1", "bid": bid, "ask": ask, "last": bid, "sts": 1})
-    tape.flush()
-
-    class S:
-        tape_path = str(tmp_path / "tape.db")
-
-    yes = LongShot("BNC-1", "", "", 0.85, 0.86, 0.0, "", 0.1, side="yes")
-    rise, dip = runner.side_bounce(S, yes, now=now)
-    assert abs(rise - 0.11) < 1e-9  # ask 0.75 at -35 s, 0.86 now
-    assert abs(dip - 0.12) < 1e-9  # bid 0.84 at -100 s, 0.72 low
-    recent.clear()

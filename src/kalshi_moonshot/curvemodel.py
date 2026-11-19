@@ -3,7 +3,7 @@
 scripts/state_record_fibonacci.py (studies/results/2026-11-07-state-record-fibonacci.txt): a ridge regression of the bet-to-win net on the curve at 1, 2, 3, 5, 8, 13, 21, 34 and 55 minutes, fit on the earlier days and scored on the next, netted +1.53 per $10 ticket on its best 5% of moments, +1.06 on the best 10% and +0.71 on the best 20% (every moment -0.34), positive in both halves of three test days.
 2026-11-08 (user: "you absolutely need to build time left into the curve prediction ... it needs to figure out a further projection based on time remaining"): live bets bought in the first four minutes won 55% (+$15.48 on 31) and those bought after minute 8 won 14% (-$30.54 on 43), while the model read the same curve the same way at minute 3 and minute 12 (studies/results/2026-11-08-multiscale-by-elapsed.txt). The model now also reads the seconds left: the minutes left, and at four scales the cushion (the spot's distance to the strike on the side bought) over what the seconds left can move at that scale's one-second rate (z), and the same after carrying that scale's drift forward to the close (proj), and the normal chance that the cushion is still above zero at the close given proj (win), which the fit sets against the ask. Walk-forward (studies/results/2026-11-08-curve-time-left-walkforward.txt) it did NOT pay: the 18-reading model netted +0.058 per $1 on its best 5% (first per market side) and the timed one -0.024, and at 10% and 20% the timed model was lower in every row. The ridge is fitted on the first 18 readings only; the time-left readings stay in `features` and `build_rows(timed=True)` for the studies (scripts/curve_time_left_walkforward.py and the win-chance studies). A second model on them (a logistic regression on the cushion and its drift, shadowed 2026-11-08) turned negative over 89 shadow signals (-0.277 per $1) and was retired and removed.
 Readings, per scale: the SLOPE (the change of the cushion over the look-back in that look-back's typical move; tan of the angle) and the VARIABILITY (the standard deviation of the cushion over the look-back in the same unit). The cushion is the spot's distance to the strike on the side bought, so one curve gives both sides' readings. Plus the price asked. No coin and no crossing count enters.
-The model is refit daily from the tape in a separate low-priority process (python -m kalshi_moonshot.curvemodel). A lane with model_buy buys a market side when its predicted net per dollar is in the top `model_top` share of the training moments and above zero.
+The model is refit daily from the tape in a separate low-priority process (python -m kalshi_moonshot.curvemodel). A lane whose buy module has the curve_model step buys a market side when its predicted net per dollar is in the top `model_top` share of the training moments and above zero.
 """
 
 from __future__ import annotations
@@ -245,10 +245,10 @@ def load(s: Any, category: str = "") -> dict[str, Any] | None:
 
 
 def categories(s: Any) -> list[str]:
-    """The model categorys the enabled model_buy lanes use ("" is the shared one), sorted."""
+    """The model categorys the enabled curve_model lanes use ("" is the shared one), sorted."""
     from .lanes import lane_specs
 
-    return sorted({sp.model_category for sp in lane_specs(s).values() if sp.enabled and sp.model_buy})
+    return sorted({sp.model_category for sp in lane_specs(s).values() if sp.enabled and "curve_model" in sp.buy_chain})
 
 
 def maybe_refit(s: Any, now: float | None = None) -> bool:
@@ -282,7 +282,7 @@ def cut_for(model: dict[str, Any], top: float) -> float:
 
 
 def admits(s: Any, store: Any, shot: Any, spec: Any, ask: float, waited: float = 0.0) -> tuple[bool, str]:
-    """Whether a model_buy lane would buy this market side at `ask` now: (True, the note tag) or (False, why not)."""
+    """Whether a curve_model lane would buy this market side at `ask` now: (True, the note tag) or (False, why not)."""
     from . import ticks as ticks_mod
     from . import variants
 
@@ -338,7 +338,7 @@ class Pacer:
 
 
 def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, str, str, float]] | None = None, timed: bool = False, kind: str = "fibonacci", duty: float = 1.0, category: str = "") -> list[tuple[list[float], float, float]]:
-    """(`meta`, when given, gets (close, seconds into the window, ticker, side, the side's bid) per row, for studies; `timed` adds the 13 time-left readings for the studies; the ridge is fitted on the first 18.) The training rows from the tape: every settled window of the model_buy lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
+    """(`meta`, when given, gets (close, seconds into the window, ticker, side, the side's bid) per row, for studies; `timed` adds the 13 time-left readings for the studies; the ridge is fitted on the first 18.) The training rows from the tape: every settled window of the curve_model lanes' series in the trailing TRAIN_DAYS, both sides, every MOMENT_STEP seconds inside the lane's entry window, ask and spread inside the lane's bands."""
     from . import db, variants
     from .kalshiws import RECORD_ONLY
     from .lanes import lane_specs
@@ -348,7 +348,7 @@ def build_rows(s: Any, now: float | None = None, meta: list[tuple[float, float, 
     now = time.time() if now is None else now
     rules: dict[str, tuple[float, float, float, float, float]] = {}
     for sp in lane_specs(s).values():
-        if sp.enabled and sp.model_buy and sp.model_category == category:
+        if sp.enabled and "curve_model" in sp.buy_chain and sp.model_category == category:
             for series in sp.series:
                 lo = max(sp.entry_elapsed[0] * 60.0, 900.0 - sp.hours[1] * 3600.0)
                 hi = min(sp.entry_elapsed[1] * 60.0, 900.0 - sp.hours[0] * 3600.0)
@@ -439,12 +439,12 @@ def main() -> None:
     s = config.reload()
     from .lanes import lane_specs
 
-    specs = [sp for sp in lane_specs(s).values() if sp.enabled and sp.model_buy]
+    specs = [sp for sp in lane_specs(s).values() if sp.enabled and "curve_model" in sp.buy_chain]
     for category in sorted({sp.model_category for sp in specs}) or [""]:
         kinds = [sp.model_features for sp in specs if sp.model_category == category]
         kind = kinds[0] if kinds else "fibonacci"
         if len(set(kinds)) > 1:
-            print(f"category {category!r}: model_buy lanes disagree on model_features", sorted(set(kinds)), "-> fitting", kind)
+            print(f"category {category!r}: curve_model lanes disagree on model_features", sorted(set(kinds)), "-> fitting", kind)
         rows = build_rows(s, kind=kind, duty=float(os.environ.get("CURVE_PACE_DUTY", PACE_DUTY)), category=category)  # a job on its own machine sets CURVE_PACE_DUTY=1
         model = fit([(r[0][: len(KINDS[kind])], r[1], r[2]) for r in rows], kind=kind)
         if model is None:

@@ -8,7 +8,7 @@ from kalshi_moonshot.estimators import Estimate
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
 
-LANE = "[lane.rf]\nestimator='market'\nprice=[0.10,0.85]\nprice_skip=[0.45,0.57]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nneeds_model_edge=true\nmin_edge_room=0.12\nrisk_score_buy=0.25\n"
+LANE = "[lane.rf]\nestimator='market'\nprice=[0.10,0.85]\nhours=[0.0,1.0]\nsides=['yes','no']\nfixed_stake=1.0\nseries=['KXBTC15M']\nneeds_model_edge=true\nmin_edge_room=0.12\nrisk_score_buy=0.25\n"
 
 
 @pytest.fixture(autouse=True)
@@ -50,16 +50,3 @@ def test_integration_the_score_alone_does_not_buy_the_ladder_has_to_rate_the_wor
     out = decide(tmp_path, monkeypatch, worth_yes=0.81, score=0.80)  # the score favours it; the ladder has it worth what it costs
     assert out.action == "pass" and "edge screen" in out.note
 
-
-def test_integration_the_ladder_alone_does_not_buy_the_score_has_to_favour_the_side(tmp_path, monkeypatch):
-    out = decide(tmp_path, monkeypatch, worth_yes=0.92, score=0.60)  # worth more than the bet, at a risk of 40%
-    assert out.action == "pass" and "risk of 25% or under" in out.note
-
-
-def test_integration_a_side_outside_the_live_lanes_prices_is_not_a_candidate_price(tmp_path, monkeypatch):
-    from kalshi_moonshot import lanes
-
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE)
-    sp = lanes.spec_for(config.load(), "rf")
-    assert sp.price == (0.10, 0.85) and lanes.no_buy(sp, 0.50) and not lanes.no_buy(sp, 0.80)

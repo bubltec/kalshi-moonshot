@@ -289,20 +289,6 @@ def steady_model_ok(model_p: float, ask: float, max_lag: float) -> bool:
 FALLING_REASON = "ask is falling (live collapse, not a long shot)"
 
 
-def stop_loss_hit(entry: float, bid: float, hours_left: float, hours: float, drop: float) -> str | None:
-    """Why to sell now, or None to keep holding.
-
-    Both conditions must hold: not much time left, and the bid is down `drop` or more
-    from the price we paid. No bid means we cannot exit, so we hold.
-    """
-    if hours_left > hours or entry <= 0 or bid <= 0:
-        return None
-    lost = (entry - bid) / entry
-    if lost < drop:
-        return None
-    return f"stop-loss: {hours_left:.1f}h left, down {lost:.0%} ({entry:.2f} -> {bid:.2f})"
-
-
 def stop_wait(cap: float, seconds_left: float | None, fifteen_min: bool = False) -> float:
     """How long a dipped bid must stay past the stop line before the stop believes it, in seconds.
 
@@ -340,119 +326,6 @@ EARLY_BUY_MINUTE = 7.0
 # and the last 3 seconds are a hover, it is sold. It is also sold at minute 9 if it is still ahead.
 CASH_BEFORE_MINUTE = EARLY_BUY_MINUTE
 CASH_LEAVE_MINUTE = 9.0
-
-
-def _early(opened_min: float, before: float) -> bool:
-    return before > 0 and 0 <= opened_min < before
-
-
-def early_cash(
-    entry: float, bid: float, opened_min: float, minute_now: float | None,
-    *, before: float = CASH_BEFORE_MINUTE, leave: float = CASH_LEAVE_MINUTE, hovering: bool = False,
-) -> str | None:
-    """Why a buy opened before minute 7 should be sold now, or None. A later buy holds."""
-    if not _early(opened_min, before) or entry <= 0 or bid <= entry:
-        return None
-    if hovering:
-        return f"cash-out: bid {bid:.2f} is hovering above the {entry:.2f} paid (bought {opened_min:.0f} min in)"
-    if minute_now is not None and minute_now >= leave:
-        return f"cash-out: bought {opened_min:.0f} min in, selling {bid:.2f} at minute {minute_now:.0f} (paid {entry:.2f})"
-    return None
-
-
-def cash_if_up(entry: float, bid: float, minute_now: float | None, after: float, drop: float = 0.0) -> str | None:
-    """Sell once the window reaches `after` minutes and the bid is above the price paid, or down `drop` of it.
-
-    `after` is the lane's cash_up_minute and `drop` its cash_drop (0 = that side off). A smaller dip
-    is left to the lane's other exit. None before that minute.
-    """
-    if after <= 0 or minute_now is None or minute_now < after or entry <= 0 or bid <= 0:
-        return None
-    if bid > entry:
-        return f"cash-out: bid {bid:.2f} is above the {entry:.2f} paid at minute {minute_now:.0f}"
-    if drop > 0 and (entry - bid) / entry >= drop - 1e-9:
-        return f"cash-out: bid {bid:.2f} is {(entry - bid) / entry:.0%} under the {entry:.2f} paid at minute {minute_now:.0f}"
-    return None
-
-
-def cash_if_losing(entry: float, bid: float, seconds_left: float | None, within: float, hovering: bool) -> str | None:
-    """Sell a hover that is still under the price paid once `within` seconds remain.
-
-    `within` is the lane's cash_left_seconds (0 = off). The market is still quoting, and holding
-    that hover to the result can settle as a total loss. A bid at or above the price paid is left
-    to settle. A move that is not a hover is left to the lane's other exit.
-    """
-    if within <= 0 or not hovering or seconds_left is None or seconds_left < 0 or seconds_left > within:
-        return None
-    if entry <= 0 or bid <= 0 or bid >= entry:
-        return None
-    return f"cash-out: bid {bid:.2f} is under the {entry:.2f} paid with {seconds_left:.0f}s left"
-
-
-def ride_for(seconds_left: float | None, ride: float, patient_left: float) -> float:
-    """How long a visit under the watch line may last before a downtrend is sold.
-
-    `ride` is that wait when at least `patient_left` seconds remain. Less time left shortens it in
-    proportion, so both numbers are the lane's (strategies.toml) and not a fixed clock.
-    """
-    if ride <= 0 or seconds_left is None or seconds_left <= 0:
-        return 0.0
-    if patient_left <= 0 or seconds_left >= patient_left:
-        return ride
-    return ride * seconds_left / patient_left
-
-
-def hard_loss(
-    entry: float, bid: float, under_for: float, loss: float, bounce: float, *, low: float = 0.0, lift: float = 0.0,
-) -> str | None:
-    """Sell once the bid has given back `loss` of the price paid and stayed there for `bounce` seconds.
-
-    A print back above that line restarts `under_for`. A bid more than `lift` above `low` (the worst
-    print of this visit) is already coming back, so it is held. `lift` of 0 ignores that. None while
-    the bounce is still open, or when `loss` is 0. The numbers come from the lane.
-    """
-    if loss <= 0 or entry <= 0 or bid <= 0 or bid > entry * (1.0 - loss):
-        return None
-    if under_for < bounce:
-        return None
-    if lift > 0 and low > 0 and bid > low + lift:
-        return None
-    held = f" for {under_for:.0f}s" if bounce else ""
-    return f"stop-loss: bid {bid:.2f} is {1 - bid / entry:.0%} under the {entry:.2f} paid{held} (watched)"
-
-
-def scalp_hit(bid: float, high: float, arm: float, dip: float) -> str | None:
-    """Sell once the bid has printed `arm` and then fallen `dip` dollars from the high since.
-
-    A higher print raises that high, so a climb keeps riding. None until the arm has printed, or while
-    the bid is still within `dip` of the high. `arm` and `dip` come from the lane.
-    """
-    if arm <= 0 or dip <= 0 or bid <= 0 or high < arm - 1e-9:
-        return None
-    if bid > high - dip + 1e-9:
-        return None
-    return f"scalp: bid {bid:.2f} is {high - bid:.2f} under the {high:.2f} high since {arm:.2f}"
-
-
-def watch_trend(
-    entry: float, bid: float, seconds_left: float | None, under_for: float,
-    *, line: float, ride: float, patient_left: float, trend: bool,
-) -> str | None:
-    """Sell a favorite whose bid has stayed at or under `line` and is trending away.
-
-    A hover or a spike is not a sale: the visit is only being watched. `under_for` is how long this
-    visit has already lasted. The wait is ride_for. None while that wait is still running.
-    A lane leaves this off by not setting `line` (the moonshot lanes).
-    """
-    if line <= 0 or seconds_left is None or seconds_left <= 0:
-        return None
-    if entry <= line or bid <= 0 or bid > line or not trend:
-        return None
-    wait = ride_for(seconds_left, ride, patient_left)
-    if under_for < wait:
-        return None
-    held = f" for {under_for:.0f}s" if wait else ""
-    return f"stop-loss: bid {bid:.2f} trending away under {line:.2f}{held} with {seconds_left:.0f}s left (paid {entry:.2f}) (watched)"
 
 
 def price_shape(points: list[tuple[float, float]], now: float, bid: float) -> str:
@@ -504,22 +377,6 @@ def trail_hit(entry: float, peak: float, bid: float, activate: float, drop: floa
         return None
     if peak >= entry * (1 + activate) - 1e-9 and peak > entry and bid <= peak - drop + 1e-9:
         return f"peak-crash: bid {bid:.2f} is {peak - bid:.2f} off its {peak:.2f} peak (paid {entry:.2f})"
-    return None
-
-
-def spike_hit(
-    history: list[tuple[float, float]], now: float, entry: float, cents: float, seconds: float, min_gain: float = 0.0
-) -> str | None:
-    """A sharp rise: the latest bid is `cents` above the lowest bid of the last `seconds`, and at least `min_gain` above what we paid.
-
-    history is (time, bid) pairs, oldest first, the last being the latest.
-    """
-    if cents <= 0 or len(history) < 2:
-        return None
-    bid = history[-1][1]
-    recent = [b for t, b in history if now - t <= seconds]
-    if bid > entry * (1 + min_gain) - 1e-9 and bid > entry and len(recent) >= 2 and bid - min(recent) >= cents - 1e-9:
-        return f"spike: bid {bid:.2f} is up {bid - min(recent):.2f} in {seconds:.0f}s (paid {entry:.2f})"
     return None
 
 
@@ -587,7 +444,7 @@ def both_sides(spec: LaneSpec, p_yes: float, yes_bid: float, yes_ask: float) -> 
     """Both sides of one market judged together, from one chance and one quote taken at the same moment (2026-11-17, user: "we need a function that determines both sides at the same time", after a market whose YES side was dropped at the screen while only its NO side reached the decisions log).
     `p_yes`: the model's chance that YES pays; NO's is one minus it. `yes_bid`, `yes_ask`: Kalshi's quote for YES; NO costs one minus the YES bid. Each side gets its worth, its all-in cost, its edge and the edge the lane asks for, by the same rule that decides a buy (lanes.wants_bet, lanes.chance_ok).
     The two edges add up to minus the spread and both fees, so they cannot both be over zero: at most one side is worth more than the bet, and `pick` is that side when it also clears the lane's bar and the lane may buy it."""
-    from .lanes import chance_ok, no_buy, wants_bet
+    from .lanes import wants_bet
 
     def read(side: str, worth: float, ask: float) -> SideRead:
         live = 0.0 < ask < 1.0
@@ -598,9 +455,8 @@ def both_sides(spec: LaneSpec, p_yes: float, yes_bid: float, yes_ask: float) -> 
             needs = spec.min_edge_room * max((1.0 - worth) + e, 0.0)
         elif spec.needs_model_edge and spec.min_edge is not None:
             needs = spec.min_edge
-        buyable = live and side in spec.sides and spec.price[0] <= ask <= spec.price[1] and not no_buy(spec, ask)
-        in_band = chance_ok(spec, worth)
-        return SideRead(side, worth, ask, cost, e, needs, buyable, live and wants_bet(spec, worth, ask, e) and in_band, in_band)
+        buyable = live and side in spec.sides and spec.price[0] <= ask <= spec.price[1]
+        return SideRead(side, worth, ask, cost, e, needs, buyable, live and wants_bet(spec, worth, ask, e))
 
     yes = read("yes", p_yes, yes_ask)
     no = read("no", 1.0 - p_yes, 1.0 - yes_bid)
@@ -616,22 +472,6 @@ def both_sides_tag(b: BothSides) -> str:
         return f"{r.side.upper()} worth {r.worth:.2f} costs {r.cost:.3f}, edge {r.edge:+.3f}{needs}{'' if r.buyable else ', not a price the lane buys'}{'' if r.in_band else ', a chance outside the lane' + chr(39) + 's band'}"
 
     return f"[both sides: {one(b.yes)} | {one(b.no)} | {'the rule buys ' + b.pick.upper() if b.pick else 'the rule buys neither'}]"
-
-
-def agreed_pick(b: BothSides, trends: dict[str, str | None]) -> str | None:
-    """The side where worth and trend agree (2026-11-17, user, on KXBTC15M 18:45, whose NO side the model rated worth 0.72 for 0.62 while NO's own risk had worsened two typical moves: "it never should have suggested that, at that time"; "Build the note"): the side the lane's edge rule would buy (both_sides' pick) when that side's risk trend says "holding" (runner.risk_trend_read: the risk has held or improved over the look back). None when the rule buys neither, or when the picked side's risk is worsening, an anomaly or unreadable. `trends`: side -> the risk trend's state, None where it could not be read."""
-    return b.pick if b.pick is not None and trends.get(b.pick) == "holding" else None
-
-
-def agreed_tag(b: BothSides, reads: dict[str, tuple[float, float, str] | None]) -> str:
-    """Worth and trend for both sides in one line for a decision's note. `reads`: side -> runner.risk_trend_read's (reading, look back, state), None when unreadable."""
-
-    def one(r: SideRead) -> str:
-        got = reads.get(r.side)
-        return f"{r.side.upper()} edge {r.edge:+.3f}, risk trend {'unreadable' if got is None else f'{got[0]:+.1f} {got[2]}'}"
-
-    pick = agreed_pick(b, {k: (v[2] if v is not None else None) for k, v in reads.items()})
-    return f"[worth and trend: {one(b.yes)} | {one(b.no)} | agree on {pick.upper() if pick else 'neither'}]"
 
 
 def side_ask_notional(book: dict[str, Any], limit: float, side: str = "yes") -> float:

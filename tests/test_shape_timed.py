@@ -5,7 +5,7 @@ import logging
 
 import pytest
 
-from kalshi_moonshot import pathshape, sellchain, watcher
+from kalshi_moonshot import pathshape, watcher
 from kalshi_moonshot import ticks as ticks_mod
 from tests.test_risk_exit_flow import TICKER, climb, held, level
 from tests.test_shape_shadow import (  # noqa: F401  (the fixture and helpers of the shape step's own tests)
@@ -23,12 +23,6 @@ def test_unit_the_wait_is_a_tenth_of_the_time_left_and_stops_shrinking_at_90_sec
     assert pathshape.timed_window(450.0) == pytest.approx(45.0)
     assert pathshape.timed_window(90.0) == pytest.approx(9.0)
     assert pathshape.timed_window(20.0) == pytest.approx(9.0) and pathshape.timed_window(-5.0) == pytest.approx(9.0)
-
-
-def test_unit_shape_timed_is_a_step_a_chain_may_name_and_is_not_in_the_default_order():
-    assert "shape_timed" in sellchain.SELL_STEPS and "shape_timed" not in sellchain.DEFAULT and "shape_timed" not in sellchain.order_of(())
-    sellchain.check(("shape_timed", "profit_take"), "lane 'a'")
-    assert callable(watcher._SELL["shape_timed"]) and "timed" in pathshape.LOOKS
 
 
 def test_integration_a_steady_fall_gets_one_row_only_after_the_wait_and_no_sale(tmp_path, monkeypatch, caplog):

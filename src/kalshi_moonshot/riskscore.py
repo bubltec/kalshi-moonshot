@@ -183,11 +183,6 @@ def low_risk(chances: Sequence[float] | None, max_risk: float) -> bool:
 SALE_SHARE = 0.5  # a side bought under twice the lane's line is sold at half the price paid instead: structural (it keeps the buy and the sale from contradicting each other), not a tuned number
 
 
-def sale_line(line: float, entry: float) -> float:
-    """The chance at or under which a loss is sold (lane field curve_risk_score): the lane's line, or half the price paid when that is lower. A side bought at 0.80 is sold at the lane's 0.25 (a risk of 75% that has stayed); a side bought at 0.24 would sit on that line from its first second (2026-11-16 23:23: ZEC bought at 0.23 was sold two minutes later), so it is sold at 0.12."""
-    return min(line, SALE_SHARE * entry) if entry > 0 else line
-
-
 def tag(chances: Sequence[float] | None, kalshi: float | None) -> str:
     if not chances:
         return "[risk score unreadable]"

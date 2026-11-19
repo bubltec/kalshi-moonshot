@@ -151,48 +151,6 @@ def example_lane(tmp_path):
     return settings(tmp_path)
 
 
-def test_the_example_lane_loads_and_is_tiered(tmp_path):
-    s = example_lane(tmp_path)
-    lane = lanes.spec_for(s, "fifteen")
-    assert not lane.needs_model_edge and lane.fixed_stake == 2.0 and lane.sides == ("yes", "no")
-    assert lane.price == (0.12, 0.30) and lane.entry_elapsed == (1.0, 12.0)
-    assert lanes.tiered(lane) and "fifteen" in [x.name for x in lanes.tiered_lanes(s)]
-
-
-def test_always_bets_even_when_the_model_sees_no_edge(tmp_path):
-    lane = lanes.spec_for(example_lane(tmp_path), "fifteen")
-    assert lanes.wants_bet(lane, p=0.05, ask=0.20, edge=-0.15)  # no edge needed
-
-
-def test_a_fixed_stake_is_the_same_dollars_whatever_the_odds(tmp_path):
-    s = example_lane(tmp_path)
-    lane = lanes.spec_for(s, "fifteen")
-    cheap = size_bet(lane, s, p=0.05, ask=0.13, available=100, equity=100, lane_exposure=0)
-    dear = size_bet(lane, s, p=0.05, ask=0.28, available=100, equity=100, lane_exposure=0)
-    assert cheap.ok and dear.ok
-    assert 1.7 <= cheap.cost_usd <= 2.0 and 1.7 <= dear.cost_usd <= 2.0  # about $2 either way (whole contracts)
-    assert cheap.contracts > dear.contracts  # a cheaper contract buys more of them, and pays more
-    assert "fixed stake" in cheap.why
-
-
-def test_a_fixed_stake_is_capped_by_the_per_bet_share_of_equity(tmp_path):
-    s = example_lane(tmp_path)
-    lane = lanes.spec_for(s, "fifteen")  # fixed $2, per-bet cap 2% of equity by default
-    small = size_bet(lane, s, 0.05, 0.2, available=100, equity=13.0, lane_exposure=0)
-    assert small.cost_usd <= 13.0 * lane.max_bet_pct + 1e-9  # a flat $2 would be 15% of a $13 balance
-    assert "capped at" in small.why
-    big = size_bet(lane, s, 0.05, 0.2, available=500, equity=500, lane_exposure=0)
-    assert 1.7 <= big.cost_usd <= 2.0  # a fat balance still bets the fixed $2, no more
-
-
-def test_a_fixed_stake_still_respects_cash_and_the_lanes_room(tmp_path):
-    s = example_lane(tmp_path)
-    lane = lanes.spec_for(s, "fifteen")
-    assert size_bet(lane, s, 0.05, 0.2, available=1.0, equity=100, lane_exposure=0).cost_usd <= 1.0
-    full = size_bet(lane, s, 0.05, 0.2, available=100, equity=100, lane_exposure=100 * lane.max_exposure_pct)
-    assert not full.ok and "no room" in full.why
-
-
 def test_the_lane_never_trades_for_real_unless_both_switches_are_on(tmp_path):
     s = settings(tmp_path, mode="trade", live_lanes=frozenset({"fifteen"}), fast_live=False)
     assert not s.is_live("fifteen", "KXBTC15M")  # 15-minute windows are paper by default

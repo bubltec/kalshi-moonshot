@@ -6,7 +6,7 @@
 
 On every risk check the steps are asked in the lane's order. A step answers one of three things: a sale (its reason: the walk ends and the bet is sold), a hold (the walk ends and nothing is sold on this check), or nothing (the next step is asked). A step left out of a chain is not asked.
 
-The steps:
+The steps (a lane with no exit module sells nothing):
   never_ahead   a bet never once in profit is sold at the lane's mark (curve_risk_never_ahead)
   under_even    a favourite whose bid has stayed under even is sold (curve_risk_under_even)
   profit_take   a gain is taken once it is over its bar and the bid has stopped rising (curve_take and its settings: the early take, the sure-win latch, the cushion hold)
@@ -20,7 +20,7 @@ The steps:
 
 Each step reads the lane's existing settings and is off when its setting is off, as it always was; none has a number of its own here. The step bodies are methods of the watcher (ProfitWatcher._sell_<name>): they use its helpers and the bet's state. This module holds the names, the default order, the check of a lane's chain and the note a sale carries.
 
-A lane with NO chain is asked the default order, which is the order the risk exit has always used, and its sale reasons are unchanged. Only a lane that names a chain gets the note at the end of its sale reason:
+A lane sells only through its exit module's steps (2026-11-19, user: "we don't use anything outside modules for buying and selling"); the sale reason carries a note at its end:
 
     [sell chain <exit module, or 'lane'>: a > b > c | sold at <step>]
 
@@ -29,8 +29,7 @@ A chain can be given a name and shared: an exit module ([exit.<name>] in strateg
 
 from __future__ import annotations
 
-DEFAULT = ("never_ahead", "under_even", "profit_take", "trail", "long_hold")  # the order a lane with no chain is asked: the risk exit's order before the chain existed
-SELL_STEPS = (*DEFAULT, "shape", "shape_timed", "trail_timed", "late_tight")  # the steps a lane may name in sell_chain; the watcher holds one method for each (_sell_<name>). `shape` and `trail_timed` are shadow only and asked only where a chain names them
+SELL_STEPS = ("never_ahead", "under_even", "profit_take", "trail", "long_hold", "shape", "shape_timed", "trail_timed", "late_tight")  # the steps a lane may name in its exit module; the watcher holds one method for each (_sell_<name>). `shape`, `shape_timed` and `trail_timed` are shadow only
 KEEP = 900  # what Store.mark_exited keeps of a sale's reason
 
 
@@ -49,11 +48,6 @@ def check(chain: tuple[str, ...] | list[str], who: str) -> None:
     bad = [x for x in chain if x not in SELL_STEPS]
     if bad or len(set(chain)) != len(chain):
         raise ValueError(f"{who}: sell_chain names {bad or 'a step twice'}; the steps are {', '.join(SELL_STEPS)}, each at most once")
-
-
-def order_of(chain: tuple[str, ...] | list[str] | None) -> tuple[str, ...]:
-    """The steps to ask: the lane's chain, or the default order when it has none."""
-    return tuple(chain) if chain else DEFAULT
 
 
 def tag(chain: tuple[str, ...], module: str, step: str) -> str:

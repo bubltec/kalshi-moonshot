@@ -18,7 +18,6 @@ from .lanes import lane_specs
 from .store import Store
 from .strategy import fee_per_contract
 
-FLOOR_MARK = "[floor-bid"  # runner.evaluate puts this at the front of a paper buy that a live lane would have rested at its floor
 MARK = "[rest-v2"
 FOLLOW_UP = 8.0  # seconds after the rest window in which the live lane's fallback buy lands (the order, its retry and the fill)
 MARK_FM = "[fill-model"  # a taker paper bet judged on the tape (settle_taker)
@@ -30,7 +29,7 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
     """Judge every unjudged paper bet of a resting lane that is older than its rest window. Returns {"filled": n, "missed": n}."""
     now = time.time() if now is None else now
     out = {"filled": 0, "missed": 0}
-    specs = {name: sp for name, sp in lane_specs(s).items() if sp.buy_rest_seconds > 0 or sp.entry_approach > 0}
+    specs = {name: sp for name, sp in lane_specs(s).items() if sp.buy_rest_seconds > 0}
     if not specs or tape is None:
         return out
     for lane, spec in specs.items():
@@ -44,9 +43,7 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
             series = r["ticker"].split("-")[0]
             if s.is_live(lane, series):
                 continue  # a live lane's bets were real orders: they filled or they were not bets
-            if FLOOR_MARK in (r["reason"] or ""):  # a floor bid: rests at the price logged (the lane's floor) for the arm time
-                window, price = spec.entry_arm_seconds, round(float(r["ask"]), 4)
-            elif spec.buy_rest_seconds > 0:
+            if spec.buy_rest_seconds > 0:
                 window, price = spec.buy_rest_seconds, round(max(0.01, float(r["ask"]) - spec.buy_rest_below), 4)
             else:
                 continue  # a taker buy on a lane that also has a floor bid: it was logged at the ask it took
@@ -125,7 +122,7 @@ def settle_taker(s: Settings, store: Store, tape: Any, now: float | None = None)
     one whose ask was over the limit becomes a pass. Live lanes are never touched. Returns {"filled": n, "missed": n}."""
     now = time.time() if now is None else now
     out = {"filled": 0, "missed": 0}
-    specs = {name: sp for name, sp in lane_specs(s).items() if sp.paper_fill_model and sp.buy_rest_seconds <= 0 and sp.entry_approach <= 0}
+    specs = {name: sp for name, sp in lane_specs(s).items() if sp.paper_fill_model and sp.buy_rest_seconds <= 0}
     if not specs or tape is None:
         return out
     for lane, spec in specs.items():
