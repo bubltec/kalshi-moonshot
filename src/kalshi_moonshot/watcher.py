@@ -40,6 +40,7 @@ from . import (
     runner,
     sellchain,
     settlement,
+    steptime,
     variants,
 )
 from . import ticks as ticks_mod
@@ -350,6 +351,15 @@ class ProfitWatcher:
             return
         with self._lock:
             hits = [t for (ticker, _), t in self.targets.items() if ticker == e["ticker"]]
+        if not hits:
+            return
+        with steptime.tick("sell"):  # the sell decision of every bet on this market for this tick (budget: 60 ms)
+            self._quote_hits(e, hits)
+        line = steptime.tick_report()
+        if line:
+            log.info(line)
+
+    def _quote_hits(self, e: dict[str, Any], hits: list) -> None:
         for t in hits:
             now = float(e["ts"])
             bid = side_bid(t.side, e["bid"], e["ask"])

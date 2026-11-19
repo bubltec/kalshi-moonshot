@@ -23,7 +23,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
-from . import runner
+from . import runner, steptime
 from .config import Settings
 from .estimators import Estimator
 from .kalshi import KalshiClient, KalshiError
@@ -224,7 +224,11 @@ class EntryWatcher:
                 continue
             try:
                 self._last[key] = time.time()
-                self.review(*key)
+                with steptime.tick("buy review"):  # the entry logic for one tick: the lane's filters and the buy module's screen, up to the queued evaluation (budget: 60 ms)
+                    self.review(*key)
+                line = steptime.tick_report()
+                if line:
+                    log.info(line)
             except KalshiError as exc:
                 log.warning("entry watcher: could not review %s (%s)", key[1], exc)
             except Exception:

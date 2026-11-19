@@ -502,6 +502,7 @@ class Worker:
             self.jobs.complete(job.id, handler(job) or "")
             self.last_progress = time.time()
             if job.kind == "evaluate":
+                steptime.tick_record("buy evaluate", (time.time() - began) * 1000.0)
                 shot = job.payload.get("shot") or {}
                 log.info("buy timing %s %s: %.0f ms from the queue to the start of the evaluation, %.1f ms evaluating and deciding. %s", shot.get("lane", ""), shot.get("ticker", ""),
                          max(0.0, began - job.created_ts) * 1000.0, (time.time() - began) * 1000.0, steptime.breakdown_ms())

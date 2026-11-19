@@ -87,3 +87,23 @@ def test_the_database_wrapper_records_its_lock_wait_and_statement_time():
         steptime.end()
     assert costs["database"] >= 0.02 and "database lock wait" in costs
 
+
+
+def test_tick_latency_counts_readings_over_the_budget():
+    steptime.tick_reset()
+    for ms in (1.0, 2.0, 3.0, 90.0):
+        steptime.tick_record("sell", ms)
+    st = steptime.tick_stats()["sell"]
+    assert st["n"] == 4 and st["over"] == 1 and st["max"] == 90.0
+    line = steptime.tick_report(force=True)
+    assert line and "sell n 4" in line and "over 1" in line
+    assert steptime.tick_report(now=steptime._reported[0] + 1) is None  # not again inside the gap
+    steptime.tick_reset()
+
+
+def test_tick_context_records_a_reading():
+    steptime.tick_reset()
+    with steptime.tick("buy review"):
+        pass
+    assert steptime.tick_stats()["buy review"]["n"] == 1
+    steptime.tick_reset()
