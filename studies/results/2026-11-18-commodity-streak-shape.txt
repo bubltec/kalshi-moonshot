@@ -1,0 +1,141 @@
+window: 11-09 04:50 to 11-16 23:50 UTC; 4584 commodity favourites over 119 clock hours; periods with a full 3-hour lead-in (20+ markets): 115. Periods chosen after seeing the data.
+every reading is the median over the markets that closed in the 3 hours before the hour; per kind: the median of those hourly medians (25th to 75th)
+  all markets, whole tape: unit 10.44, flips 3.00, contested 0.34, decisive 0.28, eff 0.10, range 0.61
+  loss hours (worst fifth by net per $100): hours 23, bets 875, lost 322, markets in lead-in median 96
+      unit       median  10.244  (  9.564 to  11.263)
+      flips      median   3.000  (  2.000 to   4.000)
+      contested  median   0.334  (  0.279 to   0.375)
+      decisive   median   0.284  (  0.270 to   0.296)
+      eff        median   0.101  (  0.091 to   0.105)
+      range      median   0.617  (  0.580 to   0.635)
+  clean hours (best fifth by net per $100): hours 23, bets 780, lost 153, markets in lead-in median 72
+      unit       median  10.262  (  8.872 to  10.898)
+      flips      median   3.000  (  2.000 to   4.250)
+      contested  median   0.348  (  0.265 to   0.391)
+      decisive   median   0.283  (  0.263 to   0.321)
+      eff        median   0.093  (  0.087 to   0.105)
+      range      median   0.600  (  0.561 to   0.623)
+  other hours: hours 69, bets 2689, lost 777, markets in lead-in median 96
+      unit       median  10.527  (  9.688 to  11.246)
+      flips      median   3.000  (  2.000 to   4.000)
+      contested  median   0.331  (  0.307 to   0.375)
+      decisive   median   0.282  (  0.265 to   0.296)
+      eff        median   0.095  (  0.087 to   0.101)
+      range      median   0.619  (  0.592 to   0.639)
+--- the hours themselves (a label for reading, not a rule)
+  11-09 06:00 UTC  clean bets  37 lost  7 net/100   +3.5 | unit 8.76 flips 1.5 contested 0.22 decisive 0.341 eff 0.10 range 0.53
+  11-09 07:00 UTC  clean bets  35 lost  7 net/100  +10.3 | unit 8.57 flips 1.0 contested 0.22 decisive 0.331 eff 0.10 range 0.54
+  11-09 08:00 UTC  clean bets  38 lost  9 net/100   +6.2 | unit 8.99 flips 2.0 contested 0.23 decisive 0.344 eff 0.10 range 0.55
+  11-09 09:00 UTC  clean bets  37 lost  6 net/100  +11.5 | unit 8.64 flips 2.0 contested 0.24 decisive 0.329 eff 0.11 range 0.57
+  11-09 10:00 UTC  clean bets  39 lost 10 net/100   +3.5 | unit 9.09 flips 2.5 contested 0.28 decisive 0.325 eff 0.11 range 0.60
+  11-09 11:00 UTC  other bets  36 lost  8 net/100   +2.5 | unit 9.44 flips 3.0 contested 0.30 decisive 0.302 eff 0.12 range 0.61
+  11-09 12:00 UTC  other bets  44 lost 13 net/100   -6.0 | unit 9.58 flips 2.0 contested 0.30 decisive 0.300 eff 0.11 range 0.58
+  11-09 13:00 UTC  other bets  43 lost 12 net/100   -4.1 | unit 10.86 flips 2.0 contested 0.32 decisive 0.282 eff 0.10 range 0.61
+  11-09 14:00 UTC  other bets  19 lost  5 net/100   -2.9 | unit 10.14 flips 2.0 contested 0.31 decisive 0.302 eff 0.10 range 0.61
+  11-09 15:00 UTC  clean bets  39 lost  9 net/100   +4.4 | unit 10.05 flips 3.0 contested 0.33 decisive 0.283 eff 0.10 range 0.63
+  11-09 16:00 UTC  other bets  40 lost 11 net/100   -3.2 | unit 9.96 flips 2.5 contested 0.32 decisive 0.278 eff 0.10 range 0.59
+  11-09 17:00 UTC  other bets  46 lost 15 net/100   -5.0 | unit 10.56 flips 2.0 contested 0.33 decisive 0.260 eff 0.09 range 0.56
+  11-09 18:00 UTC  other bets  42 lost 13 net/100   -4.1 | unit 11.50 flips 2.0 contested 0.37 decisive 0.260 eff 0.09 range 0.59
+  11-09 19:00 UTC  other bets  40 lost 12 net/100   -4.0 | unit 10.83 flips 3.0 contested 0.39 decisive 0.264 eff 0.09 range 0.62
+  11-09 20:00 UTC  other bets  41 lost 12 net/100   -1.0 | unit 10.70 flips 3.0 contested 0.40 decisive 0.268 eff 0.10 range 0.65
+  11-09 21:00 UTC  other bets  38 lost 10 net/100   -0.9 | unit 9.60 flips 3.0 contested 0.37 decisive 0.283 eff 0.10 range 0.62
+  11-09 22:00 UTC  loss  bets  15 lost  6 net/100  -11.5 | unit 8.61 flips 3.0 contested 0.37 decisive 0.284 eff 0.11 range 0.59
+  11-09 23:00 UTC  other bets  25 lost  8 net/100   -8.9 | unit 8.95 flips 3.0 contested 0.37 decisive 0.258 eff 0.10 range 0.59
+  11-10 00:00 UTC  clean bets  30 lost  5 net/100   +4.0 | unit 9.00 flips 2.0 contested 0.37 decisive 0.264 eff 0.11 range 0.59
+  11-10 01:00 UTC  clean bets  31 lost  6 net/100   +6.6 | unit 8.04 flips 1.0 contested 0.25 decisive 0.327 eff 0.12 range 0.53
+  11-10 02:00 UTC  other bets  37 lost  9 net/100   +2.1 | unit 7.70 flips 0.0 contested 0.15 decisive 0.347 eff 0.13 range 0.50
+  11-10 03:00 UTC  other bets  42 lost 13 net/100   -5.8 | unit 7.45 flips 1.0 contested 0.20 decisive 0.349 eff 0.11 range 0.51
+  11-10 04:00 UTC  other bets  40 lost 11 net/100   +0.4 | unit 9.70 flips 2.0 contested 0.33 decisive 0.286 eff 0.10 range 0.58
+  11-10 05:00 UTC  loss  bets  32 lost 10 net/100  -11.7 | unit 10.24 flips 4.0 contested 0.34 decisive 0.286 eff 0.10 range 0.60
+  11-10 06:00 UTC  other bets  46 lost 15 net/100   -6.0 | unit 10.02 flips 2.0 contested 0.26 decisive 0.311 eff 0.10 range 0.58
+  11-10 07:00 UTC  loss  bets  43 lost 17 net/100  -15.3 | unit 10.02 flips 2.0 contested 0.25 decisive 0.313 eff 0.10 range 0.55
+  11-10 08:00 UTC  loss  bets  44 lost 15 net/100  -10.1 | unit 11.45 flips 2.0 contested 0.32 decisive 0.278 eff 0.09 range 0.57
+  11-10 09:00 UTC  other bets  38 lost 10 net/100   -1.9 | unit 12.32 flips 4.0 contested 0.44 decisive 0.247 eff 0.08 range 0.64
+  11-10 10:00 UTC  other bets  37 lost 10 net/100   -0.8 | unit 12.27 flips 5.0 contested 0.39 decisive 0.253 eff 0.08 range 0.65
+  11-10 11:00 UTC  other bets  39 lost 11 net/100   +1.4 | unit 11.71 flips 5.0 contested 0.37 decisive 0.265 eff 0.08 range 0.63
+  11-10 12:00 UTC  other bets  41 lost 10 net/100   +1.7 | unit 10.71 flips 5.0 contested 0.35 decisive 0.278 eff 0.09 range 0.61
+  11-10 13:00 UTC  loss  bets  41 lost 13 net/100  -10.2 | unit 9.79 flips 4.0 contested 0.33 decisive 0.284 eff 0.10 range 0.54
+  11-10 14:00 UTC  other bets  43 lost 14 net/100   -7.1 | unit 9.63 flips 3.0 contested 0.32 decisive 0.289 eff 0.09 range 0.58
+  11-10 15:00 UTC  other bets  42 lost 12 net/100   -2.4 | unit 10.15 flips 4.0 contested 0.30 decisive 0.289 eff 0.07 range 0.63
+  11-10 16:00 UTC  other bets  41 lost 13 net/100   -7.2 | unit 10.83 flips 4.0 contested 0.32 decisive 0.291 eff 0.07 range 0.66
+  11-10 17:00 UTC  other bets  42 lost 13 net/100   -4.5 | unit 11.25 flips 4.0 contested 0.33 decisive 0.283 eff 0.08 range 0.65
+  11-10 18:00 UTC  clean bets  38 lost  8 net/100   +9.3 | unit 10.26 flips 4.0 contested 0.35 decisive 0.292 eff 0.09 range 0.62
+  11-10 19:00 UTC  other bets  43 lost 14 net/100   -7.3 | unit 10.24 flips 4.0 contested 0.35 decisive 0.276 eff 0.09 range 0.62
+  11-10 20:00 UTC  clean bets  39 lost  9 net/100   +4.0 | unit 10.15 flips 4.5 contested 0.35 decisive 0.275 eff 0.09 range 0.61
+  11-10 21:00 UTC  loss  bets  50 lost 19 net/100  -11.7 | unit 10.25 flips 4.0 contested 0.31 decisive 0.275 eff 0.09 range 0.62
+  11-10 23:00 UTC  other bets  35 lost 10 net/100   -1.5 | unit 11.69 flips 5.0 contested 0.39 decisive 0.255 eff 0.09 range 0.68
+  11-11 00:00 UTC  clean bets  37 lost  5 net/100  +17.9 | unit 12.01 flips 5.0 contested 0.55 decisive 0.231 eff 0.09 range 0.64
+  11-11 01:00 UTC  clean bets  28 lost  4 net/100  +15.5 | unit 10.61 flips 2.0 contested 0.35 decisive 0.283 eff 0.09 range 0.60
+  11-11 02:00 UTC  other bets  38 lost 11 net/100   -4.0 | unit 8.89 flips 2.0 contested 0.26 decisive 0.316 eff 0.11 range 0.53
+  11-11 03:00 UTC  other bets  39 lost 11 net/100   -0.8 | unit 8.70 flips 2.0 contested 0.27 decisive 0.319 eff 0.12 range 0.57
+  11-11 04:00 UTC  loss  bets  47 lost 20 net/100  -20.3 | unit 8.44 flips 1.5 contested 0.31 decisive 0.309 eff 0.11 range 0.56
+  11-11 05:00 UTC  other bets  44 lost 12 net/100   -1.6 | unit 10.58 flips 2.0 contested 0.41 decisive 0.253 eff 0.11 range 0.63
+  11-11 06:00 UTC  other bets  40 lost 12 net/100   -3.9 | unit 10.91 flips 2.0 contested 0.36 decisive 0.299 eff 0.11 range 0.63
+  11-11 07:00 UTC  other bets  43 lost 12 net/100   -2.3 | unit 11.07 flips 2.0 contested 0.34 decisive 0.302 eff 0.10 range 0.64
+  11-11 08:00 UTC  other bets  40 lost 11 net/100   -1.7 | unit 10.81 flips 2.5 contested 0.33 decisive 0.300 eff 0.09 range 0.62
+  11-11 09:00 UTC  other bets  33 lost 10 net/100   -7.8 | unit 10.53 flips 3.0 contested 0.31 decisive 0.286 eff 0.09 range 0.62
+  11-11 10:00 UTC  loss  bets  43 lost 14 net/100  -10.4 | unit 9.86 flips 3.0 contested 0.28 decisive 0.307 eff 0.11 range 0.62
+  11-11 11:00 UTC  loss  bets  44 lost 16 net/100  -13.5 | unit 9.83 flips 2.0 contested 0.26 decisive 0.314 eff 0.13 range 0.64
+  11-11 12:00 UTC  clean bets  34 lost  6 net/100   +4.3 | unit 10.58 flips 3.0 contested 0.29 decisive 0.290 eff 0.13 range 0.66
+  11-11 13:00 UTC  other bets  38 lost 10 net/100   +2.8 | unit 10.58 flips 2.5 contested 0.29 decisive 0.287 eff 0.10 range 0.62
+  11-11 14:00 UTC  other bets  35 lost 10 net/100   -4.1 | unit 10.31 flips 3.0 contested 0.30 decisive 0.283 eff 0.10 range 0.60
+  11-11 15:00 UTC  other bets  37 lost 10 net/100   -2.9 | unit 9.18 flips 2.0 contested 0.26 decisive 0.312 eff 0.10 range 0.54
+  11-11 16:00 UTC  other bets  39 lost  9 net/100   +2.4 | unit 9.40 flips 2.0 contested 0.27 decisive 0.296 eff 0.10 range 0.59
+  11-11 17:00 UTC  other bets  39 lost 11 net/100   +0.9 | unit 9.75 flips 2.0 contested 0.25 decisive 0.292 eff 0.09 range 0.59
+  11-11 18:00 UTC  other bets  42 lost 10 net/100   -0.8 | unit 9.54 flips 2.0 contested 0.31 decisive 0.296 eff 0.10 range 0.62
+  11-11 19:00 UTC  loss  bets  43 lost 15 net/100   -9.3 | unit 9.25 flips 2.0 contested 0.30 decisive 0.310 eff 0.10 range 0.62
+  11-11 20:00 UTC  other bets  43 lost 14 net/100   -6.8 | unit 9.69 flips 4.0 contested 0.32 decisive 0.303 eff 0.10 range 0.64
+  11-11 21:00 UTC  other bets  42 lost 11 net/100   +0.8 | unit 11.13 flips 5.0 contested 0.36 decisive 0.261 eff 0.09 range 0.65
+  11-11 22:00 UTC  loss  bets  15 lost  6 net/100  -14.4 | unit 11.81 flips 5.0 contested 0.42 decisive 0.240 eff 0.09 range 0.64
+  11-11 23:00 UTC  other bets  37 lost 12 net/100   -7.8 | unit 11.99 flips 4.5 contested 0.44 decisive 0.229 eff 0.09 range 0.62
+  11-12 00:00 UTC  clean bets  33 lost  6 net/100  +10.5 | unit 11.99 flips 5.0 contested 0.45 decisive 0.227 eff 0.08 range 0.62
+  11-12 01:00 UTC  clean bets  36 lost  8 net/100   +8.2 | unit 11.12 flips 4.0 contested 0.39 decisive 0.250 eff 0.08 range 0.60
+  11-12 02:00 UTC  clean bets  38 lost  8 net/100   +4.4 | unit 10.67 flips 3.5 contested 0.35 decisive 0.285 eff 0.09 range 0.59
+  11-12 03:00 UTC  loss  bets  36 lost 14 net/100  -17.6 | unit 9.55 flips 2.0 contested 0.28 decisive 0.298 eff 0.10 range 0.59
+  11-12 04:00 UTC  other bets  46 lost 15 net/100   -7.3 | unit 11.17 flips 3.0 contested 0.35 decisive 0.280 eff 0.09 range 0.61
+  11-12 05:00 UTC  other bets  32 lost  9 net/100   -8.2 | unit 11.34 flips 3.0 contested 0.37 decisive 0.275 eff 0.09 range 0.65
+  11-12 06:00 UTC  other bets  28 lost  7 net/100   +0.5 | unit 11.47 flips 2.0 contested 0.29 decisive 0.309 eff 0.09 range 0.65
+  11-12 19:00 UTC  other bets  42 lost 14 net/100   -7.5 | unit 12.31 flips 4.0 contested 0.34 decisive 0.266 eff 0.07 range 0.60
+  11-12 20:00 UTC  other bets  42 lost 13 net/100   -6.4 | unit 11.92 flips 4.0 contested 0.39 decisive 0.249 eff 0.07 range 0.62
+  11-12 21:00 UTC  loss  bets  43 lost 18 net/100  -20.3 | unit 11.50 flips 4.0 contested 0.41 decisive 0.238 eff 0.07 range 0.62
+  11-12 23:00 UTC  loss  bets  32 lost 11 net/100  -11.0 | unit 11.45 flips 3.5 contested 0.48 decisive 0.224 eff 0.10 range 0.62
+  11-13 00:00 UTC  other bets  41 lost 10 net/100   +2.6 | unit 11.55 flips 3.0 contested 0.44 decisive 0.233 eff 0.10 range 0.62
+  11-13 01:00 UTC  other bets  33 lost  9 net/100   -1.2 | unit 11.69 flips 2.0 contested 0.34 decisive 0.269 eff 0.09 range 0.61
+  11-13 02:00 UTC  loss  bets  32 lost 11 net/100  -11.5 | unit 10.51 flips 2.0 contested 0.27 decisive 0.294 eff 0.10 range 0.57
+  11-13 03:00 UTC  other bets  36 lost 13 net/100   -7.2 | unit 9.32 flips 2.0 contested 0.28 decisive 0.290 eff 0.10 range 0.57
+  11-13 04:00 UTC  loss  bets  46 lost 17 net/100  -13.2 | unit 9.06 flips 2.0 contested 0.35 decisive 0.284 eff 0.10 range 0.60
+  11-13 05:00 UTC  other bets  40 lost 12 net/100   -5.8 | unit 10.95 flips 4.0 contested 0.38 decisive 0.269 eff 0.09 range 0.67
+  11-13 06:00 UTC  other bets  42 lost 12 net/100   -0.6 | unit 11.59 flips 4.0 contested 0.40 decisive 0.262 eff 0.08 range 0.67
+  11-13 07:00 UTC  loss  bets  43 lost 18 net/100  -20.1 | unit 11.57 flips 4.0 contested 0.41 decisive 0.256 eff 0.08 range 0.66
+  11-13 08:00 UTC  loss  bets  41 lost 14 net/100  -11.0 | unit 11.62 flips 5.0 contested 0.41 decisive 0.260 eff 0.08 range 0.64
+  11-13 09:00 UTC  loss  bets  40 lost 13 net/100  -11.1 | unit 11.08 flips 4.0 contested 0.38 decisive 0.268 eff 0.09 range 0.64
+  11-13 10:00 UTC  other bets  37 lost 12 net/100   -8.7 | unit 10.40 flips 4.0 contested 0.32 decisive 0.280 eff 0.10 range 0.65
+  11-13 11:00 UTC  loss  bets  42 lost 15 net/100   -9.7 | unit 10.62 flips 3.0 contested 0.28 decisive 0.283 eff 0.10 range 0.63
+  11-13 12:00 UTC  loss  bets  41 lost 16 net/100  -14.2 | unit 10.67 flips 3.0 contested 0.35 decisive 0.272 eff 0.11 range 0.64
+  11-13 13:00 UTC  other bets  36 lost  9 net/100   -4.1 | unit 11.56 flips 4.0 contested 0.41 decisive 0.251 eff 0.09 range 0.67
+  11-13 14:00 UTC  other bets  42 lost 11 net/100   +2.8 | unit 11.48 flips 3.0 contested 0.34 decisive 0.274 eff 0.09 range 0.65
+  11-13 15:00 UTC  other bets  48 lost 16 net/100   -7.6 | unit 11.49 flips 4.0 contested 0.33 decisive 0.281 eff 0.08 range 0.64
+  11-13 16:00 UTC  clean bets  40 lost  8 net/100   +5.5 | unit 11.13 flips 4.0 contested 0.32 decisive 0.285 eff 0.08 range 0.64
+  11-13 17:00 UTC  other bets  43 lost 12 net/100   +2.9 | unit 10.64 flips 5.0 contested 0.34 decisive 0.284 eff 0.08 range 0.62
+  11-13 18:00 UTC  other bets  36 lost 10 net/100   -2.4 | unit 10.18 flips 3.0 contested 0.31 decisive 0.287 eff 0.09 range 0.63
+  11-13 19:00 UTC  other bets  44 lost 13 net/100   -2.7 | unit 9.20 flips 2.0 contested 0.31 decisive 0.292 eff 0.11 range 0.59
+  11-13 20:00 UTC  other bets  41 lost 12 net/100   -0.6 | unit 9.53 flips 2.0 contested 0.32 decisive 0.292 eff 0.10 range 0.60
+  11-13 21:00 UTC  other bets  34 lost  8 net/100   -4.3 | unit 10.04 flips 2.0 contested 0.33 decisive 0.285 eff 0.10 range 0.62
+  11-14 00:00 UTC  loss  bets  20 lost  8 net/100   -9.4 | unit 8.65 flips 0.0 contested 0.26 decisive 0.291 eff 0.11 range 0.50
+  11-14 03:00 UTC  clean bets  15 lost  3 net/100   +8.6 | unit 11.56 flips 3.0 contested 0.65 decisive 0.168 eff 0.09 range 0.57
+  11-14 04:00 UTC  clean bets  15 lost  4 net/100   +3.5 | unit 8.67 flips 1.0 contested 0.44 decisive 0.245 eff 0.09 range 0.52
+  11-16 00:00 UTC  clean bets  33 lost  6 net/100  +13.4 | unit 7.83 flips 1.0 contested 0.25 decisive 0.317 eff 0.15 range 0.54
+  11-16 01:00 UTC  other bets  40 lost 11 net/100   -0.0 | unit 8.09 flips 1.0 contested 0.25 decisive 0.317 eff 0.15 range 0.54
+  11-16 02:00 UTC  other bets  42 lost 13 net/100   -6.1 | unit 8.66 flips 3.0 contested 0.31 decisive 0.298 eff 0.12 range 0.58
+  11-16 03:00 UTC  loss  bets  42 lost 16 net/100  -15.0 | unit 9.57 flips 3.5 contested 0.35 decisive 0.288 eff 0.10 range 0.62
+  11-16 04:00 UTC  other bets  44 lost 13 net/100   +2.9 | unit 11.46 flips 4.5 contested 0.43 decisive 0.250 eff 0.08 range 0.64
+  11-16 15:00 UTC  clean bets  39 lost  9 net/100   +3.8 | unit 12.21 flips 8.0 contested 0.35 decisive 0.268 eff 0.07 range 0.67
+  11-16 16:00 UTC  other bets  42 lost 14 net/100   -5.1 | unit 10.31 flips 5.5 contested 0.35 decisive 0.269 eff 0.08 range 0.62
+  11-16 17:00 UTC  other bets  40 lost 10 net/100   +1.7 | unit 10.60 flips 6.5 contested 0.41 decisive 0.265 eff 0.08 range 0.64
+  11-16 18:00 UTC  clean bets  31 lost  4 net/100  +11.3 | unit 10.65 flips 6.0 contested 0.40 decisive 0.263 eff 0.08 range 0.62
+  11-16 19:00 UTC  other bets  40 lost 12 net/100   -0.3 | unit 10.49 flips 4.0 contested 0.36 decisive 0.278 eff 0.09 range 0.60
+  11-16 20:00 UTC  other bets  44 lost 13 net/100   -2.6 | unit 9.73 flips 4.0 contested 0.38 decisive 0.280 eff 0.09 range 0.60
+  11-16 21:00 UTC  clean bets  38 lost  6 net/100  +17.0 | unit 10.37 flips 5.0 contested 0.39 decisive 0.266 eff 0.09 range 0.61
+  11-16 22:00 UTC  other bets  17 lost  6 net/100   -4.7 | unit 9.99 flips 4.5 contested 0.40 decisive 0.264 eff 0.10 range 0.60
+  11-16 23:00 UTC  other bets  28 lost  8 net/100   -3.0 | unit 9.87 flips 4.0 contested 0.40 decisive 0.261 eff 0.11 range 0.59
+DONE
