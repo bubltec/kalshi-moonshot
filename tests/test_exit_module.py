@@ -73,18 +73,3 @@ def test_unit_an_exit_module_with_empty_parts_changes_nothing(tmp_path, monkeypa
 # Through the lane file, the watcher and its sale signals (tests/test_risk_exit_flow.py's held bet): the module's loss part decides the sale.
 QUIET = "exit_module='quiet'\n\n[exit.quiet]\n[exit.quiet.profit]\n[exit.quiet.loss]\ncurve_risk_line_live=false"
 
-
-def test_integration_a_bet_far_under_the_line_is_sold_with_no_module(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0)
-    assert sold_after(w, 0.20, 450) is not None
-
-
-def test_integration_the_modules_loss_part_reaches_the_watcher_and_holds_the_same_bet(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra=QUIET)
-    assert w.targets[next(iter(w.targets))].risk_line_live is False
-    assert sold_after(w, 0.20, 450) is None
-
-
-def test_integration_the_lanes_own_setting_beats_the_module_at_the_watcher(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_line_live=true\n" + QUIET)
-    assert sold_after(w, 0.20, 450) is not None

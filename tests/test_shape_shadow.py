@@ -190,37 +190,13 @@ def test_integration_a_bet_that_is_ahead_gets_no_row(tmp_path, monkeypatch):
 
 
 def test_integration_a_lane_without_shape_in_its_chain_writes_no_shape_row(tmp_path, monkeypatch):
-    for name, extra in (("plain", ""), ("chain", "sell_chain=['profit_take','trail','long_hold','loss']")):
+    for name, extra in (("plain", ""), ("chain", "sell_chain=['profit_take','trail','long_hold']")):
         (tmp_path / name).mkdir()
         ticks_mod.mids._rows.clear()
         seed(0.002)
         w = held(tmp_path / name, monkeypatch, live=False, extra=extra)
         run(w, FALL)
         assert rows(tmp_path / name) == [] and len(w.targets[(TICKER, "risk_only")].shape_path) == 0
-        assert rows(tmp_path / name, kind=None)  # the loss step's own shadow row is there as before: only the shape rows are absent
-
-
-def test_integration_shape_first_in_a_chain_does_not_change_the_loss_steps_sale(tmp_path, monkeypatch):
-    out = []
-    for name, chain in (("loss", "['loss']"), ("both", "['shape','loss']")):
-        (tmp_path / name).mkdir()
-        ticks_mod.mids._rows.clear()
-        seed(0.002)
-        w = held(tmp_path / name, monkeypatch, live=True, extra=f"sell_chain={chain}")
-        sale = None
-        for k, b in enumerate(FALL):
-            ticks_mod.mids.note(TICKER, CLOSE - 449 + k, b - 0.005, b + 0.005)
-            yes_bid(w, b, 449 - k)
-            got = signals(w)
-            if got:
-                sale = (k, got[0].why)
-                break
-        out.append(sale)
-    alone, both = out
-    assert alone is not None and both is not None and both[0] == alone[0]  # the same second
-    assert alone[1].endswith("[sell chain lane: loss | sold at loss]") and both[1].endswith("[sell chain lane: shape > loss | sold at loss]")
-    assert both[1].split(" [sell chain")[0] == alone[1].split(" [sell chain")[0]
-    assert rows(tmp_path / "both") and rows(tmp_path / "loss") == []
 
 
 def test_integration_an_exit_modules_steps_may_name_shape(tmp_path, monkeypatch):
@@ -251,10 +227,3 @@ def test_integration_an_error_in_the_shape_step_does_not_stop_the_profit_take(tm
     warned = [r.getMessage() for r in caplog.records if "the shape step failed" in r.getMessage()]
     assert len(warned) == 1 and TICKER in warned[0] and "risk_only" in warned[0] and "a bad path" in warned[0]  # once a bet, not once a check
 
-
-def test_integration_an_error_in_the_shape_step_does_not_stop_a_loss_sale_either(tmp_path, monkeypatch):
-    monkeypatch.setattr(pathshape, "shape", lambda *a, **k: 1 / 0)
-    seed(0.002)
-    w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['shape','loss']")
-    got = run(w, FALL)
-    assert got and got[0].why.startswith("curve risk exit (max loss)") and rows(tmp_path) == []

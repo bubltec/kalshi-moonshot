@@ -111,3 +111,21 @@ def test_unit_a_shadow_late_tight_in_the_chain_does_not_change_the_lane_version(
     shadow = _spec(sell_chain=("trail", "late_tight", "long_hold"), curve_risk_late_tight=3.0)
     live = _spec(sell_chain=("trail", "late_tight", "long_hold"), curve_risk_late_tight=3.0, curve_risk_late_tight_live=True)
     assert lanes.settings_of(plain, cfg) == lanes.settings_of(shadow, cfg) != lanes.settings_of(live, cfg)
+
+
+def test_integration_there_is_no_bid_floor_a_bet_whose_bid_fell_under_five_cents_is_still_sold(tmp_path, monkeypatch):
+    """2026-11-19, user: "we should remove loss AND the bid_floor concept". The 0.05 floor (CURVE_MIN_BID) that every sale step used to respect is gone: a bid of 0.03 is a bid like any other."""
+    assert not hasattr(watcher, "CURVE_MIN_BID")
+    w = lane(tmp_path, monkeypatch)
+    run_up(w)
+    tick(w, 0.90, 160)
+    got = tick(w, 0.03, 140)
+    assert got and "late tight" in got[0].why and "sells at 0.03" in got[0].why
+
+
+def test_integration_under_even_also_sells_at_a_bid_under_five_cents(tmp_path, monkeypatch):
+    from tests.test_risk_exit_flow import flat, quotes
+
+    w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['under_even']\ncurve_risk_under_even=0.1\ncurve_risk_under_even_live=true")
+    out = quotes(w, flat(0.78, 445, 305) + [(left, 0.03) for left in range(300, 200, -1)])
+    assert out and out[0].why.startswith("curve risk exit (under even)") and "bid 0.03" in out[0].why

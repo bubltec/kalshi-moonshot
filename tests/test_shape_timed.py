@@ -58,7 +58,7 @@ def test_integration_a_bet_that_comes_back_ahead_starts_the_wait_over(tmp_path, 
 
 def test_integration_a_lane_without_the_step_writes_no_shape_timed_row(tmp_path, monkeypatch):
     seed(0.002)
-    w = held(tmp_path, monkeypatch, live=False, extra="sell_chain=['profit_take','trail','long_hold','loss']")
+    w = held(tmp_path, monkeypatch, live=False, extra="sell_chain=['profit_take','trail','long_hold']")
     run(w, FALL)
     assert rows(tmp_path, kind="shape_timed") == []
 

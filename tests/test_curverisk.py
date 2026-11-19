@@ -108,24 +108,6 @@ def run(monkeypatch, t, bid, p, seconds=30, left0=100.0, tmp=None):
     return None, None, logged
 
 
-def test_live_it_sells_when_the_price_cushion_is_under_the_line_and_the_loss_is_small(monkeypatch):
-    t = target(risk_live=True)
-    _, reason, _ = run(monkeypatch, t, bid=0.48, p=0.85)  # the market says 0.52, the curve says 0.85: price is the worse one
-    assert reason and reason.startswith("curve risk exit") and "price cushion the worse" in reason
-
-
-def test_shadow_logs_the_sale_once_and_sells_nothing(monkeypatch):
-    t = target(risk_live=False)
-    _, reason, logged = run(monkeypatch, t, bid=0.48, p=0.85, seconds=60)
-    assert reason is None and sum("curve risk shadow" in m for m in logged) == 1
-
-
-def test_a_high_chance_holds_and_the_max_loss_sells_at_once(monkeypatch):
-    assert run(monkeypatch, target(risk_live=True), bid=0.80, p=0.90)[1] is None  # plenty of cushion
-    i, reason, _ = run(monkeypatch, target(risk_live=True), bid=0.30, p=0.85)  # a 63% loss at q 0.28: past the limit, the sale is at the first reading
-    assert i == 0 and "(max loss)" in reason
-
-
 def test_the_hours_history_is_read_from_the_kalshi_perp_not_the_spot_feed(monkeypatch):
     assert watcher.perp_index("KXWTI15M") == "KP_WTI" and watcher.perp_index("KXBTC15M") == "KP_BTC" and watcher.perp_index("KXBTCD") is None and watcher.perp_index("KXNOPE15M") is None
     rng = random.Random(3)
@@ -150,22 +132,6 @@ def test_the_hours_history_is_read_from_the_kalshi_perp_not_the_spot_feed(monkey
     me.get_settings = lambda: SimpleNamespace(data_dir=Path(tempfile.mkdtemp()))
     watcher.ProfitWatcher._risk_hit(me, t, 0.80, CLOSE - 100.0, CLOSE - 100.0)
     assert "KP_WTI" in asked and t.risk_hist > 1.5
-
-
-def test_the_price_only_exit_needs_no_spot_feed_and_writes_its_shadow_record(monkeypatch, tmp_path):
-    t = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=False)  # no spot reference at all
-    _, reason, logged = run(monkeypatch, t, bid=0.48, p=0.85, seconds=60, tmp=tmp_path)
-    assert reason is None and sum("curve risk shadow" in m for m in logged) == 1
-    rows = (tmp_path / "risk_shadow.jsonl").read_text().splitlines()
-    assert len(rows) == 1 and json.loads(rows[0])["worse"] == "price" and json.loads(rows[0])["ticker"] == "KXWTI15M-1"
-
-
-def test_live_the_price_only_exit_sells_at_the_max_loss_with_no_wait(monkeypatch, tmp_path):
-    t = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True)
-    i, reason, _ = run(monkeypatch, t, bid=0.30, p=0.85, tmp=tmp_path)
-    assert i == 0 and "(max loss)" in reason
-    rows = [json.loads(x) for x in (tmp_path / "risk_shadow.jsonl").read_text().splitlines()]
-    assert len(rows) == 1 and rows[0]["live"] is True and rows[0]["stop"] is True
 
 
 def test_the_spot_path_leaves_a_price_only_lane_alone_and_the_quote_path_a_spot_lane(monkeypatch):
@@ -196,33 +162,6 @@ def test_long_chance_reads_the_cushion_against_the_hours_own_movement():
     assert curverisk.long_chance(ts[:100], vs[:100], 99.0, ref, "yes", 120.0) is None  # too short an hour
     assert curverisk.long_chance(ts, vs, now + 100.0, ref, "yes", 120.0) is None  # the newest tick is stale
     assert curverisk.long_chance(ts, vs, now, 0.0, "yes", 120.0) is None
-
-
-def test_a_price_dip_alone_does_not_sell_when_the_long_layer_says_the_bet_stays_positive(monkeypatch, tmp_path):
-    t = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True, risk_confirm=0.4)
-    logged = []
-    monkeypatch.setattr(watcher.log, "info", lambda msg, *a, **k: logged.append(msg % a if a else msg))
-    me = SimpleNamespace(get_settings=lambda: SimpleNamespace(data_dir=tmp_path))
-    me._risk_record = lambda *a, **k: watcher.ProfitWatcher._risk_record(me, *a, **k)
-    me._risk_held = lambda *a: watcher.ProfitWatcher._risk_held(me, *a)
-    monkeypatch.setattr(watcher.variants, "comeback_stats", lambda *a, **k: None)
-    me._risk_long = lambda tt, now, left: 0.9  # the hour says the side is very likely to pay
-    me._risk_decide = lambda *a: watcher.ProfitWatcher._risk_decide(me, *a)
-    assert watcher.ProfitWatcher._risk_quote_hit(me, t, 0.30, CLOSE - 100.0) is None  # a 63% loss, past the max-loss limit, price alone would sell
-    me._risk_long = lambda tt, now, left: 0.2  # the hour agrees it is going wrong
-    t.risk_at = 0.0
-    assert watcher.ProfitWatcher._risk_quote_hit(me, t, 0.30, CLOSE - 99.0).startswith("curve risk exit (max loss)")
-    me._risk_long = lambda tt, now, left: None  # no hour to read: the sale does not wait for it
-    t.risk_at = 0.0
-    assert watcher.ProfitWatcher._risk_quote_hit(me, t, 0.30, CLOSE - 98.0) is not None
-
-
-def test_under_the_minimum_bid_the_line_sale_does_not_fire_either(monkeypatch, tmp_path):
-    """A bid of a few cents has nothing left to sell for: the line sale stood down there as the max loss already did (the BTC bet of 2026-11-13 was offered at 1 to 4 cents)."""
-    t = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True, risk_max_loss=0.0)  # no max loss: only the line could sell
-    assert run(monkeypatch, t, bid=0.03, p=0.85, seconds=40, tmp=tmp_path)[1] is None
-    t2 = target(risk_spot_weight=0.0, shock_ref=0.0, shock_index="", risk_live=True, risk_max_loss=0.0)
-    assert run(monkeypatch, t2, bid=0.30, p=0.85, seconds=40, tmp=tmp_path)[1] is not None
 
 
 def test_unit_take_profit_bar_is_the_share_of_the_bets_room_the_market_has_used():

@@ -102,37 +102,6 @@ def test_a_lane_with_only_the_risk_exit_gets_a_watched_position_with_the_exit_ar
     assert t is not None and t.risk_sell == 0.5 and t.risk_live and t.risk_spot_weight == 0.0 and t.close_ts > 0
 
 
-def test_live_it_sells_a_sliding_bet_at_the_max_loss_and_not_before(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True)
-    sold = None
-    for k, bid in enumerate(PATH):
-        yes_bid(w, bid, 450 - 3 * k)
-        out = signals(w)
-        if out:
-            sold = (bid, out[0].why)
-            break
-    assert sold is not None, "the bet slid to 0.56 and nothing sold"
-    assert sold[0] > 0.55 and sold[1].startswith("curve risk exit (max loss)")
-    assert sold[0] <= 0.62  # not on the early dip: at 0.70 the loss is 16% against a limit of a third
-
-
-def test_the_sale_signal_is_executed_as_an_order_at_a_loss_and_the_bet_closes(tmp_path, monkeypatch):
-    """The sell executor vetoes a sale at a loss unless its reason is on a list of exits that cut losses by design; 'curve risk exit' was not, so every loss-cutting sale of the risk exit was declined and no order was placed (11:08 WTI, -$9.65). This test follows the signal all the way to the order."""
-    c = Client(bid=0.56)
-    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": True)  # a live lane: the sale is a real order, not a paper one
-    w = held(tmp_path, monkeypatch, live=True, client=c)
-    job = None
-    for k, bid in enumerate(PATH):
-        yes_bid(w, bid, 450 - 3 * k)
-        if not w._jobs.empty():
-            job = w._jobs.get_nowait()
-            break
-    assert job is not None
-    w._sell(*job)
-    assert len(c.sold) == 1, "the signal was raised but no sell order was placed"
-    assert len(Store(config.load().db_path).open_bets()) == 0
-
-
 def test_in_shadow_it_sells_nothing(tmp_path, monkeypatch):
     w = held(tmp_path, monkeypatch, live=False)
     for k, bid in enumerate(PATH):
@@ -183,19 +152,6 @@ def test_integration_the_hour_view_keeps_a_bet_the_price_alone_would_sell(tmp_pa
     seed_perp(monkeypatch, last_over_open=0.004)  # 40 bp over the open, 7-8 minutes left
     w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
     assert slide(w) == []
-
-
-def test_integration_the_hour_view_agrees_and_the_sale_goes(tmp_path, monkeypatch):
-    seed_perp(monkeypatch, last_over_open=-0.004)  # the perp is 40 bp under the open: a YES bet is losing on every layer
-    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
-    out = slide(w)
-    assert out and out[0].why.startswith("curve risk exit (max loss)")
-
-
-def test_integration_with_no_perp_hour_the_price_alone_decides(tmp_path, monkeypatch):
-    monkeypatch.setattr(ticks_mod, "history", ticks_mod.TickHistory())
-    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
-    assert slide(w) != []
 
 
 # ---- a position the user sold by hand (2026-11-13: the bot sent 100 sell orders in 77 s for contracts that were gone) ----
@@ -249,9 +205,9 @@ def test_unit_a_shortfall_is_written_off_only_when_the_last_order_is_old_enough(
 
 def test_integration_the_sale_sells_only_what_the_account_still_holds(tmp_path, monkeypatch):
     live(monkeypatch)
-    c = Client(bid=0.56, account={TICKER: 3.0})  # the user sold 1.65 of the 4.65 by hand
-    w = held(tmp_path, monkeypatch, live=True, client=c)
-    job = first_signal(w)
+    c = Client(bid=0.45, account={TICKER: 3.0})  # the user sold 1.65 of the 4.65 by hand
+    w = held(tmp_path, monkeypatch, live=True, client=c, extra=UE)
+    job = ue_signal(w)
     assert job is not None
     w._sell(*job)
     assert [n for n, _ in c.sold] == [3.0]  # one order, for the three contracts that are there
@@ -260,9 +216,9 @@ def test_integration_the_sale_sells_only_what_the_account_still_holds(tmp_path, 
 
 def test_integration_a_bet_sold_entirely_by_hand_sends_no_order_and_is_closed(tmp_path, monkeypatch):
     live(monkeypatch)
-    c = Client(bid=0.56, account={})  # nothing of it left on the account
-    w = held(tmp_path, monkeypatch, live=True, client=c)
-    job = first_signal(w)
+    c = Client(bid=0.45, account={})  # nothing of it left on the account
+    w = held(tmp_path, monkeypatch, live=True, client=c, extra=UE)
+    job = ue_signal(w)
     w._sell(*job)
     s = config.load()
     store = Store(s.db_path)
@@ -274,9 +230,9 @@ def test_integration_a_bet_sold_entirely_by_hand_sends_no_order_and_is_closed(tm
 
 def test_integration_when_the_account_cannot_be_read_the_sale_goes_by_the_books(tmp_path, monkeypatch):
     live(monkeypatch)
-    c = Client(bid=0.56, account=None)
-    w = held(tmp_path, monkeypatch, live=True, client=c)
-    w._sell(*first_signal(w))
+    c = Client(bid=0.45, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=c, extra=UE)
+    w._sell(*ue_signal(w))
     assert [n for n, _ in c.sold] == [4.65]
 
 
@@ -284,7 +240,7 @@ def test_integration_a_sale_that_fills_nothing_backs_off_instead_of_firing_every
     live(monkeypatch)
     monkeypatch.setattr("kalshi_moonshot.runner.time.sleep", lambda x: None)
     c = Client(bid=0.30, fills=0.0, account=None)  # every order comes back unfilled
-    w = held(tmp_path, monkeypatch, live=True, client=c)
+    w = held(tmp_path, monkeypatch, live=True, client=c, extra=UE)
     clock = {"now": 1_000_000.0}
     monkeypatch.setattr(watcher.time, "time", lambda: clock["now"])
     signals_sent = 0
@@ -347,13 +303,6 @@ def test_integration_a_silent_perp_falls_back_to_the_spot_index_and_holds_a_dip(
     assert t.risk_long is not None and t.risk_long > 0.9 and t.risk_long_fallback
 
 
-def test_integration_a_silent_perp_and_a_spot_under_the_strike_still_sells(tmp_path, monkeypatch):
-    seed_spot_only(monkeypatch, last_over_strike=-0.004)
-    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
-    out = slide(w)
-    assert out and out[0].why.startswith("curve risk exit (max loss)")
-
-
 def test_integration_a_settled_market_leaving_the_account_is_not_a_hand_sale(tmp_path, monkeypatch):
     """After the close the position disappears from the account because it settled. The check must leave that bet to the settlement, not close it at a price of 0."""
     from kalshi_moonshot import manual
@@ -388,33 +337,6 @@ def sold_after(w, bid, left, step=1, limit=200):
 
 # The stop's wait (2026-11-14 evening, user: "The stops wait sounds incomplete"; "Is it missing a cap or something?"; "it also needs to be scaled on time left"):
 # the market's recovery time (15 s here, the lane's default) x (1 - how deep the chance is under the line) x the share of the market still to run, never over the lane's share of the time left.
-def test_integration_the_stop_waits_the_recovery_time_scaled_by_the_clock_not_half_the_time_left(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5)
-    took = sold_after(w, 0.55, 450)  # past the stop from the first quote, still over the line: 15 s x 1 x (450 / 900) = 7.5 s. It was 225 s
-    assert took is not None and 7 <= took <= 9
-
-
-def test_integration_the_deeper_the_fall_the_shorter_the_wait(tmp_path, monkeypatch):
-    (tmp_path / "a").mkdir()
-    (tmp_path / "b").mkdir()
-    shallow = sold_after(held(tmp_path / "a", monkeypatch, live=True, hold=0.5), 0.55, 450)
-    deep = sold_after(held(tmp_path / "b", monkeypatch, live=True, hold=0.5), 0.20, 450)  # a chance of about 0.19: 62% of the way from the line to nothing, so about 2.8 s
-    assert deep is not None and shallow is not None and deep < shallow and deep <= 4
-
-
-def test_integration_the_less_time_left_the_shorter_the_wait(tmp_path, monkeypatch):
-    (tmp_path / "a").mkdir()
-    (tmp_path / "b").mkdir()
-    early = sold_after(held(tmp_path / "a", monkeypatch, live=True, hold=0.5), 0.55, 720)  # 15 s x (720 / 900) = 12 s
-    late = sold_after(held(tmp_path / "b", monkeypatch, live=True, hold=0.5), 0.55, 120)  # 15 s x (120 / 900) = 2 s
-    assert early is not None and late is not None and 11 <= early <= 13 and late <= 3
-
-
-def test_integration_the_lanes_share_of_the_time_left_is_still_its_upper_limit(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, hold=0.005)  # 0.5% of 450 s is 2.25 s, under the 7.5 s the rest would give
-    assert sold_after(w, 0.55, 450) <= 3
-
-
 def test_integration_a_dip_that_recovers_inside_the_wait_does_not_sell_and_the_clock_restarts(tmp_path, monkeypatch):
     w = held(tmp_path, monkeypatch, live=True, hold=0.5)
     for k in range(0, 5):  # 5 s under the stop, shorter than the 7.5 s wait
@@ -425,12 +347,6 @@ def test_integration_a_dip_that_recovers_inside_the_wait_does_not_sell_and_the_c
     for k in range(0, 5):  # a second dip gets its own wait
         yes_bid(w, 0.55, 444 - k)
         assert signals(w) == []
-
-
-def test_integration_with_no_hold_the_stop_sells_at_once_as_before(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, hold=0)
-    yes_bid(w, 0.55, 450)
-    assert signals(w) != []
 
 
 def test_unit_the_hold_changes_a_lanes_version_only_when_it_is_set(tmp_path, monkeypatch):
@@ -656,30 +572,10 @@ LIVE = dict(hold=0.5, share=0.08)  # the live lane's holds
 CAP = 0.02  # two cents
 
 
-def test_integration_late_a_slide_that_stops_a_fraction_of_a_cent_short_of_the_max_loss_is_squeezed(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=121)
-    w = held(tmp_path, monkeypatch, live=True, squeeze=CAP, **NO_HOLDS)
-    got = slid(w, TO_59, 120)  # about 85 s left: 91% of the market gone, a nudge of about 1.8 cents
-    assert got is not None and got[1].why.startswith("curve risk exit (max loss)") and "[squeeze: " in got[1].why
-    assert 0.59 <= got[0] <= 0.60
-
-
 def test_integration_without_the_squeeze_that_near_miss_is_not_sold(tmp_path, monkeypatch):
     feed_history(0.013, from_left=1300, to_left=121)
     w = held(tmp_path, monkeypatch, live=True, squeeze=0, **NO_HOLDS)
     assert slid(w, TO_59, 120) is None
-
-
-def test_integration_the_clock_shrinks_the_nudge_early_the_same_shortfall_is_not_squeezed(tmp_path, monkeypatch):
-    """1.7 cents short of the max loss and sliding. With a minute and a half left the nudge is about 1.8 cents and it sells; with ten minutes left the nudge is about 0.7 of a cent and it does not."""
-    (tmp_path / "late").mkdir()
-    (tmp_path / "early").mkdir()
-    feed_history(0.013, from_left=1300, to_left=121)
-    late = slid(held(tmp_path / "late", monkeypatch, live=True, squeeze=CAP, **NO_HOLDS), TO_60, 120)
-    ticks_mod.mids._rows.clear()
-    feed_history(0.013, from_left=1300, to_left=671)
-    early = slid(held(tmp_path / "early", monkeypatch, live=True, squeeze=CAP, **NO_HOLDS), [0.78] * 60 + TO_60[len(SIT):] + [0.60] * 30, 670)  # it sits at 0.60 long enough to be read as a slide over the 46 s look back
-    assert late is not None and early is None
 
 
 def test_integration_a_near_miss_that_is_not_heading_down_is_not_squeezed(tmp_path, monkeypatch):
@@ -938,13 +834,6 @@ def test_integration_an_hour_view_of_half_still_holds_the_stop_with_seven_minute
     assert slide_at(w, 450) == []  # 0.55 is over the lane's 0.4 and the market is not in its last fifth
 
 
-def test_integration_the_same_hour_view_no_longer_holds_with_a_minute_left(tmp_path, monkeypatch):
-    with_hour_view(monkeypatch, 0.55)
-    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
-    out = slide_at(w, 60)  # the bar is 0.8 at 36 s of the last fifth gone: 0.55 does not reach it
-    assert out and out[0].why.startswith("curve risk exit (max loss)")
-
-
 def test_integration_a_strong_hour_view_still_holds_late(tmp_path, monkeypatch):
     with_hour_view(monkeypatch, 0.97)
     w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
@@ -956,24 +845,6 @@ def held_rows(tmp_path):
 
     path = Path(tmp_path) / "risk_shadow.jsonl"
     return [json.loads(x) for x in path.read_text().splitlines() if '"held"' in x] if path.exists() else []
-
-
-def test_integration_a_stop_the_hour_view_holds_is_written_down_once_with_its_reason(tmp_path, monkeypatch):
-    """2026-11-15: ETH 09:00 and three more bets were held to a full loss and nothing recorded why. A wanted sale that the long layer holds is logged once, and the row says so."""
-    seed_perp(monkeypatch, last_over_open=0.004)
-    w = held(tmp_path, monkeypatch, live=True, confirm=0.4)
-    assert slide(w) == []
-    rows = held_rows(tmp_path)
-    assert len(rows) == 1 and rows[0]["held"].startswith("long layer: ") and rows[0]["live"] is True and rows[0]["ticker"] == TICKER
-
-
-def test_integration_a_stop_waiting_out_its_wait_is_written_down(tmp_path, monkeypatch):
-    monkeypatch.setattr(ticks_mod, "history", ticks_mod.TickHistory())
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5)  # the max-loss stop waits half the time left
-    slide(w)
-    rows = held_rows(tmp_path)
-    assert rows and all(r["held"].startswith("wait: ") for r in rows)
-    assert len(rows) == 1  # one row as the wait begins, not one a second
 
 
 def test_integration_a_hold_with_no_sale_wanted_writes_nothing(tmp_path, monkeypatch):
@@ -991,42 +862,7 @@ def hour_fit(monkeypatch, k):
     monkeypatch.setattr(widthfit, "latest", (k, CLOSE - 300.0, 60))
 
 
-def test_integration_a_wild_hour_shrinks_the_squeeze_so_the_same_near_miss_is_not_sold(tmp_path, monkeypatch):
-    """1.7 cents short of the max loss, sliding, 85 s left: the nudge is about 1.8 cents and the bet sells. With the hour's k at 2 the nudge is halved to about 0.9 of a cent and it does not."""
-    (tmp_path / "calm").mkdir()
-    (tmp_path / "wild").mkdir()
-    feed_history(0.013, from_left=1300, to_left=121)
-    hour_fit(monkeypatch, 1.0)
-    calm = slid(held(tmp_path / "calm", monkeypatch, live=True, squeeze=CAP, nudge_hour='true', **NO_HOLDS), TO_60, 120)
-    ticks_mod.mids._rows.clear()
-    feed_history(0.013, from_left=1300, to_left=121)
-    hour_fit(monkeypatch, 2.0)
-    wild = slid(held(tmp_path / "wild", monkeypatch, live=True, squeeze=CAP, nudge_hour='true', **NO_HOLDS), TO_60, 120)
-    assert calm is not None and "the hour factor scales the nudge by 1.00" in calm[1].why
-    assert wild is None
-
-
-def test_integration_with_the_option_off_the_hour_factor_changes_nothing(tmp_path, monkeypatch):
-    feed_history(0.013, from_left=1300, to_left=121)
-    hour_fit(monkeypatch, 2.0)
-    out = slid(held(tmp_path, monkeypatch, live=True, squeeze=CAP, nudge_hour='false', **NO_HOLDS), TO_60, 120)
-    assert out is not None and "hour factor" not in out[1].why  # the nudge as it was
-
-
 # ---- no fixed cap: the squeeze's allowed miss is the market's own typical minute times how strongly everything agrees (2026-11-15, user: "remove the cap, it needs to hold its own logically. Maybe the high nudge is a good indication") ----
-def test_integration_without_a_cap_a_larger_near_miss_than_the_cents_cap_allows_sells_when_the_market_is_sliding_and_late(tmp_path, monkeypatch):
-    """The slide to 0.62 stops about 4.5 cents short of the max loss: over the two-cent cap, so the capped squeeze never sells it (test above). With the cap gone the allowed miss is the market's typical minute times the history and the clock, and this slide is a large move for it."""
-    feed_history(0.013, from_left=1300, to_left=121)
-    path = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 17)] + [0.62] * 8
-    capped = slid(held(tmp_path, monkeypatch, live=True, squeeze=CAP, **NO_HOLDS), path, 120)
-    assert capped is None
-    (tmp_path / "nocap").mkdir()
-    ticks_mod.mids._rows.clear()
-    feed_history(0.013, from_left=1300, to_left=121)
-    free = slid(held(tmp_path / "nocap", monkeypatch, live=True, squeeze=0, nudge_units=1.0, **NO_HOLDS), path, 120)
-    assert free is not None and "no cap:" in free[1].why and "[squeeze: " in free[1].why
-
-
 def test_integration_without_a_cap_a_near_miss_that_is_not_sliding_still_waits(tmp_path, monkeypatch):
     feed_history(0.013, from_left=1300, to_left=121)
     w = held(tmp_path, monkeypatch, live=True, squeeze=0, nudge_units=1.0, **NO_HOLDS)
@@ -1045,27 +881,6 @@ def test_integration_the_lanes_hour_view_scales_reach_the_watched_position(tmp_p
     seed_perp(monkeypatch, last_over_open=0.004)
     w = held(tmp_path, monkeypatch, live=True, confirm=0.4, long_scales="[15,30,60]")
     assert [tuple(x.risk_long_scales) for x in w.targets.values()] == [(15, 30, 60)]
-
-
-def test_integration_with_scales_the_hour_view_still_holds_a_dip_the_perp_says_stays_on_its_side_and_sells_when_it_agrees(tmp_path, monkeypatch):
-    seed_perp(monkeypatch, last_over_open=0.004)
-    (tmp_path / "up").mkdir()
-    (tmp_path / "down").mkdir()
-    holds = held(tmp_path / "up", monkeypatch, live=True, confirm=0.4, long_scales="[15,30,60]")
-    assert slide(holds) == []  # the perp is 40 bp over the open: the view says the side stays, so no sale
-    seed_perp(monkeypatch, last_over_open=-0.004)
-    sells = held(tmp_path / "down", monkeypatch, live=True, confirm=0.4, long_scales="[15,30,60]")
-    out = slide(sells)
-    assert out and out[0].why.startswith("curve risk exit (max loss)")
-
-
-def test_integration_with_the_market_so_far_scale_the_hour_view_reaches_the_watcher_and_sells_when_the_perp_agrees(tmp_path, monkeypatch):
-    """The fixture's perp ramps smoothly over the market, so the market-so-far scale reads that ramp as movement (a trending open is a wide one) and its chance sits lower than the hour's: the hold the plain hour gave a 40 bp lead is not asserted here, only that the lane's scales reach the position and that a perp against the side still lets the stop through."""
-    seed_perp(monkeypatch, last_over_open=-0.004)
-    w = held(tmp_path, monkeypatch, live=True, confirm=0.4, long_scales="[0,15,60,180]")
-    assert [tuple(x.risk_long_scales) for x in w.targets.values()] == [(0, 15, 60, 180)]
-    out = slide(w)
-    assert out and out[0].why.startswith("curve risk exit (max loss)")
 
 
 def test_integration_the_hour_view_is_re_read_every_second_not_every_five(tmp_path, monkeypatch):
@@ -1200,42 +1015,11 @@ def test_unit_the_early_hold_is_a_share_of_the_market_still_to_run():
     assert not curverisk.early_hold(880.0, 900.0, 0.0)  # off
 
 
-def test_integration_a_loss_with_most_of_the_market_to_run_is_not_sold(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
-    assert sold_after(w, 0.55, 600, limit=60) is None  # past the max loss from the first quote, 10 minutes left: held
-    t = w.targets.get((TICKER, "risk_only"))
-    assert t is not None and t.risk_early_off
-
-
 def test_integration_a_bet_held_early_is_held_to_settlement_even_when_it_falls_further(tmp_path, monkeypatch):
     w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
     assert sold_after(w, 0.55, 600, limit=20) is None  # the 10 s wait runs out and the sale is held instead
     assert sold_after(w, 0.30, 300, limit=120) is None  # five minutes left and deeper: the hold stays (what the replay scored)
     assert sold_after(w, 0.20, 60, limit=40) is None
-
-
-def test_integration_a_loss_first_reached_later_in_the_market_sells_as_before(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
-    yes_bid(w, 0.80, 600)  # early and fine: nothing wanted, nothing latched
-    assert signals(w) == []
-    took = sold_after(w, 0.55, 450)  # 450 s left is under 477: the stop and its 7.5 s wait, as without the hold
-    assert took is not None and 7 <= took <= 9
-
-
-def test_integration_without_the_setting_an_early_loss_sells_as_before(tmp_path, monkeypatch):
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5)
-    took = sold_after(w, 0.55, 600)  # 15 s x (600 / 900) = 10 s
-    assert took is not None and 9 <= took <= 11
-
-
-def test_integration_the_early_hold_is_written_down_once_with_the_market_units_reading(tmp_path, monkeypatch):
-    import json
-
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
-    assert sold_after(w, 0.55, 600, limit=20) is None
-    rows = [json.loads(x) for x in (tmp_path / "risk_shadow.jsonl").read_text().splitlines()]
-    early = [r for r in rows if "early hold" in str(r.get("held", ""))]
-    assert len(early) == 1 and "stay off to settlement" in early[0]["held"] and "of what the market typically travels" in early[0]["held"]
 
 
 def test_unit_the_early_hold_changes_a_lanes_version_only_when_set(tmp_path, monkeypatch):
@@ -1246,20 +1030,6 @@ def test_unit_the_early_hold_changes_a_lanes_version_only_when_set(tmp_path, mon
     base = lanes.LaneSpec(name="x", estimator="market", label="x", price=(0.1, 0.9), hours=(0.0, 1.0), max_spread=0.05, min_volume=0.0)
     assert "curve_risk_early_hold" not in lanes.settings_of(base, s)
     assert lanes.version_of(base, s) != lanes.version_of(dataclasses.replace(base, curve_risk_early_hold=0.53), s)
-
-
-def test_integration_an_early_dip_that_recovers_inside_the_wait_leaves_the_stop_armed(tmp_path, monkeypatch):
-    """2026-11-16 (user: "i think the early hold might get overriden by something else"): the hold is taken at the point of the sale. A dip the wait lets recover does not switch the bet's stop off for the rest of the market."""
-    w = held(tmp_path, monkeypatch, live=True, hold=0.5, extra="curve_risk_early_hold=0.53")
-    for k in range(0, 5):  # 5 s under the stop with 10 minutes left, shorter than the 10 s wait
-        yes_bid(w, 0.55, 600 - k)
-        assert signals(w) == []
-    yes_bid(w, 0.80, 594)  # it recovers: nothing was sold and nothing was latched
-    assert signals(w) == []
-    t = w.targets.get((TICKER, "risk_only"))
-    assert t is not None and not t.risk_early_off
-    took = sold_after(w, 0.55, 300)  # a real fall later in the market: the stop is still there (15 s x 300 / 900 = 5 s)
-    assert took is not None and 4 <= took <= 6
 
 
 def test_integration_the_long_layer_holding_an_early_sale_does_not_switch_the_stop_off(tmp_path, monkeypatch):
@@ -1480,13 +1250,6 @@ def test_integration_a_slide_that_stays_on_the_bets_side_of_the_target_is_not_lo
     assert not any(DROP in r.getMessage() for r in caplog.records) and drop_rows(tmp_path) == []
 
 
-def test_integration_the_drop_check_does_not_stop_or_change_a_real_sale(tmp_path, monkeypatch):
-    path = spot_path(monkeypatch, sliding)
-    w = held(tmp_path, monkeypatch, live=True, extra="curve_risk_drop=1.0")  # the max loss is on, as in the fixture
-    out = walk(w, path, bid=0.40)  # the price has fallen through the max loss
-    assert out and out[0].why.startswith("curve risk exit (max loss)")
-
-
 def test_unit_the_drop_check_is_shadow_so_it_never_changes_a_lanes_version(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     seen = []
@@ -1500,31 +1263,6 @@ def test_unit_the_drop_check_is_shadow_so_it_never_changes_a_lanes_version(tmp_p
 
 
 # The risk exit on the risk score (lane field curve_risk_score; 2026-11-16, user: "all these factors need to build towards that risk score").
-def test_integration_the_score_holds_a_bet_the_price_alone_would_sell_and_sells_when_it_agrees(tmp_path, monkeypatch):
-    from kalshi_moonshot import riskscore
-
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_score=true")
-    assert all(t.risk_score for t in w.targets.values())
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.80], 0.45, [0.45]))  # the score still gives the side 80%
-    for n, bid in enumerate([0.44] * 12):
-        yes_bid(w, bid, 400 - 10 * n)
-    assert signals(w) == []  # the bid is under the 0.50 line; the score is not
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: ([0.30], 0.45, [0.45]))  # now the score agrees
-    for n, bid in enumerate([0.44] * 12):
-        yes_bid(w, bid, 280 - 10 * n)
-    assert len(signals(w)) == 1
-
-
-def test_integration_an_unreadable_score_leaves_the_exit_on_the_price(tmp_path, monkeypatch):
-    from kalshi_moonshot import riskscore
-
-    w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_score=true")
-    monkeypatch.setattr(riskscore, "live", lambda *a, **k: None)
-    for n, bid in enumerate([0.36] * 12):
-        yes_bid(w, bid, 400 - 10 * n)
-    assert len(signals(w)) == 1
-
-
 def test_integration_a_bet_on_the_score_exit_gets_its_sale_line_from_the_price_paid(tmp_path, monkeypatch):
     w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_score=true")
     assert all(t.risk_sell == pytest.approx(0.5 * t.entry) and t.risk_sell < 0.5 for t in w.targets.values())  # bought at about 0.79 on a lane with a 0.5 line: half the price paid is the lower
@@ -1632,6 +1370,15 @@ def test_unit_the_never_ahead_sale_changes_a_lanes_version_only_when_it_is_set(t
 # the fixture bet: YES bought at 0.81 with 450 s left. The max loss is off and the line is the fixture's 0.5 with its own wait, so these tests keep the long layer out and read the new rule's own reason.
 UNDER = "curve risk exit (under even)"
 UE = "curve_risk_under_even=0.1\ncurve_risk_under_even_live=true"
+
+
+def ue_signal(w, path=None):
+    """The first sale signal of a favorite whose bid sits under even (the under-even step is the sale these account and order mechanics tests ride on: the loss step they used was removed 2026-11-19)."""
+    for left, bid in path or (flat(0.78, 445, 305) + [(left, 0.45) for left in range(300, 200, -1)]):
+        yes_bid(w, bid, left)
+        if not w._jobs.empty():
+            return w._jobs.get_nowait()
+    return None
 
 
 @pytest.fixture
