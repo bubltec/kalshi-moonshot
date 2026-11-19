@@ -1,0 +1,32 @@
+
+window: 11-11 00:00 ET to now; 477 live commodity bets with an hour of Kalshi perp ticks and the bet's centre (83 left out). Cuts fixed before the run.
+  all                                          bets  477 | avg ask  85.0c win  82.8% | held  -14.35 ( -3.5/$100) | traded  -20.46 ( -5.0/$100) | ended under 0.10: 43 | held halves  -0.3 /  -6.7
+--- comp (last 10 min typical minute over the hour before; under 1 = gone quiet)
+  comp under 0.5                               bets   15 | avg ask  83.3c win  86.7% | held   +0.36 ( +2.9/$100) | traded   -0.62 ( -4.9/$100) | ended under 0.10: 2 | held halves +17.3 / -14.1
+  comp 0.5 to 1                                bets  280 | avg ask  84.7c win  82.1% | held   -9.57 ( -4.0/$100) | traded  -13.37 ( -5.6/$100) | ended under 0.10: 22 | held halves  +1.3 /  -8.6
+  comp 1 or more                               bets  182 | avg ask  85.5c win  83.5% | held   -5.13 ( -3.3/$100) | traded   -6.47 ( -4.2/$100) | ended under 0.10: 19 | held halves  -4.0 /  -2.5
+--- cushion (spot clear of the centre on the bet's side, in unit10 x sqrt(left/60); negative = on the wrong side)
+  cushion under 0.5                            bets  373 | avg ask  85.1c win  81.2% | held  -17.48 ( -5.5/$100) | traded  -19.19 ( -6.0/$100) | ended under 0.10: 36 | held halves  -3.2 /  -7.5
+  cushion 0.5 to 1                             bets   18 | avg ask  85.2c win  88.9% | held   +0.52 ( +3.4/$100) | traded   +0.74 ( +4.8/$100) | ended under 0.10: 0 | held halves  -9.0 /  +8.3
+  cushion 1 to 2                               bets   18 | avg ask  84.0c win  83.3% | held   -0.29 ( -1.9/$100) | traded   -0.45 ( -2.9/$100) | ended under 0.10: 1 | held halves +18.0 / -26.8
+  cushion 2 or more                            bets   68 | avg ask  84.6c win  89.7% | held   +2.91 ( +5.1/$100) | traded   -1.56 ( -2.7/$100) | ended under 0.10: 6 | held halves  +8.0 /  -0.5
+--- held share of the last 5 minutes on the bet's side
+  held under 1                                 bets  378 | avg ask  85.0c win  81.5% | held  -16.44 ( -5.1/$100) | traded  -17.32 ( -5.4/$100) | ended under 0.10: 35 | held halves  -3.6 /  -6.5
+  held exactly 1                               bets   99 | avg ask  84.9c win  87.9% | held   +2.09 ( +2.5/$100) | traded   -3.14 ( -3.7/$100) | ended under 0.10: 8 | held halves  +9.8 /  -7.6
+--- comp x cushion
+  comp under 0.5 / cushion under 0.5           bets   13
+  comp under 0.5 / cushion 0.5 to 1            bets    0
+  comp under 0.5 / cushion 1 to 2              bets    0
+  comp under 0.5 / cushion 2 or more           bets    2
+  comp 0.5 to 1 / cushion under 0.5            bets  220 | avg ask  85.0c win  80.9% | held  -10.91 ( -5.8/$100) | traded  -10.75 ( -5.7/$100) | ended under 0.10: 18 | held halves  -2.2 /  -8.7
+  comp 0.5 to 1 / cushion 0.5 to 1             bets    9
+  comp 0.5 to 1 / cushion 1 to 2               bets    8
+  comp 0.5 to 1 / cushion 2 or more            bets   43 | avg ask  83.7c win  88.4% | held   +1.60 ( +4.4/$100) | traded   -2.19 ( -6.1/$100) | ended under 0.10: 4 | held halves +11.4 /  -7.9
+  comp 1 or more / cushion under 0.5           bets  140 | avg ask  85.2c win  81.4% | held   -6.48 ( -5.4/$100) | traded   -7.38 ( -6.2/$100) | ended under 0.10: 16 | held halves  -6.9 /  -4.0
+  comp 1 or more / cushion 0.5 to 1            bets    9
+  comp 1 or more / cushion 1 to 2              bets   10
+  comp 1 or more / cushion 2 or more           bets   23 | avg ask  86.8c win  91.3% | held   +0.86 ( +4.3/$100) | traded   +0.19 ( +0.9/$100) | ended under 0.10: 2 | held halves  +2.6 /  +8.7
+--- the example
+  KXBRENT15M-26NOV191730: ask 0.70, comp 0.36, cushion 40.08, held share 1.00, won True
+DONE
+Cannot perform start session: EOF
