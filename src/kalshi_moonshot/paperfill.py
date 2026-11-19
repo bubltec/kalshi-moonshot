@@ -71,7 +71,7 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                         came = True
                     if r["side"] == "no" and fl[1] > 0 and fl[3] >= 1.0 - price - 1e-9:  # YES takers lift the YES ask we posted
                         came = True
-            reason = (r["reason"] or "").split(" " + OLD_MARK)[0].split(" " + MARK)[0][:230]
+            reason = (r["reason"] or "").split(" " + OLD_MARK)[0].split(" " + MARK)[0]
             if not crossed and came:
                 stake = spec.fixed_stake or float(r["stake_usd"] or 0.0)
                 if r["action"] == "pass" and stake <= 0:
@@ -142,7 +142,7 @@ def settle_taker(s: Settings, store: Store, tape: Any, now: float | None = None)
             if not quotes:
                 continue
             fill = simulate_taker_buy([tuple(float(x or 0.0) for x in q) for q in quotes], r["side"], float(r["ts"]), float(r["ask"]), spec.buy_slip)
-            reason = (r["reason"] or "")[:230]
+            reason = r["reason"] or ""  # the whole note (2026-11-19: it was cut to 230 characters, which dropped the chain note and every shadow verdict at its end)
             if fill.filled and fill.price is not None:
                 stake = spec.fixed_stake or float(r["stake_usd"] or 0.0)
                 n = round(stake / (fill.price + fee_per_contract(fill.price)), 2) if stake > 0 else None

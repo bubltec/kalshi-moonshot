@@ -1,0 +1,9 @@
+--- 1. state-record shadow verdict, on the bets that carry it
+(2: 'held' = holding to the result, 'as sold' = selling at the row's bid, on $5 a bet)
+--- 2. shape_timed rows
+all shape_timed rows               n  301 stake    1505 | held  -444.11 ( -29.5%) | as sold  -416.56 ( -27.7%) | win 54%
+shape flat / sold=False            n   52 stake     260 | held   -70.32 ( -27.0%) | as sold   -67.17 ( -25.8%) | win 56%
+shape flat / sold=None             n  122 stake     610 | held  -115.76 ( -19.0%) | as sold  -125.06 ( -20.5%) | win 61%
+shape flat / sold=True             n   12 stake      60 | held    +3.99 (  +6.6%) | as sold    -8.16 ( -13.6%) | win 83%
+shape trend_against / sold=None    n   63 stake     315 | held  -169.36 ( -53.8%) | as sold  -124.96 ( -39.7%) | win 37%
+shape trend_against / sold=True    n   52 stake     260 | held   -92.66 ( -35.6%) | as sold   -91.21 ( -35.1%) | win 50%

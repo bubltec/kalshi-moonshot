@@ -52,12 +52,13 @@ def test_a_taker_paper_bet_is_refilled_or_turned_into_a_pass_on_the_tape(tmp_pat
     tape.execute("INSERT INTO quotes (ts, ticker, bid, ask, bid_size, ask_size) VALUES (200.5, 'KXBTC15M-B', 0.85, 0.88, 10, 10)")  # over it
     tape.commit()
     for tk, ts in (("KXBTC15M-A", 100.0), ("KXBTC15M-B", 200.0)):
-        store.add_decision(ticker=tk, title="", bid=0.0, ask=0.80, model_p=0.0, edge=0.0, action="bet", mode="observe", lane="paperlane", side="yes", contracts=3, stake_usd=3.0, close_time="2099-01-01T00:00:00Z", ts=ts)
+        store.add_decision(ticker=tk, title="", bid=0.0, ask=0.80, model_p=0.0, edge=0.0, action="bet", mode="observe", lane="paperlane", side="yes", contracts=3, stake_usd=3.0, close_time="2099-01-01T00:00:00Z", ts=ts, reason=("a long note " * 40) + "[chain m: price | YES passed every step: state_record_shadow yes (shadow: would buy)]")
     got = paperfill.settle_taker(s, store, tape, now=1000.0)
     assert got == {"filled": 1, "missed": 1}
     a = store.db.execute("SELECT action, ask, reason FROM decisions WHERE ticker='KXBTC15M-A'").fetchone()
     b = store.db.execute("SELECT action, reason FROM decisions WHERE ticker='KXBTC15M-B'").fetchone()
     assert a["action"] == "bet" and a["ask"] == pytest.approx(0.83) and "filled at 0.830" in a["reason"]
+    assert "shadow: would buy" in a["reason"] and "shadow: would buy" in b["reason"]  # the note's end, where the chain and shadow verdicts sit, is kept (it was cut to 230 characters)
     assert b["action"] == "pass" and "not filled" in b["reason"]
     assert paperfill.settle_taker(s, store, tape, now=1000.0) == {"filled": 0, "missed": 0}  # each bet is judged once
 
