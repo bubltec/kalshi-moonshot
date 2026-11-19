@@ -85,7 +85,11 @@ for f in days:
                 for _, _, s, _ in coins:
                     above = np.flatnonzero(s[:k + 1] >= LO)
                     crossed.append(k - int(above[0]) if len(above) else 0)
-                events.append({"day": day, "way": way, "left": left, "n": len(coins), "lose": float(np.mean(lost)),
+                def sask(a, j):
+                    return float(a["a"][j]) if way == "yes" else 1.0 - float(a["b"][j])
+
+                coinrows = [(sask(a, k), sask(a, k + 60), sask(a, k + 120), a["result"] == way) for _, a, _, _ in coins]
+                events.append({"coins": coinrows, "day": day, "way": way, "left": left, "n": len(coins), "lose": float(np.mean(lost)),
                                "slope3": float(np.mean([(s[k] - s[k - 180]) / u for _, _, s, u in coins])),
                                "range5": float(np.mean([(x.max() - x.min()) / u for x, (_, _, _, u) in zip(w5, coins)])),
                                "eff5": float(np.mean([(abs(x[-1] - x[0]) / mv) if mv > 0 else 1.0 for x, mv in zip(w5, moves)])),
@@ -137,4 +141,48 @@ for nm, lo, hi in (("fell 0.05 or more", -9, -0.05), ("fell under 0.05", -0.05, 
     sel = [e for e in events if lo <= e["paths"][i2] - e["paths"][i0] < hi]
     if len(sel) >= 15:
         print(f"    {nm:20s} sets {len(sel):4d} | all lose {100.0 * np.mean([e['lose'] >= 0.75 for e in sel]):5.1f}% | all win {100.0 * np.mean([e['lose'] <= 0.25 for e in sel]):5.1f}% | mean share lost {100.0 * np.mean([e['lose'] for e in sel]):5.1f}% | mean side mid at the mark {np.mean([e['paths'][i0] for e in sel]):.3f}, two minutes later {np.mean([e['paths'][i2] for e in sel]):.3f}")
+FEE = 0.07
+
+
+def net_of(rows, idx):
+    """(bets, won, net, staked, per-day net) of buying each coin at its ask `idx` (0 the mark, 1 a minute later, 2 two minutes later), held to settlement, fee on the buy; a coin with no quote is skipped."""
+    out, days_net = [], defaultdict(float)
+    for e in rows:
+        for c in e["coins"]:
+            a = c[idx]
+            if not (a == a) or a <= 0 or a >= 1:
+                continue
+            net = (1.0 if c[3] else 0.0) - a - FEE * a * (1.0 - a)
+            out.append((a, c[3], net, a + FEE * a * (1.0 - a)))
+            days_net[e["day"]] += net
+    return out, days_net
+
+
+def show_net(label, rows, idx):
+    out, days_net = net_of(rows, idx)
+    if len(out) < 30:
+        print(f"  {label:58s} bets {len(out):5d}")
+        return
+    net = sum(x[2] for x in out)
+    print(f"  {label:58s} bets {len(out):5d} | win {100.0 * np.mean([x[1] for x in out]):5.1f}% vs avg ask {100.0 * np.mean([x[0] for x in out]):5.1f}c | net {net:+8.2f} ({100.0 * net / sum(x[3] for x in out):+6.1f} per $100 staked) | days positive {sum(1 for v in days_net.values() if v > 0)} of {len(days_net)}")
+
+
+print("--- THE NET: what buying the set's coins pays, held to settlement, fee on the buy, by when the buy is placed (every coin of every set, no price filter; the risk score, the ladder and exits are not replayed)")
+rise = lambda e, i: e["paths"][i] - e["paths"][i0]
+show_net("buy at the mark (every set)", events, 0)
+show_net("buy a minute later (every set)", events, 1)
+show_net("buy two minutes later (every set)", events, 2)
+for nm, test in (("the set rose 0.03 or more in the minute", lambda e: rise(e, i1) >= 0.03), ("the set held or rose (no fall) in the minute", lambda e: rise(e, i1) >= 0.0), ("the set rose under 0.03 in the minute", lambda e: 0.0 <= rise(e, i1) < 0.03), ("the set fell in the minute", lambda e: rise(e, i1) < 0.0)):
+    sel = [e for e in events if test(e)]
+    show_net(f"{nm}: bought a minute later", sel, 1)
+    show_net(f"{nm}: bought at the mark (same sets, for comparison)", sel, 0)
+for nm, test in (("the set rose 0.05 or more in two minutes", lambda e: rise(e, i2) >= 0.05), ("the set did not rise 0.05 in two minutes", lambda e: rise(e, i2) < 0.05)):
+    sel = [e for e in events if test(e)]
+    show_net(f"{nm}: bought two minutes later", sel, 2)
+    show_net(f"{nm}: bought at the mark (same sets, for comparison)", sel, 0)
+print("--- bought a minute later, by the price paid then (a set that rose 0.03 or more)")
+rs = [e for e in events if rise(e, i1) >= 0.03]
+for lo, hi in ((0.0, 0.70), (0.70, 0.80), (0.80, 0.90), (0.90, 1.0)):
+    sub = [{"coins": [c for c in e["coins"] if lo <= c[1] < hi], "day": e["day"]} for e in rs]
+    show_net(f"price a minute later {lo:.2f} to {hi:.2f}", sub, 1)
 print("DONE")

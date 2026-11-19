@@ -70,4 +70,25 @@ window: 2026-11-09 to 2026-11-16; 560 favourite sets of four or more coins (one 
     fell under 0.05      sets   46 | all lose  21.7% | all win  69.6% | mean share lost  26.2% | mean side mid at the mark 0.745, two minutes later 0.717
     rose under 0.05      sets   73 | all lose  20.5% | all win  58.9% | mean share lost  31.6% | mean side mid at the mark 0.738, two minutes later 0.763
     rose 0.05 or more    sets  265 | all lose   7.5% | all win  81.1% | mean share lost  15.4% | mean side mid at the mark 0.726, two minutes later 0.864
+--- THE NET: what buying the set's coins pays, held to settlement, fee on the buy, by when the buy is placed (every coin of every set, no price filter; the risk score, the ladder and exits are not replayed)
+  buy at the mark (every set)                                bets  2892 | win  70.3% vs avg ask  73.6c | net  -133.16 (  -6.1 per $100 staked) | days positive 1 of 8
+  buy a minute later (every set)                             bets  2892 | win  70.3% vs avg ask  73.7c | net  -131.88 (  -6.1 per $100 staked) | days positive 1 of 8
+  buy two minutes later (every set)                          bets  2892 | win  70.3% vs avg ask  73.6c | net  -126.95 (  -5.9 per $100 staked) | days positive 1 of 8
+  the set rose 0.03 or more in the minute: bought a minute later bets  1322 | win  81.6% vs avg ask  83.3c | net   -34.84 (  -3.1 per $100 staked) | days positive 2 of 8
+  the set rose 0.03 or more in the minute: bought at the mark (same sets, for comparison) bets  1322 | win  81.6% vs avg ask  73.6c | net   +88.85 (  +9.0 per $100 staked) | days positive 8 of 8
+  the set held or rose (no fall) in the minute: bought a minute later bets  1632 | win  79.0% vs avg ask  82.1c | net   -66.74 (  -4.9 per $100 staked) | days positive 2 of 8
+  the set held or rose (no fall) in the minute: bought at the mark (same sets, for comparison) bets  1632 | win  79.0% vs avg ask  73.9c | net   +61.64 (  +5.0 per $100 staked) | days positive 7 of 8
+  the set rose under 0.03 in the minute: bought a minute later bets   310 | win  67.7% vs avg ask  76.8c | net   -31.90 ( -13.2 per $100 staked) | days positive 3 of 8
+  the set rose under 0.03 in the minute: bought at the mark (same sets, for comparison) bets   310 | win  67.7% vs avg ask  75.3c | net   -27.21 ( -11.5 per $100 staked) | days positive 3 of 8
+  the set fell in the minute: bought a minute later          bets  1260 | win  59.1% vs avg ask  62.8c | net   -65.14 (  -8.0 per $100 staked) | days positive 1 of 8
+  the set fell in the minute: bought at the mark (same sets, for comparison) bets  1260 | win  59.1% vs avg ask  73.3c | net  -194.79 ( -20.7 per $100 staked) | days positive 0 of 8
+  the set rose 0.05 or more in two minutes: bought two minutes later bets  1357 | win  84.2% vs avg ask  86.9c | net   -47.03 (  -4.0 per $100 staked) | days positive 2 of 8
+  the set rose 0.05 or more in two minutes: bought at the mark (same sets, for comparison) bets  1357 | win  84.2% vs avg ask  73.5c | net  +126.93 ( +12.5 per $100 staked) | days positive 8 of 8
+  the set did not rise 0.05 in two minutes: bought two minutes later bets  1535 | win  58.1% vs avg ask  61.9c | net   -79.91 (  -8.2 per $100 staked) | days positive 2 of 8
+  the set did not rise 0.05 in two minutes: bought at the mark (same sets, for comparison) bets  1535 | win  58.1% vs avg ask  73.7c | net  -260.09 ( -22.6 per $100 staked) | days positive 0 of 8
+--- bought a minute later, by the price paid then (a set that rose 0.03 or more)
+  price a minute later 0.00 to 0.70                          bets    92 | win  64.1% vs avg ask  64.2c | net    -1.55 (  -2.6 per $100 staked) | days positive 3 of 8
+  price a minute later 0.70 to 0.80                          bets   271 | win  72.0% vs avg ask  75.2c | net   -12.33 (  -5.9 per $100 staked) | days positive 2 of 8
+  price a minute later 0.80 to 0.90                          bets   618 | win  80.9% vs avg ask  84.7c | net   -29.21 (  -5.5 per $100 staked) | days positive 2 of 8
+  price a minute later 0.90 to 1.00                          bets   341 | win  95.3% vs avg ask  92.4c | net    +8.26 (  +2.6 per $100 staked) | days positive 6 of 8
 DONE
