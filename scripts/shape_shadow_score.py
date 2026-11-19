@@ -100,4 +100,20 @@ for label, live in (("LIVE lanes", True), ("PAPER lanes", False)):
         if x["flag"]:
             r, g = x["r"], x["flag"]
             print(f"    {datetime.datetime.fromtimestamp(float(r['ts']), ET):%m-%d %H:%M} {r['ticker']:30s} {r['lane']:20s} {r['side']:3s} paid {float(r['ask']):.2f} | since buy {x['buy']}, quarter {x['quarter']} | rule sells {float(g['bid']):.2f} with {g['left']:.0f}s left ${x['rule']:+.2f} | actual ${x['actual']:+.2f} ({'sold by the lane' if x['sold'] else 'won' if x['won'] else 'lost'})")
+
+print("\n=== the same, split by the window the bet was in (a study's cut, after seeing the results): WAVE window = 5 or more scored bets in one 15-minute window, 60% or more of them ended behind (what happened below zero); OTHER = every other window. All scored bets, and the bets from 11-18 18:31 ET on (the push) apart.")
+by_win = {}
+for x in out:
+    by_win.setdefault(x["r"]["ticker"].split("-")[1], []).append(x)
+wave_wins = {w for w, xs in by_win.items() if len(xs) >= 5 and sum(1 for y in xs if y["actual"] < 0) >= 0.6 * len(xs)}
+for label, since_ts in (("all scored bets", 0), ("since the push (11-18 18:31 ET)", 1795044681)):
+    sub = [x for x in out if float(x["r"]["ts"]) >= since_ts]
+    wv = [x for x in sub if x["r"]["ticker"].split("-")[1] in wave_wins]
+    ot = [x for x in sub if x["r"]["ticker"].split("-")[1] not in wave_wins]
+    print(f"  -- {label}: {len(wave_wins)} wave windows in the whole set")
+    line("wave windows", wv)
+    line("other windows", ot)
+    for sh in ("trend_against", "flat"):
+        line(f"  wave windows, first would-sell {sh}", [x for x in wv if x["flag"] and x["buy"] == sh])
+        line(f"  other windows, first would-sell {sh}", [x for x in ot if x["flag"] and x["buy"] == sh])
 print("DONE")
