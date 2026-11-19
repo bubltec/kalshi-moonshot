@@ -1,0 +1,31 @@
+leader windows with up/down results for all 5 coins: n=440 of 457, 2026-11-09 to 2026-11-16
+coins up (of 5) per window: {0: 140, 1: 51, 2: 49, 3: 37, 4: 54, 5: 109}
+waves (5 same) n=249 (56.6%); near waves (4 of 5) n=105; mixed n=86. up waves 109, down waves 140
+
+(b) leader-market quote by window type (median leader mid, median sum of asks)
+  wave       n=249  min3: leader_mid=0.425 sum_ask=1.190  min5: leader_mid=0.490 sum_ask=1.200  min7: leader_mid=0.585 sum_ask=1.220
+  near wave  n=105  min3: leader_mid=0.450 sum_ask=1.180  min5: leader_mid=0.475 sum_ask=1.200  min7: leader_mid=0.590 sum_ask=1.210
+  mixed      n= 86  min3: leader_mid=0.450 sum_ask=1.190  min5: leader_mid=0.562 sum_ask=1.210  min7: leader_mid=0.620 sum_ask=1.220
+  P(wave leader mid at 3 min > non-wave) = 0.434 (0.5 = no separation), waves n=243, non-waves n=189
+  P(wave leader mid at 5 min > non-wave) = 0.469 (0.5 = no separation), waves n=249, non-waves n=191
+
+(c) who leads: rank (1 = largest typical-minute move) of the winning coin among five, up/down mid curve; windows where all five measured
+  PRIOR window (known before)
+    up wave    n= 31 winner rank counts 1..5: [7, 6, 5, 7, 6]  mean rank 2.97 (3.0 = no relation)
+    down wave  n= 38 winner rank counts 1..5: [5, 7, 5, 11, 10]  mean rank 3.37 (3.0 = no relation)
+    mixed/near n= 45 winner rank counts 1..5: [6, 12, 8, 10, 9]  mean rank 3.09 (3.0 = no relation)
+  same window (after the fact)
+    up wave    n= 26 winner rank counts 1..5: [2, 4, 2, 5, 13]  mean rank 3.88 (3.0 = no relation)
+    down wave  n= 38 winner rank counts 1..5: [22, 6, 7, 1, 2]  mean rank 1.82 (3.0 = no relation)
+    mixed/near n= 44 winner rank counts 1..5: [5, 2, 6, 12, 19]  mean rank 3.86 (3.0 = no relation)
+  coin labels of the winner by wave type (label only):
+    up wave    n=109 {'XRP': 24, 'SOL': 26, 'HYPE': 49, 'BTC': 5, 'ETH': 5}
+    down wave  n=140 {'HYPE': 17, 'BTC': 63, 'ETH': 18, 'SOL': 16, 'XRP': 26}
+    mixed/near n=191 {'HYPE': 62, 'ETH': 17, 'XRP': 63, 'SOL': 30, 'BTC': 19}
+
+(d) hedge check
+  yes contracts of the five leader markets pay exactly 1 in total in every window: windows with exactly one winner = all 457 used.
+  wave     at 5 min: median cost to hold all five yes = 1.200 for a payout of 1 (a loss of 0.200 before the fee); favourite ask median 0.530
+  wave     at 10 min: median cost to hold all five yes = 1.240 for a payout of 1 (a loss of 0.240 before the fee); favourite ask median 0.710
+  not wave at 5 min: median cost to hold all five yes = 1.210 for a payout of 1 (a loss of 0.210 before the fee); favourite ask median 0.550
+  not wave at 10 min: median cost to hold all five yes = 1.230 for a payout of 1 (a loss of 0.230 before the fee); favourite ask median 0.800
