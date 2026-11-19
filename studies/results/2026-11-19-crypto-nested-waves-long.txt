@@ -1,0 +1,17 @@
+window: 2026-10-26 to 2026-11-19 ET; 2227 closes; runs of consecutive closes 5, longest 668; mean D -0.017, share of windows with D>0 47.6%
+--- 1. autocorrelation of D, lags 1-192: 12 of 192 lags outside the band (10 expected by chance)
+  outside: 1 (0.2 h) -0.06, 11 (2.8 h) -0.06, 53 (13.2 h) +0.04, 73 (18.2 h) -0.04, 77 (19.2 h) +0.06, 83 (20.8 h) -0.05, 89 (22.2 h) +0.05, 104 (26.0 h) -0.06, 134 (33.5 h) +0.04, 145 (36.2 h) -0.05, 151 (37.8 h) +0.05, 158 (39.5 h) -0.07
+  hour         lag   4: -0.027 (band -0.037 to +0.042)
+  quarter-day  lag  24: -0.001 (band -0.041 to +0.048)
+  day          lag  96: +0.002 (band -0.043 to +0.049)
+--- 2. the larger wave as the odds: the slow state (mean D of the previous N windows) against the NEXT window
+  hour (4)         n 2202 | corr(slow, next D) -0.025 (band -0.041 to +0.037) | next window up: after a slow-up 46.9% (1074), after a slow-down 48.6% (1128)
+  quarter-day (24) n 2114 | corr(slow, next D) -0.036 (band -0.048 to +0.041) | next window up: after a slow-up 45.3% (867), after a slow-down 49.5% (1247)
+  day (96)         n 1826 | corr(slow, next D) -0.015 (band -0.048 to +0.045) | next window up: after a slow-up 47.4% (608), after a slow-down 48.7% (1218)
+--- 3. time of day (ET): mean D by hour and by six-hour block, with the shuffle band of the largest deviations
+  by hour: 00:+0.04 01:-0.08 02:-0.03 03:+0.07 04:-0.01 05:+0.01 06:+0.05 07:-0.06 08:-0.01 09:-0.03 10:-0.07 11:-0.06 12:-0.03 13:+0.00 14:-0.02 15:-0.05 16:+0.05 17:-0.01 18:+0.01 19:-0.02 20:-0.06 21:-0.05 22:-0.02 23:-0.04
+  largest hour deviation +0.080 (shuffle 95th percentile 0.137)
+  by six-hour block (00-06, 06-12, 12-18, 18-24): -0.001 -0.030 -0.010 -0.029 | largest 0.030 (shuffle 95th 0.051)
+--- 4. the 15-minute alternation (effect of the last window on the next) by the slow state
+  hour (4)         effect of the last window in slow-up -0.022, slow-down -0.050; difference +0.028 (band -0.068 to +0.067); n 2202
+  quarter-day (24) effect of the last window in slow-up -0.028, slow-down -0.038; difference +0.010 (band -0.062 to +0.070); n 2114
