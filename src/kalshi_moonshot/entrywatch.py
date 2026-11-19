@@ -2,8 +2,9 @@
 
 2026-11-19, user: "entry is supposed to be on a thread based on the websocket". The slow scoping pass (runner.scope_lane) still decides which events are worth watching. This listener sits on the tape recorder's socket and, for a two-level lane (one with review_minutes), reviews one watched event when
 
-  - a streamed quote puts a side the lane may buy inside the lane's price band, inside its entry window, or
-  - a tick of the index that settles the event arrives (the risk score reads the index as well as the quote, and Kalshi's quote may sit still while the index moves), and the event's last streamed quote is in the band.
+  - a streamed quote on it arrives, or
+  - a tick of the index that settles it arrives (the perp feed: the risk score reads the index as well as the quote, and Kalshi's quote may sit still while the index moves).
+Every tick asks the entry logic; the lane's filter (price, window, spread) and the buy module's steps say yes or no, so no rule is kept in this file.
 
 A hit runs the lane's own review on that one event (runner.review_lane: the same filters, buy-module screen, cooldown and one-per rule as the polled review) and queues the same `evaluate` jobs, so the buy module's steps, sizing, limits and paper-versus-live are untouched. A look at one event is taken no more often than ENTRY_MIN_GAP_SECONDS. The thread decides nothing about what to buy: every rule is a step of the lane's buy module.
 
@@ -115,7 +116,6 @@ class EntryWatcher:
         keys = quote_keys(str(e["ticker"]))
         s = self.get_settings()
         specs = lane_specs(s)
-        now = datetime.fromtimestamp(float(e["ts"]), UTC)
         hits = [(lane, ev, info) for (lane, ev), info in self._watched().items() if ev in keys]
         self._prune_maybe()
         hist = self._hist.setdefault(e["ticker"], deque(maxlen=400))
@@ -124,32 +124,26 @@ class EntryWatcher:
             spec = specs.get(lane)
             if spec is None or not spec.enabled or not tiered(spec):
                 continue
-            self._offer(s, spec, lane, event, info, float(e["bid"]), float(e["ask"]), now)
+            self._offer(s, spec, lane, event, info)
 
     def _index_review(self, e: dict[str, Any]) -> None:
-        """A settlement index tick: reviews every watched event that index settles, if its last streamed quote is in the lane's band and window."""
+        """A settlement index tick (the perp feed's reading of the value the market settles on): asks the entry logic for every watched event that index settles."""
         idx = str(e["index_id"])
         s = self.get_settings()
         specs = lane_specs(s)
-        now = datetime.fromtimestamp(float(e["ts"]), UTC)
-        hits = [(lane, ev, info) for (lane, ev), info in self._watched().items() if index_for_series(str(info.get("series", ""))) == idx]
-        for lane, event, info in hits:
+        for (lane, event), info in self._watched().items():
             spec = specs.get(lane)
-            if spec is None or not spec.enabled or not tiered(spec):
+            if spec is None or not spec.enabled or not tiered(spec) or index_for_series(str(info.get("series", ""))) != idx:
                 continue
-            rows = self._hist.get(str(info.get("ticker", "")))
-            if not rows:
-                continue
-            _, bid, ask = rows[-1]
-            self._offer(s, spec, lane, event, info, bid, ask, now)
+            self._offer(s, spec, lane, event, info)
 
-    def _offer(self, s: Settings, spec: LaneSpec, lane: str, event: str, info: dict[str, Any], bid: float, ask: float, now: datetime) -> None:
+    def _offer(self, s: Settings, spec: LaneSpec, lane: str, event: str, info: dict[str, Any]) -> None:
+        """Every tick on a watched event asks the lane's entry logic (no price or window pre-check here: the lane's filter and its buy module's steps decide), at most once per ENTRY_MIN_GAP_SECONDS for the event."""
         key = (lane, event)
         if key in self._pending or time.time() - self._last.get(key, 0.0) < s.entry_min_gap_seconds:
             return
-        if in_band(spec, bid, ask) and in_window(spec, info.get("close", ""), now, str(info.get("series", ""))):
-            self._pending.add(key)
-            self._jobs.put(key)
+        self._pending.add(key)
+        self._jobs.put(key)
 
     def _watched(self) -> dict[tuple[str, str], dict[str, Any]]:
         """The watched events, from memory: the scoping pass puts them there (Store.set_watch), a restart loads them once (start). No table read on a tick. `self.watch`, when a test or a caller sets it, wins."""

@@ -98,12 +98,25 @@ def test_a_review_uses_the_lanes_own_venue(tmp_path):
     assert poly.calls == [f"event:{EVENT}"]
 
 
-def test_a_quote_out_of_range_queues_nothing(tmp_path):
+def test_every_tick_on_a_watched_event_asks_the_entry_logic_and_the_lane_decides(tmp_path):
     s = socket_settings(tmp_path)
     w = watcher(s, Client(live_event()))
     w.watch = {("commodity", EVENT): {"close": (datetime.now(UTC) + timedelta(minutes=5)).isoformat()}}
-    w.on_event(quote(0.40, 0.45))
+    w.on_event(quote(0.40, 0.45))  # not in any price band: the lane's filter and steps turn it down in the review, not here
+    assert w._jobs.qsize() == 1
+    w.on_event({"kind": "quote", "ticker": "KXOTHER-1-T1", "bid": 0.4, "ask": 0.45, "ts": time.time()})  # not watched
+    assert w._jobs.qsize() == 1
+
+
+def test_an_index_tick_asks_the_entry_logic_for_the_events_it_settles(tmp_path, monkeypatch):
+    s = socket_settings(tmp_path)
+    w = watcher(s, Client(live_event()))
+    w.watch = {("commodity", EVENT): {"series": "KXGOLDD", "close": (datetime.now(UTC) + timedelta(minutes=5)).isoformat()}}
+    monkeypatch.setattr(entrywatch, "index_for_series", lambda series: "GOLD" if series == "KXGOLDD" else None)
+    w.on_event({"kind": "index", "index_id": "OTHER", "value": 1.0, "ts": time.time()})
     assert w._jobs.qsize() == 0
+    w.on_event({"kind": "index", "index_id": "GOLD", "value": 1.0, "ts": time.time()})
+    assert w._jobs.qsize() == 1
 
 
 def test_a_lane_that_is_switched_off_is_ignored(tmp_path):
