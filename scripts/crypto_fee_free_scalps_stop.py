@@ -74,6 +74,13 @@ for f in days:
                         rng5 = float(w5.max() - w5.min()) / unit
                     else:
                         eff5 = rng5 = None
+                    sm = (sa + sb) / 2.0
+                    if k >= 300 and not np.isnan(sm[k - 300:k + 1]).any():
+                        slope3 = float(sm[k] - sm[k - 180]) / unit
+                        dd5 = float(sm[k - 300:k + 1].max() - sm[k]) / unit
+                        slope30 = float(sm[k] - sm[k - 30]) / unit
+                    else:
+                        slope3 = dd5 = slope30 = None
                     hit = np.flatnonzero(sa[k + 1:k + 1 + wait] <= pb + 1e-9)
                     if not len(hit):
                         k += max(15, wait)
@@ -82,11 +89,11 @@ for f in days:
                     end = min(jf + hold, 840)
                     seg = sb[jf + 1:end + 1]
                     outs = {}
-                    for tu in (0.5, 1.0):
+                    for tu in (0.5, 1.0, 1.5):
                         tgt = max(0.01, tu * unit)
                         h_t = np.flatnonzero(seg >= pb + tgt - 1e-9)
                         t_t = int(h_t[0]) if len(h_t) else 10 ** 9
-                        for su in (None, 0.5, 1.0):
+                        for su in (None, 1.0):
                             if su is None:
                                 t_s = 10 ** 9
                             else:
@@ -100,10 +107,10 @@ for f in days:
                             else:
                                 cb = float(sb[end]) if not np.isnan(sb[end]) else pb
                                 outs[(tu, su)] = ("open", cb - pb - 0.07 * cb * (1 - cb), (1.0 if win else 0.0) - pb)
-                    rows.append((day, unit, pb, eff5, rng5, outs))
+                    rows.append((day, unit, pb, eff5, rng5, outs, slope3, dd5, slope30))
                     k = jf + 1 + hold // 2
 print(f"window: {days[0].split('day=')[1][:10]} to {days[-1].split('day=')[1][:10]}; {len(rows)} filled scalps, band 0.60-0.85, whole market length")
-KEYS = [(tu, su) for tu in (0.5, 1.0) for su in (None, 0.5, 1.0)]
+KEYS = [(tu, su) for tu in (0.5, 1.0, 1.5) for su in (None, 1.0)]
 
 
 def nets(sel, key):
@@ -139,3 +146,25 @@ print("--- by day, net per filled scalp in cents (cut)")
 for d in sorted(set(r[0] for r in rows)):
     sel = [r for r in rows if r[0] == d]
     print(f"  {d} n={len(sel):5d}" + "".join(f"{nets(sel, k)[0]:+12.2f}" for k in KEYS))
+
+print("--- by the SETUP at the buy (the user's own: a trend up caught at 0.60 to 0.75; a dip that has levelled out; a fall still running; the rest), net per filled scalp in cents (cut), scalps that start 5 minutes or more into the window")
+have = [r for r in rows if r[6] is not None]
+setups = (
+    ("rising: 3-min move up 1.0+ unit, bid 0.60-0.75", lambda r: r[6] >= 1.0 and r[2] <= 0.75),
+    ("dip levelling: 1.0+ unit under the 5-min high, last 30 s not falling", lambda r: r[7] >= 1.0 and r[8] >= 0 and r[6] > -1.0),
+    ("falling: 3-min move down 1.0+ unit", lambda r: r[6] <= -1.0),
+    ("flat: |3-min move| under 1.0, not 1.0 under the high", lambda r: abs(r[6]) < 1.0 and r[7] < 1.0),
+)
+print("  " + " " * 70 + "".join(f"  t{k[0]}/s{k[1]}"[:12].rjust(12) for k in KEYS))
+for nm, f in setups:
+    sel = [r for r in have if f(r)]
+    if len(sel) >= 30:
+        c = collections.Counter(r[5][(1.0, None)][0] for r in sel)
+        print(f"  {nm:70s}" + "".join(f"{nets(sel, k)[0]:+12.2f}" for k in KEYS) + f"   n={len(sel)}, sold at 1.0u {100.0 * c['sold'] / len(sel):.0f}%")
+print("--- by day for the two setups the user named, target 1.0 no stop / target 1.5 no stop (cents)")
+for nm, f in setups[:2]:
+    print("  " + nm)
+    for d in sorted(set(r[0] for r in have)):
+        sel = [r for r in have if r[0] == d and f(r)]
+        if len(sel) >= 20:
+            print(f"    {d} n={len(sel):4d} {nets(sel, (1.0, None))[0]:+6.2f} {nets(sel, (1.5, None))[0]:+6.2f}")
