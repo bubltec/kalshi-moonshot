@@ -184,3 +184,33 @@ def test_a_bets_row_is_written_at_once_and_its_snapshot_is_filled_in_behind(tmp_
     assert rid > 0 and store.db.execute("SELECT factors FROM decisions WHERE id=?", (rid,)).fetchone()["factors"] in (None, "")
     sent[0](store)  # the write-behind thread
     assert '"spread": 0.02' in store.db.execute("SELECT factors FROM decisions WHERE id=?", (rid,)).fetchone()["factors"]
+
+
+def test_registering_a_new_position_with_the_sell_watcher_does_not_hold_the_buy_thread(tmp_path):
+    import threading
+
+    from kalshi_moonshot import worker
+
+    class Rec:
+        def follow(self, t):
+            pass
+
+    gate, ran = threading.Event(), []
+
+    class Watcher:
+        def refresh(self):
+            gate.wait(3.0)
+            ran.append(1)
+
+    w = worker.Worker.__new__(worker.Worker)
+    w.watcher, w.recorder, w.stopping = Watcher(), Rec(), False
+    t0 = __import__("time").time()
+    w._watch_new_position("KX-1")  # returns while refresh is still blocked
+    assert __import__("time").time() - t0 < 1.0 and not ran
+    gate.set()
+    for _ in range(100):
+        if ran:
+            break
+        __import__("time").sleep(0.02)
+    assert ran
+    w.stopping = True

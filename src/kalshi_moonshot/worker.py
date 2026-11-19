@@ -359,14 +359,34 @@ class Worker:
         return out
 
     def _watch_new_position(self, ticker: str) -> None:
-        """A bet was just placed: follow it on the socket now and register it with the watcher, instead of at the next refresh."""
+        """A bet was just placed: follow it on the socket now, and have the sell watcher register it. The registration (watcher.refresh reads the books, the tape and the account) runs on its own thread, one at a time and coalesced, so the market's buy thread is not held by it (2026-11-19: a refresh after each bet was 0.5 to 3 s inside the buy thread)."""
         if self.watcher is None or self.recorder is None:
             return
         try:
             self.recorder.follow({ticker})
-            self.watcher.refresh()
+            if getattr(self, "_watch_q", None) is None:
+                self._watch_q: queue.SimpleQueue = queue.SimpleQueue()
+                threading.Thread(target=self._run_watch_new, name="watch-new", daemon=True).start()
+            self._watch_q.put(ticker)
         except Exception:
             log.exception("could not register %s with the watcher", ticker)
+
+    def _run_watch_new(self) -> None:
+        while not self.stopping:
+            try:
+                self._watch_q.get(timeout=5.0)
+            except queue.Empty:
+                continue
+            while True:  # every bet that arrived meanwhile is covered by the one refresh
+                try:
+                    self._watch_q.get_nowait()
+                except queue.Empty:
+                    break
+            try:
+                with memguard.allowed():
+                    self.watcher.refresh()
+            except Exception:
+                log.exception("could not register a new position with the watcher")
 
     def _start_discovery(self) -> None:
         """One thread lists the open markets of every series any lane uses and fills the shared cache (marketdata.py); lane jobs read from it, so a lane costs no requests."""
