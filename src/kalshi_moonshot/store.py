@@ -17,7 +17,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-from . import db
+from . import db, memguard
 from .calibration import Calibrator
 from .rag import Rag
 
@@ -352,12 +352,16 @@ def watched_in_memory(path: str) -> dict[tuple[str, str], dict[str, Any]]:
     key = str(path)
     return {(lane, ev): info for (p, lane), events in list(_WATCH.items()) if p == key for ev, info in list(events.items())}
 _PROC_START = time.time()
+_DEC_FROM: dict[str, float] = {}  # store path -> how far back _LAST_DEC is complete (preload_decisions); a question about a later time is answered from memory
 DEC_BATCH = 200
 
 
 def queue_decisions(on: bool = True) -> None:
     """Turn the background decision writer on (the running bot) or off (tests, the CLI: rows are written at once, as they always were)."""
     _DEC_BG["on"] = on
+    if on and not _BEHIND_STARTED[0]:
+        _BEHIND_STARTED[0] = True
+        threading.Thread(target=_behind_writer, name="write-behind", daemon=True).start()
     if on and not _DEC_BG["started"]:
         _DEC_BG["started"] = True
         threading.Thread(target=_decision_writer, name="decision-writer", daemon=True).start()
@@ -427,6 +431,25 @@ def _decision_writer() -> None:
             _log.error("decision writer: %d decision rows dropped after 5 tries", len(batch))
         for _ in batch:
             _DEC_Q.task_done()
+
+
+_BEHIND_Q: "queue.Queue[tuple[str, tuple, Any]]" = queue.Queue()
+_BEHIND_STARTED = [False]
+
+
+def _behind_writer() -> None:
+    """Runs the work handed to Store.behind, one item at a time, each with a Store of this thread's own."""
+    stores: dict[tuple[str, tuple], Store] = {}
+    while True:
+        path, exclude, fn = _BEHIND_Q.get()
+        try:
+            st = stores.get((path, exclude))
+            if st is None:
+                st = stores[(path, exclude)] = Store(path, exclude)
+            fn(st)
+        except Exception:
+            _log.exception("write-behind: one item failed")
+            stores.clear()
 
 
 def _note_decision(path: str, ticker: str, lane: Any, ts: float) -> None:
@@ -600,7 +623,8 @@ class Store:
                 _GEN[(str(self.path), d)] = _GEN.get((str(self.path), d), 0) + 1
         if _BACKGROUND["on"] and "bets" in domains:  # the writer rebuilds the bet book, so no evaluation has to read after this write
             try:
-                self.rebuild_book()
+                with memguard.allowed():  # the bet's own write has been made; the book is rebuilt now so the next decision sees it (a known read after the order, not part of the judgement)
+                    self.rebuild_book()
             except Exception:
                 _BOOK.pop(str(self.path), None)  # no list is better than a wrong one: the next reader builds it
                 _log.exception("bet book: the rebuild after a write failed")
@@ -880,8 +904,22 @@ class Store:
 
     # ---- screened-out candidates: markets that passed the lane's filter but never got a decision ----
     def log_screened(self, lane: str, rows: list[dict[str, Any]], now: float | None = None, gap: float = 300.0) -> int:
-        """Record why candidates were dropped by the estimator's screen. One row per ticker and side per `gap` seconds."""
+        """Record why candidates were dropped by the estimator's screen. One row per ticker and side per `gap` seconds. In the running bot the rows are handed to a writer thread: a review never waits on the table."""
         now = time.time() if now is None else now
+        if _DEC_BG["on"]:
+            rows = list(rows)
+            self.behind(lambda st: st._log_screened_now(lane, rows, now, gap))
+            return len(rows)
+        return self._log_screened_now(lane, rows, now, gap)
+
+    def behind(self, fn: Any) -> bool:
+        """Run `fn(store)` on the write-behind thread when the running bot has one (returns True), nobody waits for it; else not run and False (the caller then does it itself). Whatever reads or writes the database for a record, not for a judgement, goes through here."""
+        if not _DEC_BG["on"]:
+            return False
+        _BEHIND_Q.put((str(self.path), tuple(self.exclude_versions), fn))
+        return True
+
+    def _log_screened_now(self, lane: str, rows: list[dict[str, Any]], now: float, gap: float) -> int:
         n = 0
         for r in rows:
             seen = self.db.execute(
@@ -903,14 +941,28 @@ class Store:
         self.db.execute("DELETE FROM screen_log WHERE ts<?", (now - days * 86400,))
         self.db.commit()
 
+    def preload_decisions(self, hours: float = 2.0, now: float | None = None) -> int:
+        """Background job at start: the last decision time of every market and lane in the last `hours`, put in memory, so the review's cooldown is answered from memory right after a restart too (2026-11-19: no table read in the entry path)."""
+        now = time.time() if now is None else now
+        since = now - hours * 3600.0
+        rows = self.db.execute("SELECT ticker, lane, MAX(ts) AS ts FROM decisions WHERE ts>=? GROUP BY ticker, lane", (since,)).fetchall()
+        p = str(self.path)
+        with _LAST_DEC_LOCK:
+            for r in rows:
+                for k in ((p, r["ticker"], r["lane"]), (p, r["ticker"], None)):
+                    if _LAST_DEC.get(k, 0.0) < float(r["ts"]):
+                        _LAST_DEC[k] = float(r["ts"])
+            _DEC_FROM[p] = since
+        return len(rows)
+
     def decided_since(self, ticker: str, since_ts: float, lane: str | None = None) -> bool:
         """Whether a decision on the market was logged since `since_ts`: by any lane, or (with `lane`) by that lane alone. The review cooldown asks with the lane's own name (2026-11-15): the paper variants log hundreds of decisions an hour on the same markets, and counted from every lane they kept the live lane's review off 57% of the last two hours."""
         if _DEC_BG["on"]:  # the running bot: rows are queued, so memory is asked first (outside it the table is read, as it always was)
             last = _LAST_DEC.get((str(self.path), ticker, lane))
             if last is not None and last >= since_ts:
                 return True  # this process logged one; its row may still be in the queue
-            if since_ts >= _PROC_START:
-                return False  # every decision since the bot started passed through add_decision: memory is the whole answer
+            if since_ts >= min(_PROC_START, _DEC_FROM.get(str(self.path), _PROC_START)):
+                return False  # every decision since the bot started (or since the preload's start) passed through add_decision or the preload: memory is the whole answer
         if lane is None:
             row = self.db.execute("SELECT 1 FROM decisions WHERE ticker=? AND ts>=? LIMIT 1", (ticker, since_ts)).fetchone()
         else:

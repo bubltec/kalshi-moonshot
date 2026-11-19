@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import steptime
+from . import memguard, steptime
 
 log = logging.getLogger("moonshot")
 
@@ -185,6 +185,18 @@ class PgCursor:
         pass
 
 
+class _GuardedSqlite(sqlite3.Connection):
+    """The memory guard's hook on a SQLite connection (the tests): each statement is shown to memguard first."""
+
+    def execute(self, sql, *a, **k):  # type: ignore[override]
+        memguard.note("db", sql)
+        return super().execute(sql, *a, **k)
+
+    def executemany(self, sql, *a, **k):  # type: ignore[override]
+        memguard.note("db", sql)
+        return super().executemany(sql, *a, **k)
+
+
 def _locked(fn):
     """One statement at a time on a connection. The worker's maintenance thread and its main loop share one Store, and so one connection; psycopg
     refuses a second command while one is in flight ('another command is already in progress') and that took the whole process down."""
@@ -192,6 +204,8 @@ def _locked(fn):
 
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
+        if args and isinstance(args[0], str):
+            memguard.note("db", args[0])
         asked = time.perf_counter()
         with self._lock:
             got = time.perf_counter()
@@ -396,7 +410,7 @@ class PgConn:
 def connect(path: Path | str, kind: str = "main", *, shared: bool = False, timeout: float = 30.0) -> Any:
     """A connection for the store at `path`. `kind` is "main" or "tape" (their Postgres schemas); `shared` lets several threads use it."""
     if not use_postgres():
-        con = sqlite3.connect(str(path), timeout=timeout, check_same_thread=not shared)
+        con = sqlite3.connect(str(path), timeout=timeout, check_same_thread=not shared, factory=_GuardedSqlite)
         con.row_factory = sqlite3.Row
         return con
     schema = schema_for(path, kind)

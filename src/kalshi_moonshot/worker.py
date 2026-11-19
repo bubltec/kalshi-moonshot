@@ -25,9 +25,10 @@ from typing import Any
 from . import jobs as jobs_mod
 from . import lanes as lanes_mod
 from . import manual as manual_mod
-from . import orderkeys, reqstats, runner, steptime
+from . import memguard, orderkeys, reqstats, risk, runner, steptime
 from . import ticks as ticks_mod
 from .commodities import CommodityPricer
+from .bankroll import ColdMemory
 from .config import Settings
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
@@ -108,6 +109,8 @@ class Worker:
         self._hot_local = threading.local()  # the discovery thread's own store connection
         self._tape_db: Any = None  # a read connection to the tape, opened on first use, for the entry factors saved with decisions
         self.stopping = False
+        self._mem_ready = threading.Event()  # set when _warm_memory has filled what a socket buy reads
+        self._warm_store: Store | None = None
         self._poly_client: Any = None  # PolymarketClient, False once building it has failed, None until first use
         self._poly_stream: Any = None
         self._last_cleanup = 0.0
@@ -245,9 +248,37 @@ class Worker:
         w.client_for = self._venue  # the same review, on the lane's own venue
         w.evaluate = self.evaluate_shot  # each hit is evaluated on its market's own thread, in memory: no job row (orderkeys.py has the order id)
         threading.Thread(target=self._seed_order_keys, name="order-keys-seed", daemon=True).start()
+        threading.Thread(target=self._warm_memory, name="memory-fill", daemon=True).start()
         w.start()
         self.entry_watcher = w
         log.info("entry watcher on: reviewing a watched event as soon as its socket quote or index ticks into the lane's price band")
+
+    def _warm_memory(self) -> None:
+        """A background job (2026-11-19: database and Kalshi reads belong to background jobs only): fills what a buy decision reads from memory (the earlier decisions of each market for the cooldown, the open positions, the account balance, today's realized result) and keeps it fresh every Bankroll.REFRESH_EVERY seconds. The socket path decides nothing until the first pass is done."""
+        from . import store as store_mod
+
+        first = True
+        while not self.stopping:
+            try:
+                with memguard.allowed():
+                    store = Store(self.s.db_path, self.s.exclude_versions) if first else self._warm_store
+                    self._warm_store = store
+                    if first:
+                        store.preload_decisions()
+                    store.open_position_tickers(self.s.env)
+                    clients = {id(c): c for c in (self._venue(name) for name in lane_specs(self.s))} or {id(self.client): self.client}
+                    for c in clients.values():
+                        self.store.bankroll.refresh(c, self.s)
+                    risk.refresh_realized(self.store)
+                if first:
+                    self.store.bankroll.served = True
+                    risk.serve(self.store)
+                    self._mem_ready.set()
+                    first = False
+                    log.info("memory filled: the buy decision reads the cooldown, bet book, positions, balance and daily result from memory")
+            except Exception:
+                log.exception("memory fill failed; the socket path buys nothing until it has run once" if first else "memory refresh failed; the last copy stays in use")
+            time.sleep(self.store.bankroll.REFRESH_EVERY)
 
     def _seed_order_keys(self) -> None:
         """A background job: the orders already sent, so a buy's order id after a restart is never one Kalshi has seen (orderkeys.py)."""
@@ -648,29 +679,37 @@ class Worker:
     def evaluate_shot(self, shot: LongShot) -> str:
         """The socket path (entrywatch.py): the buy module's evaluation of one shot on its market's own thread, no job row. A live lane reads the real market; a paper lane may use the shared cache. The order id is derived before the order is sent and is the same after a restart (orderkeys.py); the decision and order rows are written behind."""
         s = self.s
-        if not orderkeys.ready():
-            return f"skip {shot.ticker}: the order ids are not seeded from the orders table yet"
+        if not orderkeys.ready() or not self._mem_ready.is_set():
+            return f"skip {shot.ticker}: memory is still being filled from the database (order ids, bet book, balance); no buy is decided on a cold copy"
         live = s.is_live(shot.lane)
         if live and shot.ticker:
             manual_mod.buying_begin(shot.ticker)  # the fill reaches the account before the order reaches the books: until then the position must not be read as hand-placed
         try:
-            with shared_for(self._venue(shot.lane), 0.0 if live else s.discovery_eval_age, s.discovery_enabled):
+            with memguard.decision("buy"), shared_for(self._venue(shot.lane), 0.0 if live else s.discovery_eval_age, s.discovery_enabled):
                 return self._evaluate_shot(
                     shot, orderkeys.key(s.env, shot.lane, shot.ticker, shot.side), raise_model_errors=False,
-                    before_order=lambda: orderkeys.begin(s.env, shot.ticker, shot.side),
+                    before_order=lambda: orderkeys.begin(s.env, shot.ticker, shot.side), memory=True,
                 )
+        except ColdMemory as exc:
+            log.info("skip %s %s: %s", shot.lane, shot.ticker, exc)
+            return f"skipped: {exc}"
         finally:
             if live and shot.ticker:
                 manual_mod.buying_end(shot.ticker)
 
-    def _evaluate_shot(self, shot: LongShot, order_key: str, raise_model_errors: bool, before_order: Callable[[], None]) -> str:
+    def _evaluate_shot(self, shot: LongShot, order_key: str, raise_model_errors: bool, before_order: Callable[[], None], memory: bool = False) -> str:
         s = self.s
         if ticks_mod.reload_pending():
             return f"skip {shot.ticker}: memory is still reloading from the tape after the restart (no buy is decided on empty history)"
         client = self._venue(shot.lane)
         # The shortlist may be minutes old. Re-read the market and drop it if it no longer fits.
         with steptime.step("market read"):
-            m = client.market(shot.ticker)
+            if memory and hasattr(client, "market_memory"):  # the socket path: the stream's copy of the market, never a request (memguard.py)
+                m = client.market_memory(shot.ticker)
+                if m is None:
+                    return f"skipped: the stream has no quote for {shot.ticker} in memory yet"
+            else:
+                m = client.market(shot.ticker)
         m["category"] = shot.category
         if shot.series:
             m.setdefault("series_ticker", shot.series)
@@ -678,7 +717,7 @@ class Worker:
         spec = spec_for(s, shot.lane)
         m.setdefault("event_ticker", shot.event_ticker)
         why_not = lane_reject_reason(side_view(m, shot.side), spec, s, now)
-        if not why_not and spec.trend == "not_falling":
+        if not why_not and spec.trend == "not_falling" and not memory:  # (the socket's review reads no candles: a lane with a trend rule is judged on the quote alone there)
             try:
                 candles = client.candlesticks(shot.series, shot.ticker, spec.lookback_hours)
             except Exception:

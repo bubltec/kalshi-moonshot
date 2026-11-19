@@ -120,11 +120,11 @@ def candidate_markets(s: Settings, client: KalshiClient, partial_ok: bool = True
     return out
 
 
-def _apply_event_info(client: KalshiClient, shots: list[LongShot]) -> list[LongShot]:
-    """Fill category / series / mutex from the event, including a fetch for cache misses."""
+def _apply_event_info(client: KalshiClient, shots: list[LongShot], memory: bool = False) -> list[LongShot]:
+    """Fill category / series / mutex from the event, including a fetch for cache misses (`memory`: from what is already in memory, no fetch)."""
     if not shots or not hasattr(client, "fill_event_info"):
         return shots
-    info = client.fill_event_info([x.event_ticker for x in shots])
+    info = client.event_info_memory() if memory and hasattr(client, "event_info_memory") else client.fill_event_info([x.event_ticker for x in shots])
     out: list[LongShot] = []
     for shot in shots:
         raw = info.get(shot.event_ticker, ("", "", False))
@@ -140,9 +140,9 @@ def _apply_event_info(client: KalshiClient, shots: list[LongShot]) -> list[LongS
 
 def lane_shots(
     s: Settings, client: KalshiClient, markets: list[dict], spec: LaneSpec,
-    estimators: dict[str, Estimator] | None = None, now: datetime | None = None,
+    estimators: dict[str, Estimator] | None = None, now: datetime | None = None, memory: bool = False,
 ) -> list[LongShot]:
-    """One lane's shortlist: its filter, its estimator's screen, its trend rule and one-per rule."""
+    """One lane's shortlist: its filter, its estimator's screen, its trend rule and one-per rule. `memory`: the socket's review, which reads no candles and asks Kalshi nothing."""
     now = now or datetime.now(UTC)
     if estimators is not None and spec.estimator not in estimators:
         return []  # nothing to rate this lane with (e.g. no price feed): do not queue dead work
@@ -154,10 +154,10 @@ def lane_shots(
         cands = buychain.screen(buychain.Ctx(s, spec, None, now.timestamp()), cands)
     elif estimator is not None:
         cands = estimator.screen(cands, markets, spec, s, now)
-    pool = _apply_event_info(client, cands[: spec.shortlist * 3])
+    pool = _apply_event_info(client, cands[: spec.shortlist * 3], memory)
     out: list[LongShot] = []
     for shot in pool:
-        if spec.trend != "none":
+        if spec.trend != "none" and not memory:
             try:
                 candles: list | None = client.candlesticks(shot.series, shot.ticker, spec.lookback_hours)
             except KalshiError:
@@ -293,10 +293,11 @@ def scope_lane(
 
 def review_lane(
     s: Settings, client: KalshiClient, store: Store, spec: LaneSpec,
-    estimators: dict[str, Estimator] | None, now: datetime | None = None, only: set[str] | None = None,
+    estimators: dict[str, Estimator] | None, now: datetime | None = None, only: set[str] | None = None, memory: bool = False,
 ) -> list[LongShot]:
     """Level 2, fast: re-read only the watched events and return markets worth evaluating now.
     `only` limits the pass to those events (the socket entry watcher reviews just the one that moved).
+    `memory`: the socket's review (2026-11-19): the listing comes from the stream's copy in memory, never from Kalshi (an event the stream holds no listing of is left for the next tick), no candles are read, and the screen log is written behind.
 
     Markets decided on within the lane's cooldown are dropped, so a two-minute loop does not
     log the same unchanged view thirty times an hour.
@@ -311,18 +312,23 @@ def review_lane(
             store.unwatch(spec.name, event)
             continue
         try:
-            rows = client.event_markets(event)
+            rows = client.event_markets_memory(event) if memory and hasattr(client, "event_markets_memory") else client.event_markets(event)
         except KalshiError:
             continue
+        if rows is None:
+            continue  # nothing in memory for this event yet: the next tick looks again
         for m in rows:
             m["category"] = info.get("category", "")
             m.setdefault("series_ticker", info.get("series", ""))
         markets.extend(rows)
     if spec.shadow_suffix:
         ladder = (estimators or {}).get(LADDER)
-        shadow.snapshot(store, s, markets, spec.shadow_suffix, getattr(ladder, "pricer", None), now)
+        pricer = getattr(ladder, "pricer", None)
+        rows = [dict(m) for m in markets]
+        if not (memory and store.behind(lambda st: shadow.snapshot(st, s, rows, spec.shadow_suffix, pricer, now))):  # a record, not a judgement: the socket's review hands it to the write-behind thread
+            shadow.snapshot(store, s, markets, spec.shadow_suffix, pricer, now)
     wide = replace(spec, shortlist=spec.shortlist * 3)
-    shots = lane_shots(s, client, markets, wide, estimators, now)
+    shots = lane_shots(s, client, markets, wide, estimators, now, memory)
     if spec.buy_chain:
         from . import buychain
 

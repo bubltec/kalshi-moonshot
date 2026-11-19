@@ -32,6 +32,7 @@ from . import (
     curvevalue,
     manual,
     manualrest,
+    memguard,
     paperfill,
     pathshape,
     perpref,
@@ -353,7 +354,7 @@ class ProfitWatcher:
             hits = [t for (ticker, _), t in self.targets.items() if ticker == e["ticker"]]
         if not hits:
             return
-        with steptime.tick("sell"):  # the sell decision of every bet on this market for this tick (budget: 60 ms)
+        with steptime.tick("sell"), memguard.decision("sell"):  # the sell decision of every bet on this market for this tick (budget: 60 ms; no database or Kalshi read in it)
             self._quote_hits(e, hits)
         line = steptime.tick_report()
         if line:

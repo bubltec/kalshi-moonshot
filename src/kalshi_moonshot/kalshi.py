@@ -19,7 +19,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from . import reqstats, steptime
+from . import memguard, reqstats, steptime
 from .marketdata import MarketCache
 
 log = logging.getLogger("moonshot")
@@ -204,6 +204,8 @@ class KalshiClient:
         """
         url = self.base_url + path
         safe = method.upper() == "GET"
+        if safe:
+            memguard.note("rest", f"GET {path}")  # a read inside a buy or sell decision is a breach (memguard.py)
         if auth and not self.authed:
             raise KalshiError("this call needs KALSHI_KEY_ID and KALSHI_PRIVATE_KEY_PATH")
         last_wait = 0.0
@@ -408,6 +410,19 @@ class KalshiClient:
             return []
         body = self._request("GET", "/markets", params={"tickers": ",".join(tickers[:100]), "limit": min(100, len(tickers))})
         return list(body.get("markets", []))
+
+    def market_memory(self, ticker: str) -> dict[str, Any] | None:
+        """The market from memory (the stream's listing and quote), or None. Never a request."""
+        return self.cache.get_market_streamed(ticker)
+
+    def event_markets_memory(self, event_ticker: str) -> list[dict[str, Any]] | None:
+        """The event's open markets from memory, or None. Never a request."""
+        return self.cache.get_event(event_ticker, 600.0)
+
+    def event_info_memory(self) -> dict[str, tuple[str, str, bool]]:
+        """event_ticker -> (category, series, mutually exclusive) as last read; empty if never read. Never a request."""
+        cached = _EVENT_CACHE.get(self.base_url)
+        return dict(cached[1]) if cached else {}
 
     def market(self, ticker: str) -> dict[str, Any]:
         if self._age() > 0 and (hit := self.cache.get_market(ticker, self._age())) is not None:

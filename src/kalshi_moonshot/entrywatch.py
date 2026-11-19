@@ -218,7 +218,7 @@ class EntryWatcher:
             return 0
         book = self._book(lane)
         with shared_for(book, s.discovery_max_age, s.discovery_enabled):  # the listing (strike, status) is read from the shared cache, not asked of Kalshi on every price move
-            shots = runner.review_lane(s, book, store, spec, self.estimators(store), only={event})
+            shots = runner.review_lane(s, book, store, spec, self.estimators(store), only={event}, memory=self.evaluate is not None)
         queued = 0
         if self.evaluate is not None:
             for shot in shots:

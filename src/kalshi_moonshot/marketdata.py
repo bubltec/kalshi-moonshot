@@ -292,6 +292,26 @@ class MarketCache:
             self.misses += 1
             return None
 
+    def get_market_streamed(self, ticker: str) -> dict[str, Any] | None:
+        """The market as the stream has kept it, for a buy decision (2026-11-19: no REST read in it): its row from a listing the lifecycle stream keeps current (or one no older than QUOTE_STALE), with the streamed quote laid over it. None when the stream has sent no quote for it or no listing holds it: the decision then waits for the next tick."""
+        with self._lock:
+            if ticker not in self._quotes:
+                return None
+            series = self._ticker_series.get(ticker, "")
+            if series and self._live_locked(series):
+                for m in self._open_rows(self._series[series][1]):
+                    if m.get("ticker") == ticker:
+                        return self._overlay(m, 0.0)
+            direct = self._markets.get(ticker)
+            if direct and self._clock() - direct[0] <= QUOTE_STALE:
+                return self._overlay(direct[1], direct[0])
+            ser = self._series.get(series)
+            if ser and self._clock() - ser[0] <= QUOTE_STALE:
+                for m in ser[1]:
+                    if m.get("ticker") == ticker:
+                        return self._overlay(m, ser[0])
+        return None
+
     def stats(self) -> str:
         total = self.hits + self.misses
         return f"market cache: {self.hits:,} reads from memory, {self.misses:,} that went to Kalshi" + (f" ({self.hits / total:.0%} shared)" if total else "")

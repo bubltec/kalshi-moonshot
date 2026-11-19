@@ -32,6 +32,29 @@ def start_of_day(now: float | None = None) -> float:
     return local.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
+_SERVED: set[str] = set()  # store paths the running bot serves from memory: the gate reads today's realized result from memory (refresh_realized, a background job), never from the database
+_REALIZED: dict[str, tuple[float, float]] = {}  # store path -> (start of the day it covers, realized dollars)
+
+
+def serve(store: Store) -> None:
+    _SERVED.add(str(store.path))
+
+
+def refresh_realized(store: Store, now: float | None = None) -> float:
+    """Background job: today's realized result, from the finished trips (the database is read here)."""
+    day = start_of_day(now)
+    got = realized_since(store, day)
+    _REALIZED[str(store.path)] = (day, got)
+    return got
+
+
+def realized_today(store: Store, day: float) -> float:
+    if str(store.path) not in _SERVED:
+        return realized_since(store, day)
+    got = _REALIZED.get(str(store.path))
+    return got[1] if got is not None and got[0] == day else 0.0  # a new day starts at nothing until the refresh runs (within its period)
+
+
 def check(
     s: Settings,
     store: Store,
@@ -69,7 +92,7 @@ def check(
         return Verdict(False, f"{len(held)} open positions (cap {s.max_open_positions})")
     # Realized losses today, from the synced account history (so your own trades count too). It is as fresh as the
     # last account sync (ACCOUNT_SYNC_MINUTES). Wins offset losses; money merely spent on open positions does not count.
-    lost = -realized_since(store, start_of_day(now))
+    lost = -realized_today(store, start_of_day(now))
     limit = equity * s.max_loss_pct_per_day if s.max_loss_pct_per_day > 0 and equity > 0 else s.max_loss_per_day
     if limit > 0 and lost >= limit - 1e-9:
         return Verdict(False, f"daily loss limit: down ${lost:.2f} today (limit ${limit:.2f})")

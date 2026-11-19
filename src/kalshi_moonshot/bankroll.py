@@ -19,6 +19,10 @@ from .store import Store
 from .strategy import fee_per_contract
 
 
+class ColdMemory(RuntimeError):
+    """A decision asked for something a background job has not put in memory yet. The decision is skipped, not answered from the database."""
+
+
 @dataclass(frozen=True)
 class Balance:
     available: float  # cash we can stake now
@@ -59,16 +63,60 @@ def paper_balance(store: Store, s: Settings) -> Balance:
     return Balance(max(0.0, equity - open_total), equity, "paper", open_by_lane)
 
 
+def _sized_open(row: Any) -> bool:
+    """Store.paper_bets(open_only=True) for a row of the bet book."""
+    return (row["action"] == "bet" and row["stake_usd"] is not None and (row["contracts"] or 0) > 0 and (row["lane"] or "moonshot") != "manual"
+            and (row["outcome"] or "") not in ("yes", "no") and row["exit_ts"] is None)
+
+
 class Bankroll:
-    """Reads the balance, caching the Kalshi call for a few seconds."""
+    """Reads the balance, caching the Kalshi call for a few seconds.
+
+    In the running bot (`served`, 2026-11-19: no database or REST read inside a buy decision) read() answers from memory: the bets still open come from the bet book, the dollars already won or lost and Kalshi's cash and portfolio value are a snapshot that `refresh` takes in a background job, as old as REFRESH_EVERY at most, and read() never takes one itself."""
 
     TTL = 20.0
+    REFRESH_EVERY = 30.0
+    served = False  # set by the worker (serve_from_memory)
 
     def __init__(self, store: Store):
         self.store = store
         self._cached: dict[int, tuple[float, Balance]] = {}
+        self._realized: tuple[float, float] | None = None  # (taken at, dollars returned minus staked on finished paper bets)
+        self._cash: dict[int, tuple[float, float, float]] = {}  # id(client) -> (taken at, cash, portfolio value)
+
+    def refresh(self, client: Any, s: Settings) -> None:
+        """Background job: the snapshot the decision reads. The database and Kalshi are read here and nowhere in a decision."""
+        pnl = paper_pnl(self.store)
+        self._realized = (time.time(), sum(v["returned"] - v["staked"] for v in pnl.values()))
+        if s.mode == "trade" and getattr(client, "authed", False):
+            resp = client.balance()
+            cash = float(resp.get("balance_dollars") or (resp.get("balance") or 0) / 100.0)
+            self._cash[id(client)] = (time.time(), cash, float(resp.get("portfolio_value") or 0) / 100.0)
+
+    def _read_served(self, client: Any, s: Settings, live: bool) -> Balance:
+        book = self.store._book() or []
+        open_paper: dict[str, float] = {}
+        open_real: dict[str, float] = {}
+        for r in book:
+            if _sized_open(r):
+                lane = r["lane"] or "moonshot"
+                into = open_real if r["mode"] == "trade" else open_paper
+                into[lane] = into.get(lane, 0.0) + r["stake_usd"]
+        realized = self._realized[1] if self._realized else 0.0
+        equity = s.paper_bankroll_usd + realized
+        if equity < s.paper_bankroll_usd:
+            equity = s.paper_bankroll_usd  # paper stakes are sized as if the starting stake were intact (see read)
+        paper = Balance(max(0.0, equity - sum(open_paper.values())), equity, "paper", open_paper)
+        if not live or s.mode != "trade" or not getattr(client, "authed", False):
+            return paper
+        cash = self._cash.get(id(client))
+        if cash is None:
+            raise ColdMemory("the account balance has not been read yet (the background refresh has not run)")
+        return Balance(cash[1], cash[1] + cash[2], "kalshi", open_real)
 
     def read(self, client: Any, s: Settings, live: bool = True) -> Balance:
+        if self.served:
+            return self._read_served(client, s, live)
         paper = paper_balance(self.store, s)
         if paper.equity < s.paper_bankroll_usd:
             # Paper trading exists to collect results. Sizing off a bankroll that paper losses have eaten would starve every paper lane
