@@ -168,7 +168,6 @@ class Target:
     timed_at: float = 0.0  # shape_timed: when the shape was last read (once every pathshape.STEP seconds)
     timed_done: bool = False  # shape_timed: its one row has been written for this bet
     timed_failed: bool = False  # the shape_timed step raised on this bet and the one warning has been written
-    risk_shape_live: bool = False  # the shape_timed step sells (lane field curve_risk_shape_live); off = it records a would-sell row only
     risk_spot_weight: float = 0.5
     risk_history: bool = True
     risk_min_profit: float = 0.01
@@ -816,14 +815,14 @@ class ProfitWatcher:
         return None
 
     def _shape_timed_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> str | None:
-        """The shape_timed step's body (see _sell_shape_timed, which catches whatever this raises). Returns the sale's reason when the lane sells on it (curve_risk_shape_live), else None."""
+        """The shape_timed step's body (see _sell_shape_timed, which catches whatever this raises). Returns the sale's reason when the lane sells on it (a live exit module), else None."""
         ProfitWatcher._shape_path_note(t, bid, now)
         if pnl >= 0:
             t.timed_since = 0.0  # back ahead: the wait starts over
             return None
         if t.timed_since <= 0:
             t.timed_since = now
-        live = bool(t.risk_live and t.risk_shape_live)
+        live = bool(t.risk_live)
         if (t.timed_done and not live) or now - t.timed_at < pathshape.STEP:
             return None
         t.timed_at = now
@@ -837,7 +836,7 @@ class ProfitWatcher:
         if behind_for < window or not pathshape.would_sell(got.shape):
             return None
         cushion = r.q - (bid - fee_per_contract(bid))  # the chance the exit acts on (the risk score's, on a lane that scores) less what the sale pays net of its fee: over zero = the model says the bet is worth more held than sold. On a lane without the score the chance IS that net bid, so the cushion is zero and a flat bet is held
-        sells = live and (got.shape == "trend_against" or cushion < 0.0)  # a falling bet is sold whatever the model says; a flat one only with no cushion under it
+        sells = live and got.shape == "trend_against"  # a falling bet is sold whatever the model says; a flat one is only recorded (2026-11-19: of 20 flat sales 15 bets won at settlement, the sale beat holding on 5)
         since = pathshape.shape(path, t.bought_ts, now, unit, pathshape.seen_of(series, "buy", now)) if t.bought_ts > 0 else pathshape.Shape("unknown")
         extra = {"would_sell": True, "buy": got.row(), "quarter": since.row(), "window": round(window, 1), "behind_for": round(behind_for, 1), "share": pathshape.TIMED_SHARE, "unit": round(unit, 5) if unit else None, "cushion": round(cushion, 4), "sold": sells}
         if not t.timed_done:
@@ -847,7 +846,7 @@ class ProfitWatcher:
                 self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="shape_timed", extra=extra)
         if not sells:
             return None
-        reason = f"curve risk exit (shape): the bet has been behind {pnl * 100.0:+.1f}% of cost for {behind_for:.0f}s, a tenth of the {left:.0f}s left or more, and its path over that window is {got.shape}" + (f" with no cushion under it (the score's chance is {-cushion:.3f} under what the sale pays net of its fee)" if got.shape == "flat" else "") + f"; sells at {bid:.2f}"
+        reason = f"curve risk exit (shape): the bet has been behind {pnl * 100.0:+.1f}% of cost for {behind_for:.0f}s, a tenth of the {left:.0f}s left or more, and its path over that window is {got.shape}" + f"; sells at {bid:.2f}"
         self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="shape_timed", extra=extra)
         return reason
 
@@ -1212,7 +1211,6 @@ class ProfitWatcher:
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.risk_time_to_go, held.risk_time_to_go_chance, held.risk_time_to_go_wait_share = spec.curve_risk_time_to_go, spec.curve_risk_time_to_go_chance, spec.curve_risk_time_to_go_wait_share
                 held.risk_late_tight, held.risk_late_tight_share, held.risk_late_tight_live = spec.curve_risk_late_tight, spec.curve_risk_late_tight_share, spec.curve_risk_late_tight_live
-                held.risk_shape_live = spec.curve_risk_shape_live
                 series_name = ticker.split("-")[0]
                 sid = (variants.spot_index(series_name, spec.spot_source) if spec.spot_source == "kalshi" else None) or biquote_index(series_name) or index_for_series(series_name) or ""
                 ref = self._shock_reference(held, sid) if sid else 0.0

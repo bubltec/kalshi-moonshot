@@ -16,7 +16,7 @@ The steps (a lane with no exit module sells nothing):
   time_to_go    in the last curve_risk_time_to_go seconds a bet whose curve chance is under curve_risk_time_to_go_chance (the spot on the wrong side of its target) is sold at the bid once that has held without a break for a wait set by the time left (a dip never shortens it)
   late_tight    a bet whose bid is K typical minutes under its high since the buy, ahead or not, in the last share of the market, is sold (curve_risk_late_tight, _share, _live; shadow until _live). Not in the default order: put it after `trail`, so a sale by an earlier step stands
   shape         SHADOW ONLY, never sells: while a bet is behind it records the shape of the bet's own price path (flat, trend against or for, wavy; pathshape.py) since the buy and over a quarter of the time left, and whether the user's rule would sell (kind "shape" in data/risk_shadow.jsonl). Not in the default order; put it first in a chain, since a sale or a hold ends the walk
-  shape_timed   SHADOW ONLY, never sells or holds: the bet has been behind for a share of the time left (pathshape.timed_window) and its path over that same stretch is flat or trending against (pathshape.py); one row (kind "shape_timed" in data/risk_shadow.jsonl) the first time both hold, with the bid it would sell at. Not in the default order
+  shape_timed   the bet has been behind for a share of the time left (pathshape.timed_window) and its path over that same stretch is trend_against (pathshape.py): the bet is sold at the bid. A flat path is only recorded (one row, kind "shape_timed" in data/risk_shadow.jsonl, with the bid it would sell at). Not in the default order
   trail_timed   SHADOW ONLY, never sells or holds: the trail's condition (curverisk.trail_hit) read twice, with the exit's static typical minute and with the time-aware one (pricevol.implied_rate: the price's one-second move implied by its cushion and the time left, which rises toward the close); one row (kind "trail_timed" in data/risk_shadow.jsonl) each time the pair of verdicts changes, with both units and `would_differ`. Not in the default order
 
 Each step reads the lane's existing settings and is off when its setting is off, as it always was; none has a number of its own here. The step bodies are methods of the watcher (ProfitWatcher._sell_<name>): they use its helpers and the bet's state. This module holds the names, the default order, the check of a lane's chain and the note a sale carries.
@@ -30,7 +30,7 @@ A chain can be given a name and shared: an exit module ([exit.<name>] in strateg
 
 from __future__ import annotations
 
-SELL_STEPS = ("never_ahead", "under_even", "profit_take", "trail", "long_hold", "shape", "shape_timed", "trail_timed", "late_tight", "time_to_go")  # the steps a lane may name in its exit module; the watcher holds one method for each (_sell_<name>). `shape`, `shape_timed` and `trail_timed` are shadow only
+SELL_STEPS = ("never_ahead", "under_even", "profit_take", "trail", "long_hold", "shape", "shape_timed", "trail_timed", "late_tight", "time_to_go")  # the steps a lane may name in its exit module; the watcher holds one method for each (_sell_<name>). `shape` and `trail_timed` are shadow only
 KEEP = 900  # what Store.mark_exited keeps of a sale's reason
 
 
