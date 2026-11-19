@@ -113,7 +113,7 @@ def _window_rules(specs: dict[str, Any]) -> dict[str, tuple[float, float, float,
     """Per series, the entry window (seconds in), price band and spread cap of the state_record lane that trades it: the record reads the moments the lane could buy."""
     out: dict[str, tuple[float, float, float, float, float]] = {}
     for sp in specs.values():
-        if not (sp.enabled and "state_record" in sp.buy_chain):
+        if not (sp.enabled and ("state_record" in sp.buy_chain or "state_record_shadow" in sp.buy_chain)):
             continue
         for series in sp.series:
             lo = max(sp.entry_elapsed[0] * 60.0, 900.0 - sp.hours[1] * 3600.0)  # the lane's own window: minutes in, and hours to the close

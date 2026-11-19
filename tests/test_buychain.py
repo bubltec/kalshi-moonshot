@@ -212,3 +212,27 @@ def test_integration_a_lane_on_a_module_buys_by_its_steps_and_the_note_names_the
     store.db.commit()
     out = runner.evaluate(s, None, None, store, shot(), estimators={"market": Fixed(0.92)})
     assert out.action == "bet" and "[chain risk_first: risk_score > price > ladder |" in out.note
+
+
+def test_unit_the_state_record_shadow_step_never_says_no_and_notes_the_verdict(tmp_path, monkeypatch):
+    from kalshi_moonshot import staterecord
+
+    s = settings(tmp_path, monkeypatch)
+    spec = lanes.spec_for(s, "ch")
+    ctx = buychain.Ctx(s, spec, 0.95)
+    monkeypatch.setattr(staterecord, "admits", lambda *a, **k: (False, "state DF, record -0.10 per $1 over 90 markets"))
+    got = buychain.STEPS["state_record_shadow"](ctx, shot())
+    assert got.ok and "would not buy" in got.why and "state DF" in got.why
+    monkeypatch.setattr(staterecord, "admits", lambda *a, **k: (True, "state EF, record +0.30 per $1 over 90 markets"))
+    got = buychain.STEPS["state_record_shadow"](ctx, shot())
+    assert got.ok and "would buy" in got.why and "would not" not in got.why
+
+    def broken(*a, **k):
+        raise RuntimeError("no record")
+
+    monkeypatch.setattr(staterecord, "admits", broken)
+    assert buychain.STEPS["state_record_shadow"](ctx, shot()).ok
+    base = lanes.settings_of(spec, s)["buy_chain"]
+    (tmp_path / "strategies.toml").write_text(LANE.format(chain="['risk_score','price','state_record_shadow']"))
+    s2 = config.load()
+    assert "state_record_shadow" not in lanes.settings_of(lanes.spec_for(s2, "ch"), s2)["buy_chain"] and "risk_score" in base  # a shadow step is not part of the lane's version

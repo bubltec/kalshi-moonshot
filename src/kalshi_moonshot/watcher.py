@@ -1281,7 +1281,7 @@ class ProfitWatcher:
                 from . import curvemodel
 
                 curvemodel.maybe_refit(s)
-            if any(sp.enabled and "state_record" in sp.buy_chain for sp in specs.values()):
+            if any(sp.enabled and ("state_record" in sp.buy_chain or "state_record_shadow" in sp.buy_chain) for sp in specs.values()):
                 from . import staterecord
 
                 staterecord.maybe_refit(s)

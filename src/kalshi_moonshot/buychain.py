@@ -301,6 +301,18 @@ def state_record_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
+@step("state_record_shadow", needs_estimate=True)
+def state_record_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
+    """SHADOW, never says no (2026-11-19, user: "why can't it be on the same market as a shadow feature?"): the state record (rule 8) is asked of every side that got through the lane's own steps, and its verdict goes in the decision's note as "would buy" or "would not buy" with the state and its recorded net per dollar. The bet is scored later by that verdict, held and as sold, on the same bets. It changes nothing the lane does."""
+    from . import staterecord
+
+    try:
+        ok, why = staterecord.admits(ctx.s, ctx.store, shot, ctx.spec, shot.ask)
+    except Exception as exc:  # a shadow reading that fails must never stop a buy
+        return Check(True, f"shadow: state record unreadable ({exc})")
+    return Check(True, f"shadow: {'would buy' if ok else 'would not buy'}: {why}")
+
+
 @step("curve_model", needs_estimate=True)
 def curve_model_step(ctx: Ctx, shot: LongShot) -> Check:
     """The curve model (curvemodel.py: the spot's curve at nine Fibonacci look-backs, fitted daily on the tape) predicts a net per dollar for the side that is in the top model_top share of its training moments and over zero. No fitted model, or a curve that cannot be read, is a no."""
