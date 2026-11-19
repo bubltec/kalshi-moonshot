@@ -1,0 +1,30 @@
+window: 2026-11-09 to 2026-11-16; 560 favourite sets
+--- sets, all-lose sets and severe (5+ coins, 75%+ lost) sets by day
+  2026-11-09 sets  47 all lose   8 severe   3
+  2026-11-10 sets  74 all lose  19 severe   8
+  2026-11-11 sets  69 all lose  13 severe   7
+  2026-11-12 sets  49 all lose   8 severe   4
+  2026-11-13 sets  76 all lose  14 severe   8
+  2026-11-14 sets  90 all lose  20 severe  10
+  2026-11-15 sets 100 all lose  23 severe  17
+  2026-11-16 sets  55 all lose  11 severe   9
+--- with or against the previous window (559 sets with a previous window of 6+ coins)
+  all sets                           sets  559 | all lose  20.8% | severe  11.8% | mean share lost  29.6% | net per $100   -6.2
+  with the last window (agree>=0.6)  sets  205 | all lose  20.0% | severe  11.7% | mean share lost  31.4% | net per $100   -8.1
+  middle (0.4 to 0.6)                sets  143 | all lose  25.9% | severe  15.4% | mean share lost  32.7% | net per $100  -10.8
+  against the last window (<=0.4)    sets  211 | all lose  18.0% | severe   9.5% | mean share lost  25.7% | net per $100   -1.4
+--- by fifths of the previous window's share on this way
+  prev agree 0.00 to 0.23            sets  116 | all lose  17.2% | severe  11.2% | mean share lost  24.9% | net per $100   +0.1
+  prev agree 0.23 to 0.41            sets  109 | all lose  18.3% | severe   7.3% | mean share lost  26.2% | net per $100   -2.8
+  prev agree 0.41 to 0.59            sets  111 | all lose  26.1% | severe  16.2% | mean share lost  32.1% | net per $100  -10.1
+  prev agree 0.59 to 0.75            sets  113 | all lose  23.9% | severe  13.3% | mean share lost  35.8% | net per $100  -14.1
+  prev agree 0.75 to 1.00            sets  110 | all lose  18.2% | severe  10.9% | mean share lost  29.0% | net per $100   -4.6
+--- by day, against the last window (<=0.4) vs the rest: all-lose share
+  2026-11-09 against  12 all lose   0.0% | rest  34 all lose  23.5%
+  2026-11-10 against  24 all lose  29.2% | rest  50 all lose  24.0%
+  2026-11-11 against  25 all lose  12.0% | rest  44 all lose  22.7%
+  2026-11-12 against  18 all lose  16.7% | rest  31 all lose  16.1%
+  2026-11-13 against  23 all lose  17.4% | rest  53 all lose  18.9%
+  2026-11-14 against  33 all lose  27.3% | rest  57 all lose  19.3%
+  2026-11-15 against  51 all lose  21.6% | rest  49 all lose  24.5%
+  2026-11-16 against  25 all lose   4.0% | rest  30 all lose  33.3%
