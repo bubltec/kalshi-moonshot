@@ -244,7 +244,7 @@ class Worker:
             return
         db_path = self.s.db_path
         w = entrywatch.EntryWatcher(
-            lambda: self.s, self.client, lambda: Store(db_path, self.s.exclude_versions),
+            lambda: self.s, self.client, lambda shared=False: Store(db_path, self.s.exclude_versions, shared=shared),
             lambda store: build_estimators(self.est, store, self.searcher, self.quant),
         )
         self.recorder.listeners.append(w.on_event)

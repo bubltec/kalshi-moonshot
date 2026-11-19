@@ -107,6 +107,7 @@ class EntryWatcher:
         self.reviewed: list[str] = []  # log lines, newest last (also logged)
         self._hist: dict[str, deque[tuple[float, float, float]]] = {}  # ticker -> (time, YES bid, YES ask), the last half minute
         self._pruned = 0.0
+        self._shared: Store | None = None
         self._tl = threading.local()  # a store connection for each thread, opened once
 
     def alive(self) -> bool:
@@ -192,10 +193,24 @@ class EntryWatcher:
         return self.client
 
     def _store(self) -> Store:
+        """The store the review reads. Once started, ONE store with one shared connection serves every market thread: a connection for each of the ~100 (lane, event) threads ran Postgres out of clients on the host (2026-11-19 21:46, "too many clients already"). Before start (tests, the CLI) each thread has its own, as it always did."""
+        if self._on:
+            with self._lock:
+                if self._shared is None:
+                    self._shared = self.store_factory(shared=True) if self._factory_takes_shared() else self.store_factory()
+                return self._shared
         st = getattr(self._tl, "store", None)
         if st is None:
             st = self._tl.store = self.store_factory()
         return st
+
+    def _factory_takes_shared(self) -> bool:
+        import inspect
+
+        try:
+            return "shared" in inspect.signature(self.store_factory).parameters
+        except (TypeError, ValueError):
+            return False
 
     def refresh(self) -> None:
         """Load the persisted watchlists into memory, once at start (a restart keeps what the last scoping pass found); after that the scoping pass keeps memory current."""

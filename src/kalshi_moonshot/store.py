@@ -592,10 +592,10 @@ def remembers(*domains: str) -> Any:
 
 
 class Store:
-    def __init__(self, path: Path | str, exclude_versions: Iterable[str] = ()):
+    def __init__(self, path: Path | str, exclude_versions: Iterable[str] = (), shared: bool = False):
         self.path = Path(path)
         self.exclude_versions = frozenset(exclude_versions)
-        self.db = db.connect(path, "main")
+        self.db = db.connect(path, "main", shared=shared)  # shared: one connection that any thread may use (a statement at a time), for the entry threads: one connection per market thread ran the server out of clients (2026-11-19 21:46)
         key = (db.database_url(), db.schema_for(path, "main"))
         with _PREP_LOCK:  # two threads starting at once must not both create the tables
             first = not db.is_pg(self.db) or key not in _PREPARED

@@ -277,3 +277,27 @@ def test_a_hit_is_evaluated_in_memory_with_no_job_row(tmp_path):
     from kalshi_moonshot.jobs import Jobs
 
     assert Jobs(store).claim() is None  # nothing went through the database queue
+
+
+def test_market_threads_share_one_store_connection(tmp_path):
+    """2026-11-19 21:46 on the host: a connection for each (lane, event) thread ran Postgres out of clients."""
+    import threading
+
+    s = socket_settings(tmp_path)
+    made = []
+
+    def factory(shared=False):
+        made.append(shared)
+        return Store(s.db_path, shared=shared)
+
+    w = entrywatch.EntryWatcher(lambda: s, Client(live_event()), factory, lambda store: build_estimators(None, None, None, live_quant()))
+    w._on = True
+    seen = []
+
+    def grab():
+        seen.append(w._store())
+
+    threads = [threading.Thread(target=grab) for _ in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert len({id(x) for x in seen}) == 1 and made == [True]
