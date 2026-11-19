@@ -1209,10 +1209,20 @@ def low_line(monkeypatch):
 def test_unit_under_even_needs_a_favorite_a_bid_under_even_and_a_tenth_of_the_time_left():
     assert curverisk.under_even(0.45, 0.81, 30.0, 300.0, 0.1)  # 30 s under even with 300 s left
     assert not curverisk.under_even(0.45, 0.81, 29.0, 300.0, 0.1)  # a second short
-    assert curverisk.under_even(0.45, 0.81, 3.0, 30.0, 0.1)  # late, the wait is short
+    assert not curverisk.under_even(0.45, 0.81, 3.0, 30.0, 0.1)  # late, the wait is short but never under the 15 s floor
+    assert curverisk.under_even(0.45, 0.81, 15.0, 30.0, 0.1)
     assert not curverisk.under_even(0.50, 0.81, 60.0, 300.0, 0.1)  # at even is not under it
     assert not curverisk.under_even(0.30, 0.40, 60.0, 300.0, 0.1)  # bought as the cheap side: under even is where it started
     assert not curverisk.under_even(0.45, 0.81, 60.0, 300.0, 0.0)  # off
+
+
+def test_unit_under_even_needs_depth_in_the_markets_own_swing_over_the_time_left():
+    # copper 14:00 on 2026-11-19: NO bought 0.87, bid 0.35 with 51 s left, 7 s under even, typical minute about 0.12; settled NO
+    assert not curverisk.under_even(0.42, 0.87, 20.0, 51.0, 0.1, 0.12)  # 0.08 under even, a swing of 0.11 over 51 s: a coin flip
+    assert not curverisk.under_even(0.30, 0.87, 7.0, 51.0, 0.1, 0.12)  # 7 s: under the floor
+    assert curverisk.under_even(0.30, 0.87, 15.0, 51.0, 0.1, 0.12)  # 0.20 under even, more than that swing
+    assert curverisk.under_even(0.42, 0.87, 15.0, 51.0, 0.1, None)  # no reading of the unit: the old rule
+    assert curverisk.under_even(0.45, 0.81, 30.0, 300.0, 0.1, 0.01)  # a calm market: a small depth is enough
 
 
 def test_integration_a_favorite_under_even_for_a_tenth_of_the_time_left_is_sold(tmp_path, monkeypatch, low_line):

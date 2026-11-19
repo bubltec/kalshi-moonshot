@@ -289,12 +289,16 @@ def still_falling(samples: list[tuple[float, float]], now: float, seconds: float
     return start - bid > noise and bid - low < noise
 
 
+UNDER_EVEN_MIN_WAIT = 15.0  # seconds a bid must stay under even before the under-even sale, however little time is left (2026-11-19, user, on copper 14:00: 7 s under even was enough with 51 s left: "it needs to wait longer, or have a min wait"). The price recovered within 8 s. A chosen setting, not fitted
 EVEN = 0.5  # the price at which the market says the side is no longer the favorite: structural, not fitted
 
 
-def under_even(bid: float, entry: float, under_for: float, left: float, share: float) -> bool:
+def under_even(bid: float, entry: float, under_for: float, left: float, share: float, unit: float | None = None) -> bool:
     """The under-even sale's condition (lane field curve_risk_under_even; 2026-11-17, user, after three live commodity bets bought near 0.90 went to zero inside an hour: "we need to fix this"): a bet bought as the favorite (at or over even) whose bid has now been under even, without a break, for `share` of the time left. The wait shrinks with the clock: 30 s with five minutes to go, 3 s with thirty seconds. Evidence: studies/results/2026-11-17-commodity-loss-trace.txt (live commodity bets: +$6.45 on 48 overnight, +$13.44 on 96 of 11-13 to 11-16, +$1.38 on 422 of 11-09 to 11-13, against what happened) and the seven bets of 11-17 09:20 to 10:20 ET (sells two of the three that went to zero at about 0.40, leaves the four winners; +$8.59)."""
-    return share > 0 and entry >= EVEN and bid < EVEN and left > 0 and under_for >= share * left
+    if not (share > 0 and entry >= EVEN and bid < EVEN and left > 0 and under_for >= max(share * left, UNDER_EVEN_MIN_WAIT)):
+        return False
+    # Depth (2026-11-19, user, on copper 14:00: NO bought 0.87, sold 0.35 with 51 s left after 7 s under even, settled NO: "it shouldn't cash out if its 50/50", "way too early"): the wait shrinks with the clock, so late a short dip qualified. The bid must also be under even by more than the market's own typical swing over the time left (unit x sqrt(left / 60)): a bid that can walk back to even inside the time left is a coin flip, not a loss. No reading of the unit = the old rule.
+    return not (unit is not None and unit > 0 and EVEN - bid <= unit * math.sqrt(left / MINUTE))
 
 
 def never_ahead(ever_ahead: bool, left: float, at: float, bought_left: float, seen_whole: bool, lead: float = 30.0) -> bool:

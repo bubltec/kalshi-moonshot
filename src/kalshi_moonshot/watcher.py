@@ -882,7 +882,7 @@ class ProfitWatcher:
             return None
         if t.risk_under_since <= 0:
             t.risk_under_since = now
-        if not curverisk.under_even(bid, t.entry, now - t.risk_under_since, left, t.risk_under_even):
+        if not curverisk.under_even(bid, t.entry, now - t.risk_under_since, left, t.risk_under_even, self._risk_unit(t, now)):
             return None
         reason = f"curve risk exit (under even): the bid {bid:.2f} has been under even for {now - t.risk_under_since:.0f}s without a break, {t.risk_under_even:.0%} of the {left:.0f}s left or more, on a bet bought at {t.entry:.2f}; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
         if t.risk_live and t.risk_under_even_live:
