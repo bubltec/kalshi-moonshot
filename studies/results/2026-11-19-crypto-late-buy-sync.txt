@@ -1,0 +1,37 @@
+window: 2026-11-09 to 2026-11-16; 19931 favourite-side marks (ask 0.60-0.85, spread <= 4c) with 4+ other coins quoting, held to settlement
+--- by seconds left and the group's last 3 minutes against the side: bets | mean ask | win rate | win less ask | net per $100
+  13 to 10 min  group WITH the side    |   1100 | 0.727 |  70.7% |  -2.0c |   -4.0
+  13 to 10 min  group FLAT             |    389 | 0.699 |  73.0% |  +3.1c |   +1.8
+  13 to 10 min  group AGAINST the side |    177 | 0.683 |  60.5% |  -7.8c |  -13.7
+  10 to 7 min   group WITH the side    |   4358 | 0.737 |  71.1% |  -2.6c |   -5.4
+  10 to 7 min   group FLAT             |   2133 | 0.723 |  71.5% |  -0.8c |   -3.2
+  10 to 7 min   group AGAINST the side |   1532 | 0.704 |  64.8% |  -5.6c |  -10.3
+  7 to 4 min    group WITH the side    |   3159 | 0.739 |  69.1% |  -4.8c |   -8.3
+  7 to 4 min    group FLAT             |   1736 | 0.729 |  68.0% |  -4.9c |   -8.6
+  7 to 4 min    group AGAINST the side |   1435 | 0.721 |  67.7% |  -4.4c |   -7.9
+  4 to 2 min    group WITH the side    |   1138 | 0.738 |  70.8% |  -3.0c |   -5.8
+  4 to 2 min    group FLAT             |    782 | 0.734 |  68.4% |  -4.9c |   -8.7
+  4 to 2 min    group AGAINST the side |    827 | 0.725 |  66.5% |  -6.0c |  -10.4
+  2 to 0.5 min  group WITH the side    |    471 | 0.736 |  74.3% |  +0.7c |   -0.8
+  2 to 0.5 min  group FLAT             |    336 | 0.731 |  74.4% |  +1.3c |   -0.3
+  2 to 0.5 min  group AGAINST the side |    358 | 0.724 |  72.9% |  +0.5c |   -1.0
+--- in sync or not (the coin's own last 3 minutes and the group's the same direction), by seconds left
+  13 to 10 min  in sync      |   1414 | win  70.3% less ask  -1.8c | net per $100   -4.1
+  13 to 10 min  out of sync  |    252 | win  69.4% less ask  +0.7c | net per $100   -1.1
+  10 to 7 min   in sync      |   6488 | win  70.1% less ask  -2.8c | net per $100   -5.9
+  10 to 7 min   out of sync  |   1535 | win  69.3% less ask  -2.3c | net per $100   -5.0
+  7 to 4 min    in sync      |   4977 | win  69.0% less ask  -4.3c | net per $100   -7.7
+  7 to 4 min    out of sync  |   1353 | win  66.4% less ask  -6.3c | net per $100  -10.5
+  4 to 2 min    in sync      |   2124 | win  68.9% less ask  -4.3c | net per $100   -7.7
+  4 to 2 min    out of sync  |    623 | win  68.5% less ask  -5.1c | net per $100   -9.1
+  2 to 0.5 min  in sync      |    861 | win  73.9% less ask  +0.9c | net per $100   -0.6
+  2 to 0.5 min  out of sync  |    304 | win  74.0% less ask  +0.6c | net per $100   -1.2
+--- by day, seconds left 7 to 0.5 minutes: net per $100 with the group / flat / against
+  2026-11-09   -5.7 (435) |  -10.6 (281) |   -6.9 (269)
+  2026-11-10  -13.0 (624) |   -8.6 (431) |   -0.4 (356)
+  2026-11-11   -3.7 (688) |  -10.6 (382) |  -10.8 (352)
+  2026-11-12   -3.2 (409) |   -4.2 (263) |   +1.5 (250)
+  2026-11-13   -5.7 (716) |   -5.5 (381) |   -6.0 (417)
+  2026-11-14   -1.2 (705) |   -6.2 (465) |  -13.6 (360)
+  2026-11-15   -9.7 (724) |   -9.1 (445) |  -12.8 (389)
+  2026-11-16  -14.7 (467) |   -4.6 (206) |  -10.8 (227)
