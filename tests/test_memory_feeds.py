@@ -214,3 +214,30 @@ def test_registering_a_new_position_with_the_sell_watcher_does_not_hold_the_buy_
         __import__("time").sleep(0.02)
     assert ran
     w.stopping = True
+
+
+def test_bets_that_land_together_rebuild_the_book_once_each_round_and_every_bet_is_in_it(tmp_path):
+    import threading
+
+    s = settings(tmp_path)
+    store = Store(s.db_path, shared=True)
+    store.rebuild_book()
+    store_mod._BACKGROUND["on"] = True
+    store_mod._BOOK_SEQ.clear()
+    store_mod._BOOK_COVERED.clear()
+    reads = []
+    real = store.rebuild_book
+
+    def counted():
+        reads.append(1)
+        return real()
+
+    store.rebuild_book = counted
+    for i in range(12):  # the rows are in (a Postgres connection serialises its writers; SQLite's shared one does not, so they go in one by one here)
+        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, lane, side, contracts, stake_usd, ask) VALUES (?,?,?,?,?,?,?,?,?)", (time.time(), f"KX-{i}", "bet", "observe", "a", "yes", 10, 1.0, 0.5))
+    store.db.commit()
+    threads = [threading.Thread(target=lambda: store.touch("bets")) for _ in range(12)]  # twelve bets' touches at once
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert len(store._book()) == 12  # every bet is in the book once all have returned
+    assert len(reads) < 12

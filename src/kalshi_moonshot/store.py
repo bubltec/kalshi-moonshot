@@ -351,6 +351,10 @@ def watched_in_memory(path: str) -> dict[tuple[str, str], dict[str, Any]]:
     """Every (lane, event) this process watches for the store at `path`, with the scoping pass's info for it. Memory only."""
     key = str(path)
     return {(lane, ev): info for (p, lane), events in list(_WATCH.items()) if p == key for ev, info in list(events.items())}
+_BOOK_SEQ: dict[str, int] = {}
+_BOOK_COVERED: dict[str, int] = {}
+_BOOK_SEQ_LOCK = threading.Lock()
+_BOOK_REBUILD_LOCK = threading.Lock()
 _PROC_START = time.time()
 _DEC_FROM: dict[str, float] = {}  # store path -> how far back _LAST_DEC is complete (preload_decisions); a question about a later time is answered from memory
 DEC_BATCH = 200
@@ -624,10 +628,23 @@ class Store:
         if _BACKGROUND["on"] and "bets" in domains:  # the writer rebuilds the bet book, so no evaluation has to read after this write
             try:
                 with memguard.allowed():  # the bet's own write has been made; the book is rebuilt now so the next decision sees it (a known read after the order, not part of the judgement)
-                    self.rebuild_book()
+                    self._rebuild_after_write()
             except Exception:
                 _BOOK.pop(str(self.path), None)  # no list is better than a wrong one: the next reader builds it
                 _log.exception("bet book: the rebuild after a write failed")
+
+    def _rebuild_after_write(self) -> None:
+        """Rebuild the bet book after a write, once for all the writes that land together. Eight markets opening at the same moment each placed a bet and each rebuilt the whole book on one connection, lock waits of 250 to 460 ms (host, 2026-11-19). Each write takes a number AFTER its commit; a rebuild notes the highest number issued BEFORE it reads, so every write numbered at or under that is in what it reads. A caller whose number is already covered returns at once; the others rebuild once, behind whoever is rebuilding now."""
+        p = str(self.path)
+        with _BOOK_SEQ_LOCK:
+            _BOOK_SEQ[p] = mine = _BOOK_SEQ.get(p, 0) + 1
+        with _BOOK_REBUILD_LOCK:
+            if _BOOK_COVERED.get(p, 0) >= mine:
+                return
+            with _BOOK_SEQ_LOCK:
+                upto = _BOOK_SEQ.get(p, 0)
+            self.rebuild_book()
+            _BOOK_COVERED[p] = max(_BOOK_COVERED.get(p, 0), upto)
 
     def rebuild_book(self) -> list:
         """Read the bet book (every bet row unsettled, or sold in the last hour) and put it in memory unless a newer one is already there."""
