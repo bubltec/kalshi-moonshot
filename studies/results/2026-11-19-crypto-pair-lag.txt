@@ -1,0 +1,53 @@
+window: 2026-11-09 to 2026-11-16; 663 coin-windows; series: BNB, BTC, DOGE, ETH, HYPE, NEAR, SOL, XRP, ZEC
+--- peak lag of B behind A (seconds; positive = B moves after A), corr at the peak and at 0, 5 s changes
+  BNB   HYPE  peak at   +0 s (together) | corr at peak +0.532 | at 0 +0.532 | at -5 s +0.036 | at +5 s +0.042
+  BTC   HYPE  peak at   +0 s (together) | corr at peak +0.489 | at 0 +0.489 | at -5 s +0.030 | at +5 s +0.035
+  DOGE  HYPE  peak at   +0 s (together) | corr at peak +0.523 | at 0 +0.523 | at -5 s +0.033 | at +5 s +0.041
+  ETH   HYPE  peak at   +0 s (together) | corr at peak +0.507 | at 0 +0.507 | at -5 s +0.014 | at +5 s +0.043
+  HYPE  NEAR  peak at   +0 s (together) | corr at peak +0.516 | at 0 +0.516 | at -5 s +0.050 | at +5 s +0.048
+  HYPE  SOL   peak at   +0 s (together) | corr at peak +0.512 | at 0 +0.512 | at -5 s +0.044 | at +5 s +0.035
+  HYPE  XRP   peak at   +0 s (together) | corr at peak +0.478 | at 0 +0.478 | at -5 s +0.040 | at +5 s +0.033
+  HYPE  ZEC   peak at   +0 s (together) | corr at peak +0.485 | at 0 +0.485 | at -5 s +0.048 | at +5 s +0.025
+  BNB   BTC   peak at   +0 s (together) | corr at peak +0.662 | at 0 +0.662 | at -5 s +0.022 | at +5 s +0.026
+  BNB   DOGE  peak at   +0 s (together) | corr at peak +0.650 | at 0 +0.650 | at -5 s +0.022 | at +5 s +0.017
+  BNB   ETH   peak at   +0 s (together) | corr at peak +0.668 | at 0 +0.668 | at -5 s +0.028 | at +5 s +0.002
+  BNB   NEAR  peak at   +0 s (together) | corr at peak +0.584 | at 0 +0.584 | at -5 s +0.025 | at +5 s +0.032
+  BNB   SOL   peak at   +0 s (together) | corr at peak +0.638 | at 0 +0.638 | at -5 s +0.022 | at +5 s +0.022
+  BNB   XRP   peak at   +0 s (together) | corr at peak +0.583 | at 0 +0.583 | at -5 s +0.023 | at +5 s +0.025
+  BNB   ZEC   peak at   +0 s (together) | corr at peak +0.535 | at 0 +0.535 | at -5 s +0.033 | at +5 s +0.019
+  BTC   DOGE  peak at   +0 s (together) | corr at peak +0.629 | at 0 +0.629 | at -5 s +0.021 | at +5 s +0.012
+  BTC   ETH   peak at   +0 s (together) | corr at peak +0.723 | at 0 +0.723 | at -5 s +0.028 | at +5 s -0.000
+  BTC   NEAR  peak at   +0 s (together) | corr at peak +0.512 | at 0 +0.512 | at -5 s +0.021 | at +5 s +0.029
+  BTC   SOL   peak at   +0 s (together) | corr at peak +0.638 | at 0 +0.638 | at -5 s +0.023 | at +5 s +0.019
+  BTC   XRP   peak at   +0 s (together) | corr at peak +0.577 | at 0 +0.577 | at -5 s +0.020 | at +5 s +0.020
+  BTC   ZEC   peak at   +0 s (together) | corr at peak +0.501 | at 0 +0.501 | at -5 s +0.022 | at +5 s +0.016
+  DOGE  ETH   peak at   +0 s (together) | corr at peak +0.665 | at 0 +0.665 | at -5 s +0.023 | at +5 s -0.001
+  DOGE  NEAR  peak at   +0 s (together) | corr at peak +0.601 | at 0 +0.601 | at -5 s +0.024 | at +5 s +0.036
+  DOGE  SOL   peak at   +0 s (together) | corr at peak +0.687 | at 0 +0.687 | at -5 s +0.021 | at +5 s +0.020
+  DOGE  XRP   peak at   +0 s (together) | corr at peak +0.644 | at 0 +0.644 | at -5 s +0.021 | at +5 s +0.025
+  DOGE  ZEC   peak at   +0 s (together) | corr at peak +0.524 | at 0 +0.524 | at -5 s +0.030 | at +5 s +0.013
+  ETH   NEAR  peak at   +0 s (together) | corr at peak +0.549 | at 0 +0.549 | at -5 s +0.003 | at +5 s +0.038
+  ETH   SOL   peak at   +0 s (together) | corr at peak +0.689 | at 0 +0.689 | at -5 s +0.004 | at +5 s +0.025
+  ETH   XRP   peak at   +0 s (together) | corr at peak +0.597 | at 0 +0.597 | at -5 s +0.002 | at +5 s +0.027
+  ETH   ZEC   peak at   +0 s (together) | corr at peak +0.524 | at 0 +0.524 | at -5 s +0.006 | at +5 s +0.018
+  NEAR  SOL   peak at   +0 s (together) | corr at peak +0.580 | at 0 +0.580 | at -5 s +0.037 | at +5 s +0.025
+  NEAR  XRP   peak at   +0 s (together) | corr at peak +0.543 | at 0 +0.543 | at -5 s +0.034 | at +5 s +0.028
+  NEAR  ZEC   peak at   +0 s (together) | corr at peak +0.570 | at 0 +0.570 | at -5 s +0.048 | at +5 s +0.019
+  SOL   XRP   peak at   +0 s (together) | corr at peak +0.619 | at 0 +0.619 | at -5 s +0.022 | at +5 s +0.025
+  SOL   ZEC   peak at   +0 s (together) | corr at peak +0.531 | at 0 +0.531 | at -5 s +0.031 | at +5 s +0.019
+  XRP   ZEC   peak at   +0 s (together) | corr at peak +0.490 | at 0 +0.490 | at -5 s +0.029 | at +5 s +0.019
+--- HYPE and XRP by lag (the correlation of XRP's change with HYPE's change LAG seconds later; negative LAG = HYPE first)
+  -60:+0.011 -55:+0.003 -50:+0.009 -45:+0.004 -40:+0.001 -35:+0.002 -30:+0.002 -25:+0.004 -20:+0.010 -15:+0.008 -10:+0.008 -5:+0.033 +0:+0.478 +5:+0.040 +10:+0.015 +15:+0.010 +20:+0.014 +25:+0.008 +30:-0.003 +35:+0.000 +40:+0.007 +45:+0.009 +50:+0.003 +55:+0.005 +60:+0.004
+--- by day, peak lag of HYPE behind XRP and the correlation there
+  2026-11-09 peak +0 s corr +0.464 at 0 +0.464
+  2026-11-10 peak +0 s corr +0.440 at 0 +0.440
+  2026-11-11 peak +0 s corr +0.500 at 0 +0.500
+  2026-11-12 peak +0 s corr +0.433 at 0 +0.433
+  2026-11-13 peak +0 s corr +0.463 at 0 +0.463
+  2026-11-14 peak +0 s corr +0.498 at 0 +0.498
+  2026-11-15 peak +0 s corr +0.505 at 0 +0.505
+  2026-11-16 peak +0 s corr +0.491 at 0 +0.491
+--- the use: after XRP's last 30 s move (6 steps), HYPE's next 15 s and 30 s move (typical minutes), beyond HYPE's own last 30 s
+  HYPE next 15 s: on XRP's last 30 s +0.005, on HYPE's own last 30 s +0.036 | corr with XRP's +0.035, with own +0.056 | 100367 steps
+  HYPE next 30 s: on XRP's last 30 s +0.008, on HYPE's own last 30 s +0.052 | corr with XRP's +0.036, with own +0.056 | 100367 steps
+  when XRP's last 30 s moved 1+ typical minute more than HYPE's (top 10% gap, 10037 steps): HYPE's next 30 s move signed with the gap -0.055 (typical minutes); the same over all steps -0.004
