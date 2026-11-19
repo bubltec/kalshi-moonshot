@@ -693,8 +693,8 @@ class Worker:
 
     def _driven(self, spec) -> bool:
         """True when this lane's scope and review run on the stream's events and not on a timer (2026-11-14, user: "we need to get rid of these timers"): the lane reviews on a socket quote (entry_socket) and the market list is kept from the lifecycle channel. While the stream is down the timers run as before."""
-        cache = getattr(self.client, "cache", None)
-        return bool(tiered(spec) and cache is not None and hasattr(cache, "fed") and cache.fed())
+        # 2026-11-19 OUTAGE FIX: no lane is driven by the stream any more. The socket entry watcher (entrywatch.py) that reviewed a watched event on a quote entering the lane's band was deleted with the options of the modules-only strip (commit 5a6b04f swept its deletion into a study commit, bfd6160 removed its wiring in worker.py); a "driven" lane had no timer and nothing left to wake it, so after the 11:15 ET restart NO lane reviewed past its scope pass (jobs "queued 0 of 0", no decision row from any lane for an hour). The timers review and scope the lanes again (review_minutes, scope_minutes) until the quote-driven review is rebuilt.
+        return False
 
     def _start_market_events(self) -> None:
         """A thread that turns the stream's market events into scope runs: a new or reopened market, or a changed close, scopes the lanes that trade its series at once; the stream coming up scopes every lane, and the stream going down puts the timers back."""
