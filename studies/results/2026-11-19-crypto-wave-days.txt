@@ -1,0 +1,10 @@
+window: 2026-11-05 to 2026-11-19; 1321 closes; wave windows (80%+ one way): 827 (62.6% of closes); days with 90+ closes: 13
+  daily wave counts (ET day: waves of closes): 11-06:55/96 11-07:48/96 11-08:61/96 11-09:64/96 11-10:52/96 11-11:68/96 11-12:58/88 11-13:57/96 11-14:70/96 11-15:60/96 11-16:69/96 11-17:67/96 11-18:55/96
+--- daily: mean 60.3, sd 6.7 waves a day
+  lag 1 day: autocorrelation -0.114 (band -0.624 to +0.445) over 12 pairs
+  lag 2 day: autocorrelation -0.036 (band -0.625 to +0.450) over 11 pairs
+  lag 3 day: autocorrelation +0.598 (band -0.684 to +0.561) over 10 pairs
+  previous 3-day mean against today's count: corr +0.100 over 10 days
+  days after a below-median day vs an above-median day: mean count 60.8 vs 60.7
+--- six-hour blocks of 24 consecutive closes: 53 blocks, mean 15.0 waves, sd 3.0; lag-1 autocorrelation +0.146 (band -0.282 to +0.227)
+  by hour of day, waves per close (ET): 00:0.52 01:0.54 02:0.66 03:0.66 04:0.65 05:0.59 06:0.55 07:0.55 08:0.69 09:0.69 10:0.65 11:0.66 12:0.70 13:0.48 14:0.55 15:0.62 16:0.62 17:0.64 18:0.61 19:0.61 20:0.75 21:0.64 22:0.80 23:0.59
