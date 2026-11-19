@@ -87,4 +87,13 @@ for name, sel in (("low vol third", bets[:n // 3]), ("middle third", bets[n // 3
         d = [r[f"rule{k}"] - r["actual"] for r in sel]
         sold = [r for r in sel if r[f"sold{k}"]]
         print(f"   K {k:g}: sold {len(sold):4d} | rule less actual {sum(d):+8.2f} ({100.0 * sum(d) / stake:+5.1f} per $100) | beat {sum(1 for x in d if x > 1e-9):4d} lost {sum(1 for x in d if x < -1e-9):4d} | sold bets that won {sum(1 for r in sold if r['won']):4d} of {len(sold)}")
+print("--- the size of the losses (per contract, against the buy price; a bet 'lost big' ends 0.5 or more under what it cost)")
+for k in KS:
+    a = [r["actual"] - r["ask"] for r in bets]
+    b = [r[f"rule{k}"] - r["ask"] for r in bets]
+    big_a, big_b = sum(1 for x in a if x <= -0.5), sum(1 for x in b if x <= -0.5)
+    zero_a, zero_b = sum(1 for r in bets if r["actual"] < 0.10), sum(1 for r in bets if r[f"rule{k}"] < 0.10)
+    loss_a, loss_b = sum(x for x in a if x < 0), sum(x for x in b if x < 0)
+    gain_a, gain_b = sum(x for x in a if x > 0), sum(x for x in b if x > 0)
+    print(f"   K {k:g}: lost big {big_a} -> {big_b} | ends under 0.10: {zero_a} -> {zero_b} | all losses {loss_a:+.2f} -> {loss_b:+.2f} | all gains {gain_a:+.2f} -> {gain_b:+.2f} | worst bet {min(a):+.2f} -> {min(b):+.2f}")
 print("DONE")
