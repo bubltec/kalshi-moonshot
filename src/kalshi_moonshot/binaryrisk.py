@@ -25,7 +25,7 @@ from .strategy import fee_per_contract as fee
 
 log = logging.getLogger("moonshot")
 
-NAMES = ["logit_ask", "ask_off", "cz1", "cz3", "cz5", "zt1", "zt3", "zt5", "tr13", "tr35", "left", "czl1", "czl3", "czl5", "eff5", "vr", "amp15", "pos1", "pos3", "pos5", "bounce_with", "bounce_against", "hm1", "hm3", "hm5", "hp1", "hp3", "hp5", "h_strike", "ry1", "ry3"]
+NAMES = ["logit_ask", "ask_off", "cz1", "cz3", "cz5", "tr13", "tr35", "left", "czl1", "czl3", "czl5", "pos15", "pos30", "pos60", "mv15", "mv30", "mv60", "dr24", "dr72"]
 EXITS = ("hold", "1m", "2m", "3m", "5m")
 HORIZONS = (60.0, 120.0, 180.0, 300.0)  # seconds after the buy at which the early-sale exits sell at the bid
 TOPS = (0.05, 0.10)  # the shares of training sides whose predicted net is stored as a bar
@@ -33,8 +33,6 @@ TOP = 0.05  # the bar a buy must reach
 TRAIN_HOURS = 24.0
 STEP = 60.0  # seconds between training samples of a market
 REFIT_EVERY = 3600.0
-RECENT_EVERY = 60.0
-RECENT_STALE = 900.0  # a recent-outcomes table older than this is not read
 MIN_ROWS = 4000
 CAP = 3.0  # a net per $1 above this counts as this in the fit, so one long shot cannot lead it
 RIDGE = 1.0
@@ -73,79 +71,63 @@ def usable(ask: float) -> bool:
     return ask >= ASK_FLOOR and not (DEAD[0] <= ask <= DEAD[1])
 
 
-class Recent:
-    """The share of settled windows that resolved YES in the last hours before a moment, from windows closed BEFORE that moment (never the future). Under 20 windows is unknown (0)."""
-
-    def __init__(self, rows: list[tuple[float, int]] | None = None) -> None:
-        rows = sorted(rows or [])
-        self.closes = [r[0] for r in rows]
-        self.cum = [0]
-        for _, y in rows:
-            self.cum.append(self.cum[-1] + y)
-        self.at = time.time()
-
-    def yes(self, t: float, hours: float) -> float:
-        lo, hi = bisect.bisect_left(self.closes, t - hours * 3600.0), bisect.bisect_left(self.closes, t)
-        return (self.cum[hi] - self.cum[lo]) / (hi - lo) - 0.5 if hi - lo >= 20 else 0.0
+_refs: dict[str, tuple[float, float, float]] = {}  # index -> (read at, the value 24 h ago, the value 72 h ago): a template a background job keeps in memory (refresh_refs), so a decision reads no database
+_need_refs: set[str] = set()
+REFS_EVERY = 600.0
+_refs_at = 0.0
 
 
-_recent = Recent()
-_recent.at = 0.0  # nothing read yet: a decision refuses until the first refresh
-_recent_at = 0.0
+def refs_for(index: str) -> tuple[float, float] | None:
+    r = _refs.get(index)
+    return (r[1], r[2]) if r and r[1] > 0 and r[2] > 0 else None
 
 
-def refresh_recent(s: Any, now: float | None = None) -> bool:
-    """Background job: read the last four hours of settled windows into memory (never called from a decision). True when it refreshed."""
-    global _recent, _recent_at
+def refresh_refs(s: Any, now: float | None = None) -> bool:
+    """Background job: for each index a decision has asked about, the spot 24 h and 72 h ago from the tape (never called from a decision)."""
+    global _refs_at
     now = time.time() if now is None else now
-    if now - _recent_at < RECENT_EVERY:
+    if now - _refs_at < REFS_EVERY or not _need_refs:
         return False
-    _recent_at = now
+    _refs_at = now
     try:
         from . import db
 
-        st = db.connect(s.db_path, "main")
-        rows = st.execute("SELECT close_ts, result FROM windows WHERE result IN ('yes','no') AND close_ts > ? AND close_ts IS NOT NULL", (now - 4 * 3600.0,)).fetchall()
-        _recent = Recent([(float(r["close_ts"]), 1 if r["result"] == "yes" else 0) for r in rows])
+        tape = db.connect(s.tape_path, "tape")
+        for ix in list(_need_refs):
+            got = []
+            for h in (24.0, 72.0):
+                r = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts<=? AND ts>? ORDER BY ts DESC LIMIT 1", (ix, now - h * 3600.0, now - h * 3600.0 - 1800.0)).fetchone()
+                got.append(float(r[0]) if r else 0.0)
+            _refs[ix] = (now, got[0], got[1])
         return True
     except Exception:
-        log.debug("binary risk: the recent outcomes could not be read", exc_info=True)
+        log.debug("binary risk: the 24 and 72 hour references could not be read", exc_info=True)
         return False
 
 
-def readings(T: list[float], V: list[float], now: float, strike: float, left_s: float) -> dict[str, float] | None:
-    """The curve readings at `now` from the index's ticks (T times, V values, ascending, the last at or before `now`). None when the history is short or stale. The same code reads the live curve and builds the training rows."""
+def readings(T: list[float], V: list[float], now: float, strike: float, left_s: float, refs: tuple[float, float] | None = None) -> dict[str, float] | None:
+    """The curve readings at `now` from the index's ticks (T times, V values, ascending, the last at or before `now`). None when the history is short or stale. `refs` is the spot 24 h and 72 h ago (a background template live, a lookup in training); without it the drift readings are 0 (unknown). The same code reads the live curve and builds the training rows.
+
+    The spot is read as a vector of its 0-1, 0-3 and 0-5 minute averages (user, 2026-11-20: "you need a vector, blended at 1, 3, 5 mins"; a one-tick blip is not a cushion and Kalshi settles on the last minute's average), and the longer positions and moves (15, 30, 60 minutes) are read from their equal blend. The unit is the typical minute (the 15-minute root-mean-square one-second log move times sqrt(60))."""
     j = bisect.bisect_right(T, now) - 1
     if j < 0 or now - T[j] > 10.0 or strike <= 0 or left_s <= 0:
         return None
-    i15, i5, ih = (bisect.bisect_left(T, now - x) for x in (900.0, 300.0, 3600.0))
+    i15, ih = (bisect.bisect_left(T, now - x) for x in (900.0, 3600.0))
     if j - i15 < 300 or j - ih < 1500 or T[i15] > now - 840.0 or T[ih] > now - 3300.0:
         return None
-    spot = V[j]
-    if spot <= 0:
+    if V[j] <= 0:
         return None
-
-    def steps(i: int) -> tuple[float, float]:
-        sq = ab = 0.0
-        for k in range(i + 1, j + 1):
-            a, b = V[k - 1], V[k]
-            if a > 0 and b > 0:
-                d = math.log(b / a)
-                sq += d * d
-                ab += abs(d)
-        return sq, ab
-
-    sq15, _ = steps(i15)
-    sqh, _ = steps(ih)
-    path5 = 0.0  # replaced below: the 5-minute efficiency is read on 15 second samples, not 1 second ticks (tick noise made it near zero on a clean rise)
-    span15, spanh = T[j] - T[i15], T[j] - T[ih]
-    if span15 <= 0 or spanh <= 0 or sq15 <= 0 or sqh <= 0:
+    sq = 0.0
+    for k in range(i15 + 1, j + 1):
+        a, b = V[k - 1], V[k]
+        if a > 0 and b > 0:
+            d = math.log(b / a)
+            sq += d * d
+    span15 = T[j] - T[i15]
+    if span15 <= 0 or sq <= 0:
         return None
-    u15, uh = math.sqrt(sq15 / span15 * 60.0), math.sqrt(sqh / spanh * 60.0)
-    w5, w15, wh = V[i5 : j + 1], V[i15 : j + 1], V[ih : j + 1]
-    lo15, hi15, loh, hih = min(w15), max(w15), min(wh), max(wh)
+    u15 = math.sqrt(sq / span15 * 60.0)
     lm = max(left_s, 1.0) / 60.0
-    lg = math.log(spot / strike)
 
     def cl(x: float, a: float) -> float:
         return max(-a, min(a, x))
@@ -154,44 +136,37 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
         a = V[bisect.bisect_left(T, now - sec) : j + 1]
         return sum(a) / len(a)
 
-    # the spot is a vector of its 1, 3 and 5 minute averages, not the last tick (user, 2026-11-20: "you need a vector, blended at 1, 3, 5 mins"; a blip with ten minutes left is not a cushion, and Kalshi settles on the last minute's average)
-    lgs = {m: math.log(avg(60.0 * m) / strike) for m in (1, 3, 5)}
     sp = {m: avg(60.0 * m) for m in (1, 3, 5)}
-    samples = [V[bisect.bisect_right(T, now - 300.0 + 15.0 * k) - 1] for k in range(21)]  # the last five minutes every 15 s
-    path15 = sum(abs(math.log(samples[k + 1] / samples[k])) for k in range(20) if samples[k] > 0 and samples[k + 1] > 0)
-    out = {
-        "cz": cl(lgs[3] / (u15 * math.sqrt(lm)), 8.0), "left": lm,
-        "up5": math.log(max(w5) / sp[3]) / u15, "dn5": math.log(sp[3] / min(w5)) / u15,
-        "eff5": abs(math.log(samples[-1] / samples[0])) / path15 if path15 > 0 and samples[0] > 0 and samples[-1] > 0 else 0.0,
-        "amp15": math.log(hi15 / lo15) / u15, "vr": u15 / uh - 1.0,
-        "h_strike": (strike - loh) / (hih - loh) if hih > loh else 0.5,
-    }
+    blend = (sp[1] + sp[3] + sp[5]) / 3.0
+    out: dict[str, float] = {"left": lm, "cz": cl(math.log(sp[3] / strike) / (u15 * math.sqrt(lm)), 8.0)}
     for m in (1, 3, 5):
-        out[f"czl{m}"] = cl(lgs[m] / (u15 * math.sqrt(lm)), 8.0) * min(lm, 15.0) / 15.0  # the cushion times the share of the market left: the same cushion is worth less as the clock runs down (a straight-line fit cannot see that on its own)
+        cz = cl(math.log(sp[m] / strike) / (u15 * math.sqrt(lm)), 8.0)
+        out[f"cz{m}"] = cz
+        out[f"czl{m}"] = cz * min(lm, 15.0) / 15.0  # the same cushion is worth less as the clock runs down (a straight-line fit cannot see that on its own)
     out["tr13"] = cl(math.log(sp[1] / sp[3]) / u15, 30.0)  # the trend: the 1 minute average against the 3 minute one, in typical moves (positive = rising)
     out["tr35"] = cl(math.log(sp[3] / sp[5]) / u15, 30.0)
-    for m in (1, 3, 5):
-        out[f"pos{m}"] = (sp[m] - lo15) / (hi15 - lo15) if hi15 > lo15 else 0.5
-        out[f"hm{m}"] = cl(math.log(sp[m] / wh[0]) / u15, 60.0)
-        out[f"hp{m}"] = (sp[m] - loh) / (hih - loh) if hih > loh else 0.5
-    for m in (1, 3, 5):
-        out[f"cz{m}"] = cl(lgs[m] / (u15 * math.sqrt(lm)), 8.0)
-        out[f"zt{m}"] = cl(lgs[m] / u15, 30.0)
+    for mins in (15, 30, 60):
+        i = bisect.bisect_left(T, now - 60.0 * mins)
+        w = V[i : j + 1]
+        lo, hi = min(w), max(w)
+        out[f"pos{mins}"] = (blend - lo) / (hi - lo) if hi > lo else 0.5  # where the blended spot sits in that window's range: 0 its low, 1 its high
+        out[f"mv{mins}"] = cl(math.log(blend / V[i]) / u15, 60.0)  # how far it moved over that window, in typical moves
+    for hrs, ref in zip((24, 72), refs or (0.0, 0.0), strict=True):
+        out[f"dr{hrs}"] = cl(math.log(blend / ref) / (u15 * math.sqrt(hrs * 60.0)), 8.0) if ref and ref > 0 else 0.0  # the drift: the spot's move over the past day / three days, against what a random walk of this market's own typical minute would move
     return out
 
 
-def side_vector(f: dict[str, float], side: str, ask: float, ry1: float, ry3: float) -> list[float]:
-    """The readings turned to one side's view, in NAMES' order: a NO side flips the direction readings and swaps the bounce and the places."""
+def side_vector(f: dict[str, float], side: str, ask: float, *unused: float) -> list[float]:
+    """The readings turned to one side's view, in NAMES' order: a NO side flips the direction readings and the positions. (`unused`: callers written before the recent YES rate was dropped still pass it.)"""
     ask = min(0.98, max(0.02, ask))
     yes = side == "yes"
     sg = 1.0 if yes else -1.0
-    up, dn = (f["up5"], f["dn5"]) if yes else (f["dn5"], f["up5"])
 
     def pos(v: float) -> float:
         return v if yes else 1.0 - v
 
-    return [math.log(ask / (1.0 - ask)), 10.0 * (ask - 0.5) ** 2, sg * f["cz1"], sg * f["cz3"], sg * f["cz5"], sg * f["zt1"], sg * f["zt3"], sg * f["zt5"], sg * f["tr13"], sg * f["tr35"], f["left"], sg * f["czl1"], sg * f["czl3"], sg * f["czl5"], f["eff5"], f["vr"], f["amp15"],
-            pos(f["pos1"]), pos(f["pos3"]), pos(f["pos5"]), up, dn, sg * f["hm1"], sg * f["hm3"], sg * f["hm5"], pos(f["hp1"]), pos(f["hp3"]), pos(f["hp5"]), pos(f["h_strike"]), sg * ry1, sg * ry3]
+    return [math.log(ask / (1.0 - ask)), 10.0 * (ask - 0.5) ** 2, sg * f["cz1"], sg * f["cz3"], sg * f["cz5"], sg * f["tr13"], sg * f["tr35"], f["left"], sg * f["czl1"], sg * f["czl3"], sg * f["czl5"],
+            pos(f["pos15"]), pos(f["pos30"]), pos(f["pos60"]), sg * f["mv15"], sg * f["mv30"], sg * f["mv60"], sg * f["dr24"], sg * f["dr72"]]
 
 
 def _solve(A: list[list[float]], b: list[float]) -> list[float]:
@@ -298,12 +273,11 @@ def _read(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[dict
     strike = ticks_mod.strikes.get(shot.ticker) if variants.crypto_index(shot.series) else open_strike(got[0], got[1], now + shot.hours_to_close * 3600.0)
     if not strike or strike <= 0:
         return None, f"binary risk: no strike known yet for {shot.ticker}."
-    if now - _recent.at > RECENT_STALE:
-        return None, "binary risk: the recent outcomes have not been refreshed."
-    f = readings(got[0], got[1], now, float(strike), shot.hours_to_close * 3600.0)
+    _need_refs.add(index)
+    f = readings(got[0], got[1], now, float(strike), shot.hours_to_close * 3600.0, refs_for(index))
     if f is None:
         return None, f"binary risk: the curve cannot be read yet for {shot.ticker} (short or stale history)."
-    pred, k = predict_capped(model, side_vector(f, shot.side, ask, _recent.yes(now, 1.0), _recent.yes(now, 3.0)), ask)
+    pred, k = predict_capped(model, side_vector(f, shot.side, ask), ask)
     return {"model": model, "f": f, "pred": pred, "k": k}, ""
 
 
@@ -315,7 +289,7 @@ def admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[boo
     model, f, pred, k = got["model"], got["f"], got["pred"], got["k"]
     cut = float(model["cuts"].get(str(TOP), 0.0))
     yes = shot.side == "yes"  # the note reads the side's own view: a NO side's cushion is the YES one's sign flipped
-    tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {(1 if yes else -1) * (f['cz1'] + f['cz3'] + f['cz5']) / 3.0:+.1f} (1/3/5 min {f['cz1'] if yes else -f['cz1']:+.1f}/{f['cz3'] if yes else -f['cz3']:+.1f}/{f['cz5'] if yes else -f['cz5']:+.1f}), efficiency {f['eff5']:.2f}, hour place {f['hp3'] if yes else 1.0 - f['hp3']:.2f})"
+    tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {(1 if yes else -1) * (f['cz1'] + f['cz3'] + f['cz5']) / 3.0:+.1f} (1/3/5 min {f['cz1'] if yes else -f['cz1']:+.1f}/{f['cz3'] if yes else -f['cz3']:+.1f}/{f['cz5'] if yes else -f['cz5']:+.1f}), 24 h drift {(1 if yes else -1) * f['dr24']:+.1f}, 30-min place {f['pos30'] if yes else 1.0 - f['pos30']:.2f})"
     return pred >= cut, tag
 
 
@@ -356,7 +330,7 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
     """Background: refresh the recent outcomes (every minute) and start the hourly refit as its own low-priority process. True when a refit was started."""
     global _fitting
     now = time.time() if now is None else now
-    refresh_recent(s, now)
+    refresh_refs(s, now)
     if _fitting is not None and _fitting.poll() is None:
         return False
     m = load(s)
@@ -373,8 +347,6 @@ def build_rows(s: Any, now: float) -> list[tuple[list[float], list[float], float
 
     st = db.connect(s.db_path, "main", shared=True)
     tape = db.connect(s.tape_path, "tape", shared=True)
-    allw = st.execute("SELECT close_ts, result FROM windows WHERE result IN ('yes','no') AND close_ts IS NOT NULL").fetchall()
-    recent = Recent([(float(r["close_ts"]), 1 if r["result"] == "yes" else 0) for r in allw])
     wins = st.execute("SELECT ticker, series, close_ts, strike, result FROM windows WHERE result IN ('yes','no') AND close_ts BETWEEN ? AND ?", (now - TRAIN_HOURS * 3600.0, now)).fetchall()
     by_index: dict[str, list[Any]] = {}
     for w in wins:
@@ -395,6 +367,11 @@ def build_rows(s: Any, now: float) -> list[tuple[list[float], list[float], float
             strike = float(w["strike"]) if variants_crypto(w["series"]) and w["strike"] and float(w["strike"]) > 0 else open_strike(T, V, close)
             if not strike:
                 continue
+            ref = []
+            for h in (24.0, 72.0):  # the spot 24 h and 72 h before the open: two lookups a market, the drift readings' references
+                r = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts<=? AND ts>? ORDER BY ts DESC LIMIT 1", (ix, opened - h * 3600.0, opened - h * 3600.0 - 1800.0)).fetchone()
+                ref.append(float(r[0]) if r else 0.0)
+            refs = (ref[0], ref[1])
             q = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid>0 AND ask>0 ORDER BY ts", (w["ticker"], opened - 60, close)).fetchall()
             if len(q) < 20:
                 continue
@@ -408,9 +385,8 @@ def build_rows(s: Any, now: float) -> list[tuple[list[float], list[float], float
             t = opened + 60.0
             while t <= close - 15.0:
                 qq = quote_at(t)
-                f = readings(T, V, t, strike, close - t) if qq else None
+                f = readings(T, V, t, strike, close - t, refs) if qq else None
                 if f and qq:
-                    r1, r3 = recent.yes(t, 1.0), recent.yes(t, 3.0)
                     ahead = [quote_at(t + h) if t + h <= close - 15.0 else None for h in HORIZONS]
                     for side, ask in (("yes", qq[1]), ("no", 1.0 - qq[0])):
                         if not 0.02 <= ask <= 0.98:
@@ -423,7 +399,7 @@ def build_rows(s: Any, now: float) -> list[tuple[list[float], list[float], float
                             else:
                                 sell = e[0] if side == "yes" else 1.0 - e[1]
                                 pays.append(sell - fee(sell))
-                        rows.append((side_vector(f, side, ask, r1, r3), [(p - ask - fee(ask)) / ask for p in pays], ask))
+                        rows.append((side_vector(f, side, ask), [(p - ask - fee(ask)) / ask for p in pays], ask))
                 t += STEP
     return rows
 

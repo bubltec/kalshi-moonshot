@@ -26,7 +26,6 @@ HORIZONS = br.HORIZONS
 
 st = db.connect(s.db_path, "main", shared=True)
 allw = st.execute("SELECT close_ts, result FROM windows WHERE result IN ('yes','no') AND close_ts IS NOT NULL").fetchall()
-recent = br.Recent([(float(r["close_ts"]), 1 if r["result"] == "yes" else 0) for r in allw])
 wins = st.execute("SELECT ticker, series, close_ts, strike, result FROM windows WHERE result IN ('yes','no') AND close_ts > ? ORDER BY close_ts", (START + 3600 * 2,)).fetchall()
 bets = st.execute("SELECT ts, lane, ticker, side, stake_usd, ask, outcome, exit_price, exit_ts FROM decisions WHERE mode='trade' AND action='bet' AND stake_usd>0.5 AND ts > ? AND lane LIKE 'commodity%' AND outcome IN ('yes','no') ORDER BY ts", (START,)).fetchall()
 print(f"{len(wins)} settled windows, {len(bets)} live commodity bets", flush=True)
@@ -65,6 +64,11 @@ def build(job):
             if k >= len(T) or T[k] - opened > 25.0:
                 continue
             strike = V[k]
+        ref = []  # the spot 24 h and 72 h before the open: the drift readings' references
+        for hh in (24.0, 72.0):
+            rr = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts<=? AND ts>? ORDER BY ts DESC LIMIT 1", (ix, opened - hh * 3600.0, opened - hh * 3600.0 - 1800.0)).fetchone()
+            ref.append(float(rr[0]) if rr else 0.0)
+        refs = (ref[0], ref[1])
         q = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid>0 AND ask>0 ORDER BY ts", (ticker, opened - 60, close)).fetchall()
         if len(q) < 20:
             continue
@@ -76,15 +80,14 @@ def build(job):
             return (qb[j] / scale, qa[j] / scale) if j >= 0 and t - qt[j] <= 60.0 else None
 
         for b in [b for b in bs if win_close.get(b[2]) == close]:  # this window's live bets
-            f = br.readings(T, V, b[0], strike, close - b[0])
+            f = br.readings(T, V, b[0], strike, close - b[0], refs)
             if f:
                 betf.append((b, f))
         t = opened + 60.0
         while t <= close - 15.0:
             qq = quote_at(t)
-            f = br.readings(T, V, t, strike, close - t) if qq else None
+            f = br.readings(T, V, t, strike, close - t, refs) if qq else None
             if f and qq:
-                r1, r3 = recent.yes(t, 1.0), recent.yes(t, 3.0)
                 ahead = [quote_at(t + h) if t + h <= close - 15.0 else None for h in HORIZONS]
                 for side, ask in (("yes", qq[1]), ("no", 1.0 - qq[0])):
                     if not 0.02 <= ask <= 0.98:
@@ -97,7 +100,7 @@ def build(job):
                         else:
                             sell = e[0] if side == "yes" else 1.0 - e[1]
                             pays.append(sell - fee(sell))
-                    rows.append((t, kind, br.side_vector(f, side, ask, r1, r3), [(p - ask - fee(ask)) / ask for p in pays], ask, ticker, side))
+                    rows.append((t, kind, br.side_vector(f, side, ask), [(p - ask - fee(ask)) / ask for p in pays], ask, ticker, side))
             t += STEP
     return rows, betf
 
@@ -111,7 +114,7 @@ BF = sorted((x for b in built for x in b[1]), key=lambda x: x[0][0])
 print(f"{len(S)} training sides ({sum(1 for r in S if r[1] == 'commodity')} commodity), {len(BF)} of {len(bets)} live bets could be read", flush=True)
 
 NI = {n: i for i, n in enumerate(br.NAMES)}
-SH = [("cushion", NI["cz3"]), ("path efficiency", NI["eff5"]), ("speed-up", NI["vr"])]
+SH = [("cushion", NI["cz3"]), ("30-min place", NI["pos30"]), ("30-min move", NI["mv30"])]
 cmd = [r for r in S if r[1] == "commodity"][::5]
 cuts = []
 for _, i in SH:
@@ -164,7 +167,7 @@ while t + 3600 <= t_end:
     cut = {top: ps[int(len(ps) * (1 - top))] for top in TOPS}
     for b, f in hour_bets:  # Part A
         side, ask = b[3], b[5]
-        x = br.side_vector(f, side, ask, recent.yes(b[0], 1.0), recent.yes(b[0], 3.0))
+        x = br.side_vector(f, side, ask)
         pred = br.predict_capped(model, x, ask)[0] if br.usable(ask) else -9.0
         net_lane, net_held, won = actual(b)
         for top in TOPS:
@@ -218,8 +221,8 @@ for top in TOPS:
     print(f"  top {int(top * 100):2d}% picks by ask band: " + ", ".join(f"{BANDS[k][0]:.2f}-{min(BANDS[k][1], 1.0):.2f}: {cnt.get(k, 0)}" for k in sorted(cnt)))
 print(f"done in {time.time() - t0:.0f}s")
 
-print("\n=== EXAMPLE BUYS: the top-5% picks in 0.60-0.85 (first reading per market side), 24 drawn by a fixed seed; cushion is the side's own, in typical moves of the market; hour place 0 = the hour's low, 1 = its high (the side's view)")
+print("\n=== EXAMPLE BUYS: the top-5% picks in 0.60-0.85 (first reading per market side), 24 drawn by a fixed seed; cushion is the side's own, in typical moves of the market; 30-min place 0 = the hour's low, 1 = its high (the side's view)")
 rr = _rnd.Random(11)
 for t, tk, sd, ask, pr, ex, vec, net, half in sorted(rr.sample(EXS, min(24, len(EXS))), key=lambda x: x[0]):
     nm = dict(zip(br.NAMES, vec))
-    print(f"{datetime.fromtimestamp(t, timezone.utc).strftime('%m-%d %H:%MZ')} {tk} buy {sd.upper()} at {ask:.2f}: predicted {pr:+.2f}/$1 by {ex} | cushion {nm['cz3']:+.1f}, efficiency {nm['eff5']:.2f}, hour place {nm['hp3']:.2f}, left {nm['left']:.1f} min | held to settlement: {'WON' if net > 0 else 'LOST'} {net:+.2f} per $1 (half {half + 1})")
+    print(f"{datetime.fromtimestamp(t, timezone.utc).strftime('%m-%d %H:%MZ')} {tk} buy {sd.upper()} at {ask:.2f}: predicted {pr:+.2f}/$1 by {ex} | cushion {nm['cz3']:+.1f}, trend {nm['tr13']:+.2f}, 30-min place {nm['pos30']:.2f}, left {nm['left']:.1f} min | held to settlement: {'WON' if net > 0 else 'LOST'} {net:+.2f} per $1 (half {half + 1})")

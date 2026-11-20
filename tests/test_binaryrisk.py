@@ -28,8 +28,8 @@ def test_unit_readings_need_an_hour_of_fresh_ticks():
     assert binaryrisk.readings(T, V, now + 60.0, V[-1], 300.0) is None  # the last tick is stale
     V = V[:-400] + [V[-1]] * 400  # flat for the last 400 s: every average equals the spot
     f = binaryrisk.readings(T, V, now, V[-1], 300.0)
-    assert f is not None and all(abs(f[k]) < 1e-9 for k in ("cz1", "cz3", "cz5", "zt1", "zt3", "zt5")) and f["left"] == 5.0  # spot at the strike: no cushion at any scale
-    assert all(0.0 <= f[k] <= 1.0 for k in ("pos1", "pos3", "pos5", "hp1", "hp3", "hp5", "eff5"))
+    assert f is not None and all(abs(f[k]) < 1e-9 for k in ("cz1", "cz3", "cz5")) and f["left"] == 5.0  # spot at the strike: no cushion at any scale
+    assert all(0.0 <= f[k] <= 1.0 for k in ("pos15", "pos30", "pos60"))
 
 
 def test_unit_the_cushion_is_in_typical_moves_and_signed_by_side():
@@ -42,18 +42,33 @@ def test_unit_the_cushion_is_in_typical_moves_and_signed_by_side():
     for nm in ("cz1", "cz3", "cz5"):
         i = binaryrisk.NAMES.index(nm)
         assert yes[i] > 0 > no[i]  # the same curve is a lead for YES and a deficit for NO
-    j, k = binaryrisk.NAMES.index("bounce_with"), binaryrisk.NAMES.index("bounce_against")
-    assert yes[j] == no[k] and yes[k] == no[j]  # the bounce room swaps with the side
-    assert abs(yes[binaryrisk.NAMES.index("hp3")] + no[binaryrisk.NAMES.index("hp3")] - 1.0) < 1e-9
+    for nm in ("pos15", "pos30", "pos60"):
+        i = binaryrisk.NAMES.index(nm)
+        assert abs(yes[i] + no[i] - 1.0) < 1e-9  # the place in the range is the side's own view
 
 
-def test_unit_recent_outcomes_use_only_windows_before_the_moment_and_need_twenty():
-    r = binaryrisk.Recent([(float(i), 1 if i % 4 else 0) for i in range(100)])  # a window closes each second, 75% YES
-    assert abs(r.yes(100.0, 100.0 / 3600.0) - 0.25) < 1e-9  # all 100 windows before t=100: 0.75 - 0.5
-    assert r.yes(10.0, 1.0) == 0.0  # ten windows before it: unknown, not a rate
-    r2 = binaryrisk.Recent([(float(i), 1) for i in range(100)])
-    assert abs(r2.yes(100.0, 1.0) - 0.5) < 1e-9 and r2.yes(50.0, 1.0) == 0.5  # all YES: +0.5 once twenty have closed
-    assert r2.yes(20.0, 1.0) == 0.5 and r2.yes(19.0, 1.0) == 0.0  # exactly twenty before t=20, nineteen before t=19
+def test_unit_the_drift_is_the_spots_move_over_a_day_and_three_days_signed_by_side():
+    T, V = walk(4000)
+    now, spot = T[-1], V[-1]
+    none = binaryrisk.readings(T, V, now, spot, 600.0)
+    assert none["dr24"] == 0.0 and none["dr72"] == 0.0  # no references: unknown, not a signal
+    up = binaryrisk.readings(T, V, now, spot, 600.0, (spot * 0.97, spot * 0.90))  # the spot is up 3% on a day ago and 10% on three days ago
+    assert up["dr24"] > 0 and up["dr72"] > 0
+    down = binaryrisk.readings(T, V, now, spot, 600.0, (spot * 1.03, spot * 1.10))
+    assert down["dr24"] < 0 and down["dr72"] < 0
+    yes = binaryrisk.side_vector(up, "yes", 0.60)
+    no = binaryrisk.side_vector(up, "no", 0.40)
+    for nm in ("dr24", "dr72"):
+        i = binaryrisk.NAMES.index(nm)
+        assert yes[i] > 0 > no[i]  # a falling market helps NO, a rising one helps YES
+
+
+def test_unit_the_references_are_a_background_template_read_from_memory(tmp_path, monkeypatch):
+    binaryrisk._refs.clear()
+    assert binaryrisk.refs_for("KP_GOLD") is None
+    binaryrisk._refs["KP_GOLD"] = (time.time(), 4000.0, 3900.0)
+    assert binaryrisk.refs_for("KP_GOLD") == (4000.0, 3900.0)
+    binaryrisk._refs.clear()
 
 
 def rows(n=6000, seed=2):
@@ -174,7 +189,7 @@ def test_unit_a_model_built_before_the_cap_is_refit_at_once(tmp_path, monkeypatc
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     s = config.load()
     started = []
-    monkeypatch.setattr(binaryrisk, "refresh_recent", lambda *a, **k: False)
+    monkeypatch.setattr(binaryrisk, "refresh_refs", lambda *a, **k: False)
     monkeypatch.setattr(binaryrisk, "_fitting", None)
     monkeypatch.setattr(binaryrisk.subprocess, "Popen", lambda *a, **k: started.append(a) or type("P", (), {"poll": lambda self: None})())
     fresh = binaryrisk.fit(rows())
@@ -209,7 +224,6 @@ def test_integration_a_commodity_is_scored_on_the_perp_curve_with_its_open_as_th
     s = config.load()
     (tmp_path / "binary_risk_model.json").write_text(json.dumps(binaryrisk.fit(rows())))
     binaryrisk._cache.update(mtime=None, data=None)
-    binaryrisk._recent.at = time.time()
     now = time.time()
     close = now + 300.0
     T = [close - 900.0 - 3650.0 + i for i in range(4400)]
@@ -224,7 +238,6 @@ def test_integration_a_commodity_is_scored_on_the_perp_curve_with_its_open_as_th
 def swing_model(tmp_path):
     (tmp_path / "binary_risk_model.json").write_text(json.dumps(binaryrisk.fit(rows())))
     binaryrisk._cache.update(mtime=None, data=None)
-    binaryrisk._recent.at = time.time()
 
 
 def commodity_shot(side="yes", ask=0.30):
@@ -303,37 +316,8 @@ def test_unit_a_blip_on_the_last_tick_is_not_a_cushion():
     last_tick_cushion = math.log(V[-1] / strike)
     assert last_tick_cushion > 0
     # the averaged cushions are a fraction of what the last tick alone shows, the shorter the average the more of the blip
-    assert 0 < f["zt5"] < f["zt3"] < f["zt1"]
-    assert f["zt1"] * binaryrisk_unit(T, V, now) < last_tick_cushion
-
-
-def binaryrisk_unit(T, V, now):
-    import bisect
-
-    i15 = bisect.bisect_left(T, now - 900.0)
-    j = bisect.bisect_right(T, now) - 1
-    sq = sum(math.log(V[k] / V[k - 1]) ** 2 for k in range(i15 + 1, j + 1))
-    return math.sqrt(sq / (T[j] - T[i15]) * 60.0)
-
-
-def test_unit_efficiency_reads_a_clean_rise_on_15_second_samples_not_tick_noise():
-    rnd = random.Random(5)
-    T = [1_000_000.0 + i for i in range(4000)]
-    V, v = [], 100.0
-    for i in range(4000):
-        v *= math.exp(0.00002 + (0.0003 if i % 2 else -0.0003))  # a steady rise under one second back-and-forth noise
-        V.append(v)
-    f = binaryrisk.readings(T, V, T[-1], V[-1] * 0.99, 600.0)
-    assert f is not None and f["eff5"] > 0.5  # the old tick-by-tick path read this near zero
-
-
-def test_unit_the_position_readings_are_blended_over_1_3_and_5_minutes():
-    T, V = walk(4000)
-    V = V[:-400] + [V[-401]] * 399 + [V[-401] * 1.01]  # flat, then a last-tick spike far above the hour's range
-    f = binaryrisk.readings(T, V, T[-1], V[-401], 600.0)
-    assert f is not None
-    assert f["pos1"] < 1.0 and f["hp1"] < 1.0  # the spike alone does not put the position at the top of the range
-    assert f["pos5"] <= f["pos3"] <= f["pos1"] and f["hp5"] <= f["hp3"] <= f["hp1"]
+    assert 0 < f["cz5"] < f["cz3"] < f["cz1"]
+    assert f["pos15"] < 1.0 and f["pos30"] < 1.0
 
 
 def test_unit_the_trend_is_the_direction_of_the_averages_signed_by_side():
