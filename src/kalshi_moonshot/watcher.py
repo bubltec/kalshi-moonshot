@@ -1285,9 +1285,9 @@ class ProfitWatcher:
                 from . import staterecord
 
                 staterecord.maybe_refit(s)
-            if any(sp.enabled and "binary_risk_shadow" in sp.buy_chain for sp in specs.values()):
-                from . import binaryrisk
+            from . import binaryrisk
 
+            if binaryrisk.wanted(specs):  # the shadow step or the deciding step
                 binaryrisk.maybe_refit(s)
             if any(sp.enabled and "context_score" in sp.buy_chain for sp in specs.values()):
                 from . import contextscore

@@ -43,6 +43,14 @@ _cache: dict[str, Any] = {"mtime": None, "data": None}
 _fitting: subprocess.Popen[bytes] | None = None
 
 
+STEPS = ("binary_risk_shadow", "binary_risk")  # the buy steps that read this model: a lane naming either needs the refit and the recent outcomes
+
+
+def wanted(specs: Any) -> bool:
+    """Whether any enabled lane names a step that reads the model (the watcher starts the refit and the recent-outcomes refresh only then)."""
+    return any(sp.enabled and any(x in sp.buy_chain for x in STEPS) for sp in specs.values())
+
+
 def model_path(s: Any) -> Path:
     return Path(s.data_dir) / "binary_risk_model.json"
 

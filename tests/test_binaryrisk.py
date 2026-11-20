@@ -139,3 +139,12 @@ def test_integration_the_deciding_step_says_no_without_a_model_in_the_dead_range
     monkeypatch.setattr(binaryrisk, "admits", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     got = buychain.STEPS["binary_risk"](ctx, shot())
     assert not got.ok and "unreadable" in got.why  # a deciding step that fails does not buy
+
+
+def test_unit_the_refit_is_wanted_by_either_step_and_only_when_the_lane_is_enabled():
+    from types import SimpleNamespace as NS
+
+    lane = lambda chain, on=True: NS(enabled=on, buy_chain=chain)
+    assert binaryrisk.wanted({"a": lane(("price", "binary_risk"))})  # the deciding step: the bug of 11-20, the refit never started
+    assert binaryrisk.wanted({"a": lane(("price", "binary_risk_shadow"))})
+    assert not binaryrisk.wanted({"a": lane(("price", "risk_score")), "b": lane(("binary_risk",), on=False)})
