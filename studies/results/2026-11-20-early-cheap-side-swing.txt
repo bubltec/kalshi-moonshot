@@ -1,0 +1,43 @@
+20809 settled windows on 18 price feeds
+51863 early cheap-side readings from 12293 markets, 169s
+14666 market sides (first early reading each)
+
+ALL (hit rate and net per $1 at +40% / +70% / +100%)
+  n 14666 hit 0.67 0.55 0.47 | net per $1 at +40/+70/+100%: -0.134 -0.124 -0.102 | held -0.049
+
+BY THE CURVE (thirds of every reading, side-oriented):
+  cushion (cz)     low : n  4888 hit 0.65 0.54 0.47 | net per $1 at +40/+70/+100%: -0.172 -0.156 -0.129 | held -0.055
+  cushion (cz)     mid : n  4889 hit 0.67 0.55 0.47 | net per $1 at +40/+70/+100%: -0.132 -0.119 -0.100 | held -0.046
+  cushion (cz)     high: n  4889 hit 0.69 0.56 0.47 | net per $1 at +40/+70/+100%: -0.098 -0.096 -0.076 | held -0.046
+  path efficiency  low : n  4888 hit 0.68 0.56 0.48 | net per $1 at +40/+70/+100%: -0.120 -0.108 -0.082 | held -0.029
+  path efficiency  mid : n  4889 hit 0.68 0.55 0.47 | net per $1 at +40/+70/+100%: -0.122 -0.125 -0.100 | held -0.060
+  path efficiency  high: n  4889 hit 0.65 0.54 0.46 | net per $1 at +40/+70/+100%: -0.159 -0.138 -0.123 | held -0.058
+  speed-up         low : n  4888 hit 0.68 0.56 0.48 | net per $1 at +40/+70/+100%: -0.122 -0.105 -0.080 | held -0.033
+  speed-up         mid : n  4889 hit 0.66 0.54 0.46 | net per $1 at +40/+70/+100%: -0.150 -0.142 -0.127 | held -0.069
+  speed-up         high: n  4889 hit 0.67 0.55 0.47 | net per $1 at +40/+70/+100%: -0.130 -0.125 -0.099 | held -0.045
+  15-min range     low : n  4888 hit 0.67 0.55 0.46 | net per $1 at +40/+70/+100%: -0.131 -0.125 -0.115 | held -0.066
+  15-min range     mid : n  4889 hit 0.67 0.55 0.47 | net per $1 at +40/+70/+100%: -0.135 -0.130 -0.115 | held -0.057
+  15-min range     high: n  4889 hit 0.67 0.56 0.49 | net per $1 at +40/+70/+100%: -0.135 -0.115 -0.075 | held -0.023
+  |cushion|        low : n  4888 hit 0.69 0.56 0.48 | net per $1 at +40/+70/+100%: -0.095 -0.092 -0.071 | held -0.041
+  |cushion|        mid : n  4889 hit 0.67 0.55 0.47 | net per $1 at +40/+70/+100%: -0.134 -0.123 -0.104 | held -0.052
+  |cushion|        high: n  4889 hit 0.65 0.54 0.47 | net per $1 at +40/+70/+100%: -0.172 -0.156 -0.129 | held -0.054
+
+BY SECONDS AFTER THE OPEN (all readings of that age, one per market side):
+   60s: n  5791 hit 0.66 0.54 0.46 | net per $1 at +40/+70/+100%: -0.144 -0.143 -0.125 | held -0.069
+   90s: n  6580 hit 0.66 0.54 0.46 | net per $1 at +40/+70/+100%: -0.158 -0.152 -0.139 | held -0.073
+  120s: n  7011 hit 0.67 0.55 0.47 | net per $1 at +40/+70/+100%: -0.143 -0.133 -0.120 | held -0.044
+  150s: n  8076 hit 0.66 0.54 0.47 | net per $1 at +40/+70/+100%: -0.160 -0.144 -0.121 | held -0.050
+  180s: n  8461 hit 0.66 0.55 0.48 | net per $1 at +40/+70/+100%: -0.150 -0.129 -0.102 | held -0.022
+  210s: n  8112 hit 0.65 0.54 0.47 | net per $1 at +40/+70/+100%: -0.165 -0.146 -0.122 | held -0.026
+  240s: n  7832 hit 0.65 0.54 0.46 | net per $1 at +40/+70/+100%: -0.161 -0.154 -0.127 | held -0.026
+
+BY ASK BAND:
+  0.20-0.30: n  2348 hit 0.65 0.53 0.46 | net per $1 at +40/+70/+100%: -0.178 -0.190 -0.167 | held -0.066
+  0.30-0.38: n  4269 hit 0.66 0.55 0.47 | net per $1 at +40/+70/+100%: -0.158 -0.138 -0.111 | held -0.051
+  0.38-0.45: n  8049 hit 0.68 0.56 0.47 | net per $1 at +40/+70/+100%: -0.108 -0.097 -0.078 | held -0.043
+done in 170s
+exit=0  results in job-results/20261120-092203-92965/
+
+[exited with code 0]
+
+READING (2026-11-20): the early cheap-side swing does not pay. Buying either side at ask 0.20-0.45 in the first 4 minutes and resting a sell at +40/+70/+100% hit 67/55/47% of the time and netted -0.134/-0.124/-0.102 per $1 after both fees (n 14,666 market sides, 12,293 markets, 18 price feeds, 11-09 on); held to settlement -0.049. Every third of every curve reading (cushion, |cushion|, path efficiency, speed-up, range), every second-after-open and every ask band is negative (best: |cushion| low, -0.071 at +100%). Touch-of-bid is counted as a fill, so these are optimistic. By rule 4 no shape qualifies; no signal step, no lane built. The gold market was a hit that the same rule loses on over 14k others.
