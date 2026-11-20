@@ -30,6 +30,7 @@ from . import (
     checkins,
     curverisk,
     curvevalue,
+    lateswing,
     manual,
     manualrest,
     memguard,
@@ -196,6 +197,10 @@ class Target:
     risk_take_trail_timed: bool = False  # the trail reads the time-aware typical minute (lane field curve_take_trail_timed), the static one when that has too little history
     risk_take_peak: float = 0.0  # the highest bid the risk check has seen on this bet
     risk_trail_logged: bool = False
+    swing_from: float = 0.0  # the late swing lane's window (lane fields late_swing_from, _to, _tiers): the sale's target is the tier the time left at the buy fell in; 0 = no swing target
+    swing_to: float = 45.0
+    swing_tiers: tuple = (1.0, 0.7, 0.5, 0.4, 0.3, 0.2)
+    swing_logged: bool = False
     risk_time_to_go: float = 0.0  # seconds before the close in which time_to_go may sell (lane field curve_risk_time_to_go); 0 = off
     risk_time_to_go_chance: float = 0.5
     risk_time_to_go_wait_share: float = 0.25
@@ -763,6 +768,27 @@ class ProfitWatcher:
             return reason
         return None
 
+    def _sell_swing_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step swing_take (lane fields late_swing_*, lateswing.py; 2026-11-20, user: "we would set a sell order for those tiers based on where the price goes between 2min-45s"): a bet bought inside the late swing window is sold at the bid once its gain, net of the fee (the bid net less the all-in cost), reaches its tier's share of the room the buy left (1 less the all-in cost). The tier is the slice of the window the time left at the buy fell in (close less the buy time), so a late, small bet takes a small target and an early bet rides for more; tier 100% asks the whole room, which is settlement. A bet with no buy time or bought outside the window is not asked. Sells where the lane's risk exit is live, else logs one would-sell and records it. Memory only."""
+        if t.swing_from <= 0 or t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0:
+            return None
+        share = lateswing.tier_share(t.close_ts - t.bought_ts, t.swing_from, t.swing_to, t.swing_tiers)
+        if share is None:
+            return None
+        gain, basis = c.net - c.basis, c.basis
+        target = lateswing.target_gain(share, basis)
+        if gain < target - 1e-9:
+            return None
+        reason = f"late swing take: the bid {bid:.2f} nets {gain:+.3f} a contract over its {basis:.3f} cost, the tier {share:.0%} target of {target:+.3f} ({share:.0%} of the {1.0 - basis:.3f} room), {left:.0f}s left; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="swing take", extra={"tier": share, "target": round(target, 4)})
+            return reason
+        if not t.swing_logged:
+            t.swing_logged = True
+            log.info("late swing shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="swing take", extra={"tier": share, "target": round(target, 4)})
+        return None
+
     def _sell_trail_timed(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step trail_timed, SHADOW ONLY: it never sells and never holds (2026-11-18, user: "as time expires the volatility rate increases"; "so having a static volatility number is pointless"). It asks the trail's own question (curverisk.trail_hit, under the same conditions as _sell_trail) twice: with the exit's static typical minute and with the time-aware one (_risk_unit_timed), and writes one row (kind "trail_timed" in data/risk_shadow.jsonl) each time the pair of verdicts changes on the bet, with both units, both verdicts, the bet's high and `would_differ`. scripts/trail_timed_score.py scores the rows where they differ. Not in the default order: only a lane whose chain names it is asked. Memory only; an error is logged once a bet and the next step is asked."""
         try:
@@ -1221,6 +1247,7 @@ class ProfitWatcher:
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.risk_time_to_go, held.risk_time_to_go_chance, held.risk_time_to_go_wait_share = spec.curve_risk_time_to_go, spec.curve_risk_time_to_go_chance, spec.curve_risk_time_to_go_wait_share
+                held.swing_from, held.swing_to, held.swing_tiers = spec.late_swing_from, spec.late_swing_to, tuple(spec.late_swing_tiers)
                 held.risk_late_tight, held.risk_late_tight_share, held.risk_late_tight_live = spec.curve_risk_late_tight, spec.curve_risk_late_tight_share, spec.curve_risk_late_tight_live
                 series_name = ticker.split("-")[0]
                 sid = (variants.spot_index(series_name, spec.spot_source) if spec.spot_source == "kalshi" else None) or biquote_index(series_name) or index_for_series(series_name) or ""

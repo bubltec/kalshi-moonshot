@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from . import curverisk, factors, memguard, restbuys, risk, shadow, steptime
+from . import curverisk, factors, lateswing, memguard, restbuys, risk, shadow, steptime
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
@@ -546,7 +546,7 @@ def evaluate(
             sv = None
             log.warning("spike view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
         note = f"[spike view z {sv[0]:+.1f}, {sv[1]} of {curverisk.SPIKE_STRETCHES} as large] {note}" if sv is not None else f"[spike view unreadable] {note}"
-    stake_factor = 1.0
+    stake_factor = lateswing.stake_factor(spec, shot.hours_to_close * 3600.0) if "late_swing" in spec.buy_chain else 1.0  # the late swing lane's tier: a share of its stake by the time left (lateswing.py)
     sized = Sizing(0, 0.0, "")
     if bet:
         with steptime.step("balance read"):

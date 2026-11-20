@@ -79,11 +79,11 @@ Every entry, exit and stake reads how the market's own curve behaves, in units o
 
 A **lane** is one strategy written as data (`data/strategies.toml`, untracked; shipped by `scripts/cloud_push.sh`; `docs/lanes.md` is generated from it by `scripts/lane_cards.py`). A lane names the series it watches, the price band, the minutes of the 15 it buys in, the stake, the open cap, its **buy module** (steps in order), its **exit module** and how the order is placed. A new rule is a step, never a lane setting that acts on its own.
 
-Buy steps (`buychain.py`): `price`, `risk_score`, `risk_trend`, `price_trend`, `perp_worth`, `calm` (the anomaly check), `variety`, `vol_regime`, `cushion`, `spike`, `center_agree`, `same_side`, `cooldown`, `state_record` (rule 8: the state's own record paid), `curve_model`, `ladder`, and two shadow-only steps that never say no: `state_record_shadow`, `context_score`, `binary_risk_shadow`, and `binary_risk` (the binary risk model decides the buy).
+Buy steps (`buychain.py`): `price`, `risk_score`, `risk_trend`, `price_trend`, `perp_worth`, `calm` (the anomaly check), `variety`, `vol_regime`, `cushion`, `spike`, `center_agree`, `same_side`, `cooldown`, `state_record` (rule 8: the state's own record paid), `curve_model`, `ladder`, and two shadow-only steps that never say no: `state_record_shadow`, `context_score`, `binary_risk_shadow`, and `binary_risk` (the binary risk model decides the buy). `late_swing` (2026-11-20: the late swing lane's buy, see section 11b).
 
 ## 6. The exit module (sell chain)
 
-Steps (`sellchain.py`; bodies are `ProfitWatcher._sell_<name>` in `watcher.py`): `never_ahead`, `under_even`, `profit_take`, `trail`, `long_hold` (a hold), `time_to_go`, `late_tight`, and shadow-only `shape`, `shape_timed`, `trail_timed`. The lane's **curve exit** (`curveexit.py`, `curverisk.py`, `curvevalue.py`) sells when the bid net of the fee is a set margin over the curve's chance; **shock** and **strike-cross** exits cover the Treasury lane (`quoteshock.py`). The `loss` step was removed on 2026-11-19 (user). The default order and each step's settings are in `sellchain.py`.
+Steps (`sellchain.py`; bodies are `ProfitWatcher._sell_<name>` in `watcher.py`): `never_ahead`, `under_even`, `profit_take`, `trail`, `long_hold` (a hold), `time_to_go`, `late_tight`, and `swing_take` (the late swing lane's tiered target) and shadow-only `shape`, `shape_timed`, `trail_timed`. The lane's **curve exit** (`curveexit.py`, `curverisk.py`, `curvevalue.py`) sells when the bid net of the fee is a set margin over the curve's chance; **shock** and **strike-cross** exits cover the Treasury lane (`quoteshock.py`). The `loss` step was removed on 2026-11-19 (user). The default order and each step's settings are in `sellchain.py`.
 
 ## 7. Where everything runs
 
@@ -144,6 +144,10 @@ Feature variants (`2026-11-20-binary-risk-model-variants.txt`, twelve sets fixed
 
 The older `riskscore.py` (Kalshi's price moved by the curve's readings) and `contextscore.py` are the predecessors.
 
+### 11b. The late swing lane (2026-11-20, paper, not yet pushed)
+
+User: in the last 2:00 down to 0:45 of a 15-minute market, a low bet on a cheap (0.10-0.30) or dear (0.70-0.90) side, YES or NO, when the settlement index has been jumpy and has crossed the strike in the last five minutes, sold for the most it can make. A bet cannot be placed in retrospect, so the **tier** (100%, 70%, 50%, 40%, 30%, 20% of the lane's stake) falls with the time left: the window is six equal slices, the first slice the biggest bet. Built (`lateswing.py`): buy step `late_swing` (the window, the low-or-high ask, at least `late_swing_min_crosses` strike crossings in five minutes and the last minute's move rate at least the five-minute rate, all from the market's own curve), the stake scaled by the tier in `runner.evaluate`, and sell step `swing_take`: sold once the bid net of the fee gives the tier's share of the room the buy left (tier 100% asks the whole room, so it rides to settlement). Example lane `late_swing` and modules in `strategies.example.toml`; fields `late_swing_*` in `lanes.py`. The tier shares and the target shares are the user's list used both ways, a first setting, not fitted. Paper first (CLAUDE.md rule 5); the study that scores each tier on its own bets comes after a week of them.
+
 ## 12. Glossary
 
 - **Lane**: one strategy as data. **Module**: an ordered list of steps (buy module, exit module).
@@ -163,6 +167,7 @@ The older `riskscore.py` (Kalshi's price moved by the curve's readings) and `con
 
 ## 14. Notes log (newest first; add a line for every change to the system)
 
+- 2026-11-20: Added the late swing lane: buy step `late_swing`, sell step `swing_take`, `lateswing.py`, lane fields `late_swing_*` and an example lane (paper, tiers by time left; section 11b). Needs a push with `--build`.
 - 2026-11-20: Fixed the binary risk model's refit trigger: the watcher started it only for lanes naming `binary_risk_shadow`, so the two paper lanes on `binary_risk` never got a model or the recent-outcomes table and refused every buy. `binaryrisk.wanted` now covers both steps (test added). Needs a push.
 - 2026-11-20: `cloud_push.sh --build` now always tags and pushes the image as `:recorder` too, so the tape recorder (a permanent part of the system) moves with every push and there is no `--recorder` flag or missing-tag check (user: "it just push[es] the same image"). A push restarts the recorder with the bot: a few seconds without a tape write.
 - 2026-11-20: Added the deciding buy step `binary_risk`; in the lane file, `crypto_risk_score` now buys by the one-step module `binary_only` and keeps its `risk_exit`, and the paper lane `crypto_binary_risk` has the same buy and no exit module; not yet pushed.

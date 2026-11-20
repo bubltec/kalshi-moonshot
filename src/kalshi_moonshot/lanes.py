@@ -99,6 +99,12 @@ class LaneSpec:
     curve_risk_long_scales: tuple[int, ...] = ()  # 2026-11-15 (user: the long layer should look further, but keep the current hour's context: 15, 30, 60, 120 and 180 minutes): the minutes the long layer (curve_risk_confirm) reads its movement over, together as a geometric mean of each scale's rate (curverisk.multiscale_rate); 0 = the market so far (its open to now) and a negative number reaches back that many minutes past the open, every window ending now: [0, -15, -75, -255] is the user's design of 2026-11-15 night (the market so far, then each next segment 15, 60 and 180 minutes longer). Empty = the last hour alone, as it was. studies/results/2026-11-15-multiscale-hour-check.txt
     curve_risk_min_profit: float = 0.01  # the profit asked for before a sale at high risk, as a share of the cost, scaled by the risk (this * q): shrinks toward nothing as q falls. A loss is cut at any depth once the risk is under the line
     curve_risk_confirm: float = -1.0  # 2026-11-13 (user, after a live sale of a bet that dipped briefly, never crossed the strike and won: "the long layer showed it likely staying positive"): a risk sale (the max loss and the line) also needs the long layer's chance (the Kalshi perp's cushion over its open, against its own last hour of movement: curverisk.long_chance) to be under this. -1 = price alone. studies/results/2026-11-13-risk-hour-replay.txt: 0.4 cut the cost against holding from -$31 to -$13 on crypto and from -$83 to -$58 on the commodity favorites (first look; still negative against holding)
+    late_swing_from: float = 0.0  # 2026-11-20 (user: the last two minutes of the 15-minute markets, a low bet on a jumpy curve, tiered by the time left): the buy step late_swing opens this many seconds before the close (120) and the sell step swing_take uses the same window; 0 = off. See lateswing.py
+    late_swing_to: float = 45.0  # ... and shuts this many seconds before the close
+    late_swing_tiers: tuple[float, ...] = (1.0, 0.7, 0.5, 0.4, 0.3, 0.2)  # the window cut into one slice per tier, the first slice first: the share of the lane's stake bet, and the share of the room the sale's target asks for. The user's list; a first setting, not fitted
+    late_swing_mid_lo: float = 0.30  # the ask must not sit between these two: a low side (the lane's price floor to this) or a high one (the other number to the price ceiling), YES or NO
+    late_swing_mid_hi: float = 0.70
+    late_swing_min_crosses: int = 2  # the settlement index crossed the strike at least this many times in the last five minutes, and the last minute moved at least as fast as the five minutes (vol_ratio >= 1)
     skip_varieties: tuple[str, ...] = ()  # varieties (variants.py letters) this lane does not buy: "G" on either side, "A-yes" on one side. Read at the decision from BiQuote against its window-open price, so commodities only; an unreadable one is not skipped. 2026-11-03 walk-forward on the lanes' live bets: the cells that paid in training were the same in three folds and left out G and A-yes, which then lost $49, $19 and $9 in the test period
     require_spot_center_agree: bool = False  # buy only when the raw spot AND the offset-corrected center are both on the bet's side of the strike. 2026-11-04, 672 live commodity bets: both on our side 88% won, +$0.24 a bet; where they disagreed 94 bets netted -$54 (industrial -$52 on 59, precious -$11 on 25; energy +$8 on 10, so energy leaves it off). Unreadable = no change
     max_vol_rel: float = 0.0  # buy only when it is at most this (a calm regime: below 0.7 favorites won 87%). 0 = off. No reading = no buy
@@ -212,7 +218,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "blackout_et", "skip_varieties", "buy_chain", "sell_chain"):
+    for key in ("series", "sides", "blackout_et", "skip_varieties", "buy_chain", "sell_chain", "late_swing_tiers"):
         if key in row:
             row[key] = tuple(row[key])
     bad = [x for x in row.get("buy_chain", ()) if x not in BUY_STEPS]
@@ -237,7 +243,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "context_score", "binary_risk_shadow", "binary_risk", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "context_score", "binary_risk_shadow", "binary_risk", "late_swing", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
 
 
 def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:
