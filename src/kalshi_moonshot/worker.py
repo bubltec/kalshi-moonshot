@@ -270,6 +270,8 @@ class Worker:
                         store.preload_decisions()
                     store.refresh_held(self.s.env)
                     store.reserve_ids()
+                    if first and self.recorder is not None and hasattr(self.recorder, "arm_static"):
+                        log.info("memory fill: tick history loaded for %d feeds and indexes", self.recorder.arm_static(time.time()))
                     if first and self.quant is not None and hasattr(self.quant, "warm"):
                         log.info("memory fill: price bars built for %d instruments", self.quant.warm(self.s))
                     clients = {id(c): c for c in (self._venue(name) for name in lane_specs(self.s))} or {id(self.client): self.client}

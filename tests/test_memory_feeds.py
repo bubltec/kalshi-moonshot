@@ -259,3 +259,26 @@ def test_warming_builds_the_feeds_bars_for_every_instrument_before_the_first_buy
 
     n = cm.CommodityPricer(Feed()).warm(s)
     assert asked and n == len([x for x in asked if not x.endswith("0")])
+
+
+def test_unit_the_memory_fill_loads_every_feed_and_index_history_before_the_first_buy(monkeypatch):
+    """2026-11-19 20:47: the first buy after a restart read an index and a feed from the database inside the decision (16 s of lock wait). The fill loads them first."""
+    from kalshi_moonshot import runner, tape
+
+    loaded = []
+    monkeypatch.setattr(runner, "arm_feed_history", lambda s, sym, now: loaded.append(("feed", sym)))
+    monkeypatch.setattr(runner, "arm_index_history", lambda s, idx, now: loaded.append(("index", idx)))
+    monkeypatch.setattr(runner, "_spot_symbols", lambda ser: [f"S-{ser}"])
+    monkeypatch.setattr(tape, "index_for_series", lambda ser: f"I-{ser}")
+
+    class Rec:
+        s = None
+
+        def _series(self):
+            return ["KXBTC15M", "KXETH15M"]
+
+        def _commodity_symbols(self):
+            return ["GOLD"]
+
+    n = tape.TapeRecorder.arm_static(Rec(), 1.0)
+    assert n == 5 and {x for x in loaded} == {("feed", "S-KXBTC15M"), ("feed", "S-KXETH15M"), ("feed", "GOLD"), ("index", "I-KXBTC15M"), ("index", "I-KXETH15M")}

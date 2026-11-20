@@ -632,10 +632,16 @@ class TapeRecorder:
 
     def _arm(self, tickers: set[str], now: float) -> None:
         """Load each market's history once, on this thread, so a later bid or sale does not wait on the database."""
-        from .runner import _spot_symbols, arm_feed_history, arm_index_history, arm_stop_history
+        from .runner import arm_stop_history
 
         for ticker in tickers:
             arm_stop_history(self.s, ticker, now)
+        self.arm_static(now)
+
+    def arm_static(self, now: float) -> int:
+        """Load the history of every spot feed and settlement index the lanes read, once (a background job). The first buy after a restart read them in the decision: 16 s of lock wait on the host (2026-11-19 20:47). Returns how many were loaded."""
+        from .runner import _spot_symbols, arm_feed_history, arm_index_history
+
         symbols: set[str] = set()
         indexes: set[str] = set()
         for ser in self._series():
@@ -649,6 +655,7 @@ class TapeRecorder:
             arm_feed_history(self.s, symbol, now)
         for index_id in indexes:
             arm_index_history(self.s, index_id, now)
+        return len(symbols) + len(indexes)
 
     def sample_feed(self) -> None:
         """Store Hyperliquid's latest price for each commodity. Crypto and currency decisions do not read Kraken or Coinbase."""
