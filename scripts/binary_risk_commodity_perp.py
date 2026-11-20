@@ -106,7 +106,7 @@ BF = sorted((x for b in built for x in b[1]), key=lambda x: x[0][0])
 print(f"{len(S)} training sides ({sum(1 for r in S if r[1] == 'commodity')} commodity), {len(BF)} of {len(bets)} live bets could be read", flush=True)
 
 NI = {n: i for i, n in enumerate(br.NAMES)}
-SH = [("cushion", NI["cz"]), ("path efficiency", NI["eff5"]), ("speed-up", NI["vr"])]
+SH = [("cushion", NI["cz3"]), ("path efficiency", NI["eff5"]), ("speed-up", NI["vr"])]
 cmd = [r for r in S if r[1] == "commodity"][::5]
 cuts = []
 for _, i in SH:

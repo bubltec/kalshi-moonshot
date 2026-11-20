@@ -25,7 +25,7 @@ from .strategy import fee_per_contract as fee
 
 log = logging.getLogger("moonshot")
 
-NAMES = ["logit_ask", "ask_off", "cz", "z_tm", "left", "eff5", "vr", "amp15", "pos15", "bounce_with", "bounce_against", "h_move", "h_pos", "h_strike", "ry1", "ry3"]
+NAMES = ["logit_ask", "ask_off", "cz1", "cz3", "cz5", "zt1", "zt3", "zt5", "left", "eff5", "vr", "amp15", "pos15", "bounce_with", "bounce_against", "h_move", "h_pos", "h_strike", "ry1", "ry3"]
 EXITS = ("hold", "1m", "2m", "3m", "5m")
 HORIZONS = (60.0, 120.0, 180.0, 300.0)  # seconds after the buy at which the early-sale exits sell at the bid
 TOPS = (0.05, 0.10)  # the shares of training sides whose predicted net is stored as a bar
@@ -150,13 +150,23 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
     def cl(x: float, a: float) -> float:
         return max(-a, min(a, x))
 
-    return {
-        "cz": cl(lg / (u15 * math.sqrt(lm)), 8.0), "z_tm": cl(lg / u15, 30.0), "left": lm,
+    def avg(sec: float) -> float:
+        a = V[bisect.bisect_left(T, now - sec) : j + 1]
+        return sum(a) / len(a)
+
+    # the spot is a vector of its 1, 3 and 5 minute averages, not the last tick (user, 2026-11-20: "you need a vector, blended at 1, 3, 5 mins"; a blip with ten minutes left is not a cushion, and Kalshi settles on the last minute's average)
+    lgs = {m: math.log(avg(60.0 * m) / strike) for m in (1, 3, 5)}
+    out = {
+        "cz": cl(lgs[3] / (u15 * math.sqrt(lm)), 8.0), "left": lm,
         "up5": math.log(max(w5) / spot) / u15, "dn5": math.log(spot / min(w5)) / u15,
         "eff5": abs(math.log(w5[-1] / w5[0])) / path5 if path5 > 0 and w5[0] > 0 and w5[-1] > 0 else 0.0,
         "amp15": math.log(hi15 / lo15) / u15, "pos15": (spot - lo15) / (hi15 - lo15) if hi15 > lo15 else 0.5, "vr": u15 / uh - 1.0,
         "h_move": cl(math.log(spot / wh[0]) / u15, 60.0), "h_pos": (spot - loh) / (hih - loh) if hih > loh else 0.5, "h_strike": (strike - loh) / (hih - loh) if hih > loh else 0.5,
     }
+    for m in (1, 3, 5):
+        out[f"cz{m}"] = cl(lgs[m] / (u15 * math.sqrt(lm)), 8.0)
+        out[f"zt{m}"] = cl(lgs[m] / u15, 30.0)
+    return out
 
 
 def side_vector(f: dict[str, float], side: str, ask: float, ry1: float, ry3: float) -> list[float]:
@@ -169,7 +179,7 @@ def side_vector(f: dict[str, float], side: str, ask: float, ry1: float, ry3: flo
     def pos(v: float) -> float:
         return v if yes else 1.0 - v
 
-    return [math.log(ask / (1.0 - ask)), 10.0 * (ask - 0.5) ** 2, sg * f["cz"], sg * f["z_tm"], f["left"], f["eff5"], f["vr"], f["amp15"], pos(f["pos15"]), up, dn,
+    return [math.log(ask / (1.0 - ask)), 10.0 * (ask - 0.5) ** 2, sg * f["cz1"], sg * f["cz3"], sg * f["cz5"], sg * f["zt1"], sg * f["zt3"], sg * f["zt5"], f["left"], f["eff5"], f["vr"], f["amp15"], pos(f["pos15"]), up, dn,
             sg * f["h_move"], pos(f["h_pos"]), pos(f["h_strike"]), sg * ry1, sg * ry3]
 
 
@@ -263,6 +273,8 @@ def _read(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[dict
     model = load(s)
     if model is None or not model.get("cuts"):
         return None, "binary risk: no model fitted yet."
+    if model.get("names") != NAMES:
+        return None, "binary risk: the model was fitted on older readings, a refit is due."
     if not usable(ask):
         return None, f"binary risk: ask {ask:.2f} is not a bet (never 0.45-0.55, not under {ASK_FLOOR:.2f})."
     index = curve_index(shot.series)
@@ -337,7 +349,7 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
     if _fitting is not None and _fitting.poll() is None:
         return False
     m = load(s)
-    if m and m.get("capped") and now - m["built_at"] < REFIT_EVERY:  # a model without the flag has a bar made from uncapped predictions: refit it at once
+    if m and m.get("capped") and m.get("names") == NAMES and now - m["built_at"] < REFIT_EVERY:  # a model without the flag has a bar made from uncapped predictions: refit it at once
         return False
     log.info("binary risk: refitting from the tape (separate process)")
     _fitting = subprocess.Popen([sys.executable, "-m", "kalshi_moonshot.binaryrisk"], preexec_fn=lambda: os.nice(15))  # lowers the child's priority only

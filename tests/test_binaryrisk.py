@@ -26,20 +26,22 @@ def test_unit_readings_need_an_hour_of_fresh_ticks():
     now = T[-1]
     assert binaryrisk.readings(T[-500:], V[-500:], now, V[-1], 300.0) is None  # under an hour
     assert binaryrisk.readings(T, V, now + 60.0, V[-1], 300.0) is None  # the last tick is stale
+    V = V[:-400] + [V[-1]] * 400  # flat for the last 400 s: every average equals the spot
     f = binaryrisk.readings(T, V, now, V[-1], 300.0)
-    assert f is not None and abs(f["cz"]) < 1e-9 and f["left"] == 5.0  # spot at the strike: no cushion
+    assert f is not None and all(abs(f[k]) < 1e-9 for k in ("cz1", "cz3", "cz5", "zt1", "zt3", "zt5")) and f["left"] == 5.0  # spot at the strike: no cushion at any scale
     assert 0.0 <= f["pos15"] <= 1.0 and 0.0 <= f["h_pos"] <= 1.0 and 0.0 <= f["eff5"] <= 1.0
 
 
 def test_unit_the_cushion_is_in_typical_moves_and_signed_by_side():
     T, V = walk(4000)
     now = T[-1]
-    up = binaryrisk.readings(T, V, now, V[-1] * 0.999, 300.0)  # the strike under the spot: YES is ahead
-    assert up["cz"] > 0
+    up = binaryrisk.readings(T, V, now, V[-1] * 0.99, 300.0)  # the strike well under the spot: YES is ahead
+    assert up["cz1"] > 0 and up["cz3"] > 0 and up["cz5"] > 0
     yes = binaryrisk.side_vector(up, "yes", 0.60, 0.0, 0.0)
     no = binaryrisk.side_vector(up, "no", 0.40, 0.0, 0.0)
-    i = binaryrisk.NAMES.index("cz")
-    assert yes[i] > 0 > no[i]  # the same curve is a lead for YES and a deficit for NO
+    for nm in ("cz1", "cz3", "cz5"):
+        i = binaryrisk.NAMES.index(nm)
+        assert yes[i] > 0 > no[i]  # the same curve is a lead for YES and a deficit for NO
     j, k = binaryrisk.NAMES.index("bounce_with"), binaryrisk.NAMES.index("bounce_against")
     assert yes[j] == no[k] and yes[k] == no[j]  # the bounce room swaps with the side
     assert abs(yes[binaryrisk.NAMES.index("h_pos")] + no[binaryrisk.NAMES.index("h_pos")] - 1.0) < 1e-9
@@ -289,3 +291,26 @@ def test_unit_the_commodity_early_swing_lane_block_loads_and_names_only_known_st
     lane = d["lane"]["commodity_early_swing"]
     assert lane["price"] == [0.20, 0.45] and lane["exit_module"] == "round_trip" and lane["paper_fill_model"] is True
     assert all(s.startswith("KX") and s.endswith("15M") for s in lane["series"])
+
+
+def test_unit_a_blip_on_the_last_tick_is_not_a_cushion():
+    T, V = walk(4000)
+    V = V[:-400] + [V[-401]] * 399 + [V[-401] * 1.002]  # flat, then one tick 0.2% up (the blip)
+    now = T[-1]
+    strike = V[-401]
+    f = binaryrisk.readings(T, V, now, strike, 600.0)
+    assert f is not None
+    last_tick_cushion = math.log(V[-1] / strike)
+    assert last_tick_cushion > 0
+    # the averaged cushions are a fraction of what the last tick alone shows, the shorter the average the more of the blip
+    assert 0 < f["zt5"] < f["zt3"] < f["zt1"]
+    assert f["zt1"] * binaryrisk_unit(T, V, now) < last_tick_cushion
+
+
+def binaryrisk_unit(T, V, now):
+    import bisect
+
+    i15 = bisect.bisect_left(T, now - 900.0)
+    j = bisect.bisect_right(T, now) - 1
+    sq = sum(math.log(V[k] / V[k - 1]) ** 2 for k in range(i15 + 1, j + 1))
+    return math.sqrt(sq / (T[j] - T[i15]) * 60.0)
