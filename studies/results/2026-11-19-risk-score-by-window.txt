@@ -18,3 +18,7 @@ by how many bets the lane placed in the window:
   a  1-5 bets in the window    windows  22 bets   68 | held   +1.3% | as sold   -0.0%
   b  6-10 bets                 windows  30 bets  245 | held   -3.2% | as sold   -6.8%
   c  11+ bets                  windows  24 bets  419 | held  -18.2% | as sold  -10.3%
+by the bet's place in its window (how many bets the lane had already placed in it):
+  a  bets 1-5 of a window (in time order)  bets  338 | held   -9.8% | as sold   -7.8%
+  b  bets 6-10                             bets  215 | held  -15.6% | as sold   -9.8%
+  c  bets 11 and later                     bets  179 | held   -9.2% | as sold   -6.9%
