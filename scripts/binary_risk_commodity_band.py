@@ -1,5 +1,5 @@
 """FAVOURITES BAND 0.60-0.85 (user, 2026-11-20: "run the commodity picks in the .60-.85 range"): the bar is the top 5% / 10% of the training predictions inside 0.60-0.85 and only asks inside it are picked or scored in part B. POOLED=1 fits on crypto and commodity.
-COMMODITY-ONLY FIT (2026-11-20, user: "start the commodity fit because something is off"): the pooled fit showed no commodity lift (studies/results/2026-11-20-binary-risk-commodity-perp.txt). Here each hour refits the same model on commodity rows ONLY (curve readings, no asset setting: the training set is every settled commodity market, a market kind chosen by its feed, not a rule keyed on a name), trailing 72 h instead of 24 so there are enough rows. Everything else as below.
+COMMODITY-ONLY FIT (2026-11-20, user: "start the commodity fit because something is off"): the pooled fit showed no commodity lift (studies/results/2026-11-20-binary-risk-commodity-perp.txt). Here each hour refits the same model on commodity rows ONLY (curve readings, no asset setting: the training set is every settled commodity market, a market kind chosen by its feed, not a rule keyed on a name), trailing 120 h instead of 24 so there are enough rows. Everything else as below.
 PERP VERSION (2026-11-20, user: "use the kalshi commodity perp"): the same study with commodity curves read from Kalshi's perp reference (KP_*), not BiQuote. How the binary risk model (binaryrisk.py, the capped V5) would have done on the live commodity lanes' real bets, and on the commodity markets it would have picked instead.
 Question (user, 2026-11-20: "we should see how this new binary risk would do on the commodity lanes because they are failing too often with big losses and picking bad markets to play"): two parts, each walk-forward (the model is refit every hour on the trailing 24 hours of every market, crypto and commodity pooled; it names no asset and has no asset setting: rule 1).
 A. The SAME bets (CLAUDE.md rule 4): every real commodity bet since Monday 11-09 (decisions with mode 'trade', stake over $0.50, lane name starting with 'commodity'), scored at the moment the bet was made, for the side it bought and the ask it paid, from the commodity's own price feed (the index the lane reads) against that feed's own price when the window opened. The model's verdict: would it have bought this side (its capped predicted net per $1 in the top 5% (and top 10%) of that hour's training sides, ask not 0.45-0.55, not under 0.20)? Against what actually happened on those bets (the lane's own exit, fee on the buy and on a sale): n, win rate, net dollars and net per $1 staked for the bets the model keeps and for the bets it would have vetoed, how many vetoed bets lost (the veto beat what happened) and how many won (the veto lost to it); by lane; and by third of the curve's cushion, path efficiency and speed-up (the bet's own side-oriented reading, cutoffs the 33rd and 67th percentiles of every commodity side reading).
@@ -152,13 +152,13 @@ base = {}
 t = t_start
 nh = 0
 while t + 3600 <= t_end:
-    a0, a1, b1 = (bisect.bisect_left(times, x) for x in (t - 72 * 3600, t, t + 3600))
-    tr, te = [r for r in S[a0:a1] if (POOLED or r[1] == 'commodity')], S[a1:b1]  # commodity-only fit on the trailing 72 h (POOLED=1: crypto and commodity, 72 h)
+    a0, a1, b1 = (bisect.bisect_left(times, x) for x in (t - 120 * 3600, t, t + 3600))
+    tr, te = [r for r in S[a0:a1] if (POOLED or r[1] == 'commodity')], S[a1:b1]  # commodity-only fit on the trailing 120 h (POOLED=1: crypto and commodity, 72 h)
     half = 0 if t < t_mid else 1
     j0, j1 = bisect.bisect_left(bt, t), bisect.bisect_left(bt, t + 3600)
     hour_bets = BF[j0:j1]
     t += 3600
-    if len(tr) < 4000 or len(te) < 600:
+    if len(tr) < 1500 or len(te) < 100:
         continue
     rows = [(r[2], r[3], r[4]) for r in tr]
     model = br.fit(rows)
