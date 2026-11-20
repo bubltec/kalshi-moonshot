@@ -196,6 +196,18 @@ def predict(model: dict[str, Any], x: list[float]) -> tuple[float, int]:
     return got[k], k
 
 
+def ceiling(ask: float) -> float:
+    """The most a side bought at `ask` can make per $1 (the fee paid, the side wins): (1 - ask - fee) / ask. A fact of the contract, not a fitted number."""
+    ask = min(0.98, max(0.02, ask))
+    return (1.0 - ask - fee(ask)) / ask
+
+
+def predict_capped(model: dict[str, Any], x: list[float], ask: float) -> tuple[float, int]:
+    """predict(), cut at what the bet can pay. The fit is a straight line per exit, so at the price extremes it predicts nets that cannot happen (2026-11-20: NO bought at 0.98 on a predicted +0.19 per $1 when it could pay about +0.02)."""
+    pred, k = predict(model, x)
+    return min(pred, ceiling(ask)), k
+
+
 def fit(rows: list[tuple[list[float], list[float], float]], now: float | None = None) -> dict[str, Any]:
     """rows: (side vector, net per $1 under each exit, ask). One ridge regression per exit on the standardised readings; the bars are the predicted-net quantiles of the training sides the model bets at."""
     n = len(NAMES)
@@ -215,8 +227,8 @@ def fit(rows: list[tuple[list[float], list[float], float]], now: float | None = 
         A[i][i] += RIDGE if i else 1e-6
         for j in range(i):
             A[i][j] = A[j][i]
-    model: dict[str, Any] = {"names": NAMES, "exits": list(EXITS), "mu": mu, "sd": sd, "W": [_solve(A, B[e]) for e in range(len(EXITS))], "built_at": time.time() if now is None else now, "rows": len(rows), "train_hours": TRAIN_HOURS}
-    preds = sorted(predict(model, r[0])[0] for r in rows[::2] if usable(r[2]))
+    model: dict[str, Any] = {"names": NAMES, "exits": list(EXITS), "mu": mu, "sd": sd, "W": [_solve(A, B[e]) for e in range(len(EXITS))], "built_at": time.time() if now is None else now, "rows": len(rows), "train_hours": TRAIN_HOURS, "capped": True}
+    preds = sorted(predict_capped(model, r[0], r[2])[0] for r in rows[::2] if usable(r[2]))
     model["cuts"] = {str(top): preds[min(len(preds) - 1, int(len(preds) * (1.0 - top)))] for top in TOPS} if preds else {}
     return model
 
@@ -246,9 +258,10 @@ def admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[boo
     f = readings(got[0], got[1], now, float(strike), shot.hours_to_close * 3600.0)
     if f is None:
         return False, f"binary risk: the curve cannot be read yet for {shot.ticker} (short or stale history)."
-    pred, k = predict(model, side_vector(f, shot.side, ask, _recent.yes(now, 1.0), _recent.yes(now, 3.0)))
+    pred, k = predict_capped(model, side_vector(f, shot.side, ask, _recent.yes(now, 1.0), _recent.yes(now, 3.0)), ask)
     cut = float(model["cuts"].get(str(TOP), 0.0))
-    tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {f['cz']:+.1f}, efficiency {f['eff5']:.2f}, hour place {f['h_pos']:.2f})"
+    yes = shot.side == "yes"  # the note reads the side's own view: a NO side's cushion is the YES one's sign flipped
+    tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {f['cz'] if yes else -f['cz']:+.1f}, efficiency {f['eff5']:.2f}, hour place {f['h_pos'] if yes else 1.0 - f['h_pos']:.2f})"
     return pred >= cut, tag
 
 
@@ -260,7 +273,7 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
     if _fitting is not None and _fitting.poll() is None:
         return False
     m = load(s)
-    if m and now - m["built_at"] < REFIT_EVERY:
+    if m and m.get("capped") and now - m["built_at"] < REFIT_EVERY:  # a model without the flag has a bar made from uncapped predictions: refit it at once
         return False
     log.info("binary risk: refitting from the tape (separate process)")
     _fitting = subprocess.Popen([sys.executable, "-m", "kalshi_moonshot.binaryrisk"], preexec_fn=lambda: os.nice(15))  # lowers the child's priority only

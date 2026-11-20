@@ -148,3 +148,39 @@ def test_unit_the_refit_is_wanted_by_either_step_and_only_when_the_lane_is_enabl
     assert binaryrisk.wanted({"a": lane(("price", "binary_risk"))})  # the deciding step: the bug of 11-20, the refit never started
     assert binaryrisk.wanted({"a": lane(("price", "binary_risk_shadow"))})
     assert not binaryrisk.wanted({"a": lane(("price", "risk_score")), "b": lane(("binary_risk",), on=False)})
+
+
+def test_unit_a_prediction_never_exceeds_what_the_bet_can_pay():
+    assert abs(binaryrisk.ceiling(0.98) - (0.02 - binaryrisk.fee(0.98)) / 0.98) < 1e-12 and binaryrisk.ceiling(0.98) < 0.03
+    assert binaryrisk.ceiling(0.50) > 0.9 and binaryrisk.ceiling(0.20) > 3.0
+    n = len(binaryrisk.NAMES)
+    model = {"mu": [0.0] * n, "sd": [1.0] * n, "W": [[5.0] + [0.0] * n] * 5}  # a line that predicts +5 per $1 everywhere
+    x = [0.0] * n
+    assert binaryrisk.predict(model, x)[0] == 5.0
+    assert binaryrisk.predict_capped(model, x, 0.98)[0] == binaryrisk.ceiling(0.98) < 0.03  # the 0.98 NO of 11-20 07:40: cut to about +0.02
+    assert binaryrisk.predict_capped(model, x, 0.20)[0] == binaryrisk.ceiling(0.20)  # a cheap side may still pay a lot
+
+
+def test_unit_the_bar_is_made_from_capped_predictions():
+    r = rows()
+    m = binaryrisk.fit(r)
+    capped = sorted(binaryrisk.predict_capped(m, x, a)[0] for x, _, a in r[::2] if binaryrisk.usable(a))
+    assert abs(m["cuts"]["0.05"] - capped[min(len(capped) - 1, int(len(capped) * 0.95))]) < 1e-9
+
+
+def test_unit_a_model_built_before_the_cap_is_refit_at_once(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    started = []
+    monkeypatch.setattr(binaryrisk, "refresh_recent", lambda *a, **k: False)
+    monkeypatch.setattr(binaryrisk, "_fitting", None)
+    monkeypatch.setattr(binaryrisk.subprocess, "Popen", lambda *a, **k: started.append(a) or type("P", (), {"poll": lambda self: None})())
+    fresh = binaryrisk.fit(rows())
+    assert fresh["capped"] is True
+    (tmp_path / "binary_risk_model.json").write_text(json.dumps(fresh))
+    binaryrisk._cache.update(mtime=None, data=None)
+    assert binaryrisk.maybe_refit(s, now=fresh["built_at"] + 60.0) is False and not started  # a capped model fitted a minute ago: left alone
+    old = {k: v for k, v in fresh.items() if k != "capped"}
+    (tmp_path / "binary_risk_model.json").write_text(json.dumps(old))
+    binaryrisk._cache.update(mtime=None, data=None)
+    assert binaryrisk.maybe_refit(s, now=fresh["built_at"] + 60.0) is True and len(started) == 1  # no flag: refit now

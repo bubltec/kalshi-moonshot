@@ -1,0 +1,26 @@
+job 20261120-084523-89684 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/3a1548589bb248b487332cce5a96961c
+ZECUSD_RTI: 1011 windows, rows so far 24661, 62s
+NEARUSD_RTI: 1011 windows, rows so far 49381, 79s
+HYPEUSD_RTI: 1011 windows, rows so far 74061, 95s
+BNBUSD_RTI: 1011 windows, rows so far 98780, 116s
+DOGEUSD_RTI: 1011 windows, rows so far 123607, 132s
+XRPUSD_RTI: 1011 windows, rows so far 148336, 148s
+SOLUSD_RTI: 1011 windows, rows so far 173034, 164s
+ETHUSD_RTI: 1011 windows, rows so far 197779, 179s
+BRTI: 1011 windows, rows so far 222569, 193s
+222569 readings from 8357 markets, 11-09 to 11-19
+  cz: 1st -5.077 median -0.063 99th +6.185
+  ry1: 1st -0.375 median -0.021 99th +0.361
+364033 side readings
+=== V5 plain (as studied) (16 readings, 208 test hours)
+  top  5%  first half: n  1472 net +0.021 lift +0.062+-0.021  |  second half: n  1201 net +0.017 lift +0.061+-0.023
+  top 10%  first half: n  2285 net +0.008 lift +0.049+-0.017  |  second half: n  2067 net -0.000 lift +0.044+-0.018
+  top  5% picks by ask band (under 0.20 excluded): 0.20-0.35: 61, 0.35-0.45: 453, 0.55-0.65: 951, 0.65-0.80: 549, 0.80-1.00: 659
+  top 10% picks by ask band (under 0.20 excluded): 0.20-0.35: 114, 0.35-0.45: 827, 0.55-0.65: 1468, 0.65-0.80: 994, 0.80-1.00: 949
+=== V5 capped at what a bet can pay (16 readings, 208 test hours)
+  top  5%  first half: n  1369 net +0.028 lift +0.079+-0.025  |  second half: n  1310 net +0.013 lift +0.061+-0.024
+  top 10%  first half: n  2181 net +0.015 lift +0.063+-0.020  |  second half: n  2150 net -0.014 lift +0.033+-0.019
+  top  5% picks by ask band (under 0.20 excluded): 0.20-0.35: 82, 0.35-0.45: 579, 0.55-0.65: 1168, 0.65-0.80: 771, 0.80-1.00: 79
+  top 10% picks by ask band (under 0.20 excluded): 0.20-0.35: 172, 0.35-0.45: 1038, 0.55-0.65: 1746, 0.65-0.80: 1190, 0.80-1.00: 185
+done in 339s
+exit=0  results in job-results/20261120-084523-89684/
