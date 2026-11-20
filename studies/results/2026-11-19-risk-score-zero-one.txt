@@ -1,0 +1,48 @@
+job 20261119-233229-54506 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/56ff8afa0a3a4251a4d239f4ac98428e
+110182 readings
+=== trailing 3 h, refit hourly, 46 test hours, 86694 readings; log loss score 0.5130 vs Kalshi mid 0.4473
+  score 0.0-0.1: n  16849 mean score 0.032 | YES rate 0.060 | Kalshi mid 0.078
+  score 0.1-0.2: n   8390 mean score 0.149 | YES rate 0.203 | Kalshi mid 0.233
+  score 0.2-0.3: n   8156 mean score 0.250 | YES rate 0.314 | Kalshi mid 0.333
+  score 0.3-0.4: n   7971 mean score 0.350 | YES rate 0.385 | Kalshi mid 0.415
+  score 0.4-0.5: n   7428 mean score 0.449 | YES rate 0.458 | Kalshi mid 0.489
+  score 0.5-0.6: n   7081 mean score 0.549 | YES rate 0.532 | Kalshi mid 0.559
+  score 0.6-0.7: n   6607 mean score 0.649 | YES rate 0.605 | Kalshi mid 0.623
+  score 0.7-0.8: n   6085 mean score 0.749 | YES rate 0.672 | Kalshi mid 0.700
+  score 0.8-0.9: n   6093 mean score 0.851 | YES rate 0.719 | Kalshi mid 0.778
+  score 0.9-1.0: n  12034 mean score 0.968 | YES rate 0.914 | Kalshi mid 0.930
+  buy where chance - ask - fee >= 0.00: n 4648 win 0.49 net +0.010
+  buy where chance - ask - fee >= 0.03: n 4047 win 0.48 net -0.034
+  buy where chance - ask - fee >= 0.05: n 3665 win 0.48 net -0.056
+  buy where chance - ask - fee >= 0.08: n 3113 win 0.47 net -0.063
+=== trailing 6 h, refit hourly, 46 test hours, 86694 readings; log loss score 0.4810 vs Kalshi mid 0.4473
+  score 0.0-0.1: n  15430 mean score 0.032 | YES rate 0.048 | Kalshi mid 0.058
+  score 0.1-0.2: n   8162 mean score 0.149 | YES rate 0.176 | Kalshi mid 0.199
+  score 0.2-0.3: n   8314 mean score 0.250 | YES rate 0.273 | Kalshi mid 0.301
+  score 0.3-0.4: n   8450 mean score 0.350 | YES rate 0.360 | Kalshi mid 0.389
+  score 0.4-0.5: n   8071 mean score 0.450 | YES rate 0.436 | Kalshi mid 0.472
+  score 0.5-0.6: n   7595 mean score 0.550 | YES rate 0.511 | Kalshi mid 0.558
+  score 0.6-0.7: n   7125 mean score 0.649 | YES rate 0.598 | Kalshi mid 0.642
+  score 0.7-0.8: n   6436 mean score 0.749 | YES rate 0.701 | Kalshi mid 0.729
+  score 0.8-0.9: n   5970 mean score 0.850 | YES rate 0.807 | Kalshi mid 0.833
+  score 0.9-1.0: n  11141 mean score 0.967 | YES rate 0.943 | Kalshi mid 0.951
+  buy where chance - ask - fee >= 0.00: n 4734 win 0.48 net -0.016
+  buy where chance - ask - fee >= 0.03: n 3929 win 0.47 net -0.035
+  buy where chance - ask - fee >= 0.05: n 3425 win 0.46 net -0.050
+  buy where chance - ask - fee >= 0.08: n 2775 win 0.45 net -0.060
+=== trailing 12 h, refit hourly, 46 test hours, 86694 readings; log loss score 0.4721 vs Kalshi mid 0.4473
+  score 0.0-0.1: n  14680 mean score 0.033 | YES rate 0.046 | Kalshi mid 0.049
+  score 0.1-0.2: n   7995 mean score 0.149 | YES rate 0.150 | Kalshi mid 0.176
+  score 0.2-0.3: n   8319 mean score 0.251 | YES rate 0.253 | Kalshi mid 0.282
+  score 0.3-0.4: n   8746 mean score 0.350 | YES rate 0.339 | Kalshi mid 0.376
+  score 0.4-0.5: n   8671 mean score 0.450 | YES rate 0.440 | Kalshi mid 0.470
+  score 0.5-0.6: n   7977 mean score 0.549 | YES rate 0.530 | Kalshi mid 0.562
+  score 0.6-0.7: n   7361 mean score 0.649 | YES rate 0.609 | Kalshi mid 0.654
+  score 0.7-0.8: n   6525 mean score 0.748 | YES rate 0.706 | Kalshi mid 0.752
+  score 0.8-0.9: n   6011 mean score 0.851 | YES rate 0.825 | Kalshi mid 0.858
+  score 0.9-1.0: n  10409 mean score 0.967 | YES rate 0.956 | Kalshi mid 0.959
+  buy where chance - ask - fee >= 0.00: n 4751 win 0.46 net -0.063
+  buy where chance - ask - fee >= 0.03: n 3852 win 0.44 net -0.088
+  buy where chance - ask - fee >= 0.05: n 3200 win 0.43 net -0.069
+  buy where chance - ask - fee >= 0.08: n 2366 win 0.41 net -0.039
+exit=0  results in job-results/20261119-233229-54506/
