@@ -163,6 +163,7 @@ The older `riskscore.py` (Kalshi's price moved by the curve's readings) and `con
 
 ## 14. Notes log (newest first; add a line for every change to the system)
 
+- 2026-11-20: `cloud_push.sh --build` now always tags and pushes the image as `:recorder` too, so the tape recorder (a permanent part of the system) moves with every push and there is no `--recorder` flag or missing-tag check (user: "it just push[es] the same image"). A push restarts the recorder with the bot: a few seconds without a tape write.
 - 2026-11-20: Added the deciding buy step `binary_risk`; in the lane file, `crypto_risk_score` now buys by the one-step module `binary_only` and keeps its `risk_exit`, and the paper lane `crypto_binary_risk` has the same buy and no exit module; not yet pushed.
 - 2026-11-20: Binary risk model by curve shape and twelve feature variants; working set V5 (price, cushion, shape, bounce, the hour, recent outcomes).
 - 2026-11-20: Redefined the binary risk model as a buy-or-not score (profit of buying a side now, any exit), built fresh from the tape; first result in section 11.

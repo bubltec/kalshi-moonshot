@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time: add the tape recorder container to the running host IN PLACE (no new instance, nothing on the data volume touched).
-#   1. scripts/cloud_push.sh --build --recorder     # the image, under the :latest and :recorder tags
+#   1. scripts/cloud_push.sh --build                # the image, under the :latest and :recorder tags
 #   2. scripts/cloud_recorder_setup.sh              # the compose file on the host, then moonshot-up
 # It rewrites /opt/moonshot/compose.src.yml from infra/compose.cloud.yml (a copy of the old file is kept beside it), teaches /usr/local/bin/moonshot-up to fill in the recorder's image, and runs it once. The bot is recreated once, in the memory role, as the recorder starts; after that a bot update leaves the recorder alone.
 # The CDK stack (infra/bot_stack.py) carries the same change for a machine built from scratch; do not `cdk deploy` just for this: a changed start script replaces the instance.

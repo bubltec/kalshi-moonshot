@@ -21,7 +21,6 @@ case "$*" in
       *) echo "Success" ;;
     esac ;;
   *"sts get-caller-identity"*) echo 123 ;;
-  *"ecr describe-images"*) [ "${STUB_RECORDER_TAG:-1}" = 1 ] || exit 254 ;;
   *"ecr get-login-password"*) echo pw ;;
   *"cloudformation describe-stacks"*) echo i-123 ;;
 esac
@@ -71,15 +70,10 @@ def test_integration_a_failed_pull_on_the_host_sends_no_lane_file(push):
     assert first(calls, "put-parameter") is None and first(calls, "moonshot-sync") is None
 
 
-def test_integration_a_missing_recorder_tag_stops_before_the_build(push):
-    done, calls = push("--build", STUB_RECORDER_TAG="0")
-    assert done.returncode != 0 and "recorder" in done.stderr
-    assert first(calls, "docker") is None and first(calls, "put-parameter") is None and first(calls, "send-command") is None
-
-
-def test_integration_with_recorder_the_missing_tag_is_no_obstacle(push):
-    done, calls = push("--build", "--recorder", STUB_RECORDER_TAG="0")
+def test_integration_every_build_pushes_the_recorder_tag_and_needs_no_flag(push):
+    done, calls = push("--build")
     assert done.returncode == 0, done.stderr
+    assert first(calls, "describe-images") is None  # a missing recorder tag is no obstacle: the push makes it
     assert first(calls, "kalshi-moonshot-bot:recorder") is not None and first(calls, "moonshot-sync") is not None
 
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Send this Mac's lane file and .env to the Ohio host. The bot picks them up on its next decision.
 #   scripts/cloud_push.sh            # strategies.toml, .env, and .secrets
-#   scripts/cloud_push.sh --build    # a new image first, a check that the host can pull it, then those files and a restart of the bot (the tape recorder container keeps running). If the image cannot be pulled, nothing is sent
-#   scripts/cloud_push.sh --build --recorder   # also move the recorder to this image: it restarts, and the tape has a gap of a few seconds. Only when the recorder's own code changed (tape.py, kalshiws.py, perpref.py, the record command)
+#   scripts/cloud_push.sh --build    # a new image first, a check that the host can pull it, then those files and a restart of the bot and the tape recorder (the recorder runs from this same image, tagged :recorder; the tape has a gap of a few seconds). If the image cannot be pulled, nothing is sent
 # The admin page's Settings tab changes lanes on top of strategies.toml. Pushing the file while such changes exist would leave them shadowing it, so the push stops and lists them:
 #   python -m kalshi_moonshot.settings_sync fold    # keep the page's values in the file     (or `drop` to discard them), then push again
 #   scripts/cloud_push.sh --ignore-page-changes     # push anyway
@@ -15,12 +14,10 @@ stack="${BOT_STACK:-KalshiMoonshotBot}"
 profile=()
 if [ -n "${AWS_PROFILE:-}" ]; then profile=(--profile "$AWS_PROFILE"); fi
 build=0
-recorder=0
 ignore=0
 for arg in "$@"; do
   case "$arg" in
     --build) build=1 ;;
-    --recorder) recorder=1 ;;
     --ignore-page-changes) ignore=1 ;;
   esac
 done
@@ -61,19 +58,13 @@ run_remote() {
 if [ "$build" = 1 ]; then
   account=$(aws "${profile[@]}" sts get-caller-identity --query Account --output text)
   registry="${account}.dkr.ecr.${region}.amazonaws.com"
-  if [ "$recorder" = 0 ] && ! aws "${profile[@]}" ecr describe-images --region "$region" --repository-name kalshi-moonshot-bot --image-ids imageTag=recorder >/dev/null 2>&1; then
-    echo "not pushed: the registry has no kalshi-moonshot-bot:recorder image, so the host's pull would fail. Restore that tag, or push with --build --recorder (the recorder restarts)." >&2
-    exit 1
-  fi
   aws "${profile[@]}" ecr get-login-password --region "$region" | docker login --username AWS --password-stdin "$registry"
   docker build --platform linux/arm64 -t "${registry}/kalshi-moonshot-bot:latest" .
   docker build --platform linux/arm64 -f Dockerfile.db -t "${registry}/kalshi-moonshot-db:latest" .
   docker push "${registry}/kalshi-moonshot-bot:latest"
   docker push "${registry}/kalshi-moonshot-db:latest"
-  if [ "$recorder" = 1 ]; then  # the recorder container reads this tag; an ordinary --build leaves it where it was, so the recorder is not restarted with the bot
-    docker tag "${registry}/kalshi-moonshot-bot:latest" "${registry}/kalshi-moonshot-bot:recorder"
-    docker push "${registry}/kalshi-moonshot-bot:recorder"
-  fi
+  docker tag "${registry}/kalshi-moonshot-bot:latest" "${registry}/kalshi-moonshot-bot:recorder"  # the recorder container reads this tag (user, 2026-11-20: the recorder is permanent and just gets the same image; no --recorder flag to remember)
+  docker push "${registry}/kalshi-moonshot-bot:recorder"
   precheck=$(cat << 'EOF'
 set -euo pipefail
 [ -f /opt/moonshot/compose.yml ] && [ -f /mnt/moonshot/env/.env ] || { echo "first start: nothing to check"; exit 0; }
