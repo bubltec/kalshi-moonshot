@@ -1,6 +1,6 @@
 # Binary risk model: every reading, exactly (for the user's audit, 2026-11-20)
 
-Source: `src/kalshi_moonshot/binaryrisk.py` (`readings()`, `side_vector()`, `NAMES`). 21 inputs per side. A coin reads Kalshi's settlement index, a commodity reads Kalshi's perp reference (`perpref.py`, S&P excluded). Ticks are about one a second. `now` is the moment of the decision, `left` is the time to the close in minutes.
+Source: `src/kalshi_moonshot/binaryrisk.py` (`readings()`, `side_vector()`, `NAMES`). 30 inputs per side. A coin reads Kalshi's settlement index, a commodity reads Kalshi's perp reference (`perpref.py`, S&P excluded). Ticks are about one a second. `now` is the moment of the decision, `left` is the time to the close in minutes.
 
 **The unit, the typical minute `u15`:** root-mean-square of the one-second log moves over the last 15 minutes, times sqrt(60). Every move below is divided by it, so it is in this market's own typical moves. `uh` is the same over the last hour.
 **The strike:** a coin's market strike; a commodity's perp value at the window's open (first tick within 25 s).
@@ -20,7 +20,10 @@ Source: `src/kalshi_moonshot/binaryrisk.py` (`readings()`, `side_vector()`, `NAM
 | 13 | `amp15` | ln(highest tick / lowest tick over 15 min) / u15 | last 15 min | typical minutes | same (side-neutral) |
 | 14-16 | `pos15`, `pos30`, `pos60` | (blend - lowest tick) / (highest - lowest) over the window | last 15, 30, 60 min | 0 = the low, 1 = the high (0.5 if flat) | place p becomes 1 - p for NO |
 | 17-19 | `mv15`, `mv30`, `mv60` | ln(blend / the first tick of the window) / u15, clipped +-60 | 15, 30, 60 min | typical minutes | x sign |
-| 20-21 | `dr24`, `dr72` | ln(blend / spot 24 h or 72 h ago) / (u15 x sqrt(minutes in 24 h or 72 h)), clipped +-8 | 24 h, 72 h | the move against what a random walk of this market's typical minute would move; 0 when the reference is not yet known | x sign |
+| 20-22 | `sl15`, `sl30`, `sl60` | wave shape, slope: the window (last 15/30/60 min) is cut into 12 equal bins, each bin's mean spot is taken, y = ln(bin mean / the last bin's mean) / u15, a straight line is fitted by least squares on x in [-1, 1] (-1 the window's start, +1 now); the slope is the line's rise per half-window | 15, 30, 60 min | typical moves; positive = rising | x sign |
+| 23-25 | `cv15`, `cv30`, `cv60` | wave shape, curvature: the same fit with a parabola; its x-squared term (centred) | 15, 30, 60 min | typical moves; positive = bending up (accelerating), negative = flattening or a hump (log-like, sine top) | x sign |
+| 26-28 | `ft15`, `ft30`, `ft60` | wave shape, line fit: R-squared of the straight line on the 12 bins (1 = a pure line, low = a wave; flat window reads 1) | 15, 30, 60 min | 0 to 1 | same (side-neutral) |
+| 29-30 | `dr24`, `dr72` | ln(blend / spot 24 h or 72 h ago) / (u15 x sqrt(minutes in 24 h or 72 h)), clipped +-8 | 24 h, 72 h | the move against what a random walk of this market's typical minute would move; 0 when the reference is not yet known | x sign |
 
 **References for `dr24`, `dr72`:** live, a background job (`refresh_refs`, every 10 minutes, for each index a decision has asked about) reads the last tick at or before 24 h / 72 h ago (within 30 minutes) from the tape into memory; a decision reads memory only. In training, the same lookups are made at each market's open.
 **Needs:** at least 15 minutes of ticks (over 300), at least an hour (over 1,500), a last tick within 10 s of `now`.

@@ -25,7 +25,7 @@ from .strategy import fee_per_contract as fee
 
 log = logging.getLogger("moonshot")
 
-NAMES = ["logit_ask", "ask_off", "cz1", "cz3", "cz5", "tr13", "tr35", "left", "czl1", "czl3", "czl5", "vr", "amp15", "pos15", "pos30", "pos60", "mv15", "mv30", "mv60", "dr24", "dr72"]
+NAMES = ["logit_ask", "ask_off", "cz1", "cz3", "cz5", "tr13", "tr35", "left", "czl1", "czl3", "czl5", "vr", "amp15", "pos15", "pos30", "pos60", "mv15", "mv30", "mv60", "sl15", "sl30", "sl60", "cv15", "cv30", "cv60", "ft15", "ft30", "ft60", "dr24", "dr72"]
 EXITS = ("hold", "1m", "2m", "3m", "5m")
 HORIZONS = (60.0, 120.0, 180.0, 300.0)  # seconds after the buy at which the early-sale exits sell at the bid
 TOPS = (0.05, 0.10)  # the shares of training sides whose predicted net is stored as a bar
@@ -105,6 +105,34 @@ def refresh_refs(s: Any, now: float | None = None) -> bool:
         return False
 
 
+SHAPE_BINS = 12  # the wave shape reads a window as this many equal bin means (a blip is one bin's worth, not the whole shape)
+
+
+def shape(T: list[float], V: list[float], now: float, mins: int, u15: float) -> tuple[float, float, float]:
+    """The wave shape of the last `mins` minutes (user, 2026-11-20: the shape over a period of time: linear, sin, cos, log, ...): the window is cut into SHAPE_BINS equal bins, each bin's mean spot is taken, y = ln(bin mean / the last bin's mean) / u15, and a straight line and a parabola are least-squares fitted on x in [-1, 1] (x = -1 the start of the window, +1 now). Returns (slope b: the straight line's rise from the window's middle to now per half-window, in typical moves; curvature c: the parabola's second-order term, in typical moves, positive = bending up, negative = flattening or a hump; line fit: R-squared of the straight line, 1 = a pure line, low = a wave). A flat window reads (0, 0, 1)."""
+    lo = now - 60.0 * mins
+    edges = [bisect.bisect_left(T, lo + (60.0 * mins) * k / SHAPE_BINS) for k in range(SHAPE_BINS)] + [bisect.bisect_right(T, now)]
+    ys = []
+    for k in range(SHAPE_BINS):
+        seg = V[edges[k] : max(edges[k + 1], edges[k] + 1)]
+        ys.append(sum(seg) / len(seg))
+    last = ys[-1]
+    y = [math.log(v / last) / u15 for v in ys]
+    n = SHAPE_BINS
+    x = [-1.0 + 2.0 * (k + 0.5) / n for k in range(n)]
+    sx2 = sum(a * a for a in x)
+    b = sum(a * c for a, c in zip(x, y)) / sx2  # the line through the centre of x (mean x is 0)
+    my = sum(y) / n
+    ssy = sum((c - my) ** 2 for c in y)
+    # parabola y = a + b x + c x^2 on symmetric x: b is the same, c from the centred x^2
+    x2 = [a * a - sx2 / n for a in x]
+    sx4 = sum(a * a for a in x2)
+    c2 = sum(a * (c - my) for a, c in zip(x2, y)) / sx4 if sx4 > 0 else 0.0
+    ss_line = sum((c - my - b * a) ** 2 for a, c in zip(x, y))
+    ft = 1.0 - ss_line / ssy if ssy > 1e-18 else 1.0
+    return max(-60.0, min(60.0, b)), max(-60.0, min(60.0, c2)), max(0.0, min(1.0, ft))
+
+
 def readings(T: list[float], V: list[float], now: float, strike: float, left_s: float, refs: tuple[float, float] | None = None) -> dict[str, float] | None:
     """The curve readings at `now` from the index's ticks (T times, V values, ascending, the last at or before `now`). None when the history is short or stale. `refs` is the spot 24 h and 72 h ago (a background template live, a lookup in training); without it the drift readings are 0 (unknown). The same code reads the live curve and builds the training rows.
 
@@ -159,6 +187,9 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
         lo, hi = min(w), max(w)
         out[f"pos{mins}"] = (blend - lo) / (hi - lo) if hi > lo else 0.5  # where the blended spot sits in that window's range: 0 its low, 1 its high
         out[f"mv{mins}"] = cl(math.log(blend / V[i]) / u15, 60.0)  # how far it moved over that window, in typical moves
+    for mins in (15, 30, 60):
+        sl, cv, ft = shape(T, V, now, mins, u15)
+        out[f"sl{mins}"], out[f"cv{mins}"], out[f"ft{mins}"] = sl, cv, ft
     for hrs, ref in zip((24, 72), refs or (0.0, 0.0), strict=True):
         out[f"dr{hrs}"] = cl(math.log(blend / ref) / (u15 * math.sqrt(hrs * 60.0)), 8.0) if ref and ref > 0 else 0.0  # the drift: the spot's move over the past day / three days, against what a random walk of this market's own typical minute would move
     return out
@@ -174,7 +205,7 @@ def side_vector(f: dict[str, float], side: str, ask: float, *unused: float) -> l
         return v if yes else 1.0 - v
 
     return [math.log(ask / (1.0 - ask)), 10.0 * (ask - 0.5) ** 2, sg * f["cz1"], sg * f["cz3"], sg * f["cz5"], sg * f["tr13"], sg * f["tr35"], f["left"], sg * f["czl1"], sg * f["czl3"], sg * f["czl5"], f["vr"], f["amp15"],
-            pos(f["pos15"]), pos(f["pos30"]), pos(f["pos60"]), sg * f["mv15"], sg * f["mv30"], sg * f["mv60"], sg * f["dr24"], sg * f["dr72"]]
+            pos(f["pos15"]), pos(f["pos30"]), pos(f["pos60"]), sg * f["mv15"], sg * f["mv30"], sg * f["mv60"], sg * f["sl15"], sg * f["sl30"], sg * f["sl60"], sg * f["cv15"], sg * f["cv30"], sg * f["cv60"], f["ft15"], f["ft30"], f["ft60"], sg * f["dr24"], sg * f["dr72"]]
 
 
 def _solve(A: list[list[float]], b: list[float]) -> list[float]:

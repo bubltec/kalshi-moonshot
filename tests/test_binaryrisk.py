@@ -357,3 +357,38 @@ def test_unit_the_volatility_ratio_and_the_range_are_read_in_typical_minutes():
     sped = list(V[:3000]) + [V[3000] * math.exp(0.0006 * ((k % 2) * 2 - 1)) for k in range(1000)]  # calm hour, jumpy last 15 minutes
     g = binaryrisk.readings(T, sped, T[-1], sped[-1], 600.0)
     assert g is not None and g["vr"] > f["vr"]
+
+
+def test_unit_the_wave_shape_tells_a_line_from_a_hump_and_a_flattening():
+    n = 3700
+    T = [1_000_000.0 + i for i in range(n)]
+    now = T[-1]
+
+    def series(fn):  # the shape lives in the last 15 minutes; before that the path is flat at its first value
+        return [100.0 * math.exp(0.002 * fn(max(0.0, (i - (n - 900)) / 899.0))) for i in range(n)]
+
+    line = series(lambda s: s)
+    hump = series(lambda s: 1.0 - 4.0 * (s - 0.5) ** 2)  # up then down
+    flat_out = series(lambda s: math.log1p(9.0 * s) / math.log(10.0))  # fast then flattening (log)
+    u = 0.0005
+    sl, cv, ft = binaryrisk.shape(T, line, now, 15, u)
+    assert sl > 0 and abs(cv) < 0.05 * abs(sl) and ft > 0.99  # a line: slope only, fits a line
+    sl, cv, ft = binaryrisk.shape(T, hump, now, 15, u)
+    assert cv < 0 and ft < 0.5  # a hump: bends over, a line fits badly
+    sl, cv, ft = binaryrisk.shape(T, flat_out, now, 15, u)
+    assert sl > 0 and cv < 0 and 0.5 < ft < 1.0  # a log shape: rising and flattening
+    assert binaryrisk.shape(T, [100.0] * n, now, 15, u) == (0.0, 0.0, 1.0)  # flat
+
+
+def test_unit_the_shape_readings_are_in_the_vector_and_curvature_flips_with_the_side():
+    T, V = walk(4000)
+    f = binaryrisk.readings(T, V, T[-1], V[-1], 600.0)
+    assert f is not None and all(k in f for k in ("sl15", "sl30", "sl60", "cv15", "cv30", "cv60", "ft15", "ft30", "ft60"))
+    yes = binaryrisk.side_vector(f, "yes", 0.60)
+    no = binaryrisk.side_vector(f, "no", 0.40)
+    for nm in ("sl30", "cv30"):
+        i = binaryrisk.NAMES.index(nm)
+        assert yes[i] == -no[i]
+    i = binaryrisk.NAMES.index("ft30")
+    assert yes[i] == no[i]  # how line-like the path is does not depend on the side
+    assert len(yes) == len(binaryrisk.NAMES)
