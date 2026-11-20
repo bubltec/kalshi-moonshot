@@ -345,3 +345,18 @@ def test_unit_the_trend_is_the_direction_of_the_averages_signed_by_side():
     for nm in ("tr13", "tr35"):
         i = binaryrisk.NAMES.index(nm)
         assert yes[i] > 0 > no[i]  # a rising spot helps YES and hurts NO
+
+
+def test_unit_the_cushion_is_also_read_against_the_time_left():
+    T, V = walk(4000)
+    strike = V[-1] * 0.99
+    early = binaryrisk.readings(T, V, T[-1], strike, 840.0)
+    late = binaryrisk.readings(T, V, T[-1], strike, 90.0)
+    assert early is not None and late is not None
+    # the same spot and strike: the cushion in typical moves grows as time runs down, but its time-left term is smaller
+    assert late["cz3"] > early["cz3"] > 0
+    assert late["czl3"] / late["cz3"] < early["czl3"] / early["cz3"]  # the ratio is the share of the market left
+    yes = binaryrisk.side_vector(early, "yes", 0.60, 0.0, 0.0)
+    no = binaryrisk.side_vector(early, "no", 0.40, 0.0, 0.0)
+    i = binaryrisk.NAMES.index("czl3")
+    assert yes[i] > 0 > no[i]
