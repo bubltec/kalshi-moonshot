@@ -1,0 +1,33 @@
+# 2026-11-20 PAPER, not yet in data/strategies.toml (untracked and shipped by cloud_push.sh; the parent session is mid-deploy). Paste the blocks below into it, add commodity_binary_risk to PAPER_LANE_NAMES in .env (the user's word needed) and push with --build (the lane needs binaryrisk.curve_index, which is on branch jjosef/early-swing-e7d4b9).
+# User, 2026-11-20: "use the kalshi commodity perp" for the binary risk model on commodities; "build a commodity lane that uses the risk score". The model reads each commodity on Kalshi's perp reference (KP_*) with the window's open as the strike, the same readings and the same pooled fit as crypto (rule 1: no asset setting); the lane is crypto_binary_risk's twin: the model alone decides, held to settlement.
+[lane.commodity_binary_risk]
+enabled = true
+label = "commodity binary risk: the binary risk model alone decides the buy on Kalshi's perp reference, held to settlement (PAPER)"
+estimator = "market"
+numeric = "allow"
+one_per = "event"
+series = ["KXGOLD15M", "KXSILVER15M", "KXWTI15M", "KXBRENT15M", "KXNATGAS15M", "KXCOPPER15M", "KXPLATINUM15M", "KXPALLADIUM15M"]
+sides = ["yes", "no"]
+timed_suffix = "15M"
+shadow_suffix = "15M"
+price = [0.20, 0.98]  # the model refuses 0.45-0.55 and under 0.20 itself
+hours = [0.0, 0.26]
+max_spread = 0.03
+min_volume = 0
+min_age_minutes = 20.0
+buy_module = "binary_only"
+priority = 45
+entry_scenario_view = true
+shortlist = 12
+scope_minutes = 2
+review_minutes = 1
+cooldown_minutes = 3.0
+buy_max_move = 0.05
+buy_retry_chase = 0.02
+buy_slip = 0.03
+buy_tick_ahead = true
+fixed_stake = 5.0
+max_open = 30
+max_bet_pct = 0.5
+max_exposure_pct = 0.4
+paper_fill_model = true

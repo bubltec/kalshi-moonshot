@@ -233,6 +233,23 @@ def fit(rows: list[tuple[list[float], list[float], float]], now: float | None = 
     return model
 
 
+def curve_index(series: str) -> str | None:
+    """The tape index whose curve the model reads for a series: a coin's Kalshi settlement index, else Kalshi's own perp reference for the commodity (perpref.py). Never an outside feed (user, 2026-11-20: "use the kalshi commodity perp"; docs/architecture.md section 10)."""
+    from . import perpref
+    from .kalshiws import index_for_series
+
+    return index_for_series(series) or perpref.index_for_series(series)
+
+
+def open_strike(T: list[float], V: list[float], close: float) -> float | None:
+    """A commodity market has no settlement-index strike in the tape: its strike is the perp reference's value at the window's open (the first tick within 25 s of it), as the curve model reads it. None when the open was not ticking."""
+    opened = close - 900.0
+    k = bisect.bisect_left(T, opened)
+    if k >= len(T) or T[k] - opened > 25.0 or V[k] <= 0:
+        return None
+    return V[k]
+
+
 def admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[bool, str]:
     """Whether the model would buy this market side at `ask` now: (True or False, the note). Reads memory only."""
     from . import ticks as ticks_mod
@@ -243,16 +260,16 @@ def admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[boo
         return False, "binary risk: no model fitted yet."
     if not usable(ask):
         return False, f"binary risk: ask {ask:.2f} is not a bet (never 0.45-0.55, not under {ASK_FLOOR:.2f})."
-    index = variants.crypto_index(shot.series)
+    index = curve_index(shot.series)
     if not index:
-        return False, f"binary risk: no settlement index is read for {shot.series}."
+        return False, f"binary risk: no Kalshi index or perp reference is read for {shot.series}."
     now = time.time() if now is None else now
-    strike = ticks_mod.strikes.get(shot.ticker)
-    if not strike or strike <= 0:
-        return False, f"binary risk: no strike known yet for {shot.ticker}."
     got = ticks_mod.history.window(index, now - 3700.0, now)
     if not got or not got[0]:
         return False, f"binary risk: no tick history in memory for {index}."
+    strike = ticks_mod.strikes.get(shot.ticker) if variants.crypto_index(shot.series) else open_strike(got[0], got[1], now + shot.hours_to_close * 3600.0)
+    if not strike or strike <= 0:
+        return False, f"binary risk: no strike known yet for {shot.ticker}."
     if now - _recent.at > RECENT_STALE:
         return False, "binary risk: the recent outcomes have not been refreshed."
     f = readings(got[0], got[1], now, float(strike), shot.hours_to_close * 3600.0)
@@ -281,27 +298,31 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
 
 
 def build_rows(s: Any, now: float) -> list[tuple[list[float], list[float], float]]:
-    """The training sides of the last TRAIN_HOURS from the tape: every STEP seconds of every settled crypto 15-minute market, both sides, each with its net per $1 under the five exits."""
+    """The training sides of the last TRAIN_HOURS from the tape: every STEP seconds of every settled 15-minute market (a coin on its settlement index, a commodity on Kalshi's perp reference), both sides, each with its net per $1 under the five exits."""
     from . import db
-    from .kalshiws import index_for_series
 
     st = db.connect(s.db_path, "main", shared=True)
     tape = db.connect(s.tape_path, "tape", shared=True)
     allw = st.execute("SELECT close_ts, result FROM windows WHERE result IN ('yes','no') AND close_ts IS NOT NULL").fetchall()
     recent = Recent([(float(r["close_ts"]), 1 if r["result"] == "yes" else 0) for r in allw])
-    wins = st.execute("SELECT ticker, series, close_ts, strike, result FROM windows WHERE result IN ('yes','no') AND strike > 0 AND close_ts BETWEEN ? AND ?", (now - TRAIN_HOURS * 3600.0, now)).fetchall()
+    wins = st.execute("SELECT ticker, series, close_ts, strike, result FROM windows WHERE result IN ('yes','no') AND close_ts BETWEEN ? AND ?", (now - TRAIN_HOURS * 3600.0, now)).fetchall()
     by_index: dict[str, list[Any]] = {}
     for w in wins:
-        ix = index_for_series(w["series"])
+        ix = curve_index(w["series"])
         if ix:
             by_index.setdefault(ix, []).append(w)
+    from .variants import crypto_index as variants_crypto
+
     rows: list[tuple[list[float], list[float], float]] = []
     for ix, ws in by_index.items():
         lo, hi = min(float(w["close_ts"]) for w in ws) - 900 - 4000, max(float(w["close_ts"]) for w in ws) + 5
         tk = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? ORDER BY ts", (ix, lo, hi)).fetchall()
         T, V = [float(r[0]) for r in tk], [float(r[1]) for r in tk]
         for w in ws:
-            close, opened, strike, win_yes = float(w["close_ts"]), float(w["close_ts"]) - 900.0, float(w["strike"]), w["result"] == "yes"
+            close, opened, win_yes = float(w["close_ts"]), float(w["close_ts"]) - 900.0, w["result"] == "yes"
+            strike = float(w["strike"]) if variants_crypto(w["series"]) and w["strike"] and float(w["strike"]) > 0 else open_strike(T, V, close)
+            if not strike:
+                continue
             q = tape.execute("SELECT ts, bid, ask FROM quotes WHERE ticker=? AND ts BETWEEN ? AND ? AND bid>0 AND ask>0 ORDER BY ts", (w["ticker"], opened - 60, close)).fetchall()
             if len(q) < 20:
                 continue

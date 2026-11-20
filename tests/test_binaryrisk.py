@@ -184,3 +184,36 @@ def test_unit_a_model_built_before_the_cap_is_refit_at_once(tmp_path, monkeypatc
     (tmp_path / "binary_risk_model.json").write_text(json.dumps(old))
     binaryrisk._cache.update(mtime=None, data=None)
     assert binaryrisk.maybe_refit(s, now=fresh["built_at"] + 60.0) is True and len(started) == 1  # no flag: refit now
+
+
+def test_unit_a_commodity_reads_kalshi_perp_reference_not_an_outside_feed():
+    assert binaryrisk.curve_index("KXBTC15M") == "BRTI" or binaryrisk.curve_index("KXBTC15M")
+    assert binaryrisk.curve_index("KXGOLD15M") == "KP_GOLD"
+    assert binaryrisk.curve_index("KXNATGAS15M") == "KP_NATGAS"
+    assert not str(binaryrisk.curve_index("KXGOLD15M")).startswith("BQ_")
+    assert binaryrisk.curve_index("KXNOPE15M") is None
+
+
+def test_unit_a_commodity_strike_is_the_perp_value_at_the_open_and_none_without_a_tick():
+    close = 1_000_900.0
+    T, V = [1_000_001.0, 1_000_010.0, 1_000_500.0], [2000.0, 2001.0, 2005.0]
+    assert binaryrisk.open_strike(T, V, close) == 2000.0 or binaryrisk.open_strike(T, V, close) == 2001.0
+    assert binaryrisk.open_strike([1_000_500.0], [2005.0], close) is None  # nothing within 25 s of the open
+    assert binaryrisk.open_strike([], [], close) is None
+
+
+def test_integration_a_commodity_is_scored_on_the_perp_curve_with_its_open_as_the_strike(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    (tmp_path / "binary_risk_model.json").write_text(json.dumps(binaryrisk.fit(rows())))
+    binaryrisk._cache.update(mtime=None, data=None)
+    binaryrisk._recent.at = time.time()
+    now = time.time()
+    close = now + 300.0
+    T = [close - 900.0 - 3650.0 + i for i in range(4400)]
+    V = [2000.0 * math.exp(0.00005 * ((i * 7) % 11 - 5)) for i in range(4400)]
+    for t, v in zip(T, V):
+        ticks.history.note("KP_GOLD", t, v)
+    sh = LongShot(ticker="KXGOLD15M-26NOV200000-00", title="t", rules="r", bid=0.29, ask=0.30, volume=1.0, close_time="2026-11-20T00:00:00Z", hours_to_close=300.0 / 3600.0, series="KXGOLD15M", side="yes")
+    ok, why = binaryrisk.admits(s, sh, 0.30, now=now)
+    assert "no settlement index" not in why and "no Kalshi index" not in why  # it reads the perp curve now (the crypto-only refusal is gone)
