@@ -147,6 +147,7 @@ t_end = S[-1][0]
 t_mid = (t_start + t_end) / 2
 verdicts = {top: [] for top in TOPS}  # per live bet: (lane, kept, net_lane, net_held, won, shape thirds, score)
 picks = {top: {} for top in TOPS}
+PX = []  # (half, weakest cushion on the 1/3/5 minute averages in the side's view, minutes left, net held, ask) of the top-5% picks
 base = {}
 t = t_start
 nh = 0
@@ -179,6 +180,7 @@ while t + 3600 <= t_end:
         for top in TOPS:
             if pr >= cut[top] and (r[5], r[6]) not in picks[top]:
                 picks[top][(r[5], r[6])] = (half, k, r[3][0])
+                if top == TOPS[0]: PX.append((half, min(r[2][2], r[2][3], r[2][4]), r[2][7], r[3][0], r[4]))
 print(f"{nh} test hours\n")
 
 print("=== A. the live commodity bets, scored at the moment they were made (walk-forward; what actually happened = the lane's own exit, fee on both legs)")
@@ -217,3 +219,19 @@ for top in TOPS:
     for x in picks[top].values(): cnt[x[1]] = cnt.get(x[1], 0) + 1
     print(f"  top {int(top * 100):2d}% picks by ask band: " + ", ".join(f"{BANDS[k][0]:.2f}-{min(BANDS[k][1], 1.0):.2f}: {cnt.get(k, 0)}" for k in sorted(cnt)))
 print(f"done in {time.time() - t0:.0f}s")
+
+print("\n=== C. the top-5% picks by the side's WEAKEST cushion (the least of its 1, 3 and 5 minute averages, typical moves left) and by minutes left, held to settlement (net per $1; n)")
+def cc(g):
+    return "n %4d net %+.3f win %.2f" % (len(g), sum(x[3] for x in g) / len(g), sum(1 for x in g if x[3] > 0) / len(g)) if g else "n    0"
+CB = [("under 0", -9, 0.0), ("0 to 0.5", 0.0, 0.5), ("0.5 to 1", 0.5, 1.0), ("1 and over", 1.0, 99)]
+LB = [("under 3 min", 0, 3), ("3 to 6", 3, 6), ("6 to 10", 6, 10), ("10 and over", 10, 99)]
+print("  all picks: " + cc(PX))
+for name, lo, hi in CB:
+    g = [x for x in PX if lo <= x[1] < hi]
+    print(f"  weakest cushion {name:11s}: " + cc(g) + " | by half: " + " ; ".join(cc([x for x in g if x[0] == h]) for h in (0, 1)))
+for name, lo, hi in LB:
+    g = [x for x in PX if lo <= x[2] < hi]
+    print(f"  minutes left {name:12s}: " + cc(g) + " | by half: " + " ; ".join(cc([x for x in g if x[0] == h]) for h in (0, 1)))
+print("  cushion x minutes left (net; n):")
+for cn, clo, chi in CB:
+    print("    " + f"{cn:11s}: " + " | ".join(f"{ln} " + cc([x for x in PX if clo <= x[1] < chi and llo <= x[2] < lhi]).replace("net ", "") for ln, llo, lhi in LB))
