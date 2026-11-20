@@ -25,7 +25,7 @@ from .strategy import fee_per_contract as fee
 
 log = logging.getLogger("moonshot")
 
-NAMES = ["logit_ask", "ask_off", "cz1", "cz3", "cz5", "tr13", "tr35", "left", "czl1", "czl3", "czl5", "pos15", "pos30", "pos60", "mv15", "mv30", "mv60", "dr24", "dr72"]
+NAMES = ["logit_ask", "ask_off", "cz1", "cz3", "cz5", "tr13", "tr35", "left", "czl1", "czl3", "czl5", "vr", "amp15", "pos15", "pos30", "pos60", "mv15", "mv30", "mv60", "dr24", "dr72"]
 EXITS = ("hold", "1m", "2m", "3m", "5m")
 HORIZONS = (60.0, 120.0, 180.0, 300.0)  # seconds after the buy at which the early-sale exits sell at the bid
 TOPS = (0.05, 0.10)  # the shares of training sides whose predicted net is stored as a bar
@@ -117,16 +117,21 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
         return None
     if V[j] <= 0:
         return None
-    sq = 0.0
-    for k in range(i15 + 1, j + 1):
-        a, b = V[k - 1], V[k]
-        if a > 0 and b > 0:
-            d = math.log(b / a)
-            sq += d * d
-    span15 = T[j] - T[i15]
-    if span15 <= 0 or sq <= 0:
+    def squares(i: int) -> float:
+        sq = 0.0
+        for k in range(i + 1, j + 1):
+            a, b = V[k - 1], V[k]
+            if a > 0 and b > 0:
+                d = math.log(b / a)
+                sq += d * d
+        return sq
+
+    sq, sqh = squares(i15), squares(ih)
+    span15, spanh = T[j] - T[i15], T[j] - T[ih]
+    if span15 <= 0 or spanh <= 0 or sq <= 0 or sqh <= 0:
         return None
-    u15 = math.sqrt(sq / span15 * 60.0)
+    u15 = math.sqrt(sq / span15 * 60.0)  # the typical minute over the last 15 minutes
+    uh = math.sqrt(sqh / spanh * 60.0)  # and over the last hour
     lm = max(left_s, 1.0) / 60.0
 
     def cl(x: float, a: float) -> float:
@@ -143,6 +148,9 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
         cz = cl(math.log(sp[m] / strike) / (u15 * math.sqrt(lm)), 8.0)
         out[f"cz{m}"] = cz
         out[f"czl{m}"] = cz * min(lm, 15.0) / 15.0  # the same cushion is worth less as the clock runs down (a straight-line fit cannot see that on its own)
+    w15 = V[i15 : j + 1]
+    out["vr"] = u15 / uh - 1.0  # volatility ratio: the 15 minute typical minute against the hour's (positive = the market has sped up)
+    out["amp15"] = math.log(max(w15) / min(w15)) / u15  # range: the 15 minute high to low, in typical minutes
     out["tr13"] = cl(math.log(sp[1] / sp[3]) / u15, 30.0)  # the trend: the 1 minute average against the 3 minute one, in typical moves (positive = rising)
     out["tr35"] = cl(math.log(sp[3] / sp[5]) / u15, 30.0)
     for mins in (15, 30, 60):
@@ -165,7 +173,7 @@ def side_vector(f: dict[str, float], side: str, ask: float, *unused: float) -> l
     def pos(v: float) -> float:
         return v if yes else 1.0 - v
 
-    return [math.log(ask / (1.0 - ask)), 10.0 * (ask - 0.5) ** 2, sg * f["cz1"], sg * f["cz3"], sg * f["cz5"], sg * f["tr13"], sg * f["tr35"], f["left"], sg * f["czl1"], sg * f["czl3"], sg * f["czl5"],
+    return [math.log(ask / (1.0 - ask)), 10.0 * (ask - 0.5) ** 2, sg * f["cz1"], sg * f["cz3"], sg * f["cz5"], sg * f["tr13"], sg * f["tr35"], f["left"], sg * f["czl1"], sg * f["czl3"], sg * f["czl5"], f["vr"], f["amp15"],
             pos(f["pos15"]), pos(f["pos30"]), pos(f["pos60"]), sg * f["mv15"], sg * f["mv30"], sg * f["mv60"], sg * f["dr24"], sg * f["dr72"]]
 
 

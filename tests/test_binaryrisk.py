@@ -344,3 +344,16 @@ def test_unit_the_cushion_is_also_read_against_the_time_left():
     no = binaryrisk.side_vector(early, "no", 0.40, 0.0, 0.0)
     i = binaryrisk.NAMES.index("czl3")
     assert yes[i] > 0 > no[i]
+
+
+def test_unit_the_volatility_ratio_and_the_range_are_read_in_typical_minutes():
+    T, V = walk(4000)
+    f = binaryrisk.readings(T, V, T[-1], V[-1], 600.0)
+    assert f is not None and f["amp15"] > 0 and f["vr"] > -1.0
+    i, j = binaryrisk.NAMES.index("vr"), binaryrisk.NAMES.index("amp15")
+    yes = binaryrisk.side_vector(f, "yes", 0.60)
+    no = binaryrisk.side_vector(f, "no", 0.40)
+    assert yes[i] == no[i] == f["vr"] and yes[j] == no[j] == f["amp15"]  # side-neutral: the wave's size does not depend on the side
+    sped = list(V[:3000]) + [V[3000] * math.exp(0.0006 * ((k % 2) * 2 - 1)) for k in range(1000)]  # calm hour, jumpy last 15 minutes
+    g = binaryrisk.readings(T, sped, T[-1], sped[-1], 600.0)
+    assert g is not None and g["vr"] > f["vr"]
