@@ -217,3 +217,75 @@ def test_integration_a_commodity_is_scored_on_the_perp_curve_with_its_open_as_th
     sh = LongShot(ticker="KXGOLD15M-26NOV200000-00", title="t", rules="r", bid=0.29, ask=0.30, volume=1.0, close_time="2026-11-20T00:00:00Z", hours_to_close=300.0 / 3600.0, series="KXGOLD15M", side="yes")
     ok, why = binaryrisk.admits(s, sh, 0.30, now=now)
     assert "no settlement index" not in why and "no Kalshi index" not in why  # it reads the perp curve now (the crypto-only refusal is gone)
+
+
+def swing_model(tmp_path):
+    (tmp_path / "binary_risk_model.json").write_text(json.dumps(binaryrisk.fit(rows())))
+    binaryrisk._cache.update(mtime=None, data=None)
+    binaryrisk._recent.at = time.time()
+
+
+def commodity_shot(side="yes", ask=0.30):
+    return LongShot(ticker="KXGOLD15M-26NOV200000-00", title="t", rules="r", bid=ask - 0.01, ask=ask, volume=1.0, close_time="2026-11-20T00:00:00Z", hours_to_close=800.0 / 3600.0, series="KXGOLD15M", side=side)
+
+
+def test_unit_the_swing_step_is_a_named_step_a_lane_may_use():
+    from kalshi_moonshot import lanes
+
+    assert "swing_risk" in buychain.STEPS and "swing_risk" in lanes.BUY_STEPS
+    assert "swing_risk" in binaryrisk.STEPS  # a lane naming it gets the refit
+
+
+def test_unit_the_swing_bar_comes_from_the_markets_own_recent_predictions(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    swing_model(tmp_path)
+    binaryrisk._swing["hist"].clear(); binaryrisk._swing["last"].clear()
+    now = time.time()
+    state = {"k": 2}
+    seq = iter([i / 1000.0 for i in range(1000)])
+    monkeypatch.setattr(binaryrisk, "_read", lambda *a, **k: ({"model": {}, "f": {}, "pred": next(seq), "k": state["k"]}, ""))
+    # the first predictions only build the history: no bar yet, no buy
+    ok, why = binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now)
+    assert not ok and "bar is not known" in why
+    for i in range(1, 400):  # distinct sides' times so each is stored
+        binaryrisk._swing["last"].clear()
+        binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + i)
+    binaryrisk._swing["last"].clear()
+    hi = binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + 500)  # 0.4 .. next predictions rising: the top of its own history
+    assert "own predictions" in hi[1]
+    monkeypatch.setattr(binaryrisk, "_read", lambda *a, **k: ({"model": {}, "f": {}, "pred": 5.0, "k": 2}, ""))
+    binaryrisk._swing["last"].clear()
+    assert binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + 600)[0]  # far above its own history
+    monkeypatch.setattr(binaryrisk, "_read", lambda *a, **k: ({"model": {}, "f": {}, "pred": 5.0, "k": 0}, ""))
+    binaryrisk._swing["last"].clear()
+    ok, why = binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + 700)
+    assert not ok and "hold, not a swing" in why  # the best exit is to hold: not a swing
+    monkeypatch.setattr(binaryrisk, "_read", lambda *a, **k: ({"model": {}, "f": {}, "pred": -5.0, "k": 2}, ""))
+    binaryrisk._swing["last"].clear()
+    assert not binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + 800)[0]  # below its own history
+
+
+def test_integration_the_swing_step_says_no_without_a_model_and_on_error(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    binaryrisk._cache.update(mtime=None, data=None)
+    ctx = buychain.Ctx(s=s, spec=None)
+    got = buychain.STEPS["swing_risk"](ctx, commodity_shot())
+    assert not got.ok and "no model" in got.why
+    monkeypatch.setattr(binaryrisk, "swing_admits", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert not buychain.STEPS["swing_risk"](ctx, commodity_shot()).ok  # a failing reading never buys
+
+
+def test_unit_the_commodity_early_swing_lane_block_loads_and_names_only_known_steps():
+    import pathlib
+    import tomllib
+
+    from kalshi_moonshot import lanes
+
+    d = tomllib.loads(pathlib.Path("docs/commodity_early_swing.lane.toml").read_text())
+    steps = d["module"]["swing_commodity"]["steps"]
+    assert steps[-1] == "swing_risk" and all(x in lanes.BUY_STEPS for x in steps)  # the risk model decides last
+    lane = d["lane"]["commodity_early_swing"]
+    assert lane["price"] == [0.20, 0.45] and lane["exit_module"] == "round_trip" and lane["paper_fill_model"] is True
+    assert all(s.startswith("KX") and s.endswith("15M") for s in lane["series"])

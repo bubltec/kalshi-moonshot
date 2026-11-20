@@ -15,7 +15,9 @@ import math
 import os
 import subprocess
 import sys
+import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +45,7 @@ _cache: dict[str, Any] = {"mtime": None, "data": None}
 _fitting: subprocess.Popen[bytes] | None = None
 
 
-STEPS = ("binary_risk_shadow", "binary_risk")  # the buy steps that read this model: a lane naming either needs the refit and the recent outcomes
+STEPS = ("binary_risk_shadow", "binary_risk", "swing_risk")  # the buy steps that read this model: a lane naming either needs the refit and the recent outcomes
 
 
 def wanted(specs: Any) -> bool:
@@ -250,36 +252,78 @@ def open_strike(T: list[float], V: list[float], close: float) -> float | None:
     return V[k]
 
 
-def admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[bool, str]:
-    """Whether the model would buy this market side at `ask` now: (True or False, the note). Reads memory only."""
+def _read(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[dict[str, Any] | None, str]:
+    """The model's reading of one side now: ({model, f, pred, k}, "") or (None, why not). Reads memory only."""
     from . import ticks as ticks_mod
     from . import variants
 
     model = load(s)
     if model is None or not model.get("cuts"):
-        return False, "binary risk: no model fitted yet."
+        return None, "binary risk: no model fitted yet."
     if not usable(ask):
-        return False, f"binary risk: ask {ask:.2f} is not a bet (never 0.45-0.55, not under {ASK_FLOOR:.2f})."
+        return None, f"binary risk: ask {ask:.2f} is not a bet (never 0.45-0.55, not under {ASK_FLOOR:.2f})."
     index = curve_index(shot.series)
     if not index:
-        return False, f"binary risk: no Kalshi index or perp reference is read for {shot.series}."
+        return None, f"binary risk: no Kalshi index or perp reference is read for {shot.series}."
     now = time.time() if now is None else now
     got = ticks_mod.history.window(index, now - 3700.0, now)
     if not got or not got[0]:
-        return False, f"binary risk: no tick history in memory for {index}."
+        return None, f"binary risk: no tick history in memory for {index}."
     strike = ticks_mod.strikes.get(shot.ticker) if variants.crypto_index(shot.series) else open_strike(got[0], got[1], now + shot.hours_to_close * 3600.0)
     if not strike or strike <= 0:
-        return False, f"binary risk: no strike known yet for {shot.ticker}."
+        return None, f"binary risk: no strike known yet for {shot.ticker}."
     if now - _recent.at > RECENT_STALE:
-        return False, "binary risk: the recent outcomes have not been refreshed."
+        return None, "binary risk: the recent outcomes have not been refreshed."
     f = readings(got[0], got[1], now, float(strike), shot.hours_to_close * 3600.0)
     if f is None:
-        return False, f"binary risk: the curve cannot be read yet for {shot.ticker} (short or stale history)."
+        return None, f"binary risk: the curve cannot be read yet for {shot.ticker} (short or stale history)."
     pred, k = predict_capped(model, side_vector(f, shot.side, ask, _recent.yes(now, 1.0), _recent.yes(now, 3.0)), ask)
+    return {"model": model, "f": f, "pred": pred, "k": k}, ""
+
+
+def admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[bool, str]:
+    """Whether the model would buy this market side at `ask` now: (True or False, the note). Reads memory only."""
+    got, why = _read(s, shot, ask, now)
+    if got is None:
+        return False, why
+    model, f, pred, k = got["model"], got["f"], got["pred"], got["k"]
     cut = float(model["cuts"].get(str(TOP), 0.0))
     yes = shot.side == "yes"  # the note reads the side's own view: a NO side's cushion is the YES one's sign flipped
     tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {f['cz'] if yes else -f['cz']:+.1f}, efficiency {f['eff5']:.2f}, hour place {f['h_pos'] if yes else 1.0 - f['h_pos']:.2f})"
     return pred >= cut, tag
+
+
+SWING_KEEP = 3 * 3600.0  # the market's own recent predictions: the last three hours
+SWING_MIN = 200  # fewer own predictions than this and the bar is not known: no buy
+SWING_TOP = 0.03  # high scrutiny: the side's prediction must be in the top 3% of that market series' own recent predictions
+SWING_GAP = 30.0  # one stored prediction per (market, side) per this many seconds
+_swing: dict[str, Any] = {"hist": {}, "last": {}, "lock": threading.Lock()}
+
+
+def swing_admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[bool, str]:
+    """The early-swing score (2026-11-20, user via parent: a paper lane for the early cheap-side swing, "a high-scrutiny risk model, bar from the market's own recent predictions"): the same model, read for a cheap side. The side must (1) have an early SALE (1, 2, 3 or 5 minutes) as the model's best exit, not holding to settlement, and (2) have a predicted net in the top SWING_TOP of the predictions this market series has made at the lane's prices over the last three hours (a bar from its own recent history, CLAUDE.md rule 2; no asset key: the history is kept per market series because that is the market's own curve). Fewer than SWING_MIN own predictions: no buy. Reads memory only."""
+    got, why = _read(s, shot, ask, now)
+    if got is None:
+        return False, why
+    now = time.time() if now is None else now
+    pred, k = got["pred"], got["k"]
+    key = shot.series or shot.ticker.split("-")[0]
+    with _swing["lock"]:
+        hist = _swing["hist"].setdefault(key, deque())
+        while hist and hist[0][0] < now - SWING_KEEP:
+            hist.popleft()
+        vals = sorted(v for _, v in hist)
+        sk = (shot.ticker, shot.side)
+        if now - _swing["last"].get(sk, 0.0) >= SWING_GAP:
+            _swing["last"][sk] = now
+            hist.append((now, pred))
+    if len(vals) < SWING_MIN:
+        return False, f"swing risk: only {len(vals)} own predictions in the last 3 h for {key}, the bar is not known (needs {SWING_MIN})."
+    bar = vals[min(len(vals) - 1, int(len(vals) * (1.0 - SWING_TOP)))]
+    tag = f"swing risk {pred:+.2f}/$1 by {EXITS[k]} (bar {bar:+.2f}, the top {SWING_TOP:.0%} of {len(vals)} own predictions in 3 h)"
+    if k == 0:
+        return False, tag + ": the best exit is to hold, not a swing."
+    return pred >= bar, tag
 
 
 def maybe_refit(s: Any, now: float | None = None) -> bool:

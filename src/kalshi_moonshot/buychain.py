@@ -352,6 +352,18 @@ def binary_risk_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
+@step("swing_risk")
+def swing_risk_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The early-swing risk gate (2026-11-20): the binary risk model read for a cheap side whose best exit is an early sale, held to the top 3% of this market series' own predictions over the last three hours (binaryrisk.swing_admits). Memory only."""
+    from . import binaryrisk
+
+    try:
+        ok, why = binaryrisk.swing_admits(ctx.s, shot, shot.ask)
+    except Exception as exc:
+        return Check(False, f"swing risk unreadable ({exc})")
+    return Check(ok, why)
+
+
 @step("late_swing")
 def late_swing_step(ctx: Ctx, shot: LongShot) -> Check:
     """The late swing buy (lateswing.py; 2026-11-20, user): in the last late_swing_from seconds down to late_swing_to, a side whose ask is low or high (outside late_swing_mid_lo to _mid_hi), on a curve that has been jumpy: the settlement index crossed the strike at least late_swing_min_crosses times in the last five minutes and the last minute moved at least as fast as the five minutes (vol_ratio >= 1). The note names the tier the time left puts the bet in; the stake is that share of the lane's stake (runner.evaluate). A curve that cannot be read is a no."""
