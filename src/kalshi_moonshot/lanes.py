@@ -237,7 +237,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "context_score", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "context_score", "binary_risk_shadow", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
 
 
 def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:
@@ -464,7 +464,7 @@ _NOT_LOGIC = frozenset({
 def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     """Everything that decides what this lane buys, how much, and how it gets out, including the global rules that reach it (2026-11-19: rebuilt when the rules outside the buy and sell modules were removed, so every lane has a new version from that day)."""
     out = {f.name: repr(getattr(spec, f.name)) for f in fields(spec) if f.name not in _NOT_LOGIC}
-    out["buy_chain"] = repr(tuple(x for x in spec.buy_chain if x not in ("context_score", "state_record_shadow")))  # a shadow step that never says no changes nothing the lane does: not a new version
+    out["buy_chain"] = repr(tuple(x for x in spec.buy_chain if x not in ("context_score", "state_record_shadow", "binary_risk_shadow")))  # a shadow step that never says no changes nothing the lane does: not a new version
     out["kelly_fraction"] = repr(None if spec.fixed_stake else s.kelly_fraction)
     chain = tuple(x for x in spec.sell_chain if not (x == "late_tight" and not (spec.curve_risk_late_tight > 0 and spec.curve_risk_late_tight_live)))  # late_tight in shadow changes nothing the lane does, so it is not part of the version
     out["sell_chain"] = repr(chain)
