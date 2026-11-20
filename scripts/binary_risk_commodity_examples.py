@@ -222,4 +222,4 @@ print("\n=== EXAMPLE BUYS: the top-5% picks in 0.60-0.85 (first reading per mark
 rr = _rnd.Random(11)
 for t, tk, sd, ask, pr, ex, vec, net, half in sorted(rr.sample(EXS, min(24, len(EXS))), key=lambda x: x[0]):
     nm = dict(zip(br.NAMES, vec))
-    print(f"{datetime.fromtimestamp(t, timezone.utc).strftime('%m-%d %H:%MZ')} {tk} buy {sd.upper()} at {ask:.2f}: predicted {pr:+.2f}/$1 by {ex} | cushion {nm['cz']:+.1f}, efficiency {nm['eff5']:.2f}, hour place {nm['h_pos']:.2f}, left {nm['left']:.1f} min | held to settlement: {'WON' if net > 0 else 'LOST'} {net:+.2f} per $1 (half {half + 1})")
+    print(f"{datetime.fromtimestamp(t, timezone.utc).strftime('%m-%d %H:%MZ')} {tk} buy {sd.upper()} at {ask:.2f}: predicted {pr:+.2f}/$1 by {ex} | cushion {nm['cz']:+.1f}, efficiency {nm['eff5']:.2f}, hour place {nm['hp3']:.2f}, left {nm['left']:.1f} min | held to settlement: {'WON' if net > 0 else 'LOST'} {net:+.2f} per $1 (half {half + 1})")

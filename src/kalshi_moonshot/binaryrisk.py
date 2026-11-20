@@ -25,7 +25,7 @@ from .strategy import fee_per_contract as fee
 
 log = logging.getLogger("moonshot")
 
-NAMES = ["logit_ask", "ask_off", "cz1", "cz3", "cz5", "zt1", "zt3", "zt5", "left", "eff5", "vr", "amp15", "pos15", "bounce_with", "bounce_against", "h_move", "h_pos", "h_strike", "ry1", "ry3"]
+NAMES = ["logit_ask", "ask_off", "cz1", "cz3", "cz5", "zt1", "zt3", "zt5", "left", "eff5", "vr", "amp15", "pos1", "pos3", "pos5", "bounce_with", "bounce_against", "hm1", "hm3", "hm5", "hp1", "hp3", "hp5", "h_strike", "ry1", "ry3"]
 EXITS = ("hold", "1m", "2m", "3m", "5m")
 HORIZONS = (60.0, 120.0, 180.0, 300.0)  # seconds after the buy at which the early-sale exits sell at the bid
 TOPS = (0.05, 0.10)  # the shares of training sides whose predicted net is stored as a bar
@@ -137,7 +137,7 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
 
     sq15, _ = steps(i15)
     sqh, _ = steps(ih)
-    _, path5 = steps(i5)
+    path5 = 0.0  # replaced below: the 5-minute efficiency is read on 15 second samples, not 1 second ticks (tick noise made it near zero on a clean rise)
     span15, spanh = T[j] - T[i15], T[j] - T[ih]
     if span15 <= 0 or spanh <= 0 or sq15 <= 0 or sqh <= 0:
         return None
@@ -156,13 +156,20 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
 
     # the spot is a vector of its 1, 3 and 5 minute averages, not the last tick (user, 2026-11-20: "you need a vector, blended at 1, 3, 5 mins"; a blip with ten minutes left is not a cushion, and Kalshi settles on the last minute's average)
     lgs = {m: math.log(avg(60.0 * m) / strike) for m in (1, 3, 5)}
+    sp = {m: avg(60.0 * m) for m in (1, 3, 5)}
+    samples = [V[bisect.bisect_right(T, now - 300.0 + 15.0 * k) - 1] for k in range(21)]  # the last five minutes every 15 s
+    path15 = sum(abs(math.log(samples[k + 1] / samples[k])) for k in range(20) if samples[k] > 0 and samples[k + 1] > 0)
     out = {
         "cz": cl(lgs[3] / (u15 * math.sqrt(lm)), 8.0), "left": lm,
-        "up5": math.log(max(w5) / spot) / u15, "dn5": math.log(spot / min(w5)) / u15,
-        "eff5": abs(math.log(w5[-1] / w5[0])) / path5 if path5 > 0 and w5[0] > 0 and w5[-1] > 0 else 0.0,
-        "amp15": math.log(hi15 / lo15) / u15, "pos15": (spot - lo15) / (hi15 - lo15) if hi15 > lo15 else 0.5, "vr": u15 / uh - 1.0,
-        "h_move": cl(math.log(spot / wh[0]) / u15, 60.0), "h_pos": (spot - loh) / (hih - loh) if hih > loh else 0.5, "h_strike": (strike - loh) / (hih - loh) if hih > loh else 0.5,
+        "up5": math.log(max(w5) / sp[3]) / u15, "dn5": math.log(sp[3] / min(w5)) / u15,
+        "eff5": abs(math.log(samples[-1] / samples[0])) / path15 if path15 > 0 and samples[0] > 0 and samples[-1] > 0 else 0.0,
+        "amp15": math.log(hi15 / lo15) / u15, "vr": u15 / uh - 1.0,
+        "h_strike": (strike - loh) / (hih - loh) if hih > loh else 0.5,
     }
+    for m in (1, 3, 5):
+        out[f"pos{m}"] = (sp[m] - lo15) / (hi15 - lo15) if hi15 > lo15 else 0.5
+        out[f"hm{m}"] = cl(math.log(sp[m] / wh[0]) / u15, 60.0)
+        out[f"hp{m}"] = (sp[m] - loh) / (hih - loh) if hih > loh else 0.5
     for m in (1, 3, 5):
         out[f"cz{m}"] = cl(lgs[m] / (u15 * math.sqrt(lm)), 8.0)
         out[f"zt{m}"] = cl(lgs[m] / u15, 30.0)
@@ -179,8 +186,8 @@ def side_vector(f: dict[str, float], side: str, ask: float, ry1: float, ry3: flo
     def pos(v: float) -> float:
         return v if yes else 1.0 - v
 
-    return [math.log(ask / (1.0 - ask)), 10.0 * (ask - 0.5) ** 2, sg * f["cz1"], sg * f["cz3"], sg * f["cz5"], sg * f["zt1"], sg * f["zt3"], sg * f["zt5"], f["left"], f["eff5"], f["vr"], f["amp15"], pos(f["pos15"]), up, dn,
-            sg * f["h_move"], pos(f["h_pos"]), pos(f["h_strike"]), sg * ry1, sg * ry3]
+    return [math.log(ask / (1.0 - ask)), 10.0 * (ask - 0.5) ** 2, sg * f["cz1"], sg * f["cz3"], sg * f["cz5"], sg * f["zt1"], sg * f["zt3"], sg * f["zt5"], f["left"], f["eff5"], f["vr"], f["amp15"],
+            pos(f["pos1"]), pos(f["pos3"]), pos(f["pos5"]), up, dn, sg * f["hm1"], sg * f["hm3"], sg * f["hm5"], pos(f["hp1"]), pos(f["hp3"]), pos(f["hp5"]), pos(f["h_strike"]), sg * ry1, sg * ry3]
 
 
 def _solve(A: list[list[float]], b: list[float]) -> list[float]:
@@ -304,7 +311,7 @@ def admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[boo
     model, f, pred, k = got["model"], got["f"], got["pred"], got["k"]
     cut = float(model["cuts"].get(str(TOP), 0.0))
     yes = shot.side == "yes"  # the note reads the side's own view: a NO side's cushion is the YES one's sign flipped
-    tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {f['cz'] if yes else -f['cz']:+.1f}, efficiency {f['eff5']:.2f}, hour place {f['h_pos'] if yes else 1.0 - f['h_pos']:.2f})"
+    tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {f['cz'] if yes else -f['cz']:+.1f}, efficiency {f['eff5']:.2f}, hour place {f['hp3'] if yes else 1.0 - f['hp3']:.2f})"
     return pred >= cut, tag
 
 

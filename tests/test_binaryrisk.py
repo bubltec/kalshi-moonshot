@@ -29,7 +29,7 @@ def test_unit_readings_need_an_hour_of_fresh_ticks():
     V = V[:-400] + [V[-1]] * 400  # flat for the last 400 s: every average equals the spot
     f = binaryrisk.readings(T, V, now, V[-1], 300.0)
     assert f is not None and all(abs(f[k]) < 1e-9 for k in ("cz1", "cz3", "cz5", "zt1", "zt3", "zt5")) and f["left"] == 5.0  # spot at the strike: no cushion at any scale
-    assert 0.0 <= f["pos15"] <= 1.0 and 0.0 <= f["h_pos"] <= 1.0 and 0.0 <= f["eff5"] <= 1.0
+    assert all(0.0 <= f[k] <= 1.0 for k in ("pos1", "pos3", "pos5", "hp1", "hp3", "hp5", "eff5"))
 
 
 def test_unit_the_cushion_is_in_typical_moves_and_signed_by_side():
@@ -44,7 +44,7 @@ def test_unit_the_cushion_is_in_typical_moves_and_signed_by_side():
         assert yes[i] > 0 > no[i]  # the same curve is a lead for YES and a deficit for NO
     j, k = binaryrisk.NAMES.index("bounce_with"), binaryrisk.NAMES.index("bounce_against")
     assert yes[j] == no[k] and yes[k] == no[j]  # the bounce room swaps with the side
-    assert abs(yes[binaryrisk.NAMES.index("h_pos")] + no[binaryrisk.NAMES.index("h_pos")] - 1.0) < 1e-9
+    assert abs(yes[binaryrisk.NAMES.index("hp3")] + no[binaryrisk.NAMES.index("hp3")] - 1.0) < 1e-9
 
 
 def test_unit_recent_outcomes_use_only_windows_before_the_moment_and_need_twenty():
@@ -314,3 +314,23 @@ def binaryrisk_unit(T, V, now):
     j = bisect.bisect_right(T, now) - 1
     sq = sum(math.log(V[k] / V[k - 1]) ** 2 for k in range(i15 + 1, j + 1))
     return math.sqrt(sq / (T[j] - T[i15]) * 60.0)
+
+
+def test_unit_efficiency_reads_a_clean_rise_on_15_second_samples_not_tick_noise():
+    rnd = random.Random(5)
+    T = [1_000_000.0 + i for i in range(4000)]
+    V, v = [], 100.0
+    for i in range(4000):
+        v *= math.exp(0.00002 + (0.0003 if i % 2 else -0.0003))  # a steady rise under one second back-and-forth noise
+        V.append(v)
+    f = binaryrisk.readings(T, V, T[-1], V[-1] * 0.99, 600.0)
+    assert f is not None and f["eff5"] > 0.5  # the old tick-by-tick path read this near zero
+
+
+def test_unit_the_position_readings_are_blended_over_1_3_and_5_minutes():
+    T, V = walk(4000)
+    V = V[:-400] + [V[-401]] * 399 + [V[-401] * 1.01]  # flat, then a last-tick spike far above the hour's range
+    f = binaryrisk.readings(T, V, T[-1], V[-401], 600.0)
+    assert f is not None
+    assert f["pos1"] < 1.0 and f["hp1"] < 1.0  # the spike alone does not put the position at the top of the range
+    assert f["pos5"] <= f["pos3"] <= f["pos1"] and f["hp5"] <= f["hp3"] <= f["hp1"]
