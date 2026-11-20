@@ -91,7 +91,7 @@ def build(job):
             if f and qq:
                 ahead = [quote_at(t + h) if t + h <= close - 15.0 else None for h in HORIZONS]
                 for side, ask in (("yes", qq[1]), ("no", 1.0 - qq[0])):
-                    if not 0.02 <= ask <= 0.98:
+                    if not 0.02 <= ask <= 0.98 or br.gate(f, side, close - t):  # the gate: ahead on the 1/3/5 minute averages, three minutes left
                         continue
                     won = won_yes if side == "yes" else not won_yes
                     pays = [1.0 if won else 0.0]
@@ -115,7 +115,7 @@ BF = sorted((x for b in built for x in b[1]), key=lambda x: x[0][0])
 print(f"{len(S)} training sides ({sum(1 for r in S if r[1] == 'commodity')} commodity), {len(BF)} of {len(bets)} live bets could be read", flush=True)
 
 NI = {n: i for i, n in enumerate(br.NAMES)}
-SH = [("cushion", NI["cz3"]), ("30-min place", NI["pos30"]), ("30-min move", NI["mv30"])]
+SH = [("cushion", NI["czb"]), ("30-min place", NI["pos30"]), ("30-min move", NI["mv30"])]
 cmd = [r for r in S if r[1] == "commodity"][::5]
 cuts = []
 for _, i in SH:
@@ -242,6 +242,6 @@ for t, tk, sd, ask, pr, ex, vec, net, half in sorted(rr.sample(losses, min(20, l
         cz.append("%+.1f" % ((1 if sd == "yes" else -1) * f["cz"]) if f else "-")
         j = bisect.bisect_right(qt, tt) - 1
         aa.append("%.2f" % ((float(q[j][2]) if sd == "yes" else 1.0 - float(q[j][1])) / sc) if j >= 0 else "-")
-    print(f"\n{datetime.fromtimestamp(t, timezone.utc).strftime('%m-%d %H:%MZ')} {tk} buy {sd.upper()} at {ask:.2f}: predicted {pr:+.2f}/$1 by {ex}; at the buy: cushion {nm['cz3']:+.1f}, trend {nm['tr13']:+.2f}, 30-min place {nm['pos30']:.2f}, {nm['left']:.1f} min left; lost {net:+.2f} per $1")
+    print(f"\n{datetime.fromtimestamp(t, timezone.utc).strftime('%m-%d %H:%MZ')} {tk} buy {sd.upper()} at {ask:.2f}: predicted {pr:+.2f}/$1 by {ex}; at the buy: cushion {nm['czb']:+.1f}, trend {nm['tr13']:+.2f}, 30-min place {nm['pos30']:.2f}, {nm['left']:.1f} min left; lost {net:+.2f} per $1")
     print("   side cushion each minute: " + " ".join(cz))
     print("   side ask each minute:     " + " ".join(aa))

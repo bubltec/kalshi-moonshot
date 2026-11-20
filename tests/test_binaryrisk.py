@@ -39,9 +39,9 @@ def test_unit_the_cushion_is_in_typical_moves_and_signed_by_side():
     assert up["cz1"] > 0 and up["cz3"] > 0 and up["cz5"] > 0
     yes = binaryrisk.side_vector(up, "yes", 0.60, 0.0, 0.0)
     no = binaryrisk.side_vector(up, "no", 0.40, 0.0, 0.0)
-    for nm in ("cz1", "cz3", "cz5"):
-        i = binaryrisk.NAMES.index(nm)
-        assert yes[i] > 0 > no[i]  # the same curve is a lead for YES and a deficit for NO
+    i = binaryrisk.NAMES.index("czb")
+    assert yes[i] > 0 > no[i]  # the blended cushion: a lead for YES, a deficit for NO
+    assert abs(up["czb"] - (up["cz1"] + up["cz3"] + up["cz5"]) / 3.0) < 1e-12  # the same curve is a lead for YES and a deficit for NO
     for nm in ("pos15", "pos30", "pos60"):
         i = binaryrisk.NAMES.index(nm)
         assert abs(yes[i] + no[i] - 1.0) < 1e-9  # the place in the range is the side's own view
@@ -339,10 +339,10 @@ def test_unit_the_cushion_is_also_read_against_the_time_left():
     assert early is not None and late is not None
     # the same spot and strike: the cushion in typical moves grows as time runs down, but its time-left term is smaller
     assert late["cz3"] > early["cz3"] > 0
-    assert late["czl3"] / late["cz3"] < early["czl3"] / early["cz3"]  # the ratio is the share of the market left
+    assert late["czlb"] / late["czb"] < early["czlb"] / early["czb"]  # the ratio is the share of the market left
     yes = binaryrisk.side_vector(early, "yes", 0.60, 0.0, 0.0)
     no = binaryrisk.side_vector(early, "no", 0.40, 0.0, 0.0)
-    i = binaryrisk.NAMES.index("czl3")
+    i = binaryrisk.NAMES.index("czlb")
     assert yes[i] > 0 > no[i]
 
 
@@ -392,3 +392,36 @@ def test_unit_the_shape_readings_are_in_the_vector_and_curvature_flips_with_the_
     i = binaryrisk.NAMES.index("ft30")
     assert yes[i] == no[i]  # how line-like the path is does not depend on the side
     assert len(yes) == len(binaryrisk.NAMES)
+
+
+def _f(cz1, cz3, cz5):
+    return {"cz1": cz1, "cz3": cz3, "cz5": cz5}
+
+
+def test_unit_the_gate_needs_a_positive_cushion_on_every_average_and_three_minutes():
+    assert binaryrisk.gate(_f(0.3, 0.2, 0.1), "yes", 600.0) is None
+    assert binaryrisk.gate(_f(-0.3, -0.2, -0.1), "no", 600.0) is None  # a NO side is ahead when the cushions are negative
+    # the copper 6:29 buy: the 1 minute average a hair ahead, the 3 and 5 minute ones well behind
+    assert "weakest cushion" in binaryrisk.gate(_f(0.17, -0.60, -0.81), "yes", 120.0 + 60.0)
+    assert "weakest cushion" in binaryrisk.gate(_f(0.17, 0.0, 0.5), "yes", 600.0)  # zero is not ahead
+    assert "last 3" in binaryrisk.gate(_f(0.5, 0.5, 0.5), "yes", 179.0)  # inside the last three minutes
+    assert binaryrisk.gate(_f(0.5, 0.5, 0.5), "yes", 180.0) is None
+
+
+def test_integration_admits_refuses_a_side_the_gate_blocks_with_the_reason(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    swing_model(tmp_path)
+    f = {k: 0.0 for k in ("left", "czb", "czlb", "tr13", "tr35", "vr", "amp15", "pos15", "pos30", "pos60", "mv15", "mv30", "mv60", "sl15", "sl30", "sl60", "cv15", "cv30", "cv60", "ft15", "ft30", "ft60", "dr24", "dr72")}
+    f.update(cz1=0.17, cz3=-0.6, cz5=-0.8)
+    monkeypatch.setattr(binaryrisk, "readings", lambda *a, **k: f)
+    monkeypatch.setattr(binaryrisk, "curve_index", lambda series: "KP_COPPER")
+    monkeypatch.setattr(binaryrisk, "open_strike", lambda *a, **k: 5.83)
+    import time as _t
+
+    now = _t.time()
+    ticks.history.note("KP_COPPER", now - 1.0, 5.83)
+    monkeypatch.setattr(ticks.history, "window", lambda ix, a, b: ([now - 2000.0, now - 1.0], [5.83, 5.83]))
+    sh = LongShot(ticker="KXCOPPER15M-26NOV180630-30", title="t", rules="r", bid=0.69, ask=0.70, volume=1.0, close_time="2026-11-18T11:30:00Z", hours_to_close=300.0 / 3600.0, series="KXCOPPER15M", side="yes")
+    ok, why = binaryrisk.admits(s, sh, 0.70, now=now)
+    assert not ok and "weakest cushion" in why

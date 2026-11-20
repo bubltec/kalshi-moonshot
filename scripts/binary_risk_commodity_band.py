@@ -90,7 +90,7 @@ def build(job):
             if f and qq:
                 ahead = [quote_at(t + h) if t + h <= close - 15.0 else None for h in HORIZONS]
                 for side, ask in (("yes", qq[1]), ("no", 1.0 - qq[0])):
-                    if not 0.02 <= ask <= 0.98:
+                    if not 0.02 <= ask <= 0.98 or br.gate(f, side, close - t):  # the gate: ahead on the 1/3/5 minute averages, three minutes left
                         continue
                     won = won_yes if side == "yes" else not won_yes
                     pays = [1.0 if won else 0.0]
@@ -114,7 +114,7 @@ BF = sorted((x for b in built for x in b[1]), key=lambda x: x[0][0])
 print(f"{len(S)} training sides ({sum(1 for r in S if r[1] == 'commodity')} commodity), {len(BF)} of {len(bets)} live bets could be read", flush=True)
 
 NI = {n: i for i, n in enumerate(br.NAMES)}
-SH = [("cushion", NI["cz3"]), ("30-min place", NI["pos30"]), ("30-min move", NI["mv30"])]
+SH = [("cushion", NI["czb"]), ("30-min place", NI["pos30"]), ("30-min move", NI["mv30"])]
 cmd = [r for r in S if r[1] == "commodity"][::5]
 cuts = []
 for _, i in SH:
@@ -168,7 +168,7 @@ while t + 3600 <= t_end:
     for b, f in hour_bets:  # Part A
         side, ask = b[3], b[5]
         x = br.side_vector(f, side, ask)
-        pred = br.predict_capped(model, x, ask)[0] if br.usable(ask) else -9.0
+        pred = br.predict_capped(model, x, ask)[0] if br.usable(ask) and not br.gate(f, side, f['left'] * 60.0) else -9.0  # the gate vetoes a bet the model would not look at
         net_lane, net_held, won = actual(b)
         for top in TOPS:
             verdicts[top].append((b[1], pred >= cut[top], net_lane, net_held, won, [terc(x, k) for k in range(len(SH))], b[4]))
@@ -180,7 +180,7 @@ while t + 3600 <= t_end:
         for top in TOPS:
             if pr >= cut[top] and (r[5], r[6]) not in picks[top]:
                 picks[top][(r[5], r[6])] = (half, k, r[3][0])
-                if top == TOPS[0]: PX.append((half, min(r[2][2], r[2][3], r[2][4]), r[2][7], r[3][0], r[4]))
+                if top == TOPS[0]: PX.append((half, r[2][NI['czb']], r[2][NI['left']], r[3][0], r[4]))
 print(f"{nh} test hours\n")
 
 print("=== A. the live commodity bets, scored at the moment they were made (walk-forward; what actually happened = the lane's own exit, fee on both legs)")
