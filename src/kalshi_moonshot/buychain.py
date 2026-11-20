@@ -340,6 +340,18 @@ def binary_risk_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(True, f"shadow: {'would buy' if ok else 'would not buy'}: {why}")
 
 
+@step("binary_risk")
+def binary_risk_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The binary risk model decides the buy (2026-11-20, user: "I don't want anything else impacting it"): the side is bought when its predicted net per $1 (binaryrisk.py, read from the settlement index's own curve and the price paid, held to settlement or sold early, whichever the model finds best) is in the top 5% of the last day's sides. Never an ask of 0.45-0.55, never under 0.20. A model that is missing, a curve that cannot be read yet, or an error is a no, so a buy never rests on a guess. Reads memory only. A lane that wants only the model has this as the one step of its module and no exit module (it holds to settlement), so nothing else changes what is bought or sold."""
+    from . import binaryrisk
+
+    try:
+        ok, why = binaryrisk.admits(ctx.s, shot, shot.ask)
+    except Exception as exc:
+        return Check(False, f"binary risk unreadable ({exc})")
+    return Check(ok, why)
+
+
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""

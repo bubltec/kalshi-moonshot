@@ -123,3 +123,19 @@ def test_unit_the_step_is_a_named_lane_step_and_not_a_new_lane_version():
     from kalshi_moonshot import lanes
 
     assert "binary_risk_shadow" in lanes.BUY_STEPS
+
+
+def test_integration_the_deciding_step_says_no_without_a_model_in_the_dead_range_and_on_error(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    binaryrisk._cache.update(mtime=None, data=None)
+    ctx = buychain.Ctx(s=s, spec=None)
+    got = buychain.STEPS["binary_risk"](ctx, shot())
+    assert not got.ok and "no model" in got.why  # unlike the shadow step, a missing model is a no
+    monkeypatch.setattr(binaryrisk, "admits", lambda *a, **k: (True, "binary risk +0.30/$1 by hold"))
+    assert buychain.STEPS["binary_risk"](ctx, shot()).ok
+    monkeypatch.setattr(binaryrisk, "admits", lambda *a, **k: (False, "binary risk: ask 0.50 is not a bet"))
+    assert not buychain.STEPS["binary_risk"](ctx, shot(ask=0.50)).ok
+    monkeypatch.setattr(binaryrisk, "admits", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    got = buychain.STEPS["binary_risk"](ctx, shot())
+    assert not got.ok and "unreadable" in got.why  # a deciding step that fails does not buy
