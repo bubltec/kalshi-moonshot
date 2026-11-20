@@ -1,0 +1,13 @@
+722 settled bets with readings
+--- price range over 90 s
+low (<= 0.18)      n  270 | held  -11.4% | as sold  -10.5% | win 69%
+mid                n  215 | held  -13.9% | as sold   -8.9% | win 63%
+high (> 0.26)      n  237 | held  -10.7% | as sold   -6.3% | win 68%
+--- straightness of the last 90 s (|move|/range)
+low (<= 0.45)      n  242 | held  -14.5% | as sold  -11.1% | win 65%
+mid                n  242 | held  -17.3% | as sold  -11.5% | win 63%
+high (> 0.75)      n  238 | held   -3.8% | as sold   -3.3% | win 74%
+--- quote updates in 60 s
+low (<= 55.00)     n  302 | held  -11.2% | as sold   -8.3% | win 68%
+mid                n  246 | held  -14.2% | as sold  -10.2% | win 65%
+high (> 57.00)     n  174 | held   -9.8% | as sold   -7.0% | win 69%
