@@ -1,0 +1,58 @@
+20809 settled windows, 829 live commodity bets
+278231 training sides (93870 commodity), 432 of 829 live bets could be read
+171 test hours
+
+=== A. the live commodity bets, scored at the moment they were made (walk-forward; what actually happened = the lane's own exit, fee on both legs)
+
+-- bar: top 5% of the hour's training sides (425 bets inside the test hours)
+  all live bets          n  425 win 0.83 staked $   4003 net $    -187 (-0.047 per $1) | held to settlement $    -137
+  kept (would buy)       n   29 win 0.69 staked $    271 net $     -40 (-0.147 per $1) | held to settlement $     -50
+  vetoed (would not buy) n  396 win 0.84 staked $   3732 net $    -147 (-0.040 per $1) | held to settlement $     -87
+  vetoed bets that LOST (the veto beat what happened): 90 worth $-593; vetoed bets that WON (the veto lost to it): 306 worth $+446
+  by lane (kept | vetoed): net $ per $1 staked
+    commodity_energy       n   2 $     -8 (-0.39) | n  38 $    -48 (-0.13)
+    commodity_industrial   n   2 $    -18 (-0.91) | n  98 $   -146 (-0.16)
+    commodity_multiscale   n   3 $     -2 (-0.26) | n  20 $    -17 (-0.24)
+    commodity_natgas       n   5 $     +0 (+0.01) | n  53 $    +37 (+0.07)
+    commodity_precious     n  11 $    -10 (-0.09) | n 104 $     -2 (-0.00)
+    commodity_wti          n   6 $     -3 (-0.04) | n  83 $    +30 (+0.04)
+  cushion          mid : all n   14 $    +20 | vetoed n   11 $    +25
+  cushion          high: all n  411 $   -207 | vetoed n  385 $   -172
+  path efficiency  low : all n  152 $   -154 | vetoed n  139 $   -136
+  path efficiency  mid : all n  132 $    -74 | vetoed n  122 $    -49
+  path efficiency  high: all n  141 $    +41 | vetoed n  135 $    +38
+  speed-up         low : all n  150 $    -32 | vetoed n  143 $    -23
+  speed-up         mid : all n  139 $   -115 | vetoed n  125 $    -81
+  speed-up         high: all n  136 $    -41 | vetoed n  128 $    -43
+
+-- bar: top 10% of the hour's training sides (425 bets inside the test hours)
+  all live bets          n  425 win 0.83 staked $   4003 net $    -187 (-0.047 per $1) | held to settlement $    -137
+  kept (would buy)       n   69 win 0.78 staked $    650 net $     -57 (-0.087 per $1) | held to settlement $     -67
+  vetoed (would not buy) n  356 win 0.84 staked $   3354 net $    -131 (-0.039 per $1) | held to settlement $     -70
+  vetoed bets that LOST (the veto beat what happened): 82 worth $-533; vetoed bets that WON (the veto lost to it): 274 worth $+403
+  by lane (kept | vetoed): net $ per $1 staked
+    commodity_energy       n   9 $     -4 (-0.04) | n  31 $    -52 (-0.17)
+    commodity_industrial   n  12 $    -17 (-0.15) | n  88 $   -147 (-0.17)
+    commodity_multiscale   n   6 $     -1 (-0.05) | n  17 $    -18 (-0.29)
+    commodity_natgas       n   9 $     -8 (-0.08) | n  49 $    +45 (+0.10)
+    commodity_precious     n  20 $    -27 (-0.13) | n  95 $    +14 (+0.02)
+    commodity_wti          n  13 $     -0 (-0.00) | n  76 $    +28 (+0.04)
+  cushion          mid : all n   14 $    +20 | vetoed n    9 $    +32
+  cushion          high: all n  411 $   -207 | vetoed n  347 $   -163
+  path efficiency  low : all n  152 $   -154 | vetoed n  130 $   -128
+  path efficiency  mid : all n  132 $    -74 | vetoed n  107 $    -42
+  path efficiency  high: all n  141 $    +41 | vetoed n  119 $    +39
+  speed-up         low : all n  150 $    -32 | vetoed n  124 $    -26
+  speed-up         mid : all n  139 $   -115 | vetoed n  111 $    -82
+  speed-up         high: all n  136 $    -41 | vetoed n  121 $    -22
+
+=== B. the commodity markets the model would have picked (held to settlement; lift over a random commodity point in the same ask band)
+  top  5% first half: n   376 net -0.024 lift +0.037+-0.043
+  top  5% second half: n   873 net -0.031 lift +0.015+-0.025
+  top  5% picks by ask band: 0.20-0.35: 11, 0.35-0.45: 117, 0.55-0.65: 482, 0.65-0.80: 471, 0.80-1.00: 168
+  top 10% first half: n   671 net -0.030 lift +0.029+-0.031
+  top 10% second half: n  1424 net -0.052 lift -0.007+-0.020
+  top 10% picks by ask band: 0.20-0.35: 22, 0.35-0.45: 210, 0.55-0.65: 784, 0.65-0.80: 710, 0.80-1.00: 369
+done in 286s
+
+READING (2026-11-20): a commodity-only fit (hourly, trailing 72 h, perp reference) is a little better than the pooled fit but not enough. Held-to-settlement picks: top 5% net -0.024 / -0.031 with lift +0.037 +- 0.043 and +0.015 +- 0.025 on the two halves; top 10% -0.030 / -0.052, lift +0.029 / -0.007. Lifts are inside their error, nets negative, picks mostly 0.55-0.80. On the 425 real lane bets the 29 it keeps lose (-0.147 per $1) against -0.040 for those vetoed. Nothing clears rule 4. (Pooled fit: top 5% net -0.080 / -0.056, lift -0.022 / -0.004.)
