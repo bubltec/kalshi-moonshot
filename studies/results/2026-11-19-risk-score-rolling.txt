@@ -1,0 +1,41 @@
+
+117776 readings
+=== trailing 1 h, refit hourly, 49 test hours
+  score  -50.0.. -10.0  n  15814  YES minus NO vs the hour   +0.4c
+  score  -10.0..  -5.0  n   8484  YES minus NO vs the hour   +2.6c
+  score   -5.0..  -2.0  n   7845  YES minus NO vs the hour   +1.9c
+  score   -2.0..  +2.0  n  10009  YES minus NO vs the hour   +2.5c
+  score   +2.0..  +5.0  n   7352  YES minus NO vs the hour   +1.3c
+  score   +5.0.. +10.0  n   8795  YES minus NO vs the hour   -2.3c
+  score  +10.0.. +50.0  n  20233  YES minus NO vs the hour   -2.9c
+  rule +-5: n 53326 win 0.52 net -0.087
+=== trailing 3 h, refit hourly, 50 test hours
+  score  -50.0.. -10.0  n  10565  YES minus NO vs the hour   -2.6c
+  score  -10.0..  -5.0  n   9146  YES minus NO vs the hour   -1.9c
+  score   -5.0..  -2.0  n   9723  YES minus NO vs the hour   +2.1c
+  score   -2.0..  +2.0  n  15330  YES minus NO vs the hour   +1.4c
+  score   +2.0..  +5.0  n   9934  YES minus NO vs the hour   +1.6c
+  score   +5.0.. +10.0  n  11229  YES minus NO vs the hour   +0.6c
+  score  +10.0.. +50.0  n  13453  YES minus NO vs the hour   -1.5c
+  rule +-5: n 44393 win 0.50 net -0.092
+=== trailing 6 h, refit hourly, 50 test hours
+  score  -50.0.. -10.0  n   5764  YES minus NO vs the hour   -8.6c
+  score  -10.0..  -5.0  n  10046  YES minus NO vs the hour   -1.7c
+  score   -5.0..  -2.0  n  11409  YES minus NO vs the hour   +4.7c
+  score   -2.0..  +2.0  n  22637  YES minus NO vs the hour   +4.3c
+  score   +2.0..  +5.0  n  11534  YES minus NO vs the hour   -3.3c
+  score   +5.0.. +10.0  n  10975  YES minus NO vs the hour   -5.7c
+  score  +10.0.. +50.0  n   7015  YES minus NO vs the hour   +2.2c
+  rule +-5: n 33800 win 0.51 net -0.048
+=== trailing 12 h, refit hourly, 50 test hours
+  score  -50.0.. -10.0  n   2521  YES minus NO vs the hour  -10.5c
+  score  -10.0..  -5.0  n   7949  YES minus NO vs the hour   -0.7c
+  score   -5.0..  -2.0  n  12410  YES minus NO vs the hour   -0.5c
+  score   -2.0..  +2.0  n  29032  YES minus NO vs the hour   +1.5c
+  score   +2.0..  +5.0  n  12862  YES minus NO vs the hour   -1.3c
+  score   +5.0.. +10.0  n   9655  YES minus NO vs the hour   -1.1c
+  score  +10.0.. +50.0  n   4951  YES minus NO vs the hour   +4.4c
+  rule +-5: n 25076 win 0.48 net -0.080
+
+
+
