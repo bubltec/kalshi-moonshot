@@ -1,0 +1,93 @@
+20809 settled windows on 18 price feeds
+48645 early cheap-side readings from 11397 markets, 148s
+
+ALL readings: n 48645 hit 0.47 | hold -0.038 rest+100 -0.121 timed25 -0.130 decay+100 -0.156
+UNIVARIATE: thirds of each quote reading over all readings (correlated within a market)
+  drop           low  (cuts +0.25/+0.40): n 16213 hit 0.47 | hold -0.043 rest+100 -0.101 timed25 -0.122 decay+100 -0.146
+  drop           mid  (cuts +0.25/+0.40): n 16199 hit 0.46 | hold -0.055 rest+100 -0.121 timed25 -0.132 decay+100 -0.151
+  drop           high (cuts +0.25/+0.40): n 16233 hit 0.47 | hold -0.016 rest+100 -0.140 timed25 -0.135 decay+100 -0.171
+  from_open      low  (cuts +0.16/+0.33): n 16199 hit 0.47 | hold -0.053 rest+100 -0.106 timed25 -0.121 decay+100 -0.148
+  from_open      mid  (cuts +0.16/+0.33): n 16195 hit 0.47 | hold -0.040 rest+100 -0.109 timed25 -0.125 decay+100 -0.145
+  from_open      high (cuts +0.16/+0.33): n 16251 hit 0.46 | hold -0.021 rest+100 -0.146 timed25 -0.143 decay+100 -0.177
+  bounce         low  (cuts +0.13/+0.33): n 16210 hit 0.47 | hold -0.018 rest+100 -0.124 timed25 -0.128 decay+100 -0.156
+  bounce         mid  (cuts +0.13/+0.33): n 16208 hit 0.46 | hold -0.063 rest+100 -0.137 timed25 -0.132 decay+100 -0.163
+  bounce         high (cuts +0.13/+0.33): n 16227 hit 0.47 | hold -0.033 rest+100 -0.101 timed25 -0.128 decay+100 -0.149
+  speed30        low  (cuts -0.27/+0.00): n 16205 hit 0.47 | hold -0.028 rest+100 -0.113 timed25 -0.118 decay+100 -0.148
+  speed30        mid  (cuts -0.27/+0.00): n 15070 hit 0.46 | hold -0.046 rest+100 -0.133 timed25 -0.132 decay+100 -0.161
+  speed30        high (cuts -0.27/+0.00): n 17370 hit 0.47 | hold -0.040 rest+100 -0.117 timed25 -0.138 decay+100 -0.160
+  trough_recent  low  (cuts +0.08/+0.29): n 16215 hit 0.48 | hold -0.001 rest+100 -0.103 timed25 -0.118 decay+100 -0.139
+  trough_recent  mid  (cuts +0.08/+0.29): n 16215 hit 0.46 | hold -0.051 rest+100 -0.130 timed25 -0.137 decay+100 -0.167
+  trough_recent  high (cuts +0.08/+0.29): n 16215 hit 0.46 | hold -0.063 rest+100 -0.129 timed25 -0.134 decay+100 -0.163
+  rng_rel        low  (cuts +0.42/+0.58): n 16210 hit 0.46 | hold -0.054 rest+100 -0.109 timed25 -0.124 decay+100 -0.151
+  rng_rel        mid  (cuts +0.42/+0.58): n 16214 hit 0.46 | hold -0.064 rest+100 -0.128 timed25 -0.127 decay+100 -0.158
+  rng_rel        high (cuts +0.42/+0.58): n 16221 hit 0.47 | hold +0.004 rest+100 -0.124 timed25 -0.138 decay+100 -0.160
+  chop           low  (cuts +3.60/+5.40): n 16215 hit 0.45 | hold -0.047 rest+100 -0.147 timed25 -0.145 decay+100 -0.183
+  chop           mid  (cuts +3.60/+5.40): n 16209 hit 0.47 | hold -0.043 rest+100 -0.121 timed25 -0.130 decay+100 -0.156
+  chop           high (cuts +3.60/+5.40): n 16221 hit 0.48 | hold -0.024 rest+100 -0.094 timed25 -0.114 decay+100 -0.130
+
+WALK-FORWARD: 39030 scored readings; a bet is the first reading of a market side over the bar
+  last weights: logit_ask -0.11 ask_off -0.16 cz -0.05 z_tm +0.10 left +0.12 eff5 -0.01 vr +0.05 amp15 +0.09 pos15 -0.00 bounce_with -0.03 bounce_against -0.06 h_move -0.09 h_pos +0.26 h_strike -0.30 ry1 -0.00 ry3 +0.05 drop -0.40 from_open +0.32 bounce +0.01 speed30 -0.06 trough_recent -0.03 rng_rel +0.38 chop +0.11
+  first reading, no signal   half 1: n  5546 hit 0.48 | hold -0.045 rest+100 -0.090 timed25 -0.089 decay+100 -0.122
+  first reading, no signal   half 2: n  5178 hit 0.47 | hold -0.028 rest+100 -0.099 timed25 -0.118 decay+100 -0.130
+  top 10% by predicted hit   half 1: n  1030 hit 0.47 | hold -0.063 rest+100 -0.102 timed25 -0.075 decay+100 -0.116
+  top 10% by predicted hit   half 2: n   956 hit 0.53 | hold +0.117 rest+100 +0.002 timed25 -0.121 decay+100 -0.087
+  top 25% by predicted hit   half 1: n  2077 hit 0.47 | hold -0.077 rest+100 -0.109 timed25 -0.096 decay+100 -0.131
+  top 25% by predicted hit   half 2: n  1948 hit 0.50 | hold +0.059 rest+100 -0.058 timed25 -0.118 decay+100 -0.122
+  by predicted-hit decile (all scored readings):
+    decile 0: n  3903 hit 0.46 | hold -0.018 rest+100 -0.122 timed25 -0.146 decay+100 -0.176
+    decile 1: n  3903 hit 0.46 | hold -0.042 rest+100 -0.134 timed25 -0.137 decay+100 -0.160
+    decile 2: n  3903 hit 0.47 | hold -0.072 rest+100 -0.121 timed25 -0.125 decay+100 -0.148
+    decile 3: n  3903 hit 0.46 | hold -0.058 rest+100 -0.136 timed25 -0.134 decay+100 -0.166
+    decile 4: n  3903 hit 0.45 | hold -0.054 rest+100 -0.142 timed25 -0.139 decay+100 -0.166
+    decile 5: n  3903 hit 0.47 | hold -0.013 rest+100 -0.117 timed25 -0.129 decay+100 -0.156
+    decile 6: n  3903 hit 0.45 | hold -0.070 rest+100 -0.142 timed25 -0.126 decay+100 -0.164
+    decile 7: n  3903 hit 0.47 | hold -0.043 rest+100 -0.118 timed25 -0.128 decay+100 -0.173
+    decile 8: n  3903 hit 0.48 | hold -0.020 rest+100 -0.096 timed25 -0.133 decay+100 -0.142
+    decile 9: n  3903 hit 0.51 | hold +0.048 rest+100 -0.043 timed25 -0.088 decay+100 -0.081
+  top 10% by quote-wave third (both halves pooled):
+    drop           low : n   826 hit 0.47 | hold -0.011 rest+100 -0.102 timed25 -0.116 decay+100 -0.134
+    drop           mid : n   719 hit 0.49 | hold -0.000 rest+100 -0.064 timed25 -0.092 decay+100 -0.109
+    drop           high: n   441 hit 0.56 | hold +0.127 rest+100 +0.061 timed25 -0.072 decay+100 -0.029
+    from_open      low : n   792 hit 0.47 | hold -0.005 rest+100 -0.098 timed25 -0.106 decay+100 -0.129
+    from_open      mid : n   817 hit 0.50 | hold -0.024 rest+100 -0.061 timed25 -0.116 decay+100 -0.123
+    from_open      high: n   377 hit 0.57 | hold +0.187 rest+100 +0.064 timed25 -0.040 decay+100 +0.000
+    bounce         low : n   826 hit 0.52 | hold +0.029 rest+100 -0.025 timed25 -0.098 decay+100 -0.080
+    bounce         mid : n   534 hit 0.50 | hold -0.007 rest+100 -0.059 timed25 -0.091 decay+100 -0.124
+    bounce         high: n   626 hit 0.48 | hold +0.042 rest+100 -0.080 timed25 -0.101 decay+100 -0.112
+    speed30        low : n  1084 hit 0.50 | hold -0.001 rest+100 -0.064 timed25 -0.117 decay+100 -0.116
+    speed30        mid : n   402 hit 0.50 | hold +0.036 rest+100 -0.042 timed25 -0.041 decay+100 -0.048
+    speed30        high: n   500 hit 0.50 | hold +0.066 rest+100 -0.033 timed25 -0.099 decay+100 -0.116
+    trough_recent  low : n   970 hit 0.51 | hold +0.046 rest+100 -0.021 timed25 -0.093 decay+100 -0.076
+    trough_recent  mid : n   510 hit 0.44 | hold -0.053 rest+100 -0.154 timed25 -0.125 decay+100 -0.178
+    trough_recent  high: n   506 hit 0.52 | hold +0.058 rest+100 -0.008 timed25 -0.077 decay+100 -0.075
+    rng_rel        low : n   969 hit 0.46 | hold -0.029 rest+100 -0.115 timed25 -0.118 decay+100 -0.163
+    rng_rel        mid : n   570 hit 0.54 | hold +0.040 rest+100 +0.014 timed25 -0.041 decay+100 -0.019
+    rng_rel        high: n   447 hit 0.53 | hold +0.118 rest+100 +0.002 timed25 -0.123 decay+100 -0.076
+    chop           low : n   626 hit 0.51 | hold +0.016 rest+100 -0.029 timed25 -0.091 decay+100 -0.069
+    chop           mid : n   614 hit 0.49 | hold +0.064 rest+100 -0.061 timed25 -0.092 decay+100 -0.087
+    chop           high: n   746 hit 0.49 | hold -0.003 rest+100 -0.063 timed25 -0.107 decay+100 -0.141
+  top 25% by quote-wave third (both halves pooled):
+    drop           low : n  1583 hit 0.46 | hold -0.045 rest+100 -0.113 timed25 -0.118 decay+100 -0.153
+    drop           mid : n  1491 hit 0.47 | hold -0.030 rest+100 -0.094 timed25 -0.131 decay+100 -0.143
+    drop           high: n   951 hit 0.52 | hold +0.075 rest+100 -0.020 timed25 -0.051 decay+100 -0.057
+    from_open      low : n  1512 hit 0.47 | hold -0.004 rest+100 -0.088 timed25 -0.108 decay+100 -0.132
+    from_open      mid : n  1643 hit 0.47 | hold -0.080 rest+100 -0.111 timed25 -0.131 decay+100 -0.151
+    from_open      high: n   870 hit 0.52 | hold +0.104 rest+100 -0.027 timed25 -0.058 decay+100 -0.070
+    bounce         low : n  1718 hit 0.48 | hold -0.015 rest+100 -0.085 timed25 -0.106 decay+100 -0.120
+    bounce         mid : n  1156 hit 0.48 | hold -0.040 rest+100 -0.091 timed25 -0.114 decay+100 -0.140
+    bounce         high: n  1151 hit 0.48 | hold +0.024 rest+100 -0.077 timed25 -0.101 decay+100 -0.124
+    speed30        low : n  2311 hit 0.48 | hold -0.016 rest+100 -0.093 timed25 -0.116 decay+100 -0.138
+    speed30        mid : n   800 hit 0.49 | hold -0.038 rest+100 -0.077 timed25 -0.084 decay+100 -0.101
+    speed30        high: n   914 hit 0.48 | hold +0.024 rest+100 -0.070 timed25 -0.104 decay+100 -0.119
+    trough_recent  low : n  1953 hit 0.48 | hold -0.001 rest+100 -0.082 timed25 -0.109 decay+100 -0.118
+    trough_recent  mid : n  1147 hit 0.46 | hold -0.067 rest+100 -0.129 timed25 -0.123 decay+100 -0.169
+    trough_recent  high: n   925 hit 0.51 | hold +0.036 rest+100 -0.033 timed25 -0.083 decay+100 -0.093
+    rng_rel        low : n  2032 hit 0.44 | hold -0.088 rest+100 -0.149 timed25 -0.143 decay+100 -0.191
+    rng_rel        mid : n  1165 hit 0.51 | hold +0.027 rest+100 -0.026 timed25 -0.064 decay+100 -0.069
+    rng_rel        high: n   828 hit 0.53 | hold +0.124 rest+100 -0.008 timed25 -0.077 decay+100 -0.050
+    chop           low : n  1569 hit 0.48 | hold -0.008 rest+100 -0.089 timed25 -0.120 decay+100 -0.152
+    chop           mid : n  1253 hit 0.48 | hold +0.009 rest+100 -0.079 timed25 -0.094 decay+100 -0.104
+    chop           high: n  1203 hit 0.48 | hold -0.038 rest+100 -0.084 timed25 -0.103 decay+100 -0.117
+done in 183s
+
+READING (2026-11-20): the quote's own wave does not make the +100% swing pay. Univariate: the bigger the side's fall from its open level (from_open top third) the better held-to-settlement does (-0.021 against -0.053 low) and the worse the +100% rest does (-0.146 against -0.106): a deeper dip is a market that keeps going, not one that bounces. Walk-forward (10-minute-free, 39,030 scored readings, first reading over the bar, test from 3 days after the start): top 10% hit 0.47 then 0.53, net of the +100% rest -0.102 then +0.002, held -0.063 then +0.117; top 25% rest -0.109 then -0.058. Not positive in both halves under any exit. The only stable positive reading is the held-to-settlement net of the largest drops (top 10% by drop third: hold +0.127 on n 441, from_open high +0.187 on n 377), which is a settlement bet, not the quick swing, and is positive only in the second half; a lead for the binary risk model (a side that has fallen far from its open), not a lane. No lane built.
