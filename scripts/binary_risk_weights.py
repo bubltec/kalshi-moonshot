@@ -1,10 +1,13 @@
 """Print the binary risk model's fitted weights (user, 2026-11-20: "what are the weights here?"). The same fit the hourly refit makes (binaryrisk.build_rows over the last 24 h of settled markets, coins and commodities, S&P out, then binaryrisk.fit), once, on the runner's newest backup. Prints, for each of the five exits, the weight on every standardised reading (a weight is the change in predicted net per $1 for a one standard deviation move of that reading; the constant is the mean), each reading's mean and standard deviation, and the bars. Run: SPOT=0 scripts/cloud_job.sh scripts/binary_risk_weights.py"""
 import time
-from kalshi_moonshot import binaryrisk as br, config
+from kalshi_moonshot import binaryrisk as br, config, db
 
 s = config.reload()
 t0 = time.time()
-rows = br.build_rows(s, max(r for r in [time.time()]))
+st = db.connect(s.db_path, "main", shared=True)
+newest = float(st.execute("SELECT MAX(close_ts) FROM windows WHERE result IN ('yes','no')").fetchone()[0])  # the backup's own newest settled market, not the wall clock: the backup is up to a day old and the last 24 h before 'now' would be mostly empty
+print(f'newest settled market in the backup: {time.strftime("%m-%d %H:%MZ", time.gmtime(newest))}')
+rows = br.build_rows(s, newest)
 print(f"{len(rows)} training sides, {time.time() - t0:.0f}s")
 m = br.fit(rows)
 print(f"bars {m['cuts']}\n")
