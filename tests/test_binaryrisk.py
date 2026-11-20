@@ -334,3 +334,14 @@ def test_unit_the_position_readings_are_blended_over_1_3_and_5_minutes():
     assert f is not None
     assert f["pos1"] < 1.0 and f["hp1"] < 1.0  # the spike alone does not put the position at the top of the range
     assert f["pos5"] <= f["pos3"] <= f["pos1"] and f["hp5"] <= f["hp3"] <= f["hp1"]
+
+
+def test_unit_the_trend_is_the_direction_of_the_averages_signed_by_side():
+    T, V = walk(4000, drift=0.00003)  # a steady rise
+    f = binaryrisk.readings(T, V, T[-1], V[-1] * 0.99, 600.0)
+    assert f is not None and f["tr13"] > 0 and f["tr35"] > 0  # the shorter average is above the longer one
+    yes = binaryrisk.side_vector(f, "yes", 0.60, 0.0, 0.0)
+    no = binaryrisk.side_vector(f, "no", 0.40, 0.0, 0.0)
+    for nm in ("tr13", "tr35"):
+        i = binaryrisk.NAMES.index(nm)
+        assert yes[i] > 0 > no[i]  # a rising spot helps YES and hurts NO
