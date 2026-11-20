@@ -268,7 +268,8 @@ class Worker:
                     self._warm_store = store
                     if first:
                         store.preload_decisions()
-                    store.open_position_tickers(self.s.env)
+                    store.refresh_held(self.s.env)
+                    store.reserve_ids()
                     if first and self.quant is not None and hasattr(self.quant, "warm"):
                         log.info("memory fill: price bars built for %d instruments", self.quant.warm(self.s))
                     clients = {id(c): c for c in (self._venue(name) for name in lane_specs(self.s))} or {id(self.client): self.client}

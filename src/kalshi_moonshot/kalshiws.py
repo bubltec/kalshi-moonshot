@@ -163,6 +163,8 @@ class KalshiStream:
         self.on_event = on_event
         self.on_feed = on_feed  # called with True when the lifecycle subscription is confirmed on a connection and with False when that connection ends: the market list is only kept from the stream between the two
         self.index_feed, self.fills = index_feed, fills
+        if books:
+            books_mod.books.enabled = True  # KalshiClient.orderbook reads the stream's copy from here on, never REST. Nothing ever set this flag in the running bot (only tests did), so every order-book read was a GET (found 2026-11-19: "why does it need to do a get for market just pull it off the socket")
         self.books = books  # also subscribe to orderbook_delta for the same markets (the order book kept in ticks.books, not read over REST)
         self._stray: dict[int, tuple[Any, str]] = {}  # seq -> (type, ticker) of numbered messages on the book subscription that were not applied as book messages
         self._book_seq: dict[int, int] = {}  # orderbook_delta sid -> the last sequence number seen; a gap asks for fresh snapshots

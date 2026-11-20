@@ -632,7 +632,10 @@ class CommodityPricer:
             ask = float(getattr(shot, "ask", 0.0) or 0.0)
             p_yes = 1.0 - ask if getattr(shot, "side", "yes") == "no" else ask
             return min(1.0, max(0.0, p_yes)), "price band"
-        markets = client.event_markets(shot.event_ticker)
+        markets = client.event_markets_memory(shot.event_ticker) if hasattr(client, "event_markets_memory") else None  # the stream's listing of the ladder: the model prices the whole event, and a request for it inside a buy was a GET /markets (2026-11-19)
+        if markets is None:
+            markets = client.event_markets(shot.event_ticker)
+        markets = [dict(m) for m in markets]
         for m in markets:
             m.setdefault("series_ticker", shot.series)
         priced = self.price_markets(markets, s)

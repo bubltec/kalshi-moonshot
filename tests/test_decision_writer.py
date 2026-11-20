@@ -249,3 +249,102 @@ def test_unit_off_a_row_with_a_job_is_still_written_whole(tmp_path, monkeypatch)
     s, store = mk(tmp_path, monkeypatch)
     store.add_decision(ticker="P1", action="pass", mode="observe", lane="x", _factors_job=lambda ts: '{"spread": 0.04}')
     assert Store(s.db_path).db.execute("SELECT factors FROM decisions WHERE ticker='P1'").fetchone()["factors"] == '{"spread": 0.04}'
+
+
+def _memory_on():
+    store_mod.queue_decisions()
+    store_mod.serve_from_memory()
+
+
+def _memory_off():
+    store_mod.flush_decisions(3.0)
+    store_mod._BACKGROUND["on"] = False
+    store_mod._BOOK.clear()
+    store_mod._ID_POOL.clear()
+    store_mod._PENDING_BETS.clear()
+    store_mod._HELD.clear()
+    store_mod._HELD_AT.clear()
+
+
+def test_unit_a_bet_with_a_reserved_id_is_in_the_book_before_it_is_written(tmp_path, monkeypatch):
+    """2026-11-19: the bet joins the in-memory book at once and is written behind; the book is never rebuilt from the table for it."""
+    s, store = mk(tmp_path, monkeypatch)
+    _memory_on()
+    try:
+        store.rebuild_book()
+        store_mod._ID_POOL.extend([9001, 9002])
+        gate = __import__("threading").Event()
+        store_mod._BEHIND_Q.put((str(store.path), tuple(store.exclude_versions), lambda st: gate.wait(5.0)))  # holds the writer, so the row cannot have been written yet
+        rid = store.add_decision(ticker="M1", action="bet", mode="trade", lane="x", ask=0.5, side="yes", stake_usd=1.0, contracts=2.0, ts=time.time())
+        assert rid == 9001
+        assert store.holds_sized_bet("M1", "x")  # answered from memory
+        assert Store(s.db_path).db.execute("SELECT COUNT(*) FROM decisions WHERE ticker='M1'").fetchone()[0] == 0  # not written yet
+        store.rebuild_book()  # a rebuild from the table does not drop it
+        assert store.holds_sized_bet("M1", "x")
+        gate.set()
+        assert store_mod.flush_decisions(5.0)
+        got = Store(s.db_path).db.execute("SELECT id, ticker FROM decisions WHERE ticker='M1'").fetchone()
+        assert got["id"] == 9001
+        assert store.holds_sized_bet("M1", "x")
+    finally:
+        _memory_off()
+
+
+def test_unit_a_sale_waits_for_the_bets_row_to_be_written(tmp_path, monkeypatch):
+    s, store = mk(tmp_path, monkeypatch)
+    _memory_on()
+    try:
+        store.rebuild_book()
+        store_mod._ID_POOL.append(9101)
+        store.add_decision(ticker="M2", action="bet", mode="trade", lane="x", ask=0.5, side="yes", stake_usd=1.0, contracts=2.0, ts=time.time())
+        store.mark_exited("M2", 0.8, "take", lane="x", side="yes")
+        assert store_mod.flush_decisions(5.0)
+        got = Store(s.db_path).db.execute("SELECT exit_price FROM decisions WHERE ticker='M2'").fetchone()
+        assert got["exit_price"] == 0.8
+    finally:
+        _memory_off()
+
+
+def test_unit_a_lane_version_is_written_behind(tmp_path, monkeypatch):
+    s, store = mk(tmp_path, monkeypatch)
+    _memory_on()
+    try:
+        w = Watch(store)
+        store.note_lane_version("x", "v1", {"a": "1"})
+        assert not any("lane_versions" in q for q in w.seen)
+        assert store_mod.flush_decisions(5.0)
+        assert len(Store(s.db_path).lane_versions("x")) == 1
+    finally:
+        _memory_off()
+
+
+def test_unit_the_open_position_check_reads_the_count_held_in_memory(tmp_path, monkeypatch):
+    s, store = mk(tmp_path, monkeypatch)
+    _memory_on()
+    try:
+        store.refresh_held("prod")
+        w = Watch(store)
+        store.add_order(ticker="H1", env="prod", side="buy", count=3.0, price=0.3, fee_usd=0.0, fill_count=3.0, cost_usd=1.0, order_id="o1")
+        w.seen.clear()
+        assert store.open_position_tickers("prod") == {"H1"}
+        assert w.seen == []  # no statement
+        store.add_order(ticker="H1", env="prod", side="sell", count=3.0, price=0.3, fee_usd=0.0, fill_count=3.0, cost_usd=1.0, order_id="o2")
+        assert store.open_position_tickers("prod") == set()  # sold: the lane may buy it again at once
+        store.refresh_held("prod")  # a refresh from the table agrees
+        assert store.open_position_tickers("prod") == set()
+    finally:
+        _memory_off()
+
+
+def test_unit_a_stream_with_books_turns_the_books_on_so_the_order_book_is_never_a_request():
+    from kalshi_moonshot import ticks
+    from kalshi_moonshot.kalshiws import KalshiStream
+
+    ticks.books.enabled = False
+    try:
+        KalshiStream(None, lambda e: None, books=False)
+        assert ticks.books.enabled is False
+        KalshiStream(None, lambda e: None, books=True)
+        assert ticks.books.enabled is True
+    finally:
+        ticks.books.enabled = False

@@ -6,6 +6,7 @@ retrieve similar past cases. Prices are not stored in that index.
 
 from __future__ import annotations
 
+import collections
 import json
 import logging
 import queue
@@ -398,11 +399,11 @@ def _with_snapshot(d: dict) -> dict:
 
 
 def flush_decisions(timeout: float = 5.0) -> bool:
-    """Wait until every queued decision row is written. True when the queue emptied in time."""
+    """Wait until every queued decision row (and every write-behind item, bet rows included) is written. True when the queues emptied in time."""
     end = time.monotonic() + timeout
-    while _DEC_Q.unfinished_tasks and time.monotonic() < end:
+    while (_DEC_Q.unfinished_tasks or _BEHIND_Q.unfinished_tasks) and time.monotonic() < end:
         time.sleep(0.01)
-    return not _DEC_Q.unfinished_tasks
+    return not (_DEC_Q.unfinished_tasks or _BEHIND_Q.unfinished_tasks)
 
 
 def _decision_writer() -> None:
@@ -440,6 +441,19 @@ def _decision_writer() -> None:
 _BEHIND_Q: "queue.Queue[tuple[str, tuple, Any]]" = queue.Queue()
 _BEHIND_STARTED = [False]
 
+# ---- memory-first writes (2026-11-19, user: "why do we have anything in SQL? It should be in memory") ----
+# A bet used to wait for its own INSERT (2 to 40 ms) and then for two SELECTs that rebuilt the bet book (10 to 100 ms, 250 to 460 ms behind a lock). Now the row gets an id from a pool reserved by a background job, joins the in-memory book at once, and is written behind. Until the write lands the row stays in _PENDING_BETS, so a rebuild of the book from the table does not drop it.
+_ID_POOL: "collections.deque[int]" = collections.deque()
+_ID_LOCK = threading.Lock()
+ID_POOL_LOW = 24  # below this many reserved ids a refill is queued
+ID_POOL_SIZE = 64
+_PENDING_BETS: dict[str, dict[int, dict[str, Any]]] = {}
+_PENDING_LOCK = threading.Lock()
+_DECISION_COLS: dict[str, list[str]] = {}
+_HELD: dict[tuple[str, str], dict[str, float]] = {}  # (store path, env) -> ticker -> contracts held by the bot's own orders; the buy decision's open-position check reads it
+_HELD_AT: dict[tuple[str, str, str], float] = {}  # when this process last changed a ticker's count: a refresh from the table does not overwrite a newer change
+_HELD_LOCK = threading.Lock()
+
 
 def _behind_writer() -> None:
     """Runs the work handed to Store.behind, one item at a time, each with a Store of this thread's own."""
@@ -454,6 +468,8 @@ def _behind_writer() -> None:
         except Exception:
             _log.exception("write-behind: one item failed")
             stores.clear()
+        finally:
+            _BEHIND_Q.task_done()
 
 
 def _note_decision(path: str, ticker: str, lane: Any, ts: float) -> None:
@@ -653,6 +669,10 @@ class Store:
         # two reads, each on its own partial index (idx_decisions_bets_open, idx_decisions_bets_exit). As one statement with an OR it scanned the whole table: 155,127 rows for 16 on the host at 11:36 on 2026-11-17, 64 ms idle and about 600 ms on a busy bet
         rows = list(self.db.execute("SELECT * FROM decisions WHERE action='bet' AND outcome IS NULL").fetchall())
         rows += self.db.execute("SELECT * FROM decisions WHERE action='bet' AND exit_ts IS NOT NULL AND exit_ts > ? AND outcome IS NOT NULL", (time.time() - BOOK_KEEP_EXITS,)).fetchall()
+        with _PENDING_LOCK:
+            waiting = list(_PENDING_BETS.get(p, {}).values())
+        have = {r["id"] for r in rows}
+        rows += [r for r in waiting if r["id"] not in have]  # a bet whose row is still being written behind is in the book already: the table does not have it yet
         rows.sort(key=lambda r: (r["ts"], r["id"]))
         with _BOOK_LOCK:
             cur = _BOOK.get(p)
@@ -842,7 +862,7 @@ class Store:
         if _DEC_BG["on"] and d.get("action") != "bet":
             _DEC_Q.put((str(self.path), self.exclude_versions, d))  # written by the decision-writer thread: the evaluation does not wait on the database
             return 0
-        if _DEC_BG["on"] and d.get("action") == "bet" and (d.get("_factors_job") is not None or d.get("_context_score")):
+        if _DEC_BG["on"] and d.get("action") == "bet":
             return self._add_bet_now(d)
         _with_snapshot(d)  # a bet's row, written here and now: its snapshot is taken after the judgement and the order, not before
         cols = ",".join(d)
@@ -854,16 +874,23 @@ class Store:
         return int(cur.lastrowid or 0)
 
     def _add_bet_now(self, d: dict[str, Any]) -> int:
-        """A bet's row is written at once (the watcher and the books need it the moment the order is placed), WITHOUT its entry snapshot: the snapshot is five reads of the tape, so it is taken by the write-behind thread as of the row's own time and put on the row with an UPDATE (2026-11-19: those reads were inside the buy decision, 45 of them in an hour)."""
+        """A bet's row is needed the moment the order is placed (the watcher and the books read it), WITHOUT its entry snapshot: the snapshot is five reads of the tape, so it is taken by the write-behind thread as of the row's own time and put on the row with an UPDATE (2026-11-19: those reads were inside the buy decision, 45 of them in an hour).
+        With an id from the reserved pool the row joins the bet book in memory at once and the INSERT is written behind (2026-11-19, user: "why do we have anything in SQL? It should be in memory"). Without one (SQLite, or the pool ran dry) the INSERT is made here, as before."""
         extra = {k: d.pop(k) for k in ("_factors_job", "_context_score") if k in d}
+        base = dict(d)
+        pre = self._reserved_id()
+        if pre is not None and _BACKGROUND["on"]:
+            return self._add_bet_memory(pre, base, extra)
         cols = ",".join(d)
         marks = ",".join("?" for _ in d)
         cur = self.db.execute(f"INSERT INTO decisions ({cols}) VALUES ({marks})", list(d.values()))
         self.db.commit()
         row_id = int(cur.lastrowid or 0)
         self.touch("bets")
-        base = dict(d)
+        self._fill_later(row_id, base, extra)
+        return row_id
 
+    def _fill_later(self, row_id: int, base: dict[str, Any], extra: dict[str, Any]) -> None:
         def fill(st: "Store") -> None:
             full = _with_snapshot(dict(base, **extra))
             changed = {k: v for k, v in full.items() if k not in base or base[k] != v}
@@ -874,7 +901,99 @@ class Store:
 
         if not self.behind(fill):
             fill(self)
+
+    def _add_bet_memory(self, row_id: int, base: dict[str, Any], extra: dict[str, Any]) -> int:
+        p = str(self.path)
+        cols = self._decision_columns()
+        row = {c: None for c in cols}
+        row.update(base)
+        row["id"] = row_id
+        with _PENDING_LOCK:
+            _PENDING_BETS.setdefault(p, {})[row_id] = row
+        with _BOOK_LOCK:
+            cur = _BOOK.get(p)
+            if cur is not None:
+                _BOOK[p] = (cur[0], sorted([*cur[1], row], key=lambda r: (r["ts"], r["id"])))
+        with _MEMO_LOCK:
+            _GEN[(p, "bets")] = _GEN.get((p, "bets"), 0) + 1
+        if cur is None:
+            self.rebuild_book()  # no list yet: built now, with the pending row in it
+
+        def write(st: "Store") -> None:
+            cols_w = ",".join(["id", *base])
+            marks = ",".join("?" for _ in range(len(base) + 1))
+            for attempt in range(5):
+                try:
+                    st.db.execute(f"INSERT INTO decisions ({cols_w}) VALUES ({marks})", [row_id, *base.values()])
+                    st.db.commit()
+                    break
+                except Exception:
+                    _log.exception("bet row %s not written (try %d of 5)", row_id, attempt + 1)
+                    try:
+                        st.db.rollback()
+                    except Exception:
+                        pass
+                    time.sleep(1.0)
+            else:
+                _log.error("bet row %s for %s was NOT stored after 5 tries: the order exists, the decision row does not", row_id, base.get("ticker"))
+            with _PENDING_LOCK:
+                _PENDING_BETS.get(p, {}).pop(row_id, None)
+            self._fill_now(st, row_id, base, extra)
+
+        if not self.behind(write):
+            write(self)
         return row_id
+
+    @staticmethod
+    def _fill_now(st: "Store", row_id: int, base: dict[str, Any], extra: dict[str, Any]) -> None:
+        full = _with_snapshot(dict(base, **extra))
+        changed = {k: v for k, v in full.items() if k not in base or base[k] != v}
+        if changed and row_id:
+            st.db.execute(f"UPDATE decisions SET {','.join(k + '=?' for k in changed)} WHERE id=?", [*changed.values(), row_id])
+            st.db.commit()
+            st.touch("bets")
+
+    def _decision_columns(self) -> list[str]:
+        p = str(self.path)
+        got = _DECISION_COLS.get(p)
+        if got is None:
+            with memguard.allowed():  # once, from the schema (reserve_ids has normally filled it already)
+                got = _DECISION_COLS[p] = [r["name"] for r in self.db.execute("PRAGMA table_info(decisions)")]
+        return got
+
+    def _reserved_id(self) -> int | None:
+        """An id for a bet row from the pool a background job reserved, or None when there is none (the row is then inserted the ordinary way)."""
+        with _ID_LOCK:
+            got = _ID_POOL.popleft() if _ID_POOL else None
+            low = len(_ID_POOL) < ID_POOL_LOW
+        if low and _BACKGROUND["on"]:
+            self.behind(lambda st: st.reserve_ids())
+        return got
+
+    def reserve_ids(self, n: int = ID_POOL_SIZE) -> int:
+        """Background job: reserve ids of the decisions table for bet rows written behind (Postgres only; SQLite writes in place). Fills the column list too."""
+        self._decision_columns()
+        if not db.is_pg(self.db):
+            return 0
+        with _ID_LOCK:
+            need = n - len(_ID_POOL)
+        if need <= 0:
+            return 0
+        rows = self.db.execute("SELECT nextval(pg_get_serial_sequence('decisions','id')) FROM generate_series(1, ?)", (need,)).fetchall()
+        self.db.commit()
+        with _ID_LOCK:
+            _ID_POOL.extend(int(r[0]) for r in rows)
+        return len(rows)
+
+    def wait_written(self, ticker: str, timeout: float = 5.0) -> None:
+        """A write on a bet's row (a sale) waits for that row's behind-written INSERT, so an UPDATE never meets a row that is not there yet."""
+        p = str(self.path)
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            with _PENDING_LOCK:
+                if not any(r.get("ticker") == ticker for r in _PENDING_BETS.get(p, {}).values()):
+                    return
+            time.sleep(0.01)
 
     def add_risk_readings(self, rows: Sequence[tuple[str, float, str, float | None, float | None, float]]) -> None:
         """Every open market's risk reading at a 30 s mark (riskrecord.py's background thread; never an evaluation). A mark already written is left."""
@@ -1136,7 +1255,42 @@ class Store:
         marks = ",".join("?" for _ in o)
         self.db.execute(f"INSERT INTO orders ({cols}) VALUES ({marks})", list(o.values()))
         self.db.commit()
+        self._held_change(o)
         self.touch("orders")
+
+    def _held_change(self, o: dict[str, Any]) -> None:
+        """The order just written moves the in-memory count of contracts held on its market, so the open-position check is right at once (nothing is read back)."""
+        try:
+            fills = float(o.get("fill_count") or 0.0)
+            ticker, env = str(o["ticker"]), str(o.get("env") or "")
+        except (KeyError, TypeError, ValueError):
+            return
+        delta = fills if (o.get("side") or "buy") == "buy" else -fills
+        key = (str(self.path), env)
+        with _HELD_LOCK:
+            if key in _HELD:
+                _HELD[key][ticker] = _HELD[key].get(ticker, 0.0) + delta
+                _HELD_AT[(key[0], env, ticker)] = time.time()
+
+    def refresh_held(self, env: str) -> int:
+        """Background job: the contracts held per market, from the orders (more bought than sold, market not settled), put in memory. A market this process changed after the read started keeps its in-memory count."""
+        started = time.time()
+        rows = self.db.execute(
+            """SELECT o.ticker, SUM(CASE WHEN COALESCE(o.side,'buy')='buy' THEN o.fill_count ELSE -o.fill_count END) AS n
+               FROM orders o WHERE o.env=? GROUP BY o.ticker
+               HAVING SUM(CASE WHEN COALESCE(o.side,'buy')='buy' THEN o.fill_count ELSE -o.fill_count END) > 0
+                 AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.ticker=o.ticker AND d.outcome IN ('yes','no'))""",
+            (env,),
+        ).fetchall()
+        fresh = {r["ticker"]: float(r["n"]) for r in rows}
+        key = (str(self.path), env)
+        with _HELD_LOCK:
+            cur = _HELD.get(key, {})
+            for t, at in [(t, a) for (pp, e, t), a in _HELD_AT.items() if pp == key[0] and e == env and a >= started]:
+                if t in cur:
+                    fresh[t] = cur[t]
+            _HELD[key] = fresh
+        return len(fresh)
 
     def order_counts(self, env: str, since_ts: float) -> dict[tuple[str, str], int]:
         """Orders sent since `since_ts` by market and side, {(ticker, side): n}: the seed of the buy order ids (orderkeys.py). A background job reads it once at start."""
@@ -1173,8 +1327,14 @@ class Store:
 
     def note_lane_version(self, lane: str, ver: str, settings: dict[str, str]) -> None:
         """Record the first time a version of a lane is used, with its settings, so the changes between versions can be read back."""
-        self.db.execute("INSERT OR IGNORE INTO lane_versions (lane, ver, first_ts, settings) VALUES (?,?,?,?)", (lane, ver, time.time(), json.dumps(settings)))
-        self.db.commit()
+        first_ts = time.time()
+
+        def write(st: "Store") -> None:
+            st.db.execute("INSERT OR IGNORE INTO lane_versions (lane, ver, first_ts, settings) VALUES (?,?,?,?)", (lane, ver, first_ts, json.dumps(settings)))
+            st.db.commit()
+
+        if not self.behind(write):  # the running bot writes it behind: a record, not part of the judgement
+            write(self)
 
     def lane_versions(self, lane: str) -> list[db.Row]:
         return self.db.execute("SELECT ver, first_ts, settings FROM lane_versions WHERE lane=? ORDER BY first_ts", (lane,)).fetchall()
@@ -1277,6 +1437,7 @@ class Store:
 
     def mark_exited(self, ticker: str, price: float, reason: str, lane: str | None = None, factors: str = "", side: str | None = None) -> None:
         """Write a sale on the lane's open bets on this market. With `side`, only the bets on that side: a lane may have an open row on each side of one market (a paper lane logs the other side unstaked while it holds the first), and one side's sale price is not the other's. 2026-11-18: HYPE 03:30, the NO bet's sale at 0.17 was written on the YES row too, bought 40 s earlier at 0.79. The other side's row stays open and gets its own exit or its settlement."""
+        self.wait_written(ticker)
         self.db.execute(
             """UPDATE decisions SET exit_price=?, exit_ts=?, exit_reason=?, exit_factors=?
                WHERE ticker=? AND action='bet' AND outcome IS NULL AND exit_ts IS NULL
@@ -1343,8 +1504,17 @@ class Store:
             (env,),
         ).fetchall()
 
-    @remembers('bets', 'orders')
     def open_position_tickers(self, env: str) -> set[str]:
+        """Tickers we still hold. In the running bot from the count held in memory (refresh_held, moved by every order written); else read from the table."""
+        if _BACKGROUND["on"]:
+            with _HELD_LOCK:
+                got = _HELD.get((str(self.path), env))
+                if got is not None:
+                    return {t for t, n in got.items() if n > 1e-9}
+        return self._open_position_tickers_read(env)
+
+    @remembers('bets', 'orders')
+    def _open_position_tickers_read(self, env: str) -> set[str]:
         """Tickers we still hold, from the orders themselves: more bought than sold, and the market not settled.
 
         A bet marked as exited does not matter here: if the orders still show contracts held (a second bet bought after the
