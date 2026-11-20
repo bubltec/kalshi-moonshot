@@ -1,0 +1,11 @@
+29983 readings, days ['11-17', '11-18', '11-19']
+=== train 11-17 (8270) -> test 11-18 (11970); log loss of Kalshi's mid 0.4515
+  A price only                       loss 0.4503 (-0.0012 vs mid) | gap>=0.00: n 7 net -0.245 | gap>=0.03: n 1 net +0.639 | gap>=0.05: n 1 net +0.639 | gap>=0.08: n 0
+  B live seven                       loss 0.4589 (+0.0074 vs mid) | gap>=0.00: n 424 net -0.046 | gap>=0.03: n 255 net -0.010 | gap>=0.05: n 159 net +0.056 | gap>=0.08: n 71 net -0.017
+  C price+cushion+time+look-backs    loss 0.4664 (+0.0149 vs mid) | gap>=0.00: n 546 net -0.036 | gap>=0.03: n 413 net -0.028 | gap>=0.05: n 317 net -0.012 | gap>=0.08: n 187 net -0.024
+  D all fifteen                      loss 0.4673 (+0.0158 vs mid) | gap>=0.00: n 547 net -0.050 | gap>=0.03: n 423 net -0.037 | gap>=0.05: n 335 net -0.037 | gap>=0.08: n 208 net -0.017
+=== train 11-17+11-18 (20240) -> test 11-19 (9743); log loss of Kalshi's mid 0.4592
+  A price only                       loss 0.4596 (+0.0004 vs mid) | gap>=0.00: n 29 net +0.097 | gap>=0.03: n 3 net +0.337 | gap>=0.05: n 1 net +0.221 | gap>=0.08: n 0
+  B live seven                       loss 0.4608 (+0.0017 vs mid) | gap>=0.00: n 207 net -0.084 | gap>=0.03: n 64 net +0.085 | gap>=0.05: n 31 net +0.068 | gap>=0.08: n 3 net -0.107
+  C price+cushion+time+look-backs    loss 0.4592 (+0.0000 vs mid) | gap>=0.00: n 462 net -0.023 | gap>=0.03: n 244 net -0.024 | gap>=0.05: n 151 net -0.021 | gap>=0.08: n 58 net +0.095
+  D all fifteen                      loss 0.4644 (+0.0052 vs mid) | gap>=0.00: n 399 net -0.040 | gap>=0.03: n 241 net -0.040 | gap>=0.05: n 154 net -0.029 | gap>=0.08: n 65 net +0.002
