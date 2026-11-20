@@ -9,6 +9,7 @@ Run: SPOT=0 scripts/cloud_job.sh scripts/binary_risk_commodity.py"""
 import os, array, bisect, math, multiprocessing, time
 from datetime import datetime, timezone
 from kalshi_moonshot import binaryrisk as br, config, db
+from kalshi_moonshot.perpref import index_for_series as pidx
 from kalshi_moonshot.perpref import index_for_series as bq_index  # Kalshi perp reference, not BiQuote (user, 2026-11-20)
 from kalshi_moonshot.kalshiws import index_for_series as crypto_index
 from kalshi_moonshot.strategy import fee_per_contract as fee
