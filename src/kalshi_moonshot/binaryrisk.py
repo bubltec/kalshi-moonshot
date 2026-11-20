@@ -235,6 +235,9 @@ def fit(rows: list[tuple[list[float], list[float], float]], now: float | None = 
     return model
 
 
+NOT_COMMODITY = ("KXINX",)  # the stock index has a Kalshi perp reference but is not one of the commodity series (user, 2026-11-20: "S&P should not be in this"); a scope, not a rule: no buy or sell logic reads it
+
+
 def curve_index(series: str) -> str | None:
     """The tape index whose curve the model reads for a series: a coin's Kalshi settlement index, else Kalshi's own perp reference for the commodity (perpref.py). Never an outside feed (user, 2026-11-20: "use the kalshi commodity perp"; docs/architecture.md section 10)."""
     from . import perpref
@@ -352,6 +355,8 @@ def build_rows(s: Any, now: float) -> list[tuple[list[float], list[float], float
     wins = st.execute("SELECT ticker, series, close_ts, strike, result FROM windows WHERE result IN ('yes','no') AND close_ts BETWEEN ? AND ?", (now - TRAIN_HOURS * 3600.0, now)).fetchall()
     by_index: dict[str, list[Any]] = {}
     for w in wins:
+        if w["series"].startswith(NOT_COMMODITY):
+            continue
         ix = curve_index(w["series"])
         if ix:
             by_index.setdefault(ix, []).append(w)

@@ -22,6 +22,7 @@ recent = br.Recent([(float(r["close_ts"]), 1 if r["result"] == "yes" else 0) for
 wins = st.execute("SELECT ticker, series, close_ts, strike, result FROM windows WHERE result IN ('yes','no') AND close_ts > ? ORDER BY close_ts", (START + 3600 * 2,)).fetchall()
 jobs = {}
 for w in wins:
+    if w["series"].startswith("KXINX"): continue  # the stock index is not a commodity series (user, 2026-11-20)
     ix = crypto_index(w["series"]); kind = "crypto" if ix else "commodity"
     if not ix: ix = bq_index(w["series"])
     if ix and kind == 'commodity': jobs.setdefault(ix, []).append((w["ticker"], float(w["close_ts"]), float(w["strike"]) if kind == "crypto" and w["strike"] else None, w["result"] == "yes"))

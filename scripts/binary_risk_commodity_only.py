@@ -29,6 +29,7 @@ print(f"{len(wins)} settled windows, {len(bets)} live commodity bets", flush=Tru
 
 jobs = {}  # index -> (windows, bets)
 for w in wins:
+    if w["series"].startswith("KXINX"): continue  # the stock index is not a commodity series (user, 2026-11-20)
     series = w["series"]
     ix = crypto_index(series)
     kind = "crypto" if ix else "commodity"
