@@ -1,0 +1,42 @@
+20809 settled windows on 9 price feeds
+15577 early cheap-side readings from 3661 markets, 59s
+4341 market sides (first early reading each)
+
+ALL (hit rate and net per $1 at +40% / +70% / +100%)
+  n  4341 hit 0.65 0.53 0.45 | net per $1 at +40/+70/+100%: -0.160 -0.137 -0.115 | held -0.060 | beat/lost vs held 1213/1587 749/1560 425/1523
+
+BY THE CURVE (thirds of every reading, side-oriented):
+  cushion (cz)     low : n  1447 hit 0.63 0.53 0.46 | net per $1 at +40/+70/+100%: -0.194 -0.157 -0.116 | held -0.068 | beat/lost vs held 472/441 335/436 242/430
+  cushion (cz)     mid : n  1447 hit 0.64 0.53 0.43 | net per $1 at +40/+70/+100%: -0.164 -0.141 -0.148 | held -0.083 | beat/lost vs held 391/537 236/525 108/516
+  cushion (cz)     high: n  1447 hit 0.66 0.54 0.45 | net per $1 at +40/+70/+100%: -0.123 -0.113 -0.081 | held -0.028 | beat/lost vs held 350/609 178/599 75/577
+  path efficiency  low : n  1447 hit 0.66 0.52 0.44 | net per $1 at +40/+70/+100%: -0.142 -0.150 -0.132 | held -0.069 | beat/lost vs held 402/546 218/538 110/527
+  path efficiency  mid : n  1447 hit 0.64 0.54 0.45 | net per $1 at +40/+70/+100%: -0.161 -0.119 -0.094 | held -0.038 | beat/lost vs held 387/543 250/534 140/515
+  path efficiency  high: n  1447 hit 0.64 0.53 0.45 | net per $1 at +40/+70/+100%: -0.177 -0.142 -0.120 | held -0.072 | beat/lost vs held 424/498 281/488 175/481
+  speed-up         low : n  1447 hit 0.63 0.52 0.43 | net per $1 at +40/+70/+100%: -0.183 -0.164 -0.143 | held -0.084 | beat/lost vs held 384/529 230/521 123/505
+  speed-up         mid : n  1447 hit 0.64 0.52 0.45 | net per $1 at +40/+70/+100%: -0.164 -0.142 -0.108 | held -0.026 | beat/lost vs held 384/540 228/527 131/514
+  speed-up         high: n  1447 hit 0.67 0.55 0.47 | net per $1 at +40/+70/+100%: -0.134 -0.105 -0.095 | held -0.069 | beat/lost vs held 445/518 291/512 171/504
+  15-min range     low : n  1447 hit 0.64 0.52 0.43 | net per $1 at +40/+70/+100%: -0.169 -0.157 -0.152 | held -0.087 | beat/lost vs held 397/523 234/513 117/500
+  15-min range     mid : n  1447 hit 0.63 0.51 0.43 | net per $1 at +40/+70/+100%: -0.184 -0.172 -0.147 | held -0.090 | beat/lost vs held 395/513 236/505 134/490
+  15-min range     high: n  1447 hit 0.67 0.57 0.49 | net per $1 at +40/+70/+100%: -0.127 -0.082 -0.047 | held -0.002 | beat/lost vs held 421/551 279/542 174/533
+  |cushion|        low : n  1447 hit 0.66 0.54 0.45 | net per $1 at +40/+70/+100%: -0.124 -0.114 -0.082 | held -0.029 | beat/lost vs held 349/608 178/598 75/576
+  |cushion|        mid : n  1447 hit 0.64 0.53 0.43 | net per $1 at +40/+70/+100%: -0.162 -0.139 -0.147 | held -0.081 | beat/lost vs held 392/538 236/526 108/517
+  |cushion|        high: n  1447 hit 0.63 0.53 0.46 | net per $1 at +40/+70/+100%: -0.194 -0.157 -0.116 | held -0.068 | beat/lost vs held 472/441 335/436 242/430
+
+BY SECONDS AFTER THE OPEN (all readings of that age, one per market side):
+   60s: n  1886 hit 0.63 0.52 0.45 | net per $1 at +40/+70/+100%: -0.183 -0.154 -0.117 | held -0.067 | beat/lost vs held 510/679 320/667 198/655
+   90s: n  2013 hit 0.62 0.51 0.44 | net per $1 at +40/+70/+100%: -0.199 -0.173 -0.154 | held -0.087 | beat/lost vs held 561/685 360/676 214/664
+  120s: n  2109 hit 0.63 0.52 0.43 | net per $1 at +40/+70/+100%: -0.194 -0.174 -0.169 | held -0.085 | beat/lost vs held 620/703 399/695 227/676
+  150s: n  2317 hit 0.62 0.51 0.44 | net per $1 at +40/+70/+100%: -0.200 -0.193 -0.151 | held -0.067 | beat/lost vs held 676/769 415/757 274/737
+  180s: n  2500 hit 0.65 0.53 0.46 | net per $1 at +40/+70/+100%: -0.167 -0.147 -0.110 | held -0.029 | beat/lost vs held 759/855 490/846 320/820
+  210s: n  2430 hit 0.63 0.52 0.44 | net per $1 at +40/+70/+100%: -0.186 -0.168 -0.148 | held -0.067 | beat/lost vs held 739/795 480/784 301/768
+  240s: n  2322 hit 0.63 0.51 0.43 | net per $1 at +40/+70/+100%: -0.184 -0.174 -0.152 | held -0.035 | beat/lost vs held 700/769 438/756 271/737
+
+BY ASK BAND:
+  0.20-0.30: n   563 hit 0.62 0.51 0.44 | net per $1 at +40/+70/+100%: -0.221 -0.217 -0.202 | held -0.101 | beat/lost vs held 212/138 150/138 109/137
+  0.30-0.38: n  1234 hit 0.63 0.53 0.46 | net per $1 at +40/+70/+100%: -0.183 -0.143 -0.110 | held -0.051 | beat/lost vs held 363/412 250/410 165/405
+  0.38-0.45: n  2544 hit 0.66 0.53 0.44 | net per $1 at +40/+70/+100%: -0.136 -0.116 -0.098 | held -0.054 | beat/lost vs held 638/1037 349/1012 151/981
+
+EXAMPLE KXGOLD15M-26NOV200930: not in the data (the runner restores a nightly backup up to a day old; this market is from 11-20 09:15 ET)
+done in 59s
+
+READING (2026-11-20): commodities are not better. 4,341 commodity market sides on Kalshi's perp reference (9 feeds), ask 0.20-0.45: hit 0.65/0.53/0.45 at +40/+70/+100%, net per $1 -0.160/-0.137/-0.115 (crypto and commodity pooled: -0.134/-0.124/-0.102), held -0.060. The sale beats holding on 28%/17%/10% of bets and loses to it on 37%/36%/35% (the rest tie, a held loss equals a hit-less loss). Every third of every curve reading is negative at every target; the least bad are 15-min range high (+100% -0.047, held -0.002; hit 0.49) and |cushion| low (-0.082), and the 0.20-0.30 band is the worst (-0.20). Rule 4: no shape is positive in each third it claims, so no curve shape explains a working swing on commodities. The example market KXGOLD15M-26NOV200930 is not in the data (the runner's backup is up to a day old); replay it once tonight's backup holds 11-20.
