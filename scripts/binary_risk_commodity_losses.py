@@ -238,6 +238,6 @@ for t, tk, sd, ask, pr, ex, vec, net, half in sorted(rr.sample(losses, min(20, l
         cz.append("%+.1f" % ((1 if sd == "yes" else -1) * f["cz"]) if f else "-")
         j = bisect.bisect_right(qt, tt) - 1
         aa.append("%.2f" % ((float(q[j][2]) if sd == "yes" else 1.0 - float(q[j][1])) / sc) if j >= 0 else "-")
-    print(f"\n{datetime.fromtimestamp(t, timezone.utc).strftime('%m-%d %H:%MZ')} {tk} buy {sd.upper()} at {ask:.2f}: predicted {pr:+.2f}/$1 by {ex}; at the buy: cushion {nm['cz']:+.1f}, efficiency {nm['eff5']:.2f}, hour place {nm['hp3']:.2f}, {nm['left']:.1f} min left; lost {net:+.2f} per $1")
+    print(f"\n{datetime.fromtimestamp(t, timezone.utc).strftime('%m-%d %H:%MZ')} {tk} buy {sd.upper()} at {ask:.2f}: predicted {pr:+.2f}/$1 by {ex}; at the buy: cushion {nm['cz3']:+.1f}, efficiency {nm['eff5']:.2f}, hour place {nm['hp3']:.2f}, {nm['left']:.1f} min left; lost {net:+.2f} per $1")
     print("   side cushion each minute: " + " ".join(cz))
     print("   side ask each minute:     " + " ".join(aa))
