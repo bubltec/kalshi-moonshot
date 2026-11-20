@@ -313,7 +313,7 @@ def admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[boo
     model, f, pred, k = got["model"], got["f"], got["pred"], got["k"]
     cut = float(model["cuts"].get(str(TOP), 0.0))
     yes = shot.side == "yes"  # the note reads the side's own view: a NO side's cushion is the YES one's sign flipped
-    tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {f['cz'] if yes else -f['cz']:+.1f}, efficiency {f['eff5']:.2f}, hour place {f['hp3'] if yes else 1.0 - f['hp3']:.2f})"
+    tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {(1 if yes else -1) * (f['cz1'] + f['cz3'] + f['cz5']) / 3.0:+.1f} (1/3/5 min {f['cz1'] if yes else -f['cz1']:+.1f}/{f['cz3'] if yes else -f['cz3']:+.1f}/{f['cz5'] if yes else -f['cz5']:+.1f}), efficiency {f['eff5']:.2f}, hour place {f['hp3'] if yes else 1.0 - f['hp3']:.2f})"
     return pred >= cut, tag
 
 
