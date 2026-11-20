@@ -1,0 +1,35 @@
+job 20261120-003123-58265 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/5e25447732504b0087ae560939fa0665
+ZECUSD_RTI: 1011 windows, rows so far 24661, 62s
+NEARUSD_RTI: 1011 windows, rows so far 49381, 78s
+HYPEUSD_RTI: 1011 windows, rows so far 74061, 95s
+BNBUSD_RTI: 1011 windows, rows so far 98780, 110s
+DOGEUSD_RTI: 1011 windows, rows so far 123607, 126s
+XRPUSD_RTI: 1011 windows, rows so far 148336, 140s
+SOLUSD_RTI: 1011 windows, rows so far 173034, 154s
+ETHUSD_RTI: 1011 windows, rows so far 197779, 167s
+BRTI: 1011 windows, rows so far 222569, 181s
+222569 readings from 8357 markets, 11-09 to 11-19
+  cz: 1st -5.077 median -0.063 99th +6.185
+  ry1: 1st -0.375 median -0.021 99th +0.361
+364033 side readings
+=== D price + curve: trailing 24 h, hourly refit, 208 test hours; held to settlement, net per $1; terciles of each reading: low / mid / high
+  picks = top 5% of the hour's training sides:
+    ask under 0.45  cz     n  136 -0.145+-0.117 vs -0.061 lift -0.084 | n  487 +0.090+-0.055 vs -0.021 lift +0.111 | n    1 +3.113+-0.000 vs +1.784 lift +1.329
+    ask under 0.45  eff5   n  217 +0.180+-0.085 vs -0.013 lift +0.194 | n  216 +0.031+-0.085 vs -0.045 lift +0.076 | n  191 -0.098+-0.091 vs -0.090 lift -0.008
+    ask under 0.45  vr     n  239 +0.004+-0.082 vs -0.022 lift +0.025 | n  179 +0.010+-0.092 vs -0.053 lift +0.063 | n  206 +0.120+-0.089 vs -0.077 lift +0.197
+    ask under 0.45  amp15  n  162 -0.020+-0.097 vs -0.065 lift +0.045 | n  190 +0.105+-0.091 vs -0.040 lift +0.144 | n  272 +0.039+-0.078 vs -0.049 lift +0.088
+    ask over 0.55   cz     n    2 -1.031+-0.000 vs -0.671 lift -0.360 | n 1325 +0.019+-0.022 vs -0.059 lift +0.079 | n 1262 -0.004+-0.013 vs -0.033 lift +0.029
+    ask over 0.55   eff5   n  788 +0.021+-0.026 vs -0.048 lift +0.069 | n  844 -0.008+-0.024 vs -0.043 lift +0.035 | n  957 +0.009+-0.018 vs -0.030 lift +0.039
+    ask over 0.55   vr     n  908 +0.012+-0.022 vs -0.046 lift +0.057 | n  841 +0.019+-0.023 vs -0.036 lift +0.055 | n  840 -0.009+-0.023 vs -0.038 lift +0.029
+    ask over 0.55   amp15  n  752 -0.019+-0.026 vs -0.035 lift +0.016 | n  872 +0.043+-0.022 vs -0.045 lift +0.087 | n  965 -0.004+-0.021 vs -0.040 lift +0.036
+  picks = top 10% of the hour's training sides:
+    ask under 0.45  cz     n  268 -0.181+-0.088 vs -0.061 lift -0.120 | n  889 +0.011+-0.041 vs -0.021 lift +0.032 | n    1 +3.113+-0.000 vs +1.784 lift +1.329
+    ask under 0.45  eff5   n  419 +0.035+-0.061 vs -0.013 lift +0.048 | n  375 +0.020+-0.065 vs -0.045 lift +0.065 | n  364 -0.159+-0.069 vs -0.090 lift -0.069
+    ask under 0.45  vr     n  417 +0.031+-0.065 vs -0.022 lift +0.052 | n  362 -0.145+-0.063 vs -0.053 lift -0.092 | n  379 +0.010+-0.066 vs -0.077 lift +0.087
+    ask under 0.45  amp15  n  302 -0.135+-0.069 vs -0.065 lift -0.070 | n  360 +0.063+-0.067 vs -0.040 lift +0.102 | n  496 -0.035+-0.059 vs -0.049 lift +0.014
+    ask over 0.55   cz     n    3 -0.425+-0.495 vs -0.671 lift +0.246 | n 2087 +0.019+-0.018 vs -0.059 lift +0.078 | n 1958 +0.000+-0.010 vs -0.033 lift +0.033
+    ask over 0.55   eff5   n 1196 +0.032+-0.021 vs -0.048 lift +0.079 | n 1329 +0.005+-0.019 vs -0.043 lift +0.048 | n 1523 -0.004+-0.015 vs -0.030 lift +0.026
+    ask over 0.55   vr     n 1349 +0.002+-0.018 vs -0.046 lift +0.048 | n 1364 +0.017+-0.018 vs -0.036 lift +0.053 | n 1335 +0.010+-0.018 vs -0.038 lift +0.048
+    ask over 0.55   amp15  n 1264 +0.016+-0.019 vs -0.035 lift +0.051 | n 1402 +0.016+-0.017 vs -0.045 lift +0.061 | n 1382 -0.003+-0.017 vs -0.040 lift +0.037
+done in 336s
+exit=0  results in job-results/20261120-003123-58265/
