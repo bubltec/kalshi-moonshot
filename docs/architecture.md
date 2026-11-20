@@ -52,6 +52,25 @@ In words:
 6. **Settlement.** A bet not sold settles at the close. Kalshi settles these markets on the average of the settlement index over the last 60 s (`settlement.py` computes the last minute exactly).
 7. **Learning.** Settled bets and the tape feed studies, the state record (`staterecord.py`), the curve model (`curvemodel.py`) and per-market profiles (`marketprofile.py`), which come back into memory as thresholds from the market's own recent history.
 
+### The processes and threads (from the code, 2026-11-19)
+
+Two processes run on the host, both from the same image:
+
+- **`python -m kalshi_moonshot record`** (`cmd_record`): the **tape recorder**, a process of its own so a bot rebuild leaves no gap in the tape. It writes Kalshi's market, settlement-index and extra-series sockets and the perp reference to the `tape` schema and does nothing else (thread `tape`, `tape-refresh`).
+- **`python -m kalshi_moonshot run`** (`cmd_run`, `Worker.run_forever` in `worker.py`): the **bot**, with `TAPE_ROLE=memory` (it keeps the same streams in memory only). Its threads:
+
+| Job | Threads (names in the code) | Modules |
+|---|---|---|
+| Sockets and feeds | `kalshi-ws`, `perpref-ws`, `hyperliquid-ws`, `pyth-stream`, `biquote`, `futflow-ws`, `perp-bars`, `polymarket-ws` | `kalshiws.py`, `perpref.py`, `hlfeed.py`, `pythfeed.py`, `biquotefeed.py`, `futflow.py`, `kalshifeed.py`, `polyws.py` |
+| Buy decisions (one thread per lane and event) | `entry-<lane>-<event>`, `entry-review` | `entrywatch.py` |
+| Sell decisions and position watching | the watcher, `memory-reload`, `refit-models`, `variety-ledger` | `watcher.py` |
+| Resting buys and orders | on the socket's quotes and fills | `restbuys.py`, `orderkeys.py` (`order-keys-seed`) |
+| In-memory store and write-behind to Postgres | `bet-book`, `decision-writer`, `write-behind`, `store-memo` | `store.py` |
+| Warm-up and market discovery | `memory-fill`, `discovery`, `discovery-hot`, `market-events`, `watch-new` | `worker.py`, `marketdata.py` |
+| Background jobs that build data | `maintenance`, `tape-refresh`, `regime-refresh`, `forecast-refit`, `calibration`, `risk-record`, `settlement-edge`, `control`, `archive`, `backup`, `sitepub` | `worker.py`, `riskrecord.py`, `settlement_edge.py`, `control.py`, `archive.py`, `backup.py`, `sitepub.py` |
+| Watchdog and diagnostics | `heartbeat`, `req-stats` | `heartbeat.py`, `reqstats.py` |
+| Fallback (feed down or entry thread dead) | `buy-job-<i>`, `live-lane-<lane>`, the job queue | `worker.py`, `jobs.py` |
+
 ## 4. The units: curve variance
 
 Every entry, exit and stake reads how the market's own curve behaves, in units of its own variance. The typical minute is the root-mean-square one-second move times sqrt(60). The **cushion** is the distance from spot to strike in those typical moves. Thresholds are quantiles of the market's own last hours of readings, recomputed on a schedule; a reading outside its recent range is an **anomaly** state and the rule sits out. See CLAUDE.md rules 1-3 and `marketprofile.py`, `curvefeatures.py`, `curve.py`, `variants.py`.
@@ -125,10 +144,12 @@ Named by the user on 2026-11-19. A 0-to-100 score (50 a toss-up, 0 a sure NO, 10
 
 ## 13. Known gaps (unverified)
 
-- Which of the older modules (`llm.py`, `rag.py`, `estimators.py`, `runner.py`'s model-rated scan, `search.py`, the Polymarket modules, `jobs.py`) are still on a live path was not checked for this document. CLAUDE.md says the database job queue remains only for lanes on timers while the feed is down. A cleanup pass should mark each as live, fallback or removable.
+- **Older modules, checked by imports only (2026-11-19).** An import is not proof a module runs. By import from the bot's entry point, `confidence.py`, `curvefeatures.py` and `regime.py` are imported by no bot code (only scripts, tests or a word in a comment): candidates for removal, each with a study or test that would go with it. `settings_sync.py` is a command run as a module (`python -m kalshi_moonshot.settings_sync`) and `jobrunner.py` is the runner's entry point; both are live by design. Everything else is imported by the bot. The model-rated path is still constructed at start (`cmd_run` builds an Ollama client, a news search and the commodity pricer for `Worker`; `estimators.py`, `runner.py`, `llm.py`, `search.py`, `rag.py` and the Polymarket paper thread `polymarket-paper` hang off it). Whether a lane still uses it live is decided by the lane file, not the code: unverified. Removing code that serves only a retired rule is CLAUDE.md rule 8's call, and needs the lane file checked first.
 - Which lanes are live right now is in the lane file and the admin page, not here; `docs/lanes.md` can be stale.
 - Host sizes (2 CPU) and runner sizes (4 vCPU, 16 GB) are from the infra code and script headers, not read from the running machines.
 
 ## 14. Notes log (newest first; add a line for every change to the system)
+
+- 2026-11-19: Added the process and thread map (read from `cmd_run`, `cmd_record` and every named thread) and an import check of the older modules (three unimported, the model-rated path still constructed at start).
 
 - 2026-11-19: Rewrote this document as a full system description (purpose, capabilities, end-to-end flow, lanes, chains, where things run, data, lifecycle, glossary, gaps). Added the rule that heavy compute goes to the Fargate jobs runner (`cloud_job.sh`), after studies run through `cloud.sh run` loaded the live host. Named the binary risk model.
