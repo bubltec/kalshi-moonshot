@@ -1,0 +1,96 @@
+20809 settled windows on 18 price feeds
+51863 early cheap-side readings from 12293 markets, 155s
+14666 market sides on 18 feeds; exits: hold, rest+100, timed25, timed50, timed75, decay+100
+
+BQ_SPX: n   182 hit 0.51 | hold -0.004 rest+100 -0.025 timed25 -0.030 timed50 -0.040 timed75 -0.036 decay+100 -0.087
+   curve: amp15 5.7 eff5 0.05 vr -0.00 |cz| 0.30 ask 0.37
+   half 1: n    91 hit 0.49 | hold +0.001 rest+100 -0.074 timed25 -0.016 timed50 -0.066 timed75 -0.015 decay+100 -0.093
+   half 2: n    91 hit 0.52 | hold -0.008 rest+100 +0.024 timed25 -0.044 timed50 -0.014 timed75 -0.057 decay+100 -0.080
+
+BQ_COPPER: n   448 hit 0.48 | hold -0.019 rest+100 -0.033 timed25 -0.157 timed50 -0.119 timed75 -0.080 decay+100 -0.136
+   curve: amp15 5.9 eff5 0.22 vr -0.03 |cz| 0.34 ask 0.37
+   half 1: n   224 hit 0.45 | hold -0.014 rest+100 -0.072 timed25 -0.158 timed50 -0.149 timed75 -0.114 decay+100 -0.174
+   half 2: n   224 hit 0.52 | hold -0.023 rest+100 +0.006 timed25 -0.156 timed50 -0.089 timed75 -0.047 decay+100 -0.098
+
+SOLUSD_RTI: n  1055 hit 0.50 | hold +0.001 rest+100 -0.070 timed25 -0.085 timed50 -0.098 timed75 -0.100 decay+100 -0.115
+   curve: amp15 5.4 eff5 0.07 vr -0.01 |cz| 0.32 ask 0.36
+   half 1: n   527 hit 0.49 | hold +0.034 rest+100 -0.086 timed25 -0.081 timed50 -0.101 timed75 -0.099 decay+100 -0.119
+   half 2: n   528 hit 0.50 | hold -0.031 rest+100 -0.055 timed25 -0.088 timed50 -0.095 timed75 -0.100 decay+100 -0.110
+
+ZECUSD_RTI: n  1034 hit 0.49 | hold -0.015 rest+100 -0.073 timed25 -0.107 timed50 -0.092 timed75 -0.094 decay+100 -0.110
+   curve: amp15 7.3 eff5 0.09 vr -0.02 |cz| 0.40 ask 0.37
+   half 1: n   517 hit 0.50 | hold +0.007 rest+100 -0.057 timed25 -0.113 timed50 -0.079 timed75 -0.074 decay+100 -0.103
+   half 2: n   517 hit 0.49 | hold -0.036 rest+100 -0.090 timed25 -0.101 timed50 -0.105 timed75 -0.114 decay+100 -0.117
+
+HYPEUSD_RTI: n  1031 hit 0.49 | hold -0.052 rest+100 -0.082 timed25 -0.136 timed50 -0.129 timed75 -0.110 decay+100 -0.121
+   curve: amp15 7.3 eff5 0.10 vr -0.02 |cz| 0.39 ask 0.37
+   half 1: n   515 hit 0.48 | hold -0.067 rest+100 -0.110 timed25 -0.146 timed50 -0.139 timed75 -0.128 decay+100 -0.142
+   half 2: n   516 hit 0.50 | hold -0.038 rest+100 -0.053 timed25 -0.126 timed50 -0.120 timed75 -0.091 decay+100 -0.101
+
+NEARUSD_RTI: n  1056 hit 0.49 | hold -0.036 rest+100 -0.088 timed25 -0.098 timed50 -0.090 timed75 -0.109 decay+100 -0.140
+   curve: amp15 6.7 eff5 0.08 vr -0.02 |cz| 0.36 ask 0.37
+   half 1: n   528 hit 0.51 | hold +0.029 rest+100 -0.044 timed25 -0.084 timed50 -0.054 timed75 -0.074 decay+100 -0.129
+   half 2: n   528 hit 0.46 | hold -0.102 rest+100 -0.131 timed25 -0.112 timed50 -0.127 timed75 -0.145 decay+100 -0.151
+
+BRTI: n  1055 hit 0.48 | hold -0.033 rest+100 -0.091 timed25 -0.104 timed50 -0.109 timed75 -0.101 decay+100 -0.141
+   curve: amp15 6.4 eff5 0.08 vr -0.02 |cz| 0.37 ask 0.37
+   half 1: n   527 hit 0.49 | hold -0.023 rest+100 -0.087 timed25 -0.112 timed50 -0.112 timed75 -0.087 decay+100 -0.156
+   half 2: n   528 hit 0.48 | hold -0.043 rest+100 -0.094 timed25 -0.096 timed50 -0.106 timed75 -0.115 decay+100 -0.126
+
+BQ_GOLD: n   727 hit 0.46 | hold -0.052 rest+100 -0.095 timed25 -0.118 timed50 -0.119 timed75 -0.106 decay+100 -0.163
+   curve: amp15 4.3 eff5 0.04 vr -0.01 |cz| 0.23 ask 0.37
+   half 1: n   363 hit 0.48 | hold -0.028 rest+100 -0.048 timed25 -0.132 timed50 -0.128 timed75 -0.102 decay+100 -0.149
+   half 2: n   364 hit 0.45 | hold -0.077 rest+100 -0.142 timed25 -0.104 timed50 -0.109 timed75 -0.110 decay+100 -0.176
+
+DOGEUSD_RTI: n  1044 hit 0.48 | hold -0.018 rest+100 -0.096 timed25 -0.082 timed50 -0.107 timed75 -0.109 decay+100 -0.098
+   curve: amp15 5.8 eff5 0.07 vr -0.01 |cz| 0.33 ask 0.36
+   half 1: n   522 hit 0.49 | hold +0.008 rest+100 -0.076 timed25 -0.083 timed50 -0.107 timed75 -0.088 decay+100 -0.117
+   half 2: n   522 hit 0.47 | hold -0.044 rest+100 -0.116 timed25 -0.080 timed50 -0.106 timed75 -0.130 decay+100 -0.080
+
+XRPUSD_RTI: n  1053 hit 0.48 | hold -0.065 rest+100 -0.098 timed25 -0.102 timed50 -0.106 timed75 -0.094 decay+100 -0.148
+   curve: amp15 6.5 eff5 0.08 vr -0.02 |cz| 0.37 ask 0.36
+   half 1: n   526 hit 0.50 | hold -0.079 rest+100 -0.072 timed25 -0.089 timed50 -0.093 timed75 -0.068 decay+100 -0.138
+   half 2: n   527 hit 0.47 | hold -0.052 rest+100 -0.125 timed25 -0.114 timed50 -0.120 timed75 -0.121 decay+100 -0.159
+
+BNBUSD_RTI: n  1030 hit 0.48 | hold -0.043 rest+100 -0.101 timed25 -0.091 timed50 -0.093 timed75 -0.106 decay+100 -0.103
+   curve: amp15 7.0 eff5 0.10 vr -0.03 |cz| 0.38 ask 0.37
+   half 1: n   515 hit 0.48 | hold -0.036 rest+100 -0.104 timed25 -0.109 timed50 -0.104 timed75 -0.113 decay+100 -0.122
+   half 2: n   515 hit 0.48 | hold -0.050 rest+100 -0.097 timed25 -0.073 timed50 -0.082 timed75 -0.098 decay+100 -0.085
+
+BQ_SILVER: n   714 hit 0.46 | hold -0.032 rest+100 -0.113 timed25 -0.080 timed50 -0.103 timed75 -0.110 decay+100 -0.135
+   curve: amp15 5.8 eff5 0.07 vr -0.02 |cz| 0.32 ask 0.37
+   half 1: n   357 hit 0.45 | hold -0.059 rest+100 -0.117 timed25 -0.074 timed50 -0.092 timed75 -0.105 decay+100 -0.119
+   half 2: n   357 hit 0.46 | hold -0.006 rest+100 -0.108 timed25 -0.086 timed50 -0.114 timed75 -0.114 decay+100 -0.151
+
+ETHUSD_RTI: n  1047 hit 0.47 | hold -0.060 rest+100 -0.114 timed25 -0.125 timed50 -0.147 timed75 -0.123 decay+100 -0.156
+   curve: amp15 5.5 eff5 0.06 vr -0.02 |cz| 0.31 ask 0.36
+   half 1: n   523 hit 0.47 | hold -0.033 rest+100 -0.115 timed25 -0.116 timed50 -0.137 timed75 -0.114 decay+100 -0.172
+   half 2: n   524 hit 0.47 | hold -0.087 rest+100 -0.113 timed25 -0.135 timed50 -0.157 timed75 -0.133 decay+100 -0.141
+
+BQ_PLATINUM: n   662 hit 0.46 | hold -0.062 rest+100 -0.117 timed25 -0.147 timed50 -0.163 timed75 -0.158 decay+100 -0.178
+   curve: amp15 5.7 eff5 0.08 vr -0.03 |cz| 0.33 ask 0.37
+   half 1: n   331 hit 0.44 | hold -0.097 rest+100 -0.176 timed25 -0.157 timed50 -0.178 timed75 -0.177 decay+100 -0.213
+   half 2: n   331 hit 0.48 | hold -0.027 rest+100 -0.057 timed25 -0.136 timed50 -0.149 timed75 -0.138 decay+100 -0.144
+
+BQ_PALLADIUM: n   177 hit 0.45 | hold -0.069 rest+100 -0.128 timed25 -0.159 timed50 -0.182 timed75 -0.158 decay+100 -0.184
+   curve: amp15 3.9 eff5 0.06 vr -0.03 |cz| 0.19 ask 0.38
+   half 1: n    88 hit 0.44 | hold -0.103 rest+100 -0.147 timed25 -0.142 timed50 -0.177 timed75 -0.171 decay+100 -0.201
+   half 2: n    89 hit 0.45 | hold -0.034 rest+100 -0.110 timed25 -0.175 timed50 -0.186 timed75 -0.145 decay+100 -0.167
+
+BQ_WTI: n   838 hit 0.44 | hold -0.083 rest+100 -0.131 timed25 -0.094 timed50 -0.115 timed75 -0.145 decay+100 -0.151
+   curve: amp15 5.5 eff5 0.13 vr -0.02 |cz| 0.31 ask 0.38
+   half 1: n   419 hit 0.45 | hold -0.106 rest+100 -0.102 timed25 -0.107 timed50 -0.115 timed75 -0.147 decay+100 -0.156
+   half 2: n   419 hit 0.42 | hold -0.061 rest+100 -0.160 timed25 -0.081 timed50 -0.115 timed75 -0.144 decay+100 -0.146
+
+BQ_BRENT: n   826 hit 0.43 | hold -0.140 rest+100 -0.149 timed25 -0.143 timed50 -0.159 timed75 -0.154 decay+100 -0.158
+   curve: amp15 5.5 eff5 0.13 vr -0.03 |cz| 0.31 ask 0.38
+   half 1: n   413 hit 0.40 | hold -0.195 rest+100 -0.191 timed25 -0.166 timed50 -0.182 timed75 -0.190 decay+100 -0.191
+   half 2: n   413 hit 0.45 | hold -0.084 rest+100 -0.106 timed25 -0.121 timed50 -0.136 timed75 -0.118 decay+100 -0.125
+
+BQ_NATGAS: n   687 hit 0.40 | hold -0.104 rest+100 -0.203 timed25 -0.144 timed50 -0.173 timed75 -0.195 decay+100 -0.206
+   curve: amp15 4.8 eff5 0.17 vr -0.03 |cz| 0.31 ask 0.37
+   half 1: n   343 hit 0.42 | hold -0.101 rest+100 -0.175 timed25 -0.158 timed50 -0.171 timed75 -0.207 decay+100 -0.201
+   half 2: n   344 hit 0.39 | hold -0.108 rest+100 -0.232 timed25 -0.129 timed50 -0.176 timed75 -0.183 decay+100 -0.211
+done in 155s
+
+READING (2026-11-20): per feed the early cheap-side swing is negative too. Resting +100% sell: no feed is positive in both halves (best, BQ_COPPER -0.033 and a gold-like first feed, are -0.07 / +0.01 and -0.07 / +0.02 across halves); commodities are no better than crypto, and the energy feeds (WTI, Brent, natgas) are worst (-0.13 to -0.20, hit 0.40-0.44). No feed-level shape qualifies; the user's gold market is an anecdote the study does not support on average.
