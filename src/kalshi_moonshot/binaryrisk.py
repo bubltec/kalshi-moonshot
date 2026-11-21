@@ -360,7 +360,7 @@ def win_read(s: Any, shot: Any, now: float | None = None) -> tuple[float | None,
 
 
 
-VALUE_Q = 0.90  # the share of a market's own recent edge readings the bar sits above (the study's setting, chosen after seeing results: studies/results/2026-11-21-value-buy-study.txt)
+VALUE_Q = 0.95  # the share of a market's own recent edge readings the bar sits above. The study (studies/results/2026-11-21-value-buy-study.txt) found NO setting that pays: top 20% / 10% / 5% net -0.104 / -0.160 / -0.156 per $1 in half 1 and -0.044 / -0.051 / +0.006 in half 2. 0.95 is the strictest, kept so the shadow note records the least-bad setting; it is chosen after seeing results and is not evidence of an edge
 VALUE_KEEP = 24 * 3600.0  # the market's own recent edge readings: the last day (only gated readings count, about 8 an hour for a series, so three hours never held enough)
 VALUE_MIN = 100  # fewer own readings than this and the bar is not known: no buy
 VALUE_GAP = 60.0  # one stored reading per (market, side) per this many seconds (the study's step)
