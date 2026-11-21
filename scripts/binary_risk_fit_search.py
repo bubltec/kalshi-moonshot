@@ -72,7 +72,14 @@ def build(job):
                         else:
                             sell = e[0] if side == "yes" else 1.0 - e[1]
                             pays.append(sell - fee(sell))
-                    rows.append((t, br.side_vector(f, side, ask), [(p - ask - fee(ask)) / ask for p in pays], ask, ticker, side, close - t, 1.0 if won else 0.0, close, kind))
+                    j0, j1, j6 = bisect.bisect_right(qt, t), bisect.bisect_right(qt, close - 15.0), bisect.bisect_right(qt, t + 60.0)
+                    if side == "yes": bids, asks = [x / scale for x in qb[j0:j1]], [x / scale for x in qa[j0:j1]]
+                    else: bids, asks = [1.0 - x / scale for x in qa[j0:j1]], [1.0 - x / scale for x in qb[j0:j1]]
+                    if bids:
+                        kp = max(range(len(bids)), key=bids.__getitem__)
+                        path = (bids[kp], min(bids[:kp + 1]), min(asks[:max(1, j6 - j0)]), min(asks), min(bids))  # the side's later peak bid, its lowest bid before that peak, its lowest ask in the next 60 s, its lowest ask and lowest bid to the close
+                    else: path = None
+                    rows.append((t, br.side_vector(f, side, ask), [(p - ask - fee(ask)) / ask for p in pays], ask, ticker, side, close - t, 1.0 if won else 0.0, close, kind, path))
             t += STEP
     return rows
 
@@ -81,7 +88,7 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
 S.sort(key=lambda r: r[0])
 print(f"VARIANT {V}: {len(S)} gated sides ({sum(1 for r in S if r[9] == 'commodity')} commodity), {time.time() - t0:.0f}s", flush=True)
 
-COLS = [NI["czb"]] if V == "cushonly" else FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V in ("winp", "winp0", "value") else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
+COLS = [NI["czb"]] if V == "cushonly" else FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V in ("winp", "winp0", "value", "table") else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
 def X(r): return [r[1][i] for i in COLS]
 def sigm(z): return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z))))
 
@@ -111,7 +118,7 @@ def fit(tr):
     sd = [math.sqrt(sum((x[i] - mu[i]) ** 2 for x in xs) / len(xs)) or 1.0 for i in range(n)]
     sub = tr[::3]
     m = {"mu": mu, "sd": sd, "lam": br.RIDGE}
-    if V in ("logit", "winp", "winp0", "value", "cushonly"):
+    if V in ("logit", "winp", "winp0", "value", "table", "cushonly"):
         w = [0.0] * (n + 1)
         K = n + 1
         vs = [[1.0] + [(x[i] - mu[i]) / sd[i] for i in range(n)] for x in (X(r) for r in sub)]
@@ -158,7 +165,7 @@ def pred(m, r):
     """(score used to rank, predicted hold net per $1, predicted best-exit net) all capped at the ceiling."""
     x = X(r); v = [1.0] + [(a - u) / d for a, u, d in zip(x, m["mu"], m["sd"])]
     ce = br.ceiling(r[3])
-    if V in ("winp", "winp0", "value", "cushonly"):
+    if V in ("winp", "winp0", "value", "table", "cushonly"):
         p = sigm(sum(a * b for a, b in zip(m["w"], v)))
         return p, p, p  # the score is the predicted chance to win, from the curve readings alone
     if V == "logit":
@@ -174,7 +181,7 @@ cm = [r for r in S if r[9] == "commodity"]
 t_start, t_end = cm[0][0] + 24 * 3600, cm[-1][0]
 t_hold = t_end - 24 * 3600
 t_mid = (t_start + t_hold) / 2
-inb = (lambda r: True) if V in ("winp0", "value") else (lambda r: br.usable(r[3]) and BAND[0] <= r[3] < BAND[1])  # winp0: the risk score is evaluated on EVERY gated tick, no ask band
+inb = (lambda r: True) if V in ("winp0", "value", "table") else (lambda r: br.usable(r[3]) and BAND[0] <= r[3] < BAND[1])  # winp0: the risk score is evaluated on EVERY gated tick, no ask band
 def band_of(a):
     for k, (lo, hi) in enumerate(BANDS):
         if lo <= a < hi: return k
@@ -293,6 +300,59 @@ if V == "value":
             print(f"   value buy, bar = own top {int((1 - q) * 100)}%: " + line(g))
             for lab, idx, c in (("slope", 4, c_sl), ("curv", 5, c_cv)):
                 print("      by " + lab + " third: " + " | ".join(f"{('low', 'mid', 'high')[k]} " + line([x for x in g if th(x[idx], c) == k]) for k in range(3)))
+    print(f"done in {time.time() - t0:.0f}s")
+    raise SystemExit(0)
+
+
+if V == "table":
+    # SCORE x PRICE TABLE (2026-11-21, user: the risk score "affects the price, it doesn't compare to it"; the form is not known: "this is what I need your help figuring out"). No formula is assumed and nothing is compared with Kalshi's odds or held to settlement. Each gated reading gets the price-free win-chance score (winp0, hourly refit), read as its PLACE in that market series' own scores of the previous 24 hours (100 needed; fifths), and its price band. One reading per market side per cell (the first). In each cell: what the side's price did NEXT, in cents: how far the bid later rose above the ask paid, how far the ask fell under it (so where a resting buy would have filled, in the next 60 s and by the close), and how far the bid fell before its peak.
+    OWN_H, OWN_MIN = 24 * 3600.0, 100
+    PB = ((0.0, 0.40), (0.40, 0.60), (0.60, 0.75), (0.75, 0.85), (0.85, 0.93), (0.93, 1.01))
+    def sname(r): return r[4].split("-")[0]
+    def hour_table(t):
+        if t >= t_hold: return None  # the newest 24 h stay out of this table
+        a0, a1, b1 = (bisect.bisect_left(times, x) for x in (t - WIN * 3600, t, t + 3600))
+        tr = [r for r in S[a0:a1] if r[8] <= t]
+        te = [r for r in S[a1:b1] if r[9] == "commodity"]
+        if len(tr) < 1500 or len(te) < 100: return None
+        m = fit(tr)
+        h0 = bisect.bisect_left(times, t - OWN_H)
+        hs = {}
+        for r in S[h0:b1]:
+            hs.setdefault(sname(r), ([], []))
+            hs[sname(r)][0].append(r[0]); hs[sname(r)][1].append(pred(m, r)[0])
+        seg = 0 if t < t_mid else 1
+        out = []
+        for r in te:
+            if r[10] is None: continue
+            ts, ps = hs[sname(r)]
+            lo, hi = bisect.bisect_left(ts, r[0] - OWN_H), bisect.bisect_left(ts, r[0])
+            if hi - lo < OWN_MIN: continue
+            own = sorted(ps[lo:hi])
+            sc = pred(m, r)[0]
+            qb_ = min(4, int(5 * bisect.bisect_left(own, sc) / len(own)))
+            pb_ = next(k for k, (a, b) in enumerate(PB) if a <= r[3] < b)
+            out.append((seg, r[4], r[5], qb_, pb_, r[3], r[10], r[7], sc))
+        return out
+    cells = {}
+    with multiprocessing.get_context("fork").Pool(4) as pool:
+        for res in pool.imap(hour_table, range(int(t_start), int(t_end - 3600), 3600)):
+            for seg, tk, sd, qb_, pb_, ask, path, won, sc in res or ():
+                cells.setdefault((qb_, pb_, tk, sd), (seg, ask, path, won, sc))
+    def cl(g):
+        n = len(g)
+        if n < 15: return "n %4d (too few)" % n
+        c = lambda xs: 100.0 * sum(xs) / n
+        rise = [x[2][0] - x[1] for x in g]; dip60 = [x[1] - x[2][2] for x in g]; dipall = [x[1] - x[2][3] for x in g]; dd = [x[1] - x[2][1] for x in g]
+        sh = lambda xs, k: 100.0 * sum(1 for v in xs if v >= k - 1e-9) / n
+        return "n %4d score %.2f ask %.2f | bid later rose %+5.1fc over the ask (>=+5c %2.0f%% >=+10c %2.0f%%) | ask fell in 60 s: >=2c %2.0f%% >=5c %2.0f%%; by the close %4.1fc (>=5c %2.0f%%) | bid fell %4.1fc before its peak | won %2.0f%%" % (n, sum(x[4] for x in g) / n, sum(x[1] for x in g) / n, c(rise) , sh(rise, 0.05), sh(rise, 0.10), sh(dip60, 0.02), sh(dip60, 0.05), c(dipall), sh(dipall, 0.05), c(dd), c([x[3] for x in g]))
+    print(f"\n######## SCORE (place in the market's own last 24 h, fifths: 1 lowest .. 5 highest) x PRICE BAND: what the price did next; {len(cells)} first readings")
+    for pb_, (a, b) in enumerate(PB):
+        print(f"\n--- ask {a:.2f}-{min(b, 1.0):.2f}")
+        for qb_ in range(5):
+            for seg, name in ((0, "h1"), (1, "h2")):
+                g = [v for (q, p_, _, _), v in cells.items() if q == qb_ and p_ == pb_ and v[0] == seg]
+                print(f"  score fifth {qb_ + 1} {name}: " + cl(g))
     print(f"done in {time.time() - t0:.0f}s")
     raise SystemExit(0)
 
