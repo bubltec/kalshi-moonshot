@@ -80,7 +80,16 @@ def build(job):
                         kp = max(range(len(bids)), key=bids.__getitem__)
                         path = (bids[kp], min(bids[:kp + 1]), min(asks[:max(1, j6 - j0)]), min(asks), min(bids), t - qt[j0 - 1] if j0 else 99.0)  # the side's later peak bid, its lowest bid before that peak, its lowest ask in the next 60 s, its lowest ask and lowest bid to the close
                     else: path = None  # (the last element of path is the quote's age at the reading, seconds)
-                    rows.append((t, br.side_vector(f, side, ask), [(p - ask - fee(ask)) / ask for p in pays], ask, ticker, side, close - t, 1.0 if won else 0.0, close, kind, path))
+                    later = None
+                    if V == "forms":  # the side's bid and ask every 5 s from the reading to 15 s before the close
+                        import array
+                        lb, la = array.array("f"), array.array("f")
+                        for k5 in range(1, int((close - 15.0 - t) // 5.0) + 1):
+                            jj = bisect.bisect_right(qt, t + 5.0 * k5) - 1
+                            yb, ya = qb[jj] / scale, qa[jj] / scale
+                            lb.append(yb if side == "yes" else 1.0 - ya); la.append(ya if side == "yes" else 1.0 - yb)
+                        later = (lb, la)
+                    rows.append((t, br.side_vector(f, side, ask), [(p - ask - fee(ask)) / ask for p in pays], ask, ticker, side, close - t, 1.0 if won else 0.0, close, kind, path, later))
             t += STEP
     return rows
 
@@ -89,7 +98,7 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
 S.sort(key=lambda r: r[0])
 print(f"VARIANT {V}: {len(S)} gated sides ({sum(1 for r in S if r[9] == 'commodity')} commodity), {time.time() - t0:.0f}s", flush=True)
 
-COLS = [NI["czb"]] if V == "cushonly" else FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V in ("winp", "winp0", "value", "table") else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
+COLS = [NI["czb"]] if V == "cushonly" else FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V in ("winp", "winp0", "value", "table", "forms") else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
 def X(r): return [r[1][i] for i in COLS]
 def sigm(z): return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z))))
 
@@ -119,7 +128,7 @@ def fit(tr):
     sd = [math.sqrt(sum((x[i] - mu[i]) ** 2 for x in xs) / len(xs)) or 1.0 for i in range(n)]
     sub = tr[::3]
     m = {"mu": mu, "sd": sd, "lam": br.RIDGE}
-    if V in ("logit", "winp", "winp0", "value", "table", "cushonly"):
+    if V in ("logit", "winp", "winp0", "value", "table", "forms", "cushonly"):
         w = [0.0] * (n + 1)
         K = n + 1
         vs = [[1.0] + [(x[i] - mu[i]) / sd[i] for i in range(n)] for x in (X(r) for r in sub)]
@@ -166,7 +175,7 @@ def pred(m, r):
     """(score used to rank, predicted hold net per $1, predicted best-exit net) all capped at the ceiling."""
     x = X(r); v = [1.0] + [(a - u) / d for a, u, d in zip(x, m["mu"], m["sd"])]
     ce = br.ceiling(r[3])
-    if V in ("winp", "winp0", "value", "table", "cushonly"):
+    if V in ("winp", "winp0", "value", "table", "forms", "cushonly"):
         p = sigm(sum(a * b for a, b in zip(m["w"], v)))
         return p, p, p  # the score is the predicted chance to win, from the curve readings alone
     if V == "logit":
@@ -182,7 +191,7 @@ cm = [r for r in S if r[9] == "commodity"]
 t_start, t_end = cm[0][0] + 24 * 3600, cm[-1][0]
 t_hold = t_end - 24 * 3600
 t_mid = (t_start + t_hold) / 2
-inb = (lambda r: True) if V in ("winp0", "value", "table") else (lambda r: br.usable(r[3]) and BAND[0] <= r[3] < BAND[1])  # winp0: the risk score is evaluated on EVERY gated tick, no ask band
+inb = (lambda r: True) if V in ("winp0", "value", "table", "forms") else (lambda r: br.usable(r[3]) and BAND[0] <= r[3] < BAND[1])  # winp0: the risk score is evaluated on EVERY gated tick, no ask band
 def band_of(a):
     for k, (lo, hi) in enumerate(BANDS):
         if lo <= a < hi: return k
@@ -380,6 +389,53 @@ if V == "table":
             for seg, name in ((0, "h1"), (1, "h2")):
                 g = [v for (k0, k1, _, _), v in tcells.items() if k0 == 3 and k1 == pb_ and v[0] == seg and (0 if v[5] <= c3[0] else 1 if v[5] <= c3[1] else 2) == c_]
                 if len(g) >= 15: print(f"  ask {pa:.2f}-{min(pz, 1.0):.2f} cushion {('low', 'mid', 'high')[c_]} {name}: " + cl(g))
+    print(f"done in {time.time() - t0:.0f}s")
+    raise SystemExit(0)
+
+
+if V == "forms":
+    # HOW THE SCORE ACTS ON THE PRICE (2026-11-21, user: "we are trying to figure out whether the risk score is a multiple, divisor, or other factor of the price. And the only way to do this is to test how we use it"). Each form applies the price-free win-chance score s (0-1, winp0, hourly refit) to the ask a and that decides the buy and the price paid. The lane range is the user's example 0.60-0.85. One order per market side per form, at the FIRST reading (fresh quote, age <= 10 s) the form accepts. A resting order keeps its price and fills at the first later 5-second quote whose ask is at or under it (15 s before the close at the latest); an order at the ask fills at once. Reported per form: orders, fills, the price paid, minutes into the market at the fill, how often the bid later went 5c / 10c over the price paid, how far the bid fell first, how often it never got 1c over the price paid, and the share that won. No comparison with Kalshi's odds; no net held to settlement.
+    LO, HI = 0.60, 0.85
+    FORMS = (("baseline: price in range, buy at the ask (no score)", lambda a, s: a if LO <= a <= HI else None),
+             ("multiply-range: price x score in range, buy at the ask", lambda a, s: a if LO <= a * s <= HI else None),
+             ("divide-range: price / score in range, buy at the ask", lambda a, s: a if LO <= a / max(s, 0.01) <= HI else None),
+             ("multiply-rest: price in range, rest at price x score", lambda a, s: a * s if LO <= a <= HI else None),
+             ("gentle-rest: price in range, rest at price x sqrt(score)", lambda a, s: a * math.sqrt(s) if LO <= a <= HI else None))
+    def hour_forms(t):
+        if t >= t_hold: return None
+        a0, a1, b1 = (bisect.bisect_left(times, x) for x in (t - WIN * 3600, t, t + 3600))
+        tr = [r for r in S[a0:a1] if r[8] <= t]
+        te = [r for r in S[a1:b1] if r[9] == "commodity"]
+        if len(tr) < 1500 or len(te) < 100: return None
+        m = fit(tr)
+        seg = 0 if t < t_mid else 1
+        return [(seg, r[4], r[5], r[3], pred(m, r)[0], r[11], r[7], (900.0 - r[6]) / 60.0) for r in te if r[10] is not None and r[10][5] <= 10.0 and r[11] is not None and len(r[11][0]) > 0]
+    got = [dict() for _ in FORMS]
+    with multiprocessing.get_context("fork").Pool(4) as pool:
+        for res in pool.imap(hour_forms, range(int(t_start), int(t_end - 3600), 3600)):
+            for seg, tk, sd, a, s, (lb, la), won, el in res or ():
+                for fi, (_, fn) in enumerate(FORMS):
+                    if (tk, sd) in got[fi]: continue
+                    px = fn(a, s)
+                    if px is None: continue
+                    px = round(px, 2)
+                    kf = 0 if px >= a - 1e-9 else next((k for k, x in enumerate(la) if x <= px + 1e-9), None)
+                    if kf is None:
+                        got[fi][(tk, sd)] = (seg, None, a, s, el, won); continue
+                    after = lb[kf:]
+                    kp = max(range(len(after)), key=after.__getitem__)
+                    got[fi][(tk, sd)] = (seg, (px, after[kp], min(after[:kp + 1]), el + 5.0 * kf / 60.0), a, s, el, won)
+    for seg, name in ((0, "half 1"), (1, "half 2")):
+        print(f"\n######## {name}")
+        for fi, (lab, _) in enumerate(FORMS):
+            o = [v for v in got[fi].values() if v[0] == seg]
+            f_ = [v for v in o if v[1] is not None]
+            if not f_:
+                print(f" {lab}: orders {len(o)}, no fills"); continue
+            n = len(f_); mean = lambda xs: sum(xs) / n
+            rise = [v[1][1] - v[1][0] for v in f_]; fall = [v[1][0] - v[1][2] for v in f_]
+            sh = lambda xs, k: 100.0 * sum(1 for x in xs if x >= k - 1e-9) / n
+            print(f" {lab}:\n     orders {len(o)} filled {n} ({100.0 * n / len(o):.0f}%) | ask at the order {sum(v[2] for v in o) / len(o):.2f} score {sum(v[3] for v in o) / len(o):.2f} | paid {mean([v[1][0] for v in f_]):.3f} at minute {mean([v[1][3] for v in f_]):.1f} | bid later over the price paid: >=+5c {sh(rise, 0.05):.0f}% >=+10c {sh(rise, 0.10):.0f}% mean {100 * mean(rise):+.1f}c | bid fell {100 * mean(fall):.1f}c first | never 1c over {100.0 * sum(1 for x in rise if x < 0.01) / n:.0f}% | won {100 * mean([v[5] for v in f_]):.0f}%")
     print(f"done in {time.time() - t0:.0f}s")
     raise SystemExit(0)
 
