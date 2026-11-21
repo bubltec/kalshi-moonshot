@@ -1,0 +1,27 @@
+VARIANT winp0: 33154 gated sides (33154 commodity), 67s
+training per hour: mean rows 12283 (commodity), mean distinct markets 1427; ridge strength mean 1.0; hours 86
+
+=== winp0 top 5%
+ half 1: bar +0.948 n  157 win 0.95 se 0.018 | universe win 0.66 lift +0.287 (+16.4 se) | mean predicted win 0.96
+    by slope third: low n   33 win 0.97 se 0.030 | universe win 0.66 lift +0.308 (+10.3 se) | mean predicted win 0.96 | mid n   51 win 0.92 se 0.038 | universe win 0.66 lift +0.260 (+6.9 se) | mean predicted win 0.96 | high n   73 win 0.96 se 0.023 | universe win 0.66 lift +0.297 (+12.8 se) | mean predicted win 0.96
+    by curv third: low n   21 win 1.00 se 0.000 | universe win 0.66 lift +0.338 (+49006.3 se) | mean predicted win 0.96 | mid n   38 win 0.87 se 0.055 | universe win 0.66 lift +0.207 (+3.8 se) | mean predicted win 0.96 | high n   98 win 0.97 se 0.017 | universe win 0.66 lift +0.308 (+17.7 se) | mean predicted win 0.96
+ half 2: bar +0.960 n  379 win 0.97 se 0.009 | universe win 0.65 lift +0.312 (+33.4 se) | mean predicted win 0.97
+    by slope third: low n   95 win 0.96 se 0.021 | universe win 0.65 lift +0.305 (+14.8 se) | mean predicted win 0.97 | mid n  118 win 0.97 se 0.014 | universe win 0.65 lift +0.321 (+22.2 se) | mean predicted win 0.97 | high n  166 win 0.96 se 0.014 | universe win 0.65 lift +0.311 (+21.4 se) | mean predicted win 0.97
+    by curv third: low n   51 win 0.94 se 0.033 | universe win 0.65 lift +0.288 (+8.7 se) | mean predicted win 0.97 | mid n  116 win 0.98 se 0.012 | universe win 0.65 lift +0.329 (+27.3 se) | mean predicted win 0.97 | high n  212 win 0.96 se 0.013 | universe win 0.65 lift +0.309 (+23.6 se) | mean predicted win 0.97
+
+=== winp0 top 10%
+ half 1: bar +0.927 n  235 win 0.93 se 0.017 | universe win 0.66 lift +0.266 (+15.7 se) | mean predicted win 0.94
+    by slope third: low n   59 win 0.92 se 0.036 | universe win 0.66 lift +0.253 (+7.0 se) | mean predicted win 0.94 | mid n   78 win 0.91 se 0.032 | universe win 0.66 lift +0.248 (+7.7 se) | mean predicted win 0.94 | high n   98 win 0.95 se 0.022 | universe win 0.66 lift +0.287 (+12.9 se) | mean predicted win 0.94
+    by curv third: low n   35 win 0.91 se 0.047 | universe win 0.66 lift +0.252 (+5.3 se) | mean predicted win 0.94 | mid n   70 win 0.89 se 0.038 | universe win 0.66 lift +0.224 (+5.9 se) | mean predicted win 0.94 | high n  130 win 0.95 se 0.018 | universe win 0.66 lift +0.292 (+15.9 se) | mean predicted win 0.94
+ half 2: bar +0.937 n  658 win 0.95 se 0.008 | universe win 0.65 lift +0.300 (+36.3 se) | mean predicted win 0.96
+    by slope third: low n  183 win 0.95 se 0.017 | universe win 0.65 lift +0.292 (+17.4 se) | mean predicted win 0.96 | mid n  200 win 0.97 se 0.012 | universe win 0.65 lift +0.317 (+26.3 se) | mean predicted win 0.96 | high n  275 win 0.95 se 0.014 | universe win 0.65 lift +0.292 (+21.3 se) | mean predicted win 0.95
+    by curv third: low n  108 win 0.94 se 0.024 | universe win 0.65 lift +0.282 (+11.9 se) | mean predicted win 0.95 | mid n  218 win 0.96 se 0.013 | universe win 0.65 lift +0.305 (+22.7 se) | mean predicted win 0.96 | high n  332 win 0.95 se 0.011 | universe win 0.65 lift +0.302 (+26.5 se) | mean predicted win 0.95
+
+######## VALUE CHECK (after the risk score; the ask is NOT in the score)
+ half 1 UNIVERSE: n 1721 mean ask 0.684 net/$1 -0.058 se 0.018 (-3.3 se) mix 0.00-0.40:0.01 0.40-0.60:0.24 0.60-0.85:0.63 0.85-1.00:0.12
+   top  5%: n 157 mean ask 0.941 | win minus ask +0.008 se 0.017 (+0.5 se) | net/$1 +0.004 se 0.020 (+0.2 se) | mix 0.00-0.40:0.00 0.40-0.60:0.00 0.60-0.85:0.08 0.85-1.00:0.92
+   top 10%: n 235 mean ask 0.932 | win minus ask -0.004 se 0.016 (-0.3 se) | net/$1 -0.011 se 0.019 (-0.6 se) | mix 0.00-0.40:0.00 0.40-0.60:0.00 0.60-0.85:0.07 0.85-1.00:0.93
+ half 2 UNIVERSE: n 2570 mean ask 0.664 net/$1 -0.042 se 0.015 (-2.9 se) mix 0.00-0.40:0.01 0.40-0.60:0.29 0.60-0.85:0.61 0.85-1.00:0.09
+   top  5%: n 379 mean ask 0.952 | win minus ask +0.013 se 0.008 (+1.6 se) | net/$1 +0.008 se 0.010 (+0.8 se) | mix 0.00-0.40:0.00 0.40-0.60:0.01 0.60-0.85:0.03 0.85-1.00:0.96
+   top 10%: n 658 mean ask 0.945 | win minus ask +0.008 se 0.008 (+1.0 se) | net/$1 +0.003 se 0.009 (+0.4 se) | mix 0.00-0.40:0.00 0.40-0.60:0.01 0.60-0.85:0.02 0.85-1.00:0.97
+done in 85s
