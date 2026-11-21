@@ -83,6 +83,7 @@ class Bankroll:
         self._cached: dict[int, tuple[float, Balance]] = {}
         self._realized: tuple[float, float] | None = None  # (taken at, dollars returned minus staked on finished paper bets)
         self._cash: dict[int, tuple[float, float, float]] = {}  # id(client) -> (taken at, cash, portfolio value)
+        self._open_memo: tuple[list, dict[str, float], dict[str, float]] | None = None  # (the bet book it was summed from, open paper stake by lane, open real stake by lane)
 
     def refresh(self, client: Any, s: Settings) -> None:
         """Background job: the snapshot the decision reads. The database and Kalshi are read here and nowhere in a decision."""
@@ -93,8 +94,11 @@ class Bankroll:
             cash = float(resp.get("balance_dollars") or (resp.get("balance") or 0) / 100.0)
             self._cash[id(client)] = (time.time(), cash, float(resp.get("portfolio_value") or 0) / 100.0)
 
-    def _read_served(self, client: Any, s: Settings, live: bool) -> Balance:
-        book = self.store._book() or []
+    def _open_by_lane(self, book: list) -> tuple[dict[str, float], dict[str, float]]:
+        """The open stake of each lane (paper, real), summed once for each bet book and reused until the bet book is replaced (the keeper rebuilds it in the background, and an order rebuilds it at once). A buy decision used to sum every row of the book itself: 15-19 ms of the "balance read" step on the host, 2026-11-21 (user: balance reads should be a background task, not part of the decision)."""
+        hit = self._open_memo
+        if hit is not None and hit[0] is book:
+            return dict(hit[1]), dict(hit[2])
         open_paper: dict[str, float] = {}
         open_real: dict[str, float] = {}
         for r in book:
@@ -102,6 +106,12 @@ class Bankroll:
                 lane = r["lane"] or "moonshot"
                 into = open_real if r["mode"] == "trade" else open_paper
                 into[lane] = into.get(lane, 0.0) + r["stake_usd"]
+        self._open_memo = (book, open_paper, open_real)
+        return dict(open_paper), dict(open_real)
+
+    def _read_served(self, client: Any, s: Settings, live: bool) -> Balance:
+        book = self.store._book() or []
+        open_paper, open_real = self._open_by_lane(book)
         realized = self._realized[1] if self._realized else 0.0
         equity = s.paper_bankroll_usd + realized
         if equity < s.paper_bankroll_usd:

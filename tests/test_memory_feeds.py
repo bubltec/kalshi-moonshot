@@ -50,6 +50,33 @@ def test_the_balance_in_a_decision_comes_from_the_bet_book_and_a_snapshot_not_th
         assert store.bankroll.read(object(), s, live=False).open_by_lane["a"] == 8.0
 
 
+def test_the_open_stakes_are_summed_once_for_each_bet_book_not_on_every_decision(tmp_path, monkeypatch):
+    """2026-11-21: the 'balance read' step of a buy decision took 15-19 ms on the host because it summed every row of the bet book each time. The sum is kept for the book it was made from and made again only when the book is replaced."""
+    from kalshi_moonshot import bankroll as bankroll_mod
+
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    bet(store, "a", 5.0)
+    bet(store, "b", 7.0, ticker="KX-2")
+    store.rebuild_book()
+    store_mod._BACKGROUND["on"] = True
+    store.bankroll.refresh(object(), s)
+    store.bankroll.served = True
+    seen = []
+    real = bankroll_mod._sized_open
+    monkeypatch.setattr(bankroll_mod, "_sized_open", lambda row: (seen.append(1), real(row))[1])
+    first = store.bankroll.read(object(), s, live=False)
+    rows_summed = len(seen)
+    assert rows_summed >= 2 and first.open_by_lane == {"a": 5.0, "b": 7.0}
+    for _ in range(5):
+        again = store.bankroll.read(object(), s, live=False)
+    assert len(seen) == rows_summed and again.open_by_lane == first.open_by_lane  # the same book: nothing summed again
+    again.open_by_lane["a"] = 99.0  # a caller's copy does not change what the next read sees
+    assert store.bankroll.read(object(), s, live=False).open_by_lane["a"] == 5.0
+    bet(store, "a", 3.0, ticker="KX-3")  # a new bet replaces the book: the next read sums it
+    assert store.bankroll.read(object(), s, live=False).open_by_lane["a"] == 8.0 and len(seen) > rows_summed
+
+
 def test_a_live_balance_is_the_snapshot_and_a_missing_one_is_cold_memory_not_a_request(tmp_path):
     s = type(settings(tmp_path))(**{**settings(tmp_path).__dict__, "mode": "trade"})
     store = Store(s.db_path)
