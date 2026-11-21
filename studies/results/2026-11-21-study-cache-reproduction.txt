@@ -1,0 +1,16 @@
+Study cache reproduction, 2026-11-21 (scripts/study_cache_build.py, study_cache.py, study_cache_fit_base.py, study_cache_digest.py / _local.py).
+Question: does the cache give the same rows and the same base-fit result as the runner's own script, and how fast is an iteration?
+Reference = scripts/binary_risk_fit_search.py V=base on the runner (job 20261121-074632-84694, backup moonshot-20261120, newest settled market 11-19 23:45Z). Cache = job 20261121-074523-83364 (14,199 windows, 101 MB in 8 parts). Same backup.
+
+ROWS (job 20261121-080555-86762 digest vs the cache): 33,154 gated commodity sides on both. Sums of ask, wins, seconds left and the five nets per $1 are identical; the 26 side-vector column sums differ by at most 9e-7 relative (tick times stored to the microsecond, quote prices on the 1/10,000 grid); 14 sampled markets' rows are identical to 6 places. So the cache holds the runner's data. Training size also matches: 12,283 mean commodity rows an hour, 1,427 markets, 86 hours.
+
+BASE FIT, top 5% (commodity 0.60-0.85, held, net per $1):
+ runner V=base              half 1 n 94  net -0.039 (bar +0.160) | half 2 n 209 net +0.016 (bar +0.091)
+ session figures quoted     half 1 n 102 net -0.012            | half 2 n 211 net +0.053   (their run; not in studies/results)
+ cache, ties by ticker      half 1 n 78  net -0.110 (bar +0.122) | half 2 n 190 net -0.040 (bar +0.084)
+ cache, tie seed 1..5       half 1 n 73-93 net -0.043 to -0.080 (bar +0.120 to +0.182) | half 2 n 192-210 net +0.005 to +0.066 (bar +0.080 to +0.095)
+Why the numbers differ: the data is the same; the fit is not deterministic. Markets tick on the same minute grid, so many rows share a time, and the fit uses every third row (and the bar every fourth) of the rows sorted by time; with ties the order comes from multiprocessing imap_unordered, so each runner run subsamples different rows. Shuffling only the tie order on the cache moves half 2 from -0.040 to +0.066 and half 1's bar from +0.12 to +0.18. The runner's -0.039/+0.016 and the quoted -0.012/+0.053 both sit inside that spread. Any difference between two variants smaller than this (about 0.05-0.1 per half at n 75-200; the standard error alone is 0.04-0.08) is noise from the subsample, not a result. Use TIE=<seed> to see it; a fair comparison fits on every row or averages seeds. (Not changed in this commit: the fit scripts keep their subsample.)
+
+TIMING per iteration:
+ before, one runner task: 752 s wall (12.5 min) for the base fit, of which 81 s was the script (task start and backup restore are the rest); the build of the cache took 14 min wall (412 s of script).
+ after, on the Mac (4 processes): 20 s the first time per change to a reading (building 160,923 readings), then 4 s for the whole base fit (loading the derived rows 0.9 s). About 190x faster per iteration.
