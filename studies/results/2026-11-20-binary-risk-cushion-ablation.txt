@@ -1,0 +1,28 @@
+Cushion ablation, 2026-11-20 (scripts/binary_risk_cushion_ablation.py; forms fixed before the run). Z last tick | A three separate free | B three non-negative | C blended | D blended + gate (today) | E three non-negative + gate. Commodity perp, 0.60-0.85, held, hourly refit trailing 120 h, two halves. se of a net is about 0.04-0.05 (n 160-600).
+Reading: nothing here is outside noise. Three separate cushions (A) do not beat the last tick (Z) or the blend (C): top 5% net A -0.018/-0.021, Z -0.040/+0.019, C -0.040/-0.012. The gate (D, E vs C) is the only consistent change: +0.026 and +0.039 net at top 5%, +0 and +0.012 at top 10%, within noise, and it removes the 33-45% of ungated picks that had a negative cushion. PREDICTED net of the picks (+0.22/+0.12 for D) is 0.13-0.25 above realised (-0.014/+0.027): the model's predicted gain is mostly not realised. Non-negative weights go to about zero (B, E): the cushion adds almost nothing once the other readings are in.
+
+=== top 5% (commodity, 0.60-0.85, held; net per $1 after the fee)
+ Z: bar +0.161 half 1: n  200 net -0.040 win 0.67 lift +0.017 pred +0.274 neg-cushion 36% | half 2: n  298 net +0.019 win 0.69 lift +0.069 pred +0.181 neg-cushion 45%
+ A: bar +0.165 half 1: n  195 net -0.018 win 0.68 lift +0.039 pred +0.281 neg-cushion 33% | half 2: n  311 net -0.021 win 0.67 lift +0.029 pred +0.182 neg-cushion 38%
+ B: bar +0.165 half 1: n  197 net -0.054 win 0.65 lift +0.003 pred +0.278 neg-cushion 34% | half 2: n  298 net -0.013 win 0.67 lift +0.037 pred +0.183 neg-cushion 35%
+ C: bar +0.164 half 1: n  198 net -0.040 win 0.67 lift +0.017 pred +0.277 neg-cushion 35% | half 2: n  303 net -0.012 win 0.68 lift +0.039 pred +0.185 neg-cushion 39%
+ D: bar +0.104 half 1: n  160 net -0.014 win 0.71 lift +0.043 pred +0.220 neg-cushion 0% | half 2: n  203 net +0.027 win 0.74 lift +0.077 pred +0.115 neg-cushion 0%
+ E: bar +0.104 half 1: n  160 net -0.006 win 0.71 lift +0.051 pred +0.220 neg-cushion 0% | half 2: n  197 net +0.023 win 0.74 lift +0.073 pred +0.115 neg-cushion 0%
+
+=== top 10% (commodity, 0.60-0.85, held; net per $1 after the fee)
+ Z: bar +0.122 half 1: n  305 net -0.071 win 0.65 lift -0.015 pred +0.228 neg-cushion 38% | half 2: n  577 net +0.017 win 0.70 lift +0.068 pred +0.150 neg-cushion 46%
+ A: bar +0.126 half 1: n  298 net -0.073 win 0.65 lift -0.016 pred +0.235 neg-cushion 37% | half 2: n  593 net +0.002 win 0.69 lift +0.053 pred +0.151 neg-cushion 40%
+ B: bar +0.125 half 1: n  289 net -0.061 win 0.65 lift -0.004 pred +0.236 neg-cushion 35% | half 2: n  583 net +0.018 win 0.70 lift +0.069 pred +0.151 neg-cushion 39%
+ C: bar +0.125 half 1: n  306 net -0.062 win 0.65 lift -0.005 pred +0.231 neg-cushion 36% | half 2: n  593 net +0.002 win 0.69 lift +0.052 pred +0.152 neg-cushion 41%
+ D: bar +0.069 half 1: n  262 net -0.063 win 0.68 lift -0.006 pred +0.179 neg-cushion 0% | half 2: n  402 net -0.010 win 0.72 lift +0.041 pred +0.087 neg-cushion 0%
+ E: bar +0.068 half 1: n  262 net -0.063 win 0.68 lift -0.006 pred +0.179 neg-cushion 0% | half 2: n  411 net +0.013 win 0.74 lift +0.063 pred +0.085 neg-cushion 0%
+
+=== cushion weights (standardised, hold exit) averaged over the refit hours, in the order of each variant's cushion columns
+ Z: +0.062 -0.006  (110 hours)
+ A: +0.101 +0.190 -0.235 +0.057 +0.246 -0.249  (110 hours)
+ B: +0.022 +0.007 +0.000 +0.013 +0.005 +0.000  (110 hours)
+ C: +0.028 +0.005  (110 hours)
+ D: -0.008 +0.014  (107 hours)
+ E: +0.000 +0.001 +0.001 +0.013 +0.002 +0.000  (107 hours)
+done in 226s
+exit=0  results in job-results/20261120-233106-54510/
