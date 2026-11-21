@@ -195,6 +195,7 @@ def test_unit_a_model_built_before_the_cap_is_refit_at_once(tmp_path, monkeypatc
     fresh = binaryrisk.fit(rows())
     assert fresh["capped"] is True
     (tmp_path / "binary_risk_model.json").write_text(json.dumps(fresh))
+    (tmp_path / "binary_win_model.json").write_text(json.dumps(binaryrisk.fit_win(rows())))  # the win-chance model is refit with it: a missing one is a refit due
     binaryrisk._cache.update(mtime=None, data=None)
     assert binaryrisk.maybe_refit(s, now=fresh["built_at"] + 60.0) is False and not started  # a capped model fitted a minute ago: left alone
     old = {k: v for k, v in fresh.items() if k != "capped"}
@@ -425,3 +426,72 @@ def test_integration_admits_refuses_a_side_the_gate_blocks_with_the_reason(tmp_p
     sh = LongShot(ticker="KXCOPPER15M-26NOV180630-30", title="t", rules="r", bid=0.69, ask=0.70, volume=1.0, close_time="2026-11-18T11:30:00Z", hours_to_close=300.0 / 3600.0, series="KXCOPPER15M", side="yes")
     ok, why = binaryrisk.admits(s, sh, 0.70, now=now)
     assert not ok and "weakest cushion" in why
+
+
+# ---- the price-free win-chance score and its shadow step (2026-11-21)
+FLAT = ("left", "czb", "czlb", "tr13", "tr35", "vr", "amp15", "pos15", "pos30", "pos60", "mv15", "mv30", "mv60", "sl15", "sl30", "sl60", "cv15", "cv30", "cv60", "ft15", "ft30", "ft60", "dr24", "dr72")
+
+
+def win_rows(n=6000, seed=3):
+    """Training sides where a high cushion wins and a low one loses; the ask is unrelated to the outcome here."""
+    rnd = random.Random(seed)
+    out = []
+    for _ in range(n):
+        x = [0.0] * len(binaryrisk.NAMES)
+        ask = rnd.uniform(0.25, 0.9)
+        cz = rnd.uniform(-2, 2)
+        x[0] = math.log(ask / (1 - ask)); x[1] = 10 * (ask - 0.5) ** 2; x[2] = cz
+        won = 1.0 if rnd.random() < 1.0 / (1.0 + math.exp(-2.0 * cz)) else 0.0
+        out.append((x, [(won - ask - binaryrisk.fee(ask)) / ask] * 5, ask))
+    return out
+
+
+def test_unit_the_win_chance_fit_finds_the_cushion_has_no_ask_reading_and_is_calibrated_at_the_top():
+    m = binaryrisk.fit_win(win_rows())
+    assert m["names"] == binaryrisk.NAMES[2:] and "logit_ask" not in m["names"] and "ask_off" not in m["names"]
+    lo, hi = [0.0] * len(m["names"]), [0.0] * len(m["names"])
+    i = m["names"].index("czb")
+    lo[i], hi[i] = -1.5, 1.5
+    assert binaryrisk.win_chance(m, hi) > 0.85 > 0.15 > binaryrisk.win_chance(m, lo)
+    top = [c for c in m["calibration"] if c["n"] >= 100 and c["lo"] >= 0.9]
+    assert top and all(abs(c["win"] - (c["lo"] + min(c["hi"], 1.0)) / 2.0) < 0.06 for c in top)  # the top bands win about as often as they say
+
+
+def test_unit_the_win_chance_does_not_move_with_the_price():
+    m = binaryrisk.fit_win(win_rows())
+    f = {k: 0.0 for k in FLAT}
+    f.update(czb=1.0, left=5.0)
+    assert binaryrisk.win_vector(f, "yes") == binaryrisk.side_vector(f, "yes", 0.31)[2:] == binaryrisk.side_vector(f, "yes", 0.93)[2:]
+    assert binaryrisk.win_chance(m, binaryrisk.win_vector(f, "yes")) > binaryrisk.win_chance(m, binaryrisk.win_vector(f, "no"))  # NO is the side's own view
+
+
+def test_integration_the_win_chance_step_never_says_no_reads_every_ask_and_notes_the_readings(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    ctx = buychain.Ctx(s=s, spec=None)
+    got = buychain.STEPS["win_chance_shadow"](ctx, shot())
+    assert got.ok and "no model" in got.why  # no model yet: a shadow, not a block
+    (tmp_path / "binary_win_model.json").write_text(json.dumps(binaryrisk.fit_win(win_rows())))
+    f = {k: 0.0 for k in FLAT}
+    f.update(cz1=1.0, cz3=1.0, cz5=1.0, czb=1.0, left=5.0)
+    monkeypatch.setattr(binaryrisk, "_curve", lambda shot, now: (f, ""))
+    notes = set()
+    for ask in (0.30, 0.50, 0.93):  # no ask band: the dead range and the cheap side are read like any other
+        got = buychain.STEPS["win_chance_shadow"](ctx, shot(ask=ask))
+        assert got.ok and "win chance" in got.why and "cushion +1.0" in got.why
+        notes.add(got.why)
+    assert len(notes) == 1  # the same curve scores the same at any price
+    monkeypatch.setattr(binaryrisk, "_curve", lambda shot, now: (None, "binary risk: only 2.0 minutes left (no buy inside the last 3)."))
+    got = buychain.STEPS["win_chance_shadow"](ctx, shot())
+    assert got.ok and "no win chance" in got.why and "2.0 minutes" in got.why  # the gate's reason, still no block
+    monkeypatch.setattr(binaryrisk, "win_read", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert buychain.STEPS["win_chance_shadow"](ctx, shot()).ok
+
+
+def test_unit_the_win_chance_step_is_a_named_shadow_step_and_starts_the_refit():
+    from types import SimpleNamespace as NS
+
+    from kalshi_moonshot import lanes
+
+    assert "win_chance_shadow" in lanes.BUY_STEPS
+    assert binaryrisk.wanted({"a": NS(enabled=True, buy_chain=("price", "win_chance_shadow"))})

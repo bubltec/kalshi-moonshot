@@ -340,6 +340,18 @@ def binary_risk_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(True, f"shadow: {'would buy' if ok else 'would not buy'}: {why}")
 
 
+@step("win_chance_shadow")
+def win_chance_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
+    """SHADOW, never says no (2026-11-21, user via parent): the price-free win-chance score (binaryrisk.win_read: a logistic fit of the side winning at settlement on the curve readings alone, read on every gated tick) goes in the decision's note with the readings it saw. No ask, edge or net is in it or in the ticks it reads; value (the score against the price) is a later, separate step. Reads memory only. It changes nothing the lane does."""
+    from . import binaryrisk
+
+    try:
+        pw, why = binaryrisk.win_read(ctx.s, shot)
+    except Exception as exc:  # a shadow reading that fails must never stop a buy
+        return Check(True, f"shadow: win chance unreadable ({exc})")
+    return Check(True, f"shadow: {why}" if pw is not None else f"shadow: no win chance ({why})")
+
+
 @step("binary_risk")
 def binary_risk_step(ctx: Ctx, shot: LongShot) -> Check:
     """The binary risk model decides the buy (2026-11-20, user: "I don't want anything else impacting it"): the side is bought when its predicted net per $1 (binaryrisk.py, read from the settlement index's own curve and the price paid, held to settlement or sold early, whichever the model finds best) is in the top 5% of the last day's sides. Never an ask of 0.45-0.55, never under 0.20. A model that is missing, a curve that cannot be read yet, or an error is a no, so a buy never rests on a guess. Reads memory only. A lane that wants only the model has this as the one step of its module and no exit module (it holds to settlement), so nothing else changes what is bought or sold."""

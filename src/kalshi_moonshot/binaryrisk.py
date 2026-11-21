@@ -43,7 +43,7 @@ _cache: dict[str, Any] = {"mtime": None, "data": None}
 _fitting: subprocess.Popen[bytes] | None = None
 
 
-STEPS = ("binary_risk_shadow", "binary_risk", "swing_risk")  # the buy steps that read this model: a lane naming either needs the refit and the recent outcomes
+STEPS = ("binary_risk_shadow", "binary_risk", "swing_risk", "win_chance_shadow")  # the buy steps that read this model: a lane naming either needs the refit and the recent outcomes
 
 
 def wanted(specs: Any) -> bool:
@@ -277,6 +277,89 @@ def fit(rows: list[tuple[list[float], list[float], float]], now: float | None = 
     return model
 
 
+WIN_NAMES = NAMES[2:]  # the readings without the two ask readings: the win-chance score has no price in it (user, 2026-11-21: "a different calculation aside from the price, which we then use to decide when a bet is a good idea")
+WIN_BANDS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95)  # the score bands whose realised win rate the model carries (a calibration table)
+
+
+def win_path(s: Any) -> Path:
+    return Path(s.data_dir) / "binary_win_model.json"
+
+
+def win_vector(f: dict[str, float], side: str) -> list[float]:
+    """The side's price-free readings, in WIN_NAMES' order (side_vector without its two ask readings)."""
+    return side_vector(f, side, 0.5)[2:]
+
+
+def _sigm(z: float) -> float:
+    return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z))))
+
+
+def fit_win(rows: list[tuple[list[float], list[float], float]], now: float | None = None) -> dict[str, Any]:
+    """The win-chance score: a ridge logistic fit of whether the side won at settlement on the price-free readings (the study's winp0: studies/results/2026-11-21-winp0-all-ticks-value-check.txt). rows are build_rows' (side vector, nets, ask); the outcome (the side paid $1) is read back from the held net, and the ask is not a reading in the fit. Carries a calibration table: the realised win rate of the training sides in each predicted band."""
+    xs = [r[0][2:] for r in rows]
+    ys = [1.0 if r[1][0] * r[2] + r[2] + fee(r[2]) > 0.5 else 0.0 for r in rows]
+    n = len(WIN_NAMES)
+    mu = [sum(x[i] for x in xs) / len(xs) for i in range(n)]
+    sd = [math.sqrt(sum((x[i] - mu[i]) ** 2 for x in xs) / len(xs)) or 1.0 for i in range(n)]
+    sub = list(range(0, len(xs), 3))
+    vs = [[1.0] + [(xs[j][i] - mu[i]) / sd[i] for i in range(n)] for j in sub]
+    K = n + 1
+    w = [0.0] * K
+    for _ in range(6):
+        H = [[0.0] * K for _ in range(K)]
+        g = [0.0] * K
+        for v, j in zip(vs, sub, strict=True):
+            p = _sigm(sum(a * b for a, b in zip(w, v, strict=True)))
+            ww = max(p * (1.0 - p), 1e-4)
+            for i in range(K):
+                g[i] += (ys[j] - p) * v[i]
+                for k in range(i, K):
+                    H[i][k] += ww * v[i] * v[k]
+        for i in range(K):
+            H[i][i] += RIDGE if i else 1e-6
+            g[i] -= RIDGE * w[i] if i else 0.0
+            for k in range(i):
+                H[i][k] = H[k][i]
+        w = [a + b for a, b in zip(w, _solve(H, g), strict=True)]
+    model: dict[str, Any] = {"names": WIN_NAMES, "mu": mu, "sd": sd, "w": w, "built_at": time.time() if now is None else now, "rows": len(rows), "train_hours": TRAIN_HOURS}
+    preds = [win_chance(model, x) for x in xs]
+    cal = []
+    for lo, hi in zip(WIN_BANDS, WIN_BANDS[1:] + (1.01,), strict=True):
+        got = [y for p, y in zip(preds, ys, strict=True) if lo <= p < hi]
+        cal.append({"lo": lo, "hi": hi, "n": len(got), "win": round(sum(got) / len(got), 4) if got else None})
+    model["calibration"] = cal
+    return model
+
+
+def win_chance(model: dict[str, Any], x: list[float]) -> float:
+    """The predicted chance the side wins at settlement, from its price-free readings."""
+    v = [1.0] + [(a - m) / d for a, m, d in zip(x, model["mu"], model["sd"], strict=True)]
+    return _sigm(sum(a * b for a, b in zip(model["w"], v, strict=True)))
+
+
+def win_read(s: Any, shot: Any, now: float | None = None) -> tuple[float | None, str]:
+    """(the side's win chance now, the note) or (None, why not). Memory only; no price, no ask band: every gated tick is read."""
+    p = win_path(s)
+    try:
+        model = json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None, "win chance: no model fitted yet."
+    if model.get("names") != WIN_NAMES:
+        return None, "win chance: the model was fitted on older readings, a refit is due."
+    f, why = _curve(shot, time.time() if now is None else now)
+    if f is None:
+        return None, why.replace("binary risk:", "win chance:")
+    pw = win_chance(model, win_vector(f, shot.side))
+    yes = shot.side == "yes"
+    sg = 1.0 if yes else -1.0
+    band = next((c for c in model.get("calibration", []) if c["lo"] <= pw < c["hi"] and c["win"] is not None), None)
+    cal = f"; its band ({band['lo']:.2f}-{min(band['hi'], 1.0):.2f}) won {band['win']:.2f} of {band['n']} training sides" if band else ""
+    note = (f"win chance {pw:.2f}{cal}; cushion {sg * f['czb']:+.1f} (1/3/5 min {sg * f['cz1']:+.1f}/{sg * f['cz3']:+.1f}/{sg * f['cz5']:+.1f}), trend {sg * f['tr13']:+.1f}, "
+            f"30-min place {f['pos30'] if yes else 1.0 - f['pos30']:.2f}, 30-min move {sg * f['mv30']:+.1f}, volatility ratio {f['vr']:+.2f}, 24 h drift {sg * f['dr24']:+.1f}, {f['left']:.1f} min left")
+    return pw, note
+
+
+
 NOT_COMMODITY = ("KXINX",)  # the stock index has a Kalshi perp reference but is not one of the commodity series (user, 2026-11-20: "S&P should not be in this"); a scope, not a rule: no buy or sell logic reads it
 
 
@@ -311,22 +394,14 @@ def gate(f: dict[str, float], side: str, left_s: float) -> str | None:
     return None
 
 
-def _read(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[dict[str, Any] | None, str]:
-    """The model's reading of one side now: ({model, f, pred, k}, "") or (None, why not). Reads memory only."""
+def _curve(shot: Any, now: float) -> tuple[dict[str, float] | None, str]:
+    """The side's curve readings now, gated: (readings, "") or (None, why not). Memory only; no price is read here (the win-chance score uses this alone)."""
     from . import ticks as ticks_mod
     from . import variants
 
-    model = load(s)
-    if model is None or not model.get("cuts"):
-        return None, "binary risk: no model fitted yet."
-    if model.get("names") != NAMES:
-        return None, "binary risk: the model was fitted on older readings, a refit is due."
-    if not usable(ask):
-        return None, f"binary risk: ask {ask:.2f} is not a bet (never 0.45-0.55, not under {ASK_FLOOR:.2f})."
     index = curve_index(shot.series)
     if not index:
         return None, f"binary risk: no Kalshi index or perp reference is read for {shot.series}."
-    now = time.time() if now is None else now
     got = ticks_mod.history.window(index, now - 3700.0, now)
     if not got or not got[0]:
         return None, f"binary risk: no tick history in memory for {index}."
@@ -340,6 +415,21 @@ def _read(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[dict
     why = gate(f, shot.side, shot.hours_to_close * 3600.0)
     if why:
         return None, f"binary risk: {why}."
+    return f, ""
+
+
+def _read(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[dict[str, Any] | None, str]:
+    """The model's reading of one side now: ({model, f, pred, k}, "") or (None, why not). Reads memory only."""
+    model = load(s)
+    if model is None or not model.get("cuts"):
+        return None, "binary risk: no model fitted yet."
+    if model.get("names") != NAMES:
+        return None, "binary risk: the model was fitted on older readings, a refit is due."
+    if not usable(ask):
+        return None, f"binary risk: ask {ask:.2f} is not a bet (never 0.45-0.55, not under {ASK_FLOOR:.2f})."
+    f, why = _curve(shot, time.time() if now is None else now)
+    if f is None:
+        return None, why
     pred, k = predict_capped(model, side_vector(f, shot.side, ask), ask)
     return {"model": model, "f": f, "pred": pred, "k": k}, ""
 
@@ -397,7 +487,12 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
     if _fitting is not None and _fitting.poll() is None:
         return False
     m = load(s)
-    if m and m.get("capped") and m.get("names") == NAMES and now - m["built_at"] < REFIT_EVERY:  # a model without the flag has a bar made from uncapped predictions: refit it at once
+    wm = None
+    try:
+        wm = json.loads(win_path(s).read_text())
+    except (OSError, ValueError):
+        pass
+    if m and m.get("capped") and m.get("names") == NAMES and now - m["built_at"] < REFIT_EVERY and wm and wm.get("names") == WIN_NAMES:  # a model without the flag has a bar made from uncapped predictions: refit it at once
         return False
     log.info("binary risk: refitting from the tape (separate process)")
     _fitting = subprocess.Popen([sys.executable, "-m", "kalshi_moonshot.binaryrisk"], preexec_fn=lambda: os.nice(15))  # lowers the child's priority only
@@ -478,10 +573,11 @@ def main() -> int:
         log.warning("binary risk: only %d training sides, the model is not refit", len(rows))
         return 1
     model = fit(rows, now)
-    p = model_path(s)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(model))
-    os.replace(tmp, p)
+    win = fit_win(rows, now)
+    for path, m in ((model_path(s), model), (win_path(s), win)):
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(m))
+        os.replace(tmp, path)
     log.info("binary risk: fitted on %d sides, bars %s", len(rows), {k: round(v, 3) for k, v in model["cuts"].items()})
     return 0
 
