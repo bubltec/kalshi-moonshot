@@ -211,8 +211,8 @@ def hour(t):
 
 
 if V == "value":
-    # THE BUY-SIDE VALUE CHECK (2026-11-21, user via parent: "build the buy-side value check now ... win chance minus ask minus the fee, against a bar read from that market's own recent history (rule 2, no fixed number), never an ask 0.45-0.55"). The win-chance score is the price-free one (winp0); this is a SEPARATE step after it. A reading is bought when edge = win chance - ask - fee(ask) is positive AND at least the QUANTILE of that market series' own edge readings over the previous 3 hours (needs 200 of them), never at an ask of 0.45-0.55. The three quantiles (0.80, 0.90, 0.95) are the settings tried (counted: 3 variants); the price-blind comparison is the score's own top 10% (the winp0 pick set). One first reading per market side, held to settlement, net per $1 after the buy fee.
-    QS, OWN_H, OWN_MIN = (0.80, 0.90, 0.95), 3 * 3600.0, 200
+    # THE BUY-SIDE VALUE CHECK (2026-11-21, user via parent: "build the buy-side value check now ... win chance minus ask minus the fee, against a bar read from that market's own recent history (rule 2, no fixed number), never an ask 0.45-0.55"). The win-chance score is the price-free one (winp0); this is a SEPARATE step after it. A reading is bought when edge = win chance - ask - fee(ask) is positive AND at least the QUANTILE of that market series' own edge readings over the previous 24 hours (needs 100 of them), never at an ask of 0.45-0.55. The three quantiles (0.80, 0.90, 0.95) are the settings tried (counted: 3 variants); the price-blind comparison is the score's own top 10% (the winp0 pick set). One first reading per market side, held to settlement, net per $1 after the buy fee.
+    QS, OWN_H, OWN_MIN = (0.80, 0.90, 0.95), 24 * 3600.0, 100  # first run (3 h, 200 readings) found no picks: a series has only ~8 gated readings an hour, so the history is the last 24 h with 100 needed (changed after seeing n=0, before seeing any value result)
     def sname(r): return r[4].split("-")[0]
     def hour_value(t):
         hold_hour = t >= t_hold

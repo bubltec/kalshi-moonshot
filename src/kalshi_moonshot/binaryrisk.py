@@ -43,7 +43,7 @@ _cache: dict[str, Any] = {"mtime": None, "data": None}
 _fitting: subprocess.Popen[bytes] | None = None
 
 
-STEPS = ("binary_risk_shadow", "binary_risk", "swing_risk", "win_chance_shadow")  # the buy steps that read this model: a lane naming either needs the refit and the recent outcomes
+STEPS = ("binary_risk_shadow", "binary_risk", "swing_risk", "win_chance_shadow", "win_value_shadow")  # the buy steps that read this model: a lane naming either needs the refit and the recent outcomes
 
 
 def wanted(specs: Any) -> bool:
@@ -357,6 +357,41 @@ def win_read(s: Any, shot: Any, now: float | None = None) -> tuple[float | None,
     note = (f"win chance {pw:.2f}{cal}; cushion {sg * f['czb']:+.1f} (1/3/5 min {sg * f['cz1']:+.1f}/{sg * f['cz3']:+.1f}/{sg * f['cz5']:+.1f}), trend {sg * f['tr13']:+.1f}, "
             f"30-min place {f['pos30'] if yes else 1.0 - f['pos30']:.2f}, 30-min move {sg * f['mv30']:+.1f}, volatility ratio {f['vr']:+.2f}, 24 h drift {sg * f['dr24']:+.1f}, {f['left']:.1f} min left")
     return pw, note
+
+
+
+VALUE_Q = 0.90  # the share of a market's own recent edge readings the bar sits above (the study's setting, chosen after seeing results: studies/results/2026-11-21-value-buy-study.txt)
+VALUE_KEEP = 24 * 3600.0  # the market's own recent edge readings: the last day (only gated readings count, about 8 an hour for a series, so three hours never held enough)
+VALUE_MIN = 100  # fewer own readings than this and the bar is not known: no buy
+VALUE_GAP = 60.0  # one stored reading per (market, side) per this many seconds (the study's step)
+_value: dict[str, Any] = {"hist": {}, "last": {}, "lock": threading.Lock()}
+
+
+def value_admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[bool, str]:
+    """The buy-side VALUE check (2026-11-21, user via parent: "win chance minus ask minus the fee, against a bar read from that market's own recent history (rule 2), never an ask 0.45-0.55"), a step SEPARATE from the price-free win-chance score and after it: edge = win chance - ask - the fee. The side is worth buying when its edge is positive and at least the VALUE_Q quantile of this market series' own edge readings over the last day (every gated reading of the series, either side, any ask, one per market side per minute; VALUE_MIN of them needed), and the ask is not 0.45-0.55. The win chance never sees the ask. Reads memory only."""
+    now = time.time() if now is None else now
+    pw, note = win_read(s, shot, now)
+    if pw is None:
+        return False, f"value: no win chance ({note})"
+    edge = pw - ask - fee(ask)
+    key = shot.series or shot.ticker.split("-")[0]
+    with _value["lock"]:
+        hist = _value["hist"].setdefault(key, deque())
+        while hist and hist[0][0] < now - VALUE_KEEP:
+            hist.popleft()
+        vals = sorted(v for _, v in hist)
+        sk = (shot.ticker, shot.side)
+        if now - _value["last"].get(sk, 0.0) >= VALUE_GAP:
+            _value["last"][sk] = now
+            hist.append((now, edge))
+    tag = f"value: win chance {pw:.2f} - ask {ask:.2f} - fee {fee(ask):.3f} = edge {edge:+.3f}"
+    if DEAD[0] <= ask <= DEAD[1]:
+        return False, tag + f", ask {ask:.2f} is in the never-buy range 0.45-0.55"
+    if len(vals) < VALUE_MIN:
+        return False, tag + f"; only {len(vals)} own readings in 24 h for {key}, the bar is not known (needs {VALUE_MIN})"
+    bar = vals[min(len(vals) - 1, int(len(vals) * VALUE_Q))]
+    tag += f" against the bar {bar:+.3f} (the top {(1 - VALUE_Q):.0%} of {len(vals)} own readings in 24 h)"
+    return edge > 0.0 and edge >= bar, tag
 
 
 

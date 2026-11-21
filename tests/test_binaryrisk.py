@@ -495,3 +495,80 @@ def test_unit_the_win_chance_step_is_a_named_shadow_step_and_starts_the_refit():
 
     assert "win_chance_shadow" in lanes.BUY_STEPS
     assert binaryrisk.wanted({"a": NS(enabled=True, buy_chain=("price", "win_chance_shadow"))})
+
+
+# ---- the buy-side value check after the win chance (2026-11-21)
+def _value_reset():
+    binaryrisk._value["hist"].clear()
+    binaryrisk._value["last"].clear()
+
+
+def test_unit_the_value_bar_comes_from_the_markets_own_recent_edges_and_never_the_dead_range(monkeypatch):
+    _value_reset()
+    s = None
+    now = 5_000_000.0
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.97, "win chance 0.97"))
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.50), 0.50, now=now)
+    assert not ok and "never-buy range" in why  # win chance 0.97 against an ask of 0.50 pays well, and still no (user's rule)
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.90), 0.90, now=now + 1.0)
+    assert not ok and "bar is not known" in why  # too few own readings: no bar, no buy
+    for i in range(300):  # the market's own recent edges (spaced so they stay inside a day): win chance 0.92 against asks 0.80..0.91
+        monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.92, "x"))
+        sh = shot(ask=0.80 + 0.0004 * i)
+        sh = LongShot(**{**sh.__dict__, "ticker": f"KXBTC15M-26NOV2000{i:02d}-00"})
+        binaryrisk.value_admits(s, sh, sh.ask, now=now + 100.0 + 31.0 * i)
+    later = now + 100.0 + 31.0 * 300
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.99, "x"))
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.85), 0.85, now=later)  # edge about +0.12: above its own history's top 10%
+    assert ok and "against the bar" in why
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.80, "x"))
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.85), 0.85, now=later + 61.0)  # win chance under the ask: no edge, no buy
+    assert not ok
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.88, "x"))
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.84), 0.84, now=later + 122.0)  # positive but under its own bar
+    assert not ok and "bar" in why
+
+
+def test_unit_the_value_history_is_per_market_series_and_past_readings_only(monkeypatch):
+    _value_reset()
+    now = 6_000_000.0
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.9, "x"))
+    for i in range(250):
+        sh = LongShot(**{**shot(ask=0.80).__dict__, "ticker": f"KXBTC15M-26NOV2000{i:02d}-00"})
+        binaryrisk.value_admits(None, sh, 0.80, now=now + 61.0 * i)
+    gold = LongShot(**{**commodity_shot(ask=0.80).__dict__})
+    ok, why = binaryrisk.value_admits(None, gold, 0.80, now=now + 61.0 * 251)
+    assert not ok and "only 0 own readings" in why and "KXGOLD15M" in why  # another series' history does not count
+    far = now + 61.0 * 250 + 25 * 3600.0
+    sh = LongShot(**{**shot(ask=0.80).__dict__, "ticker": "KXBTC15M-26NOV200999-00"})
+    ok, why = binaryrisk.value_admits(None, sh, 0.80, now=far)
+    assert not ok and "only 0 own readings" in why  # the last day only
+
+
+def test_integration_the_value_step_never_says_no_and_notes_the_verdict(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    ctx = buychain.Ctx(s=s, spec=None)
+    _value_reset()
+    got = buychain.STEPS["win_value_shadow"](ctx, shot())
+    assert got.ok and "would not buy" in got.why  # no win model yet: a shadow, not a block
+    monkeypatch.setattr(binaryrisk, "value_admits", lambda *a, **k: (True, "value: win chance 0.99 - ask 0.85"))
+    got = buychain.STEPS["win_value_shadow"](ctx, shot())
+    assert got.ok and got.why.startswith("shadow: would buy")
+    monkeypatch.setattr(binaryrisk, "value_admits", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert buychain.STEPS["win_value_shadow"](ctx, shot()).ok
+
+
+def test_unit_the_value_step_is_a_named_shadow_step_after_the_win_chance_in_the_live_modules():
+    import pathlib
+    import tomllib
+    from types import SimpleNamespace as NS
+
+    from kalshi_moonshot import lanes
+
+    assert "win_value_shadow" in lanes.BUY_STEPS and binaryrisk.wanted({"a": NS(enabled=True, buy_chain=("win_value_shadow",))})
+    p = pathlib.Path("data/strategies.toml")
+    if p.exists():
+        for name, st in tomllib.loads(p.read_text())["module"].items():
+            if "win_value_shadow" in st["steps"]:
+                assert st["steps"].index("win_value_shadow") == st["steps"].index("win_chance_shadow") + 1  # after the price-free score, never before it
