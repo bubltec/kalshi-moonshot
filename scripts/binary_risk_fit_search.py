@@ -11,6 +11,7 @@ from kalshi_moonshot.strategy import fee_per_contract as fee
 
 V = os.environ.get("V", "base")
 HOLDOUT = os.environ.get("HOLDOUT") == "1"
+MINLEFT = float(os.environ.get("MINLEFT", "180"))  # the model's gate drops the last 3 minutes; MINLEFT=20 lifts it for a study (user, 2026-11-21: the last 3 minutes are among the best times to buy when the conditions are right)
 POOL = V == "pool"
 WIN = {"win240": 240.0, "winall": 1e6}.get(V, 120.0)
 t0 = time.time()
@@ -64,7 +65,7 @@ def build(job):
                 for side, ask in (("yes", qq[1]), ("no", 1.0 - qq[0])):
                     if not 0.02 <= ask <= 0.98: continue
                     sg = 1.0 if side == "yes" else -1.0
-                    if min(sg * f["cz1"], sg * f["cz3"], sg * f["cz5"]) <= 0.0 or close - t < 180.0: continue
+                    if min(sg * f["cz1"], sg * f["cz3"], sg * f["cz5"]) <= 0.0 or close - t < MINLEFT: continue
                     won = won_yes if side == "yes" else not won_yes
                     pays = [1.0 if won else 0.0]
                     for e in ahead:
@@ -77,8 +78,8 @@ def build(job):
                     else: bids, asks = [1.0 - x / scale for x in qa[j0:j1]], [1.0 - x / scale for x in qb[j0:j1]]
                     if bids:
                         kp = max(range(len(bids)), key=bids.__getitem__)
-                        path = (bids[kp], min(bids[:kp + 1]), min(asks[:max(1, j6 - j0)]), min(asks), min(bids))  # the side's later peak bid, its lowest bid before that peak, its lowest ask in the next 60 s, its lowest ask and lowest bid to the close
-                    else: path = None
+                        path = (bids[kp], min(bids[:kp + 1]), min(asks[:max(1, j6 - j0)]), min(asks), min(bids), t - qt[j0 - 1] if j0 else 99.0)  # the side's later peak bid, its lowest bid before that peak, its lowest ask in the next 60 s, its lowest ask and lowest bid to the close
+                    else: path = None  # (the last element of path is the quote's age at the reading, seconds)
                     rows.append((t, br.side_vector(f, side, ask), [(p - ask - fee(ask)) / ask for p in pays], ask, ticker, side, close - t, 1.0 if won else 0.0, close, kind, path))
             t += STEP
     return rows
@@ -332,13 +333,16 @@ if V == "table":
             sc = pred(m, r)[0]
             qb_ = min(4, int(5 * bisect.bisect_left(own, sc) / len(own)))
             pb_ = next(k for k, (a, b) in enumerate(PB) if a <= r[3] < b)
-            out.append((seg, r[4], r[5], qb_, pb_, r[3], r[10], r[7], sc))
+            out.append((seg, r[4], r[5], qb_, pb_, r[3], r[10], r[7], sc, (900.0 - r[6]) / 60.0, r[1][NI["czb"]]))
         return out
-    cells = {}
+    cells, tcells = {}, {}
     with multiprocessing.get_context("fork").Pool(4) as pool:
         for res in pool.imap(hour_table, range(int(t_start), int(t_end - 3600), 3600)):
-            for seg, tk, sd, qb_, pb_, ask, path, won, sc in res or ():
+            for seg, tk, sd, qb_, pb_, ask, path, won, sc, el, czb in res or ():
+                if path[5] > 10.0: continue  # a stale quote overstates the dip that follows
                 cells.setdefault((qb_, pb_, tk, sd), (seg, ask, path, won, sc))
+                tb_ = 0 if el < 5.0 else 1 if el < 10.0 else 2 if el < 12.0 else 3
+                tcells.setdefault((tb_, pb_, tk, sd), (seg, ask, path, won, sc, czb, qb_))
     def cl(g):
         n = len(g)
         if n < 15: return "n %4d (too few)" % n
@@ -353,6 +357,29 @@ if V == "table":
             for seg, name in ((0, "h1"), (1, "h2")):
                 g = [v for (q, p_, _, _), v in cells.items() if q == qb_ and p_ == pb_ and v[0] == seg]
                 print(f"  score fifth {qb_ + 1} {name}: " + cl(g))
+    # by TIME IN THE MARKET (minutes since the open), fresh quotes only (age <= 10 s); cells here are one first reading per market side per (time band, price band)
+    TB = ((1.0, 5.0), (5.0, 10.0), (10.0, 12.0), (12.0, 15.0))
+    print("\n######## BY TIME IN THE MARKET x PRICE BAND (quote age <= 10 s; score pooled)")
+    for tb_, (a, b) in enumerate(TB):
+        print(f"\n--- minutes {a:.0f}-{b:.0f}")
+        for pb_, (pa, pz) in enumerate(PB):
+            for seg, name in ((0, "h1"), (1, "h2")):
+                g = [v for (k0, k1, _, _), v in tcells.items() if k0 == tb_ and k1 == pb_ and v[0] == seg]
+                print(f"  ask {pa:.2f}-{min(pz, 1.0):.2f} {name}: " + cl(g))
+    print("\n######## THE LAST 3 MINUTES (12-15) ONLY: PRICE BAND x SCORE FIFTH, then x CUSHION THIRD (the side's blended cushion, thirds cut on half 1)")
+    late = [v for (k0, _, _, _), v in tcells.items() if k0 == 3]
+    cz = sorted(v[5] for v in late if v[0] == 0)
+    c3 = (cz[len(cz) // 3], cz[2 * len(cz) // 3]) if len(cz) > 3 else (0.0, 0.0)
+    print(f"cushion cut points {c3[0]:+.2f} / {c3[1]:+.2f}")
+    for pb_, (pa, pz) in enumerate(PB):
+        for q5 in range(5):
+            for seg, name in ((0, "h1"), (1, "h2")):
+                g = [v for (k0, k1, _, _), v in tcells.items() if k0 == 3 and k1 == pb_ and v[0] == seg and v[6] == q5]
+                if len(g) >= 15: print(f"  ask {pa:.2f}-{min(pz, 1.0):.2f} score fifth {q5 + 1} {name}: " + cl(g))
+        for c_ in range(3):
+            for seg, name in ((0, "h1"), (1, "h2")):
+                g = [v for (k0, k1, _, _), v in tcells.items() if k0 == 3 and k1 == pb_ and v[0] == seg and (0 if v[5] <= c3[0] else 1 if v[5] <= c3[1] else 2) == c_]
+                if len(g) >= 15: print(f"  ask {pa:.2f}-{min(pz, 1.0):.2f} cushion {('low', 'mid', 'high')[c_]} {name}: " + cl(g))
     print(f"done in {time.time() - t0:.0f}s")
     raise SystemExit(0)
 
