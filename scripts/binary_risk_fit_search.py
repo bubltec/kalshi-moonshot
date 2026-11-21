@@ -213,7 +213,7 @@ picks = {top: {} for top in TOPS}
 bars = {top: [[], [], []] for top in TOPS}
 sizes, lams = [], []
 with multiprocessing.get_context("fork").Pool(4) as pool:
-    for res in pool.imap_unordered(hour, range(int(t_start), int(t_end - 3600), 3600)):
+    for res in pool.imap(hour, range(int(t_start), int(t_end - 3600), 3600)):
         if not res: continue
         t, ntr, nmk, lam, out = res
         sizes.append((ntr, nmk)); lams.append(lam)
@@ -260,7 +260,7 @@ if V in ("winp", "winp0", "cushonly"):
         e = ((0.0, 0.40), (0.40, 0.60), (0.60, 0.85), (0.85, 1.01))
         return " ".join(f"{lo:.2f}-{min(hi, 1.0):.2f}:{sum(1 for a in asks if lo <= a < hi) / max(1, len(asks)):.2f}" for lo, hi in e)
     print("\n######## VALUE CHECK (after the risk score; the ask is NOT in the score)")
-    for seg, name in ((0, "half 1"), (1, "half 2")) + (((2, "HOLDOUT"),) if HOLDOUT else ()):
+    for seg, name in ((0, "half 1"), (1, "half 2")):  # never the holdout: it is scored for the win chance only
         ua, un = _bax[seg], _bnet[seg]
         mn, sn = ms(un)
         print(f" {name} UNIVERSE: n {len(ua)} mean ask {sum(ua) / max(1, len(ua)):.3f} net/$1 {mn:+.3f} se {sn:.3f} ({mn / sn if sn else 0:+.1f} se) mix {mix(ua)}")
