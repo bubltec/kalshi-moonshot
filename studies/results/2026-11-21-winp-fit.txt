@@ -1,0 +1,21 @@
+job 20261121-073303-79125 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/10944ed16e084c33ad14803d0c99bc20
+VARIANT winp: 33154 gated sides (33154 commodity), 72s
+training per hour: mean rows 12283 (commodity), mean distinct markets 1427; ridge strength mean 1.0; hours 86
+
+=== winp top 5%
+ half 1: bar +0.868 n  117 win 0.74 se 0.041 | universe win 0.68 lift +0.058 (+1.4 se) | mean predicted win 0.89
+    by slope third: low n   33 win 0.67 se 0.082 | universe win 0.68 lift -0.010 (-0.1 se) | mean predicted win 0.89 | mid n   39 win 0.62 se 0.078 | universe win 0.68 lift -0.061 (-0.8 se) | mean predicted win 0.89 | high n   45 win 0.89 se 0.047 | universe win 0.68 lift +0.212 (+4.5 se) | mean predicted win 0.90
+    by curv third: low n   42 win 0.79 se 0.063 | universe win 0.68 lift +0.109 (+1.7 se) | mean predicted win 0.89 | mid n   36 win 0.69 se 0.077 | universe win 0.68 lift +0.018 (+0.2 se) | mean predicted win 0.90 | high n   39 win 0.72 se 0.072 | universe win 0.68 lift +0.041 (+0.6 se) | mean predicted win 0.90
+ half 2: bar +0.867 n  262 win 0.77 se 0.026 | universe win 0.69 lift +0.079 (+3.0 se) | mean predicted win 0.90
+    by slope third: low n  103 win 0.74 se 0.043 | universe win 0.69 lift +0.046 (+1.1 se) | mean predicted win 0.90 | mid n   81 win 0.81 se 0.043 | universe win 0.69 lift +0.123 (+2.8 se) | mean predicted win 0.90 | high n   78 win 0.77 se 0.048 | universe win 0.69 lift +0.077 (+1.6 se) | mean predicted win 0.90
+    by curv third: low n   53 win 0.75 se 0.059 | universe win 0.69 lift +0.062 (+1.1 se) | mean predicted win 0.91 | mid n   76 win 0.78 se 0.048 | universe win 0.69 lift +0.084 (+1.8 se) | mean predicted win 0.90 | high n  133 win 0.77 se 0.036 | universe win 0.69 lift +0.082 (+2.3 se) | mean predicted win 0.89
+
+=== winp top 10%
+ half 1: bar +0.834 n  214 win 0.73 se 0.030 | universe win 0.68 lift +0.057 (+1.9 se) | mean predicted win 0.87
+    by slope third: low n   65 win 0.68 se 0.058 | universe win 0.68 lift +0.000 (+0.0 se) | mean predicted win 0.87 | mid n   70 win 0.70 se 0.055 | universe win 0.68 lift +0.023 (+0.4 se) | mean predicted win 0.87 | high n   79 win 0.81 se 0.044 | universe win 0.68 lift +0.133 (+3.0 se) | mean predicted win 0.87
+    by curv third: low n   78 win 0.74 se 0.049 | universe win 0.68 lift +0.067 (+1.3 se) | mean predicted win 0.86 | mid n   70 win 0.71 se 0.054 | universe win 0.68 lift +0.037 (+0.7 se) | mean predicted win 0.86 | high n   66 win 0.74 se 0.054 | universe win 0.68 lift +0.066 (+1.2 se) | mean predicted win 0.88
+ half 2: bar +0.836 n  493 win 0.78 se 0.019 | universe win 0.69 lift +0.091 (+4.9 se) | mean predicted win 0.87
+    by slope third: low n  188 win 0.78 se 0.030 | universe win 0.69 lift +0.090 (+3.0 se) | mean predicted win 0.87 | mid n  147 win 0.76 se 0.035 | universe win 0.69 lift +0.063 (+1.8 se) | mean predicted win 0.88 | high n  158 win 0.81 se 0.031 | universe win 0.69 lift +0.118 (+3.8 se) | mean predicted win 0.87
+    by curv third: low n  117 win 0.76 se 0.039 | universe win 0.69 lift +0.068 (+1.7 se) | mean predicted win 0.87 | mid n  150 win 0.82 se 0.031 | universe win 0.69 lift +0.128 (+4.1 se) | mean predicted win 0.87 | high n  226 win 0.77 se 0.028 | universe win 0.69 lift +0.078 (+2.8 se) | mean predicted win 0.87
+done in 89s
+exit=0  results in job-results/20261121-073303-79125/

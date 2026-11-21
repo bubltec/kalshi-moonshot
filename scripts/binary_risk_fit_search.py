@@ -81,7 +81,7 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
 S.sort(key=lambda r: r[0])
 print(f"VARIANT {V}: {len(S)} gated sides ({sum(1 for r in S if r[9] == 'commodity')} commodity), {time.time() - t0:.0f}s", flush=True)
 
-COLS = FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V == "winp" else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
+COLS = [NI["czb"]] if V == "cushonly" else FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V == "winp" else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
 def X(r): return [r[1][i] for i in COLS]
 def sigm(z): return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z))))
 
@@ -111,7 +111,7 @@ def fit(tr):
     sd = [math.sqrt(sum((x[i] - mu[i]) ** 2 for x in xs) / len(xs)) or 1.0 for i in range(n)]
     sub = tr[::3]
     m = {"mu": mu, "sd": sd, "lam": br.RIDGE}
-    if V in ("logit", "winp"):
+    if V in ("logit", "winp", "cushonly"):
         w = [0.0] * (n + 1)
         K = n + 1
         vs = [[1.0] + [(x[i] - mu[i]) / sd[i] for i in range(n)] for x in (X(r) for r in sub)]
@@ -158,7 +158,7 @@ def pred(m, r):
     """(score used to rank, predicted hold net per $1, predicted best-exit net) all capped at the ceiling."""
     x = X(r); v = [1.0] + [(a - u) / d for a, u, d in zip(x, m["mu"], m["sd"])]
     ce = br.ceiling(r[3])
-    if V == "winp":
+    if V in ("winp", "cushonly"):
         p = sigm(sum(a * b for a, b in zip(m["w"], v)))
         return p, p, p  # the score is the predicted chance to win, from the curve readings alone
     if V == "logit":
@@ -232,7 +232,7 @@ for r in cm:
     _base[2 if r[0] >= t_hold else (0 if r[0] < t_mid else 1)].append(r[7])
 BASE = {k: (sum(v) / len(v) if v else 0.0) for k, v in _base.items()}
 def cell(g, seg=None):
-    if V == "winp":
+    if V in ("winp", "cushonly"):
         if not g: return "n    0"
         n = len(g); w = sum(x[5] for x in g) / n; se = math.sqrt(max(w * (1 - w), 1e-9) / n)
         return "n %4d win %.2f se %.3f | universe win %.2f lift %+.3f (%+.1f se) | mean predicted win %.2f" % (n, w, se, BASE[seg], w - BASE[seg], (w - BASE[seg]) / se, sum(x[4] for x in g) / n)
