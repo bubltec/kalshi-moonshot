@@ -195,6 +195,9 @@ class Worker:
             return self.last_progress, beat
 
         heartbeat.start(lambda: self.s.heartbeat_enabled, self.s.heartbeat_region, progress)  # the watchdog's heartbeat; idle unless HEARTBEAT_ENABLED
+        from . import fundwatch
+
+        fundwatch.start(lambda: self.s, lambda: self.client, lambda: Store(self.s.db_path, self.s.exclude_versions), lambda: lane_specs(self.s))  # keeps the cash of every live exchange shard at its target and says when it cannot; idle unless trading with SHARD_TOPUP_TARGET_USD set
 
     def _start_tape(self) -> None:
         """Record quotes next to the feed price they follow (read-only; see tape.py)."""
