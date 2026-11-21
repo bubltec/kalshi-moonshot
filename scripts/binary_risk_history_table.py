@@ -118,4 +118,38 @@ for uni in ("FAV", "CTR"):
             for mi in range(3):
                 cells = [[r for r in h if bucket(r[9], cut["s30"]) == si and bucket(r[IDX[mk]], cut[mk]) == mi] for h in H]
                 print(f"  s30 {LAB[si]:4s} {mk} {LAB[mi]:4s}: h1 {line(cells[0])} | h2 {line(cells[1])}")
+
+# ---- the cells as a state-record style JSON (cell key "UNI|c<cushion tercile>|s<share30 tercile>|v<vr tercile>", terciles 0 low .. 2 high; the cut points are the first half's) and a rule map
+import json
+def agg(rs):
+    n = len(rs)
+    if n == 0: return {"n": 0, "net_sum": 0.0, "net": 0.0, "se": 0.0, "win": 0.0, "ask": 0.0}
+    nets = [r[6] for r in rs]; m = sum(nets) / n
+    se = math.sqrt(sum((x - m) ** 2 for x in nets) / (n - 1)) / math.sqrt(n) if n > 1 else 0.0
+    return {"n": n, "net_sum": round(sum(nets), 4), "net": round(m, 4), "se": round(se, 4), "win": round(sum(r[5] for r in rs) / n, 4), "ask": round(sum(r[4] for r in rs) / n, 4)}
+rec = {"built_at": time.time(), "kind": "history_cushion_cells", "fee": "buy only, held to settlement", "band": {"FAV": FAV, "CTR": CTR}, "cuts": {}, "cells": {}}
+verdict = {}
+for uni in ("FAV", "CTR"):
+    U = [r for r in R if r[2] == uni]; mid = len(U) // 2; H = [U[:mid], U[mid:]]
+    cut = {k: terc([r[i] for r in H[0]]) for k, i in IDX.items()}
+    rec["cuts"][uni] = {k: list(c) for k, c in cut.items()}
+    for ci in range(3):
+        for si in range(3):
+            for vi in range(3):
+                cells = [[r for r in h if bucket(r[7], cut["cush"]) == ci and bucket(r[9], cut["s30"]) == si and bucket(r[13], cut["vr"]) == vi] for h in H]
+                a1, a2, ap = agg(cells[0]), agg(cells[1]), agg(cells[0] + cells[1])
+                key = f"{uni}|c{ci}|s{si}|v{vi}"
+                # the rule map (set before reading the cells): BUY = positive net in both halves and pooled net at least 1 se; REFUSE = negative in both halves; otherwise NO RECORD
+                v = "buy" if a1["n"] >= 20 and a2["n"] >= 20 and a1["net"] > 0 and a2["net"] > 0 and ap["se"] and ap["net"] / ap["se"] >= 1.0 else ("refuse" if a1["n"] >= 20 and a2["n"] >= 20 and a1["net"] < 0 and a2["net"] < 0 else "no_record")
+                rec["cells"][key] = {"h1": a1, "h2": a2, "pooled": ap, "verdict": v}
+                verdict[key] = v
+print("\n=== RULE MAP (BUY = net > 0 in both halves, n >= 20 each, pooled >= 1 se; REFUSE = net < 0 in both halves; else no record)")
+for uni in ("FAV", "CTR"):
+    for v in ("buy", "refuse"):
+        ks = [k for k in rec["cells"] if k.startswith(uni) and verdict[k] == v]
+        print(f"{uni} {v.upper()}: {len(ks)} cells")
+        for k in ks:
+            c = rec["cells"][k]
+            print(f"   {k}: h1 n {c['h1']['n']} net {c['h1']['net']:+.3f} | h2 n {c['h2']['n']} net {c['h2']['net']:+.3f} | pooled n {c['pooled']['n']} net {c['pooled']['net']:+.3f} se {c['pooled']['se']:.3f}")
+print("JSON_BEGIN"); print(json.dumps(rec)); print("JSON_END")
 print(f"\ndone in {time.time()-t0:.0f}s")
