@@ -1,0 +1,486 @@
+job 20261121-183112-32990 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/0602ec0d5b544a6cbe134f4469c7ec98
+4687 markets, 1988992 seconds of trades on the tape (flow_1s; 0 = fills from the quotes only); readings every 10s; 349s
+
+######## THE FIRST BUY FROM MINUTE 1: the lane's order on every market, closed by commodity_exit
+  ALL     : n 4437 paid 0.660 min  1.8 | round trip -3244.00$ ( -7.3c per $1 staked) ahead 60% | held instead -2044.72$ | sold: settled 766 time_to_go 87 trail 1910 under_even 1674
+  calm    : n 1662 paid 0.651 min  1.8 | round trip -1266.44$ ( -7.6c per $1 staked) ahead 60% | held instead  -754.79$ | sold: settled 254 time_to_go 24 trail 737 under_even 647
+  middle  : n  852 paid 0.661 min  1.7 | round trip  -631.78$ ( -7.4c per $1 staked) ahead 60% | held instead  -598.98$ | sold: settled 142 time_to_go 21 trail 375 under_even 314
+  jumpy   : n 1616 paid 0.667 min  1.7 | round trip -1172.88$ ( -7.3c per $1 staked) ahead 61% | held instead  -688.61$ | sold: settled 307 time_to_go 32 trail 673 under_even 604
+  anomaly : n  178 paid 0.665 min  2.2 | round trip  -146.45$ ( -8.2c per $1 staked) ahead 59% | held instead  -155.15$ | sold: settled 35 time_to_go 8 trail 68 under_even 67
+  unread  : n  129 paid 0.670 min  2.0 | round trip   -26.45$ ( -2.1c per $1 staked) ahead 66% | held instead  +152.82$ | sold: settled 28 time_to_go 2 trail 57 under_even 42
+
+  (a) EACH CHECK READ AT THE BUY, on those same bets (its own-history fifth; 1-2 = NO, 3 = WEAK, 4-5 = YES)
+  --- cushion
+    1       : n   77 paid 0.645 min  1.2 | round trip    +7.66$ ( +1.0c per $1 staked) ahead 65% | held instead   +58.25$ | sold: settled 14 time_to_go 1 trail 36 under_even 26
+    2       : n  413 paid 0.639 min  1.5 | round trip  -228.92$ ( -5.5c per $1 staked) ahead 60% | held instead   -10.46$ | sold: settled 64 time_to_go 3 trail 183 under_even 163
+    3       : n 1391 paid 0.637 min  2.1 | round trip -1314.26$ ( -9.4c per $1 staked) ahead 56% | held instead  -873.36$ | sold: settled 212 time_to_go 31 trail 572 under_even 576
+    4       : n 1463 paid 0.654 min  1.7 | round trip -1301.80$ ( -8.9c per $1 staked) ahead 58% | held instead -1051.64$ | sold: settled 223 time_to_go 23 trail 626 under_even 591
+    5       : n  946 paid 0.708 min  1.7 | round trip  -382.12$ ( -4.0c per $1 staked) ahead 68% | held instead  -333.58$ | sold: settled 218 time_to_go 26 trail 428 under_even 274
+    anomaly : n   18 (too few)
+    unread  : n  129 paid 0.670 min  2.0 | round trip   -26.45$ ( -2.1c per $1 staked) ahead 66% | held instead  +152.82$ | sold: settled 28 time_to_go 2 trail 57 under_even 42
+  --- trend
+    1       : n  120 paid 0.650 min  2.2 | round trip  -128.25$ (-10.7c per $1 staked) ahead 54% | held instead   -21.49$ | sold: settled 21 time_to_go 2 trail 45 under_even 52
+    2       : n  415 paid 0.641 min  1.8 | round trip  -401.51$ ( -9.7c per $1 staked) ahead 55% | held instead  -217.44$ | sold: settled 67 time_to_go 9 trail 161 under_even 178
+    3       : n 1113 paid 0.637 min  2.0 | round trip  -970.14$ ( -8.7c per $1 staked) ahead 57% | held instead  -462.70$ | sold: settled 160 time_to_go 26 trail 470 under_even 457
+    4       : n 1385 paid 0.650 min  1.8 | round trip  -806.31$ ( -5.8c per $1 staked) ahead 61% | held instead -1042.44$ | sold: settled 248 time_to_go 22 trail 599 under_even 516
+    5       : n 1192 paid 0.694 min  1.4 | round trip  -855.67$ ( -7.2c per $1 staked) ahead 64% | held instead  -454.41$ | sold: settled 221 time_to_go 25 trail 545 under_even 401
+    anomaly : n   83 paid 0.737 min  1.4 | round trip   -55.66$ ( -6.7c per $1 staked) ahead 65% | held instead    +0.94$ | sold: settled 21 time_to_go 1 trail 33 under_even 28
+    unread  : n  129 paid 0.670 min  2.0 | round trip   -26.45$ ( -2.1c per $1 staked) ahead 66% | held instead  +152.82$ | sold: settled 28 time_to_go 2 trail 57 under_even 42
+  --- history
+    1       : n  830 paid 0.658 min  1.6 | round trip  -722.52$ ( -8.7c per $1 staked) ahead 58% | held instead -1021.81$ | sold: settled 130 time_to_go 9 trail 352 under_even 339
+    2       : n  860 paid 0.662 min  1.8 | round trip  -784.63$ ( -9.1c per $1 staked) ahead 60% | held instead  -457.19$ | sold: settled 144 time_to_go 20 trail 370 under_even 326
+    3       : n  890 paid 0.659 min  1.8 | round trip  -507.57$ ( -5.7c per $1 staked) ahead 62% | held instead   -36.17$ | sold: settled 155 time_to_go 25 trail 397 under_even 313
+    4       : n  773 paid 0.660 min  1.8 | round trip  -371.33$ ( -4.8c per $1 staked) ahead 64% | held instead  -230.31$ | sold: settled 136 time_to_go 12 trail 358 under_even 267
+    5       : n  813 paid 0.658 min  2.0 | round trip  -760.73$ ( -9.4c per $1 staked) ahead 56% | held instead  -540.73$ | sold: settled 147 time_to_go 17 trail 313 under_even 336
+    anomaly : n  142 paid 0.669 min  1.5 | round trip   -70.77$ ( -5.0c per $1 staked) ahead 62% | held instead   +88.67$ | sold: settled 26 time_to_go 2 trail 63 under_even 51
+    unread  : n  129 paid 0.670 min  2.0 | round trip   -26.45$ ( -2.1c per $1 staked) ahead 66% | held instead  +152.82$ | sold: settled 28 time_to_go 2 trail 57 under_even 42
+  --- volatility
+    1       : n  799 paid 0.650 min  1.9 | round trip  -535.79$ ( -6.7c per $1 staked) ahead 59% | held instead  -235.32$ | sold: settled 135 time_to_go 10 trail 337 under_even 317
+    2       : n  863 paid 0.652 min  1.8 | round trip  -730.65$ ( -8.5c per $1 staked) ahead 60% | held instead  -519.47$ | sold: settled 119 time_to_go 14 trail 400 under_even 330
+    3       : n  852 paid 0.661 min  1.7 | round trip  -631.78$ ( -7.4c per $1 staked) ahead 60% | held instead  -598.98$ | sold: settled 142 time_to_go 21 trail 375 under_even 314
+    4       : n  847 paid 0.663 min  1.7 | round trip  -700.31$ ( -8.3c per $1 staked) ahead 60% | held instead  -714.66$ | sold: settled 146 time_to_go 15 trail 363 under_even 323
+    5       : n  769 paid 0.671 min  1.7 | round trip  -472.57$ ( -6.1c per $1 staked) ahead 61% | held instead   +26.05$ | sold: settled 161 time_to_go 17 trail 310 under_even 281
+    anomaly : n  178 paid 0.665 min  2.2 | round trip  -146.45$ ( -8.2c per $1 staked) ahead 59% | held instead  -155.15$ | sold: settled 35 time_to_go 8 trail 68 under_even 67
+    unread  : n  129 paid 0.670 min  2.0 | round trip   -26.45$ ( -2.1c per $1 staked) ahead 66% | held instead  +152.82$ | sold: settled 28 time_to_go 2 trail 57 under_even 42
+  --- price
+    1       : n   14 (too few)
+    2       : n   28 paid 0.715 min  5.8 | round trip   -53.79$ (-19.2c per $1 staked) ahead 57% | held instead   -24.55$ | sold: settled 10 time_to_go 1 trail 7 under_even 10
+    3       : n  150 paid 0.625 min  2.9 | round trip  -246.53$ (-16.4c per $1 staked) ahead 49% | held instead  -164.69$ | sold: settled 20 time_to_go 7 trail 55 under_even 68
+    4       : n  644 paid 0.629 min  2.4 | round trip  -441.53$ ( -6.9c per $1 staked) ahead 57% | held instead  -308.35$ | sold: settled 112 time_to_go 13 trail 258 under_even 261
+    5       : n  551 paid 0.647 min  2.4 | round trip  -449.37$ ( -8.2c per $1 staked) ahead 59% | held instead  -155.81$ | sold: settled 88 time_to_go 14 trail 237 under_even 212
+    anomaly : n   15 (too few)
+    unread  : n 3035 paid 0.669 min  1.4 | round trip -2052.44$ ( -6.8c per $1 staked) ahead 61% | held instead -1386.00$ | sold: settled 524 time_to_go 52 trail 1345 under_even 1114
+  --- pricedip
+    1       : n    5 (too few)
+    2       : n   25 paid 0.770 min  6.5 | round trip   -38.22$ (-15.3c per $1 staked) ahead 60% | held instead    -5.29$ | sold: settled 13 trail 3 under_even 9
+    3       : n   54 paid 0.688 min  5.1 | round trip   -80.30$ (-14.9c per $1 staked) ahead 56% | held instead  -104.05$ | sold: settled 12 time_to_go 2 trail 18 under_even 22
+    4       : n  177 paid 0.633 min  2.5 | round trip  -161.58$ ( -9.1c per $1 staked) ahead 55% | held instead  -175.39$ | sold: settled 30 time_to_go 10 trail 67 under_even 70
+    5       : n 1141 paid 0.634 min  2.4 | round trip  -909.04$ ( -8.0c per $1 staked) ahead 58% | held instead  -384.68$ | sold: settled 185 time_to_go 23 trail 475 under_even 458
+    anomaly : n    0 (too few)
+    unread  : n 3035 paid 0.669 min  1.4 | round trip -2052.44$ ( -6.8c per $1 staked) ahead 61% | held instead -1386.00$ | sold: settled 524 time_to_go 52 trail 1345 under_even 1114
+
+  (b) and (c) EACH CHECK AS A RULE, against the lane's order on the same markets (a market with no bet counts 0)
+  --- req:cushion: change    +8.90$ on 508 markets whose bet differs (better 187, worse 281); no bet on 6 of the lane's 4437; moved orders filled 0
+    all     : n 4431 paid 0.662 min  1.9 | round trip -3235.10$ ( -7.3c per $1 staked) ahead 61% | held instead -2139.86$ | sold: settled 779 time_to_go 89 trail 1914 under_even 1649
+    calm    : change   -51.80$ on 1662 markets | n 1661 paid 0.653 min  1.9 | round trip -1318.24$ ( -7.9c per $1 staked) ahead 60% | held instead  -768.15$ | sold: settled 259 time_to_go 25 trail 733 under_even 644
+    middle  : change   -20.89$ on 852 markets | n  849 paid 0.664 min  1.8 | round trip  -652.67$ ( -7.7c per $1 staked) ahead 60% | held instead  -650.21$ | sold: settled 141 time_to_go 22 trail 377 under_even 309
+    jumpy   : change   +73.89$ on 1616 markets | n 1614 paid 0.670 min  1.8 | round trip -1098.99$ ( -6.8c per $1 staked) ahead 61% | held instead  -725.00$ | sold: settled 314 time_to_go 32 trail 680 under_even 588
+  --- move:cushion: change   +47.59$ on 867 markets whose bet differs (better 320, worse 496); no bet on 7 of the lane's 4437; moved orders filled 1270
+    all     : n 4430 paid 0.669 min  2.0 | round trip -3196.41$ ( -7.2c per $1 staked) ahead 61% | held instead -2024.44$ | sold: settled 833 time_to_go 98 trail 1887 under_even 1612
+    calm    : change   +50.69$ on 1662 markets | n 1660 paid 0.661 min  2.1 | round trip -1215.75$ ( -7.3c per $1 staked) ahead 61% | held instead  -656.56$ | sold: settled 285 time_to_go 29 trail 727 under_even 619
+    middle  : change   +15.49$ on 852 markets | n  850 paid 0.670 min  2.0 | round trip  -616.29$ ( -7.3c per $1 staked) ahead 61% | held instead  -574.62$ | sold: settled 160 time_to_go 26 trail 363 under_even 301
+    jumpy   : change   -28.15$ on 1616 markets | n 1613 paid 0.675 min  1.9 | round trip -1201.03$ ( -7.4c per $1 staked) ahead 61% | held instead  -778.82$ | sold: settled 322 time_to_go 33 trail 670 under_even 588
+  --- req:trend: change   +43.86$ on 618 markets whose bet differs (better 238, worse 327); no bet on 16 of the lane's 4437; moved orders filled 0
+    all     : n 4421 paid 0.662 min  1.9 | round trip -3200.14$ ( -7.2c per $1 staked) ahead 61% | held instead -2130.27$ | sold: settled 769 time_to_go 91 trail 1919 under_even 1642
+    calm    : change    +8.91$ on 1662 markets | n 1658 paid 0.654 min  1.9 | round trip -1257.54$ ( -7.6c per $1 staked) ahead 60% | held instead  -792.95$ | sold: settled 261 time_to_go 23 trail 735 under_even 639
+    middle  : change   -20.17$ on 852 markets | n  849 paid 0.663 min  1.8 | round trip  -651.95$ ( -7.7c per $1 staked) ahead 60% | held instead  -659.21$ | sold: settled 138 time_to_go 25 trail 378 under_even 308
+    jumpy   : change   +34.78$ on 1616 markets | n 1610 paid 0.668 min  1.8 | round trip -1138.10$ ( -7.1c per $1 staked) ahead 61% | held instead  -681.73$ | sold: settled 308 time_to_go 33 trail 680 under_even 589
+  --- move:trend: change    +4.77$ on 846 markets whose bet differs (better 302, worse 475); no bet on 13 of the lane's 4437; moved orders filled 968
+    all     : n 4424 paid 0.664 min  1.9 | round trip -3239.23$ ( -7.3c per $1 staked) ahead 61% | held instead -2239.05$ | sold: settled 795 time_to_go 94 trail 1901 under_even 1634
+    calm    : change   +60.54$ on 1662 markets | n 1658 paid 0.656 min  2.0 | round trip -1205.90$ ( -7.3c per $1 staked) ahead 60% | held instead  -854.73$ | sold: settled 271 time_to_go 22 trail 733 under_even 632
+    middle  : change   -49.87$ on 852 markets | n  850 paid 0.666 min  1.9 | round trip  -681.65$ ( -8.0c per $1 staked) ahead 60% | held instead  -684.39$ | sold: settled 146 time_to_go 25 trail 368 under_even 311
+    jumpy   : change   -26.66$ on 1616 markets | n 1612 paid 0.671 min  1.8 | round trip -1199.54$ ( -7.4c per $1 staked) ahead 61% | held instead  -744.24$ | sold: settled 313 time_to_go 36 trail 675 under_even 588
+  --- req:history: change  +430.01$ on 1832 markets whose bet differs (better 746, worse 1072); no bet on 525 of the lane's 4437; moved orders filled 0
+    all     : n 3912 paid 0.664 min  3.3 | round trip -2813.99$ ( -7.2c per $1 staked) ahead 60% | held instead -1224.21$ | sold: settled 890 time_to_go 111 trail 1490 under_even 1421
+    calm    : change  +235.16$ on 1662 markets | n 1464 paid 0.658 min  3.4 | round trip -1031.28$ ( -7.0c per $1 staked) ahead 60% | held instead  -302.85$ | sold: settled 317 time_to_go 40 trail 571 under_even 536
+    middle  : change   +74.28$ on 852 markets | n  748 paid 0.668 min  3.4 | round trip  -557.50$ ( -7.5c per $1 staked) ahead 60% | held instead  -253.21$ | sold: settled 173 time_to_go 22 trail 282 under_even 271
+    jumpy   : change  +219.57$ on 1616 markets | n 1416 paid 0.667 min  3.2 | round trip  -953.31$ ( -6.7c per $1 staked) ahead 61% | held instead  -609.81$ | sold: settled 336 time_to_go 39 trail 537 under_even 504
+  --- move:history: change   -42.82$ on 956 markets whose bet differs (better 402, worse 531); no bet on 214 of the lane's 4437; moved orders filled 2226
+    all     : n 4223 paid 0.665 min  2.3 | round trip -3286.82$ ( -7.8c per $1 staked) ahead 60% | held instead -2263.45$ | sold: settled 808 time_to_go 105 trail 1739 under_even 1571
+    calm    : change   +52.25$ on 1662 markets | n 1566 paid 0.657 min  2.4 | round trip -1214.19$ ( -7.8c per $1 staked) ahead 60% | held instead  -728.08$ | sold: settled 265 time_to_go 31 trail 681 under_even 589
+    middle  : change   -64.37$ on 852 markets | n  817 paid 0.668 min  2.4 | round trip  -696.15$ ( -8.5c per $1 staked) ahead 59% | held instead  -619.35$ | sold: settled 159 time_to_go 24 trail 330 under_even 304
+    jumpy   : change    +2.34$ on 1616 markets | n 1542 paid 0.670 min  2.2 | round trip -1170.54$ ( -7.6c per $1 staked) ahead 60% | held instead  -873.93$ | sold: settled 320 time_to_go 41 trail 612 under_even 569
+  --- req:price: change   -41.10$ on 57 markets whose bet differs (better 19, worse 37); no bet on 14 of the lane's 4437; moved orders filled 0
+    all     : n 4423 paid 0.660 min  1.8 | round trip -3285.10$ ( -7.4c per $1 staked) ahead 60% | held instead -2100.10$ | sold: settled 758 time_to_go 88 trail 1904 under_even 1673
+    calm    : change   -19.91$ on 1662 markets | n 1657 paid 0.651 min  1.8 | round trip -1286.35$ ( -7.8c per $1 staked) ahead 59% | held instead  -781.64$ | sold: settled 254 time_to_go 24 trail 731 under_even 648
+    middle  : change   -10.38$ on 852 markets | n  851 paid 0.662 min  1.8 | round trip  -642.16$ ( -7.5c per $1 staked) ahead 60% | held instead  -590.28$ | sold: settled 141 time_to_go 21 trail 375 under_even 314
+    jumpy   : change   -11.01$ on 1616 markets | n 1611 paid 0.666 min  1.7 | round trip -1183.90$ ( -7.3c per $1 staked) ahead 60% | held instead  -716.85$ | sold: settled 303 time_to_go 32 trail 672 under_even 604
+  --- move:price: change   -20.18$ on 207 markets whose bet differs (better 73, worse 124); no bet on 11 of the lane's 4437; moved orders filled 28
+    all     : n 4426 paid 0.661 min  1.8 | round trip -3264.18$ ( -7.4c per $1 staked) ahead 60% | held instead -2248.71$ | sold: settled 770 time_to_go 90 trail 1902 under_even 1664
+    calm    : change   -20.62$ on 1662 markets | n 1659 paid 0.652 min  1.9 | round trip -1287.06$ ( -7.8c per $1 staked) ahead 59% | held instead  -919.17$ | sold: settled 255 time_to_go 24 trail 734 under_even 646
+    middle  : change   -45.21$ on 852 markets | n  850 paid 0.662 min  1.8 | round trip  -676.99$ ( -8.0c per $1 staked) ahead 60% | held instead  -682.84$ | sold: settled 142 time_to_go 22 trail 371 under_even 315
+    jumpy   : change   +14.89$ on 1616 markets | n 1613 paid 0.668 min  1.7 | round trip -1157.99$ ( -7.2c per $1 staked) ahead 61% | held instead  -683.35$ | sold: settled 312 time_to_go 33 trail 669 under_even 599
+  --- req:pricedip: change    -3.87$ on 30 markets whose bet differs (better 11, worse 17); no bet on 6 of the lane's 4437; moved orders filled 0
+    all     : n 4431 paid 0.660 min  1.8 | round trip -3247.87$ ( -7.3c per $1 staked) ahead 60% | held instead -2093.81$ | sold: settled 762 time_to_go 87 trail 1909 under_even 1673
+    calm    : change   -14.95$ on 1662 markets | n 1661 paid 0.651 min  1.8 | round trip -1281.40$ ( -7.7c per $1 staked) ahead 59% | held instead  -769.77$ | sold: settled 254 time_to_go 24 trail 735 under_even 648
+    middle  : change    -2.35$ on 852 markets | n  851 paid 0.661 min  1.7 | round trip  -634.13$ ( -7.5c per $1 staked) ahead 60% | held instead  -602.41$ | sold: settled 141 time_to_go 21 trail 375 under_even 314
+    jumpy   : change   +17.15$ on 1616 markets | n 1614 paid 0.666 min  1.7 | round trip -1155.73$ ( -7.2c per $1 staked) ahead 61% | held instead  -703.35$ | sold: settled 306 time_to_go 32 trail 674 under_even 602
+  --- move:pricedip: change   -19.43$ on 83 markets whose bet differs (better 35, worse 43); no bet on 11 of the lane's 4437; moved orders filled 30
+    all     : n 4426 paid 0.659 min  1.8 | round trip -3263.43$ ( -7.4c per $1 staked) ahead 60% | held instead -2061.41$ | sold: settled 764 time_to_go 88 trail 1899 under_even 1675
+    calm    : change   -16.81$ on 1662 markets | n 1661 paid 0.651 min  1.8 | round trip -1283.25$ ( -7.7c per $1 staked) ahead 59% | held instead  -797.60$ | sold: settled 254 time_to_go 25 trail 734 under_even 648
+    middle  : change    -0.92$ on 852 markets | n  850 paid 0.661 min  1.7 | round trip  -632.70$ ( -7.4c per $1 staked) ahead 60% | held instead  -602.36$ | sold: settled 141 time_to_go 21 trail 374 under_even 314
+    jumpy   : change    +4.88$ on 1616 markets | n 1611 paid 0.666 min  1.7 | round trip -1168.00$ ( -7.3c per $1 staked) ahead 60% | held instead  -653.49$ | sold: settled 309 time_to_go 32 trail 666 under_even 604
+  --- formula: change  +200.32$ on 1514 markets whose bet differs (better 559, worse 913); no bet on 498 of the lane's 4437; moved orders filled 2810
+    all     : n 3939 paid 0.672 min  2.4 | round trip -3043.68$ ( -7.7c per $1 staked) ahead 61% | held instead -2178.17$ | sold: settled 777 time_to_go 100 trail 1628 under_even 1434
+    calm    : change  +125.94$ on 1662 markets | n 1462 paid 0.664 min  2.5 | round trip -1140.50$ ( -7.8c per $1 staked) ahead 61% | held instead  -757.92$ | sold: settled 262 time_to_go 29 trail 629 under_even 542
+    middle  : change   -35.73$ on 852 markets | n  757 paid 0.675 min  2.4 | round trip  -667.51$ ( -8.8c per $1 staked) ahead 59% | held instead  -581.97$ | sold: settled 147 time_to_go 23 trail 311 under_even 276
+    jumpy   : change   +98.94$ on 1616 markets | n 1440 paid 0.677 min  2.2 | round trip -1073.94$ ( -7.5c per $1 staked) ahead 61% | held instead  -810.39$ | sold: settled 306 time_to_go 41 trail 576 under_even 517
+  --- formula_req: change  +214.06$ on 1516 markets whose bet differs (better 559, worse 915); no bet on 501 of the lane's 4437; moved orders filled 2806
+    all     : n 3936 paid 0.672 min  2.4 | round trip -3029.94$ ( -7.7c per $1 staked) ahead 61% | held instead -2151.50$ | sold: settled 776 time_to_go 100 trail 1627 under_even 1433
+    calm    : change  +136.20$ on 1662 markets | n 1461 paid 0.664 min  2.5 | round trip -1130.24$ ( -7.7c per $1 staked) ahead 61% | held instead  -747.66$ | sold: settled 261 time_to_go 29 trail 629 under_even 542
+    middle  : change   -35.73$ on 852 markets | n  757 paid 0.675 min  2.4 | round trip  -667.51$ ( -8.8c per $1 staked) ahead 59% | held instead  -581.97$ | sold: settled 147 time_to_go 23 trail 311 under_even 276
+    jumpy   : change  +105.32$ on 1616 markets | n 1438 paid 0.677 min  2.2 | round trip -1067.56$ ( -7.4c per $1 staked) ahead 61% | held instead  -791.08$ | sold: settled 306 time_to_go 41 trail 575 under_even 516
+
+######## THE FIRST BUY FROM MINUTE 5: the lane's order on every market, closed by commodity_exit
+  ALL     : n 3952 paid 0.711 min  5.5 | round trip -2684.59$ ( -6.8c per $1 staked) ahead 67% | held instead -1755.03$ | sold: settled 1243 time_to_go 180 trail 1423 under_even 1106
+  calm    : n 1535 paid 0.705 min  5.5 | round trip -1138.84$ ( -7.4c per $1 staked) ahead 66% | held instead  -835.94$ | sold: settled 426 time_to_go 64 trail 600 under_even 445
+  middle  : n  755 paid 0.713 min  5.4 | round trip  -709.61$ ( -9.4c per $1 staked) ahead 65% | held instead  -627.59$ | sold: settled 230 time_to_go 32 trail 264 under_even 229
+  jumpy   : n 1446 paid 0.718 min  5.4 | round trip  -743.61$ ( -5.1c per $1 staked) ahead 69% | held instead  -358.18$ | sold: settled 506 time_to_go 71 trail 495 under_even 374
+  anomaly : n  157 paid 0.706 min  5.6 | round trip  -100.96$ ( -6.4c per $1 staked) ahead 66% | held instead    +4.43$ | sold: settled 56 time_to_go 11 trail 46 under_even 44
+  unread  : n   59 paid 0.706 min  6.0 | round trip    +8.42$ ( +1.4c per $1 staked) ahead 73% | held instead   +62.25$ | sold: settled 25 time_to_go 2 trail 18 under_even 14
+
+  (a) EACH CHECK READ AT THE BUY, on those same bets (its own-history fifth; 1-2 = NO, 3 = WEAK, 4-5 = YES)
+  --- cushion
+    1       : n    6 (too few)
+    2       : n  149 paid 0.643 min  5.4 | round trip  -168.01$ (-11.3c per $1 staked) ahead 54% | held instead  -112.98$ | sold: settled 37 time_to_go 12 trail 44 under_even 56
+    3       : n  885 paid 0.646 min  5.7 | round trip  -540.96$ ( -6.1c per $1 staked) ahead 63% | held instead  -157.25$ | sold: settled 226 time_to_go 44 trail 334 under_even 281
+    4       : n 1327 paid 0.690 min  5.3 | round trip -1177.85$ ( -8.9c per $1 staked) ahead 63% | held instead -1116.79$ | sold: settled 374 time_to_go 63 trail 462 under_even 428
+    5       : n 1507 paid 0.774 min  5.5 | round trip  -835.12$ ( -5.5c per $1 staked) ahead 74% | held instead  -464.56$ | sold: settled 568 time_to_go 59 trail 555 under_even 325
+    anomaly : n   19 (too few)
+    unread  : n   59 paid 0.706 min  6.0 | round trip    +8.42$ ( +1.4c per $1 staked) ahead 73% | held instead   +62.25$ | sold: settled 25 time_to_go 2 trail 18 under_even 14
+  --- trend
+    1       : n  332 paid 0.711 min  6.3 | round trip  -351.60$ (-10.6c per $1 staked) ahead 63% | held instead  -354.00$ | sold: settled 120 time_to_go 23 trail 97 under_even 92
+    2       : n  613 paid 0.697 min  5.6 | round trip  -426.02$ ( -6.9c per $1 staked) ahead 66% | held instead  -391.34$ | sold: settled 197 time_to_go 27 trail 208 under_even 181
+    3       : n  911 paid 0.698 min  5.5 | round trip  -350.87$ ( -3.9c per $1 staked) ahead 69% | held instead  -131.09$ | sold: settled 280 time_to_go 35 trail 349 under_even 247
+    4       : n 1046 paid 0.710 min  5.3 | round trip  -712.33$ ( -6.8c per $1 staked) ahead 67% | held instead  -391.61$ | sold: settled 299 time_to_go 41 trail 405 under_even 301
+    5       : n  957 paid 0.733 min  5.2 | round trip  -862.60$ ( -9.0c per $1 staked) ahead 66% | held instead  -572.65$ | sold: settled 310 time_to_go 52 trail 330 under_even 265
+    anomaly : n   34 paid 0.774 min  6.0 | round trip   +10.40$ ( +3.1c per $1 staked) ahead 82% | held instead   +23.41$ | sold: settled 12 trail 16 under_even 6
+    unread  : n   59 paid 0.706 min  6.0 | round trip    +8.42$ ( +1.4c per $1 staked) ahead 73% | held instead   +62.25$ | sold: settled 25 time_to_go 2 trail 18 under_even 14
+  --- history
+    1       : n  513 paid 0.687 min  5.4 | round trip  -399.10$ ( -7.8c per $1 staked) ahead 64% | held instead  -405.63$ | sold: settled 147 time_to_go 23 trail 181 under_even 162
+    2       : n  852 paid 0.719 min  5.5 | round trip  -738.98$ ( -8.7c per $1 staked) ahead 66% | held instead  -525.26$ | sold: settled 266 time_to_go 44 trail 302 under_even 240
+    3       : n  843 paid 0.715 min  5.4 | round trip  -631.21$ ( -7.5c per $1 staked) ahead 67% | held instead  -478.42$ | sold: settled 265 time_to_go 43 trail 302 under_even 233
+    4       : n  721 paid 0.707 min  5.4 | round trip  -375.12$ ( -5.2c per $1 staked) ahead 68% | held instead  -164.09$ | sold: settled 227 time_to_go 25 trail 269 under_even 200
+    5       : n  862 paid 0.715 min  5.5 | round trip  -574.43$ ( -6.7c per $1 staked) ahead 67% | held instead  -321.41$ | sold: settled 275 time_to_go 40 trail 310 under_even 237
+    anomaly : n  102 paid 0.733 min  5.3 | round trip   +25.83$ ( +2.5c per $1 staked) ahead 78% | held instead   +77.54$ | sold: settled 38 time_to_go 3 trail 41 under_even 20
+    unread  : n   59 paid 0.706 min  6.0 | round trip    +8.42$ ( +1.4c per $1 staked) ahead 73% | held instead   +62.25$ | sold: settled 25 time_to_go 2 trail 18 under_even 14
+  --- volatility
+    1       : n  761 paid 0.700 min  5.5 | round trip  -409.79$ ( -5.4c per $1 staked) ahead 68% | held instead  -134.63$ | sold: settled 219 time_to_go 27 trail 300 under_even 215
+    2       : n  774 paid 0.709 min  5.5 | round trip  -729.05$ ( -9.4c per $1 staked) ahead 65% | held instead  -701.31$ | sold: settled 207 time_to_go 37 trail 300 under_even 230
+    3       : n  755 paid 0.713 min  5.4 | round trip  -709.61$ ( -9.4c per $1 staked) ahead 65% | held instead  -627.59$ | sold: settled 230 time_to_go 32 trail 264 under_even 229
+    4       : n  756 paid 0.714 min  5.4 | round trip  -330.30$ ( -4.4c per $1 staked) ahead 70% | held instead  -259.04$ | sold: settled 239 time_to_go 33 trail 294 under_even 190
+    5       : n  690 paid 0.723 min  5.5 | round trip  -413.31$ ( -6.0c per $1 staked) ahead 67% | held instead   -99.14$ | sold: settled 267 time_to_go 38 trail 201 under_even 184
+    anomaly : n  157 paid 0.706 min  5.6 | round trip  -100.96$ ( -6.4c per $1 staked) ahead 66% | held instead    +4.43$ | sold: settled 56 time_to_go 11 trail 46 under_even 44
+    unread  : n   59 paid 0.706 min  6.0 | round trip    +8.42$ ( +1.4c per $1 staked) ahead 73% | held instead   +62.25$ | sold: settled 25 time_to_go 2 trail 18 under_even 14
+  --- price
+    1       : n  144 paid 0.734 min  7.9 | round trip   -55.40$ ( -3.8c per $1 staked) ahead 69% | held instead   +13.40$ | sold: settled 68 time_to_go 7 trail 35 under_even 34
+    2       : n  375 paid 0.693 min  5.7 | round trip  -370.20$ ( -9.9c per $1 staked) ahead 63% | held instead  -401.75$ | sold: settled 116 time_to_go 21 trail 124 under_even 114
+    3       : n  890 paid 0.695 min  5.4 | round trip  -539.95$ ( -6.1c per $1 staked) ahead 66% | held instead  -651.71$ | sold: settled 271 time_to_go 36 trail 320 under_even 263
+    4       : n 1210 paid 0.709 min  5.3 | round trip  -648.75$ ( -5.4c per $1 staked) ahead 68% | held instead  -238.21$ | sold: settled 364 time_to_go 49 trail 464 under_even 333
+    5       : n 1238 paid 0.726 min  5.3 | round trip -1023.52$ ( -8.3c per $1 staked) ahead 67% | held instead  -559.96$ | sold: settled 388 time_to_go 64 trail 451 under_even 335
+    anomaly : n   35 paid 0.755 min  5.5 | round trip   -56.61$ (-16.2c per $1 staked) ahead 60% | held instead   +19.55$ | sold: settled 10 time_to_go 1 trail 11 under_even 13
+    unread  : n   60 paid 0.709 min  6.0 | round trip    +9.82$ ( +1.6c per $1 staked) ahead 73% | held instead   +63.65$ | sold: settled 26 time_to_go 2 trail 18 under_even 14
+  --- pricedip
+    1       : n   53 paid 0.739 min  7.6 | round trip   -16.28$ ( -3.1c per $1 staked) ahead 72% | held instead    +2.57$ | sold: settled 23 time_to_go 3 trail 15 under_even 12
+    2       : n  366 paid 0.703 min  6.2 | round trip  -370.81$ (-10.1c per $1 staked) ahead 63% | held instead  -278.62$ | sold: settled 123 time_to_go 22 trail 110 under_even 111
+    3       : n  893 paid 0.710 min  5.5 | round trip  -510.70$ ( -5.7c per $1 staked) ahead 68% | held instead  -420.76$ | sold: settled 291 time_to_go 38 trail 317 under_even 247
+    4       : n 1262 paid 0.713 min  5.3 | round trip -1058.43$ ( -8.4c per $1 staked) ahead 66% | held instead  -995.92$ | sold: settled 372 time_to_go 59 trail 464 under_even 367
+    5       : n 1318 paid 0.711 min  5.4 | round trip  -738.19$ ( -5.6c per $1 staked) ahead 68% | held instead  -125.95$ | sold: settled 408 time_to_go 56 trail 499 under_even 355
+    anomaly : n    0 (too few)
+    unread  : n   60 paid 0.709 min  6.0 | round trip    +9.82$ ( +1.6c per $1 staked) ahead 73% | held instead   +63.65$ | sold: settled 26 time_to_go 2 trail 18 under_even 14
+
+  (b) and (c) EACH CHECK AS A RULE, against the lane's order on the same markets (a market with no bet counts 0)
+  --- req:cushion: change   +15.81$ on 174 markets whose bet differs (better 60, worse 95); no bet on 6 of the lane's 3952; moved orders filled 0
+    all     : n 3946 paid 0.712 min  5.5 | round trip -2668.78$ ( -6.8c per $1 staked) ahead 67% | held instead -1748.19$ | sold: settled 1249 time_to_go 179 trail 1420 under_even 1098
+    calm    : change   -11.90$ on 1535 markets | n 1533 paid 0.706 min  5.5 | round trip -1150.74$ ( -7.5c per $1 staked) ahead 66% | held instead  -863.83$ | sold: settled 429 time_to_go 66 trail 597 under_even 441
+    middle  : change   +38.94$ on 755 markets | n  754 paid 0.713 min  5.5 | round trip  -670.67$ ( -8.9c per $1 staked) ahead 65% | held instead  -607.38$ | sold: settled 231 time_to_go 31 trail 267 under_even 225
+    jumpy   : change   -18.94$ on 1446 markets | n 1444 paid 0.719 min  5.5 | round trip  -762.55$ ( -5.3c per $1 staked) ahead 68% | held instead  -335.88$ | sold: settled 506 time_to_go 71 trail 493 under_even 374
+  --- move:cushion: change  +225.78$ on 1053 markets whose bet differs (better 453, worse 542); no bet on 36 of the lane's 3952; moved orders filled 516
+    all     : n 3916 paid 0.725 min  5.8 | round trip -2458.81$ ( -6.3c per $1 staked) ahead 68% | held instead -1765.15$ | sold: settled 1354 time_to_go 196 trail 1333 under_even 1033
+    calm    : change   +57.66$ on 1535 markets | n 1518 paid 0.720 min  5.8 | round trip -1081.17$ ( -7.1c per $1 staked) ahead 68% | held instead  -766.49$ | sold: settled 462 time_to_go 69 trail 572 under_even 415
+    middle  : change   +93.71$ on 755 markets | n  749 paid 0.727 min  5.8 | round trip  -615.89$ ( -8.2c per $1 staked) ahead 66% | held instead  -632.89$ | sold: settled 263 time_to_go 34 trail 236 under_even 216
+    jumpy   : change   +63.96$ on 1446 markets | n 1436 paid 0.730 min  5.8 | round trip  -679.65$ ( -4.7c per $1 staked) ahead 69% | held instead  -427.02$ | sold: settled 544 time_to_go 81 trail 464 under_even 347
+  --- req:trend: change   +85.91$ on 979 markets whose bet differs (better 350, worse 584); no bet on 123 of the lane's 3952; moved orders filled 0
+    all     : n 3829 paid 0.714 min  5.7 | round trip -2598.68$ ( -6.8c per $1 staked) ahead 67% | held instead -1491.44$ | sold: settled 1231 time_to_go 180 trail 1347 under_even 1071
+    calm    : change  +113.83$ on 1535 markets | n 1501 paid 0.707 min  5.6 | round trip -1025.00$ ( -6.8c per $1 staked) ahead 67% | held instead  -756.89$ | sold: settled 440 time_to_go 64 trail 571 under_even 426
+    middle  : change   +89.23$ on 755 markets | n  725 paid 0.714 min  5.6 | round trip  -620.38$ ( -8.6c per $1 staked) ahead 65% | held instead  -466.06$ | sold: settled 225 time_to_go 35 trail 252 under_even 213
+    jumpy   : change  -113.79$ on 1446 markets | n 1394 paid 0.722 min  5.7 | round trip  -857.40$ ( -6.2c per $1 staked) ahead 68% | held instead  -314.86$ | sold: settled 490 time_to_go 68 trail 461 under_even 375
+  --- move:trend: change   +32.79$ on 1885 markets whose bet differs (better 859, worse 954); no bet on 170 of the lane's 3952; moved orders filled 733
+    all     : n 3782 paid 0.716 min  5.9 | round trip -2651.80$ ( -7.0c per $1 staked) ahead 66% | held instead -1623.90$ | sold: settled 1267 time_to_go 181 trail 1273 under_even 1061
+    calm    : change   +57.94$ on 1535 markets | n 1477 paid 0.712 min  5.8 | round trip -1080.90$ ( -7.3c per $1 staked) ahead 66% | held instead  -869.11$ | sold: settled 459 time_to_go 68 trail 526 under_even 424
+    middle  : change  +112.65$ on 755 markets | n  723 paid 0.716 min  5.8 | round trip  -596.95$ ( -8.3c per $1 staked) ahead 66% | held instead  -425.61$ | sold: settled 230 time_to_go 34 trail 252 under_even 207
+    jumpy   : change  -147.78$ on 1446 markets | n 1376 paid 0.722 min  5.9 | round trip  -891.39$ ( -6.5c per $1 staked) ahead 67% | held instead  -409.33$ | sold: settled 501 time_to_go 66 trail 434 under_even 375
+  --- req:history: change  +405.41$ on 1467 markets whose bet differs (better 551, worse 901); no bet on 563 of the lane's 3952; moved orders filled 0
+    all     : n 3389 paid 0.706 min  6.4 | round trip -2279.18$ ( -6.7c per $1 staked) ahead 65% | held instead -1503.98$ | sold: settled 1164 time_to_go 174 trail 1079 under_even 972
+    calm    : change  +177.47$ on 1535 markets | n 1327 paid 0.702 min  6.3 | round trip  -961.37$ ( -7.2c per $1 staked) ahead 65% | held instead  -601.70$ | sold: settled 424 time_to_go 63 trail 443 under_even 397
+    middle  : change  +225.55$ on 755 markets | n  652 paid 0.703 min  6.4 | round trip  -484.05$ ( -7.4c per $1 staked) ahead 63% | held instead  -391.66$ | sold: settled 231 time_to_go 33 trail 191 under_even 197
+    jumpy   : change   +74.47$ on 1446 markets | n 1226 paid 0.712 min  6.4 | round trip  -669.13$ ( -5.5c per $1 staked) ahead 67% | held instead  -401.72$ | sold: settled 438 time_to_go 69 trail 398 under_even 321
+  --- move:history: change  +361.58$ on 2300 markets whose bet differs (better 1124, worse 1124); no bet on 591 of the lane's 3952; moved orders filled 1254
+    all     : n 3361 paid 0.702 min  6.6 | round trip -2323.01$ ( -6.9c per $1 staked) ahead 64% | held instead -1393.01$ | sold: settled 1168 time_to_go 194 trail 1028 under_even 971
+    calm    : change   +15.40$ on 1535 markets | n 1317 paid 0.699 min  6.5 | round trip -1123.44$ ( -8.5c per $1 staked) ahead 63% | held instead  -644.78$ | sold: settled 417 time_to_go 72 trail 425 under_even 403
+    middle  : change  +297.23$ on 755 markets | n  631 paid 0.698 min  6.6 | round trip  -412.37$ ( -6.5c per $1 staked) ahead 64% | held instead  -342.91$ | sold: settled 225 time_to_go 32 trail 184 under_even 190
+    jumpy   : change  +107.16$ on 1446 markets | n 1234 paid 0.706 min  6.6 | round trip  -636.45$ ( -5.2c per $1 staked) ahead 66% | held instead  -368.98$ | sold: settled 455 time_to_go 79 trail 376 under_even 324
+  --- req:price: change  +104.04$ on 554 markets whose bet differs (better 191, worse 332); no bet on 89 of the lane's 3952; moved orders filled 0
+    all     : n 3863 paid 0.711 min  5.5 | round trip -2580.55$ ( -6.7c per $1 staked) ahead 67% | held instead -1534.54$ | sold: settled 1224 time_to_go 172 trail 1381 under_even 1086
+    calm    : change   +36.17$ on 1535 markets | n 1513 paid 0.705 min  5.5 | round trip -1102.66$ ( -7.3c per $1 staked) ahead 66% | held instead  -819.96$ | sold: settled 425 time_to_go 64 trail 586 under_even 438
+    middle  : change   +94.01$ on 755 markets | n  738 paid 0.712 min  5.5 | round trip  -615.60$ ( -8.3c per $1 staked) ahead 65% | held instead  -521.72$ | sold: settled 226 time_to_go 32 trail 262 under_even 218
+    jumpy   : change    +1.71$ on 1446 markets | n 1401 paid 0.719 min  5.5 | round trip  -741.90$ ( -5.3c per $1 staked) ahead 68% | held instead  -228.72$ | sold: settled 497 time_to_go 63 trail 470 under_even 371
+  --- move:price: change  +258.12$ on 1436 markets whose bet differs (better 640, worse 732); no bet on 108 of the lane's 3952; moved orders filled 506
+    all     : n 3844 paid 0.714 min  5.7 | round trip -2426.47$ ( -6.3c per $1 staked) ahead 67% | held instead -1394.77$ | sold: settled 1262 time_to_go 179 trail 1341 under_even 1062
+    calm    : change  +108.49$ on 1535 markets | n 1504 paid 0.708 min  5.7 | round trip -1030.35$ ( -6.9c per $1 staked) ahead 67% | held instead  -693.59$ | sold: settled 445 time_to_go 66 trail 564 under_even 429
+    middle  : change  +116.27$ on 755 markets | n  730 paid 0.714 min  5.7 | round trip  -593.34$ ( -8.1c per $1 staked) ahead 65% | held instead  -541.82$ | sold: settled 229 time_to_go 35 trail 254 under_even 212
+    jumpy   : change    +9.27$ on 1446 markets | n 1401 paid 0.721 min  5.7 | round trip  -734.34$ ( -5.2c per $1 staked) ahead 68% | held instead  -229.43$ | sold: settled 511 time_to_go 65 trail 457 under_even 368
+  --- req:pricedip: change   +69.19$ on 419 markets whose bet differs (better 124, worse 276); no bet on 47 of the lane's 3952; moved orders filled 0
+    all     : n 3905 paid 0.713 min  5.5 | round trip -2615.40$ ( -6.7c per $1 staked) ahead 67% | held instead -1686.87$ | sold: settled 1240 time_to_go 175 trail 1400 under_even 1090
+    calm    : change   +45.97$ on 1535 markets | n 1522 paid 0.706 min  5.5 | round trip -1092.86$ ( -7.2c per $1 staked) ahead 66% | held instead  -786.15$ | sold: settled 430 time_to_go 63 trail 590 under_even 439
+    middle  : change   +43.39$ on 755 markets | n  747 paid 0.715 min  5.5 | round trip  -666.21$ ( -8.9c per $1 staked) ahead 65% | held instead  -588.86$ | sold: settled 231 time_to_go 31 trail 262 under_even 223
+    jumpy   : change    +1.27$ on 1446 markets | n 1423 paid 0.720 min  5.5 | round trip  -742.34$ ( -5.2c per $1 staked) ahead 69% | held instead  -321.13$ | sold: settled 500 time_to_go 68 trail 486 under_even 369
+  --- move:pricedip: change   +90.69$ on 1306 markets whose bet differs (better 602, worse 670); no bet on 99 of the lane's 3952; moved orders filled 529
+    all     : n 3853 paid 0.713 min  5.7 | round trip -2593.90$ ( -6.7c per $1 staked) ahead 67% | held instead -1552.75$ | sold: settled 1262 time_to_go 173 trail 1334 under_even 1084
+    calm    : change   +89.06$ on 1535 markets | n 1506 paid 0.707 min  5.6 | round trip -1049.77$ ( -7.0c per $1 staked) ahead 66% | held instead  -780.78$ | sold: settled 447 time_to_go 66 trail 560 under_even 433
+    middle  : change   -22.32$ on 755 markets | n  735 paid 0.714 min  5.6 | round trip  -731.93$ (-10.0c per $1 staked) ahead 64% | held instead  -618.65$ | sold: settled 230 time_to_go 29 trail 245 under_even 231
+    jumpy   : change   +11.23$ on 1446 markets | n 1404 paid 0.720 min  5.7 | round trip  -732.38$ ( -5.2c per $1 staked) ahead 69% | held instead  -211.26$ | sold: settled 508 time_to_go 65 trail 466 under_even 365
+  --- formula: change +1127.61$ on 3501 markets whose bet differs (better 1356, worse 2080); no bet on 1640 of the lane's 3952; moved orders filled 1221
+    all     : n 2312 paid 0.724 min  7.2 | round trip -1556.98$ ( -6.7c per $1 staked) ahead 66% | held instead -1096.36$ | sold: settled 907 time_to_go 143 trail 639 under_even 623
+    calm    : change  +382.28$ on 1535 markets | n  958 paid 0.723 min  7.2 | round trip  -756.55$ ( -7.9c per $1 staked) ahead 65% | held instead  -288.92$ | sold: settled 356 time_to_go 54 trail 280 under_even 268
+    middle  : change  +419.14$ on 755 markets | n  442 paid 0.718 min  7.2 | round trip  -290.47$ ( -6.6c per $1 staked) ahead 65% | held instead  -199.91$ | sold: settled 172 time_to_go 23 trail 121 under_even 126
+    jumpy   : change  +301.76$ on 1446 markets | n  778 paid 0.731 min  7.2 | round trip  -441.85$ ( -5.7c per $1 staked) ahead 67% | held instead  -551.96$ | sold: settled 321 time_to_go 60 trail 206 under_even 191
+  --- formula_req: change +1142.09$ on 3501 markets whose bet differs (better 1350, worse 2086); no bet on 1651 of the lane's 3952; moved orders filled 1209
+    all     : n 2301 paid 0.724 min  7.2 | round trip -1542.50$ ( -6.7c per $1 staked) ahead 66% | held instead -1062.13$ | sold: settled 901 time_to_go 143 trail 639 under_even 618
+    calm    : change  +398.09$ on 1535 markets | n  954 paid 0.723 min  7.2 | round trip  -740.75$ ( -7.8c per $1 staked) ahead 65% | held instead  -264.54$ | sold: settled 354 time_to_go 54 trail 280 under_even 266
+    middle  : change  +424.17$ on 755 markets | n  441 paid 0.718 min  7.2 | round trip  -285.43$ ( -6.5c per $1 staked) ahead 65% | held instead  -189.65$ | sold: settled 172 time_to_go 23 trail 121 under_even 125
+    jumpy   : change  +300.09$ on 1446 markets | n  773 paid 0.731 min  7.2 | round trip  -443.51$ ( -5.7c per $1 staked) ahead 67% | held instead  -547.68$ | sold: settled 318 time_to_go 60 trail 206 under_even 189
+
+######## THE FIRST BUY FROM MINUTE 10 (where the live commodity lanes buy): the lane's order on every market, closed by commodity_exit
+  ALL     : n 2688 paid 0.734 min 10.4 | round trip -1714.67$ ( -6.4c per $1 staked) ahead 64% | held instead -1279.00$ | sold: settled 1412 time_to_go 240 trail 352 under_even 684
+  calm    : n 1094 paid 0.728 min 10.4 | round trip  -617.65$ ( -5.6c per $1 staked) ahead 64% | held instead  -437.33$ | sold: settled 551 time_to_go 93 trail 170 under_even 280
+  middle  : n  526 paid 0.742 min 10.4 | round trip  -413.71$ ( -7.9c per $1 staked) ahead 64% | held instead  -355.53$ | sold: settled 283 time_to_go 40 trail 62 under_even 141
+  jumpy   : n  946 paid 0.735 min 10.4 | round trip  -601.60$ ( -6.4c per $1 staked) ahead 63% | held instead  -387.10$ | sold: settled 517 time_to_go 94 trail 106 under_even 229
+  anomaly : n   86 paid 0.737 min 10.5 | round trip   -65.50$ ( -7.6c per $1 staked) ahead 62% | held instead   -80.47$ | sold: settled 42 time_to_go 12 trail 9 under_even 23
+  unread  : n   36 paid 0.719 min 10.2 | round trip   -16.21$ ( -4.5c per $1 staked) ahead 64% | held instead   -18.57$ | sold: settled 19 time_to_go 1 trail 5 under_even 11
+
+  (a) EACH CHECK READ AT THE BUY, on those same bets (its own-history fifth; 1-2 = NO, 3 = WEAK, 4-5 = YES)
+  --- cushion
+    1       : n    5 (too few)
+    2       : n   93 paid 0.662 min 10.5 | round trip  -109.85$ (-11.8c per $1 staked) ahead 49% | held instead   -29.85$ | sold: settled 34 time_to_go 24 trail 9 under_even 26
+    3       : n  941 paid 0.686 min 10.3 | round trip  -628.21$ ( -6.7c per $1 staked) ahead 58% | held instead  -450.89$ | sold: settled 429 time_to_go 112 trail 123 under_even 277
+    4       : n 1305 paid 0.758 min 10.4 | round trip  -819.45$ ( -6.3c per $1 staked) ahead 67% | held instead  -687.49$ | sold: settled 721 time_to_go 86 trail 180 under_even 318
+    5       : n  308 paid 0.801 min 11.0 | round trip  -144.39$ ( -4.7c per $1 staked) ahead 73% | held instead   -98.64$ | sold: settled 207 time_to_go 14 trail 35 under_even 52
+    anomaly : n    0 (too few)
+    unread  : n   36 paid 0.719 min 10.2 | round trip   -16.21$ ( -4.5c per $1 staked) ahead 64% | held instead   -18.57$ | sold: settled 19 time_to_go 1 trail 5 under_even 11
+  --- trend
+    1       : n  412 paid 0.737 min 10.8 | round trip  -484.61$ (-11.8c per $1 staked) ahead 59% | held instead  -384.58$ | sold: settled 200 time_to_go 41 trail 58 under_even 113
+    2       : n  505 paid 0.732 min 10.5 | round trip  -306.99$ ( -6.1c per $1 staked) ahead 64% | held instead  -174.31$ | sold: settled 266 time_to_go 50 trail 68 under_even 121
+    3       : n  572 paid 0.729 min 10.3 | round trip  -318.95$ ( -5.6c per $1 staked) ahead 64% | held instead  -272.66$ | sold: settled 299 time_to_go 57 trail 77 under_even 139
+    4       : n  602 paid 0.736 min 10.3 | round trip  -264.08$ ( -4.4c per $1 staked) ahead 66% | held instead  -182.17$ | sold: settled 333 time_to_go 45 trail 79 under_even 145
+    5       : n  517 paid 0.735 min 10.2 | round trip  -299.76$ ( -5.8c per $1 staked) ahead 64% | held instead  -227.19$ | sold: settled 274 time_to_go 44 trail 56 under_even 143
+    anomaly : n   44 paid 0.738 min 10.8 | round trip   -24.08$ ( -5.5c per $1 staked) ahead 68% | held instead   -19.51$ | sold: settled 21 time_to_go 2 trail 9 under_even 12
+    unread  : n   36 paid 0.719 min 10.2 | round trip   -16.21$ ( -4.5c per $1 staked) ahead 64% | held instead   -18.57$ | sold: settled 19 time_to_go 1 trail 5 under_even 11
+  --- history
+    1       : n  300 paid 0.700 min 10.3 | round trip   -73.29$ ( -2.4c per $1 staked) ahead 62% | held instead   -79.47$ | sold: settled 157 time_to_go 35 trail 34 under_even 74
+    2       : n  537 paid 0.739 min 10.3 | round trip  -415.66$ ( -7.7c per $1 staked) ahead 64% | held instead  -244.06$ | sold: settled 275 time_to_go 51 trail 77 under_even 134
+    3       : n  550 paid 0.731 min 10.4 | round trip  -482.86$ ( -8.8c per $1 staked) ahead 61% | held instead  -523.51$ | sold: settled 282 time_to_go 55 trail 65 under_even 148
+    4       : n  518 paid 0.736 min 10.5 | round trip  -275.05$ ( -5.3c per $1 staked) ahead 65% | held instead  -147.00$ | sold: settled 271 time_to_go 42 trail 72 under_even 133
+    5       : n  698 paid 0.743 min 10.4 | round trip  -475.65$ ( -6.8c per $1 staked) ahead 65% | held instead  -276.38$ | sold: settled 376 time_to_go 53 trail 91 under_even 178
+    anomaly : n   49 paid 0.757 min 10.6 | round trip   +24.06$ ( +4.9c per $1 staked) ahead 78% | held instead   +10.00$ | sold: settled 32 time_to_go 3 trail 8 under_even 6
+    unread  : n   36 paid 0.719 min 10.2 | round trip   -16.21$ ( -4.5c per $1 staked) ahead 64% | held instead   -18.57$ | sold: settled 19 time_to_go 1 trail 5 under_even 11
+  --- volatility
+    1       : n  541 paid 0.728 min 10.4 | round trip  -212.89$ ( -3.9c per $1 staked) ahead 65% | held instead  -142.65$ | sold: settled 275 time_to_go 45 trail 86 under_even 135
+    2       : n  553 paid 0.728 min 10.4 | round trip  -404.76$ ( -7.3c per $1 staked) ahead 63% | held instead  -294.68$ | sold: settled 276 time_to_go 48 trail 84 under_even 145
+    3       : n  526 paid 0.742 min 10.4 | round trip  -413.71$ ( -7.9c per $1 staked) ahead 64% | held instead  -355.53$ | sold: settled 283 time_to_go 40 trail 62 under_even 141
+    4       : n  498 paid 0.736 min 10.4 | round trip  -420.83$ ( -8.5c per $1 staked) ahead 62% | held instead  -354.80$ | sold: settled 261 time_to_go 50 trail 60 under_even 127
+    5       : n  448 paid 0.734 min 10.4 | round trip  -180.77$ ( -4.0c per $1 staked) ahead 65% | held instead   -32.30$ | sold: settled 256 time_to_go 44 trail 46 under_even 102
+    anomaly : n   86 paid 0.737 min 10.5 | round trip   -65.50$ ( -7.6c per $1 staked) ahead 62% | held instead   -80.47$ | sold: settled 42 time_to_go 12 trail 9 under_even 23
+    unread  : n   36 paid 0.719 min 10.2 | round trip   -16.21$ ( -4.5c per $1 staked) ahead 64% | held instead   -18.57$ | sold: settled 19 time_to_go 1 trail 5 under_even 11
+  --- price
+    1       : n  257 paid 0.744 min 11.3 | round trip  -365.52$ (-14.2c per $1 staked) ahead 57% | held instead  -271.48$ | sold: settled 134 time_to_go 24 trail 31 under_even 68
+    2       : n  376 paid 0.736 min 10.6 | round trip  -214.47$ ( -5.7c per $1 staked) ahead 65% | held instead   -63.65$ | sold: settled 194 time_to_go 30 trail 59 under_even 93
+    3       : n  616 paid 0.731 min 10.3 | round trip  -228.17$ ( -3.7c per $1 staked) ahead 66% | held instead  -265.70$ | sold: settled 325 time_to_go 54 trail 90 under_even 147
+    4       : n  647 paid 0.728 min 10.3 | round trip  -405.06$ ( -6.3c per $1 staked) ahead 63% | held instead  -365.90$ | sold: settled 339 time_to_go 61 trail 79 under_even 168
+    5       : n  703 paid 0.737 min 10.2 | round trip  -412.23$ ( -5.9c per $1 staked) ahead 64% | held instead  -228.10$ | sold: settled 379 time_to_go 65 trail 78 under_even 181
+    anomaly : n   53 paid 0.736 min 10.4 | round trip   -73.01$ (-13.8c per $1 staked) ahead 58% | held instead   -65.61$ | sold: settled 22 time_to_go 5 trail 10 under_even 16
+    unread  : n   36 paid 0.719 min 10.2 | round trip   -16.21$ ( -4.5c per $1 staked) ahead 64% | held instead   -18.57$ | sold: settled 19 time_to_go 1 trail 5 under_even 11
+  --- pricedip
+    1       : n   47 paid 0.741 min 11.2 | round trip    -7.24$ ( -1.5c per $1 staked) ahead 68% | held instead   +41.85$ | sold: settled 27 time_to_go 3 trail 7 under_even 10
+    2       : n  327 paid 0.734 min 11.0 | round trip  -442.74$ (-13.5c per $1 staked) ahead 56% | held instead  -262.63$ | sold: settled 160 time_to_go 35 trail 41 under_even 91
+    3       : n  944 paid 0.735 min 10.5 | round trip  -424.91$ ( -4.5c per $1 staked) ahead 66% | held instead  -292.54$ | sold: settled 508 time_to_go 73 trail 139 under_even 224
+    4       : n  985 paid 0.735 min 10.2 | round trip  -633.86$ ( -6.4c per $1 staked) ahead 64% | held instead  -597.36$ | sold: settled 519 time_to_go 94 trail 118 under_even 254
+    5       : n  349 paid 0.726 min 10.2 | round trip  -189.70$ ( -5.4c per $1 staked) ahead 63% | held instead  -149.75$ | sold: settled 179 time_to_go 34 trail 42 under_even 94
+    anomaly : n    0 (too few)
+    unread  : n   36 paid 0.719 min 10.2 | round trip   -16.21$ ( -4.5c per $1 staked) ahead 64% | held instead   -18.57$ | sold: settled 19 time_to_go 1 trail 5 under_even 11
+
+  (b) and (c) EACH CHECK AS A RULE, against the lane's order on the same markets (a market with no bet counts 0)
+  --- req:cushion: change   +80.30$ on 98 markets whose bet differs (better 40, worse 54); no bet on 7 of the lane's 2688; moved orders filled 0
+    all     : n 2681 paid 0.735 min 10.4 | round trip -1634.37$ ( -6.1c per $1 staked) ahead 64% | held instead -1264.98$ | sold: settled 1425 time_to_go 226 trail 351 under_even 679
+    calm    : change    +6.71$ on 1094 markets | n 1091 paid 0.729 min 10.4 | round trip  -610.94$ ( -5.6c per $1 staked) ahead 65% | held instead  -474.48$ | sold: settled 555 time_to_go 88 trail 170 under_even 278
+    middle  : change    -0.37$ on 526 markets | n  525 paid 0.744 min 10.5 | round trip  -414.09$ ( -7.9c per $1 staked) ahead 64% | held instead  -353.16$ | sold: settled 284 time_to_go 39 trail 61 under_even 141
+    jumpy   : change   +63.88$ on 946 markets | n  944 paid 0.737 min 10.4 | round trip  -537.72$ ( -5.7c per $1 staked) ahead 64% | held instead  -350.06$ | sold: settled 525 time_to_go 86 trail 106 under_even 227
+  --- move:cushion: change  +192.09$ on 1035 markets whose bet differs (better 510, worse 496); no bet on 185 of the lane's 2688; moved orders filled 592
+    all     : n 2503 paid 0.743 min 10.7 | round trip -1522.58$ ( -6.1c per $1 staked) ahead 65% | held instead -1121.37$ | sold: settled 1392 time_to_go 207 trail 294 under_even 610
+    calm    : change  +175.12$ on 1094 markets | n 1016 paid 0.740 min 10.7 | round trip  -442.53$ ( -4.4c per $1 staked) ahead 67% | held instead  -263.02$ | sold: settled 555 time_to_go 81 trail 144 under_even 236
+    middle  : change   -15.27$ on 526 markets | n  489 paid 0.751 min 10.7 | round trip  -428.98$ ( -8.8c per $1 staked) ahead 64% | held instead  -333.75$ | sold: settled 272 time_to_go 34 trail 52 under_even 131
+    jumpy   : change    +7.45$ on 946 markets | n  883 paid 0.744 min 10.8 | round trip  -594.14$ ( -6.7c per $1 staked) ahead 64% | held instead  -490.30$ | sold: settled 506 time_to_go 79 trail 85 under_even 213
+  --- req:trend: change  +551.36$ on 961 markets whose bet differs (better 341, worse 594); no bet on 275 of the lane's 2688; moved orders filled 0
+    all     : n 2413 paid 0.731 min 10.6 | round trip -1163.31$ ( -4.8c per $1 staked) ahead 65% | held instead  -859.57$ | sold: settled 1328 time_to_go 210 trail 271 under_even 604
+    calm    : change   +83.26$ on 1094 markets | n 1000 paid 0.729 min 10.6 | round trip  -534.40$ ( -5.3c per $1 staked) ahead 64% | held instead  -491.86$ | sold: settled 533 time_to_go 79 trail 127 under_even 261
+    middle  : change  +221.59$ on 526 markets | n  466 paid 0.737 min 10.6 | round trip  -192.13$ ( -4.1c per $1 staked) ahead 66% | held instead   -49.70$ | sold: settled 265 time_to_go 40 trail 50 under_even 111
+    jumpy   : change  +249.63$ on 946 markets | n  833 paid 0.732 min 10.7 | round trip  -351.97$ ( -4.2c per $1 staked) ahead 65% | held instead  -190.79$ | sold: settled 475 time_to_go 80 trail 80 under_even 198
+  --- move:trend: change  +178.12$ on 1522 markets whose bet differs (better 765, worse 730); no bet on 312 of the lane's 2688; moved orders filled 666
+    all     : n 2376 paid 0.727 min 10.8 | round trip -1536.55$ ( -6.5c per $1 staked) ahead 62% | held instead -1120.34$ | sold: settled 1292 time_to_go 225 trail 238 under_even 621
+    calm    : change   -44.39$ on 1094 markets | n  971 paid 0.727 min 10.8 | round trip  -662.04$ ( -6.8c per $1 staked) ahead 62% | held instead  -488.68$ | sold: settled 513 time_to_go 88 trail 112 under_even 258
+    middle  : change   +76.12$ on 526 markets | n  457 paid 0.733 min 10.8 | round trip  -337.59$ ( -7.4c per $1 staked) ahead 63% | held instead  -271.08$ | sold: settled 252 time_to_go 38 trail 45 under_even 122
+    jumpy   : change  +134.75$ on 946 markets | n  833 paid 0.723 min 10.8 | round trip  -466.85$ ( -5.6c per $1 staked) ahead 62% | held instead  -280.38$ | sold: settled 469 time_to_go 86 trail 70 under_even 208
+  --- req:history: change  +249.26$ on 886 markets whose bet differs (better 312, worse 567); no bet on 460 of the lane's 2688; moved orders filled 0
+    all     : n 2228 paid 0.729 min 10.8 | round trip -1465.41$ ( -6.6c per $1 staked) ahead 63% | held instead -1137.95$ | sold: settled 1189 time_to_go 191 trail 267 under_even 581
+    calm    : change   +95.60$ on 1094 markets | n  912 paid 0.725 min 10.7 | round trip  -522.06$ ( -5.7c per $1 staked) ahead 64% | held instead  -287.91$ | sold: settled 469 time_to_go 76 trail 127 under_even 240
+    middle  : change  +192.70$ on 526 markets | n  440 paid 0.735 min 10.8 | round trip  -221.02$ ( -5.0c per $1 staked) ahead 65% | held instead  -158.11$ | sold: settled 244 time_to_go 33 trail 49 under_even 114
+    jumpy   : change    +6.04$ on 946 markets | n  768 paid 0.730 min 10.8 | round trip  -595.56$ ( -7.8c per $1 staked) ahead 62% | held instead  -550.11$ | sold: settled 422 time_to_go 74 trail 80 under_even 192
+  --- move:history: change  +147.74$ on 1430 markets whose bet differs (better 690, worse 721); no bet on 514 of the lane's 2688; moved orders filled 710
+    all     : n 2174 paid 0.720 min 10.9 | round trip -1566.93$ ( -7.2c per $1 staked) ahead 61% | held instead -1012.93$ | sold: settled 1147 time_to_go 200 trail 241 under_even 586
+    calm    : change   +44.15$ on 1094 markets | n  887 paid 0.718 min 10.9 | round trip  -573.50$ ( -6.5c per $1 staked) ahead 62% | held instead  -247.09$ | sold: settled 454 time_to_go 79 trail 117 under_even 237
+    middle  : change  +186.26$ on 526 markets | n  422 paid 0.723 min 11.0 | round trip  -227.45$ ( -5.4c per $1 staked) ahead 63% | held instead  -116.89$ | sold: settled 232 time_to_go 31 trail 42 under_even 117
+    jumpy   : change   -54.06$ on 946 markets | n  761 paid 0.720 min 11.0 | round trip  -655.66$ ( -8.6c per $1 staked) ahead 60% | held instead  -536.69$ | sold: settled 407 time_to_go 82 trail 74 under_even 198
+  --- req:price: change  +382.13$ on 686 markets whose bet differs (better 236, worse 434); no bet on 195 of the lane's 2688; moved orders filled 0
+    all     : n 2493 paid 0.732 min 10.5 | round trip -1332.54$ ( -5.3c per $1 staked) ahead 64% | held instead  -949.24$ | sold: settled 1344 time_to_go 218 trail 304 under_even 627
+    calm    : change   +14.59$ on 1094 markets | n 1039 paid 0.729 min 10.5 | round trip  -603.06$ ( -5.8c per $1 staked) ahead 64% | held instead  -477.83$ | sold: settled 536 time_to_go 81 trail 149 under_even 273
+    middle  : change  +177.76$ on 526 markets | n  481 paid 0.737 min 10.5 | round trip  -235.95$ ( -4.9c per $1 staked) ahead 66% | held instead  -112.18$ | sold: settled 269 time_to_go 40 trail 55 under_even 117
+    jumpy   : change  +177.61$ on 946 markets | n  854 paid 0.733 min 10.5 | round trip  -423.98$ ( -5.0c per $1 staked) ahead 64% | held instead  -246.30$ | sold: settled 478 time_to_go 87 trail 86 under_even 203
+  --- move:price: change   +30.24$ on 1295 markets whose bet differs (better 614, worse 631); no bet on 221 of the lane's 2688; moved orders filled 573
+    all     : n 2467 paid 0.728 min 10.6 | round trip -1684.43$ ( -6.8c per $1 staked) ahead 62% | held instead -1226.60$ | sold: settled 1322 time_to_go 229 trail 267 under_even 649
+    calm    : change  -112.50$ on 1094 markets | n 1020 paid 0.728 min 10.6 | round trip  -730.16$ ( -7.2c per $1 staked) ahead 62% | held instead  -501.94$ | sold: settled 526 time_to_go 89 trail 131 under_even 274
+    middle  : change   +47.16$ on 526 markets | n  476 paid 0.732 min 10.6 | round trip  -366.56$ ( -7.7c per $1 staked) ahead 63% | held instead  -281.60$ | sold: settled 259 time_to_go 39 trail 50 under_even 128
+    jumpy   : change   +95.30$ on 946 markets | n  853 paid 0.725 min 10.7 | round trip  -506.29$ ( -5.9c per $1 staked) ahead 62% | held instead  -328.85$ | sold: settled 477 time_to_go 90 trail 75 under_even 211
+  --- req:pricedip: change  +121.11$ on 374 markets whose bet differs (better 119, worse 242); no bet on 64 of the lane's 2688; moved orders filled 0
+    all     : n 2624 paid 0.735 min 10.5 | round trip -1593.56$ ( -6.1c per $1 staked) ahead 64% | held instead -1255.38$ | sold: settled 1406 time_to_go 226 trail 329 under_even 663
+    calm    : change   -77.59$ on 1094 markets | n 1076 paid 0.730 min 10.4 | round trip  -695.24$ ( -6.5c per $1 staked) ahead 64% | held instead  -532.11$ | sold: settled 545 time_to_go 89 trail 159 under_even 283
+    middle  : change  +105.98$ on 526 markets | n  510 paid 0.741 min 10.5 | round trip  -307.73$ ( -6.0c per $1 staked) ahead 65% | held instead  -232.81$ | sold: settled 286 time_to_go 38 trail 60 under_even 126
+    jumpy   : change   +81.98$ on 946 markets | n  916 paid 0.737 min 10.5 | round trip  -519.62$ ( -5.7c per $1 staked) ahead 64% | held instead  -380.19$ | sold: settled 512 time_to_go 87 trail 96 under_even 221
+  --- move:pricedip: change   -83.86$ on 1312 markets whose bet differs (better 642, worse 648); no bet on 216 of the lane's 2688; moved orders filled 657
+    all     : n 2473 paid 0.730 min 10.6 | round trip -1798.53$ ( -7.3c per $1 staked) ahead 62% | held instead -1367.73$ | sold: settled 1309 time_to_go 234 trail 285 under_even 645
+    calm    : change   -96.64$ on 1094 markets | n 1014 paid 0.730 min 10.5 | round trip  -714.30$ ( -7.0c per $1 staked) ahead 63% | held instead  -475.21$ | sold: settled 517 time_to_go 94 trail 139 under_even 264
+    middle  : change    -4.31$ on 526 markets | n  476 paid 0.733 min 10.6 | round trip  -418.02$ ( -8.8c per $1 staked) ahead 62% | held instead  -357.31$ | sold: settled 255 time_to_go 40 trail 51 under_even 130
+    jumpy   : change   -15.64$ on 947 markets | n  867 paid 0.730 min 10.6 | round trip  -617.23$ ( -7.1c per $1 staked) ahead 62% | held instead  -487.43$ | sold: settled 476 time_to_go 88 trail 84 under_even 219
+  --- formula: change +1095.87$ on 2530 markets whose bet differs (better 1010, worse 1494); no bet on 1789 of the lane's 2688; moved orders filled 559
+    all     : n  899 paid 0.724 min 11.3 | round trip  -618.80$ ( -6.9c per $1 staked) ahead 62% | held instead  -522.33$ | sold: settled 504 time_to_go 75 trail 82 under_even 238
+    calm    : change  +397.26$ on 1094 markets | n  406 paid 0.730 min 11.3 | round trip  -220.39$ ( -5.4c per $1 staked) ahead 64% | held instead  -101.34$ | sold: settled 231 time_to_go 34 trail 40 under_even 101
+    middle  : change  +365.53$ on 526 markets | n  167 paid 0.731 min 11.3 | round trip   -48.19$ ( -2.9c per $1 staked) ahead 66% | held instead   +18.06$ | sold: settled 97 time_to_go 12 trail 18 under_even 40
+    jumpy   : change  +297.30$ on 946 markets | n  263 paid 0.713 min 11.3 | round trip  -304.30$ (-11.6c per $1 staked) ahead 57% | held instead  -341.18$ | sold: settled 144 time_to_go 26 trail 17 under_even 76
+  --- formula_req: change +1135.02$ on 2530 markets whose bet differs (better 1009, worse 1495); no bet on 1798 of the lane's 2688; moved orders filled 550
+    all     : n  890 paid 0.725 min 11.3 | round trip  -579.65$ ( -6.5c per $1 staked) ahead 62% | held instead  -458.56$ | sold: settled 501 time_to_go 75 trail 82 under_even 232
+    calm    : change  +418.59$ on 1094 markets | n  403 paid 0.731 min 11.3 | round trip  -199.06$ ( -4.9c per $1 staked) ahead 64% | held instead   -70.57$ | sold: settled 230 time_to_go 34 trail 40 under_even 99
+    middle  : change  +376.83$ on 526 markets | n  165 paid 0.733 min 11.3 | round trip   -36.89$ ( -2.2c per $1 staked) ahead 67% | held instead   +38.56$ | sold: settled 97 time_to_go 12 trail 18 under_even 38
+    jumpy   : change  +303.81$ on 946 markets | n  259 paid 0.714 min 11.4 | round trip  -297.78$ (-11.5c per $1 staked) ahead 57% | held instead  -328.68$ | sold: settled 142 time_to_go 26 trail 17 under_even 74
+
+######## THE FIRST BUY IN THE LAST 3 MINUTES: the lane's order on every market, closed by commodity_exit
+  ALL     : n 1957 paid 0.739 min 12.3 | round trip  -935.14$ ( -4.8c per $1 staked) ahead 64% | held instead  -719.80$ | sold: settled 1217 time_to_go 168 trail 111 under_even 461
+  calm    : n  796 paid 0.736 min 12.3 | round trip  -399.72$ ( -5.0c per $1 staked) ahead 64% | held instead  -288.62$ | sold: settled 477 time_to_go 66 trail 56 under_even 197
+  middle  : n  391 paid 0.741 min 12.3 | round trip  -188.52$ ( -4.8c per $1 staked) ahead 66% | held instead  -199.08$ | sold: settled 248 time_to_go 34 trail 21 under_even 88
+  jumpy   : n  689 paid 0.740 min 12.3 | round trip  -298.69$ ( -4.3c per $1 staked) ahead 65% | held instead  -203.20$ | sold: settled 447 time_to_go 56 trail 28 under_even 158
+  anomaly : n   57 paid 0.745 min 12.3 | round trip   -11.96$ ( -2.1c per $1 staked) ahead 63% | held instead   +18.84$ | sold: settled 33 time_to_go 10 trail 3 under_even 11
+  unread  : n   24 paid 0.749 min 12.1 | round trip   -36.24$ (-15.1c per $1 staked) ahead 58% | held instead   -47.75$ | sold: settled 12 time_to_go 2 trail 3 under_even 7
+
+  (a) EACH CHECK READ AT THE BUY, on those same bets (its own-history fifth; 1-2 = NO, 3 = WEAK, 4-5 = YES)
+  --- cushion
+    1       : n    1 (too few)
+    2       : n   33 paid 0.676 min 12.5 | round trip   +21.74$ ( +6.6c per $1 staked) ahead 64% | held instead   +66.69$ | sold: settled 18 time_to_go 8 trail 1 under_even 6
+    3       : n 1109 paid 0.714 min 12.2 | round trip  -359.09$ ( -3.2c per $1 staked) ahead 63% | held instead  -212.89$ | sold: settled 653 time_to_go 113 trail 64 under_even 279
+    4       : n  731 paid 0.776 min 12.4 | round trip  -488.72$ ( -6.7c per $1 staked) ahead 67% | held instead  -460.51$ | sold: settled 484 time_to_go 45 trail 41 under_even 161
+    5       : n   59 paid 0.785 min 14.0 | round trip   -76.52$ (-13.0c per $1 staked) ahead 66% | held instead   -69.04$ | sold: settled 49 trail 2 under_even 8
+    anomaly : n    0 (too few)
+    unread  : n   24 paid 0.749 min 12.1 | round trip   -36.24$ (-15.1c per $1 staked) ahead 58% | held instead   -47.75$ | sold: settled 12 time_to_go 2 trail 3 under_even 7
+  --- trend
+    1       : n  326 paid 0.738 min 12.5 | round trip  -371.01$ (-11.4c per $1 staked) ahead 58% | held instead  -374.46$ | sold: settled 191 time_to_go 38 trail 18 under_even 79
+    2       : n  407 paid 0.739 min 12.4 | round trip  -225.51$ ( -5.5c per $1 staked) ahead 64% | held instead  -133.53$ | sold: settled 252 time_to_go 29 trail 23 under_even 103
+    3       : n  401 paid 0.734 min 12.3 | round trip  -108.63$ ( -2.7c per $1 staked) ahead 66% | held instead  -151.00$ | sold: settled 256 time_to_go 41 trail 19 under_even 85
+    4       : n  425 paid 0.737 min 12.3 | round trip   -77.59$ ( -1.8c per $1 staked) ahead 66% | held instead   +19.67$ | sold: settled 266 time_to_go 35 trail 24 under_even 100
+    5       : n  347 paid 0.744 min 12.2 | round trip  -128.66$ ( -3.7c per $1 staked) ahead 67% | held instead   -47.29$ | sold: settled 222 time_to_go 23 trail 21 under_even 81
+    anomaly : n   27 paid 0.767 min 12.5 | round trip   +12.50$ ( +4.6c per $1 staked) ahead 78% | held instead   +14.55$ | sold: settled 18 trail 3 under_even 6
+    unread  : n   24 paid 0.749 min 12.1 | round trip   -36.24$ (-15.1c per $1 staked) ahead 58% | held instead   -47.75$ | sold: settled 12 time_to_go 2 trail 3 under_even 7
+  --- history
+    1       : n  231 paid 0.722 min 12.2 | round trip   -29.94$ ( -1.3c per $1 staked) ahead 65% | held instead   +59.91$ | sold: settled 146 time_to_go 26 trail 7 under_even 52
+    2       : n  417 paid 0.738 min 12.3 | round trip  -381.86$ ( -9.2c per $1 staked) ahead 59% | held instead  -363.53$ | sold: settled 241 time_to_go 47 trail 19 under_even 110
+    3       : n  344 paid 0.734 min 12.4 | round trip  -220.43$ ( -6.4c per $1 staked) ahead 62% | held instead  -128.34$ | sold: settled 213 time_to_go 30 trail 17 under_even 84
+    4       : n  432 paid 0.746 min 12.4 | round trip  -172.29$ ( -4.0c per $1 staked) ahead 66% | held instead  -191.28$ | sold: settled 269 time_to_go 31 trail 27 under_even 105
+    5       : n  478 paid 0.744 min 12.3 | round trip  -128.47$ ( -2.7c per $1 staked) ahead 68% | held instead   -80.26$ | sold: settled 310 time_to_go 30 trail 37 under_even 101
+    anomaly : n   31 paid 0.755 min 12.5 | round trip   +34.09$ (+11.0c per $1 staked) ahead 81% | held instead   +31.46$ | sold: settled 26 time_to_go 2 trail 1 under_even 2
+    unread  : n   24 paid 0.749 min 12.1 | round trip   -36.24$ (-15.1c per $1 staked) ahead 58% | held instead   -47.75$ | sold: settled 12 time_to_go 2 trail 3 under_even 7
+  --- volatility
+    1       : n  389 paid 0.736 min 12.3 | round trip  -113.86$ ( -2.9c per $1 staked) ahead 66% | held instead    +0.63$ | sold: settled 235 time_to_go 32 trail 29 under_even 93
+    2       : n  407 paid 0.736 min 12.3 | round trip  -285.86$ ( -7.0c per $1 staked) ahead 62% | held instead  -289.25$ | sold: settled 242 time_to_go 34 trail 27 under_even 104
+    3       : n  391 paid 0.741 min 12.3 | round trip  -188.52$ ( -4.8c per $1 staked) ahead 66% | held instead  -199.08$ | sold: settled 248 time_to_go 34 trail 21 under_even 88
+    4       : n  391 paid 0.739 min 12.3 | round trip  -233.36$ ( -6.0c per $1 staked) ahead 64% | held instead  -216.21$ | sold: settled 250 time_to_go 26 trail 20 under_even 95
+    5       : n  298 paid 0.743 min 12.3 | round trip   -65.33$ ( -2.2c per $1 staked) ahead 66% | held instead   +13.01$ | sold: settled 197 time_to_go 30 trail 8 under_even 63
+    anomaly : n   57 paid 0.745 min 12.3 | round trip   -11.96$ ( -2.1c per $1 staked) ahead 63% | held instead   +18.84$ | sold: settled 33 time_to_go 10 trail 3 under_even 11
+    unread  : n   24 paid 0.749 min 12.1 | round trip   -36.24$ (-15.1c per $1 staked) ahead 58% | held instead   -47.75$ | sold: settled 12 time_to_go 2 trail 3 under_even 7
+  --- price
+    1       : n  188 paid 0.730 min 12.7 | round trip  -317.34$ (-16.9c per $1 staked) ahead 53% | held instead  -289.54$ | sold: settled 106 time_to_go 21 trail 11 under_even 50
+    2       : n  302 paid 0.726 min 12.4 | round trip   -99.14$ ( -3.3c per $1 staked) ahead 64% | held instead   -90.25$ | sold: settled 184 time_to_go 24 trail 22 under_even 72
+    3       : n  450 paid 0.740 min 12.3 | round trip  -108.61$ ( -2.4c per $1 staked) ahead 68% | held instead   -88.44$ | sold: settled 292 time_to_go 39 trail 25 under_even 94
+    4       : n  450 paid 0.743 min 12.3 | round trip   -73.63$ ( -1.6c per $1 staked) ahead 67% | held instead   -77.77$ | sold: settled 290 time_to_go 34 trail 25 under_even 101
+    5       : n  509 paid 0.744 min 12.2 | round trip  -321.24$ ( -6.3c per $1 staked) ahead 63% | held instead  -146.77$ | sold: settled 307 time_to_go 46 trail 24 under_even 132
+    anomaly : n   34 paid 0.761 min 12.2 | round trip   +21.07$ ( +6.2c per $1 staked) ahead 76% | held instead   +20.73$ | sold: settled 26 time_to_go 2 trail 1 under_even 5
+    unread  : n   24 paid 0.749 min 12.1 | round trip   -36.24$ (-15.1c per $1 staked) ahead 58% | held instead   -47.75$ | sold: settled 12 time_to_go 2 trail 3 under_even 7
+  --- pricedip
+    1       : n   24 paid 0.729 min 12.8 | round trip   -18.21$ ( -7.6c per $1 staked) ahead 58% | held instead    +5.00$ | sold: settled 14 time_to_go 2 trail 2 under_even 6
+    2       : n  177 paid 0.728 min 12.6 | round trip  -270.39$ (-15.3c per $1 staked) ahead 53% | held instead  -247.63$ | sold: settled 90 time_to_go 25 trail 12 under_even 50
+    3       : n 1100 paid 0.739 min 12.4 | round trip  -426.87$ ( -3.9c per $1 staked) ahead 66% | held instead  -339.17$ | sold: settled 714 time_to_go 80 trail 57 under_even 249
+    4       : n  632 paid 0.743 min 12.2 | round trip  -183.42$ ( -2.9c per $1 staked) ahead 66% | held instead   -90.24$ | sold: settled 387 time_to_go 59 trail 37 under_even 149
+    5       : n    0 (too few)
+    anomaly : n    0 (too few)
+    unread  : n   24 paid 0.749 min 12.1 | round trip   -36.24$ (-15.1c per $1 staked) ahead 58% | held instead   -47.75$ | sold: settled 12 time_to_go 2 trail 3 under_even 7
+
+  (b) and (c) EACH CHECK AS A RULE, against the lane's order on the same markets (a market with no bet counts 0)
+  --- req:cushion: change   -19.73$ on 34 markets whose bet differs (better 11, worse 20); no bet on 10 of the lane's 1957; moved orders filled 0
+    all     : n 1947 paid 0.740 min 12.3 | round trip  -954.87$ ( -4.9c per $1 staked) ahead 65% | held instead  -767.97$ | sold: settled 1213 time_to_go 163 trail 111 under_even 460
+    calm    : change   -10.26$ on 796 markets | n  790 paid 0.737 min 12.3 | round trip  -409.98$ ( -5.2c per $1 staked) ahead 64% | held instead  -323.50$ | sold: settled 475 time_to_go 62 trail 56 under_even 197
+    middle  : change    -9.26$ on 391 markets | n  389 paid 0.742 min 12.3 | round trip  -197.78$ ( -5.1c per $1 staked) ahead 66% | held instead  -214.81$ | sold: settled 247 time_to_go 33 trail 21 under_even 88
+    jumpy   : change    -1.63$ on 689 markets | n  687 paid 0.741 min 12.4 | round trip  -300.32$ ( -4.4c per $1 staked) ahead 65% | held instead  -202.18$ | sold: settled 446 time_to_go 56 trail 28 under_even 157
+  --- move:cushion: change  -212.36$ on 1141 markets whose bet differs (better 579, worse 534); no bet on 339 of the lane's 1957; moved orders filled 671
+    all     : n 1618 paid 0.737 min 12.7 | round trip -1147.50$ ( -7.1c per $1 staked) ahead 62% | held instead  -978.43$ | sold: settled 1015 time_to_go 141 trail 73 under_even 389
+    calm    : change   -45.78$ on 796 markets | n  669 paid 0.735 min 12.7 | round trip  -445.50$ ( -6.7c per $1 staked) ahead 63% | held instead  -297.82$ | sold: settled 418 time_to_go 55 trail 33 under_even 163
+    middle  : change  -116.70$ on 391 markets | n  320 paid 0.743 min 12.6 | round trip  -305.23$ ( -9.5c per $1 staked) ahead 62% | held instead  -357.19$ | sold: settled 199 time_to_go 25 trail 14 under_even 82
+    jumpy   : change   -54.08$ on 689 markets | n  557 paid 0.738 min 12.7 | round trip  -352.77$ ( -6.3c per $1 staked) ahead 63% | held instead  -314.24$ | sold: settled 359 time_to_go 49 trail 21 under_even 128
+  --- req:trend: change  +231.93$ on 760 markets whose bet differs (better 242, worse 507); no bet on 326 of the lane's 1957; moved orders filled 0
+    all     : n 1631 paid 0.735 min 12.5 | round trip  -703.21$ ( -4.3c per $1 staked) ahead 65% | held instead  -551.91$ | sold: settled 1031 time_to_go 137 trail 80 under_even 383
+    calm    : change  +112.36$ on 796 markets | n  693 paid 0.731 min 12.5 | round trip  -287.37$ ( -4.1c per $1 staked) ahead 65% | held instead  -277.99$ | sold: settled 429 time_to_go 58 trail 41 under_even 165
+    middle  : change    -5.38$ on 391 markets | n  315 paid 0.740 min 12.5 | round trip  -193.90$ ( -6.2c per $1 staked) ahead 65% | held instead  -151.78$ | sold: settled 202 time_to_go 26 trail 15 under_even 72
+    jumpy   : change  +129.79$ on 689 markets | n  553 paid 0.735 min 12.5 | round trip  -168.90$ ( -3.1c per $1 staked) ahead 65% | held instead   -51.87$ | sold: settled 362 time_to_go 44 trail 18 under_even 129
+  --- move:trend: change  -115.21$ on 1157 markets whose bet differs (better 545, worse 593); no bet on 366 of the lane's 1957; moved orders filled 487
+    all     : n 1591 paid 0.726 min 12.6 | round trip -1050.35$ ( -6.6c per $1 staked) ahead 61% | held instead  -899.93$ | sold: settled 979 time_to_go 140 trail 68 under_even 404
+    calm    : change   -75.18$ on 796 markets | n  659 paid 0.726 min 12.6 | round trip  -474.90$ ( -7.2c per $1 staked) ahead 61% | held instead  -403.50$ | sold: settled 398 time_to_go 59 trail 29 under_even 173
+    middle  : change   +15.94$ on 391 markets | n  312 paid 0.728 min 12.6 | round trip  -172.59$ ( -5.5c per $1 staked) ahead 63% | held instead  -159.66$ | sold: settled 193 time_to_go 26 trail 16 under_even 77
+    jumpy   : change   -67.80$ on 689 markets | n  551 paid 0.724 min 12.6 | round trip  -366.48$ ( -6.7c per $1 staked) ahead 61% | held instead  -296.43$ | sold: settled 351 time_to_go 47 trail 18 under_even 135
+  --- req:history: change  +152.40$ on 679 markets whose bet differs (better 216, worse 461); no bet on 401 of the lane's 1957; moved orders filled 0
+    all     : n 1556 paid 0.735 min 12.5 | round trip  -782.74$ ( -5.0c per $1 staked) ahead 64% | held instead  -661.62$ | sold: settled 977 time_to_go 116 trail 95 under_even 368
+    calm    : change  +112.26$ on 796 markets | n  643 paid 0.732 min 12.5 | round trip  -287.46$ ( -4.5c per $1 staked) ahead 65% | held instead  -146.71$ | sold: settled 395 time_to_go 45 trail 44 under_even 159
+    middle  : change   +67.62$ on 391 markets | n  315 paid 0.737 min 12.5 | round trip  -120.90$ ( -3.8c per $1 staked) ahead 66% | held instead   -98.33$ | sold: settled 199 time_to_go 27 trail 22 under_even 67
+    jumpy   : change   -11.90$ on 689 markets | n  532 paid 0.736 min 12.6 | round trip  -310.59$ ( -5.8c per $1 staked) ahead 64% | held instead  -355.58$ | sold: settled 347 time_to_go 36 trail 25 under_even 124
+  --- move:history: change  -171.02$ on 1020 markets whose bet differs (better 461, worse 549); no bet on 456 of the lane's 1957; moved orders filled 409
+    all     : n 1501 paid 0.724 min 12.6 | round trip -1106.16$ ( -7.4c per $1 staked) ahead 61% | held instead -1012.53$ | sold: settled 911 time_to_go 125 trail 85 under_even 380
+    calm    : change    -1.86$ on 796 markets | n  624 paid 0.723 min 12.6 | round trip  -401.58$ ( -6.4c per $1 staked) ahead 62% | held instead  -299.76$ | sold: settled 379 time_to_go 49 trail 38 under_even 158
+    middle  : change    +2.69$ on 391 markets | n  293 paid 0.729 min 12.6 | round trip  -185.84$ ( -6.3c per $1 staked) ahead 63% | held instead  -202.63$ | sold: settled 177 time_to_go 25 trail 19 under_even 72
+    jumpy   : change  -163.02$ on 689 markets | n  518 paid 0.722 min 12.7 | round trip  -461.71$ ( -8.9c per $1 staked) ahead 60% | held instead  -456.35$ | sold: settled 319 time_to_go 43 trail 24 under_even 132
+  --- req:price: change  +240.78$ on 524 markets whose bet differs (better 159, worse 353); no bet on 199 of the lane's 1957; moved orders filled 0
+    all     : n 1758 paid 0.740 min 12.4 | round trip  -694.35$ ( -3.9c per $1 staked) ahead 66% | held instead  -436.95$ | sold: settled 1116 time_to_go 144 trail 90 under_even 408
+    calm    : change   +63.59$ on 796 markets | n  738 paid 0.736 min 12.4 | round trip  -336.13$ ( -4.6c per $1 staked) ahead 65% | held instead  -241.29$ | sold: settled 451 time_to_go 56 trail 46 under_even 185
+    middle  : change   +53.93$ on 391 markets | n  345 paid 0.742 min 12.4 | round trip  -134.59$ ( -3.9c per $1 staked) ahead 67% | held instead  -115.62$ | sold: settled 225 time_to_go 28 trail 17 under_even 75
+    jumpy   : change  +135.55$ on 689 markets | n  601 paid 0.742 min 12.4 | round trip  -163.14$ ( -2.7c per $1 staked) ahead 66% | held instead    -2.42$ | sold: settled 399 time_to_go 52 trail 21 under_even 129
+  --- move:price: change  -174.42$ on 973 markets whose bet differs (better 438, worse 515); no bet on 239 of the lane's 1957; moved orders filled 392
+    all     : n 1718 paid 0.734 min 12.5 | round trip -1109.56$ ( -6.5c per $1 staked) ahead 62% | held instead  -876.39$ | sold: settled 1064 time_to_go 151 trail 72 under_even 431
+    calm    : change  -107.56$ on 796 markets | n  720 paid 0.735 min 12.5 | round trip  -507.29$ ( -7.0c per $1 staked) ahead 62% | held instead  -404.93$ | sold: settled 435 time_to_go 61 trail 35 under_even 189
+    middle  : change   -62.39$ on 391 markets | n  339 paid 0.735 min 12.5 | round trip  -250.91$ ( -7.4c per $1 staked) ahead 63% | held instead  -248.57$ | sold: settled 209 time_to_go 29 trail 16 under_even 85
+    jumpy   : change   -19.21$ on 689 markets | n  586 paid 0.732 min 12.5 | round trip  -317.90$ ( -5.4c per $1 staked) ahead 62% | held instead  -188.34$ | sold: settled 379 time_to_go 54 trail 16 under_even 137
+  --- req:pricedip: change  +162.11$ on 201 markets whose bet differs (better 67, worse 130); no bet on 47 of the lane's 1957; moved orders filled 0
+    all     : n 1910 paid 0.740 min 12.4 | round trip  -773.03$ ( -4.0c per $1 staked) ahead 65% | held instead  -594.06$ | sold: settled 1207 time_to_go 154 trail 107 under_even 442
+    calm    : change   +21.05$ on 796 markets | n  780 paid 0.737 min 12.4 | round trip  -378.67$ ( -4.9c per $1 staked) ahead 65% | held instead  -308.31$ | sold: settled 472 time_to_go 58 trail 57 under_even 193
+    middle  : change   +22.76$ on 391 markets | n  381 paid 0.740 min 12.3 | round trip  -165.76$ ( -4.4c per $1 staked) ahead 66% | held instead  -170.17$ | sold: settled 246 time_to_go 31 trail 19 under_even 85
+    jumpy   : change  +103.07$ on 689 markets | n  670 paid 0.742 min 12.4 | round trip  -195.61$ ( -2.9c per $1 staked) ahead 66% | held instead   -78.53$ | sold: settled 443 time_to_go 56 trail 25 under_even 146
+  --- move:pricedip: change  -310.62$ on 1295 markets whose bet differs (better 624, worse 654); no bet on 297 of the lane's 1957; moved orders filled 671
+    all     : n 1661 paid 0.731 min 12.6 | round trip -1245.76$ ( -7.5c per $1 staked) ahead 61% | held instead -1143.64$ | sold: settled 1012 time_to_go 149 trail 71 under_even 429
+    calm    : change  -136.72$ on 796 markets | n  687 paid 0.730 min 12.5 | round trip  -536.44$ ( -7.8c per $1 staked) ahead 61% | held instead  -502.01$ | sold: settled 410 time_to_go 60 trail 33 under_even 184
+    middle  : change   -89.41$ on 391 markets | n  326 paid 0.732 min 12.6 | round trip  -277.93$ ( -8.5c per $1 staked) ahead 61% | held instead  -287.84$ | sold: settled 197 time_to_go 29 trail 15 under_even 85
+    jumpy   : change   -89.27$ on 690 markets | n  573 paid 0.731 min 12.6 | round trip  -387.95$ ( -6.8c per $1 staked) ahead 61% | held instead  -308.39$ | sold: settled 364 time_to_go 52 trail 17 under_even 140
+  --- formula: change  +573.01$ on 1920 markets whose bet differs (better 721, worse 1189); no bet on 1612 of the lane's 1957; moved orders filled 279
+    all     : n  345 paid 0.702 min 13.0 | round trip  -362.12$ (-10.5c per $1 staked) ahead 57% | held instead  -411.50$ | sold: settled 206 time_to_go 26 trail 14 under_even 99
+    calm    : change  +299.21$ on 796 markets | n  155 paid 0.706 min 13.0 | round trip  -100.51$ ( -6.5c per $1 staked) ahead 61% | held instead   -95.69$ | sold: settled 98 time_to_go 12 trail 8 under_even 37
+    middle  : change   +96.04$ on 391 markets | n   65 paid 0.691 min 13.1 | round trip   -92.48$ (-14.2c per $1 staked) ahead 49% | held instead  -105.27$ | sold: settled 33 time_to_go 8 trail 2 under_even 22
+    jumpy   : change  +173.50$ on 689 markets | n   95 paid 0.693 min 13.2 | round trip  -125.19$ (-13.2c per $1 staked) ahead 55% | held instead  -144.91$ | sold: settled 60 time_to_go 4 trail 1 under_even 30
+  --- formula_req: change  +610.62$ on 1920 markets whose bet differs (better 721, worse 1189); no bet on 1619 of the lane's 1957; moved orders filled 272
+    all     : n  338 paid 0.703 min 13.0 | round trip  -324.52$ ( -9.6c per $1 staked) ahead 58% | held instead  -354.10$ | sold: settled 204 time_to_go 26 trail 14 under_even 94
+    calm    : change  +315.12$ on 796 markets | n  153 paid 0.707 min 13.0 | round trip   -84.60$ ( -5.5c per $1 staked) ahead 62% | held instead   -75.17$ | sold: settled 97 time_to_go 12 trail 8 under_even 36
+    middle  : change  +107.34$ on 391 markets | n   63 paid 0.693 min 13.1 | round trip   -81.18$ (-12.9c per $1 staked) ahead 51% | held instead   -84.77$ | sold: settled 33 time_to_go 8 trail 2 under_even 20
+    jumpy   : change  +183.90$ on 689 markets | n   92 paid 0.693 min 13.2 | round trip  -114.79$ (-12.5c per $1 staked) ahead 55% | held instead  -128.53$ | sold: settled 59 time_to_go 4 trail 1 under_even 28
+
+done in 350s
+exit=0  results in job-results/20261121-183112-32990/
+exit=0
