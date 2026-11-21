@@ -34,5 +34,5 @@
 
 - Query the Docker Postgres, not `data/moonshot.db` (stale). Live runs in the cloud (us-east-2 host through SSM); the Mac runs config and analysis.
 - `data/strategies.toml` is untracked and shipped by `scripts/cloud_push.sh`. A config that names a new lane field needs the new image: use `--build`. An old image refuses an unknown field.
-- A restart (`--build`) lands just after a quarter-hour close: start the push at about xx:44:40, xx:14:40 and so on, after a warm build.
+- Before a restart (`--build`), check the account for open bets and resting orders. With nothing open, push at once; do not wait for a quarter-hour close (user, 2026-11-21: "stop waiting to push, just check the account"). With something open, say what it is and ask.
 - Do not add attribution lines to commit messages or pull request descriptions.
