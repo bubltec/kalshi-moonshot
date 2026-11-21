@@ -81,7 +81,7 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
 S.sort(key=lambda r: r[0])
 print(f"VARIANT {V}: {len(S)} gated sides ({sum(1 for r in S if r[9] == 'commodity')} commodity), {time.time() - t0:.0f}s", flush=True)
 
-COLS = [NI["czb"]] if V == "cushonly" else FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V in ("winp", "winp0") else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
+COLS = [NI["czb"]] if V == "cushonly" else FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V in ("winp", "winp0", "value") else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
 def X(r): return [r[1][i] for i in COLS]
 def sigm(z): return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z))))
 
@@ -111,7 +111,7 @@ def fit(tr):
     sd = [math.sqrt(sum((x[i] - mu[i]) ** 2 for x in xs) / len(xs)) or 1.0 for i in range(n)]
     sub = tr[::3]
     m = {"mu": mu, "sd": sd, "lam": br.RIDGE}
-    if V in ("logit", "winp", "winp0", "cushonly"):
+    if V in ("logit", "winp", "winp0", "value", "cushonly"):
         w = [0.0] * (n + 1)
         K = n + 1
         vs = [[1.0] + [(x[i] - mu[i]) / sd[i] for i in range(n)] for x in (X(r) for r in sub)]
@@ -158,7 +158,7 @@ def pred(m, r):
     """(score used to rank, predicted hold net per $1, predicted best-exit net) all capped at the ceiling."""
     x = X(r); v = [1.0] + [(a - u) / d for a, u, d in zip(x, m["mu"], m["sd"])]
     ce = br.ceiling(r[3])
-    if V in ("winp", "winp0", "cushonly"):
+    if V in ("winp", "winp0", "value", "cushonly"):
         p = sigm(sum(a * b for a, b in zip(m["w"], v)))
         return p, p, p  # the score is the predicted chance to win, from the curve readings alone
     if V == "logit":
@@ -174,7 +174,7 @@ cm = [r for r in S if r[9] == "commodity"]
 t_start, t_end = cm[0][0] + 24 * 3600, cm[-1][0]
 t_hold = t_end - 24 * 3600
 t_mid = (t_start + t_hold) / 2
-inb = (lambda r: True) if V == "winp0" else (lambda r: br.usable(r[3]) and BAND[0] <= r[3] < BAND[1])  # winp0: the risk score is evaluated on EVERY gated tick, no ask band
+inb = (lambda r: True) if V in ("winp0", "value") else (lambda r: br.usable(r[3]) and BAND[0] <= r[3] < BAND[1])  # winp0: the risk score is evaluated on EVERY gated tick, no ask band
 def band_of(a):
     for k, (lo, hi) in enumerate(BANDS):
         if lo <= a < hi: return k
@@ -208,6 +208,93 @@ def hour(t):
             if sc >= cuts[(top, band_of(r[3]) if V == "band" else None)]:
                 out.append((top, r[4], r[5], seg, r[2][0], r[1][NI["sl30"]], r[1][NI["cv30"]], ph, r[7], cuts[(top, band_of(r[3]) if V == "band" else None)], r[3]))
     return t, len(trc), len({r[4] for r in tr}), m["lam"], out
+
+
+if V == "value":
+    # THE BUY-SIDE VALUE CHECK (2026-11-21, user via parent: "build the buy-side value check now ... win chance minus ask minus the fee, against a bar read from that market's own recent history (rule 2, no fixed number), never an ask 0.45-0.55"). The win-chance score is the price-free one (winp0); this is a SEPARATE step after it. A reading is bought when edge = win chance - ask - fee(ask) is positive AND at least the QUANTILE of that market series' own edge readings over the previous 3 hours (needs 200 of them), never at an ask of 0.45-0.55. The three quantiles (0.80, 0.90, 0.95) are the settings tried (counted: 3 variants); the price-blind comparison is the score's own top 10% (the winp0 pick set). One first reading per market side, held to settlement, net per $1 after the buy fee.
+    QS, OWN_H, OWN_MIN = (0.80, 0.90, 0.95), 3 * 3600.0, 200
+    def sname(r): return r[4].split("-")[0]
+    def hour_value(t):
+        hold_hour = t >= t_hold
+        if hold_hour and not HOLDOUT: return None
+        a0, a1, b1 = (bisect.bisect_left(times, x) for x in (t - WIN * 3600, t, t + 3600))
+        tr = [r for r in S[a0:a1] if r[8] <= t]
+        te = [r for r in S[a1:b1] if r[9] == "commodity"]
+        trc = [r for r in tr if r[9] == "commodity"]
+        if len(trc) < 1500 or len(te) < 100: return None
+        m = fit(tr)
+        ps = sorted(pred(m, r)[0] for r in trc[::4])
+        cut10 = ps[int(len(ps) * 0.90)]
+        h0 = bisect.bisect_left(times, t - OWN_H)
+        hs = {}
+        for r in S[h0:b1]:
+            if r[9] != "commodity": continue
+            hs.setdefault(sname(r), ([], []))
+            hs[sname(r)][0].append(r[0]); hs[sname(r)][1].append(pred(m, r)[0] - r[3] - fee(r[3]))
+        seg = 2 if hold_hour else (0 if t < t_mid else 1)
+        out, blind, band = [], [], {}
+        for r in te:
+            a = r[3]
+            p = pred(m, r)[0]
+            e = p - a - fee(a)
+            bk = 0 if a < 0.40 else 1 if a < 0.60 else 2 if a < 0.85 else 3
+            b = band.setdefault(bk, [0, 0, 0.0, 0.0, 0.0])
+            b[0] += 1; b[1] += 1 if e > 0 else 0; b[2] += e; b[3] += r[7]; b[4] += r[2][0]
+            row = (r[4], r[5], seg, r[2][0], r[1][NI["sl30"]], r[1][NI["cv30"]], p, r[7], a, e)
+            if p >= cut10: blind.append(row)
+            if br.DEAD[0] <= a <= br.DEAD[1] or e <= 0: continue
+            ts, es = hs[sname(r)]
+            lo, hi = bisect.bisect_left(ts, r[0] - OWN_H), bisect.bisect_left(ts, r[0])
+            if hi - lo < OWN_MIN: continue
+            own = sorted(es[lo:hi])
+            for q in QS:
+                bar = own[min(len(own) - 1, int(len(own) * q))]
+                if e >= bar: out.append((q, row + (bar,)))
+        return seg, out, blind, band
+    vp = {q: {} for q in QS}; blindp = {}; bandagg = {0: {}, 1: {}, 2: {}}
+    with multiprocessing.get_context("fork").Pool(4) as pool:
+        for res in pool.imap(hour_value, range(int(t_start), int(t_end - 3600), 3600)):
+            if not res: continue
+            seg, out, blind, band = res
+            for q, row in out:
+                vp[q].setdefault((row[0], row[1]), row)
+            for row in blind:
+                blindp.setdefault((row[0], row[1]), row)
+            for bk, b in band.items():
+                a = bandagg[seg].setdefault(bk, [0, 0, 0.0, 0.0, 0.0])
+                for i in range(5): a[i] += b[i]
+    def mse(xs):
+        n = len(xs); mm = sum(xs) / n if n else 0.0
+        return mm, math.sqrt(sum((x - mm) ** 2 for x in xs) / max(1, n - 1) / max(1, n))
+    slv = sorted(r[1][NI["sl30"]] for r in cm[::7]); cvv = sorted(r[1][NI["cv30"]] for r in cm[::7])
+    c_sl = (slv[len(slv) // 3], slv[2 * len(slv) // 3]); c_cv = (cvv[len(cvv) // 3], cvv[2 * len(cvv) // 3])
+    th = lambda x, c: 0 if x < c[0] else 1 if x < c[1] else 2
+    _seen, _un = set(), {0: [], 1: [], 2: []}
+    for r in cm:
+        if (r[4], r[5]) in _seen: continue
+        _seen.add((r[4], r[5])); _un[2 if r[0] >= t_hold else (0 if r[0] < t_mid else 1)].append(r[2][0])
+    def line(g):
+        if not g: return "n    0"
+        nets = [x[3] for x in g]; mm, se = mse(nets)
+        wn, _ = mse([x[7] for x in g]); ak, _ = mse([x[8] for x in g]); wa, wse = mse([x[7] - x[8] for x in g])
+        return "n %4d ask %.3f win %.2f | win-ask %+.3f (%+.1f se) | net/$1 %+.3f se %.3f (%+.1f se) | total net on $1 stakes %+.1f | profitable %d lose %d" % (len(g), ak, wn, wa, wa / wse if wse else 0.0, mm, se, mm / se if se else 0.0, sum(nets), sum(1 for n_ in nets if n_ > 0), sum(1 for n_ in nets if n_ <= 0))
+    print("\n######## WHERE THE SCORE EVER FINDS VALUE (every gated reading of the test hours; edge = win chance - ask - fee)")
+    for seg, name in ((0, "half 1"), (1, "half 2")) + (((2, "HOLDOUT"),) if HOLDOUT else ()):
+        for bk, lab in ((0, "ask <0.40"), (1, "0.40-0.60"), (2, "0.60-0.85"), (3, "0.85+")):
+            b = bandagg[seg].get(bk)
+            if b and b[0]: print(f" {name} {lab}: n {b[0]} edge>0 in {b[1] / b[0]:.2f} | mean edge {b[2] / b[0]:+.3f} | realised win {b[3] / b[0]:.2f} | held net/$1 {b[4] / b[0]:+.3f}")
+    print("\n######## VALUE BUY (own-history bar) vs the score's price-blind top 10% vs the universe")
+    for seg, name in ((0, "half 1"), (1, "half 2")) + (((2, "HOLDOUT"),) if HOLDOUT else ()):
+        um, use = mse(_un[seg])
+        print(f"\n {name} UNIVERSE (first reading per market side): n {len(_un[seg])} net/$1 {um:+.3f} se {use:.3f}")
+        print("   price-blind top 10% by win chance: " + line([x for x in blindp.values() if x[2] == seg]))
+        for q in QS:
+            g = [x for x in vp[q].values() if x[2] == seg]
+            print(f"   value buy, bar = own top {int((1 - q) * 100)}%: " + line(g))
+            for lab, idx, c in (("slope", 4, c_sl), ("curv", 5, c_cv)):
+                print("      by " + lab + " third: " + " | ".join(f"{('low', 'mid', 'high')[k]} " + line([x for x in g if th(x[idx], c) == k]) for k in range(3)))
+    print(f"done in {time.time() - t0:.0f}s")
+    raise SystemExit(0)
 
 picks = {top: {} for top in TOPS}
 bars = {top: [[], [], []] for top in TOPS}
