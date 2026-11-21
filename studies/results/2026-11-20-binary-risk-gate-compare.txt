@@ -1,0 +1,33 @@
+Gate comparison, 2026-11-20. FIXED 180 s, F90 (user's pick, chosen before results), S1, S2. Reading: F90 is worse than FIXED in both halves (top 5%: -0.063/+0.010 vs -0.024/+0.069; top 10%: -0.091/-0.013 vs -0.112/+0.020 is worse in half 2 only, better in half 1). FIXED 180 s stays. The 90-180 s band alone: n 5 net -0.295 (top 5%), n 15 net about -0.5 (top 10%); small n.
+
+=== PICKS per gate variant (commodity, 0.60-0.85, held to settlement; net per $1 after the fee)
+top  5% FIXED: half 1: n  123 net -0.024 win 0.70 | half 2: n  264 net +0.069 win 0.77
+top  5% F90  : half 1: n  130 net -0.063 win 0.68 | half 2: n  273 net +0.010 win 0.73
+top  5% S1   : half 1: n   39 net -0.196 win 0.64 | half 2: n   71 net +0.074 win 0.83
+top  5% S2   : half 1: n    0 | half 2: n    0
+top 10% FIXED: half 1: n  220 net -0.112 win 0.65 | half 2: n  495 net +0.020 win 0.74
+top 10% F90  : half 1: n  236 net -0.091 win 0.66 | half 2: n  526 net -0.013 win 0.72
+top 10% S1   : half 1: n   62 net -0.133 win 0.69 | half 2: n  147 net +0.088 win 0.84
+top 10% S2   : half 1: n    0 | half 2: n    0
+
+=== AGAINST FIXED (the same picks compared: both / only the variant / only FIXED)
+top  5% F90 half 1: both n   87 net -0.052 win 0.68 | only F90 n   43 net -0.086 win 0.67 | only FIXED n   36 net +0.039 win 0.75
+top  5% F90 half 2: both n  170 net +0.052 win 0.75 | only F90 n  103 net -0.059 win 0.70 | only FIXED n   94 net +0.107 win 0.81
+top  5% S1 half 1: both n   17 net +0.037 win 0.82 | only S1 n   22 net -0.376 win 0.50 | only FIXED n  106 net -0.041 win 0.68
+top  5% S1 half 2: both n   28 net +0.097 win 0.86 | only S1 n   43 net +0.059 win 0.81 | only FIXED n  236 net +0.062 win 0.76
+top  5% S2 half 1: both n    0 | only S2 n    0 | only FIXED n  123 net -0.024 win 0.70
+top  5% S2 half 2: both n    0 | only S2 n    0 | only FIXED n  264 net +0.069 win 0.77
+top 10% F90 half 1: both n  145 net -0.099 win 0.65 | only F90 n   91 net -0.078 win 0.68 | only FIXED n   75 net -0.139 win 0.64
+top 10% F90 half 2: both n  346 net +0.042 win 0.76 | only F90 n  180 net -0.118 win 0.66 | only FIXED n  149 net -0.049 win 0.68
+top 10% S1 half 1: both n   31 net -0.065 win 0.74 | only S1 n   31 net -0.200 win 0.65 | only FIXED n  189 net -0.130 win 0.63
+top 10% S1 half 2: both n   70 net +0.059 win 0.83 | only S1 n   77 net +0.115 win 0.84 | only FIXED n  425 net +0.005 win 0.72
+top 10% S2 half 1: both n    0 | only S2 n    0 | only FIXED n  220 net -0.112 win 0.65
+top 10% S2 half 2: both n    0 | only S2 n    0 | only FIXED n  495 net +0.020 win 0.74
+
+=== THE 90-180 s BAND ON ITS OWN (F90 picks whose first reading had 90 to 180 s left)
+top  5% half 1: n    0
+top  5% half 2: n    5 net -0.295 win 0.60
+top 10% half 1: n    3 net -1.017 win 0.00
+top 10% half 2: n   12 net -0.293 win 0.58
+done in 360s
+exit=0  results in job-results/20261120-192703-36678/
