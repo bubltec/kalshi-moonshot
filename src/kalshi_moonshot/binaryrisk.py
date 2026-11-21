@@ -133,10 +133,12 @@ def shape(T: list[float], V: list[float], now: float, mins: int, u15: float) -> 
     return max(-60.0, min(60.0, b)), max(-60.0, min(60.0, c2)), max(0.0, min(1.0, ft))
 
 
-def readings(T: list[float], V: list[float], now: float, strike: float, left_s: float, refs: tuple[float, float] | None = None) -> dict[str, float] | None:
+def readings(T: list[float], V: list[float], now: float, strike: float, left_s: float, refs: tuple[float, float] | None = None, cfg: dict[str, Any] | None = None) -> dict[str, float] | None:
     """The curve readings at `now` from the index's ticks (T times, V values, ascending, the last at or before `now`). None when the history is short or stale. `refs` is the spot 24 h and 72 h ago (a background template live, a lookup in training); without it the drift readings are 0 (unknown). The same code reads the live curve and builds the training rows.
 
     The spot is read as a vector of its 0-1, 0-3 and 0-5 minute averages (user, 2026-11-20: "you need a vector, blended at 1, 3, 5 mins"; a one-tick blip is not a cushion and Kalshi settles on the last minute's average), and the longer positions and moves (15, 30, 60 minutes) are read from their equal blend. The unit is the typical minute (the 15-minute root-mean-square one-second log move times sqrt(60))."""
+    cfg = cfg or {}  # the window study's settings (u_min, uh_min, look, avgs); empty = the model's own windows
+    look, avgs = cfg.get("look", (15, 30, 60)), cfg.get("avgs", (1, 3, 5))
     j = bisect.bisect_right(T, now) - 1
     if j < 0 or now - T[j] > 10.0 or strike <= 0 or left_s <= 0:
         return None
@@ -154,8 +156,10 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
                 sq += d * d
         return sq
 
-    sq, sqh = squares(i15), squares(ih)
-    span15, spanh = T[j] - T[i15], T[j] - T[ih]
+    iu = bisect.bisect_left(T, now - 60.0 * cfg.get("u_min", 15))
+    ihh = bisect.bisect_left(T, now - 60.0 * cfg.get("uh_min", 60))
+    sq, sqh = squares(iu), squares(ihh)
+    span15, spanh = T[j] - T[iu], T[j] - T[ihh]
     if span15 <= 0 or spanh <= 0 or sq <= 0 or sqh <= 0:
         return None
     u15 = math.sqrt(sq / span15 * 60.0)  # the typical minute over the last 15 minutes
@@ -169,28 +173,28 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
         a = V[bisect.bisect_left(T, now - sec) : j + 1]
         return sum(a) / len(a)
 
-    sp = {m: avg(60.0 * m) for m in (1, 3, 5)}
-    blend = (sp[1] + sp[3] + sp[5]) / 3.0
-    out: dict[str, float] = {"left": lm, "cz": cl(math.log(sp[3] / strike) / (u15 * math.sqrt(lm)), 8.0)}
-    for m in (1, 3, 5):
+    sp = {m: avg(60.0 * m) for m in avgs}
+    blend = sum(sp.values()) / len(sp)
+    out: dict[str, float] = {"left": lm, "cz": cl(math.log(sp[avgs[1]] / strike) / (u15 * math.sqrt(lm)), 8.0)}
+    for m in avgs:
         cz = cl(math.log(sp[m] / strike) / (u15 * math.sqrt(lm)), 8.0)
         out[f"cz{m}"] = cz
         out[f"czl{m}"] = cz * min(lm, 15.0) / 15.0  # the same cushion is worth less as the clock runs down (a straight-line fit cannot see that on its own)
     w15 = V[i15 : j + 1]
     out["vr"] = u15 / uh - 1.0  # volatility ratio: the 15 minute typical minute against the hour's (positive = the market has sped up)
     out["amp15"] = math.log(max(w15) / min(w15)) / u15  # range: the 15 minute high to low, in typical minutes
-    out["czb"] = (out["cz1"] + out["cz3"] + out["cz5"]) / 3.0  # the blended cushion: one reading in the fit (three overlapping cushions got opposite-signed weights, so a negative cushion on a longer average could add to the score)
+    out["czb"] = sum(out[f"cz{m}"] for m in avgs) / len(avgs)  # the blended cushion: one reading in the fit (three overlapping cushions got opposite-signed weights, so a negative cushion on a longer average could add to the score)
     out["czlb"] = out["czb"] * min(lm, 15.0) / 15.0
     out["czt"] = cl(math.log(V[j] / strike) / (u15 * math.sqrt(lm)), 8.0)  # the last tick against the strike (the pre-2026-11-20 cushion); read only by the cushion ablation study, not in the model
-    out["tr13"] = cl(math.log(sp[1] / sp[3]) / u15, 30.0)  # the trend: the 1 minute average against the 3 minute one, in typical moves (positive = rising)
-    out["tr35"] = cl(math.log(sp[3] / sp[5]) / u15, 30.0)
-    for mins in (15, 30, 60):
+    out["tr13"] = cl(math.log(sp[avgs[0]] / sp[avgs[1]]) / u15, 30.0)  # the trend: the 1 minute average against the 3 minute one, in typical moves (positive = rising)
+    out["tr35"] = cl(math.log(sp[avgs[1]] / sp[avgs[2]]) / u15, 30.0)
+    for mins in look:
         i = bisect.bisect_left(T, now - 60.0 * mins)
         w = V[i : j + 1]
         lo, hi = min(w), max(w)
         out[f"pos{mins}"] = (blend - lo) / (hi - lo) if hi > lo else 0.5  # where the blended spot sits in that window's range: 0 its low, 1 its high
         out[f"mv{mins}"] = cl(math.log(blend / V[i]) / u15, 60.0)  # how far it moved over that window, in typical moves
-    for mins in (15, 30, 60):
+    for mins in look:
         sl, cv, ft = shape(T, V, now, mins, u15)
         out[f"sl{mins}"], out[f"cv{mins}"], out[f"ft{mins}"] = sl, cv, ft
     for hrs, ref in zip((24, 72), refs or (0.0, 0.0), strict=True):
