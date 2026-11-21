@@ -1,4 +1,5 @@
-"""GATE COMPARISON (2026-11-20, user via parent: "test replacing the fixed 3-minute floor with one that scales with the market's own typical minute (rule 2)"). Forms fixed BEFORE the run. The cushion cz is already in units of the expected move over the time left (it divides by sqrt(minutes left)), so "the cushion exceeds the expected move over the time left" is cz >= 1. Variants of the eligibility gate, each applied to the training rows and to the picks: FIXED = every cushion (1, 3 and 5 minute averages, the side's view) above 0 and at least 180 s left (today's gate); S1 = the weakest of the three cushions >= 0.5 (half the expected move over the time left) and at least 60 s left (settlement uses the last minute: structural); S2 = the weakest >= 1.0 (the expected move) and at least 60 s left. Same bets for all: commodity picks in 0.60-0.85 (S&P out), commodity-only fit on the trailing 120 h, the bar from the band's own predictions, top 5% and 10%, held to settlement, the two halves of the test hours. Reported per variant and half: n, net per $1 after the fee, win rate; then against FIXED: picks in both, picks only the variant takes, picks only FIXED takes (n, net), and the net the variant gains or loses on the bets it adds or drops. The scaled floor replaces the fixed one only if it does at least as well in both halves.
+"""NOTE (2026-11-20, user via parent, chosen BEFORE the results): the user thinks 3 minutes is too much and suggested 90 seconds; F90 = every cushion above 0 and at least 90 s left, added next to FIXED (180 s), S1, S2. If F90 does at least as well as FIXED in both halves it becomes the default; otherwise 180 s stays. Also printed: the 90-180 s band on its own (F90 picks made with 90-180 s left).
+GATE COMPARISON (2026-11-20, user via parent: "test replacing the fixed 3-minute floor with one that scales with the market's own typical minute (rule 2)"). Forms fixed BEFORE the run. The cushion cz is already in units of the expected move over the time left (it divides by sqrt(minutes left)), so "the cushion exceeds the expected move over the time left" is cz >= 1. Variants of the eligibility gate, each applied to the training rows and to the picks: FIXED = every cushion (1, 3 and 5 minute averages, the side's view) above 0 and at least 180 s left (today's gate); S1 = the weakest of the three cushions >= 0.5 (half the expected move over the time left) and at least 60 s left (settlement uses the last minute: structural); S2 = the weakest >= 1.0 (the expected move) and at least 60 s left. Same bets for all: commodity picks in 0.60-0.85 (S&P out), commodity-only fit on the trailing 120 h, the bar from the band's own predictions, top 5% and 10%, held to settlement, the two halves of the test hours. Reported per variant and half: n, net per $1 after the fee, win rate; then against FIXED: picks in both, picks only the variant takes, picks only FIXED takes (n, net), and the net the variant gains or loses on the bets it adds or drops. The scaled floor replaces the fixed one only if it does at least as well in both halves.
 NOTE (2026-11-20, same day, before the second run): the first run took almost no picks (the gates leave few rows: FIXED 4 and 50 picks, S1/S2 none) because an hour was skipped under 3,000 gated training rows and 300 test rows; the forms are unchanged, the training window is 120 h and an hour needs 1,500 gated training rows and 100 test rows.
 FAVOURITES BAND 0.60-0.85 (user, 2026-11-20: "run the commodity picks in the .60-.85 range"): the bar is the top 5% / 10% of the training predictions inside 0.60-0.85 and only asks inside it are picked or scored in part B. POOLED=1 fits on crypto and commodity.
 COMMODITY-ONLY FIT (2026-11-20, user: "start the commodity fit because something is off"): the pooled fit showed no commodity lift (studies/results/2026-11-20-binary-risk-commodity-perp.txt). Here each hour refits the same model on commodity rows ONLY (curve readings, no asset setting: the training set is every settled commodity market, a market kind chosen by its feed, not a rule keyed on a name), trailing 120 h instead of 24 so there are enough rows. Everything else as below.
@@ -148,13 +149,14 @@ def ok(czs, variant):
     c1, c3, c5, left = czs
     w = min(c1, c3, c5)
     if variant == "FIXED": return w > 0.0 and left >= 180.0
+    if variant == "F90": return w > 0.0 and left >= 90.0
     return w >= (0.5 if variant == "S1" else 1.0) and left >= 60.0
 
 times = [r[0] for r in S]
 t_start = S[0][0] + 24 * 3600
 t_end = S[-1][0]
 t_mid = (t_start + t_end) / 2
-VARS = ("FIXED", "S1", "S2")
+VARS = ("FIXED", "F90", "S1", "S2")
 picks = {(v, top): {} for v in VARS for top in TOPS}
 for v in VARS:
     t = t_start
@@ -176,7 +178,7 @@ for v in VARS:
             pr = br.predict_capped(model, r[2], r[4])[0]
             for top in TOPS:
                 if pr >= cut[top] and (r[5], r[6]) not in picks[(v, top)]:
-                    picks[(v, top)][(r[5], r[6])] = (half, r[3][0], r[4])
+                    picks[(v, top)][(r[5], r[6])] = (half, r[3][0], r[4], r[7][3])
 def cell(g):
     return "n %4d net %+.3f win %.2f" % (len(g), sum(x[1] for x in g) / len(g), sum(1 for x in g if x[1] > 0) / len(g)) if g else "n    0"
 print("\n=== PICKS per gate variant (commodity, 0.60-0.85, held to settlement; net per $1 after the fee)")
@@ -192,4 +194,9 @@ for top in TOPS:
         for h in (0, 1):
             g = lambda ks, src: [src[k] for k in ks if src[k][0] == h]
             print(f"top {int(top * 100):2d}% {v} half {h + 1}: both {cell(g(both, pv))} | only {v} {cell(g(only_v, pv))} | only FIXED {cell(g(only_f, fx))}")
+print("\n=== THE 90-180 s BAND ON ITS OWN (F90 picks whose first reading had 90 to 180 s left)")
+for top in TOPS:
+    for h in (0, 1):
+        g = [x for x in picks[("F90", top)].values() if x[0] == h and x[3] < 180.0]
+        print(f"top {int(top * 100):2d}% half {h + 1}: " + cell(g))
 print(f"done in {time.time() - t0:.0f}s")
