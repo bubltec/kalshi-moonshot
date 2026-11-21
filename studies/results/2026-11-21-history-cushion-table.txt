@@ -1,0 +1,205 @@
+job 20261121-073138-78799 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/a53b06e66c37405e9c51f62f0b242925
+9420 market-side readings (4775 FAV, 4645 CTR), 115s
+
+######## FAV: 4775 market sides, half 1 2387, half 2 2388 (cut points from half 1: cush +0.08/+0.27, s15 +0.34/+0.67, s30 +0.31/+0.68, s60 +0.29/+0.71, mv30 -1.38/+2.81, sl30 -1.03/+1.33, vr -0.12/+0.02)
+ALL: h1 n 2387 win 0.68 se 0.010 | h2 n 2388 win 0.68 se 0.010
+
+--- cushion x s30 (pooled over volatility); terciles of the side's cushion and of the share
+  cushion low  s30 low : h1 n  331 win 0.64 se 0.026 | h2 n  286 win 0.70 se 0.027
+  cushion low  s30 mid : h1 n  271 win 0.63 se 0.029 | h2 n  341 win 0.63 se 0.026
+  cushion low  s30 high: h1 n  194 win 0.62 se 0.035 | h2 n  223 win 0.70 se 0.031
+  cushion mid  s30 low : h1 n  257 win 0.68 se 0.029 | h2 n  260 win 0.58 se 0.031
+  cushion mid  s30 mid : h1 n  265 win 0.68 se 0.029 | h2 n  251 win 0.61 se 0.031
+  cushion mid  s30 high: h1 n  274 win 0.66 se 0.029 | h2 n  254 win 0.69 se 0.029
+  cushion high s30 low : h1 n  208 win 0.73 se 0.031 | h2 n  251 win 0.72 se 0.028
+  cushion high s30 mid : h1 n  260 win 0.75 se 0.027 | h2 n  271 win 0.77 se 0.026
+  cushion high s30 high: h1 n  327 win 0.74 se 0.024 | h2 n  251 win 0.74 se 0.028
+
+--- cushion x s15 (pooled over volatility); terciles of the side's cushion and of the share
+  cushion low  s15 low : h1 n  386 win 0.63 se 0.025 | h2 n  396 win 0.68 se 0.024
+  cushion low  s15 mid : h1 n  284 win 0.67 se 0.028 | h2 n  299 win 0.65 se 0.028
+  cushion low  s15 high: h1 n  126 win 0.56 se 0.044 | h2 n  155 win 0.70 se 0.037
+  cushion mid  s15 low : h1 n  234 win 0.69 se 0.030 | h2 n  217 win 0.57 se 0.034
+  cushion mid  s15 mid : h1 n  274 win 0.70 se 0.028 | h2 n  276 win 0.64 se 0.029
+  cushion mid  s15 high: h1 n  288 win 0.63 se 0.028 | h2 n  272 win 0.65 se 0.029
+  cushion high s15 low : h1 n  176 win 0.75 se 0.033 | h2 n  182 win 0.74 se 0.032
+  cushion high s15 mid : h1 n  238 win 0.71 se 0.029 | h2 n  253 win 0.77 se 0.026
+  cushion high s15 high: h1 n  381 win 0.75 se 0.022 | h2 n  338 win 0.72 se 0.024
+
+--- cushion x s60 (pooled over volatility); terciles of the side's cushion and of the share
+  cushion low  s60 low : h1 n  293 win 0.61 se 0.028 | h2 n  275 win 0.66 se 0.029
+  cushion low  s60 mid : h1 n  263 win 0.67 se 0.029 | h2 n  282 win 0.67 se 0.028
+  cushion low  s60 high: h1 n  240 win 0.63 se 0.031 | h2 n  293 win 0.68 se 0.027
+  cushion mid  s60 low : h1 n  256 win 0.68 se 0.029 | h2 n  262 win 0.58 se 0.030
+  cushion mid  s60 mid : h1 n  277 win 0.64 se 0.029 | h2 n  249 win 0.65 se 0.030
+  cushion mid  s60 high: h1 n  263 win 0.70 se 0.028 | h2 n  254 win 0.65 se 0.030
+  cushion high s60 low : h1 n  247 win 0.72 se 0.028 | h2 n  271 win 0.68 se 0.028
+  cushion high s60 mid : h1 n  256 win 0.74 se 0.027 | h2 n  283 win 0.78 se 0.025
+  cushion high s60 high: h1 n  292 win 0.75 se 0.025 | h2 n  219 win 0.78 se 0.028
+
+--- cushion x s30 x vr (27 cells)
+  cush low  s30 low  vr low : h1 n  122 win 0.61 se 0.044 | h2 n   79 win 0.71 se 0.051
+  cush low  s30 low  vr mid : h1 n  116 win 0.67 se 0.044 | h2 n   91 win 0.66 se 0.050
+  cush low  s30 low  vr high: h1 n   93 win 0.66 se 0.049 | h2 n  116 win 0.72 se 0.042
+  cush low  s30 mid  vr low : h1 n   89 win 0.55 se 0.053 | h2 n   89 win 0.60 se 0.052
+  cush low  s30 mid  vr mid : h1 n   87 win 0.69 se 0.050 | h2 n  125 win 0.61 se 0.044
+  cush low  s30 mid  vr high: h1 n   95 win 0.66 se 0.048 | h2 n  127 win 0.69 se 0.041
+  cush low  s30 high vr low : h1 n   48 win 0.60 se 0.071 | h2 n   55 win 0.67 se 0.063
+  cush low  s30 high vr mid : h1 n   65 win 0.62 se 0.060 | h2 n   80 win 0.69 se 0.052
+  cush low  s30 high vr high: h1 n   81 win 0.63 se 0.054 | h2 n   88 win 0.72 se 0.048
+  cush mid  s30 low  vr low : h1 n   75 win 0.63 se 0.056 | h2 n   66 win 0.61 se 0.060
+  cush mid  s30 low  vr mid : h1 n   85 win 0.65 se 0.052 | h2 n   96 win 0.57 se 0.050
+  cush mid  s30 low  vr high: h1 n   97 win 0.74 se 0.044 | h2 n   98 win 0.57 se 0.050
+  cush mid  s30 mid  vr low : h1 n   96 win 0.65 se 0.049 | h2 n   81 win 0.67 se 0.052
+  cush mid  s30 mid  vr mid : h1 n   93 win 0.68 se 0.048 | h2 n   95 win 0.64 se 0.049
+  cush mid  s30 mid  vr high: h1 n   76 win 0.71 se 0.052 | h2 n   75 win 0.51 se 0.058
+  cush mid  s30 high vr low : h1 n   90 win 0.68 se 0.049 | h2 n   72 win 0.64 se 0.057
+  cush mid  s30 high vr mid : h1 n   93 win 0.61 se 0.051 | h2 n   80 win 0.76 se 0.048
+  cush mid  s30 high vr high: h1 n   91 win 0.70 se 0.048 | h2 n  102 win 0.66 se 0.047
+  cush high s30 low  vr low : h1 n   64 win 0.77 se 0.053 | h2 n   53 win 0.79 se 0.056
+  cush high s30 low  vr mid : h1 n   76 win 0.70 se 0.053 | h2 n   88 win 0.72 se 0.048
+  cush high s30 low  vr high: h1 n   68 win 0.72 se 0.054 | h2 n  110 win 0.68 se 0.044
+  cush high s30 mid  vr low : h1 n   89 win 0.76 se 0.045 | h2 n   80 win 0.80 se 0.045
+  cush high s30 mid  vr mid : h1 n   86 win 0.71 se 0.049 | h2 n  106 win 0.76 se 0.041
+  cush high s30 mid  vr high: h1 n   85 win 0.79 se 0.044 | h2 n   85 win 0.75 se 0.047
+  cush high s30 high vr low : h1 n  123 win 0.74 se 0.040 | h2 n   60 win 0.72 se 0.058
+  cush high s30 high vr mid : h1 n   95 win 0.74 se 0.045 | h2 n   99 win 0.76 se 0.043
+  cush high s30 high vr high: h1 n  109 win 0.73 se 0.042 | h2 n   92 win 0.74 se 0.046
+
+--- by the side's own 30-minute move (mv30) and wave slope (sl30) inside the history-against cells (s30 low) and history-for cells (s30 high)
+  s30 low  mv30 low : h1 n   40 win 0.65 se 0.075 | h2 n   38 win 0.68 se 0.075
+  s30 low  mv30 mid : h1 n  228 win 0.70 se 0.030 | h2 n  218 win 0.71 se 0.031
+  s30 low  mv30 high: h1 n  528 win 0.67 se 0.020 | h2 n  541 win 0.65 se 0.021
+  s30 low  sl30 low : h1 n   13 win 0.62 se 0.135 | h2 n   11 win 0.55 se 0.150
+  s30 low  sl30 mid : h1 n  248 win 0.67 se 0.030 | h2 n  209 win 0.71 se 0.031
+  s30 low  sl30 high: h1 n  535 win 0.68 se 0.020 | h2 n  577 win 0.65 se 0.020
+  s30 high mv30 low : h1 n  522 win 0.70 se 0.020 | h2 n  489 win 0.70 se 0.021
+  s30 high mv30 mid : h1 n  235 win 0.63 se 0.031 | h2 n  202 win 0.72 se 0.031
+  s30 high mv30 high: h1 n   38 win 0.74 se 0.071 | h2 n   37 win 0.70 se 0.075
+  s30 high sl30 low : h1 n  540 win 0.70 se 0.020 | h2 n  513 win 0.71 se 0.020
+  s30 high sl30 mid : h1 n  230 win 0.64 se 0.032 | h2 n  196 win 0.69 se 0.033
+  s30 high sl30 high: h1 n   25 win 0.64 se 0.096 | h2 n   19 win 0.79 se 0.094
+
+######## CTR: 4645 market sides, half 1 2322, half 2 2323 (cut points from half 1: cush -0.30/-0.11, s15 +0.33/+0.65, s30 +0.32/+0.68, s60 +0.29/+0.71, mv30 -2.85/+1.30, sl30 -1.33/+1.02, vr -0.12/+0.02)
+ALL: h1 n 2322 win 0.29 se 0.009 | h2 n 2323 win 0.30 se 0.010
+
+--- cushion x s30 (pooled over volatility); terciles of the side's cushion and of the share
+  cushion low  s30 low : h1 n  310 win 0.27 se 0.025 | h2 n  241 win 0.23 se 0.027
+  cushion low  s30 mid : h1 n  255 win 0.22 se 0.026 | h2 n  262 win 0.24 se 0.026
+  cushion low  s30 high: h1 n  210 win 0.23 se 0.029 | h2 n  244 win 0.27 se 0.029
+  cushion mid  s30 low : h1 n  281 win 0.29 se 0.027 | h2 n  262 win 0.30 se 0.028
+  cushion mid  s30 mid : h1 n  247 win 0.32 se 0.030 | h2 n  244 win 0.33 se 0.030
+  cushion mid  s30 high: h1 n  246 win 0.31 se 0.029 | h2 n  259 win 0.37 se 0.030
+  cushion high s30 low : h1 n  184 win 0.35 se 0.035 | h2 n  219 win 0.28 se 0.030
+  cushion high s30 mid : h1 n  272 win 0.32 se 0.028 | h2 n  315 win 0.36 se 0.027
+  cushion high s30 high: h1 n  317 win 0.33 se 0.026 | h2 n  277 win 0.30 se 0.028
+
+--- cushion x s15 (pooled over volatility); terciles of the side's cushion and of the share
+  cushion low  s15 low : h1 n  364 win 0.25 se 0.023 | h2 n  316 win 0.25 se 0.024
+  cushion low  s15 mid : h1 n  237 win 0.25 se 0.028 | h2 n  242 win 0.24 se 0.027
+  cushion low  s15 high: h1 n  174 win 0.22 se 0.032 | h2 n  189 win 0.25 se 0.031
+  cushion mid  s15 low : h1 n  284 win 0.33 se 0.028 | h2 n  265 win 0.33 se 0.029
+  cushion mid  s15 mid : h1 n  264 win 0.30 se 0.028 | h2 n  283 win 0.32 se 0.028
+  cushion mid  s15 high: h1 n  226 win 0.28 se 0.030 | h2 n  217 win 0.36 se 0.033
+  cushion high s15 low : h1 n  129 win 0.37 se 0.043 | h2 n  158 win 0.29 se 0.036
+  cushion high s15 mid : h1 n  271 win 0.31 se 0.028 | h2 n  270 win 0.34 se 0.029
+  cushion high s15 high: h1 n  373 win 0.34 se 0.025 | h2 n  383 win 0.31 se 0.024
+
+--- cushion x s60 (pooled over volatility); terciles of the side's cushion and of the share
+  cushion low  s60 low : h1 n  279 win 0.25 se 0.026 | h2 n  213 win 0.20 se 0.028
+  cushion low  s60 mid : h1 n  245 win 0.24 se 0.027 | h2 n  270 win 0.22 se 0.025
+  cushion low  s60 high: h1 n  251 win 0.24 se 0.027 | h2 n  264 win 0.31 se 0.028
+  cushion mid  s60 low : h1 n  277 win 0.26 se 0.026 | h2 n  259 win 0.33 se 0.029
+  cushion mid  s60 mid : h1 n  261 win 0.33 se 0.029 | h2 n  258 win 0.32 se 0.029
+  cushion mid  s60 high: h1 n  236 win 0.33 se 0.031 | h2 n  248 win 0.35 se 0.030
+  cushion high s60 low : h1 n  219 win 0.33 se 0.032 | h2 n  270 win 0.29 se 0.028
+  cushion high s60 mid : h1 n  268 win 0.31 se 0.028 | h2 n  271 win 0.32 se 0.028
+  cushion high s60 high: h1 n  286 win 0.36 se 0.028 | h2 n  270 win 0.35 se 0.029
+
+--- cushion x s30 x vr (27 cells)
+  cush low  s30 low  vr low : h1 n  107 win 0.27 se 0.043 | h2 n   62 win 0.21 se 0.052
+  cush low  s30 low  vr mid : h1 n   95 win 0.27 se 0.046 | h2 n   93 win 0.22 se 0.043
+  cush low  s30 low  vr high: h1 n  108 win 0.26 se 0.042 | h2 n   86 win 0.26 se 0.047
+  cush low  s30 mid  vr low : h1 n   94 win 0.20 se 0.041 | h2 n   70 win 0.19 se 0.046
+  cush low  s30 mid  vr mid : h1 n   76 win 0.28 se 0.051 | h2 n  114 win 0.26 se 0.041
+  cush low  s30 mid  vr high: h1 n   85 win 0.20 se 0.043 | h2 n   78 win 0.24 se 0.049
+  cush low  s30 high vr low : h1 n   60 win 0.22 se 0.053 | h2 n   47 win 0.21 se 0.060
+  cush low  s30 high vr mid : h1 n   77 win 0.23 se 0.048 | h2 n   82 win 0.30 se 0.051
+  cush low  s30 high vr high: h1 n   73 win 0.25 se 0.050 | h2 n  115 win 0.28 se 0.042
+  cush mid  s30 low  vr low : h1 n  102 win 0.28 se 0.045 | h2 n   68 win 0.32 se 0.057
+  cush mid  s30 low  vr mid : h1 n   89 win 0.33 se 0.050 | h2 n   92 win 0.23 se 0.044
+  cush mid  s30 low  vr high: h1 n   90 win 0.27 se 0.047 | h2 n  102 win 0.35 se 0.047
+  cush mid  s30 mid  vr low : h1 n   93 win 0.38 se 0.050 | h2 n   80 win 0.24 se 0.048
+  cush mid  s30 mid  vr mid : h1 n   87 win 0.33 se 0.051 | h2 n   88 win 0.32 se 0.050
+  cush mid  s30 mid  vr high: h1 n   67 win 0.21 se 0.050 | h2 n   76 win 0.43 se 0.057
+  cush mid  s30 high vr low : h1 n   79 win 0.34 se 0.053 | h2 n   63 win 0.35 se 0.060
+  cush mid  s30 high vr mid : h1 n   86 win 0.34 se 0.051 | h2 n   95 win 0.38 se 0.050
+  cush mid  s30 high vr high: h1 n   81 win 0.25 se 0.048 | h2 n  101 win 0.39 se 0.048
+  cush high s30 low  vr low : h1 n   48 win 0.40 se 0.071 | h2 n   54 win 0.35 se 0.065
+  cush high s30 low  vr mid : h1 n   61 win 0.38 se 0.062 | h2 n   74 win 0.31 se 0.054
+  cush high s30 low  vr high: h1 n   75 win 0.31 se 0.053 | h2 n   91 win 0.22 se 0.043
+  cush high s30 mid  vr low : h1 n   81 win 0.38 se 0.054 | h2 n   83 win 0.41 se 0.054
+  cush high s30 mid  vr mid : h1 n   96 win 0.24 se 0.044 | h2 n  122 win 0.38 se 0.044
+  cush high s30 mid  vr high: h1 n   95 win 0.36 se 0.049 | h2 n  110 win 0.30 se 0.044
+  cush high s30 high vr low : h1 n  111 win 0.38 se 0.046 | h2 n   71 win 0.31 se 0.055
+  cush high s30 high vr mid : h1 n  107 win 0.33 se 0.045 | h2 n   96 win 0.30 se 0.047
+  cush high s30 high vr high: h1 n   99 win 0.29 se 0.046 | h2 n  110 win 0.29 se 0.043
+
+--- by the side's own 30-minute move (mv30) and wave slope (sl30) inside the history-against cells (s30 low) and history-for cells (s30 high)
+  s30 low  mv30 low : h1 n   35 win 0.26 se 0.074 | h2 n   38 win 0.29 se 0.074
+  s30 low  mv30 mid : h1 n  229 win 0.33 se 0.031 | h2 n  205 win 0.27 se 0.031
+  s30 low  mv30 high: h1 n  511 win 0.28 se 0.020 | h2 n  479 win 0.27 se 0.020
+  s30 low  sl30 low : h1 n   21 win 0.38 se 0.106 | h2 n   17 win 0.18 se 0.092
+  s30 low  sl30 mid : h1 n  223 win 0.31 se 0.031 | h2 n  195 win 0.28 se 0.032
+  s30 low  sl30 high: h1 n  531 win 0.29 se 0.020 | h2 n  510 win 0.27 se 0.020
+  s30 high mv30 low : h1 n  515 win 0.30 se 0.020 | h2 n  523 win 0.34 se 0.021
+  s30 high mv30 mid : h1 n  222 win 0.27 se 0.030 | h2 n  223 win 0.27 se 0.030
+  s30 high mv30 high: h1 n   36 win 0.39 se 0.081 | h2 n   34 win 0.29 se 0.078
+  s30 high sl30 low : h1 n  524 win 0.29 se 0.020 | h2 n  566 win 0.33 se 0.020
+  s30 high sl30 mid : h1 n  238 win 0.31 se 0.030 | h2 n  205 win 0.27 se 0.031
+  s30 high sl30 high: h1 n   11 win 0.45 se 0.150 | h2 n    9 win 0.44 se 0.166
+
+=== RULE MAP (BUY = cell win rate above its universe's win rate in both halves, n >= 20 each, pooled lift >= 1 se; REFUSE = below in both halves; else no record)
+FAV BUY: 7 cells
+   FAV|c2|s0|v0: h1 n 64 win 0.77 lift +0.084 | h2 n 53 win 0.79 lift +0.113 | pooled n 117 win 0.78 lift +0.097 se 0.038
+   FAV|c2|s1|v0: h1 n 89 win 0.76 lift +0.082 | h2 n 80 win 0.80 lift +0.120 | pooled n 169 win 0.78 lift +0.100 se 0.032
+   FAV|c2|s1|v1: h1 n 86 win 0.71 lift +0.027 | h2 n 106 win 0.76 lift +0.085 | pooled n 192 win 0.74 lift +0.059 se 0.032
+   FAV|c2|s1|v2: h1 n 85 win 0.79 lift +0.106 | h2 n 85 win 0.75 lift +0.073 | pooled n 170 win 0.77 lift +0.090 se 0.032
+   FAV|c2|s2|v0: h1 n 123 win 0.74 lift +0.058 | h2 n 60 win 0.72 lift +0.037 | pooled n 183 win 0.73 lift +0.051 se 0.033
+   FAV|c2|s2|v1: h1 n 95 win 0.74 lift +0.055 | h2 n 99 win 0.76 lift +0.078 | pooled n 194 win 0.75 lift +0.067 se 0.031
+   FAV|c2|s2|v2: h1 n 109 win 0.73 lift +0.052 | h2 n 92 win 0.74 lift +0.059 | pooled n 201 win 0.74 lift +0.056 se 0.031
+FAV REFUSE: 8 cells
+   FAV|c0|s0|v1: h1 n 116 win 0.67 lift -0.010 | h2 n 91 win 0.66 lift -0.020 | pooled n 207 win 0.67 lift -0.014 se 0.033
+   FAV|c0|s1|v0: h1 n 89 win 0.55 lift -0.131 | h2 n 89 win 0.60 lift -0.084 | pooled n 178 win 0.57 lift -0.108 se 0.037
+   FAV|c0|s2|v0: h1 n 48 win 0.60 lift -0.078 | h2 n 55 win 0.67 lift -0.007 | pooled n 103 win 0.64 lift -0.040 se 0.047
+   FAV|c1|s0|v0: h1 n 75 win 0.63 lift -0.055 | h2 n 66 win 0.61 lift -0.073 | pooled n 141 win 0.62 lift -0.064 se 0.041
+   FAV|c1|s0|v1: h1 n 85 win 0.65 lift -0.035 | h2 n 96 win 0.57 lift -0.107 | pooled n 181 win 0.61 lift -0.073 se 0.036
+   FAV|c1|s1|v0: h1 n 96 win 0.65 lift -0.036 | h2 n 81 win 0.67 lift -0.013 | pooled n 177 win 0.66 lift -0.025 se 0.036
+   FAV|c1|s1|v1: h1 n 93 win 0.68 lift -0.005 | h2 n 95 win 0.64 lift -0.037 | pooled n 188 win 0.66 lift -0.021 se 0.035
+   FAV|c1|s2|v0: h1 n 90 win 0.68 lift -0.004 | h2 n 72 win 0.64 lift -0.041 | pooled n 162 win 0.66 lift -0.020 se 0.037
+CTR BUY: 6 cells
+   CTR|c1|s2|v0: h1 n 79 win 0.34 lift +0.047 | h2 n 63 win 0.35 lift +0.049 | pooled n 142 win 0.35 lift +0.048 se 0.040
+   CTR|c1|s2|v1: h1 n 86 win 0.34 lift +0.043 | h2 n 95 win 0.38 lift +0.078 | pooled n 181 win 0.36 lift +0.062 se 0.036
+   CTR|c2|s0|v0: h1 n 48 win 0.40 lift +0.101 | h2 n 54 win 0.35 lift +0.051 | pooled n 102 win 0.37 lift +0.075 se 0.048
+   CTR|c2|s0|v1: h1 n 61 win 0.38 lift +0.082 | h2 n 74 win 0.31 lift +0.010 | pooled n 135 win 0.34 lift +0.043 se 0.041
+   CTR|c2|s1|v0: h1 n 81 win 0.38 lift +0.088 | h2 n 83 win 0.41 lift +0.109 | pooled n 164 win 0.40 lift +0.099 se 0.038
+   CTR|c2|s2|v0: h1 n 111 win 0.38 lift +0.084 | h2 n 71 win 0.31 lift +0.009 | pooled n 182 win 0.35 lift +0.054 se 0.035
+CTR REFUSE: 9 cells
+   CTR|c0|s0|v0: h1 n 107 win 0.27 lift -0.024 | h2 n 62 win 0.21 lift -0.091 | pooled n 169 win 0.25 lift -0.049 se 0.033
+   CTR|c0|s0|v1: h1 n 95 win 0.27 lift -0.021 | h2 n 93 win 0.22 lift -0.085 | pooled n 188 win 0.24 lift -0.053 se 0.031
+   CTR|c0|s0|v2: h1 n 108 win 0.26 lift -0.035 | h2 n 86 win 0.26 lift -0.045 | pooled n 194 win 0.26 lift -0.040 se 0.031
+   CTR|c0|s1|v0: h1 n 94 win 0.20 lift -0.092 | h2 n 70 win 0.19 lift -0.115 | pooled n 164 win 0.20 lift -0.102 se 0.031
+   CTR|c0|s1|v1: h1 n 76 win 0.28 lift -0.018 | h2 n 114 win 0.26 lift -0.037 | pooled n 190 win 0.27 lift -0.029 se 0.032
+   CTR|c0|s1|v2: h1 n 85 win 0.20 lift -0.095 | h2 n 78 win 0.24 lift -0.057 | pooled n 163 win 0.22 lift -0.077 se 0.033
+   CTR|c0|s2|v0: h1 n 60 win 0.22 lift -0.078 | h2 n 47 win 0.21 lift -0.088 | pooled n 107 win 0.21 lift -0.083 se 0.040
+   CTR|c0|s2|v2: h1 n 73 win 0.25 lift -0.048 | h2 n 115 win 0.28 lift -0.022 | pooled n 188 win 0.27 lift -0.032 se 0.032
+   CTR|c2|s2|v2: h1 n 99 win 0.29 lift -0.002 | h2 n 110 win 0.29 lift -0.010 | pooled n 209 win 0.29 lift -0.006 se 0.031
+
+=== HOW THE CELLS WOULD MAP TO A BUY RULE (reading of the table above; nothing built)
+Outcome is win rate to settlement only (no price). 9,420 first readings (4,775 FAV, 4,645 CTR), commodity perp, 11-09 .. 11-20, halves by close time, terciles cut on half 1.
+1. The in-market cushion carries the signal. FAV win rate by cushion tercile: low 0.63-0.64, mid 0.58-0.68, high 0.72-0.77 (both halves, every history-share row). That is the user's concept (c).
+2. The history share adds little on top of it. Inside the HIGH cushion tercile the win rate is 0.73/0.75/0.74 (h1) and 0.72/0.77/0.74 (h2) for share low/mid/high: the DISAGREEMENT cell (cushion on the side, history against) does NOT lose (0.73 and 0.72, n 208 and 251, se ~0.03). So concept (a)/(b) "UP favoured but history below -> UP is risky" is not supported at share30; same at share15 (0.75/0.74) and share60 (0.72/0.68 h1/h2, the one weaker pair, within 1.5 se).
+3. The counter (cheap) side: win rate 0.29-0.30 overall. Its best cells are those with cushion nearest zero (CTR cushion high tercile, win 0.28-0.37), not those where history says the side was on the right side: CTR cushion LOW with history HIGH (the "flip" cell) wins 0.23 / 0.27 (h1/h2, n 210/244), below the universe's 0.29-0.30. The flip to the counter side is not supported.
+4. Rule-map result (BUY = above the universe in both halves and pooled lift >= 1 se; REFUSE = below in both): FAV BUY 7 cells, all with cushion HIGH (c2) and any share; FAV REFUSE 8 cells, all cushion low or mid; CTR BUY 6 cells (cushion mid/high); CTR REFUSE 9 cells, cushion low (c0). The cushion tercile separates the verdicts; share and vr do not.
+5. Caution: 54 cells at a 1 se bar; some BUY cells are expected by chance (the share/vr splits inside a cushion tercile look like noise, e.g. CTR c2 s2 v0 holds in h1 +0.084, h2 +0.009).
+What this says for the risk score: cushion first; history share should enter as one more reading (additive is not clearly wrong here); an interaction flag "cushion on side, history against" shows no loss in this table. Open: a score on share x trend x vr in a fit scored by win rate (V=winp, running).
