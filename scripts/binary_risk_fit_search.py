@@ -246,7 +246,7 @@ for top in TOPS:
     for seg, name in ((0, "half 1"), (1, "half 2")) + (((2, "HOLDOUT"),) if HOLDOUT else ()):
         g = [x for x in picks[top].values() if x[0] == seg]
         bar = sum(bars[top][seg]) / max(1, len(bars[top][seg]))
-        print(f" {name}: bar {bar:+.3f} " + cell(g))
+        print(f" {name}: bar {bar:+.3f} " + cell(g, seg))
         for lab, idx, c in (("slope", 2, c_sl), ("curv", 3, c_cv)):
             print("    by " + lab + " third: " + " | ".join(f"{('low', 'mid', 'high')[k]} " + cell([x for x in g if th(x[idx], c) == k], seg) for k in range(3)))
 print(f"done in {time.time() - t0:.0f}s")
