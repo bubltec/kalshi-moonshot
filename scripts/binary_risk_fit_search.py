@@ -81,7 +81,7 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
 S.sort(key=lambda r: r[0])
 print(f"VARIANT {V}: {len(S)} gated sides ({sum(1 for r in S if r[9] == 'commodity')} commodity), {time.time() - t0:.0f}s", flush=True)
 
-COLS = FEWER if V == "fewer" else list(range(len(br.NAMES)))
+COLS = FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V == "winp" else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
 def X(r): return [r[1][i] for i in COLS]
 def sigm(z): return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z))))
 
@@ -111,7 +111,7 @@ def fit(tr):
     sd = [math.sqrt(sum((x[i] - mu[i]) ** 2 for x in xs) / len(xs)) or 1.0 for i in range(n)]
     sub = tr[::3]
     m = {"mu": mu, "sd": sd, "lam": br.RIDGE}
-    if V == "logit":
+    if V in ("logit", "winp"):
         w = [0.0] * (n + 1)
         K = n + 1
         vs = [[1.0] + [(x[i] - mu[i]) / sd[i] for i in range(n)] for x in (X(r) for r in sub)]
@@ -158,6 +158,9 @@ def pred(m, r):
     """(score used to rank, predicted hold net per $1, predicted best-exit net) all capped at the ceiling."""
     x = X(r); v = [1.0] + [(a - u) / d for a, u, d in zip(x, m["mu"], m["sd"])]
     ce = br.ceiling(r[3])
+    if V == "winp":
+        p = sigm(sum(a * b for a, b in zip(m["w"], v)))
+        return p, p, p  # the score is the predicted chance to win, from the curve readings alone
     if V == "logit":
         p = sigm(sum(a * b for a, b in zip(m["w"], v)))
         net = min((p - r[3] - fee(r[3])) / r[3], ce)
@@ -221,7 +224,18 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
 slv = sorted(r[1][NI["sl30"]] for r in cm[::7]); cvv = sorted(r[1][NI["cv30"]] for r in cm[::7])
 c_sl = (slv[len(slv) // 3], slv[2 * len(slv) // 3]); c_cv = (cvv[len(cvv) // 3], cvv[2 * len(cvv) // 3])
 def th(x, c): return 0 if x < c[0] else 1 if x < c[1] else 2
-def cell(g):
+# win-rate baseline per segment: the first in-band gated reading per market side
+_seen, _base = set(), {0: [], 1: [], 2: []}
+for r in cm:
+    if not inb(r) or (r[4], r[5]) in _seen: continue
+    _seen.add((r[4], r[5]))
+    _base[2 if r[0] >= t_hold else (0 if r[0] < t_mid else 1)].append(r[7])
+BASE = {k: (sum(v) / len(v) if v else 0.0) for k, v in _base.items()}
+def cell(g, seg=None):
+    if V == "winp":
+        if not g: return "n    0"
+        n = len(g); w = sum(x[5] for x in g) / n; se = math.sqrt(max(w * (1 - w), 1e-9) / n)
+        return "n %4d win %.2f se %.3f | universe win %.2f lift %+.3f (%+.1f se) | mean predicted win %.2f" % (n, w, se, BASE[seg], w - BASE[seg], (w - BASE[seg]) / se, sum(x[4] for x in g) / n)
     if not g: return "n    0"
     nets = [x[1] for x in g]; mm = sum(nets) / len(nets)
     se = math.sqrt(sum((x - mm) ** 2 for x in nets) / max(1, len(nets) - 1) / len(nets))
@@ -234,5 +248,5 @@ for top in TOPS:
         bar = sum(bars[top][seg]) / max(1, len(bars[top][seg]))
         print(f" {name}: bar {bar:+.3f} " + cell(g))
         for lab, idx, c in (("slope", 2, c_sl), ("curv", 3, c_cv)):
-            print("    by " + lab + " third: " + " | ".join(f"{('low', 'mid', 'high')[k]} " + cell([x for x in g if th(x[idx], c) == k]) for k in range(3)))
+            print("    by " + lab + " third: " + " | ".join(f"{('low', 'mid', 'high')[k]} " + cell([x for x in g if th(x[idx], c) == k], seg) for k in range(3)))
 print(f"done in {time.time() - t0:.0f}s")
