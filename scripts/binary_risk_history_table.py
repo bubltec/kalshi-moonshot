@@ -1,7 +1,7 @@
 """HISTORY vs CUSHION TABLE (2026-11-20, user via parent: "In-market trends/cushion are the most important; historical trends and curve shape decide whether a buy is a good idea, and it must work both ways ... the current model is additive, so it cannot express 'cushion says X but history says not-X'. Test this directly before fitting anything."). Rule 8, state-record style: a table, no fit.
-QUESTION: does the realised result, against the ask, depend on the in-market cushion AND the history of the spot against the SAME strike, in the way the user describes? One reading per market side: the FIRST reading at least 180 s into the market with at least 180 s left whose ask is in the universe's band. Universes (both from the same commodity perp markets, S&P out, Kalshi perp reference only): FAV = the side asked 0.60-0.85 (the model's band); COUNTER = the cheap side asked 0.15-0.40 (Kalshi favours the other way). Held to settlement, net per $1 after the fee on the buy only.
+QUESTION: does the realised win rate depend on the in-market cushion AND the history of the spot against the SAME strike, in the way the user describes? One reading per market side: the FIRST reading at least 180 s into the market with at least 180 s left whose ask is in the universe's band. Universes (both from the same commodity perp markets, S&P out, Kalshi perp reference only): FAV = the side asked 0.60-0.85 (the model's band); COUNTER = the cheap side asked 0.15-0.40 (Kalshi favours the other way). Held to settlement; the outcome is the win rate only (no price, no net).
 READINGS (the side's view): cushion = the blended 1/3/5-minute average against the strike in the typical minute x sqrt(minutes left) (binaryrisk 'czb', signed to the side); HISTORY SHARE s15/s30/s60 = the share of the last 15/30/60 minutes' ticks the spot spent on the side's WINNING side of the strike (not crossings); and the side's own 30-minute move (mv30) and wave slope (sl30), both in the market's own typical minutes; VOLATILITY = vr (the 15-minute typical minute over the hour's, own-history relative).
-BUCKETS: terciles, with the cut points set on the FIRST half of the markets (by close time) only, applied to both halves. Table: cushion x share30 x vr (27 cells) per half, then cushion x share (9 cells) pooled over vr for share 15/30/60, then the disagreement cells. n, win rate, mean ask, win minus ask, net per $1, its se. Nothing here is chosen after the results except where marked.
+BUCKETS: terciles, with the cut points set on the FIRST half of the markets (by close time) only, applied to both halves. Table: cushion x share30 x vr (27 cells) per half, then cushion x share (9 cells) pooled over vr for share 15/30/60, then the disagreement cells. n, win rate, its se; the lift is a cell's win rate minus its universe's own win rate in that half. Nothing here is chosen after the results except where marked.
 Run: SPOT=0 scripts/cloud_job.sh scripts/binary_risk_history_table.py"""
 import bisect, math, multiprocessing, os, time
 from datetime import datetime, timezone
@@ -84,13 +84,9 @@ def bucket(x, c): return 0 if x <= c[0] else (1 if x <= c[1] else 2)
 def line(rs):
     n = len(rs)
     if n < 5: return f"n {n:4d}  (too few)"
-    nets = [r[6] for r in rs]
-    m = sum(nets) / n
-    sd = math.sqrt(sum((x - m) ** 2 for x in nets) / (n - 1))
-    se = sd / math.sqrt(n)
     win = sum(r[5] for r in rs) / n
-    ask = sum(r[4] for r in rs) / n
-    return f"n {n:4d} win {win:.2f} ask {ask:.2f} edge {win-ask:+.3f} net {m:+.3f} se {se:.3f} ({m/se if se else 0:+.1f} se)"
+    se = math.sqrt(max(win * (1 - win), 1e-9) / n)
+    return f"n {n:4d} win {win:.2f} se {se:.3f}"
 LAB = ("low", "mid", "high")
 
 for uni in ("FAV", "CTR"):
@@ -123,11 +119,10 @@ for uni in ("FAV", "CTR"):
 import json
 def agg(rs):
     n = len(rs)
-    if n == 0: return {"n": 0, "net_sum": 0.0, "net": 0.0, "se": 0.0, "win": 0.0, "ask": 0.0}
-    nets = [r[6] for r in rs]; m = sum(nets) / n
-    se = math.sqrt(sum((x - m) ** 2 for x in nets) / (n - 1)) / math.sqrt(n) if n > 1 else 0.0
-    return {"n": n, "net_sum": round(sum(nets), 4), "net": round(m, 4), "se": round(se, 4), "win": round(sum(r[5] for r in rs) / n, 4), "ask": round(sum(r[4] for r in rs) / n, 4)}
-rec = {"built_at": time.time(), "kind": "history_cushion_cells", "fee": "buy only, held to settlement", "band": {"FAV": FAV, "CTR": CTR}, "cuts": {}, "cells": {}}
+    if n == 0: return {"n": 0, "wins": 0, "win": 0.0, "se": 0.0}
+    w = sum(r[5] for r in rs)
+    return {"n": n, "wins": int(w), "win": round(w / n, 4), "se": round(math.sqrt(max(w / n * (1 - w / n), 1e-9) / n), 4)}
+rec = {"built_at": time.time(), "kind": "history_cushion_cells", "outcome": "win rate to settlement", "band": {"FAV": FAV, "CTR": CTR}, "cuts": {}, "cells": {}}
 verdict = {}
 for uni in ("FAV", "CTR"):
     U = [r for r in R if r[2] == uni]; mid = len(U) // 2; H = [U[:mid], U[mid:]]
@@ -139,17 +134,21 @@ for uni in ("FAV", "CTR"):
                 cells = [[r for r in h if bucket(r[7], cut["cush"]) == ci and bucket(r[9], cut["s30"]) == si and bucket(r[13], cut["vr"]) == vi] for h in H]
                 a1, a2, ap = agg(cells[0]), agg(cells[1]), agg(cells[0] + cells[1])
                 key = f"{uni}|c{ci}|s{si}|v{vi}"
-                # the rule map (set before reading the cells): BUY = positive net in both halves and pooled net at least 1 se; REFUSE = negative in both halves; otherwise NO RECORD
-                v = "buy" if a1["n"] >= 20 and a2["n"] >= 20 and a1["net"] > 0 and a2["net"] > 0 and ap["se"] and ap["net"] / ap["se"] >= 1.0 else ("refuse" if a1["n"] >= 20 and a2["n"] >= 20 and a1["net"] < 0 and a2["net"] < 0 else "no_record")
+                # the rule map (set before reading the cells): BUY = win rate above the universe's own in both halves and the pooled lift at least 1 se; REFUSE = below in both halves; otherwise NO RECORD
+                b1, b2 = sum(r[5] for r in H[0]) / len(H[0]), sum(r[5] for r in H[1]) / len(H[1])  # the universe's own win rate in each half
+                bp = (b1 * len(H[0]) + b2 * len(H[1])) / len(U)
+                big = a1["n"] >= 20 and a2["n"] >= 20
+                v = "buy" if big and a1["win"] > b1 and a2["win"] > b2 and ap["se"] and (ap["win"] - bp) / ap["se"] >= 1.0 else ("refuse" if big and a1["win"] < b1 and a2["win"] < b2 else "no_record")
+                a1["lift"], a2["lift"], ap["lift"] = round(a1["win"] - b1, 4), round(a2["win"] - b2, 4), round(ap["win"] - bp, 4)
                 rec["cells"][key] = {"h1": a1, "h2": a2, "pooled": ap, "verdict": v}
                 verdict[key] = v
-print("\n=== RULE MAP (BUY = net > 0 in both halves, n >= 20 each, pooled >= 1 se; REFUSE = net < 0 in both halves; else no record)")
+print("\n=== RULE MAP (BUY = cell win rate above its universe's win rate in both halves, n >= 20 each, pooled lift >= 1 se; REFUSE = below in both halves; else no record)")
 for uni in ("FAV", "CTR"):
     for v in ("buy", "refuse"):
         ks = [k for k in rec["cells"] if k.startswith(uni) and verdict[k] == v]
         print(f"{uni} {v.upper()}: {len(ks)} cells")
         for k in ks:
             c = rec["cells"][k]
-            print(f"   {k}: h1 n {c['h1']['n']} net {c['h1']['net']:+.3f} | h2 n {c['h2']['n']} net {c['h2']['net']:+.3f} | pooled n {c['pooled']['n']} net {c['pooled']['net']:+.3f} se {c['pooled']['se']:.3f}")
+            print(f"   {k}: h1 n {c['h1']['n']} win {c['h1']['win']:.2f} lift {c['h1']['lift']:+.3f} | h2 n {c['h2']['n']} win {c['h2']['win']:.2f} lift {c['h2']['lift']:+.3f} | pooled n {c['pooled']['n']} win {c['pooled']['win']:.2f} lift {c['pooled']['lift']:+.3f} se {c['pooled']['se']:.3f}")
 print("JSON_BEGIN"); print(json.dumps(rec)); print("JSON_END")
 print(f"\ndone in {time.time()-t0:.0f}s")
