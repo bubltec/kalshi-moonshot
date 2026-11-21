@@ -400,6 +400,15 @@ def late_swing_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(True, f"jumpy: {crosses} crossings in five minutes, last minute {ratio:.2f}x the five-minute rate; {left:.0f}s left, tier {share:.0%} of the stake, ask {shot.ask:.2f}")
 
 
+@step("wave_top")
+def wave_top_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The wave-top reversal (wavetop.py; 2026-11-21, the user's hand scalp): the spot has made a wave bigger than the waves before it (its slope above the last legs and at the lane's quantile of the market's own legs, wave_top_quantile), the top has stood and the spot has gone back and forth, and this side is the reversal (NO after an up wave, YES after a down wave). A dip bet after a rising wave_top_trend_hours is not taken. Memory only."""
+    from . import wavetop
+
+    ok, why = wavetop.admits(ctx.s, shot, ctx.spec, ctx.now)
+    return Check(ok, why)
+
+
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""

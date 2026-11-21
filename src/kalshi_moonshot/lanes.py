@@ -105,6 +105,8 @@ class LaneSpec:
     late_swing_mid_lo: float = 0.30  # the ask must not sit between these two: a low side (the lane's price floor to this) or a high one (the other number to the price ceiling), YES or NO
     late_swing_mid_hi: float = 0.70
     late_swing_min_crosses: int = 2  # the settlement index crossed the strike at least this many times in the last five minutes, and the last minute moved at least as fast as the five minutes (vol_ratio >= 1)
+    wave_top_quantile: float = 0.0  # 2026-11-21 (user's hand scalp, wavetop.py): the buy step wave_top asks that the spot wave's slope is at or above this quantile of the market's own legs since an hour before the open (0.9); 0 = the step says no
+    wave_top_trend_hours: float = 1.0  # the buy step wave_top takes no dip bet (YES after a down wave) when the spot at the open is above its value this many hours before (user: the past hour, not a whole day); 0 = no trend check
     skip_varieties: tuple[str, ...] = ()  # varieties (variants.py letters) this lane does not buy: "G" on either side, "A-yes" on one side. Read at the decision from BiQuote against its window-open price, so commodities only; an unreadable one is not skipped. 2026-11-03 walk-forward on the lanes' live bets: the cells that paid in training were the same in three folds and left out G and A-yes, which then lost $49, $19 and $9 in the test period
     require_spot_center_agree: bool = False  # buy only when the raw spot AND the offset-corrected center are both on the bet's side of the strike. 2026-11-04, 672 live commodity bets: both on our side 88% won, +$0.24 a bet; where they disagreed 94 bets netted -$54 (industrial -$52 on 59, precious -$11 on 25; energy +$8 on 10, so energy leaves it off). Unreadable = no change
     max_vol_rel: float = 0.0  # buy only when it is at most this (a calm regime: below 0.7 favorites won 87%). 0 = off. No reading = no buy
@@ -243,7 +245,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "context_score", "binary_risk_shadow", "win_chance_shadow", "binary_risk", "swing_risk", "late_swing", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "context_score", "binary_risk_shadow", "win_chance_shadow", "binary_risk", "swing_risk", "late_swing", "wave_top", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
 
 
 def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:

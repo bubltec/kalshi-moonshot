@@ -1,0 +1,38 @@
+9976 windows
+all windows (spot change at t vs yes-mid change at t+lag)
+  lag  -10s corr 0.0146
+  lag   -5s corr 0.1968
+  lag    0s corr 0.7057
+  lag    1s corr 0.5405
+  lag    2s corr 0.3715
+  lag    3s corr 0.2092
+  lag    5s corr 0.0122
+  lag    8s corr 0.0027
+  lag   12s corr 0.0054
+  lag   20s corr 0.0060
+  lag   30s corr -0.0043
+quietest third by relative spot size
+  lag  -10s corr 0.0156
+  lag   -5s corr 0.2190
+  lag    0s corr 0.6431
+  lag    1s corr 0.4842
+  lag    2s corr 0.3213
+  lag    3s corr 0.1701
+  lag    5s corr 0.0113
+  lag    8s corr 0.0036
+  lag   12s corr 0.0021
+  lag   20s corr 0.0009
+  lag   30s corr -0.0011
+most volatile third
+  lag  -10s corr 0.0169
+  lag   -5s corr 0.1737
+  lag    0s corr 0.7640
+  lag    1s corr 0.5934
+  lag    2s corr 0.4182
+  lag    3s corr 0.2443
+  lag    5s corr 0.0106
+  lag    8s corr 0.0010
+  lag   12s corr 0.0100
+  lag   20s corr 0.0105
+  lag   30s corr -0.0068
+DONE

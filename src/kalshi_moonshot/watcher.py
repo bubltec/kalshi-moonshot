@@ -201,6 +201,8 @@ class Target:
     swing_to: float = 45.0
     swing_tiers: tuple = (1.0, 0.7, 0.5, 0.4, 0.3, 0.2)
     swing_logged: bool = False
+    wave_rest_logged: bool = False  # the wave-top lane's resting sale at the entry + 0.40 was recorded once as "would sell" (wavetop.RESTING)
+    wave_failed: bool = False
     risk_time_to_go: float = 0.0  # seconds before the close in which time_to_go may sell (lane field curve_risk_time_to_go); 0 = off
     risk_time_to_go_chance: float = 0.5
     risk_time_to_go_wait_share: float = 0.25
@@ -787,6 +789,45 @@ class ProfitWatcher:
             t.swing_logged = True
             log.info("late swing shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="swing take", extra={"tier": share, "target": round(target, 4)})
+        return None
+
+    def _sell_wave_salvage(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step wave_salvage (wavetop.py; 2026-11-21, user: "we might be able to salvage this for a small profit or small loss ... a combination of the spot + kalshi price"): a bet that went under water is sold at the bid once it has come back off its low, its climb has slowed and the spot has stopped moving its way (wavetop.salvage). A bet that never dipped is held. The user's resting sale at the entry + 0.40 is only recorded, once (kind "wave rest"). Reads the quote and tick memory only. A failure is logged once and the step is passed over."""
+        try:
+            return ProfitWatcher._wave_salvage_read(self, t, r, bid, now, left, pnl)
+        except Exception as e:
+            if not t.wave_failed:
+                t.wave_failed = True
+                log.warning("wave salvage: the step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
+        return None
+
+    def _wave_salvage_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> str | None:
+        from . import binaryrisk, wavetop
+
+        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0:
+            return None
+        if not t.wave_rest_logged and bid >= t.entry + wavetop.RESTING:
+            t.wave_rest_logged = True
+            log.info("wave salvage shadow: %s %s a resting sale at %.2f (the entry + %.2f) would have filled, %.0fs left", t.ticker, t.lane, t.entry + wavetop.RESTING, wavetop.RESTING, left)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="wave rest", extra={"rest": round(t.entry + wavetop.RESTING, 4)})
+        index = binaryrisk.curve_index(t.ticker.split("-")[0])
+        if not index:
+            return None
+        got = ticks_mod.history.window(index, now - 300.0, now)
+        if not got or not got[0]:
+            return None
+        sell, info = wavetop.salvage(ticks_mod.mids.quotes(t.ticker), t.side, t.close_ts - 900.0, t.bought_ts, now, got[0], got[1])
+        if not sell:
+            return None
+        reason = f"wave salvage: the bid fell to {info['low']:.2f} (its own typical minute {info['unit']:.3f} under the {info['entry_bid']:.2f} at the buy, or more), has come back to {bid:.2f}, its climb over the last {info['window']:.0f}s has slowed to {info['recent'] * 60:+.3f} a minute against the run's {info['run'] * 60:+.3f}, and the spot has stopped moving its way; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
+        extra = {k: round(v, 5) for k, v in info.items()}
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="wave salvage", extra=extra)
+            return reason
+        if not t.swing_logged:
+            t.swing_logged = True
+            log.info("wave salvage shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="wave salvage", extra=extra)
         return None
 
     def _sell_trail_timed(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:

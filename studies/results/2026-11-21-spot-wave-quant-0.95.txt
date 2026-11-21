@@ -1,0 +1,43 @@
+QUANT=0.95; 14199 windows, newest close 2026-11-19T23:45:00+00:00; R=1.0 min move=2.0 qty=25 band 0.15-0.45
+576 signals, 394 passed (side outside 0.15-0.45), 1846 windows skipped for missing spot; 182 bets
+H   hold to settlement         n=182 net $  254.53 (sales fee-free $  254.53) win rate  36% beat H   0 lost to H   0
+R   failed-turn exit           n=182 net $ -144.24 (sales fee-free $ -101.87) win rate  11% beat H 107 lost to H  46
+R2  failed turn = new extreme  n=182 net $ -127.76 (sales fee-free $  -88.14) win rate  13% beat H 106 lost to H  43
+RF  failed-turn + flip sale    n=182 net $ -206.19 (sales fee-free $ -149.77) win rate  23% beat H 113 lost to H  66
+RC  failed-turn + 2-min check  n=182 net $ -204.86 (sales fee-free $ -148.34) win rate  23% beat H 115 lost to H  66
+P20 profit take +0.20 only     n=182 net $  -31.28 (sales fee-free $   13.78) win rate  58% beat H  40 lost to H  66
+PF  flip sale only             n=182 net $  -46.44 (sales fee-free $    1.03) win rate  59% beat H  42 lost to H  66
+P20R +0.20 take and new-extreme fail n=182 net $ -143.47 (sales fee-free $  -86.29) win rate  27% beat H 115 lost to H  66
+SL  0.40 resting + slow-down   n=182 net $   35.20 (sales fee-free $   62.03) win rate  55% beat H  40 lost to H  66
+SLC SL + 2-min check           n=182 net $   32.46 (sales fee-free $   62.66) win rate  54% beat H  94 lost to H  66
+SLF SL + no-curve exit         n=182 net $ -229.92 (sales fee-free $ -178.72) win rate  19% beat H  91 lost to H  66
+SL exits rest  n=  87 avg $  9.66 total $  840.08
+SL exits slow  n=  65 avg $  2.91 total $  188.97
+SL exits held  n=  76 avg $ -7.23 total $ -549.40
+
+by curve shape at the bet (net $, with sales fees: H R RF RC)
+  leg down slope>=1.5x prev False n= 25  H    59.49  P20   -10.71  SL   -10.91  SLC   -10.57  SLF   -34.57
+  leg down slope>=1.5x prev True  n= 54  H    23.76  P20   -26.47  SL    -5.77  SLC   -13.30  SLF   -79.70
+  leg up   slope>=1.5x prev False n= 23  H   147.80  P20    39.79  SL    72.13  SLC    63.35  SLF    -7.73
+  leg up   slope>=1.5x prev True  n= 80  H    23.48  P20   -33.89  SL   -20.25  SLC    -7.01  SLF  -107.92
+
+by series (label only): n, H, RF
+  KXNEAR15M      n= 27  H   -39.26  RF   -50.80
+  KXSOL15M       n= 17  H    66.41  RF    -8.73
+  KXBNB15M       n= 17  H    57.62  RF   -13.44
+  KXXRP15M       n= 17  H    22.85  RF   -22.20
+  KXDOGE15M      n= 15  H     3.75  RF   -19.83
+  KXHYPE15M      n= 15  H    31.08  RF    -2.04
+  KXBTC15M       n= 14  H    58.03  RF   -24.70
+  KXETH15M       n= 11  H   -29.47  RF   -17.14
+  KXZEC15M       n= 11  H     4.52  RF   -20.50
+  KXPLATINUM15M  n=  8  H     8.05  RF   -12.61
+  KXGOLD15M      n=  7  H    -7.55  RF     3.71
+  KXWTI15M       n=  6  H     8.25  RF    -3.89
+  KXCOPPER15M    n=  5  H   -16.12  RF    -0.38
+  KXSILVER15M    n=  4  H     1.06  RF     1.89
+  KXPALLADIUM15M n=  3  H    46.27  RF    -4.84
+  KXBRENT15M     n=  3  H    50.38  RF    -2.16
+  KXNATGAS15M    n=  2  H   -11.34  RF    -8.53
+DONE
+20s

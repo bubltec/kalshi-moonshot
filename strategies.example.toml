@@ -95,3 +95,48 @@ curve_risk_live = true
 [exit.swing_take.profit]
 
 [exit.swing_take.loss]
+
+# The wave-top reversal lane (2026-11-21, PAPER; the user's hand scalp, src/kalshi_moonshot/wavetop.py): the cheap side at the top of a spot wave bigger than
+# the waves before it (NO on a peak, YES on a dip), bought 2 to 8 minutes after the open, about 25 contracts. A bet that dips is sold once it has come back
+# (wave_salvage); a bet that never dips is held. Evidence and limits: studies/results/2026-11-21-spot-wave-*.txt (a lead at about two standard errors, settings
+# chosen after seeing results). Series are the scope, not a rule: every 15-minute market with a Kalshi index or perp reference.
+[lane.wave_top]
+enabled = true
+label = "wave top: the cheap side at the top of a big spot wave, salvaged if it dips (PAPER)"
+estimator = "market"
+numeric = "allow"
+one_per = "event"
+series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXADA15M", "KXBCH15M", "KXBNB15M", "KXHYPE15M", "KXNEAR15M", "KXZEC15M", "KXGOLD15M", "KXSILVER15M", "KXWTI15M", "KXBRENT15M", "KXNATGAS15M", "KXCOPPER15M", "KXPLATINUM15M", "KXPALLADIUM15M"]
+sides = ["yes", "no"]
+timed_suffix = "15M"
+shadow_suffix = "15M"
+price = [0.15, 0.45]
+hours = [0.0, 0.26]
+entry_elapsed = [2, 8]          # minutes after the open: later wave tops lost in the study
+max_spread = 0.03
+min_volume = 0
+shortlist = 12
+scope_minutes = 2
+review_minutes = 1
+fixed_stake = 7.5               # about 25 contracts at 0.30
+max_open = 30
+max_exposure_pct = 0.4
+paper_fill_model = true
+priority = 43
+wave_top_quantile = 0.9         # the wave's slope against the market's own legs since an hour before the open
+wave_top_trend_hours = 1.0      # no dip bet when the spot at the open is above its value an hour before
+buy_module = "wave_top"
+exit_module = "wave_salvage"
+
+[module.wave_top]
+label = "the market is in its own range, the cheap side is the reversal of a big spot wave at its top"
+steps = ["price", "calm", "wave_top"]
+
+[exit.wave_salvage]
+label = "a bet that dipped is sold once it has come back and its climb has faded; one that never dipped is held"
+steps = ["wave_salvage"]
+curve_risk_live = true
+
+[exit.wave_salvage.profit]
+
+[exit.wave_salvage.loss]

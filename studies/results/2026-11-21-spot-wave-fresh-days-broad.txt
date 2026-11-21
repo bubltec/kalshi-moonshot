@@ -1,0 +1,73 @@
+QUANT=0.0; 16446 windows, newest close 2026-11-21T16:15:00+00:00; R=1.0 min move=2.0 qty=25 band 0.15-0.45
+660 signals, 358 passed (side outside 0.15-0.45), 68 windows skipped for missing spot; 302 bets
+H   hold to settlement         n=302 net $  124.21 (sales fee-free $  124.21) win rate  33% beat H   0 lost to H   0
+R   failed-turn exit           n=302 net $ -294.09 (sales fee-free $ -220.19) win rate  10% beat H 192 lost to H  69
+R2  failed turn = new extreme  n=302 net $ -302.18 (sales fee-free $ -232.27) win rate  11% beat H 190 lost to H  66
+RF  failed-turn + flip sale    n=302 net $ -353.66 (sales fee-free $ -257.31) win rate  24% beat H 197 lost to H 100
+RC  failed-turn + 2-min check  n=302 net $ -348.28 (sales fee-free $ -251.56) win rate  24% beat H 201 lost to H 100
+P20 profit take +0.20 only     n=302 net $ -280.00 (sales fee-free $ -210.79) win rate  54% beat H  62 lost to H 100
+PF  flip sale only             n=302 net $ -290.31 (sales fee-free $ -217.04) win rate  55% beat H  67 lost to H 100
+P20R +0.20 take and new-extreme fail n=302 net $ -370.10 (sales fee-free $ -276.01) win rate  23% beat H 199 lost to H 100
+SL  0.40 resting + slow-down   n=302 net $ -176.30 (sales fee-free $ -132.61) win rate  52% beat H  62 lost to H 100
+T00 sell at bid >= entry ask, else hold n=302 net $ -333.80 (sales fee-free $ -233.29) win rate   8% beat H 173 lost to H 100
+T05 sell at +0.05, else hold   n=302 net $ -378.13 (sales fee-free $ -289.04) win rate  73% beat H 121 lost to H 100
+T10 sell at +0.10, else hold   n=302 net $ -348.96 (sales fee-free $ -266.79) win rate  65% beat H  95 lost to H 100
+T15 sell at +0.15, else hold   n=302 net $ -255.68 (sales fee-free $ -177.29) win rate  61% beat H  83 lost to H 100
+SV0 salvage: dipped 1 unit, sell back at entry bid n=302 net $  -13.50 (sales fee-free $   19.21) win rate  26% beat H  57 lost to H  32
+SV2 salvage: dipped, bid climb faded and spot turned n=302 net $  -30.99 (sales fee-free $    3.93) win rate  25% beat H  88 lost to H  32
+SV1 salvage: sell at 0.5 unit under entry bid n=302 net $  -51.22 (sales fee-free $  -17.44) win rate  23% beat H  75 lost to H  32
+S05 +0.05 target, stop -0.05   n=302 net $ -351.68 (sales fee-free $ -249.44) win rate  41% beat H 202 lost to H 100
+S10 +0.05 target, stop -0.10   n=302 net $ -302.97 (sales fee-free $ -202.16) win rate  59% beat H 202 lost to H 100
+S15 +0.05 target, stop -0.15   n=302 net $ -299.26 (sales fee-free $ -200.87) win rate  67% beat H 190 lost to H 100
+SLC SL + 2-min check           n=302 net $ -200.50 (sales fee-free $ -152.34) win rate  51% beat H 138 lost to H 100
+SLF SL + no-curve exit         n=302 net $ -253.56 (sales fee-free $ -168.72) win rate  26% beat H 172 lost to H 100
+
+reach: share of bets whose bid ever got to entry +x, and of those that did not, the share that ended at zero (total loss)
+  +0.00: reached  90%  not reached n=  29  of those ended at zero 100%
+  +0.05: reached  75%  not reached n=  75  of those ended at zero 100%
+  +0.10: reached  65%  not reached n= 106  of those ended at zero 100%
+  +0.15: reached  61%  not reached n= 119  of those ended at zero 100%
+  +0.20: reached  54%  not reached n= 139  of those ended at zero 100%
+  +0.40: reached  43%  not reached n= 173  of those ended at zero 100%
+  all bets: won  33%
+SL exits rest  n= 128 avg $  9.64 total $ 1234.00
+SL exits slow  n= 105 avg $  3.00 total $  315.22
+SL exits held  n= 140 avg $ -7.44 total $-1041.05
+
+by curve shape at the bet (net $, with sales fees: H R RF RC)
+  leg down slope>=1.5x prev False n= 76  H   104.99  P20   -25.23  SL     5.31  SLC   -16.61  SLF    14.54
+  leg down slope>=1.5x prev True  n= 84  H     7.21  P20    12.89  SL    41.69  SLC    28.68  SLF  -115.78
+  leg up   slope>=1.5x prev False n= 60  H   -11.81  P20  -106.91  SL   -93.16  SLC   -80.18  SLF   -81.42
+  leg up   slope>=1.5x prev True  n= 82  H    23.82  P20  -160.75  SL  -130.14  SLC  -132.38  SLF   -70.90
+
+by series (label only): n, H, RF
+  KXZEC15M       n= 31  H    -7.04  RF   -57.38
+  KXNEAR15M      n= 30  H   -30.14  RF   -20.04
+  KXBNB15M       n= 27  H   133.34  RF   -30.95
+  KXDOGE15M      n= 25  H    22.09  RF    -1.63
+  KXHYPE15M      n= 24  H   -55.87  RF   -48.71
+  KXXRP15M       n= 24  H    81.06  RF   -36.58
+  KXETH15M       n= 23  H    20.51  RF   -48.53
+  KXSOL15M       n= 22  H   -11.09  RF    -8.31
+  KXBTC15M       n= 20  H    68.32  RF   -10.70
+  KXBRENT15M     n= 12  H   -65.72  RF   -22.55
+  KXGOLD15M      n= 11  H   -20.19  RF    -6.90
+  KXPALLADIUM15M n= 11  H   -28.25  RF    -0.48
+  KXSILVER15M    n= 11  H   -20.38  RF   -11.92
+  KXWTI15M       n= 10  H    -3.32  RF   -14.00
+  KXCOPPER15M    n=  9  H    45.25  RF   -10.19
+  KXPLATINUM15M  n=  6  H   -27.58  RF   -18.96
+  KXNATGAS15M    n=  6  H    23.22  RF    -5.83
+
+simulation checks (hold to settlement)
+  mean ask 0.300  win rate 0.331  net/bet 0.41  sd 11.49  total 124 +- 200 (one standard error)
+  quote age at the buy (s): median 0  90th pct 1  max 4;  spread median 0.01 90th 0.03
+  quote age 0-2s n= 301 mean ask 0.301 win 0.329 H $  104.23
+  quote age 2-10s n=   1 mean ask 0.190 win 1.000 H $   19.98
+  ask 0.15-0.25 n=  88 mean ask 0.197 win 0.205 H $   -8.25
+  ask 0.25-0.35 n= 111 mean ask 0.292 win 0.315 H $   23.65
+  ask 0.35-0.45 n= 103 mean ask 0.397 win 0.456 H $  108.81
+  11-20 n= 215 win 0.32 H $   35.09
+  11-21 n=  87 win 0.36 H $   89.12
+DONE
+4s
