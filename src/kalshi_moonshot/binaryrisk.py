@@ -181,6 +181,7 @@ def readings(T: list[float], V: list[float], now: float, strike: float, left_s: 
     out["amp15"] = math.log(max(w15) / min(w15)) / u15  # range: the 15 minute high to low, in typical minutes
     out["czb"] = (out["cz1"] + out["cz3"] + out["cz5"]) / 3.0  # the blended cushion: one reading in the fit (three overlapping cushions got opposite-signed weights, so a negative cushion on a longer average could add to the score)
     out["czlb"] = out["czb"] * min(lm, 15.0) / 15.0
+    out["czt"] = cl(math.log(V[j] / strike) / (u15 * math.sqrt(lm)), 8.0)  # the last tick against the strike (the pre-2026-11-20 cushion); read only by the cushion ablation study, not in the model
     out["tr13"] = cl(math.log(sp[1] / sp[3]) / u15, 30.0)  # the trend: the 1 minute average against the 3 minute one, in typical moves (positive = rising)
     out["tr35"] = cl(math.log(sp[3] / sp[5]) / u15, 30.0)
     for mins in (15, 30, 60):
