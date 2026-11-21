@@ -158,6 +158,33 @@ def test_backups_are_copied_once(tmp_path):
     assert rep.uploaded == 1 and ("b", "backups/moonshot-20261120.dump") in s3.objects
 
 
+def test_a_newer_dump_with_the_same_name_replaces_the_buckets_copy(tmp_path):
+    s3 = FakeS3()
+    f = tmp_path / "tape-20261120.dump"
+    f.write_bytes(b"first dump")
+    rep = archive.Report()
+    archive.upload_backups(s3, "b", tmp_path, rep)
+    f.write_bytes(b"second dump of the same day, larger")
+    archive.upload_backups(s3, "b", tmp_path, rep)
+    assert rep.uploaded == 2 and s3.objects[("b", "backups/tape-20261120.dump")][0] == b"second dump of the same day, larger"
+
+
+def test_a_written_backup_is_handed_to_the_upload_at_once_and_a_failed_upload_does_not_stop_the_backup(monkeypatch):
+    from kalshi_moonshot import backup
+
+    s = settings()
+    calls = []
+    monkeypatch.setattr(backup, "run_once", lambda s_: ["tape-20261121.dump"])
+    assert backup.pass_once(s, calls.append) == ["tape-20261121.dump"] and calls == [s]
+
+    def boom(s_):
+        raise RuntimeError("no network")
+
+    assert backup.pass_once(s, boom) == ["tape-20261121.dump"]
+    monkeypatch.setattr(backup, "run_once", lambda s_: [])
+    assert backup.pass_once(s, calls.append) == [] and len(calls) == 1  # nothing written: no upload
+
+
 def test_fetch_downloads_a_days_files(env, tmp_path):
     store, tape_db, s3 = env
     archive.run(settings(), store, tape_db, s3, apply=True, delete_local=False, now=NOW)

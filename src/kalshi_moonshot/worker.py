@@ -169,10 +169,9 @@ class Worker:
         from . import riskrecord
 
         riskrecord.start_background(lambda: self.s, lambda: Store(self.s.db_path, self.s.exclude_versions))  # every open market's risk attributes every 30 s, from its own thread
-        from . import backup
+        from . import archive, backup
 
-        backup.start_nightly(lambda: self.s)
-        from . import archive
+        backup.start_nightly(lambda: self.s, after=archive.upload_backups_now)  # a new dump goes to the bucket at once
         from .tape import Tape
 
         archive.start_nightly(

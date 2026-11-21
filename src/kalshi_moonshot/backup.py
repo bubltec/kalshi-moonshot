@@ -96,15 +96,27 @@ def run_once(s: Settings, force: bool = False) -> list[str]:
     return wrote
 
 
-def start_nightly(get_settings) -> None:
-    """A background thread that makes sure a recent copy of each database exists."""
+def pass_once(s: Settings, after=None) -> list[str]:
+    """One look: write the copies that are due and, when any was written, hand the settings to `after` (the upload to the archive bucket) at once."""
+    wrote = run_once(s)
+    for name in wrote:
+        log.info("backup: wrote %s", name)
+    if wrote and after is not None:
+        try:
+            after(s)
+        except Exception:
+            log.exception("backup: the upload after the copy failed; the archive pass retries it")
+    return wrote
+
+
+def start_nightly(get_settings, after=None) -> None:
+    """A background thread that makes sure a recent copy of each database exists. `after(settings)` runs when a copy was written."""
 
     def loop() -> None:
         time.sleep(300.0)  # let the bot settle after a start
         while True:
             try:
-                for name in run_once(get_settings()):
-                    log.info("backup: wrote %s", name)
+                pass_once(get_settings(), after)
             except Exception:
                 log.exception("backup: failed")
             time.sleep(CHECK_EVERY)

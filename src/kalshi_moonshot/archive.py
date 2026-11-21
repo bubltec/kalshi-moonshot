@@ -207,12 +207,14 @@ def delete_local_day(store: Any, tape_db: Any, table: str, day: str, report: Rep
 
 
 def upload_backups(client: Any, bucket: str, folder: Path, report: Report) -> None:
-    """Copy each pg_dump file in `folder` that is not in the bucket yet to backups/."""
+    """Copy each pg_dump file in `folder` that is not in the bucket yet, or whose copy there has another size (an older dump of the same name), to backups/."""
     for path in sorted(folder.glob("*.dump")):
         key = f"backups/{path.name}"
         try:
-            client.head_object(Bucket=bucket, Key=key)
-            continue
+            head = client.head_object(Bucket=bucket, Key=key)
+            if int(head.get("ContentLength", -1)) == path.stat().st_size:
+                continue
+            # a second dump on the same calendar day has the same name: the bucket's copy is the older one (2026-11-21: the runner restored a tape a day and a half old)
         except Exception as exc:
             if "404" not in str(exc) and "Not Found" not in str(exc):
                 report.failed += 1
@@ -225,6 +227,15 @@ def upload_backups(client: Any, bucket: str, folder: Path, report: Report) -> No
         except Exception as exc:
             report.failed += 1
             report.say(f"backup {path.name}: upload failed ({exc})")
+
+
+def upload_backups_now(s: Settings) -> int:
+    """Upload the backups that are not in the bucket, right after a dump is written (backup.py calls this), so a new dump does not wait for the next archive pass. Returns how many were uploaded."""
+    if not enabled(s):
+        return 0
+    report = Report()
+    upload_backups(client_for(s), s.archive_bucket, s.data_dir / "backups", report)
+    return report.uploaded
 
 
 def run(
