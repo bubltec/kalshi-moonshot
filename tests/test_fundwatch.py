@@ -95,13 +95,14 @@ def test_the_shard_of_a_series_is_asked_once(tmp_path, monkeypatch):
     assert c.market_calls == 2  # one for each series, not one for each pass
 
 
-def test_report_logs_each_problem_once_in_a_while_and_puts_the_count(tmp_path, caplog):
+def test_a_problem_is_announced_at_most_once_an_hour_even_if_it_clears_and_returns(tmp_path, caplog):
     fundwatch._LAST_ALERT.clear()
     sent = []
     with caplog.at_level(logging.WARNING, logger="moonshot"):
         assert fundwatch.report(["a"], now=1000.0, put_metric=sent.append) == ["a"]
-        assert fundwatch.report(["a"], now=1100.0, put_metric=sent.append) == []  # the same problem, soon after: not logged again
+        assert fundwatch.report(["a"], now=1100.0, put_metric=sent.append) == []  # still there: not announced again
         assert fundwatch.report([], now=1200.0, put_metric=sent.append) == []  # cleared
-        assert fundwatch.report(["a"], now=1300.0, put_metric=sent.append) == ["a"]  # back: announced again
-    assert sent == [1.0, 1.0, 0.0, 1.0]  # the metric is put every pass, 0 when all is well, so the alarm can clear
-    assert "FUNDS ALERT: a" in caplog.text
+        assert fundwatch.report(["a"], now=1300.0, put_metric=sent.append) == []  # back within the hour: no second email
+        assert fundwatch.report(["a"], now=4700.0, put_metric=sent.append) == ["a"]  # an hour later and still short: again
+    assert sent == [1.0, 0.0, 0.0, 0.0, 1.0]  # the alarm emails when the metric reaches 1, so these are the only two emails
+    assert caplog.text.count("FUNDS ALERT: a") == 2

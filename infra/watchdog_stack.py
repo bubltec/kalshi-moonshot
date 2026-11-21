@@ -53,12 +53,13 @@ class WatchdogStack(Stack):
             evaluation_periods=5, datapoints_to_alarm=5, treat_missing_data=cw.TreatMissingData.BREACHING,
         )
         funds = cw.Alarm(
-            self, "ExchangeFunds", alarm_description="A Kalshi exchange shard that a live lane trades on holds less cash than it needs, or the account cannot cover them all (src/kalshi_moonshot/fundwatch.py).",
+            self, "ExchangeFunds", alarm_description="A Kalshi exchange shard that a live lane trades on holds less cash than it needs, or the account cannot cover them all (src/kalshi_moonshot/fundwatch.py). The bot raises it at most once an hour.",
             metric=cw.Metric(namespace=NAMESPACE, metric_name="ExchangeShortfall", statistic="Maximum", period=Duration.minutes(1)),
             threshold=1, comparison_operator=cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            evaluation_periods=3, datapoints_to_alarm=2, treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
+            evaluation_periods=1, datapoints_to_alarm=1, treat_missing_data=cw.TreatMissingData.NOT_BREACHING,
         )
-        for alarm in (host, beat, funds):
+        funds.add_alarm_action(action)  # an email when raised; no recovery email (the bot raises it at most once an hour)
+        for alarm in (host, beat):
             alarm.add_alarm_action(action)
             alarm.add_ok_action(action)  # also say when it recovers
 

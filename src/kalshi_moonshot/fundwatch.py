@@ -2,7 +2,7 @@
 
 Kalshi keeps a cash balance for each exchange shard a market trades on, and an order can only spend the balance of its own shard. Before this job the shards were filled in two places only: once at start-up for shards that already held a position, and at the moment of an order (the order's own shard, a funds check made as part of sending it). A shard that ran low between orders, or one a quiet lane would trade on after the weekend, was found out only when an order was refused.
 
-Every INTERVAL seconds, in the background (a maintenance job, never on a tick): find the shard of each series a live lane trades on, read the cash per shard (the same one balance call the account snapshot makes), and top up any shard under SHARD_TOPUP_TARGET_USD from the richest other shard (`runner._fill_shard`: the same rules, the source never below SHARD_TOPUP_KEEP_USD, the daily cap). A shard still short after that, or an account whose total cash cannot cover every live shard, is a problem: it is logged as `FUNDS ALERT` (repeated at most every REPEAT seconds), and the metric KalshiMoonshot/Bot ExchangeShortfall is put (the number of problems; 0 when all is well) so the watchdog alarm in infra/watchdog_stack.py sends the email. The metric is sent only where HEARTBEAT_ENABLED is on (the cloud host).
+Every INTERVAL seconds, in the background (a maintenance job, never on a tick): find the shard of each series a live lane trades on, read the cash per shard (the same one balance call the account snapshot makes), and top up any shard under SHARD_TOPUP_TARGET_USD from the richest other shard (`runner._fill_shard`: the same rules, the source never below SHARD_TOPUP_KEEP_USD, the daily cap). A shard still short after that, or an account whose total cash cannot cover every live shard, is a problem: it is announced at most once an hour (user: a simple email, not more than once an hour) as a `FUNDS ALERT` log line and by putting the metric KalshiMoonshot/Bot ExchangeShortfall at 1 (0 on every other pass), and the watchdog alarm in infra/watchdog_stack.py emails when it reaches 1. The metric is sent only where HEARTBEAT_ENABLED is on (the cloud host).
 
 It moves cash between the account's own shards, as the order-time top-up already did, and places no order. Idle unless trading with SHARD_TOPUP_TARGET_USD above 0 and an authenticated client. Stdlib only (boto3 only through the same path the heartbeat uses).
 """
@@ -18,7 +18,7 @@ from typing import Any
 log = logging.getLogger("moonshot")
 
 INTERVAL = 60.0
-REPEAT = 1800.0  # the same problem is logged again no sooner than this
+REPEAT = 3600.0  # the same problem is announced (log and email) no sooner than this: at most one email an hour (user, 2026-11-21)
 NAMESPACE = "KalshiMoonshot/Bot"
 METRIC = "ExchangeShortfall"
 
@@ -98,19 +98,17 @@ def check_once(s: Any, client: Any, store: Any, specs: dict[str, Any]) -> list[s
 
 
 def report(problems: list[str], now: float | None = None, put_metric: Callable[[float], None] | None = None) -> list[str]:
-    """Log each problem (at most once every REPEAT seconds) and put the metric. Returns the lines logged."""
+    """Announce each problem at most once every REPEAT seconds, by a log line and by putting the metric at 1; every other pass puts 0. The alarm emails when the metric reaches 1, so a problem that stays, or one that clears and returns, sends at most one email an hour. Returns the problems announced."""
     now = time.time() if now is None else now
-    logged: list[str] = []
+    announced: list[str] = []
     for p in problems:
         if p not in _LAST_ALERT or now - _LAST_ALERT[p] >= REPEAT:
             _LAST_ALERT[p] = now
             log.warning("FUNDS ALERT: %s", p)
-            logged.append(p)
-    for k in [k for k in _LAST_ALERT if k not in problems]:
-        _LAST_ALERT.pop(k)  # a problem that cleared is announced again if it returns
+            announced.append(p)
     if put_metric is not None:
-        put_metric(float(len(problems)))
-    return logged
+        put_metric(1.0 if announced else 0.0)
+    return announced
 
 
 def start(get_settings: Callable[[], Any], get_client: Callable[[], Any], get_store: Callable[[], Any], get_specs: Callable[[], dict[str, Any]]) -> None:
