@@ -138,7 +138,7 @@ def test_integration_the_live_lanes_buy_and_sell_only_through_modules(tmp_path, 
         sp = got[name]
         assert sp.buy_module and sp.buy_chain and sp.exit_module and sp.sell_chain, name
         assert sp.buy_chain[:1] == ("price",) and "perp_worth" in sp.buy_chain and "cushion" in sp.buy_chain, name
-    assert "center_agree" in got["commodity_precious"].buy_chain and "center_agree" not in got["commodity_wti"].buy_chain
+        assert "center_agree" in sp.buy_chain, name  # 2026-11-21 (user): all five live commodity lanes, the energy ones included, ask that the spot and its corrected center agree (the base lane buys by commodity_live_spot_center). Before this the energy lanes left the step out
     assert got["commodity_wti"].min_cushion_z == 0.8 and got["commodity_wti"].max_vol_rel == 1.6 and got["commodity_wti"].curve_take_trail == 1.0
 
 
