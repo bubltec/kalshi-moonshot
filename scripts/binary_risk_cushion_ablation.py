@@ -162,7 +162,7 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
         out, wts, cut = res
         cw[v].append(wts["cz"])
         half = 0 if t < t_mid else 1
-        for top, tk, sd, net, p, neg, cut in out:
+        for top, tk, sd, net, p, neg, _cut in out:
             if (tk, sd) not in picks[(v, top)]: picks[(v, top)][(tk, sd)] = (half, net, p, neg)
         for top in TOPS: bars[(v, top)].append(cut[top])
 base = [[], []]
