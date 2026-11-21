@@ -81,7 +81,7 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
 S.sort(key=lambda r: r[0])
 print(f"VARIANT {V}: {len(S)} gated sides ({sum(1 for r in S if r[9] == 'commodity')} commodity), {time.time() - t0:.0f}s", flush=True)
 
-COLS = [NI["czb"]] if V == "cushonly" else FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V == "winp" else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
+COLS = [NI["czb"]] if V == "cushonly" else FEWER if V == "fewer" else (list(range(2, len(br.NAMES))) if V in ("winp", "winp0") else list(range(len(br.NAMES))))  # winp: the curve readings only, no ask readings (logit_ask, ask_off)
 def X(r): return [r[1][i] for i in COLS]
 def sigm(z): return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z))))
 
@@ -111,7 +111,7 @@ def fit(tr):
     sd = [math.sqrt(sum((x[i] - mu[i]) ** 2 for x in xs) / len(xs)) or 1.0 for i in range(n)]
     sub = tr[::3]
     m = {"mu": mu, "sd": sd, "lam": br.RIDGE}
-    if V in ("logit", "winp", "cushonly"):
+    if V in ("logit", "winp", "winp0", "cushonly"):
         w = [0.0] * (n + 1)
         K = n + 1
         vs = [[1.0] + [(x[i] - mu[i]) / sd[i] for i in range(n)] for x in (X(r) for r in sub)]
@@ -158,7 +158,7 @@ def pred(m, r):
     """(score used to rank, predicted hold net per $1, predicted best-exit net) all capped at the ceiling."""
     x = X(r); v = [1.0] + [(a - u) / d for a, u, d in zip(x, m["mu"], m["sd"])]
     ce = br.ceiling(r[3])
-    if V in ("winp", "cushonly"):
+    if V in ("winp", "winp0", "cushonly"):
         p = sigm(sum(a * b for a, b in zip(m["w"], v)))
         return p, p, p  # the score is the predicted chance to win, from the curve readings alone
     if V == "logit":
@@ -174,7 +174,7 @@ cm = [r for r in S if r[9] == "commodity"]
 t_start, t_end = cm[0][0] + 24 * 3600, cm[-1][0]
 t_hold = t_end - 24 * 3600
 t_mid = (t_start + t_hold) / 2
-inb = lambda r: br.usable(r[3]) and BAND[0] <= r[3] < BAND[1]
+inb = (lambda r: True) if V == "winp0" else (lambda r: br.usable(r[3]) and BAND[0] <= r[3] < BAND[1])  # winp0: the risk score is evaluated on EVERY gated tick, no ask band
 def band_of(a):
     for k, (lo, hi) in enumerate(BANDS):
         if lo <= a < hi: return k
@@ -206,7 +206,7 @@ def hour(t):
         sc, ph, pb = pred(m, r)
         for top in TOPS:
             if sc >= cuts[(top, band_of(r[3]) if V == "band" else None)]:
-                out.append((top, r[4], r[5], seg, r[2][0], r[1][NI["sl30"]], r[1][NI["cv30"]], ph, r[7], cuts[(top, band_of(r[3]) if V == "band" else None)]))
+                out.append((top, r[4], r[5], seg, r[2][0], r[1][NI["sl30"]], r[1][NI["cv30"]], ph, r[7], cuts[(top, band_of(r[3]) if V == "band" else None)], r[3]))
     return t, len(trc), len({r[4] for r in tr}), m["lam"], out
 
 picks = {top: {} for top in TOPS}
@@ -217,22 +217,23 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
         if not res: continue
         t, ntr, nmk, lam, out = res
         sizes.append((ntr, nmk)); lams.append(lam)
-        for top, tk, sd, seg, net, sl, cv, ph, won, cut in out:
+        for top, tk, sd, seg, net, sl, cv, ph, won, cut, ask in out:
             if (tk, sd) not in picks[top]:
-                picks[top][(tk, sd)] = (seg, net, sl, cv, ph, won)
+                picks[top][(tk, sd)] = (seg, net, sl, cv, ph, won, ask)
                 bars[top][seg].append(cut)
 slv = sorted(r[1][NI["sl30"]] for r in cm[::7]); cvv = sorted(r[1][NI["cv30"]] for r in cm[::7])
 c_sl = (slv[len(slv) // 3], slv[2 * len(slv) // 3]); c_cv = (cvv[len(cvv) // 3], cvv[2 * len(cvv) // 3])
 def th(x, c): return 0 if x < c[0] else 1 if x < c[1] else 2
 # win-rate baseline per segment: the first in-band gated reading per market side
-_seen, _base = set(), {0: [], 1: [], 2: []}
+_seen, _base, _bax, _bnet = set(), {0: [], 1: [], 2: []}, {0: [], 1: [], 2: []}, {0: [], 1: [], 2: []}
 for r in cm:
     if not inb(r) or (r[4], r[5]) in _seen: continue
     _seen.add((r[4], r[5]))
-    _base[2 if r[0] >= t_hold else (0 if r[0] < t_mid else 1)].append(r[7])
+    _sg = 2 if r[0] >= t_hold else (0 if r[0] < t_mid else 1)
+    _base[_sg].append(r[7]); _bax[_sg].append(r[3]); _bnet[_sg].append(r[2][0])
 BASE = {k: (sum(v) / len(v) if v else 0.0) for k, v in _base.items()}
 def cell(g, seg=None):
-    if V in ("winp", "cushonly"):
+    if V in ("winp", "winp0", "cushonly"):
         if not g: return "n    0"
         n = len(g); w = sum(x[5] for x in g) / n; se = math.sqrt(max(w * (1 - w), 1e-9) / n)
         return "n %4d win %.2f se %.3f | universe win %.2f lift %+.3f (%+.1f se) | mean predicted win %.2f" % (n, w, se, BASE[seg], w - BASE[seg], (w - BASE[seg]) / se, sum(x[4] for x in g) / n)
@@ -249,4 +250,25 @@ for top in TOPS:
         print(f" {name}: bar {bar:+.3f} " + cell(g, seg))
         for lab, idx, c in (("slope", 2, c_sl), ("curv", 3, c_cv)):
             print("    by " + lab + " third: " + " | ".join(f"{('low', 'mid', 'high')[k]} " + cell([x for x in g if th(x[idx], c) == k], seg) for k in range(3)))
+if V in ("winp", "winp0", "cushonly"):
+    # VALUE CHECK: a SEPARATE step after the risk score (user, 2026-11-21: the price test comes after we evaluate risk, never inside the score or the universe). Per pick set: mean ask paid, win minus mean ask, net per $1 after the fee (buy fee; held to settlement), ask mix against the universe's.
+    def ms(xs):
+        n = len(xs); m = sum(xs) / n if n else 0.0
+        se = math.sqrt(sum((x - m) ** 2 for x in xs) / max(1, n - 1) / max(1, n))
+        return m, se
+    def mix(asks):
+        e = ((0.0, 0.40), (0.40, 0.60), (0.60, 0.85), (0.85, 1.01))
+        return " ".join(f"{lo:.2f}-{min(hi, 1.0):.2f}:{sum(1 for a in asks if lo <= a < hi) / max(1, len(asks)):.2f}" for lo, hi in e)
+    print("\n######## VALUE CHECK (after the risk score; the ask is NOT in the score)")
+    for seg, name in ((0, "half 1"), (1, "half 2")) + (((2, "HOLDOUT"),) if HOLDOUT else ()):
+        ua, un = _bax[seg], _bnet[seg]
+        mn, sn = ms(un)
+        print(f" {name} UNIVERSE: n {len(ua)} mean ask {sum(ua) / max(1, len(ua)):.3f} net/$1 {mn:+.3f} se {sn:.3f} ({mn / sn if sn else 0:+.1f} se) mix {mix(ua)}")
+        for top in TOPS:
+            g = [x for x in picks[top].values() if x[0] == seg]
+            if not g: continue
+            ga = [x[6] for x in g]
+            wm, ws = ms([x[5] - x[6] for x in g])
+            nm, ns = ms([x[1] for x in g])
+            print(f"   top {int(top * 100):2d}%: n {len(g)} mean ask {sum(ga) / len(ga):.3f} | win minus ask {wm:+.3f} se {ws:.3f} ({wm / ws if ws else 0:+.1f} se) | net/$1 {nm:+.3f} se {ns:.3f} ({nm / ns if ns else 0:+.1f} se) | mix {mix(ga)}")
 print(f"done in {time.time() - t0:.0f}s")
