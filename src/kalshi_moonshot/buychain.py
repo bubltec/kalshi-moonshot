@@ -437,6 +437,18 @@ def binary_risk_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
+@step("priskp")
+def priskp_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The PriskP checks model (priskp.py; 2026-11-22, user: separate yes/no checks, each against the market's own history, no single score): the five checks read and passing with the cushion in its top fifth, held three readings in a row, inside minutes 2 to 14, never an ask of 0.45 to 0.55, and not the side a confirmed shift took out of its cushion. A take at the ask. The note is the step's answer as properties (verb, why, the failing checks, each check's fifth). Memory only."""
+    from . import priskp
+
+    try:
+        ok, why = priskp.admit(ctx.s, shot, ctx.now, _hours_left(ctx, shot))
+    except Exception as exc:
+        return Check(False, f"priskp unreadable ({exc})")
+    return Check(ok, why)
+
+
 @step("swing_risk")
 def swing_risk_step(ctx: Ctx, shot: LongShot) -> Check:
     """The early-swing risk gate (2026-11-20): the binary risk model read for a cheap side whose best exit is an early sale, held to the top 3% of this market series' own predictions over the last three hours (binaryrisk.swing_admits). Memory only."""
