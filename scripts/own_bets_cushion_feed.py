@@ -64,6 +64,14 @@ print("  a skipped variety (G-no, A-yes) on the perp: " + tot(sk))
 out = {id(x) for x in low + cr + sk} | {id(x) for x in rows if not x[3]}
 print("  REFUSED in all                            : " + tot([x for x in rows if id(x) in out]))
 print("  STILL BOUGHT                              : " + tot([x for x in rows if id(x) not in out]))
+vg = [x for x in P if x[3]["z"] >= 0.8 and variants.skipped(("G-no", "A-yes"), x[3].get("variety"), x[0]["side"])]
+o2 = {id(x) for x in low + vg}
+print("\nWITHOUT THE CROSSINGS LIMIT (removed 2026-11-21, user: \"We don't want any of that\"), perp readings:")
+print("  cushion z under 0.8 on the perp           : " + tot(low))
+print("  a skipped variety (G-no, A-yes) on the perp: " + tot(vg) + "   (G-no " + tot([x for x in vg if x[3].get("variety") == "G"]) + ")")
+print("  REFUSED in all                            : " + tot([x for x in rows if id(x) in o2]))
+print("  STILL BOUGHT                              : " + tot([x for x in rows if id(x) not in o2]))
+print("  with the variety skip gone too, only the cushion refuses: bought " + tot([x for x in rows if id(x) not in {id(y) for y in low}]))
 print("  (a refused bet leaves room for a later buy in the same market, which this does not count)")
 for x in sorted([x for x in rows if id(x) in out], key=lambda x: x[0]["net"])[:12]:
     print("    %-30s %-3s paid %.2f net %+6.2f | recorded z %+.2f %s, on the perp z %s crossings %s variety %s" % (x[0]["ticker"], x[0]["side"], x[0]["paid"], x[0]["net"], x[1]["cushion_z"], x[1]["variety"], "%+.2f" % x[3]["z"] if x[3] else "n/a", x[3]["crosses"] if x[3] else "n/a", x[3].get("variety") if x[3] else "n/a"))

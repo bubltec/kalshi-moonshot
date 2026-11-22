@@ -69,13 +69,6 @@ def test_the_grid_makes_a_slow_and_a_fast_feed_read_alike():
     assert a["variety"] == b["variety"] == "G" and abs(a["crosses"] - b["crosses"]) <= 1
 
 
-def test_a_skip_list_names_a_variety_on_either_side_or_on_one():
-    assert variants.skipped(("G", "A-yes"), "G", "no") and variants.skipped(("G", "A-yes"), "G", "yes")
-    assert variants.skipped(("G", "A-yes"), "A", "yes") and not variants.skipped(("G", "A-yes"), "A", "no")
-    assert not variants.skipped(("G", "A-yes"), "B", "yes")
-    assert not variants.skipped(("G",), None, "yes")  # a variety that cannot be read is never skipped
-
-
 def test_the_market_report_prints_every_class_with_its_flip(monkeypatch):
     def cell(n, wins, net, flip_wins, flip_net, flip_price):
         return {"n": n, "wins": wins, "net": net, "recent_n": 4, "recent_wins": 3, "recent_net": -2.0, "flip_wins": flip_wins, "flip_net": flip_net, "flip_price": flip_price, "recent_flip_net": 1.5}
@@ -117,7 +110,6 @@ def test_a_custom_variety_comes_from_a_file_and_is_checked(tmp_path):
         assert variants.NAMES["K"] == "near and speeding up" and "J" not in variants.NAMES and variants.NAMES["B"] == "far, flat"
         assert variants.classify_features({"z": 0.4, "slope": 0.0, "crosses": 0, "vol_ratio": 2.0, "since_cross": 300.0}) == "K"
         assert variants.classify_features({"z": 0.4, "slope": 0.0, "crosses": 0, "vol_ratio": 1.0, "since_cross": 300.0}) == "E"  # no custom test holds: the built-in letter
-        assert variants.skipped(("K-yes",), "K", "yes") and not variants.skipped(("K-yes",), "K", "no")
     finally:
         (tmp_path / variants.CUSTOM_FILE).unlink()
         variants._custom_mtime.clear()
@@ -163,8 +155,8 @@ def test_a_crypto_variety_is_read_from_memory_against_the_strike(monkeypatch):
     monkeypatch.setattr(variants.db, "connect", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the tape must not be read")))
     s = SimpleNamespace(tape_path="x", data_dir=__import__("pathlib").Path("/nonexistent"))
     try:
-        assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now, strike=100.0) == "B"
-        assert variants.variety_now(s, "KXBTC15M", "yes", 300.0, now=now) is None  # no strike, no variety
+        assert variants.snapshot_now(s, "KXBTC15M", "yes", 300.0, now=now, strike=100.0)["variety"] == "B"
+        assert variants.snapshot_now(s, "KXBTC15M", "yes", 300.0, now=now) is None  # no strike, no variety
     finally:
         ticks.history.clear()
 

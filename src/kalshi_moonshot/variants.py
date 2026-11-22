@@ -854,17 +854,6 @@ def multiscale_now(s: Settings, series: str, side: str, left_seconds: float, sca
     return out
 
 
-def variety_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None, strike: float | None = None) -> str | None:
-    """The variety letter of snapshot_now, or None."""
-    snap = snapshot_now(s, series, side, left_seconds, now, strike)
-    return snap["variety"] if snap else None
-
-
-def skipped(varieties: Sequence[str], variety: str | None, side: str) -> bool:
-    """Whether a lane's skip list names this variety: "G" skips it on either side, "A-yes" only on that side."""
-    return variety is not None and (variety in varieties or f"{variety}-{side}" in varieties)
-
-
 CASE_FIELDS = ("ticker", "series", "cls", "coin", "side", "ts", "close_ts", "ask", "bid", "left_s", "won", "pnl", "flip_pnl", "z", "slope", "crosses", "vol_ratio", "since_cross", "variety", "vol_rel", *SWING_FEATURES)
 SWING_INT = ("sw_legs", "sw_cross", "sw_relapse", "sw_last_dir")
 MIN_PRIOR = 10  # older favorites a variety needs before the auto skip may act on it

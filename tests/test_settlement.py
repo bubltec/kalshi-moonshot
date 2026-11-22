@@ -349,32 +349,6 @@ def test_trend_in_the_markets_own_units(tmp_path):
     assert runner.side_trend_z(S, yes, 10.0, now=5000.0) is None  # no recent quote
 
 
-def _variety_world(tmp_path, monkeypatch, ticks, extra="skip_varieties=['G', 'A-yes']"):
-    import time as _time
-
-    from kalshi_moonshot import db, regime
-
-    regime.reset()
-    w, s, store, _close = _watcher(tmp_path, monkeypatch)
-    (tmp_path / "strategies.toml").write_text(f"[lane.guarded]\nestimator='market'\nprice=[0.5,0.99]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=2.0\nseries=['KXCOPPER15M']\n{extra}\n")
-    s = config.load()
-    tape = db.connect(s.tape_path, "tape", shared=True)
-    tape.execute("CREATE TABLE IF NOT EXISTS index_ticks (ts REAL NOT NULL, index_id TEXT NOT NULL, value REAL, avg60 REAL, quote_avg REAL, src_ms INTEGER)")
-    now = _time.time()
-    close = now + 437.0
-    tape.execute("INSERT INTO index_ticks (ts, index_id, value) VALUES (?,?,?)", (close - 897.0, "BQ_COPPER", 100.0))  # the price at the window open
-    for k, value in enumerate(ticks):
-        tape.execute("INSERT INTO index_ticks (ts, index_id, value) VALUES (?,?,?)", (now - 302.0 + k * 2.0, "BQ_COPPER", value))
-    tape.commit()
-    return w, s, store
-
-
-def _copper_shot(side="yes", ask=0.86):
-    from kalshi_moonshot.strategy import LongShot
-
-    return LongShot("KXCOPPER15M-9", "t", "", ask - 0.01, ask, 437.0 / 3600.0, "2099-01-01T00:00:00Z", 437.0 / 3600.0, lane="guarded", series="KXCOPPER15M", side=side)
-
-
 def _choppy_world(tmp_path, monkeypatch, lane_extra):
     import time as _time
 

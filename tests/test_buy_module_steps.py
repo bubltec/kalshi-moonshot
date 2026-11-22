@@ -29,17 +29,25 @@ def ask(step, sp, sh=None, **ctx):
 
 def test_unit_every_step_here_is_named_in_the_lanes_list_and_the_other_way_round():
     assert set(buychain.STEPS) == set(lanes.BUY_STEPS)
-    assert {"variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "price_trend", "state_record", "curve_model"} <= set(buychain.STEPS)
+    assert {"vol_regime", "cushion", "spike", "center_agree", "same_side", "price_trend", "state_record", "curve_model"} <= set(buychain.STEPS)
 
 
-def test_unit_variety_skips_what_the_lane_names_and_does_not_skip_what_it_cannot_read(monkeypatch):
-    sp = spec(skip_varieties=("G-no", "A-yes"))
-    monkeypatch.setattr(variants, "variety_now", lambda *a, **k: "G")
-    assert ask("variety", sp, shot("no")).ok is False and ask("variety", sp, shot("yes")).ok is True
-    monkeypatch.setattr(variants, "variety_now", lambda *a, **k: None)
-    got = ask("variety", sp, shot("no"))
-    assert got.ok is True and "not skipped" in got.why
-    assert ask("variety", spec()).ok is False  # no varieties named: the step is a no, as every step of a lane that sets nothing for it
+def test_unit_no_curve_variety_is_refused_the_letter_is_a_reading_in_the_cushion_note(monkeypatch):
+    assert "variety" not in lanes.BUY_STEPS and "variety" not in buychain.STEPS and not hasattr(spec(), "skip_varieties") and not hasattr(variants, "skipped")
+    for letter in ("A", "G"):  # 2026-11-21: the oscillating variety is bought like any other
+        monkeypatch.setattr(variants, "snapshot_now", lambda *a, _l=letter, **k: {"z": 1.0, "crosses": 6, "variety": _l})
+        for side in ("yes", "no"):
+            got = ask("cushion", spec(min_cushion_z=0.8), shot(side))
+            assert got.ok is True and f"variety {letter}" in got.why
+
+
+def test_integration_a_lane_file_with_the_variety_step_and_skip_list_loads_without_them(tmp_path, monkeypatch, caplog):
+    """Lane file -> module -> spec: the retired step and setting are dropped and logged, the other steps keep their order."""
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    text = "[module.m]\nsteps=['price','variety','cushion','cooldown']\nmin_cushion_z=0.8\nskip_varieties=['G-no','A-yes']\n\n[lane.a]\nestimator='market'\nprice=[0.60,0.92]\nhours=[0.0,1.0]\nseries=['KXGOLD15M']\nmax_spread=0.05\nmin_volume=0\nbuy_module='m'\n"
+    with caplog.at_level("WARNING", logger="moonshot"):
+        sp = lanes.lane_specs_from(config.load(), text)["a"]
+    assert sp.buy_chain == ("price", "cushion", "cooldown") and "skip_varieties" in caplog.text and "variety" in caplog.text
 
 
 def test_unit_vol_regime_wants_a_known_regime_under_the_ceiling(monkeypatch):
@@ -53,16 +61,31 @@ def test_unit_vol_regime_wants_a_known_regime_under_the_ceiling(monkeypatch):
     assert ask("vol_regime", sp).ok is False and ask("vol_regime", spec()).ok is False
 
 
-def test_unit_cushion_wants_a_cushion_and_few_crossings(monkeypatch):
-    sp = spec(min_cushion_z=0.8, max_spot_crosses=4)
+def test_unit_cushion_wants_a_cushion_and_does_not_limit_crossings(monkeypatch):
+    sp = spec(min_cushion_z=0.8)
     monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 1.0, "crosses": 2})
     assert ask("cushion", sp).ok is True
     monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 0.5, "crosses": 2})
     assert ask("cushion", sp).ok is False
-    monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 1.0, "crosses": 4})
-    assert ask("cushion", sp).ok is False
+    monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 1.0, "crosses": 14})
+    got = ask("cushion", sp)
+    assert got.ok is True and "14 crossings" in got.why  # 2026-11-21: the crossings are a reading in the note, never a refusal
     monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: None)
     assert ask("cushion", sp).ok is False and ask("cushion", spec()).ok is False
+    assert not hasattr(sp, "max_spot_crosses")
+
+
+def test_integration_a_lane_file_that_still_sets_the_crossings_limit_loads_without_it(tmp_path, monkeypatch, caplog):
+    """Lane file -> module -> spec: the retired setting is dropped and logged, the cushion step still gates on the cushion, and an unknown setting is still refused."""
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    text = "[module.m]\nsteps=['price','cushion']\nmin_cushion_z=0.8\nmax_spot_crosses=4\n\n[lane.a]\nestimator='market'\nprice=[0.60,0.92]\nhours=[0.0,1.0]\nseries=['KXGOLD15M']\nmax_spread=0.05\nmin_volume=0\nbuy_module='m'\n"
+    with caplog.at_level("WARNING", logger="moonshot"):
+        sp = lanes.lane_specs_from(config.load(), text)["a"]
+    assert sp.min_cushion_z == 0.8 and "max_spot_crosses" in caplog.text
+    monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 1.0, "crosses": 9})
+    assert ask("cushion", sp).ok is True
+    with pytest.raises(ValueError):
+        lanes.lane_specs_from(config.load(), text.replace("max_spot_crosses", "no_such_setting"))
 
 
 def test_unit_spike_refuses_a_side_that_just_ran(monkeypatch):
@@ -290,23 +313,22 @@ def test_unit_a_silent_perp_is_no_reading_and_the_outside_feed_is_not_a_fallback
         ticks.history.clear()
 
 
-def test_integration_the_cushion_and_variety_steps_follow_the_perp_through_the_real_reading(monkeypatch):
-    """No stub of the reading: ticks in memory, the step, the answer. The perp says YES is ahead by a wide cushion and the outside feed says NO is; the steps pass YES and refuse NO. With the perp silent the cushion step is a no and the variety step does not skip."""
+def test_integration_the_cushion_step_follows_the_perp_through_the_real_reading(monkeypatch):
+    """No stub of the reading: ticks in memory, the step, the answer. The perp says YES is ahead by a wide cushion and the outside feed says NO is; the step passes YES and refuses NO. With the perp silent the cushion step is a no."""
     from kalshi_moonshot import biquotefeed, perpref
 
     ticks.history.clear()
     monkeypatch.setattr(variants.db, "reader", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the tape must not be read in a buy decision")))
-    sp, now = spec(min_cushion_z=0.8, max_spot_crosses=4, skip_varieties=("G",)), 50_000.0
+    sp, now = spec(min_cushion_z=0.8), 50_000.0
     try:
         _fill(perpref.index_for_series("KXGOLD15M"), now, 100.0, 101.0)
         _fill(biquotefeed.index_for_series("KXGOLD15M"), now, 100.0, 99.0)
         yes, no = ask("cushion", sp, shot("yes"), now=now), ask("cushion", sp, shot("no"), now=now)
         assert yes.ok is True and "cushion z +" in yes.why and no.ok is False and "under the lane's" in no.why
-        assert "variety " in ask("variety", sp, shot("yes"), now=now).why and "not readable" not in ask("variety", sp, shot("yes"), now=now).why
+        assert "variety " in yes.why
         ticks.history.clear()
         _fill(biquotefeed.index_for_series("KXGOLD15M"), now, 100.0, 101.0)
         assert ask("cushion", sp, shot("yes"), now=now).ok is False and "cannot be read" in ask("cushion", sp, shot("yes"), now=now).why
-        assert "not readable" in ask("variety", sp, shot("yes"), now=now).why
     finally:
         ticks.history.clear()
 

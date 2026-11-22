@@ -111,7 +111,6 @@ class LaneSpec:
     late_swing_min_crosses: int = 2  # the settlement index crossed the strike at least this many times in the last five minutes, and the last minute moved at least as fast as the five minutes (vol_ratio >= 1)
     wave_top_quantile: float = 0.0  # 2026-11-21 (user's hand scalp, wavetop.py): the buy step wave_top asks that the spot wave's slope is at or above this quantile of the market's own legs since an hour before the open (0.9); 0 = the step says no
     wave_top_trend_hours: float = 1.0  # the buy step wave_top takes no dip bet (YES after a down wave) when the spot at the open is above its value this many hours before (user: the past hour, not a whole day); 0 = no trend check
-    skip_varieties: tuple[str, ...] = ()  # varieties (variants.py letters) this lane does not buy: "G" on either side, "A-yes" on one side. Read at the decision from BiQuote against its window-open price, so commodities only; an unreadable one is not skipped. 2026-11-03 walk-forward on the lanes' live bets: the cells that paid in training were the same in three folds and left out G and A-yes, which then lost $49, $19 and $9 in the test period
     require_spot_center_agree: bool = False  # buy only when the raw spot AND the offset-corrected center are both on the bet's side of the strike. 2026-11-04, 672 live commodity bets: both on our side 88% won, +$0.24 a bet; where they disagreed 94 bets netted -$54 (industrial -$52 on 59, precious -$11 on 25; energy +$8 on 10, so energy leaves it off). Unreadable = no change
     max_vol_rel: float = 0.0  # buy only when it is at most this (a calm regime: below 0.7 favorites won 87%). 0 = off. No reading = no buy
     min_cushion_z: float = -99.0  # 2026-11-05 (user): buy only when the bet's side has a cushion of at least this many typical moves left (variants.snapshot z). -99 = off. Commodity states since 11-02 (17,900 moments): cushion under 0.5 lost -$0.4 to -$1.45 a $10 bet in both halves, 1.0-1.5 made +$0.24, 1.5+ made +$0.26 to +$0.53 (studies/results/2026-11-05-entry-state-map.txt)
@@ -121,7 +120,6 @@ class LaneSpec:
     buy_chain: tuple[str, ...] = ()  # 2026-11-17 (user: "ladder should not be the entry point"; "the risk score makes way more sense to go FIRST"; "you need to write new code that is modular and can fit in logic in any order"): the buy as named steps in the lane's own order (buychain.py), e.g. ["risk_score", "price", "ladder"]. Both sides start alive; each step is asked of the sides still alive, a no puts a side out, and a side alive after the last step is bought. With a chain set the estimator's own screen is not run in the review (the first step puts the sides forward) and the steps replace this lane's edge rule, no-buy check, risk score rule and trend checks in the decision; the steps read those same settings. Empty = the lane decides as it always has
     entry_risk_trend: float = 0.0  # 2026-11-17 SHADOW until entry_risk_trend_live (user, on the entry trend check and its fixed 2-minute noise window: "it shouldn't even care about the entry trend by itself. its the risk factor"; "i want to build something that replaces it"; of the two risk numbers, "Exit's risk factor"): above 0, the buy reads the direction of the side's risk as the exit reads it (curverisk.risk: the worse of Kalshi's bid net of the fee and the long layer, the price counted in full) over a look back of this share of the TIME LEFT, in the market's own typical move for that span (the moves before the look back). In shadow every decision's note carries the reading, what it would do and the old price trend beside it, and nothing is gated. A first setting, not fitted. 0 = off
     spot_source: str = ""  # 2026-11-11 (user: "a new curve analysis based on kalshi's data only"): "kalshi" = this lane reads the spot for its curve readings (wave, curve edge, the curve exit's chance) from Kalshi's own prices: a coin's settlement index, else Kalshi's perp reference price for the underlying while it is ticking, the external feed only as a fallback (variants.spot_index). "" = as before (settlement index, else BiQuote). Does not reach the curve model's own features (model_buy), the hot-market gate or the hour-drift gate, which still read the older index
-    max_spot_crosses: int = 0  # buy only when the spot crossed the strike fewer than this many times in the last five minutes (4 = the oscillating variety G). 0 = off. Commodity states: 4+ crossings lost $0.59 a bet in both halves
     entry_trend_seconds: float = 0.0  # buy only when the side's price (mid of the tape's bid and ask, in its own terms) has not fallen over the last this many seconds by more than entry_trend_min (0 = no check). A market that is falling when we would buy lost 16-18% over 7 days; one flat or rising lost 0-5%
     entry_trend_min: float = 0.0  # the least the side's price must have changed over entry_trend_seconds, in dollars (0.0 = not falling; 0.01 = up a cent)
     entry_spike_seconds: float = 0.0  # no buy on a spike (2026-11-02): the side's price (mid) has risen by entry_spike_rise or more over the last this many seconds, or its bid has swung by entry_spike_range or more inside them (0 = off). 242 settled live commodity bets in dollars: rise over 90 s of 30c+ -$44.5 on $149 (-30%), swing of 30c+ -$34.9 on $248, the rest +$73 on $1,289
@@ -217,6 +215,10 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
             raise ValueError(f"lane {name!r}: set needs_model_edge or its old name always, not both")
         row = {k: v for k, v in row.items() if k != "always"} | {"needs_model_edge": not row["always"]}
     known = {f.name for f in fields(LaneSpec)}
+    gone = [k for k in row if k in RETIRED_FIELDS]
+    if gone:
+        log.warning("lane %s: it sets %s, which no longer exist; read without them", name, ", ".join(gone))
+        row = {k: v for k, v in row.items() if k not in RETIRED_FIELDS}
     unknown = set(row) - known
     if unknown:
         raise ValueError(f"lane {name!r}: unknown field(s) {sorted(unknown)}")
@@ -224,7 +226,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "blackout_et", "skip_varieties", "buy_chain", "sell_chain", "late_swing_tiers"):
+    for key in ("series", "sides", "blackout_et", "buy_chain", "sell_chain", "late_swing_tiers"):
         if key in row:
             row[key] = tuple(row[key])
     if any(x in RETIRED_STEPS for x in row.get("buy_chain", ())):
@@ -252,8 +254,9 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "spread", "entry_window", "time_left", "blackout", "volume", "min_return", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow", "binary_risk", "swing_risk", "late_swing", "wave_top", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
-RETIRED_STEPS = ("context_score",)  # steps that no longer exist: a lane file that still names one loads without it and says so in the log, so a config written for an older image does not stop the bot. context_score (shadow, never said no) was removed 2026-11-21: on the bot's own 132 live commodity bets its percentile did not separate the bets that ended ahead from the ones behind (80%, 77%, 80% ahead by thirds)
+BUY_STEPS = ("price", "spread", "entry_window", "time_left", "blackout", "volume", "min_return", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow", "binary_risk", "swing_risk", "late_swing", "wave_top", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+RETIRED_FIELDS = ("max_spot_crosses", "skip_varieties")  # lane settings that no longer exist: a lane file that still writes one loads without it and says so in the log. max_spot_crosses (no buy at 4 or more strike crossings in five minutes) was removed 2026-11-21 at the user's word ("We don't want any of that"): a fixed count, set on the outside BiQuote feed, with no study file behind it. skip_varieties and the `variety` step that read it (no buy of a named curve variety, the live lanes' G-no and A-yes) went the same day at the same word ("That should have been removed"; earlier, 2026-11-19: stable and volatile curves both get bets): no curve shape is refused, the letter stays in the cushion step's note
+RETIRED_STEPS = ("context_score", "variety")  # steps that no longer exist: a lane file that still names one loads without it and says so in the log, so a config written for an older image does not stop the bot. context_score (shadow, never said no) was removed 2026-11-21: on the bot's own 132 live commodity bets its percentile did not separate the bets that ended ahead from the ones behind (80%, 77%, 80% ahead by thirds)
 
 
 def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:
