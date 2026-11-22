@@ -36,6 +36,7 @@ def clean():
     ticks.mids.clear()
     ticks.history.clear()
     buychain.DROPPED.clear()
+    __import__('kalshi_moonshot.perpchance', fromlist=['x']).clear()
     curveexit._cuts.clear()
     curveexit._cuts_at.clear()
 
@@ -209,3 +210,91 @@ def test_integration_the_risk_score_still_picks_the_side_before_the_perp_is_aske
     out = decide(tmp_path, monkeypatch, yes_score=0.60)  # a risk of 40%: the side is out before the perp is read
     assert out.action == "pass" and "YES out at risk_score" in out.note and "perp_worth" not in out.note.split("|")[1]
 
+
+
+# --- 2026-11-21: perp_worth gates on the perp's chance as a LEVEL against the market's own readings; the gap stays in the note ---
+
+
+def _level_settings(tmp_path, monkeypatch, q=0.5, floor=-0.05):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(FILE.format(steps=STEPS, floor=floor).replace("spot_source='kalshi'", f"spot_source='kalshi'\nperp_chance_quantile={q}"))
+    monkeypatch.setattr(riskscore, "live", lambda series, ticker, side, *a, **k: ([0.80 if side == "yes" else 0.20] * 3, 0.5, [0.5] * 3))
+    return config.load()
+
+
+def _history(now, values, series="KXSILVER15M"):
+    """Readings of other markets of the series over the last two hours."""
+    from kalshi_moonshot import perpchance
+
+    perpchance.clear()
+    for k, v in enumerate(values):
+        perpchance.note(series, f"OLD-{k}", "yes", v, now - 7200.0 + k * (7000.0 / len(values)))
+
+
+def test_unit_the_bar_is_a_quantile_of_the_markets_own_last_day_and_needs_history():
+    from kalshi_moonshot import perpchance
+
+    perpchance.clear()
+    now = 1_000_000.0
+    assert perpchance.bar("S", 0.5, now) == (None, 0)
+    for k in range(150):
+        perpchance.note("S", f"m{k}", "yes", 0.50 + k * 0.002, now - 1800.0 + k)  # enough readings, but only half an hour of them
+    assert perpchance.bar("S", 0.5, now)[0] is None
+    perpchance.clear()
+    for k in range(150):
+        perpchance.note("S", f"m{k}", "yes", 0.50 + k * 0.002, now - 7200.0 + k * 40.0)
+    level, n = perpchance.bar("S", 0.5, now)
+    assert n == 150 and level == pytest.approx(0.65, abs=0.003)
+    perpchance.note("S", "m0", "yes", 0.99, now - 7200.0 + 5.0)  # a second reading of one market side inside 10 s is not kept
+    assert perpchance.bar("S", 0.5, now + 61.0)[1] == 150
+    assert perpchance.bar("S", 0.5, now + 86400.0 + 7200.0)[0] is None  # a day later the old readings are gone
+    assert perpchance.quantile_bar([now - 7200.0 + k * 40.0 for k in range(150)], [0.50 + k * 0.002 for k in range(150)], 0.5, now)[0] == pytest.approx(level)
+    perpchance.clear()
+
+
+def test_unit_perp_worth_as_a_level_gates_on_the_chance_and_keeps_the_gap_in_the_note(tmp_path, monkeypatch):
+    s, now = _level_settings(tmp_path, monkeypatch), time.time()
+    perp(now, drift_bp=1.0)
+    p, e = variants.curve_edge_now("KXSILVER15M", "yes", LEFT, 0.80, None, now=now, source="kalshi")
+    _history(now, [p - 0.10] * 200)  # the market's own readings sit under this one
+    got = buychain.perp_worth_step(ctx(s, now), shot("yes"))
+    assert got.ok and "at or over its own bar" in got.why and f"({e:+.3f}" in got.why and "the old gap rule would" in got.why
+    _history(now, [min(0.999, p + 0.05)] * 200)  # ...and now over it: the same chance is refused, whatever its gap to the ask
+    cheap = shot("yes", bid=0.60, ask=0.61)
+    got = buychain.perp_worth_step(ctx(s, now), cheap)
+    assert not got.ok and "under its own bar" in got.why and "the old gap rule would pass" in got.why
+
+
+def test_unit_perp_worth_with_a_short_history_answers_by_the_gap_and_says_so(tmp_path, monkeypatch):
+    from kalshi_moonshot import perpchance
+
+    s, now = _level_settings(tmp_path, monkeypatch), time.time()
+    perpchance.clear()
+    perp(now, drift_bp=10.0)
+    yes, no = buychain.perp_worth_step(ctx(s, now), shot("yes")), buychain.perp_worth_step(ctx(s, now), shot("no", bid=0.19, ask=0.21))
+    assert yes.ok and "no level bar yet" in yes.why and not no.ok and "under the ask 0.21" in no.why
+    assert perpchance.bar("KXSILVER15M", 0.5, now + 61.0)[1] == 2  # the step kept its own readings
+
+
+def test_unit_perp_worth_without_the_level_is_the_gap_rule_unchanged(tmp_path, monkeypatch):
+    s, now = settings(tmp_path, monkeypatch), time.time()
+    perp(now, drift_bp=10.0)
+    got = buychain.perp_worth_step(ctx(s, now), shot("yes"))
+    assert got.ok and "bar" not in got.why and "the lane allows -0.05" in got.why
+
+
+def test_integration_the_level_from_the_lane_file_decides_the_buy(tmp_path, monkeypatch):
+    """Lane file -> module setting -> spec -> the decision (runner.evaluate): the same market is bought when its perp chance is over the series' own bar and passed over when it is under it; the note carries the gap and the old rule's verdict."""
+    s, now = _level_settings(tmp_path, monkeypatch), time.time()
+    assert lanes.spec_for(s, "cm").perp_chance_quantile == 0.5
+    store = Store(s.db_path)
+    regime.reset()
+    perp(now, drift_bp=10.0)
+    store.db.execute("INSERT OR REPLACE INTO windows (ticker, series, close_ts, strike, fetched_ts) VALUES (?,?,?,?,?)", ("KXSILVER15M-7", "KXSILVER15M", now + LEFT, 50.0, now))
+    store.db.commit()
+    _history(now, [0.30] * 200)
+    out = runner.evaluate(s, None, None, store, shot(), estimators={"market": Fixed()})
+    assert out.action == "bet" and "at or over its own bar 0.300" in out.note and "the old gap rule would pass" in out.note, out.note
+    _history(now, [0.9999] * 200)
+    out = runner.evaluate(s, None, None, store, shot(), estimators={"market": Fixed()})
+    assert out.action == "pass" and "YES out at perp_worth" in out.note and "under its own bar" in out.note, out.note

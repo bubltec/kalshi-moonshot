@@ -125,22 +125,35 @@ def kalshi_index(series: str, now: float) -> str | None:
 
 @step("perp_worth")
 def perp_worth_step(ctx: Ctx, shot: LongShot) -> Check:
-    """Kalshi's own price puts the side's chance within reach of the ask (2026-11-18, user, on the commodity lanes' gates: "these are model concepts, they shouldn't be lane options"): the chance read from the Kalshi perp reference (variants.curve_edge_now, source "kalshi": the reading the lane option buy_curve_edge_min has gated on in runner.evaluate) is no more than the lane's buy_curve_edge_min under the ask. It needs no model estimate. No reading is a no."""
+    """Kalshi's own price backs the side (2026-11-18, user, on the commodity lanes' gates: "these are model concepts, they shouldn't be lane options"). The reading is the side's chance from the Kalshi perp reference (variants.curve_edge_now, source "kalshi"). It needs no model estimate. No reading is a no.
+    As a LEVEL (lane field perp_chance_quantile, 2026-11-21): the chance is at or over its own bar, that quantile of this series' own readings of the last day (perpchance.py; CLAUDE.md rule 2, no fixed number). The gap to the ask stays in the note with what the old rule would have said, so both are scored on the bets that follow. While the series' history is short there is no bar and the gap rule answers.
+    As a GAP (perp_chance_quantile 0, the rule until 2026-11-21): the chance is no more than the lane's buy_curve_edge_min under the ask."""
+    from . import perpchance
     from . import ticks as ticks_mod
     from . import variants
 
-    floor = ctx.spec.buy_curve_edge_min
-    if floor <= -1.0:
-        return Check(False, "the lane sets no allowance (buy_curve_edge_min)")
+    floor, q = ctx.spec.buy_curve_edge_min, ctx.spec.perp_chance_quantile
+    if floor <= -1.0 and q <= 0:
+        return Check(False, "the lane sets no allowance (buy_curve_edge_min) and no level (perp_chance_quantile)")
     series = shot.series or shot.ticker.split("-")[0]
     if kalshi_index(series, ctx.now) is None:
         return Check(False, "Kalshi's perp reference is silent, so its chance cannot be read")
     ce = variants.curve_edge_now(series, shot.side, shot.hours_to_close * 3600.0, shot.ask, ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot), now=ctx.now, source="kalshi")
     if ce is None:
         return Check(False, "the perp's chance cannot be read (short history, a stale tick or no reference)")
+    if q > 0:
+        level, n = perpchance.bar(series, q, ctx.now)
+        perpchance.note(series, shot.ticker, shot.side, ce[0], ctx.now)  # after the bar is read: a reading is judged against the ones before it
+        if level is not None:
+            old = "the old gap rule is off" if floor <= -1.0 else f"the old gap rule would {'pass' if ce[1] >= floor else 'refuse'} at {floor:+g}"
+            ok = ce[0] >= level
+            return Check(ok, f"the perp's chance {ce[0]:.3f} is {'at or over' if ok else 'under'} its own bar {level:.3f} (the {q:.0%} point of this market's {n} readings of the last day); against the ask {shot.ask:.2f} ({ce[1]:+.3f}, {old})")
+        if floor <= -1.0:
+            return Check(False, f"the perp's chance {ce[0]:.3f} has no bar yet ({n} readings of this market in memory) and the lane sets no gap allowance")
+    short = f"; no level bar yet ({perpchance.bar(series, q, ctx.now)[1]} readings of this market in memory), so the gap rule answers" if q > 0 else ""
     if ce[1] < floor:
-        return Check(False, f"the perp's chance {ce[0]:.3f} is {-ce[1]:.3f} under the ask {shot.ask:.2f}, the lane allows {-floor:g}")
-    return Check(True, f"the perp's chance {ce[0]:.3f} against the ask {shot.ask:.2f} ({ce[1]:+.3f}, the lane allows {floor:+g})")
+        return Check(False, f"the perp's chance {ce[0]:.3f} is {-ce[1]:.3f} under the ask {shot.ask:.2f}, the lane allows {-floor:g}{short}")
+    return Check(True, f"the perp's chance {ce[0]:.3f} against the ask {shot.ask:.2f} ({ce[1]:+.3f}, the lane allows {floor:+g}){short}")
 
 
 @step("calm")
