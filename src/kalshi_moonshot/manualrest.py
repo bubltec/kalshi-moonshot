@@ -122,9 +122,17 @@ class ManualRest:
                 self.said[ticker] = price
                 return f"would rest an ask at {price:.2f} for {count:g} {side} (trading is off)"
             return ""
+        life = min(ORDER_LIFE, left - 3.0)
+        if w is not None and alive and life >= 5.0 and hasattr(self.client, "amend_resting"):
+            try:  # update the working ask in place (CLAUDE.md, 2026-11-22), with a fresh expiry; cancel and place is the fallback
+                self.client.amend_resting(w.order_id, ticker, side, "sell", price, round(count, 2), seconds=life)
+            except KalshiError as exc:
+                log.info("manual rest: the amend of %s on %s to %.2f was refused (%s); cancelling and placing again", w.order_id, ticker, price, exc)
+            else:
+                self.working[ticker] = Working(w.order_id, price, count, now)
+                return f"ask amended to {price:.2f} for {count:g} {side} (was {w.price:.2f})"
         if w is not None:
             self.cancel(ticker)
-        life = min(ORDER_LIFE, left - 3.0)
         if life < 5.0:
             return ""
         try:

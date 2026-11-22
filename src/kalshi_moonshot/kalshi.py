@@ -555,6 +555,27 @@ class KalshiClient:
         return resp if side == "yes" else _as_no(resp)
 
 
+    def amend_resting(
+        self, order_id: str, ticker: str, side: str, action: str, price: float, count: float, seconds: float | None = None
+    ) -> dict[str, Any]:
+        """Move one resting order to `price` (that side's own price) and `count` (the order's TOTAL: what has filled plus what should still rest) in place, with Kalshi's V2 amend call (the architecture rule "a resting order is updated in place", CLAUDE.md, 2026-11-22).
+
+        `side` is "yes" or "no" and `action` "buy" or "sell", as the order was placed; the call itself names the YES leg only: a YES buy and a NO sell are bids at the YES price, a NO buy and a YES sell are asks at it (the way buy_resting and sell_resting send them). The order keeps its id and its expiry; `seconds` gives it a new one that long from now. A price change puts the order at the back of the queue, and an amend that changes nothing is refused (AMEND_ORDER_NO_OP), so a caller moves an order only to a different price. Returns Kalshi's answer with the order's id filled in. Raises KalshiError when the exchange refuses (the order filled, expired or was cancelled meanwhile, or the call is not supported there): the caller then falls back to cancel and place.
+        """
+        yes_price = price if side == "yes" else 1.0 - price
+        body: dict[str, Any] = {
+            "ticker": ticker,
+            "side": "bid" if (side == "yes") == (action == "buy") else "ask",
+            "price": f"{yes_price:.4f}",  # as buy_resting sends it
+            "count": f"{count:.2f}",
+        }
+        if seconds is not None:
+            body["expiration_time"] = int(time.time() + seconds)
+        resp = self._request("POST", f"/portfolio/events/orders/{order_id}/amend", json=body, auth=True)
+        out = dict(resp) if isinstance(resp, dict) else {}
+        out.setdefault("order_id", order_id)
+        return out
+
     def cancel_order(self, order_id: str) -> dict[str, Any]:
         """Cancel one open order by id. Kalshi answers with the order's last state; a fill that beat the cancel is on it (and in the fills list)."""
         return self._request("DELETE", f"/portfolio/events/orders/{order_id}", auth=True)

@@ -1496,6 +1496,17 @@ def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count
     want = round(max(0.01, live_ask - spec.buy_rest_below), 4)
     if not withdraw and want >= price - 1e-9:
         return None  # a risen ask never raises the price
+    if not withdraw and hasattr(client, "amend_resting"):
+        # Update the order where it stands (CLAUDE.md, 2026-11-22: "a resting order is updated in place"): same order, same expiry, the new price, for the whole count (what has filled stays filled). Cancel and place is the fallback when the exchange refuses the amend.
+        left_now = round(count - rest.filled, 2)
+        if left_now * want >= s.min_order_usd:
+            try:
+                resp = client.amend_resting(order_id, shot.ticker, shot.side, "buy", want, count)
+            except KalshiError as exc:
+                log.info("resting buy %s %s: the amend to %.2f was refused (%s); cancelling and placing again", shot.ticker, shot.side, want, exc)
+            else:
+                log.info("resting buy %s %s: the ask fell to %.2f, the order amended in place from %.2f to %.2f for %g", shot.ticker, shot.side, live_ask, price, want, left_now)
+                return resp.get("order_id") or order_id, want
     try:
         client.cancel_order(order_id)
     except KalshiError as exc:
