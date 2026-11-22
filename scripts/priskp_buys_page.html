@@ -5,7 +5,7 @@
 :root{--bg:#fafaf7;--fg:#1d1d1b;--mut:#6b6b66;--card:#fff;--line:#dcdcd4;--win:#1a7f4b;--loss:#b3261e;--weak:#a86a00;--c1:#2c5aa0;--c2:#b3261e;--c3:#1a7f4b}
 @media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#ececE6;--mut:#9a9a92;--card:#1d1d1b;--line:#33332f;--win:#4cc38a;--loss:#ff7b72;--weak:#e3a948;--c1:#7aa7e8;--c2:#ff7b72;--c3:#4cc38a}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 -apple-system,system-ui,Segoe UI,sans-serif;padding:16px;max-width:980px;margin:0 auto}
-h1{font-size:20px;margin:4px 0 8px}h2{font-size:17px;margin:26px 0 8px}p{margin:6px 0}.mut{color:var(--mut);font-size:13px}
+h1{font-size:20px;margin:4px 0 8px}h2{font-size:17px;margin:26px 0 8px}h3{font-size:15px;margin:14px 0 4px}p{margin:6px 0}.mut{color:var(--mut);font-size:13px}
 table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left;white-space:normal}
 .wrap{overflow-x:auto}.win{color:var(--win)}.loss{color:var(--loss)}.weak{color:var(--weak)}.beat{font-weight:600}
 .row{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:8px 10px}
@@ -37,8 +37,7 @@ button{font:inherit;background:none;border:1px solid var(--line);color:var(--fg)
 <p class="mut">Every earlier crypto table (all of them inside a 0.60-0.85 band with the commodity lane's resting order, and the "from minute 10" ones) is superseded by this run.</p>
 
 <div id="sum"></div>
-<h2>Biggest losers</h2><div id="losers"></div>
-<h2>Biggest winners</h2><div id="winners"></div>
+<h2>Biggest losers and winners</h2><p class="mut">Ranked by dollars, which price drives (a cheap buy wins and loses more dollars), so the all-prices lists are mostly cheap buys. Pick a price group:</p><div class="ctl"><select id="lg"><option value="fav">Favorites: ask 0.65 and up</option><option value="mid">Ask 0.65 to 0.85</option><option value="fav85">Ask 0.85 and up</option><option value="low">Ask under 0.65 (cheap and barely-favorite)</option><option value="all">All prices</option></select></div><h3>Biggest losers</h3><div id="losers"></div><h3>Biggest winners</h3><div id="winners"></div>
 <h2>Every buy</h2>
 <div class="ctl"><select id="grp"><option value="model">The model's buys</option><option value="refused">Refused (plain order's buy the checks blocked)</option></select>
 <select id="out"><option value="">won or lost</option><option value="w">won</option><option value="l">lost</option></select>
@@ -81,11 +80,12 @@ function chart(r){const c=r.ch,W=640,H=330,L=36,R=8,xs=(i,n)=>L+(W-L-R)*i/(n-1);
  const bx=openX+(W-R-openX)*(c.buy_s/900);
  return `<svg viewBox="0 0 ${W} ${H}"><text x="${L}" y="9">settlement index vs strike, % (60 min before the open to the close)</text><line x1="${L}" x2="${W-R}" y1="${y1(0)}" y2="${y1(0)}" stroke="var(--mut)" stroke-dasharray="4 3"/><path d="${p1}" fill="none" stroke="var(--c1)" stroke-width="1.4"/><line x1="${openX}" x2="${openX}" y1="10" y2="180" stroke="var(--line)"/><line x1="${buyX}" x2="${buyX}" y1="10" y2="320" stroke="var(--c3)" stroke-width="1.5"/><text x="${buyX+3}" y="22" style="fill:var(--c3)">buy</text><text x="2" y="${y1(hi)+8}">${hi.toFixed(2)}</text><text x="2" y="${y1(lo)}">${lo.toFixed(2)}</text><text x="2" y="${y1(0)-2}">0</text><text x="${openX+3}" y="190">open</text>
  <text x="${L}" y="238">${r.sd.toUpperCase()} side bid (blue) and ask (red) from the open, price 0 to 1</text><line x1="${openX}" x2="${W-R}" y1="${y2(r.p)}" y2="${y2(r.p)}" stroke="var(--c3)" stroke-dasharray="4 3"/><path d="${line(0)}" fill="none" stroke="var(--c1)" stroke-width="1.4"/><path d="${line(1)}" fill="none" stroke="var(--c2)" stroke-width="1.2"/><text x="2" y="${y2(1)+8}">1.00</text><text x="2" y="${y2(0)}">0</text><text x="${W-R-60}" y="${y2(r.p)-3}" style="fill:var(--c3)">paid ${r.p.toFixed(2)}</text></svg>`}
-function fill(id,ts){const el=$(id);ts.forEach(t=>el.appendChild(rowEl(byT[t],true)))}
+function fill(id,ts){const el=$(id);el.innerHTML="";ts.forEach(t=>el.appendChild(rowEl(byT[t],true)))}
+function lists(){const g=D.lists[$("lg").value];fill("losers",g.losers);fill("winners",g.winners)}
 let shown=0,cur=[];
 function render(reset){if(reset){$("list").innerHTML="";shown=0;const g=$("grp").value,o=$("out").value,s=$("sd").value,sg=$("sg").value,q=$("q").value.toUpperCase();cur=D[g].filter(r=>(!o||(o==="w")===r.w)&&(!s||r.sd===s)&&(!sg||r.sg===sg)&&(!q||r.t.includes(q))&&r.p>=parseFloat($("p0").value||0)&&r.p<=parseFloat($("p1").value||1)&&r.m>=parseFloat($("m0").value||0)&&r.m<=parseFloat($("m1").value||99));cur.sort((a,b)=>a.n-b.n);$("cnt").textContent=cur.length+" buys";}
  cur.slice(shown,shown+60).forEach(r=>$("list").appendChild(rowEl(r,$("grp").value==="model")));shown+=60;$("more").style.display=shown<cur.length?"":"none"}
 D.segs.forEach(s=>{const o=document.createElement("option");o.textContent=s;$("sg").appendChild(o)});
-sumTable();fill("losers",D.losers);fill("winners",D.winners);
+sumTable();$("lg").addEventListener("input",lists);lists();
 ["grp","out","sd","sg","q","m0","m1","p0","p1"].forEach(i=>$(i).addEventListener("input",()=>render(true)));$("more").onclick=()=>render(false);render(true);
 </script></body></html>

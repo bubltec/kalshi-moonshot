@@ -36,11 +36,14 @@ def slim(r, full):
         if r["ticker"] in FEAT: o["hr"] = r.get("hr"); o["ch"] = r.get("chart")
     return o
 ranked0 = sorted(model, key=lambda r: r["net"])
-FEAT.update(r["ticker"] for r in ranked0[:150] + ranked0[-150:])  # charts and hour profiles for the 150 biggest losers and 150 biggest winners (a page of every chart would pass 16 MB)
+GROUPS = {"all": lambda r: True, "fav": lambda r: r["price"] >= 0.65, "fav85": lambda r: r["price"] >= 0.85, "mid": lambda r: 0.65 <= r["price"] < 0.85, "low": lambda r: r["price"] < 0.65}
+for gname, gf in GROUPS.items():  # the biggest losers and winners of each price group carry a chart: dollars are driven by price, so the all-prices lists show the cheapest buys
+    gr = [r for r in ranked0 if gf(r)]
+    FEAT.update(r["ticker"] for r in gr[:60] + gr[-60:])
+FEAT.update(r["ticker"] for r in ranked0[:100] + ranked0[-100:])  # charts and hour profiles for the 150 biggest losers and 150 biggest winners (a page of every chart would pass 16 MB)
 data = {"model": [slim(r, True) for r in model], "refused": [slim(r, False) for r in refused], "summary": summary, "segs": segs}
 ranked = sorted(model, key=lambda r: r["net"])
-data["losers"] = [r["ticker"] for r in ranked[:30]]
-data["winners"] = [r["ticker"] for r in ranked[::-1][:30]]
+data["lists"] = {g: {"losers": [r["ticker"] for r in [x for x in ranked if f(x)][:30]], "winners": [r["ticker"] for r in [x for x in ranked[::-1] if f(x)][:30]]} for g, f in GROUPS.items()}
 html = open(__file__.replace("priskp_buys_page.py", "priskp_buys_page.html")).read().replace("/*DATA*/null", json.dumps(data, separators=(",", ":")))
 open(sys.argv[2], "w").write(html)
 print(f"{len(model)} model buys, {len(plain)} plain buys, {len(refused)} refused; page {len(html) / 1e6:.1f} MB")

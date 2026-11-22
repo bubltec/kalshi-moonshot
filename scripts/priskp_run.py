@@ -187,7 +187,14 @@ def build(job):
                    "raw": {k: (None if v is None else round(v, 4)) for k, v in raw.items()}}
             if rule == "model" or True:
                 row["hr"] = hour_profile(m, sd, s_open)
-            if rule == "model": row["chart"] = chart(m, sd, s_open, price)
+            if rule == "model":
+                row["chart"] = chart(m, sd, s_open, price)
+                # the side's bid every 10 s after the buy to the close (for the exit study); a quote older than 30 s is None
+                bids = []
+                for x in range(int(s_open // 10) + 1, 91):
+                    jq = bisect.bisect_right(m["qt"], m["opened"] + 10.0 * x) - 1
+                    bids.append(None if jq < 0 or m["opened"] + 10.0 * x - m["qt"][jq] > 30.0 else round(m["qb"][jq] if sd == "yes" else 1.0 - m["qa"][jq], 3))
+                row["bids"] = bids
             out.append(row)
     return out, len(M)
 
