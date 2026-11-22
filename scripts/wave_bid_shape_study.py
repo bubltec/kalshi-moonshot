@@ -98,7 +98,7 @@ for w in sorted(cache.windows, key=lambda x: (x["close"], x["ticker"])):
         win = bid_s[t : t + LOOK + 1]
         cross = sum(1 for x, y in zip(win, win[1:], strict=False) if (x - ask) * (y - ask) < 0)
         won = side == w["result"]
-        bets.append({"bid": bid_s, "mid": [0.5 * (bids[x] + asks[x]) for x in range(n)], "t": t, "n": n, "close": close, "side": side, "ask": ask, "won": won, "H": hold_net(ask, won), "range_u": (max(win) - min(win)) / u, "cross": cross, "swings": swings(win, 0.5 * u)})
+        bets.append({"u": u, "bid": bid_s, "mid": [0.5 * (bids[x] + asks[x]) for x in range(n)], "t": t, "n": n, "close": close, "side": side, "ask": ask, "won": won, "H": hold_net(ask, won), "range_u": (max(win) - min(win)) / u, "cross": cross, "swings": swings(win, 0.5 * u)})
         break
 
 
@@ -106,7 +106,7 @@ def fee1(p):
     return 0.07 * p * (1 - p)
 
 
-def staircase(b, k=0.25, p=0.5):
+def staircase(b, k=0.25, p=0.5, from_t=0):
     """The lane's staircase with its defaults (cushion off, no high-zone rule): the sale's net dollars, or the hold result."""
     ask, bid, mid, t, n = b["ask"], b["bid"], b["mid"], b["t"], b["n"]
     basis = ask + fee1(ask)
@@ -129,7 +129,17 @@ def staircase(b, k=0.25, p=0.5):
             lo = min(lo, x)
             if x - lo >= rev - 1e-9:
                 last, d, hi = lo, 1, x
-        if best > 0 and d < 0 and last > 0 and x < last - 1e-9:
+        if s_ >= b["t"] + from_t and best > 0 and d < 0 and last > 0 and x < last - 1e-9:
+            return QTY * x - fee(x) - (QTY * ask + fee(ask))
+    return b["H"]
+
+
+def stop(b, m):
+    """Sell at the bid the first second after the shape is read (120 s) that it is m of the bid's typical minutes under the price paid."""
+    ask, bid, t, n, u = b["ask"], b["bid"], b["t"], b["n"], b["u"]
+    for s_ in range(t + LOOK, n - 3):
+        if bid[s_] <= ask - m * u:
+            x = bid[s_]
             return QTY * x - fee(x) - (QTY * ask + fee(ask))
     return b["H"]
 
@@ -162,4 +172,14 @@ for lab, test in (("calm   range <= %.2f" % c1, lambda v: v <= c1), ("middle", l
     rows = [b for b in bets if test(b["range_u"])]
     st = [staircase(b) for b in rows]
     print(f"  {lab:24s} n={len(rows):4d}  hold {sum(b['H'] for b in rows):9.2f}  staircase {sum(st):9.2f}")
+print("\nSPLIT SALE: the whipsaw third is held; the calm and the middle thirds get an exit read from 120 s after the buy (an exit that never fires holds). Totals in dollars, hold to settlement for all 1,473 bets = %.2f" % sum(b["H"] for b in bets))
+whip = [b for b in bets if b["range_u"] > c2]
+rest_calm = [b for b in bets if b["range_u"] <= c1]
+rest_mid = [b for b in bets if c1 < b["range_u"] <= c2]
+print(f"  whipsaw held {sum(b['H'] for b in whip):8.2f} | calm held {sum(b['H'] for b in rest_calm):8.2f} | middle held {sum(b['H'] for b in rest_mid):8.2f}")
+policies = [("staircase k0.25 p0.5", lambda b: staircase(b, 0.25, 0.5, LOOK)), ("staircase k0.5 p1", lambda b: staircase(b, 0.5, 1.0, LOOK)), ("staircase k1 p1", lambda b: staircase(b, 1.0, 1.0, LOOK))] + [(f"stop {m} typical minutes under the price", (lambda mm: (lambda b: stop(b, mm)))(m)) for m in (0.5, 1.0, 2.0, 3.0)]
+for lab, fn in policies:
+    c_ = sum(fn(b) for b in rest_calm)
+    m_ = sum(fn(b) for b in rest_mid)
+    print(f"  {lab:40s} calm {c_:9.2f}  middle {m_:9.2f}  | whole policy (whipsaw held) calm-only {sum(b['H'] for b in whip) + c_ + sum(b['H'] for b in rest_mid):9.2f}  calm+middle {sum(b['H'] for b in whip) + c_ + m_:9.2f}")
 print(f"\n{time.time() - t_start:.0f} s")

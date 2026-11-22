@@ -38,4 +38,14 @@ STAIRCASE (lane defaults, cushion off, no high zone, backup on) against hold, by
   middle                   n= 491  hold   -257.85  staircase   -898.62
   whipsaw range > 2.16     n= 490  hold   1100.43  staircase    567.69
 
-31 s
+SPLIT SALE: the whipsaw third is held; the calm and the middle thirds get an exit read from 120 s after the buy (an exit that never fires holds). Totals in dollars, hold to settlement for all 1,473 bets = 170.66
+  whipsaw held  1100.43 | calm held  -671.92 | middle held  -257.85
+  staircase k0.25 p0.5                     calm   -952.68  middle   -935.84  | whole policy (whipsaw held) calm-only   -110.10  calm+middle   -788.09
+  staircase k0.5 p1                        calm   -766.50  middle   -446.68  | whole policy (whipsaw held) calm-only     76.09  calm+middle   -112.74
+  staircase k1 p1                          calm   -682.15  middle   -277.06  | whole policy (whipsaw held) calm-only    160.43  calm+middle    141.22
+  stop 0.5 typical minutes under the price calm   -961.81  middle   -931.01  | whole policy (whipsaw held) calm-only   -119.23  calm+middle   -792.40
+  stop 1.0 typical minutes under the price calm   -785.72  middle   -701.45  | whole policy (whipsaw held) calm-only     56.86  calm+middle   -386.74
+  stop 2.0 typical minutes under the price calm   -650.55  middle   -411.35  | whole policy (whipsaw held) calm-only    192.03  calm+middle     38.53
+  stop 3.0 typical minutes under the price calm   -652.57  middle   -252.60  | whole policy (whipsaw held) calm-only    190.01  calm+middle    195.26
+
+64 s
