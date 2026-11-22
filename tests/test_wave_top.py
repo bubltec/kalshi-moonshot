@@ -325,31 +325,99 @@ def test_integration_the_sell_step_sells_a_dipped_bet(tmp_path, monkeypatch, mem
 
 
 # ---- the take sales (wave_take) ----
-def test_integration_wave_take_sells_the_resting_forty_and_the_twenty_that_stopped_rising(tmp_path, monkeypatch, mem):
-    from kalshi_moonshot import curverisk, watcher
+def spot_feed(now, level, wobble=0.01):
+    T = [now - 1500.0 + k for k in range(1501)]
+    V = [level + wobble * (-1) ** k for k in range(1501)]
+    ticks_mod.history.clear()
+    ticks_mod.history.warm(INDEX, list(zip(T, V, strict=True)), T[0] - 1.0)
+
+
+def take_target(tmp_path, monkeypatch, entry, unit=0.10):
     from tests.test_risk_exit_flow import CLOSE, TICKER as HELD, held
 
     w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['wave_take']")
     t = w.targets[(HELD, "risk_only")]
-    t.entry, t.bought_ts = 0.30, CLOSE - 800.0
+    t.entry, t.bought_ts, t.side = entry, CLOSE - 800.0, "yes"
+    t.shock_index, t.shock_ref = INDEX, 100.0
+    monkeypatch.setattr(w, "_risk_unit", lambda tt, now: unit)  # the bid's typical minute
+    return w, t, CLOSE
+
+
+def asker(w, t, close):
+    from kalshi_moonshot import curverisk, watcher
+
     risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
     c = watcher._SellWalk(30.0, 0.83, 0.78, None)
 
-    def ask(bid, at):
+    def ask(bid, left):
         with memguard.decision("sell"):
-            return w._sell_wave_take(t, risk, bid, at, CLOSE - at, 0.0, c)
+            return w._sell_wave_take(t, risk, bid, close - left, left, 0.0, c)
 
-    t0 = CLOSE - 800.0
-    assert ask(0.35, t0 + 20) is None and ask(0.45, t0 + 40) is None  # +0.15: not yet
-    assert ask(0.50, t0 + 60) is None  # +0.20 and a new high: still rising
-    assert ask(0.50, t0 + 65) is None  # no new high for 5 s: a quarter of the 60 s run is 15 s
-    assert ask(0.49, t0 + 76) is None  # 16 s without a new high but the bid is back under +0.20
-    why = ask(0.50, t0 + 77)
-    assert why and why.startswith("wave take") and "slowed" in why  # +0.20 and 17 s without a new high (a quarter of the 60 s run is 15 s)
-    assert ask(0.60, t0 + 80) is None  # a new high resets the wait
-    spike = ask(0.70, t0 + 81)
-    assert spike and "resting sale at +0.40" in spike
+    return ask
+
+
+def test_unit_the_spot_reading_and_the_chance_of_losing():
+    now = 1_000_000.0
+    T = [now - 700.0 + k for k in range(701)]
+    V = [101.0 + 0.01 * (-1) ** k for k in range(701)]
+    cushion, unit = wavetop.spot_read(T, V, now, 100.0, "yes")
+    assert cushion == pytest.approx(1.0, abs=0.01) and unit == pytest.approx(0.02 * 7.746, abs=0.005)
+    assert wavetop.spot_read(T, V, now, 100.0, "no")[0] == pytest.approx(-1.0, abs=0.01)  # a NO bet reads it the other way
+    assert wavetop.spot_read(T, V, now + 60.0, 100.0, "yes") is None  # stale ticks
+    assert wavetop.spot_read(T[-30:], V[-30:], now, 100.0, "yes") is None  # too little history
+    assert wavetop.p_lose(1.0, 1.0, 60.0) == pytest.approx(0.1587, abs=0.001)  # one typical move of cushion with a minute left
+    assert wavetop.p_lose(1.0, 1.0, 240.0) == pytest.approx(0.3085, abs=0.001) and wavetop.p_lose(1.0, 1.0, 15.0) == pytest.approx(0.0228, abs=0.001)  # more time, more chance to lose
+    assert wavetop.p_lose(-1.0, 1.0, 60.0) > 0.8
+
+
+def test_integration_the_staircase_sells_the_first_lower_low_ahead_and_the_resting_forty(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.30, unit=0.20)  # a reversal of 0.25 x 0.20 x sqrt(60 / 60) = 0.05 at a minute left
+    ask = asker(w, t, close)
+    for bid in (0.28, 0.36, 0.41, 0.35, 0.41, 0.48, 0.41):  # a climb, a pullback of 0.06, a bounce of 0.06 (the low 0.35 is confirmed), a higher high, a pullback
+        assert ask(bid, 60) is None
+    assert ask(0.36, 60) is None  # a higher low than... it is still above the last swing low 0.35
+    why = ask(0.34, 60)
+    assert why and why.startswith("wave take") and "last swing low 0.35" in why and "a gain of" in why and "swings of 0.050" in why
     t.wave_peak_bid = 0.0
-    assert ask(0.44, t0 + 200) is None  # +0.14: neither sale
-    t.bought_ts = 0.0
-    assert ask(0.80, t0 + 300) is None  # no buy time, nothing is read
+    assert ask(0.70, 50) and "resting sale at +0.40" in ask(0.70, 49)
+
+
+def test_integration_the_backup_accepts_a_small_loss_on_a_bet_that_was_ahead(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.30, unit=0.20)
+    ask = asker(w, t, close)
+    for bid in (0.36, 0.42, 0.36, 0.33, 0.39, 0.45, 0.39, 0.34):  # ahead at 0.42, a swing low of 0.33 confirmed, a higher high, then back toward it
+        assert ask(bid, 60) is None
+    why = ask(0.32, 60)  # under the last swing low and under the cost: the bet had been ahead
+    assert why and "a small loss of" in why and "had been ahead" in why
+
+
+def test_integration_a_bet_that_was_never_ahead_is_not_sold_by_the_staircase(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.30, unit=0.20)
+    ask = asker(w, t, close)
+    for bid in (0.29, 0.31, 0.26, 0.28, 0.33, 0.20, 0.15):  # never ahead after both fees: the salvage's business
+        assert ask(bid, 60) is None
+
+
+def test_integration_the_reversal_is_wide_with_time_left_and_narrows_toward_the_close(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.30, unit=0.20)
+    ask = asker(w, t, close)
+    for bid in (0.36, 0.42, 0.36, 0.42, 0.50):
+        ask(bid, 600)  # a lot of time left: swings of 0.25 x 0.20 x sqrt(10) = 0.158: a 0.06 pullback is no swing
+    assert t.wave_dir >= 0 and t.wave_last_low == 0.0
+    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
+    for bid in (0.36, 0.42, 0.36, 0.42):
+        ask(bid, 60)  # a minute left: swings of 0.05
+    assert t.wave_last_low == pytest.approx(0.36)
+
+
+def test_integration_in_the_high_zone_it_holds_only_while_it_cannot_likely_lose(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.50, unit=0.10)
+    ask = asker(w, t, close)
+    spot_feed(close - 2.0, 102.0)  # a cushion of 2 against a typical move of 0.15: out of reach with 30 s left
+    assert ask(0.85, 30) is None and ask(0.85, 29) is None  # held: it will not lose
+    spot_feed(close - 2.0, 100.03)  # a cushion of 0.03: the bet could still be lost
+    why = ask(0.85, 28)
+    assert why and "high zone" in why and "chance of losing" in why
+    t.wave_peak_bid = 0.0
+    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
+    assert ask(0.75, 28) is None  # under 0.80 the zone's comparison is not asked

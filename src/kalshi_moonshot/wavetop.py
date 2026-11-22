@@ -12,7 +12,7 @@ The buy (buy step `wave_top`):
   turn    the raw spot has crossed to the other side of the average (below it on a peak, above it on a dip) while the average has not yet come off its extreme by more than TURN_A units: the spot has started to go the opposite way and the average has not shown it yet. This is the buy: the average lags the spot by about half a minute and Kalshi's price follows the spot, so waiting for the average itself to turn buys after the flip (user, 2026-11-22, on ZEC 18:18 and XRP 02:31: "the flip had already happened when you bought").
   side    NO on a peak, YES on a dip (the side the average is NOT on). A lane's price band says how cheap it must be.
   trend   a dip bet (YES) is not taken when the spot at the open is above its value wave_top_trend_hours before (user: "if the past hour has been rising. i wouldn't give it a whole day"); with no value in memory a dip bet is not taken.
-The sale (sell steps `wave_take` and `wave_salvage`): your resting sale at the entry plus RESTING (a bid at or over it sells), a sale at the entry plus TAKE once the bid has stopped making new highs for a quarter of the run so far, and the salvage of a bet that went under water: its bid at least one of its own typical minutes under the bid at the buy is sold once its bid has come at least half a unit off its low, the climb over the last quarter of the time since the low has slowed to a quarter of the run's pace, and the spot has stopped moving the bet's way over that stretch.
+The sale (sell steps `wave_take` and `wave_salvage`): your resting sale at the entry plus RESTING (a bid at or over it sells), and the STAIRCASE (user, 2026-11-22: "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c"; "I like wide early with a back up for avoid loss that accepts a small loss"): the bid's swings are cut at a reversal of rev = max(TICK, REV_K x the bid's typical minute x sqrt(max(time left, 60) / 60)) (wide with a lot of time left, narrowing toward the close), and the bet is sold the first time the bid falls under the previous swing low (a lower low: the climb is done) once the bet has been ahead after both fees, at a gain or at a small loss; and in the high-bid zone (HIGH and over) a bet that is ahead is held only while the chance of losing it, from the spot's cushion over the target in its own typical moves and the time left, is under what the sale nets now (the sale when P_lose >= 1 - bid + fee); and the salvage of a bet that went under water: its bid at least one of its own typical minutes under the bid at the buy is sold once its bid has come at least half a unit off its low, the climb over the last quarter of the time since the low has slowed to a quarter of the run's pace, and the spot has stopped moving the bet's way over that stretch.
 
 2026-11-22: the buy was rebuilt on the average curve against the target. The first version (raw spot, a wave of at least 2 typical minutes, top 10% of the market's own legs, bought AFTER the leg and its bounce) bought nine bets on 11-21 and 11-22 for -$0.56: six lost, and the user's review found the entries came after the flip, on the wrong end (ZEC 18:18 bought YES 14 s after the drop through the target that followed the spike; XRP 02:31 bought NO 49 s after the jump through it). The settings below (MIN_MOVE_A, TURN_A, LEG_A, TAKE) are mine, chosen after those cases, not studied: a lead, on paper first (CLAUDE.md rule 5). The earlier evidence for the first version is in scripts/spot_wave_replay_cache.py and studies/results/2026-11-21-spot-wave-*.txt, which still run `Zig` on the raw spot.
 
@@ -37,7 +37,9 @@ BOUNCE_U = 0.10  # ... and has bounced this far off its low since
 LOOK = 3500  # seconds of legs before the open
 UNIT_SPAN = 3600  # the typical minute is read over this long before the open
 RESTING = 0.40  # the user's resting sale, entry plus this
-TAKE = 0.20  # the user's "+20c or more", sold once the bid stops making new highs
+TICK = 0.01  # the exchange's price step: a turn down from the high is at least one tick (a bid that stays at its high is not a turn)
+HIGH = 0.80  # the high-bid zone's start (the user's "80-100c range"): from here a bet is held only while it cannot likely lose
+REV_K = 0.25  # the staircase's reversal in the bid's typical minutes at one minute left: mine, the best of 0.25 to 1 on the two NEAR bets, to be set by the replay over the wave bets and the study cache (CLAUDE.md rule 4)
 AVG_SECONDS = 60  # the average curve: the settlement's own span
 LEG_A = 0.25  # legs of the average are confirmed when it comes this far (in its own typical minutes) off the extreme
 MIN_MOVE_A = 0.5  # the running leg of the average is at least this long
@@ -82,6 +84,34 @@ def typical_minute(sp: list[float], i_open: int) -> float:
     """The root-mean-square 60-second change over the UNIT_SPAN seconds before index i_open, read every 10 s."""
     ch = [sp[k] - sp[k - 60] for k in range(max(60, i_open - UNIT_SPAN + 60), i_open, 10)]
     return math.sqrt(sum(c * c for c in ch) / len(ch)) if ch else 0.0
+
+
+def norm_cdf(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def spot_read(T: list[float], V: list[float], now: float, strike: float, side: str) -> tuple[float, float] | None:
+    """The spot's cushion over the target for the bet and its typical minute, from the last ten minutes of ticks: (cushion, unit), the cushion the 60-second average's distance past the strike on the bet's side (negative = on the wrong side), the unit the root-mean-square one-second change times sqrt(60). None when the ticks do not cover the last minute or are too few."""
+    if not T or now - T[-1] > 10.0 or strike <= 0:
+        return None
+    end = int(now) + 1
+    sp = grid(T, V, end - 600, end)
+    last = sp[-AVG_SECONDS:]
+    if len(last) < AVG_SECONDS or None in last:
+        return None
+    avg = sum(last) / AVG_SECONDS  # type: ignore[arg-type]
+    ch = [b - a for a, b in zip(sp, sp[1:], strict=False) if a is not None and b is not None]
+    if len(ch) < 60:
+        return None
+    unit = math.sqrt(sum(c * c for c in ch) / len(ch)) * math.sqrt(60.0)
+    if unit <= 0:
+        return None
+    return ((avg - strike) if side == "yes" else (strike - avg)), unit
+
+
+def p_lose(cushion: float, unit: float, left: float) -> float:
+    """The chance the spot's average ends on the wrong side: the cushion over what a random walk moves in the time left (its typical minute x sqrt(left / 60))."""
+    return norm_cdf(-cushion / (unit * math.sqrt(max(left, 1.0) / 60.0)))
 
 
 class Zig:

@@ -200,6 +200,11 @@ class Target:
     wave_peak_bid: float = 0.0  # the highest bid the wave_take step has seen on this bet since the buy
     wave_peak_ts: float = 0.0  # and when
     wave_take_logged: bool = False
+    wave_dir: int = 0  # the staircase: 1 rising, -1 pulling back, 0 not started
+    wave_hi: float = 0.0
+    wave_lo: float = 0.0
+    wave_last_low: float = 0.0  # the last confirmed swing low (0 = none yet)
+    wave_best_net: float = -9.0  # the best net gain a contract the bet has shown, after both fees
     wave_failed: bool = False
     risk_time_to_go: float = 0.0  # seconds before the close in which time_to_go may sell (lane field curve_risk_time_to_go); 0 = off
     risk_time_to_go_chance: float = 0.5
@@ -768,8 +773,21 @@ class ProfitWatcher:
             return reason
         return None
 
+    def _wave_spot(self, t: Target, now: float) -> tuple[float, float] | None:
+        """The spot's cushion over the target for this bet and the spot's typical minute (wavetop.spot_read), from the tick memory; None when the lane has no reading armed or the ticks are stale."""
+        if not t.shock_index or t.shock_ref <= 0:
+            return None
+        from . import wavetop
+
+        got = ticks_mod.history.window(t.shock_index, now - 620.0, now)
+        return wavetop.spot_read(got[0], got[1], now, t.shock_ref, t.side) if got and got[0] else None
+
     def _sell_wave_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
-        """Sell step wave_take (wavetop.py; 2026-11-22, user, on how they sell these: "aim for +20c or more and wait until the move slows" and "a resting sale at about +40c for spikes"). Two sales at the bid on a bet that is ahead: the bid has reached the entry plus RESTING (the resting sale would have filled), or it has reached the entry plus TAKE and has made no new high for a quarter of the run so far (the move has slowed: the wait scales with the run, never fixed seconds), never under 3 s. The bet's own price, not the spot, answers it."""
+        """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "a resting sale at about +40c for spikes", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid:
+        1. the bid is RESTING (0.40) over the price paid;
+        2. the staircase: the bid's swings are cut at rev = max(TICK, REV_K x the bid's typical minute x sqrt(max(left, 60) / 60)); the first time the bid falls under the previous swing low (a lower low: the climb is done) it is sold, if the bet has ever been ahead after both fees: at a gain, or at a small loss (the backup that avoids a total loss);
+        3. from HIGH (0.80) up, a bet that is ahead is sold when the chance of losing it (wavetop.p_lose: the spot's cushion in its own typical moves against the time left) is at least what the sale gives up over holding, 1 - bid + fee.
+        Reads the quote and tick memory only."""
         if t.bought_ts <= 0 or bid <= 0 or t.entry <= 0:
             return None
         from . import wavetop
@@ -777,17 +795,35 @@ class ProfitWatcher:
         if bid > t.wave_peak_bid + 1e-9:
             t.wave_peak_bid, t.wave_peak_ts = bid, now
         gain = bid - t.entry
-        reason = ""
+        net = bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry))
+        t.wave_best_net = max(t.wave_best_net, net)
+        unit = self._risk_unit(t, now)
+        rev = max(wavetop.TICK, wavetop.REV_K * unit * math.sqrt(max(left, 60.0) / 60.0)) if unit else max(wavetop.TICK, 0.05)
+        if t.wave_hi <= 0:
+            t.wave_hi = t.wave_lo = bid
+        if t.wave_dir >= 0:
+            t.wave_hi = max(t.wave_hi, bid)
+            if t.wave_hi - bid >= rev - 1e-9:
+                t.wave_dir, t.wave_lo = -1, bid
+        if t.wave_dir < 0:
+            t.wave_lo = min(t.wave_lo, bid)
+            if bid - t.wave_lo >= rev - 1e-9:
+                t.wave_last_low, t.wave_dir, t.wave_hi = t.wave_lo, 1, bid
+        reason, kind = "", ""
+        lose = None
         if gain >= wavetop.RESTING - 1e-9:
-            reason = f"wave take: the bid {bid:.2f} is {gain:+.2f} over the {t.entry:.2f} paid, the resting sale at +{wavetop.RESTING:.2f} fills"
-        elif gain >= wavetop.TAKE - 1e-9:
-            run = max(t.wave_peak_ts - t.bought_ts, 0.0)
-            still = now - t.wave_peak_ts
-            if still >= max(3.0, 0.25 * run):
-                reason = f"wave take: the bid {bid:.2f} is {gain:+.2f} over the {t.entry:.2f} paid and has made no new high for {still:.0f} s (a quarter of the {run:.0f} s run is {0.25 * run:.0f} s): the move has slowed"
+            reason, kind = f"wave take: the bid {bid:.2f} is {gain:+.2f} over the {t.entry:.2f} paid, the resting sale at +{wavetop.RESTING:.2f} fills", "resting"
+        elif t.wave_best_net > 0 and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
+            where = f"a gain of {net * 100:.1f}c a contract" if net > 0 else f"a small loss of {-net * 100:.1f}c a contract (the bet had been ahead by {t.wave_best_net * 100:.1f}c)"
+            reason, kind = f"wave take: the bid {bid:.2f} fell under its last swing low {t.wave_last_low:.2f} (swings of {rev:.3f}, {left:.0f} s left): the climb is done, sold at {where}", "lower low"
+        elif net > 0 and bid >= wavetop.HIGH - 1e-9:
+            spot = self._wave_spot(t, now)
+            lose = wavetop.p_lose(spot[0], spot[1], left) if spot is not None else None
+            if lose is not None and lose >= 1.0 - bid + fee_per_contract(bid):
+                reason, kind = f"wave take: the bid {bid:.2f} is in the high zone and the chance of losing it is {lose:.2f}, at least the {1.0 - bid + fee_per_contract(bid):.2f} the sale gives up over holding ({left:.0f} s left)", "high zone"
         if not reason:
             return None
-        extra = {"gain": round(gain, 4), "peak": round(t.wave_peak_bid, 4), "still": round(now - t.wave_peak_ts, 1)}
+        extra = {"gain": round(gain, 4), "net": round(net, 4), "rev": round(rev, 4), "last_low": round(t.wave_last_low, 4), "p_lose": None if lose is None else round(lose, 4), "kind": kind}
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="wave take", extra=extra)
             return reason

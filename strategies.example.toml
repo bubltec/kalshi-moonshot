@@ -63,7 +63,7 @@ curve_risk_under_even_live = true
 # chosen after seeing results). Series are the scope, not a rule: every 15-minute market with a Kalshi index or perp reference.
 [lane.wave_top]
 enabled = true
-label = "wave top: the cheap side at a peak above or a dip below the target, bought as the spot turns on the 60 s average, sold at +20c once it stops rising or at +40c (PAPER)"
+label = "wave top: the cheap side at a peak above or a dip below the target, bought as the spot turns on the 60 s average, sold at +40c, at the first turn down below the target, trailed on the winning side (PAPER)"
 estimator = "market"
 numeric = "allow"
 one_per = "event"
@@ -99,7 +99,7 @@ steps = ["price", "entry_window", "wave_top", "wave_trend"]
 
 [exit.wave_exit]
 label = "a bet that dipped is sold once it has come back and its climb has faded; one that never dipped is held"
-steps = ["wave_take", "wave_salvage"]  # 2026-11-22: the user's own exit (the +40c resting sale, +20c once the move slows) joins the salvage sale; the first version had only the salvage
+steps = ["wave_take", "wave_salvage"]  # 2026-11-22: the user's own exit (+40c; the first turn down below the target; a trail on the winning side; the high-zone hold-or-sell, see wavetop.py) joins the salvage sale; the first version had only the salvage
 curve_risk_live = true
 curve_risk_spot_weight = 0.0  # 2026-11-22 breaking fix: left at the default 0.5 the exit never ran (see docs/architecture.md notes log); 0 = Kalshi's price alone
 
