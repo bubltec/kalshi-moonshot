@@ -117,13 +117,10 @@ def price_trend_step(ctx: Ctx, shot: LongShot) -> Check:
 
 
 def kalshi_index(series: str, now: float) -> str | None:
-    """The tape index of Kalshi's own price for the series' underlying: a coin's settlement index, a commodity's perp reference while it is ticking. None when only the outside feed could answer (variants.spot_index falls back to it): a step that reads Kalshi's price does not read that."""
+    """The tape index of Kalshi's own price for the series' underlying (variants.kalshi_index): a coin's settlement index, a commodity's perp reference while it is ticking. None when only the outside feed could answer: a step that reads Kalshi's price does not read that."""
     from . import variants
 
-    index = variants.spot_index(series, "kalshi", now)
-    if index and not variants.crypto_index(series) and index == variants.biquote_index(series):
-        return None
-    return index
+    return variants.kalshi_index(series, now)
 
 
 @step("perp_worth")

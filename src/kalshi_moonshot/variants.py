@@ -461,14 +461,17 @@ def market_report(s: Settings, days: float = 6.0, recent_days: float = 1.0, min_
 
 
 def snapshot_now(s: Settings, series: str, side: str, left_seconds: float, now: float | None = None, strike: float | None = None) -> dict | None:
-    """The shape of a bet at this moment (snapshot(): z, slope, crosses, vol_ratio, since_cross and the variety letter), from the index ticks of the last five minutes, which are read from memory (ticks.history) and only
-    from the tape when the history does not reach back that far. A commodity reads BiQuote against its own price when the window opened; a crypto coin reads its settlement index against the window's `strike`. None when
-    the series has no index, the reference is missing (no BiQuote tick near the open, or no strike for a coin), or there are too few recent ticks: a caller that skips on a shape must not skip on None."""
+    """The shape of a bet at this moment (snapshot(): z, slope, crosses, vol_ratio, since_cross and the variety letter), from the index ticks of the last five minutes, read from memory only (ticks.history).
+    Kalshi's own price only (2026-11-21; user, 2026-11-20: "everything is supposed to use kalshi's perpetuals, we were supposed to remove biQuote"): a crypto coin reads its settlement index against the window's
+    `strike`; a commodity reads Kalshi's perp reference (kalshi_index) against that reference's own price when the window opened. Until this date a commodity read the outside BiQuote feed here, so the cushion and
+    variety steps of the live commodity lanes were not on Kalshi's price (studies/results/2026-11-21-own-bets-hand-check.txt: on 132 live bets the recorded cushion matched the perp within 0.1 on a third).
+    None when Kalshi's price is not there (no index, a perp reference that is not ticking), the reference is missing (no tick near the open, or no strike for a coin), or memory holds too few recent ticks: the
+    outside feed is not a fallback and the tape is not read (no database read in a buy decision). A caller that skips on a shape must not skip on None."""
+    now = time.time() if now is None else now
     crypto = crypto_index(series)
-    index = crypto or biquote_index(series)
+    index = kalshi_index(series, now)
     if not index or left_seconds <= 0:
         return None
-    now = time.time() if now is None else now
     close = now + left_seconds
     load_custom(s)
     if crypto:
@@ -476,21 +479,12 @@ def snapshot_now(s: Settings, series: str, side: str, left_seconds: float, now: 
             return None
         ref: float | None = strike
     else:
-        opened = close - 900.0
-        ref = ticks_mod.history.first_at_or_after(index, opened - 5.0, 25.0)
-        if ref is None:
-            tape = db.reader(s.tape_path)
-            row = tape.execute("SELECT value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts LIMIT 1", (index, opened - 5.0, opened + 20.0)).fetchone()
-            ref = float(row[0]) if row else None
-        if ref is None:
-            return None
+        ref = ticks_mod.history.first_at_or_after(index, close - 900.0 - 5.0, 25.0)
     if ref is None:
         return None
     got = ticks_mod.history.window(index, now - LOOK - 40.0, now)
     if got is None:
-        tape = db.reader(s.tape_path)
-        rows = tape.execute("SELECT ts, value FROM index_ticks WHERE index_id=? AND ts BETWEEN ? AND ? AND value>0 ORDER BY ts", (index, now - LOOK - 40.0, now)).fetchall()
-        got = ([float(r[0]) for r in rows], [float(r[1]) for r in rows])
+        return None
     snap = snapshot(got[0], got[1], ref, side, now, close)
     if snap is not None:  # the whole window behind the spot, recorded with the bet (nothing reads it yet)
         full = ticks_mod.history.window(index, close - 900.0 - 40.0, now)
@@ -630,6 +624,19 @@ def comeback_rate(index: str, now: float | None = None, fall_units: float = 1.5,
 
 
 PERP_FRESH = 30.0  # seconds: a Kalshi perp reference tick older than this is not a live spot
+
+
+def kalshi_index(series: str, now: float | None = None) -> str | None:
+    """The tape index of Kalshi's own price for the series' underlying: a coin's settlement index, a commodity's perp reference (perpref.py) while it is ticking (a tick in the last PERP_FRESH seconds, in memory). None when Kalshi has no live price for it: the outside feed is never returned (spot_index falls back to it; a reading that must be Kalshi's does not)."""
+    crypto = crypto_index(series)
+    if crypto:
+        return crypto
+    kp = perpref.index_for_series(series)
+    if not kp:
+        return None
+    now = time.time() if now is None else now
+    got = ticks_mod.history.window(kp, now - PERP_FRESH, now)
+    return kp if got and got[0] else None
 
 
 def spot_index(series: str, source: str = "", now: float | None = None) -> str | None:
