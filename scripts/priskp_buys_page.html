@@ -45,7 +45,7 @@ button{font:inherit;background:none;border:1px solid var(--line);color:var(--fg)
 <select id="sd"><option value="">yes or no side</option><option>yes</option><option>no</option></select>
 <select id="sg"><option value="">any segment</option></select><label class="mut">price <input id="p0" value="0" size="4"> to <input id="p1" value="1" size="4"></label> <input id="q" placeholder="ticker or coin e.g. BTC" size="14"> <label class="mut">buy minute <input id="m0" value="2" size="3"> to <input id="m1" value="14" size="3"></label></div>
 <div id="cnt" class="mut"></div><div id="list"></div><p><button id="more">Show more</button></p>
-<p class="mut">Links go to the series page on Kalshi (https://kalshi.com/markets/&lt;series&gt;); I could not confirm an event-level URL pattern for settled 15-minute markets, so the ticker is shown to look up. Charts are from the recorded tape: settlement index against the strike (percent), the side's bid and ask underneath; refused rows have no chart data, and only the 150 biggest losers and 150 biggest winners carry the chart and hour profile (a page of every chart would pass the size limit); every model buy shows its readings.</p>
+<p class="mut">Each ticker links to that exact market on Kalshi (https://kalshi.com/markets/&lt;series&gt;/&lt;coin&gt;-15-min/&lt;event&gt;, the event being the ticker without its last "-NN"); checked on the 2026-11-09 BTC market. Charts are from the recorded tape: settlement index against the strike (percent), the side's bid and ask underneath; refused rows have no chart data, and only the 150 biggest losers and 150 biggest winners carry the chart and hour profile (a page of every chart would pass the size limit); every model buy shows its readings.</p>
 <script>
 const D=/*DATA*/null;const $=id=>document.getElementById(id);
 const byT={};D.model.forEach(r=>byT[r.t]=r);
@@ -63,8 +63,8 @@ function sumTable(){let h='<div class="wrap"><table><tr><th></th><th>buys</th><t
  $("sum").innerHTML=h+'</table></div>';}
 function when(r){const t=r.cl-900+r.m*60;return new Date(t*1000).toISOString().slice(5,16).replace("T"," ")+" UTC, minute "+r.m.toFixed(1)}
 function chips(r){return '<div class="chips">'+CH.map(([k,n])=>{const s=r.st[k],l=lab(s);return `<span class="chip ${l}">${n}: ${l}${typeof s==="number"?" ("+s+"/5)":""}</span>`}).join("")+(r.sg?`<span class="chip">${r.sg}</span>`:"")+'</div>'}
-function rowEl(r,full){const d=document.createElement("div");d.className="row";const series=r.t.split("-")[0].toLowerCase();
- d.innerHTML=`<div class="top"><span class="tk"><a href="https://kalshi.com/markets/${series}" target="_blank" rel="noopener">${r.t}</a></span><span>${r.sd.toUpperCase()} at ${r.p.toFixed(2)}</span><span class="${r.w?'win':'loss'}">${r.w?'WON':'LOST'} ${f(r.n,2)}$</span><span class="mut">${when(r)}</span>${full?'<button>readings and chart</button>':''}</div>`+chips(r);
+function rowEl(r,full){const d=document.createElement("div");d.className="row";const parts=r.t.split("-"),series=parts[0].toLowerCase(),coin=series.replace(/^kx/,"").replace(/15m$/,""),ev=(parts[0]+"-"+parts[1]).toLowerCase(),url=`https://kalshi.com/markets/${series}/${coin}-15-min/${ev}`;
+ d.innerHTML=`<div class="top"><span class="tk"><a href="${url}" target="_blank" rel="noopener">${r.t}</a></span><span>${r.sd.toUpperCase()} at ${r.p.toFixed(2)}</span><span class="${r.w?'win':'loss'}">${r.w?'WON':'LOST'} ${f(r.n,2)}$</span><span class="mut">${when(r)}</span>${full?'<button>readings and chart</button>':''}</div>`+chips(r);
  if(full){const b=d.querySelector("button");let open=false;b.onclick=()=>{if(open){d.querySelector(".det").remove();open=false;return}open=true;const x=document.createElement("div");x.className="det";x.innerHTML=detail(r);d.appendChild(x)}}
  return d}
 function detail(r){let h='<div class="wrap"><table><tr><th>check</th><th>reading</th><th>fifth</th><th>says</th></tr>';
