@@ -1383,6 +1383,10 @@ class ProfitWatcher:
             from . import marketprofile
 
             marketprofile.refresh(s, sorted({series for sp in lane_specs(s).values() if sp.enabled for series in sp.series if series.endswith("15M")}), tape=self._tape_db())
+            from . import binaryrisk, wavetrend
+
+            wave_series = sorted({series for sp in lane_specs(s).values() if sp.enabled and "wave_trend" in sp.buy_chain for series in sp.series})
+            wavetrend.refresh(s, [ix for ix in (binaryrisk.curve_index(x) for x in wave_series) if ix], tape=self._tape_db())
             from . import lanehealth
 
             live = {name for name, sp in lane_specs(s).items() if sp.enabled and any(s.is_live(name, series) for series in sp.series)}

@@ -143,4 +143,13 @@ for h in HORIZONS:
             rows = [b for b in rows0 if h in b["trend"] and lo < b["trend"][h] * (1 if b["side"] == "yes" else -1) <= hi]
             if rows:
                 print(f"  {lab} trend for bet {max(lo, -9):+3d}..{min(hi, 9):+3d}  H {stats(rows, 'H')}   E per bet {sum(r['E'] for r in rows) / len(rows):+6.2f}")
+print("\nSLOPE: per-contract hold-to-settlement net against the trend signed for the bet (clipped to +-3), least squares: the worth of the bet moves by `slope` dollars a contract per unit of trend")
+for h in HORIZONS:
+    pts = [(max(-3.0, min(3.0, b["trend"][h] * (1 if b["side"] == "yes" else -1))), b["H"] / QTY) for b in bets if h in b["trend"]]
+    n = len(pts)
+    mx, my = sum(x for x, _ in pts) / n, sum(y for _, y in pts) / n
+    sxx = sum((x - mx) ** 2 for x, _ in pts)
+    slope = sum((x - mx) * (y - my) for x, y in pts) / sxx
+    resid = sum((y - my - slope * (x - mx)) ** 2 for x, y in pts) / max(n - 2, 1)
+    print(f"  {h:2d} h  n={n}  slope {slope:+.4f} +- {math.sqrt(resid / sxx):.4f} a contract per unit of trend  (t {slope / math.sqrt(resid / sxx):+.1f})")
 print(f"\n{time.time() - t_start:.0f} s")
