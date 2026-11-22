@@ -1083,7 +1083,7 @@ class Store:
     def _log_screened_now(self, lane: str, rows: list[dict[str, Any]], now: float, gap: float) -> int:
         n = 0
         for r in rows:
-            seen = self.db.execute(
+            seen = gap > 0 and self.db.execute(  # gap 0: the caller already kept one row per gate (runner._fresh_drops)
                 "SELECT 1 FROM screen_log WHERE lane=? AND ticker=? AND side=? AND ts>=? LIMIT 1",
                 (lane, r["ticker"], r["side"], now - gap),
             ).fetchone()

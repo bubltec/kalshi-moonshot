@@ -162,33 +162,37 @@ def side_prob(p_yes: float, side: str) -> float:
 
 
 def lane_candidates(
-    markets: list[dict[str, Any]], spec: LaneSpec, s: Settings, now: datetime | None = None
+    markets: list[dict[str, Any]], spec: LaneSpec, s: Settings, now: datetime | None = None,
+    rejected: list[dict[str, Any]] | None = None,
 ) -> list[LongShot]:
-    """Markets that pass the lane's filter, most traded first (tightest, least stale prices)."""
+    """Markets that pass the lane's filter, most traded first (tightest, least stale prices). `rejected`: a list the sides the filter turned down are added to, with the reason (a review passes one and writes it to screen_log, so a gate never acts unseen)."""
     now = now or datetime.now(UTC)
-    out = [
-        LongShot(
-            ticker=m["ticker"],
-            title=m.get("title", ""),
-            rules=m.get("rules_primary", ""),
-            bid=_f(view, "yes_bid_dollars"),
-            ask=_f(view, "yes_ask_dollars"),
-            volume=_f(m, "volume_fp"),
-            close_time=m.get("close_time", ""),
-            hours_to_close=_hours_until(m["close_time"], now) or 0.0,
-            subtitle=m.get("yes_sub_title", "") or "",
-            lane=spec.name,
-            series=_series(m),
-            category=m.get("category", "") or "",
-            event_ticker=m.get("event_ticker", "") or "",
-            mutually_exclusive=bool(m.get("mutually_exclusive")),
-            side=side,
-        )
-        for m in markets
-        for side in spec.sides
-        for view in (side_view(m, side),)
-        if lane_reject_reason(view, spec, s, now) is None
-    ]
+    out: list[LongShot] = []
+    for m in markets:
+        for side in spec.sides:
+            view = side_view(m, side)
+            why = lane_reject_reason(view, spec, s, now)
+            if why is not None:
+                if rejected is not None:
+                    rejected.append({"ticker": m["ticker"], "side": side, "ask": _f(view, "yes_ask_dollars"), "reason": f"lane filter: {why}"})
+                continue
+            out.append(LongShot(
+                ticker=m["ticker"],
+                title=m.get("title", ""),
+                rules=m.get("rules_primary", ""),
+                bid=_f(view, "yes_bid_dollars"),
+                ask=_f(view, "yes_ask_dollars"),
+                volume=_f(m, "volume_fp"),
+                close_time=m.get("close_time", ""),
+                hours_to_close=_hours_until(m["close_time"], now) or 0.0,
+                subtitle=m.get("yes_sub_title", "") or "",
+                lane=spec.name,
+                series=_series(m),
+                category=m.get("category", "") or "",
+                event_ticker=m.get("event_ticker", "") or "",
+                mutually_exclusive=bool(m.get("mutually_exclusive")),
+                side=side,
+            ))
     out.sort(key=lambda x: x.volume, reverse=True)
     return out
 

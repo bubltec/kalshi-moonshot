@@ -130,3 +130,29 @@ def test_the_decision_time_estimate_for_crypto_follows_the_lane(monkeypatch):
     assert pricer.estimate(None, sh, s) == (pytest.approx(0.43), "price band")  # no client needed: nothing is read
     monkeypatch.setattr(lanes, "lane_specs", lambda _s: {"x": dataclasses.replace(base, needs_model_edge=True)})
     assert pricer.estimate(Client(), sh, s) == (0.81, "perp note")
+
+
+def test_a_lane_filter_rejection_is_kept_with_its_reason_and_logged_once_per_gate():
+    """Every gate says what it did (user, 2026-11-21): the lane's own filter (price, entry window, spread) hands back the sides it turned down, and a review logs each market, side and gate once per gap, so a side stopped by one gate and later by another shows both."""
+    from datetime import UTC, datetime, timedelta
+
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.lanes import spec_for
+    from kalshi_moonshot.strategy import lane_candidates
+
+    s = config.load()
+    spec = spec_for(s, "moonshot")
+    now = datetime(2026, 11, 21, tzinfo=UTC)
+    m = {"ticker": "KX-1", "yes_ask_dollars": "0.99", "yes_bid_dollars": "0.98", "volume_fp": "1000", "close_time": (now + timedelta(hours=1)).isoformat()}
+    rejected: list[dict] = []
+    assert lane_candidates([m], spec, s, now, rejected) == []
+    assert rejected and all(r["reason"].startswith("lane filter: ") for r in rejected)
+    assert lane_candidates([m], spec, s, now) == []  # no list handed in: nothing kept
+
+    runner._DROP_SEEN.clear()
+    a = {"ticker": "KX-1", "side": "yes", "reason": "lane filter: outside the entry window (1.2 min into a 15-min window)"}
+    b = {"ticker": "KX-1", "side": "yes", "reason": "chain price > calm > wave_top: out at wave_top (no wave top)"}
+    assert runner._fresh_drops("x", [a], 1000.0) == [a]
+    assert runner._fresh_drops("x", [{**a, "reason": a["reason"].replace("1.2", "1.4")}], 1010.0) == []  # the same gate, other numbers
+    assert runner._fresh_drops("x", [b], 1020.0) == [b]  # another gate on the same side
+    assert len(runner._fresh_drops("x", [a], 1300.0)) == 1  # after the gap

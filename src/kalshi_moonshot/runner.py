@@ -141,12 +141,13 @@ def _apply_event_info(client: KalshiClient, shots: list[LongShot], memory: bool 
 def lane_shots(
     s: Settings, client: KalshiClient, markets: list[dict], spec: LaneSpec,
     estimators: dict[str, Estimator] | None = None, now: datetime | None = None, memory: bool = False,
+    rejected: list[dict] | None = None,
 ) -> list[LongShot]:
-    """One lane's shortlist: its filter, its estimator's screen, its trend rule and one-per rule. `memory`: the socket's review, which reads no candles and asks Kalshi nothing."""
+    """One lane's shortlist: its filter, its estimator's screen, its trend rule and one-per rule. `memory`: the socket's review, which reads no candles and asks Kalshi nothing. `rejected`: a list that takes the sides the lane's filter turned down, with why."""
     now = now or datetime.now(UTC)
     if estimators is not None and spec.estimator not in estimators:
         return []  # nothing to rate this lane with (e.g. no price feed): do not queue dead work
-    cands = lane_candidates(markets, spec, s, now)
+    cands = lane_candidates(markets, spec, s, now, rejected)
     estimator = (estimators or {}).get(spec.estimator)
     if spec.buy_chain:  # the lane's own steps put the sides forward, in its order; the estimator's screen (the ladder's) is not asked which side to look at
         from . import buychain
@@ -291,6 +292,24 @@ def scope_lane(
     return len(soonest)
 
 
+_DROP_SEEN: dict[tuple[str, str, str, str], float] = {}  # (lane, ticker, side, gate) -> when it was last written to screen_log
+_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _fresh_drops(lane: str, rows: list[dict], now: float, gap: float = 300.0) -> list[dict]:
+    """The turned-down sides not yet logged for this gate in the last `gap` seconds. Kept in memory (a review reads no table): one row per market, side and gate per gap, where the gate is the reason with its numbers taken out, so a side stopped by the entry window and later by the wave step shows both."""
+    out = []
+    for r in rows:
+        key = (lane, r["ticker"], r["side"], _NUMBER.sub("#", r.get("reason") or "")[:90])
+        if now - _DROP_SEEN.get(key, 0.0) >= gap:
+            _DROP_SEEN[key] = now
+            out.append(r)
+    if len(_DROP_SEEN) > 20000:
+        for key in [k for k, at in _DROP_SEEN.items() if now - at >= gap]:
+            del _DROP_SEEN[key]
+    return out
+
+
 def review_lane(
     s: Settings, client: KalshiClient, store: Store, spec: LaneSpec,
     estimators: dict[str, Estimator] | None, now: datetime | None = None, only: set[str] | None = None, memory: bool = False,
@@ -328,15 +347,17 @@ def review_lane(
         if not (memory and store.behind(lambda st: shadow.snapshot(st, s, rows, spec.shadow_suffix, pricer, now))):  # a record, not a judgement: the socket's review hands it to the write-behind thread
             shadow.snapshot(store, s, markets, spec.shadow_suffix, pricer, now)
     wide = replace(spec, shortlist=spec.shortlist * 3)
-    shots = lane_shots(s, client, markets, wide, estimators, now, memory)
+    filtered: list[dict] = []
+    shots = lane_shots(s, client, markets, wide, estimators, now, memory, filtered)
     if spec.buy_chain:
         from . import buychain
 
         dropped = buychain.DROPPED.pop(wide.name, None)
     else:
         dropped = getattr((estimators or {}).get(spec.estimator), "dropped", None)
+    dropped = _fresh_drops(spec.name, filtered + list(dropped or []), now.timestamp())
     if dropped:
-        store.log_screened(spec.name, dropped, now.timestamp())
+        store.log_screened(spec.name, dropped, now.timestamp(), gap=0.0)
     if spec.cooldown_minutes:
         # A short market must be re-read as it nears the close: its outcome is only decided late.
         # So the cooldown is at most a fifth of the time left.
