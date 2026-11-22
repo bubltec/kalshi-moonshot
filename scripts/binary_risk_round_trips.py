@@ -296,9 +296,10 @@ def build(job):
                 got = trade(m, rule, first_k, rn in ("base", "formula", "no_any5", "no_any4") and tag in ("m10", "late"))
                 if got: out.append((tag, rn, m["ticker"], m["close"], *got))
     # the raw perp ticks and Kalshi quotes of this index's biggest formula losers and winners (from minute 10), so each check's reading can be recomputed by hand
-    F = sorted([o for o in out if o[0] == "m10" and o[1] == "formula"], key=lambda o: o[8])
+    RR = os.environ.get("RAWRULE", "formula")  # 2026-11-22: RAWRULE=base RAWSEG=1 keeps the raw ticks and quotes of the biggest winners and losers among bets bought after a fall over 30 minutes that is bending up (30-minute slope tercile 1, curvature tercile 3) for the bet-by-bet review
+    F = sorted([o for o in out if o[0] == "m10" and o[1] == RR and (not os.environ.get("RAWSEG") or (o[10].get("t:sl30") == 1 and o[10].get("t:cv30") == 3))], key=lambda o: o[8])
     raw, by = {}, {m["ticker"]: m for m in M}
-    for o in F[:4] + F[-4:]:
+    for o in F[:12] + F[-12:]:
         m = by[o[2]]
         a, b = bisect.bisect_left(T, m["close"] - 900.0 - 3800.0), bisect.bisect_right(T, m["close"])
         raw[o[2]] = {"index": ix, "strike": m["strike"], "close": m["close"], "ticks": [(round(T[k], 2), Vv[k]) for k in range(a, b)], "quotes": m["q"]}
@@ -382,6 +383,8 @@ import json
 from pathlib import Path
 rows = [{"universe": r[0], "rule": r[1], "ticker": r[2], "close": r[3], "side": r[4], "price": r[5], "minute": r[6], "step": r[7], "net": r[8], "hold": r[9], "states": r[10], **r[12]} for (tg, rn), d in RES.items() if rn in ("base", "formula", "no_any5", "no_any4") and tg in ("m10", "late") for r in d.values()]
 Path(os.environ.get("DATA_DIR", "/data"), "round_trip_bets.json").write_text(json.dumps(rows))
+import gzip as _gz
+with _gz.open(Path(os.environ.get("DATA_DIR", "/data"), "crypto_bets_m10.json.gz"), "wt") as fh: json.dump([r for r in rows if r["universe"] == "m10" and r["rule"] == "base"], fh)
 import gzip
 with gzip.open(Path(os.environ.get("DATA_DIR", "/data"), "round_trip_raw.json.gz"), "wt") as fh: json.dump(RAW, fh)
 print(f"{len(rows)} bets (the lane's order and the formula's) written to round_trip_bets.json; raw ticks and quotes for {len(RAW)} formula bets in round_trip_raw.json.gz")
