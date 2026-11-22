@@ -48,23 +48,46 @@ def num(m, key):
 
 
 # A post-only YES buy at 0.01 and then 0.02 can never cross unless the YES ask is at 3c or under. A market with no ask at all is fine too.
-pick = next((m for m in markets if m.get("market_type", "binary") == "binary" and (num(m, "yes_ask_dollars") == 0 or num(m, "yes_ask_dollars") > 0.05)), None)
-if pick is None:
+# The demo account is funded on some exchange indexes (shards) only, and an order on any other is refused with insufficient_shard_balance (a 404), so the check tries
+# candidates until one accepts the order: the bot's own 15-minute series first, then any market that is not a multivariate combination (KXMVE...), then the rest.
+def usable(m):
+    return m.get("market_type", "binary") == "binary" and (num(m, "yes_ask_dollars") == 0 or num(m, "yes_ask_dollars") > 0.05)
+
+
+def rank(m):
+    tk = m["ticker"]
+    return 0 if "15M-" in tk else (2 if tk.startswith("KXMVE") else 1)
+
+
+candidates = sorted((m for m in markets if usable(m)), key=rank)
+if not candidates:
     sample = {k: markets[0].get(k) for k in ("ticker", "status", "yes_bid_dollars", "yes_ask_dollars", "market_type")} if markets else None
     sys.exit(f"no usable open demo market; the first one read was {sample}")
-ticker = pick["ticker"]
-print(f"market: {ticker} (YES bid {pick.get('yes_bid_dollars')}, ask {pick.get('yes_ask_dollars')})")
 
 order_id = None
+ticker = ""
+placed: dict = {}
+for pick in candidates[:25]:
+    ticker = pick["ticker"]
+    try:
+        placed = c.buy_resting(ticker, "yes", 1, 0.01, 120)
+    except KalshiError as exc:
+        if "insufficient_shard_balance" in str(exc):
+            print(f"skipped {ticker}: no balance on its exchange index")
+            continue
+        raise
+    print(f"market: {ticker} (YES bid {pick.get('yes_bid_dollars')}, ask {pick.get('yes_ask_dollars')})")
+    break
+else:
+    sys.exit("none of the first 25 demo markets is on an exchange index this account has a balance on (fund it with POST /portfolio/intra_exchange_instance_transfer, or tell me which series to use)")
+
 try:
-    placed = c.buy_resting(ticker, "yes", 1, 0.01, 120)
     show("1. rested a buy at 0.01", placed)
     order_id = placed.get("order_id") or (placed.get("order") or {}).get("order_id")
     if not order_id:
         sys.exit("the exchange gave no order id; stopping")
-    body = {"ticker": ticker, "side": "bid", "price": "0.0200", "count": "1.00"}
     try:
-        amended = c._request("POST", f"/portfolio/events/orders/{order_id}/amend", json=body, auth=True)
+        amended = c.amend_resting(order_id, ticker, "yes", "buy", 0.02, 1.0)  # the bot's own call, not a hand-made request
         show("2. amended to 0.02 (expiry omitted)", amended)
     except KalshiError as exc:
         show("2. amend REFUSED", str(exc))
@@ -77,7 +100,7 @@ try:
         show("3. could not read the order back", str(exc))
     if amended is not None:
         try:
-            c._request("POST", f"/portfolio/events/orders/{order_id}/amend", json=body, auth=True)
+            c.amend_resting(order_id, ticker, "yes", "buy", 0.02, 1.0)
             show("4. the same amend again", "accepted (no error)")
         except KalshiError as exc:
             show("4. the same amend again (expect a no-op refusal)", str(exc))
