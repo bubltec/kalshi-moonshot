@@ -1,0 +1,105 @@
+the formula's bets, buying from the last 3 minutes: 345 bets, -362.12$ on $10 stakes, ahead 196, behind 149; average win +3.67, average loss -7.26
+
+THE 15 BIGGEST LOSERS (reading, then its state; 'moved' = typical minutes the resting buy sat under the ask)
+  market                         side paid  min moved ended           net$  | cushion       | trend         | history       | volatility    | price         | pricedip     
+  KXPLATINUM15M-26NOV191000-00   no   0.60 14.6  1.0  settled LOST    -10.28 |  +0.90 YES    |  +0.09 weak   |  +0.60 YES    |  -0.18 NO     |  +0.73 YES    |  -0.47 weak  
+  KXBRENT15M-26NOV171800-00      no   0.61 13.0  0.0  settled LOST    -10.27 |  +0.76 YES    |  +0.19 YES    |  +0.92 YES    |  -0.71 NO     |  +1.01 YES    |  -0.00 YES   
+  KXPALLADIUM15M-26NOV170300-00  yes  0.62 14.1  3.0  settled LOST    -10.27 |  +3.02 YES    |  -1.06 NO     |  +0.63 YES    |  -0.08 NO     |  -1.85 NO     |  -3.29 NO    
+  KXCOPPER15M-26NOV180630-30     yes  0.63 13.7  0.5  settled LOST    -10.26 |  -0.42 weak   |  +0.93 YES    |  +0.59 YES    |  +0.13 YES    |  +0.93 YES    |  -0.09 YES   
+  KXPLATINUM15M-26NOV111500-00   yes  0.63 12.6  1.0  settled LOST    -10.26 |  +0.25 weak   |  -0.14 weak   |  +0.63 YES    |  -0.15 NO     |  +0.69 YES    |  -0.00 YES   
+  KXSILVER15M-26NOV111915-15     yes  0.64 14.2  0.5  settled LOST    -10.25 |  -0.30 weak   |  +1.03 YES    |  +0.65 YES    |  +0.14 YES    |  +1.71 YES    |  -0.47 YES   
+  KXWTI15M-26NOV181245-45        no   0.64 13.9  0.5  settled LOST    -10.25 |  -0.05 weak   |  +0.23 YES    |  +0.70 YES    |  -0.21 NO     |  +0.56 YES    |  -0.00 YES   
+  KXPALLADIUM15M-26NOV170830-30  yes  0.64 13.8  0.5  settled LOST    -10.25 |  +0.22 weak   |  +0.70 YES    |  +0.71 YES    |  +0.08 YES    |  +0.39 YES    |  -0.04 YES   
+  KXNATGAS15M-26NOV121415-15     yes  0.64 14.7  1.0  settled LOST    -10.25 |  -0.18 weak   |  +0.41 YES    |  +0.55 weak   |  -0.19 NO     |  +1.81 YES    |  -0.00 YES   
+  KXGOLD15M-26NOV152045-45       no   0.67 14.0  1.0  settled LOST    -10.23 |  +1.07 weak   |  +0.20 YES    |  +0.85 YES    |  -0.03 YES    |  +0.65 YES    |  -0.64 weak  
+  KXSILVER15M-26NOV152330-30     no   0.60 14.4  0.5  under_even 0.00 -10.22 |  -0.09 weak   |  +0.51 YES    |  +0.72 YES    |  -0.12 weak   |  +1.41 YES    |  -0.15 YES   
+  KXWTI15M-26NOV122330-30        no   0.69 14.2  0.5  settled LOST    -10.22 |  -0.36 weak   |  +0.48 YES    |  +0.83 YES    |  +0.04 YES    |  +1.61 YES    |  -0.00 YES   
+  KXPLATINUM15M-26NOV180500-00   yes  0.69 13.8  1.0  settled LOST    -10.22 |  +0.50 weak   |  +0.85 YES    |  +0.47 weak   |  -0.16 NO     |  +1.63 YES    |  -0.49 YES   
+  KXPALLADIUM15M-26NOV121600-00  yes  0.70 12.5  0.5  settled LOST    -10.21 |  +0.09 weak   |  +0.38 YES    |  +0.81 YES    |  -0.02 YES    |  +0.37 YES    |  -0.12 YES   
+  KXBRENT15M-26NOV190000-00      no   0.71 14.5  0.5  settled LOST    -10.20 |  +1.74 YES    |  +0.16 YES    |  +0.86 YES    |  +0.01 weak   |  +0.49 YES    |  -1.05 weak  
+
+THE 15 BIGGEST WINNERS
+  market                         side paid  min moved ended           net$  | cushion       | trend         | history       | volatility    | price         | pricedip     
+  KXGOLD15M-26NOV191615-15       yes  0.60 14.3  0.5  settled won      +6.39 |  -0.34 weak   |  +0.38 YES    |  +0.59 YES    |  -0.19 NO     |  +1.14 YES    |  -0.21 YES   
+  KXNATGAS15M-26NOV121515-15     no   0.60 12.8  1.0  settled won      +6.39 |  +0.57 YES    |  -0.14 NO     |  +0.69 YES    |  -0.21 NO     |  +0.46 YES    |  -0.25 YES   
+  KXWTI15M-26NOV171145-45        yes  0.60 13.4  0.5  settled won      +6.39 |  -0.13 weak   |  +0.24 YES    |  +0.66 YES    |  -0.04 weak   |  +1.07 YES    |  -0.00 YES   
+  KXBRENT15M-26NOV200900-00      yes  0.60 12.8  0.5  settled won      +6.39 |  +0.12 weak   |  +0.22 YES    |  +0.78 YES    |  -0.16 NO     |  +0.70 YES    |  -0.33 YES   
+  KXGOLD15M-26NOV172000-00       no   0.61 14.0  1.5  settled won      +6.12 |  +0.99 YES    |  +0.12 weak   |  +0.17 NO     |  -0.06 NO     |  +0.65 YES    |  -0.19 YES   
+  KXNATGAS15M-26NOV170815-15     no   0.61 14.5  1.0  settled won      +6.12 |  +1.41 YES    |  +1.13 YES    |  +0.52 weak   |  +0.23 YES    |  +1.31 YES    |  -1.08 weak  
+  KXWTI15M-26NOV190945-45        yes  0.61 14.0  1.0  settled won      +6.12 |  +0.49 weak   |  +0.11 weak   |  +0.81 YES    |  +0.07 YES    |  +0.70 YES    |  -0.21 YES   
+  KXWTI15M-26NOV171515-15        yes  0.61 12.1  0.5  settled won      +6.12 |  -0.03 weak   |  +0.35 YES    |  +0.59 YES    |  -0.21 NO     |  +0.94 YES    |  -0.22 YES   
+  KXWTI15M-26NOV111630-30        yes  0.61 12.6  1.5  settled won      +6.12 |  +0.72 weak   |  +0.15 YES    |  +0.46 weak   |  -0.15 NO     |  +0.49 YES    |  -0.85 weak  
+  KXSILVER15M-26NOV170500-00     yes  0.61 13.1  1.5  settled won      +6.12 |  +0.50 weak   |  +0.31 YES    |  +0.31 NO     |  -0.22 NO     |  +0.87 YES    |  -0.32 YES   
+  KXCOPPER15M-26NOV161215-15     yes  0.61 12.8  0.5  settled won      +6.12 |  -0.46 weak   |  +0.21 YES    |  +0.79 YES    |  +0.16 YES    |  +1.11 YES    |  -0.00 YES   
+  KXNATGAS15M-26NOV170315-15     no   0.62 14.1  1.0  settled won      +5.86 |  +1.22 YES    |  +0.46 YES    |  +0.65 YES    |  -0.01 YES    |  +0.09 weak   |  -1.40 weak  
+  KXPLATINUM15M-26NOV180645-45   no   0.62 13.3  1.5  settled won      +5.86 |  +1.43 YES    |  +0.26 YES    |  +0.93 YES    |  -0.13 NO     |  -0.46 NO     |  -1.91 weak  
+  KXCOPPER15M-26NOV192245-45     yes  0.62 12.9  1.0  settled won      +5.86 |  -0.10 weak   |  +0.64 YES    |  +0.53 weak   |  -0.15 NO     |  +1.50 YES    |  -0.17 YES   
+  KXCOPPER15M-26NOV161845-45     yes  0.62 12.3  0.5  settled won      +5.86 |  +0.07 weak   |  +0.56 YES    |  +0.57 YES    |  -0.20 NO     |  +0.95 YES    |  -0.00 YES   
+
+HAND CHECK on 42 bets with raw ticks and quotes (each series' biggest losers and winners): the run's reading / recomputed here
+  KXPLATINUM15M-26NOV191000-00   no  net -10.28 | cushi +0.90/+0.90 | trend +0.09/+0.09 | histo +0.60/+0.60 | volat -0.18/-0.18 | price +0.73/+0.73 | price -0.47/-0.47
+  KXBRENT15M-26NOV171800-00      no  net -10.27 | cushi +0.76/+0.76 | trend +0.19/+0.19 | histo +0.92/+0.92 | volat -0.71/-0.71 | price +1.01/+1.01 | price -0.00/-0.00
+  KXPALLADIUM15M-26NOV170300-00  yes net -10.27 | cushi +3.02/+3.02 | trend -1.06/-1.06 | histo +0.63/+0.63 | volat -0.08/-0.08 | price -1.85/-1.85 | price -3.29/-3.29
+  KXCOPPER15M-26NOV180630-30     yes net -10.26 | cushi -0.42/-0.42 | trend +0.93/+0.93 | histo +0.59/+0.59 | volat +0.13/+0.13 | price +0.93/+0.93 | price -0.09/-0.09
+  KXPLATINUM15M-26NOV111500-00   yes net -10.26 | cushi +0.25/+0.25 | trend -0.14/-0.14 | histo +0.63/+0.63 | volat -0.15/-0.15 | price +0.69/+0.69 | price -0.00/-0.00
+  KXSILVER15M-26NOV111915-15     yes net -10.25 | cushi -0.30/-0.30 | trend +1.03/+1.03 | histo +0.65/+0.65 | volat +0.14/+0.14 | price +1.71/+1.71 | price -0.47/-0.47
+  KXBRENT15M-26NOV200900-00      yes net  +6.39 | cushi +0.12/+0.12 | trend +0.22/+0.22 | histo +0.78/+0.78 | volat -0.16/-0.16 | price +0.70/+0.70 | price -0.33/-0.33
+  KXWTI15M-26NOV171145-45        yes net  +6.39 | cushi -0.13/-0.13 | trend +0.24/+0.24 | histo +0.66/+0.66 | volat -0.04/-0.04 | price +1.07/+1.07 | price -0.00/-0.00
+  KXGOLD15M-26NOV191615-15       yes net  +6.39 | cushi -0.34/-0.34 | trend +0.38/+0.38 | histo +0.59/+0.59 | volat -0.19/-0.19 | price +1.14/+1.14 | price -0.21/-0.21
+  KXCOPPER15M-26NOV161215-15     yes net  +6.12 | cushi -0.46/-0.46 | trend +0.21/+0.21 | histo +0.79/+0.79 | volat +0.16/+0.16 | price +1.11/+1.11 | price -0.00/-0.00
+  KXSILVER15M-26NOV170500-00     yes net  +6.12 | cushi +0.50/+0.50 | trend +0.31/+0.31 | histo +0.31/+0.31 | volat -0.22/-0.22 | price +0.87/+0.87 | price -0.32/-0.32
+  KXWTI15M-26NOV171515-15        yes net  +6.12 | cushi -0.03/-0.03 | trend +0.35/+0.35 | histo +0.59/+0.59 | volat -0.21/-0.21 | price +0.94/+0.94 | price -0.22/-0.22
+  cushion    n  42  within 0.02:  42 (100%)  median gap 0.0000  worst 0.005
+  trend      n  42  within 0.02:  42 (100%)  median gap 0.0000  worst 0.006
+  history    n  42  within 0.02:  42 (100%)  median gap 0.0000  worst 0.000
+  volatility n  42  within 0.02:  42 (100%)  median gap 0.0000  worst 0.000
+  price      n  42  within 0.02:  42 (100%)  median gap 0.0000  worst 0.002
+  pricedip   n  42  within 0.02:  42 (100%)  median gap 0.0000  worst 0.004
+
+WINNERS AGAINST LOSERS PER CHECK, the formula's bets (a NO or weak check lowered the price; the bet still filled)
+  all                : n  345  ahead  57%   -362.12$  (-10.5c per $1)
+  cushion
+    NO   (fifths 1-2)  n    2  ahead   0%    -12.85$  (-64.2c per $1)
+    weak (fifth 3)     n  163  ahead  53%   -166.48$  (-10.2c per $1)
+    YES  (fifths 4-5)  n  156  ahead  61%   -146.55$  ( -9.4c per $1)
+    unread             n   24  ahead  58%    -36.24$  (-15.1c per $1)
+  trend
+    NO   (fifths 1-2)  n   21  ahead  29%    -82.30$  (-39.2c per $1)
+    weak (fifth 3)     n   45  ahead  58%    -41.79$  ( -9.3c per $1)
+    YES  (fifths 4-5)  n  255  ahead  59%   -201.79$  ( -7.9c per $1)
+    unread             n   24  ahead  58%    -36.24$  (-15.1c per $1)
+  history
+    NO   (fifths 1-2)  n   16  ahead  62%     +9.44$  ( +5.9c per $1)
+    weak (fifth 3)     n   27  ahead  44%    -56.28$  (-20.8c per $1)
+    YES  (fifths 4-5)  n  278  ahead  58%   -279.04$  (-10.0c per $1)
+    unread             n   24  ahead  58%    -36.24$  (-15.1c per $1)
+  volatility
+    NO   (fifths 1-2)  n  158  ahead  61%   -102.52$  ( -6.5c per $1)
+    weak (fifth 3)     n   63  ahead  52%    -66.97$  (-10.6c per $1)
+    YES  (fifths 4-5)  n   94  ahead  52%   -148.68$  (-15.8c per $1)
+    unread             n   24  ahead  58%    -36.24$  (-15.1c per $1)
+  price
+    NO   (fifths 1-2)  n   14  ahead  36%    -36.95$  (-26.4c per $1)
+    weak (fifth 3)     n   15  ahead  60%     -4.93$  ( -3.3c per $1)
+    YES  (fifths 4-5)  n  292  ahead  58%   -284.01$  ( -9.7c per $1)
+    unread             n   24  ahead  58%    -36.24$  (-15.1c per $1)
+  pricedip
+    NO   (fifths 1-2)  n    7  ahead  14%    -37.60$  (-53.7c per $1)
+    weak (fifth 3)     n   84  ahead  57%    -74.79$  ( -8.9c per $1)
+    YES  (fifths 4-5)  n  230  ahead  58%   -213.49$  ( -9.3c per $1)
+    unread             n   24  ahead  58%    -36.24$  (-15.1c per $1)
+  how many of the five directional checks said NO
+    0                  n  305  ahead  58%   -296.50$  ( -9.7c per $1)
+    1                  n   27  ahead  56%     -8.61$  ( -3.2c per $1)
+    2                  n    6  ahead  33%    -19.42$  (-32.4c per $1)
+    3                  n    7  ahead  14%    -37.60$  (-53.7c per $1)
+  how far the price was moved (typical minutes under the ask)
+    0.0 to 0.0         n   66  ahead  62%   -100.81$  (-15.3c per $1)
+    0.0 to 1.0         n  241  ahead  57%   -201.36$  ( -8.4c per $1)
+    1.0 to 2.0         n   25  ahead  56%     -2.94$  ( -1.2c per $1)
+    2.0 to 5.0         n   13  ahead  23%    -57.02$  (-43.9c per $1)
+  how it ended
+    settled            n  206  ahead  88%   +441.70$  (+21.4c per $1)  average +2.14
+    time_to_go         n   26  ahead   4%   -112.82$  (-43.4c per $1)  average -4.34
+    trail              n   14  ahead 100%    +22.07$  (+15.8c per $1)  average +1.58
+    under_even         n   99  ahead   0%   -713.07$  (-72.0c per $1)  average -7.20

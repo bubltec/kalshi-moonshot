@@ -110,7 +110,7 @@ def build(job):
                     pu = None
             R.append((kk, (f["czb"], f["tr13"], share, f["vr"], pt, dy, dn), pu, f))
             t += STEP
-        M.append({"ticker": ticker, "series": series, "close": close, "base": base, "won_yes": won_yes, "strike": strike, "yb": yb, "ya": ya, "age": age, "mid": mid, "sq": sq, "k0": k0, "sell_y": sell_y, "buy_y": buy_y, "R": R, "units": {}, "ttg": {}, "x": {}})
+        M.append({"ticker": ticker, "series": series, "close": close, "base": base, "won_yes": won_yes, "strike": strike, "yb": yb, "ya": ya, "age": age, "mid": mid, "sq": sq, "k0": k0, "sell_y": sell_y, "buy_y": buy_y, "R": R, "q": [(round(float(r[0]), 2), float(r[1]) / scale, float(r[2]) / scale) for r in q], "units": {}, "ttg": {}, "x": {}})
 
     # the series' own history of each check, by the 3 minutes of the market, both sides
     H = {}
@@ -236,7 +236,7 @@ def build(job):
                 hold = (1.0 if won else 0.0) - basis
                 net = hold if sold is None else sold - fee(sold) - basis
                 return (side, price, (kf - 60) / 60.0, step, net * STAKE / price, hold * STAKE / price, {n: state(m, i, n, side) for n in CHECKS}, d,
-                        None if not detail else {"sold": sold, "kx": kx - 60, "won": won, "kk": kk - 60, "ask": a, "pu": pu, "raw": {n: side_val(v, n, side) for n in CHECKS}, "f": {k2: (round(x, 4) if isinstance(x, float) else x) for k2, x in f.items()},
+                        None if not detail else {"d": d, "sold": sold, "kx": kx - 60, "won": won, "kk": kk - 60, "ask": a, "pu": pu, "raw": {n: side_val(v, n, side) for n in CHECKS}, "f": {k2: (round(x, 4) if isinstance(x, float) else x) for k2, x in f.items()},
                                                  "after": [round(bid(m, side, x), 2) for x in range(kf, 961, 5)], "before": [None if m["yb"][x] is None else round(bid(m, side, x), 2) for x in range(max(0, kk - 300), kk + 1, 5)]})
         return None
 
@@ -266,15 +266,22 @@ def build(job):
     for m in M:
         for tag, first_k in (("any", 120), ("m5", 360), ("m10", 660), ("late", 780)):
             for rn, rule in RULES.items():
-                got = trade(m, rule, first_k, rn == "base" and tag in ("m10", "late"))
+                got = trade(m, rule, first_k, rn in ("base", "formula") and tag in ("m10", "late"))
                 if got: out.append((tag, rn, m["ticker"], m["close"], *got))
-    return out, len(M), trades_seen
+    # the raw perp ticks and Kalshi quotes of this index's biggest formula losers and winners (from minute 10), so each check's reading can be recomputed by hand
+    F = sorted([o for o in out if o[0] == "m10" and o[1] == "formula"], key=lambda o: o[8])
+    raw, by = {}, {m["ticker"]: m for m in M}
+    for o in F[:4] + F[-4:]:
+        m = by[o[2]]
+        a, b = bisect.bisect_left(T, m["close"] - 900.0 - 3800.0), bisect.bisect_right(T, m["close"])
+        raw[o[2]] = {"index": ix, "strike": m["strike"], "close": m["close"], "ticks": [(round(T[k], 2), Vv[k]) for k in range(a, b)], "quotes": m["q"]}
+    return out, len(M), trades_seen, raw
 
 
-RES, NM, NT = {}, 0, 0
+RES, NM, NT, RAW = {}, 0, 0, {}
 with multiprocessing.get_context("fork").Pool(4) as pool:
-    for out, nm, nt in pool.imap_unordered(build, list(jobs.items())):
-        NM += nm; NT += nt
+    for out, nm, nt, raw in pool.imap_unordered(build, list(jobs.items())):
+        NM += nm; NT += nt; RAW.update(raw)
         for r in out: RES.setdefault((r[0], r[1]), {})[r[2]] = r
         print(f"  an index done: {nm} markets, {time.time() - t0:.0f}s", flush=True)
 print(f"{NM} markets, {NT} seconds of trades on the tape (flow_1s; 0 = fills from the quotes only); readings every {STEP}s; {time.time() - t0:.0f}s", flush=True)
@@ -320,7 +327,9 @@ for tag, title in (("any", "THE FIRST BUY FROM MINUTE 1"), ("m5", "THE FIRST BUY
             print(f"    {sh:8s}: change {sum((V[k][8] if k in V else 0.0) - (base[k][8] if k in base else 0.0) for k in ks):+8.2f}$ on {len(ks)} markets | " + line([V[k] for k in ks if k in V]))
 import json
 from pathlib import Path
-rows = [{"universe": r[0], "ticker": r[2], "close": r[3], "side": r[4], "price": r[5], "minute": r[6], "step": r[7], "net": r[8], "hold": r[9], "states": r[10], **r[12]} for (tg, rn), d in RES.items() if rn == "base" and tg in ("m10", "late") for r in d.values()]
+rows = [{"universe": r[0], "rule": r[1], "ticker": r[2], "close": r[3], "side": r[4], "price": r[5], "minute": r[6], "step": r[7], "net": r[8], "hold": r[9], "states": r[10], **r[12]} for (tg, rn), d in RES.items() if rn in ("base", "formula") and tg in ("m10", "late") for r in d.values()]
 Path(os.environ.get("DATA_DIR", "/data"), "round_trip_bets.json").write_text(json.dumps(rows))
-print(f"{len(rows)} lane-order bets written to round_trip_bets.json")
+import gzip
+with gzip.open(Path(os.environ.get("DATA_DIR", "/data"), "round_trip_raw.json.gz"), "wt") as fh: json.dump(RAW, fh)
+print(f"{len(rows)} bets (the lane's order and the formula's) written to round_trip_bets.json; raw ticks and quotes for {len(RAW)} formula bets in round_trip_raw.json.gz")
 print(f"\ndone in {time.time() - t0:.0f}s")
