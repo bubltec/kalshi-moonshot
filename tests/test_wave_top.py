@@ -324,6 +324,33 @@ def test_integration_the_sell_step_sells_a_dipped_bet(tmp_path, monkeypatch, mem
     assert w._sell_wave_salvage(t, risk, 0.80, now, CLOSE - now, -0.02, c) is None  # no buy time: nothing is read
 
 
+def test_integration_the_salvage_does_not_sell_a_bet_that_is_winning_on_the_spot(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+    from tests.test_risk_exit_flow import CLOSE, TICKER as HELD, held
+
+    w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['wave_salvage']")
+    t = w.targets[(HELD, "risk_only")]
+    t.side = "yes"
+    opened = CLOSE - 900.0
+    t.bought_ts = opened + 200.0
+    before = [0.80 + 0.02 * ((k // 30) % 2) for k in range(200)]
+    bids = before + [0.80 - 0.004 * k for k in range(1, 31)] + [0.68 + 0.004 * k for k in range(1, 31)] + [0.80] * 20
+    for k, b in enumerate(bids):
+        ticks_mod.mids.note(HELD, opened + k, b, b + 0.01)
+    for k in range(-1200, len(bids)):
+        ticks_mod.history.note("BRTI", opened + k, 100.0 + 0.01 * (-1) ** k)
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    now = opened + len(bids) - 1
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+    t.shock_index = "BRTI"
+    t.shock_ref = 101.0  # the spot's average is under the target: a YES bet that is losing on the spot
+    with memguard.decision("sell"):
+        assert w._sell_wave_salvage(t, risk, 0.80, now, CLOSE - now, -0.02, c)
+    t.shock_ref = 99.0  # over the target: the YES bet is winning now
+    with memguard.decision("sell"):
+        assert w._sell_wave_salvage(t, risk, 0.80, now, CLOSE - now, -0.02, c) is None
+
+
 # ---- the take sales (wave_take) ----
 def spot_feed(now, level, wobble=0.01):
     T = [now - 1500.0 + k for k in range(1501)]

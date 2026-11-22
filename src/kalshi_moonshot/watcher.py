@@ -834,7 +834,7 @@ class ProfitWatcher:
         return None
 
     def _sell_wave_salvage(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
-        """Sell step wave_salvage (wavetop.py; 2026-11-21, user: "we might be able to salvage this for a small profit or small loss ... a combination of the spot + kalshi price"): a bet that went under water is sold at the bid once it has come back off its low, its climb has slowed and the spot has stopped moving its way (wavetop.salvage). A bet that never dipped is held. The user's resting sale at the entry + 0.40 is only recorded, once (kind "wave rest"). Reads the quote and tick memory only. A failure is logged once and the step is passed over."""
+        """Sell step wave_salvage (wavetop.py; 2026-11-21, user: "we might be able to salvage this for a small profit or small loss ... a combination of the spot + kalshi price"; 2026-11-22: "salvage shouldn't sell winners", so a bet whose spot average is on its side of the target is skipped): a bet that went under water is sold at the bid once it has come back off its low, its climb has slowed and the spot has stopped moving its way (wavetop.salvage). A bet that never dipped is held. The user's resting sale at the entry + 0.40 is only recorded, once (kind "wave rest"). Reads the quote and tick memory only. A failure is logged once and the step is passed over."""
         try:
             return ProfitWatcher._wave_salvage_read(self, t, r, bid, now, left, pnl)
         except Exception as e:
@@ -847,6 +847,9 @@ class ProfitWatcher:
         from . import binaryrisk, wavetop
 
         if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0:
+            return None
+        spot = self._wave_spot(t, now)
+        if spot is not None and spot[0] > 0:  # user, 2026-11-22: "salvage shouldn't sell winners": a bet whose spot average is on its side of the target is winning now and is not salvaged
             return None
         index = binaryrisk.curve_index(t.ticker.split("-")[0])
         if not index:
