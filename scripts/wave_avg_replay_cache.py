@@ -23,7 +23,9 @@ import study_cache as sc  # noqa: E402
 
 from kalshi_moonshot import wavetop as wt  # noqa: E402
 
-LO, HI, QTY = 0.18, 0.40, 25
+import os  # noqa: E402
+
+LO, HI, QTY = float(os.environ.get('LO', '0.18')), float(os.environ.get('HI', '0.40')), 25  # the lane's band (it was 0.18 to 0.40; 0.55 from 2026-11-22)
 ENTRY_END = 480
 HORIZONS = (1, 3, 6, 12, 24)
 BUCKETS = [(-99, -2), (-2, -1), (-1, 0), (0, 1), (1, 2), (2, 99)]
@@ -131,6 +133,11 @@ for label, rows in (("all bets", bets), ("peak bets (NO)", [b for b in bets if b
     print("  hold to settlement ", stats(rows, "H"))
     print("  wave_take + hold   ", stats(rows, "E"))
     print(f"  sold by wave_take: {sum(r['sold'] for r in rows)} of {len(rows)}; best bid reached entry +0.20 or more in {sum((r['peak'] - r['ask']) >= 0.20 for r in rows)}")
+print("\nby the ask paid")
+for lo, hi in ((0.0, 0.25), (0.25, 0.35), (0.35, 0.45), (0.45, 0.56)):
+    rows = [b for b in bets if lo <= b["ask"] < hi]
+    if rows:
+        print(f"  {lo:.2f}-{hi:.2f} H {stats(rows, 'H')}   E per bet {sum(r['E'] for r in rows) / len(rows):+6.2f}")
 print("\nby minute after the open")
 for lo, hi in ((0, 60), (60, 120), (120, 240), (240, 481)):
     print(f"  {lo:3d}-{hi:3d} s ", stats([b for b in bets if lo <= b["t"] < hi], "H"))
