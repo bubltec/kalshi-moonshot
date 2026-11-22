@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from . import curverisk, factors, lateswing, memguard, restbuys, risk, shadow, steptime
+from . import curverisk, factors, memguard, restbuys, risk, shadow, steptime
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
@@ -563,14 +563,13 @@ def evaluate(
             sv = None
             log.warning("spike view unreadable for %s %s: %s", shot.ticker, shot.side, exc)
         note = f"[spike view z {sv[0]:+.1f}, {sv[1]} of {curverisk.SPIKE_STRETCHES} as large] {note}" if sv is not None else f"[spike view unreadable] {note}"
-    stake_factor = lateswing.stake_factor(spec, shot.hours_to_close * 3600.0) if "late_swing" in spec.buy_chain else 1.0  # the late swing lane's tier: a share of its stake by the time left (lateswing.py)
     sized = Sizing(0, 0.0, "")
     if bet:
         with steptime.step("balance read"):
             balance = store.bankroll.read(client, s, live=s.is_live(shot.lane, shot.series))
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
-            balance.open_by_lane.get(shot.lane, 0.0), stake_factor, fractional=s.fractional_stake and not _NO_FRACTION,
+            balance.open_by_lane.get(shot.lane, 0.0), 1.0, fractional=s.fractional_stake and not _NO_FRACTION,
             maker_price=round(max(0.01, shot.ask - spec.buy_rest_below), 4) if spec.buy_rest_seconds > 0 else None,
         )
         if store.holds_sized_bet(shot.ticker, shot.lane) and not s.is_live(shot.lane, shot.series):

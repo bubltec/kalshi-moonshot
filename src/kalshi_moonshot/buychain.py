@@ -449,30 +449,6 @@ def swing_risk_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
-@step("late_swing")
-def late_swing_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The late swing buy (lateswing.py; 2026-11-20, user): in the last late_swing_from seconds down to late_swing_to, a side whose ask is low or high (outside late_swing_mid_lo to _mid_hi), on a curve that has been jumpy: the settlement index crossed the strike at least late_swing_min_crosses times in the last five minutes and the last minute moved at least as fast as the five minutes (vol_ratio >= 1). The note names the tier the time left puts the bet in; the stake is that share of the lane's stake (runner.evaluate). A curve that cannot be read is a no."""
-    from . import lateswing, variants
-    from . import ticks as ticks_mod
-
-    sp = ctx.spec
-    if sp.late_swing_from <= 0:
-        return Check(False, "the lane sets no window (late_swing_from)")
-    left = shot.hours_to_close * 3600.0
-    share = lateswing.tier_share(left, sp.late_swing_from, sp.late_swing_to, tuple(sp.late_swing_tiers))
-    if share is None:
-        return Check(False, f"{left:.0f}s left is outside the lane's {sp.late_swing_to:g} to {sp.late_swing_from:g}s window")
-    if shot.side not in sp.sides or not lateswing.band_ok(sp, shot.ask):
-        return Check(False, f"ask {shot.ask:.2f} is not a low or a high side ({sp.price[0]:g} to {sp.late_swing_mid_lo:g}, {sp.late_swing_mid_hi:g} to {sp.price[1]:g})")
-    snap = variants.snapshot_now(ctx.s, shot.series, shot.side, left, now=ctx.now, strike=ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot))
-    if snap is None:
-        return Check(False, "the curve of the last five minutes cannot be read")
-    crosses, ratio = int(snap["crosses"]), float(snap["vol_ratio"])
-    if crosses < sp.late_swing_min_crosses or ratio < 1.0:
-        return Check(False, f"not jumpy: {crosses} crossings in five minutes (needs {sp.late_swing_min_crosses}), last minute {ratio:.2f}x the five-minute rate (needs 1)")
-    return Check(True, f"jumpy: {crosses} crossings in five minutes, last minute {ratio:.2f}x the five-minute rate; {left:.0f}s left, tier {share:.0%} of the stake, ask {shot.ask:.2f}")
-
-
 @step("wave_top")
 def wave_top_step(ctx: Ctx, shot: LongShot) -> Check:
     """The wave-top reversal (wavetop.py; 2026-11-21, the user's hand scalp): the spot has made a wave bigger than the waves before it (its slope above the last legs and at the lane's quantile of the market's own legs, wave_top_quantile), the top has stood and the spot has gone back and forth, and this side is the reversal (NO after an up wave, YES after a down wave). A dip bet after a rising wave_top_trend_hours is not taken. Memory only."""

@@ -57,47 +57,6 @@ curve_take_trail_live = true
 curve_risk_under_even = 0.1
 curve_risk_under_even_live = true
 
-# The late swing lane (2026-11-20, paper): in the last 2:00 down to 0:45 of a 15-minute market, a small bet on a low (0.10-0.30) or high
-# (0.70-0.90) side, YES or NO, when the settlement index has been jumpy and has crossed the strike. The bet is a tier of the stake by the
-# time left (100%, 70%, 50%, 40%, 30%, 20% across the window) and is sold at a target of the same share of its room (src/kalshi_moonshot/lateswing.py).
-[lane.late_swing]
-estimator = "ladder"
-needs_model_edge = false
-fixed_stake = 5.0               # the 100% tier; later tiers bet a share of it
-sides = ["yes", "no"]
-price = [0.10, 0.90]
-hours = [0.0, 0.0334]           # the last 2 minutes
-max_spread = 0.10
-min_volume = 0
-shortlist = 12
-one_per = "event"
-series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXADA15M", "KXBCH15M", "KXBNB15M", "KXHYPE15M", "KXNEAR15M", "KXZEC15M"]
-timed_suffix = "15M"
-shadow_suffix = "15M"
-scope_minutes = 2
-review_minutes = 1
-max_open = 6
-paper_fill_model = true
-max_exposure_pct = 0.30
-late_swing_from = 120
-late_swing_to = 45
-buy_module = "late_swing"
-exit_module = "swing_take"
-
-[module.late_swing]
-label = "a low or high side of a jumpy curve in the last two minutes, a tier of the stake by the time left"
-# 2026-11-21: the lane filter's checks are steps now (spread, time_left), so this list is everything that can turn a buy down; before, the filter applied them unlisted.
-steps = ["price", "spread", "time_left", "late_swing"]
-
-[exit.swing_take]
-label = "sell at the tier's share of the room the buy left"
-steps = ["swing_take"]
-curve_risk_live = true
-
-[exit.swing_take.profit]
-
-[exit.swing_take.loss]
-
 # The wave-top reversal lane (2026-11-21, PAPER; the user's hand scalp, src/kalshi_moonshot/wavetop.py): the cheap side at the top of a spot wave bigger than
 # the waves before it (NO on a peak, YES on a dip), bought 2 to 8 minutes after the open, about 25 contracts. A bet that dips is sold once it has come back
 # (wave_salvage); a bet that never dips is held. Evidence and limits: studies/results/2026-11-21-spot-wave-*.txt (a lead at about two standard errors, settings
