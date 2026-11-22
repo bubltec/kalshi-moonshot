@@ -13,6 +13,7 @@ import bisect, math, multiprocessing, os, time
 from datetime import datetime, timezone
 from kalshi_moonshot import binaryrisk as br, config, curverisk, curvevalue, db, pricevol
 from kalshi_moonshot.perpref import index_for_series as perp_index
+from kalshi_moonshot.kalshiws import index_for_series as crypto_index
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
 t0 = time.time()
@@ -20,7 +21,14 @@ START = datetime(2026, 11, 9, 5, tzinfo=timezone.utc).timestamp()
 STEP = int(os.environ.get("STEP", "10"))
 LIMIT = int(os.environ.get("LIMIT", "0"))  # markets per index (0 = all), for a quick run
 LO, HI = 0.60, 0.85
+UNIVERSE = os.environ.get("UNIVERSE", "commodity")  # 2026-11-22: crypto = the 11 KX*15M crypto series on their Kalshi settlement index (user: this model is for crypto); commodity = the old run
+EXIT = os.environ.get("EXIT", "commodity")  # hold = each bet held to settlement (the buy judged alone; the sell side waits until the buy is finished); commodity = commodity_exit
 CHECKS = ("cushion", "trend", "history", "volatility", "price", "pricedip")
+# 2026-11-22 FEATURES=1 (user: iterate on the features: which help, which need adjusting, which go): every price-free reading of the model, each read as its own check by its own-history fifth
+FEAT_SIGNED = ("czb", "czlb", "tr13", "tr35", "mv15", "mv30", "mv60", "sl15", "sl30", "sl60", "cv15", "cv30", "cv60")
+FEAT_POS = ("pos15", "pos30", "pos60")
+FEAT_FREE = ("left", "vr", "amp15", "ft15", "ft30", "ft60")
+if os.environ.get("FEATURES"): CHECKS = CHECKS + tuple("f:" + n for n in FEAT_SIGNED + FEAT_POS + FEAT_FREE)
 DIRECT = ("cushion", "trend", "history", "price", "pricedip")
 QS = (0.01, 0.2, 0.4, 0.6, 0.8, 0.99)
 STAKE = 10.0
@@ -30,14 +38,18 @@ wins = st.execute("SELECT ticker, series, close_ts, result FROM windows WHERE re
 jobs = {}
 for w in wins:
     if w["series"].startswith("KXINX"): continue
-    ix = perp_index(w["series"])
+    ix = (crypto_index(w["series"]) if w["series"].endswith("15M") and not perp_index(w["series"]) else None) if UNIVERSE == "crypto" else perp_index(w["series"])
     if ix: jobs.setdefault(ix, []).append((w["ticker"], w["series"], float(w["close_ts"]), w["result"] == "yes"))
 if LIMIT: jobs = {k: v[-LIMIT:] for k, v in jobs.items()}
 
 
-def side_val(v, name, side):
-    """The check's reading in the side's view from the YES-view tuple (cz, tr, share, vr, price, dipY, dipN)."""
+def side_val(v, name, side, f=None):
+    """The check's reading in the side's view from the YES-view tuple (cz, tr, share, vr, price, dipY, dipN); a "f:" name reads the model's own reading `f[name]` (direction flipped for NO as binaryrisk.side_vector does)."""
     sg = 1.0 if side == "yes" else -1.0
+    if name.startswith("f:"):
+        x = f.get(name[2:]) if f else None
+        if x is None: return None
+        return sg * x if name[2:] in FEAT_SIGNED else (x if side == "yes" else 1.0 - x) if name[2:] in FEAT_POS else x
     if name == "cushion": return sg * v[0]
     if name == "trend": return sg * v[1]
     if name == "history": return v[2] if side == "yes" else 1.0 - v[2]
@@ -121,7 +133,7 @@ def build(job):
             t, b = m["base"] + kk, min(4, (kk - 60) // 180)
             for name in CHECKS:
                 for side in ("yes", "no"):
-                    x = side_val(v, name, side)
+                    x = side_val(v, name, side, _f)
                     if x is not None: H.setdefault((m["series"], b, name), []).append((t, x))
     HT = {}
     for key, v in H.items():
@@ -131,7 +143,7 @@ def build(job):
 
     def state(m, i, name, side):
         kk, v, _pu, _f = m["R"][i]
-        x = None if v is None else side_val(v, name, side)
+        x = None if v is None else side_val(v, name, side, _f)
         if x is None: return "unread"
         t = m["base"] + kk
         key = (m["series"], min(4, (kk - 60) // 180), name)
@@ -231,13 +243,13 @@ def build(job):
                     if p >= LO - 1e-9:
                         kf, price = rest(m, side, kk, p, STEP), p
                 if kf is None or not 0.01 <= price <= 0.99: continue
-                sold, step, kx = exit_(m, side, price, kf)
+                sold, step, kx = (None, "settled", 960) if EXIT == "hold" else exit_(m, side, price, kf)
                 won = m["won_yes"] if side == "yes" else not m["won_yes"]
                 basis = price + fee(price)
                 hold = (1.0 if won else 0.0) - basis
                 net = hold if sold is None else sold - fee(sold) - basis
                 return (side, price, (kf - 60) / 60.0, step, net * STAKE / price, hold * STAKE / price, {n: state(m, i, n, side) for n in CHECKS}, d,
-                        None if not detail else {"d": d, "sold": sold, "kx": kx - 60, "won": won, "kk": kk - 60, "ask": a, "pu": pu, "raw": {n: side_val(v, n, side) for n in CHECKS}, "f": {k2: (round(x, 4) if isinstance(x, float) else x) for k2, x in f.items()},
+                        None if not detail else {"d": d, "sold": sold, "kx": kx - 60, "won": won, "kk": kk - 60, "ask": a, "pu": pu, "raw": {n: side_val(v, n, side, f) for n in CHECKS}, "f": {k2: (round(x, 4) if isinstance(x, float) else x) for k2, x in f.items()},
                                                  "after": [round(bid(m, side, x), 2) for x in range(kf, 961, 5)], "before": [None if m["yb"][x] is None else round(bid(m, side, x), 2) for x in range(max(0, kk - 300), kk + 1, 5)]})
         return None
 
