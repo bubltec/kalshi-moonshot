@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import tomllib
 from dataclasses import dataclass, fields, replace
@@ -28,6 +29,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import overrides, sellchain
+
+log = logging.getLogger("moonshot")
 from .config import Settings
 
 # Paper twin of the commodity lane. It reads Polymarket and never places an order, even if named in LIVE_LANES.
@@ -72,6 +75,7 @@ class LaneSpec:
     max_open: int = 0  # at most this many bets of this lane open at once, across all its markets (0 = no limit); the next candidate waits until one closes
     max_same_side: int = 0  # at most this many of this lane's open bets on the same side of the same 15-minute window (BTC, ETH and DOGE YES together is one bet on one move); 0 = no limit. 2026-11-02 replay, 30 days of crypto_favorite: the 3rd same-side bet in a window won 13 of 22 for -$46.6, the 1st and 2nd won 82-86%
     buy_curve_edge_min: float = -9.0  # 2026-11-11 (user: "within 0.05 and not flat looks good lets implement that now"): buy only when the curve's chance that the side pays (curvevalue.read, 900 s rate) minus the ask is at least this (-0.05 = the chance may sit up to 5 cents under the price); -9 = off. No reading = no buy. studies/results/2026-11-11-multiscale-buy-filters.txt: on 308 crypto_multiscale bets, with the flat-trend skip, 212 kept made +$56.43 (+10.8% per $) against +$29.79 buying all, better per dollar on each of the 5 days it changed; six days of bets and one bad day (11-08) carries most of it; a cutoff picked day by day lost, so this one is fixed, not tuned. The study measured the price paid; the gate reads the ask, so it is slightly stricter.
+    perp_chance_quantile: float = 0.0  # 2026-11-21: the perp_worth step gates on the perp's chance as a LEVEL: at or over this quantile (0.5 = the median) of the series' own readings of the last day (perpchance.py), in place of its gap to the ask (buy_curve_edge_min, which then only answers while the history is short and stays in the note). 0 = the gap rule. A lead from 132 live commodity bets with 28 behind, to be scored on the bets that follow
     curve_exit_scales: str = "900+180"  # which horizon-scale rates the curve exit reads: "900+180" the lower chance of the 900 s and 180 s rates, "900" the 900 s rate alone
     curve_risk_live: bool = False  # false: log "curve risk shadow: would sell" and sell nothing; true: the sale is made
     curve_risk_spot_weight: float = 0.5  # how far a spot alarm counts when it is the worse cushion (1 = as much as the price, 0 = not at all); the price is trusted more
@@ -223,6 +227,9 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("series", "sides", "blackout_et", "skip_varieties", "buy_chain", "sell_chain", "late_swing_tiers"):
         if key in row:
             row[key] = tuple(row[key])
+    if any(x in RETIRED_STEPS for x in row.get("buy_chain", ())):
+        log.warning("lane %s: its buy steps name %s, which no longer exist; read without them", name, ", ".join(x for x in row["buy_chain"] if x in RETIRED_STEPS))
+        row["buy_chain"] = tuple(x for x in row["buy_chain"] if x not in RETIRED_STEPS)
     bad = [x for x in row.get("buy_chain", ()) if x not in BUY_STEPS]
     if bad or len(set(row.get("buy_chain", ()))) != len(row.get("buy_chain", ())):
         raise ValueError(f"lane {name!r}: buy_chain names {bad or 'a step twice'}; the steps are {', '.join(BUY_STEPS)}, each at most once")
@@ -245,7 +252,8 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "context_score", "binary_risk_shadow", "win_chance_shadow", "binary_risk", "swing_risk", "late_swing", "wave_top", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow", "binary_risk", "swing_risk", "late_swing", "wave_top", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+RETIRED_STEPS = ("context_score",)  # steps that no longer exist: a lane file that still names one loads without it and says so in the log, so a config written for an older image does not stop the bot. context_score (shadow, never said no) was removed 2026-11-21: on the bot's own 132 live commodity bets its percentile did not separate the bets that ended ahead from the ones behind (80%, 77%, 80% ahead by thirds)
 
 
 def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:
@@ -472,7 +480,7 @@ _NOT_LOGIC = frozenset({
 def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     """Everything that decides what this lane buys, how much, and how it gets out, including the global rules that reach it (2026-11-19: rebuilt when the rules outside the buy and sell modules were removed, so every lane has a new version from that day)."""
     out = {f.name: repr(getattr(spec, f.name)) for f in fields(spec) if f.name not in _NOT_LOGIC}
-    out["buy_chain"] = repr(tuple(x for x in spec.buy_chain if x not in ("context_score", "state_record_shadow", "binary_risk_shadow", "win_chance_shadow")))  # a shadow step that never says no changes nothing the lane does: not a new version
+    out["buy_chain"] = repr(tuple(x for x in spec.buy_chain if x not in ("state_record_shadow", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow")))  # a shadow step that never says no changes nothing the lane does: not a new version
     out["kelly_fraction"] = repr(None if spec.fixed_stake else s.kelly_fraction)
     chain = tuple(x for x in spec.sell_chain if not (x == "late_tight" and not (spec.curve_risk_late_tight > 0 and spec.curve_risk_late_tight_live)))  # late_tight in shadow changes nothing the lane does, so it is not part of the version
     out["sell_chain"] = repr(chain)

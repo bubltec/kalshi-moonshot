@@ -1,0 +1,185 @@
+job 20261121-164552-24677 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/77186be2ebf7414486d0e55bc526f2b3
+244332 readings on 8 series; 6624 bets (first in range), 2293 bets in the last 3 minutes; 98s
+
+######## THE FIRST READING IN RANGE (any time in the market): 6624 bets
+  ALL          : h1 n 3312 paid 0.67 at minute  3.9 | bid later >=+5c 86% >=+10c 81% | fell 17.4c first | never 1c over  8% | won 66%
+                 h2 n 3312 paid 0.67 at minute  3.4 | bid later >=+5c 87% >=+10c 81% | fell 17.5c first | never 1c over  8% | won 65%
+
+  --- check: cushion
+  yes     : h1 n  318 paid 0.74 at minute  3.2 | bid later >=+5c 86% >=+10c 81% | fell 17.2c first | never 1c over  7% | won 70%
+            h2 n  169 paid 0.73 at minute  2.5 | bid later >=+5c 91% >=+10c 87% | fell 18.1c first | never 1c over  7% | won 77%
+  mid     : h1 n 2703 paid 0.66 at minute  3.4 | bid later >=+5c 86% >=+10c 81% | fell 17.7c first | never 1c over  8% | won 65%
+            h2 n 2904 paid 0.66 at minute  2.9 | bid later >=+5c 87% >=+10c 81% | fell 17.7c first | never 1c over  8% | won 64%
+  no      : h1 n  244 paid 0.67 at minute 10.1 | bid later >=+5c 84% >=+10c 79% | fell 15.2c first | never 1c over 11% | won 69%
+            h2 n  239 paid 0.67 at minute 10.0 | bid later >=+5c 86% >=+10c 79% | fell 14.2c first | never 1c over  9% | won 68%
+  anomaly : h1 n    0 (too few)
+            h2 n    0 (too few)
+  unread  : h1 n   47 paid 0.68 at minute  4.1 | bid later >=+5c 83% >=+10c 72% | fell 15.7c first | never 1c over 11% | won 72%
+            h2 n    0 (too few)
+
+  --- check: trend
+  yes     : h1 n 2133 paid 0.68 at minute  4.1 | bid later >=+5c 87% >=+10c 81% | fell 17.4c first | never 1c over  8% | won 66%
+            h2 n 2103 paid 0.67 at minute  3.8 | bid later >=+5c 86% >=+10c 81% | fell 17.5c first | never 1c over  8% | won 65%
+  mid     : h1 n  893 paid 0.65 at minute  3.5 | bid later >=+5c 85% >=+10c 79% | fell 16.9c first | never 1c over  8% | won 64%
+            h2 n  944 paid 0.65 at minute  3.0 | bid later >=+5c 87% >=+10c 81% | fell 17.0c first | never 1c over  8% | won 64%
+  no      : h1 n  165 paid 0.67 at minute  3.4 | bid later >=+5c 86% >=+10c 81% | fell 18.8c first | never 1c over 10% | won 62%
+            h2 n  173 paid 0.65 at minute  1.7 | bid later >=+5c 91% >=+10c 86% | fell 19.1c first | never 1c over  6% | won 66%
+  anomaly : h1 n   74 paid 0.75 at minute  3.2 | bid later >=+5c 84% >=+10c 82% | fell 20.6c first | never 1c over 11% | won 72%
+            h2 n   92 paid 0.73 at minute  2.2 | bid later >=+5c 90% >=+10c 85% | fell 18.2c first | never 1c over  4% | won 74%
+  unread  : h1 n   47 paid 0.68 at minute  4.1 | bid later >=+5c 83% >=+10c 72% | fell 15.7c first | never 1c over 11% | won 72%
+            h2 n    0 (too few)
+
+  --- check: history
+  yes     : h1 n 1031 paid 0.67 at minute  3.1 | bid later >=+5c 85% >=+10c 81% | fell 17.8c first | never 1c over  8% | won 64%
+            h2 n 1079 paid 0.66 at minute  2.9 | bid later >=+5c 88% >=+10c 82% | fell 17.1c first | never 1c over  7% | won 67%
+  mid     : h1 n  898 paid 0.68 at minute  4.5 | bid later >=+5c 87% >=+10c 81% | fell 17.6c first | never 1c over  8% | won 65%
+            h2 n  884 paid 0.67 at minute  4.2 | bid later >=+5c 87% >=+10c 82% | fell 17.1c first | never 1c over  7% | won 66%
+  no      : h1 n 1249 paid 0.67 at minute  4.3 | bid later >=+5c 86% >=+10c 81% | fell 17.0c first | never 1c over  9% | won 66%
+            h2 n 1279 paid 0.67 at minute  3.4 | bid later >=+5c 86% >=+10c 80% | fell 18.1c first | never 1c over  9% | won 63%
+  anomaly : h1 n   87 paid 0.68 at minute  2.0 | bid later >=+5c 87% >=+10c 82% | fell 17.4c first | never 1c over  7% | won 75%
+            h2 n   70 paid 0.68 at minute  1.5 | bid later >=+5c 96% >=+10c 90% | fell 18.0c first | never 1c over  4% | won 73%
+  unread  : h1 n   47 paid 0.68 at minute  4.1 | bid later >=+5c 83% >=+10c 72% | fell 15.7c first | never 1c over 11% | won 72%
+            h2 n    0 (too few)
+
+  --- check: volatility
+  yes     : h1 n 1049 paid 0.68 at minute  3.6 | bid later >=+5c 87% >=+10c 82% | fell 17.6c first | never 1c over  8% | won 69%
+            h2 n 1011 paid 0.67 at minute  3.2 | bid later >=+5c 85% >=+10c 78% | fell 17.4c first | never 1c over  9% | won 65%
+  mid     : h1 n 1084 paid 0.67 at minute  3.9 | bid later >=+5c 86% >=+10c 81% | fell 17.8c first | never 1c over  8% | won 64%
+            h2 n 1135 paid 0.66 at minute  3.3 | bid later >=+5c 88% >=+10c 82% | fell 17.8c first | never 1c over  7% | won 65%
+  no      : h1 n 1048 paid 0.67 at minute  4.2 | bid later >=+5c 85% >=+10c 79% | fell 16.7c first | never 1c over  8% | won 64%
+            h2 n 1112 paid 0.66 at minute  3.6 | bid later >=+5c 88% >=+10c 82% | fell 17.3c first | never 1c over  7% | won 65%
+  anomaly : h1 n   84 paid 0.68 at minute  4.0 | bid later >=+5c 89% >=+10c 86% | fell 18.3c first | never 1c over  7% | won 65%
+            h2 n   54 paid 0.67 at minute  4.7 | bid later >=+5c 89% >=+10c 83% | fell 15.3c first | never 1c over  6% | won 63%
+  unread  : h1 n   47 paid 0.68 at minute  4.1 | bid later >=+5c 83% >=+10c 72% | fell 15.7c first | never 1c over 11% | won 72%
+            h2 n    0 (too few)
+
+  --- check: price
+  yes     : h1 n  882 paid 0.67 at minute  7.7 | bid later >=+5c 85% >=+10c 78% | fell 17.1c first | never 1c over  9% | won 65%
+            h2 n  936 paid 0.67 at minute  7.3 | bid later >=+5c 85% >=+10c 79% | fell 16.8c first | never 1c over  9% | won 66%
+  mid     : h1 n   99 paid 0.64 at minute  7.1 | bid later >=+5c 84% >=+10c 79% | fell 14.7c first | never 1c over 11% | won 57%
+            h2 n   98 paid 0.63 at minute  6.1 | bid later >=+5c 86% >=+10c 82% | fell 17.2c first | never 1c over  7% | won 65%
+  no      : h1 n   17 (too few)
+            h2 n    5 (too few)
+  anomaly : h1 n   55 paid 0.69 at minute  9.5 | bid later >=+5c 87% >=+10c 85% | fell 20.1c first | never 1c over  5% | won 73%
+            h2 n   58 paid 0.70 at minute  9.3 | bid later >=+5c 86% >=+10c 81% | fell 15.5c first | never 1c over 10% | won 62%
+  unread  : h1 n 2259 paid 0.67 at minute  2.1 | bid later >=+5c 86% >=+10c 81% | fell 17.6c first | never 1c over  8% | won 66%
+            h2 n 2215 paid 0.66 at minute  1.5 | bid later >=+5c 88% >=+10c 82% | fell 17.8c first | never 1c over  7% | won 65%
+
+  --- check: pricedip
+  yes     : h1 n  940 paid 0.67 at minute  7.7 | bid later >=+5c 86% >=+10c 79% | fell 17.1c first | never 1c over  9% | won 66%
+            h2 n 1011 paid 0.67 at minute  7.2 | bid later >=+5c 85% >=+10c 80% | fell 16.4c first | never 1c over  8% | won 65%
+  mid     : h1 n  106 paid 0.68 at minute  8.6 | bid later >=+5c 81% >=+10c 75% | fell 15.6c first | never 1c over  8% | won 59%
+            h2 n   81 paid 0.66 at minute  8.0 | bid later >=+5c 83% >=+10c 77% | fell 21.4c first | never 1c over 10% | won 72%
+  no      : h1 n    7 (too few)
+            h2 n    5 (too few)
+  anomaly : h1 n    0 (too few)
+            h2 n    0 (too few)
+  unread  : h1 n 2259 paid 0.67 at minute  2.1 | bid later >=+5c 86% >=+10c 81% | fell 17.6c first | never 1c over  8% | won 66%
+            h2 n 2215 paid 0.66 at minute  1.5 | bid later >=+5c 88% >=+10c 82% | fell 17.8c first | never 1c over  7% | won 65%
+
+  --- together: how many of cushion, trend, history say YES (0-3), then with the price curve not NO
+  h1 0 of 3 yes: n  694 paid 0.65 at minute  3.8 | bid later >=+5c 85% >=+10c 79% | fell 17.3c first | never 1c over  8% | won 68%
+  h1 1 of 3 yes: n 1830 paid 0.67 at minute  4.2 | bid later >=+5c 87% >=+10c 81% | fell 17.3c first | never 1c over  9% | won 64%
+  h1 2 of 3 yes: n  712 paid 0.69 at minute  3.2 | bid later >=+5c 86% >=+10c 81% | fell 17.6c first | never 1c over  8% | won 67%
+  h1 3 of 3 yes: n   76 paid 0.74 at minute  2.6 | bid later >=+5c 84% >=+10c 83% | fell 18.5c first | never 1c over  7% | won 76%
+  h1 2+ of 3 yes and price not NO: n  171 paid 0.68 at minute  6.3 | bid later >=+5c 84% >=+10c 77% | fell 17.5c first | never 1c over  7% | won 65%
+  h1 2+ of 3 yes and price NO    : n    7 (too few)
+  h2 0 of 3 yes: n  686 paid 0.65 at minute  2.9 | bid later >=+5c 85% >=+10c 78% | fell 17.2c first | never 1c over  9% | won 62%
+  h2 1 of 3 yes: n 1925 paid 0.67 at minute  3.7 | bid later >=+5c 88% >=+10c 83% | fell 17.8c first | never 1c over  7% | won 66%
+  h2 2 of 3 yes: n  677 paid 0.67 at minute  3.2 | bid later >=+5c 87% >=+10c 80% | fell 16.9c first | never 1c over  8% | won 67%
+  h2 3 of 3 yes: n   24 paid 0.76 at minute  1.6 | bid later >=+5c 83% >=+10c 75% | fell 15.5c first | never 1c over 17% | won 75%
+  h2 2+ of 3 yes and price not NO: n  239 paid 0.67 at minute  6.1 | bid later >=+5c 85% >=+10c 79% | fell 17.5c first | never 1c over 10% | won 68%
+  h2 2+ of 3 yes and price NO    : n    3 (too few)
+
+######## THE LAST 3 MINUTES (minutes 12-15): 2293 bets
+  ALL          : h1 n 1146 paid 0.73 at minute 12.6 | bid later >=+5c 84% >=+10c 77% | fell 12.8c first | never 1c over 10% | won 71%
+                 h2 n 1147 paid 0.73 at minute 12.5 | bid later >=+5c 86% >=+10c 79% | fell 13.4c first | never 1c over  8% | won 74%
+
+  --- check: cushion
+  yes     : h1 n  598 paid 0.76 at minute 12.4 | bid later >=+5c 82% >=+10c 75% | fell 12.8c first | never 1c over 10% | won 70%
+            h2 n  605 paid 0.76 at minute 12.4 | bid later >=+5c 88% >=+10c 81% | fell 13.6c first | never 1c over  6% | won 77%
+  mid     : h1 n  367 paid 0.71 at minute 12.4 | bid later >=+5c 86% >=+10c 79% | fell 13.3c first | never 1c over  9% | won 69%
+            h2 n  345 paid 0.71 at minute 12.5 | bid later >=+5c 86% >=+10c 78% | fell 13.9c first | never 1c over 10% | won 69%
+  no      : h1 n  174 paid 0.70 at minute 13.3 | bid later >=+5c 83% >=+10c 75% | fell 11.7c first | never 1c over 11% | won 78%
+            h2 n  197 paid 0.69 at minute 13.2 | bid later >=+5c 82% >=+10c 75% | fell 12.1c first | never 1c over 11% | won 76%
+  anomaly : h1 n    0 (too few)
+            h2 n    0 (too few)
+  unread  : h1 n    7 (too few)
+            h2 n    0 (too few)
+
+  --- check: trend
+  yes     : h1 n  398 paid 0.73 at minute 12.7 | bid later >=+5c 84% >=+10c 75% | fell 13.5c first | never 1c over  9% | won 74%
+            h2 n  441 paid 0.73 at minute 12.6 | bid later >=+5c 86% >=+10c 78% | fell 13.5c first | never 1c over  8% | won 72%
+  mid     : h1 n  411 paid 0.73 at minute 12.4 | bid later >=+5c 83% >=+10c 78% | fell 11.3c first | never 1c over 11% | won 71%
+            h2 n  407 paid 0.73 at minute 12.5 | bid later >=+5c 86% >=+10c 80% | fell 12.8c first | never 1c over  9% | won 75%
+  no      : h1 n  321 paid 0.74 at minute 12.6 | bid later >=+5c 83% >=+10c 77% | fell 13.8c first | never 1c over 11% | won 67%
+            h2 n  293 paid 0.74 at minute 12.5 | bid later >=+5c 87% >=+10c 80% | fell 14.0c first | never 1c over  7% | won 75%
+  anomaly : h1 n    9 (too few)
+            h2 n    6 (too few)
+  unread  : h1 n    7 (too few)
+            h2 n    0 (too few)
+
+  --- check: history
+  yes     : h1 n  388 paid 0.74 at minute 12.5 | bid later >=+5c 85% >=+10c 78% | fell 12.3c first | never 1c over  9% | won 71%
+            h2 n  381 paid 0.74 at minute 12.4 | bid later >=+5c 87% >=+10c 81% | fell 12.7c first | never 1c over  8% | won 76%
+  mid     : h1 n  482 paid 0.73 at minute 12.6 | bid later >=+5c 82% >=+10c 75% | fell 12.4c first | never 1c over 11% | won 70%
+            h2 n  500 paid 0.73 at minute 12.6 | bid later >=+5c 85% >=+10c 77% | fell 14.2c first | never 1c over  8% | won 72%
+  no      : h1 n  262 paid 0.72 at minute 12.6 | bid later >=+5c 83% >=+10c 77% | fell 14.5c first | never 1c over 11% | won 72%
+            h2 n  260 paid 0.72 at minute 12.6 | bid later >=+5c 87% >=+10c 80% | fell 13.0c first | never 1c over  8% | won 74%
+  anomaly : h1 n    7 (too few)
+            h2 n    6 (too few)
+  unread  : h1 n    7 (too few)
+            h2 n    0 (too few)
+
+  --- check: volatility
+  yes     : h1 n  333 paid 0.74 at minute 12.6 | bid later >=+5c 84% >=+10c 77% | fell 12.2c first | never 1c over  8% | won 73%
+            h2 n  295 paid 0.73 at minute 12.5 | bid later >=+5c 87% >=+10c 81% | fell 14.0c first | never 1c over  7% | won 76%
+  mid     : h1 n  374 paid 0.73 at minute 12.5 | bid later >=+5c 83% >=+10c 77% | fell 12.9c first | never 1c over 12% | won 68%
+            h2 n  405 paid 0.73 at minute 12.6 | bid later >=+5c 86% >=+10c 79% | fell 13.4c first | never 1c over  8% | won 75%
+  no      : h1 n  398 paid 0.72 at minute 12.6 | bid later >=+5c 83% >=+10c 75% | fell 13.2c first | never 1c over 11% | won 71%
+            h2 n  418 paid 0.73 at minute 12.6 | bid later >=+5c 86% >=+10c 79% | fell 13.1c first | never 1c over  8% | won 73%
+  anomaly : h1 n   34 paid 0.72 at minute 12.5 | bid later >=+5c 97% >=+10c 88% | fell 12.1c first | never 1c over  3% | won 76%
+            h2 n   29 paid 0.74 at minute 12.6 | bid later >=+5c 86% >=+10c 72% | fell 13.6c first | never 1c over 10% | won 66%
+  unread  : h1 n    7 (too few)
+            h2 n    0 (too few)
+
+  --- check: price
+  yes     : h1 n  528 paid 0.73 at minute 12.6 | bid later >=+5c 84% >=+10c 76% | fell 13.1c first | never 1c over  9% | won 73%
+            h2 n  557 paid 0.74 at minute 12.6 | bid later >=+5c 85% >=+10c 76% | fell 13.6c first | never 1c over  8% | won 74%
+  mid     : h1 n  412 paid 0.73 at minute 12.5 | bid later >=+5c 85% >=+10c 78% | fell 12.3c first | never 1c over 10% | won 71%
+            h2 n  385 paid 0.73 at minute 12.4 | bid later >=+5c 88% >=+10c 82% | fell 13.3c first | never 1c over  8% | won 74%
+  no      : h1 n  171 paid 0.72 at minute 12.6 | bid later >=+5c 80% >=+10c 74% | fell 12.9c first | never 1c over 12% | won 64%
+            h2 n  177 paid 0.73 at minute 12.5 | bid later >=+5c 88% >=+10c 82% | fell 13.3c first | never 1c over  8% | won 77%
+  anomaly : h1 n   25 paid 0.76 at minute 12.6 | bid later >=+5c 88% >=+10c 84% | fell 13.6c first | never 1c over  4% | won 80%
+            h2 n   28 paid 0.72 at minute 12.6 | bid later >=+5c 82% >=+10c 79% | fell 12.2c first | never 1c over 11% | won 68%
+  unread  : h1 n   10 (too few)
+            h2 n    0 (too few)
+
+  --- check: pricedip
+  yes     : h1 n  520 paid 0.74 at minute 12.6 | bid later >=+5c 86% >=+10c 77% | fell 13.0c first | never 1c over  9% | won 73%
+            h2 n  503 paid 0.74 at minute 12.6 | bid later >=+5c 85% >=+10c 78% | fell 12.7c first | never 1c over  8% | won 74%
+  mid     : h1 n  532 paid 0.73 at minute 12.5 | bid later >=+5c 82% >=+10c 76% | fell 12.1c first | never 1c over 11% | won 70%
+            h2 n  571 paid 0.73 at minute 12.5 | bid later >=+5c 87% >=+10c 80% | fell 13.6c first | never 1c over  8% | won 74%
+  no      : h1 n   84 paid 0.72 at minute 12.7 | bid later >=+5c 80% >=+10c 75% | fell 15.4c first | never 1c over 12% | won 65%
+            h2 n   73 paid 0.72 at minute 12.6 | bid later >=+5c 86% >=+10c 79% | fell 17.2c first | never 1c over  8% | won 78%
+  anomaly : h1 n    0 (too few)
+            h2 n    0 (too few)
+  unread  : h1 n   10 (too few)
+            h2 n    0 (too few)
+
+  --- together: how many of cushion, trend, history say YES (0-3), then with the price curve not NO
+  h1 0 of 3 yes: n  173 paid 0.69 at minute 12.7 | bid later >=+5c 85% >=+10c 77% | fell 13.0c first | never 1c over 11% | won 69%
+  h1 1 of 3 yes: n  596 paid 0.73 at minute 12.6 | bid later >=+5c 83% >=+10c 77% | fell 12.6c first | never 1c over 11% | won 72%
+  h1 2 of 3 yes: n  343 paid 0.75 at minute 12.4 | bid later >=+5c 84% >=+10c 78% | fell 12.8c first | never 1c over  7% | won 72%
+  h1 3 of 3 yes: n   34 paid 0.79 at minute 12.3 | bid later >=+5c 79% >=+10c 62% | fell 15.0c first | never 1c over 12% | won 71%
+  h1 2+ of 3 yes and price not NO: n  302 paid 0.76 at minute 12.3 | bid later >=+5c 83% >=+10c 75% | fell 13.0c first | never 1c over  8% | won 73%
+  h1 2+ of 3 yes and price NO    : n   70 paid 0.73 at minute 12.7 | bid later >=+5c 86% >=+10c 79% | fell 13.0c first | never 1c over  7% | won 66%
+  h2 0 of 3 yes: n  155 paid 0.69 at minute 12.7 | bid later >=+5c 83% >=+10c 78% | fell 13.2c first | never 1c over 10% | won 71%
+  h2 1 of 3 yes: n  593 paid 0.73 at minute 12.6 | bid later >=+5c 86% >=+10c 78% | fell 13.6c first | never 1c over  8% | won 73%
+  h2 2 of 3 yes: n  363 paid 0.76 at minute 12.4 | bid later >=+5c 87% >=+10c 81% | fell 13.5c first | never 1c over  7% | won 77%
+  h2 3 of 3 yes: n   36 paid 0.77 at minute 12.3 | bid later >=+5c 97% >=+10c 92% | fell 10.4c first | never 1c over  3% | won 72%
+  h2 2+ of 3 yes and price not NO: n  314 paid 0.77 at minute 12.3 | bid later >=+5c 88% >=+10c 82% | fell 13.3c first | never 1c over  7% | won 76%
+  h2 2+ of 3 yes and price NO    : n   83 paid 0.74 at minute 12.5 | bid later >=+5c 88% >=+10c 82% | fell 13.3c first | never 1c over  7% | won 80%
+
+done in 147s
+exit=0  results in job-results/20261121-164552-24677/

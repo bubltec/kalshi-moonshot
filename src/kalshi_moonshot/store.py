@@ -379,7 +379,6 @@ def writes_in_background() -> bool:
 def _with_snapshot(d: dict) -> dict:
     """Take the row's entry snapshot now, as of the row's own time (the caller handed over a job instead of taking it before the evaluation), and merge it under whatever factors the row already carries."""
     job = d.pop("_factors_job", None)
-    score = d.pop("_context_score", False)
     if job is not None:
         try:
             snap = job(float(d["ts"]))
@@ -388,13 +387,6 @@ def _with_snapshot(d: dict) -> dict:
                 d["factors"] = json.dumps(json.loads(snap) | json.loads(have)) if have else snap
         except Exception:
             _log.exception("decision writer: no entry snapshot for %s", d.get("ticker"))
-    if score and d.get("action") == "bet":
-        try:
-            from . import config, contextscore
-
-            contextscore.annotate(d, config.load())
-        except Exception:
-            _log.debug("decision writer: no context score for %s", d.get("ticker"), exc_info=True)
     return d
 
 
@@ -876,7 +868,7 @@ class Store:
     def _add_bet_now(self, d: dict[str, Any]) -> int:
         """A bet's row is needed the moment the order is placed (the watcher and the books read it), WITHOUT its entry snapshot: the snapshot is five reads of the tape, so it is taken by the write-behind thread as of the row's own time and put on the row with an UPDATE (2026-11-19: those reads were inside the buy decision, 45 of them in an hour).
         With an id from the reserved pool the row joins the bet book in memory at once and the INSERT is written behind (2026-11-19, user: "why do we have anything in SQL? It should be in memory"). Without one (SQLite, or the pool ran dry) the INSERT is made here, as before."""
-        extra = {k: d.pop(k) for k in ("_factors_job", "_context_score") if k in d}
+        extra = {k: d.pop(k) for k in ("_factors_job",) if k in d}
         base = dict(d)
         pre = self._reserved_id()
         if pre is not None and _BACKGROUND["on"]:

@@ -248,3 +248,92 @@ def test_unit_cooldown_blocks_a_market_the_lane_just_sold_on_either_side(tmp_pat
         assert got.ok is False and "30s ago" in got.why
     assert ask("cooldown", spec(reentry_cooldown_seconds=20), p_yes=0.9, store=store).ok is True  # past its wait
     assert ask("cooldown", spec(), p_yes=0.9, store=store).ok is False  # a lane that sets no wait: the step is a no, as every step of a lane that sets nothing for it
+
+
+# --- 2026-11-21: the cushion and variety steps read Kalshi's own price, never the outside feed, and memory only ---
+
+def _fill(index, now, open_value, value, wobble=0.0005):
+    """Ticks every second from 20 minutes back: `open_value` until the market opened (500 s ago), `value` since, with a small wobble so there is a rate."""
+    for k in range(1201):
+        t = now - 1200 + k
+        ticks.history.note(index, t, (open_value if t < now - 500 else value) * (1.0 + wobble * (k % 2)))
+
+
+def test_unit_a_commodity_snapshot_reads_the_kalshi_perp_and_not_the_outside_feed(monkeypatch):
+    from kalshi_moonshot import biquotefeed, perpref
+
+    ticks.history.clear()
+    monkeypatch.setattr(variants.db, "reader", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the tape must not be read in a buy decision")))
+    now, s = 50_000.0, config.load()
+    try:
+        _fill(perpref.index_for_series("KXGOLD15M"), now, 100.0, 101.0)  # Kalshi's perp: up 1% since the open, YES is ahead
+        _fill(biquotefeed.index_for_series("KXGOLD15M"), now, 100.0, 99.0)  # the outside feed says the opposite
+        assert variants.kalshi_index("KXGOLD15M", now) == perpref.index_for_series("KXGOLD15M")
+        yes, no = variants.snapshot_now(s, "KXGOLD15M", "yes", 400.0, now=now), variants.snapshot_now(s, "KXGOLD15M", "no", 400.0, now=now)
+        assert yes["z"] > 0 > no["z"]  # the perp's side, not the outside feed's
+    finally:
+        ticks.history.clear()
+
+
+def test_unit_a_silent_perp_is_no_reading_and_the_outside_feed_is_not_a_fallback(monkeypatch):
+    from kalshi_moonshot import biquotefeed, perpref
+
+    ticks.history.clear()
+    monkeypatch.setattr(variants.db, "reader", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the tape must not be read in a buy decision")))
+    now, s = 50_000.0, config.load()
+    try:
+        _fill(biquotefeed.index_for_series("KXGOLD15M"), now, 100.0, 101.0)  # only the outside feed ticks
+        assert variants.kalshi_index("KXGOLD15M", now) is None and variants.snapshot_now(s, "KXGOLD15M", "yes", 400.0, now=now) is None
+        _fill(perpref.index_for_series("KXGOLD15M"), now - 60.0, 100.0, 101.0)  # a perp whose newest tick is a minute old is not a live price
+        assert variants.kalshi_index("KXGOLD15M", now) is None and variants.snapshot_now(s, "KXGOLD15M", "yes", 400.0, now=now) is None
+    finally:
+        ticks.history.clear()
+
+
+def test_integration_the_cushion_and_variety_steps_follow_the_perp_through_the_real_reading(monkeypatch):
+    """No stub of the reading: ticks in memory, the step, the answer. The perp says YES is ahead by a wide cushion and the outside feed says NO is; the steps pass YES and refuse NO. With the perp silent the cushion step is a no and the variety step does not skip."""
+    from kalshi_moonshot import biquotefeed, perpref
+
+    ticks.history.clear()
+    monkeypatch.setattr(variants.db, "reader", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the tape must not be read in a buy decision")))
+    sp, now = spec(min_cushion_z=0.8, max_spot_crosses=4, skip_varieties=("G",)), 50_000.0
+    try:
+        _fill(perpref.index_for_series("KXGOLD15M"), now, 100.0, 101.0)
+        _fill(biquotefeed.index_for_series("KXGOLD15M"), now, 100.0, 99.0)
+        yes, no = ask("cushion", sp, shot("yes"), now=now), ask("cushion", sp, shot("no"), now=now)
+        assert yes.ok is True and "cushion z +" in yes.why and no.ok is False and "under the lane's" in no.why
+        assert "variety " in ask("variety", sp, shot("yes"), now=now).why and "not readable" not in ask("variety", sp, shot("yes"), now=now).why
+        ticks.history.clear()
+        _fill(biquotefeed.index_for_series("KXGOLD15M"), now, 100.0, 101.0)
+        assert ask("cushion", sp, shot("yes"), now=now).ok is False and "cannot be read" in ask("cushion", sp, shot("yes"), now=now).why
+        assert "not readable" in ask("variety", sp, shot("yes"), now=now).why
+    finally:
+        ticks.history.clear()
+
+
+# --- 2026-11-21: the context_score step is removed; a lane file that still names it loads without it ---
+
+def test_unit_the_context_score_step_and_its_module_are_gone():
+    import importlib
+
+    assert "context_score" not in lanes.BUY_STEPS and "context_score" not in buychain.STEPS and "context_score" in lanes.RETIRED_STEPS
+    with pytest.raises(ImportError):
+        importlib.import_module("kalshi_moonshot.contextscore")
+
+
+def test_integration_a_lane_file_that_still_names_context_score_loads_without_it(tmp_path, monkeypatch, caplog):
+    """Lane file -> module -> spec: a config written for the older image does not stop the bot; the retired step is dropped and logged, the other steps keep their order, and an unknown step is still refused."""
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    text = "[module.m]\nsteps=['price','cushion','context_score','cooldown']\nmin_cushion_z=0.8\n\n[lane.a]\nestimator='market'\nprice=[0.60,0.92]\nhours=[0.0,1.0]\nseries=['KXGOLD15M']\nmax_spread=0.05\nmin_volume=0\nbuy_module='m'\n"
+    with caplog.at_level("WARNING", logger="moonshot"):
+        sp = lanes.lane_specs_from(config.load(), text)["a"]
+    assert sp.buy_chain == ("price", "cushion", "cooldown") and "context_score" in caplog.text
+    with pytest.raises(ValueError):
+        lanes.lane_specs_from(config.load(), text.replace("context_score", "no_such_step"))
+
+
+@pytest.mark.skipif(not LANES_FILE.exists(), reason="no local lane file")
+def test_integration_the_real_lane_file_loads_and_no_lane_keeps_the_retired_step(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    got = lanes.lane_specs_from(config.load(), LANES_FILE.read_text())
+    assert got and all("context_score" not in sp.buy_chain for sp in got.values())
