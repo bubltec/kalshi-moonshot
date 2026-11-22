@@ -1316,10 +1316,6 @@ class ProfitWatcher:
 
             if binaryrisk.wanted(specs):  # the shadow step or the deciding step
                 binaryrisk.maybe_refit(s)
-            if any(sp.enabled and "context_score" in sp.buy_chain for sp in specs.values()):
-                from . import contextscore
-
-                contextscore.maybe_refit(s)
         except Exception:
             log.warning("watcher: refitting a buy step's model failed", exc_info=True)
         finally:

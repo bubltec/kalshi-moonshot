@@ -332,12 +332,6 @@ def curve_model_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
-@step("context_score")
-def context_score_step(ctx: Ctx, shot: LongShot) -> Check:
-    """SHADOW, never says no (2026-11-19, user: "yes", to a shadow step for the readings together): the context score (contextscore.py) is read when the bet's row is written, from the readings the row carries, and put in its note (runner._log asks for it when the lane's chain names this step). It asks nothing of the market itself."""
-    return Check(True, "context score read when the row is written (shadow)")
-
-
 @step("binary_risk_shadow")
 def binary_risk_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
     """SHADOW, never says no (2026-11-20, user: "yes let's try it"): the binary risk model (binaryrisk.py), a buy-or-not score read from the settlement index's own curve and the price paid, is asked of every side that reaches this step, and its verdict goes in the decision's note as "would buy" or "would not buy" with the predicted net per $1 and the curve readings. The bet is scored later by that verdict, held and as sold, on the same bets (CLAUDE.md rule 5: a week of live bets before anyone turns it on). Reads memory only. It changes nothing the lane does."""

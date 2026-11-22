@@ -434,10 +434,6 @@ def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
     fields.setdefault("lane_ver", _lane_version(store, s, shot.lane))
     if shot.factors:
         fields.setdefault("factors", shot.factors)
-    if fields.get("action") == "bet":
-        spec = lane_specs(s).get(shot.lane)
-        if spec is not None and "context_score" in spec.buy_chain:
-            fields["_context_score"] = True  # the row is annotated with the context score when it is written, after its snapshot is in (store._with_snapshot)
     if shot.factors_job is not None:
         fields["_factors_job"] = shot.factors_job  # the entry snapshot is taken by whoever writes the row, as of the decision's time: the evaluation does not read the tape for it
     store.add_decision(

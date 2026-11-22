@@ -309,3 +309,31 @@ def test_integration_the_cushion_and_variety_steps_follow_the_perp_through_the_r
         assert "not readable" in ask("variety", sp, shot("yes"), now=now).why
     finally:
         ticks.history.clear()
+
+
+# --- 2026-11-21: the context_score step is removed; a lane file that still names it loads without it ---
+
+def test_unit_the_context_score_step_and_its_module_are_gone():
+    import importlib
+
+    assert "context_score" not in lanes.BUY_STEPS and "context_score" not in buychain.STEPS and "context_score" in lanes.RETIRED_STEPS
+    with pytest.raises(ImportError):
+        importlib.import_module("kalshi_moonshot.contextscore")
+
+
+def test_integration_a_lane_file_that_still_names_context_score_loads_without_it(tmp_path, monkeypatch, caplog):
+    """Lane file -> module -> spec: a config written for the older image does not stop the bot; the retired step is dropped and logged, the other steps keep their order, and an unknown step is still refused."""
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    text = "[module.m]\nsteps=['price','cushion','context_score','cooldown']\nmin_cushion_z=0.8\n\n[lane.a]\nestimator='market'\nprice=[0.60,0.92]\nhours=[0.0,1.0]\nseries=['KXGOLD15M']\nmax_spread=0.05\nmin_volume=0\nbuy_module='m'\n"
+    with caplog.at_level("WARNING", logger="moonshot"):
+        sp = lanes.lane_specs_from(config.load(), text)["a"]
+    assert sp.buy_chain == ("price", "cushion", "cooldown") and "context_score" in caplog.text
+    with pytest.raises(ValueError):
+        lanes.lane_specs_from(config.load(), text.replace("context_score", "no_such_step"))
+
+
+@pytest.mark.skipif(not LANES_FILE.exists(), reason="no local lane file")
+def test_integration_the_real_lane_file_loads_and_no_lane_keeps_the_retired_step(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    got = lanes.lane_specs_from(config.load(), LANES_FILE.read_text())
+    assert got and all("context_score" not in sp.buy_chain for sp in got.values())
