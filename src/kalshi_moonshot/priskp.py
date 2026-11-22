@@ -171,25 +171,62 @@ def confirmed(ticker: str, side: str, ok: bool, now: float) -> tuple[bool, int]:
         return n >= CONFIRM, n
 
 
-def note(side: str, states: dict[str, int | str], count: int, minute: float) -> str:
-    """The market note for one side at one reading, one declarative line (the notes draft, studies/results/2026-11-22-priskp-notes-draft.md): what the checks decided and why, so a later reading and the review page can cite it.
+def note(side: str, states: dict[str, int | str], count: int, minute: float) -> dict[str, Any]:
+    """The market note for one side at one reading, as PROPERTIES the bot can read (user, 2026-11-22: "it could be more yaml like so it's just properties"). A later reading, a sell step and the review page read the keys; render() writes it as YAML-like lines for a log or a decision's note and parse() reads those lines back.
 
-      buy YES because all five checks read and pass, cushion fifth 5, 3 of 3 readings
-      wait NO 2 of 3 readings: all five pass and the cushion is in fifth 5
-      refuse YES because trend fifth 2, price unread
-      wait YES minute 1.5, before the window
+        verb: refuse | wait | buy
+        side: yes | no
+        minute: 5.0                 minutes since the open
+        why: trend_low | unread | cushion_not_strong | confirming | window | pass
+        failing: [trend, price]     the checks not in fifths 4-5 (empty when none)
+        cushion_fifth: 5            1-5, or anomaly / unread
+        confirm: 2                  readings in a row so far
+        need: 3                     readings in a row needed
+        <check>_fifth: ...          each of the five checks' fifth
     """
-    S = side.upper()
+    d: dict[str, Any] = {"verb": "", "side": side, "minute": round(minute, 2), "why": "", "failing": [c for c in CHECKS if states[c] not in (4, 5)], "cushion_fifth": states["cushion"], "confirm": count, "need": CONFIRM}
+    for c in CHECKS:
+        d[f"{c}_fifth"] = states[c]
     if minute < 2.0 or minute > 14.0:
-        return f"wait {S} minute {minute:.1f}, outside the window of minutes 2 to 14"
-    bad = [f"{c} {'fifth ' + str(states[c]) if isinstance(states[c], int) else states[c]}" for c in CHECKS if states[c] not in (4, 5)]
-    if bad:
-        return f"refuse {S} because " + ", ".join(bad)
-    if states["cushion"] != 5:
-        return f"wait {S} all five pass but the cushion is in fifth {states['cushion']}, not 5"
-    if count < CONFIRM:
-        return f"wait {S} {count} of {CONFIRM} readings: all five pass and the cushion is in fifth 5"
-    return f"buy {S} because all five checks read and pass, cushion fifth 5, {count} readings in a row"
+        d["verb"], d["why"] = "wait", "window"
+    elif d["failing"]:
+        d["verb"], d["why"] = "refuse", "unread" if any(states[c] == "unread" for c in d["failing"]) else "check_not_passing"
+    elif states["cushion"] != 5:
+        d["verb"], d["why"] = "wait", "cushion_not_strong"
+    elif count < CONFIRM:
+        d["verb"], d["why"] = "wait", "confirming"
+    else:
+        d["verb"], d["why"] = "buy", "pass"
+    return d
+
+
+def render(d: dict[str, Any]) -> str:
+    """The note as YAML-like lines, one `key: value` each; a list is written [a, b]."""
+    out = []
+    for k, v in d.items():
+        out.append(f"{k}: [{', '.join(str(x) for x in v)}]" if isinstance(v, list) else f"{k}: {v}")
+    return "\n".join(out)
+
+
+def parse(text: str) -> dict[str, Any]:
+    """Read render()'s lines back into properties: integers, numbers and lists are restored, anything else stays text."""
+    d: dict[str, Any] = {}
+    for line in text.splitlines():
+        if ":" not in line:
+            continue
+        k, v = line.split(":", 1)
+        k, v = k.strip(), v.strip()
+        if v.startswith("[") and v.endswith("]"):
+            d[k] = [x.strip() for x in v[1:-1].split(",") if x.strip()]
+            continue
+        try:
+            d[k] = int(v)
+        except ValueError:
+            try:
+                d[k] = float(v)
+            except ValueError:
+                d[k] = v
+    return d
 
 
 class Staircase:

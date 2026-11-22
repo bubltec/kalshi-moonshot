@@ -116,10 +116,20 @@ def test_side_readings_without_enough_index_history_are_none():
     assert priskp.side_readings(T, V, [], 100.0, 500.0, V[100], 1000.0) is None
 
 
-def test_the_note_says_what_the_checks_decided_and_why():
+def test_the_note_is_properties_the_bot_can_read():
     ok = {c: 4 for c in priskp.CHECKS} | {"cushion": 5}
-    assert priskp.note("yes", ok, 3, 5.0) == "buy YES because all five checks read and pass, cushion fifth 5, 3 readings in a row"
-    assert priskp.note("no", ok, 2, 5.0) == "wait NO 2 of 3 readings: all five pass and the cushion is in fifth 5"
-    assert priskp.note("yes", ok | {"cushion": 4}, 3, 5.0).startswith("wait YES all five pass but the cushion is in fifth 4")
-    assert priskp.note("yes", ok | {"trend": 2, "price": "unread"}, 3, 5.0) == "refuse YES because trend fifth 2, price unread"
-    assert priskp.note("yes", ok, 3, 1.5).startswith("wait YES minute 1.5, outside the window")
+    n = priskp.note("yes", ok, 3, 5.0)
+    assert (n["verb"], n["why"], n["failing"], n["cushion_fifth"], n["confirm"], n["need"]) == ("buy", "pass", [], 5, 3, 3)
+    assert priskp.note("no", ok, 2, 5.0)["verb"] == "wait" and priskp.note("no", ok, 2, 5.0)["why"] == "confirming"
+    assert priskp.note("yes", ok | {"cushion": 4}, 3, 5.0)["why"] == "cushion_not_strong"
+    r = priskp.note("yes", ok | {"trend": 2, "price": "unread"}, 3, 5.0)
+    assert (r["verb"], r["why"], r["failing"]) == ("refuse", "unread", ["trend", "price"])
+    assert priskp.note("yes", ok, 3, 1.5)["why"] == "window" and priskp.note("yes", ok, 3, 14.5)["verb"] == "wait"
+
+
+def test_a_note_written_as_yaml_like_lines_reads_back_the_same():
+    ok = {c: 4 for c in priskp.CHECKS} | {"cushion": 5, "trend": "anomaly"}
+    n = priskp.note("yes", ok, 1, 7.25)
+    text = priskp.render(n)
+    assert "verb: refuse" in text and "failing: [trend]" in text and "trend_fifth: anomaly" in text
+    assert priskp.parse(text) == n
