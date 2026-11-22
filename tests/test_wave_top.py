@@ -304,6 +304,7 @@ def test_integration_the_sell_step_sells_a_dipped_bet(tmp_path, monkeypatch, mem
 
     w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['wave_salvage']")
     t = w.targets[(HELD, "risk_only")]
+    t.wave_whipsaw = 0.0
     opened = CLOSE - 900.0
     t.bought_ts = opened + 200.0
     before = [0.80 + 0.02 * ((k // 30) % 2) for k in range(200)]
@@ -330,6 +331,7 @@ def test_integration_the_salvage_does_not_sell_a_bet_that_is_winning_on_the_spot
 
     w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['wave_salvage']")
     t = w.targets[(HELD, "risk_only")]
+    t.wave_whipsaw = 0.0
     t.side = "yes"
     opened = CLOSE - 900.0
     t.bought_ts = opened + 200.0
@@ -366,6 +368,7 @@ def take_target(tmp_path, monkeypatch, entry, unit=0.10):
     t = w.targets[(HELD, "risk_only")]
     t.entry, t.bought_ts, t.side = entry, CLOSE - 800.0, "yes"
     t.shock_index, t.shock_ref = INDEX, 100.0
+    t.wave_whipsaw = 0.0  # the is_whipsaw_behavior switch is off here (it has its own tests)
     monkeypatch.setattr(w, "_risk_unit", lambda tt, now: unit)  # the bid's typical minute
     return w, t, CLOSE
 
@@ -483,3 +486,56 @@ def test_integration_the_exponent_sets_how_fast_the_swing_narrows(tmp_path, monk
     for bid in (0.36, 0.42, 0.30, 0.42, 0.40):
         ask(bid, 300)
     assert t.wave_last_low == pytest.approx(0.30)
+
+
+def switch_target(tmp_path, monkeypatch, bids, entry=0.30):
+    """A wave bet with the is_whipsaw_behavior switch ON, bought 800 s before the close, whose first bids (one a second from the buy) are `bids`."""
+    from tests.test_risk_exit_flow import TICKER as HELD
+
+    w, t, close = take_target(tmp_path, monkeypatch, entry, unit=0.10)
+    t.wave_whipsaw, t.wave_shape_s = 2.16, 120.0
+    for k, b in enumerate(bids):
+        ticks_mod.mids.note(HELD, t.bought_ts + k, b, b + 0.01)
+    return w, t, close
+
+
+def test_integration_is_whipsaw_behavior_holds_a_whipsaw_and_lets_the_sales_work_on_other_kinds(tmp_path, monkeypatch, mem):
+    # a whipsaw: the bid swings 0.24 to 0.55 in its first 120 s (a range of 3.1 typical minutes at a unit of 0.10)
+    wild = [0.24 + 0.31 * ((k // 15) % 2) for k in range(140)]
+    w, t, close = switch_target(tmp_path, monkeypatch, wild)
+    ask = asker(w, t, close)
+    assert w._is_whipsaw_behavior(t, t.bought_ts + 60.0) is None  # not read before the shape time
+    for bid in (0.36, 0.42, 0.35, 0.41, 0.48, 0.41, 0.34):  # the staircase's own climb and lower low (as in the staircase test)
+        assert ask(bid, 600) is None
+    assert w._is_whipsaw_behavior(t, t.bought_ts + 200.0) is True and t.wave_kind == "whipsaw" and t.wave_range_u == pytest.approx(3.1, abs=0.2)
+    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
+    t.wave_best_net = -9.0
+    for bid in (0.36, 0.42, 0.35, 0.41, 0.48, 0.41, 0.36, 0.30):
+        assert ask(bid, 60) is None  # held: a whipsaw is not sold by the staircase, even on a lower low under cost after being ahead
+    # a calm bet: a range of 0.6 typical minutes
+    tame = [0.30 + 0.06 * ((k // 20) % 2) for k in range(140)]
+    ticks_mod.mids.clear()
+    w2, t2, close2 = switch_target(tmp_path, monkeypatch, tame)
+    ask2 = asker(w2, t2, close2)
+    for bid in (0.36, 0.42, 0.36, 0.42, 0.36):
+        ask2(bid, 600)  # inside the first 120 s of the buy time (no sale) ... and after: asked below
+    assert w2._is_whipsaw_behavior(t2, t2.bought_ts + 200.0) is False and t2.wave_kind == "other"
+    t2.wave_dir, t2.wave_hi, t2.wave_lo, t2.wave_last_low = 0, 0.0, 0.0, 0.0
+    t2.wave_best_net = -9.0
+    for bid in (0.28, 0.36, 0.41, 0.35, 0.41, 0.48, 0.41, 0.36):
+        assert ask2(bid, 60) is None
+    why = ask2(0.34, 60)
+    assert why and "last swing low" in why  # another kind: the staircase sells as it does
+
+
+def test_integration_no_wave_sale_inside_the_shape_time_with_the_switch_on(tmp_path, monkeypatch, mem):
+    tame = [0.30 + 0.06 * ((k // 20) % 2) for k in range(140)]
+    w, t, close = switch_target(tmp_path, monkeypatch, tame)
+    ask = asker(w, t, close)
+    t.wave_best_net = 0.05
+    t.wave_dir, t.wave_last_low = -1, 0.35
+    t.wave_hi = t.wave_lo = 0.30
+    # 60 s after the buy (740 s left of 800): the staircase's lower low would sell, the switch holds it
+    assert ask(0.20, 740) is None
+    t.wave_kind = ""
+    assert ask(0.20, 600)  # 200 s after the buy: read as another kind, then the same lower low sells

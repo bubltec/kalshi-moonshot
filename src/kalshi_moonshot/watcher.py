@@ -203,6 +203,10 @@ class Target:
     wave_rev_k: float = 0.25
     wave_rev_p: float = 0.5
     wave_cushion: bool = True
+    wave_whipsaw: float = 0.0
+    wave_shape_s: float = 120.0
+    wave_kind: str = ""  # the kind-of-wave switch: "" not read yet, "whipsaw" (held), "other"
+    wave_range_u: float = 0.0
     wave_dir: int = 0  # the staircase: 1 rising, -1 pulling back, 0 not started
     wave_hi: float = 0.0
     wave_lo: float = 0.0
@@ -785,6 +789,30 @@ class ProfitWatcher:
         got = ticks_mod.history.window(t.shock_index, now - 620.0, now)
         return wavetop.spot_read(got[0], got[1], now, t.shock_ref, t.side) if got and got[0] else None
 
+    def _is_whipsaw_behavior(self, t: Target, now: float) -> bool | None:
+        """The is_whipsaw_behavior switch of the wave sales (lane field wave_whipsaw_range; user, 2026-11-22: "it needs to be integrated as a switch into the existing logic, so its not a separate step", "so staircase has a is_whipsaw_behavior switch"). The bet's bid range over its first wave_shape_seconds, in the bid's typical minutes, read once from the quote memory: at or over wave_whipsaw_range it is a whipsaw (True: held to settlement), under it another kind (False). None while the shape is not readable yet, and always False with the field at 0 (no switch)."""
+        if t.wave_whipsaw <= 0 or t.bought_ts <= 0:
+            return False
+        if t.wave_kind:
+            return t.wave_kind == "whipsaw"
+        if now - t.bought_ts < t.wave_shape_s:
+            return None
+        from . import wavetop
+
+        a = int(t.bought_ts)
+        path = [x for x in wavetop.side_bids(ticks_mod.mids.quotes(t.ticker), t.side, a, a + int(t.wave_shape_s) + 1) if x is not None]
+        unit = self._risk_unit(t, now)
+        if len(path) < int(t.wave_shape_s * 0.5) or not unit:
+            return None
+        t.wave_range_u = (max(path) - min(path)) / unit
+        t.wave_kind = "whipsaw" if t.wave_range_u >= t.wave_whipsaw else "other"
+        log.info("wave kind: %s %s is_whipsaw_behavior=%s (its bid range in the first %.0f s is %.2f typical minutes, the switch at %.2f)", t.ticker, t.lane, t.wave_kind == "whipsaw", t.wave_shape_s, t.wave_range_u, t.wave_whipsaw)
+        return t.wave_kind == "whipsaw"
+
+    def _wave_blocked(self, t: Target, now: float) -> bool:
+        """True when the wave sales must not sell this bet: it is a whipsaw, or the shape is not known yet (no wave sale in the first wave_shape_seconds when the switch is on)."""
+        return self._is_whipsaw_behavior(t, now) is not False
+
     def _sell_wave_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid:
         1. the staircase: the bid's swings are cut at rev = max(TICK, wave_rev_k x the bid's typical minute x (max(left, 60) / 60)^wave_rev_p x the cushion factor 2 x (1 - P_lose), wave_cushion); the first time the bid falls under the previous swing low (a lower low: the climb is done) it is sold, if the bet has ever been ahead after both fees: at a gain, or at a small loss (the backup that avoids a total loss);
@@ -821,7 +849,7 @@ class ProfitWatcher:
         elif net > 0 and bid >= wavetop.HIGH - 1e-9:
             if lose is not None and lose >= 1.0 - bid + fee_per_contract(bid):
                 reason, kind = f"wave take: the bid {bid:.2f} is in the high zone and the chance of losing it is {lose:.2f}, at least the {1.0 - bid + fee_per_contract(bid):.2f} the sale gives up over holding ({left:.0f} s left)", "high zone"
-        if not reason:
+        if not reason or self._wave_blocked(t, now):
             return None
         extra = {"gain": round(gain, 4), "net": round(net, 4), "rev": round(rev, 4), "last_low": round(t.wave_last_low, 4), "p_lose": None if lose is None else round(lose, 4), "kind": kind}
         if t.risk_live:
@@ -846,7 +874,7 @@ class ProfitWatcher:
     def _wave_salvage_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> str | None:
         from . import binaryrisk, wavetop
 
-        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0:
+        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0 or self._wave_blocked(t, now):
             return None
         spot = self._wave_spot(t, now)
         if spot is not None and spot[0] > 0:  # user, 2026-11-22: "salvage shouldn't sell winners": a bet whose spot average is on its side of the target is winning now and is not salvaged
@@ -1328,6 +1356,7 @@ class ProfitWatcher:
                 held.risk_take_trail_timed = spec.curve_take_trail_timed
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.wave_rev_k, held.wave_rev_p, held.wave_cushion = spec.wave_rev_k, spec.wave_rev_p, spec.wave_cushion
+                held.wave_whipsaw, held.wave_shape_s = spec.wave_whipsaw_range, spec.wave_shape_seconds
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.risk_time_to_go, held.risk_time_to_go_chance, held.risk_time_to_go_wait_share = spec.curve_risk_time_to_go, spec.curve_risk_time_to_go_chance, spec.curve_risk_time_to_go_wait_share
                 held.risk_late_tight, held.risk_late_tight_share, held.risk_late_tight_live = spec.curve_risk_late_tight, spec.curve_risk_late_tight_share, spec.curve_risk_late_tight_live
