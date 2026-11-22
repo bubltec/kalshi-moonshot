@@ -4,7 +4,9 @@ What it does, in order, with one contract of play money: rests a YES buy at 1c (
 POST /portfolio/events/orders/{order_id}/amend, reads the order back, and cancels it. It refuses to run unless the configured base URL is the
 demo exchange. It prints what Kalshi answered at each step and never prints a key.
 
-    KALSHI_ENV=demo KALSHI_KEY_ID=<demo key id> KALSHI_PRIVATE_KEY_PATH=<demo private key file> .venv/bin/python scripts/demo_amend_check.py
+    ENV_FILE=.env.demo .venv/bin/python scripts/demo_amend_check.py
+
+(.env.demo holds the demo key id and key file. The settings loader overlays ENV_FILE, which defaults to .env, the prod file.)
 """
 
 import json
