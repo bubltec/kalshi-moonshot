@@ -1,0 +1,117 @@
+window: 11-20 07:22 to 11-21 11:06 ET; 942 settled paper bets with a binary_risk note; recomputed on 942; with drift references 410
+
+################ crypto_risk_score: 615 bets, -189.28$, ahead 363 (avg +1.19), behind 252 (avg -2.46); ended: profit_take 181, settled 107, shape_timed 236, trail 91
+
+  THE 12 BIGGEST LOSERS
+  time ET     market                       side paid  min ended            net$ | pred  cut | cushion rec/new  1min rec/new  3min rec/new  5min rec/new | drift rec/new | place rec/new | trend  move30  vol
+  11-20 18:47 KXSOL15M-26NOV201900-00      yes 0.61  2.4 settled    LOST   -5.00 | +0.12 +0.10 |  n/a/+0.0     n/a/-0.0     n/a/-0.1     n/a/+0.1  |  n/a/+0.0    |  n/a/0.23    | +0.3  -3.6  -0.24
+  11-21 06:13 KXETH15M-26NOV210615-15      no  0.59 13.6 settled    LOST   -5.00 | +0.15 +0.14 |  n/a/-0.6     n/a/-0.3     n/a/-0.8     n/a/-0.8  |  n/a/-0.0    |  n/a/0.45    | +0.7  -1.6  -0.12
+  11-20 21:57 KXETH15M-26NOV202200-00      no  0.26 12.9 settled    LOST   -5.00 | +0.14 +0.11 |  n/a/-0.2     n/a/-0.2     n/a/-0.3     n/a/-0.3  |  n/a/-0.0    |  n/a/0.61    | +0.2  +2.5  +0.17
+  11-21 06:57 KXXRP15M-26NOV210700-00      no  0.70 12.0 settled    LOST   -5.00 | +0.19 +0.14 |  n/a/+0.6     n/a/+0.7     n/a/+0.6     n/a/+0.4  |  n/a/-0.0    |  n/a/0.71    | +0.1  -5.0  -0.18
+  11-20 08:45 KXZEC15M-26NOV200900-00      no  0.41  0.3 settled    LOST   -5.00 | +0.21 +0.20 |  n/a/+0.1     n/a/-0.1     n/a/+0.2     n/a/+0.1  |  n/a/-0.0    |  n/a/0.41    | -1.3  +0.4  +0.34
+  11-21 06:57 KXNEAR15M-26NOV210700-00     no  0.83 12.6 settled    LOST   -5.00 | +0.17 +0.14 |  n/a/+0.7     n/a/+1.0     n/a/+0.7     n/a/+0.3  |  n/a/-0.0    |  n/a/0.72    | +0.4  -3.4  -0.17
+  11-20 09:00 KXXRP15M-26NOV200915-15      no  0.46  0.7 settled    LOST   -5.00 | +0.37 +0.20 |  n/a/-0.0     n/a/-0.1     n/a/-0.0     n/a/-0.0  |  n/a/-0.0    |  n/a/0.12    | -0.1  -7.9  +0.23
+  11-20 19:41 KXZEC15M-26NOV201945-45      yes 0.71 11.2 settled    LOST   -5.00 | +0.07 +0.06 |  n/a/-0.1     n/a/-0.3     n/a/-0.2     n/a/+0.2  |  n/a/+0.0    |  n/a/0.28    | -0.3  -7.3  -0.08
+  11-21 09:03 KXXRP15M-26NOV210915-15      yes 0.70  3.5 settled    LOST   -5.00 | +0.14 +0.13 | +0.1/+0.1    +0.3/+0.3    +0.1/+0.1    +0.0/+0.0  | -0.3/+0.0    | 0.88/0.88    | +0.6  +11.7  -0.12
+  11-20 08:45 KXHYPE15M-26NOV200900-00     no  0.63  0.7 settled    LOST   -5.00 | +0.20 +0.20 |  n/a/-0.1     n/a/+0.1     n/a/-0.1     n/a/-0.2  |  n/a/-0.0    |  n/a/0.80    | +0.7  +7.0  +0.27
+  11-21 01:45 KXZEC15M-26NOV210200-00      no  0.65  0.2 settled    LOST   -5.00 | +0.15 +0.12 |  n/a/+0.0     n/a/-0.0     n/a/+0.1     n/a/-0.0  |  n/a/-0.0    |  n/a/0.19    | -0.3  -11.7  +0.34
+  11-21 07:30 KXBNB15M-26NOV210745-45      no  0.63  0.8 settled    LOST   -5.00 | +0.25 +0.12 |  n/a/+0.0     n/a/+0.1     n/a/+0.0     n/a/-0.0  |  n/a/-0.0    |  n/a/0.18    | +0.2  -7.1  -0.26
+
+  THE 12 BIGGEST WINNERS
+  time ET     market                       side paid  min ended            net$ | pred  cut | cushion rec/new  1min rec/new  3min rec/new  5min rec/new | drift rec/new | place rec/new | trend  move30  vol
+  11-20 08:29 KXBTC15M-26NOV200830-30      no  0.28 14.7 settled    won   +12.62 | +0.23 +0.20 |  n/a/+0.7     n/a/-0.2     n/a/+1.1     n/a/+1.3  |  n/a/-0.0    |  n/a/0.69    | -0.7  +1.7  -0.03
+  11-20 09:01 KXETH15M-26NOV200915-15      no  0.58  1.8 settled    won    +3.66 | +0.30 +0.20 |  n/a/-0.0     n/a/-0.1     n/a/-0.1     n/a/+0.0  |  n/a/-0.0    |  n/a/0.12    | -0.2  -7.8  +0.26
+  11-21 04:21 KXBNB15M-26NOV210430-30      yes 0.60  6.9 settled    won    +3.37 | +0.25 +0.18 |  n/a/-0.4     n/a/-0.1     n/a/-0.5     n/a/-0.4  |  n/a/+0.0    |  n/a/0.57    | +1.1  -2.9  -0.15
+  11-20 20:41 KXXRP15M-26NOV202045-45      yes 0.60 12.0 settled    won    +3.37 | +0.08 +0.07 |  n/a/-0.1     n/a/+0.1     n/a/-0.1     n/a/-0.3  |  n/a/+0.0    |  n/a/0.30    | +0.4  -2.4  +0.10
+  11-21 04:48 KXNEAR15M-26NOV210500-00     yes 0.61  3.0 settled    won    +3.24 | +0.18 +0.18 |  n/a/+0.2     n/a/+0.3     n/a/+0.2     n/a/+0.1  |  n/a/+0.0    |  n/a/0.62    | +0.6  -0.6  -0.25
+  11-21 04:18 KXDOGE15M-26NOV210430-30     yes 0.61  3.2 settled    won    +3.24 | +0.20 +0.18 |  n/a/+0.1     n/a/+0.1     n/a/+0.1     n/a/+0.1  |  n/a/+0.0    |  n/a/0.73    | -0.1  +1.6  +0.05
+  11-20 21:58 KXBTC15M-26NOV202200-00      no  0.62 13.5 settled    won    +3.12 | +0.18 +0.11 |  n/a/+0.2     n/a/+0.3     n/a/+0.3     n/a/+0.0  |  n/a/-0.0    |  n/a/0.84    | -0.0  +7.3  +0.29
+  11-20 19:27 KXBTC15M-26NOV201930-30      yes 0.62 12.4 settled    won    +3.11 | +0.07 +0.06 |  n/a/+0.4     n/a/+0.2     n/a/+0.6     n/a/+0.3  |  n/a/+0.0    |  n/a/0.76    | -0.6  +5.2  -0.03
+  11-21 04:16 KXXRP15M-26NOV210430-30      yes 0.62  1.6 settled    won    +3.11 | +0.20 +0.18 |  n/a/+0.1     n/a/+0.1     n/a/+0.1     n/a/+0.0  |  n/a/+0.0    |  n/a/0.77    | +0.2  +5.9  +0.04
+  11-20 13:08 KXSOL15M-26NOV201315-15      no  0.62  8.8 settled    won    +3.11 | +0.28 +0.18 |  n/a/+0.1     n/a/+0.1     n/a/+0.1     n/a/+0.2  |  n/a/-0.0    |  n/a/0.12    | -0.1  -3.2  -0.19
+  11-21 04:16 KXBTC15M-26NOV210430-30      yes 0.63  1.7 settled    won    +2.98 | +0.20 +0.18 |  n/a/+0.0     n/a/+0.1     n/a/+0.0     n/a/+0.1  |  n/a/+0.0    |  n/a/0.49    | +0.2  +1.5  -0.08
+  11-21 02:31 KXHYPE15M-26NOV210245-45     no  0.63  1.4 settled    won    +2.98 | +0.12 +0.11 |  n/a/-0.0     n/a/-0.0     n/a/-0.0     n/a/-0.1  |  n/a/-0.0    |  n/a/0.20    | -0.2  -6.5  -0.29
+
+  DOES EACH RECORDED READING RECOMPUTE? (the note rounds to 0.1, the place to 0.01)
+    czb    n   18 within 0.1 :   18 (100%)  median gap 0.029  90th pct 0.048  worst 0.05
+    cz1    n   18 within 0.1 :   18 (100%)  median gap 0.029  90th pct 0.046  worst 0.05
+    cz3    n   18 within 0.1 :   18 (100%)  median gap 0.032  90th pct 0.047  worst 0.05
+    cz5    n   18 within 0.1 :   18 (100%)  median gap 0.026  90th pct 0.045  worst 0.05
+    dr24   n   18 within 0.1 :    5 (28%)  median gap 0.300  90th pct 0.600  worst 0.60
+    pos30  n   18 within 0.02:   18 (100%)  median gap 0.003  90th pct 0.005  worst 0.00
+    the step read 0 s before the row's stamp (median); wrong side of the strike by the recomputed 1-minute cushion: 150 of 615
+
+  WINNERS AGAINST LOSERS, each reading by thirds (range, n, ahead, dollars); recorded readings first, then the recomputed ones the note does not carry
+    price paid                 0.26..  0.64 n 205  63%   -37.1 |   0.64..  0.70 n 205  60%   -62.1 |   0.70..  0.98 n 205  54%   -90.1
+    minute bought              0.10..  2.37 n 205  65%   -68.7 |   2.38..  8.83 n 205  61%   -20.3 |   8.84.. 14.65 n 205  51%  -100.2
+    predicted net (rec)        0.06..  0.13 n 205  58%   -50.2 |   0.14..  0.18 n 205  62%   -76.7 |   0.19..  0.39 n 205  57%   -62.4
+    pred over its cut (rec)    0.00..  0.01 n 205  64%   -32.7 |   0.01..  0.05 n 205  60%   -41.9 |   0.05..  0.25 n 205  53%  -114.7
+    trend 1v3 min (new)       -1.54.. -0.11 n 205  60%   -37.4 |  -0.11..  0.29 n 205  62%   -57.6 |   0.30..  2.91 n 205  55%   -94.3
+    30-min move (new)        -20.58.. -3.54 n 205  58%  -108.3 |  -3.52..  1.64 n 205  58%   -68.2 |   1.67.. 14.18 n 205  62%   -12.8
+    volatility ratio (new)    -0.57.. -0.16 n 205  48%  -152.0 |  -0.16..  0.01 n 205  62%   -26.9 |   0.01..  0.76 n 205  67%   -10.4
+    exit the prediction is for 3m n1 ahead 100% +0.9$; 5m n45 ahead 53% -1.4$; hold n569 ahead 59% -188.7$
+    side                     no n315 ahead 59% -128.6$; yes n300 ahead 59% -60.7$
+
+################ crypto_binary_risk: 327 bets, -155.38$, ahead 186 (avg +2.95), behind 141 (avg -5.00); ended: settled 327
+
+  THE 12 BIGGEST LOSERS
+  time ET     market                       side paid  min ended            net$ | pred  cut | cushion rec/new  1min rec/new  3min rec/new  5min rec/new | drift rec/new | place rec/new | trend  move30  vol
+  11-20 08:07 KXZEC15M-26NOV200815-15      yes 0.61  7.5 settled    LOST   -5.00 | +0.19 +0.19 |  n/a/-0.1     n/a/+0.2     n/a/-0.2     n/a/-0.3  |  n/a/+0.0    |  n/a/0.33    | +1.0  -1.5  -0.06
+  11-20 11:35 KXBNB15M-26NOV201145-45      no  0.62  5.3 settled    LOST   -5.00 | +0.16 +0.16 |  n/a/+0.1     n/a/+0.0     n/a/+0.1     n/a/+0.0  |  n/a/-0.0    |  n/a/0.74    | -0.1  -2.6  -0.29
+  11-20 15:00 KXBNB15M-26NOV201515-15      no  0.65  0.2 settled    LOST   -5.00 | +0.14 +0.13 |  n/a/-0.1     n/a/+0.1     n/a/-0.2     n/a/-0.2  |  n/a/-0.0    |  n/a/0.28    | +0.8  -8.6  -0.23
+  11-20 15:45 KXBNB15M-26NOV201600-00      yes 0.62  0.3 settled    LOST   -5.00 | +0.16 +0.11 |  n/a/+0.1     n/a/-0.0     n/a/+0.2     n/a/+0.2  |  n/a/+0.0    |  n/a/0.47    | -0.8  -1.6  +0.21
+  11-20 15:45 KXDOGE15M-26NOV201600-00     yes 0.62  0.3 settled    LOST   -5.00 | +0.17 +0.11 |  n/a/+0.1     n/a/+0.0     n/a/+0.1     n/a/+0.1  |  n/a/+0.0    |  n/a/0.45    | -0.5  -1.4  +0.26
+  11-20 19:00 KXNEAR15M-26NOV201915-15     yes 0.62  0.1 settled    LOST   -5.00 | +0.18 +0.10 |  n/a/-0.1     n/a/+0.1     n/a/-0.1     n/a/-0.2  |  n/a/+0.0    |  n/a/0.10    | +0.4  -11.2  -0.27
+  11-21 00:47 KXDOGE15M-26NOV210100-00     yes 0.62  2.7 settled    LOST   -5.00 | +0.17 +0.10 |  n/a/+0.1     n/a/+0.2     n/a/+0.1     n/a/+0.1  |  n/a/+0.0    |  n/a/0.16    | +0.5  -5.8  -0.01
+  11-21 00:47 KXBNB15M-26NOV210100-00      yes 0.64  2.9 settled    LOST   -5.00 | +0.27 +0.10 |  n/a/+0.0     n/a/+0.1     n/a/-0.0     n/a/-0.0  |  n/a/+0.0    |  n/a/0.13    | +0.6  -9.8  +0.05
+  11-21 01:45 KXHYPE15M-26NOV210200-00     no  0.64  0.6 settled    LOST   -5.00 | +0.14 +0.12 |  n/a/+0.2     n/a/-0.0     n/a/+0.2     n/a/+0.3  |  n/a/-0.0    |  n/a/0.08    | -1.0  -15.4  +0.24
+  11-21 04:48 KXXRP15M-26NOV210500-00      yes 0.64  3.3 settled    LOST   -5.00 | +0.31 +0.18 |  n/a/+0.1     n/a/+0.2     n/a/-0.0     n/a/+0.0  |  n/a/+0.0    |  n/a/0.79    | +0.7  +4.7  -0.15
+  11-21 01:45 KXZEC15M-26NOV210200-00      no  0.55  0.3 settled    LOST   -5.00 | +0.14 +0.12 |  n/a/+0.0     n/a/-0.0     n/a/+0.1     n/a/-0.0  |  n/a/-0.0    |  n/a/0.19    | -0.3  -11.7  +0.35
+  11-20 09:18 KXXRP15M-26NOV200930-30      no  0.64  3.4 settled    LOST   -5.00 | +0.30 +0.18 |  n/a/-0.0     n/a/-0.1     n/a/+0.0     n/a/+0.1  |  n/a/-0.0    |  n/a/0.09    | -0.4  -14.5  -0.28
+
+  THE 12 BIGGEST WINNERS
+  time ET     market                       side paid  min ended            net$ | pred  cut | cushion rec/new  1min rec/new  3min rec/new  5min rec/new | drift rec/new | place rec/new | trend  move30  vol
+  11-20 08:29 KXBTC15M-26NOV200830-30      no  0.27 14.6 settled    won   +13.28 | +0.22 +0.20 |  n/a/+0.7     n/a/-0.2     n/a/+1.1     n/a/+1.3  |  n/a/-0.0    |  n/a/0.69    | -0.7  +1.8  -0.03
+  11-21 05:52 KXZEC15M-26NOV210600-00      no  0.39  7.7 settled    won    +7.94 | +0.19 +0.19 |  n/a/-0.8     n/a/-0.7     n/a/-0.8     n/a/-0.8  |  n/a/-0.0    |  n/a/0.29    | +0.3  -2.9  +0.03
+  11-21 04:18 KXBTC15M-26NOV210430-30      yes 0.40  3.6 settled    won    +7.61 | +0.22 +0.18 |  n/a/+0.0     n/a/-0.0     n/a/+0.1     n/a/+0.0  |  n/a/+0.0    |  n/a/0.47    | -0.4  -0.8  -0.04
+  11-20 21:20 KXSOL15M-26NOV202130-30      yes 0.41  5.0 settled    won    +7.30 | +0.12 +0.11 |  n/a/-0.3     n/a/-0.3     n/a/-0.3     n/a/-0.3  |  n/a/+0.0    |  n/a/0.22    | +0.1  -2.7  -0.05
+  11-21 04:21 KXXRP15M-26NOV210430-30      yes 0.41  6.4 settled    won    +7.30 | +0.21 +0.18 |  n/a/-0.2     n/a/-0.4     n/a/-0.2     n/a/-0.1  |  n/a/+0.0    |  n/a/0.66    | -0.3  +1.1  +0.04
+  11-20 19:17 KXETH15M-26NOV201930-30      yes 0.41  2.9 settled    won    +7.30 | +0.09 +0.06 |  n/a/-0.2     n/a/-0.2     n/a/-0.1     n/a/-0.1  |  n/a/+0.0    |  n/a/0.49    | -0.3  -0.7  +0.08
+  11-20 19:17 KXDOGE15M-26NOV201930-30     yes 0.43  2.8 settled    won    +6.71 | +0.10 +0.06 |  n/a/-0.1     n/a/-0.2     n/a/-0.1     n/a/-0.1  |  n/a/+0.0    |  n/a/0.13    | -0.1  -6.5  -0.01
+  11-21 08:20 KXETH15M-26NOV210830-30      yes 0.44  5.6 settled    won    +6.44 | +0.14 +0.13 |  n/a/-0.2     n/a/-0.2     n/a/-0.3     n/a/-0.2  |  n/a/+0.0    |  n/a/0.51    | +0.5  +3.2  +0.09
+  11-20 09:00 KXHYPE15M-26NOV200915-15     no  0.44  0.3 settled    won    +6.44 | +0.32 +0.20 |  n/a/+0.1     n/a/-0.1     n/a/+0.1     n/a/+0.2  |  n/a/-0.0    |  n/a/0.12    | -0.7  -6.0  +0.16
+  11-21 10:00 KXZEC15M-26NOV211015-15      yes 0.44  0.3 settled    won    +6.44 | +0.19 +0.13 | +0.1/+0.1    +0.0/+0.0    +0.1/+0.1    +0.2/+0.2  | -0.3/+0.0    | 0.41/0.41    | -0.5  +0.8  -0.28
+  11-21 04:17 KXBNB15M-26NOV210430-30      yes 0.46  2.5 settled    won    +5.93 | +0.19 +0.18 |  n/a/-0.0     n/a/-0.0     n/a/-0.0     n/a/+0.0  |  n/a/+0.0    |  n/a/0.67    | +0.1  +3.8  -0.09
+  11-21 04:00 KXETH15M-26NOV210415-15      yes 0.46  0.9 settled    won    +5.93 | +0.17 +0.16 |  n/a/+0.0     n/a/-0.0     n/a/-0.0     n/a/+0.1  |  n/a/+0.0    |  n/a/0.56    | -0.1  +1.7  +0.07
+
+  DOES EACH RECORDED READING RECOMPUTE? (the note rounds to 0.1, the place to 0.01)
+    czb    n   19 within 0.1 :   19 (100%)  median gap 0.044  90th pct 0.064  worst 0.07
+    cz1    n   19 within 0.1 :   19 (100%)  median gap 0.017  90th pct 0.042  worst 0.05
+    cz3    n   19 within 0.1 :   19 (100%)  median gap 0.030  90th pct 0.047  worst 0.06
+    cz5    n   19 within 0.1 :   19 (100%)  median gap 0.027  90th pct 0.048  worst 0.06
+    dr24   n   19 within 0.1 :    4 (21%)  median gap 0.300  90th pct 0.600  worst 0.80
+    pos30  n   19 within 0.02:   18 (95%)  median gap 0.003  90th pct 0.012  worst 0.02
+    the step read 0 s before the row's stamp (median); wrong side of the strike by the recomputed 1-minute cushion: 120 of 327
+
+  WINNERS AGAINST LOSERS, each reading by thirds (range, n, ahead, dollars); recorded readings first, then the recomputed ones the note does not carry
+    price paid                 0.27..  0.59 n 109  42%   -93.3 |   0.59..  0.65 n 109  61%    -4.5 |   0.65..  0.98 n 109  68%   -57.5
+    minute bought              0.07..  1.90 n 109  50%   -83.1 |   1.90..  4.98 n 109  52%   -94.4 |   5.31.. 14.68 n 109  68%   +22.2
+    predicted net (rec)        0.06..  0.13 n 109  63%   -24.7 |   0.13..  0.18 n 109  53%   -93.9 |   0.18..  0.38 n 109  54%   -36.7
+    pred over its cut (rec)    0.00..  0.01 n 109  63%   -22.4 |   0.01..  0.03 n 109  58%   -24.8 |   0.03..  0.21 n 109  50%  -108.2
+    trend 1v3 min (new)       -1.55.. -0.11 n 109  50%   -86.9 |  -0.11..  0.35 n 109  63%   +12.2 |   0.37..  3.15 n 109  58%   -80.7
+    30-min move (new)        -17.53.. -3.31 n 109  50%  -106.9 |  -3.24..  2.20 n 109  59%   -15.9 |   2.29.. 17.01 n 109  61%   -32.5
+    volatility ratio (new)    -0.45.. -0.14 n 109  48%  -142.5 |  -0.14..  0.02 n 109  61%   -12.6 |   0.02..  0.68 n 109  62%    -0.2
+    exit the prediction is for 3m n4 ahead 75% -3.9$; 5m n22 ahead 64% +1.0$; hold n301 ahead 56% -152.5$
+    side                     no n172 ahead 54% -142.9$; yes n155 ahead 60% -12.5$
+
+=== BY MODEL VERSION (scripts/own_bets_binary_versions.py)
+crypto_risk_score  old (single cushion)        n 597 net  -181.75 ahead 59% | a 1, 3 or 5-minute cushion against the side: 277 | under 3 min left:  74 | first 2 min: 188
+crypto_risk_score  new (cushion vector, gate)  n  18 net    -7.53 ahead 67% | a 1, 3 or 5-minute cushion against the side:   0 | under 3 min left:   0 | first 2 min:   1
+crypto_binary_risk old (single cushion)        n 308 net  -149.25 ahead 56% | a 1, 3 or 5-minute cushion against the side: 186 | under 3 min left:  10 | first 2 min: 108
+crypto_binary_risk new (cushion vector, gate)  n  19 net    -6.13 ahead 63% | a 1, 3 or 5-minute cushion against the side:   1 | under 3 min left:   0 | first 2 min:   2
+old note's cushion against the recomputed czt: within 0.1 on 840 of 905, median gap 0.03
+old note's cushion against the recomputed cz3: within 0.1 on 186 of 905, median gap 0.25
+old note's cushion against the recomputed czb: within 0.1 on 199 of 905, median gap 0.22
+old note's cushion: median +0.30, at or under +0.2 on 49%, negative on 60
+crypto_risk_score old-version bets | today's gate would pass: n 275 net   -36.78 ahead 61% | refuse: n 322 net  -144.97 ahead 57%
+crypto_binary_risk old-version bets | today's gate would pass: n 117 net   -37.83 ahead 65% | refuse: n 191 net  -111.43 ahead 51%
