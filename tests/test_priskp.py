@@ -114,3 +114,12 @@ def test_side_readings_are_mirrored_between_the_sides():
 def test_side_readings_without_enough_index_history_are_none():
     T, V = _market(n=600)
     assert priskp.side_readings(T, V, [], 100.0, 500.0, V[100], 1000.0) is None
+
+
+def test_the_note_says_what_the_checks_decided_and_why():
+    ok = {c: 4 for c in priskp.CHECKS} | {"cushion": 5}
+    assert priskp.note("yes", ok, 3, 5.0) == "buy YES because all five checks read and pass, cushion fifth 5, 3 readings in a row"
+    assert priskp.note("no", ok, 2, 5.0) == "wait NO 2 of 3 readings: all five pass and the cushion is in fifth 5"
+    assert priskp.note("yes", ok | {"cushion": 4}, 3, 5.0).startswith("wait YES all five pass but the cushion is in fifth 4")
+    assert priskp.note("yes", ok | {"trend": 2, "price": "unread"}, 3, 5.0) == "refuse YES because trend fifth 2, price unread"
+    assert priskp.note("yes", ok, 3, 1.5).startswith("wait YES minute 1.5, outside the window")

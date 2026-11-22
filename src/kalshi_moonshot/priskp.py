@@ -171,6 +171,27 @@ def confirmed(ticker: str, side: str, ok: bool, now: float) -> tuple[bool, int]:
         return n >= CONFIRM, n
 
 
+def note(side: str, states: dict[str, int | str], count: int, minute: float) -> str:
+    """The market note for one side at one reading, one declarative line (the notes draft, studies/results/2026-11-22-priskp-notes-draft.md): what the checks decided and why, so a later reading and the review page can cite it.
+
+      buy YES because all five checks read and pass, cushion fifth 5, 3 of 3 readings
+      wait NO 2 of 3 readings: all five pass and the cushion is in fifth 5
+      refuse YES because trend fifth 2, price unread
+      wait YES minute 1.5, before the window
+    """
+    S = side.upper()
+    if minute < 2.0 or minute > 14.0:
+        return f"wait {S} minute {minute:.1f}, outside the window of minutes 2 to 14"
+    bad = [f"{c} {'fifth ' + str(states[c]) if isinstance(states[c], int) else states[c]}" for c in CHECKS if states[c] not in (4, 5)]
+    if bad:
+        return f"refuse {S} because " + ", ".join(bad)
+    if states["cushion"] != 5:
+        return f"wait {S} all five pass but the cushion is in fifth {states['cushion']}, not 5"
+    if count < CONFIRM:
+        return f"wait {S} {count} of {CONFIRM} readings: all five pass and the cushion is in fifth 5"
+    return f"buy {S} because all five checks read and pass, cushion fifth 5, {count} readings in a row"
+
+
 class Staircase:
     """The sell step's state for one bet (scripts/priskp_staircase_study.py, rule 1 with the swing size K0 = 1.0, chosen after seeing the study): swings of the bid, and the sale once the bid falls under the last confirmed swing low after the bet has been ahead.
 
