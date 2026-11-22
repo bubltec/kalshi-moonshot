@@ -1,0 +1,60 @@
+
+E0: buys on 6149 of 10568 markets
+  held                  : n  6149  net   -1005$  -1.6c per $1  ahead 77%  ended: held 6149
+  rule 1 staircase (0.25): n  6149  net   -1844$  -3.0c per $1  ahead 61%  ended: settled 3950 stair 2199
+  rule 2 high zone      : n  6149  net   -1910$  -3.1c per $1  ahead 87%  ended: p_lose 4760 settled 1389
+  both                  : n  6149  net   -2328$  -3.8c per $1  ahead 80%  ended: p_lose 4402 settled 966 stair 781
+  rule 1 with the cushion factor g (0.25, p 0.5): n  6149  net   -1574$  -2.6c per $1  ahead 64%  ended: settled 4435 stair 1714
+  both rules with g      : n  6149  net   -2071$  -3.4c per $1  ahead 82%  ended: p_lose 4521 settled 1004 stair 624
+    sensitivity, not chosen: g with k0 0.5: n  6149  net   -1218$  -2.0c per $1  ahead 72%  ended: settled 5101 stair 1048
+                             p 1.0 (no g): n  6149  net   -1356$  -2.2c per $1  ahead 70%  ended: settled 5045 stair 1104
+                             p 0.0 (no g): n  6149  net   -2365$  -3.8c per $1  ahead 57%  ended: settled 2994 stair 3155
+    sensitivity, not chosen, staircase 0.5: n  6149  net   -1584$  -2.6c per $1  ahead 68%  ended: settled 4879 stair 1270
+    sensitivity, not chosen, staircase 1.0: n  6149  net   -1120$  -1.8c per $1  ahead 75%  ended: settled 5771 stair 378
+  halves of the days (held | both): first -0.7c | -2.2c n3070 | second -2.6c | -5.4c n3079
+  by buy minute (held | both): 2-4: -2.5c | -4.5c n2971 | 4-7: +0.4c | -4.0c n1295 | 7-10: -3.3c | -3.9c n983 | 10-12: +0.7c | -1.0c n539 | 12-14: -0.8c | -0.7c n361
+
+E2: buys on 4018 of 10568 markets
+  held                  : n  4018  net    -272$  -0.7c per $1  ahead 85%  ended: held 4018
+  rule 1 staircase (0.25): n  4018  net    -948$  -2.4c per $1  ahead 69%  ended: settled 2940 stair 1078
+  rule 2 high zone      : n  4018  net    -821$  -2.0c per $1  ahead 92%  ended: p_lose 3194 settled 824
+  both                  : n  4018  net   -1085$  -2.7c per $1  ahead 88%  ended: p_lose 3056 settled 688 stair 274
+  rule 1 with the cushion factor g (0.25, p 0.5): n  4018  net    -750$  -1.9c per $1  ahead 74%  ended: settled 3245 stair 773
+  both rules with g      : n  4018  net   -1033$  -2.6c per $1  ahead 89%  ended: p_lose 3109 settled 713 stair 196
+    sensitivity, not chosen: g with k0 0.5: n  4018  net    -386$  -1.0c per $1  ahead 81%  ended: settled 3597 stair 421
+                             p 1.0 (no g): n  4018  net    -598$  -1.5c per $1  ahead 78%  ended: settled 3485 stair 533
+                             p 0.0 (no g): n  4018  net    -993$  -2.5c per $1  ahead 64%  ended: settled 2419 stair 1599
+    sensitivity, not chosen, staircase 0.5: n  4018  net    -672$  -1.7c per $1  ahead 77%  ended: settled 3423 stair 595
+    sensitivity, not chosen, staircase 1.0: n  4018  net    -374$  -0.9c per $1  ahead 83%  ended: settled 3866 stair 152
+  halves of the days (held | both): first -0.9c | -2.3c n2009 | second -0.4c | -3.1c n2009
+  by buy minute (held | both): 2-4: -1.7c | -3.4c n979 | 4-7: -0.6c | -4.2c n1252 | 7-10: +0.2c | -1.9c n1052 | 10-12: -1.9c | -1.0c n559 | 12-14: +2.8c | +1.6c n176
+
+E5: buys on 3532 of 10568 markets
+  held                  : n  3532  net     +35$  +0.1c per $1  ahead 85%  ended: held 3532
+  rule 1 staircase (0.25): n  3532  net    -487$  -1.4c per $1  ahead 70%  ended: settled 2530 stair 1002
+  rule 2 high zone      : n  3532  net    -722$  -2.0c per $1  ahead 92%  ended: p_lose 2769 settled 763
+  both                  : n  3532  net    -798$  -2.3c per $1  ahead 88%  ended: p_lose 2639 settled 616 stair 277
+  rule 1 with the cushion factor g (0.25, p 0.5): n  3532  net    -365$  -1.0c per $1  ahead 74%  ended: settled 2812 stair 720
+  both rules with g      : n  3532  net    -748$  -2.1c per $1  ahead 89%  ended: p_lose 2696 settled 642 stair 194
+    sensitivity, not chosen: g with k0 0.5: n  3532  net     -66$  -0.2c per $1  ahead 81%  ended: settled 3127 stair 405
+                             p 1.0 (no g): n  3532  net    -300$  -0.9c per $1  ahead 79%  ended: settled 3041 stair 491
+                             p 0.0 (no g): n  3532  net    -719$  -2.0c per $1  ahead 63%  ended: settled 1997 stair 1535
+    sensitivity, not chosen, staircase 0.5: n  3532  net    -344$  -1.0c per $1  ahead 77%  ended: settled 2978 stair 554
+    sensitivity, not chosen, staircase 1.0: n  3532  net     +18$  +0.1c per $1  ahead 84%  ended: settled 3382 stair 150
+  halves of the days (held | both): first -0.1c | -2.4c n1760 | second +0.3c | -2.2c n1772
+  by buy minute (held | both): 2-4: +0.4c | -2.9c n1369 | 4-7: -0.4c | -3.5c n959 | 7-10: -0.3c | -0.9c n718 | 10-12: +1.0c | +0.3c n473 | 12-14: few
+
+E7: buys on 2846 of 10568 markets
+  held                  : n  2846  net     -57$  -0.2c per $1  ahead 88%  ended: held 2846
+  rule 1 staircase (0.25): n  2846  net    -511$  -1.8c per $1  ahead 73%  ended: settled 2143 stair 703
+  rule 2 high zone      : n  2846  net    -513$  -1.8c per $1  ahead 94%  ended: p_lose 2187 settled 659
+  both                  : n  2846  net    -578$  -2.0c per $1  ahead 90%  ended: p_lose 2102 settled 561 stair 183
+  rule 1 with the cushion factor g (0.25, p 0.5): n  2846  net    -402$  -1.4c per $1  ahead 78%  ended: settled 2355 stair 491
+  both rules with g      : n  2846  net    -571$  -2.0c per $1  ahead 91%  ended: p_lose 2139 settled 584 stair 123
+    sensitivity, not chosen: g with k0 0.5: n  2846  net    -163$  -0.6c per $1  ahead 84%  ended: settled 2586 stair 260
+                             p 1.0 (no g): n  2846  net    -296$  -1.0c per $1  ahead 82%  ended: settled 2504 stair 342
+                             p 0.0 (no g): n  2846  net    -535$  -1.9c per $1  ahead 67%  ended: settled 1765 stair 1081
+    sensitivity, not chosen, staircase 0.5: n  2846  net    -385$  -1.4c per $1  ahead 80%  ended: settled 2460 stair 386
+    sensitivity, not chosen, staircase 1.0: n  2846  net     -73$  -0.3c per $1  ahead 86%  ended: settled 2738 stair 108
+  halves of the days (held | both): first -0.9c | -2.3c n1421 | second +0.5c | -1.7c n1425
+  by buy minute (held | both): 2-4: +1.3c | -2.1c n694 | 4-7: -1.7c | -4.2c n983 | 7-10: -0.2c | -0.8c n725 | 10-12: +0.9c | +0.9c n433 | 12-14: few

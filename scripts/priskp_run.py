@@ -172,7 +172,7 @@ def build(job):
             tt = m["opened"] + s_open
             ask = {"yes": ya, "no": 1.0 - yb}
             cs = {s: "".join(code(state(tt, s_open, c, vals[s][c])) for c in CHECKS) for s in ("yes", "no")}
-            log.append((int(s_open), round(ask["yes"], 3), round(ask["no"], 3), cs["yes"], cs["no"], round(vals["yes"]["cushion"], 3)))  # the last: the YES-view cushion (negative = the spot is under the strike), for the exit study
+            log.append((int(s_open), round(ask["yes"], 3), round(ask["no"], 3), cs["yes"], cs["no"], round(vals["yes"]["cushion"], 3), round(f["cz1"], 3)))  # the last two: the YES-view blended cushion and the 60-second-average cushion (negative = the spot is under the strike), for the exit studies
             if len(got) == 2: continue
             usable = [s for s in ("yes", "no") if 0.01 <= ask[s] <= 0.99 and not DEAD[0] <= ask[s] <= DEAD[1]]
             if not usable: continue
