@@ -1,0 +1,25 @@
+132 bets; BiQuote ticks for 132, perp ticks for 132
+  recorded against the outside BiQuote feed: z within 0.1 on 126 of 132 (median gap 0.005, 90th pct 0.044); same crossings 130; same variety letter 127
+  recorded against Kalshi's perp reference : z within 0.1 on  44 of 132 (median gap 0.173, 90th pct 0.534); same crossings  86; same variety letter  66
+
+WITH THE PERP READINGS, on the same bets (what the lane's own settings would have refused):
+  all bets                                  : n 132,  -69.00$, ahead 104, behind 28
+  no perp reading (cushion step = no buy)   : n   0,   +0.00$, ahead 0, behind 0
+  cushion z under 0.8 on the perp           : n  20,  -10.92$, ahead 15, behind 5
+  4 or more crossings on the perp           : n  24,  -33.82$, ahead 17, behind 7
+  a skipped variety (G-no, A-yes) on the perp: n   4,   +8.63$, ahead 4, behind 0
+  REFUSED in all                            : n  48,  -36.10$, ahead 36, behind 12
+  STILL BOUGHT                              : n  84,  -32.90$, ahead 68, behind 16
+  (a refused bet leaves room for a later buy in the same market, which this does not count)
+    KXBRENT15M-26NOV192245-45      no  paid 0.86 net  -8.90 | recorded z +1.02 A, on the perp z +0.91 crossings 5 variety G
+    KXCOPPER15M-26NOV200930-30     yes paid 0.82 net  -8.66 | recorded z +0.92 F, on the perp z +1.01 crossings 4 variety G
+    KXWTI15M-26NOV200015-15        yes paid 0.82 net  -8.16 | recorded z +0.89 F, on the perp z +0.84 crossings 4 variety G
+    KXNATGAS15M-26NOV200015-15     no  paid 0.79 net  -8.01 | recorded z +1.55 A, on the perp z +0.58 crossings 1 variety F
+    KXBRENT15M-26NOV201115-15      no  paid 0.76 net  -7.89 | recorded z +1.05 B, on the perp z +0.79 crossings 8 variety G
+    KXPLATINUM15M-26NOV200830-30   yes paid 0.83 net  -7.72 | recorded z +0.90 F, on the perp z +0.94 crossings 4 variety G
+    KXWTI15M-26NOV192200-00        no  paid 0.79 net  -7.61 | recorded z +0.84 F, on the perp z +0.73 crossings 3 variety F
+    KXWTI15M-26NOV201115-15        no  paid 0.87 net  -7.56 | recorded z +1.73 A, on the perp z +1.17 crossings 10 variety G
+    KXSILVER15M-26NOV200800-00     no  paid 0.73 net  -7.15 | recorded z +0.87 F, on the perp z +0.77 crossings 14 variety G
+    KXGOLD15M-26NOV200800-00       no  paid 0.82 net  -6.99 | recorded z +0.81 F, on the perp z +1.03 crossings 4 variety G
+    KXWTI15M-26NOV200600-00        no  paid 0.79 net  -6.95 | recorded z +0.81 F, on the perp z +0.79 crossings 1 variety F
+    KXWTI15M-26NOV200230-30        yes paid 0.85 net  -6.07 | recorded z +0.80 F, on the perp z +0.96 crossings 5 variety G
