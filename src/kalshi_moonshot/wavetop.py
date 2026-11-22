@@ -162,6 +162,33 @@ def average(sp: list[float | None]) -> list[float | None]:
     return out
 
 
+def signal_at(z: Zig, avg: float, raw: float, strike: float, unit: float, spot_open: float) -> tuple[Wave | None, str]:
+    """Whether the zigzag `z` of the average (already stepped through this second) is a wave top now: `avg` and `raw` are the average and the spot at this second, `unit` the average's typical minute, `spot_open` the spot at the open. (Wave, "") or (None, why not). The live read and the replay (scripts/wave_avg_replay_cache.py) both ask this."""
+    d = z.d
+    if d == 0 or len(z.legs) < 2:
+        return None, f"only {len(z.legs)} legs of the average so far"
+    dur = z.ext[0] - z.piv[0]
+    move = abs(z.ext[1] - z.piv[1]) / unit
+    if dur < 1 or move < MIN_MOVE_A:
+        return None, f"the average's running leg is {move:.2f} typical minutes (needs {MIN_MOVE_A:g})"
+    slope = move / (dur / 60.0)
+    same = [x[1] for x in z.legs if x[0] == d][-PREV:]  # the earlier waves the same way: a rise is judged against earlier rises, a fall against earlier falls
+    prev = max(same) if same else 0.0
+    if slope <= prev:
+        return None, f"the leg's slope {slope:.2f} is not above the last {PREV} {'rises' if d == 1 else 'falls'}' {prev:.2f}"
+    if (avg - strike) * d <= 0:
+        return None, f"the average {avg:.6g} is {'under' if d == 1 else 'over'} the target {strike:.6g}, so the {'rise' if d == 1 else 'fall'} is not a {'peak' if d == 1 else 'dip'}"
+    if (z.piv[1] - strike) * d <= 0:
+        return None, f"the leg began at {z.piv[1]:.6g}, on the other side of the target {strike:.6g}: it crossed the target, which is a flip and not a {'peak' if d == 1 else 'dip'}"
+    back = (z.ext[1] - avg) * d / unit
+    if back > TURN_A:
+        return None, f"the average is already {back:.2f} off its extreme (the buy is open to {TURN_A:g}): the flip has started"
+    gap = (avg - raw) * d / unit
+    if gap <= 0:
+        return None, f"the spot {raw:.6g} has not crossed to the other side of its average {avg:.6g} yet"
+    return Wave(d, slope, prev, 0.0, len(z.legs), move, back, gap, unit, float(z.ext[0]), z.ext[1], spot_open), ""
+
+
 def read(T: list[float], V: list[float], opened: float, now: float, strike: float) -> tuple[Wave | None, str]:
     """The wave top at `now` for a market that opened at `opened` and has target `strike`, from the spot's ticks (T ascending, covering opened - 3,700 s to now). (None, why) when there is none or the history is short."""
     a = int(opened) - (UNIT_SPAN + 100)
@@ -178,30 +205,10 @@ def read(T: list[float], V: list[float], opened: float, now: float, strike: floa
     for k in range(z0 + 1, len(sp)):
         z.step(k, A[k])  # type: ignore[arg-type]
     k = len(sp) - 1
-    d = z.d
-    if d == 0 or len(z.legs) < 2:
-        return None, f"only {len(z.legs)} legs of the average so far"
-    avg, raw = A[k], sp[k]
-    dur = z.ext[0] - z.piv[0]
-    move = abs(z.ext[1] - z.piv[1]) / unit
-    if dur < 1 or move < MIN_MOVE_A:
-        return None, f"the average's running leg is {move:.2f} typical minutes (needs {MIN_MOVE_A:g})"
-    slope = move / (dur / 60.0)
-    same = [x[1] for x in z.legs if x[0] == d][-PREV:]  # the earlier waves the same way: a rise is judged against earlier rises, a fall against earlier falls
-    prev = max(same) if same else 0.0
-    if slope <= prev:
-        return None, f"the leg's slope {slope:.2f} is not above the last {PREV} {'rises' if d == 1 else 'falls'}' {prev:.2f}"
-    if (avg - strike) * d <= 0:  # type: ignore[operator]
-        return None, f"the average {avg:.6g} is {'under' if d == 1 else 'over'} the target {strike:.6g}, so the {'rise' if d == 1 else 'fall'} is not a {'peak' if d == 1 else 'dip'}"
-    if (z.piv[1] - strike) * d <= 0:
-        return None, f"the leg began at {z.piv[1]:.6g}, on the other side of the target {strike:.6g}: it crossed the target, which is a flip and not a {'peak' if d == 1 else 'dip'}"
-    back = (z.ext[1] - avg) * d / unit  # type: ignore[operator]
-    if back > TURN_A:
-        return None, f"the average is already {back:.2f} off its extreme (the buy is open to {TURN_A:g}): the flip has started"
-    gap = (avg - raw) * d / unit  # type: ignore[operator]
-    if gap <= 0:
-        return None, f"the spot {raw:.6g} has not crossed to the other side of its average {avg:.6g} yet"
-    return Wave(d, slope, prev, 0.0, len(z.legs), move, back, gap, unit, float(z.ext[0] + a), z.ext[1], sp[ia]), ""  # type: ignore[arg-type]
+    w, why = signal_at(z, A[k], sp[k], strike, unit, sp[ia])  # type: ignore[arg-type]
+    if w is not None:
+        w.ext_ts += a
+    return w, why
 
 
 _memo: dict[tuple[str, int, int, float], tuple[Wave | None, str]] = {}
