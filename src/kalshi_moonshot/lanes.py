@@ -109,7 +109,6 @@ class LaneSpec:
     late_swing_mid_lo: float = 0.30  # the ask must not sit between these two: a low side (the lane's price floor to this) or a high one (the other number to the price ceiling), YES or NO
     late_swing_mid_hi: float = 0.70
     late_swing_min_crosses: int = 2  # the settlement index crossed the strike at least this many times in the last five minutes, and the last minute moved at least as fast as the five minutes (vol_ratio >= 1)
-    skip_varieties: tuple[str, ...] = ()  # varieties (variants.py letters) this lane does not buy: "G" on either side, "A-yes" on one side. Read at the decision from BiQuote against its window-open price, so commodities only; an unreadable one is not skipped. 2026-11-03 walk-forward on the lanes' live bets: the cells that paid in training were the same in three folds and left out G and A-yes, which then lost $49, $19 and $9 in the test period
     require_spot_center_agree: bool = False  # buy only when the raw spot AND the offset-corrected center are both on the bet's side of the strike. 2026-11-04, 672 live commodity bets: both on our side 88% won, +$0.24 a bet; where they disagreed 94 bets netted -$54 (industrial -$52 on 59, precious -$11 on 25; energy +$8 on 10, so energy leaves it off). Unreadable = no change
     max_vol_rel: float = 0.0  # buy only when it is at most this (a calm regime: below 0.7 favorites won 87%). 0 = off. No reading = no buy
     min_cushion_z: float = -99.0  # 2026-11-05 (user): buy only when the bet's side has a cushion of at least this many typical moves left (variants.snapshot z). -99 = off. Commodity states since 11-02 (17,900 moments): cushion under 0.5 lost -$0.4 to -$1.45 a $10 bet in both halves, 1.0-1.5 made +$0.24, 1.5+ made +$0.26 to +$0.53 (studies/results/2026-11-05-entry-state-map.txt)
@@ -225,7 +224,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     for key in ("price", "hours", "entry_elapsed"):
         if key in row:
             row[key] = _pair(row[key])
-    for key in ("series", "sides", "blackout_et", "skip_varieties", "buy_chain", "sell_chain", "late_swing_tiers"):
+    for key in ("series", "sides", "blackout_et", "buy_chain", "sell_chain", "late_swing_tiers"):
         if key in row:
             row[key] = tuple(row[key])
     if any(x in RETIRED_STEPS for x in row.get("buy_chain", ())):
@@ -253,9 +252,9 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow", "binary_risk", "swing_risk", "late_swing", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
-RETIRED_FIELDS = ("max_spot_crosses",)  # lane settings that no longer exist: a lane file that still writes one loads without it and says so in the log. max_spot_crosses (no buy at 4 or more strike crossings in five minutes) was removed 2026-11-21 at the user's word ("We don't want any of that"): a fixed count, set on the outside BiQuote feed, with no study file behind it
-RETIRED_STEPS = ("context_score",)  # steps that no longer exist: a lane file that still names one loads without it and says so in the log, so a config written for an older image does not stop the bot. context_score (shadow, never said no) was removed 2026-11-21: on the bot's own 132 live commodity bets its percentile did not separate the bets that ended ahead from the ones behind (80%, 77%, 80% ahead by thirds)
+BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow", "binary_risk", "swing_risk", "late_swing", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+RETIRED_FIELDS = ("max_spot_crosses", "skip_varieties")  # lane settings that no longer exist: a lane file that still writes one loads without it and says so in the log. max_spot_crosses (no buy at 4 or more strike crossings in five minutes) was removed 2026-11-21 at the user's word ("We don't want any of that"): a fixed count, set on the outside BiQuote feed, with no study file behind it. skip_varieties and the `variety` step that read it (no buy of a named curve variety, the live lanes' G-no and A-yes) went the same day at the same word ("That should have been removed"; earlier, 2026-11-19: stable and volatile curves both get bets): no curve shape is refused, the letter stays in the cushion step's note
+RETIRED_STEPS = ("context_score", "variety")  # steps that no longer exist: a lane file that still names one loads without it and says so in the log, so a config written for an older image does not stop the bot. context_score (shadow, never said no) was removed 2026-11-21: on the bot's own 132 live commodity bets its percentile did not separate the bets that ended ahead from the ones behind (80%, 77%, 80% ahead by thirds)
 
 
 def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:

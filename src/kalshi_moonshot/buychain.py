@@ -179,23 +179,6 @@ def _window_strike(ctx: Ctx, shot: LongShot) -> float | None:
     return ctx.store.window_strike(shot.ticker) if ctx.store is not None else None
 
 
-@step("variety")
-def variety_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The side's curve variety at this moment (variants.py: its cushion, slope, crossings and volatility, lettered) is not one the lane skips (skip_varieties: "G" either side, "A-yes" one). A variety that cannot be read is not skipped (no reference price near the window open, no strike, too few ticks)."""
-    from . import ticks as ticks_mod
-    from . import variants
-
-    skips = ctx.spec.skip_varieties
-    if not skips:
-        return Check(False, "the lane names no varieties to skip (skip_varieties)")
-    kind = variants.variety_now(ctx.s, shot.series, shot.side, shot.hours_to_close * 3600.0, now=ctx.now, strike=ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot))
-    if kind is None:
-        return Check(True, "variety not readable (no reference price near the window open or no strike, or too few recent ticks), so not skipped")
-    if variants.skipped(skips, kind, shot.side):
-        return Check(False, f"variety {kind} ({variants.NAMES[kind]}), which the lane does not buy")
-    return Check(True, f"variety {kind}")
-
-
 @step("vol_regime")
 def vol_regime_step(ctx: Ctx, shot: LongShot) -> Check:
     """The market's volatility over the last hours is not more than max_vol_rel times its own normal (volregime.py). A market whose regime is not known yet is a no."""
@@ -213,7 +196,7 @@ def vol_regime_step(ctx: Ctx, shot: LongShot) -> Check:
 
 @step("cushion")
 def cushion_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The spot's distance to the strike, in the market's own typical moves, is at least min_cushion_z (variants.snapshot_now, on Kalshi's own price). A cushion that cannot be read is a no. The note also carries how many times the spot crossed the strike in five minutes, as a reading only: the limit on it (max_spot_crosses) was removed 2026-11-21 at the user's word."""
+    """The spot's distance to the strike, in the market's own typical moves, is at least min_cushion_z (variants.snapshot_now, on Kalshi's own price). A cushion that cannot be read is a no. The note also carries how many times the spot crossed the strike in five minutes and the side's variety letter (variants.py), as readings only: the limit on crossings (max_spot_crosses) and the variety step with its skip list (skip_varieties) were removed 2026-11-21 at the user's word; no curve shape is refused."""
     from . import ticks as ticks_mod
     from . import variants
 
@@ -225,7 +208,7 @@ def cushion_step(ctx: Ctx, shot: LongShot) -> Check:
         return Check(False, "the cushion cannot be read")
     if snap["z"] < spec.min_cushion_z:
         return Check(False, f"cushion z {snap['z']:+.2f} is under the lane's {spec.min_cushion_z:g}")
-    return Check(True, f"cushion z {snap['z']:+.2f}, {int(snap['crosses'])} crossings")
+    return Check(True, f"cushion z {snap['z']:+.2f}, {int(snap['crosses'])} crossings, variety {snap.get('variety') or '?'}")
 
 
 @step("spike")

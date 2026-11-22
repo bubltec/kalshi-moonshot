@@ -1279,7 +1279,7 @@ class ProfitWatcher:
             self.reconcile_hand_sales(s, store)
         except Exception:
             log.warning("watcher: the hand-sale check failed this cycle", exc_info=True)
-        if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.skip_varieties or sp.max_vol_rel > 0 for sp in lane_specs(s).values()):
+        if time.time() - self._ledger_at >= LEDGER_EVERY and any(sp.max_vol_rel > 0 for sp in lane_specs(s).values()):
             self._ledger_at = time.time()
             threading.Thread(target=self._refresh_ledger, args=(s,), daemon=True, name="variety-ledger").start()  # the scoreboard reads days of ticks: off the refresh cycle and at low priority
         if time.time() - self._curve_at >= 5.0 and not self._curve_busy:
