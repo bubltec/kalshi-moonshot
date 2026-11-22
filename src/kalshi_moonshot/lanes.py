@@ -252,7 +252,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow", "binary_risk", "swing_risk", "late_swing", "wave_top", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+BUY_STEPS = ("price", "spread", "entry_window", "time_left", "blackout", "volume", "min_return", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "variety", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow", "binary_risk", "swing_risk", "late_swing", "wave_top", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
 RETIRED_STEPS = ("context_score",)  # steps that no longer exist: a lane file that still names one loads without it and says so in the log, so a config written for an older image does not stop the bot. context_score (shadow, never said no) was removed 2026-11-21: on the bot's own 132 live commodity bets its percentile did not separate the bets that ended ahead from the ones behind (80%, 77%, 80% ahead by thirds)
 
 

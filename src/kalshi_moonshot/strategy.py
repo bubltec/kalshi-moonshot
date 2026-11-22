@@ -82,14 +82,18 @@ def is_numeric_threshold(m: dict[str, Any]) -> bool:
     return m.get("floor_strike") is not None or m.get("cap_strike") is not None
 
 
-def lane_reject_reason(m: dict[str, Any], spec: LaneSpec, s: Settings, now: datetime) -> str | None:
-    """None if the market qualifies for this lane, else why not. Every bound comes from the spec."""
+def lane_reject_reason(m: dict[str, Any], spec: LaneSpec, s: Settings, now: datetime, scope: bool = False) -> str | None:
+    """None if the market qualifies for this lane, else why not. Every bound comes from the spec.
+
+    A lane that buys by a module (2026-11-21, user: "I keep finding out about new things influencing the buys and sells that I didn't ask for"): the filter says only which markets the lane looks at (its series, an open binary market with a bid and a close time). The price range, spread, entry window, time left, blackout, volume and least return are the module's steps (`price`, `spread`, `entry_window`, `time_left`, `blackout`, `volume`, `min_return`), so a module's step list is everything that can turn a buy down; a step the module does not list is not applied. `scope`: the watchlist pass, which keeps every bound it is handed (it is given a relaxed lane and still needs the time to the close).
+    """
+    steps = bool(spec.buy_chain) and not scope
     skipped = {c.casefold() for c in s.skip_categories}
     category = (m.get("category") or "").casefold()
     if category and category in skipped:
         return "category skipped"
     series = _series(m)
-    if in_blackout(spec, now, series):
+    if not steps and in_blackout(spec, now, series):
         return "blackout: the lane makes no new entries in this time window"
     if spec.series and series not in spec.series:
         return "series not in this lane"
@@ -102,7 +106,7 @@ def lane_reject_reason(m: dict[str, Any], spec: LaneSpec, s: Settings, now: date
     if m.get("status") not in {"active", "open"}:
         return "not active"
     ask, bid = _f(m, "yes_ask_dollars"), _f(m, "yes_bid_dollars")
-    if not (spec.price[0] <= ask <= spec.price[1]):
+    if not steps and not (spec.price[0] <= ask <= spec.price[1]):
         return f"ask outside {spec.label} range"
     # Many cheap contracts have an ask but no bid and no trades. Nothing can be sold into that.
     if bid <= 0.0:
@@ -118,15 +122,17 @@ def lane_reject_reason(m: dict[str, Any], spec: LaneSpec, s: Settings, now: date
                 age = None
             if age is not None and age < spec.min_age_minutes:
                 return f"market opened {age:.0f} min ago (waits {spec.min_age_minutes:g})"
-    if spec.min_return and net_return(ask) < spec.min_return:
+    if not steps and spec.min_return and net_return(ask) < spec.min_return:
         return f"pays under {spec.min_return:.0%} if it wins"
-    if ask - bid > spec.max_spread:
+    if not steps and ask - bid > spec.max_spread:
         return "spread too wide"
-    if _f(m, "volume_fp") < spec.min_volume:
+    if not steps and _f(m, "volume_fp") < spec.min_volume:
         return "volume too low"
     hours = _hours_until(m.get("close_time", ""), now)
     if hours is None:
         return "no close time"
+    if steps:
+        return None
     if spec.timed_suffix and series.endswith(spec.timed_suffix):
         # A fixed-length window opens exactly timed_minutes before it closes, so how far in we are
         # is known. Bet only inside the lane's entry window.

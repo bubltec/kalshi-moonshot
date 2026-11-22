@@ -72,6 +72,82 @@ def price_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(True, f"ask {shot.ask:.2f}")
 
 
+def _hours_left(ctx: Ctx, shot: LongShot) -> float:
+    """Hours to the close as of the step's own moment (a shot's own figure is from when it was listed)."""
+    from datetime import UTC, datetime
+
+    from .strategy import _hours_until
+
+    hours = _hours_until(shot.close_time, datetime.fromtimestamp(ctx.now, UTC)) if shot.close_time else None
+    return shot.hours_to_close if hours is None else hours
+
+
+@step("spread")
+def spread_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The gap between the side's ask and its bid is at most the lane's max_spread. (A step since 2026-11-21, user: "I keep finding out about new things influencing the buys and sells that I didn't ask for": it was the lane filter's, applied before the module and listed nowhere in it.)"""
+    gap = shot.ask - shot.bid
+    if gap > ctx.spec.max_spread:
+        return Check(False, f"spread {gap:.2f} (bid {shot.bid:.2f}, ask {shot.ask:.2f}) is over the lane's {ctx.spec.max_spread:g}")
+    return Check(True, f"spread {gap:.2f}")
+
+
+@step("entry_window")
+def entry_window_step(ctx: Ctx, shot: LongShot) -> Check:
+    """A fixed-length market is this many minutes old: inside the lane's entry_elapsed (minutes after the open). A market that is not one of the lane's fixed-length windows passes. (A step since 2026-11-21; it was the lane filter's.)"""
+    spec = ctx.spec
+    series = shot.series or shot.ticker.split("-")[0]
+    if not (spec.timed_suffix and series.endswith(spec.timed_suffix)):
+        return Check(True, "not a fixed-length window")
+    elapsed = spec.timed_minutes - _hours_left(ctx, shot) * 60.0
+    lo, hi = spec.entry_elapsed
+    if not lo <= elapsed <= hi:
+        return Check(False, f"{elapsed:.1f} min into a {spec.timed_minutes:g}-min window, outside the lane's {lo:g} to {hi:g}")
+    return Check(True, f"{elapsed:.1f} min in")
+
+
+@step("time_left")
+def time_left_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The time to the close is inside the lane's `hours`. (A step since 2026-11-21; it was the lane filter's.)"""
+    hours = _hours_left(ctx, shot)
+    lo, hi = ctx.spec.hours
+    if hours < lo:
+        return Check(False, f"closes in {hours * 60:.1f} min, sooner than the lane's {lo * 60:g}")
+    if hours > hi:
+        return Check(False, f"closes in {hours * 60:.1f} min, further out than the lane's {hi * 60:g}")
+    return Check(True, f"{hours * 60:.1f} min left")
+
+
+@step("blackout")
+def blackout_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The moment is outside the lane's blackout windows (blackout_et). (A step since 2026-11-21; it was the lane filter's.)"""
+    from datetime import UTC, datetime
+
+    from .lanes import in_blackout
+
+    if in_blackout(ctx.spec, datetime.fromtimestamp(ctx.now, UTC), shot.series or shot.ticker.split("-")[0]):
+        return Check(False, "blackout: the lane makes no new entries in this time window")
+    return Check(True, "no blackout")
+
+
+@step("volume")
+def volume_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The market has traded at least the lane's min_volume. (A step since 2026-11-21; it was the lane filter's.)"""
+    if shot.volume < ctx.spec.min_volume:
+        return Check(False, f"volume {shot.volume:g} is under the lane's {ctx.spec.min_volume:g}")
+    return Check(True, f"volume {shot.volume:g}")
+
+
+@step("min_return")
+def min_return_step(ctx: Ctx, shot: LongShot) -> Check:
+    """A win pays at least the lane's min_return on the stake, after the fee. (A step since 2026-11-21; it was the lane filter's.)"""
+    from .strategy import net_return
+
+    pays = net_return(shot.ask)
+    if ctx.spec.min_return and pays < ctx.spec.min_return:
+        return Check(False, f"a win pays {pays:.0%}, under the lane's {ctx.spec.min_return:.0%}")
+    return Check(True, f"a win pays {pays:.0%}")
+
+
 @step("risk_score")
 def risk_score_step(ctx: Ctx, shot: LongShot) -> Check:
     """The risk score favours the side: its risk (riskscore.py) is at or under the lane's level (risk_score_buy) now and at two looks back that scale with the time left (riskscore.looks_for)."""

@@ -63,7 +63,9 @@ def lane_full(store: Store, spec: LaneSpec, keys: set[str]) -> bool:
 
 
 def in_band(spec: LaneSpec, bid: float, ask: float) -> bool:
-    """Whether a YES-book quote puts a side the lane may buy inside its price band."""
+    """Whether a YES-book quote puts a side the lane may buy inside its price band. A lane with a module that lists no `price` step has no band (a module's step list is everything that can turn a buy down), so every quote is a reason to look."""
+    if spec.buy_chain and "price" not in spec.buy_chain:
+        return True
     lo, hi = spec.price
     if "yes" in spec.sides and ask > 0 and lo <= ask <= hi:
         return True
@@ -72,9 +74,10 @@ def in_band(spec: LaneSpec, bid: float, ask: float) -> bool:
 
 def in_window(spec: LaneSpec, close: str, now: datetime, series: str = "") -> bool:
     """Whether the lane may bet on this event yet / still, by minutes elapsed in its fixed-length window, and outside its blackout windows."""
-    if in_blackout(spec, now, series):
+    chain = spec.buy_chain  # a lane with a module: only the bounds its steps list are a reason not to look
+    if (not chain or "blackout" in chain) and in_blackout(spec, now, series):
         return False
-    if not spec.timed_suffix:
+    if not spec.timed_suffix or (chain and "entry_window" not in chain):
         return True
     try:
         left = (datetime.fromisoformat(close) - now).total_seconds() / 60.0

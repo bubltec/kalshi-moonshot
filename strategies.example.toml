@@ -34,7 +34,8 @@ exit_module = "hold_and_trail"
 
 [module.favourite]
 label = "the lane's gates say what is eligible, then the curve's own readings"
-steps = ["price", "vol_regime", "cushion", "price_trend", "spike"]
+# 2026-11-21: the lane filter's checks are steps now (spread, entry_window), so this list is everything that can turn a buy down; before, the filter applied them unlisted.
+steps = ["price", "spread", "entry_window", "vol_regime", "cushion", "price_trend", "spike"]
 max_vol_rel = 1.6               # vol_regime: no buy while the market's volatility is over 1.6 times its normal
 min_cushion_z = 0.8             # cushion: the spot at least 0.8 typical moves on the side's side of the strike
 max_spot_crosses = 4            # cushion: fewer than 4 crossings of the strike in five minutes
@@ -85,7 +86,8 @@ exit_module = "swing_take"
 
 [module.late_swing]
 label = "a low or high side of a jumpy curve in the last two minutes, a tier of the stake by the time left"
-steps = ["price", "late_swing"]
+# 2026-11-21: the lane filter's checks are steps now (spread, time_left), so this list is everything that can turn a buy down; before, the filter applied them unlisted.
+steps = ["price", "spread", "time_left", "late_swing"]
 
 [exit.swing_take]
 label = "sell at the tier's share of the room the buy left"
@@ -130,7 +132,8 @@ exit_module = "wave_salvage"
 
 [module.wave_top]
 label = "the market is in its own range, the cheap side is the reversal of a big spot wave at its top"
-steps = ["price", "calm", "wave_top"]
+# 2026-11-21: the lane filter's checks are steps now (entry_window; no spread step, the user took the spread limit out), so this list is everything that can turn a buy down; before, the filter applied them unlisted.
+steps = ["price", "entry_window", "calm", "wave_top"]
 
 [exit.wave_salvage]
 label = "a bet that dipped is sold once it has come back and its climb has faded; one that never dipped is held"

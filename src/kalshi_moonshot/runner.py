@@ -280,7 +280,7 @@ def scope_lane(
             category = (info.get(m.get("event_ticker", ""), ("",))[0]) or ""
             m["category"] = category
             m.setdefault("series_ticker", series)
-            if lane_reject_reason(m, relaxed, s, now) is None:
+            if lane_reject_reason(m, relaxed, s, now, scope=True) is None:
                 found.setdefault(
                     m["event_ticker"],
                     {"close": m.get("close_time", ""), "category": category, "series": series, "ticker": m.get("ticker", ""), "strike": m.get("floor_strike")},
