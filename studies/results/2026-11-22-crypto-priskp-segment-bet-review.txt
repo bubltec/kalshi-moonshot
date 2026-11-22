@@ -1,0 +1,103 @@
+794 bets in the segment (30-min slope tercile 1, curvature tercile 3); 216 have raw ticks; segment ahead 77%, paid 0.739
+
+=== BIGGEST WINNERS
+KXNEAR15M-26NOV100445-45 no  bought min 10.0 at 0.58  $+6.95  WON  left 300s
+   side view: slope30 -2.64 curv30 +4.17 slope15 +0.03 curv15 +1.47 slope60 +0.78 | cushion +0.29 trend -0.25 vol -0.15 | share of last 30 min on the winning side 0.80 | price move at the buy -0.32, dip -1.24
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:-0.03% 11:-0.10% 12:-0.10% 13:-0.18% 14:-0.11% 15:-0.02%; settled spot -0.017% -> no
+
+KXHYPE15M-26NOV150745-45 no  bought min 10.0 at 0.59  $+6.66  WON  left 300s
+   side view: slope30 -4.40 curv30 +5.23 slope15 +0.20 curv15 +0.88 slope60 -3.74 | cushion +0.46 trend +0.04 vol -0.22 | share of last 30 min on the winning side 0.82 | price move at the buy -0.13, dip -0.46
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:-0.08% 11:-0.10% 12:-0.08% 13:-0.14% 14:-0.15% 15:-0.13%; settled spot -0.129% -> no
+
+KXHYPE15M-26NOV152145-45 no  bought min 10.6 at 0.59  $+6.66  WON  left 270s
+   side view: slope30 -4.39 curv30 +5.53 slope15 +0.62 curv15 -3.94 slope60 -3.79 | cushion -0.23 trend -0.48 vol -0.05 | share of last 30 min on the winning side 0.70 | price move at the buy -0.19, dip -1.62
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:+0.13% 11:+0.09% 12:-0.03% 13:-0.19% 14:-0.39% 15:-0.29%; settled spot -0.290% -> no
+
+KXBNB15M-26NOV162030-30 no  bought min 10.1 at 0.59  $+6.66  WON  left 300s
+   side view: slope30 -2.06 curv30 +2.22 slope15 +0.05 curv15 +2.12 slope60 -2.72 | cushion +0.71 trend +0.26 vol -0.03 | share of last 30 min on the winning side 0.89 | price move at the buy +0.40, dip -1.27
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:-0.06% 11:-0.06% 12:+0.02% 13:-0.05% 14:-0.02% 15:-0.07%; settled spot -0.072% -> no
+
+KXZEC15M-26NOV191715-15 yes bought min 10.0 at 0.59  $+6.66  WON  left 300s
+   side view: slope30 -2.49 curv30 +2.13 slope15 +0.56 curv15 -1.85 slope60 -2.98 | cushion +0.09 trend -0.56 vol -0.11 | share of last 30 min on the winning side 0.82 | price move at the buy -0.16, dip -1.31
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:+0.04% 11:-0.02% 12:-0.09% 13:-0.03% 14:+0.03% 15:-0.02%; settled spot -0.018% -> no
+
+KXETH15M-26NOV151745-45 no  bought min 11.2 at 0.59  $+6.66  WON  left 230s
+   side view: slope30 -2.14 curv30 +2.82 slope15 +0.36 curv15 +1.09 slope60 -5.08 | cushion +0.16 trend -0.09 vol -0.11 | share of last 30 min on the winning side 0.74 | price move at the buy +0.19, dip -1.29
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:+0.01% 11:-0.01% 12:-0.01% 13:-0.01% 14:-0.02% 15:-0.03%; settled spot -0.033% -> no
+
+KXHYPE15M-26NOV182345-45 no  bought min 10.0 at 0.60  $+6.39  WON  left 300s
+   side view: slope30 -2.54 curv30 +2.72 slope15 +1.43 curv15 -0.56 slope60 -7.82 | cushion -0.17 trend +0.66 vol -0.12 | share of last 30 min on the winning side 0.49 | price move at the buy +0.45, dip -0.58
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:-0.01% 11:+0.04% 12:-0.09% 13:-0.05% 14:-0.05% 15:+0.03%; settled spot +0.029% -> yes
+
+KXBNB15M-26NOV090615-15 no  bought min 10.0 at 0.60  $+6.39  WON  left 300s
+   side view: slope30 -4.22 curv30 +2.99 slope15 +0.24 curv15 +2.30 slope60 -1.33 | cushion +0.45 trend -0.32 vol +0.05 | share of last 30 min on the winning side 0.80 | price move at the buy +0.21, dip -1.67
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:-0.01% 11:-0.03% 12:+0.05% 13:+0.00% 14:+0.00% 15:-0.04%; settled spot -0.038% -> no
+
+=== BIGGEST LOSERS
+KXNEAR15M-26NOV181115-15 yes bought min 10.2 at 0.58  $-10.29  LOST  left 290s
+   side view: slope30 -2.53 curv30 +3.51 slope15 -1.29 curv15 +2.80 slope60 -14.13 | cushion +0.34 trend +0.23 vol -0.17 | share of last 30 min on the winning side 0.75 | price move at the buy +0.10, dip -0.96
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:+0.14% 11:+0.07% 12:-0.09% 13:-0.32% 14:-0.34% 15:-0.31%; settled spot -0.309% -> no
+
+KXHYPE15M-26NOV181115-15 yes bought min 10.3 at 0.59  $-10.29  LOST  left 280s
+   side view: slope30 -2.17 curv30 +2.36 slope15 -1.28 curv15 +3.65 slope60 -12.49 | cushion +0.66 trend -0.02 vol -0.16 | share of last 30 min on the winning side 0.86 | price move at the buy +0.39, dip -1.11
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:+0.15% 11:+0.14% 12:-0.26% 13:-0.30% 14:-0.27% 15:-0.30%; settled spot -0.303% -> no
+
+KXXRP15M-26NOV131645-45 yes bought min 10.0 at 0.59  $-10.29  LOST  left 300s
+   side view: slope30 -2.20 curv30 +3.24 slope15 -0.23 curv15 +0.78 slope60 -11.71 | cushion -0.34 trend -0.01 vol -0.05 | share of last 30 min on the winning side 0.42 | price move at the buy +1.05, dip -0.73
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:-0.04% 11:-0.06% 12:-0.05% 13:-0.11% 14:-0.20% 15:-0.24%; settled spot -0.243% -> no
+
+KXDOGE15M-26NOV122315-15 yes bought min 10.7 at 0.59  $-10.29  LOST  left 260s
+   side view: slope30 -2.01 curv30 +4.20 slope15 +1.15 curv15 -1.17 slope60 -6.10 | cushion +0.18 trend -0.57 vol -0.19 | share of last 30 min on the winning side 0.60 | price move at the buy -0.89, dip -1.66
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:-0.02% 11:+0.04% 12:-0.06% 13:-0.21% 14:-0.25% 15:-0.24%; settled spot -0.236% -> no
+
+KXBNB15M-26NOV111100-00 no  bought min 10.5 at 0.60  $-10.28  LOST  left 270s
+   side view: slope30 -5.41 curv30 +7.76 slope15 -0.31 curv15 -1.32 slope60 -5.78 | cushion -0.48 trend -0.19 vol +0.01 | share of last 30 min on the winning side 0.50 | price move at the buy +0.46, dip -1.23
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:+0.07% 11:+0.07% 12:+0.04% 13:+0.05% 14:+0.08% 15:+0.07%; settled spot +0.067% -> yes
+
+KXBNB15M-26NOV141000-00 yes bought min 11.0 at 0.60  $-10.28  LOST  left 240s
+   side view: slope30 -2.04 curv30 +2.54 slope15 -0.51 curv15 -1.16 slope60 -7.90 | cushion -0.54 trend +0.97 vol -0.16 | share of last 30 min on the winning side 0.40 | price move at the buy +1.16, dip -0.00
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:-0.07% 11:-0.01% 12:-0.05% 13:-0.16% 14:-0.13% 15:-0.08%; settled spot -0.078% -> no
+
+KXBNB15M-26NOV170545-45 yes bought min 10.0 at 0.60  $-10.28  LOST  left 300s
+   side view: slope30 -4.70 curv30 +1.98 slope15 -0.31 curv15 +0.09 slope60 -8.01 | cushion -0.49 trend +0.73 vol -0.09 | share of last 30 min on the winning side 0.52 | price move at the buy +0.38, dip -0.00
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:+0.01% 11:+0.02% 12:+0.01% 13:-0.01% 14:-0.03% 15:-0.05%; settled spot -0.051% -> no
+
+KXZEC15M-26NOV112100-00 no  bought min 10.8 at 0.60  $-10.28  LOST  left 250s
+   side view: slope30 -2.17 curv30 +2.62 slope15 +1.17 curv15 -0.09 slope60 -1.32 | cushion +0.48 trend -0.51 vol -0.16 | share of last 30 min on the winning side 0.77 | price move at the buy -0.14, dip -1.10
+   hand check vs study: ALL 14 readings agree
+   spot vs strike by minute (%): 10:-0.11% 11:-0.10% 12:-0.15% 13:-0.04% 14:+0.09% 15:+0.14%; settled spot +0.139% -> yes
+
+hand check: 16 of 16 reviewed bets had all 14 readings agree
+
+ALL 794 SEGMENT BETS: winners 609, losers 185; medians in the side's view (recorded readings)
+  f:czb    winners +0.54  losers +0.40
+  f:tr13   winners +0.10  losers +0.04
+  f:sl60   winners -2.85  losers -3.76
+  f:cv60   winners -2.82  losers -2.08
+  f:sl15   winners +0.58  losers +0.62
+  f:cv15   winners +0.88  losers +0.48
+  f:pos60  winners +0.31  losers +0.27
+  f:mv60   winners -3.79  losers -4.42
+  f:vr     winners -0.05  losers -0.07
+  history  winners +0.78  losers +0.78
+  price    winners +0.39  losers +0.25
+  pricedip winners -0.63  losers -0.71
+  price paid: winners 0.746 losers 0.716; minute bought: winners 10.3 losers 10.3
+  60-min slope tercile 1: n 465 ahead 75% net -0.8c/$1
+  60-min slope tercile 2: n 213 ahead 83% net +11.2c/$1
+  60-min slope tercile 3: n 76 ahead 78% net +1.9c/$1
