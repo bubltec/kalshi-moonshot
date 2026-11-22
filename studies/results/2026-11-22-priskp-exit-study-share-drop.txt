@@ -1,0 +1,34 @@
+6149 model buys with a bid path
+
+STATED RULE (share 0.5, drop 1.0 typical minute):
+  ALL: n 6149 | exit   -2217$  -3.6c per $1 ahead 75% | held    -989$  -1.6c ahead 77% | ended: drop 1570 settled 693 share 3886
+  sensitivity, not chosen: share 0.33: n 6149 | exit   -2183$  -3.6c per $1 ahead 81% | held    -989$  -1.6c ahead 77% | ended: drop 1182 settled 561 share 4406
+                           share 0.67: n 6149 | exit   -1836$  -3.0c per $1 ahead 70% | held    -989$  -1.6c ahead 77% | ended: drop 1940 settled 943 share 3266
+
+BY BUY MINUTE (stated rule)
+  min 2-4: n 2972 | exit   -1284$  -4.3c per $1 ahead 73% | held    -747$  -2.5c ahead 71% | ended: drop 808 settled 73 share 2091
+  min 4-5: n  511 | exit    -367$  -7.2c per $1 ahead 69% | held     -34$  -0.7c ahead 73% | ended: drop 160 settled 19 share 332
+  min 5-7: n  784 | exit    -187$  -2.4c per $1 ahead 76% | held     +86$  +1.1c ahead 79% | ended: drop 193 settled 26 share 565
+  min 7-10: n  984 | exit    -363$  -3.7c per $1 ahead 76% | held    -293$  -3.0c ahead 82% | ended: drop 238 settled 72 share 674
+  min 10-12: n  539 | exit     +15$  +0.3c per $1 ahead 76% | held     +36$  +0.7c ahead 90% | ended: drop 136 settled 179 share 224
+  min 12-14: n  359 | exit     -30$  -0.8c per $1 ahead 90% | held     -37$  -1.0c ahead 95% | ended: drop 35 settled 324
+
+BY PRICE PAID (stated rule)
+  0.00-0.45: n   29 (too few)
+  0.55-0.65: n  866 | exit    -289$  -3.3c per $1 ahead 66% | held    +106$  +1.2c ahead 63% | ended: drop 302 settled 24 share 540
+  0.65-0.75: n 1817 | exit   -1080$  -5.9c per $1 ahead 69% | held    -568$  -3.1c ahead 69% | ended: drop 566 settled 64 share 1187
+  0.75-0.85: n 1679 | exit    -708$  -4.2c per $1 ahead 75% | held    -457$  -2.7c ahead 78% | ended: drop 425 settled 96 share 1158
+  0.85-1.00: n 1753 | exit    -214$  -1.2c per $1 ahead 85% | held    -153$  -0.9c ahead 92% | ended: drop 264 settled 508 share 981
+
+BY 30-MINUTE SLOPE x CURVATURE TERCILES (stated rule)
+  slope 1 curv 1: n  701 | exit    -123$  -1.8c per $1 ahead 74% | held    +307$  +4.4c ahead 75% | ended: drop 181 settled 24 share 496
+  slope 1 curv 2: n 1169 | exit    -303$  -2.6c per $1 ahead 75% | held     +28$  +0.2c ahead 76% | ended: drop 297 settled 80 share 792
+  slope 1 curv 3: n 1094 | exit    -569$  -5.2c per $1 ahead 73% | held    -274$  -2.5c ahead 77% | ended: drop 291 settled 141 share 662
+  slope 2 curv 1: n  821 | exit    -270$  -3.3c per $1 ahead 72% | held     +27$  +0.3c ahead 73% | ended: drop 234 settled 52 share 535
+  slope 2 curv 2: n  908 | exit    -571$  -6.3c per $1 ahead 72% | held    -541$  -6.0c ahead 75% | ended: drop 262 settled 115 share 531
+  slope 2 curv 3: n  400 | exit     -87$  -2.2c per $1 ahead 79% | held     -86$  -2.2c ahead 84% | ended: drop 87 settled 68 share 245
+  slope 3 curv 1: n  481 | exit    -154$  -3.2c per $1 ahead 77% | held    -283$  -5.9c ahead 77% | ended: drop 113 settled 75 share 293
+  slope 3 curv 2: n  277 | exit     -16$  -0.6c per $1 ahead 85% | held     -54$  -1.9c ahead 91% | ended: drop 43 settled 92 share 142
+  slope 3 curv 3: n  110 | exit     -10$  -0.9c per $1 ahead 87% | held     -30$  -2.8c ahead 94% | ended: drop 14 settled 32 share 64
+
+SOLD 5456 of 6149; median minutes from buy to sale 3.5; of those sold, held would have WON 74%
