@@ -92,7 +92,7 @@ def build(job):
             kk = int(t - base)
             f = br.readings(T, Vv, t, strike, close - t) if yb[kk] is not None else None
             if f is None:
-                R.append((kk, None, None)); t += STEP; continue
+                R.append((kk, None, None, None)); t += STEP; continue
             je = bisect.bisect_right(T, t) - 1
             ia = max(i0, bisect.bisect_left(T, t - 1800.0))
             share = (cs[je + 1 - i0] - cs[ia - i0]) / max(1, je + 1 - ia)
@@ -108,14 +108,14 @@ def build(job):
                     dy, dn = -(max(g) - g[-1]) / pu, -(g[-1] - min(g)) / pu
                 else:
                     pu = None
-            R.append((kk, (f["czb"], f["tr13"], share, f["vr"], pt, dy, dn), pu))
+            R.append((kk, (f["czb"], f["tr13"], share, f["vr"], pt, dy, dn), pu, f))
             t += STEP
         M.append({"ticker": ticker, "series": series, "close": close, "base": base, "won_yes": won_yes, "strike": strike, "yb": yb, "ya": ya, "age": age, "mid": mid, "sq": sq, "k0": k0, "sell_y": sell_y, "buy_y": buy_y, "R": R, "units": {}, "ttg": {}, "x": {}})
 
     # the series' own history of each check, by the 3 minutes of the market, both sides
     H = {}
     for m in M:
-        for kk, v, _pu in m["R"]:
+        for kk, v, _pu, _f in m["R"]:
             if v is None: continue
             t, b = m["base"] + kk, min(4, (kk - 60) // 180)
             for name in CHECKS:
@@ -129,7 +129,7 @@ def build(job):
     cuts = {}
 
     def state(m, i, name, side):
-        kk, v, _pu = m["R"][i]
+        kk, v, _pu, _f = m["R"][i]
         x = None if v is None else side_val(v, name, side)
         if x is None: return "unread"
         t = m["base"] + kk
@@ -209,9 +209,9 @@ def build(job):
         m["x"][key] = out
         return out
 
-    def trade(m, rule, first_k):
+    def trade(m, rule, first_k, detail=False):
         """One bet a market under a buy rule: rule(m, i, side) is None (no order at this reading) or the typical minutes the resting buy sits under the ask (0 = the lane's own order)."""
-        for i, (kk, v, pu) in enumerate(m["R"]):
+        for i, (kk, v, pu, f) in enumerate(m["R"]):
             if kk < first_k or v is None or m["age"][kk] > 10.0: continue
             for side in ("yes", "no"):
                 a = ask(m, side, kk)
@@ -235,7 +235,9 @@ def build(job):
                 basis = price + fee(price)
                 hold = (1.0 if won else 0.0) - basis
                 net = hold if sold is None else sold - fee(sold) - basis
-                return (side, price, (kf - 60) / 60.0, step, net * STAKE / price, hold * STAKE / price, {n: state(m, i, n, side) for n in CHECKS}, d)
+                return (side, price, (kf - 60) / 60.0, step, net * STAKE / price, hold * STAKE / price, {n: state(m, i, n, side) for n in CHECKS}, d,
+                        None if not detail else {"sold": sold, "kx": kx - 60, "won": won, "kk": kk - 60, "ask": a, "pu": pu, "raw": {n: side_val(v, n, side) for n in CHECKS}, "f": {k2: (round(x, 4) if isinstance(x, float) else x) for k2, x in f.items()},
+                                                 "after": [round(bid(m, side, x), 2) for x in range(kf, 961, 5)], "before": [None if m["yb"][x] is None else round(bid(m, side, x), 2) for x in range(max(0, kk - 300), kk + 1, 5)]})
         return None
 
     def required(name):
@@ -264,7 +266,7 @@ def build(job):
     for m in M:
         for tag, first_k in (("any", 120), ("m5", 360), ("m10", 660), ("late", 780)):
             for rn, rule in RULES.items():
-                got = trade(m, rule, first_k)
+                got = trade(m, rule, first_k, rn == "base" and tag in ("m10", "late"))
                 if got: out.append((tag, rn, m["ticker"], m["close"], *got))
     return out, len(M), trades_seen
 
@@ -316,4 +318,9 @@ for tag, title in (("any", "THE FIRST BUY FROM MINUTE 1"), ("m5", "THE FIRST BUY
         for sh in ("calm", "middle", "jumpy"):
             ks = [k for k in keys if shape(base.get(k) or V[k]) == sh]
             print(f"    {sh:8s}: change {sum((V[k][8] if k in V else 0.0) - (base[k][8] if k in base else 0.0) for k in ks):+8.2f}$ on {len(ks)} markets | " + line([V[k] for k in ks if k in V]))
+import json
+from pathlib import Path
+rows = [{"universe": r[0], "ticker": r[2], "close": r[3], "side": r[4], "price": r[5], "minute": r[6], "step": r[7], "net": r[8], "hold": r[9], "states": r[10], **r[12]} for (tg, rn), d in RES.items() if rn == "base" and tg in ("m10", "late") for r in d.values()]
+Path(os.environ.get("DATA_DIR", "/data"), "round_trip_bets.json").write_text(json.dumps(rows))
+print(f"{len(rows)} lane-order bets written to round_trip_bets.json")
 print(f"\ndone in {time.time() - t0:.0f}s")
