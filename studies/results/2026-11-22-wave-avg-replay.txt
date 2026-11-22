@@ -1,0 +1,135 @@
+16446 windows, newest close 2026-11-21T16:15:00+00:00; band 0.18-0.4, entry 0-480 s, qty 25; LEG_A 0.25 MIN_MOVE_A 0.5 TURN_A 0.25 TAKE 0.2 RESTING 0.4
+
+9859 crypto windows, 23 skipped for missing spot or quotes, 15898 signals on a side outside the band; 1226 bets over 12.3 days (99.4 a day)
+
+all bets
+  hold to settlement  n=1226 win 0.29 ask 0.271 H total    151.71 per bet  +0.12 +- 0.32
+  wave_take + hold    n=1226 win 0.29 ask 0.271 E total   -630.83 per bet  -0.51 +- 0.21
+  sold by wave_take: 541 of 1226; best bid reached entry +0.20 or more in 646
+
+peak bets (NO)
+  hold to settlement  n= 578 win 0.29 ask 0.270 H total     73.92 per bet  +0.13 +- 0.47
+  wave_take + hold    n= 578 win 0.29 ask 0.270 E total   -338.80 per bet  -0.59 +- 0.31
+  sold by wave_take: 256 of 578; best bid reached entry +0.20 or more in 315
+
+dip bets (YES)
+  hold to settlement  n= 648 win 0.29 ask 0.272 H total     77.79 per bet  +0.12 +- 0.44
+  wave_take + hold    n= 648 win 0.29 ask 0.272 E total   -292.02 per bet  -0.45 +- 0.30
+  sold by wave_take: 285 of 648; best bid reached entry +0.20 or more in 331
+
+by minute after the open
+    0- 60 s  n=  10 win 0.60 ask 0.390 H total     48.32 per bet  +4.83 +- 4.14
+   60-120 s  n=  28 win 0.46 ask 0.315 H total     93.70 per bet  +3.35 +- 2.31
+  120-240 s  n= 307 win 0.32 ask 0.306 H total    -36.92 per bet  -0.12 +- 0.66
+  240-481 s  n= 881 win 0.27 ask 0.256 H total     46.61 per bet  +0.05 +- 0.37
+
+TREND, signed for the bet (positive = the trend runs the bet's way; the drift against a random walk's spread). Hold to settlement, then with wave_take.
+
+1 h before the open
+  all     trend for bet  -9.. -2  H n=  21 win 0.33 ask 0.272 H total     25.01 per bet  +1.19 +- 2.65   E per bet  +0.06
+  all     trend for bet  -2.. -1  H n= 149 win 0.30 ask 0.266 H total     59.09 per bet  +0.40 +- 0.91   E per bet  -0.60
+  all     trend for bet  -1.. +0  H n= 449 win 0.31 ask 0.273 H total    256.28 per bet  +0.57 +- 0.54   E per bet  -0.26
+  all     trend for bet  +0.. +1  H n= 448 win 0.29 ask 0.272 H total      2.51 per bet  +0.01 +- 0.53   E per bet  -0.35
+  all     trend for bet  +1.. +2  H n= 144 win 0.24 ask 0.272 H total   -177.35 per bet  -1.23 +- 0.89   E per bet  -1.52
+  all     trend for bet  +2.. +9  H n=  10 win 0.10 ask 0.209 H total    -30.15 per bet  -3.01 +- 2.60   E per bet  -4.08
+  peak NO trend for bet  -9.. -2  H n=   7 win 0.29 ask 0.260 H total      2.16 per bet  +0.31 +- 4.67   E per bet  -1.57
+  peak NO trend for bet  -2.. -1  H n=  54 win 0.24 ask 0.249 H total    -28.23 per bet  -0.52 +- 1.43   E per bet  -1.18
+  peak NO trend for bet  -1.. +0  H n= 211 win 0.27 ask 0.270 H total    -72.94 per bet  -0.35 +- 0.76   E per bet  -0.88
+  peak NO trend for bet  +0.. +1  H n= 226 win 0.34 ask 0.277 H total    259.09 per bet  +1.15 +- 0.78   E per bet  +0.21
+  peak NO trend for bet  +1.. +2  H n=  70 win 0.24 ask 0.273 H total    -76.07 per bet  -1.09 +- 1.29   E per bet  -1.34
+  peak NO trend for bet  +2.. +9  H n=   5 win 0.00 ask 0.200 H total    -26.41 per bet  -5.28 +- 0.23   E per bet  -5.28
+  dip YES trend for bet  -9.. -2  H n=  14 win 0.36 ask 0.278 H total     22.85 per bet  +1.63 +- 3.33   E per bet  +0.87
+  dip YES trend for bet  -2.. -1  H n=  95 win 0.33 ask 0.276 H total     87.32 per bet  +0.92 +- 1.18   E per bet  -0.27
+  dip YES trend for bet  -1.. +0  H n= 238 win 0.34 ask 0.275 H total    329.22 per bet  +1.38 +- 0.76   E per bet  +0.28
+  dip YES trend for bet  +0.. +1  H n= 222 win 0.23 ask 0.267 H total   -256.58 per bet  -1.16 +- 0.70   E per bet  -0.93
+  dip YES trend for bet  +1.. +2  H n=  74 win 0.23 ask 0.271 H total   -101.28 per bet  -1.37 +- 1.22   E per bet  -1.70
+  dip YES trend for bet  +2.. +9  H n=   5 win 0.20 ask 0.218 H total     -3.74 per bet  -0.75 +- 5.27   E per bet  -2.88
+
+3 h before the open
+  all     trend for bet  -9.. -2  H n=  20 win 0.40 ask 0.261 H total     62.57 per bet  +3.13 +- 2.81   E per bet  +0.75
+  all     trend for bet  -2.. -1  H n= 152 win 0.32 ask 0.277 H total     94.55 per bet  +0.62 +- 0.93   E per bet  -0.87
+  all     trend for bet  -1.. +0  H n= 413 win 0.23 ask 0.272 H total   -529.84 per bet  -1.28 +- 0.51   E per bet  -0.91
+  all     trend for bet  +0.. +1  H n= 456 win 0.32 ask 0.271 H total    358.61 per bet  +0.79 +- 0.54   E per bet  -0.22
+  all     trend for bet  +1.. +2  H n= 147 win 0.31 ask 0.259 H total    150.27 per bet  +1.02 +- 0.96   E per bet  +0.01
+  all     trend for bet  +2.. +9  H n=  22 win 0.36 ask 0.300 H total     26.98 per bet  +1.23 +- 2.69   E per bet  +0.60
+  peak NO trend for bet  -9.. -2  H n=  10 win 0.20 ask 0.270 H total    -20.91 per bet  -2.09 +- 3.31   E per bet  -4.12
+  peak NO trend for bet  -2.. -1  H n=  68 win 0.28 ask 0.266 H total     -0.85 per bet  -0.01 +- 1.37   E per bet  -1.59
+  peak NO trend for bet  -1.. +0  H n= 183 win 0.23 ask 0.268 H total   -239.45 per bet  -1.31 +- 0.76   E per bet  -1.33
+  peak NO trend for bet  +0.. +1  H n= 218 win 0.34 ask 0.272 H total    315.14 per bet  +1.45 +- 0.79   E per bet  +0.40
+  peak NO trend for bet  +1.. +2  H n=  82 win 0.29 ask 0.269 H total     20.99 per bet  +0.26 +- 1.28   E per bet  -0.10
+  peak NO trend for bet  +2.. +9  H n=   7 win 0.14 ask 0.289 H total    -28.00 per bet  -4.00 +- 3.22   E per bet  -1.61
+  dip YES trend for bet  -9.. -2  H n=  10 win 0.60 ask 0.253 H total     83.48 per bet  +8.35 +- 4.03   E per bet  +5.63
+  dip YES trend for bet  -2.. -1  H n=  84 win 0.35 ask 0.286 H total     95.40 per bet  +1.14 +- 1.27   E per bet  -0.29
+  dip YES trend for bet  -1.. +0  H n= 230 win 0.24 ask 0.276 H total   -290.39 per bet  -1.26 +- 0.68   E per bet  -0.57
+  dip YES trend for bet  +0.. +1  H n= 238 win 0.29 ask 0.269 H total     43.47 per bet  +0.18 +- 0.73   E per bet  -0.79
+  dip YES trend for bet  +1.. +2  H n=  65 win 0.34 ask 0.246 H total    129.28 per bet  +1.99 +- 1.45   E per bet  +0.15
+  dip YES trend for bet  +2.. +9  H n=  15 win 0.47 ask 0.305 H total     54.98 per bet  +3.67 +- 3.54   E per bet  +1.63
+
+6 h before the open
+  all     trend for bet  -9.. -2  H n=  32 win 0.38 ask 0.288 H total     58.71 per bet  +1.83 +- 2.17   E per bet  +1.42
+  all     trend for bet  -2.. -1  H n= 165 win 0.32 ask 0.277 H total    127.32 per bet  +0.77 +- 0.90   E per bet  +0.00
+  all     trend for bet  -1.. +0  H n= 393 win 0.28 ask 0.267 H total    -32.18 per bet  -0.08 +- 0.55   E per bet  -0.69
+  all     trend for bet  +0.. +1  H n= 414 win 0.30 ask 0.270 H total    163.61 per bet  +0.40 +- 0.56   E per bet  -0.38
+  all     trend for bet  +1.. +2  H n= 161 win 0.24 ask 0.274 H total   -208.92 per bet  -1.30 +- 0.84   E per bet  -1.35
+  all     trend for bet  +2.. +9  H n=  22 win 0.50 ask 0.285 H total    110.23 per bet  +5.01 +- 2.60   E per bet  +2.70
+  peak NO trend for bet  -9.. -2  H n=  12 win 0.33 ask 0.294 H total      7.40 per bet  +0.62 +- 3.49   E per bet  -1.30
+  peak NO trend for bet  -2.. -1  H n=  55 win 0.29 ask 0.273 H total      5.63 per bet  +0.10 +- 1.53   E per bet  -0.41
+  peak NO trend for bet  -1.. +0  H n= 160 win 0.27 ask 0.260 H total    -18.22 per bet  -0.11 +- 0.87   E per bet  -0.96
+  peak NO trend for bet  +0.. +1  H n= 227 win 0.33 ask 0.274 H total    216.11 per bet  +0.95 +- 0.76   E per bet  -0.07
+  peak NO trend for bet  +1.. +2  H n=  97 win 0.25 ask 0.278 H total   -107.66 per bet  -1.11 +- 1.12   E per bet  -1.07
+  peak NO trend for bet  +2.. +9  H n=   6 win 0.17 ask 0.222 H total    -10.06 per bet  -1.68 +- 3.98   E per bet  +1.32
+  dip YES trend for bet  -9.. -2  H n=  20 win 0.40 ask 0.283 H total     51.31 per bet  +2.57 +- 2.83   E per bet  +3.05
+  dip YES trend for bet  -2.. -1  H n= 110 win 0.34 ask 0.278 H total    121.69 per bet  +1.11 +- 1.12   E per bet  +0.21
+  dip YES trend for bet  -1.. +0  H n= 233 win 0.28 ask 0.272 H total    -13.96 per bet  -0.06 +- 0.72   E per bet  -0.50
+  dip YES trend for bet  +0.. +1  H n= 187 win 0.27 ask 0.265 H total    -52.50 per bet  -0.28 +- 0.81   E per bet  -0.77
+  dip YES trend for bet  +1.. +2  H n=  64 win 0.22 ask 0.268 H total   -101.26 per bet  -1.58 +- 1.29   E per bet  -1.77
+  dip YES trend for bet  +2.. +9  H n=  16 win 0.62 ask 0.309 H total    120.29 per bet  +7.52 +- 3.08   E per bet  +3.22
+
+12 h before the open
+  all     trend for bet  -9.. -2  H n=  34 win 0.38 ask 0.265 H total     88.06 per bet  +2.59 +- 2.17   E per bet  +1.76
+  all     trend for bet  -2.. -1  H n= 192 win 0.33 ask 0.282 H total    179.96 per bet  +0.94 +- 0.82   E per bet  +0.45
+  all     trend for bet  -1.. +0  H n= 353 win 0.29 ask 0.267 H total     45.73 per bet  +0.13 +- 0.59   E per bet  -1.09
+  all     trend for bet  +0.. +1  H n= 359 win 0.25 ask 0.272 H total   -335.65 per bet  -0.93 +- 0.57   E per bet  -0.88
+  all     trend for bet  +1.. +2  H n= 148 win 0.32 ask 0.270 H total    149.51 per bet  +1.01 +- 0.96   E per bet  +0.27
+  all     trend for bet  +2.. +9  H n=  41 win 0.20 ask 0.257 H total    -76.89 per bet  -1.88 +- 1.58   E per bet  -1.02
+  peak NO trend for bet  -9.. -2  H n=  10 win 0.40 ask 0.239 H total     37.09 per bet  +3.71 +- 3.94   E per bet  +1.91
+  peak NO trend for bet  -2.. -1  H n=  52 win 0.31 ask 0.275 H total     24.54 per bet  +0.47 +- 1.59   E per bet  -0.01
+  peak NO trend for bet  -1.. +0  H n= 152 win 0.26 ask 0.264 H total    -81.22 per bet  -0.53 +- 0.87   E per bet  -1.80
+  peak NO trend for bet  +0.. +1  H n= 181 win 0.25 ask 0.272 H total   -144.08 per bet  -0.80 +- 0.80   E per bet  -0.40
+  peak NO trend for bet  +1.. +2  H n= 109 win 0.34 ask 0.275 H total    138.23 per bet  +1.27 +- 1.13   E per bet  -0.11
+  peak NO trend for bet  +2.. +9  H n=  31 win 0.19 ask 0.270 H total    -69.64 per bet  -2.25 +- 1.80   E per bet  -1.20
+  dip YES trend for bet  -9.. -2  H n=  24 win 0.38 ask 0.276 H total     50.97 per bet  +2.12 +- 2.65   E per bet  +1.69
+  dip YES trend for bet  -2.. -1  H n= 140 win 0.34 ask 0.284 H total    155.42 per bet  +1.11 +- 0.96   E per bet  +0.63
+  dip YES trend for bet  -1.. +0  H n= 201 win 0.31 ask 0.270 H total    126.95 per bet  +0.63 +- 0.80   E per bet  -0.55
+  dip YES trend for bet  +0.. +1  H n= 178 win 0.24 ask 0.271 H total   -191.57 per bet  -1.08 +- 0.81   E per bet  -1.37
+  dip YES trend for bet  +1.. +2  H n=  39 win 0.28 ask 0.257 H total     11.28 per bet  +0.29 +- 1.81   E per bet  +1.34
+  dip YES trend for bet  +2.. +9  H n=  10 win 0.20 ask 0.217 H total     -7.25 per bet  -0.72 +- 3.45   E per bet  -0.47
+
+24 h before the open
+  all     trend for bet  -9.. -2  H n=  61 win 0.36 ask 0.279 H total    103.78 per bet  +1.70 +- 1.57   E per bet  -0.23
+  all     trend for bet  -2.. -1  H n= 170 win 0.37 ask 0.280 H total    325.30 per bet  +1.91 +- 0.90   E per bet  +0.67
+  all     trend for bet  -1.. +0  H n= 319 win 0.31 ask 0.270 H total    241.81 per bet  +0.76 +- 0.64   E per bet  -0.26
+  all     trend for bet  +0.. +1  H n= 354 win 0.23 ask 0.265 H total   -392.26 per bet  -1.11 +- 0.55   E per bet  -0.76
+  all     trend for bet  +1.. +2  H n= 149 win 0.26 ask 0.275 H total   -126.73 per bet  -0.85 +- 0.91   E per bet  -1.69
+  all     trend for bet  +2.. +9  H n=  43 win 0.40 ask 0.277 H total    112.48 per bet  +2.62 +- 1.88   E per bet  +0.78
+  peak NO trend for bet  -9.. -2  H n=   3 win 0.67 ask 0.240 H total     31.05 per bet +10.35 +- 9.50   E per bet  +0.07
+  peak NO trend for bet  -2.. -1  H n=  27 win 0.44 ask 0.301 H total     86.65 per bet  +3.21 +- 2.33   E per bet  +1.18
+  peak NO trend for bet  -1.. +0  H n= 109 win 0.30 ask 0.270 H total     51.27 per bet  +0.47 +- 1.09   E per bet  -1.26
+  peak NO trend for bet  +0.. +1  H n= 209 win 0.28 ask 0.265 H total     -5.46 per bet  -0.03 +- 0.76   E per bet  +0.28
+  peak NO trend for bet  +1.. +2  H n= 126 win 0.27 ask 0.273 H total    -54.44 per bet  -0.43 +- 1.01   E per bet  -1.61
+  peak NO trend for bet  +2.. +9  H n=  42 win 0.40 ask 0.279 H total    117.76 per bet  +2.80 +- 1.91   E per bet  +0.93
+  dip YES trend for bet  -9.. -2  H n=  58 win 0.34 ask 0.281 H total     72.73 per bet  +1.25 +- 1.58   E per bet  -0.25
+  dip YES trend for bet  -2.. -1  H n= 143 win 0.36 ask 0.276 H total    238.65 per bet  +1.67 +- 0.98   E per bet  +0.57
+  dip YES trend for bet  -1.. +0  H n= 210 win 0.32 ask 0.269 H total    190.54 per bet  +0.91 +- 0.79   E per bet  +0.26
+  dip YES trend for bet  +0.. +1  H n= 145 win 0.17 ask 0.266 H total   -386.80 per bet  -2.67 +- 0.77   E per bet  -2.25
+  dip YES trend for bet  +1.. +2  H n=  23 win 0.17 ask 0.286 H total    -72.29 per bet  -3.14 +- 2.03   E per bet  -2.12
+  dip YES trend for bet  +2.. +9  H n=   1 win 0.00 ask 0.200 H total     -5.28 per bet  -5.28 +- 0.00   E per bet  -5.28
+
+SLOPE: per-contract hold-to-settlement net against the trend signed for the bet (clipped to +-3), least squares: the worth of the bet moves by `slope` dollars a contract per unit of trend
+   1 h  n=1221  slope -0.0162 +- 0.0142 a contract per unit of trend  (t -1.1)
+   3 h  n=1210  slope +0.0183 +- 0.0135 a contract per unit of trend  (t +1.4)
+   6 h  n=1187  slope -0.0021 +- 0.0130 a contract per unit of trend  (t -0.2)
+  12 h  n=1127  slope -0.0192 +- 0.0120 a contract per unit of trend  (t -1.6)
+  24 h  n=1096  slope -0.0236 +- 0.0117 a contract per unit of trend  (t -2.0)
+
+18 s

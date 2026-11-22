@@ -295,50 +295,6 @@ def shifts(T: list[float], V: list[float], now: float, u: float, hold: float = 1
     return merged
 
 
-class Staircase:
-    """The sell step's state for one bet (scripts/priskp_staircase_study.py, rule 1 with the swing size K0 = 1.0, chosen after seeing the study): swings of the bid, and the sale once the bid falls under the last confirmed swing low after the bet has been ahead.
-
-    rev = max(0.01, K0 x u x sqrt(max(T, 60) / 60)), u the bid's typical minute. After a high, a pullback of rev confirms the swing high; after that, a bounce of rev off the lowest point confirms a swing low. The sale can be at a small loss; there is no loss cap."""
-
-    K0 = 1.0
-
-    def __init__(self) -> None:
-        self.phase = "up"
-        self.hi = 0.0
-        self.lo = 1.0
-        self.swing_low: float | None = None
-        self.ahead = False
-        self.rev = 0.0  # the swing size at the last reading
-
-    def step(self, bid: float, net: float, u: float, left: float) -> bool:
-        """Feed one reading (the bid, its gain after both fees per contract, the bid's typical minute, the seconds left); True when the bet is to be sold now."""
-        if net > 0:
-            self.ahead = True
-        rev = self.rev = max(0.01, self.K0 * u * math.sqrt(max(left, 60.0) / 60.0))
-        if self.phase == "up":
-            self.hi = max(self.hi, bid)
-            if bid <= self.hi - rev:
-                self.phase, self.lo = "down", bid
-        else:
-            self.lo = min(self.lo, bid)
-            if bid >= self.lo + rev:
-                self.swing_low, self.phase, self.hi = self.lo, "up", bid
-        return self.swing_low is not None and bid < self.swing_low and self.ahead
-
-
-def bid_unit(bids: deque[tuple[float, float]] | list[tuple[float, float]], now: float) -> float:
-    """The bid's typical minute from (time, bid) readings: the root-mean-square change between consecutive readings, scaled to a minute by the time between them (change / sqrt(dt) x sqrt(60)), over the last 15 minutes. 0.0 with fewer than 3 changes."""
-    rows = [(t, b) for t, b in bids if now - 900.0 <= t <= now]
-    d = []
-    for (t0, b0), (t1, b1) in zip(rows, rows[1:]):
-        dt = t1 - t0
-        if dt > 0:
-            d.append(((b1 - b0) ** 2) / dt)
-    if len(d) < 3:
-        return 0.0
-    return math.sqrt(sum(d) / len(d) * 60.0)
-
-
 # ---- the buy step ----------------------------------------------------------------------------------------------------------
 
 STEP = "priskp"  # the buy step's name (buychain.py)

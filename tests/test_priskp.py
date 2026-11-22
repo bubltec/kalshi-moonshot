@@ -56,31 +56,13 @@ def test_a_gap_of_readings_starts_the_count_again():
     assert priskp.confirmed("T", "yes", True, 60.0) == (False, 1)
 
 
-def test_the_bid_unit_scales_changes_to_a_minute():
-    rows = [(10.0 * i, 0.50 + (0.01 if i % 2 else 0.0)) for i in range(20)]  # a 1c change every 10 s
-    u = priskp.bid_unit(rows, 190.0)
-    assert math.isclose(u, 0.01 * math.sqrt(6.0), rel_tol=1e-9)
-    assert priskp.bid_unit(rows[:3], 20.0) == 0.0  # too few changes
 
 
-def test_the_staircase_sells_under_the_last_swing_low_once_ahead():
-    s = priskp.Staircase()
-    u, left = 0.02, 600.0
-    rev = max(0.01, 1.0 * u * math.sqrt(left / 60.0))  # 0.063
-    seq = [(0.60, 0.02), (0.75, 0.10), (0.75 - rev - 0.001, 0.05),  # a swing high confirmed at 0.75
-           (0.66, 0.0), (0.66 + rev + 0.001, 0.05)]  # a bounce of rev off the low confirms the swing low at 0.66
-    assert [s.step(b, n, u, left) for b, n in seq] == [False] * 5
-    assert s.swing_low == 0.66 and s.ahead
-    assert s.step(0.70, 0.04, u, left) is False  # above the swing low
-    assert s.step(0.659, -0.01, u, left) is True  # under it: sold, here at a small loss against the entry
 
 
-def test_a_bet_never_ahead_is_not_sold_by_the_staircase():
-    s = priskp.Staircase()
-    u, left = 0.02, 600.0
-    rev = max(0.01, u * math.sqrt(left / 60.0))
-    for b in (0.40, 0.50, 0.50 - rev - 0.001, 0.30, 0.30 + rev + 0.001, 0.20):
-        assert s.step(b, -0.05, u, left) is False
+
+
+
 
 
 def _market(seed=1, n=4300):

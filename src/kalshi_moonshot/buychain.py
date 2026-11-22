@@ -461,12 +461,29 @@ def swing_risk_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
+@step("wave_trend")
+def wave_trend_step(ctx: Ctx, shot: LongShot) -> Check:
+    """SHADOW ONLY, never says no (wavetrend.py; 2026-11-22, user: the trend "shouldn't be a hard NO"; "Ok let's try that"): writes the trend over 1, 3, 12 and 24 hours before the open, signed for this bet, and what the 24 h trend would move the bet's worth by, into the decision's note. Changes nothing the lane buys; scored later against the bets that follow."""
+    from . import binaryrisk, wavetrend
+
+    try:
+        index = binaryrisk.curve_index(shot.series or shot.ticker.split("-")[0])
+        if not index:
+            return Check(True, "trend: no index is read for this series (shadow)")
+        opened = round((ctx.now + shot.hours_to_close * 3600.0) / 900.0) * 900.0 - 900.0
+        return Check(True, wavetrend.note(index, opened, ctx.now, shot.side))
+    except Exception as exc:
+        return Check(True, f"trend unreadable ({exc!r}) (shadow)")
+
+
 @step("wave_top")
 def wave_top_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The wave-top reversal (wavetop.py; 2026-11-21, the user's hand scalp): the spot has made a wave bigger than the waves before it (its slope above the last legs and at the lane's quantile of the market's own legs, wave_top_quantile), the top has stood and the spot has gone back and forth, and this side is the reversal (NO after an up wave, YES after a down wave). A dip bet after a rising wave_top_trend_hours is not taken. Memory only."""
+    """The wave top (wavetop.py; 2026-11-21 the user's hand scalp, rebuilt 2026-11-22 on the 60-second average against the target): the average has risen (fallen) faster than the earlier rises (falls), the whole leg stayed above (below) the market's target, the raw spot has just crossed to the other side of its average and the average has not yet come off its extreme: a peak (dip) whose flip is starting. This side is NO on a peak and YES on a dip. A dip bet after a rising hour is not taken (wave_top_trend_hours). Memory only (the tick history and the target in memory)."""
+    from . import ticks as ticks_mod
     from . import wavetop
 
-    ok, why = wavetop.admits(ctx.s, shot, ctx.spec, ctx.now)
+    strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
+    ok, why = wavetop.admits(ctx.s, shot, ctx.spec, ctx.now, strike)
     return Check(ok, why)
 
 

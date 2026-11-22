@@ -22,6 +22,11 @@ max_spread = 1.0
 min_volume = 0
 buy_module = "priskp"
 exit_module = "priskp_exit"
+wave_rev_k = 1.0
+wave_rev_p = 0.5
+wave_cushion = false
+wave_high_zone = false
+wave_whipsaw_range = 0.0
 priority = 45
 fixed_stake = 5.0
 paper_fill_model = true
@@ -32,7 +37,7 @@ steps = ["priskp"]
 
 [exit.priskp_exit]
 label = "the PriskP sale"
-steps = ["staircase"]
+steps = ["wave_take"]
 curve_risk_live = true
 curve_risk_spot_weight = 0.0
 
@@ -53,8 +58,9 @@ def spec(tmp_path, monkeypatch):
 
 def test_the_lane_loads_with_the_one_buy_step_and_the_staircase_sale(spec):
     s, sp = spec
-    assert sp.enabled and sp.buy_chain == ("priskp",) and sp.sell_chain == ("staircase",)
+    assert sp.enabled and sp.buy_chain == ("priskp",) and sp.sell_chain == ("wave_take",)
     assert sp.buy_module == "priskp" and sp.exit_module == "priskp_exit"
+    assert (sp.wave_rev_k, sp.wave_cushion, sp.wave_high_zone, sp.wave_whipsaw_range) == (1.0, False, False, 0.0)  # the wave lane's staircase, set for PriskP: one concept
 
 
 def test_the_lane_has_no_gate_the_user_did_not_ask_for(spec):

@@ -1,0 +1,51 @@
+1473 bets; all: n=1473 win 0.29 mean ask 0.270 hold total   170.66 per bet  +0.12 +- 0.29
+
+bid range over 120 s in typical minutes: cut points 1.58 and 2.16
+  <= 1.58            n= 492 win 0.20 mean ask 0.245 hold total  -671.92 per bet  -1.37 +- 0.45
+      yes n= 266 win 0.20 mean ask 0.243 hold total  -399.54 per bet  -1.50 +- 0.60
+      no  n= 226 win 0.21 mean ask 0.248 hold total  -272.38 per bet  -1.21 +- 0.67
+  1.58 < v <= 2.16   n= 491 win 0.27 mean ask 0.274 hold total  -257.85 per bet  -0.53 +- 0.49
+      yes n= 256 win 0.26 mean ask 0.276 hold total  -180.07 per bet  -0.70 +- 0.69
+      no  n= 235 win 0.27 mean ask 0.272 hold total   -77.78 per bet  -0.33 +- 0.70
+  > 2.16             n= 490 win 0.39 mean ask 0.290 hold total  1100.43 per bet  +2.25 +- 0.55
+      yes n= 276 win 0.41 mean ask 0.292 hold total   685.86 per bet  +2.48 +- 0.74
+      no  n= 214 win 0.38 mean ask 0.287 hold total   414.57 per bet  +1.94 +- 0.84
+
+crossings of the price paid in 120 s: cut points 1.00 and 3.00
+  <= 1.00            n= 726 win 0.25 mean ask 0.265 hold total  -500.84 per bet  -0.69 +- 0.40
+      yes n= 377 win 0.24 mean ask 0.266 hold total  -331.46 per bet  -0.88 +- 0.54
+      no  n= 349 win 0.26 mean ask 0.264 hold total  -169.38 per bet  -0.49 +- 0.58
+  1.00 < v <= 3.00   n= 414 win 0.31 mean ask 0.269 hold total   304.76 per bet  +0.74 +- 0.56
+      yes n= 235 win 0.30 mean ask 0.267 hold total   129.29 per bet  +0.55 +- 0.75
+      no  n= 179 win 0.32 mean ask 0.271 hold total   175.47 per bet  +0.98 +- 0.86
+  > 3.00             n= 333 win 0.34 mean ask 0.281 hold total   366.74 per bet  +1.10 +- 0.64
+      yes n= 186 win 0.37 mean ask 0.285 hold total   308.42 per bet  +1.66 +- 0.87
+      no  n= 147 win 0.31 mean ask 0.276 hold total    58.32 per bet  +0.40 +- 0.92
+
+confirmed swings at half a typical minute in 120 s: cut points 3.00 and 5.00
+  <= 3.00            n= 761 win 0.22 mean ask 0.259 hold total  -957.65 per bet  -1.26 +- 0.37
+      yes n= 415 win 0.21 mean ask 0.259 hold total  -653.91 per bet  -1.58 +- 0.49
+      no  n= 346 win 0.24 mean ask 0.259 hold total  -303.74 per bet  -0.88 +- 0.57
+  3.00 < v <= 5.00   n= 431 win 0.33 mean ask 0.277 hold total   437.02 per bet  +1.01 +- 0.56
+      yes n= 232 win 0.34 mean ask 0.280 hold total   293.20 per bet  +1.26 +- 0.78
+      no  n= 199 win 0.32 mean ask 0.274 hold total   143.82 per bet  +0.72 +- 0.82
+  > 5.00             n= 281 win 0.40 mean ask 0.286 hold total   691.29 per bet  +2.46 +- 0.72
+      yes n= 151 win 0.42 mean ask 0.286 hold total   466.96 per bet  +3.09 +- 1.00
+      no  n= 130 win 0.37 mean ask 0.286 hold total   224.33 per bet  +1.73 +- 1.04
+
+STAIRCASE (lane defaults, cushion off, no high zone, backup on) against hold, by the range third
+  calm   range <= 1.58     n= 492  hold   -671.92  staircase   -972.81
+  middle                   n= 491  hold   -257.85  staircase   -898.62
+  whipsaw range > 2.16     n= 490  hold   1100.43  staircase    567.69
+
+SPLIT SALE: the whipsaw third is held; the calm and the middle thirds get an exit read from 120 s after the buy (an exit that never fires holds). Totals in dollars, hold to settlement for all 1,473 bets = 170.66
+  whipsaw held  1100.43 | calm held  -671.92 | middle held  -257.85
+  staircase k0.25 p0.5                     calm   -952.68  middle   -935.84  | whole policy (whipsaw held) calm-only   -110.10  calm+middle   -788.09
+  staircase k0.5 p1                        calm   -766.50  middle   -446.68  | whole policy (whipsaw held) calm-only     76.09  calm+middle   -112.74
+  staircase k1 p1                          calm   -682.15  middle   -277.06  | whole policy (whipsaw held) calm-only    160.43  calm+middle    141.22
+  stop 0.5 typical minutes under the price calm   -961.81  middle   -931.01  | whole policy (whipsaw held) calm-only   -119.23  calm+middle   -792.40
+  stop 1.0 typical minutes under the price calm   -785.72  middle   -701.45  | whole policy (whipsaw held) calm-only     56.86  calm+middle   -386.74
+  stop 2.0 typical minutes under the price calm   -650.55  middle   -411.35  | whole policy (whipsaw held) calm-only    192.03  calm+middle     38.53
+  stop 3.0 typical minutes under the price calm   -652.57  middle   -252.60  | whole policy (whipsaw held) calm-only    190.01  calm+middle    195.26
+
+64 s

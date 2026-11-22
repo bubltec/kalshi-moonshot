@@ -570,9 +570,9 @@ def evaluate(
         sized = size_bet(
             spec, s, cal.p, shot.ask, balance.available, balance.equity,
             balance.open_by_lane.get(shot.lane, 0.0), 1.0, fractional=s.fractional_stake and not _NO_FRACTION,
-            maker_price=round(max(0.01, shot.ask - spec.buy_rest_below), 4) if spec.buy_rest_seconds > 0 else None,
+            maker_price=_rest_start(shot, spec) if spec.buy_rest_seconds > 0 else None,
         )
-        if store.holds_sized_bet(shot.ticker, shot.lane) and not s.is_live(shot.lane, shot.series):
+        if store.holds_sized_bet(shot.ticker, shot.lane, time.time() - spec.buy_rest_seconds if spec.buy_rest_seconds > 0 else None) and not s.is_live(shot.lane, shot.series):  # (a paper resting order whose time is up and whose fill is not judged yet is no hold: store.book_holds_sized)
             sized = Sizing(0, 0.0, "already holding this market (paper)")
         elif not sized.ok:
             bet = False
@@ -1367,11 +1367,20 @@ def _requote_why(s: Settings, client: KalshiClient, store: Store, shot: LongShot
     return (limit, "") if verdict.ok else (None, f"the risk gate refused ({verdict.reason})")
 
 
+def _rest_start(shot: LongShot, spec: LaneSpec) -> float:
+    """Where the resting buy starts: `buy_rest_below` under the ask, or under the lower of the ask and its average of the last buy_rest_avg_seconds (restprice.py). Reads the quote memory only."""
+    from . import restprice
+    from . import ticks as ticks_mod
+
+    rows = ticks_mod.mids.quotes(shot.ticker) if spec.buy_rest_avg_seconds > 0 else ()
+    return restprice.rest_price(spec, shot.side, shot.ask, rows, time.time())
+
+
 def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) -> tuple[float | None, str]:
     """(the price a resting buy sits at, "") or (None, why it is skipped). It rests `buy_rest_below` under the ask. The ask was read some time ago and may have fallen since; a post-only buy at or over the ask
     is refused ("post only cross": 94% of 275 refusals in two days), so when the live book's ask is lower it rests the same distance under that one. A fallen ask under the lane's price floor skips the buy.
     A risen ask does not raise the price, and a missing or empty book leaves the planned price."""
-    price = round(max(0.01, shot.ask - spec.buy_rest_below), 4)
+    price = _rest_start(shot, spec)
     if price >= shot.ask - 1e-9:
         return None, f"skipped: a resting buy needs a price under the ask {shot.ask:.2f}"
     live_ask = best_ask(book, shot.side) if book else None
@@ -1487,6 +1496,17 @@ def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count
     want = round(max(0.01, live_ask - spec.buy_rest_below), 4)
     if not withdraw and want >= price - 1e-9:
         return None  # a risen ask never raises the price
+    if not withdraw and hasattr(client, "amend_resting"):
+        # Update the order where it stands (CLAUDE.md, 2026-11-22: "a resting order is updated in place"): same order, same expiry, the new price, for the whole count (what has filled stays filled). Cancel and place is the fallback when the exchange refuses the amend.
+        left_now = round(count - rest.filled, 2)
+        if left_now * want >= s.min_order_usd:
+            try:
+                resp = client.amend_resting(order_id, shot.ticker, shot.side, "buy", want, count)
+            except KalshiError as exc:
+                log.info("resting buy %s %s: the amend to %.2f was refused (%s); cancelling and placing again", shot.ticker, shot.side, want, exc)
+            else:
+                log.info("resting buy %s %s: the ask fell to %.2f, the order amended in place from %.2f to %.2f for %g", shot.ticker, shot.side, live_ask, price, want, left_now)
+                return resp.get("order_id") or order_id, want
     try:
         client.cancel_order(order_id)
     except KalshiError as exc:

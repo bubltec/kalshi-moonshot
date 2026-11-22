@@ -1,0 +1,182 @@
+"""The facts board: how the steps of a module talk to each other (2026-11-22; user: "could we make steps communicate with each other?", then "yes this works").
+
+A READER computes one named fact about a bet at one moment (the spot's cushion over the target, the chance of losing the bet, the kind of wave it is). A step does not call the reader's code or another step's helper: it asks the board for the fact by name. A fact is computed the first time anything asks for it on a check and kept for the rest of that check, so two steps that need the same fact read the same value, once. A reader may ask for other facts (the chance of losing needs the spot's cushion); that is how facts build on each other.
+
+Each step names the facts it may read (NEEDS, below). Asking for one it did not name raises, so what influences a step is always listed, and the module's step list says what each sale depends on. The sale reasons carry the facts the step read ("[facts read: ...]"), so a bet's log line shows what it was judged on. When a lane file loads, `sellchain.check` refuses a step whose needs have no reader.
+
+VETOES (user, 2026-11-22: "this facts board ... is exactly what we need to make sure we don't let one step action when another tells it not to"): VETO_RULES say which fact, read as which value, stops which steps from selling ("the whipsaw fact is not False: the wave sales hold"). A step asks the board `cleared()` at the point where it would sell and the sale walk refuses a sale from a step the board vetoed, so a step cannot act against a fact another reading has settled, and the refusal is logged with the rule's label.
+
+WEIGHTS (same message: "allows us to add weights that really accumulate"): any step or reader may `weigh(source, weight, why)` on the board: signed evidence for (+) or against (-) a sale on this check, and `score()` is the running total. The ledger is part of the board and of the note a sale carries; no lane uses it yet (nothing here sells on a total): the first use is for the user to choose.
+
+Memory only: a reader reads the quote and tick memory and the bet's own state, never the database (CLAUDE.md: no database call in buy or sell logic). Sell steps first; the buy chain can adopt the same board (a `Ctx` that holds a Board, readers for the buy's facts).
+
+To add a fact: write a reader with @reader("name") returning (value, why), and add the name to NEEDS for each step that reads it.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable
+from typing import Any
+
+log = logging.getLogger("moonshot")
+
+READERS: dict[str, Callable[[Board], tuple[Any, str]]] = {}
+NEEDS: dict[str, tuple[str, ...]] = {
+    "wave_take": ("whipsaw", "bid_unit", "p_lose", "cushion_factor"),
+    "wave_salvage": ("whipsaw", "spot"),
+}
+
+
+VETO_RULES: list[tuple[str, Callable[[Any], bool], tuple[str, ...], str]] = [
+    ("whipsaw", lambda v: v is not False, ("wave_take", "wave_salvage"), "is_whipsaw_behavior: a whipsaw is held to settlement, and the shape is not read for the first seconds after the buy"),
+]  # (fact, vetoes when this is true of its value, the steps it stops, the label the log carries)
+VETOED_STEPS = frozenset(step for _, _, steps, _ in VETO_RULES for step in steps)
+
+
+def reader(name: str) -> Callable[[Callable[[Board], tuple[Any, str]]], Callable[[Board], tuple[Any, str]]]:
+    def deco(fn: Callable[[Board], tuple[Any, str]]) -> Callable[[Board], tuple[Any, str]]:
+        READERS[name] = fn
+        return fn
+
+    return deco
+
+
+def check_needs(chain: tuple[str, ...] | list[str], who: str) -> None:
+    """Raise ValueError when a step in the chain needs a fact no reader provides."""
+    for step in chain:
+        for need in NEEDS.get(step, ()):
+            if need not in READERS:
+                raise ValueError(f"{who}: step {step!r} needs the fact {need!r}, which has no reader")
+
+
+class Board:
+    """The facts of one bet on one check. `host` is the watcher (its helpers read memory), `t` the bet's state."""
+
+    def __init__(self, host: Any, t: Any, now: float, left: float, bid: float) -> None:
+        self.host, self.t, self.now, self.left, self.bid = host, t, now, left, bid
+        self._v: dict[str, tuple[Any, str]] = {}
+        self._read: list[str] = []
+        self._weights: list[tuple[str, float, str]] = []
+
+    def get(self, name: str) -> Any:
+        if name not in self._v:
+            if name not in READERS:
+                raise KeyError(f"no reader for the fact {name!r}")
+            try:
+                self._v[name] = READERS[name](self)
+            except Exception as exc:  # a reader that fails is an unknown fact, never a crash of the sale
+                log.warning("fact %s unreadable on %s: %r", name, getattr(self.t, "ticker", "?"), exc)
+                self._v[name] = (None, f"unreadable ({exc!r})")
+        if name not in self._read:
+            self._read.append(name)
+        return self._v[name][0]
+
+    def why(self, name: str) -> str:
+        self.get(name)
+        return self._v[name][1]
+
+    def view(self, step: str) -> View:
+        return View(self, step)
+
+    def vetoes(self, step: str) -> str | None:
+        """The label of the first veto rule that stops `step` on this check, or None. Reads the rule's fact through the board."""
+        for fact, test, steps, label in VETO_RULES:
+            if step in steps and test(self.get(fact)):
+                return label
+        return None
+
+    def weigh(self, source: str, weight: float, why: str = "") -> None:
+        """Add signed evidence (for a sale +, against -) to this check's ledger."""
+        self._weights.append((source, float(weight), why))
+
+    def score(self) -> float:
+        return sum(w for _, w, _ in self._weights)
+
+    def note(self) -> str:
+        """The facts read (and the weights added) on this check, for a sale's reason."""
+        out = ""
+        if self._read:
+            out += " [facts read: " + "; ".join(f"{n}={_show(self._v[n][0])}" for n in self._read) + "]"
+        if self._weights:
+            out += " [weights: " + "; ".join(f"{src} {w:+.2f}" for src, w, _ in self._weights) + f" = {self.score():+.2f}]"
+        return out
+
+
+class View:
+    """A step's own window on the board: only the facts it named."""
+
+    def __init__(self, board: Board, step: str) -> None:
+        self.board, self.step = board, step
+
+    def get(self, name: str) -> Any:
+        if name not in NEEDS.get(self.step, ()):
+            raise KeyError(f"step {self.step!r} read the fact {name!r}, which it did not name in facts.NEEDS")
+        return self.board.get(name)
+
+    def cleared(self) -> bool:
+        """False when a veto rule stops this step on this check: the step must not sell (the walk refuses it if it does)."""
+        return self.board.vetoes(self.step) is None
+
+    def weigh(self, weight: float, why: str = "") -> None:
+        self.board.weigh(self.step, weight, why)
+
+    def note(self) -> str:
+        return self.board.note()
+
+
+def _show(v: Any) -> str:
+    if v is None:
+        return "n/a"
+    if isinstance(v, bool):
+        return "yes" if v else "no"
+    if isinstance(v, float):
+        return f"{v:.3g}"
+    if isinstance(v, tuple):
+        return "(" + ", ".join(_show(x) for x in v) + ")"
+    return str(v)
+
+
+# ---- the readers (memory only) ----
+@reader("spot")
+def _spot(b: Board) -> tuple[Any, str]:
+    """(cushion, typical minute) of the spot against the target, for the bet's side: the 60 s average's distance past the strike (negative = the wrong side) and the spot's own rms one-second move x sqrt(60). None when no reading is armed or the ticks are stale."""
+    got = b.host._wave_spot(b.t, b.now)
+    return got, "the spot's 60 s average against the target, in the spot's own typical minute" if got else "no spot reading (none armed, or stale ticks)"
+
+
+@reader("p_lose")
+def _p_lose(b: Board) -> tuple[Any, str]:
+    """The chance the spot's average ends on the wrong side: its cushion over what a random walk moves in the time left (wavetop.p_lose). None without a spot reading."""
+    from . import wavetop
+
+    spot = b.get("spot")
+    if spot is None:
+        return None, "no spot reading"
+    return wavetop.p_lose(spot[0], spot[1], b.left), "the cushion against a random walk's move over the time left"
+
+
+@reader("cushion_factor")
+def _cushion_factor(b: Board) -> tuple[Any, str]:
+    """2 x (1 - p_lose): about 2 with the spot safely on the bet's side, about 0 on the wrong side; 1 when the lane's wave_cushion is off or there is no reading."""
+    if not b.t.wave_cushion:
+        return 1.0, "the lane's wave_cushion is off"
+    lose = b.get("p_lose")
+    return (1.0, "no spot reading") if lose is None else (2.0 * (1.0 - lose), "2 x (1 - p_lose)")
+
+
+@reader("bid_unit")
+def _bid_unit(b: Board) -> tuple[Any, str]:
+    """The bet's own typical minute: the rms one-second change of the market's mid over the last 15 minutes x sqrt(60) (the watcher's _risk_unit)."""
+    return b.host._risk_unit(b.t, b.now), "the market's own typical minute"
+
+
+@reader("whipsaw")
+def _whipsaw(b: Board) -> tuple[Any, str]:
+    """is_whipsaw_behavior: True when the bet's bid range over its first wave_shape_seconds, in the bid's typical minutes, is at or over wave_whipsaw_range; False under it, or when the lane's switch is off; None while the shape is not readable yet (the watcher's _is_whipsaw_behavior reads it once and keeps it on the bet)."""
+    v = b.host._is_whipsaw_behavior(b.t, b.now)
+    if v is None:
+        return None, f"the shape is read {b.t.wave_shape_s:.0f} s after the buy"
+    if b.t.wave_whipsaw <= 0:
+        return False, "the lane's switch is off"
+    return v, f"bid range {b.t.wave_range_u:.2f} typical minutes in the first {b.t.wave_shape_s:.0f} s against {b.t.wave_whipsaw:.2f}"

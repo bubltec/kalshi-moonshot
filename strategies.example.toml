@@ -63,7 +63,7 @@ curve_risk_under_even_live = true
 # chosen after seeing results). Series are the scope, not a rule: every 15-minute market with a Kalshi index or perp reference.
 [lane.wave_top]
 enabled = true
-label = "wave top: the cheap side at the top of a big spot wave, salvaged if it dips (PAPER)"
+label = "wave top: the cheap side at a peak above or a dip below the target, bought as the spot turns on the 60 s average, sold at +40c, at the first turn down below the target, trailed on the winning side (PAPER)"
 estimator = "market"
 numeric = "allow"
 one_per = "event"
@@ -71,9 +71,9 @@ series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXADA15M
 sides = ["yes", "no"]
 timed_suffix = "15M"
 shadow_suffix = "15M"
-price = [0.18, 0.40]             # the user's own band (2026-11-21)
+price = [0.18, 0.55]             # user, 2026-11-22: "lets try bumping the price upper bound to 55, i am curious" (it was 0.18 to 0.40)
 hours = [0.0, 0.26]
-entry_elapsed = [0, 8]          # minutes after the open: later wave tops lost in the study. No wait at the open (user, 2026-11-21: the minute-2 start was not asked for)
+entry_elapsed = [2, 10]         # minutes after the open (user, 2026-11-22: "can we move the entry window to 2-10?")
 max_spread = 1.0                # no spread limit (user, 2026-11-21: a spread limit conflicts with this lane's purpose)
 min_volume = 0
 shortlist = 12
@@ -81,26 +81,28 @@ scope_minutes = 2
 review_minutes = 1
 fixed_stake = 7.5               # about 25 contracts at 0.30
 buy_rest_seconds = 5            # 2026-11-22 (user: the lane should not take the price right at the ask the moment the peak shows; "fluttering on the price for a few moments and that's when you bet under a cent or 2"): a resting buy under the ask for a few seconds, the commodity lanes' 5. Paper: judged on the tape, filled only if the ask comes down to it, else no bet (paperfill.settle)
-buy_rest_below = 0.02           # how far under the ask the buy rests: the user's "a cent or 2" (the commodity lanes rest 1c)
+buy_rest_follow = true          # 2026-11-22 (user: "the bot can operate much faster and sees every tick"): the order moves down to a cent or two under the ask as it falls, at most 3 times; paper is judged the same way (paperfill._follow_down)
+buy_rest_avg_seconds = 5        # 2026-11-22 (user: "when it's peaking it's going to flutter up and down ... you could take an average of like 5s"): the order starts under the lower of the ask and its 5-second average ask (restprice.py)
+buy_rest_below = 0.02          # how far under the ask the buy rests: the user's "a cent or 2" (the commodity lanes rest 1c)
 max_open = 30
 max_exposure_pct = 0.4
 paper_fill_model = true
 priority = 43
-wave_top_quantile = 0.9         # the wave's slope against the market's own legs since an hour before the open
 wave_top_trend_hours = 1.0      # no dip bet when the spot at the open is above its value an hour before
 buy_module = "wave_top"
-exit_module = "wave_salvage"
+exit_module = "wave_exit"
 
 [module.wave_top]
 label = "the market is in its own range, the cheap side is the reversal of a big spot wave at its top"
 # 2026-11-21: the lane filter's checks are steps now (entry_window; no spread step, the user took the spread limit out), so this list is everything that can turn a buy down; before, the filter applied them unlisted.
-steps = ["price", "entry_window", "calm", "wave_top"]
+steps = ["price", "entry_window", "wave_top", "wave_trend"]
 
-[exit.wave_salvage]
+[exit.wave_exit]
 label = "a bet that dipped is sold once it has come back and its climb has faded; one that never dipped is held"
-steps = ["wave_salvage"]
+steps = ["wave_take", "wave_salvage"]  # 2026-11-22: the user's own exit (+40c; the first turn down below the target; a trail on the winning side; the high-zone hold-or-sell, see wavetop.py) joins the salvage sale; the first version had only the salvage
 curve_risk_live = true
+curve_risk_spot_weight = 0.0  # 2026-11-22 breaking fix: left at the default 0.5 the exit never ran (see docs/architecture.md notes log); 0 = Kalshi's price alone
 
-[exit.wave_salvage.profit]
+[exit.wave_exit.profit]
 
-[exit.wave_salvage.loss]
+[exit.wave_exit.loss]
