@@ -36,14 +36,27 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
     for lane, spec in specs.items():
         rows = store.db.execute(
             f"""SELECT id, ts, ticker, side, ask, reason, action, stake_usd FROM decisions
-                WHERE lane=? AND mode='observe' AND exit_ts IS NULL AND (action='bet' OR COALESCE(reason,'') LIKE '%{OLD_MARK}%')
-                  AND ts < ? AND ts > ? AND COALESCE(reason,'') NOT LIKE '%{MARK}%'""",
+                WHERE lane=? AND mode='observe' AND exit_ts IS NULL AND ((action='bet' AND stake_usd IS NOT NULL) OR COALESCE(reason,'') LIKE '%{OLD_MARK}%')
+                  AND ts < ? AND ts > ? AND COALESCE(reason,'') NOT LIKE '%{MARK}%' ORDER BY ts""",
             (lane, now - GRACE, now - 24 * 3600),
         ).fetchall()
         for r in rows:
             series = r["ticker"].split("-")[0]
             if s.is_live(lane, series):
                 continue  # a live lane's bets were real orders: they filled or they were not bets
+            held = store.db.execute(  # an earlier resting bid of this lane on this market that filled and is still open: this one would not have been placed (the live lane sees its position and skips)
+                f"""SELECT 1 FROM decisions WHERE lane=? AND ticker=? AND id<>? AND ts < ? AND action='bet' AND stake_usd IS NOT NULL
+                    AND (COALESCE(reason,'') LIKE '%{MARK}: a resting bid at%would have filled%' OR COALESCE(reason,'') LIKE '%{MARK}: the resting bid at%then takes the ask%') AND (exit_ts IS NULL OR exit_ts > ?) LIMIT 1""",
+                (lane, r["ticker"], r["id"], r["ts"], r["ts"]),
+            ).fetchone()
+            if held is not None and r["action"] == "bet":
+                reason = (r["reason"] or "").split(" " + MARK)[0]
+                store.db.execute(
+                    "UPDATE decisions SET action='pass', contracts=NULL, stake_usd=NULL, outcome=NULL, reason=? WHERE id=?",
+                    (f"{reason} {MARK}: already holding this market (paper), an earlier resting bid of this lane filled]", r["id"]),
+                )
+                out["missed"] += 1
+                continue
             if spec.buy_rest_seconds > 0:
                 window, price = spec.buy_rest_seconds, round(max(0.01, float(r["ask"]) - spec.buy_rest_below), 4)  # (the average-ask start, if the lane sets one, replaces this once the quotes are read, below)
             else:

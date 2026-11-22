@@ -497,8 +497,13 @@ def book_open_bets(rows: Sequence[Any]) -> list:
     return sorted(first.values(), key=lambda r: r["ts"])
 
 
-def book_holds_sized(rows: Sequence[Any], ticker: str, lane: str | None) -> bool:
-    return any(r["ticker"] == ticker and r["stake_usd"] is not None and r["outcome"] is None and r["exit_ts"] is None and (lane is None or _lane_of(r) == lane) for r in rows)
+def book_holds_sized(rows: Sequence[Any], ticker: str, lane: str | None, pending_before: float | None = None) -> bool:
+    """`pending_before`: a paper resting bet is a bet until its fill is judged on the tape (paperfill.settle, a few seconds after its order's time is up). A row without the judge's mark that was decided before this time is a resting order whose time ran out: it is not a hold, so the lane may look at the market again (a live lane's order is over when its wait is, and its next look places a new one)."""
+    return any(
+        r["ticker"] == ticker and r["stake_usd"] is not None and r["outcome"] is None and r["exit_ts"] is None and (lane is None or _lane_of(r) == lane)
+        and not (pending_before is not None and float(r["ts"]) < pending_before and "[rest-v2" not in (r["reason"] or ""))
+        for r in rows
+    )
 
 
 def book_event_tickers(rows: Sequence[Any], event_ticker: str) -> set[str]:
@@ -1028,20 +1033,21 @@ class Store:
             (1 if live else 0,),
         ).fetchall()
 
-    def holds_sized_bet(self, ticker: str, lane: str | None = None) -> bool:
+    def holds_sized_bet(self, ticker: str, lane: str | None = None, pending_before: float | None = None) -> bool:
         """A sized bet on this market is already open (so a re-score must not stake it again).
 
         With `lane`, only that lane's bet counts: two lanes (an A/B pair, say) can each hold the same market. From the bet book in the running bot.
         """
         book = self._book()
-        return book_holds_sized(book, ticker, lane) if book is not None else self._holds_sized_bet_read(ticker, lane)
+        return book_holds_sized(book, ticker, lane, pending_before) if book is not None else self._holds_sized_bet_read(ticker, lane, pending_before)
 
     @remembers('bets')
-    def _holds_sized_bet_read(self, ticker: str, lane: str | None = None) -> bool:
+    def _holds_sized_bet_read(self, ticker: str, lane: str | None = None, pending_before: float | None = None) -> bool:
         row = self.db.execute(
             """SELECT 1 FROM decisions WHERE ticker=? AND action='bet' AND stake_usd IS NOT NULL
-               AND outcome IS NULL AND exit_ts IS NULL AND (? IS NULL OR COALESCE(lane,'moonshot')=?) LIMIT 1""",
-            (ticker, lane, lane),
+               AND outcome IS NULL AND exit_ts IS NULL AND (? IS NULL OR COALESCE(lane,'moonshot')=?)
+               AND NOT (? IS NOT NULL AND ts < ? AND COALESCE(reason,'') NOT LIKE '%[rest-v2%') LIMIT 1""",
+            (ticker, lane, lane, pending_before, pending_before),
         ).fetchone()
         return row is not None
 

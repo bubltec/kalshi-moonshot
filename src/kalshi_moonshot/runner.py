@@ -572,7 +572,7 @@ def evaluate(
             balance.open_by_lane.get(shot.lane, 0.0), 1.0, fractional=s.fractional_stake and not _NO_FRACTION,
             maker_price=_rest_start(shot, spec) if spec.buy_rest_seconds > 0 else None,
         )
-        if store.holds_sized_bet(shot.ticker, shot.lane) and not s.is_live(shot.lane, shot.series):
+        if store.holds_sized_bet(shot.ticker, shot.lane, time.time() - spec.buy_rest_seconds if spec.buy_rest_seconds > 0 else None) and not s.is_live(shot.lane, shot.series):  # (a paper resting order whose time is up and whose fill is not judged yet is no hold: store.book_holds_sized)
             sized = Sizing(0, 0.0, "already holding this market (paper)")
         elif not sized.ok:
             bet = False
