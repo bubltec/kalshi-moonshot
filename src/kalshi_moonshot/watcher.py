@@ -44,6 +44,7 @@ from . import (
     steptime,
     variants,
 )
+from . import facts as facts_mod
 from . import ticks as ticks_mod
 from .biquotefeed import index_for_series as biquote_index
 from .config import Settings
@@ -110,10 +111,11 @@ def perp_index(series: str) -> str | None:
 class _SellWalk:
     """What the sale's steps share on one risk check (ProfitWatcher._risk_decide): the readings every step may use, and what a step computed for the steps after it. Made new on every check."""
 
-    __slots__ = ("bar", "basis", "early", "gain", "long_chance", "look", "net", "rebuy", "room", "shared", "take_state", "taken", "unit")
+    __slots__ = ("bar", "basis", "early", "facts", "gain", "long_chance", "look", "net", "rebuy", "room", "shared", "take_state", "taken", "unit")
 
     def __init__(self, look: float, basis: float, net: float, long_chance: float | None) -> None:
         self.look, self.basis, self.net, self.long_chance = look, basis, net, long_chance
+        self.facts = None  # the facts board of this check (facts.py), made the first time a step or a veto asks
         self.shared = False  # the slope history (_sell_shared)
         self.take_state, self.gain, self.room, self.rebuy, self.unit, self.bar = False, 0.0, 0.0, 0.0, None, 0.0  # the gain's readings (_sell_take_state)
         self.taken, self.early = False, False  # what the profit take decided on this check, for the trail
@@ -607,6 +609,11 @@ class ProfitWatcher:
         c = _SellWalk(look, basis, net, long_chance)
         for name in t.sell_chain:
             got = _SELL[name](self, t, r, bid, now, left, pnl, c)
+            if isinstance(got, str) and name in facts_mod.VETOED_STEPS:
+                stop = self._board(c, t, now, left, bid).vetoes(name)
+                if stop:  # belt and braces: a step that sold against a veto is refused here (the steps ask the board first; this catches one that did not)
+                    log.error("wave sale refused: %s %s step %s sold against the veto (%s)", t.ticker, t.lane, name, stop)
+                    return None
             if got is sellchain.HOLD:
                 return None
             if got:
@@ -780,6 +787,12 @@ class ProfitWatcher:
             return reason
         return None
 
+    def _board(self, c: _SellWalk, t: Target, now: float, left: float, bid: float) -> Any:
+        """The facts board of this check (facts.py): one per risk check, shared by every step on it, so two steps that need a fact read the same value and a veto is judged once."""
+        if c.facts is None or c.facts.now != now:
+            c.facts = facts_mod.Board(self, t, now, left, bid)
+        return c.facts
+
     def _wave_spot(self, t: Target, now: float) -> tuple[float, float] | None:
         """The spot's cushion over the target for this bet and the spot's typical minute (wavetop.spot_read), from the tick memory; None when the lane has no reading armed or the ticks are stale."""
         if not t.shock_index or t.shock_ref <= 0:
@@ -809,10 +822,6 @@ class ProfitWatcher:
         log.info("wave kind: %s %s is_whipsaw_behavior=%s (its bid range in the first %.0f s is %.2f typical minutes, the switch at %.2f)", t.ticker, t.lane, t.wave_kind == "whipsaw", t.wave_shape_s, t.wave_range_u, t.wave_whipsaw)
         return t.wave_kind == "whipsaw"
 
-    def _wave_blocked(self, t: Target, now: float) -> bool:
-        """True when the wave sales must not sell this bet: it is a whipsaw, or the shape is not known yet (no wave sale in the first wave_shape_seconds when the switch is on)."""
-        return self._is_whipsaw_behavior(t, now) is not False
-
     def _sell_wave_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid:
         1. the staircase: the bid's swings are cut at rev = max(TICK, wave_rev_k x the bid's typical minute x (max(left, 60) / 60)^wave_rev_p x the cushion factor 2 x (1 - P_lose), wave_cushion); the first time the bid falls under the previous swing low (a lower low: the climb is done) it is sold, if the bet has ever been ahead after both fees: at a gain, or at a small loss (the backup that avoids a total loss);
@@ -827,10 +836,10 @@ class ProfitWatcher:
         gain = bid - t.entry
         net = bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry))
         t.wave_best_net = max(t.wave_best_net, net)
-        unit = self._risk_unit(t, now)
-        spot = self._wave_spot(t, now)
-        lose = wavetop.p_lose(spot[0], spot[1], left) if spot is not None else None
-        cushion = 2.0 * (1.0 - lose) if (t.wave_cushion and lose is not None) else 1.0  # 0 to 2: wide with a cushion, tight with a deficit
+        fx = self._board(c, t, now, left, bid).view("wave_take")
+        unit = fx.get("bid_unit")
+        lose = fx.get("p_lose")
+        cushion = fx.get("cushion_factor")  # 0 to 2: wide with a cushion, tight with a deficit, 1 when off or unread
         rev = max(wavetop.TICK, t.wave_rev_k * unit * (max(left, 60.0) / 60.0) ** t.wave_rev_p * cushion) if unit else max(wavetop.TICK, 0.05)
         if t.wave_hi <= 0:
             t.wave_hi = t.wave_lo = bid
@@ -849,8 +858,9 @@ class ProfitWatcher:
         elif net > 0 and bid >= wavetop.HIGH - 1e-9:
             if lose is not None and lose >= 1.0 - bid + fee_per_contract(bid):
                 reason, kind = f"wave take: the bid {bid:.2f} is in the high zone and the chance of losing it is {lose:.2f}, at least the {1.0 - bid + fee_per_contract(bid):.2f} the sale gives up over holding ({left:.0f} s left)", "high zone"
-        if not reason or self._wave_blocked(t, now):
+        if not reason or not fx.cleared():  # the board vetoes a sale while the bet is a whipsaw (or its shape is unknown)
             return None
+        reason += fx.note()
         extra = {"gain": round(gain, 4), "net": round(net, 4), "rev": round(rev, 4), "last_low": round(t.wave_last_low, 4), "p_lose": None if lose is None else round(lose, 4), "kind": kind}
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="wave take", extra=extra)
@@ -864,19 +874,19 @@ class ProfitWatcher:
     def _sell_wave_salvage(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step wave_salvage (wavetop.py; 2026-11-21, user: "we might be able to salvage this for a small profit or small loss ... a combination of the spot + kalshi price"; 2026-11-22: "salvage shouldn't sell winners", so a bet whose spot average is on its side of the target is skipped): a bet that went under water is sold at the bid once it has come back off its low, its climb has slowed and the spot has stopped moving its way (wavetop.salvage). A bet that never dipped is held. The user's resting sale at the entry + 0.40 is only recorded, once (kind "wave rest"). Reads the quote and tick memory only. A failure is logged once and the step is passed over."""
         try:
-            return ProfitWatcher._wave_salvage_read(self, t, r, bid, now, left, pnl)
+            return ProfitWatcher._wave_salvage_read(self, t, r, bid, now, left, pnl, self._board(c, t, now, left, bid).view("wave_salvage"))
         except Exception as e:
             if not t.wave_failed:
                 t.wave_failed = True
                 log.warning("wave salvage: the step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
         return None
 
-    def _wave_salvage_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float) -> str | None:
+    def _wave_salvage_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, fx: Any) -> str | None:
         from . import binaryrisk, wavetop
 
-        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0 or self._wave_blocked(t, now):
+        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0 or not fx.cleared():  # the board vetoes a sale while the bet is a whipsaw (or its shape is unknown)
             return None
-        spot = self._wave_spot(t, now)
+        spot = fx.get("spot")
         if spot is not None and spot[0] > 0:  # user, 2026-11-22: "salvage shouldn't sell winners": a bet whose spot average is on its side of the target is winning now and is not salvaged
             return None
         index = binaryrisk.curve_index(t.ticker.split("-")[0])
@@ -889,6 +899,7 @@ class ProfitWatcher:
         if not sell:
             return None
         reason = f"wave salvage: the bid fell to {info['low']:.2f} (its own typical minute {info['unit']:.3f} under the {info['entry_bid']:.2f} at the buy, or more), has come back to {bid:.2f}, its climb over the last {info['window']:.0f}s has slowed to {info['recent'] * 60:+.3f} a minute against the run's {info['run'] * 60:+.3f}, and the spot has stopped moving its way; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
+        reason += fx.note()
         extra = {k: round(v, 5) for k, v in info.items()}
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="wave salvage", extra=extra)

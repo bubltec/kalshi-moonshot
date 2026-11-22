@@ -51,6 +51,9 @@ def check(chain: tuple[str, ...] | list[str], who: str) -> None:
     bad = [x for x in chain if x not in SELL_STEPS]
     if bad or len(set(chain)) != len(chain):
         raise ValueError(f"{who}: sell_chain names {bad or 'a step twice'}; the steps are {', '.join(SELL_STEPS)}, each at most once")
+    from . import facts
+
+    facts.check_needs(chain, who)  # a step's named facts must each have a reader
 
 
 def tag(chain: tuple[str, ...], module: str, step: str) -> str:

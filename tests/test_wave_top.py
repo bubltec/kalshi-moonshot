@@ -349,6 +349,7 @@ def test_integration_the_salvage_does_not_sell_a_bet_that_is_winning_on_the_spot
     with memguard.decision("sell"):
         assert w._sell_wave_salvage(t, risk, 0.80, now, CLOSE - now, -0.02, c)
     t.shock_ref = 99.0  # over the target: the YES bet is winning now
+    c.facts = None  # a new check
     with memguard.decision("sell"):
         assert w._sell_wave_salvage(t, risk, 0.80, now, CLOSE - now, -0.02, c) is None
 
@@ -380,6 +381,7 @@ def asker(w, t, close):
     c = watcher._SellWalk(30.0, 0.83, 0.78, None)
 
     def ask(bid, left):
+        c.facts = None  # each ask is a new check: a new board
         with memguard.decision("sell"):
             return w._sell_wave_take(t, risk, bid, close - left, left, 0.0, c)
 
