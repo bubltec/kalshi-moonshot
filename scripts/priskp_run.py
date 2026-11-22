@@ -161,14 +161,19 @@ def build(job):
             px.append([round(b, 3), round(a, 3)] if side == "yes" else [round(1.0 - a, 3), round(1.0 - b, 3)])
         return {"idx": idx, "px": px, "buy_s": s_open, "price": price}
 
-    out = []
+    out, decisions = [], []
     for m in M:
         won = {"yes": m["won_yes"], "no": not m["won_yes"]}
         got = {}
+        log = []  # every reading's decision in the window (2026-11-22, the entry study): (seconds after the open, YES ask, NO ask, the five checks' fifths for YES, for NO; A anomaly, U unread)
+        code = lambda v: "A" if v == "anomaly" else "U" if v == "unread" else str(v)
         for s_open, vals, ya, yb, age, f in m["R"]:
             if not (WIN_LO * 60.0 <= s_open <= WIN_HI * 60.0) or age > STALE: continue
             tt = m["opened"] + s_open
             ask = {"yes": ya, "no": 1.0 - yb}
+            cs = {s: "".join(code(state(tt, s_open, c, vals[s][c])) for c in CHECKS) for s in ("yes", "no")}
+            log.append((int(s_open), round(ask["yes"], 3), round(ask["no"], 3), cs["yes"], cs["no"]))
+            if len(got) == 2: continue
             usable = [s for s in ("yes", "no") if 0.01 <= ask[s] <= 0.99 and not DEAD[0] <= ask[s] <= DEAD[1]]
             if not usable: continue
             st = {s: {n: state(tt, s_open, n, vals[s][n]) for n in NAMES} for s in usable}
@@ -180,7 +185,7 @@ def build(job):
                 if ok:
                     sd = max(ok, key=lambda s: vals[s]["cushion"])
                     got["model"] = (sd, s_open, ask[sd], st[sd], vals[sd], f)
-            if len(got) == 2: break
+        decisions.append({"ticker": m["ticker"], "series": m["series"], "close": m["close"], "won_yes": m["won_yes"], "log": log})
         for rule, (sd, s_open, price, states, raw, f) in got.items():
             net = ((1.0 if won[sd] else 0.0) - price - fee(price)) * STAKE / price
             row = {"rule": rule, "ticker": m["ticker"], "series": m["series"], "close": m["close"], "side": sd, "price": round(price, 4), "minute": round(s_open / 60.0, 3), "won": won[sd], "net": round(net, 3), "states": states,
@@ -196,15 +201,16 @@ def build(job):
                     bids.append(None if jq < 0 or m["opened"] + 10.0 * x - m["qt"][jq] > 30.0 else round(m["qb"][jq] if sd == "yes" else 1.0 - m["qa"][jq], 3))
                 row["bids"] = bids
             out.append(row)
-    return out, len(M)
+    return out, len(M), decisions
 
 
-rows, NM = [], 0
+rows, NM, DEC = [], 0, []
 with multiprocessing.get_context("fork").Pool(4) as pool:
-    for out, nm in pool.imap_unordered(build, list(jobs.items())):
-        rows += out; NM += nm
+    for out, nm, dec in pool.imap_unordered(build, list(jobs.items())):
+        rows += out; NM += nm; DEC += dec
         print(f"  an index done: {nm} markets, {time.time() - t0:.0f}s", flush=True)
 Path(os.environ.get("DATA_DIR", "/data"), "priskp_buys_crypto.json.gz").write_bytes(gzip.compress(json.dumps(rows).encode()))
+Path(os.environ.get("DATA_DIR", "/data"), "priskp_decisions.json.gz").write_bytes(gzip.compress(json.dumps(DEC).encode()))
 model = [r for r in rows if r["rule"] == "model"]; plain = [r for r in rows if r["rule"] == "plain"]
 mk = {r["ticker"] for r in model}; refused = [r for r in plain if r["ticker"] not in mk]
 print(f"{NM} markets; plain buys {len(plain)}, model buys {len(model)}, refused {len(refused)}; {time.time() - t0:.0f}s\n")
