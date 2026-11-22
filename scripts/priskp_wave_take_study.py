@@ -1,10 +1,12 @@
 """PriskP exit study: the user's wave_take rules (2026-11-22, the user's own specification, taken as written).
-THE RULES (the user's): on any bet that is AHEAD AFTER BOTH FEES (bid - entry > entry fee + sell fee; otherwise nothing is sold, the bet is held): (1) +40c over the price paid: sell. (2) Spot average NOT on the bet's side of the target (or unreadable): sell at the first one-cent turn down from the high (the bid at or under the highest bid since the buy minus 0.01; a flat bid does not count; no 20c minimum). (3) Winning side (the spot average on the bet's side): trail the high with a giveback of TRAIL_K x the bid's typical minute x sqrt(time left / 60); it shrinks to nothing as the close approaches. (4) Bid of 0.80 or more: sell when P_lose >= 1 - bid + fee (the sell fee at that bid). Otherwise hold toward 100c (settlement).
-MY CHOICES (named): TRAIL_K = 2.0 (the user gave no number; 1.0 and 3.0 shown as sensitivities, not chosen); the spot average's side = the sign of the blended 1/3/5-minute cushion (binaryrisk's czb, in the log); P_lose = Phi(-side cushion), the normal chance of ending on the other side given the time-scaled cushion (the blended cushion is already in typical moves over the time left): no other lane's chance is used; the typical minute = the rms 10-second change of the bet's bid over the log's bids up to now (at most the last 15 minutes) times sqrt(6), read from 7 changes on; the bid = 1 minus the other side's ask; the log is every 10 s and ends at minute 14, so nothing is sold in the last minute (held from there); a sale is at that reading's bid; fills are not modelled. Rule order when several hold: (1), then (2) or (3) by the spot's side, and (4) in either state.
+THE RULES (the user's): on any bet that is AHEAD AFTER BOTH FEES (bid - entry > entry fee + sell fee; otherwise nothing is sold, the bet is held): (1) [REMOVED by the user, 2026-11-22: "you could remove the 40c rule, that's the scalp part"] (2) Spot average NOT on the bet's side of the target (or unreadable): sell at the first one-cent turn down from the high (the bid at or under the highest bid since the buy minus 0.01; a flat bid does not count; no 20c minimum). (3) Winning side (the spot average on the bet's side): trail the high with a giveback of TRAIL_K x the bid's typical minute x sqrt(time left / 60); it shrinks to nothing as the close approaches. (4) Bid of 0.80 or more: sell when P_lose >= 1 - bid + fee (the sell fee at that bid). Otherwise hold toward 100c (settlement).
+MY CHOICES (named): TRAIL_K = 2.0 (the user gave no number; 1.0 and 3.0 shown as sensitivities, not chosen); the spot average's side = the sign of the blended 1/3/5-minute cushion (binaryrisk's czb, in the log); P_lose = Phi(-side cushion), the normal chance of ending on the other side given the time-scaled cushion (the blended cushion is already in typical moves over the time left): no other lane's chance is used; the typical minute = the rms 10-second change of the bet's bid over the log's bids up to now (at most the last 15 minutes) times sqrt(6), read from 7 changes on; the bid = 1 minus the other side's ask; the log is every 10 s and ends at minute 14, so nothing is sold in the last minute (held from there); a sale is at that reading's bid; fills are not modelled. Rule order when several hold: (2) or (3) by the spot's side, and (4) in either state. Rule 4 is also shown switched off (P_LOSE=0), because my P_lose is a stand-in.
 ENTRIES (scripts/priskp_entry_study.py): E0 first pass, E2 six readings in a row, E5 cushion fifth 5 and three in a row, E7 cushion fifth 5 and six in a row; a take at the ask, minutes 2-14, never an ask 0.45-0.55, one buy a market. Held to settlement is the comparison. Input: priskp_decisions.json.gz with the cushion in each log entry. Run: python3 scripts/priskp_wave_take_study.py priskp_decisions.json.gz"""
 import gzip, json, math, sys
 fee = lambda p: 0.07 * p * (1.0 - p)
 phi = lambda z: 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
+import os
+USE_PLOSE = os.environ.get("P_LOSE", "1") != "0"
 D = json.load(gzip.open(sys.argv[1]))
 DEAD = (0.45, 0.55)
 ok = lambda cs: all(c in "45" for c in cs)
@@ -38,15 +40,14 @@ def trade(m, i, side, K):
         if not b - entry > fe + fee(b): continue  # only a bet that is ahead after both fees is sold
         z = sg * log[j][5]
         reason = None
-        if b >= entry + 0.40: reason = "+40c"
-        elif z <= 0:
+        if z <= 0:
             if b <= high - 0.01 - 1e-9 and high > bids[i] - 1e-9: reason = "turn"
         else:
             d = [y - x for x, y in zip(bids[:j], bids[1:j + 1])]
             if len(d) >= 7:
                 u = math.sqrt(sum(v * v for v in d[-90:]) / len(d[-90:])) * math.sqrt(6.0)
                 if u > 0 and b <= high - K * u * math.sqrt(T / 60.0): reason = "trail"
-        if reason is None and b >= 0.80 and (1.0 - phi(z)) >= 1.0 - b + fee(b): reason = "p_lose"
+        if reason is None and USE_PLOSE and b >= 0.80 and (1.0 - phi(z)) >= 1.0 - b + fee(b): reason = "p_lose"
         if reason: return ((b - fee(b)) - entry - fe) * 10.0 / entry, hold, reason
     return hold, hold, "settled"
 

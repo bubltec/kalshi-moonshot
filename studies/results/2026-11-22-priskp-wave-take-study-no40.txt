@@ -1,0 +1,35 @@
+=== WITH rule 4 (P_lose stand-in) ===
+E0: buys on 6149 of 10568 markets
+  held                   : n  6149  net   -1005$  -1.6c per $1  ahead 77%  ended: held 6149
+  wave_take (TRAIL_K 2.0): n  6149  net   -2176$  -3.5c per $1  ahead 88%  ended: p_lose 4982 settled 1123 trail 1 turn 43
+E2: buys on 4018 of 10568 markets
+  held                   : n  4018  net    -272$  -0.7c per $1  ahead 85%  ended: held 4018
+  wave_take (TRAIL_K 2.0): n  4018  net   -1079$  -2.7c per $1  ahead 93%  ended: p_lose 3441 settled 577
+E5: buys on 3532 of 10568 markets
+  held                   : n  3532  net     +35$  +0.1c per $1  ahead 85%  ended: held 3532
+  wave_take (TRAIL_K 2.0): n  3532  net    -866$  -2.5c per $1  ahead 93%  ended: p_lose 3018 settled 513 turn 1
+E7: buys on 2846 of 10568 markets
+  held                   : n  2846  net     -57$  -0.2c per $1  ahead 88%  ended: held 2846
+  wave_take (TRAIL_K 2.0): n  2846  net    -687$  -2.4c per $1  ahead 94%  ended: p_lose 2421 settled 425
+
+=== WITHOUT rule 4 (turn and trail only) ===
+E0: buys on 6149 of 10568 markets
+  held                   : n  6149  net   -1005$  -1.6c per $1  ahead 77%  ended: held 6149
+  wave_take (TRAIL_K 2.0): n  6149  net   -1086$  -1.8c per $1  ahead 78%  ended: settled 6018 trail 8 turn 123
+  halves of the days (held | wave_take): first -0.7c | -0.7c n3070 | second -2.6c | -2.8c n3079
+  by buy minute (held | wave_take): 2-4: -2.5c | -2.6c n2971 | 4-7: +0.4c | +0.2c n1295 | 7-10: -3.3c | -3.4c n983 | 10-12: +0.7c | +0.7c n539 | 12-14: -0.8c | -0.8c n361
+E2: buys on 4018 of 10568 markets
+  held                   : n  4018  net    -272$  -0.7c per $1  ahead 85%  ended: held 4018
+  wave_take (TRAIL_K 2.0): n  4018  net    -262$  -0.7c per $1  ahead 85%  ended: settled 3986 trail 2 turn 30
+  halves of the days (held | wave_take): first -0.9c | -0.9c n2009 | second -0.4c | -0.4c n2009
+  by buy minute (held | wave_take): 2-4: -1.7c | -1.8c n979 | 4-7: -0.6c | -0.4c n1252 | 7-10: +0.2c | +0.2c n1052 | 10-12: -1.9c | -1.9c n559 | 12-14: +2.8c | +2.8c n176
+E5: buys on 3532 of 10568 markets
+  held                   : n  3532  net     +35$  +0.1c per $1  ahead 85%  ended: held 3532
+  wave_take (TRAIL_K 2.0): n  3532  net     +44$  +0.1c per $1  ahead 86%  ended: settled 3502 trail 2 turn 28
+  halves of the days (held | wave_take): first -0.1c | -0.2c n1760 | second +0.3c | +0.4c n1772
+  by buy minute (held | wave_take): 2-4: +0.4c | +0.4c n1369 | 4-7: -0.4c | -0.4c n959 | 7-10: -0.3c | -0.3c n718 | 10-12: +1.0c | +1.0c n473 | 12-14: few
+E7: buys on 2846 of 10568 markets
+  held                   : n  2846  net     -57$  -0.2c per $1  ahead 88%  ended: held 2846
+  wave_take (TRAIL_K 2.0): n  2846  net     -53$  -0.2c per $1  ahead 88%  ended: settled 2826 trail 2 turn 18
+  halves of the days (held | wave_take): first -0.9c | -0.9c n1421 | second +0.5c | +0.5c n1425
+  by buy minute (held | wave_take): 2-4: +1.3c | +1.2c n694 | 4-7: -1.7c | -1.6c n983 | 7-10: -0.2c | -0.2c n725 | 10-12: +0.9c | +0.9c n433 | 12-14: few
