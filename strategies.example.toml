@@ -101,6 +101,7 @@ steps = ["price", "entry_window", "wave_top", "wave_trend"]
 label = "a bet that dipped is sold once it has come back and its climb has faded; one that never dipped is held"
 steps = ["wave_take", "wave_salvage"]  # 2026-11-22: the user's own exit (the +40c resting sale, +20c once the move slows) joins the salvage sale; the first version had only the salvage
 curve_risk_live = true
+curve_risk_spot_weight = 0.0  # 2026-11-22 breaking fix: left at the default 0.5 the exit never ran (see docs/architecture.md notes log); 0 = Kalshi's price alone
 
 [exit.wave_exit.profit]
 
