@@ -13,7 +13,7 @@ half = sorted(m["close"] for m in D)[len(D) // 2]
 def pick(m, rule):
     log, run = m["log"], {"yes": 0, "no": 0}
     for i, r in enumerate(log):
-        s, ya, na, cy, cn = r
+        s, ya, na, cy, cn = r[:5]
         for side, ask, c in (("yes", ya, cy), ("no", na, cn)):
             p = ok(c) and 0.01 <= ask <= 0.99 and not DEAD[0] <= ask <= DEAD[1]
             run[side] = run[side] + 1 if p else 0

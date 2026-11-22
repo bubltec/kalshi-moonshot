@@ -18,7 +18,7 @@ ok = lambda cs: all(c in "45" for c in cs)
 
 def passes(rd):
     """(yes_pass, no_pass) at one reading, with the price band."""
-    s, ya, na, cy, cn = rd
+    s, ya, na, cy, cn = rd[:5]
     return (ok(cy) and 0.01 <= ya <= 0.99 and not DEAD[0] <= ya <= DEAD[1], ok(cn) and 0.01 <= na <= 0.99 and not DEAD[0] <= na <= DEAD[1])
 
 
