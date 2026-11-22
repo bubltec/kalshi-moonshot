@@ -172,3 +172,14 @@ def test_two_shifts_in_an_hour_are_both_found_newest_last():
 def test_a_move_inside_the_noise_is_not_a_shift():
     T, V = _steps([100.0] * 30 + [100.02] * 30)
     assert priskp.shifts(T, V, T[-1], u=0.05) == []
+
+
+def test_a_shift_out_of_cushion_blocks_the_side_it_hurt_against_the_current_target():
+    down = {"before": 105.0, "after": 99.0}  # a step down from above the strike to under it
+    assert priskp.out_of_cushion(down, 100.0, "yes") is True    # YES lost its cushion
+    assert priskp.out_of_cushion(down, 100.0, "no") is False    # NO gained one
+    inside = {"before": 108.0, "after": 103.0}  # a step down that stayed above the strike
+    assert priskp.out_of_cushion(inside, 100.0, "yes") is False
+    up = {"before": 95.0, "after": 102.0}
+    assert priskp.out_of_cushion(up, 100.0, "no") is True and priskp.out_of_cushion(up, 100.0, "yes") is False
+    assert priskp.out_of_cushion(down, 110.0, "yes") is False   # against another target the same step reads differently: it started under that strike

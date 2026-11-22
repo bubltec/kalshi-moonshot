@@ -147,6 +147,12 @@ def clear() -> None:
         _runs.clear()
 
 
+def out_of_cushion(shift: dict[str, float], strike: float, side: str) -> bool:
+    """Whether a confirmed shift took the spot OUT of the side's cushion, read against the current market's target (user, 2026-11-22: no buys on the side of the shift, if it shifted out of cushion): the level before the shift was on the side's winning side of the strike and the level after is not."""
+    sg = 1.0 if side == "yes" else -1.0
+    return sg * (shift["before"] - strike) > 0 and sg * (shift["after"] - strike) <= 0
+
+
 def candidate(states: dict[str, int | str]) -> bool:
     """All five checks read and in fifths 4 or 5, with the cushion in fifth 5 (E5's strong cushion)."""
     return all(states[c] in (4, 5) for c in CHECKS) and states["cushion"] == 5
@@ -247,7 +253,7 @@ def typical_minute(T: list[float], V: list[float], now: float, span: float = 900
 def shifts(T: list[float], V: list[float], now: float, u: float, hold: float = 180.0, zmin: float = 2.0, span: float = 3600.0, step_s: float = 10.0) -> list[dict[str, float]]:
     """The confirmed level shifts in the last `span` seconds of the spot, newest last (user, 2026-11-22: a shift happens at any size and any time frame, needs about 3 to 5 minutes of holding to count, and can repeat or last a long while).
 
-    A shift at time t: the spot's mean level over the `hold` seconds after t differs from its mean over the `hold` seconds before t by more than random noise over the hold would explain (|step| >= zmin x u x sqrt(hold / 60), u the spot's typical minute in index units), AND both levels held: no 10-second level in the hold window after t has gone back past the midpoint of the old and new levels, and none in the window before t has already crossed it (a spike's return is not a shift). t must be at least `hold` seconds ago (a shift is confirmed by the hold that followed it). Candidates within `hold` of each other are merged to the one with the largest step. Returns {ago (seconds), step (new level minus old, in index units), z (the step over the noise), held (the share of the step still in place now, 1.0 = all, negative = it has gone the other way), dir (1 up, -1 down)}.
+    A shift at time t: the spot's mean level over the `hold` seconds after t differs from its mean over the `hold` seconds before t by more than random noise over the hold would explain (|step| >= zmin x u x sqrt(hold / 60), u the spot's typical minute in index units), AND both levels held: no 10-second level in the hold window after t has gone back past the midpoint of the old and new levels, and none in the window before t has already crossed it (a spike's return is not a shift). t must be at least `hold` seconds ago (a shift is confirmed by the hold that followed it). Candidates within `hold` of each other are merged to the one with the largest step. Returns {ago (seconds), step (new level minus old, in index units), z (the step over the noise), held (the share of the step still in place now, 1.0 = all, negative = it has gone the other way), dir (1 up, -1 down), before and after (the two levels in index units: the caller reads them against the CURRENT market's target, never an earlier window's)}.
     Pure function: ticks T, V ascending, the last at or before `now`."""
     if u <= 0 or not T or now - T[0] < span * 0.5:
         return []
@@ -274,7 +280,7 @@ def shifts(T: list[float], V: list[float], now: float, u: float, hold: float = 1
         d = 1 if step > 0 else -1
         if any((v - mid) * d < 0 for v in after) or any((v - mid) * d > 0 for v in before):  # the new level did not hold, or the old one was not itself steady (a spike's return is not a shift)
             continue
-        found.append({"ago": now - grid[i][0], "step": step, "z": abs(step) / noise, "dir": float(d)})
+        found.append({"ago": now - grid[i][0], "step": step, "z": abs(step) / noise, "dir": float(d), "before": sum(before) / n, "after": sum(after) / n})
     merged: list[dict[str, float]] = []
     for c in sorted(found, key=lambda c: -c["ago"]):  # oldest first
         if merged and merged[-1]["ago"] - c["ago"] < hold:

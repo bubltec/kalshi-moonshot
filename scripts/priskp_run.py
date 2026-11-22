@@ -106,7 +106,7 @@ def build(job):
             if int(s_open) % 30 == 0:  # the confirmed shifts of the last hour, every 30 s (the entry study reads the latest at or before a buy)
                 ux = priskp.typical_minute(T, V, t)
                 got = priskp.shifts(T, V, t, ux, step_s=30.0) if ux > 0 else []
-                sh = [(round(c["ago"]), round(c["step"] / max(ux, 1e-12), 2), round(c["held"], 2)) for c in got]
+                sh = [(round(c["ago"]), round(c["step"] / max(ux, 1e-12), 2), round(c["held"], 2), round((c["before"] - strike) / max(ux, 1e-12), 2), round((c["after"] - strike) / max(ux, 1e-12), 2)) for c in got]  # the levels before and after against THIS market's strike, in typical minutes (YES view)
             R.append((s_open, vals, qa[jq], qb[jq], t - qt[jq], f, sh))
             t += STEP
         M.append({"ticker": ticker, "series": series, "close": close, "opened": opened, "won_yes": won_yes, "strike": strike, "R": R, "qt": qt, "qb": qb, "qa": qa})
