@@ -16,7 +16,7 @@ series = ["KXBTC15M", "KXETH15M"]
 sides = ["yes", "no"]
 timed_suffix = "15M"
 shadow_suffix = "15M"
-price = [0.01, 0.99]
+price = [0.30, 0.85]
 hours = [0.0, 0.26]
 max_spread = 1.0
 min_volume = 0
@@ -33,7 +33,7 @@ paper_fill_model = true
 
 [module.priskp]
 label = "the PriskP checks"
-steps = ["priskp"]
+steps = ["price", "priskp"]
 
 [exit.priskp_exit]
 label = "the PriskP sale"
@@ -58,15 +58,15 @@ def spec(tmp_path, monkeypatch):
 
 def test_the_lane_loads_with_the_one_buy_step_and_the_staircase_sale(spec):
     s, sp = spec
-    assert sp.enabled and sp.buy_chain == ("priskp",) and sp.sell_chain == ("wave_take",)
+    assert sp.enabled and sp.buy_chain == ("price", "priskp") and sp.sell_chain == ("wave_take",)
     assert sp.buy_module == "priskp" and sp.exit_module == "priskp_exit"
     assert (sp.wave_rev_k, sp.wave_cushion, sp.wave_high_zone, sp.wave_whipsaw_range) == (1.0, False, False, 0.0)  # the wave lane's staircase, set for PriskP: one concept
 
 
 def test_the_lane_has_no_gate_the_user_did_not_ask_for(spec):
     s, sp = spec
-    assert sp.price == (0.01, 0.99) and sp.max_spread >= 1.0 and sp.min_volume == 0  # no price band, no spread limit, no volume limit: the step's list is everything that can turn a buy down
-    assert sp.buy_chain == ("priskp",)  # price, spread, entry_window, time_left, cooldown, blackout and the rest are not applied
+    assert sp.price == (0.30, 0.85) and sp.max_spread >= 1.0 and sp.min_volume == 0  # the price band the user asked for (0.30 to 0.85, as the `price` step), no spread limit, no volume limit: the step's list is everything that can turn a buy down
+    assert sp.buy_chain == ("price", "priskp")  # spread, entry_window, time_left, cooldown, blackout and the rest are not applied
 
 
 def test_the_watcher_builds_the_cutoffs_only_when_a_lane_names_the_step(spec, tmp_path):
