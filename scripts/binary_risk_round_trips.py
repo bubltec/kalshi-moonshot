@@ -28,9 +28,12 @@ CHECKS = ("cushion", "trend", "history", "volatility", "price", "pricedip")
 FEAT_SIGNED = ("czb", "czlb", "tr13", "tr35", "mv15", "mv30", "mv60", "sl15", "sl30", "sl60", "cv15", "cv30", "cv60")
 FEAT_POS = ("pos15", "pos30", "pos60")
 FEAT_FREE = ("left", "vr", "amp15", "ft15", "ft30", "ft60")
+# 2026-11-22 SHAPES=1 (user via parent: build the wave-shape segments fresh from binaryrisk.shape() readings only, terciles of the market's own prior 24 h, no old shape table): slope, curvature and line fit at 15/30/60 minutes, each in the side's view, as "t:" readings with a tercile state 1-3
+SHAPE_READS = tuple(f"{a}{w}" for a in ("sl", "cv", "ft") for w in (15, 30, 60))
+if os.environ.get("SHAPES"): CHECKS = CHECKS + tuple("t:" + n for n in SHAPE_READS)
 if os.environ.get("FEATURES"): CHECKS = CHECKS + tuple("f:" + n for n in FEAT_SIGNED + FEAT_POS + FEAT_FREE)
 DIRECT = ("cushion", "trend", "history", "price", "pricedip")
-QS = (0.01, 0.2, 0.4, 0.6, 0.8, 0.99)
+QS = (0.01, 0.2, 0.4, 0.6, 0.8, 0.99, 1.0 / 3.0, 2.0 / 3.0)  # the last two: the terciles of the shape segments
 STAKE = 10.0
 s = config.reload()
 st = db.connect(s.db_path, "main", shared=True)
@@ -46,10 +49,10 @@ if LIMIT: jobs = {k: v[-LIMIT:] for k, v in jobs.items()}
 def side_val(v, name, side, f=None):
     """The check's reading in the side's view from the YES-view tuple (cz, tr, share, vr, price, dipY, dipN); a "f:" name reads the model's own reading `f[name]` (direction flipped for NO as binaryrisk.side_vector does)."""
     sg = 1.0 if side == "yes" else -1.0
-    if name.startswith("f:"):
+    if name.startswith(("f:", "t:")):
         x = f.get(name[2:]) if f else None
         if x is None: return None
-        return sg * x if name[2:] in FEAT_SIGNED else (x if side == "yes" else 1.0 - x) if name[2:] in FEAT_POS else x
+        return sg * x if name[2:] in FEAT_SIGNED or name[2:].startswith(("sl", "cv")) else (x if side == "yes" else 1.0 - x) if name[2:] in FEAT_POS else x
     if name == "cushion": return sg * v[0]
     if name == "trend": return sg * v[1]
     if name == "history": return v[2] if side == "yes" else 1.0 - v[2]
@@ -155,6 +158,7 @@ def build(job):
             c = cuts[(key, hour)] = None if len(own) < 100 else tuple(own[min(len(own) - 1, int(len(own) * p))] for p in QS)
         if c is None: return "unread"
         if x < c[0] or x > c[5]: return "anomaly"
+        if name.startswith("t:"): return 1 if x <= c[6] else 2 if x <= c[7] else 3
         return 1 + sum(1 for z in c[1:5] if x > z)
 
     bid = lambda m, side, kk: m["yb"][kk] if side == "yes" else 1.0 - m["ya"][kk]
@@ -348,6 +352,32 @@ for tag, title in (("any", "THE FIRST BUY FROM MINUTE 1"), ("m5", "THE FIRST BUY
         for sh in ("calm", "middle", "jumpy"):
             ks = [k for k in keys if shape(base.get(k) or V[k]) == sh]
             print(f"    {sh:8s}: change {sum((V[k][8] if k in V else 0.0) - (base[k][8] if k in base else 0.0) for k in ks):+8.2f}$ on {len(ks)} markets | " + line([V[k] for k in ks if k in V]))
+if os.environ.get("SHAPES"):
+    def seg(g):
+        """n, net per $1, share ahead, average price paid and the break-even (price plus fee), and whether the share ahead beat it (the parent's ask: a win rate above what the price implied)."""
+        n = len(g)
+        if n < 30: return "n %4d (too few)" % n
+        win = sum(1 for x in g if x[8] > 0) / n
+        pay = sum(x[5] for x in g) / n
+        be = sum(x[5] + fee(x[5]) for x in g) / n
+        return "n %4d %+6.1fc/$1 ahead %2.0f%% paid %.3f need %2.0f%% %s" % (n, 100.0 * sum(x[8] for x in g) / (STAKE * n), 100 * win, pay, 100 * be, "BEAT" if win > be else "no")
+    for tag in ("m5", "m10"):
+        B = sorted(RES.get((tag, "base"), {}).values(), key=lambda x: x[3])
+        print(f"\n######## WAVE SHAPE SEGMENTS, buy from {tag}, held to settlement (terciles 1-3 of each reading's own previous 24 h in the same 3 minutes of the market, in the side's view; slope 3 = rising for the side, curvature 3 = bending up, line fit 3 = the straightest)")
+        print("  ALL: " + seg(B))
+        for r in SHAPE_READS:
+            print(f"  --- {r}: " + " | ".join(f"{t}: " + seg([x for x in B if x[10]["t:" + r] == t]) for t in (1, 2, 3)))
+        for w in (15, 30, 60):
+            print(f"  --- slope x curvature at {w} min")
+            for a in (1, 2, 3):
+                print(f"    slope {a}: " + " | ".join(f"curv {c}: " + seg([x for x in B if x[10][f"t:sl{w}"] == a and x[10][f"t:cv{w}"] == c]) for c in (1, 2, 3)))
+        print("  --- WAVE TURNS: the 60-minute slope against the 15-minute slope (rows: slope 60; columns: slope 15). Row 3 / column 1 = a long rise turning down against the side; row 1 / column 3 = a long fall turning up for it")
+        for a in (1, 2, 3):
+            print(f"    slope60 {a}: " + " | ".join(f"slope15 {c}: " + seg([x for x in B if x[10]["t:sl60"] == a and x[10]["t:sl15"] == c]) for c in (1, 2, 3)))
+        print("  --- 30-minute slope against 15-minute slope")
+        for a in (1, 2, 3):
+            print(f"    slope30 {a}: " + " | ".join(f"slope15 {c}: " + seg([x for x in B if x[10]["t:sl30"] == a and x[10]["t:sl15"] == c]) for c in (1, 2, 3)))
+
 import json
 from pathlib import Path
 rows = [{"universe": r[0], "rule": r[1], "ticker": r[2], "close": r[3], "side": r[4], "price": r[5], "minute": r[6], "step": r[7], "net": r[8], "hold": r[9], "states": r[10], **r[12]} for (tg, rn), d in RES.items() if rn in ("base", "formula", "no_any5", "no_any4") and tg in ("m10", "late") for r in d.values()]
