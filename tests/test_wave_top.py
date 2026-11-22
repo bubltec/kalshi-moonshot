@@ -421,3 +421,38 @@ def test_integration_in_the_high_zone_it_holds_only_while_it_cannot_likely_lose(
     t.wave_peak_bid = 0.0
     t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
     assert ask(0.75, 28) is None  # under 0.80 the zone's comparison is not asked
+
+
+def test_integration_the_cushion_widens_the_swing_with_the_spot_on_the_bets_side_and_tightens_it_on_the_wrong_side(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.30, unit=0.20)
+    ask = asker(w, t, close)
+    spot_feed(close - 2.0, 102.0)  # far over the target: P_lose near 0, the factor near 2
+    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
+    for bid in (0.36, 0.42, 0.36, 0.42, 0.36, 0.30):  # swings of 0.05 x 2 = 0.10: the 0.06 pullbacks are no swing, so there is no low to fall under
+        assert ask(bid, 60) is None
+    assert t.wave_last_low == 0.0
+    spot_feed(close - 2.0, 98.0)  # under the target: P_lose near 1, the factor near 0: swings of 1c
+    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low, t.wave_best_net = 0, 0.0, 0.0, 0.0, -9.0
+    for bid in (0.36, 0.42, 0.40, 0.42, 0.40):
+        ask(bid, 60)
+    assert t.wave_last_low == pytest.approx(0.40)  # the 2c pullbacks are swings now
+    t.wave_cushion = False
+    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low, t.wave_best_net = 0, 0.0, 0.0, 0.0, -9.0
+    for bid in (0.36, 0.42, 0.40, 0.42, 0.40):
+        ask(bid, 60)
+    assert t.wave_last_low == 0.0  # with the cushion off the swing is 0.05 again
+
+
+def test_integration_the_exponent_sets_how_fast_the_swing_narrows(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.30, unit=0.20)
+    ticks_mod.history.clear()  # no spot reading: the factor is 1
+    ask = asker(w, t, close)
+    t.wave_rev_p = 1.0  # at 300 s left: 0.25 x 0.20 x 5 = 0.25 (0.5 would give 0.11)
+    for bid in (0.36, 0.42, 0.36, 0.42, 0.36):
+        ask(bid, 300)
+    assert t.wave_last_low == 0.0
+    t.wave_rev_p = 0.5
+    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
+    for bid in (0.36, 0.42, 0.30, 0.42, 0.40):
+        ask(bid, 300)
+    assert t.wave_last_low == pytest.approx(0.30)
