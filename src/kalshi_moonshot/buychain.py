@@ -451,10 +451,12 @@ def swing_risk_step(ctx: Ctx, shot: LongShot) -> Check:
 
 @step("wave_top")
 def wave_top_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The wave-top reversal (wavetop.py; 2026-11-21, the user's hand scalp): the spot has made a wave bigger than the waves before it (its slope above the last legs and at the lane's quantile of the market's own legs, wave_top_quantile), the top has stood and the spot has gone back and forth, and this side is the reversal (NO after an up wave, YES after a down wave). A dip bet after a rising wave_top_trend_hours is not taken. Memory only."""
+    """The wave top (wavetop.py; 2026-11-21 the user's hand scalp, rebuilt 2026-11-22 on the 60-second average against the target): the average has risen (fallen) faster than the earlier rises (falls), the whole leg stayed above (below) the market's target, the raw spot has just crossed to the other side of its average and the average has not yet come off its extreme: a peak (dip) whose flip is starting. This side is NO on a peak and YES on a dip. A dip bet after a rising hour is not taken (wave_top_trend_hours). Memory only (the tick history and the target in memory)."""
+    from . import ticks as ticks_mod
     from . import wavetop
 
-    ok, why = wavetop.admits(ctx.s, shot, ctx.spec, ctx.now)
+    strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
+    ok, why = wavetop.admits(ctx.s, shot, ctx.spec, ctx.now, strike)
     return Check(ok, why)
 
 

@@ -197,7 +197,9 @@ class Target:
     risk_take_peak: float = 0.0  # the highest bid the risk check has seen on this bet
     risk_trail_logged: bool = False
     wave_logged: bool = False  # the wave salvage step said once what it would sell (a lane whose exit is not live)
-    wave_rest_logged: bool = False  # the wave-top lane's resting sale at the entry + 0.40 was recorded once as "would sell" (wavetop.RESTING)
+    wave_peak_bid: float = 0.0  # the highest bid the wave_take step has seen on this bet since the buy
+    wave_peak_ts: float = 0.0  # and when
+    wave_take_logged: bool = False
     wave_failed: bool = False
     risk_time_to_go: float = 0.0  # seconds before the close in which time_to_go may sell (lane field curve_risk_time_to_go); 0 = off
     risk_time_to_go_chance: float = 0.5
@@ -766,6 +768,35 @@ class ProfitWatcher:
             return reason
         return None
 
+    def _sell_wave_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step wave_take (wavetop.py; 2026-11-22, user, on how they sell these: "aim for +20c or more and wait until the move slows" and "a resting sale at about +40c for spikes"). Two sales at the bid on a bet that is ahead: the bid has reached the entry plus RESTING (the resting sale would have filled), or it has reached the entry plus TAKE and has made no new high for a quarter of the run so far (the move has slowed: the wait scales with the run, never fixed seconds), never under 3 s. The bet's own price, not the spot, answers it."""
+        if t.bought_ts <= 0 or bid <= 0 or t.entry <= 0:
+            return None
+        from . import wavetop
+
+        if bid > t.wave_peak_bid + 1e-9:
+            t.wave_peak_bid, t.wave_peak_ts = bid, now
+        gain = bid - t.entry
+        reason = ""
+        if gain >= wavetop.RESTING - 1e-9:
+            reason = f"wave take: the bid {bid:.2f} is {gain:+.2f} over the {t.entry:.2f} paid, the resting sale at +{wavetop.RESTING:.2f} fills"
+        elif gain >= wavetop.TAKE - 1e-9:
+            run = max(t.wave_peak_ts - t.bought_ts, 0.0)
+            still = now - t.wave_peak_ts
+            if still >= max(3.0, 0.25 * run):
+                reason = f"wave take: the bid {bid:.2f} is {gain:+.2f} over the {t.entry:.2f} paid and has made no new high for {still:.0f} s (a quarter of the {run:.0f} s run is {0.25 * run:.0f} s): the move has slowed"
+        if not reason:
+            return None
+        extra = {"gain": round(gain, 4), "peak": round(t.wave_peak_bid, 4), "still": round(now - t.wave_peak_ts, 1)}
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="wave take", extra=extra)
+            return reason
+        if not t.wave_take_logged:
+            t.wave_take_logged = True
+            log.info("wave take shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="wave take", extra=extra)
+        return None
+
     def _sell_wave_salvage(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step wave_salvage (wavetop.py; 2026-11-21, user: "we might be able to salvage this for a small profit or small loss ... a combination of the spot + kalshi price"): a bet that went under water is sold at the bid once it has come back off its low, its climb has slowed and the spot has stopped moving its way (wavetop.salvage). A bet that never dipped is held. The user's resting sale at the entry + 0.40 is only recorded, once (kind "wave rest"). Reads the quote and tick memory only. A failure is logged once and the step is passed over."""
         try:
@@ -781,10 +812,6 @@ class ProfitWatcher:
 
         if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0:
             return None
-        if not t.wave_rest_logged and bid >= t.entry + wavetop.RESTING:
-            t.wave_rest_logged = True
-            log.info("wave salvage shadow: %s %s a resting sale at %.2f (the entry + %.2f) would have filled, %.0fs left", t.ticker, t.lane, t.entry + wavetop.RESTING, wavetop.RESTING, left)
-            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="wave rest", extra={"rest": round(t.entry + wavetop.RESTING, 4)})
         index = binaryrisk.curve_index(t.ticker.split("-")[0])
         if not index:
             return None

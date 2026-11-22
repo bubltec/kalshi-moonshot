@@ -14,6 +14,7 @@ The steps (a lane with no exit module sells nothing):
   long_hold     a HOLD: while the long layer says the side is likely to pay, no step after it is asked (curve_risk_confirm)
   (the `loss` step, the max loss and the line sale with their wait and early hold, was REMOVED on 2026-11-19, user: "we should remove loss AND the bid_floor concept": a bet that is behind is only sold by never_ahead, under_even, late_tight or the lane's curve exit; a chain that names `loss` is refused)
   time_to_go    in the last curve_risk_time_to_go seconds a bet whose curve chance is under curve_risk_time_to_go_chance (the spot on the wrong side of its target) is sold at the bid once that has held without a break for a wait set by the time left (a dip never shortens it)
+  wave_take     the wave-top lane's sales of a bet that is ahead (wavetop.py, 2026-11-22): the bid at the entry plus RESTING (0.40, the resting sale) is sold, and at the entry plus TAKE (0.20) once the bid has made no new high for a quarter of the run so far.
   wave_salvage  the wave-top lane's sale (wavetop.py): only a bet that has gone under water (its bid one of its own typical minutes under the bid at the buy) is sold, once the bid is half a unit off its low, its climb has slowed to a quarter of the run's pace and the spot has stopped moving the bet's way. A bet that never dipped is held. The user's resting sale at the entry + 0.40 is recorded as "would sell" (kind "wave rest") and never acts
   late_tight    a bet whose bid is K typical minutes under its high since the buy, ahead or not, in the last share of the market, is sold (curve_risk_late_tight, _share, _live; shadow until _live). Not in the default order: put it after `trail`, so a sale by an earlier step stands
   shape         SHADOW ONLY, never sells: while a bet is behind it records the shape of the bet's own price path (flat, trend against or for, wavy; pathshape.py) since the buy and over a quarter of the time left, and whether the user's rule would sell (kind "shape" in data/risk_shadow.jsonl). Not in the default order; put it first in a chain, since a sale or a hold ends the walk
@@ -31,7 +32,7 @@ A chain can be given a name and shared: an exit module ([exit.<name>] in strateg
 
 from __future__ import annotations
 
-SELL_STEPS = ("never_ahead", "under_even", "profit_take", "trail", "long_hold", "shape", "shape_timed", "trail_timed", "late_tight", "time_to_go", "wave_salvage")  # the steps a lane may name in its exit module; the watcher holds one method for each (_sell_<name>). `shape` and `trail_timed` are shadow only
+SELL_STEPS = ("never_ahead", "under_even", "profit_take", "trail", "long_hold", "shape", "shape_timed", "trail_timed", "late_tight", "time_to_go", "wave_take", "wave_salvage")  # the steps a lane may name in its exit module; the watcher holds one method for each (_sell_<name>). `shape` and `trail_timed` are shadow only
 KEEP = 900  # what Store.mark_exited keeps of a sale's reason
 
 

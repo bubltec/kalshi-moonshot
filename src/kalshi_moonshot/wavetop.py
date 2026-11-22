@@ -4,15 +4,17 @@
 
 The spot is Kalshi's own: a coin's settlement index or a commodity's perp reference (binaryrisk.curve_index). Everything is in the spot's own typical minute (the root-mean-square 60-second change over the hour before the market opened), never in dollars or by asset.
 
-The buy (buy step `wave_top`, lane field wave_top_quantile):
-  legs    a zigzag over the spot, second by second, from 3,500 s before the market opened through now (one unbroken history; a wave that began before the open counts in full). A turn is confirmed when the spot comes back R_TURN typical minutes from the running extreme. A leg's slope is its move in typical minutes per minute of its own length.
-  wave    the running leg has moved at least MIN_MOVE typical minutes, its slope is above each of the previous PREV legs, and it is at or above the lane's quantile (wave_top_quantile, 0.9) of all the legs confirmed since the history began (at least MIN_LEGS of them): a threshold from the market's own recent readings.
-  top     the extreme has stood for at least HOLD_F of the leg's own length, the spot is back at least BACK_U from it and has bounced at least BOUNCE_U off its low since (it went back and forth).
-  side    the reversal: NO after an up wave, YES after a down wave.
-  trend   a dip bet (YES after a down wave) is not taken when the spot at the open is above its value wave_top_trend_hours before (user: "if the past hour has been rising. i wouldn't give it a whole day"); with no value in memory a dip bet is not taken. Study, 1 h: dip bets after a rising hour lost (-$0.78 a bet on 448, -$1.45 on 104 with the quantile); 3 h did not show it.
-The sale (sell step `wave_salvage`): only a bet that has gone under water (its bid at least one of its own typical minutes under the bid at the buy) is sold, once its bid has come at least half a unit off its low, the bid's climb over the last quarter of the time since the low has slowed to a quarter of the run's pace, and the spot has stopped moving the bet's way over that same stretch. A bet that never dipped is held. The user's resting sale at the entry plus RESTING is recorded as "would sell" and never acts: on the same bets it made the result worse.
+The buy (buy step `wave_top`):
+  curve   the 60-SECOND AVERAGE of the spot (what Kalshi settles on, and what its chart draws), second by second from 3,500 s before the market opened through now, as one unbroken history. Its typical minute is the root-mean-square 60-second change of that average over the hour before the open (the unit of everything below).
+  target  the market's strike. A PEAK is the average above the target, a DIP the average below it (user, 2026-11-22: "that's how it determines if it's a peak or dip, which is relative to the target").
+          The whole leg stays on that side: a rise that began under the target and crossed it is a flip and not a peak (user, 2026-11-22: "the flip had already happened when you bought").
+  wave    the running leg of the average is at least MIN_MOVE_A units long and its slope is above each of the previous PREV legs (user: "I usually bet on when the slope is larger than previous slopes"). Earlier legs are the zigzag of the average with turns confirmed at LEG_A units.
+  turn    the raw spot has crossed to the other side of the average (below it on a peak, above it on a dip) while the average has not yet come off its extreme by more than TURN_A units: the spot has started to go the opposite way and the average has not shown it yet. This is the buy: the average lags the spot by about half a minute and Kalshi's price follows the spot, so waiting for the average itself to turn buys after the flip (user, 2026-11-22, on ZEC 18:18 and XRP 02:31: "the flip had already happened when you bought").
+  side    NO on a peak, YES on a dip (the side the average is NOT on). A lane's price band says how cheap it must be.
+  trend   a dip bet (YES) is not taken when the spot at the open is above its value wave_top_trend_hours before (user: "if the past hour has been rising. i wouldn't give it a whole day"); with no value in memory a dip bet is not taken.
+The sale (sell steps `wave_take` and `wave_salvage`): your resting sale at the entry plus RESTING (a bid at or over it sells), a sale at the entry plus TAKE once the bid has stopped making new highs for a quarter of the run so far, and the salvage of a bet that went under water: its bid at least one of its own typical minutes under the bid at the buy is sold once its bid has come at least half a unit off its low, the climb over the last quarter of the time since the low has slowed to a quarter of the run's pace, and the spot has stopped moving the bet's way over that stretch.
 
-Evidence (scripts/spot_wave_replay_cache.py, which runs this module's detector; studies/results/2026-11-21-spot-wave-*.txt; 11-09 to 11-21, fee on every leg, 25 contracts): the wave entry beat random cheap-side buys by about $1 a bet (about two standard errors); held to settlement +$556 on 550 bets, +- about $250; the salvage sale +$99; fixed targets and stops all lost; with the resting +0.40 sale added -$168. The settings below and the quantile were chosen after seeing results, and the result is not split by the curve model's shapes: a lead, on paper first (CLAUDE.md rule 5).
+2026-11-22: the buy was rebuilt on the average curve against the target. The first version (raw spot, a wave of at least 2 typical minutes, top 10% of the market's own legs, bought AFTER the leg and its bounce) bought nine bets on 11-21 and 11-22 for -$0.56: six lost, and the user's review found the entries came after the flip, on the wrong end (ZEC 18:18 bought YES 14 s after the drop through the target that followed the spike; XRP 02:31 bought NO 49 s after the jump through it). The settings below (MIN_MOVE_A, TURN_A, LEG_A, TAKE) are mine, chosen after those cases, not studied: a lead, on paper first (CLAUDE.md rule 5). The earlier evidence for the first version is in scripts/spot_wave_replay_cache.py and studies/results/2026-11-21-spot-wave-*.txt, which still run `Zig` on the raw spot.
 
 Memory only: the tick history and the quote history. Nothing here reads the database. stdlib only.
 """
@@ -34,7 +36,12 @@ BACK_U = 0.25  # the spot is back this far from the top ...
 BOUNCE_U = 0.10  # ... and has bounced this far off its low since
 LOOK = 3500  # seconds of legs before the open
 UNIT_SPAN = 3600  # the typical minute is read over this long before the open
-RESTING = 0.40  # the user's resting sale, entry plus this: recorded, never acted on
+RESTING = 0.40  # the user's resting sale, entry plus this
+TAKE = 0.20  # the user's "+20c or more", sold once the bid stops making new highs
+AVG_SECONDS = 60  # the average curve: the settlement's own span
+LEG_A = 0.25  # legs of the average are confirmed when it comes this far (in its own typical minutes) off the extreme
+MIN_MOVE_A = 0.5  # the running leg of the average is at least this long
+TURN_A = 0.25  # the buy is open until the average has come this far off its extreme
 
 
 @dataclass
@@ -80,8 +87,8 @@ def typical_minute(sp: list[float], i_open: int) -> float:
 class Zig:
     """The zigzag, fed one second at a time. `step` moves it; `signal` answers whether the running leg is a wave top at this second."""
 
-    def __init__(self, k0: int, v0: float, unit: float, quantile: float) -> None:
-        self.unit, self.quantile = unit, quantile
+    def __init__(self, k0: int, v0: float, unit: float, quantile: float, r_turn: float = R_TURN) -> None:
+        self.unit, self.quantile, self.r_turn = unit, quantile, r_turn
         self.legs: list[tuple[int, float]] = []  # (direction, slope) of each confirmed leg
         self.d = 0
         self.piv = (k0, v0)
@@ -90,13 +97,13 @@ class Zig:
     def step(self, k: int, v: float) -> None:
         d = self.d
         if d == 0:
-            if abs(v - self.piv[1]) >= R_TURN * self.unit:
+            if abs(v - self.piv[1]) >= self.r_turn * self.unit:
                 self.d = 1 if v > self.piv[1] else -1
                 self.ext = (k, v)
             return
         if (v - self.ext[1]) * d > 0:
             self.ext = (k, v)
-        elif (self.ext[1] - v) * d >= R_TURN * self.unit:  # the turn is confirmed: the running leg is complete
+        elif (self.ext[1] - v) * d >= self.r_turn * self.unit:  # the turn is confirmed: the running leg is complete
             dur = max(self.ext[0] - self.piv[0], 1)
             self.legs.append((d, abs(self.ext[1] - self.piv[1]) / self.unit / (dur / 60.0)))
             self.piv = self.ext
@@ -135,42 +142,82 @@ class Zig:
         return Wave(d, slope, prev, cut, len(self.legs), move, back, bounce, unit, float(self.ext[0]), self.ext[1], 0.0), ""
 
 
-def read(T: list[float], V: list[float], opened: float, now: float, quantile: float) -> tuple[Wave | None, str]:
-    """The wave top at `now` for a market that opened at `opened`, from the spot's ticks (T ascending, covering opened - 3,700 s to now). (None, why) when there is none or the history is short."""
+def average(sp: list[float | None]) -> list[float | None]:
+    """The trailing AVG_SECONDS-second average of a second-by-second path; None until a full span of values is behind a second."""
+    out: list[float | None] = [None] * len(sp)
+    run, bad = 0.0, 0
+    for k, v in enumerate(sp):
+        if v is None:
+            bad += 1
+        else:
+            run += v
+        if k >= AVG_SECONDS:
+            old = sp[k - AVG_SECONDS]
+            if old is None:
+                bad -= 1
+            else:
+                run -= old
+        if k >= AVG_SECONDS - 1 and bad == 0:
+            out[k] = run / AVG_SECONDS
+    return out
+
+
+def read(T: list[float], V: list[float], opened: float, now: float, strike: float) -> tuple[Wave | None, str]:
+    """The wave top at `now` for a market that opened at `opened` and has target `strike`, from the spot's ticks (T ascending, covering opened - 3,700 s to now). (None, why) when there is none or the history is short."""
     a = int(opened) - (UNIT_SPAN + 100)
     ia = UNIT_SPAN + 100
     sp = grid(T, V, a, int(now) + 1)
-    if len(sp) <= ia or None in sp[ia - UNIT_SPAN :]:
+    if len(sp) <= ia or None in sp[ia - UNIT_SPAN - AVG_SECONDS :]:
         return None, "the spot's history does not cover the hour before the open"
-    unit = typical_minute(sp, ia)  # type: ignore[arg-type]
+    A = average(sp)
+    unit = typical_minute(A, ia)  # type: ignore[arg-type]
     if unit <= 0:
-        return None, "the spot did not move in the hour before the open"
+        return None, "the spot's average did not move in the hour before the open"
     z0 = ia - LOOK
-    z = Zig(z0, sp[z0], unit, quantile)  # type: ignore[arg-type]
+    z = Zig(z0, A[z0], unit, 0.0, LEG_A)  # type: ignore[arg-type]
     for k in range(z0 + 1, len(sp)):
-        z.step(k, sp[k])  # type: ignore[arg-type]
-    w, why = z.signal(len(sp) - 1, sp)  # type: ignore[arg-type]
-    if w is None:
-        return None, why
-    w.ext_ts += a
-    w.spot_open = sp[ia]  # type: ignore[assignment]
-    return w, ""
+        z.step(k, A[k])  # type: ignore[arg-type]
+    k = len(sp) - 1
+    d = z.d
+    if d == 0 or len(z.legs) < 2:
+        return None, f"only {len(z.legs)} legs of the average so far"
+    avg, raw = A[k], sp[k]
+    dur = z.ext[0] - z.piv[0]
+    move = abs(z.ext[1] - z.piv[1]) / unit
+    if dur < 1 or move < MIN_MOVE_A:
+        return None, f"the average's running leg is {move:.2f} typical minutes (needs {MIN_MOVE_A:g})"
+    slope = move / (dur / 60.0)
+    same = [x[1] for x in z.legs if x[0] == d][-PREV:]  # the earlier waves the same way: a rise is judged against earlier rises, a fall against earlier falls
+    prev = max(same) if same else 0.0
+    if slope <= prev:
+        return None, f"the leg's slope {slope:.2f} is not above the last {PREV} {'rises' if d == 1 else 'falls'}' {prev:.2f}"
+    if (avg - strike) * d <= 0:  # type: ignore[operator]
+        return None, f"the average {avg:.6g} is {'under' if d == 1 else 'over'} the target {strike:.6g}, so the {'rise' if d == 1 else 'fall'} is not a {'peak' if d == 1 else 'dip'}"
+    if (z.piv[1] - strike) * d <= 0:
+        return None, f"the leg began at {z.piv[1]:.6g}, on the other side of the target {strike:.6g}: it crossed the target, which is a flip and not a {'peak' if d == 1 else 'dip'}"
+    back = (z.ext[1] - avg) * d / unit  # type: ignore[operator]
+    if back > TURN_A:
+        return None, f"the average is already {back:.2f} off its extreme (the buy is open to {TURN_A:g}): the flip has started"
+    gap = (avg - raw) * d / unit  # type: ignore[operator]
+    if gap <= 0:
+        return None, f"the spot {raw:.6g} has not crossed to the other side of its average {avg:.6g} yet"
+    return Wave(d, slope, prev, 0.0, len(z.legs), move, back, gap, unit, float(z.ext[0] + a), z.ext[1], sp[ia]), ""  # type: ignore[arg-type]
 
 
 _memo: dict[tuple[str, int, int, float], tuple[Wave | None, str]] = {}
 _memo_lock = threading.Lock()
 
 
-def read_index(index: str, opened: float, now: float, quantile: float) -> tuple[Wave | None, str]:
+def read_index(index: str, opened: float, now: float, strike: float) -> tuple[Wave | None, str]:
     """`read` on the tick memory, kept for the second it was read in (both sides and every lane of a market ask the same question)."""
     from . import ticks as ticks_mod
 
-    key = (index, int(opened), int(now), quantile)
+    key = (index, int(opened), int(now), strike)
     with _memo_lock:
         if key in _memo:
             return _memo[key]
     got = ticks_mod.history.window(index, opened - (UNIT_SPAN + 100), now)
-    out = (None, f"no tick history in memory for {index} back to an hour before the open") if not got or not got[0] else read(got[0], got[1], opened, now, quantile)
+    out = (None, f"no tick history in memory for {index} back to an hour before the open") if not got or not got[0] else read(got[0], got[1], opened, now, strike)
     with _memo_lock:
         if len(_memo) > 400:
             _memo.clear()
@@ -178,22 +225,25 @@ def read_index(index: str, opened: float, now: float, quantile: float) -> tuple[
     return out
 
 
-def admits(s: Any, shot: Any, spec: Any, now: float) -> tuple[bool, str]:
+def admits(s: Any, shot: Any, spec: Any, now: float, strike: float | None) -> tuple[bool, str]:
     """The buy step's answer for one side: (buy?, the sentence for the decision's note). Memory only."""
     from . import binaryrisk
 
-    if spec.wave_top_quantile <= 0:
-        return False, "the lane sets no quantile (wave_top_quantile)"
     index = binaryrisk.curve_index(shot.series or shot.ticker.split("-")[0])
     if not index:
         return False, f"no Kalshi index or perp reference is read for {shot.series}"
+    if not strike:
+        return False, "the market's target is not in memory yet"
     opened = round((now + shot.hours_to_close * 3600.0) / 900.0) * 900.0 - 900.0
-    w, why = read_index(index, opened, now, spec.wave_top_quantile)
+    w, why = read_index(index, opened, now, strike)
     if w is None:
         return False, f"no wave top: {why}"
-    told = f"{'up' if w.d == 1 else 'down'} wave of {w.move:.1f} typical minutes, slope {w.slope:.2f} (last {PREV} legs {w.prev_max:.2f}, its {spec.wave_top_quantile:.0%} mark {w.cut:.2f} of {w.legs} legs), {w.back:.2f} back from the top, {w.bounce:.2f} off the low"
+    told = (
+        f"{'peak' if w.d == 1 else 'dip'}: the average {'rose' if w.d == 1 else 'fell'} {w.move:.2f} typical minutes at slope {w.slope:.2f} (last {PREV} legs {w.prev_max:.2f}, {w.legs} legs), "
+        f"{w.back:.2f} off its extreme, the spot {w.bounce:.2f} on the other side of the average"
+    )
     if shot.side != w.side:
-        return False, f"{told}: the reversal is {w.side.upper()}, not this side"
+        return False, f"{told}: the bet is {w.side.upper()}, not this side"
     if w.d == -1 and spec.wave_top_trend_hours > 0:
         from . import ticks as ticks_mod
 
@@ -203,7 +253,7 @@ def admits(s: Any, shot: Any, spec: Any, now: float) -> tuple[bool, str]:
             return False, f"{told}: a dip bet needs the spot's value {spec.wave_top_trend_hours:g} h before the open, which is not in memory"
         if w.spot_open > got[1][-1]:
             return False, f"{told}: a dip bet after a rising {spec.wave_top_trend_hours:g} h (the spot at the open {w.spot_open:g} is above its {got[1][-1]:g} then) is not taken"
-    return True, f"wave top: {told}; buys the reversal"
+    return True, f"wave top: {told}; buys {w.side.upper()}"
 
 
 def side_bids(quotes: list[tuple[float, float, float]], side: str, a: int, b: int) -> list[float | None]:

@@ -63,7 +63,7 @@ curve_risk_under_even_live = true
 # chosen after seeing results). Series are the scope, not a rule: every 15-minute market with a Kalshi index or perp reference.
 [lane.wave_top]
 enabled = true
-label = "wave top: the cheap side at the top of a big spot wave, salvaged if it dips (PAPER)"
+label = "wave top: the cheap side at a peak above or a dip below the target, bought as the spot turns on the 60 s average, sold at +20c once it stops rising or at +40c (PAPER)"
 estimator = "market"
 numeric = "allow"
 one_per = "event"
@@ -88,21 +88,20 @@ max_open = 30
 max_exposure_pct = 0.4
 paper_fill_model = true
 priority = 43
-wave_top_quantile = 0.9         # the wave's slope against the market's own legs since an hour before the open
 wave_top_trend_hours = 1.0      # no dip bet when the spot at the open is above its value an hour before
 buy_module = "wave_top"
-exit_module = "wave_salvage"
+exit_module = "wave_exit"
 
 [module.wave_top]
 label = "the market is in its own range, the cheap side is the reversal of a big spot wave at its top"
 # 2026-11-21: the lane filter's checks are steps now (entry_window; no spread step, the user took the spread limit out), so this list is everything that can turn a buy down; before, the filter applied them unlisted.
 steps = ["price", "entry_window", "calm", "wave_top"]
 
-[exit.wave_salvage]
+[exit.wave_exit]
 label = "a bet that dipped is sold once it has come back and its climb has faded; one that never dipped is held"
-steps = ["wave_salvage"]
+steps = ["wave_take", "wave_salvage"]  # 2026-11-22: the user's own exit (the +40c resting sale, +20c once the move slows) joins the salvage sale; the first version had only the salvage
 curve_risk_live = true
 
-[exit.wave_salvage.profit]
+[exit.wave_exit.profit]
 
-[exit.wave_salvage.loss]
+[exit.wave_exit.loss]
