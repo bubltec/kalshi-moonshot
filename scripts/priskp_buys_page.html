@@ -16,20 +16,20 @@ button{font:inherit;background:none;border:1px solid var(--line);color:var(--fg)
 .det{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}svg{width:100%;height:auto;display:block;background:var(--card)}svg text{fill:var(--mut);font-size:10px}
 </style></head><body>
 <h1>PriskP checks model: its buys on the recorded tape (crypto)</h1>
-<p class="mut">The model, as run: five yes/no checks (cushion, 1-3 min trend, 30-min history, Kalshi price trend, price dip), each read in its own-history fifth (the series' previous 24 h, same 3 minutes of the market). NO = fifths 1-2, WEAK = 3, YES = 4-5. <b>No buy at a reading where any check says NO, WEAK or anomaly.</b> The buy is a take at the side's ask at the first 10-second reading inside the window where all five say YES. "Plain" = the favourite side at the first usable reading in the window, no checks; "refused" = markets where the plain buy exists and the model never buys. Every buy held to settlement, $10 a buy, fee on both legs. Dollars are driven partly by price (cheap buys win more dollars): read "ahead" against "need" (price plus fee).</p>
+<p class="mut">The model, as run: five yes/no checks (cushion, 1-3 min trend, 30-min history, Kalshi price trend, price dip), each read in its own-history fifth (the series' previous 24 h, same 3 minutes of the market). NO = fifths 1-2, WEAK = 3, YES = 4-5. <b>No buy at a reading where any check says NO, WEAK, anomaly, or cannot be read yet (no history).</b> The buy is a take at the side's ask at the first 10-second reading inside the window where all five can be read and say YES. "Plain" = the favourite side at the first usable reading in the window, no checks; "refused" = markets where the plain buy exists and the model never buys. Every buy held to settlement, $10 a buy, fee on both legs. Dollars are driven partly by price (cheap buys win more dollars): read "ahead" against "need" (price plus fee).</p>
 <h2>Every bound this run uses, and where it came from</h2>
 <div class="wrap"><table><tr><th>bound</th><th>value</th><th>source</th></tr>
 <tr><td>Markets</td><td>the 11 crypto 15-minute series on their Kalshi settlement indexes (BTC, ETH, SOL, XRP, DOGE, ADA, BCH, BNB, HYPE, NEAR, ZEC)</td><td>the user's words</td></tr>
 <tr><td>Buy window</td><td>minutes 2 to 14 after the open</td><td>the user's words: "like 2-14" (approximate; the buy minute is a column and a filter below, and the summary shows minute bands)</td></tr>
-<tr><td>Checks are refusals</td><td>no buy on a NO, WEAK or anomaly</td><td>the user's words (a check's NO is no buy)</td></tr>
+<tr><td>Checks are refusals</td><td>no buy on a NO, WEAK, anomaly or unread check</td><td>the user's words (a check's NO is no buy)</td></tr>
 <tr><td>Held to settlement</td><td>no exit</td><td>the user's words (the buy is judged before any exit is built)</td></tr>
 <tr><td>Never an ask 0.45 to 0.55</td><td>that ask is skipped</td><td>the user's own rule for this model</td></tr>
 <tr><td>No price band, no time gate, no cushion gate</td><td>price is a column and a filter, and the summary has price bands</td><td>nothing from any lane is used</td></tr>
-<tr><td>The buy</td><td>a take at the side's ask, first reading inside the window where all five checks say YES; if both sides pass, the one with the larger cushion</td><td>my choice (simplest)</td></tr>
+<tr><td>The buy</td><td>a take at the side's ask, first reading inside the window where all five checks can be read and say YES; if both sides pass, the one with the larger cushion</td><td>my choice (simplest)</td></tr>
 <tr><td>One buy a market</td><td>the first buy; the market is one row</td><td>my choice</td></tr>
 <tr><td>Quote freshness</td><td>quote at most 10 s old</td><td>my choice (data freshness)</td></tr>
 <tr><td>Readings</td><td>every 10 s, until 20 s before the close</td><td>my choice</td></tr>
-<tr><td>Own history</td><td>previous 24 h, the same 3-minute bucket of the market, both sides, 100 readings needed, cutoffs hourly; anomaly beyond the 1st/99th percentile; an unread check has no say</td><td>CLAUDE.md rules 2 and 3 for the idea; the 24 h, the 3-minute bucket and the 100 are my choice</td></tr>
+<tr><td>Own history</td><td>previous 24 h, the same 3-minute bucket of the market, both sides, 100 readings needed, cutoffs hourly; anomaly beyond the 1st/99th percentile; an unread check blocks the buy</td><td>CLAUDE.md rules 2 and 3 for the idea; the 24 h, the 3-minute bucket and the 100 are my choice</td></tr>
 <tr><td>Fifths</td><td>NO 1-2, WEAK 3, YES 4-5 (shape terciles 1-3)</td><td>my choice</td></tr>
 <tr><td>Strike</td><td>the settlement index's own tick at the open</td><td>my choice</td></tr>
 <tr><td>Markets covered</td><td>settled since 2026-11-09 07:00 UTC with ticks and quotes</td><td>my choice (the day the logic was rewritten)</td></tr>
