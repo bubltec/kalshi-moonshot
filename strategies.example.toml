@@ -95,7 +95,7 @@ exit_module = "wave_exit"
 [module.wave_top]
 label = "the market is in its own range, the cheap side is the reversal of a big spot wave at its top"
 # 2026-11-21: the lane filter's checks are steps now (entry_window; no spread step, the user took the spread limit out), so this list is everything that can turn a buy down; before, the filter applied them unlisted.
-steps = ["price", "entry_window", "calm", "wave_top", "wave_trend"]
+steps = ["price", "entry_window", "wave_top", "wave_trend"]
 
 [exit.wave_exit]
 label = "a bet that dipped is sold once it has come back and its climb has faded; one that never dipped is held"
