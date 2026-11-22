@@ -27,12 +27,31 @@ def show(label, value):
     print(f"{label}: {json.dumps(value, default=str)[:600]}")
 
 
-markets = c._request("GET", "/markets", params={"status": "open", "limit": 200}).get("markets", [])
-pick = next((m for m in markets if float(m.get("yes_bid_dollars") or 0) >= 0.10 and float(m.get("yes_ask_dollars") or 0) < 1.0), None)
+markets: list[dict] = []
+cursor = ""
+for _ in range(5):  # a few pages: the demo exchange is thin and its first page may hold no quoted market
+    page = c._request("GET", "/markets", params={"status": "open", "limit": 1000, **({"cursor": cursor} if cursor else {})})
+    markets += page.get("markets", [])
+    cursor = page.get("cursor") or ""
+    if not cursor:
+        break
+print(f"{len(markets)} open demo markets read")
+
+
+def num(m, key):
+    try:
+        return float(m.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+# A post-only YES buy at 0.01 and then 0.02 can never cross unless the YES ask is at 3c or under. A market with no ask at all is fine too.
+pick = next((m for m in markets if m.get("market_type", "binary") == "binary" and (num(m, "yes_ask_dollars") == 0 or num(m, "yes_ask_dollars") > 0.05)), None)
 if pick is None:
-    sys.exit("no open demo market with a YES bid of 10c or more; nothing to rest an order under")
+    sample = {k: markets[0].get(k) for k in ("ticker", "status", "yes_bid_dollars", "yes_ask_dollars", "market_type")} if markets else None
+    sys.exit(f"no usable open demo market; the first one read was {sample}")
 ticker = pick["ticker"]
-print(f"market: {ticker} (YES bid {pick['yes_bid_dollars']}, ask {pick['yes_ask_dollars']})")
+print(f"market: {ticker} (YES bid {pick.get('yes_bid_dollars')}, ask {pick.get('yes_ask_dollars')})")
 
 order_id = None
 try:
