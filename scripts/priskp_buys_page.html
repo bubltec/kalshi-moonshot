@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PriskP crypto buys</title>
+<style>
+:root{--bg:#fafaf7;--fg:#1d1d1b;--mut:#6b6b66;--card:#fff;--line:#dcdcd4;--win:#1a7f4b;--loss:#b3261e;--weak:#a86a00;--c1:#2c5aa0;--c2:#b3261e;--c3:#1a7f4b}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#ececE6;--mut:#9a9a92;--card:#1d1d1b;--line:#33332f;--win:#4cc38a;--loss:#ff7b72;--weak:#e3a948;--c1:#7aa7e8;--c2:#ff7b72;--c3:#4cc38a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 -apple-system,system-ui,Segoe UI,sans-serif;padding:16px;max-width:980px;margin:0 auto}
+h1{font-size:20px;margin:4px 0 8px}h2{font-size:17px;margin:26px 0 8px}p{margin:6px 0}.mut{color:var(--mut);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left;white-space:normal}
+.wrap{overflow-x:auto}.win{color:var(--win)}.loss{color:var(--loss)}.weak{color:var(--weak)}.beat{font-weight:600}
+.row{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:8px 10px}
+.top{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline}.tk{font-weight:600;word-break:break-all}.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chip{font-size:12px;border:1px solid var(--line);border-radius:10px;padding:1px 7px}.chip.NO{color:var(--loss);border-color:var(--loss)}.chip.WEAK{color:var(--weak);border-color:var(--weak)}.chip.YES{color:var(--win);border-color:var(--win)}
+button{font:inherit;background:none;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:3px 9px;cursor:pointer}a{color:var(--c1)}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}select,input{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+.det{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}svg{width:100%;height:auto;display:block;background:var(--card)}svg text{fill:var(--mut);font-size:10px}
+</style></head><body>
+<h1>PriskP checks model: its buys on the recorded tape (crypto)</h1>
+<p class="mut">The model, as run: five yes/no checks (cushion, 1-3 min trend, 30-min history, Kalshi price trend, price dip), each read in its own-history fifth (the series' previous 24 h, same 3 minutes of the market). NO = fifths 1-2, WEAK = 3, YES = 4-5. <b>No buy at a reading where any check says NO, WEAK or anomaly.</b> The buy is a take at the side's ask at the first 10-second reading inside the window where all five say YES. "Plain" = the favourite side at the first usable reading in the window, no checks; "refused" = markets where the plain buy exists and the model never buys. Every buy held to settlement, $10 a buy, fee on both legs. Dollars are driven partly by price (cheap buys win more dollars): read "ahead" against "need" (price plus fee).</p>
+<h2>Every bound this run uses, and where it came from</h2>
+<div class="wrap"><table><tr><th>bound</th><th>value</th><th>source</th></tr>
+<tr><td>Markets</td><td>the 11 crypto 15-minute series on their Kalshi settlement indexes (BTC, ETH, SOL, XRP, DOGE, ADA, BCH, BNB, HYPE, NEAR, ZEC)</td><td>the user's words</td></tr>
+<tr><td>Buy window</td><td>minutes 2 to 14 after the open</td><td>the user's words: "like 2-14" (approximate; the buy minute is a column and a filter below, and the summary shows minute bands)</td></tr>
+<tr><td>Checks are refusals</td><td>no buy on a NO, WEAK or anomaly</td><td>the user's words (a check's NO is no buy)</td></tr>
+<tr><td>Held to settlement</td><td>no exit</td><td>the user's words (the buy is judged before any exit is built)</td></tr>
+<tr><td>Never an ask 0.45 to 0.55</td><td>that ask is skipped</td><td>the user's own rule for this model</td></tr>
+<tr><td>No price band, no time gate, no cushion gate</td><td>price is a column and a filter, and the summary has price bands</td><td>nothing from any lane is used</td></tr>
+<tr><td>The buy</td><td>a take at the side's ask, first reading inside the window where all five checks say YES; if both sides pass, the one with the larger cushion</td><td>my choice (simplest)</td></tr>
+<tr><td>One buy a market</td><td>the first buy; the market is one row</td><td>my choice</td></tr>
+<tr><td>Quote freshness</td><td>quote at most 10 s old</td><td>my choice (data freshness)</td></tr>
+<tr><td>Readings</td><td>every 10 s, until 20 s before the close</td><td>my choice</td></tr>
+<tr><td>Own history</td><td>previous 24 h, the same 3-minute bucket of the market, both sides, 100 readings needed, cutoffs hourly; anomaly beyond the 1st/99th percentile; an unread check has no say</td><td>CLAUDE.md rules 2 and 3 for the idea; the 24 h, the 3-minute bucket and the 100 are my choice</td></tr>
+<tr><td>Fifths</td><td>NO 1-2, WEAK 3, YES 4-5 (shape terciles 1-3)</td><td>my choice</td></tr>
+<tr><td>Strike</td><td>the settlement index's own tick at the open</td><td>my choice</td></tr>
+<tr><td>Markets covered</td><td>settled since 2026-11-09 07:00 UTC with ticks and quotes</td><td>my choice (the day the logic was rewritten)</td></tr>
+<tr><td>Stake and fee</td><td>$10 a buy; fee 0.07 p (1-p)</td><td>Kalshi's fee formula; the stake only scales dollars</td></tr></table></div>
+<p class="mut">Every earlier crypto table (all of them inside a 0.60-0.85 band with the commodity lane's resting order, and the "from minute 10" ones) is superseded by this run.</p>
+
+<div id="sum"></div>
+<h2>Biggest losers</h2><div id="losers"></div>
+<h2>Biggest winners</h2><div id="winners"></div>
+<h2>Every buy</h2>
+<div class="ctl"><select id="grp"><option value="model">The model's buys</option><option value="refused">Refused (plain order's buy the checks blocked)</option></select>
+<select id="out"><option value="">won or lost</option><option value="w">won</option><option value="l">lost</option></select>
+<select id="sd"><option value="">yes or no side</option><option>yes</option><option>no</option></select>
+<select id="sg"><option value="">any segment</option></select><label class="mut">price <input id="p0" value="0" size="4"> to <input id="p1" value="1" size="4"></label> <input id="q" placeholder="ticker or coin e.g. BTC" size="14"> <label class="mut">buy minute <input id="m0" value="2" size="3"> to <input id="m1" value="14" size="3"></label></div>
+<div id="cnt" class="mut"></div><div id="list"></div><p><button id="more">Show more</button></p>
+<p class="mut">Links go to the series page on Kalshi (https://kalshi.com/markets/&lt;series&gt;); I could not confirm an event-level URL pattern for settled 15-minute markets, so the ticker is shown to look up. Charts are from the recorded tape: settlement index against the strike (percent), the side's bid and ask underneath; refused rows have no chart data, and only the 150 biggest losers and 150 biggest winners carry the chart and hour profile (a page of every chart would pass the size limit); every model buy shows its readings.</p>
+<script>
+const D=/*DATA*/null;const $=id=>document.getElementById(id);
+const byT={};D.model.forEach(r=>byT[r.t]=r);
+const CH=[["cushion","cushion"],["trend","trend"],["history","history"],["price","price trend"],["pricedip","price dip"]];
+const lab=s=>s==="anomaly"?"ANOM":s==="unread"?"unread":(s<=2?"NO":s===3?"WEAK":"YES");
+const f=(x,d=1)=>x==null?"–":(x>=0?"+":"")+x.toFixed(d);
+const pct=x=>x==null?"–":x.toFixed(0)+"%";
+function sumTable(){let h='<div class="wrap"><table><tr><th></th><th>buys</th><th>net $ (at $10)</th><th>c per $1</th><th>ahead</th><th>paid</th><th>need</th><th></th></tr>';
+ const line=(n,s)=>s?`<tr><td>${n}</td><td>${s.n}</td><td class="${s.net>=0?'win':'loss'}">${f(s.net,0)}</td><td class="${s.c>=0?'win':'loss'}">${f(s.c)}c</td><td>${pct(s.ahead)}</td><td>${s.paid.toFixed(3)}</td><td>${pct(s.need)}</td><td class="beat ${s.beat?'win':'loss'}">${s.beat?'BEAT':'no'}</td></tr>`:`<tr><td>${n}</td><td colspan=7>none</td></tr>`;
+ h+=line("The model",D.summary.model)+line("Plain order (no checks)",D.summary.plain)+line("Refused by the checks",D.summary.refused)+'</table></div>';
+ h+='<h2>By buy minute (a result, not a rule; minutes since the open)</h2><div class="wrap"><table><tr><th>band</th><th>model n</th><th>c/$1</th><th>ahead / need</th><th></th><th>plain n</th><th>c/$1</th><th>ahead / need</th><th></th></tr>'+Object.keys(D.summary.bands).map(k=>{const a=D.summary.bands[k].model,b=D.summary.bands[k].plain;const c=x=>x&&x.n>=30?`<td>${x.n}</td><td class="${x.c>=0?'win':'loss'}">${f(x.c)}c</td><td>${pct(x.ahead)} / ${pct(x.need)}</td><td class="beat ${x.beat?'win':'loss'}">${x.beat?'BEAT':'no'}</td>`:`<td>${x?x.n:0}</td><td colspan=3 class="mut">too few</td>`;return `<tr><td>minutes ${k}</td>${c(a)}${c(b)}</tr>`}).join('')+'</table></div>';
+ h+='<h2>By price paid</h2><div class="wrap"><table><tr><th>ask paid</th><th>model n</th><th>c/$1</th><th>ahead / need</th><th></th><th>plain n</th><th>c/$1</th><th>ahead / need</th><th></th></tr>'+Object.keys(D.summary.pbands).map(k=>{const a=D.summary.pbands[k].model,b=D.summary.pbands[k].plain;const c=x=>x&&x.n>=30?`<td>${x.n}</td><td class="${x.c>=0?'win':'loss'}">${f(x.c)}c</td><td>${pct(x.ahead)} / ${pct(x.need)}</td><td class="beat ${x.beat?'win':'loss'}">${x.beat?'BEAT':'no'}</td>`:`<td>${x?x.n:0}</td><td colspan=3 class="mut">too few</td>`;return `<tr><td>${k}</td>${c(a)}${c(b)}</tr>`}).join('')+'</table></div>';
+ h+='<h2>By segment (30-minute slope and curvature, terciles of the market\'s own prior 24 h, side view)</h2><div class="wrap"><table><tr><th>segment</th><th>model n</th><th>c/$1</th><th>ahead / need</th><th></th><th>plain n</th><th>c/$1</th><th>ahead / need</th><th></th></tr>';
+ D.segs.forEach(s=>{const a=D.summary.seg[s].model,b=D.summary.seg[s].plain;const c=x=>x&&x.n>=30?`<td>${x.n}</td><td class="${x.c>=0?'win':'loss'}">${f(x.c)}c</td><td>${pct(x.ahead)} / ${pct(x.need)}</td><td class="beat ${x.beat?'win':'loss'}">${x.beat?'BEAT':'no'}</td>`:`<td>${x?x.n:0}</td><td colspan=3 class="mut">too few</td>`;h+=`<tr><td>${s}</td>${c(a)}${c(b)}</tr>`});
+ $("sum").innerHTML=h+'</table></div>';}
+function when(r){const t=r.cl-900+r.m*60;return new Date(t*1000).toISOString().slice(5,16).replace("T"," ")+" UTC, minute "+r.m.toFixed(1)}
+function chips(r){return '<div class="chips">'+CH.map(([k,n])=>{const s=r.st[k],l=lab(s);return `<span class="chip ${l}">${n}: ${l}${typeof s==="number"?" ("+s+"/5)":""}</span>`}).join("")+(r.sg?`<span class="chip">${r.sg}</span>`:"")+'</div>'}
+function rowEl(r,full){const d=document.createElement("div");d.className="row";const series=r.t.split("-")[0].toLowerCase();
+ d.innerHTML=`<div class="top"><span class="tk"><a href="https://kalshi.com/markets/${series}" target="_blank" rel="noopener">${r.t}</a></span><span>${r.sd.toUpperCase()} at ${r.p.toFixed(2)}</span><span class="${r.w?'win':'loss'}">${r.w?'WON':'LOST'} ${f(r.n,2)}$</span><span class="mut">${when(r)}</span>${full?'<button>readings and chart</button>':''}</div>`+chips(r);
+ if(full){const b=d.querySelector("button");let open=false;b.onclick=()=>{if(open){d.querySelector(".det").remove();open=false;return}open=true;const x=document.createElement("div");x.className="det";x.innerHTML=detail(r);d.appendChild(x)}}
+ return d}
+function detail(r){let h='<div class="wrap"><table><tr><th>check</th><th>reading</th><th>fifth</th><th>says</th></tr>';
+ CH.concat([["volatility","volatility ratio (not a refusal check)"]]).forEach(([k,n])=>{const s=r.st[k];h+=`<tr><td>${Array.isArray(n)?n[1]:n}</td><td>${f(r.rd[k],2)}</td><td>${s}</td><td class="${lab(s)==='NO'?'loss':lab(s)==='WEAK'?'weak':lab(s)==='YES'?'win':''}">${lab(s)}</td></tr>`});
+ h+='</table></div>';
+ if(r.sh){h+='<p class="mut">Wave shape (side view, in typical moves; tercile 1-3 of own prior 24 h): '+["sl15","sl30","sl60","cv15","cv30","cv60"].map(k=>`${k.replace("sl","slope ").replace("cv","curv ")}: ${f(r.sh["t:"+k],2)} (${r.ts["t:"+k]})`).join("; ")+'; line fit 15/30/60: '+["ft15","ft30","ft60"].map(k=>r.sh["t:"+k]==null?"–":r.sh["t:"+k].toFixed(2)).join("/")+'</p>'}
+ if(r.hr){const e=r.hr;h+=`<p class="mut">Past hour (side view, in the market's own typical minutes above(+)/below(-) the strike, 5-minute levels oldest to newest): ${e.bins.map(x=>f(x,1)).join(" ")}<br>share of each 10 minutes on the winning side: ${e.blocks.map(x=>x.toFixed(2)).join(" ")}; strike crossings ${e.cross}; hour's high ${e.hi_ago} min ago, low ${e.lo_ago} min ago; range ${e.range.toFixed(1)}, drift ${f(e.drift,1)}, path efficiency ${e.eff.toFixed(2)}</p>`}
+ if(r.ch)h+=chart(r);return h}
+function chart(r){const c=r.ch,W=640,H=330,L=36,R=8,xs=(i,n)=>L+(W-L-R)*i/(n-1);
+ const idx=c.idx.map((v,i)=>[i,v]).filter(a=>a[1]!=null);const vs=idx.map(a=>a[1]).concat([0]);let lo=Math.min(...vs),hi=Math.max(...vs);if(hi-lo<0.05){lo-=0.03;hi+=0.03}
+ const y1=v=>10+170*(1-(v-lo)/(hi-lo)),N=c.idx.length;let p1=idx.map((a,k)=>(k?"L":"M")+xs(a[0],N).toFixed(1)+" "+y1(a[1]).toFixed(1)).join("");
+ const openX=xs(360,N),buyX=xs(360+c.buy_s/10,N),y2=v=>240+80*(1-v);const pts=c.px.map((a,i)=>[i,a]).filter(a=>a[1]);
+ const line=(k)=>pts.map((a,j)=>(j?"L":"M")+(openX+(W-R-openX)*a[0]/90).toFixed(1)+" "+y2(a[1][k]).toFixed(1)).join("");
+ const bx=openX+(W-R-openX)*(c.buy_s/900);
+ return `<svg viewBox="0 0 ${W} ${H}"><text x="${L}" y="9">settlement index vs strike, % (60 min before the open to the close)</text><line x1="${L}" x2="${W-R}" y1="${y1(0)}" y2="${y1(0)}" stroke="var(--mut)" stroke-dasharray="4 3"/><path d="${p1}" fill="none" stroke="var(--c1)" stroke-width="1.4"/><line x1="${openX}" x2="${openX}" y1="10" y2="180" stroke="var(--line)"/><line x1="${buyX}" x2="${buyX}" y1="10" y2="320" stroke="var(--c3)" stroke-width="1.5"/><text x="${buyX+3}" y="22" style="fill:var(--c3)">buy</text><text x="2" y="${y1(hi)+8}">${hi.toFixed(2)}</text><text x="2" y="${y1(lo)}">${lo.toFixed(2)}</text><text x="2" y="${y1(0)-2}">0</text><text x="${openX+3}" y="190">open</text>
+ <text x="${L}" y="238">${r.sd.toUpperCase()} side bid (blue) and ask (red) from the open, price 0 to 1</text><line x1="${openX}" x2="${W-R}" y1="${y2(r.p)}" y2="${y2(r.p)}" stroke="var(--c3)" stroke-dasharray="4 3"/><path d="${line(0)}" fill="none" stroke="var(--c1)" stroke-width="1.4"/><path d="${line(1)}" fill="none" stroke="var(--c2)" stroke-width="1.2"/><text x="2" y="${y2(1)+8}">1.00</text><text x="2" y="${y2(0)}">0</text><text x="${W-R-60}" y="${y2(r.p)-3}" style="fill:var(--c3)">paid ${r.p.toFixed(2)}</text></svg>`}
+function fill(id,ts){const el=$(id);ts.forEach(t=>el.appendChild(rowEl(byT[t],true)))}
+let shown=0,cur=[];
+function render(reset){if(reset){$("list").innerHTML="";shown=0;const g=$("grp").value,o=$("out").value,s=$("sd").value,sg=$("sg").value,q=$("q").value.toUpperCase();cur=D[g].filter(r=>(!o||(o==="w")===r.w)&&(!s||r.sd===s)&&(!sg||r.sg===sg)&&(!q||r.t.includes(q))&&r.p>=parseFloat($("p0").value||0)&&r.p<=parseFloat($("p1").value||1)&&r.m>=parseFloat($("m0").value||0)&&r.m<=parseFloat($("m1").value||99));cur.sort((a,b)=>a.n-b.n);$("cnt").textContent=cur.length+" buys";}
+ cur.slice(shown,shown+60).forEach(r=>$("list").appendChild(rowEl(r,$("grp").value==="model")));shown+=60;$("more").style.display=shown<cur.length?"":"none"}
+D.segs.forEach(s=>{const o=document.createElement("option");o.textContent=s;$("sg").appendChild(o)});
+sumTable();fill("losers",D.losers);fill("winners",D.winners);
+["grp","out","sd","sg","q","m0","m1","p0","p1"].forEach(i=>$(i).addEventListener("input",()=>render(true)));$("more").onclick=()=>render(false);render(true);
+</script></body></html>

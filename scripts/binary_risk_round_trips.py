@@ -22,6 +22,9 @@ STEP = int(os.environ.get("STEP", "10"))
 LIMIT = int(os.environ.get("LIMIT", "0"))  # markets per index (0 = all), for a quick run
 LO, HI = 0.60, 0.85
 UNIVERSE = os.environ.get("UNIVERSE", "commodity")  # 2026-11-22: crypto = the 11 KX*15M crypto series on their Kalshi settlement index (user: this model is for crypto); commodity = the old run
+# 2026-11-22 WINDOW=2,14 (user via parent: "It should be looking at like 2-14"): one bet a market at the first eligible moment from minute LO to minute HI after the open; no other start or end. The earlier "from minute 10" universes (a commodity lane's setting, not the user's) stay only for runs without WINDOW.
+WINDOW = tuple(float(x) for x in os.environ["WINDOW"].split(",")) if os.environ.get("WINDOW") else None
+WT = "w214" if WINDOW else "m10"  # the tag the dumps and the page read
 EXIT = os.environ.get("EXIT", "commodity")  # hold = each bet held to settlement (the buy judged alone; the sell side waits until the buy is finished); commodity = commodity_exit
 CHECKS = ("cushion", "trend", "history", "volatility", "price", "pricedip")
 # 2026-11-22 FEATURES=1 (user: iterate on the features: which help, which need adjusting, which go): every price-free reading of the model, each read as its own check by its own-history fifth
@@ -226,10 +229,45 @@ def build(job):
         m["x"][key] = out
         return out
 
-    def trade(m, rule, first_k, detail=False):
+    def hourprof(m, side, kk):
+        """2026-11-22 (user: look at how the market behaved over the past hour on the winning bets): the past 60 minutes of the settlement index at the reading, in the side's view and in the market's own typical minute u15 (the last 15 minutes' root-mean-square one-tick log move per minute): 12 five-minute mean levels against the strike (oldest first), the share of each 10-minute block on the side's winning side (6), strike crossings, minutes ago of the hour's high and low, the hour's range, drift and path efficiency (10-second grid)."""
+        t, strike, sg = m["base"] + kk, m["strike"], (1.0 if side == "yes" else -1.0)
+        j = bisect.bisect_right(T, t) - 1
+        i15, i60 = bisect.bisect_left(T, t - 900.0), bisect.bisect_left(T, t - 3600.0)
+        if j - i60 < 1500 or j - i15 < 300: return None
+        sq = sum(math.log(Vv[k] / Vv[k - 1]) ** 2 for k in range(i15 + 1, j + 1) if Vv[k] > 0 and Vv[k - 1] > 0)
+        u = math.sqrt(sq / (T[j] - T[i15]) * 60.0) if T[j] > T[i15] and sq > 0 else None
+        if not u: return None
+        g = []
+        for x in range(361):  # 10-second grid, 60 minutes back to now, the last tick at or before each point
+            a = bisect.bisect_right(T, t - 3600.0 + 10.0 * x) - 1
+            g.append(Vv[max(a, 0)])
+        lv = lambda v: sg * math.log(v / strike) / u
+        bins = [round(lv(sum(g[30 * b:30 * b + 30]) / 30.0), 3) for b in range(12)]
+        blocks = [round(sum(1 for v in g[60 * b:60 * b + 60] if sg * (v - strike) > 0) / 60.0, 3) for b in range(6)]
+        cross = sum(1 for a, b in zip(g, g[1:]) if (a - strike) * (b - strike) < 0)
+        hi, lo = max(range(361), key=lambda x: sg * g[x]), min(range(361), key=lambda x: sg * g[x])
+        mv = sum(abs(math.log(b / a)) for a, b in zip(g, g[1:]))
+        return {"u15": u, "bins": bins, "blocks": blocks, "cross": cross, "hi_ago": round((360 - hi) / 6.0, 1), "lo_ago": round((360 - lo) / 6.0, 1), "range": round(math.log(max(g) / min(g)) / u, 3), "drift": round(sg * math.log(g[-1] / g[0]) / u, 3), "eff": round(abs(math.log(g[-1] / g[0])) / mv, 4) if mv > 0 else 0.0}
+
+    def chartdata(m, side, kk, kf, price):
+        """2026-11-22 (user: see the model's buys one by one): the settlement index against the strike from 60 minutes before the open to the close on a 10-second grid (percent over the strike), the side's bid and ask from the open to the close on a 10-second grid, and the buy's second after the open, for the page."""
+        opened, close, strike = m["base"] + 60.0, m["close"], m["strike"]
+        idx = []
+        for x in range(int((close - (opened - 3600.0)) // 10) + 1):
+            a = bisect.bisect_right(T, opened - 3600.0 + 10.0 * x) - 1
+            idx.append(None if a < 0 else round(100.0 * math.log(Vv[a] / strike), 4))
+        px = []
+        for x in range(91):
+            sec = 60 + 10 * x
+            ok = sec <= 960 and m["yb"][sec] is not None and m["age"][sec] <= 30.0
+            px.append([round(bid(m, side, sec), 3), round(ask(m, side, sec), 3)] if ok else None)
+        return {"idx": idx, "px": px, "buy_s": kk - 60, "fill_s": kf - 60, "price": price}
+
+    def trade(m, rule, first_k, detail=False, last_k=10 ** 9):
         """One bet a market under a buy rule: rule(m, i, side) is None (no order at this reading) or the typical minutes the resting buy sits under the ask (0 = the lane's own order)."""
         for i, (kk, v, pu, f) in enumerate(m["R"]):
-            if kk < first_k or v is None or m["age"][kk] > 10.0: continue
+            if kk < first_k or kk > last_k or v is None or m["age"][kk] > 10.0: continue
             for side in ("yes", "no"):
                 a = ask(m, side, kk)
                 if not LO <= a <= HI: continue
@@ -253,7 +291,7 @@ def build(job):
                 hold = (1.0 if won else 0.0) - basis
                 net = hold if sold is None else sold - fee(sold) - basis
                 return (side, price, (kf - 60) / 60.0, step, net * STAKE / price, hold * STAKE / price, {n: state(m, i, n, side) for n in CHECKS}, d,
-                        None if not detail else {"d": d, "sold": sold, "kx": kx - 60, "won": won, "kk": kk - 60, "ask": a, "pu": pu, "raw": {n: side_val(v, n, side, f) for n in CHECKS}, "f": {k2: (round(x, 4) if isinstance(x, float) else x) for k2, x in f.items()},
+                        None if not detail else {"d": d, "sold": sold, "kx": kx - 60, "won": won, "kk": kk - 60, "ask": a, "pu": pu, "raw": {n: side_val(v, n, side, f) for n in CHECKS}, "hr": hourprof(m, side, kk), **({"chart": chartdata(m, side, kk, kf, price)} if detail == "chart" else {}), "f": {k2: (round(x, 4) if isinstance(x, float) else x) for k2, x in f.items()},
                                                  "after": [round(bid(m, side, x), 2) for x in range(kf, 961, 5)], "before": [None if m["yb"][x] is None else round(bid(m, side, x), 2) for x in range(max(0, kk - 300), kk + 1, 5)]})
         return None
 
@@ -291,13 +329,13 @@ def build(job):
         if not os.environ.get("ONLY"): RULES["req:" + n], RULES["move:" + n] = required(n), mover(n)
     out = []
     for m in M:
-        for tag, first_k in (("any", 120), ("m5", 360), ("m10", 660), ("late", 780)):
+        for tag, first_k in ((("w214", int(60 + 60 * WINDOW[0])),) if WINDOW else (("any", 120), ("m5", 360), ("m10", 660), ("late", 780))):
             for rn, rule in RULES.items():
-                got = trade(m, rule, first_k, rn in ("base", "formula", "no_any5", "no_any4") and tag in ("m10", "late"))
+                got = trade(m, rule, first_k, ("chart" if (rn == "no_weak5" and tag == WT and os.environ.get("CHARTS")) else True) if (rn in ("base", "formula", "no_any5", "no_any4") or (rn == "no_weak5" and os.environ.get("CHARTS"))) and tag in (WT, "late") else False, int(60 + 60 * WINDOW[1]) if WINDOW else 10 ** 9)
                 if got: out.append((tag, rn, m["ticker"], m["close"], *got))
     # the raw perp ticks and Kalshi quotes of this index's biggest formula losers and winners (from minute 10), so each check's reading can be recomputed by hand
     RR = os.environ.get("RAWRULE", "formula")  # 2026-11-22: RAWRULE=base RAWSEG=1 keeps the raw ticks and quotes of the biggest winners and losers among bets bought after a fall over 30 minutes that is bending up (30-minute slope tercile 1, curvature tercile 3) for the bet-by-bet review
-    F = sorted([o for o in out if o[0] == "m10" and o[1] == RR and (not os.environ.get("RAWSEG") or (o[10].get("t:sl30") == 1 and o[10].get("t:cv30") == 3))], key=lambda o: o[8])
+    F = sorted([o for o in out if o[0] == WT and o[1] == RR and (not os.environ.get("RAWSEG") or (o[10].get("t:sl30") == 1 and o[10].get("t:cv30") == 3))], key=lambda o: o[8])
     raw, by = {}, {m["ticker"]: m for m in M}
     for o in F[:12] + F[-12:]:
         m = by[o[2]]
@@ -331,7 +369,7 @@ def shape(x):
     return "calm" if v in (1, 2) else "jumpy" if v in (4, 5) else "middle" if v == 3 else str(v)
 
 
-for tag, title in (("any", "THE FIRST BUY FROM MINUTE 1"), ("m5", "THE FIRST BUY FROM MINUTE 5"), ("m10", "THE FIRST BUY FROM MINUTE 10 (where the live commodity lanes buy)"), ("late", "THE FIRST BUY IN THE LAST 3 MINUTES")):
+for tag, title in ((("w214", "THE FIRST BUY IN MINUTES 2-14 OF THE MARKET (the user: like 2-14)"),) if WINDOW else (("any", "THE FIRST BUY FROM MINUTE 1"), ("m5", "THE FIRST BUY FROM MINUTE 5"), ("m10", "THE FIRST BUY FROM MINUTE 10 (where the live commodity lanes buy)"), ("late", "THE FIRST BUY IN THE LAST 3 MINUTES"))):
     base = RES.get((tag, "base"), {})
     B = sorted(base.values(), key=lambda x: x[3])
     print(f"\n######## {title}: the lane's order on every market, closed by commodity_exit")
@@ -362,7 +400,7 @@ if os.environ.get("SHAPES"):
         pay = sum(x[5] for x in g) / n
         be = sum(x[5] + fee(x[5]) for x in g) / n
         return "n %4d %+6.1fc/$1 ahead %2.0f%% paid %.3f need %2.0f%% %s" % (n, 100.0 * sum(x[8] for x in g) / (STAKE * n), 100 * win, pay, 100 * be, "BEAT" if win > be else "no")
-    for tag in ("m5", "m10"):
+    for tag in ((WT,) if WINDOW else ("m5", "m10")):
         B = sorted(RES.get((tag, "base"), {}).values(), key=lambda x: x[3])
         print(f"\n######## WAVE SHAPE SEGMENTS, buy from {tag}, held to settlement (terciles 1-3 of each reading's own previous 24 h in the same 3 minutes of the market, in the side's view; slope 3 = rising for the side, curvature 3 = bending up, line fit 3 = the straightest)")
         print("  ALL: " + seg(B))
@@ -381,10 +419,18 @@ if os.environ.get("SHAPES"):
 
 import json
 from pathlib import Path
-rows = [{"universe": r[0], "rule": r[1], "ticker": r[2], "close": r[3], "side": r[4], "price": r[5], "minute": r[6], "step": r[7], "net": r[8], "hold": r[9], "states": r[10], **r[12]} for (tg, rn), d in RES.items() if rn in ("base", "formula", "no_any5", "no_any4") and tg in ("m10", "late") for r in d.values()]
+rows = [{"universe": r[0], "rule": r[1], "ticker": r[2], "close": r[3], "side": r[4], "price": r[5], "minute": r[6], "step": r[7], "net": r[8], "hold": r[9], "states": r[10], **r[12]} for (tg, rn), d in RES.items() if (rn in ("base", "formula", "no_any5", "no_any4") or (rn == "no_weak5" and os.environ.get("CHARTS"))) and tg in (WT, "late") for r in d.values()]
 Path(os.environ.get("DATA_DIR", "/data"), "round_trip_bets.json").write_text(json.dumps(rows))
 import gzip as _gz
-with _gz.open(Path(os.environ.get("DATA_DIR", "/data"), "crypto_bets_m10.json.gz"), "wt") as fh: json.dump([r for r in rows if r["universe"] == "m10" and r["rule"] == "base"], fh)
+if os.environ.get("CHARTS"):  # the page's data: every plain order's buy from minute 10 (light rows) and every buy of the model (the checks as refusals) with its readings, hour profile and chart
+    keep = []
+    for r in rows:
+        if r["universe"] != WT or r["rule"] not in ("base", "no_weak5"): continue
+        if r["rule"] == "base": r = {k: v for k, v in r.items() if k in ("universe", "rule", "ticker", "close", "side", "price", "minute", "net", "states", "won", "raw", "ask")}
+        else: r = {k: v for k, v in r.items() if k not in ("before",)}
+        keep.append(r)
+    with _gz.open(Path(os.environ.get("DATA_DIR", "/data"), "priskp_buys_crypto.json.gz"), "wt") as fh: json.dump(keep, fh)
+with _gz.open(Path(os.environ.get("DATA_DIR", "/data"), "crypto_bets_m10.json.gz"), "wt") as fh: json.dump([r for r in rows if r["universe"] == WT and r["rule"] == "base"], fh)
 import gzip
 with gzip.open(Path(os.environ.get("DATA_DIR", "/data"), "round_trip_raw.json.gz"), "wt") as fh: json.dump(RAW, fh)
 print(f"{len(rows)} bets (the lane's order and the formula's) written to round_trip_bets.json; raw ticks and quotes for {len(RAW)} formula bets in round_trip_raw.json.gz")

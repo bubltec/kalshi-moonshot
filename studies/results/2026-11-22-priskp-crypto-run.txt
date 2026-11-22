@@ -1,0 +1,125 @@
+job 20261122-091437-88158 started: arn:aws:ecs:us-east-2:288892511071:task/KalshiMoonshotJobs-ClusterEB0386A7-faJuUixb7zw3/5885f1004a7e4aeb910fd2e7ad5b096a
+  an index done: 1102 markets, 216s
+  an index done: 1102 markets, 216s
+  an index done: 1101 markets, 216s
+  an index done: 1103 markets, 217s
+  an index done: 1101 markets, 380s
+  an index done: 1100 markets, 381s
+  an index done: 1102 markets, 382s
+  an index done: 1101 markets, 382s
+  an index done: 1101 markets, 542s
+9913 markets; plain buys 9851, model buys 5924, refused 3927; 554s
+
+(1) ALL: 
+    the model   : n 5924  net    -1194$    -2.0c per $1  ahead 76%  paid 0.762  need 77%  no
+    plain order : n 9851  net    -4311$    -4.4c per $1  ahead 66%  paid 0.677  need 69%  no
+    refused     : n 3927  net     +990$    +2.5c per $1  ahead 72%  paid 0.686  need 70%  BEAT
+
+(2) BY BUY MINUTE (minutes since the open)
+  minutes  2-5   model: n 3557  net     -964$    -2.7c per $1  ahead 70%  paid 0.709  need 72%  no
+               plain : n 9565  net    -4299$    -4.5c per $1  ahead 66%  paid 0.675  need 69%  no
+  minutes  5-10  model: n 1572  net     -231$    -1.5c per $1  ahead 80%  paid 0.806  need 82%  no
+               plain : n  262  net       -9$    -0.3c per $1  ahead 75%  paid 0.735  need 75%  BEAT
+  minutes 10-12  model: n  475  net      +29$    +0.6c per $1  ahead 90%  paid 0.886  need 89%  BEAT
+               plain : n   18 (too few)
+  minutes 12-14  model: n  320  net      -28$    -0.9c per $1  ahead 95%  paid 0.959  need 96%  no
+               plain : n    6 (too few)
+
+(3) BY PRICE PAID (the side's ask; 0.45-0.55 never)
+  0.00-0.20  model: n    0 (too few)
+             plain : n    1 (too few)
+  0.20-0.45  model: n   68  net      +75$   +11.1c per $1  ahead 46%  paid 0.403  need 42%  BEAT
+             plain : n    0 (too few)
+  0.55-0.65  model: n  950  net     -167$    -1.8c per $1  ahead 61%  paid 0.606  need 62%  no
+             plain : n 4506  net    -2642$    -5.9c per $1  ahead 58%  paid 0.595  need 61%  no
+  0.65-0.85  model: n 3373  net     -830$    -2.5c per $1  ahead 74%  paid 0.741  need 75%  no
+             plain : n 4756  net    -1568$    -3.3c per $1  ahead 72%  paid 0.728  need 74%  no
+  0.85-1.00  model: n 1526  net     -244$    -1.6c per $1  ahead 91%  paid 0.923  need 93%  no
+             plain : n  588  net      -90$    -1.5c per $1  ahead 88%  paid 0.886  need 89%  no
+
+(4) WAVE SHAPE SEGMENTS (terciles 1-3 of each reading's own previous 24 h, side view; slope 3 = rising for the side, curvature 3 = bending up)
+  model: slope x curvature at 15 min
+    slope 1: curv 1: n  245  net      +29$    +1.2c per $1  ahead 66%  paid 0.636  need 65%  BEAT | curv 2: n  673  net     +221$    +3.3c per $1  ahead 72%  paid 0.686  need 70%  BEAT | curv 3: n 1216  net     -121$    -1.0c per $1  ahead 74%  paid 0.731  need 74%  no
+    slope 2: curv 1: n  342  net      -59$    -1.7c per $1  ahead 73%  paid 0.725  need 74%  no | curv 2: n  842  net     -680$    -8.1c per $1  ahead 70%  paid 0.741  need 75%  no | curv 3: n 1431  net      -92$    -0.6c per $1  ahead 80%  paid 0.799  need 81%  no
+    slope 3: curv 1: n  212  net     -103$    -4.9c per $1  ahead 83%  paid 0.854  need 86%  no | curv 2: n  281  net     -257$    -9.1c per $1  ahead 79%  paid 0.861  need 87%  no | curv 3: n  358  net      -18$    -0.5c per $1  ahead 91%  paid 0.905  need 91%  no
+  model: slope x curvature at 30 min
+    slope 1: curv 1: n  707  net     +405$    +5.7c per $1  ahead 75%  paid 0.707  need 72%  BEAT | curv 2: n 1156  net     -122$    -1.1c per $1  ahead 74%  paid 0.739  need 75%  no | curv 3: n  963  net     -266$    -2.8c per $1  ahead 76%  paid 0.770  need 78%  no
+    slope 2: curv 1: n  794  net      -79$    -1.0c per $1  ahead 72%  paid 0.712  need 73%  no | curv 2: n  857  net     -541$    -6.3c per $1  ahead 74%  paid 0.770  need 78%  no | curv 3: n  361  net     -117$    -3.2c per $1  ahead 82%  paid 0.841  need 85%  no
+    slope 3: curv 1: n  458  net     -250$    -5.5c per $1  ahead 77%  paid 0.803  need 81%  no | curv 2: n  252  net      -50$    -2.0c per $1  ahead 90%  paid 0.915  need 92%  no | curv 3: n   99  net      -36$    -3.6c per $1  ahead 93%  paid 0.960  need 96%  no
+  model: slope x curvature at 60 min
+    slope 1: curv 1: n  866  net      -25$    -0.3c per $1  ahead 75%  paid 0.742  need 75%  no | curv 2: n  815  net     +129$    +1.6c per $1  ahead 76%  paid 0.746  need 76%  BEAT | curv 3: n  474  net      -85$    -1.8c per $1  ahead 77%  paid 0.769  need 78%  no
+    slope 2: curv 1: n  866  net     -194$    -2.2c per $1  ahead 74%  paid 0.737  need 75%  no | curv 2: n  723  net     -369$    -5.1c per $1  ahead 74%  paid 0.768  need 78%  no | curv 3: n  338  net      +30$    +0.9c per $1  ahead 83%  paid 0.825  need 83%  no
+    slope 3: curv 1: n  724  net     -131$    -1.8c per $1  ahead 75%  paid 0.749  need 76%  no | curv 2: n  513  net     -111$    -2.2c per $1  ahead 80%  paid 0.803  need 81%  no | curv 3: n  256  net     -152$    -5.9c per $1  ahead 82%  paid 0.860  need 87%  no
+  model: WAVE TURNS, 60-minute slope against 15-minute slope
+    slope60 1: slope15 1: n  928  net     +404$    +4.4c per $1  ahead 75%  paid 0.714  need 73%  BEAT | slope15 2: n 1021  net     -337$    -3.3c per $1  ahead 75%  paid 0.764  need 78%  no | slope15 3: n  198  net     -120$    -6.1c per $1  ahead 81%  paid 0.845  need 85%  no
+    slope60 2: slope15 1: n  751  net     -138$    -1.8c per $1  ahead 71%  paid 0.705  need 72%  no | slope15 2: n  872  net     -290$    -3.3c per $1  ahead 76%  paid 0.775  need 79%  no | slope15 3: n  317  net      -88$    -2.8c per $1  ahead 86%  paid 0.874  need 88%  no
+    slope60 3: slope15 1: n  480  net     -170$    -3.5c per $1  ahead 69%  paid 0.699  need 71%  no | slope15 2: n  712  net      -62$    -0.9c per $1  ahead 79%  paid 0.785  need 80%  no | slope15 3: n  339  net     -131$    -3.9c per $1  ahead 88%  paid 0.908  need 91%  no
+  plain: slope x curvature at 15 min
+    slope 1: curv 1: n  416  net      -37$    -0.9c per $1  ahead 64%  paid 0.635  need 65%  no | curv 2: n  906  net     +296$    +3.3c per $1  ahead 69%  paid 0.655  need 67%  BEAT | curv 3: n 1195  net     +185$    +1.5c per $1  ahead 70%  paid 0.675  need 69%  BEAT
+    slope 2: curv 1: n  693  net     -369$    -5.3c per $1  ahead 63%  paid 0.643  need 66%  no | curv 2: n 1162  net     -412$    -3.5c per $1  ahead 65%  paid 0.658  need 67%  no | curv 3: n 1453  net     -455$    -3.1c per $1  ahead 69%  paid 0.695  need 71%  no
+    slope 3: curv 1: n  805  net    -1029$   -12.8c per $1  ahead 58%  paid 0.648  need 66%  no | curv 2: n 1159  net     -968$    -8.3c per $1  ahead 63%  paid 0.671  need 69%  no | curv 3: n 1498  net    -1454$    -9.7c per $1  ahead 67%  paid 0.724  need 74%  no
+  plain: slope x curvature at 30 min
+    slope 1: curv 1: n  818  net     +188$    +2.3c per $1  ahead 70%  paid 0.666  need 68%  BEAT | curv 2: n 1028  net     +263$    +2.6c per $1  ahead 70%  paid 0.671  need 69%  BEAT | curv 3: n 1101  net     -672$    -6.1c per $1  ahead 65%  paid 0.680  need 69%  no
+    slope 2: curv 1: n  934  net     -329$    -3.5c per $1  ahead 65%  paid 0.664  need 68%  no | curv 2: n 1108  net     -208$    -1.9c per $1  ahead 68%  paid 0.679  need 69%  no | curv 3: n 1222  net     -765$    -6.3c per $1  ahead 66%  paid 0.689  need 70%  no
+    slope 3: curv 1: n  905  net     -653$    -7.2c per $1  ahead 63%  paid 0.662  need 68%  no | curv 2: n 1103  net     -752$    -6.8c per $1  ahead 65%  paid 0.682  need 70%  no | curv 3: n 1059  net    -1286$   -12.1c per $1  ahead 63%  paid 0.691  need 71%  no
+  plain: slope x curvature at 60 min
+    slope 1: curv 1: n  941  net     -442$    -4.7c per $1  ahead 67%  paid 0.679  need 69%  no | curv 2: n 1061  net     -398$    -3.8c per $1  ahead 67%  paid 0.676  need 69%  no | curv 3: n  996  net     -131$    -1.3c per $1  ahead 68%  paid 0.680  need 69%  no
+    slope 2: curv 1: n  998  net     -105$    -1.1c per $1  ahead 68%  paid 0.668  need 68%  no | curv 2: n 1167  net     -839$    -7.2c per $1  ahead 65%  paid 0.680  need 69%  no | curv 3: n 1097  net     -183$    -1.7c per $1  ahead 68%  paid 0.673  need 69%  no
+    slope 3: curv 1: n  968  net     -174$    -1.8c per $1  ahead 68%  paid 0.674  need 69%  no | curv 2: n 1071  net     -950$    -8.9c per $1  ahead 64%  paid 0.682  need 70%  no | curv 3: n  985  net     -714$    -7.3c per $1  ahead 65%  paid 0.685  need 70%  no
+  plain: WAVE TURNS, 60-minute slope against 15-minute slope
+    slope60 1: slope15 1: n 1016  net     +375$    +3.7c per $1  ahead 71%  paid 0.669  need 68%  BEAT | slope15 2: n 1082  net     -756$    -7.0c per $1  ahead 64%  paid 0.675  need 69%  no | slope15 3: n  895  net     -546$    -6.1c per $1  ahead 66%  paid 0.692  need 71%  no
+    slope60 2: slope15 1: n  900  net     +158$    +1.8c per $1  ahead 68%  paid 0.655  need 67%  BEAT | slope15 2: n 1113  net     -240$    -2.2c per $1  ahead 67%  paid 0.670  need 68%  no | slope15 3: n 1234  net    -1322$   -10.7c per $1  ahead 63%  paid 0.690  need 70%  no
+    slope60 3: slope15 1: n  614  net     -177$    -2.9c per $1  ahead 66%  paid 0.663  need 68%  no | slope15 2: n 1078  net      -89$    -0.8c per $1  ahead 69%  paid 0.673  need 69%  no | slope15 3: n 1327  net    -1572$   -11.8c per $1  ahead 63%  paid 0.692  need 71%  no
+
+(5) EACH CHECK ON THE PLAIN BUYS, by its own fifth (1-2 NO, 3 WEAK, 4-5 YES)
+  --- cushion
+    1       : n  208  net     -250$   -12.0c per $1  ahead 55%  paid 0.612  need 63%  no
+    2       : n  919  net      -65$    -0.7c per $1  ahead 62%  paid 0.611  need 63%  no
+    3       : n 1877  net    -1077$    -5.7c per $1  ahead 60%  paid 0.622  need 64%  no
+    4       : n 2880  net    -1538$    -5.3c per $1  ahead 64%  paid 0.658  need 67%  no
+    5       : n 3673  net    -1317$    -3.6c per $1  ahead 72%  paid 0.729  need 74%  no
+    anomaly : n  200  net       +3$    +0.1c per $1  ahead 86%  paid 0.854  need 86%  no
+    unread  : n   94  net      -66$    -7.1c per $1  ahead 66%  paid 0.691  need 70%  no
+  --- trend
+    1       : n   49  net     -102$   -20.9c per $1  ahead 51%  paid 0.616  need 63%  no
+    2       : n  396  net     -102$    -2.6c per $1  ahead 61%  paid 0.604  need 62%  no
+    3       : n 1910  net     -909$    -4.8c per $1  ahead 59%  paid 0.603  need 62%  no
+    4       : n 3410  net    -1748$    -5.1c per $1  ahead 63%  paid 0.642  need 66%  no
+    5       : n 3765  net    -1357$    -3.6c per $1  ahead 73%  paid 0.742  need 75%  no
+    anomaly : n  227  net      -26$    -1.1c per $1  ahead 87%  paid 0.877  need 88%  no
+    unread  : n   94  net      -66$    -7.1c per $1  ahead 66%  paid 0.691  need 70%  no
+  --- history
+    1       : n 1861  net    -1335$    -7.2c per $1  ahead 65%  paid 0.684  need 70%  no
+    2       : n 1972  net    -1456$    -7.4c per $1  ahead 64%  paid 0.677  need 69%  no
+    3       : n 2004  net    -1035$    -5.2c per $1  ahead 66%  paid 0.676  need 69%  no
+    4       : n 1889  net     -553$    -2.9c per $1  ahead 67%  paid 0.674  need 69%  no
+    5       : n 1790  net     +429$    +2.4c per $1  ahead 71%  paid 0.675  need 69%  BEAT
+    anomaly : n  241  net     -294$   -12.2c per $1  ahead 60%  paid 0.661  need 68%  no
+    unread  : n   94  net      -66$    -7.1c per $1  ahead 66%  paid 0.691  need 70%  no
+  --- price
+    1       : n   18 (too few)
+    2       : n  136  net      -39$    -2.9c per $1  ahead 60%  paid 0.602  need 62%  no
+    3       : n 1174  net     -543$    -4.6c per $1  ahead 59%  paid 0.604  need 62%  no
+    4       : n 2927  net    -1927$    -6.6c per $1  ahead 61%  paid 0.637  need 65%  no
+    5       : n 2922  net    -1158$    -4.0c per $1  ahead 72%  paid 0.731  need 74%  no
+    anomaly : n  186  net      +84$    +4.5c per $1  ahead 87%  paid 0.824  need 83%  BEAT
+    unread  : n 2488  net     -711$    -2.9c per $1  ahead 68%  paid 0.687  need 70%  no
+  --- pricedip
+    1       : n   41  net      -47$   -11.6c per $1  ahead 54%  paid 0.578  need 59%  no
+    2       : n  406  net      +40$    +1.0c per $1  ahead 63%  paid 0.607  need 62%  BEAT
+    3       : n 1321  net     -818$    -6.2c per $1  ahead 61%  paid 0.638  need 65%  no
+    4       : n 2454  net    -1827$    -7.4c per $1  ahead 64%  paid 0.674  need 69%  no
+    5       : n 3141  net     -948$    -3.0c per $1  ahead 69%  paid 0.697  need 71%  no
+    anomaly : n    0 (too few)
+    unread  : n 2488  net     -711$    -2.9c per $1  ahead 68%  paid 0.687  need 70%  no
+  --- volatility
+    1       : n 1840  net     -964$    -5.2c per $1  ahead 64%  paid 0.662  need 68%  no
+    2       : n 1891  net    -1050$    -5.6c per $1  ahead 65%  paid 0.671  need 69%  no
+    3       : n 1858  net     -473$    -2.5c per $1  ahead 68%  paid 0.680  need 69%  no
+    4       : n 1903  net     -772$    -4.1c per $1  ahead 67%  paid 0.683  need 70%  no
+    5       : n 1913  net    -1073$    -5.6c per $1  ahead 66%  paid 0.684  need 70%  no
+    anomaly : n  352  net      +87$    +2.5c per $1  ahead 72%  paid 0.691  need 70%  BEAT
+    unread  : n   94  net      -66$    -7.1c per $1  ahead 66%  paid 0.691  need 70%  no
+
+done in 555s
+exit=0  results in job-results/20261122-091437-88158/
