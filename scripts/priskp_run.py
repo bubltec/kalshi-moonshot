@@ -8,7 +8,7 @@ Run: SPOT=0 scripts/cloud_job.sh scripts/priskp_run.py [LIMIT=markets per index,
 import bisect, gzip, json, math, multiprocessing, os, time
 from datetime import datetime, timezone
 from pathlib import Path
-from kalshi_moonshot import binaryrisk as br, config, db
+from kalshi_moonshot import binaryrisk as br, config, db, priskp
 from kalshi_moonshot.kalshiws import index_for_series as settlement_index
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
@@ -102,13 +102,18 @@ def build(job):
                     pt = (g[-1] - mid[sidx - back]) / (pu * math.sqrt(back / 60.0))
                     dy, dn = -(max(g) - g[-1]) / pu, -(g[-1] - min(g)) / pu
             vals = {side: {n: side_value(n, side, f, share, pt, dy, dn) for n in NAMES} for side in ("yes", "no")}
-            R.append((s_open, vals, qa[jq], qb[jq], t - qt[jq], f))
+            sh = None
+            if int(s_open) % 30 == 0:  # the confirmed shifts of the last hour, every 30 s (the entry study reads the latest at or before a buy)
+                ux = priskp.typical_minute(T, V, t)
+                got = priskp.shifts(T, V, t, ux, step_s=30.0) if ux > 0 else []
+                sh = [(round(c["ago"]), round(c["step"] / max(ux, 1e-12), 2), round(c["held"], 2)) for c in got]
+            R.append((s_open, vals, qa[jq], qb[jq], t - qt[jq], f, sh))
             t += STEP
         M.append({"ticker": ticker, "series": series, "close": close, "opened": opened, "won_yes": won_yes, "strike": strike, "R": R, "qt": qt, "qb": qb, "qa": qa})
     # each reading's own history: the series' previous 24 h, the same 3 minutes of the market, both sides
     H = {}
     for m in M:
-        for s_open, vals, _a, _b, _age, _f in m["R"]:
+        for s_open, vals, _a, _b, _age, _f, _sh in m["R"]:
             tt, bk = m["opened"] + s_open, min(4, int(s_open // 180))
             for side in ("yes", "no"):
                 for n in NAMES:
@@ -167,12 +172,12 @@ def build(job):
         got = {}
         log = []  # every reading's decision in the window (2026-11-22, the entry study): (seconds after the open, YES ask, NO ask, the five checks' fifths for YES, for NO; A anomaly, U unread)
         code = lambda v: "A" if v == "anomaly" else "U" if v == "unread" else str(v)
-        for s_open, vals, ya, yb, age, f in m["R"]:
+        for s_open, vals, ya, yb, age, f, sh in m["R"]:
             if not (WIN_LO * 60.0 <= s_open <= WIN_HI * 60.0) or age > STALE: continue
             tt = m["opened"] + s_open
             ask = {"yes": ya, "no": 1.0 - yb}
             cs = {s: "".join(code(state(tt, s_open, c, vals[s][c])) for c in CHECKS) for s in ("yes", "no")}
-            log.append((int(s_open), round(ask["yes"], 3), round(ask["no"], 3), cs["yes"], cs["no"], round(vals["yes"]["cushion"], 3), round(f["cz1"], 3)))  # the last two: the YES-view blended cushion and the 60-second-average cushion (negative = the spot is under the strike), for the exit studies
+            log.append((int(s_open), round(ask["yes"], 3), round(ask["no"], 3), cs["yes"], cs["no"], round(vals["yes"]["cushion"], 3), round(f["cz1"], 3), sh))  # the last two: the YES-view blended cushion and the 60-second-average cushion (negative = the spot is under the strike), for the exit studies
             if len(got) == 2: continue
             usable = [s for s in ("yes", "no") if 0.01 <= ask[s] <= 0.99 and not DEAD[0] <= ask[s] <= DEAD[1]]
             if not usable: continue

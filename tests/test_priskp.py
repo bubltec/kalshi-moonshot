@@ -133,3 +133,42 @@ def test_a_note_written_as_yaml_like_lines_reads_back_the_same():
     text = priskp.render(n)
     assert "verb: refuse" in text and "failing: [trend]" in text and "trend_fifth: anomaly" in text
     assert priskp.parse(text) == n
+
+
+def _steps(levels, per=60, hold_noise=0.0001, seed=3):
+    """A spot made of flat stretches at the given levels (index units), `per` seconds each at 1 tick a second, with a little noise."""
+    rnd = random.Random(seed)
+    T, V = [], []
+    for k, lv in enumerate(levels):
+        for i in range(per):
+            T.append(float(len(T)))
+            V.append(lv * (1.0 + rnd.gauss(0, hold_noise)))
+    return T, V
+
+
+def test_a_step_that_holds_for_three_minutes_is_a_shift():
+    T, V = _steps([100.0] * 30 + [97.0] * 30)  # an hour: 30 minutes at 100, then a step down to 97 that holds
+    got = priskp.shifts(T, V, T[-1], u=0.05)
+    assert len(got) == 1 and got[0]["dir"] == -1.0
+    assert 28 * 60 < got[0]["ago"] < 32 * 60 and abs(got[0]["step"] + 3.0) < 0.1 and got[0]["held"] > 0.9
+
+
+def test_a_spike_that_comes_back_is_not_a_shift():
+    T, V = _steps([100.0] * 25 + [104.0] * 2 + [100.0] * 33)
+    assert priskp.shifts(T, V, T[-1], u=0.05) == []
+
+
+def test_a_step_still_inside_its_hold_is_not_confirmed_yet():
+    T, V = _steps([100.0] * 58 + [97.0] * 2)
+    assert priskp.shifts(T, V, T[-1], u=0.05) == []
+
+
+def test_two_shifts_in_an_hour_are_both_found_newest_last():
+    T, V = _steps([100.0] * 15 + [103.0] * 15 + [99.0] * 30)
+    got = priskp.shifts(T, V, T[-1], u=0.05)
+    assert [g["dir"] for g in got] == [1.0, -1.0] and got[0]["ago"] > got[1]["ago"]
+
+
+def test_a_move_inside_the_noise_is_not_a_shift():
+    T, V = _steps([100.0] * 30 + [100.02] * 30)
+    assert priskp.shifts(T, V, T[-1], u=0.05) == []
