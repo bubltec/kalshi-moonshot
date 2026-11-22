@@ -53,16 +53,31 @@ def test_unit_vol_regime_wants_a_known_regime_under_the_ceiling(monkeypatch):
     assert ask("vol_regime", sp).ok is False and ask("vol_regime", spec()).ok is False
 
 
-def test_unit_cushion_wants_a_cushion_and_few_crossings(monkeypatch):
-    sp = spec(min_cushion_z=0.8, max_spot_crosses=4)
+def test_unit_cushion_wants_a_cushion_and_does_not_limit_crossings(monkeypatch):
+    sp = spec(min_cushion_z=0.8)
     monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 1.0, "crosses": 2})
     assert ask("cushion", sp).ok is True
     monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 0.5, "crosses": 2})
     assert ask("cushion", sp).ok is False
-    monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 1.0, "crosses": 4})
-    assert ask("cushion", sp).ok is False
+    monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 1.0, "crosses": 14})
+    got = ask("cushion", sp)
+    assert got.ok is True and "14 crossings" in got.why  # 2026-11-21: the crossings are a reading in the note, never a refusal
     monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: None)
     assert ask("cushion", sp).ok is False and ask("cushion", spec()).ok is False
+    assert not hasattr(sp, "max_spot_crosses")
+
+
+def test_integration_a_lane_file_that_still_sets_the_crossings_limit_loads_without_it(tmp_path, monkeypatch, caplog):
+    """Lane file -> module -> spec: the retired setting is dropped and logged, the cushion step still gates on the cushion, and an unknown setting is still refused."""
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    text = "[module.m]\nsteps=['price','cushion']\nmin_cushion_z=0.8\nmax_spot_crosses=4\n\n[lane.a]\nestimator='market'\nprice=[0.60,0.92]\nhours=[0.0,1.0]\nseries=['KXGOLD15M']\nmax_spread=0.05\nmin_volume=0\nbuy_module='m'\n"
+    with caplog.at_level("WARNING", logger="moonshot"):
+        sp = lanes.lane_specs_from(config.load(), text)["a"]
+    assert sp.min_cushion_z == 0.8 and "max_spot_crosses" in caplog.text
+    monkeypatch.setattr(variants, "snapshot_now", lambda *a, **k: {"z": 1.0, "crosses": 9})
+    assert ask("cushion", sp).ok is True
+    with pytest.raises(ValueError):
+        lanes.lane_specs_from(config.load(), text.replace("max_spot_crosses", "no_such_setting"))
 
 
 def test_unit_spike_refuses_a_side_that_just_ran(monkeypatch):
@@ -296,7 +311,7 @@ def test_integration_the_cushion_and_variety_steps_follow_the_perp_through_the_r
 
     ticks.history.clear()
     monkeypatch.setattr(variants.db, "reader", lambda *a, **k: (_ for _ in ()).throw(AssertionError("the tape must not be read in a buy decision")))
-    sp, now = spec(min_cushion_z=0.8, max_spot_crosses=4, skip_varieties=("G",)), 50_000.0
+    sp, now = spec(min_cushion_z=0.8, skip_varieties=("G",)), 50_000.0
     try:
         _fill(perpref.index_for_series("KXGOLD15M"), now, 100.0, 101.0)
         _fill(biquotefeed.index_for_series("KXGOLD15M"), now, 100.0, 99.0)

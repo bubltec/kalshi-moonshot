@@ -10,6 +10,13 @@ WITH THE PERP READINGS, on the same bets (what the lane's own settings would hav
   a skipped variety (G-no, A-yes) on the perp: n   4,   +8.63$, ahead 4, behind 0
   REFUSED in all                            : n  48,  -36.10$, ahead 36, behind 12
   STILL BOUGHT                              : n  84,  -32.90$, ahead 68, behind 16
+
+WITHOUT THE CROSSINGS LIMIT (removed 2026-11-21, user: "We don't want any of that"), perp readings:
+  cushion z under 0.8 on the perp           : n  20,  -10.92$, ahead 15, behind 5
+  a skipped variety (G-no, A-yes) on the perp: n  21,   +2.51$, ahead 18, behind 3   (G-no n  17,   -6.13$, ahead 14, behind 3)
+  REFUSED in all                            : n  41,   -8.41$, ahead 33, behind 8
+  STILL BOUGHT                              : n  91,  -60.59$, ahead 71, behind 20
+  with the variety skip gone too, only the cushion refuses: bought n 112,  -58.08$, ahead 89, behind 23
   (a refused bet leaves room for a later buy in the same market, which this does not count)
     KXBRENT15M-26NOV192245-45      no  paid 0.86 net  -8.90 | recorded z +1.02 A, on the perp z +0.91 crossings 5 variety G
     KXCOPPER15M-26NOV200930-30     yes paid 0.82 net  -8.66 | recorded z +0.92 F, on the perp z +1.01 crossings 4 variety G

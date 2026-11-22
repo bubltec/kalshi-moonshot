@@ -213,20 +213,18 @@ def vol_regime_step(ctx: Ctx, shot: LongShot) -> Check:
 
 @step("cushion")
 def cushion_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The spot's distance to the strike, in the market's own typical moves, is at least min_cushion_z, and the spot has crossed the strike fewer than max_spot_crosses times in five minutes (variants.snapshot_now). A cushion that cannot be read is a no."""
+    """The spot's distance to the strike, in the market's own typical moves, is at least min_cushion_z (variants.snapshot_now, on Kalshi's own price). A cushion that cannot be read is a no. The note also carries how many times the spot crossed the strike in five minutes, as a reading only: the limit on it (max_spot_crosses) was removed 2026-11-21 at the user's word."""
     from . import ticks as ticks_mod
     from . import variants
 
     spec = ctx.spec
-    if spec.min_cushion_z <= -90 and spec.max_spot_crosses <= 0:
-        return Check(False, "the lane sets no cushion or crossing limit (min_cushion_z, max_spot_crosses)")
+    if spec.min_cushion_z <= -90:
+        return Check(False, "the lane sets no cushion (min_cushion_z)")
     snap = variants.snapshot_now(ctx.s, shot.series, shot.side, shot.hours_to_close * 3600.0, now=ctx.now, strike=ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot))
     if snap is None:
         return Check(False, "the cushion cannot be read")
     if snap["z"] < spec.min_cushion_z:
         return Check(False, f"cushion z {snap['z']:+.2f} is under the lane's {spec.min_cushion_z:g}")
-    if spec.max_spot_crosses > 0 and snap["crosses"] >= spec.max_spot_crosses:
-        return Check(False, f"the spot crossed the strike {int(snap['crosses'])} times in five minutes (the lane buys under {spec.max_spot_crosses})")
     return Check(True, f"cushion z {snap['z']:+.2f}, {int(snap['crosses'])} crossings")
 
 
