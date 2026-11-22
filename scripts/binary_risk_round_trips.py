@@ -7,7 +7,8 @@ THE EXIT (commodity_exit as it is live; the steps call the bot's own functions):
 THE CHECKS (side view, market's own units): cushion (binaryrisk czb), trend (tr13), history (share of the last 30 minutes on the side's winning side), volatility (vr, unsigned), price (the side's mid now against up to 3 minutes ago, in the PRICE's typical minute: rms 5-second mid change x sqrt(12), read from 60 s of quotes on), pricedip (how far the mid is under its high of up to the last 5 minutes, in the same unit, negated: high = not dipping).
 STATE (CLAUDE.md rules 2 and 3): the reading against that series' own readings of the previous 24 h IN THE SAME 3 MINUTES OF THE MARKET (both sides, 100 needed), the cutoffs recomputed hourly: ANOMALY beyond the 1st/99th percentile, else its fifth 1 (lowest) to 5; UNREAD with short history. A check says NO in fifths 1-2, WEAK in fifth 3, YES in 4-5. An anomaly sits out. An unread check has no say.
 SETTINGS stated before the run, none tuned: fifths; 1 typical minute lower for a NO, half for a WEAK; the 5 s rest and 5c run are the lane's. Not covered: queue position, partial fills, the sale's own fill, the time_to_go wait's market recovery time (its 15 s default is used).
-Run: SPOT=0 scripts/cloud_job.sh scripts/binary_risk_round_trips.py"""
+2026-11-22 ADDED (user: "Yes", to treating a NO as no buy instead of pay less; chosen after seeing the price move hurt in studies/results/2026-11-21-risk-checks-model-own-bets-m10.txt): four refusal rules, each with the lane's own order when it does not refuse, never a lowered price: no_any5 (any of the five directional checks NO, fifths 1-2, or an anomaly: no order at that reading), no_any4 (the same on trend, history, price trend and price dip, the four that marked the losers; cushion left out), no_2of5 (two or more NO), no_weak5 (NO or WEAK, fifths 1-3). Weak is not priced lower in these. Run ONLY=base,no_any5,... to run a subset.
+Run: SPOT=0 scripts/cloud_job.sh scripts/binary_risk_round_trips.py [ONLY=base,no_any5,no_any4,no_2of5,no_weak5]"""
 import bisect, math, multiprocessing, os, time
 from datetime import datetime, timezone
 from kalshi_moonshot import binaryrisk as br, config, curverisk, curvevalue, db, pricevol
@@ -259,14 +260,24 @@ def build(job):
         if "anomaly" in xs or sum(1 for x in xs if x in (1, 2)) >= 3: return None
         return sum(1.0 if x in (1, 2) else 0.5 if x == 3 else 0.0 for x in xs)
 
-    RULES = {"base": lambda m, i, side: 0.0, "formula": formula, "formula_req": formula_req}
+    def refuse(names, weak_too=False, need=1):
+        """2026-11-22 (user: "Yes", to treating a NO as no buy instead of pay less): no order at this reading when `need` or more of `names` say NO (fifths 1-2; also WEAK, fifth 3, with weak_too) or any is an anomaly; otherwise the lane's own order, never a lowered price. The buy waits for a later reading."""
+        bad = (1, 2, 3) if weak_too else (1, 2)
+        def f(m, i, side):
+            xs = [state(m, i, n, side) for n in names]
+            return None if "anomaly" in xs or sum(1 for x in xs if x in bad) >= need else 0.0
+        return f
+
+    RULES = {"base": lambda m, i, side: 0.0, "formula": formula, "formula_req": formula_req,
+             "no_any5": refuse(DIRECT), "no_any4": refuse(("trend", "history", "price", "pricedip")), "no_2of5": refuse(DIRECT, need=2), "no_weak5": refuse(DIRECT, weak_too=True)}
+    if os.environ.get("ONLY"): RULES = {k: v for k, v in RULES.items() if k in os.environ["ONLY"].split(",")}
     for n in DIRECT:
-        RULES["req:" + n], RULES["move:" + n] = required(n), mover(n)
+        if not os.environ.get("ONLY"): RULES["req:" + n], RULES["move:" + n] = required(n), mover(n)
     out = []
     for m in M:
         for tag, first_k in (("any", 120), ("m5", 360), ("m10", 660), ("late", 780)):
             for rn, rule in RULES.items():
-                got = trade(m, rule, first_k, rn in ("base", "formula") and tag in ("m10", "late"))
+                got = trade(m, rule, first_k, rn in ("base", "formula", "no_any5", "no_any4") and tag in ("m10", "late"))
                 if got: out.append((tag, rn, m["ticker"], m["close"], *got))
     # the raw perp ticks and Kalshi quotes of this index's biggest formula losers and winners (from minute 10), so each check's reading can be recomputed by hand
     F = sorted([o for o in out if o[0] == "m10" and o[1] == "formula"], key=lambda o: o[8])
@@ -316,7 +327,7 @@ for tag, title in (("any", "THE FIRST BUY FROM MINUTE 1"), ("m5", "THE FIRST BUY
         for stt in (1, 2, 3, 4, 5, "anomaly", "unread"):
             print(f"    {str(stt):8s}: " + line([x for x in B if x[10][name] == stt]))
     print("\n  (b) and (c) EACH CHECK AS A RULE, against the lane's order on the same markets (a market with no bet counts 0)")
-    for rn in [f"{k}:{n}" for n in DIRECT for k in ("req", "move")] + ["formula", "formula_req"]:
+    for rn in [f"{k}:{n}" for n in DIRECT for k in ("req", "move")] + ["formula", "formula_req", "no_any5", "no_any4", "no_2of5", "no_weak5"]:
         V = RES.get((tag, rn), {})
         keys = set(base) | set(V)
         diff = [(V[k][8] if k in V else 0.0) - (base[k][8] if k in base else 0.0) for k in keys if (k in V) != (k in base) or (k in V and (V[k][4], V[k][5], V[k][6]) != (base[k][4], base[k][5], base[k][6]))]
@@ -327,7 +338,7 @@ for tag, title in (("any", "THE FIRST BUY FROM MINUTE 1"), ("m5", "THE FIRST BUY
             print(f"    {sh:8s}: change {sum((V[k][8] if k in V else 0.0) - (base[k][8] if k in base else 0.0) for k in ks):+8.2f}$ on {len(ks)} markets | " + line([V[k] for k in ks if k in V]))
 import json
 from pathlib import Path
-rows = [{"universe": r[0], "rule": r[1], "ticker": r[2], "close": r[3], "side": r[4], "price": r[5], "minute": r[6], "step": r[7], "net": r[8], "hold": r[9], "states": r[10], **r[12]} for (tg, rn), d in RES.items() if rn in ("base", "formula") and tg in ("m10", "late") for r in d.values()]
+rows = [{"universe": r[0], "rule": r[1], "ticker": r[2], "close": r[3], "side": r[4], "price": r[5], "minute": r[6], "step": r[7], "net": r[8], "hold": r[9], "states": r[10], **r[12]} for (tg, rn), d in RES.items() if rn in ("base", "formula", "no_any5", "no_any4") and tg in ("m10", "late") for r in d.values()]
 Path(os.environ.get("DATA_DIR", "/data"), "round_trip_bets.json").write_text(json.dumps(rows))
 import gzip
 with gzip.open(Path(os.environ.get("DATA_DIR", "/data"), "round_trip_raw.json.gz"), "wt") as fh: json.dump(RAW, fh)
