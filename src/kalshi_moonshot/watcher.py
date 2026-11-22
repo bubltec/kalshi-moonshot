@@ -783,10 +783,9 @@ class ProfitWatcher:
         return wavetop.spot_read(got[0], got[1], now, t.shock_ref, t.side) if got and got[0] else None
 
     def _sell_wave_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
-        """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "a resting sale at about +40c for spikes", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid:
-        1. the bid is RESTING (0.40) over the price paid;
-        2. the staircase: the bid's swings are cut at rev = max(TICK, REV_K x the bid's typical minute x sqrt(max(left, 60) / 60)); the first time the bid falls under the previous swing low (a lower low: the climb is done) it is sold, if the bet has ever been ahead after both fees: at a gain, or at a small loss (the backup that avoids a total loss);
-        3. from HIGH (0.80) up, a bet that is ahead is sold when the chance of losing it (wavetop.p_lose: the spot's cushion in its own typical moves against the time left) is at least what the sale gives up over holding, 1 - bid + fee.
+        """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid:
+        1. the staircase: the bid's swings are cut at rev = max(TICK, REV_K x the bid's typical minute x sqrt(max(left, 60) / 60)); the first time the bid falls under the previous swing low (a lower low: the climb is done) it is sold, if the bet has ever been ahead after both fees: at a gain, or at a small loss (the backup that avoids a total loss);
+        2. from HIGH (0.80) up, a bet that is ahead is sold when the chance of losing it (wavetop.p_lose: the spot's cushion in its own typical moves against the time left) is at least what the sale gives up over holding, 1 - bid + fee.
         Reads the quote and tick memory only."""
         if t.bought_ts <= 0 or bid <= 0 or t.entry <= 0:
             return None
@@ -811,9 +810,7 @@ class ProfitWatcher:
                 t.wave_last_low, t.wave_dir, t.wave_hi = t.wave_lo, 1, bid
         reason, kind = "", ""
         lose = None
-        if gain >= wavetop.RESTING - 1e-9:
-            reason, kind = f"wave take: the bid {bid:.2f} is {gain:+.2f} over the {t.entry:.2f} paid, the resting sale at +{wavetop.RESTING:.2f} fills", "resting"
-        elif t.wave_best_net > 0 and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
+        if t.wave_best_net > 0 and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
             where = f"a gain of {net * 100:.1f}c a contract" if net > 0 else f"a small loss of {-net * 100:.1f}c a contract (the bet had been ahead by {t.wave_best_net * 100:.1f}c)"
             reason, kind = f"wave take: the bid {bid:.2f} fell under its last swing low {t.wave_last_low:.2f} (swings of {rev:.3f}, {left:.0f} s left): the climb is done, sold at {where}", "lower low"
         elif net > 0 and bid >= wavetop.HIGH - 1e-9:

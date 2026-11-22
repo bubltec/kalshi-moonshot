@@ -370,7 +370,7 @@ def test_unit_the_spot_reading_and_the_chance_of_losing():
     assert wavetop.p_lose(-1.0, 1.0, 60.0) > 0.8
 
 
-def test_integration_the_staircase_sells_the_first_lower_low_ahead_and_the_resting_forty(tmp_path, monkeypatch, mem):
+def test_integration_the_staircase_sells_the_first_lower_low_ahead_and_no_fixed_40c_line(tmp_path, monkeypatch, mem):
     w, t, close = take_target(tmp_path, monkeypatch, 0.30, unit=0.20)  # a reversal of 0.25 x 0.20 x sqrt(60 / 60) = 0.05 at a minute left
     ask = asker(w, t, close)
     for bid in (0.28, 0.36, 0.41, 0.35, 0.41, 0.48, 0.41):  # a climb, a pullback of 0.06, a bounce of 0.06 (the low 0.35 is confirmed), a higher high, a pullback
@@ -378,8 +378,8 @@ def test_integration_the_staircase_sells_the_first_lower_low_ahead_and_the_resti
     assert ask(0.36, 60) is None  # a higher low than... it is still above the last swing low 0.35
     why = ask(0.34, 60)
     assert why and why.startswith("wave take") and "last swing low 0.35" in why and "a gain of" in why and "swings of 0.050" in why
-    t.wave_peak_bid = 0.0
-    assert ask(0.70, 50) and "resting sale at +0.40" in ask(0.70, 49)
+    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
+    assert ask(0.70, 50) is None  # +0.40 and over is no sale by itself (user, 2026-11-22: the 40c line is out): only the staircase and the high zone sell
 
 
 def test_integration_the_backup_accepts_a_small_loss_on_a_bet_that_was_ahead(tmp_path, monkeypatch, mem):
