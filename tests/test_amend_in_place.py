@@ -113,3 +113,31 @@ def test_a_refused_amend_of_the_sale_cancels_and_places_the_new_ask():
 
 def test_the_followed_buy_still_rests_where_the_runner_says():
     assert runner.REST_FOLLOW_MAX == 3  # the cap on moves stays: each is a request, whichever call makes it
+
+
+# ---- the resting orders go out on the tick grid (2026-11-23): a live GOLD NO buy resting at 0.894 went out as a YES ask of 0.106, off the cent grid of the 10c to 90c zone of the tapered ladder, and Kalshi refused it with invalid_price ----
+def test_unit_a_book_price_never_gets_worse_than_the_price_meant():
+    from kalshi_moonshot.kalshi import book_price
+
+    assert book_price(0.106, "ask") == 0.11 and book_price(0.106, "bid") == 0.10  # a NO buy at 0.894 is an ask at 0.106: up to 0.11 = NO 0.89, never over the 0.894 meant
+    assert book_price(0.143, "bid") == 0.14 and book_price(0.143, "ask") == 0.15  # a YES buy at 0.143 down to 0.14
+    assert book_price(0.093, "bid") == book_price(0.093, "ask") == 0.093  # under 10c a tenth of a cent is the step: on the grid already
+    assert book_price(0.5, "bid") == book_price(0.5, "ask") == 0.5
+
+
+def test_integration_the_resting_buy_sale_and_amend_bodies_are_on_the_grid_for_both_sides():
+    c, calls = client_with(lambda path, body: {"order_id": "O", "remaining_count": "1.00"})
+    c.buy_resting("KXGOLD15M-1", "no", 6.0, 0.894, 5.0)  # the refused one
+    assert calls[-1][2]["side"] == "ask" and calls[-1][2]["price"] == "0.1100"  # YES ask 0.11 = the NO buy at 0.89, not over the 0.894 meant
+    c.buy_resting("KXGOLD15M-1", "yes", 6.0, 0.143, 5.0)
+    assert calls[-1][2]["side"] == "bid" and calls[-1][2]["price"] == "0.1400"
+    c.sell_resting("KXGOLD15M-1", "no", 6.0, 0.896, 5.0)  # a NO sale is a YES bid at 0.104: down to 0.10 = NO 0.90, never under the 0.896 asked
+    assert calls[-1][2]["side"] == "bid" and calls[-1][2]["price"] == "0.1000"
+    c.sell_resting("KXGOLD15M-1", "yes", 6.0, 0.613, 5.0)  # a YES sale at 0.613 up to 0.62
+    assert calls[-1][2]["side"] == "ask" and calls[-1][2]["price"] == "0.6200"
+    c.amend_resting("O1", "KXGOLD15M-1", "no", "buy", 0.894, 6.0)
+    assert calls[-1][2]["side"] == "ask" and calls[-1][2]["price"] == "0.1100"
+    c.amend_resting("O2", "KXGOLD15M-1", "no", "sell", 0.896, 6.0)
+    assert calls[-1][2]["side"] == "bid" and calls[-1][2]["price"] == "0.1000"
+    c.buy_resting("KXBTC15M-1", "no", 6.0, 0.26, 5.0)  # a price already on the grid does not move
+    assert calls[-1][2]["price"] == "0.7400"

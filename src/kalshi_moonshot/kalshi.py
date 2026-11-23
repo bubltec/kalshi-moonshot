@@ -39,6 +39,11 @@ def snap_price(price: float, up: bool = False) -> float:
     k = math.ceil(n - 1e-6) if up else math.floor(n + 1e-6)
     return round(k * step, 4)
 
+def book_price(yes_price: float, book_side: str) -> float:
+    """The YES-book price a resting order is sent at, on Kalshi's tick grid (2026-11-23: a live GOLD NO buy resting at an ask minus a cent, 0.894 on a market whose ask sat at a tenth of a cent, went out as a YES price of 0.106, off the cent grid of the 10c to 90c zone, and was refused with `invalid_price`; the immediate orders already snapped, the resting ones did not). The price never gets worse than the one meant: a bid (a YES buy or a NO sell) rounds DOWN, an ask (a YES sell or a NO buy) rounds UP."""
+    return snap_price(yes_price, up=(book_side == "ask"))
+
+
 class KalshiError(RuntimeError):
     pass
 
@@ -519,7 +524,7 @@ class KalshiClient:
             "client_order_id": client_order_id or str(uuid.uuid4()),
             "side": "bid" if side == "yes" else "ask",
             "count": f"{count:.2f}",
-            "price": f"{price if side == 'yes' else 1.0 - price:.4f}",
+            "price": f"{book_price(price if side == 'yes' else 1.0 - price, 'bid' if side == 'yes' else 'ask'):.4f}",
             "time_in_force": "good_till_canceled",
             "expiration_time": int(time.time() + seconds),
             "post_only": post_only,
@@ -544,7 +549,7 @@ class KalshiClient:
             "client_order_id": client_order_id or str(uuid.uuid4()),
             "side": "ask" if side == "yes" else "bid",
             "count": f"{count:.2f}",
-            "price": f"{price if side == 'yes' else 1.0 - price:.4f}",
+            "price": f"{book_price(price if side == 'yes' else 1.0 - price, 'ask' if side == 'yes' else 'bid'):.4f}",
             "time_in_force": "good_till_canceled",
             "expiration_time": int(time.time() + seconds),
             "post_only": post_only,
@@ -563,10 +568,11 @@ class KalshiClient:
         `side` is "yes" or "no" and `action` "buy" or "sell", as the order was placed; the call itself names the YES leg only: a YES buy and a NO sell are bids at the YES price, a NO buy and a YES sell are asks at it (the way buy_resting and sell_resting send them). The order keeps its id and its expiry; `seconds` gives it a new one that long from now. A price change puts the order at the back of the queue, and an amend that changes nothing is refused (AMEND_ORDER_NO_OP), so a caller moves an order only to a different price. Returns Kalshi's answer with the order's id filled in. Raises KalshiError when the exchange refuses (the order filled, expired or was cancelled meanwhile, or the call is not supported there): the caller then falls back to cancel and place.
         """
         yes_price = price if side == "yes" else 1.0 - price
+        book_side = "bid" if (side == "yes") == (action == "buy") else "ask"
         body: dict[str, Any] = {
             "ticker": ticker,
-            "side": "bid" if (side == "yes") == (action == "buy") else "ask",
-            "price": f"{yes_price:.4f}",  # as buy_resting sends it
+            "side": book_side,
+            "price": f"{book_price(yes_price, book_side):.4f}",  # as buy_resting sends it, on the tick grid
             "count": f"{count:.2f}",
         }
         if seconds is not None:
