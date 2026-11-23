@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .digest import EXIT_SLIP, _won
+from .manualrest import is_rest_fill
 from .strategy import fee_per_contract as fee
 
 DELAY_SECONDS = 24 * 3600.0
@@ -49,6 +50,8 @@ def _profit(r: Any) -> float | None:
         return None
     cost = r["ask"] + fee(r["ask"])
     if r["exit_price"] is not None:
+        if is_rest_fill(r["exit_reason"]):
+            return r["exit_price"] / cost - 1  # a resting order fills at its own price: no slip and no taker fee
         return (r["exit_price"] - EXIT_SLIP - fee(r["exit_price"])) / cost - 1
     return _won(r) / cost - 1
 

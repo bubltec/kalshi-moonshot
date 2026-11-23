@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .manualrest import sale_fee
 from .strategy import fee_per_contract
 
 
@@ -58,7 +59,7 @@ def summarize(rows: list[Any]) -> dict[str, Any]:
     def pnl_one(r: Any) -> float:
         entry = r["ask"] + fee_per_contract(r["ask"])
         if _get(r, "exit_price") is not None:
-            return float(r["exit_price"]) - fee_per_contract(float(r["exit_price"])) - entry
+            return float(r["exit_price"]) - sale_fee(float(r["exit_price"]), _get(r, "exit_reason")) - entry  # a resting fill paid no fee
         return _yes(r) - entry
 
     pnl = sum(pnl_one(r) for r in bets)

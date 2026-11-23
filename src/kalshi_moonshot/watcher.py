@@ -38,6 +38,7 @@ from . import (
     perpref,
     pricevol,
     quoteshock,
+    restsell,
     runner,
     sellchain,
     settlement,
@@ -96,6 +97,13 @@ class SellSignal(NamedTuple):
     ticker: str
     lane: str
     why: str
+
+
+class RestOrder(NamedTuple):
+    """A live resting sale's order work for the sell worker (restsell.py): "sync" places the order or amends it to the price the tick asked for; "filled" books a sale the account's fills completed. The tick only queues it: the order calls happen on the sell thread, in order with the sales."""
+    ticker: str
+    lane: str
+    op: str
 
 
 def perp_index(series: str) -> str | None:
@@ -272,6 +280,10 @@ class Target:
     cur_bid: float = 0.0  # the latest bid and the opposite side's ask, from the socket
     cur_other_ask: float = 0.0
     history: deque = field(default_factory=lambda: deque(maxlen=400))
+    wave_rest_share: float = 0.0  # lane field wave_rest_share: a gain-side wave sale rests at the ask for this share of the time left (restsell.py); 0 = off
+    rest: Any = None  # the resting gain-side sale now working (restsell.RestSell), None = none
+    rest_live: bool = False  # the lane places real orders, so the rest is a real post-only sell placed by the sell thread
+    cur_ask: float = 0.0  # the held side's ask on the latest tick
 
 
 def arm_gain(t: Target) -> float:
@@ -367,6 +379,10 @@ class ProfitWatcher:
     # ---- socket side: must be fast and never raise ----
     def on_event(self, e: dict[str, Any]) -> None:
         if e.get("kind") == "fill":
+            try:
+                self._rest_fill_event(e)
+            except Exception:
+                log.warning("watcher: a fill on the socket could not be matched to a resting sale", exc_info=True)
             self._on_fill(e)
             return
         if e.get("kind") in ("index", "index_fast") and e.get("index_id") and e.get("value"):
@@ -400,6 +416,7 @@ class ProfitWatcher:
             bid = side_bid(t.side, e["bid"], e["ask"])
             t.cur_bid = bid
             t.cur_other_ask = (1.0 - float(e["bid"])) if t.side == "yes" else float(e["ask"])
+            t.cur_ask = restsell.side_ask(t.side, e["bid"], e["ask"])
             t.history.append((now, bid))
             if bid > 0:
                 t.low = min(t.low, bid)
@@ -409,11 +426,73 @@ class ProfitWatcher:
                 t.stop_ref = min(t.entry, bid)  # hand-placed: measure the stop from what it could be sold for, not the ask paid (the spread is not a loss)
             self._track_peak(t, bid, now)
             key = (t.ticker, t.lane)
+            if t.rest is not None and key not in self._inflight:
+                ended = self._rest_tick(t, bid, now)  # a resting gain-side sale: filled, ended, or moved to the new ask (memory only; a live order is moved by the sell thread)
+                if ended:
+                    self._inflight.add(key)
+                    self._queue_sell(SellSignal(t.ticker, t.lane, ended))
+                    continue
             fast = self._fast_crash(t, bid)
             reason = self._stop_hit(t, bid, now) or fast or take_profit_hit(t.entry, bid, t.x, t.at) or self._unstable_hit(t, bid, now) or self._risk_quote_hit(t, bid, now)
             if reason and key not in self._inflight:
+                reason = self._rest_gate(t, reason, bid, now)  # a gain-side wave sale may rest at the ask instead (lane field wave_rest_share); any other sale withdraws a resting one
+            if reason and key not in self._inflight:
                 self._inflight.add(key)
                 self._queue_sell(SellSignal(t.ticker, t.lane, reason))
+
+    # ---- the resting gain-side sale (restsell.py, lane field wave_rest_share): decided on the tick from memory; a live order is placed, amended and cancelled by the sell thread ----
+    def _rest_tick(self, t: Target, bid: float, now: float) -> str | None:
+        """One tick on a resting sale: the reason to sell with when it filled (paper) or ended, else None. A move of the ask moves the order (paper: in memory; live: the sell thread amends it)."""
+        r = t.rest
+        what, why = restsell.tick(r, bid, t.cur_ask, t.entry, now)
+        if what == "moved":
+            log.info("resting sale %s %s: %s [%s]", t.ticker, t.lane, why, "live: the order is amended" if r.live else "paper")
+            if r.live and not r.pending:
+                r.pending = True
+                self._jobs.put(RestOrder(t.ticker, t.lane, "sync"))
+            return None
+        if what == "filled":
+            log.info("resting sale %s %s: filled at %.3f (the bid reached it) after %.0fs of its %.0fs window", t.ticker, t.lane, r.price, now - r.started, r.window)
+            return why
+        if what == "ended":
+            log.info("resting sale %s %s: %s", t.ticker, t.lane, why[-260:])
+            return why
+        return None
+
+    def _rest_gate(self, t: Target, reason: str, bid: float, now: float) -> str | None:
+        """A sale the tick decided: None when it rests (a gain-side wave sale that is a gain at the ask, on a lane with wave_rest_share), else the reason to sell at the bid with. A sale that is not the resting one's kind withdraws a resting sale: the sell thread cancels a live order before it sells."""
+        r = t.rest
+        if r is not None:
+            if restsell.keeps(r, reason, t.entry):
+                return None
+            r.done = r.done or "ended"
+            log.info("resting sale %s %s: withdrawn, another exit decided: %s", t.ticker, t.lane, reason[:200])
+            return restsell.stopped_reason(r, now, reason)
+        got = restsell.start(t.wave_rest_share, reason, t.cur_ask, t.entry, now, t.close_ts, CURVE_MIN_LEFT, live=t.rest_live) if t.close_ts > 0 else None
+        if got is None:
+            return reason
+        t.rest = got
+        log.info("resting sale %s %s: rests at the ask %.3f (the bid %.2f) for up to %.0fs (%g x %.0fs left) instead of taking the bid [%s]: %s", t.ticker, t.lane, got.price, bid, got.window, got.share, got.left0, "live" if got.live else "paper", reason[:200])
+        if got.live:
+            got.pending = True
+            self._jobs.put(RestOrder(t.ticker, t.lane, "sync"))
+        return None
+
+    def _rest_fill_event(self, e: dict[str, Any]) -> None:
+        """The account's fill on the socket: a fill of a live resting sale's order is counted, and a complete one is handed to the sell thread to book. Memory only; never raises."""
+        oid = str(e.get("order_id") or "")
+        if not oid:
+            return
+        with self._lock:
+            hit = next((t for t in self.targets.values() if t.rest is not None and oid in t.rest.ids), None)
+        if hit is None:
+            return
+        r = hit.rest
+        r.filled += float(e.get("count") or 0.0)
+        if r.count > 0 and r.filled >= r.count - 1e-6 and not r.done:
+            r.done = "filled"
+            self._inflight.add((hit.ticker, hit.lane))
+            self._jobs.put(RestOrder(hit.ticker, hit.lane, "filled"))
 
 
 
@@ -618,7 +697,10 @@ class ProfitWatcher:
             if got is sellchain.HOLD:
                 return None
             if got:
-                return sellchain.tagged(got, t.sell_chain, t.sell_module, name)
+                why = sellchain.tagged(got, t.sell_chain, t.sell_module, name)
+                if t.rest is not None and restsell.keeps(t.rest, why, t.entry):
+                    continue  # the resting sale (restsell.py) already is this gain-side sale: the walk goes on, so a later step's other sale (the give-up, a loss sale) can still withdraw it
+                return why
         return None
 
     def _sell_never_ahead(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
@@ -1438,6 +1520,7 @@ class ProfitWatcher:
                 held.value_sale_premium, held.value_after_flip = spec.value_sale_premium, spec.value_after_flip
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
+                held.wave_rest_share, held.rest_live = spec.wave_rest_share, s.is_live(lane, ticker.split("-")[0])  # a gain-side wave sale rests at the ask (restsell.py); a live lane's rest is a real order
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.risk_time_to_go, held.risk_time_to_go_chance, held.risk_time_to_go_wait_share = spec.curve_risk_time_to_go, spec.curve_risk_time_to_go_chance, spec.curve_risk_time_to_go_wait_share
                 held.risk_late_tight, held.risk_late_tight_share, held.risk_late_tight_live = spec.curve_risk_late_tight, spec.curve_risk_late_tight_share, spec.curve_risk_late_tight_live
@@ -1710,6 +1793,20 @@ class ProfitWatcher:
             side = row["side"] or "yes"
             with self._lock:
                 tk = self.targets.get((ticker, lane))
+            rest_px = manualrest.rest_fill_price(why)
+            if tk is not None and tk.rest is not None and rest_px is None and self._rest_withdraw(s, store, book, row, tk):
+                return  # the live resting sale had filled in full before it could be withdrawn: booked as its fill, nothing left to sell
+            if rest_px is not None:
+                # A paper resting sale the bid came up to (restsell.tick): booked at the order's own price through the paper exit, which reads the price from the reason (manualrest.rest_fill_price): no taker fee, no slip, none of the taker sale's checks (the fill has happened).
+                if tk is not None:
+                    tk.rest = None
+                if s.is_live(lane, ticker.split("-")[0]):
+                    log.warning("watcher: a resting-sale fill reason reached the taker sale path on a live lane (%s %s); a live fill is booked from the account's fills: nothing sent", ticker, lane)
+                    return
+                line = runner.exit_position(s, book, store, row, rest_px, why + " [socket]")
+                log.info("watcher: %s", line)
+                self.sold.append(line)
+                return
             tick_bid = tk.last_bid if (tk is not None and tk.last_ts and time.time() - tk.last_ts < 5.0 and tk.last_bid > 0) else 0.0  # the bid of the latest socket tick, the side the bet holds
             from_tick = tick_bid > 0 and not s.is_live(lane, ticker.split("-")[0])
             if from_tick:
@@ -1832,12 +1929,147 @@ class ProfitWatcher:
         if filled < pos.count - 0.005:
             self._back_off(ticker, manual.LANE)
 
+    # ---- the live resting sale's orders (restsell.py): on the sell thread, in order with the sales, never on the tick ----
+    def _rest_fills(self, book: Any, t: Target, r: Any) -> tuple[float, float, float]:
+        """(contracts, proceeds, fee) a live resting sale's orders filled: the account's fills list (one read on the order side, after the orders, as a resting buy reconciles), or what the socket reported at the order's price when the list trails it (a maker's fill, no fee)."""
+        from types import SimpleNamespace
+
+        filled, spent, fee = runner._own_fills(book, SimpleNamespace(side=t.side, ticker=t.ticker), set(r.ids), r.started)
+        proceeds = spent - fee  # _own_fills adds the fee to the price paid: a sale's proceeds are the price alone
+        if r.filled > filled + 1e-9:
+            proceeds += (r.filled - filled) * r.price
+            filled = r.filled
+        return filled, proceeds, fee
+
+    def _rest_record(self, s: Settings, store: Store, t: Target, r: Any, filled: float, proceeds: float, fee: float) -> None:
+        store.add_order(ticker=t.ticker, env=s.env, count=r.count, price=r.price, fill_count=filled, cost_usd=-(proceeds - fee), fee_usd=fee, order_id=r.order_id, side="sell", contract=t.side)
+
+    def _rest_withdraw(self, s: Settings, store: Store, book: Any, row: Any, t: Target) -> bool:
+        """Withdraw the resting sale before another sale of the same contracts. Paper: forgotten. Live: the order is cancelled and a fill that beat the cancel is recorded, so the sale that follows sells only what is left. True when it had filled in full (booked as the resting fill: nothing is left to sell)."""
+        r, t.rest = t.rest, None
+        if r is None or not r.live or not r.order_id:
+            return False
+        try:
+            book.cancel_order(r.order_id)
+            log.info("resting sale %s %s: order %s at %.3f cancelled before the sale at the bid", t.ticker, t.lane, r.order_id, r.placed)
+        except KalshiError as exc:
+            log.info("resting sale %s %s: the cancel of %s failed (%s); it expires at the end of its window", t.ticker, t.lane, r.order_id, exc)
+        filled, proceeds, fee = self._rest_fills(book, t, r)
+        if filled <= 0:
+            return False
+        self._rest_record(s, store, t, r, filled, proceeds, fee)
+        if filled < r.count - 1e-6:
+            log.info("resting sale %s %s: %g of %g filled at the ask before the cancel; the rest is sold at the bid", t.ticker, t.lane, filled, r.count)
+            return False
+        with runner._EXIT_LOCK:
+            store.mark_exited(t.ticker, proceeds / filled, restsell.filled_reason(r, time.time()), t.lane, side=t.side)
+        log.info("resting sale %s %s: had filled in full at %.3f before the cancel", t.ticker, t.lane, proceeds / filled)
+        return True
+
+    def _rest_order(self, job: RestOrder) -> None:
+        """A live resting sale's order work: "sync" places the post-only sell at the price the tick asked for, or amends it there in place (Kalshi's amend; cancel and place for what is left, keeping the deadline, when the amend is refused); "filled" books the sale the account's fills completed."""
+        with self._lock:
+            t = self.targets.get((job.ticker, job.lane))
+        r = t.rest if t is not None else None
+        if r is None or t is None:
+            return
+        s = self.get_settings()
+        store = self.store_factory()
+        book = self._book(job.lane)
+        if job.op == "filled":
+            try:
+                row = next((x for x in store.open_bets() if x["ticker"] == t.ticker and (x["lane"] or "moonshot") == t.lane), None)
+                if row is not None:
+                    filled, proceeds, fee = self._rest_fills(book, t, r)
+                    self._rest_record(s, store, t, r, filled, proceeds, fee)
+                    why = restsell.filled_reason(r, time.time())
+                    with runner._EXIT_LOCK:
+                        store.mark_exited(t.ticker, proceeds / filled if filled > 0 else r.price, why, t.lane, side=t.side)
+                    line = f"sold {filled:g}/{r.count:g} {t.ticker} resting at {r.price:.3f}, fee ${fee:.4f}. {why}"
+                    log.info("watcher: %s", line)
+                    self.sold.append(line)
+                t.rest = None
+            finally:
+                self._inflight.discard((t.ticker, t.lane))
+            return
+        r.pending = False
+        if r.done:
+            return
+        now = time.time()
+        life = r.deadline - now
+        if life < 1.0:
+            return  # the window is over: the next tick takes the bid
+        if not r.order_id:
+            count = round(store.net_contracts(t.ticker, s.env), 2)
+            if count <= 0:
+                log.info("resting sale %s %s: the books hold no contracts to rest a sale for; withdrawn", t.ticker, t.lane)
+                t.rest = None
+                return
+            try:
+                resp = book.sell_resting(t.ticker, t.side, count, r.price, life + 1.0)
+                oid = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
+                if not oid:
+                    raise KalshiError("Kalshi named no order")
+            except KalshiError as exc:  # a post-only sell the bid has already reached is refused ("post only cross"): the bid is taken, as before
+                r.done = "ended"
+                why = restsell.ended_reason(r, now, t.cur_bid, f"the resting order was refused ({str(exc)[:80]})")
+                log.info("resting sale %s %s: the post-only sell at %.3f was refused (%s); the bid is taken", t.ticker, t.lane, r.price, exc)
+                if (t.ticker, t.lane) not in self._inflight:
+                    self._inflight.add((t.ticker, t.lane))
+                    self._queue_sell(SellSignal(t.ticker, t.lane, why))
+                return
+            r.order_id, r.placed, r.count = oid, r.price, count
+            r.ids.append(oid)
+            log.info("resting sale %s %s: post-only sell %s for %g %s resting at %.3f, expires with its window in %.0fs", t.ticker, t.lane, oid, count, t.side, r.price, life)
+        elif abs(r.price - r.placed) >= restsell.MOVE:
+            want = r.price
+            try:
+                book.amend_resting(r.order_id, t.ticker, t.side, "sell", want, round(r.count - r.base, 2))  # the order's total (what it filled plus what still rests); its expiry is kept
+                log.info("resting sale %s %s: order %s amended in place from %.3f to %.3f (the ask moved)", t.ticker, t.lane, r.order_id, r.placed, want)
+                r.placed = want
+            except KalshiError as exc:
+                log.info("resting sale %s %s: the amend of %s to %.3f was refused (%s); cancelling and placing again", t.ticker, t.lane, r.order_id, want, exc)
+                try:
+                    book.cancel_order(r.order_id)
+                except KalshiError as exc2:
+                    log.info("resting sale %s %s: the cancel of %s failed (%s)", t.ticker, t.lane, r.order_id, exc2)
+                left = round(r.count - r.filled, 2)
+                if left <= 0:
+                    return  # it filled meanwhile: the fill on the socket books it
+                try:
+                    resp = book.sell_resting(t.ticker, t.side, left, want, life + 1.0)  # the original deadline is kept
+                    oid = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
+                except KalshiError as exc3:
+                    oid = ""
+                    log.info("resting sale %s %s: placing again at %.3f was refused (%s)", t.ticker, t.lane, want, exc3)
+                if not oid:
+                    r.done = "ended"
+                    if (t.ticker, t.lane) not in self._inflight:
+                        self._inflight.add((t.ticker, t.lane))
+                        self._queue_sell(SellSignal(t.ticker, t.lane, restsell.ended_reason(r, now, t.cur_bid, "the order could not be moved")))
+                    return
+                r.base, r.order_id, r.placed = r.filled, oid, want
+                r.ids.append(oid)
+                log.info("resting sale %s %s: placed again as %s at %.3f for %g", t.ticker, t.lane, oid, want, left)
+        if abs(r.price - r.placed) >= restsell.MOVE and not r.pending:  # the ask moved again while the order was being sent
+            r.pending = True
+            self._jobs.put(RestOrder(t.ticker, t.lane, "sync"))
+
     def _run_sells(self) -> None:
         while not self._stop.is_set():
             try:
-                ticker, lane, why = self._jobs.get(timeout=1.0)
+                item = self._jobs.get(timeout=1.0)
             except queue.Empty:
                 continue
+            if isinstance(item, RestOrder):
+                try:
+                    self._rest_order(item)
+                except Exception:
+                    log.exception("watcher: resting sale order work on %s failed", item.ticker)
+                    if item.op == "filled":
+                        self._inflight.discard((item.ticker, item.lane))
+                continue
+            ticker, lane, why = item
             try:
                 self._sell(ticker, lane, why)
             except Exception:

@@ -18,8 +18,8 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .manualrest import sale_fee
 from .store import Store
-from .strategy import fee_per_contract
 
 EXCHANGE_TZ = "America/New_York"
 
@@ -70,7 +70,7 @@ def _listed_close(row: Any) -> float:
 def trades(store: Store) -> list[Trade]:
     """Finished sized bets, oldest first. Open bets are not trades yet."""
     rows = store.db.execute(
-        """SELECT ticker, lane, side, mode, contracts, stake_usd, outcome, exit_price, exit_ts,
+        """SELECT ticker, lane, side, mode, contracts, stake_usd, outcome, exit_price, exit_reason, exit_ts,
                   close_time, settled_ts, ts, lane_ver
            FROM decisions
            WHERE action='bet' AND stake_usd IS NOT NULL AND contracts > 0
@@ -80,7 +80,7 @@ def trades(store: Store) -> list[Trade]:
     for r in rows:
         stopped = r["exit_price"] is not None
         if stopped:
-            returned = r["contracts"] * (r["exit_price"] - fee_per_contract(r["exit_price"]))
+            returned = r["contracts"] * (r["exit_price"] - sale_fee(r["exit_price"], r["exit_reason"]))  # a resting fill paid no fee
         else:
             returned = float(r["contracts"]) if r["outcome"] == (r["side"] or "yes") else 0.0
         out.append(Trade(
