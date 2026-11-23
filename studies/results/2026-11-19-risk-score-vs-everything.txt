@@ -1,7 +1,0 @@
-BOUGHT                                       n   548 | net per $1 staked -0.105 | win 68%
-TURNED DOWN (not bought)                     n   531 | net per $1 staked -0.053 | win 70%
-by score: risk 31-40%                        n   372 | net per $1 staked -0.053 | win 70%
-by score: risk 41-50%                        n    12 | net per $1 staked -0.402 | win 42%
-by score: risk <=30%                         n    72 | net per $1 staked -0.015 | win 81%
-by score: risk >50%                          n     1 | net per $1 staked -1.022 | win 0%
-every eligible side (price band 0.60-0.85)   n  1079 | net per $1 staked -0.080 | win 69%

@@ -1,4 +1,0 @@
-readings 1143 from 631 markets (10 one-minute moves each)
-typical minute / real one-minute rms: median 1.03, quartiles 0.87 to 1.27, 5th 0.67, 95th 1.78, share over 1.25: 26%, share under 0.8: 16%
-DONE
-	

@@ -1,9 +1,0 @@
-One bet, replayed on its own taped quotes: scripts/late_take_replay.py, run on the host 2026-11-14 about 16:15 ET.
-Question: would the profit take's late cap have cashed the SOL NO that lost at the bell?
-An illustration on one bet, not a study. Fee on both legs. The slope look back is 8% of the time left, as live.
-
-KXSOL15M-26NOV141530-30 no bought at 0.78 (0.792 with the fee, room 0.208); 897 quotes; close 1794688200
-  the clock's bar alone (live): no profit sale
-  with the late cap: sells at 0.91 with 75s left, +0.116 a contract (typical minute 0.171)
-
-Live result: held to settlement, lost $26.50 (33.98 contracts). With the cap: about +$3.94.

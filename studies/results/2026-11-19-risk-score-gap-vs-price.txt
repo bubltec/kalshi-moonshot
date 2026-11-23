@@ -1,4 +1,0 @@
-a  gap under 0 (score at or below the price)   n  559 | mean gap -0.107 | win 69% vs mean ask 0.73 | net per $1 -0.083
-b  gap 0 to 0.03                               n   20 | mean gap +0.010 | win 75% vs mean ask 0.72 | net per $1 +0.026
-c  gap 0.03 to 0.06                            n    4 | mean gap +0.038 | win 75% vs mean ask 0.70 | net per $1 +0.116
-d  gap 0.06 and over                           n    3 | mean gap +0.085 | win 67% vs mean ask 0.69 | net per $1 -0.025

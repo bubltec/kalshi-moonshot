@@ -1,8 +1,0 @@
-window: 2026-11-09 to 2026-11-16; 4584 commodity favourites held to settlement, fee on the buy. Median typical minute 10.78c; stake multiplier med/unit limited to 0.5 to 2 (mean 1.07).
-  flat $1 a bet                      staked   4584.0 | net  -125.72 (-2.74 per $100) | worst day  -45.99 | days positive 3 of 8
-  scaled by the typical minute       staked   4925.7 | net  -108.04 (-2.19 per $100) | worst day  -45.20 | days positive 3 of 8
---- by thirds of the typical minute (flat stakes): are the wild markets the worse ones?
-  quietest third                     staked   1528.0 | net    -8.29 (-0.54 per $100) | worst day  -10.24 | days positive 4 of 8
-  middle third                       staked   1528.0 | net   -46.45 (-3.04 per $100) | worst day  -20.60 | days positive 3 of 8
-  wildest third                      staked   1528.0 | net   -70.98 (-4.65 per $100) | worst day  -15.15 | days positive 1 of 8
-DONE

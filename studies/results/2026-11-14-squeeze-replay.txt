@@ -1,9 +1,0 @@
-One bet, replayed on its own taped quotes: scripts/squeeze_replay.py, run on the host 2026-11-14 about 16:25 ET.
-Question (user): would the paper lane's squeeze have sold the SOL NO that lost at the bell?
-An illustration on one bet, not a study. Fee on both legs. The hour view, which can still hold a squeezed sale, is not replayed.
-
-KXSOL15M-26NOV141530-30 no bought at 0.78 (0.792 with the fee)
-  the squeeze sells at 0.61 with 546s left, -0.199 a contract (typical minute 0.148)
-
-33.98 contracts: about -$6.76 with the squeeze, against -$26.50 live (held to settlement) and about +$3.94 with the profit take's late cap (studies/results/2026-11-14-late-take-replay.txt).
-The paper lane itself did not buy this market, so this is what its exit would have done with the live lane's bet.

@@ -1,6 +1,0 @@
-2767 windows and coins with a side bid at 0.98 or more about 2 minutes before the close
-  fell to 0.95 or lower before the close: 110 (3.98%)
-  fell to 0.90 or lower before the close: 62 (2.24%)
-  fell to 0.75 or lower before the close: 35 (1.26%)
-  fell to 0.50 or lower before the close: 22 (0.80%)
-  settled against it: 16 (0.58%)

@@ -1,6 +1,0 @@
-AGAINST the hour's drift (z < -1)    n   69 | held  -17.0% | as sold   -8.6% | win 61%
-WITH the hour's drift (z > 1)        n  125 | held  -12.2% | as sold  -16.8% | win 70%
-flat hour (|z| <= 1)                 n  538 | held  -10.5% | as sold   -6.1% | win 68%
-[label] BTC spot: 6.502e+04 -> 6.168e+04 over 4.0 days (-5.1%)
-[label] ETH spot: 1824 -> 1738 over 4.0 days (-4.7%)
-[label] SOL spot: 72.27 -> 72.03 over 4.0 days (-0.3%)

@@ -1,9 +1,0 @@
-markets used 60, skipped 180; samples per variant: {'15 min': 240, '30 min': 240, '60 min': 240, 'variable: 4 x time left, 15 to 60 min': 240}
-
-variant: n | Brier | log loss | hold zone 0.30 to 0.60: n, mean chance, share that paid
-  15 min                                  :  240 | 0.1611 | 0.4726 |   57, 0.454, 0.509
-  30 min                                  :  240 | 0.1600 | 0.4710 |   65, 0.462, 0.446
-  60 min                                  :  240 | 0.1601 | 0.4708 |   69, 0.457, 0.449
-  variable: 4 x time left, 15 to 60 min   :  240 | 0.1595 | 0.4674 |   62, 0.466, 0.468
-DONE
-	

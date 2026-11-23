@@ -1,3 +1,0 @@
-a ratio under 1 (calmer than its median)   n  225 | held  -13.9% | as sold  -11.5% | win 65%
-b ratio 1 to 1.5                           n  365 | held   -8.3% | as sold   -6.5% | win 70%
-c ratio 1.5 to 3                           n  142 | held  -15.3% | as sold   -7.2% | win 65%

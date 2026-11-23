@@ -1,9 +1,0 @@
-Spot wave replay, hold to settlement, one signal condition dropped at a time (scripts/spot_wave_replay_cache.py, DROP=<ids>; study cache 11-09 to 11-19; fee on every leg; run 2026-11-21; dropping choices made after seeing the first run).
-conditions: 1 slope above the previous 3 legs, 2 top has held (0.25 x leg duration), 3 back and forth (pulled back, bounced), 4 opposite slope started
-all four         n=1440  net  +659.52  per bet +0.46
-drop 2           n=1646  net  +741.83  per bet +0.45   (nothing lost: 2 adds nothing)
-drop 4           n=1699  net  +358.60  per bet +0.21
-drop 3           n=2052  net  +275.25  per bet +0.13
-drop 1           n=4639  net  -426.47  per bet -0.09   (slope above previous legs carries the result)
-none             n=9140  net -1258.53  per bet -0.14
-By leg direction with all four: up-leg bets (buy NO) +867, down-leg bets (buy YES) -208; weak-slope down-legs -303. A direction gap in one sample is the period's drift, not a finding.

@@ -1,4 +1,0 @@
-
-30604 readings, days ['11-17', '11-18', '11-19']
-=== train 11-17 (8270) -> test 11-18 (11970); log loss of Kalshi's mid 0.4515
-Cannot perform start session: EOF
