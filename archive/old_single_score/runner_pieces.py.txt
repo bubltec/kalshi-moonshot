@@ -1,0 +1,96 @@
+def side_scenario(store: Store, shot: LongShot, now: float | None = None) -> str | None:
+    """The market's scenario as a tag for the note (lane field entry_scenario_view; scenario.py): the target and its place in the 15, 30 and 60 minute scopes before the open, the cushion and the spot's place in each scope now, and the series' last four markets. None when the series has no spot index, the hour before the open is not in memory, or the target cannot be read."""
+    import bisect
+
+    from . import scenario, variants
+    from . import ticks as ticks_mod
+
+    now = time.time() if now is None else now
+    series = shot.series or shot.ticker.split("-")[0]
+    left = shot.hours_to_close * 3600.0
+    opened = now + left - 900.0  # 900: a 15-minute market's length, structural
+    ix = variants.spot_index(series, "kalshi", now)  # Kalshi's own price, as riskscore.gather (2026-11-18)
+    got = ticks_mod.history.window(ix, opened - 3700.0, now) if ix else None
+    if not got:
+        return None
+    ts, vs = got
+    opening = scenario.at_open(ts, vs, opened)
+    if opening is None:
+        return None
+    sc = opening["scopes"]
+    unit = next((sc[m]["unit"] for m in reversed(scenario.SCOPES) if m in sc), None)  # the widest scope read
+    cush = scenario.cushion(ts, vs, now, opening["target"], shot.side, left, unit) if unit else None
+    i = bisect.bisect_right(ts, now) - 1
+    now_place = {m: got_["place"] for m in scenario.SCOPES if i >= 0 and (got_ := scenario.scope(ts, vs, now, m, vs[i])) is not None}
+    from . import riskscore
+
+    prev = riskscore.previous(ts, vs, ticks_mod.mids.series_rows(series, opened, 3600.0), opened, unit)  # from memory, no database read
+    return scenario.note(opening, cush, now_place, prev)
+
+def risk_trend_read(shot: LongShot, spec: LaneSpec, now: float | None = None, keep: bool = True) -> tuple[float, float, str] | None:
+    """The buy's risk trend (lane field entry_risk_trend): (the move of the side's risk over the look back in the market's own typical moves, the look back in seconds, "holding" / "worsening" / "anomaly"). The risk is the exit's own number for the side at each mark: curverisk.risk on the bid net of the sell fee and the long layer's chance. The look back is the lane's share of the time left. None when it cannot be read. Memory only."""
+    from .strategy import fee_per_contract
+
+    now = time.time() if now is None else now
+    left = shot.hours_to_close * 3600.0
+    back = spec.entry_risk_trend * left
+    yes = shot.side == "yes"
+    qs: list[tuple[float, float | None]] = []
+    for t, bid, ask, long_yes in risk_marks(shot, tuple(spec.curve_risk_long_scales), now):
+        side_bid = (bid if yes else 1.0 - ask) if bid is not None and ask is not None else None
+        if side_bid is None or long_yes is None or not 0.0 < side_bid < 1.0:
+            qs.append((t, None))
+            continue
+        qs.append((t, curverisk.risk(long_yes if yes else 1.0 - long_yes, side_bid - fee_per_contract(side_bid), 1.0, curverisk.LONG_WEIGHT).q))
+    got = curverisk.risk_trend(qs, now, back)
+    if got is None:
+        return None
+    z = got[0] / got[1]
+    seen = _risk_seen.setdefault(shot.series or shot.ticker.split("-")[0], deque())
+    while seen and seen[0][0] < now - 3600.0:  # the current hour: the range a reading is judged against
+        seen.popleft()
+    state = curverisk.trend_state(z, [v for _, v in seen])
+    if len(_risk_seen_at) > 2000:
+        _risk_seen_at.clear()
+    if keep and now - _risk_seen_at.get((shot.ticker, shot.side), 0.0) >= curverisk.TREND_STEP:  # keep=False: a second look at the other side for the note, not added to the hour's range
+        _risk_seen_at[(shot.ticker, shot.side)] = now
+        seen.append((now, z))
+    return z, back, state
+
+_risk_marks: dict[tuple[str, tuple[int, ...]], list[tuple[float, float | None, float | None, float | None]]] = {}  # (ticker, long scales) -> (mark time, YES bid, YES ask, the long layer's YES chance): a past mark does not change, so each is read once
+
+_risk_seen: dict[str, deque[tuple[float, float]]] = {}  # series -> (time, reading) of the last hour: the range an anomaly is judged against
+
+_risk_seen_at: dict[tuple[str, str], float] = {}  # (ticker, side) -> when its last reading was kept (one per mark)
+
+def risk_marks(shot: LongShot, scales: tuple[int, ...], now: float) -> list[tuple[float, float | None, float | None, float | None]]:
+    """The market's marks for the risk trend, every curverisk.TREND_STEP seconds from its open to `now`, from memory alone: Kalshi's YES bid and ask at the mark (the last quote, at most 30 s old) and the long layer's chance that YES pays as it stood then (curverisk.long_chance on the Kalshi perp, read only from ticks at or before the mark). Either is None where it could not be read."""
+    from . import ticks as ticks_mod
+    from .watcher import perp_index
+
+    step = curverisk.TREND_STEP
+    close = now + shot.hours_to_close * 3600.0
+    opened = close - 900.0  # 900: a 15-minute market's length, structural
+    key = (shot.ticker, tuple(scales))
+    marks = _risk_marks.get(key)
+    if marks is None:
+        if len(_risk_marks) > 400:
+            _risk_marks.clear()
+        marks = _risk_marks[key] = []
+    t = (marks[-1][0] + step) if marks else math.ceil(opened / step) * step  # marks sit on the clock's own 5 s grid, so a close time read a second off between calls does not move them
+    if t > now:
+        return marks
+    quotes = ticks_mod.mids.quotes(shot.ticker)
+    qt = [q[0] for q in quotes]
+    kp = perp_index(shot.series or shot.ticker.split("-")[0])
+    reach = max(3700.0, 60.0 * max(max(scales, default=60), 1) + 100.0)
+    got = (ticks_mod.history.window(kp, now - reach - 900.0, now) or ticks_mod.history.window(kp, now - reach, now)) if kp else None
+    ref = ticks_mod.history.first_at_or_after(kp, opened, 60.0) if kp else None
+    while t <= now:
+        i = bisect.bisect_right(qt, t) - 1
+        bid, ask = (quotes[i][1], quotes[i][2]) if i >= 0 and t - quotes[i][0] <= 30.0 else (None, None)
+        long_yes = curverisk.long_chance(got[0], got[1], t, ref, "yes", close - t, scales=tuple(scales), elapsed=max(0.0, t - opened)) if got and ref and close > t else None
+        marks.append((t, bid, ask, long_yes))
+        t += step
+    return marks
+

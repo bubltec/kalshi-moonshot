@@ -1,0 +1,255 @@
+def test_unit_the_fit_finds_a_paying_reading_and_the_bar_is_a_top_share():
+    m = binaryrisk.fit(rows())
+    assert set(m["cuts"]) == {"0.05", "0.1"} and m["cuts"]["0.05"] > m["cuts"]["0.1"]
+    lo = [0.0] * len(binaryrisk.NAMES); hi = [0.0] * len(binaryrisk.NAMES)
+    lo[2], hi[2] = -2.0, 2.0
+    assert binaryrisk.predict(m, hi)[0] > binaryrisk.predict(m, lo)[0]
+    assert binaryrisk.predict(m, hi)[0] >= m["cuts"]["0.05"]
+
+def test_unit_the_never_bet_range():
+    assert not binaryrisk.usable(0.45) and not binaryrisk.usable(0.50) and not binaryrisk.usable(0.55)
+    assert not binaryrisk.usable(0.19) and binaryrisk.usable(0.44) and binaryrisk.usable(0.56) and binaryrisk.usable(0.20)
+
+def test_unit_admits_refuses_without_a_model_and_in_the_dead_range(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    binaryrisk._cache.update(mtime=None, data=None)
+    ok, why = binaryrisk.admits(s, shot(), 0.62)
+    assert not ok and "no model" in why
+    (tmp_path / "binary_risk_model.json").write_text(json.dumps(binaryrisk.fit(rows())))
+    binaryrisk._cache.update(mtime=None, data=None)
+    ok, why = binaryrisk.admits(s, shot(ask=0.50), 0.50)
+    assert not ok and "not a bet" in why
+
+def test_integration_the_shadow_step_never_says_no_and_notes_the_verdict(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    binaryrisk._cache.update(mtime=None, data=None)
+    ctx = buychain.Ctx(s=s, spec=None)
+    got = buychain.STEPS["binary_risk_shadow"](ctx, shot())
+    assert got.ok and "would not buy" in got.why  # no model yet: a shadow, not a block
+    monkeypatch.setattr(binaryrisk, "admits", lambda *a, **k: (True, "binary risk +0.20/$1 by hold"))
+    got = buychain.STEPS["binary_risk_shadow"](ctx, shot())
+    assert got.ok and got.why.startswith("shadow: would buy")
+    monkeypatch.setattr(binaryrisk, "admits", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert buychain.STEPS["binary_risk_shadow"](ctx, shot()).ok  # a failing reading never stops a buy
+
+def test_unit_the_step_is_a_named_lane_step_and_not_a_new_lane_version():
+    from kalshi_moonshot import lanes
+
+    assert "binary_risk_shadow" in lanes.BUY_STEPS
+
+def test_integration_the_deciding_step_says_no_without_a_model_in_the_dead_range_and_on_error(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    binaryrisk._cache.update(mtime=None, data=None)
+    ctx = buychain.Ctx(s=s, spec=None)
+    got = buychain.STEPS["binary_risk"](ctx, shot())
+    assert not got.ok and "no model" in got.why  # unlike the shadow step, a missing model is a no
+    monkeypatch.setattr(binaryrisk, "admits", lambda *a, **k: (True, "binary risk +0.30/$1 by hold"))
+    assert buychain.STEPS["binary_risk"](ctx, shot()).ok
+    monkeypatch.setattr(binaryrisk, "admits", lambda *a, **k: (False, "binary risk: ask 0.50 is not a bet"))
+    assert not buychain.STEPS["binary_risk"](ctx, shot(ask=0.50)).ok
+    monkeypatch.setattr(binaryrisk, "admits", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    got = buychain.STEPS["binary_risk"](ctx, shot())
+    assert not got.ok and "unreadable" in got.why  # a deciding step that fails does not buy
+
+def test_unit_the_refit_is_wanted_by_either_step_and_only_when_the_lane_is_enabled():
+    from types import SimpleNamespace as NS
+
+    lane = lambda chain, on=True: NS(enabled=on, buy_chain=chain)
+    assert binaryrisk.wanted({"a": lane(("price", "binary_risk"))})  # the deciding step: the bug of 11-20, the refit never started
+    assert binaryrisk.wanted({"a": lane(("price", "binary_risk_shadow"))})
+    assert not binaryrisk.wanted({"a": lane(("price", "risk_score")), "b": lane(("binary_risk",), on=False)})
+
+def test_unit_a_prediction_never_exceeds_what_the_bet_can_pay():
+    assert abs(binaryrisk.ceiling(0.98) - (0.02 - binaryrisk.fee(0.98)) / 0.98) < 1e-12 and binaryrisk.ceiling(0.98) < 0.03
+    assert binaryrisk.ceiling(0.50) > 0.9 and binaryrisk.ceiling(0.20) > 3.0
+    n = len(binaryrisk.NAMES)
+    model = {"mu": [0.0] * n, "sd": [1.0] * n, "W": [[5.0] + [0.0] * n] * 5}  # a line that predicts +5 per $1 everywhere
+    x = [0.0] * n
+    assert binaryrisk.predict(model, x)[0] == 5.0
+    assert binaryrisk.predict_capped(model, x, 0.98)[0] == binaryrisk.ceiling(0.98) < 0.03  # the 0.98 NO of 11-20 07:40: cut to about +0.02
+    assert binaryrisk.predict_capped(model, x, 0.20)[0] == binaryrisk.ceiling(0.20)  # a cheap side may still pay a lot
+
+def test_unit_the_bar_is_made_from_capped_predictions():
+    r = rows()
+    m = binaryrisk.fit(r)
+    capped = sorted(binaryrisk.predict_capped(m, x, a)[0] for x, _, a in r[::2] if binaryrisk.usable(a))
+    assert abs(m["cuts"]["0.05"] - capped[min(len(capped) - 1, int(len(capped) * 0.95))]) < 1e-9
+
+def test_unit_a_model_built_before_the_cap_is_refit_at_once(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    started = []
+    monkeypatch.setattr(binaryrisk, "refresh_refs", lambda *a, **k: False)
+    monkeypatch.setattr(binaryrisk, "_fitting", None)
+    monkeypatch.setattr(binaryrisk.subprocess, "Popen", lambda *a, **k: started.append(a) or type("P", (), {"poll": lambda self: None})())
+    fresh = binaryrisk.fit(rows())
+    assert fresh["capped"] is True
+    (tmp_path / "binary_risk_model.json").write_text(json.dumps(fresh))
+    (tmp_path / "binary_win_model.json").write_text(json.dumps(binaryrisk.fit_win(rows())))  # the win-chance model is refit with it: a missing one is a refit due
+    binaryrisk._cache.update(mtime=None, data=None)
+    assert binaryrisk.maybe_refit(s, now=fresh["built_at"] + 60.0) is False and not started  # a capped model fitted a minute ago: left alone
+    old = {k: v for k, v in fresh.items() if k != "capped"}
+    (tmp_path / "binary_risk_model.json").write_text(json.dumps(old))
+    binaryrisk._cache.update(mtime=None, data=None)
+    assert binaryrisk.maybe_refit(s, now=fresh["built_at"] + 60.0) is True and len(started) == 1  # no flag: refit now
+
+def test_integration_a_commodity_is_scored_on_the_perp_curve_with_its_open_as_the_strike(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    (tmp_path / "binary_risk_model.json").write_text(json.dumps(binaryrisk.fit(rows())))
+    binaryrisk._cache.update(mtime=None, data=None)
+    now = time.time()
+    close = now + 300.0
+    T = [close - 900.0 - 3650.0 + i for i in range(4400)]
+    V = [2000.0 * math.exp(0.00005 * ((i * 7) % 11 - 5)) for i in range(4400)]
+    for t, v in zip(T, V):
+        ticks.history.note("KP_GOLD", t, v)
+    sh = LongShot(ticker="KXGOLD15M-26NOV200000-00", title="t", rules="r", bid=0.29, ask=0.30, volume=1.0, close_time="2026-11-20T00:00:00Z", hours_to_close=300.0 / 3600.0, series="KXGOLD15M", side="yes")
+    ok, why = binaryrisk.admits(s, sh, 0.30, now=now)
+    assert "no settlement index" not in why and "no Kalshi index" not in why  # it reads the perp curve now (the crypto-only refusal is gone)
+
+def test_unit_the_swing_step_is_a_named_step_a_lane_may_use():
+    from kalshi_moonshot import lanes
+
+    assert "swing_risk" in buychain.STEPS and "swing_risk" in lanes.BUY_STEPS
+    assert "swing_risk" in binaryrisk.STEPS  # a lane naming it gets the refit
+
+def test_unit_the_swing_bar_comes_from_the_markets_own_recent_predictions(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    swing_model(tmp_path)
+    binaryrisk._swing["hist"].clear(); binaryrisk._swing["last"].clear()
+    now = time.time()
+    state = {"k": 2}
+    seq = iter([i / 1000.0 for i in range(1000)])
+    monkeypatch.setattr(binaryrisk, "_read", lambda *a, **k: ({"model": {}, "f": {}, "pred": next(seq), "k": state["k"]}, ""))
+    # the first predictions only build the history: no bar yet, no buy
+    ok, why = binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now)
+    assert not ok and "bar is not known" in why
+    for i in range(1, 400):  # distinct sides' times so each is stored
+        binaryrisk._swing["last"].clear()
+        binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + i)
+    binaryrisk._swing["last"].clear()
+    hi = binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + 500)  # 0.4 .. next predictions rising: the top of its own history
+    assert "own predictions" in hi[1]
+    monkeypatch.setattr(binaryrisk, "_read", lambda *a, **k: ({"model": {}, "f": {}, "pred": 5.0, "k": 2}, ""))
+    binaryrisk._swing["last"].clear()
+    assert binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + 600)[0]  # far above its own history
+    monkeypatch.setattr(binaryrisk, "_read", lambda *a, **k: ({"model": {}, "f": {}, "pred": 5.0, "k": 0}, ""))
+    binaryrisk._swing["last"].clear()
+    ok, why = binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + 700)
+    assert not ok and "hold, not a swing" in why  # the best exit is to hold: not a swing
+    monkeypatch.setattr(binaryrisk, "_read", lambda *a, **k: ({"model": {}, "f": {}, "pred": -5.0, "k": 2}, ""))
+    binaryrisk._swing["last"].clear()
+    assert not binaryrisk.swing_admits(s, commodity_shot(), 0.30, now=now + 800)[0]  # below its own history
+
+def test_integration_the_swing_step_says_no_without_a_model_and_on_error(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    binaryrisk._cache.update(mtime=None, data=None)
+    ctx = buychain.Ctx(s=s, spec=None)
+    got = buychain.STEPS["swing_risk"](ctx, commodity_shot())
+    assert not got.ok and "no model" in got.why
+    monkeypatch.setattr(binaryrisk, "swing_admits", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert not buychain.STEPS["swing_risk"](ctx, commodity_shot()).ok  # a failing reading never buys
+
+def test_unit_the_commodity_early_swing_lane_block_loads_and_names_only_known_steps():
+    import pathlib
+    import tomllib
+
+    from kalshi_moonshot import lanes
+
+    d = tomllib.loads(pathlib.Path("docs/commodity_early_swing.lane.toml").read_text())
+    steps = d["module"]["swing_commodity"]["steps"]
+    assert steps[-1] == "swing_risk" and all(x in lanes.BUY_STEPS for x in steps)  # the risk model decides last
+    lane = d["lane"]["commodity_early_swing"]
+    assert lane["price"] == [0.20, 0.45] and lane["exit_module"] == "round_trip" and lane["paper_fill_model"] is True
+    assert all(s.startswith("KX") and s.endswith("15M") for s in lane["series"])
+
+def test_integration_admits_refuses_a_side_the_gate_blocks_with_the_reason(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    swing_model(tmp_path)
+    f = {k: 0.0 for k in ("left", "czb", "czlb", "tr13", "tr35", "vr", "amp15", "pos15", "pos30", "pos60", "mv15", "mv30", "mv60", "sl15", "sl30", "sl60", "cv15", "cv30", "cv60", "ft15", "ft30", "ft60", "dr24", "dr72")}
+    f.update(cz1=0.17, cz3=-0.6, cz5=-0.8)
+    monkeypatch.setattr(binaryrisk, "readings", lambda *a, **k: f)
+    monkeypatch.setattr(binaryrisk, "curve_index", lambda series: "KP_COPPER")
+    monkeypatch.setattr(binaryrisk, "open_strike", lambda *a, **k: 5.83)
+    import time as _t
+
+    now = _t.time()
+    ticks.history.note("KP_COPPER", now - 1.0, 5.83)
+    monkeypatch.setattr(ticks.history, "window", lambda ix, a, b: ([now - 2000.0, now - 1.0], [5.83, 5.83]))
+    sh = LongShot(ticker="KXCOPPER15M-26NOV180630-30", title="t", rules="r", bid=0.69, ask=0.70, volume=1.0, close_time="2026-11-18T11:30:00Z", hours_to_close=300.0 / 3600.0, series="KXCOPPER15M", side="yes")
+    ok, why = binaryrisk.admits(s, sh, 0.70, now=now)
+    assert not ok and "weakest cushion" in why
+
+def test_unit_the_value_bar_comes_from_the_markets_own_recent_edges_and_never_the_dead_range(monkeypatch):
+    _value_reset()
+    s = None
+    now = 5_000_000.0
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.97, "win chance 0.97"))
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.50), 0.50, now=now)
+    assert not ok and "never-buy range" in why  # win chance 0.97 against an ask of 0.50 pays well, and still no (user's rule)
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.90), 0.90, now=now + 1.0)
+    assert not ok and "bar is not known" in why  # too few own readings: no bar, no buy
+    for i in range(300):  # the market's own recent edges (spaced so they stay inside a day): win chance 0.92 against asks 0.80..0.91
+        monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.92, "x"))
+        sh = shot(ask=0.80 + 0.0004 * i)
+        sh = LongShot(**{**sh.__dict__, "ticker": f"KXBTC15M-26NOV2000{i:02d}-00"})
+        binaryrisk.value_admits(s, sh, sh.ask, now=now + 100.0 + 31.0 * i)
+    later = now + 100.0 + 31.0 * 300
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.99, "x"))
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.85), 0.85, now=later)  # edge about +0.12: above its own history's top 10%
+    assert ok and "against the bar" in why
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.80, "x"))
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.85), 0.85, now=later + 61.0)  # win chance under the ask: no edge, no buy
+    assert not ok
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.88, "x"))
+    ok, why = binaryrisk.value_admits(s, shot(ask=0.84), 0.84, now=later + 122.0)  # positive but under its own bar
+    assert not ok and "bar" in why
+
+def test_unit_the_value_history_is_per_market_series_and_past_readings_only(monkeypatch):
+    _value_reset()
+    now = 6_000_000.0
+    monkeypatch.setattr(binaryrisk, "win_read", lambda s, shot, now=None: (0.9, "x"))
+    for i in range(250):
+        sh = LongShot(**{**shot(ask=0.80).__dict__, "ticker": f"KXBTC15M-26NOV2000{i:02d}-00"})
+        binaryrisk.value_admits(None, sh, 0.80, now=now + 61.0 * i)
+    gold = LongShot(**{**commodity_shot(ask=0.80).__dict__})
+    ok, why = binaryrisk.value_admits(None, gold, 0.80, now=now + 61.0 * 251)
+    assert not ok and "only 0 own readings" in why and "KXGOLD15M" in why  # another series' history does not count
+    far = now + 61.0 * 250 + 25 * 3600.0
+    sh = LongShot(**{**shot(ask=0.80).__dict__, "ticker": "KXBTC15M-26NOV200999-00"})
+    ok, why = binaryrisk.value_admits(None, sh, 0.80, now=far)
+    assert not ok and "only 0 own readings" in why  # the last day only
+
+def test_integration_the_value_step_never_says_no_and_notes_the_verdict(tmp_path, monkeypatch, clean):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    s = config.load()
+    ctx = buychain.Ctx(s=s, spec=None)
+    _value_reset()
+    got = buychain.STEPS["win_value_shadow"](ctx, shot())
+    assert got.ok and "would not buy" in got.why  # no win model yet: a shadow, not a block
+    monkeypatch.setattr(binaryrisk, "value_admits", lambda *a, **k: (True, "value: win chance 0.99 - ask 0.85"))
+    got = buychain.STEPS["win_value_shadow"](ctx, shot())
+    assert got.ok and got.why.startswith("shadow: would buy")
+    monkeypatch.setattr(binaryrisk, "value_admits", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert buychain.STEPS["win_value_shadow"](ctx, shot()).ok
+
+def test_unit_the_value_step_is_a_named_shadow_step_after_the_win_chance_in_the_live_modules():
+    import pathlib
+    import tomllib
+    from types import SimpleNamespace as NS
+
+    from kalshi_moonshot import lanes
+
+    assert "win_value_shadow" in lanes.BUY_STEPS and binaryrisk.wanted({"a": NS(enabled=True, buy_chain=("win_value_shadow",))})
+    p = pathlib.Path("data/strategies.toml")
+    if p.exists():
+        for name, st in tomllib.loads(p.read_text())["module"].items():
+            if "win_value_shadow" in st["steps"]:
+                assert st["steps"].index("win_value_shadow") == st["steps"].index("win_chance_shadow") + 1  # after the price-free score, never before it

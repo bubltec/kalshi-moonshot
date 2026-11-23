@@ -83,7 +83,7 @@ def test_a_buy_decision_on_the_socket_path_touches_neither_the_database_nor_kals
 
     from kalshi_moonshot import config
     from kalshi_moonshot import store as store_mod
-    from tests import test_risk_score as T
+    from tests import decide_support as T
 
     T.decide(tmp_path, monkeypatch, _time.time(), "")  # cold: tables and the lane's version row are written once
     s = config.load()
@@ -117,7 +117,7 @@ def test_a_buy_decision_on_the_socket_path_touches_neither_the_database_nor_kals
 def decide_with(store, tmp_path, monkeypatch, s):
     from kalshi_moonshot import ticks
     from kalshi_moonshot.strategy import LongShot
-    from tests import test_risk_score as T
+    from tests import decide_support as T
 
     now = __import__("time").time()
     shot = LongShot("KXBTC15M-7", "t", "", 0.80, 0.81, 420.0 / 3600.0, "2099-01-01T00:00:00Z", 420.0 / 3600.0, lane="rs", series="KXBTC15M", side="yes")

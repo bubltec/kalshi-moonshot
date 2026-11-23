@@ -166,9 +166,6 @@ class Worker:
         from . import calibration
 
         calibration.start_background(lambda: Store(self.s.db_path, self.s.exclude_versions))  # the record adjustment is answered from memory from here on: no evaluation reads the settled decisions
-        from . import riskrecord
-
-        riskrecord.start_background(lambda: self.s, lambda: Store(self.s.db_path, self.s.exclude_versions))  # every open market's risk attributes every 30 s, from its own thread
         from . import archive, backup
 
         backup.start_nightly(lambda: self.s, after=archive.upload_backups_now)  # a new dump goes to the bucket at once

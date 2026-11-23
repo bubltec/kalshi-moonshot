@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-import test_risk_score as T  # noqa: E402
+import decide_support as T  # noqa: E402
 
 from kalshi_moonshot import config, runner  # noqa: E402
 from kalshi_moonshot.store import Store  # noqa: E402

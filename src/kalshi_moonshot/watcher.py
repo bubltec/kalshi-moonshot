@@ -234,7 +234,6 @@ class Target:
     risk_never_state: int = 0  # 0 = the look has not happened, 1 = looked and kept, 2 = looked and sells
     risk_long_scales: tuple = ()  # the minutes the long layer reads its movement over, together (lane field curve_risk_long_scales); empty = the last hour
     risk_take_hist: list = field(default_factory=list)  # (time, bid) readings of the last minute, for the slope
-    risk_score: bool = False  # the risk exit reads riskscore.py's chance in place of the net bid (lane field curve_risk_score)
     risk_at: float = 0.0  # the risk check reads at most once a second
     risk_noted: float = 0.0
     risk_since: float = 0.0  # when the risk began to stay high without a break (0 = not high)
@@ -494,22 +493,7 @@ class ProfitWatcher:
         basis = t.entry + fee_per_contract(t.entry)
         pnl = (net - basis) / basis if basis > 0 else 0.0
         q = min(max(net, 0.0), 1.0)
-        if getattr(t, "risk_score", False):
-            scored = self._risk_score(t, now)
-            if scored is not None:
-                return self._risk_decide(t, curverisk.Risk(scored, q, scored, "score"), bid, now, left, pnl, self._risk_long(t, now, left))
         return self._risk_decide(t, curverisk.Risk(q, q, q, "price"), bid, now, left, pnl, self._risk_long(t, now, left))
-
-    def _risk_score(self, t: Target, now: float) -> float | None:
-        """The chance the side pays by riskscore.py (lane field curve_risk_score), or None when it cannot be read (the exit then reads the bid, as it always has)."""
-        from . import riskscore
-
-        try:
-            got = riskscore.live(t.ticker.split("-")[0], t.ticker, t.side, t.close_ts, now, str(self.get_settings().data_dir), (0.0,))
-        except Exception as exc:
-            log.warning("risk score unreadable for %s %s: %s", t.ticker, t.lane, exc)
-            return None
-        return got[0][0] if got else None
 
     def reconcile_hand_sales(self, s: Settings, store: Store) -> list[str]:
         """Close the bot's record of a live bet the account no longer holds (the user sold it by hand, or bought the other side and Kalshi netted it), so the books agree and the lane may buy the market again. A shortfall has to show on two separate reads of the account, and the bot's last order on the market has to be 20 s old, because the positions read can trail a fill. Returns the log lines of what it closed."""
@@ -1357,7 +1341,6 @@ class ProfitWatcher:
                 held.risk_live, held.risk_spot_weight, held.risk_history = spec.curve_risk_live, spec.curve_risk_spot_weight, spec.curve_risk_history
                 held.sell_chain, held.sell_module = tuple(spec.sell_chain), spec.exit_module
                 held.risk_min_profit, held.risk_confirm = spec.curve_risk_min_profit, spec.curve_risk_confirm
-                held.risk_score = spec.curve_risk_score
                 held.risk_take, held.risk_take_slope = spec.curve_take, spec.curve_take_slope_share
                 held.risk_long_scales = tuple(spec.curve_risk_long_scales)
                 held.risk_take_sure, held.risk_take_sure_late = spec.curve_take_sure, spec.curve_take_sure_late
@@ -1423,10 +1406,6 @@ class ProfitWatcher:
     def _refit_models(self, s: Settings, specs: dict[str, LaneSpec]) -> None:
         """Rebuild what a buy step reads from the tape, as its own low-priority work: the risk score's fit (risk_score and risk_trend steps) the curve model (curve_model step) and the state record (state_record step)."""
         try:
-            if any(sp.enabled and sp.risk_score_buy > 0 for sp in specs.values()):
-                from . import risktune
-
-                risktune.maybe_refit(s)
             if any(sp.enabled and "curve_model" in sp.buy_chain for sp in specs.values()):
                 from . import curvemodel
 

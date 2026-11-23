@@ -1,0 +1,31 @@
+TREND_STEP = 5.0  # seconds between the marks the risk trend is read on: the grid the market's mids are read on everywhere else (riskscore.STEP)
+
+def risk_trend(marks: Sequence[tuple[float, float | None]], now: float, back: float, step: float = TREND_STEP) -> tuple[float, float] | None:
+    """The buy's risk trend (lane field entry_risk_trend; 2026-11-17, user, on the entry trend check: "it shouldn't even care about the entry trend by itself. its the risk factor"): how far the side's risk number moved over the last `back` seconds, and the market's own typical move for a span that long.
+    `marks`: (time, q) on the `step` grid, oldest first, q the chance the side pays as the exit reads it (risk(): the worse of Kalshi's bid net of the fee and the long layer, the price counted in full), None where it could not be read.
+    The typical move is the root-mean-square of the mark-to-mark moves BEFORE the look back (the move being measured is not part of its own noise), times sqrt(back / step). None when either end has no mark within two steps, the market has under TREND_MIN_MOVES moves before the look back, or it did not move at all."""
+    if back < step or not marks:
+        return None
+    ts = [m[0] for m in marks]
+    i, j = bisect.bisect_right(ts, now) - 1, bisect.bisect_right(ts, now - back) - 1
+    if i < 0 or j < 0 or now - ts[i] > 2.0 * step or now - back - ts[j] > 2.0 * step:
+        return None
+    cur, then = marks[i][1], marks[j][1]
+    if cur is None or then is None:
+        return None
+    moves = [b[1] - a[1] for a, b in itertools.pairwise(marks[: j + 1]) if a[1] is not None and b[1] is not None and b[0] - a[0] <= 1.5 * step]
+    if len(moves) < TREND_MIN_MOVES:
+        return None
+    rms = math.sqrt(sum(m * m for m in moves) / len(moves))
+    if rms <= 0:
+        return None
+    return cur - then, rms * math.sqrt(back / step)
+
+def trend_state(z: float, seen: Sequence[float]) -> str:
+    """What a risk trend reading says: "anomaly" when it is outside the 1st to 99th percentile of the series' own readings of the last hour (`seen`, at least TREND_MIN_SEEN of them): no rule is assumed to hold there, the buy sits out and the reading is logged; else "holding" when the risk has not worsened (z at or over zero: the direction, structural) and "worsening" when it has."""
+    if len(seen) >= TREND_MIN_SEEN:
+        ranked = sorted(seen)
+        if z < ranked[int(0.01 * (len(ranked) - 1))] or z > ranked[math.ceil(0.99 * (len(ranked) - 1))]:
+            return "anomaly"
+    return "holding" if z >= 0 else "worsening"
+

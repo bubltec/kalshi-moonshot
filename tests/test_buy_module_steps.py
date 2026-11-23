@@ -192,7 +192,7 @@ def test_integration_a_step_that_says_no_keeps_the_buy_out_and_the_note_names_it
     from tests.test_buychain import Fixed, LANE
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    (tmp_path / "strategies.toml").write_text(LANE.format(chain="['price','spike']").replace("risk_score_buy=0.25\n", "entry_spike_seconds=90\n"))
+    (tmp_path / "strategies.toml").write_text(LANE.format(chain="['price','spike']").replace("buy_chain=", "entry_spike_seconds=90\nbuy_chain="))
     s = config.load()
     store = Store(s.db_path)
     sh = LongShot("KXBTC15M-7", "t", "", 0.79, 0.80, 400.0 / 3600.0, "2099-01-01T00:00:00Z", 400.0 / 3600.0, lane="ch", series="KXBTC15M", side="yes", event_ticker="KXBTC15M-7")

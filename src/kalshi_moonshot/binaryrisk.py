@@ -15,9 +15,7 @@ import math
 import os
 import subprocess
 import sys
-import threading
 import time
-from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -28,47 +26,22 @@ log = logging.getLogger("moonshot")
 NAMES = ["logit_ask", "ask_off", "czb", "tr13", "tr35", "left", "czlb", "vr", "amp15", "pos15", "pos30", "pos60", "mv15", "mv30", "mv60", "sl15", "sl30", "sl60", "cv15", "cv30", "cv60", "ft15", "ft30", "ft60", "dr24", "dr72"]
 EXITS = ("hold", "1m", "2m", "3m", "5m")
 HORIZONS = (60.0, 120.0, 180.0, 300.0)  # seconds after the buy at which the early-sale exits sell at the bid
-TOPS = (0.05, 0.10)  # the shares of training sides whose predicted net is stored as a bar
-TOP = 0.05  # the bar a buy must reach
 TRAIN_HOURS = 24.0
 STEP = 60.0  # seconds between training samples of a market
 REFIT_EVERY = 3600.0
 MIN_ROWS = 4000
-CAP = 3.0  # a net per $1 above this counts as this in the fit, so one long shot cannot lead it
 RIDGE = 1.0
-ASK_FLOOR = 0.20  # asks under this are not bet (the cheapest band lost in the first study)
 DEAD = (0.45, 0.55)  # never a bet (user, 2026-11-20)
 
-_cache: dict[str, Any] = {"mtime": None, "data": None}
 _fitting: subprocess.Popen[bytes] | None = None
 
 
-STEPS = ("binary_risk_shadow", "binary_risk", "swing_risk", "win_chance_shadow", "win_value_shadow")  # the buy steps that read this model: a lane naming either needs the refit and the recent outcomes
+STEPS = ("win_chance_shadow",)  # the buy steps that read this model: a lane naming either needs the refit and the recent outcomes
 
 
 def wanted(specs: Any) -> bool:
     """Whether any enabled lane names a step that reads the model (the watcher starts the refit and the recent-outcomes refresh only then)."""
     return any(sp.enabled and any(x in sp.buy_chain for x in STEPS) for sp in specs.values())
-
-
-def model_path(s: Any) -> Path:
-    return Path(s.data_dir) / "binary_risk_model.json"
-
-
-def load(s: Any) -> dict[str, Any] | None:
-    p = model_path(s)
-    try:
-        m = p.stat().st_mtime
-        if _cache["data"] is None or m != _cache["mtime"]:
-            _cache["data"], _cache["mtime"] = json.loads(p.read_text()), m
-    except (OSError, ValueError):
-        return _cache["data"]
-    return _cache["data"]
-
-
-def usable(ask: float) -> bool:
-    """Whether the model bets at this ask at all: never 0.45-0.55, not under 0.20."""
-    return ask >= ASK_FLOOR and not (DEAD[0] <= ask <= DEAD[1])
 
 
 _refs: dict[str, tuple[float, float, float]] = {}  # index -> (read at, the value 24 h ago, the value 72 h ago): a template a background job keeps in memory (refresh_refs), so a decision reads no database
@@ -232,51 +205,6 @@ def _solve(A: list[list[float]], b: list[float]) -> list[float]:
     return [M[i][n] for i in range(n)]
 
 
-def predict(model: dict[str, Any], x: list[float]) -> tuple[float, int]:
-    """(the best predicted net per $1 over the five exits, the exit's index)."""
-    v = [1.0] + [(a - m) / d for a, m, d in zip(x, model["mu"], model["sd"], strict=True)]
-    got = [sum(a * b for a, b in zip(w, v, strict=True)) for w in model["W"]]
-    k = max(range(len(got)), key=lambda i: got[i])
-    return got[k], k
-
-
-def ceiling(ask: float) -> float:
-    """The most a side bought at `ask` can make per $1 (the fee paid, the side wins): (1 - ask - fee) / ask. A fact of the contract, not a fitted number."""
-    ask = min(0.98, max(0.02, ask))
-    return (1.0 - ask - fee(ask)) / ask
-
-
-def predict_capped(model: dict[str, Any], x: list[float], ask: float) -> tuple[float, int]:
-    """predict(), cut at what the bet can pay. The fit is a straight line per exit, so at the price extremes it predicts nets that cannot happen (2026-11-20: NO bought at 0.98 on a predicted +0.19 per $1 when it could pay about +0.02)."""
-    pred, k = predict(model, x)
-    return min(pred, ceiling(ask)), k
-
-
-def fit(rows: list[tuple[list[float], list[float], float]], now: float | None = None) -> dict[str, Any]:
-    """rows: (side vector, net per $1 under each exit, ask). One ridge regression per exit on the standardised readings; the bars are the predicted-net quantiles of the training sides the model bets at."""
-    n = len(NAMES)
-    mu = [sum(r[0][i] for r in rows) / len(rows) for i in range(n)]
-    sd = [math.sqrt(sum((r[0][i] - mu[i]) ** 2 for r in rows) / len(rows)) or 1.0 for i in range(n)]
-    K = n + 1
-    A = [[0.0] * K for _ in range(K)]
-    B = [[0.0] * K for _ in EXITS]
-    for r in rows[::3]:
-        v = [1.0] + [(r[0][i] - mu[i]) / sd[i] for i in range(n)]
-        for i in range(K):
-            for j in range(i, K):
-                A[i][j] += v[i] * v[j]
-            for e in range(len(EXITS)):
-                B[e][i] += v[i] * min(CAP, r[1][e])
-    for i in range(K):
-        A[i][i] += RIDGE if i else 1e-6
-        for j in range(i):
-            A[i][j] = A[j][i]
-    model: dict[str, Any] = {"names": NAMES, "exits": list(EXITS), "mu": mu, "sd": sd, "W": [_solve(A, B[e]) for e in range(len(EXITS))], "built_at": time.time() if now is None else now, "rows": len(rows), "train_hours": TRAIN_HOURS, "capped": True}
-    preds = sorted(predict_capped(model, r[0], r[2])[0] for r in rows[::2] if usable(r[2]))
-    model["cuts"] = {str(top): preds[min(len(preds) - 1, int(len(preds) * (1.0 - top)))] for top in TOPS} if preds else {}
-    return model
-
-
 WIN_NAMES = NAMES[2:]  # the readings without the two ask readings: the win-chance score has no price in it (user, 2026-11-21: "a different calculation aside from the price, which we then use to decide when a bet is a good idea")
 WIN_BANDS = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95)  # the score bands whose realised win rate the model carries (a calibration table)
 
@@ -360,41 +288,6 @@ def win_read(s: Any, shot: Any, now: float | None = None) -> tuple[float | None,
 
 
 
-VALUE_Q = 0.95  # the share of a market's own recent edge readings the bar sits above. The study (studies/results/2026-11-21-value-buy-study.txt) found NO setting that pays: top 20% / 10% / 5% net -0.104 / -0.160 / -0.156 per $1 in half 1 and -0.044 / -0.051 / +0.006 in half 2. 0.95 is the strictest, kept so the shadow note records the least-bad setting; it is chosen after seeing results and is not evidence of an edge
-VALUE_KEEP = 24 * 3600.0  # the market's own recent edge readings: the last day (only gated readings count, about 8 an hour for a series, so three hours never held enough)
-VALUE_MIN = 100  # fewer own readings than this and the bar is not known: no buy
-VALUE_GAP = 60.0  # one stored reading per (market, side) per this many seconds (the study's step)
-_value: dict[str, Any] = {"hist": {}, "last": {}, "lock": threading.Lock()}
-
-
-def value_admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[bool, str]:
-    """The buy-side VALUE check (2026-11-21, user via parent: "win chance minus ask minus the fee, against a bar read from that market's own recent history (rule 2), never an ask 0.45-0.55"), a step SEPARATE from the price-free win-chance score and after it: edge = win chance - ask - the fee. The side is worth buying when its edge is positive and at least the VALUE_Q quantile of this market series' own edge readings over the last day (every gated reading of the series, either side, any ask, one per market side per minute; VALUE_MIN of them needed), and the ask is not 0.45-0.55. The win chance never sees the ask. Reads memory only."""
-    now = time.time() if now is None else now
-    pw, note = win_read(s, shot, now)
-    if pw is None:
-        return False, f"value: no win chance ({note})"
-    edge = pw - ask - fee(ask)
-    key = shot.series or shot.ticker.split("-")[0]
-    with _value["lock"]:
-        hist = _value["hist"].setdefault(key, deque())
-        while hist and hist[0][0] < now - VALUE_KEEP:
-            hist.popleft()
-        vals = sorted(v for _, v in hist)
-        sk = (shot.ticker, shot.side)
-        if now - _value["last"].get(sk, 0.0) >= VALUE_GAP:
-            _value["last"][sk] = now
-            hist.append((now, edge))
-    tag = f"value: win chance {pw:.2f} - ask {ask:.2f} - fee {fee(ask):.3f} = edge {edge:+.3f}"
-    if DEAD[0] <= ask <= DEAD[1]:
-        return False, tag + f", ask {ask:.2f} is in the never-buy range 0.45-0.55"
-    if len(vals) < VALUE_MIN:
-        return False, tag + f"; only {len(vals)} own readings in 24 h for {key}, the bar is not known (needs {VALUE_MIN})"
-    bar = vals[min(len(vals) - 1, int(len(vals) * VALUE_Q))]
-    tag += f" against the bar {bar:+.3f} (the top {(1 - VALUE_Q):.0%} of {len(vals)} own readings in 24 h)"
-    return edge > 0.0 and edge >= bar, tag
-
-
-
 NOT_COMMODITY = ("KXINX",)  # the stock index has a Kalshi perp reference but is not one of the commodity series (user, 2026-11-20: "S&P should not be in this"); a scope, not a rule: no buy or sell logic reads it
 
 
@@ -453,65 +346,6 @@ def _curve(shot: Any, now: float) -> tuple[dict[str, float] | None, str]:
     return f, ""
 
 
-def _read(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[dict[str, Any] | None, str]:
-    """The model's reading of one side now: ({model, f, pred, k}, "") or (None, why not). Reads memory only."""
-    model = load(s)
-    if model is None or not model.get("cuts"):
-        return None, "binary risk: no model fitted yet."
-    if model.get("names") != NAMES:
-        return None, "binary risk: the model was fitted on older readings, a refit is due."
-    if not usable(ask):
-        return None, f"binary risk: ask {ask:.2f} is not a bet (never 0.45-0.55, not under {ASK_FLOOR:.2f})."
-    f, why = _curve(shot, time.time() if now is None else now)
-    if f is None:
-        return None, why
-    pred, k = predict_capped(model, side_vector(f, shot.side, ask), ask)
-    return {"model": model, "f": f, "pred": pred, "k": k}, ""
-
-
-def admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[bool, str]:
-    """Whether the model would buy this market side at `ask` now: (True or False, the note). Reads memory only."""
-    got, why = _read(s, shot, ask, now)
-    if got is None:
-        return False, why
-    model, f, pred, k = got["model"], got["f"], got["pred"], got["k"]
-    cut = float(model["cuts"].get(str(TOP), 0.0))
-    yes = shot.side == "yes"  # the note reads the side's own view: a NO side's cushion is the YES one's sign flipped
-    tag = f"binary risk {pred:+.2f}/$1 by {EXITS[k]} (top {TOP:.0%} from {cut:+.2f}; cushion {(1 if yes else -1) * (f['cz1'] + f['cz3'] + f['cz5']) / 3.0:+.1f} (1/3/5 min {f['cz1'] if yes else -f['cz1']:+.1f}/{f['cz3'] if yes else -f['cz3']:+.1f}/{f['cz5'] if yes else -f['cz5']:+.1f}), 24 h drift {(1 if yes else -1) * f['dr24']:+.1f}, 30-min place {f['pos30'] if yes else 1.0 - f['pos30']:.2f})"
-    return pred >= cut, tag
-
-
-SWING_KEEP = 3 * 3600.0  # the market's own recent predictions: the last three hours
-SWING_MIN = 200  # fewer own predictions than this and the bar is not known: no buy
-SWING_TOP = 0.03  # high scrutiny: the side's prediction must be in the top 3% of that market series' own recent predictions
-SWING_GAP = 30.0  # one stored prediction per (market, side) per this many seconds
-_swing: dict[str, Any] = {"hist": {}, "last": {}, "lock": threading.Lock()}
-
-
-def swing_admits(s: Any, shot: Any, ask: float, now: float | None = None) -> tuple[bool, str]:
-    """The early-swing score (2026-11-20, user via parent: a paper lane for the early cheap-side swing, "a high-scrutiny risk model, bar from the market's own recent predictions"): the same model, read for a cheap side. The side must (1) have an early SALE (1, 2, 3 or 5 minutes) as the model's best exit, not holding to settlement, and (2) have a predicted net in the top SWING_TOP of the predictions this market series has made at the lane's prices over the last three hours (a bar from its own recent history, CLAUDE.md rule 2; no asset key: the history is kept per market series because that is the market's own curve). Fewer than SWING_MIN own predictions: no buy. Reads memory only."""
-    got, why = _read(s, shot, ask, now)
-    if got is None:
-        return False, why
-    now = time.time() if now is None else now
-    pred, k = got["pred"], got["k"]
-    key = shot.series or shot.ticker.split("-")[0]
-    with _swing["lock"]:
-        hist = _swing["hist"].setdefault(key, deque())
-        while hist and hist[0][0] < now - SWING_KEEP:
-            hist.popleft()
-        vals = sorted(v for _, v in hist)
-        sk = (shot.ticker, shot.side)
-        if now - _swing["last"].get(sk, 0.0) >= SWING_GAP:
-            _swing["last"][sk] = now
-            hist.append((now, pred))
-    if len(vals) < SWING_MIN:
-        return False, f"swing risk: only {len(vals)} own predictions in the last 3 h for {key}, the bar is not known (needs {SWING_MIN})."
-    bar = vals[min(len(vals) - 1, int(len(vals) * (1.0 - SWING_TOP)))]
-    tag = f"swing risk {pred:+.2f}/$1 by {EXITS[k]} (bar {bar:+.2f}, the top {SWING_TOP:.0%} of {len(vals)} own predictions in 3 h)"
-    if k == 0:
-        return False, tag + ": the best exit is to hold, not a swing."
-    return pred >= bar, tag
 
 
 def maybe_refit(s: Any, now: float | None = None) -> bool:
@@ -521,13 +355,12 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
     refresh_refs(s, now)
     if _fitting is not None and _fitting.poll() is None:
         return False
-    m = load(s)
     wm = None
     try:
         wm = json.loads(win_path(s).read_text())
     except (OSError, ValueError):
         pass
-    if m and m.get("capped") and m.get("names") == NAMES and now - m["built_at"] < REFIT_EVERY and wm and wm.get("names") == WIN_NAMES:  # a model without the flag has a bar made from uncapped predictions: refit it at once
+    if wm and wm.get("names") == WIN_NAMES and now - wm["built_at"] < REFIT_EVERY:
         return False
     log.info("binary risk: refitting from the tape (separate process)")
     _fitting = subprocess.Popen([sys.executable, "-m", "kalshi_moonshot.binaryrisk"], preexec_fn=lambda: os.nice(15))  # lowers the child's priority only
@@ -607,13 +440,12 @@ def main() -> int:
     if len(rows) < MIN_ROWS:
         log.warning("binary risk: only %d training sides, the model is not refit", len(rows))
         return 1
-    model = fit(rows, now)
     win = fit_win(rows, now)
-    for path, m in ((model_path(s), model), (win_path(s), win)):
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(m))
-        os.replace(tmp, path)
-    log.info("binary risk: fitted on %d sides, bars %s", len(rows), {k: round(v, 3) for k, v in model["cuts"].items()})
+    path = win_path(s)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(win))
+    os.replace(tmp, path)
+    log.info("binary risk: win chance fitted on %d sides", len(rows))
     return 0
 
 

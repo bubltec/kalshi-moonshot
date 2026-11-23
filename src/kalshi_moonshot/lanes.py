@@ -118,7 +118,6 @@ class LaneSpec:
     exit_module: str = ""  # 2026-11-18 (user: "we need a sell module which covers profit and loss"; "you mentioned it above, exit module ... do that"): the name of an exit module in strategies.toml ([exit.<name>], with a `profit` and a `loss` part); its exit settings are this lane's unless the lane writes its own (_with_exit). The name itself decides nothing
     sell_chain: tuple[str, ...] = ()  # 2026-11-18 (user: "we also need to build a sell module, since we're refactoring this flow"): the risk exit's sale as named steps in the lane's own order (sellchain.py), e.g. ["profit_take", "trail", "long_hold", "loss"]. On every risk check the steps are asked in order: a step sells, holds (nothing is sold on that check) or passes to the next. A step left out is not asked; each step still reads its own settings (curve_take, curve_risk_sell, ...). A lane on an exit module that holds `steps` takes them as its chain. Empty = the default order (never_ahead, under_even, profit_take, trail, long_hold, loss), which is what every lane did before the chain, with its sale reasons unchanged; a lane with a chain gets the chain and the step that sold at the end of its sale reason
     buy_chain: tuple[str, ...] = ()  # 2026-11-17 (user: "ladder should not be the entry point"; "the risk score makes way more sense to go FIRST"; "you need to write new code that is modular and can fit in logic in any order"): the buy as named steps in the lane's own order (buychain.py), e.g. ["risk_score", "price", "ladder"]. Both sides start alive; each step is asked of the sides still alive, a no puts a side out, and a side alive after the last step is bought. With a chain set the estimator's own screen is not run in the review (the first step puts the sides forward) and the steps replace this lane's edge rule, no-buy check, risk score rule and trend checks in the decision; the steps read those same settings. Empty = the lane decides as it always has
-    entry_risk_trend: float = 0.0  # 2026-11-17 SHADOW until entry_risk_trend_live (user, on the entry trend check and its fixed 2-minute noise window: "it shouldn't even care about the entry trend by itself. its the risk factor"; "i want to build something that replaces it"; of the two risk numbers, "Exit's risk factor"): above 0, the buy reads the direction of the side's risk as the exit reads it (curverisk.risk: the worse of Kalshi's bid net of the fee and the long layer, the price counted in full) over a look back of this share of the TIME LEFT, in the market's own typical move for that span (the moves before the look back). In shadow every decision's note carries the reading, what it would do and the old price trend beside it, and nothing is gated. A first setting, not fitted. 0 = off
     spot_source: str = ""  # 2026-11-11 (user: "a new curve analysis based on kalshi's data only"): "kalshi" = this lane reads the spot for its curve readings (wave, curve edge, the curve exit's chance) from Kalshi's own prices: a coin's settlement index, else Kalshi's perp reference price for the underlying while it is ticking, the external feed only as a fallback (variants.spot_index). "" = as before (settlement index, else BiQuote). Does not reach the curve model's own features (model_buy), the hot-market gate or the hour-drift gate, which still read the older index
     entry_trend_seconds: float = 0.0  # buy only when the side's price (mid of the tape's bid and ask, in its own terms) has not fallen over the last this many seconds by more than entry_trend_min (0 = no check). A market that is falling when we would buy lost 16-18% over 7 days; one flat or rising lost 0-5%
     entry_trend_min: float = 0.0  # the least the side's price must have changed over entry_trend_seconds, in dollars (0.0 = not falling; 0.01 = up a cent)
@@ -129,9 +128,6 @@ class LaneSpec:
     model_features: str = "fibonacci"  # ... which reads these curve readings
     record_min: float = 0.20  # the state_record step: the state's recorded net per dollar staked (shrunk toward zero) must be at least this ...
     record_min_n: int = 15  # ... and be read over at least this many earlier markets at the buy's price band (staterecord.py)
-    risk_score_buy: float = 0.0  # 2026-11-16 PAPER (user: "all these factors need to build towards that risk score"; "I thought you were putting our new logic up as a lane"): above 0, the lane buys a side only while its risk by riskscore.py (Kalshi's price moved by the curve's readings) is at or under this now and at two looks back that scale with the time left (a thirtieth and a fifteenth of it). No price or minute band is needed beside it. 0 = off. Not shown to pay: the number equalled Kalshi's mid held out
-    curve_risk_score: bool = False  # 2026-11-16 PAPER: the risk exit's chance is riskscore.py's number in place of the bid net of its fee, so the line (curve_risk_sell) and its wait act on a risk that is high and has stayed high; an unreadable score falls back to the bid
-    entry_scenario_view: bool = False  # 2026-11-16 SHADOW (user: "build a structured buy scenario every 15 mins ... based on the previous hour of ... markets"; "we are building our scenario"; "Yes, build it"): every decision that reaches the buy gates notes the market's scenario (scenario.py): the target's place in the index's range over the 15, 30 and 60 minutes before the open, the drift across each, the cushion now in typical remaining moves, where the spot sits in each range now, and the last four markets' finishing margin and flips. It gates nothing: the labels are scored on the markets that follow before any becomes a rule
     entry_spike_rise: float = 0.30  # dollars, the rise that counts as a spike
     entry_spike_range: float = 0.30  # dollars, the bid swing that counts as a spike
     min_return: float = 0.0  # a win must pay at least this much on the stake, after the fee
@@ -254,9 +250,9 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
     return replace(base, **row)
 
 
-BUY_STEPS = ("price", "spread", "entry_window", "time_left", "blackout", "volume", "min_return", "risk_score", "risk_trend", "price_trend", "perp_worth", "calm", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow", "binary_risk", "swing_risk", "priskp", "wave_top", "wave_trend", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
-RETIRED_FIELDS = ("max_spot_crosses", "skip_varieties")  # lane settings that no longer exist: a lane file that still writes one loads without it and says so in the log. max_spot_crosses (no buy at 4 or more strike crossings in five minutes) was removed 2026-11-21 at the user's word ("We don't want any of that"): a fixed count, set on the outside BiQuote feed, with no study file behind it. skip_varieties and the `variety` step that read it (no buy of a named curve variety, the live lanes' G-no and A-yes) went the same day at the same word ("That should have been removed"; earlier, 2026-11-19: stable and volatile curves both get bets): no curve shape is refused, the letter stays in the cushion step's note
-RETIRED_STEPS = ("context_score", "variety")  # steps that no longer exist: a lane file that still names one loads without it and says so in the log, so a config written for an older image does not stop the bot. context_score (shadow, never said no) was removed 2026-11-21: on the bot's own 132 live commodity bets its percentile did not separate the bets that ended ahead from the ones behind (80%, 77%, 80% ahead by thirds)
+BUY_STEPS = ("price", "spread", "entry_window", "time_left", "blackout", "volume", "min_return", "price_trend", "perp_worth", "calm", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "win_chance_shadow", "priskp", "wave_top", "wave_trend", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
+RETIRED_FIELDS = ("max_spot_crosses", "skip_varieties", "risk_score_buy", "entry_risk_trend", "entry_risk_trend_live", "curve_risk_score", "entry_scenario_view")  # lane settings that no longer exist: a lane file that still writes one loads without it and says so in the log. max_spot_crosses (no buy at 4 or more strike crossings in five minutes) was removed 2026-11-21 at the user's word ("We don't want any of that"): a fixed count, set on the outside BiQuote feed, with no study file behind it. skip_varieties and the `variety` step that read it (no buy of a named curve variety, the live lanes' G-no and A-yes) went the same day at the same word ("That should have been removed"; earlier, 2026-11-19: stable and volatile curves both get bets): no curve shape is refused, the letter stays in the cushion step's note
+RETIRED_STEPS = ("context_score", "variety", "risk_score", "risk_trend", "binary_risk_shadow", "binary_risk", "swing_risk", "win_value_shadow")  # steps that no longer exist: a lane file that still names one loads without it and says so in the log, so a config written for an older image does not stop the bot. context_score (shadow, never said no) was removed 2026-11-21: on the bot's own 132 live commodity bets its percentile did not separate the bets that ended ahead from the ones behind (80%, 77%, 80% ahead by thirds)
 
 
 def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> dict[str, Any]:
@@ -276,10 +272,10 @@ def _inherited(rows: dict[str, Any], name: str, _seen: tuple[str, ...] = ()) -> 
 def _with_module(row: dict[str, Any], name: str, modules: dict[str, Any]) -> dict[str, Any]:
     """A lane's settings with `buy_module = "name"` resolved (2026-11-17, user: "we should be able to have multiple modules. And assign a lane to a module"). A module is a named buy chain in strategies.toml:
 
-        [module.risk_first]
-        label = "the risk score picks the side, the ladder checks the worth last"
-        steps = ["risk_score", "price", "ladder"]
-        risk_score_buy = 0.25        # optional: any lane setting, as the module's default
+        [module.priced]
+        label = "the price band, then the ladder checks the worth last"
+        steps = ["price", "ladder"]
+        price = [0.30, 0.85]         # optional: any lane setting, as the module's default
 
     The lane's buy_chain becomes the module's steps, and every other setting the module writes is the lane's unless the lane writes its own. Many lanes may name one module; a lane names at most one, and does not also write buy_chain."""
     module = row.get("buy_module")
@@ -476,14 +472,14 @@ def spec_for(s: Settings, name: str) -> LaneSpec:
 _NOT_LOGIC = frozenset({
     "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
     "buy_redecide_shadow", "stake_vol_shadow", "record_adjust", "paper_fill_model", "buy_slip", "buy_max_move", "buy_retries", "buy_retry_chase",
-    "buy_module", "exit_module", "entry_spike_view", "entry_scenario_view",
+    "buy_module", "exit_module", "entry_spike_view",
 })
 
 
 def settings_of(spec: LaneSpec, s: Any) -> dict[str, str]:
     """Everything that decides what this lane buys, how much, and how it gets out, including the global rules that reach it (2026-11-19: rebuilt when the rules outside the buy and sell modules were removed, so every lane has a new version from that day)."""
     out = {f.name: repr(getattr(spec, f.name)) for f in fields(spec) if f.name not in _NOT_LOGIC}
-    out["buy_chain"] = repr(tuple(x for x in spec.buy_chain if x not in ("state_record_shadow", "binary_risk_shadow", "win_chance_shadow", "win_value_shadow")))  # a shadow step that never says no changes nothing the lane does: not a new version
+    out["buy_chain"] = repr(tuple(x for x in spec.buy_chain if x not in ("state_record_shadow", "win_chance_shadow", "win_value_shadow")))  # a shadow step that never says no changes nothing the lane does: not a new version
     out["kelly_fraction"] = repr(None if spec.fixed_stake else s.kelly_fraction)
     chain = tuple(x for x in spec.sell_chain if not (x == "late_tight" and not (spec.curve_risk_late_tight > 0 and spec.curve_risk_late_tight_live)))  # late_tight in shadow changes nothing the lane does, so it is not part of the version
     out["sell_chain"] = repr(chain)

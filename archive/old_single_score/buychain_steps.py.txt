@@ -1,0 +1,72 @@
+@step("risk_score")
+def risk_score_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The risk score favours the side: its risk (riskscore.py) is at or under the lane's level (risk_score_buy) now and at two looks back that scale with the time left (riskscore.looks_for)."""
+    from . import riskscore
+
+    level = ctx.spec.risk_score_buy
+    if level <= 0:
+        return Check(False, "the lane sets no risk level (risk_score_buy)")
+    rs = riskscore.live(shot.series or shot.ticker.split("-")[0], shot.ticker, shot.side, ctx.now + shot.hours_to_close * 3600.0, ctx.now, ctx.s.data_dir)
+    if rs is None:
+        return Check(False, "no risk score yet (a market under a minute old, a price at the edge or a stale index)")
+    risks = ", ".join(f"{100 * (1 - c):.0f}%" for c in rs[0])
+    if not riskscore.low_risk(rs[0], level):
+        return Check(False, f"risk {risks} (now and two looks back that scale with the time left), over the lane's {100 * level:.0f}%")
+    return Check(True, f"risk {risks}, at or under {100 * level:.0f}% and held")
+
+@step("risk_trend")
+def risk_trend_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The side's risk, as the exit reads it, has held or improved over the lane's look back (entry_risk_trend, a share of the time left)."""
+    from . import runner
+
+    if ctx.spec.entry_risk_trend <= 0:
+        return Check(False, "the lane sets no look back (entry_risk_trend)")
+    got = runner.risk_trend_read(shot, ctx.spec, ctx.now, keep=False)
+    if got is None:
+        return Check(False, "no risk trend yet (a young market, or its quotes or long layer are missing)")
+    return Check(got[2] == "holding", f"risk trend {got[0]:+.1f} over {got[1]:.0f}s, {got[2]}")
+
+@step("binary_risk_shadow")
+def binary_risk_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
+    """SHADOW, never says no (2026-11-20, user: "yes let's try it"): the binary risk model (binaryrisk.py), a buy-or-not score read from the settlement index's own curve and the price paid, is asked of every side that reaches this step, and its verdict goes in the decision's note as "would buy" or "would not buy" with the predicted net per $1 and the curve readings. The bet is scored later by that verdict, held and as sold, on the same bets (CLAUDE.md rule 5: a week of live bets before anyone turns it on). Reads memory only. It changes nothing the lane does."""
+    from . import binaryrisk
+
+    try:
+        ok, why = binaryrisk.admits(ctx.s, shot, shot.ask)
+    except Exception as exc:  # a shadow reading that fails must never stop a buy
+        return Check(True, f"shadow: binary risk unreadable ({exc})")
+    return Check(True, f"shadow: {'would buy' if ok else 'would not buy'}: {why}")
+
+@step("win_value_shadow")
+def win_value_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
+    """SHADOW, never says no (2026-11-21, user via parent): after the price-free win chance, ask whether the price pays: win chance minus ask minus the fee at least the bar from this market's own last three hours of the same readings, never an ask of 0.45-0.55 (binaryrisk.value_admits). The verdict goes in the note as "would buy" or "would not buy" with the numbers; the bet is scored later by it (CLAUDE.md rule 5). Reads memory only. It changes nothing the lane does."""
+    from . import binaryrisk
+
+    try:
+        ok, why = binaryrisk.value_admits(ctx.s, shot, shot.ask)
+    except Exception as exc:  # a shadow reading that fails must never stop a buy
+        return Check(True, f"shadow: value unreadable ({exc})")
+    return Check(True, f"shadow: {'would buy' if ok else 'would not buy'}: {why}")
+
+@step("binary_risk")
+def binary_risk_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The binary risk model decides the buy (2026-11-20, user: "I don't want anything else impacting it"): the side is bought when its predicted net per $1 (binaryrisk.py, read from the settlement index's own curve and the price paid, held to settlement or sold early, whichever the model finds best) is in the top 5% of the last day's sides. Never an ask of 0.45-0.55, never under 0.20. A model that is missing, a curve that cannot be read yet, or an error is a no, so a buy never rests on a guess. Reads memory only. A lane that wants only the model has this as the one step of its module and no exit module (it holds to settlement), so nothing else changes what is bought or sold."""
+    from . import binaryrisk
+
+    try:
+        ok, why = binaryrisk.admits(ctx.s, shot, shot.ask)
+    except Exception as exc:
+        return Check(False, f"binary risk unreadable ({exc})")
+    return Check(ok, why)
+
+@step("swing_risk")
+def swing_risk_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The early-swing risk gate (2026-11-20): the binary risk model read for a cheap side whose best exit is an early sale, held to the top 3% of this market series' own predictions over the last three hours (binaryrisk.swing_admits). Memory only."""
+    from . import binaryrisk
+
+    try:
+        ok, why = binaryrisk.swing_admits(ctx.s, shot, shot.ask)
+    except Exception as exc:
+        return Check(False, f"swing risk unreadable ({exc})")
+    return Check(ok, why)
+

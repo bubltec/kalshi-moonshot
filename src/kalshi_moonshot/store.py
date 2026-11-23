@@ -992,13 +992,6 @@ class Store:
                     return
             time.sleep(0.01)
 
-    def add_risk_readings(self, rows: Sequence[tuple[str, float, str, float | None, float | None, float]]) -> None:
-        """Every open market's risk reading at a 30 s mark (riskrecord.py's background thread; never an evaluation). A mark already written is left."""
-        for r in rows:
-            self.db.execute("INSERT OR IGNORE INTO risk_readings (ticker, ts, x, yes_bid, yes_ask, age) VALUES (?,?,?,?,?,?)", tuple(r))
-        if rows:
-            self.db.commit()
-
     def add_manual_entry(self, **e: Any) -> None:
         """Record a hand-placed buy and the entry context at the moment of the fill. A repeated fill id is ignored."""
         cols = ",".join(e)

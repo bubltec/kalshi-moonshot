@@ -1,0 +1,18 @@
+    def add_risk_readings(self, rows: Sequence[tuple[str, float, str, float | None, float | None, float]]) -> None:
+        """Every open market's risk reading at a 30 s mark (riskrecord.py's background thread; never an evaluation). A mark already written is left."""
+        for r in rows:
+            self.db.execute("INSERT OR IGNORE INTO risk_readings (ticker, ts, x, yes_bid, yes_ask, age) VALUES (?,?,?,?,?,?)", tuple(r))
+        if rows:
+            self.db.commit()
+
+    def _risk_score(self, t: Target, now: float) -> float | None:
+        """The chance the side pays by riskscore.py (lane field curve_risk_score), or None when it cannot be read (the exit then reads the bid, as it always has)."""
+        from . import riskscore
+
+        try:
+            got = riskscore.live(t.ticker.split("-")[0], t.ticker, t.side, t.close_ts, now, str(self.get_settings().data_dir), (0.0,))
+        except Exception as exc:
+            log.warning("risk score unreadable for %s %s: %s", t.ticker, t.lane, exc)
+            return None
+        return got[0][0] if got else None
+
