@@ -29,7 +29,6 @@ exit_module = "priskp_exit"
 wave_rev_k = 1.0
 wave_rev_p = 0.5
 wave_cushion = false
-wave_high_zone = false
 wave_whipsaw_range = 0.0
 priority = 45
 fixed_stake = 5.0
@@ -65,7 +64,7 @@ def test_the_lane_loads_with_the_one_buy_step_and_the_staircase_sale(spec):
     assert sp.enabled and sp.buy_chain == ("price", "priskp") and sp.sell_chain == ("wave_take",)
     assert sp.buy_module == "priskp" and sp.exit_module == "priskp_exit"
     assert sp.buy_rest_follow and sp.buy_rest_seconds == 5 and sp.buy_rest_below == 0.02 and sp.buy_rest_avg_seconds == 5  # the resting buy follows the ask down (user, 2026-11-22)
-    assert (sp.wave_rev_k, sp.wave_cushion, sp.wave_high_zone, sp.wave_whipsaw_range) == (1.0, False, False, 0.0)  # the wave lane's staircase, set for PriskP: one concept
+    assert (sp.wave_rev_k, sp.wave_cushion, sp.wave_whipsaw_range) == (1.0, False, 0.0)  # the wave lane's staircase, set for PriskP: one concept
 
 
 def test_the_lane_has_no_gate_the_user_did_not_ask_for(spec):

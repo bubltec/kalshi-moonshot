@@ -443,17 +443,12 @@ def test_integration_the_reversal_is_wide_with_time_left_and_narrows_toward_the_
     assert t.wave_last_low == pytest.approx(0.36)
 
 
-def test_integration_in_the_high_zone_it_holds_only_while_it_cannot_likely_lose(tmp_path, monkeypatch, mem):
+def test_integration_a_bet_at_80c_or_more_is_not_sold_on_the_chance_of_losing(tmp_path, monkeypatch, mem):
+    """The high-zone sale was removed 2026-11-23 (user: it was never part of the design, and it kept coming back): at 0.85 a bet with a small cushion is sold by the staircase or the spike trail, or not at all."""
     w, t, close = take_target(tmp_path, monkeypatch, 0.50, unit=0.10)
     ask = asker(w, t, close)
-    spot_feed(close - 2.0, 102.0)  # a cushion of 2 against a typical move of 0.15: out of reach with 30 s left
-    assert ask(0.85, 30) is None and ask(0.85, 29) is None  # held: it will not lose
-    spot_feed(close - 2.0, 100.03)  # a cushion of 0.03: the bet could still be lost
-    why = ask(0.85, 28)
-    assert why and "high zone" in why and "chance of losing" in why
-    t.wave_peak_bid = 0.0
-    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
-    assert ask(0.75, 28) is None  # under 0.80 the zone's comparison is not asked
+    spot_feed(close - 2.0, 100.03)  # a cushion of 0.03: the bet could still be lost; the old zone sold here with "the chance of losing"
+    assert ask(0.85, 28) is None and ask(0.85, 27) is None
 
 
 def test_integration_the_cushion_widens_the_swing_with_the_spot_on_the_bets_side_and_tightens_it_on_the_wrong_side(tmp_path, monkeypatch, mem):
