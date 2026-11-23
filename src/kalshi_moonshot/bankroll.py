@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from .config import Settings
+from .manualrest import sale_fee
 from .store import Store
-from .strategy import fee_per_contract
 
 
 class ColdMemory(RuntimeError):
@@ -44,7 +44,7 @@ def paper_pnl(store: Store, live: bool = False) -> dict[str, dict[str, float]]:
         agg["n"] += 1
         agg["staked"] += r["stake_usd"]
         if r["exit_price"] is not None:
-            agg["returned"] += r["contracts"] * (r["exit_price"] - fee_per_contract(r["exit_price"]))
+            agg["returned"] += r["contracts"] * (r["exit_price"] - sale_fee(r["exit_price"], r["exit_reason"]))  # a resting fill paid no fee (manualrest.sale_fee)
         elif _won(r):
             agg["wins"] += 1
             agg["returned"] += r["contracts"]

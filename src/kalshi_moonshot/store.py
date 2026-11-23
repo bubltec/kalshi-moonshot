@@ -1016,7 +1016,7 @@ class Store:
         """
         done = "(COALESCE(outcome,'') IN ('yes','no') OR exit_ts IS NOT NULL)"
         return self.db.execute(
-            f"""SELECT id, ticker, lane, side, outcome, contracts, stake_usd, exit_price
+            f"""SELECT id, ticker, lane, side, outcome, contracts, stake_usd, exit_price, exit_reason
                 FROM decisions
                 WHERE action='bet' AND stake_usd IS NOT NULL AND contracts > 0
                   AND COALESCE(lane,'moonshot') != 'manual'

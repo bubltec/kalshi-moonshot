@@ -67,6 +67,18 @@ def plan(chance: float | None, left: float, bid: float, far: float, guard: float
     return "rest", price
 
 
+def is_rest_fill(reason: Any) -> bool:
+    """A sale reason of a resting order the market came up to (a lane's curve_rest sale, or a wave lane's resting gain-side sale, restsell.py): filled at its own price, as a maker."""
+    return str(reason or "").startswith(REST_PREFIX)
+
+
+def sale_fee(price: float, reason: Any) -> float:
+    """The fee a sale at `price` paid a contract: none for a resting fill (a maker pays no trading fee on a standard series), the taker fee for every other sale. Reports and the paper P&L count the exit fee through this."""
+    from .strategy import fee_per_contract
+
+    return 0.0 if is_rest_fill(reason) else fee_per_contract(price)
+
+
 def rest_fill_price(why: str) -> float | None:
     """The ask's price from a resting-ask sale reason ("... filled at 0.63 ..."), else None."""
     if not why.startswith(REST_PREFIX):
