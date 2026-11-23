@@ -220,6 +220,11 @@ class Target:
     wave_arm_swings: float = 1.0
     value_sale_premium: float = 0.0
     value_after_flip: bool = False
+    value_crossed: bool = False
+    spot_perp: bool = False
+    perp_ref: float = 0.0
+    value_wait_share: float = 0.0
+    value_since: float = 0.0
     value_sale_logged: bool = False
     value_sale_failed: bool = False
     wave_cushion: bool = True
@@ -884,6 +889,16 @@ class ProfitWatcher:
             return None
         from . import wavetop
 
+        if t.spot_perp:  # the Kalshi perp against its own value at the window's open: it leads the settlement index and the basis between them drops out
+            kp = perp_index(t.ticker.split("-")[0])
+            if kp:
+                if t.perp_ref <= 0:
+                    t.perp_ref = ticks_mod.history.first_at_or_after(kp, t.close_ts - 900.0, 60.0) or 0.0
+                if t.perp_ref > 0:
+                    pg = ticks_mod.history.window(kp, now - 620.0, now)
+                    read = wavetop.spot_read(pg[0], pg[1], now, t.perp_ref, t.side) if pg and pg[0] else None
+                    if read is not None:
+                        return read
         got = ticks_mod.history.window(t.shock_index, now - 620.0, now)
         return wavetop.spot_read(got[0], got[1], now, t.shock_ref, t.side) if got and got[0] else None
 
@@ -1027,10 +1042,21 @@ class ProfitWatcher:
             spot = fx.get("spot")
             if spot is None or spot[0] <= 0:
                 return None  # before the flip the bet is a scalp, not a favourite: the value sale does not act
+        if t.value_crossed:
+            spot = fx.get("spot")
+            if spot is None or spot[0] > 0:
+                t.value_since = 0.0  # the spot is still on the bet's side of the target: nothing to sell for yet
+                return None
         hold = 1.0 - lose
         pays = bid - fee_per_contract(bid)
         if pays < hold + t.value_sale_premium:
+            t.value_since = 0.0  # a break: the wait starts over
             return None
+        if t.value_wait_share > 0:
+            if t.value_since <= 0:
+                t.value_since = now
+            if now - t.value_since < t.value_wait_share * left:
+                return None  # it has not held long enough yet: a share of the time left, never fixed seconds
         reason = f"value sale: the bid {bid:.2f} pays {pays:.3f} after the sale fee, at or over the hold value {hold:.3f} (the spot's chance of ending on the wrong side {lose:.3f}) plus a premium of {t.value_sale_premium:g}"
         reason += fx.note()
         extra = {"bid": round(bid, 4), "pays": round(pays, 4), "hold": round(hold, 4), "p_lose": round(lose, 4), "premium": t.value_sale_premium}
@@ -1518,6 +1544,8 @@ class ProfitWatcher:
                 held.wave_rev_k, held.wave_rev_p, held.wave_cushion = spec.wave_rev_k, spec.wave_rev_p, spec.wave_cushion
                 held.wave_time_curve, held.wave_arm_swings = spec.wave_time_curve, spec.wave_arm_swings
                 held.value_sale_premium, held.value_after_flip = spec.value_sale_premium, spec.value_after_flip
+                held.value_crossed, held.value_wait_share = spec.value_sale_crossed, spec.value_sale_wait_share
+                held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
                 held.wave_rest_share, held.rest_live = spec.wave_rest_share, s.is_live(lane, ticker.split("-")[0])  # a gain-side wave sale rests at the ask (restsell.py); a live lane's rest is a real order

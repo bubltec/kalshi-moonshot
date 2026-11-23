@@ -112,3 +112,64 @@ def test_the_lane_file_sets_value_after_flip(tmp_path, monkeypatch):
     (tmp_path / "strategies.toml").write_text(TOML.replace("wave_top_trend_hours = 1.0", "wave_top_trend_hours = 1.0\nvalue_after_flip = true\n"))
     assert lanes.lane_specs(config.load())["wt"].value_after_flip is True
     sellchain.check(("value_hold", "wave_take", "wave_salvage"), "x")
+
+
+def test_integration_crossed_only_waits_for_the_spot_to_cross_the_target(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.value_crossed = True
+    spot_feed(close - 300, 100.3)  # the spot still on the bet's side: not crossed
+    assert asker(w, t, close)(0.30, 300) is None
+    spot_feed(close - 300, 99.7)  # crossed
+    assert asker(w, t, close)(0.50, 300) is not None
+
+
+def test_integration_the_wait_is_a_share_of_the_time_left_and_a_break_restarts_it(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.value_wait_share = 0.25
+    ask = asker(w, t, close)
+
+    def at(bid, left):
+        spot_feed(close - left, 99.7)  # the spot's ticks are fresh at every ask
+        return ask(bid, left)
+
+    assert at(0.50, 300) is None and t.value_since > 0  # the condition begins to hold: it must hold 0.25 x the time left
+    assert at(0.50, 260) is None  # 40 s in, under 0.25 x 260 = 65 s
+    assert at(0.50, 200) is not None  # 100 s in, over 0.25 x 200 = 50 s
+    t.value_since = 0.0
+    assert at(0.50, 300) is None
+    assert at(0.05, 280) is None and t.value_since == 0.0  # the bid fell under the hold value: a break, the wait restarts
+    assert at(0.50, 270) is None
+
+
+def test_the_lane_file_sets_the_wait_and_the_cross(tmp_path, monkeypatch):
+    from kalshi_moonshot import config, lanes
+
+    spec(tmp_path, monkeypatch)
+    (tmp_path / "strategies.toml").write_text(TOML.replace("wave_top_trend_hours = 1.0", "wave_top_trend_hours = 1.0\nvalue_sale_crossed = true\nvalue_sale_wait_share = 0.25\n"))
+    sp = lanes.lane_specs(config.load())["wt"]
+    assert sp.value_sale_crossed is True and sp.value_sale_wait_share == 0.25
+
+
+def test_integration_spot_perp_reads_the_perp_against_its_own_open(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.value_crossed = True
+    now = close - 300
+    spot_feed(now, 100.3)  # the settlement index: 0.3 over the target, the bet's side
+    T = [close - 1500.0 + k for k in range(1501 - 300)]
+    V = [100.0 if x <= close - 900.0 + 5 else 99.7 + 0.01 * (-1) ** int(x) for x in T]  # the perp: 100.0 at the open, 99.7 now
+    ticks_mod.history.warm("KP_BTC", list(zip(T, V, strict=True)), T[0] - 1.0)
+    assert asker(w, t, close)(0.50, 300) is None  # off: the settlement index says the spot is on the bet's side
+    t.spot_perp = True
+    assert asker(w, t, close)(0.50, 300) is not None  # on: the perp is under its open, the wrong side
+    ticks_mod.history.clear()
+    spot_feed(now, 100.3)
+    t.perp_ref = 0.0
+    assert asker(w, t, close)(0.50, 300) is None  # no perp reading: the settlement index again
+
+
+def test_the_lane_file_sets_spot_perp(tmp_path, monkeypatch):
+    from kalshi_moonshot import config, lanes
+
+    spec(tmp_path, monkeypatch)
+    (tmp_path / "strategies.toml").write_text(TOML.replace("wave_top_trend_hours = 1.0", "wave_top_trend_hours = 1.0\nspot_perp = true\n"))
+    assert lanes.lane_specs(config.load())["wt"].spot_perp is True

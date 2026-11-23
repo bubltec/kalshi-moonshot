@@ -19,6 +19,7 @@ def fee(p):
     return 0.07 * p * (1.0 - p)
 
 
+WAITS = (0.1, 0.25, 0.5)  # the value sale waits until its condition has held without a break for this share of the time left (2026-11-23, user: it was the first wave it hit, "it should have given more time"); three shares shown, none chosen yet; waitx = the same, sold only after the spot crossed
 MARGINS = (-0.05, -0.02, 0.0, 0.02, 0.05)
 HOLDS = (0.005, 0.01, 0.02, 0.05, 0.10)  # the hold step: no value sale while p_lose is at or under this bar (2026-11-23, user: hold the clearly safe ones for the small gain); a bar is a chance, shown at five levels, none chosen yet
 res, skipped = [], 0
@@ -26,6 +27,9 @@ for b in data["bets"]:
     t0, close, n = float(b["ts"]), float(b["close_ts"]), float(b["contracts"])
     basis, side = float(b["stake_usd"]) / n, b["side"]
     q, sp = data["quotes"][b["ticker"]], spot.get(b["ticker"])
+    if sp and os.environ.get("PERP"):  # SPOT holds the coin's perp ticks: the target is the perp's own value at the window's open (a tick within 60 s of it)
+        opened = [x for x in sp["ticks"] if close - 900 <= x[0] <= close - 840]
+        sp = dict(sp, strike=opened[0][1] if opened else None)
     if not sp or not sp["ticks"] or not sp["strike"]:
         skipped += 1
         continue
@@ -49,18 +53,22 @@ for b in data["bets"]:
     actual = ((float(b["exit_price"]) - fee(float(b["exit_price"]))) if sold else (1.0 if won else 0.0)) - basis - fee(basis)
     cache = {}
 
+    cush = {}
+
     def hold_value(sec):
         if sec not in cache:
             k = sum(1 for x in T if x <= sec)  # ticks up to now only
             r = wavetop.spot_read(T[:k], V[:k], float(sec), float(sp["strike"]), side) if k else None
             cache[sec] = None if r is None else 1.0 - wavetop.p_lose(r[0], r[1], close - sec)
+            cush[sec] = None if r is None else r[0]
         return cache[sec]
 
     def lose_now(sec):
         hv = hold_value(sec)
         return None if hv is None else 1.0 - hv
 
-    def run(take, value_margin, hold_p=None):
+    def run(take, value_margin, hold_p=None, crossed=False, wait_share=0.0):
+        since = None  # when the value sale's condition began to hold without a break (the wait is a share of the time left, never fixed seconds)
         for sec, bid in grid:
             if sec <= t0:
                 continue
@@ -70,21 +78,32 @@ for b in data["bets"]:
             if value_margin is not None and sec % 5 == 0:
                 hv = hold_value(sec)
                 pl = lose_now(sec)
+                if crossed and (cush.get(sec) is None or cush[sec] > 0):
+                    continue  # the spot has not crossed to the wrong side of the target: no sale
                 if hold_p is not None and pl is not None and pl <= hold_p:
                     continue  # the hold step: a bet clearly safe by the spot is not asked the value sale
                 if hv is not None and bid - fee(bid) >= hv - value_margin:
-                    return net
+                    since = sec if since is None else since
+                    if sec - since >= wait_share * (close - sec):
+                        return net
+                else:
+                    since = None
         return held
 
     out = {"actual": actual, "hold": held, "n": n, "won": won, "take": run(True, None), "both": run(True, 0.0)}
     for m in MARGINS:
         out[f"value{m}"] = run(False, m)
+    out["crossed0.0"] = run(False, 0.0, None, True)
+    out["crossed0.02"] = run(False, -0.02, None, True)  # a premium of 0.02 over the hold value
+    for ws in WAITS:
+        out[f"wait{ws}"] = run(False, -0.02, None, False, ws)
+        out[f"waitx{ws}"] = run(False, -0.02, None, True, ws)
     for hp in HOLDS:
         out[f"hold{hp}"] = run(False, 0.0, hp)
     res.append(out)
 print(f"bets {len(res)} (left out: {skipped}); as ran {sum(r['actual'] * r['n'] for r in res):+.2f}, held {sum(r['hold'] * r['n'] for r in res):+.2f}; lost {sum(1 for r in res if not r['won'])}")
 print("rule: net $ | beat / lost to what ran | beat / lost to holding | net on the bets that lost (holding: net)")
-for key in ["take", "value-0.05", "value-0.02", "value0.0", "value0.02", "value0.05", "both"] + [f"hold{h}" for h in HOLDS]:
+for key in ["take", "value-0.05", "value-0.02", "value0.0", "value0.02", "value0.05", "both"] + ["crossed0.0", "crossed0.02"] + [f"wait{w}" for w in WAITS] + [f"waitx{w}" for w in WAITS] + [f"hold{h}" for h in HOLDS]:
     net = sum(r[key] * r["n"] for r in res)
     lo = [r for r in res if not r["won"]]
     print(f"{key:9s} {net:+8.2f} | {sum(1 for r in res if r[key] > r['actual'] + 1e-9):3d} / {sum(1 for r in res if r[key] < r['actual'] - 1e-9):3d} | {sum(1 for r in res if r[key] > r['hold'] + 1e-9):3d} / {sum(1 for r in res if r[key] < r['hold'] - 1e-9):3d} | {sum(r[key] * r['n'] for r in lo):+7.2f} ({sum(r['hold'] * r['n'] for r in lo):+.2f})")
