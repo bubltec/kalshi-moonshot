@@ -1,30 +1,26 @@
-"""The PriskP lane's sale is the wave lane's `wave_take` staircase with the PriskP lane's own settings (one concept, 2026-11-22: swing size 1.0, the cushion factor off, no whipsaw switch, the high zone off, studies/results/2026-11-22-priskp-staircase-study.txt)."""
+"""The PriskP lane's sale is the wave lane's `wave_take` staircase with the PriskP lane's own settings (one concept, 2026-11-22: swing size 1.0, the cushion factor off, no whipsaw switch, studies/results/2026-11-22-priskp-staircase-study.txt)."""
 import pytest
 
 from tests.test_wave_top import asker, mem, spot_feed, take_target  # noqa: F401 (mem is a fixture)
 
 
 def priskp_settings(t):
-    t.wave_rev_k, t.wave_rev_p, t.wave_cushion, t.wave_high_zone, t.wave_whipsaw = 1.0, 0.5, False, False, 0.0
+    t.wave_rev_k, t.wave_rev_p, t.wave_cushion, t.wave_whipsaw = 1.0, 0.5, False, 0.0
 
 
-def test_unit_the_high_zone_is_a_lane_setting_on_for_the_wave_lane_and_off_for_priskp(tmp_path, monkeypatch, mem):
-    from kalshi_moonshot import lanes
+def test_unit_there_is_no_high_zone_sale_and_no_lane_setting_for_one(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import lanes, wavetop
 
-    assert lanes.LaneSpec.__dataclass_fields__["wave_high_zone"].default is True  # the wave lane as it was
+    assert "wave_high_zone" not in lanes.LaneSpec.__dataclass_fields__  # removed 2026-11-23 (user: it was never part of the design); a lane file naming it is refused
+    assert not hasattr(wavetop, "HIGH")
 
 
-def test_integration_with_the_high_zone_off_a_bet_in_the_zone_is_not_sold_on_the_chance_of_losing(tmp_path, monkeypatch, mem):
+def test_integration_a_bet_in_the_old_high_zone_is_not_sold_on_the_chance_of_losing(tmp_path, monkeypatch, mem):
     w, t, close = take_target(tmp_path, monkeypatch, 0.50, unit=0.10)
     priskp_settings(t)
     ask = asker(w, t, close)
-    spot_feed(close - 2.0, 100.03)  # a cushion of 0.03: the wave lane would sell here (its own test)
-    assert ask(0.85, 28) is None
-    t.wave_high_zone = True
-    t.wave_peak_bid = 0.0
-    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
-    why = ask(0.85, 27)
-    assert why and "high zone" in why  # the same bet with the setting on is sold
+    spot_feed(close - 2.0, 100.03)  # a cushion of 0.03: the bet could still be lost; the old high-zone sale would have sold here
+    assert ask(0.85, 28) is None and ask(0.85, 27) is None
 
 
 def test_integration_the_priskp_staircase_swing_is_one_typical_minute_scaled_by_the_time_left(tmp_path, monkeypatch, mem):

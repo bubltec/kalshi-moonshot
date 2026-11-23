@@ -208,7 +208,6 @@ class Target:
     wave_time_curve: tuple = ()
     wave_arm_swings: float = 1.0
     wave_cushion: bool = True
-    wave_high_zone: bool = True
     wave_whipsaw: float = 0.0
     wave_kind: str = ""  # "whipsaw" once the bet has followed the whipsaw shape, else ""
     wave_range_u: float = 0.0
@@ -664,7 +663,7 @@ class ProfitWatcher:
         gain, room, rebuy, unit, bar = ProfitWatcher._sell_take_state(self, t, bid, now, left, c)
         look, net = c.look, c.net
         wants = pnl > 0 and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit)
-        flat_ok = wants and (left <= 900.0 * curverisk.LATE_SHARE or bid >= curverisk.HIGH_BID) and curverisk.flat_holds(net, self._take_cushion(t, now, left, net), unit, left)  # in the last fifth a flat bid is held while the spot's cushion backs the price; a thin cushion sells (user, 2026-11-14)
+        flat_ok = wants and left <= 900.0 * curverisk.LATE_SHARE and curverisk.flat_holds(net, self._take_cushion(t, now, left, net), unit, left)  # in the last fifth a flat bid is held while the spot's cushion backs the price; a thin cushion sells (user, 2026-11-14)
         taken = wants and not curverisk.still_rising(t.risk_take_hist, now, look, unit, flat_ok)
         early = pnl > 0 and t.risk_take_early_bid > 0 and bid >= t.risk_take_early_bid and 900.0 - left <= t.risk_take_early_seconds
         if early:
@@ -816,9 +815,8 @@ class ProfitWatcher:
         return False
 
     def _sell_wave_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
-        """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid:
+        """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid, both by the staircase (the high-zone sale was removed 2026-11-23, user: it was never part of the design):
         1. the staircase: the bid's swings are cut at rev = max(TICK, wave_rev_k x the bid's typical minute x (max(left, 60) / 60)^wave_rev_p x the cushion factor 2 x (1 - P_lose), wave_cushion); the first time the bid falls under the previous swing low (a lower low: the climb is done) it is sold, if the bet has ever been ahead after both fees: at a gain, or at a small loss (the backup that avoids a total loss);
-        2. from HIGH (0.80) up, a bet that is ahead is sold when the chance of losing it (wavetop.p_lose: the spot's cushion in its own typical moves against the time left) is at least what the sale gives up over holding, 1 - bid + fee.
         Reads the quote and tick memory only."""
         if t.bought_ts <= 0 or bid <= 0 or t.entry <= 0:
             return None
@@ -860,13 +858,11 @@ class ProfitWatcher:
                 t.wave_ride_high = max(t.wave_ride_high, bid)
                 if net > 0 and bid <= t.wave_ride_high - t.wave_spike_tr * move - 1e-9:
                     reason, kind = f"wave take: the spike peaked at {t.wave_ride_high:.2f} and the bid fell {t.wave_spike_tr:.1f} of its usual {t.wave_spike_s:.0f} s moves ({t.wave_spike_tr * move:.3f}) under it to {bid:.2f}: sold at the end of the ride, a gain of {net * 100:.1f}c a contract", "spike"
-        if kind == "spike" or t.wave_ride:  # a ride is held until it peaks: neither the staircase nor the high-zone sale ends it
+        if kind == "spike" or t.wave_ride:  # a ride is held until it peaks: the staircase does not end it
             pass
         elif t.wave_best_net > 0 and (net > 0 or t.wave_best_net > t.wave_arm_swings * rev) and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
             where = f"a gain of {net * 100:.1f}c a contract" if net > 0 else f"a small loss of {-net * 100:.1f}c a contract (the bet had been ahead by {t.wave_best_net * 100:.1f}c)"
             reason, kind = f"wave take: the bid {bid:.2f} fell under its last swing low {t.wave_last_low:.2f} (swings of {rev:.3f}, cushion factor {cushion:.2f}, {left:.0f} s left): the climb is done, sold at {where}", "lower low"
-        elif t.wave_high_zone and net > 0 and bid >= wavetop.HIGH - 1e-9 and lose is not None and lose >= 1.0 - bid + fee_per_contract(bid):
-            reason, kind = f"wave take: the bid {bid:.2f} is in the high zone and the chance of losing it is {lose:.2f}, at least the {1.0 - bid + fee_per_contract(bid):.2f} the sale gives up over holding ({left:.0f} s left)", "high zone"
         if not reason:
             return None
         reason += fx.note()
@@ -1374,7 +1370,7 @@ class ProfitWatcher:
                 held.risk_take_trail, held.risk_take_trail_live = spec.curve_take_trail, spec.curve_take_trail_live
                 held.risk_take_trail_timed = spec.curve_take_trail_timed
                 held.risk_never_ahead = spec.curve_risk_never_ahead
-                held.wave_rev_k, held.wave_rev_p, held.wave_cushion, held.wave_high_zone = spec.wave_rev_k, spec.wave_rev_p, spec.wave_cushion, spec.wave_high_zone
+                held.wave_rev_k, held.wave_rev_p, held.wave_cushion = spec.wave_rev_k, spec.wave_rev_p, spec.wave_cushion
                 held.wave_time_curve, held.wave_arm_swings = spec.wave_time_curve, spec.wave_arm_swings
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
