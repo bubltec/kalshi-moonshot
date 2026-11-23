@@ -417,6 +417,17 @@ def wave_top_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
+@step("wave_flag")
+def wave_flag_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The wave flag (waveflag.py; 2026-11-23, a candidate beside wave_top, from scripts/wave_flag_lab.py): a leg of the raw spot, confirmed when the spot comes off its extreme by max(wave_flag_turn x the swing, sigma10), is significant when its swing is at least wave_flag_z x sigma10 x sqrt(max(duration, 5) / 10) (sigma10 = the spot's rms 10 s change over the hour before the open); the flag is that confirmation when at least wave_flag_legs significant legs came in the last wave_flag_window seconds and the whole leg stayed on one side of the target. NO after a peak over the target, YES after a dip under it (the target on the curve's scale: a coin's strike, a commodity's perp value at the open, waveflag.target). The flag stays open for the entry thread's look gap (entry_min_gap_seconds) after its confirmation. Price band and entry window are the lane's own steps. Memory only (the tick history and the target in memory)."""
+    from . import ticks as ticks_mod
+    from . import waveflag
+
+    strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
+    ok, why = waveflag.admits(ctx.s, shot, ctx.spec, ctx.now, strike)
+    return Check(ok, why)
+
+
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""

@@ -84,6 +84,15 @@ class TickHistory:
             lo, hi = bisect.bisect_left(t, start), bisect.bisect_right(t, end)
             return t[lo:hi].tolist(), v[lo:hi].tolist()
 
+    def last_at_or_before(self, index_id: str, ts: float) -> tuple[float, float] | None:
+        """The last tick (time, value) at or before `ts`, however old (a gridded path carries it forward across a pause in the feed, such as a commodity's daily session break), or None."""
+        with self._lock:
+            t = self._ts.get(index_id)
+            if not t:
+                return None
+            i = bisect.bisect_right(t, ts) - 1
+            return (t[i], self._val[index_id][i]) if i >= 0 else None
+
     def first_at_or_after(self, index_id: str, start: float, within: float) -> float | None:
         """The first tick value at or after `start` and no more than `within` seconds later (a window-open reference), or None."""
         with self._lock:
