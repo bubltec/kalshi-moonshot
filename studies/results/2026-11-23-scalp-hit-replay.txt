@@ -1,0 +1,9 @@
+2452 detector bets, 167151 baseline entries (no signal)
+detector, all                      n= 2452 1u in 3 min 0.36 6 min 0.50 | 2u in 3 min 0.19 6 min 0.35 | median s to 1u   100 | win 0.28 hold -0.03/bet
+detector, crypto                   n= 1574 1u in 3 min 0.38 6 min 0.52 | 2u in 3 min 0.20 6 min 0.36 | median s to 1u    99 | win 0.28 hold +0.01/bet
+detector, commodity                n=  878 1u in 3 min 0.32 6 min 0.46 | 2u in 3 min 0.17 6 min 0.32 | median s to 1u   101 | win 0.28 hold -0.09/bet
+baseline, all                      n=167151 1u in 3 min 0.42 6 min 0.57 | 2u in 3 min 0.23 6 min 0.41 | median s to 1u    97 | win 0.37 hold -0.39/bet
+baseline, crypto                   n=114728 1u in 3 min 0.44 6 min 0.58 | 2u in 3 min 0.23 6 min 0.42 | median s to 1u    94 | win 0.37 hold -0.28/bet
+baseline, commodity                n=52423 1u in 3 min 0.40 6 min 0.55 | 2u in 3 min 0.22 6 min 0.40 | median s to 1u   104 | win 0.37 hold -0.63/bet
+
+48 s
