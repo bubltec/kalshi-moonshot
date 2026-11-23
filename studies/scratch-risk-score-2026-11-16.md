@@ -151,3 +151,22 @@ The plain table (no model) settles what the trend is worth. On the line, a spot 
 And Kalshi's price already has it, cell by cell: 42.5% priced against 41.5% won; 55.7% against 55.6%; 19.1% against 17.4%; 79.4% against 77.9%; 87.5% against 88.2%. The gaps are a point or two at most.
 
 That is why its weight in a score that starts from Kalshi's price is small (5-minute trend: +0.05 on the line, +0.07 at a fair cushion, +0.16 at a wide one). The trend is not unimportant; it is priced.
+
+## The arrangement (21:00, design only, nothing built)
+
+User: "i think all of this criteria is right, now how do we arrange it".
+
+Five layers, top to bottom. Buying and selling read the same number.
+
+1. Readings. Each in the market's own units: Kalshi's price (the starting point), the cushion (spot against the target for the time left), the feed's trend over 1, 3, 5 and 15 minutes and the feed nudge, flips per minute lapsed, the target's place in the 15/30/60 scopes, the last four markets.
+2. Scenario. Decides how the readings are weighed: one set of weights per scenario, not one for all. A scenario is read off the curve (cushion zone: on the line / fair / wide; flip rate; spike against the scopes), not off a clock or a price. Time enters only through the cushion (same distance, less time, bigger cushion).
+3. One risk number per side: the chance the side fails. Price moved by the weighted readings, on the odds scale. Both sides of a market add to 1.
+4. Trust band and persistence. The band is how far the number has been off for readings like this one (from the walk-forward record, per scenario). Widest on the line, so a 50/50 never clears it: that is what keeps the 45 to 55 zone undesirable without a coded rule. Persistence: how long the number has stayed on one side of its line, in typical minutes.
+5. Actions, three readings of the same number:
+   - Buy: risk low, and under Kalshi's by more than costs plus the band.
+   - Take profit: in gain and the risk rising (the part of the exit that has paid).
+   - Cut loss: risk high and persistent. Not acted on at 55%. Never keyed on the price paid.
+
+Lines for 5 are quantiles of the market's own recent risk readings (rule 2), not fixed numbers.
+
+Caveat on record: the fitted number has so far equalled Kalshi's mid held out. The arrangement's worth is in the band, the persistence and acting only at high risk, not in out-predicting the price. Open: whether per-scenario weights do better than one set (not fitted yet).

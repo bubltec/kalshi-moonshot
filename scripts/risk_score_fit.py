@@ -7,6 +7,7 @@ The score is the chance a side LOSES. Factors kept, each for the YES side at a m
   time       the share of the market gone x the logit of the mid
   trend3 trend15  is the SPOT trending the side's way (user, 2026-11-16: "i think we're missing one thing if the spot is trending in the direction of the side"): the settlement index's travel over the last 3 and the last 15 minutes, in its own typical moves for that long, + = toward YES. The cushion says where the spot is; this says which way it is going
   trend5 near / mid / far  (user: "the trend should be worth more") the spot's travel over the last 5 minutes, toward YES, given its own weight in three situations: the spot ON THE LINE (the cushion within half a typical remaining move of the target either way), a FAIR cushion (0.5 to 1.5) and a WIDE one (over 1.5). One weight for every situation averages a trend that may matter a lot near the target with one that cannot matter far from it
+  nudge feed what the nudge SHOULD read (user, 2026-11-16: "i think our trend needs to come from the feed though not kalshi's price"; "we should have included that"): the settlement index's travel over the last 60 s in its own typical one-minute moves, + = toward YES. Kept beside the nudge as it is built today, which reads Kalshi's own contract price, so the two can be compared
   nudge      what the nudge reads (user, 2026-11-16: "nudge should be in risk too"): YES's move over the last minute in this market's own typical minutes (the root-mean-square 5 s change of its mid so far, scaled to a minute), + = moving YES's way
   t15 t30 t60  where the target sits in the index's range over the 15, 30 and 60 minutes before the open (0 low, 1 high), centred
   margin     the average finish of the series' last four markets against their targets, in typical moves (+ = above)
@@ -27,10 +28,11 @@ from kalshi_moonshot.lanes import lane_specs
 
 ET = datetime.timezone(datetime.timedelta(hours=-5))
 SINCE = datetime.datetime(2026, 11, 9, 0, 0, tzinfo=ET).timestamp()
-NAMES = ("price", "cushion", "flip rate", "time", "t15", "t30", "t60", "margin", "flips", "nudge", "trend3", "trend15", "trend5 near", "trend5 mid", "trend5 far")
+NAMES = ("price", "cushion", "flip rate", "time", "t15", "t30", "t60", "margin", "flips", "nudge", "trend3", "trend15", "trend5 near", "trend5 mid", "trend5 far", "nudge feed")
 SHOW = {"KXETH15M-26NOV161600": "yes", "KXDOGE15M-26NOV161815": "no"}  # matched on the start of the ticker
 show_rows = []  # (ticker, time, x, mid)
 zrows = []  # (cushion zone, 5-minute spot trend toward YES, yes won, mid): for the plain table under the fit
+z1rows = []  # and with the 60-second trend from the feed (the nudge's reading, taken from the coin)
 z3rows = []  # the same with the 3-minute trend (user: "if anything the past 3 minutes are worth more than 15")
 s = config.load()
 st = db.connect(s.db_path, "main", shared=True)
@@ -105,10 +107,13 @@ for ser in series:
                     k5 = bisect.bisect_right(bt, t - 300.0) - 1
                     tr5 = max(-4.0, min(4.0, math.log(bv[k] / bv[k5]) / (unit * math.sqrt(5.0)))) if k5 >= 0 else 0.0
                     zone = 0 if abs(cush) < 0.5 else 1 if abs(cush) < 1.5 else 2
-                    x = (lg(mid), max(-6.0, min(6.0, cush)), min(1.5, nflips / max((t - opened) / 60.0, 1.0)) * lg(mid), (t - opened) / 900.0 * lg(mid), places[0], places[1], places[2], max(-3.0, min(3.0, pm)), max(-2.0, min(4.0, pf)), max(-3.0, min(3.0, (mid - hist.get(t - 60, mid)) / (math.sqrt(sq / nsq) * math.sqrt(12.0)))) if nsq and sq > 0 else 0.0, max(-4.0, min(4.0, tr3)), max(-4.0, min(4.0, tr15)), tr5 if zone == 0 else 0.0, tr5 if zone == 1 else 0.0, tr5 if zone == 2 else 0.0)
-                    rows.append((day, x, w["result"] == "yes", mid, t - opened))
+                    k1 = bisect.bisect_right(bt, t - 60.0) - 1
+                    tr1 = max(-4.0, min(4.0, math.log(bv[k] / bv[k1]) / unit)) if k1 >= 0 else 0.0
+                    x = (lg(mid), max(-6.0, min(6.0, cush)), min(1.5, nflips / max((t - opened) / 60.0, 1.0)) * lg(mid), (t - opened) / 900.0 * lg(mid), places[0], places[1], places[2], max(-3.0, min(3.0, pm)), max(-2.0, min(4.0, pf)), max(-3.0, min(3.0, (mid - hist.get(t - 60, mid)) / (math.sqrt(sq / nsq) * math.sqrt(12.0)))) if nsq and sq > 0 else 0.0, max(-4.0, min(4.0, tr3)), max(-4.0, min(4.0, tr15)), tr5 if zone == 0 else 0.0, tr5 if zone == 1 else 0.0, tr5 if zone == 2 else 0.0, tr1)
+                    rows.append((day, x, w["result"] == "yes", mid, t - opened, zone, nflips))
                     zrows.append((zone, tr5, w["result"] == "yes", mid))
                     z3rows.append((zone, max(-4.0, min(4.0, tr3)), w["result"] == "yes", mid))
+                    z1rows.append((zone, tr1, w["result"] == "yes", mid))
                     key = next((k_ for k_ in SHOW if w["ticker"].startswith(k_)), None)
                     if key:
                         show_rows.append((key, t, x, mid, cush, nflips))
@@ -182,6 +187,39 @@ for D in days[2:]:
         c = gap[name]
         c[0] += 1; c[1] += won; c[2] += mid; c[3] += p
 
+
+# Per-scenario weights (2026-11-16, user: "Yes, fit it"): the same walk-forward, but one set of weights per scenario instead of one for all. A scenario is read off the curve: the cushion zone (on the line / fair / wide), alone and then split by whether the favorite has changed yet in this market. Design math only; nothing here is a rule.
+ZN = ("on the line", "fair cushion", "wide cushion")
+SCEN = (("by cushion zone", lambda r: r[5], lambda k: ZN[k]),
+        ("by cushion zone and flips so far", lambda r: r[5] * 2 + (r[6] > 0), lambda k: f"{ZN[k // 2]}, {'has flipped' if k % 2 else 'no flip yet'}"))
+MIN_TRAIN = 3000  # a scenario with fewer earlier moments than this is scored with the one-set weights
+ll = lambda p, won: -math.log(min(1 - 1e-6, max(1e-6, p)) if won else 1 - min(1 - 1e-6, max(1e-6, p)))  # noqa: E731
+scen_out = []
+for title, keyf, namef in SCEN:
+    acc = defaultdict(lambda: [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0])  # scenario -> n, loss mid, loss one set, loss own set, |own - won| band sum, sq err, used own
+    dec = defaultdict(lambda: [0, 0.0, 0])  # (scenario, tenth of the own score) -> n, score sum, won
+    last = {}
+    for D in days[2:]:
+        before = [r for r in rows if r[0] < D]
+        if len(before) < 5000:
+            continue
+        w_all = fit(before)
+        parts = defaultdict(list)
+        for r in before:
+            parts[keyf(r)].append(r)
+        w_own = {k: fit(v) for k, v in parts.items() if len(v) >= MIN_TRAIN}
+        last = w_own
+        for r in (r for r in rows if r[0] == D):
+            k = keyf(r)
+            x, won, mid = r[1], r[2], r[3]
+            p_all = sig(sum(a * b for a, b in zip(w_all, x)))
+            p_own = sig(sum(a * b for a, b in zip(w_own[k], x))) if k in w_own else p_all
+            c = acc[k]
+            c[0] += 1; c[1] += ll(mid, won); c[2] += ll(p_all, won); c[3] += ll(p_own, won); c[6] += k in w_own
+            d = dec[(k, min(9, int(p_own * 10)))]
+            d[0] += 1; d[1] += p_own; d[2] += won
+    scen_out.append((title, namef, acc, dec, last))
+
 print(f"window: 2026-11-09 00:00 ET on; {len(rows)} moments on days {', '.join(days)}; scored walk-forward on {', '.join(days[2:])}")
 print("weights of the last fit (trained on every day before the last): " + ", ".join(f"{n} {v:+.3f}" for n, v in zip(NAMES, w_last or [])))
 print(f"log-loss on the held-out days (lower is better): Kalshi's mid {loss['mid'][0] / loss['mid'][1]:.4f} | the score {loss['score'][0] / loss['score'][1]:.4f}")
@@ -192,6 +230,19 @@ for _, _, name in BANDS:
         print(f"  {name:30s} n {c[0]:6d}")
         continue
     print(f"  {name:30s} n {c[0]:6d} | Kalshi's mid said {c[2] / c[0]:5.1%} | the score said {c[3] / c[0]:5.1%} | YES actually won {c[1] / c[0]:5.1%}")
+print("\nweights per scenario, walk-forward on the same held-out days (log-loss, lower is better)")
+for title, namef, acc, dec, last in scen_out:
+    print(f" {title}")
+    tot = [0, 0.0, 0.0, 0.0]
+    for k in sorted(acc):
+        c = acc[k]
+        tot = [tot[0] + c[0], tot[1] + c[1], tot[2] + c[2], tot[3] + c[3]]
+        cells = [(d[0], abs(d[1] / d[0] - d[2] / d[0])) for (kk, _), d in dec.items() if kk == k and d[0] >= 200]
+        band = sum(n_ * e_ for n_, e_ in cells) / sum(n_ for n_, _ in cells) if cells else float("nan")
+        print(f"  {namef(k):34s} n {c[0]:6d} | Kalshi's mid {c[1] / c[0]:.4f} | one set {c[2] / c[0]:.4f} | its own set {c[3] / c[0]:.4f} | trust band (average miss of its own score by tenth) {100 * band:4.1f} pts")
+    print(f"  {'all':34s} n {tot[0]:6d} | Kalshi's mid {tot[1] / tot[0]:.4f} | one set {tot[2] / tot[0]:.4f} | its own set {tot[3] / tot[0]:.4f}")
+    for k in sorted(last):
+        print(f"   last weights, {namef(k)}: " + ", ".join(f"{n} {v:+.2f}" for n, v in zip(NAMES, last[k]) if abs(v) >= 0.005))
 print("\nthe spot's 5-minute trend against the outcome, with no model: by where the spot sits (the cushion) and which way it has been going (YES side)")
 for z, zname in ((0, "ON THE LINE (cushion within 0.5)"), (1, "fair cushion (0.5 to 1.5)"), (2, "wide cushion (over 1.5)")):
     for lo_, hi_, name in ((-9, -1.0, "trending AWAY from YES (under -1)"), (-1.0, -0.3, "drifting away"), (-0.3, 0.3, "flat"), (0.3, 1.0, "drifting toward"), (1.0, 9, "trending TOWARD YES (over +1)")):
@@ -203,6 +254,13 @@ print("\nthe same table with the spot's 3-minute trend")
 for z, zname in ((0, "ON THE LINE (cushion within 0.5)"), (1, "fair cushion (0.5 to 1.5)"), (2, "wide cushion (over 1.5)")):
     for lo_, hi_, name in ((-9, -1.0, "trending AWAY from YES (under -1)"), (-1.0, -0.3, "drifting away"), (-0.3, 0.3, "flat"), (0.3, 1.0, "drifting toward"), (1.0, 9, "trending TOWARD YES (over +1)")):
         rs = [r for r in z3rows if r[0] == z and lo_ <= r[1] < hi_]
+        if len(rs) < 300:
+            continue
+        print(f"  {zname:34s} {name:34s} n {len(rs):5d} | Kalshi's mid said YES {sum(r[3] for r in rs) / len(rs):5.1%} | YES actually won {sum(1 for r in rs if r[2]) / len(rs):5.1%}")
+print("\nthe same table with the spot's 60-second trend (what a feed-based nudge would read)")
+for z, zname in ((0, "ON THE LINE (cushion within 0.5)"), (1, "fair cushion (0.5 to 1.5)"), (2, "wide cushion (over 1.5)")):
+    for lo_, hi_, name in ((-9, -1.0, "moved AWAY from YES (under -1)"), (-1.0, -0.3, "drifted away"), (-0.3, 0.3, "flat"), (0.3, 1.0, "drifted toward"), (1.0, 9, "moved TOWARD YES (over +1)")):
+        rs = [r for r in z1rows if r[0] == z and lo_ <= r[1] < hi_]
         if len(rs) < 300:
             continue
         print(f"  {zname:34s} {name:34s} n {len(rs):5d} | Kalshi's mid said YES {sum(r[3] for r in rs) / len(rs):5.1%} | YES actually won {sum(1 for r in rs if r[2]) / len(rs):5.1%}")

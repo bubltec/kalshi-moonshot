@@ -31,6 +31,7 @@ def result_of(ticker, outcome):
         return None
 
 
+STOP = os.environ.get("STOP", "1") == "1"  # STOP=0 reproduces the earlier runs, which let a held bet ride to settlement
 MODE = os.environ.get("RISE_RULE", "cut")  # "cut": flat holds when FLAT_LEFT s or less is left; "cushion": the same, but only while curverisk.flat_holds (the cushion backs the price); "scaled": the rise a bid needs shrinks with the share of the market gone (a flat bid holds late, a dip sells), no cut-off
 
 
@@ -109,8 +110,18 @@ for r in rows:
             if gain > 0 and bid >= 0.05 and curverisk.take_profit(gain, room, left, 900.0, fee_per_contract(bid), unit) and not holds(hist, t, look, unit, ok, left):
                 got = (t, bid); break
         t += 1.0
+    stopped_at = None
+    if not got and STOP:  # a bet the take does not sell can still be stopped: the price-only max-loss stop (pnl <= -0.5 x the chance, no wait, no hour view), as on the lane
+        tt = t0
+        while tt < close - 8.0:
+            b = at(tt); nn = b - fee_per_contract(b)
+            if curverisk.stopped((nn - basis) / basis, min(max(nn, 0.0), 1.0), 0.5):
+                stopped_at = (tt, b); break
+            tt += 1.0
     if got:
         v = n * (got[1] - fee_per_contract(got[1])) - cost; how = f"{close - got[0]:.0f}s @{got[1]:.3f}"
+    elif stopped_at:
+        v = n * (stopped_at[1] - fee_per_contract(stopped_at[1])) - cost; how = f"STOP {close - stopped_at[0]:.0f}s @{stopped_at[1]:.3f}"
     else:
         v = (n if res == side else 0.0) - cost; how = "settles"
     k = tot["rule"]; k[0] += 1; k[1] += real; k[2] += v; k[3] += v > real + 1e-9; k[4] += v < real - 1e-9

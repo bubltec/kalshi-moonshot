@@ -94,7 +94,17 @@ def build(r):
         rate0 = math.sqrt(max(c60[k0] - c60[k0 - 900], 0.0) / 900.0)
         cs = [(g[k] - ref) for k in range(k0 - 300, k0 + 1)]
         crossings = sum(1 for a_, b_ in zip(cs, cs[1:]) if a_ * b_ < 0)
-        META[r["id"]] = {"cross": crossings, "span": (max(abs(x) for x in cs) / (rate0 * math.sqrt(60.0))) if rate0 > 0 else None}
+        bet_sign = 1.0 if yes else -1.0
+        on = [(bet_sign * (g[k] - ref)) > 0 for k in range(k0 - 600, k0 + 1)] if k0 - 600 >= 100 else None
+        since = None
+        if on:
+            now_on = on[-1]
+            since = 0
+            for v in reversed(on):
+                if v != now_on: break
+                since += 1
+        META[r["id"]] = {"cross": crossings, "span": (max(abs(x) for x in cs) / (rate0 * math.sqrt(60.0))) if rate0 > 0 else None,
+                         "on_now": None if not on else on[-1], "share300": None if not on else sum(on[-301:]) / len(on[-301:]), "share600": None if not on else sum(on) / len(on), "since_side": None if not on else since}
     sign = 1.0 if yes else -1.0
     for b in bids:
         k = int(b[0]) - base
@@ -252,4 +262,18 @@ def meta_rows(title, key, buckets):
 meta_rows("crossings of the target", "cross", [(0, 1, "0 crossings"), (1, 2, "1 crossing"), (2, 3, "2 crossings"), (3, 5, "3-4 crossings"), (5, 999, "5 or more")])
 meta_rows("widest stray from the target (typical minutes)", "span", [(0, 1.0, "under 1"), (1.0, 2.0, "1 to 2"), (2.0, 3.0, "2 to 3"), (3.0, 5.0, "3 to 5"), (5.0, 1e9, "5 or more")])
 print(f"  bets with a reading of this: {sum(1 for r, _, _ in first if r['id'] in META)} of {len(first)}")
+
+# How long the spot had been on the BET's side of the target before the buy (user, 2026-11-11: "why isn't it looking at the history before making a judgement?"): seconds on its current side (capped at 600),
+# and the share of the last 5 and 10 minutes spent on the bet's side. Bets whose spot was on the other side at the buy are their own group.
+print("\nby how long the spot had been on the bet's side before the buy (the target is the strike for a coin, the window-open value for a commodity)")
+def side_rows(title, key, buckets):
+    print(title)
+    for lo, hi, label in buckets:
+        xs = [(r, b, c) for r, b, c in first if r["id"] in META and META[r["id"]]["on_now"] is True and META[r["id"]][key] is not None and lo <= META[r["id"]][key] < hi]
+        print(row(label, xs))
+side_rows("seconds on the bet's side up to the buy", "since_side", [(0, 30, "under 30 s (just crossed)"), (30, 60, "30 to 60 s"), (60, 180, "1 to 3 minutes"), (180, 420, "3 to 7 minutes"), (420, 1e9, "7 minutes or more")])
+side_rows("share of the last 5 minutes on the bet's side", "share300", [(0, 0.5, "under half"), (0.5, 0.8, "half to 80%"), (0.8, 0.999, "80% to nearly all"), (0.999, 2, "all of it")])
+off = [(r, b, c) for r, b, c in first if r["id"] in META and META[r["id"]]["on_now"] is False]
+print(row("spot on the other side at the buy", off))
+print(f"  bets with this reading: {sum(1 for r, _, _ in first if r['id'] in META and META[r['id']]['on_now'] is not None)} of {len(first)}")
 print("DONE")
