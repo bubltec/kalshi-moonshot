@@ -111,3 +111,15 @@ def test_the_lane_step_asks_priskp_through_the_buy_chain():
     now = OPEN + 5.0 * 60.0
     res = [buychain.STEPS["priskp"](buychain.Ctx(s=s, spec=spec, now=now + k * 10.0), shot()) for k in range(3)]
     assert [r.ok for r in res] == [False, False, True] and res[2].why.startswith("verb: buy")
+
+
+def test_the_buy_reads_the_facts_board_and_the_veto_rule_is_the_board_s_not_the_step_s():
+    from kalshi_moonshot import facts
+
+    feed(lambda s: 100.6 if s < 120 else 99.2, OPEN + 600.0)
+    cuts()
+    outs = [ask_at(7.0 + k / 6.0, "yes") for k in range(3)]
+    ok, why = outs[2]
+    assert ok is False and "shift_out_of_cushion" in why and "[facts read: priskp_screen=" in why and "shift_out=" in why  # the note shows what the buy was judged on
+    assert "priskp" in facts.VETOED_STEPS and any(rule[0] == "shift_out" and rule[2] == ("priskp",) for rule in facts.VETO_RULES)
+    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out") and all(n in facts.READERS for n in facts.NEEDS["priskp"])

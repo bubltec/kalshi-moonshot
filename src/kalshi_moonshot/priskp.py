@@ -18,6 +18,8 @@ Memory only, stdlib only: no table, no file read on a tick.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import bisect
 import json
 import math
@@ -372,15 +374,34 @@ def _readings(shot: Any, now: float, hours: float) -> tuple[dict[str, Any] | Non
 def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bool, str]:
     """The buy step's answer for one side now: (ok, the note as one line). Memory only.
 
-    The rules are the user's and the study's: minutes 2 to 14; never an ask of 0.45 to 0.55; all five checks read and in fifths 4-5 with the cushion in fifth 5 (E5), held three readings in a row; and no buy on the side a confirmed shift hurt: the LATEST confirmed shift took the spot out of this side's cushion against this market's target (user, 2026-11-22). A take at the ask is the lane's order."""
+    The rules are the user's and the study's: minutes 2 to 14; never an ask of 0.45 to 0.55; all five checks read and in fifths 4-5 with the cushion in fifth 5 (E5), held three readings in a row; and no buy on the side a confirmed shift hurt: the LATEST confirmed shift took the spot out of this side's cushion against this market's target (user, 2026-11-22). A take at the ask is the lane's order.
+
+    The step reads the facts board (facts.py, 2026-11-22: the buy side adopts it): the checks are the fact `priskp_screen`, the shift is the fact `shift_out`, and a veto rule (not the step's own `if`) stops the buy when the shift took the spot out of the side's cushion. The note carries the facts read."""
+    from . import facts
+
     hours = shot.hours_to_close if hours is None else hours  # the hours to the close as of this moment (the shot's own figure is from when it was listed)
+    host = SimpleNamespace(s=s, hours=hours, now=now)
+    board = facts.Board(host, shot, now, hours * 3600.0, float(getattr(shot, "bid", 0.0) or 0.0))
+    view = board.view("priskp")
+    n = view.get("priskp_screen")
+    if n["verb"] == "buy":
+        label = board.vetoes("priskp")
+        if label:
+            n["verb"], n["why"] = "refuse", label
+            n["shift_ago_min"] = round(view.get("shift_out")["ago"] / 60.0, 1)
+    return n["verb"] == "buy", one_line(n) + board.note()
+
+
+def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """The fact `priskp_screen`: the five checks for the shot's side now, as the note dict (verb buy / wait), and the latest confirmed shift (or None) for the fact `shift_out`. No shift rule here: the board's veto does that."""
+    now, hours, s = host.now, host.hours, host.s
     close = now + hours * 3600.0
     minute = (now - (close - 900.0)) / 60.0
     ro, sh, strike, why = _readings(shot, now, hours)
     if ro is None:
-        return False, one_line({"verb": "wait", "side": shot.side, "minute": round(minute, 2), "why": why})
+        return {"verb": "wait", "side": shot.side, "minute": round(minute, 2), "why": why}, None
     if loaded() == 0:
-        return False, one_line({"verb": "wait", "side": shot.side, "minute": round(minute, 2), "why": "no cutoffs file loaded yet"})
+        return {"verb": "wait", "side": shot.side, "minute": round(minute, 2), "why": "no cutoffs file loaded yet"}, None
     states = fifths(shot.series, minute * 60.0, ro[shot.side])
     ok = candidate(states) and WINDOW[0] <= minute <= WINDOW[1] and not DEAD[0] <= shot.ask <= DEAD[1]
     reached, count = confirmed(shot.ticker, shot.side, ok, now)
@@ -390,10 +411,8 @@ def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bo
         n["verb"], n["why"] = "wait", "dead_ask_band"
     elif n["verb"] == "buy" and not reached:
         n["verb"], n["why"] = "wait", "confirming"
-    if n["verb"] == "buy" and sh and out_of_cushion(sh[-1], strike, shot.side):
-        n["verb"], n["why"] = "refuse", "shift_out_of_cushion"
-        n["shift_ago_min"] = round(sh[-1]["ago"] / 60.0, 1)
-    return n["verb"] == "buy", one_line(n)
+    last = sh[-1] if sh and out_of_cushion(sh[-1], strike, shot.side) else None
+    return n, last
 
 
 def one_line(d: dict[str, Any]) -> str:

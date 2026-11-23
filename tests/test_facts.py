@@ -1,7 +1,7 @@
 """The facts board (facts.py; 2026-11-22): named facts steps read instead of calling each other, vetoes that stop a step selling, and the weights ledger."""
 import pytest
 
-from kalshi_moonshot import facts, memguard, sellchain, watcher
+from kalshi_moonshot import buychain, facts, memguard, sellchain, watcher
 from tests.test_wave_top import asker, mem, spot_feed, switch_target, take_target  # noqa: F401  (mem: the fixture)
 
 
@@ -23,7 +23,7 @@ class T:
 
 def test_every_fact_a_step_names_has_a_reader_and_a_missing_one_is_refused_at_load():
     for step, needs in facts.NEEDS.items():
-        assert step in sellchain.SELL_STEPS and all(n in facts.READERS for n in needs)
+        assert (step in sellchain.SELL_STEPS or step in buychain.STEPS) and all(n in facts.READERS for n in needs)
     sellchain.check(("wave_take", "wave_salvage"), "lane x")  # loads
     facts.NEEDS["wave_take"] = (*facts.NEEDS["wave_take"], "no_such_fact")
     try:

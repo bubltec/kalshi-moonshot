@@ -25,12 +25,14 @@ READERS: dict[str, Callable[[Board], tuple[Any, str]]] = {}
 NEEDS: dict[str, tuple[str, ...]] = {
     "wave_take": ("whipsaw", "bid_unit", "p_lose", "cushion_factor"),
     "wave_salvage": ("whipsaw", "spot"),
+    "priskp": ("priskp_screen", "shift_out"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
 }
 
 
 VETO_RULES: list[tuple[str, Callable[[Any], bool], tuple[str, ...], str]] = [
     ("whipsaw", lambda v: v is not False, ("wave_take", "wave_salvage"), "is_whipsaw_behavior: a whipsaw is held to settlement, and the shape is not read for the first seconds after the buy"),
 ]  # (fact, vetoes when this is true of its value, the steps it stops, the label the log carries)
+VETO_RULES.append(("shift_out", lambda v: v is not None, ("priskp",), "shift_out_of_cushion"))  # user, 2026-11-22: no buy on the side a confirmed shift took out of its cushion, against the current target
 VETOED_STEPS = frozenset(step for _, _, steps, _ in VETO_RULES for step in steps)
 
 
@@ -180,3 +182,21 @@ def _whipsaw(b: Board) -> tuple[Any, str]:
     if b.t.wave_whipsaw <= 0:
         return False, "the lane's switch is off"
     return v, f"bid range {b.t.wave_range_u:.2f} typical minutes in the first {b.t.wave_shape_s:.0f} s against {b.t.wave_whipsaw:.2f}"
+
+
+# ---- the buy side's readers (the priskp step; memory only) ----
+@reader("priskp_screen")
+def _priskp_screen(b: Board) -> tuple[Any, str]:
+    """The five checks for the shot's side now (priskp.screen): the note as a dict with verb buy or wait. The latest out-of-cushion shift it found is kept for the fact `shift_out`."""
+    from . import priskp
+
+    note, shift = priskp.screen(b.host, b.t)
+    b.host.shift = shift
+    return note, "the five checks in the market's own fifths, held three readings, minutes 2-14, no ask 0.45-0.55"
+
+
+@reader("shift_out")
+def _shift_out(b: Board) -> tuple[Any, str]:
+    """The latest confirmed shift (a dict) when it took the spot out of this side's cushion against this market's target; None otherwise (and None until the checks are read)."""
+    b.get("priskp_screen")
+    return getattr(b.host, "shift", None), "the latest confirmed shift, against this market's own target"
