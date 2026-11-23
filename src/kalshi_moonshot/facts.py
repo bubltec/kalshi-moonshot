@@ -27,7 +27,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "wave_salvage": ("spot",),
     "value_sale": ("p_lose", "spot"),
     "value_hold": ("p_lose", "spot"),
-    "priskp": ("priskp_screen", "shift_out"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
+    "priskp": ("priskp_screen", "shift_out", "hour_view"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
 }
 
 
@@ -136,6 +136,8 @@ def _show(v: Any) -> str:
         return f"{v:.3g}"
     if isinstance(v, tuple):
         return "(" + ", ".join(_show(x) for x in v) + ")"
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{k}={_show(x)}" for k, x in v.items()) + "}"
     return str(v)
 
 
@@ -192,6 +194,15 @@ def _priskp_screen(b: Board) -> tuple[Any, str]:
     note, shift = priskp.screen(b.host, b.t)
     b.host.shift = shift
     return note, "the five checks in the market's own fifths, held three readings, minutes 2-14, no ask 0.45-0.55"
+
+
+@reader("hour_view")
+def _hour_view(b: Board) -> tuple[Any, str]:
+    """The hour before now for the bet's side (hourview.py): drift, range, crossings, straightness, minutes since its best and worst. Built every five minutes in the background and read from memory; None when the market has none or it is stale. A tie-breaker for a risk that is not sure, logged only for now."""
+    from . import hourview
+
+    got = hourview.read(b.t.ticker, b.t.side, b.now)
+    return got, "the hour before now, built in the background every five minutes" if got else "no hour view for this market (not built yet, or stale)"
 
 
 @reader("shift_out")

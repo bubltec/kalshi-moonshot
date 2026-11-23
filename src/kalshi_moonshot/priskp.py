@@ -388,6 +388,10 @@ def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bo
         if label:
             n["verb"], n["why"] = "refuse", label
             n["shift_ago_min"] = round(view.get("shift_out")["ago"] / 60.0, 1)
+    hv = view.get("hour_view") if n["verb"] == "buy" else None  # the hour before now, from memory (hourview.py): logged only, a tie-breaker the user wants for a risk that is not sure
+    if hv is not None:
+        n["hour_drift"] = hv["drift"]
+        n["hour_tie"] = "unsure" if 4 in [n.get(f"{c}_fifth") for c in CHECKS] else "sure"  # a check in fifth 4 and not 5: the risk is not sure; the hour would speak there
     return n["verb"] == "buy", one_line(n) + board.note()
 
 

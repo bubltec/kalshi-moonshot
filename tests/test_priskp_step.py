@@ -122,4 +122,20 @@ def test_the_buy_reads_the_facts_board_and_the_veto_rule_is_the_board_s_not_the_
     ok, why = outs[2]
     assert ok is False and "shift_out_of_cushion" in why and "[facts read: priskp_screen=" in why and "shift_out=" in why  # the note shows what the buy was judged on
     assert "priskp" in facts.VETOED_STEPS and any(rule[0] == "shift_out" and rule[2] == ("priskp",) for rule in facts.VETO_RULES)
-    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out") and all(n in facts.READERS for n in facts.NEEDS["priskp"])
+    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "hour_view") and all(n in facts.READERS for n in facts.NEEDS["priskp"])
+
+
+def test_a_buy_logs_the_hour_view_and_whether_the_risk_was_sure():
+    """2026-11-23: the hour view (hourview.py, built in the background) is read from memory and written on the buy's line; "unsure" when a check is in fifth 4 and not 5. Logged only: it never changes the verdict."""
+    from kalshi_moonshot import hourview
+
+    feed(lambda s: 100.6, OPEN + 700.0)
+    cuts()
+    hourview.clear()
+    outs = [ask_at(5.0 + k / 6.0, "yes") for k in range(3)]
+    assert outs[2][0] is True and "hour_view" in outs[2][1] and "hour_drift" not in outs[2][1]  # no view built yet: nothing to log, the buy is as before
+    now = OPEN + 5.0 * 60.0 + 20.0
+    hourview._VIEW[TICKER] = {"u": 0.0004, "drift_yes": 3.0, "range": 5.0, "cross": 0.0, "eff": 0.2, "hi_yes_ago": 1.0, "lo_yes_ago": 50.0, "built_at": now}
+    ok, why = ask_at(5.0 + 20.0 / 60.0, "yes")
+    assert ok is True and "hour_drift: 3.0" in why and "hour_tie: sure" in why  # every check in fifth 5 here: the risk was sure
+    hourview.clear()
