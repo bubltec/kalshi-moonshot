@@ -14,7 +14,7 @@ eras=(
   "4 15:40 high zone and 0.95 line removed|2026-11-23 15:40"
   "5 19:00 salvage give-up on, share 0.3 (about: pushed after the 18:57 restart)|2026-11-23 19:00"
   "6 19:36 value_hold and value_sale after the flip (about: config push after the 19:33 build)|2026-11-23 19:36"
-  "7 21:10 give-up share 0.1, was 0.3 (about: config push after the replay) (current)|2026-11-23 21:10"
+  "7 20:57 give-up share 0.1, was 0.3 (config push) (current)|2026-11-23 20:57"
 )
 case_sql="case"
 for ((i=${#eras[@]}-1; i>=0; i--)); do
