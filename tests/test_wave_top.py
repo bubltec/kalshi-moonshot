@@ -529,28 +529,30 @@ def test_integration_a_bet_following_the_whipsaw_shape_widens_its_swing_to_its_o
     assert ask(0.28, 600)  # a fall out of its range: the climb is done and the staircase sells
 
 
-def test_integration_a_spike_is_sold_at_the_high_by_the_ratio_of_change(tmp_path, monkeypatch, mem):
-    # 2026-11-23 SILVER 22:00: the bid went from 0.39 to 0.63 inside a minute and was never sold
+def test_integration_a_spike_starts_a_ride_that_is_held_while_the_bid_rises_and_sold_when_it_peaks(tmp_path, monkeypatch, mem):
+    # the spike trail (N 20 s, z 5, trail 1.0): at a typical minute of 0.10 the bid's usual 20 s move is 0.058
     from tests.test_risk_exit_flow import TICKER as HELD
 
     w, t, close = take_target(tmp_path, monkeypatch, 0.39, unit=0.10)
-    t.wave_spike = 2.0
+    t.wave_spike, t.wave_spike_s, t.wave_spike_tr = 5.0, 20.0, 1.0
     now = close - 600.0
-    for k in range(61):  # the bid climbs 0.39 -> 0.63 over the last 60 s
-        b = 0.39 + 0.24 * k / 60.0
-        ticks_mod.mids.note(HELD, now - 60 + k, b, b + 0.01)
+    for k in range(21):  # 0.39 -> 0.70 in 20 s: a rise of 0.31, 5.4 usual moves
+        b = 0.39 + 0.31 * k / 20.0
+        ticks_mod.mids.note(HELD, now - 20 + k, b, b + 0.01)
     ask = asker(w, t, close)
-    why = ask(0.63, 600)
-    assert why and "rose 2.4 of its typical minutes" in why and "sold at the spike" in why
-    # the same rise over ten minutes is slow: held
+    assert ask(0.70, 600) is None and t.wave_ride  # started riding, nothing sold on the way up
+    assert ask(0.74, 600) is None and t.wave_ride_high == pytest.approx(0.74)  # still rising: let it ride
+    assert ask(0.70, 600) is None  # 0.04 under the high is inside the trail (0.058)
+    why = ask(0.67, 600)
+    assert why and "the spike peaked at 0.74" in why and "end of the ride" in why
+    # a slow rise (0.31 over ten minutes) is not a spike
     ticks_mod.mids.clear()
     w2, t2, close2 = take_target(tmp_path, monkeypatch, 0.39, unit=0.10)
-    t2.wave_spike = 2.0
+    t2.wave_spike, t2.wave_spike_s, t2.wave_spike_tr = 5.0, 20.0, 1.0
     for k in range(601):
-        b = 0.39 + 0.24 * k / 600.0
+        b = 0.39 + 0.31 * k / 600.0
         ticks_mod.mids.note(HELD, close2 - 1200 + k, b, b + 0.01)
-    assert asker(w2, t2, close2)(0.63, 600) is None
-    # the setting at 0 is off
-    t.wave_spike = 0.0
-    t.wave_best_net, t.wave_dir = -9.0, 0
-    assert asker(w, t, close)(0.63, 600) is None
+    assert asker(w2, t2, close2)(0.70, 600) is None and not t2.wave_ride
+    # z at 0 is off
+    t.wave_ride, t.wave_spike = False, 0.0
+    assert asker(w, t, close)(0.70, 600) is None and not t.wave_ride

@@ -210,7 +210,11 @@ class Target:
     wave_kind: str = ""  # "whipsaw" once the bet has followed the whipsaw shape, else ""
     wave_range_u: float = 0.0
     wave_dir: int = 0  # the staircase: 1 rising, -1 pulling back, 0 not started
-    wave_spike: float = 0.0
+    wave_spike: float = 0.0  # the spike trail's z (0 = off)
+    wave_spike_s: float = 20.0
+    wave_spike_tr: float = 1.0
+    wave_ride: bool = False  # a spike started a ride: held while the bid keeps rising
+    wave_ride_high: float = 0.0
     wave_path_hi: float = 0.0  # the highest and lowest bid since the buy: a whipsaw's own range, the least a reversal must be before it counts (the staircase keeps reading the price)
     wave_path_lo: float = 0.0
     wave_hi: float = 0.0
@@ -839,12 +843,19 @@ class ProfitWatcher:
             if bid - t.wave_lo >= rev - 1e-9:
                 t.wave_last_low, t.wave_dir, t.wave_hi = t.wave_lo, 1, bid
         reason, kind = "", ""
-        spike = 0.0
-        if t.wave_spike > 0 and unit and net > 0:  # the spike sale: a rise this fast, in the bid's own typical minutes, is taken at the highest price seen so far
-            win = [x for x in wavetop.side_bids(ticks_mod.mids.quotes(t.ticker), t.side, int(now) - 60, int(now) + 1) if x is not None]
-            spike = (bid - min(win)) / unit if win else 0.0
-        if spike >= t.wave_spike > 0:
-            reason, kind = f"wave take: the bid rose {spike:.1f} of its typical minutes in the last 60 s (to {bid:.2f}, the highest so far {t.wave_peak_bid:.2f}), at least the {t.wave_spike:.1f} the lane sells on: sold at the spike, a gain of {net * 100:.1f}c a contract", "spike"
+        if t.wave_spike > 0 and unit:  # the spike trail: a spike starts a ride, the ride is held while the bid still rises and sold when it peaks
+            move = unit * math.sqrt(max(t.wave_spike_s, 1.0) / 60.0)  # what the bid usually moves in wave_spike_seconds
+            if not t.wave_ride:
+                win = [x for x in wavetop.side_bids(ticks_mod.mids.quotes(t.ticker), t.side, int(now) - int(t.wave_spike_s), int(now) + 1) if x is not None]
+                if net > 0 and win and move > 0 and (bid - min(win)) / move >= t.wave_spike:
+                    t.wave_ride, t.wave_ride_high = True, bid
+                    log.info("wave spike: %s %s the bid rose %.1f of its usual %.0f s moves to %.2f (z %.1f): riding it", t.ticker, t.lane, (bid - min(win)) / move, t.wave_spike_s, bid, t.wave_spike)
+            else:
+                t.wave_ride_high = max(t.wave_ride_high, bid)
+                if net > 0 and bid <= t.wave_ride_high - t.wave_spike_tr * move - 1e-9:
+                    reason, kind = f"wave take: the spike peaked at {t.wave_ride_high:.2f} and the bid fell {t.wave_spike_tr:.1f} of its usual {t.wave_spike_s:.0f} s moves ({t.wave_spike_tr * move:.3f}) under it to {bid:.2f}: sold at the end of the ride, a gain of {net * 100:.1f}c a contract", "spike"
+        if kind == "spike" or t.wave_ride:  # a ride is held until it peaks: neither the staircase nor the high-zone sale ends it
+            pass
         elif t.wave_best_net > 0 and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
             where = f"a gain of {net * 100:.1f}c a contract" if net > 0 else f"a small loss of {-net * 100:.1f}c a contract (the bet had been ahead by {t.wave_best_net * 100:.1f}c)"
             reason, kind = f"wave take: the bid {bid:.2f} fell under its last swing low {t.wave_last_low:.2f} (swings of {rev:.3f}, cushion factor {cushion:.2f}, {left:.0f} s left): the climb is done, sold at {where}", "lower low"
@@ -1359,7 +1370,7 @@ class ProfitWatcher:
                 held.risk_take_trail_timed = spec.curve_take_trail_timed
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.wave_rev_k, held.wave_rev_p, held.wave_cushion, held.wave_high_zone = spec.wave_rev_k, spec.wave_rev_p, spec.wave_cushion, spec.wave_high_zone
-                held.wave_whipsaw, held.wave_spike = spec.wave_whipsaw_range, spec.wave_spike_units
+                held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.risk_time_to_go, held.risk_time_to_go_chance, held.risk_time_to_go_wait_share = spec.curve_risk_time_to_go, spec.curve_risk_time_to_go_chance, spec.curve_risk_time_to_go_wait_share
                 held.risk_late_tight, held.risk_late_tight_share, held.risk_late_tight_live = spec.curve_risk_late_tight, spec.curve_risk_late_tight_share, spec.curve_risk_late_tight_live
