@@ -206,6 +206,9 @@ class Target:
     wave_rev_k: float = 0.25
     wave_rev_p: float = 0.5
     wave_time_curve: tuple = ()
+    wave_give_up_share: float = 0.0
+    wave_give_up_turn: float = 0.5
+    wave_give_up_peak: float = 1.0 / 3.0
     wave_arm_swings: float = 1.0
     wave_cushion: bool = True
     wave_whipsaw: float = 0.0
@@ -900,10 +903,13 @@ class ProfitWatcher:
         got = ticks_mod.history.window(index, now - 300.0, now)
         if not got or not got[0]:
             return None
-        sell, info = wavetop.salvage(ticks_mod.mids.quotes(t.ticker), t.side, t.close_ts - 900.0, t.bought_ts, now, got[0], got[1])
+        sell, info = wavetop.salvage(ticks_mod.mids.quotes(t.ticker), t.side, t.close_ts - 900.0, t.bought_ts, now, got[0], got[1], t.wave_give_up_share, t.wave_give_up_turn, t.wave_give_up_peak)
         if not sell:
             return None
-        reason = f"wave salvage: the bid fell to {info['low']:.2f} (its own typical minute {info['unit']:.3f} under the {info['entry_bid']:.2f} at the buy, or more), has come back to {bid:.2f}, its climb over the last {info['window']:.0f}s has slowed to {info['recent'] * 60:+.3f} a minute against the run's {info['run'] * 60:+.3f}, and the spot has stopped moving its way; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"  # type: ignore[operator]
+        if info.get("give_up"):
+            reason = f"wave give-up: the bid fell to {info['low']:.2f} (its own typical minute {info['unit']:.3f} under the {info['entry_bid']:.2f} at the buy, armed at {info['armed_at']:.0f}) and has not turned (a rebound of {info['turn']:g} x the unit = {info['turn'] * info['unit']:.3f} off its low) for {info['waited']:.0f}s since {info['since']:.0f}, against the {info['allowed']:.0f}s allowed ({info['share']:g} x the lesser of {info['elapsed']:.0f}s since the open and {info['left']:.0f}s left x {info['peak']:.3f} / (1 - {info['peak']:.3f})); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"  # type: ignore[operator]
+        else:
+            reason = f"wave salvage: the bid fell to {info['low']:.2f} (its own typical minute {info['unit']:.3f} under the {info['entry_bid']:.2f} at the buy, or more), has come back to {bid:.2f}, its climb over the last {info['window']:.0f}s has slowed to {info['recent'] * 60:+.3f} a minute against the run's {info['run'] * 60:+.3f}, and the spot has stopped moving its way; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"  # type: ignore[operator]
         reason += fx.note()
         extra = {k: round(v, 5) for k, v in info.items()}  # type: ignore[arg-type]
         if t.risk_live:
@@ -1372,6 +1378,7 @@ class ProfitWatcher:
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.wave_rev_k, held.wave_rev_p, held.wave_cushion = spec.wave_rev_k, spec.wave_rev_p, spec.wave_cushion
                 held.wave_time_curve, held.wave_arm_swings = spec.wave_time_curve, spec.wave_arm_swings
+                held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.risk_time_to_go, held.risk_time_to_go_chance, held.risk_time_to_go_wait_share = spec.curve_risk_time_to_go, spec.curve_risk_time_to_go_chance, spec.curve_risk_time_to_go_wait_share
@@ -1661,7 +1668,7 @@ class ProfitWatcher:
                 with contextlib.suppress(TypeError, ValueError):
                     bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
-            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit")) and not runner.is_profit_sale(why)
+            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit", "wave give-up")) and not runner.is_profit_sale(why)  # 2026-11-23: the wave give-up is a safety exit, a sale at a loss by design (user: "if the scalp isn't working we should exit ... just exit"); without it here _sell backs off every give-up under the cost, as it does the wave salvage (which sells only for a small gain)
             if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not cut:  # a profit take never sells for a loss after both fees; the crash exit, the stop and the risk exit's sales do (the point is to get out)
                 self._back_off(ticker, lane)
                 return

@@ -602,3 +602,181 @@ def test_integration_a_sale_at_a_gain_is_armed_by_any_gain_only_the_loss_sale_ne
     t.wave_best_net, t.wave_dir, t.wave_last_low, t.wave_hi, t.wave_lo = 0.04, -1, 0.56, 0.62, 0.55
     why = ask(0.55, 780)  # ahead by less than a swing, under its last low, still at a gain after both fees: sold
     assert why and "a gain of" in why
+
+
+# ---- the salvage GIVE-UP (2026-11-23): a bet that dipped and does not turn is sold; W = share x min(e, left x p / (1 - p)), a tent peaking at the share p of the market ----
+def tent(share, e, left, p=1.0 / 3.0):
+    return share * min(e, left * p / (1.0 - p))
+
+
+def gu_bids(n0, turn_at=None, turn_to=None, slide=False, total=900):
+    """The bet side's bid a second from the open: a 60 s sawtooth (typical minute 0.02) up to the buy at second n0 (0.30), then a fall of 0.01 a second to 0.20 and flat (or, slide, a fall that never stops); turn_at: seconds after the buy when it jumps to turn_to."""
+    b = [0.30 + 0.02 * ((k // 60) % 2) for k in range(n0)] + [0.30]
+    for k in range(1, total - n0):
+        v = max(0.30 - 0.01 * k, 0.20) if not slide else max(0.30 - 0.0007 * k - 0.01 * min(k, 3), 0.01)
+        if turn_at is not None and turn_at <= k < turn_at + 2:  # a brief turn, then back to the low
+            v = turn_to
+        b.append(v)
+    return b
+
+
+def gu(bids, n0, now, share=0.1, turn=0.5, peak=1.0 / 3.0):
+    q = quotes(bids, OPEN)
+    T, V = flat_spot(900, drift=0.5)  # the spot keeps moving the bet's way: the rebound sale never fires, only the give-up is asked
+    return wavetop.salvage(q, "yes", OPEN, OPEN + n0, OPEN + now, T, V, share, turn, peak)
+
+
+def first_give_up(bids, n0, share=0.1, peak=1.0 / 3.0):
+    for now in range(n0 + 1, 899):
+        sell, info = gu(bids, n0, now, share, peak=peak)
+        if sell:
+            assert info["give_up"] == 1.0
+            return now, info
+    return None, {}
+
+
+def test_unit_give_up_not_armed_is_no_give_up():
+    bids = [0.30 + 0.02 * ((k // 60) % 2) for k in range(300)] + [0.30] * 600
+    q = quotes(bids, OPEN)
+    sell, info = wavetop.salvage(q, "yes", OPEN, OPEN + 300, OPEN + 800, *flat_spot(900), 0.1, 0.5)
+    assert not sell and not info["armed"]
+
+
+def test_unit_give_up_a_dip_with_no_turn_is_sold_and_says_what_it_read():
+    bids = gu_bids(400)
+    assert not gu(bids, 400, 410)[0]  # armed seconds ago: inside the wait
+    now, info = first_give_up(bids, 400)
+    assert now is not None and info["waited"] >= info["allowed"] and info["allowed"] == pytest.approx(tent(0.1, info["elapsed"], info["left"]))
+    assert info["low"] == pytest.approx(0.20) and info["unit"] == pytest.approx(0.02) and info["share"] == 0.1
+    assert info["armed_at"] == info["since"] and not gu(bids, 400, now - 1)[0]
+
+
+def test_unit_give_up_a_continuing_slide_makes_new_lows_and_the_clock_keeps_running():
+    bids = gu_bids(400, slide=True)
+    now, info = first_give_up(bids, 400)
+    assert now is not None and info["since"] == info["armed_at"]  # no turn: the clock runs from the arming
+    assert info["low"] == pytest.approx(bids[now])
+
+
+def test_unit_give_up_a_turn_restarts_the_clock():
+    base, _ = first_give_up(gu_bids(250), 250)
+    bids = gu_bids(250, turn_at=15, turn_to=0.215)  # up 0.015 off the low (a half unit is 0.01) 15 s after the buy, before the wait was up
+    assert not gu(bids, 250, base + 1)[0]  # the wait that was up is not up any more
+    now, info = first_give_up(bids, 250)
+    assert info["since"] == OPEN + 266 and now > base
+    assert now - 266 >= tent(0.1, now, 900 - now) and now - 1 - 266 < tent(0.1, now - 1, 901 - now)
+    small = gu_bids(250, turn_at=15, turn_to=0.205)  # up 0.005: under half a unit, not a turn
+    assert first_give_up(small, 250)[0] == base
+
+
+def test_unit_give_up_the_wait_peaks_at_minute_five_and_is_short_at_the_open_and_at_the_close():
+    waits = {}
+    for minute in (1.2, 2, 5, 8, 12, 14.5):
+        n0 = int(minute * 60)
+        now, info = first_give_up(gu_bids(n0), n0, 0.2)
+        assert now is not None, minute
+        assert info["allowed"] == pytest.approx(tent(0.2, info["elapsed"], info["left"]))  # the formula, at the second it sold
+        assert info["waited"] >= info["allowed"] and info["waited"] - info["allowed"] < 2.5  # sold in the first second the wait was up
+        waits[minute] = info["waited"]
+    assert waits[1.2] < waits[2] < waits[5] and waits[5] > waits[8] > waits[12] > waits[14.5]
+    assert tent(0.2, 300, 600) == pytest.approx(0.2 * 300) and tent(0.2, 600, 300) == pytest.approx(0.2 * 150) and tent(0.2, 900, 0) == 0.0  # peak share x 300 s at minute 5, half of it at minute 10, none at the close
+
+
+def test_unit_give_up_the_peak_is_the_lanes_and_must_lie_inside_the_market():
+    now_a, info_a = first_give_up(gu_bids(450), 450, 0.2, peak=1.0 / 3.0)
+    now_b, info_b = first_give_up(gu_bids(450), 450, 0.2, peak=0.5)  # the peak moved to minute 7.5: a longer wait there
+    assert info_b["waited"] > info_a["waited"] and info_b["peak"] == 0.5
+    assert info_b["allowed"] == pytest.approx(tent(0.2, info_b["elapsed"], info_b["left"], 0.5))
+    for bad in (0.0, 1.0, -0.2, 1.5):
+        assert not gu(gu_bids(400), 400, 800, 0.1, peak=bad)[0]
+
+
+def test_unit_give_up_is_off_at_a_share_of_zero_and_an_unreadable_unit_is_no_sale():
+    bids = gu_bids(400)
+    assert not gu(bids, 400, 800, 0.0)[0] and gu(bids, 400, 800, 0.1)[0]
+    q = quotes(gu_bids(50), OPEN)  # under a minute of bids before the buy: no typical minute to read
+    sell, info = wavetop.salvage(q, "yes", OPEN, OPEN + 50, OPEN + 800, *flat_spot(900), 0.1, 0.5)
+    assert not sell and info == {"unit_unreadable": 1.0}
+    sell, info = wavetop.salvage(q, "yes", OPEN, OPEN + 50, OPEN + 800, *flat_spot(900))  # the old call too: no fixed 5c fallback
+    assert not sell and info["unit_unreadable"] == 1.0
+
+
+def test_unit_give_up_a_no_bet_reads_the_no_bid():
+    bids = gu_bids(400)
+    no_q = [(OPEN + k, 1.0 - b - 0.01, 1.0 - b) for k, b in enumerate(bids)]  # the NO bid is 1 - the YES ask
+    sell, info = wavetop.salvage(no_q, "no", OPEN, OPEN + 400, OPEN + 800, *flat_spot(900, drift=-0.5), 0.1, 0.5)
+    assert sell and info["give_up"] == 1.0
+
+
+def test_unit_give_up_one_read_on_a_900_s_history_is_fast():
+    q = quotes(gu_bids(400, slide=True), OPEN)
+    T, V = flat_spot(900, drift=0.5)
+    began = time.perf_counter()
+    for _ in range(20):
+        wavetop.salvage(q, "yes", OPEN, OPEN + 400, OPEN + 899, T, V, 0.1, 0.5)
+    took = (time.perf_counter() - began) / 20
+    print(f"salvage with the give-up on a 900 s history: {took * 1000:.2f} ms")
+    assert took < 0.03
+
+
+def test_unit_a_lane_file_names_the_give_up(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(TOML)
+    sp = lanes.lane_specs(config.load())["wt"]
+    assert (sp.wave_give_up_share, sp.wave_give_up_turn) == (0.0, 0.5)  # off by default
+    (tmp_path / "strategies.toml").write_text(TOML.replace("wave_top_trend_hours = 1.0", "wave_top_trend_hours = 1.0\nwave_give_up_share = 0.2\nwave_give_up_turn = 0.4"))
+    sp = lanes.lane_specs(config.load())["wt"]
+    assert (sp.wave_give_up_share, sp.wave_give_up_turn) == (0.2, 0.4)
+
+
+def _gu_held(tmp_path, monkeypatch, side, shock_ref=None, share=0.1):
+    from kalshi_moonshot import curverisk, watcher
+    from tests.test_risk_exit_flow import CLOSE, TICKER as HELD, held
+
+    w = held(tmp_path, monkeypatch, live=True, extra=f"sell_chain=['wave_salvage']\nwave_give_up_share={share}\nwave_give_up_turn=0.5")
+    t = w.targets[(HELD, "risk_only")]
+    assert (t.wave_give_up_share, t.wave_give_up_turn) == (share, 0.5)  # the lane file reached the target through the refresh
+    t.wave_whipsaw = 0.0
+    t.side = side
+    opened = CLOSE - 900.0
+    n0 = 300
+    t.bought_ts = opened + n0
+    bids = [0.50 + 0.02 * ((k // 60) % 2) for k in range(n0)] + [0.50] + [max(0.50 - 0.01 * k, 0.35) for k in range(1, 100)]
+    for k, b in enumerate(bids):
+        if side == "yes":
+            ticks_mod.mids.note(HELD, opened + k, b, b + 0.01)
+        else:
+            ticks_mod.mids.note(HELD, opened + k, 1.0 - b - 0.01, 1.0 - b)
+    for k in range(-400, len(bids)):
+        ticks_mod.history.note("BRTI", opened + k, 100.0 + 0.01 * (-1) ** k)
+    if shock_ref is not None:
+        t.shock_index = "BRTI"
+        t.shock_ref = shock_ref
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+
+    def at(sec):
+        now = opened + sec
+        with memguard.decision("sell"):
+            return w._sell_wave_salvage(t, risk, bids[sec], now, CLOSE - now, -0.3, watcher._SellWalk(30.0, 0.83, 0.78, None))
+
+    return at
+
+
+@pytest.mark.parametrize("side", ["yes", "no"])
+def test_integration_the_give_up_sells_a_dip_that_does_not_turn(tmp_path, monkeypatch, mem, side):
+    at = _gu_held(tmp_path, monkeypatch, side)
+    assert at(320) is None  # armed 17 s ago, 32 s allowed
+    why = at(360)  # 57 s without a turn against 0.1 x min(360, 540 x 0.5) = 27 s
+    assert why and why.startswith("wave give-up") and "has not turned" in why and "allowed" in why and "typical minute" in why
+
+
+def test_integration_the_give_up_is_off_unless_the_lane_names_a_share(tmp_path, monkeypatch, mem):
+    at = _gu_held(tmp_path, monkeypatch, "yes", share=0.0)
+    assert at(390) is None
+
+
+@pytest.mark.parametrize("side,ref,sold", [("yes", 99.0, False), ("yes", 101.0, True), ("no", 101.0, False), ("no", 99.0, True)])
+def test_integration_the_give_up_skips_a_bet_that_is_winning_on_the_spot(tmp_path, monkeypatch, mem, side, ref, sold):
+    # a YES bet wins while the spot's average is over the target; a NO bet while it is under
+    got = _gu_held(tmp_path, monkeypatch, side, shock_ref=ref)(390)
+    assert bool(got) is sold
