@@ -1620,6 +1620,9 @@ class ProfitWatcher:
             if priskp.wanted(specs):  # the PriskP buy step: load its cutoffs file into memory, and rebuild the file hourly in its own low-priority process
                 priskp.refresh(s)
                 priskp.maybe_refit(s)
+                from . import hourview
+
+                hourview.maybe_refresh(s)  # the hour view of every active market, rebuilt in the background every five minutes from the tick memory (hourview.py)
         except Exception:
             log.warning("watcher: refitting a buy step's model failed", exc_info=True)
         finally:
