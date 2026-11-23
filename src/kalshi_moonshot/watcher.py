@@ -1671,7 +1671,7 @@ class ProfitWatcher:
                 with contextlib.suppress(TypeError, ValueError):
                     bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
-            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit")) and not runner.is_profit_sale(why)
+            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit", "wave give-up")) and not runner.is_profit_sale(why)  # 2026-11-23: the wave give-up is a safety exit, a sale at a loss by design (user: "if the scalp isn't working we should exit ... just exit"); without it here _sell backs off every give-up under the cost, as it does the wave salvage (which sells only for a small gain)
             if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not cut:  # a profit take never sells for a loss after both fees; the crash exit, the stop and the risk exit's sales do (the point is to get out)
                 self._back_off(ticker, lane)
                 return

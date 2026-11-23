@@ -66,3 +66,21 @@ def test_integration_a_stale_read_cannot_sell_a_bid_that_has_gone_under_the_cost
     w._sell(TICKER, LANE, WHY)
     assert exit_prices(tmp_path) == []  # a profit take never sells for a loss
     assert len(Store(config.load().db_path).open_bets()) == 1
+
+
+# ---- the wave give-up is a sale at a loss by design (2026-11-23). _sell backs off a sale under the cost after both fees unless the reason is one of the exits that exist to get out; the wave salvage sells only for a small gain, the give-up must not be refused for being under the cost. ----
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("live", [False, True])
+def test_integration_a_wave_give_up_sells_under_the_cost_and_the_wave_salvage_still_does_not(tmp_path, monkeypatch, live):
+    monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": live)
+    for why, sells in (("wave give-up: the bid fell and has not turned", True), ("wave salvage: the bid fell and has come back", False)):
+        sub = tmp_path / ("a" if sells else "b")
+        sub.mkdir()
+        c = Reads(bid=0.50)  # well under the 0.81 the bet cost: a sale here is a loss after both fees
+        w = held(sub, monkeypatch, live=live, client=c)
+        yes_bid(w, 0.50, 700)
+        w._sell(TICKER, LANE, why)
+        open_bets = len(Store(config.load().db_path).open_bets())
+        assert (open_bets == 0) is sells, (why, live, open_bets)
