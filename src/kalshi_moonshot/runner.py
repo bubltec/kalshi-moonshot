@@ -1172,7 +1172,7 @@ def _rest_start(shot: LongShot, spec: LaneSpec) -> float:
     from . import ticks as ticks_mod
 
     rows = ticks_mod.mids.quotes(shot.ticker) if spec.buy_rest_avg_seconds > 0 else ()
-    return restprice.rest_price(spec, shot.side, shot.ask, rows, time.time())
+    return restprice.rest_price(spec, shot.side, shot.ask, rows, time.time(), bid=shot.bid)
 
 
 def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) -> tuple[float | None, str]:
@@ -1180,6 +1180,12 @@ def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) 
     is refused ("post only cross": 94% of 275 refusals in two days), so when the live book's ask is lower it rests the same distance under that one. A fallen ask under the lane's price floor skips the buy.
     A risen ask does not raise the price, and a missing or empty book leaves the planned price."""
     price = _rest_start(shot, spec)
+    if spec.buy_rest_at_bid:  # the price is the side's bid: the live book's bid when there is one, else the decision's
+        live_bid = best_bid(book, shot.side) if book else None
+        if live_bid is not None:
+            price = round(max(0.01, live_bid), 4)
+        if price <= 0.01 and shot.bid <= 0:
+            return None, "skipped: nobody bids for this side, so a resting buy has no bid to sit on"
     if price >= shot.ask - 1e-9:
         return None, f"skipped: a resting buy needs a price under the ask {shot.ask:.2f}"
     live_ask = best_ask(book, shot.side) if book else None
@@ -1187,7 +1193,7 @@ def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) 
         if live_ask < spec.price[0] - 1e-9:
             return None, f"skipped: the {shot.side} ask fell from {shot.ask:.2f} to {live_ask:.2f}, under the lane's {spec.price[0]:.2f} floor"
         lowered = round(max(0.01, live_ask - spec.buy_rest_below), 4)
-        if lowered < price:
+        if lowered < price and not spec.buy_rest_at_bid:
             log.info("resting buy %s %s: the ask fell from %.2f to %.2f, resting at %.2f instead of %.2f", shot.ticker, shot.side, shot.ask, live_ask, lowered, price)
             price = lowered
     return price, ""
@@ -1293,6 +1299,11 @@ def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count
         return None
     withdraw = live_ask < spec.price[0] - 1e-9
     want = round(max(0.01, live_ask - spec.buy_rest_below), 4)
+    if spec.buy_rest_at_bid:  # the order sits on the bid and follows a falling bid down
+        live_bid = best_bid(book, shot.side)
+        if live_bid is None:
+            return None
+        want = round(max(0.01, live_bid), 4)
     if not withdraw and want >= price - 1e-9:
         return None  # a risen ask never raises the price
     if not withdraw and hasattr(client, "amend_resting"):

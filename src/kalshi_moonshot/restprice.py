@@ -31,6 +31,15 @@ def base_ask(spec: Any, side: str, ask: float, rows: Sequence[Sequence[float]], 
     return ask if avg is None else min(ask, avg)
 
 
-def rest_price(spec: Any, side: str, ask: float, rows: Sequence[Sequence[float]], now: float) -> float:
-    """The price a resting buy starts at."""
+def side_bid(bid: float, ask: float, side: str) -> float | None:
+    """The side's bid from one YES quote (a NO bid is 1 minus the YES ask), or None when the quote has no price for it."""
+    if side == "yes":
+        return bid if bid > 0 else None
+    return 1.0 - ask if 0 < ask < 1 else None
+
+
+def rest_price(spec: Any, side: str, ask: float, rows: Sequence[Sequence[float]], now: float, bid: float | None = None) -> float:
+    """The price a resting buy starts at: the side's bid when the lane sets buy_rest_at_bid and a bid is known, else under the ask."""
+    if getattr(spec, "buy_rest_at_bid", False) and bid is not None and bid > 0:
+        return round(max(0.01, bid), 4)
     return round(max(0.01, base_ask(spec, side, ask, rows, now) - spec.buy_rest_below), 4)

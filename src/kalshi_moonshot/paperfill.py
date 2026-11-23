@@ -75,14 +75,21 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
             def side_ask(q: Any, side: str = r["side"]) -> float:
                 return float(q[2]) if side == "yes" else 1.0 - float(q[1])
 
+            def side_bid_q(q: Any, side: str = r["side"]) -> float | None:
+                return restprice.side_bid(float(q[1]), float(q[2]), side)
+
             at_order = [q for q in quotes if q[0] <= r["ts"]]
+            if spec.buy_rest_at_bid and at_order:  # the order sits on the side's bid at the decision (restprice.py); the tape judges it filled when the ask comes down to it
+                bid_at = restprice.side_bid(float(at_order[-1][1]), float(at_order[-1][2]), r["side"])
+                if bid_at is not None:
+                    price = restprice.rest_price(spec, r["side"], float(r["ask"]), [], float(r["ts"]), bid=bid_at)
             crossed = bool(at_order) and side_ask(at_order[-1]) <= price + 1e-9
             later = [q for q in quotes if r["ts"] < q[0] <= r["ts"] + window]
             flows = tape.execute("SELECT ts, yes_vol, no_vol, vwap FROM flow_1s WHERE ticker=? AND ts > ? AND ts <= ?", (r["ticker"], int(r["ts"]), int(r["ts"] + window))).fetchall()
             start = price
             moves = [(float(r["ts"]), price)]  # (when, where the order sat from then): one entry unless the lane follows the ask down
             if spec.buy_rest_follow:
-                price, moves, withdrawn = _follow_down(spec, later, side_ask, price, float(r["ts"]))
+                price, moves, withdrawn = _follow_down(spec, later, side_ask, price, float(r["ts"]), side_bid_q)
                 if withdrawn:
                     later = []  # the live lane cancels an order whose ask fell under the lane's floor and does not place it again
                     flows = []
@@ -138,7 +145,7 @@ def _sat(moves: list[tuple[float, float]], when: float) -> float:
     return out
 
 
-def _follow_down(spec: Any, later: list[Any], side_ask: Any, price: float, started: float) -> tuple[float, list[tuple[float, float]], bool]:
+def _follow_down(spec: Any, later: list[Any], side_ask: Any, price: float, started: float, side_bid: Any = None) -> tuple[float, list[tuple[float, float]], bool]:
     """The live follow rule (runner._rest_follow, lane field buy_rest_follow) on the tape's quotes: each quote asks where the order should sit, `buy_rest_below` under the ask; when that is lower than the order it moves there (at most REST_FOLLOW_MAX times), a risen ask never raises it, and an ask under the lane's price floor withdraws it. An order that the ask reached before the quote that would have moved it stays where it was. Returns (the order's last price, its moves as (when, price), withdrawn)."""
     from .runner import REST_FOLLOW_MAX
 
@@ -151,6 +158,11 @@ def _follow_down(spec: Any, later: list[Any], side_ask: Any, price: float, start
         if a < spec.price[0] - 1e-9:
             return price, moves, True
         want = round(max(0.01, a - spec.buy_rest_below), 4)
+        if spec.buy_rest_at_bid and side_bid is not None:  # the order follows the side's bid down
+            b = side_bid(q)
+            if b is None:
+                continue
+            want = round(max(0.01, b), 4)
         if follows < REST_FOLLOW_MAX and want < price - 1e-9:
             price = want
             follows += 1
