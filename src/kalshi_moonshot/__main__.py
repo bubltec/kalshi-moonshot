@@ -257,7 +257,7 @@ def cmd_lanes(s: config.Settings, args: argparse.Namespace) -> int:
             f"hours={spec.hours[0]:g}-{spec.hours[1]:g} min-return={spec.min_return:.0%} edge>={spec.min_edge} lag<={spec.max_lag} "
             f"usd={spec.usd_per_trade} trust={spec.trust:.2f} "
             f"{'15m-window=' + format(spec.entry_elapsed[0], 'g') + '-' + format(spec.entry_elapsed[1], 'g') + 'min-in ' if spec.timed_suffix else ''}"
-            f"loops={'scope ' + format(spec.scope_minutes, 'g') + 'm / review ' + format(spec.review_minutes, 'g') + 'm' if spec.review_minutes else 'main scan'}"
+            f"timers if the feed is down={'scope ' + format(spec.scope_minutes, 'g') + 'm / review ' + format(spec.review_minutes, 'g') + 'm'}"
         )
         cal = store.calibrator.adjust(spec.name, "", sum(spec.price) / 2, 0.5, spec.trust)
         skill = "n/a" if cal.skill is None else f"{cal.skill:+.2f}"

@@ -322,7 +322,6 @@ def test_integration_a_live_lanes_buy_job_marks_its_market_and_a_paper_lanes_doe
 
     w = worker(tmp_path, FakeClient())
     w.start()
-    w.run_job(w.jobs.claim(kinds={"scan"}))
     job = w.jobs.claim(kinds={"evaluate"})
     ticker = job.payload["shot"]["ticker"]
     seen = []

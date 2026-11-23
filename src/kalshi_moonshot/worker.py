@@ -23,7 +23,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from . import jobs as jobs_mod
-from . import lanes as lanes_mod
 from . import manual as manual_mod
 from . import memguard, orderkeys, reqstats, risk, runner, steptime
 from . import ticks as ticks_mod
@@ -33,7 +32,7 @@ from .config import Settings
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
 from .kalshi import KalshiClient, KalshiError, KalshiRateLimited
-from .lanes import POLY_LANES, job_priority, lane_specs, spec_for, tiered, tiered_lanes
+from .lanes import POLY_LANES, enabled_lanes, job_priority, lane_specs, spec_for
 from .marketdata import Discovery, shared_for
 from .search import NewsSearch
 from .store import Store
@@ -42,7 +41,7 @@ from .strategy import LongShot, ask_trend, falling_reason, lane_reject_reason, s
 log = logging.getLogger("moonshot")
 # Jobs that are long and not needed to trade (downloading history, resolving settled markets, syncing fills, the broad scan, the hourly review). They run on their own thread,
 # so a 40-second job can never hold up a live lane's review or evaluation, and their requests are throttled to a third of the budget.
-MAINTENANCE = frozenset({"scan", "resolve", "review", "history", "account_sync", "patterns"})
+MAINTENANCE = frozenset({"resolve", "review", "history", "account_sync", "patterns"})
 BUY_KINDS = frozenset({"evaluate"})  # the job that sizes and places a buy. With BUY_WORKERS above 0 these run on their own threads, so a lane scope or review (or another lane's slow buy) never queues a buy behind it
 SLOW_JOB_SECONDS = 10.0  # a job that runs longer than this is logged with how long it ran, so a slow stage can be found in the logs
 BUY_POLL = 0.5  # seconds a buy worker sleeps when no buy is due
@@ -137,7 +136,7 @@ class Worker:
                 "%d job(s) were mid-order when the bot stopped and were NOT re-run. "
                 "Check your Kalshi portfolio, then see `jobs`.", parked,
             )
-        self.jobs.run_now("scan")
+        self.jobs.run_now("resolve")
         self.jobs.ensure("review", time.time(), max_attempts=self.s.job_max_attempts)
         if self.s.account_sync_enabled and getattr(self.client, "authed", False):
             self.jobs.ensure(
@@ -151,7 +150,7 @@ class Worker:
             self.jobs.ensure(
                 "history", time.time() + 300, max_attempts=self.s.job_max_attempts, priority=HISTORY_PRIORITY
             )
-        self._ensure_tiered()
+        self._ensure_lane_jobs()
         self._start_discovery()
         self._start_tape()
         threading.Thread(target=self._quote_polymarket, name="polymarket-paper", daemon=True).start()
@@ -398,7 +397,7 @@ class Worker:
             return
         self.discovery = Discovery(
             lambda: self.client, lambda: self.s,
-            lambda s: {name for spec in tiered_lanes(s) for name in runner.lane_series(spec, s)},
+            lambda s: {name for spec in enabled_lanes(s) for name in runner.lane_series(spec, s)},
             hot=self._hot_series,
         )
         self.discovery.start()
@@ -411,7 +410,7 @@ class Worker:
             store = self._hot_local.store = Store(s.db_path, s.exclude_versions)
         live = s.live_lanes or frozenset()
         out = [row["ticker"].split("-")[0] for row in store.open_bets()]
-        for spec in sorted(tiered_lanes(s), key=lambda x: x.name not in live):
+        for spec in sorted(enabled_lanes(s), key=lambda x: x.name not in live):
             out += [info.get("series") or event.split("-")[0] for event, info in store.watch(spec.name).items()]
         return list(dict.fromkeys(out))
 
@@ -443,7 +442,7 @@ class Worker:
         if self._buy_threads:
             log.info("%d buy worker(s) run evaluate jobs apart from scans and reviews", self._buy_threads)
         if self.s.live_lane_threads and self.s.live_lanes is not None:
-            for spec in tiered_lanes(self.s):
+            for spec in enabled_lanes(self.s):
                 if self.s.is_live(spec.name):
                     self._lane_threads.add(spec.name)
                     threading.Thread(target=self._lane_loop, args=(spec.name,), name=f"live-lane-{spec.name}", daemon=True).start()
@@ -557,7 +556,7 @@ class Worker:
     # ---- running a job ----
     def run_job(self, job: Job) -> None:
         handlers = {
-            "scan": self.do_scan, "evaluate": self.do_evaluate,
+            "evaluate": self.do_evaluate,
             "resolve": self.do_resolve,
             "review": self.do_review, "history": self.do_history, "account_sync": self.do_account_sync, "patterns": self.do_patterns,
         }
@@ -593,30 +592,6 @@ class Worker:
         finally:
             steptime.end()
             reqstats.set_source(None)
-
-    def do_scan(self, job: Job) -> str:
-        s = self.s
-        every = s.scan_interval_minutes * 60
-        # Scheduled first, so even a scan that crashes or is killed leaves the next one waiting.
-        self.jobs.ensure("scan", time.time() + every, max_attempts=s.job_max_attempts)
-        # The all-markets scan reads every open market closing in the next 2 to 47 hours (9,273 of them on 2026-11-14: about 220 requests, a burst of 429s at every start and every half hour) to shortlist for the lanes it serves. When no enabled lane is served by it (every running lane is two-level and event-driven) there is nothing to shortlist, and the read is skipped.
-        markets = runner.candidate_markets(s, self.client, partial_ok=job.last_attempt) if lanes_mod.main_lanes(s) else []
-        lanes = runner.shortlists(s, self.client, markets, self.estimators())
-        shots = [shot for picked in lanes.values() for shot in picked]
-        log.info(runner.describe_scan(
-            s, len(markets), {k: len(v) for k, v in lanes.items()}, self.searcher,
-        ))
-        queued = 0
-        for shot in shots:
-            made = self.jobs.enqueue(
-                "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
-                expires_in=every, max_attempts=s.job_max_attempts,
-                priority=job_priority(s, spec_for(s, shot.lane)),
-            )
-            queued += 1 if made else 0
-        self.jobs.enqueue("resolve", dedupe_key="resolve", max_attempts=s.job_max_attempts)
-        self._ensure_tiered()
-        return f"{len(markets)} markets, queued {queued} of {len(shots)} evaluations"
 
     def _poly(self) -> Any:
         """The Polymarket client, or None when it cannot be built. Public market data needs no key."""
@@ -804,10 +779,10 @@ class Worker:
         return factors.snapshot_now(self.s, shot.ticker, shot.side, shot.close_time, "", strike, now)
 
     # ---- two-level lanes: a slow scoping pass feeds a fast reviewing pass ----
-    def _ensure_tiered(self) -> None:
+    def _ensure_lane_jobs(self) -> None:
         """Keep one scope and one review job alive per two-level lane (also picks up a lane
         turned on by a settings change)."""
-        for spec in tiered_lanes(self.s):
+        for spec in enabled_lanes(self.s):
             if self._driven(spec):
                 continue  # kept by the stream's events (see _on_market_event). The skip holds only while the entry watcher's threads are alive and the feed is up: a dead thread makes the lane undriven and this puts its timers back
             now = time.time()
@@ -821,10 +796,10 @@ class Worker:
             )
 
     def _driven(self, spec) -> bool:
-        """True when this lane's review runs on the stream (the entry watcher: a socket quote or index tick) and its scope on the stream's market events, with no timer behind them. Only while the feed is up and the entry watcher's threads are alive: otherwise the timers run as before. 2026-11-19 OUTAGE: a lane marked driven with no thread behind it had no timer and nothing to wake it; no lane reviewed for an hour. Now the lane counts as driven only while the entry watcher's threads are alive (EntryWatcher.alive), and _ensure_tiered puts the timers back the moment they are not."""
+        """True when this lane's review runs on the stream (the entry watcher: a socket quote or index tick) and its scope on the stream's market events, with no timer behind them. Only while the feed is up and the entry watcher's threads are alive: otherwise the timers run as before. 2026-11-19 OUTAGE: a lane marked driven with no thread behind it had no timer and nothing to wake it; no lane reviewed for an hour. Now the lane counts as driven only while the entry watcher's threads are alive (EntryWatcher.alive), and _ensure_lane_jobs puts the timers back the moment they are not."""
         cache = getattr(self.client, "cache", None)
         w = self.entry_watcher
-        return bool(tiered(spec) and w is not None and w.alive() and cache is not None and hasattr(cache, "fed") and cache.fed())
+        return bool(spec.enabled and w is not None and w.alive() and cache is not None and hasattr(cache, "fed") and cache.fed())
 
     def _start_market_events(self) -> None:
         """A thread that turns the stream's market events into scope runs: a new or reopened market, or a changed close, scopes the lanes that trade its series at once; the stream coming up scopes every lane, and the stream going down puts the timers back."""
@@ -873,11 +848,11 @@ class Worker:
         """One market event or feed change onto the scope jobs. Separate from the thread so a test can drive it."""
         if kind == "feed":
             if item:
-                for spec in tiered_lanes(self.s):
+                for spec in enabled_lanes(self.s):
                     if self._driven(spec):
                         jobs.run_now(f"lane_scope:{spec.name}", priority=job_priority(self.s, spec))
             else:
-                for spec in tiered_lanes(self.s):  # stream down: the timers come back
+                for spec in enabled_lanes(self.s):  # stream down: the timers come back
                     now = time.time()
                     jobs.ensure(f"lane_scope:{spec.name}", now, max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec))
                     jobs.ensure(f"lane_review:{spec.name}", now + 15, max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec))
@@ -885,21 +860,21 @@ class Worker:
         if item.get("event") not in {"created", "activated", "close_date_updated", "strike", "determined", "settled"}:
             return
         series = str(item.get("ticker", "")).split("-")[0]
-        for spec in tiered_lanes(self.s):
+        for spec in enabled_lanes(self.s):
             if self._driven(spec) and series in runner.lane_series(spec, self.s):
                 jobs.run_now(f"lane_scope:{spec.name}", priority=job_priority(self.s, spec))
 
-    def _tiered_spec(self, job: Job):
+    def _lane_spec(self, job: Job):
         spec = lane_specs(self.s).get(job.kind.partition(":")[2])
-        return spec if spec is not None and spec.enabled and tiered(spec) else None
+        return spec if spec is not None and spec.enabled else None
 
     def do_lane_scope(self, job: Job) -> str:
-        spec = self._tiered_spec(job)
+        spec = self._lane_spec(job)
         if spec is None:
-            return "lane off or not two-level; not rescheduled"
+            return "lane off; not rescheduled"
         if not self._driven(spec):  # a lane the stream drives is scoped by its market events, not by a timer (user, 2026-11-19: "nothing should be running off a timer unless its a background job for database calculations")
             self.jobs.ensure(
-                job.kind, time.time() + (spec.scope_minutes or 30.0) * 60,
+                job.kind, time.time() + spec.scope_minutes * 60,
                 max_attempts=self.s.job_max_attempts, priority=job_priority(self.s, spec),
             )
         if spec.name in POLY_LANES and self._poly() is None:
@@ -912,10 +887,10 @@ class Worker:
         return f"{n} events watched"
 
     def do_lane_review(self, job: Job) -> str:
-        spec = self._tiered_spec(job)
+        spec = self._lane_spec(job)
         if spec is None:
-            return "lane off or not two-level; not rescheduled"
-        every = (spec.review_minutes or 2.0) * 60
+            return "lane off; not rescheduled"
+        every = spec.review_minutes * 60
         if not self._driven(spec):  # a lane the stream drives is reviewed on a socket quote or an index tick, not by a timer
             self.jobs.ensure(
                 job.kind, time.time() + every, max_attempts=self.s.job_max_attempts,
@@ -940,6 +915,7 @@ class Worker:
         return build_estimators(self.est, self.store, self.searcher, self.quant)
 
     def do_resolve(self, job: Job) -> str:
+        self.jobs.ensure("resolve", time.time() + self.s.scan_interval_minutes * 60, max_attempts=self.s.job_max_attempts)  # a background job that settles the books on a schedule; it was queued by the all-markets scan, removed 2026-11-23
         n = runner.resolve(self.client, self.store, client_for=lambda ticker: self._venue(self.store.decision_lane(ticker)))
         log.info("resolved %d settled markets", n)
         return f"{n} resolved"

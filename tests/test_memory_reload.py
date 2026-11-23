@@ -110,7 +110,6 @@ def test_integration_no_buy_is_decided_while_memory_is_reloading_and_one_is_afte
 
     w = worker(tmp_path, FakeClient())
     w.start()
-    w.run_job(w.jobs.claim(kinds={"scan"}))
     job = w.jobs.claim(kinds={"evaluate"})
     before = w.store.db.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
     ticks_mod.reload_begin()

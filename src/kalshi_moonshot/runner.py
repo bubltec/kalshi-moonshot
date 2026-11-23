@@ -28,16 +28,15 @@ from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
 from .estimators import Estimate, EstimateShare, Estimator, build_estimators
-from .kalshi import MARKET_PAGES, KalshiClient, KalshiError, KalshiRateLimited
+from .kalshi import KalshiClient, KalshiError, KalshiRateLimited
 from .lanes import (
     LADDER,
     LaneSpec,
     edge_verdict,
     lane_specs,
-    main_lanes,
     settings_of,
     spec_for,
-    tiered_lanes,
+    enabled_lanes,
     version_of,
     wants_bet,
 )
@@ -76,47 +75,6 @@ class Outcome:
     action: str
     note: str
     lane: str = "moonshot"
-
-
-def candidate_markets(s: Settings, client: KalshiClient, partial_ok: bool = True) -> list[dict]:
-    """Open markets closing inside the window either lane is looking at, with category attached.
-
-    Fetched by close time. The plain market list and the event list are not ordered by close
-    time, so reading the first few pages can return zero markets inside a short window.
-
-    If a page fails after every retry: partial_ok keeps what was read (with a warning),
-    otherwise the error is raised so a queued job can retry the whole fetch later.
-    """
-    lanes = main_lanes(s)
-    lo = min(lane.hours[0] for lane in lanes) if lanes else s.min_hours_to_close
-    hi = max(lane.hours[1] for lane in lanes) if lanes else s.max_hours_to_close
-    now = time.time()
-    info = client.event_info()
-    skip = {c.casefold() for c in s.skip_categories}
-    out: list[dict] = []
-    fetched = 0
-    try:
-        for m in client.markets_closing(now + lo * 3600, now + hi * 3600):
-            fetched += 1
-            raw = info.get(m.get("event_ticker", ""), ("", "", False))
-            category, series, mutex = (*raw, "", "", False)[:3]
-            if category and category.casefold() in skip:
-                continue
-            m["category"] = category
-            m["mutually_exclusive"] = bool(mutex)
-            if series:
-                m.setdefault("series_ticker", series)
-            out.append(m)
-    except KalshiError as exc:
-        if not partial_ok:
-            raise
-        log.warning("market fetch stopped after %d markets (%s); using what was read", fetched, exc)
-    if fetched >= MARKET_PAGES * getattr(client, "page_size", 1000):
-        log.warning(
-            "fetched the %d-market limit for a %.0f-%.0fh window; some markets were not read. "
-            "Narrow the hour limits.", fetched, lo, hi,
-        )
-    return out
 
 
 def _apply_event_info(client: KalshiClient, shots: list[LongShot], memory: bool = False) -> list[LongShot]:
@@ -182,34 +140,6 @@ def lane_shots(
     return out[: spec.shortlist]
 
 
-def shortlists(
-    s: Settings, client: KalshiClient, markets: list[dict],
-    estimators: dict[str, Estimator] | None = None, now: datetime | None = None,
-    lanes: list[LaneSpec] | None = None,
-) -> dict[str, list[LongShot]]:
-    """Each main-scan lane's candidates (two-level lanes have their own scope/review passes).
-    A market goes to the first lane that takes it, and a lane skips events an earlier lane
-    already holds a side of."""
-    now = now or datetime.now(UTC)
-    out: dict[str, list[LongShot]] = {}
-    taken: set[str] = set()
-    taken_events: set[str] = set()
-    for spec in main_lanes(s) if lanes is None else lanes:
-        shots = lane_shots(s, client, markets, spec, estimators, now)
-        if spec.shares_markets:  # a control lane sees the same markets as the lane it is compared with
-            out[spec.name] = shots
-            continue
-        picked = [
-            x for x in shots
-            if x.ticker not in taken
-            and not (x.mutually_exclusive and x.event_ticker in taken_events)
-        ]
-        out[spec.name] = picked
-        taken.update(x.ticker for x in picked)
-        taken_events.update(x.event_ticker for x in picked if x.mutually_exclusive and x.event_ticker)
-    return out
-
-
 def _all_series(spec: LaneSpec, s: Settings) -> list[str]:
     if spec.series:
         return list(spec.series)
@@ -230,7 +160,7 @@ def watched(s: Settings) -> set[str] | None:
             if s.live_lanes is None or name in s.live_lanes:
                 out |= set(series) if series else {i.prefix + suffix for i in load_instruments(s.data_dir) for suffix in i.suffixes}
         return out
-    for spec in tiered_lanes(s):
+    for spec in enabled_lanes(s):
         if s.live_lanes is None or spec.name in s.live_lanes:
             out |= set(_all_series(spec, s))
     return out
@@ -368,32 +298,6 @@ def review_lane(
     return shots[: spec.shortlist]
 
 
-def moonshot_shots(markets, s, client, now=None) -> list[LongShot]:
-    return lane_shots(s, client, markets, spec_for(s, "moonshot"), None, now)
-
-
-def steady_shots(markets, s, client, now=None) -> list[LongShot]:
-    return lane_shots(s, client, markets, spec_for(s, "steady"), None, now)
-
-
-def shortlist(
-    s: Settings, client: KalshiClient, markets: list[dict], now: datetime | None = None
-) -> tuple[list[LongShot], list[LongShot]]:
-    """(moonshot, steady) candidates, from an already-fetched market list."""
-    lanes = shortlists(s, client, markets, None, now)
-    return lanes.get("moonshot", []), lanes.get("steady", [])
-
-
-def describe_scan(s: Settings, total: int, counts: dict[str, int], searcher: object | None) -> str:
-    skipped = ", ".join(sorted(s.skip_categories))
-    lanes = ", ".join(f"{n} {name}" for name, n in counts.items())
-    return (
-        f"{total} open markets: {lanes}"
-        f"{f', skipping {skipped}' if skipped else ''}"
-        f"{', news on' if searcher else ', news off'}"
-    )
-
-
 def format_outcome(r: Outcome) -> str:
     p = f"{r.model_p:.3f}" if r.model_p is not None else "  -  "
     e = f"{r.edge:+.3f}" if r.edge is not None else "  -  "
@@ -409,12 +313,11 @@ def scan(
 ) -> list[Outcome]:
     """One synchronous pass (the `scan` command). The `run` loop uses the job queue instead."""
     estimators = build_estimators(est, store, searcher, quant)
-    markets = candidate_markets(s, client)
-    lanes = shortlists(s, client, markets, estimators)
-    for spec in tiered_lanes(s):  # one-off scan: do both levels back to back
+    lanes: dict[str, list[LongShot]] = {}
+    for spec in enabled_lanes(s):  # one-off scan: do both levels back to back
         scope_lane(s, client, store, spec, quant=quant)
         lanes[spec.name] = review_lane(s, client, store, spec, estimators)
-    log.info(describe_scan(s, len(markets), {k: len(v) for k, v in lanes.items()}, searcher))
+    log.info("scan: %s%s", ", ".join(f"{len(v)} {k}" for k, v in lanes.items()), ", news on" if searcher else ", news off")
     return [
         evaluate(s, client, est, store, shot, searcher, quant=quant, estimators=estimators)
         for shots in lanes.values() for shot in shots

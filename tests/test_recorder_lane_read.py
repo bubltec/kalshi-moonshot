@@ -24,7 +24,7 @@ def test_unit_only_lanes_that_are_on_and_two_level_are_read_with_their_series(tm
     s = settings(tmp_path, monkeypatch, GOOD)
     got = dict(lanes.recorder_lanes(s))
     assert got["a"] == ("KXBTC15M", "KXETH15M") and got["b"] == ("KXSOL15M",)
-    assert "off" not in got and "slow" not in got
+    assert "off" not in got and got["slow"] == ("KXSLOW15M",)  # a lane that sets no review_minutes is watched like any other (2026-11-23)
 
 
 def test_unit_the_series_reach_a_lane_through_inherit_and_through_its_modules_defaults(tmp_path, monkeypatch):
@@ -43,7 +43,7 @@ def test_unit_the_admin_pages_lane_switch_is_kept(tmp_path, monkeypatch):
 def test_unit_on_a_lane_file_both_understand_the_recorder_follows_what_the_bot_follows(tmp_path, monkeypatch):
     rec = runner.watched(settings(tmp_path, monkeypatch, GOOD, role="record"))
     bot = runner.watched(settings(tmp_path, monkeypatch, GOOD, role="both"))
-    assert rec == bot and {"KXWATCH15M", "KXBTC15M", "KXETH15M", "KXSOL15M"} <= rec and "KXOFF15M" not in rec and "KXSLOW15M" not in rec  # (the built-in commodity lane names no series, so both add every priced instrument's)
+    assert rec == bot and {"KXWATCH15M", "KXBTC15M", "KXETH15M", "KXSOL15M"} <= rec and "KXOFF15M" not in rec  # (the built-in commodity lane names no series, so both add every priced instrument's)
 
 
 def test_unit_only_live_lanes_add_their_series_when_a_live_list_is_set(tmp_path, monkeypatch):

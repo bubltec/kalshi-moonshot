@@ -61,18 +61,9 @@ def live_quant():
     return cm.CommodityPricer(FakeFeed(feed_series(price=4000, per_bar=0.0005, age_s=30, now=now)))
 
 
-def test_commodity_is_two_level_and_leaves_the_main_scan(tmp_path):
+def test_commodity_is_the_one_enabled_builtin_lane(tmp_path):
     s = settings(tmp_path)
-    assert [x.name for x in lanes.tiered_lanes(s)] == ["commodity"]
-    assert "commodity" not in [x.name for x in lanes.main_lanes(s)]
-
-
-def test_a_two_level_lane_must_name_what_it_fetches(tmp_path):
-    (tmp_path / "strategies.toml").write_text(
-        '[lane.x]\nestimator = "llm"\nprice = [0.1, 0.2]\nhours = [1, 2]\nreview_minutes = 1\n'
-    )
-    with pytest.raises(ValueError, match="review_minutes needs"):
-        lanes.lane_specs(settings(tmp_path))
+    assert [x.name for x in lanes.enabled_lanes(s)] == ["commodity"]
 
 
 def test_scoping_fetches_series_by_name_and_saves_a_watchlist(tmp_path):
@@ -182,7 +173,7 @@ def test_worker_keeps_a_scope_and_a_review_job_alive_per_tiered_lane(tmp_path):
     w = Worker(s, Client([]), None, Store(s.db_path), None, quant=live_quant())
     w.start()
     kinds = {k for k, st, _ in w.jobs.counts() if st == "pending"}
-    assert {"lane_scope:commodity", "lane_review:commodity", "scan", "review"} <= kinds
+    assert {"lane_scope:commodity", "lane_review:commodity", "resolve", "review"} <= kinds
 
 
 def test_scope_job_reschedules_itself_and_pulls_the_review_forward(tmp_path):

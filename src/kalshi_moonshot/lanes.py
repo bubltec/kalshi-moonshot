@@ -61,7 +61,6 @@ class LaneSpec:
     fixed_stake: float = 0.0  # dollars per bet, ignoring Kelly (0 = size by the odds and the balance)
     needs_model_edge: bool = True  # the model must see an edge over the price before the lane buys (min_edge, min_edge_room, max_lag). False = the lane buys whatever passes its other gates, with no minimum edge from a model. Until 2026-11-16 this was `always` with the opposite sense (user: "lets re-work that concept. because 'always' means nothing"); a lane file may still say `always`. On the live crypto lane's 157 bets with the screen off (11-15 16:31 on), the 19 it would have passed made +1.10 and the 138 it would have dropped -175.35, though the model's edge does not sort the bets: the screen mostly buys an eighth as often (studies/results/2026-11-16-edge-screen-record.txt)
     min_age_minutes: float = 0.0  # skip a market until it has been open this long (books settle down)
-    shares_markets: bool = False  # main-scan lane that also takes markets another lane took (for A/B controls); never consumes them
     reentry_cooldown_seconds: float = 0.0  # after this lane exits a market, wait this long before it may buy that market again (0 = no wait)
     rebuy_opposite_after_gain_seconds: float = 0.0  # 2026-11-08 (user, HYPE 09:15: the value exit sold YES at 0.67 for a gain and the lane bought YES again 94 s later at 0.67 and lost $2.22; "a 60-ish sell is great but we might want to rebuy if confidence continues to increase"); put back 2026-11-19 (user: "Put it back", after the cleanup took it out): after this lane exits one side of a market for a gain (the sale after its fee over the price paid after its fee), it may not buy that SAME side again for this many seconds; the opposite side goes through the lane's usual buy chain at once, and its own gain sale starts the same wait on its side. After the wait the side is open again. A sale at a loss sets no limit (0 = off). Read by the buy step `cooldown` (buychain.py; name it in a buy module's steps and set this in the module, with reentry_cooldown_seconds), from the bet book in memory (Store.last_gain_sale), not the database. A fixed number, set by the user, not read from the curve
     buy_rest_seconds: float = 0.0  # buy with a post-only RESTING order instead of an immediate one: it waits this many seconds at buy_rest_below under the ask and is dropped if unfilled (no fallback). A resting order that fills pays no taker fee; replay says it mostly fills on dips (0 = buy at the ask)
@@ -142,8 +141,8 @@ class LaneSpec:
     lookback_hours: int = 6  # candle window for the trend rule
     min_trend: float = 0.0  # ask gain over the window a 'rising' lane needs, dollars
     max_drop: float = 0.02  # ask fall (window or last candle) a 'not_falling' lane tolerates
-    scope_minutes: float | None = None  # with review_minutes: slow pass that builds the watchlist
-    review_minutes: float | None = None  # fast pass over the watchlist; None = the main scan only
+    scope_minutes: float = 2.0  # the slow pass that builds the watchlist; used only while the feed is down or the entry thread is dead (the stream's market events scope the lane otherwise). Unset = 2 (2026-11-23: every lane is driven by the entry thread, there is no all-markets scan)
+    review_minutes: float = 1.0  # the fast pass over the watchlist; used only while the feed is down or the entry thread is dead (a socket quote reviews the lane otherwise). Unset = 1
     cooldown_minutes: float = 0.0  # skip a market decided on this recently
     buy_max_move: float = 0.0  # skip a buy when the order book's ask on the side has FALLEN more than this many dollars under the ask the decision was made at (0 = off). A job can wait many seconds behind the shared request budget between deciding and ordering; a Gold NO decided at 0.86 was bought at 0.24 eight seconds before the close, after the side had collapsed
     buy_retries: int = 0  # when an immediate buy fills nothing, read the book again and send it once more, up to this many times, right away (0 = no retry). The next signal on the market comes a median 108 s later and about 3.7c dearer
@@ -169,7 +168,7 @@ def _pair(v: Any) -> tuple[float, float]:
 
 
 def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
-    """The three starting lanes, parameterized entirely from settings."""
+    """The starting lanes, parameterized entirely from settings. The old long-shot and steady lanes (moonshot, steady) are kept only as specs, switched off: the all-markets scan that served them was removed 2026-11-23, and a lane with no series is no longer watched by anything."""
     lanes = {
         "moonshot": LaneSpec(
             "moonshot", LLM, "long-shot", (s.min_price, s.max_price),
@@ -177,13 +176,13 @@ def builtin_lanes(s: Settings) -> dict[str, LaneSpec]:
             min_edge=s.min_edge, shortlist=s.shortlist, trend="not_falling", one_per="mutex",
             max_bet_pct=s.moonshot_bet_pct, max_exposure_pct=s.moonshot_exposure_pct,
             lookback_hours=s.steady_lookback_hours, max_drop=s.moonshot_max_drop,
-            sides=s.moonshot_sides,
+            sides=s.moonshot_sides, enabled=False,
         ),
         "steady": LaneSpec(
             "steady", LLM, "steady", (s.steady_min_price, s.steady_max_price),
             (s.steady_min_hours_to_close, s.steady_max_hours_to_close), s.steady_max_spread,
             s.steady_min_volume, max_lag=s.steady_max_lag, usd_per_trade=s.steady_usd_per_trade or None,
-            shortlist=s.steady_shortlist, trend="rising", one_per="mutex", enabled=s.steady_enabled,
+            shortlist=s.steady_shortlist, trend="rising", one_per="mutex", enabled=False,
             max_bet_pct=s.steady_bet_pct, max_exposure_pct=s.steady_exposure_pct,
             lookback_hours=s.steady_lookback_hours, min_trend=s.steady_min_trend,
             sides=s.steady_sides,
@@ -251,7 +250,7 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
 
 
 BUY_STEPS = ("price", "spread", "entry_window", "time_left", "blackout", "volume", "min_return", "price_trend", "perp_worth", "calm", "vol_regime", "cushion", "spike", "center_agree", "same_side", "cooldown", "state_record", "state_record_shadow", "curve_model", "win_chance_shadow", "priskp", "wave_top", "wave_trend", "ladder")  # the steps a lane may name in buy_chain; buychain.py holds one function for each
-RETIRED_FIELDS = ("max_spot_crosses", "skip_varieties", "risk_score_buy", "entry_risk_trend", "entry_risk_trend_live", "curve_risk_score", "entry_scenario_view")  # lane settings that no longer exist: a lane file that still writes one loads without it and says so in the log. max_spot_crosses (no buy at 4 or more strike crossings in five minutes) was removed 2026-11-21 at the user's word ("We don't want any of that"): a fixed count, set on the outside BiQuote feed, with no study file behind it. skip_varieties and the `variety` step that read it (no buy of a named curve variety, the live lanes' G-no and A-yes) went the same day at the same word ("That should have been removed"; earlier, 2026-11-19: stable and volatile curves both get bets): no curve shape is refused, the letter stays in the cushion step's note
+RETIRED_FIELDS = ("max_spot_crosses", "skip_varieties", "risk_score_buy", "entry_risk_trend", "entry_risk_trend_live", "curve_risk_score", "entry_scenario_view", "shares_markets")  # lane settings that no longer exist: a lane file that still writes one loads without it and says so in the log. max_spot_crosses (no buy at 4 or more strike crossings in five minutes) was removed 2026-11-21 at the user's word ("We don't want any of that"): a fixed count, set on the outside BiQuote feed, with no study file behind it. skip_varieties and the `variety` step that read it (no buy of a named curve variety, the live lanes' G-no and A-yes) went the same day at the same word ("That should have been removed"; earlier, 2026-11-19: stable and volatile curves both get bets): no curve shape is refused, the letter stays in the cushion step's note
 RETIRED_STEPS = ("context_score", "variety", "risk_score", "risk_trend", "binary_risk_shadow", "binary_risk", "swing_risk", "win_value_shadow")  # steps that no longer exist: a lane file that still names one loads without it and says so in the log, so a config written for an older image does not stop the bot. context_score (shadow, never said no) was removed 2026-11-21: on the bot's own 132 live commodity bets its percentile did not separate the bets that ended ahead from the ones behind (80%, 77%, 80% ahead by thirds)
 
 
@@ -367,11 +366,8 @@ def lane_specs_from(s: Settings, strategies_toml: str | None, overrides_json: st
             lanes[name] = _overlay(lanes.get(name), name, _with_module(_with_exit(_inherited(rows, name), name, exits), name, modules))
     lanes = overrides.apply(lanes, overrides.parse(overrides_json))  # the admin page's changes, already checked against overrides.TUNABLES
     for spec in lanes.values():
-        if tiered(spec) and not (spec.series or spec.needs_instrument):
-            raise ValueError(
-                f"lane {spec.name!r}: review_minutes needs `series` or `needs_instrument`, "
-                "because a fast pass can only fetch what it can name"
-            )
+        if spec.enabled and not (spec.series or spec.needs_instrument):
+            log.warning("lane %r names no series and needs no instrument: the entry thread has nothing to watch for it", spec.name)
     if not s.paper_lanes and s.live_lanes is not None:
         # The live host runs only what is live. A switched-off lane keeps its spec, so a bet it left open is still stopped and sold.
         lanes = {name: spec if name in s.live_lanes or name in s.paper_named else replace(spec, enabled=False) for name, spec in lanes.items()}
@@ -418,7 +414,7 @@ def _recorder_lanes(s: Settings, text: str | None, changes: str | None) -> list[
 
         enabled = (page.get(name) or {}).get("enabled", val("enabled", True)) if isinstance(page.get(name), dict) else val("enabled", True)
         series = val("series", ())
-        if enabled is True and val("review_minutes", None) is not None:
+        if enabled is True:
             out.append((name, tuple(str(x) for x in series) if isinstance(series, list | tuple) else ()))
     return out
 
@@ -439,20 +435,6 @@ def unknown_live_lanes(s: Settings) -> list[str]:
     return sorted((s.live_lanes or frozenset()) - set(lane_specs(s)))
 
 
-def tiered(spec: LaneSpec) -> bool:
-    """True for a two-level lane: scoped slowly into a watchlist, reviewed quickly from it."""
-    return spec.review_minutes is not None
-
-
-def main_lanes(s: Settings) -> list[LaneSpec]:
-    """Enabled lanes served by the all-markets scan."""
-    return [lane for lane in enabled_lanes(s) if not tiered(lane)]
-
-
-def tiered_lanes(s: Settings) -> list[LaneSpec]:
-    return [lane for lane in enabled_lanes(s) if tiered(lane)]
-
-
 LIVE_BOOST = 1000  # a live lane's jobs are claimed before any paper lane's, whatever the lanes' own priority numbers say
 
 
@@ -470,7 +452,7 @@ def spec_for(s: Settings, name: str) -> LaneSpec:
 
 # Settings that only say how the bot goes about watching a lane, or how its record is read: changing one is not a change to what the lane does.
 _NOT_LOGIC = frozenset({
-    "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes", "shares_markets",
+    "name", "label", "enabled", "shortlist", "scope_minutes", "review_minutes", "priority", "watch_max", "cooldown_minutes",
     "buy_redecide_shadow", "stake_vol_shadow", "record_adjust", "paper_fill_model", "buy_slip", "buy_max_move", "buy_retries", "buy_retry_chase",
     "buy_module", "exit_module", "entry_spike_view",
 })

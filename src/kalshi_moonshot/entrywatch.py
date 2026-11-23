@@ -30,7 +30,7 @@ from .config import Settings
 from .estimators import Estimator
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series
-from .lanes import LaneSpec, in_blackout, job_priority, lane_specs, tiered
+from .lanes import LaneSpec, in_blackout, job_priority, lane_specs
 from .marketdata import shared_for
 from . import store as store_mod
 from .store import Store
@@ -42,7 +42,7 @@ IDLE_SECONDS = 120.0  # a market's own thread ends after this long without a loo
 
 
 def wanted(s: Settings) -> bool:
-    return any(tiered(spec) for spec in lane_specs(s).values() if spec.enabled)
+    return any(spec.enabled for spec in lane_specs(s).values())
 
 
 def event_of(ticker: str) -> str:
@@ -133,7 +133,7 @@ class EntryWatcher:
         hist.append((float(e["ts"]), float(e["bid"]), float(e["ask"])))
         for lane, event, info in hits:
             spec = specs.get(lane)
-            if spec is None or not spec.enabled or not tiered(spec):
+            if spec is None or not spec.enabled:
                 continue
             self._offer(s, spec, lane, event, info)
 
@@ -144,7 +144,7 @@ class EntryWatcher:
         specs = lane_specs(s)
         for (lane, event), info in self._watched().items():
             spec = specs.get(lane)
-            if spec is None or not spec.enabled or not tiered(spec) or index_for_series(str(info.get("series", ""))) != idx:
+            if spec is None or not spec.enabled or index_for_series(str(info.get("series", ""))) != idx:
                 continue
             self._offer(s, spec, lane, event, info)
 
@@ -220,7 +220,7 @@ class EntryWatcher:
         s = self.get_settings()
         store = self.store_factory()
         for spec in lane_specs(s).values():
-            if spec.enabled and tiered(spec):
+            if spec.enabled:
                 store.watch(spec.name)  # reads the table once and remembers it
 
     def review(self, lane: str, event: str) -> int:
@@ -229,7 +229,7 @@ class EntryWatcher:
 
         s = self.get_settings()
         spec = lane_specs(s).get(lane)
-        if spec is None or not spec.enabled or not tiered(spec):
+        if spec is None or not spec.enabled:
             return 0
         store = self._store()
         if lane_full(store, spec, {event}):
@@ -249,7 +249,7 @@ class EntryWatcher:
                 steptime.tick_record("buy evaluate", (time.perf_counter() - started) * 1000.0)
         else:
             jobs = Jobs(store)
-            every = (spec.review_minutes or 2.0) * 60
+            every = spec.review_minutes * 60
             for shot in shots:
                 made = jobs.enqueue(
                     "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",

@@ -14,7 +14,7 @@ def test_builtin_lanes_come_from_settings(tmp_path):
     specs = lanes.lane_specs(s)
     assert specs["moonshot"].price == (0.03, 0.12)
     assert specs["steady"].enabled is False
-    assert [x.name for x in lanes.enabled_lanes(s)] == ["moonshot", "commodity"]
+    assert [x.name for x in lanes.enabled_lanes(s)] == ["commodity"]  # moonshot and steady are specs only, off: the scan that served them is gone (2026-11-23)
 
 
 def test_bet_rule_uses_the_lanes_own_parameters(tmp_path):

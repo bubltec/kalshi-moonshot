@@ -1,6 +1,6 @@
 """WATCH_SERIES opts in to the series the bot follows: lane discovery and the tape skip everything else, and a live lane keeps its own series."""
 from kalshi_moonshot import config, runner
-from kalshi_moonshot.lanes import tiered_lanes
+from kalshi_moonshot.lanes import enabled_lanes as tiered_lanes
 
 
 def test_no_list_follows_everything(monkeypatch):

@@ -19,4 +19,4 @@ def test_the_index_favorite_lane_is_tiered_and_data_driven():
     spec = lanes.lane_specs(s).get("index_favorite")
     if spec is None:
         return  # data/strategies.toml is the user's; the lane may not be present in a test checkout
-    assert spec.estimator == lanes.MARKET and lanes.tiered(spec) and spec.series
+    assert spec.estimator == lanes.MARKET and spec.enabled and spec.series

@@ -84,9 +84,34 @@ class FakeEst:
         return self.p, "because"
 
 
+def scan_once(w):
+    """What the all-markets scan used to do (removed 2026-11-23): shortlist the fake client's open markets for the moonshot spec and queue one evaluate job per shot. The evaluation path is what these tests exercise; the scan that fed it is gone, so the test queues the jobs itself."""
+    from dataclasses import asdict
+
+    from kalshi_moonshot.lanes import job_priority, spec_for
+
+    info = w.client.event_info()
+    markets = []
+    for m in w.client.markets_closing(0, 1):
+        category, series, mutex = (*info.get(m.get("event_ticker", ""), ("", "", False)), "", "", False)[:3]
+        m["category"], m["mutually_exclusive"] = category, bool(mutex)
+        if series:
+            m.setdefault("series_ticker", series)
+        markets.append(m)
+    spec = spec_for(w.s, "moonshot")
+    for shot in runner.lane_shots(w.s, w.client, markets, spec, w.estimators()):
+        w.jobs.enqueue(
+            "evaluate", {"shot": asdict(shot)}, dedupe_key=f"evaluate:{shot.lane}:{shot.ticker}",
+            expires_in=w.s.scan_interval_minutes * 60, max_attempts=w.s.job_max_attempts, priority=job_priority(w.s, spec),
+        )
+
+
 def worker(tmp_path, client=None, est=None, **over):
     s = settings(tmp_path, **over)
-    return Worker(s, client or FakeClient(), est or FakeEst(), Store(s.db_path), None)
+    w = Worker(s, client or FakeClient(), est or FakeEst(), Store(s.db_path), None)
+    start = w.start
+    w.start = lambda: (start(), scan_once(w))[0]  # starting the bot used to queue the first scan; the test queues its evaluations the same way
+    return w
 
 
 def drain(w, limit=50):
@@ -108,8 +133,7 @@ def test_a_scan_queues_evaluations_and_the_next_scan(tmp_path):
     w.start()
     drain(w)
     assert status(w, "evaluate") == {"done": 2}
-    assert status(w, "resolve") == {"done": 1}
-    assert status(w, "scan") == {"done": 1, "pending": 1}  # the next one is waiting
+    assert status(w, "resolve") == {"done": 1, "pending": 1}  # the next one is waiting (resolve keeps its own schedule since the scan went)
     assert len(w.store.recent_decisions()) == 2
 
 
@@ -144,7 +168,6 @@ def test_a_price_that_moved_out_of_range_skips_the_model(tmp_path):
     client, est = FakeClient(), FakeEst()
     w = worker(tmp_path, client, est)
     w.start()
-    w.step()  # the scan
     client.fresh_ask = "0.50"
     drain(w)
     assert est.calls == 0 and w.store.recent_decisions() == []
@@ -165,8 +188,7 @@ def test_rate_limit_defers_without_using_an_attempt(tmp_path):
 def test_restart_resumes_jobs_that_were_running(tmp_path):
     w = worker(tmp_path)
     w.start()
-    w.step()  # scan queues two evaluations
-    interrupted = w.jobs.claim()  # one is picked up... and the bot dies
+    interrupted = w.jobs.claim(kinds={"evaluate"})  # one is picked up... and the bot dies
     w2 = worker(tmp_path)  # new process, same database
     w2.start()
     drain(w2)
@@ -198,18 +220,6 @@ def test_orders_use_a_stable_id_per_job(tmp_path):
     assert ticker == "AAA" and len(order_id) == 36  # a UUID derived from the job, not random
 
 
-def test_partial_fetch_is_kept_only_when_allowed():
-    class Flaky(FakeClient):
-        def markets_closing(self, lo, hi):
-            yield mk("AAA")
-            raise KalshiError("page 2 failed")
-
-    s = config.load()
-    assert [m["ticker"] for m in runner.candidate_markets(s, Flaky(), partial_ok=True)] == ["AAA"]
-    with pytest.raises(KalshiError):
-        runner.candidate_markets(s, Flaky(), partial_ok=False)
-
-
 def test_the_main_loop_leaves_evaluate_jobs_to_the_buy_workers(tmp_path):
     w = worker(tmp_path)
     w.jobs.enqueue("evaluate", {"shot": {}}, run_at=1.0)
@@ -223,7 +233,6 @@ def test_the_main_loop_leaves_evaluate_jobs_to_the_buy_workers(tmp_path):
 def test_without_buy_workers_the_main_loop_still_runs_evaluate_jobs(tmp_path):
     w = worker(tmp_path, buy_workers=0)
     w.start()
-    w.run_job(w.jobs.claim(kinds={"scan"}))  # the scan queues the two evaluations
     w._split = True
     drain(w)
     assert status(w, "evaluate") == {"done": 2}
@@ -232,7 +241,6 @@ def test_without_buy_workers_the_main_loop_still_runs_evaluate_jobs(tmp_path):
 def test_a_buy_worker_runs_only_evaluate_jobs(tmp_path):
     w = worker(tmp_path)
     w.start()
-    w.run_job(w.jobs.claim(kinds={"scan"}))  # the scan queues the two evaluations
     w.jobs.enqueue("lane_scope:x", {}, run_at=1.0)
     ran: list[str] = []
 
@@ -316,37 +324,3 @@ def test_a_live_lane_thread_runs_only_its_own_lanes_jobs(tmp_path):
     w._lane_loop("live_a")
     assert ran == ["lane_scope:live_a"]
     assert status(w, "lane_scope:paper_b") == {"pending": 1} and status(w, "evaluate") == {"pending": 1}
-
-
-# ---- the all-markets scan reads nothing when no lane is served by it (2026-11-14: 9,273 markets, about 220 requests at every start and every half hour, for no lane) ----
-def test_the_scan_makes_no_market_request_when_every_enabled_lane_is_two_level(tmp_path, monkeypatch):
-    from kalshi_moonshot import lanes as lanes_mod
-
-    class Counting(FakeClient):
-        reads = 0
-
-        def markets_closing(self, *a, **k):
-            Counting.reads += 1
-            return iter(())
-
-    w = worker(tmp_path, Counting())
-    w.start()
-    monkeypatch.setattr(lanes_mod, "main_lanes", lambda s: [])
-    w.run_job(w.jobs.claim(kinds={"scan"}))
-    assert Counting.reads == 0
-    assert status(w, "scan") == {"done": 1, "pending": 1}  # the next one is still scheduled
-    assert w.jobs.claim(kinds={"resolve"}) is not None  # and the scan's follow-ups still run
-
-
-def test_the_scan_still_reads_the_markets_when_a_main_scan_lane_is_enabled(tmp_path):
-    class Counting(FakeClient):
-        reads = 0
-
-        def markets_closing(self, *a, **k):
-            Counting.reads += 1
-            return iter(())
-
-    w = worker(tmp_path, Counting())
-    w.start()
-    w.run_job(w.jobs.claim(kinds={"scan"}))
-    assert Counting.reads == 1

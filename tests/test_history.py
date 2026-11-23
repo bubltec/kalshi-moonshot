@@ -131,7 +131,7 @@ def test_the_bot_schedules_history_at_a_priority_below_trading(tmp_path):
 
     s = config.load()
     s = type(s)(**{**s.__dict__, "data_dir": tmp_path, "mode": "observe", "history_enabled": True,
-                   "commodities_enabled": False, "history_batch": 5})
+                   "commodities_enabled": False, "history_batch": 5, "history_keep_days": 3650})  # the fixed windows are from 2026-10-19: a 30-day keep would prune them once the date passed 2026-11-18
     store = Store(tmp_path / "moonshot.db")
     w = Worker(s, Client({f"KXGOLD15M-W{i}": ("yes", straight(0.5, 0.9)) for i in range(8)}), None, store, None)
     w.start()

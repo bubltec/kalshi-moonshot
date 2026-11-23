@@ -41,7 +41,7 @@ def test_an_exit_closes_only_its_own_lanes_bet(store):
 def test_the_control_lane_is_flagged_to_share_markets():
     toml = "[lane.control]\nestimator = 'llm'\nprice = [0.5, 0.8]\nhours = [1, 72]\nshares_markets = true\n"
     spec = lanes.lane_specs_from(config.load(), toml)["control"]
-    assert spec.shares_markets
+    assert not hasattr(spec, "shares_markets")  # retired 2026-11-23 with the all-markets scan: an old lane file that names it still loads
 
 
 def test_a_sale_saves_the_context_at_the_moment_of_the_sale(store):

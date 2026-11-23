@@ -52,7 +52,6 @@ def test_a_slow_job_logs_where_its_time_went(tmp_path, caplog, monkeypatch):
 
     w = worker(tmp_path, FakeClient())
     w.start()
-    w.run_job(w.jobs.claim(kinds={"scan"}))
     job = w.jobs.claim(kinds={"evaluate"})
     monkeypatch.setattr("kalshi_moonshot.worker.SLOW_JOB_SECONDS", -1.0)  # every job counts as slow
     real = w.do_evaluate

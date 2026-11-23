@@ -31,7 +31,7 @@ def worker(tmp_path, monkeypatch):
 
 
 def test_the_long_background_jobs_are_the_ones_named_as_maintenance():
-    assert {"history", "resolve", "account_sync", "patterns", "review", "scan"} == MAINTENANCE
+    assert {"history", "resolve", "account_sync", "patterns", "review"} == MAINTENANCE
     assert not MAINTENANCE & {"evaluate", "stop_loss", "lane_scope", "lane_review"}
 
 
