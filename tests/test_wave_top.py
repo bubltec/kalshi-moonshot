@@ -493,60 +493,40 @@ def test_integration_the_exponent_sets_how_fast_the_swing_narrows(tmp_path, monk
     assert t.wave_last_low == pytest.approx(0.30)
 
 
-def switch_target(tmp_path, monkeypatch, bids, entry=0.30):
-    """A wave bet with the is_whipsaw_behavior switch ON, bought 800 s before the close, whose first bids (one a second from the buy) are `bids`."""
-    from tests.test_risk_exit_flow import TICKER as HELD
-
+def switch_target(tmp_path, monkeypatch, entry=0.30):
+    """A wave bet with the whipsaw variant ON (2.16 typical minutes; the bid's typical minute is 0.10 here, so a range of 0.216), bought 800 s before the close."""
     w, t, close = take_target(tmp_path, monkeypatch, entry, unit=0.10)
-    t.wave_whipsaw, t.wave_shape_s = 2.16, 120.0
-    for k, b in enumerate(bids):
-        ticks_mod.mids.note(HELD, t.bought_ts + k, b, b + 0.01)
+    t.wave_whipsaw = 2.16
     return w, t, close
 
 
-def test_integration_is_whipsaw_behavior_holds_a_whipsaw_and_lets_the_sales_work_on_other_kinds(tmp_path, monkeypatch, mem):
-    # a whipsaw: the bid swings 0.24 to 0.55 in its first 120 s (a range of 3.1 typical minutes at a unit of 0.10)
-    wild = [0.24 + 0.31 * ((k // 15) % 2) for k in range(140)]
-    w, t, close = switch_target(tmp_path, monkeypatch, wild)
+def test_integration_the_whipsaw_variant_is_read_on_every_tick_and_never_holds_the_staircase(tmp_path, monkeypatch, mem):
+    # a calm bet: the bid's range stays at 0.12 (1.2 typical minutes): not the whipsaw shape, the staircase works as it does
+    w, t, close = switch_target(tmp_path, monkeypatch)
     ask = asker(w, t, close)
-    assert w._is_whipsaw_behavior(t, t.bought_ts + 60.0) is None  # not read before the shape time
-    assert w._is_whipsaw_behavior(t, t.bought_ts + 200.0) is True and t.wave_kind == "whipsaw" and t.wave_range_u == pytest.approx(3.1, abs=0.2)
-    # a calm bet: a range of 0.6 typical minutes
-    tame = [0.30 + 0.06 * ((k // 20) % 2) for k in range(140)]
-    ticks_mod.mids.clear()
-    w2, t2, close2 = switch_target(tmp_path, monkeypatch, tame)
-    ask2 = asker(w2, t2, close2)
-    for bid in (0.36, 0.42, 0.36, 0.42, 0.36):
-        ask2(bid, 600)  # inside the first 120 s of the buy time (no sale) ... and after: asked below
-    assert w2._is_whipsaw_behavior(t2, t2.bought_ts + 200.0) is False and t2.wave_kind == "other"
-    t2.wave_dir, t2.wave_hi, t2.wave_lo, t2.wave_last_low = 0, 0.0, 0.0, 0.0
-    t2.wave_best_net = -9.0
-    for bid in (0.28, 0.36, 0.41, 0.35, 0.41, 0.48, 0.41, 0.36):
-        assert ask2(bid, 60) is None
-    why = ask2(0.34, 60)
-    assert why and "last swing low" in why  # another kind: the staircase sells as it does
+    for bid in (0.36, 0.42, 0.35, 0.41, 0.48, 0.41, 0.36):
+        assert ask(bid, 60) is None
+    assert t.wave_kind == "" and t.wave_range_u == pytest.approx(1.3, abs=0.1)
+    why = ask(0.34, 60)
+    assert why and "last swing low" in why
 
 
-def test_integration_the_shape_time_is_no_blackout_a_sale_inside_it_goes_through(tmp_path, monkeypatch, mem):
-    # 2026-11-23 SILVER 22:00: the bet was up 48% inside the 120 s before its shape was read and nothing sold (the blackout); an unread shape holds nothing
-    tame = [0.30 + 0.06 * ((k // 20) % 2) for k in range(140)]
-    w, t, close = switch_target(tmp_path, monkeypatch, tame)
+def test_integration_no_blackout_a_sale_right_after_the_buy_goes_through(tmp_path, monkeypatch, mem):
+    # 2026-11-23 SILVER 22:00: up 48% inside the first 120 s and nothing sold; no wait, no shape time
+    w, t, close = switch_target(tmp_path, monkeypatch)
     ask = asker(w, t, close)
     t.wave_best_net = 0.05
     t.wave_dir, t.wave_last_low = -1, 0.35
     t.wave_hi = t.wave_lo = 0.30
-    # 60 s after the buy (740 s left of 800): the shape is not read yet and the staircase's lower low sells
-    assert w._is_whipsaw_behavior(t, t.bought_ts + 60.0) is None
-    assert ask(0.20, 740)
+    assert ask(0.20, 790)  # 10 s after the buy
 
 
-def test_integration_a_whipsaw_keeps_reading_the_price_and_widens_its_swing_to_its_own_range(tmp_path, monkeypatch, mem):
-    wild = [0.24 + 0.31 * ((k // 15) % 2) for k in range(140)]
-    w, t, close = switch_target(tmp_path, monkeypatch, wild)
-    assert w._is_whipsaw_behavior(t, t.bought_ts + 200.0) is True
+def test_integration_a_bet_following_the_whipsaw_shape_widens_its_swing_to_its_own_range_and_is_still_read(tmp_path, monkeypatch, mem):
+    w, t, close = switch_target(tmp_path, monkeypatch)
     ask = asker(w, t, close)
-    for bid in (0.30, 0.55, 0.30, 0.58):  # the bet's own range so far is 0.28
+    for bid in (0.30, 0.55, 0.30, 0.58):  # the bet's own range so far reaches 0.28: 2.8 typical minutes, over the shape's 2.16
         assert ask(bid, 600) is None
+    assert t.wave_kind == "whipsaw" and t.wave_range_u == pytest.approx(2.5, abs=0.1)
     assert t.wave_path_hi == pytest.approx(0.58) and t.wave_path_lo == pytest.approx(0.30)  # the price is read on every check
     assert ask(0.50, 600) is None  # a 0.08 fall is inside the whipsaw's own range: ordinary motion, no reversal
-    assert ask(0.28, 600)  # a fall out of its range (more than 0.28 off the high): the climb is done and the staircase sells
+    assert ask(0.28, 600)  # a fall out of its range: the climb is done and the staircase sells

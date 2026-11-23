@@ -24,14 +24,12 @@ log = logging.getLogger("moonshot")
 READERS: dict[str, Callable[[Board], tuple[Any, str]]] = {}
 NEEDS: dict[str, tuple[str, ...]] = {
     "wave_take": ("whipsaw", "bid_unit", "p_lose", "cushion_factor"),
-    "wave_salvage": ("whipsaw", "spot"),
+    "wave_salvage": ("spot",),
     "priskp": ("priskp_screen", "shift_out"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
 }
 
 
-VETO_RULES: list[tuple[str, Callable[[Any], bool], tuple[str, ...], str]] = [
-    ("whipsaw", lambda v: v is True, ("wave_salvage",), "is_whipsaw_behavior: the salvage does not run on a whipsaw; the staircase keeps reading the price and widens its swing to the bet's own range (2026-11-23: SILVER 22:00 peaked at +48% inside the old blind window and again at 0.87 and was held to zero); a shape not read yet holds nothing"),
-]  # (fact, vetoes when this is true of its value, the steps it stops, the label the log carries)
+VETO_RULES: list[tuple[str, Callable[[Any], bool], tuple[str, ...], str]] = []  # (fact, vetoes when this is true of its value, the steps it stops, the label the log carries)
 VETO_RULES.append(("shift_out", lambda v: v is not None, ("priskp",), "shift_out_of_cushion"))  # user, 2026-11-22: no buy on the side a confirmed shift took out of its cushion, against the current target
 VETOED_STEPS = frozenset(step for _, _, steps, _ in VETO_RULES for step in steps)
 
@@ -175,13 +173,12 @@ def _bid_unit(b: Board) -> tuple[Any, str]:
 
 @reader("whipsaw")
 def _whipsaw(b: Board) -> tuple[Any, str]:
-    """is_whipsaw_behavior: True when the bet's bid range over its first wave_shape_seconds, in the bid's typical minutes, is at or over wave_whipsaw_range; False under it, or when the lane's switch is off; None while the shape is not readable yet (the watcher's _is_whipsaw_behavior reads it once and keeps it on the bet)."""
+    """The whipsaw variant: True when the bet's bid range since the buy, in the bid's typical minutes, is at or over the lane's wave_whipsaw_range (read on every check by the watcher's _is_whipsaw_behavior; once true it stays true); False under it or with the variant off. The staircase reads it to size its swing; nothing is held."""
     v = b.host._is_whipsaw_behavior(b.t, b.now)
-    if v is None:
-        return None, f"the shape is read {b.t.wave_shape_s:.0f} s after the buy"
     if b.t.wave_whipsaw <= 0:
-        return False, "the lane's switch is off"
-    return v, f"bid range {b.t.wave_range_u:.2f} typical minutes in the first {b.t.wave_shape_s:.0f} s against {b.t.wave_whipsaw:.2f}"
+        return False, "the lane's variant is off"
+    return v, f"bid range {b.t.wave_range_u:.2f} typical minutes since the buy against {b.t.wave_whipsaw:.2f}"
+
 
 
 # ---- the buy side's readers (the priskp step; memory only) ----

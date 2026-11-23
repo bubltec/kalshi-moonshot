@@ -67,10 +67,12 @@ def test_weights_accumulate_on_the_board_and_show_in_the_note():
 def test_a_veto_stops_a_step_and_the_walk_refuses_a_step_that_sells_anyway(tmp_path, monkeypatch, mem, caplog):  # noqa: F811
     from kalshi_moonshot import curverisk
 
-    w, t, close = switch_target(tmp_path, monkeypatch, [0.30] * 140)
+    w, t, close = switch_target(tmp_path, monkeypatch)
     risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
     t.sell_chain = ("wave_salvage",)
-    t.wave_kind = "whipsaw"  # read as a whipsaw (a shape not read yet holds nothing)
+    monkeypatch.setattr(facts, "VETO_RULES", [("whipsaw", lambda v: v is True, ("wave_salvage",), "a test veto")])  # the wave lane has no veto now; the machinery is tested with one
+    monkeypatch.setattr(facts, "VETOED_STEPS", frozenset({"wave_salvage"}))
+    t.wave_kind = "whipsaw"
     monkeypatch.setitem(watcher._SELL, "wave_salvage", lambda self, tt, r, bid, now, left, pnl, c: "wave salvage: a sale that ignores the board")
     now = close - 700.0
     with memguard.decision("sell"):
