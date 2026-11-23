@@ -11,7 +11,9 @@ eras=(
   "1 07:47 spike trail, k1/p1, no blackout|2026-11-23 07:47"
   "2 14:34 staircase fixes (no 5c fallback, arming)|2026-11-23 14:34"
   "3 15:11 paper sale price fix|2026-11-23 15:11"
-  "4 15:40 high zone and 0.95 line removed (current)|2026-11-23 15:40"
+  "4 15:40 high zone and 0.95 line removed|2026-11-23 15:40"
+  "5 19:00 salvage give-up on, share 0.3 (about: pushed after the 18:57 restart)|2026-11-23 19:00"
+  "6 19:36 value_hold and value_sale after the flip (about: config push after the 19:33 build) (current)|2026-11-23 19:36"
 )
 case_sql="case"
 for ((i=${#eras[@]}-1; i>=0; i--)); do
