@@ -210,6 +210,10 @@ class Target:
     wave_give_up_turn: float = 0.5
     wave_give_up_peak: float = 1.0 / 3.0
     wave_arm_swings: float = 1.0
+    value_sale_premium: float = 0.0
+    value_after_flip: bool = False
+    value_sale_logged: bool = False
+    value_sale_failed: bool = False
     wave_cushion: bool = True
     wave_whipsaw: float = 0.0
     wave_kind: str = ""  # "whipsaw" once the bet has followed the whipsaw shape, else ""
@@ -921,6 +925,59 @@ class ProfitWatcher:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="wave salvage", extra=extra)
         return None
 
+    def _sell_value_sale(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step value_sale (2026-11-23, user: "value sale looks good", "our goal is avoiding loss"; scripts/priskp_favorite_exit_replay.py): a favourite is sold when the market pays what the spot says holding is worth. Hold value = 1 - p_lose (the spot's chance of ending on the wrong side, its cushion over a random walk's move in the time left); the bet is sold at the bid when the bid after the sale fee is at least that plus the lane's value_sale_premium, at a gain or a loss. No spot reading: held. Memory only."""
+        try:
+            return ProfitWatcher._value_sale_read(self, t, r, bid, now, left, pnl, self._board(c, t, now, left, bid).view("value_sale"))
+        except Exception as e:
+            if not t.value_sale_failed:
+                t.value_sale_failed = True
+                log.warning("value sale: the step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
+        return None
+
+    def _value_sale_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, fx: Any) -> str | None:
+        if t.close_ts <= 0 or bid <= 0 or left <= 0:
+            return None
+        lose = fx.get("p_lose")
+        if lose is None:
+            return None
+        if t.value_after_flip:
+            spot = fx.get("spot")
+            if spot is None or spot[0] <= 0:
+                return None  # before the flip the bet is a scalp, not a favourite: the value sale does not act
+        hold = 1.0 - lose
+        pays = bid - fee_per_contract(bid)
+        if pays < hold + t.value_sale_premium:
+            return None
+        reason = f"value sale: the bid {bid:.2f} pays {pays:.3f} after the sale fee, at or over the hold value {hold:.3f} (the spot's chance of ending on the wrong side {lose:.3f}) plus a premium of {t.value_sale_premium:g}"
+        reason += fx.note()
+        extra = {"bid": round(bid, 4), "pays": round(pays, 4), "hold": round(hold, 4), "p_lose": round(lose, 4), "premium": t.value_sale_premium}
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="value sale", extra=extra)
+            return reason
+        if not t.value_sale_logged:
+            t.value_sale_logged = True
+            log.info("value sale shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="value sale", extra=extra)
+        return None
+
+    def _sell_value_hold(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step value_hold, a HOLD (2026-11-23, the wave session; user: "value hold only applies after the flip"): once the spot is on the bet's side of the target (cushion over zero) and the bid after the sale fee is under what holding is worth plus the lane's value_sale_premium (exactly when value_sale would not sell), the walk ends with no sale, so the steps after it (the staircase's lower-low sale, the give-up) are not asked. Before the flip, or with no spot reading, it does nothing. Memory only."""
+        try:
+            fx = self._board(c, t, now, left, bid).view("value_hold")
+            if t.close_ts <= 0 or bid <= 0 or left <= 0:
+                return None
+            spot, lose = fx.get("spot"), fx.get("p_lose")
+            if spot is None or lose is None or spot[0] <= 0:
+                return None
+            if bid - fee_per_contract(bid) < (1.0 - lose) + t.value_sale_premium:  # exactly when value_sale would not sell
+                return sellchain.HOLD
+        except Exception as e:
+            if not t.value_sale_failed:
+                t.value_sale_failed = True
+                log.warning("value hold: the step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
+        return None
+
     def _sell_trail_timed(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step trail_timed, SHADOW ONLY: it never sells and never holds (2026-11-18, user: "as time expires the volatility rate increases"; "so having a static volatility number is pointless"). It asks the trail's own question (curverisk.trail_hit, under the same conditions as _sell_trail) twice: with the exit's static typical minute and with the time-aware one (_risk_unit_timed), and writes one row (kind "trail_timed" in data/risk_shadow.jsonl) each time the pair of verdicts changes on the bet, with both units, both verdicts, the bet's high and `would_differ`. scripts/trail_timed_score.py scores the rows where they differ. Not in the default order: only a lane whose chain names it is asked. Memory only; an error is logged once a bet and the next step is asked."""
         try:
@@ -1378,6 +1435,7 @@ class ProfitWatcher:
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.wave_rev_k, held.wave_rev_p, held.wave_cushion = spec.wave_rev_k, spec.wave_rev_p, spec.wave_cushion
                 held.wave_time_curve, held.wave_arm_swings = spec.wave_time_curve, spec.wave_arm_swings
+                held.value_sale_premium, held.value_after_flip = spec.value_sale_premium, spec.value_after_flip
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
@@ -1668,7 +1726,7 @@ class ProfitWatcher:
                 with contextlib.suppress(TypeError, ValueError):
                     bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
-            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit", "wave give-up")) and not runner.is_profit_sale(why)  # 2026-11-23: the wave give-up is a safety exit, a sale at a loss by design (user: "if the scalp isn't working we should exit ... just exit"); without it here _sell backs off every give-up under the cost, as it does the wave salvage (which sells only for a small gain)
+            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit", "wave give-up", "value sale")) and not runner.is_profit_sale(why)  # 2026-11-23: the wave give-up is a safety exit, a sale at a loss by design (user: "if the scalp isn't working we should exit ... just exit"); without it here _sell backs off every give-up under the cost, as it does the wave salvage (which sells only for a small gain)
             if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not cut:  # a profit take never sells for a loss after both fees; the crash exit, the stop and the risk exit's sales do (the point is to get out)
                 self._back_off(ticker, lane)
                 return

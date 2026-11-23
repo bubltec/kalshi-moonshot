@@ -75,8 +75,8 @@ import pytest  # noqa: E402
 @pytest.mark.parametrize("live", [False, True])
 def test_integration_a_wave_give_up_sells_under_the_cost_and_the_wave_salvage_still_does_not(tmp_path, monkeypatch, live):
     monkeypatch.setattr(config.Settings, "is_live", lambda self, lane, series="": live)
-    for why, sells in (("wave give-up: the bid fell and has not turned", True), ("wave salvage: the bid fell and has come back", False)):
-        sub = tmp_path / ("a" if sells else "b")
+    for why, sells in (("wave give-up: the bid fell and has not turned", True), ("value sale: the bid pays the hold value", True), ("wave salvage: the bid fell and has come back", False)):
+        sub = tmp_path / why.split(":")[0].replace(" ", "_")
         sub.mkdir()
         c = Reads(bid=0.50)  # well under the 0.81 the bet cost: a sale here is a loss after both fees
         w = held(sub, monkeypatch, live=live, client=c)

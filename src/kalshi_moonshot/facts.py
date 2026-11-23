@@ -25,6 +25,8 @@ READERS: dict[str, Callable[[Board], tuple[Any, str]]] = {}
 NEEDS: dict[str, tuple[str, ...]] = {
     "wave_take": ("whipsaw", "bid_unit", "p_lose", "cushion_factor"),
     "wave_salvage": ("spot",),
+    "value_sale": ("p_lose", "spot"),
+    "value_hold": ("p_lose", "spot"),
     "priskp": ("priskp_screen", "shift_out"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
 }
 
