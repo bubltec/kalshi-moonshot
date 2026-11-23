@@ -1,0 +1,26 @@
+1467 bets with a reading; all: n=1467 win 0.29 mean ask 0.269 hold total   199.80 per bet  +0.14 +- 0.29
+
+THE TURN: the side's bid change over the 30 s before the buy, in the bid's typical minutes (positive = already turning up). Hold to settlement.
+  cut -0.50  at or under: n=  19 win 0.26 mean ask 0.315 hold total   -31.65 per bet  -1.67 +- 2.63
+             over      : n=1448 win 0.29 mean ask 0.269 hold total   231.45 per bet  +0.16 +- 0.29
+  cut -0.25  at or under: n=  72 win 0.28 mean ask 0.273 hold total   -16.42 per bet  -0.23 +- 1.32
+             over      : n=1395 win 0.29 mean ask 0.269 hold total   216.22 per bet  +0.15 +- 0.30
+  cut +0.00  at or under: n= 306 win 0.29 mean ask 0.262 hold total   121.18 per bet  +0.40 +- 0.65
+             over      : n=1161 win 0.29 mean ask 0.271 hold total    78.62 per bet  +0.07 +- 0.33
+  cut +0.25  at or under: n= 624 win 0.27 mean ask 0.263 hold total  -143.49 per bet  -0.23 +- 0.44
+             over      : n= 843 win 0.30 mean ask 0.274 hold total   343.29 per bet  +0.41 +- 0.39
+  cut +0.50  at or under: n=1005 win 0.27 mean ask 0.264 hold total  -118.50 per bet  -0.12 +- 0.35
+             over      : n= 462 win 0.32 mean ask 0.281 hold total   318.30 per bet  +0.69 +- 0.53
+
+thirds (cuts +0.17, +0.48, from this sample):
+  lowest   n= 490 win 0.28 mean ask 0.264 hold total     2.40 per bet  +0.00 +- 0.51
+      yes n= 294 win 0.26 mean ask 0.264 hold total  -164.63 per bet  -0.56 +- 0.64
+      no  n= 196 win 0.31 mean ask 0.264 hold total   167.03 per bet  +0.85 +- 0.82
+  middle   n= 489 win 0.27 mean ask 0.263 hold total   -57.51 per bet  -0.12 +- 0.50
+      yes n= 243 win 0.30 mean ask 0.264 hold total   112.10 per bet  +0.46 +- 0.72
+      no  n= 246 win 0.25 mean ask 0.262 hold total  -169.61 per bet  -0.69 +- 0.68
+  highest  n= 488 win 0.32 mean ask 0.281 hold total   254.91 per bet  +0.52 +- 0.51
+      yes n= 257 win 0.32 mean ask 0.283 hold total   169.62 per bet  +0.66 +- 0.71
+      no  n= 231 win 0.31 mean ask 0.279 hold total    85.29 per bet  +0.37 +- 0.74
+
+20 s
