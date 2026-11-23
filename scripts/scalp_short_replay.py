@@ -147,7 +147,7 @@ for w in sorted(cache.windows, key=lambda x: (x["close"], x["ticker"])):
         cross = sum(1 for x, y in zip(win, win[1:], strict=False) if (x - ask) * (y - ask) < 0)
         won = side == w["result"]
         sc = scalp(bids, asks, side, ask, t, n, won, w["kind"])
-        bets.append({**sc, "u": u, "bid": bid_s, "mid": [0.5 * (bids[x] + asks[x]) for x in range(n)], "t": t, "n": n, "close": close, "side": side, "ask": ask, "won": won, "H": hold_net(ask, won), "range_u": (max(win) - min(win)) / u, "cross": cross, "swings": swings(win, 0.5 * u), "eff_b": abs(win[-1] - win[0]) / max(1e-9, sum(abs(y - x) for x, y in zip(win, win[1:], strict=False))), "eff_s": abs(sp[k] - sp[k - 300]) / max(1e-9, sum(abs(y - x) for x, y in zip(sp[k - 300 : k + 1], sp[k - 299 : k + 1], strict=False))), "drift_s": (sp[k] - sp[k - 300]) / ua * (1 if side == "yes" else -1), "kind": w["kind"], "eff5": eff(A, k, 300), "eff10": eff(A, k, 600), "cross5": xcount(sp, A, k, 300), "reach": abs(A[k] - strike) / ua, "run10": (A[k] - A[k - 600]) / ua * (1 if side == "no" else -1), "u": u, "t_min": t / 60.0})
+        bets.append({"bid": bid_s, "mid": [0.5 * (bids[x] + asks[x]) for x in range(n)], "t": t, "n": n, "close": close, "side": side, "ask": ask, "won": won, "H": hold_net(ask, won), "range_u": (max(win) - min(win)) / u, "cross": cross, "swings": swings(win, 0.5 * u), "eff_b": abs(win[-1] - win[0]) / max(1e-9, sum(abs(y - x) for x, y in zip(win, win[1:], strict=False))), "eff_s": abs(sp[k] - sp[k - 300]) / max(1e-9, sum(abs(y - x) for x, y in zip(sp[k - 300 : k + 1], sp[k - 299 : k + 1], strict=False))), "drift_s": (sp[k] - sp[k - 300]) / ua * (1 if side == "yes" else -1), "kind": w["kind"], "eff5": eff(A, k, 300), "eff10": eff(A, k, 600), "cross5": xcount(sp, A, k, 300), "reach": abs(A[k] - strike) / ua, "run10": (A[k] - A[k - 600]) / ua * (1 if side == "no" else -1), "t_min": t / 60.0, **sc})
         break
 
     ur = math.sqrt(sum((sp[x] - sp[x - UNIT]) ** 2 for x in range(ia - 3600 + UNIT, ia, 10)) / max(1, len(range(ia - 3600 + UNIT, ia, 10))))
@@ -194,7 +194,7 @@ def rep(rows, label):
     f = lambda k, x: sum(1 for r in ok if r[k] >= x * r["u"]) / m
     ts = sorted(r["t1"] for r in ok if r["t1"] is not None)
     med = ts[len(ts) // 2] if ts else float("nan")
-    print(f"{label:30s} n={m:6d} 1u in 30 s {f('best30', 1):.2f} 60 s {f('best60', 1):.2f} | 2u in 30 s {f('best30', 2):.2f} 60 s {f('best60', 2):.2f} | median s to 1u {med:4.0f} | spread {sum(r['spr'] for r in ok) / m:.2f}u | win {sum(r['won'] for r in ok) / m:.2f} hold {sum(r['H'] for r in ok) / m:+.2f}/bet")
+    print(f"{label:30s} n={m:6d} 1u in 30 s {f('best30', 1):.2f} 60 s {f('best60', 1):.2f} | 2u in 30 s {f('best30', 2):.2f} 60 s {f('best60', 2):.2f} | median s to 1u {med:4.0f} | unit {sum(r['u'] for r in ok) / m:.4f} spread {sum(r['spr'] for r in ok) / m:.2f}u | win {sum(r['won'] for r in ok) / m:.2f} hold {sum(r['H'] for r in ok) / m:+.2f}/bet")
 
 
 def by_spread(rows, label, cuts):

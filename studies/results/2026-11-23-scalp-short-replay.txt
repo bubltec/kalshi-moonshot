@@ -1,29 +1,29 @@
 2452 detector bets, 199156 baseline entries (no signal)
-old detector (60 s average)    n=  2452 1u in 30 s 0.05 60 s 0.14 | 2u in 30 s 0.00 60 s 0.03 | median s to 1u   24 | spread 1.49u | win 0.28 hold -0.03/bet
-   crypto                      n=  1574 1u in 30 s 0.05 60 s 0.15 | 2u in 30 s 0.01 60 s 0.03 | median s to 1u   24 | spread 0.85u | win 0.28 hold +0.01/bet
-   commodity                   n=   878 1u in 30 s 0.04 60 s 0.12 | 2u in 30 s 0.00 60 s 0.03 | median s to 1u   25 | spread 2.64u | win 0.28 hold -0.09/bet
-baseline, no signal            n=168601 1u in 30 s 0.24 60 s 0.38 | 2u in 30 s 0.12 60 s 0.25 | median s to 1u   24 | spread 0.46u | win 0.37 hold -0.36/bet
-   crypto                      n=115237 1u in 30 s 0.26 60 s 0.40 | 2u in 30 s 0.13 60 s 0.26 | median s to 1u   23 | spread 0.35u | win 0.37 hold -0.27/bet
-   commodity                   n= 53364 1u in 30 s 0.19 60 s 0.33 | 2u in 30 s 0.10 60 s 0.22 | median s to 1u   26 | spread 0.71u | win 0.36 hold -0.56/bet
-bump 5 s                       n=  3005 1u in 30 s 0.22 60 s 0.38 | 2u in 30 s 0.09 60 s 0.22 | median s to 1u   26 | spread 0.40u | win 0.29 hold -0.12/bet
-   crypto                      n=  2272 1u in 30 s 0.23 60 s 0.40 | 2u in 30 s 0.10 60 s 0.23 | median s to 1u   26 | spread 0.33u | win 0.30 hold +0.24/bet
-   commodity                   n=   733 1u in 30 s 0.17 60 s 0.30 | 2u in 30 s 0.09 60 s 0.17 | median s to 1u   27 | spread 0.60u | win 0.25 hold -1.21/bet
-bump 10 s                      n=  2230 1u in 30 s 0.20 60 s 0.36 | 2u in 30 s 0.08 60 s 0.19 | median s to 1u   26 | spread 0.40u | win 0.27 hold +0.03/bet
-   crypto                      n=  1681 1u in 30 s 0.22 60 s 0.38 | 2u in 30 s 0.09 60 s 0.20 | median s to 1u   26 | spread 0.35u | win 0.27 hold +0.10/bet
-   commodity                   n=   549 1u in 30 s 0.15 60 s 0.28 | 2u in 30 s 0.07 60 s 0.16 | median s to 1u   28 | spread 0.56u | win 0.27 hold -0.19/bet
-bump 20 s                      n=  1622 1u in 30 s 0.21 60 s 0.36 | 2u in 30 s 0.08 60 s 0.19 | median s to 1u   26 | spread 0.42u | win 0.26 hold +0.19/bet
-   crypto                      n=  1267 1u in 30 s 0.23 60 s 0.38 | 2u in 30 s 0.08 60 s 0.20 | median s to 1u   26 | spread 0.37u | win 0.27 hold +0.48/bet
-   commodity                   n=   355 1u in 30 s 0.16 60 s 0.29 | 2u in 30 s 0.07 60 s 0.17 | median s to 1u   29 | spread 0.59u | win 0.23 hold -0.85/bet
-bump 30 s                      n=  1322 1u in 30 s 0.22 60 s 0.35 | 2u in 30 s 0.08 60 s 0.18 | median s to 1u   26 | spread 0.41u | win 0.25 hold +0.40/bet
-   crypto                      n=  1030 1u in 30 s 0.23 60 s 0.36 | 2u in 30 s 0.08 60 s 0.18 | median s to 1u   25 | spread 0.38u | win 0.26 hold +0.65/bet
-   commodity                   n=   292 1u in 30 s 0.18 60 s 0.32 | 2u in 30 s 0.08 60 s 0.19 | median s to 1u   28 | spread 0.54u | win 0.22 hold -0.47/bet
+old detector (60 s average)    n=  2184 1u in 30 s 0.21 60 s 0.34 | 2u in 30 s 0.10 60 s 0.20 | median s to 1u   24 | unit 0.0458 spread 0.46u | win 0.28 hold +0.05/bet
+   crypto                      n=  1493 1u in 30 s 0.22 60 s 0.35 | 2u in 30 s 0.10 60 s 0.20 | median s to 1u   24 | unit 0.0469 spread 0.36u | win 0.28 hold +0.02/bet
+   commodity                   n=   691 1u in 30 s 0.18 60 s 0.30 | 2u in 30 s 0.09 60 s 0.18 | median s to 1u   25 | unit 0.0432 spread 0.67u | win 0.28 hold +0.13/bet
+baseline, no signal            n=168601 1u in 30 s 0.24 60 s 0.38 | 2u in 30 s 0.12 60 s 0.25 | median s to 1u   24 | unit 0.0446 spread 0.46u | win 0.37 hold -0.36/bet
+   crypto                      n=115237 1u in 30 s 0.26 60 s 0.40 | 2u in 30 s 0.13 60 s 0.26 | median s to 1u   23 | unit 0.0458 spread 0.35u | win 0.37 hold -0.27/bet
+   commodity                   n= 53364 1u in 30 s 0.19 60 s 0.33 | 2u in 30 s 0.10 60 s 0.22 | median s to 1u   26 | unit 0.0422 spread 0.71u | win 0.36 hold -0.56/bet
+bump 5 s                       n=  3005 1u in 30 s 0.22 60 s 0.38 | 2u in 30 s 0.09 60 s 0.22 | median s to 1u   26 | unit 0.0480 spread 0.40u | win 0.29 hold -0.12/bet
+   crypto                      n=  2272 1u in 30 s 0.23 60 s 0.40 | 2u in 30 s 0.10 60 s 0.23 | median s to 1u   26 | unit 0.0486 spread 0.33u | win 0.30 hold +0.24/bet
+   commodity                   n=   733 1u in 30 s 0.17 60 s 0.30 | 2u in 30 s 0.09 60 s 0.17 | median s to 1u   27 | unit 0.0462 spread 0.60u | win 0.25 hold -1.21/bet
+bump 10 s                      n=  2230 1u in 30 s 0.20 60 s 0.36 | 2u in 30 s 0.08 60 s 0.19 | median s to 1u   26 | unit 0.0503 spread 0.40u | win 0.27 hold +0.03/bet
+   crypto                      n=  1681 1u in 30 s 0.22 60 s 0.38 | 2u in 30 s 0.09 60 s 0.20 | median s to 1u   26 | unit 0.0507 spread 0.35u | win 0.27 hold +0.10/bet
+   commodity                   n=   549 1u in 30 s 0.15 60 s 0.28 | 2u in 30 s 0.07 60 s 0.16 | median s to 1u   28 | unit 0.0491 spread 0.56u | win 0.27 hold -0.19/bet
+bump 20 s                      n=  1622 1u in 30 s 0.21 60 s 0.36 | 2u in 30 s 0.08 60 s 0.19 | median s to 1u   26 | unit 0.0518 spread 0.42u | win 0.26 hold +0.19/bet
+   crypto                      n=  1267 1u in 30 s 0.23 60 s 0.38 | 2u in 30 s 0.08 60 s 0.20 | median s to 1u   26 | unit 0.0525 spread 0.37u | win 0.27 hold +0.48/bet
+   commodity                   n=   355 1u in 30 s 0.16 60 s 0.29 | 2u in 30 s 0.07 60 s 0.17 | median s to 1u   29 | unit 0.0492 spread 0.59u | win 0.23 hold -0.85/bet
+bump 30 s                      n=  1322 1u in 30 s 0.22 60 s 0.35 | 2u in 30 s 0.08 60 s 0.18 | median s to 1u   26 | unit 0.0522 spread 0.41u | win 0.25 hold +0.40/bet
+   crypto                      n=  1030 1u in 30 s 0.23 60 s 0.36 | 2u in 30 s 0.08 60 s 0.18 | median s to 1u   25 | unit 0.0527 spread 0.38u | win 0.26 hold +0.65/bet
+   commodity                   n=   292 1u in 30 s 0.18 60 s 0.32 | 2u in 30 s 0.08 60 s 0.19 | median s to 1u   28 | unit 0.0505 spread 0.54u | win 0.22 hold -0.47/bet
 
 spread cuts (typical 10 s, from the baseline): 0.24 / 0.44
-old detector (60 s average)    1u in 30 s by spread third: low 0.06 (n=795)  mid 0.04 (n=713)  high 0.04 (n=944)
+old detector (60 s average)    1u in 30 s by spread third: low 0.20 (n=795)  mid 0.22 (n=713)  high 0.20 (n=676)
 baseline, no signal            1u in 30 s by spread third: low 0.25 (n=56201)  mid 0.25 (n=56200)  high 0.21 (n=56200)
 bump 5 s                       1u in 30 s by spread third: low 0.22 (n=1304)  mid 0.22 (n=925)  high 0.21 (n=776)
 bump 10 s                      1u in 30 s by spread third: low 0.22 (n=1036)  mid 0.19 (n=655)  high 0.19 (n=539)
 bump 20 s                      1u in 30 s by spread third: low 0.21 (n=778)  mid 0.21 (n=467)  high 0.21 (n=377)
 bump 30 s                      1u in 30 s by spread third: low 0.21 (n=647)  mid 0.21 (n=381)  high 0.24 (n=294)
 
-163 s
+164 s
