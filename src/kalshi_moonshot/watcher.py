@@ -860,7 +860,7 @@ class ProfitWatcher:
                     reason, kind = f"wave take: the spike peaked at {t.wave_ride_high:.2f} and the bid fell {t.wave_spike_tr:.1f} of its usual {t.wave_spike_s:.0f} s moves ({t.wave_spike_tr * move:.3f}) under it to {bid:.2f}: sold at the end of the ride, a gain of {net * 100:.1f}c a contract", "spike"
         if kind == "spike" or t.wave_ride:  # a ride is held until it peaks: neither the staircase nor the high-zone sale ends it
             pass
-        elif t.wave_best_net > t.wave_arm_swings * rev and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
+        elif t.wave_best_net > 0 and (net > 0 or t.wave_best_net > t.wave_arm_swings * rev) and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
             where = f"a gain of {net * 100:.1f}c a contract" if net > 0 else f"a small loss of {-net * 100:.1f}c a contract (the bet had been ahead by {t.wave_best_net * 100:.1f}c)"
             reason, kind = f"wave take: the bid {bid:.2f} fell under its last swing low {t.wave_last_low:.2f} (swings of {rev:.3f}, cushion factor {cushion:.2f}, {left:.0f} s left): the climb is done, sold at {where}", "lower low"
         elif t.wave_high_zone and net > 0 and bid >= wavetop.HIGH - 1e-9:

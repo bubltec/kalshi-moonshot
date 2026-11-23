@@ -595,3 +595,12 @@ def test_unit_a_lane_file_with_a_time_curve_loads_it_largest_seconds_first(tmp_p
     (tmp_path / "strategies.toml").write_text(TOML.replace("wave_top_trend_hours = 1.0", "wave_top_trend_hours = 1.0\nwave_time_curve = [[60, 1.0], [900, 0.5], [300, 2.0]]\nwave_arm_swings = 0.5"))
     sp = lanes.lane_specs(config.load())["wt"]
     assert sp.wave_time_curve == ((900.0, 0.5), (300.0, 2.0), (60.0, 1.0)) and sp.wave_arm_swings == 0.5
+
+
+def test_integration_a_sale_at_a_gain_is_armed_by_any_gain_only_the_loss_sale_needs_a_swing(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.50, unit=0.10)
+    t.wave_arm_swings = 1.0
+    ask = asker(w, t, close)  # a swing at 780 s left: 0.09
+    t.wave_best_net, t.wave_dir, t.wave_last_low, t.wave_hi, t.wave_lo = 0.04, -1, 0.56, 0.62, 0.55
+    why = ask(0.55, 780)  # ahead by less than a swing, under its last low, still at a gain after both fees: sold
+    assert why and "a gain of" in why
