@@ -67,6 +67,46 @@ for b in data["bets"]:
         hv = hold_value(sec)
         return None if hv is None else 1.0 - hv
 
+    tick_at = {int(x[0]): float(x[1]) for x in sp["ticks"]}
+
+    def inst_cushion(sec):  # the latest perp tick at or before this second, against the target, for the bet's side (negative = crossed)
+        for back in range(0, 8):
+            v = tick_at.get(sec - back)
+            if v is not None:
+                return (v - float(sp["strike"])) if side == "yes" else (float(sp["strike"]) - v)
+        return None
+
+    def avg_cushion(sec, n):  # the perp's average of the last n seconds against the target, for the bet's side
+        vals = [tick_at[k] for k in range(sec - n + 1, sec + 1) if k in tick_at]
+        if len(vals) < max(2, n // 3):
+            return None
+        a = sum(vals) / len(vals)
+        return (a - float(sp["strike"])) if side == "yes" else (float(sp["strike"]) - a)
+
+    def run_cross_n(n):
+        """Sell at the bid the first time the perp's n-second average is on the wrong side of the target; no value condition."""
+        for sec, bid in grid:
+            if sec <= t0 or sec % 5:
+                continue
+            c = avg_cushion(sec, n)
+            if c is not None and c <= 0:
+                return bid - fee(bid) - basis - fee(basis)
+        return held
+
+    def run_cross(avg60):
+        """Sell at the bid the first time the spot has crossed to the wrong side of the target (cushion zero or under): the 60 s average the value sale reads (avg60) or the latest tick, with no value condition."""
+        for sec, bid in grid:
+            if sec <= t0 or sec % 5:
+                continue
+            if avg60:
+                hold_value(sec)
+                c = cush.get(sec)
+            else:
+                c = inst_cushion(sec)
+            if c is not None and c <= 0:
+                return bid - fee(bid) - basis - fee(basis)
+        return held
+
     def run(take, value_margin, hold_p=None, crossed=False, wait_share=0.0):
         since = None  # when the value sale's condition began to hold without a break (the wait is a share of the time left, never fixed seconds)
         for sec, bid in grid:
@@ -95,6 +135,10 @@ for b in data["bets"]:
         out[f"value{m}"] = run(False, m)
     out["crossed0.0"] = run(False, 0.0, None, True)
     out["crossed0.02"] = run(False, -0.02, None, True)  # a premium of 0.02 over the hold value
+    for n in (10, 20, 30, 45):
+        out[f"cross{n}s"] = run_cross_n(n)
+    out["cross60"] = run_cross(True)
+    out["crossInst"] = run_cross(False)
     for ws in WAITS:
         out[f"wait{ws}"] = run(False, -0.02, None, False, ws)
         out[f"waitx{ws}"] = run(False, -0.02, None, True, ws)
@@ -103,7 +147,7 @@ for b in data["bets"]:
     res.append(out)
 print(f"bets {len(res)} (left out: {skipped}); as ran {sum(r['actual'] * r['n'] for r in res):+.2f}, held {sum(r['hold'] * r['n'] for r in res):+.2f}; lost {sum(1 for r in res if not r['won'])}")
 print("rule: net $ | beat / lost to what ran | beat / lost to holding | net on the bets that lost (holding: net)")
-for key in ["take", "value-0.05", "value-0.02", "value0.0", "value0.02", "value0.05", "both"] + ["crossed0.0", "crossed0.02"] + [f"wait{w}" for w in WAITS] + [f"waitx{w}" for w in WAITS] + [f"hold{h}" for h in HOLDS]:
+for key in ["take", "value-0.05", "value-0.02", "value0.0", "value0.02", "value0.05", "both"] + ["cross10s", "cross20s", "cross30s", "cross45s", "cross60", "crossInst", "crossed0.0", "crossed0.02"] + [f"wait{w}" for w in WAITS] + [f"waitx{w}" for w in WAITS] + [f"hold{h}" for h in HOLDS]:
     net = sum(r[key] * r["n"] for r in res)
     lo = [r for r in res if not r["won"]]
     print(f"{key:9s} {net:+8.2f} | {sum(1 for r in res if r[key] > r['actual'] + 1e-9):3d} / {sum(1 for r in res if r[key] < r['actual'] - 1e-9):3d} | {sum(1 for r in res if r[key] > r['hold'] + 1e-9):3d} / {sum(1 for r in res if r[key] < r['hold'] - 1e-9):3d} | {sum(r[key] * r['n'] for r in lo):+7.2f} ({sum(r['hold'] * r['n'] for r in lo):+.2f})")
