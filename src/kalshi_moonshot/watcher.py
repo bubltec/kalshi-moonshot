@@ -1645,15 +1645,24 @@ class ProfitWatcher:
             if row is None:
                 return
             book = self._book(lane)
-            m = book.market(ticker)
-            read = time.time()
-            if m.get("result") in {"yes", "no"}:
-                return
             side = row["side"] or "yes"
-            quoted = flip(m) if side == "no" else m
-            bid = 0.0
-            with contextlib.suppress(TypeError, ValueError):
-                bid = float(quoted.get("yes_bid_dollars") or 0.0)
+            with self._lock:
+                tk = self.targets.get((ticker, lane))
+            tick_bid = tk.last_bid if (tk is not None and tk.last_ts and time.time() - tk.last_ts < 5.0 and tk.last_bid > 0) else 0.0  # the bid of the latest socket tick, the side the bet holds
+            from_tick = tick_bid > 0 and not s.is_live(lane, ticker.split("-")[0])
+            if from_tick:
+                # 2026-11-23: a PAPER sale is priced at the tick's bid from memory, the bid the step decided on. It used to re-read the market (a REST GET, which can be older than the tick) and keep the lower of the two, so a sale on a rising bid was recorded at the quote from before the rise: id 251601 KXNATGAS15M-26NOV230230 decided at 0.86, recorded 0.65; all 13 high-zone sales were recorded under the bid in their reason, 14c on average (a live order takes the lower of the two on purpose, below).
+                m, bid = {}, tick_bid
+                read = time.time()
+            else:
+                m = book.market(ticker)
+                read = time.time()
+                if m.get("result") in {"yes", "no"}:
+                    return
+                quoted = flip(m) if side == "no" else m
+                bid = 0.0
+                with contextlib.suppress(TypeError, ValueError):
+                    bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
             cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit")) and not runner.is_profit_sale(why)
             if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not cut:  # a profit take never sells for a loss after both fees; the crash exit, the stop and the risk exit's sales do (the point is to get out)
@@ -1688,8 +1697,8 @@ class ProfitWatcher:
                 t.below_since = None  # the dip has already healed; keep riding
                 self._back_off(ticker, lane)
                 return
-            # The socket is the freshest price (REST can show an older quote), so anchor the order to the lower of the two.
-            if t is not None and t.last_ts and time.time() - t.last_ts < 5.0 and t.last_bid > 0:
+            # The socket is the freshest price (REST can show an older quote), so anchor a live order to the lower of the two. A paper sale already carries the tick's bid and keeps it.
+            if not from_tick and t is not None and t.last_ts and time.time() - t.last_ts < 5.0 and t.last_bid > 0:
                 bid = min(bid, t.last_bid)
             slip = runner.EXIT_SLIP + (0.02 if "fast exit" in why else 0.0) + (0.03 if why.startswith("stop-loss") else 0.0)  # a collapse needs the surest fill
             ordering = time.time()
