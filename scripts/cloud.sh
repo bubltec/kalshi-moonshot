@@ -7,6 +7,9 @@
 #   scripts/cloud.sh sql "SELECT count(*) FROM tape.quotes"   # one query, results printed
 #   scripts/cloud.sh run scripts/some_study.py [VAR=value ...]   # a study from this repo, run against the CLOUD tape and trades
 #   scripts/cloud.sh shell                       # a shell on the host
+#   scripts/cloud.sh kill                        # the KILL SWITCH on the host: no new buy passes the risk gate until `unkill` (exits are not touched; every lane, live commodity and PriskP too). `python -m kalshi_moonshot kill` only writes a file on the machine it runs on, so on the Mac it stops nothing in the cloud
+#   scripts/cloud.sh unkill                      # remove it
+#   scripts/cloud.sh killed                      # is it on? (also shown at the end of `status`)
 # `run` is the cloud twin of: docker compose exec -T bot python - < scripts/some_study.py
 # Needs the AWS CLI signed in and the session-manager-plugin. AWS_PROFILE and BOT_REGION work as in cloud_push.sh.
 set -euo pipefail
@@ -52,7 +55,16 @@ pg='psql -U moonshot -d moonshot'
 
 case "${1:-}" in
   status)
-    remote "uptime; free -m | sed -n 1,2p; df -h / /mnt/moonshot | tail -2; echo; sudo docker ps -a --format '{{.Names}}  {{.Status}}'; echo; sudo docker logs --tail 8 $bot 2>&1 | cut -c1-200"
+    remote "uptime; free -m | sed -n 1,2p; df -h / /mnt/moonshot | tail -2; echo; sudo docker ps -a --format '{{.Names}}  {{.Status}}'; echo; if [ -e /mnt/moonshot/data/KILL ]; then echo 'KILL SWITCH: ON (no new buys)'; else echo 'kill switch: off'; fi; echo; sudo docker logs --tail 8 $bot 2>&1 | cut -c1-200"
+    ;;
+  kill)
+    remote "sudo touch /mnt/moonshot/data/KILL && echo 'KILL SWITCH ON: no new buys on any lane until unkill (exits are not touched)'; ls -l /mnt/moonshot/data/KILL"
+    ;;
+  unkill)
+    remote "sudo rm -f /mnt/moonshot/data/KILL && echo 'kill switch removed: buys are allowed again'"
+    ;;
+  killed)
+    remote "if [ -e /mnt/moonshot/data/KILL ]; then echo 'KILL SWITCH: ON (no new buys)'; else echo 'kill switch: off (buys are allowed)'; fi"
     ;;
   logs)
     stream "sudo docker logs --tail ${2:-200} -f $bot 2>&1"
