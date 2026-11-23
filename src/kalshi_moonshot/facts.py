@@ -114,9 +114,9 @@ class View:
             raise KeyError(f"step {self.step!r} read the fact {name!r}, which it did not name in facts.NEEDS")
         return self.board.get(name)
 
-    def cleared(self, part: str = "") -> bool:
-        """False when a veto rule stops this step (or its `part`, as "wave_take:staircase") on this check: it must not sell (the walk refuses a vetoed step if it does)."""
-        return self.board.vetoes(f"{self.step}:{part}" if part else self.step) is None
+    def cleared(self) -> bool:
+        """False when a veto rule stops this step on this check: the step must not sell (the walk refuses it if it does)."""
+        return self.board.vetoes(self.step) is None
 
     def weigh(self, weight: float, why: str = "") -> None:
         self.board.weigh(self.step, weight, why)

@@ -442,20 +442,17 @@ def test_integration_the_reversal_is_wide_with_time_left_and_narrows_toward_the_
     assert t.wave_last_low == pytest.approx(0.36)
 
 
-def test_integration_a_bet_is_held_only_while_it_cannot_likely_lose_at_any_bid(tmp_path, monkeypatch, mem):
+def test_integration_in_the_high_zone_it_holds_only_while_it_cannot_likely_lose(tmp_path, monkeypatch, mem):
     w, t, close = take_target(tmp_path, monkeypatch, 0.50, unit=0.10)
     ask = asker(w, t, close)
     spot_feed(close - 2.0, 102.0)  # a cushion of 2 against a typical move of 0.15: out of reach with 30 s left
     assert ask(0.85, 30) is None and ask(0.85, 29) is None  # held: it will not lose
     spot_feed(close - 2.0, 100.03)  # a cushion of 0.03: the bet could still be lost
     why = ask(0.85, 28)
-    assert why and "worth more sold than held" in why and "chance of losing" in why
+    assert why and "high zone" in why and "chance of losing" in why
     t.wave_peak_bid = 0.0
     t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
-    spot_feed(close - 2.0, 102.0)  # the same bid with the cushion back: held again, whatever the bid (no fixed price line)
-    assert ask(0.75, 28) is None
-    spot_feed(close - 2.0, 99.0)  # the spot on the wrong side: a bid of 0.60 is worth more sold than held, no 0.80 needed
-    assert "worth more sold than held" in (ask(0.60, 28) or "")
+    assert ask(0.75, 28) is None  # under 0.80 the zone's comparison is not asked
 
 
 def test_integration_the_cushion_widens_the_swing_with_the_spot_on_the_bets_side_and_tightens_it_on_the_wrong_side(tmp_path, monkeypatch, mem):
