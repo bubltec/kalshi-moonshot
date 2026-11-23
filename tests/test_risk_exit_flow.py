@@ -719,7 +719,7 @@ def test_integration_in_the_last_fifth_a_flat_bid_with_no_spot_reading_sells_as_
     assert level(w, 0.99, 150, seconds=12) is not None
 
 
-# ---- from a 0.95 bid up a flat bid is held while the cushion backs the price, at any time left (2026-11-14, user: "I don't think when it's above 95 we need to consider an early sale as long as it has cushion"; BTC 00:00 YES sold at 0.955 with 419 s left, then 0.99) ----
+# ---- no 0.95 line (2026-11-23, user: it is an older patch concept and a hard cap; it had held a flat bid at 0.95 and over with more than the last fifth left while the cushion backed the price; BTC 00:00 YES had sold at 0.955 with 419 s left on 2026-11-14). A flat bid sells like any other outside the last fifth; the helper below climbs to a top bid and holds it flat ----
 def high_flat(tmp_path, monkeypatch, over_strike, top):
     seed_spot(monkeypatch, over_strike)
     feed_history(0.013, from_left=1300, to_left=401)  # a typical minute of about 0.10
@@ -729,8 +729,9 @@ def high_flat(tmp_path, monkeypatch, over_strike, top):
     return level(w, top, 400 - steps + 30, seconds=40)
 
 
-def test_integration_above_ninety_five_a_flat_bid_with_cushion_is_held_with_seven_minutes_left(tmp_path, monkeypatch):
-    assert high_flat(tmp_path, monkeypatch, 0.008, 0.96) is None  # 400 s left, nowhere near the last fifth
+def test_integration_above_ninety_five_a_flat_bid_with_cushion_is_not_held_by_a_line_with_seven_minutes_left(tmp_path, monkeypatch):
+    sig = high_flat(tmp_path, monkeypatch, 0.008, 0.96)  # 400 s left, nowhere near the last fifth: the old 0.95 line held this one; now it sells as the flat bid at 0.93 does
+    assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
 
 
 def test_integration_above_ninety_five_a_flat_bid_with_a_thin_cushion_sells(tmp_path, monkeypatch):
@@ -739,7 +740,7 @@ def test_integration_above_ninety_five_a_flat_bid_with_a_thin_cushion_sells(tmp_
 
 
 def test_integration_under_ninety_five_the_same_flat_bid_still_sells_with_seven_minutes_left(tmp_path, monkeypatch):
-    sig = high_flat(tmp_path, monkeypatch, 0.008, 0.93)  # a high cushion, but the bid is under 0.95 and the market is not in its last fifth
+    sig = high_flat(tmp_path, monkeypatch, 0.008, 0.93)  # a high cushion, the market is not in its last fifth
     assert sig is not None and sig.why.startswith("curve risk exit (profit take)")
 
 

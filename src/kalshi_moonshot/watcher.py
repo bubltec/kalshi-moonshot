@@ -661,7 +661,7 @@ class ProfitWatcher:
         gain, room, rebuy, unit, bar = ProfitWatcher._sell_take_state(self, t, bid, now, left, c)
         look, net = c.look, c.net
         wants = pnl > 0 and curverisk.take_profit(gain, room, left, 900.0, rebuy, unit)
-        flat_ok = wants and (left <= 900.0 * curverisk.LATE_SHARE or bid >= curverisk.HIGH_BID) and curverisk.flat_holds(net, self._take_cushion(t, now, left, net), unit, left)  # in the last fifth a flat bid is held while the spot's cushion backs the price; a thin cushion sells (user, 2026-11-14)
+        flat_ok = wants and left <= 900.0 * curverisk.LATE_SHARE and curverisk.flat_holds(net, self._take_cushion(t, now, left, net), unit, left)  # in the last fifth a flat bid is held while the spot's cushion backs the price; a thin cushion sells (user, 2026-11-14)
         taken = wants and not curverisk.still_rising(t.risk_take_hist, now, look, unit, flat_ok)
         early = pnl > 0 and t.risk_take_early_bid > 0 and bid >= t.risk_take_early_bid and 900.0 - left <= t.risk_take_early_seconds
         if early:
