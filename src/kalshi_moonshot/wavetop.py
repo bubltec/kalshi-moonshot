@@ -332,3 +332,15 @@ def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, 
     spot_turn = (sp[-1] - sp[0]) * d >= 0
     info.update({"run": s_run, "recent": s_rec, "window": float(wl), "spot_turn": float(spot_turn)})
     return bool(s_rec <= 0.25 * s_run and spot_turn), info
+
+
+def time_factor(curve: tuple[tuple[float, float], ...], left: float, p: float) -> float:
+    """The staircase's time multiplier (2026-11-23). With a lane curve ((seconds left, multiplier) pairs, largest seconds first): straight lines between the points, flat beyond the ends. Without one: (max(left, 60) / 60)^p, the power law as it was."""
+    if not curve:
+        return (max(left, 60.0) / 60.0) ** p
+    if left >= curve[0][0]:
+        return curve[0][1]
+    for (s0, m0), (s1, m1) in zip(curve, curve[1:]):
+        if left >= s1:
+            return m1 + (m0 - m1) * (left - s1) / (s0 - s1) if s0 > s1 else m1
+    return curve[-1][1]

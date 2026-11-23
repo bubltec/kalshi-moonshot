@@ -370,6 +370,7 @@ def take_target(tmp_path, monkeypatch, entry, unit=0.10):
     t.entry, t.bought_ts, t.side = entry, CLOSE - 800.0, "yes"
     t.shock_index, t.shock_ref = INDEX, 100.0
     t.wave_whipsaw = 0.0  # the is_whipsaw_behavior switch is off here (it has its own tests)
+    t.wave_arm_swings = 0.0  # the loss backup arms on any gain here; its own tests set one swing
     monkeypatch.setattr(w, "_risk_unit", lambda tt, now: unit)  # the bid's typical minute
     return w, t, CLOSE
 
@@ -556,3 +557,41 @@ def test_integration_a_spike_starts_a_ride_that_is_held_while_the_bid_rises_and_
     # z at 0 is off
     t.wave_ride, t.wave_spike = False, 0.0
     assert asker(w, t, close)(0.70, 600) is None and not t.wave_ride
+
+
+def test_integration_with_no_reading_of_the_bids_typical_minute_the_staircase_sells_nothing(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.50, unit=None)  # no fixed 5c swing on a made-up size
+    ask = asker(w, t, close)
+    t.wave_best_net, t.wave_dir, t.wave_last_low, t.wave_hi, t.wave_lo = 0.5, -1, 0.35, 0.60, 0.30
+    assert ask(0.20, 780) is None
+    assert t.wave_dir == -1 and t.wave_last_low == 0.35  # and the state is left as it was
+
+
+def test_integration_a_gain_smaller_than_a_swing_does_not_arm_the_loss_backup(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.50, unit=0.10)
+    t.wave_arm_swings = 1.0
+    ask = asker(w, t, close)  # a swing at 780 s left: 0.25 x 0.10 x sqrt(13) = 0.09
+    t.wave_best_net, t.wave_dir, t.wave_last_low, t.wave_hi, t.wave_lo = 0.003, -1, 0.49, 0.52, 0.45
+    assert ask(0.44, 780) is None  # ahead by 0.3c once: not enough to sell a loss
+    t.wave_best_net = 0.12
+    t.wave_peak_bid = 0.0
+    why = ask(0.43, 779)
+    assert why and "last swing low" in why  # ahead by more than a swing: armed
+
+
+def test_unit_the_time_curve_is_tight_early_widest_from_five_to_three_minutes_and_shorter_after():
+    from kalshi_moonshot import wavetop
+
+    c = ((900.0, 0.5), (450.0, 0.5), (300.0, 2.0), (180.0, 2.0), (60.0, 1.0))
+    f = lambda left: wavetop.time_factor(c, left, 0.5)
+    assert f(900) == f(500) == 0.5 and f(450) == 0.5  # up to mid-market: sells the first fall
+    assert f(300) == f(240) == f(180) == 2.0  # five to three minutes: holds
+    assert 1.0 < f(120) < 2.0 and f(60) == f(30) == 1.0  # after three minutes: shorter holds
+    assert wavetop.time_factor((), 300.0, 0.5) == pytest.approx(5 ** 0.5)  # no curve: the power law as it was
+
+
+def test_unit_a_lane_file_with_a_time_curve_loads_it_largest_seconds_first(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(TOML.replace("wave_top_trend_hours = 1.0", "wave_top_trend_hours = 1.0\nwave_time_curve = [[60, 1.0], [900, 0.5], [300, 2.0]]\nwave_arm_swings = 0.5"))
+    sp = lanes.lane_specs(config.load())["wt"]
+    assert sp.wave_time_curve == ((900.0, 0.5), (300.0, 2.0), (60.0, 1.0)) and sp.wave_arm_swings == 0.5
