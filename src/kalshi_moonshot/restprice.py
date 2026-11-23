@@ -31,6 +31,13 @@ def base_ask(spec: Any, side: str, ask: float, rows: Sequence[Sequence[float]], 
     return ask if avg is None else min(ask, avg)
 
 
+def rest_wait(spec: Any, left: float) -> float:
+    """How long a resting buy rests: buy_rest_wait_share of the seconds left to the close, never under buy_rest_seconds; with no share (or no time left read) buy_rest_seconds."""
+    seconds = float(spec.buy_rest_seconds)
+    share = float(getattr(spec, "buy_rest_wait_share", 0.0) or 0.0)
+    return max(seconds, share * left) if share > 0 and left > 0 else seconds
+
+
 def side_bid(bid: float, ask: float, side: str) -> float | None:
     """The side's bid from one YES quote (a NO bid is 1 minus the YES ask), or None when the quote has no price for it."""
     if side == "yes":

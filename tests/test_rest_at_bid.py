@@ -54,3 +54,17 @@ def test_integration_the_order_follows_a_falling_bid_down_and_not_a_rising_one(s
     assert got == ("o1", 0.28) and c.amends == [("o1", 0.28, 1.5)]  # amended in place to the bid
     c2 = Amend(book(0.33, 0.35))
     assert runner._rest_follow(s, c2, shot, sp, 1.5, "k", "o1", 0.30, time.time() + 30, 0.0, 0, rest) is None and not c2.amends  # a risen bid never raises the price
+
+
+def test_the_rest_is_a_share_of_the_time_left_never_fixed_seconds(setup):
+    _s, _store, shot, spec = setup
+    sp = spec(buy_rest_seconds=5.0, buy_rest_wait_share=0.25, buy_rest_at_bid=True)
+    assert restprice.rest_wait(sp, 800.0) == 200.0  # 0.25 of 800 s left
+    assert restprice.rest_wait(sp, 60.0) == 15.0
+    assert restprice.rest_wait(sp, 8.0) == 5.0  # never under buy_rest_seconds
+    assert restprice.rest_wait(spec(buy_rest_seconds=5.0, buy_rest_wait_share=0.0), 800.0) == 5.0  # off: the fixed seconds as before
+    from datetime import UTC, datetime, timedelta
+
+    soon = (datetime.now(UTC) + timedelta(seconds=400)).isoformat()
+    s2 = type(shot)(shot.ticker, "t", "r", 0.30, 0.35, 100.0, soon, 0.1, lane="scalpy", series="KXBTC15M", event_ticker="KXBTC15M-E", side="yes")
+    assert 95.0 <= runner._rest_wait_for(s2, sp) <= 100.0  # 0.25 of the 400 s to the close

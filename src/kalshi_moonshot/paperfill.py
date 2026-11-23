@@ -58,7 +58,8 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                 out["missed"] += 1
                 continue
             if spec.buy_rest_seconds > 0:
-                window, price = spec.buy_rest_seconds, round(max(0.01, float(r["ask"]) - spec.buy_rest_below), 4)  # (the average-ask start, if the lane sets one, replaces this once the quotes are read, below)
+                crow = store.db.execute("SELECT close_ts FROM windows WHERE ticker=?", (r["ticker"],)).fetchone() if spec.buy_rest_wait_share > 0 else None
+                window, price = restprice.rest_wait(spec, float(crow["close_ts"]) - float(r["ts"]) if crow and crow["close_ts"] else 0.0), round(max(0.01, float(r["ask"]) - spec.buy_rest_below), 4)  # (the average-ask start, if the lane sets one, replaces this once the quotes are read, below)
             else:
                 continue  # a taker buy on a lane that also has a floor bid: it was logged at the ask it took
             if float(r["ts"]) > now - window - GRACE:

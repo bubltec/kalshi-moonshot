@@ -466,7 +466,7 @@ def evaluate(
             balance.open_by_lane.get(shot.lane, 0.0), 1.0, fractional=s.fractional_stake and not _NO_FRACTION,
             maker_price=_rest_start(shot, spec) if spec.buy_rest_seconds > 0 else None,
         )
-        if store.holds_sized_bet(shot.ticker, shot.lane, time.time() - spec.buy_rest_seconds if spec.buy_rest_seconds > 0 else None) and not s.is_live(shot.lane, shot.series):  # (a paper resting order whose time is up and whose fill is not judged yet is no hold: store.book_holds_sized)
+        if store.holds_sized_bet(shot.ticker, shot.lane, time.time() - _rest_wait_for(shot, spec) if spec.buy_rest_seconds > 0 else None) and not s.is_live(shot.lane, shot.series):  # (a paper resting order whose time is up and whose fill is not judged yet is no hold: store.book_holds_sized)
             sized = Sizing(0, 0.0, "already holding this market (paper)")
         elif not sized.ok:
             bet = False
@@ -1166,6 +1166,17 @@ def _requote_why(s: Settings, client: KalshiClient, store: Store, shot: LongShot
     return (limit, "") if verdict.ok else (None, f"the risk gate refused ({verdict.reason})")
 
 
+def _rest_wait_for(shot: LongShot, spec: LaneSpec) -> float:
+    """The seconds a resting buy of this market rests (restprice.rest_wait): a share of the time left to its close when the lane sets buy_rest_wait_share."""
+    from datetime import UTC, datetime
+
+    from . import restprice
+    from .strategy import _hours_until
+
+    hours = _hours_until(shot.close_time, datetime.now(UTC))
+    return restprice.rest_wait(spec, 0.0 if hours is None else hours * 3600.0)
+
+
 def _rest_start(shot: LongShot, spec: LaneSpec) -> float:
     """Where the resting buy starts: `buy_rest_below` under the ask, or under the lower of the ask and its average of the last buy_rest_avg_seconds (restprice.py). Reads the quote memory only."""
     from . import restprice
@@ -1205,7 +1216,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     `price` and `seconds` fix both, for a bid that must stay at one price (the lane's floor). `hold_price` refuses a cross instead of walking that price down."""
     from . import account
 
-    wait = spec.buy_rest_seconds if seconds is None else seconds
+    wait = _rest_wait_for(shot, spec) if seconds is None else seconds
     if price is None:
         price, skip = _resting_price(shot, spec, book)
         if price is None:
