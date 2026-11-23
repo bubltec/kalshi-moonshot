@@ -98,6 +98,35 @@ def nudge(z24_for_bet: float) -> float:
     return NUDGE_PER_UNIT * max(-3.0, min(3.0, z24_for_bet))
 
 
+NOW_SECONDS = (30, 60, 120, 300)  # the "right now" horizons: the last half minute, minute, two and five minutes
+NOW_SMOOTH = 10  # the spot at each end of a horizon is the mean of its last this many seconds (one tick is noise)
+
+
+def now_drift(sp: list[Any], unit: float, side: str) -> dict[int, float]:
+    """The spot's drift over the last 30 s, 1, 2 and 5 minutes before the end of the grid `sp` (one value a second, the last is now), signed for the bet (positive = the spot is moving the bet's way), in the spot's typical minute: the change over a random walk's spread for that long, the same unit as the longer trends. A horizon whose history has a gap is left out. 2026-11-23 (user, for the scalping lane: "what matters is mostly right now", the trend in the last 5 minutes, the longer history only a weak nudge): written beside the long trends, nothing acts on it."""
+    out: dict[int, float] = {}
+    if unit <= 0 or len(sp) < max(NOW_SECONDS) + NOW_SMOOTH + 1:
+        return out
+    tail = sp[-(max(NOW_SECONDS) + NOW_SMOOTH + 1) :]
+    if None in tail:
+        return out
+    now_v = sum(tail[-NOW_SMOOTH:]) / NOW_SMOOTH  # type: ignore[arg-type]
+    for h in NOW_SECONDS:
+        old = tail[len(tail) - 1 - h - NOW_SMOOTH + 1 : len(tail) - h]
+        if len(old) < NOW_SMOOTH:
+            continue
+        z = (now_v - sum(old) / len(old)) / (unit * math.sqrt(h / 60.0))  # type: ignore[arg-type]
+        out[h] = for_bet(z, side)
+    return out
+
+
+def now_text(sp: list[Any], unit: float, side: str) -> str:
+    d = now_drift(sp, unit, side)
+    if not d:
+        return ""
+    return "now for the bet (+ = the spot is moving its way, in typical minutes) " + ", ".join(f"{h} s {z:+.1f}" if h < 60 else f"{h // 60} m {z:+.1f}" for h, z in sorted(d.items())) + "; "
+
+
 def note(index: str, opened: float, now: float, side: str) -> str:
     """The shadow sentence for a bet on `side`: the signed trend at each horizon and the nudge, from memory. Never raises."""
     from . import ticks as ticks_mod
@@ -119,6 +148,6 @@ def note(index: str, opened: float, now: float, side: str) -> str:
         parts = ", ".join(f"{h:g}h {for_bet(z, side):+.1f}" for h, z in sorted(tr.items()))
         z24 = tr.get(24.0)
         tail = f"; the 24 h nudge would move its worth by {100 * nudge(for_bet(z24, side)):+.1f}c a contract" if z24 is not None else "; no 24 h value yet, no nudge"
-        return f"trend for the bet (+ = the trend runs its way) {parts}{tail} (shadow, nothing changes)"
+        return f"{now_text(sp, unit, side)}trend for the bet (+ = the trend runs its way) {parts}{tail} (shadow, nothing changes)"
     except Exception as exc:
         return f"trend unreadable ({exc!r}) (shadow)"

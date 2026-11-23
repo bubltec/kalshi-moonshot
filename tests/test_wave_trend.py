@@ -88,3 +88,41 @@ def test_the_buy_step_only_writes_the_note_and_never_says_no(tmp_path, monkeypat
     got = buychain.STEPS["wave_trend"](buychain.Ctx(config.load(), sp, now=now), shot(now, "yes"))
     assert got.ok
     assert TICKER  # (the market the helper builds)
+
+
+# ---- the "right now" readings (2026-11-23, user, for the scalping lane: "what matters is mostly right now", the trend in the last 5 minutes; the longer history a weak nudge). Shadow, written beside the long trends, nothing acts on them. ----
+def test_unit_the_drift_over_the_last_half_minute_to_five_minutes_is_signed_for_the_bet_in_typical_minutes():
+    ramp = [100.0 + 0.01 * k for k in range(900)]  # a straight climb of 0.01 a second
+    up = wavetrend.now_drift(ramp, 0.30, "yes")
+    down = wavetrend.now_drift(ramp, 0.30, "no")
+    assert set(up) == {30, 60, 120, 300}
+    assert all(up[h] > 0 and down[h] == pytest.approx(-up[h]) for h in up)  # a climb runs a YES bet's way and a NO bet's against it
+    # 300 s of climb is 3.0 against a random walk's spread of unit x sqrt(5) = 0.671: 4.47 units
+    assert up[300] == pytest.approx(3.0 / (0.30 * math.sqrt(5.0)), rel=0.01)
+    assert wavetrend.now_drift([100.0] * 900, 0.30, "yes") == {h: 0.0 for h in (30, 60, 120, 300)}  # flat: no drift
+    assert wavetrend.now_drift(ramp, 0.0, "yes") == {}  # no unit, no reading
+    assert wavetrend.now_drift(ramp[:200], 0.30, "yes") == {}  # under five minutes of history: nothing, no error
+
+
+def test_unit_a_gap_in_the_last_five_minutes_leaves_the_clause_out_and_a_reading_writes_it():
+    ramp = [100.0 + 0.01 * k for k in range(900)]
+    assert wavetrend.now_text(ramp, 0.30, "yes").startswith("now for the bet") and "5 m " in wavetrend.now_text(ramp, 0.30, "yes") and "30 s " in wavetrend.now_text(ramp, 0.30, "yes")
+    gapped = ramp[:]
+    gapped[800] = None
+    assert wavetrend.now_text(gapped, 0.30, "yes") == ""
+
+
+def test_integration_the_note_carries_the_right_now_clause_and_keeps_its_ending_and_the_buy_step_still_never_says_no(tmp_path, monkeypatch, mem):
+    import re
+
+    s, tape, now = tape_with_minutes(tmp_path, monkeypatch, per_minute=lambda ts: 100.0 - (ts - OPEN) / 3600.0)
+    wavetrend.refresh(s, [INDEX], tape, now)
+    T, V, v = background(lead=4000)
+    T, V, _last = segments(T, V, v, [(100, 0.0)])
+    feed(T, V)
+    yes, no = wavetrend.note(INDEX, OPEN, OPEN + 100, "yes"), wavetrend.note(INDEX, OPEN, OPEN + 100, "no")
+    for text in (yes, no):
+        assert "now for the bet" in text and "5 m " in text and "trend for the bet" in text and text.endswith("(shadow, nothing changes)")
+    z_yes = float(re.search(r"5 m ([+-][0-9.]+)", yes).group(1))
+    z_no = float(re.search(r"5 m ([+-][0-9.]+)", no).group(1))
+    assert z_yes == pytest.approx(-z_no, abs=0.11)  # the same drift, signed for each side
