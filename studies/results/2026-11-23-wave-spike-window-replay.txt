@@ -1,0 +1,24 @@
+1473 bets; hold to settlement 170.66
+window N seconds, z = rise over what the bid usually moves in N seconds (rms 1-s change x sqrt(N)); sold bets' hold = what those same bets pay held
+  N 10 z 3.0: sold  855 (58%), win 0.47 held; sold  2647.99 vs held  3863.20; policy -1044.55 (-1215.21)
+  N 10 z 4.0: sold  584 (40%), win 0.55 held; sold  2885.31 vs held  3851.43; policy  -795.46 ( -966.12)
+  N 10 z 5.0: sold  356 (24%), win 0.57 held; sold  2319.10 vs held  2612.27; policy  -122.51 ( -293.17)
+  N 10 z 6.0: sold  207 (14%), win 0.60 held; sold  1743.40 vs held  1709.12; policy   204.95 (  +34.28)
+  N 10 z 8.0: sold   70 (5%), win 0.74 held; sold   735.00 vs held   815.26; policy    90.41 (  -80.26)
+  N 20 z 3.0: sold  765 (52%), win 0.52 held; sold  3105.17 vs held  4348.89; policy -1073.06 (-1243.72)
+  N 20 z 4.0: sold  471 (32%), win 0.59 held; sold  3064.55 vs held  3585.59; policy  -350.38 ( -521.04)
+  N 20 z 5.0: sold  237 (16%), win 0.60 held; sold  2043.02 vs held  1943.90; policy   269.78 (  +99.12)
+  N 20 z 6.0: sold  116 (8%), win 0.68 held; sold  1180.45 vs held  1177.86; policy   173.25 (   +2.59)
+  N 20 z 8.0: sold   18 (1%), win 0.83 held; sold   221.04 vs held   271.42; policy   120.28 (  -50.38)
+  N 30 z 3.0: sold  686 (47%), win 0.55 held; sold  3310.97 vs held  4454.50; policy  -972.87 (-1143.53)
+  N 30 z 4.0: sold  399 (27%), win 0.62 held; sold  3084.82 vs held  3393.51; policy  -138.03 ( -308.69)
+  N 30 z 5.0: sold  178 (12%), win 0.70 held; sold  1779.52 vs held  1862.70; policy    87.48 (  -83.19)
+  N 30 z 6.0: sold   73 (5%), win 0.66 held; sold   826.83 vs held   704.89; policy   292.60 ( +121.94)
+  N 30 z 8.0: sold    6 (0%), win 1.00 held; sold    92.95 vs held   113.96; policy   149.65 (  -21.01)
+  N 60 z 3.0: sold  525 (36%), win 0.62 held; sold  3807.82 vs held  4391.38; policy  -412.90 ( -583.56)
+  N 60 z 4.0: sold  219 (15%), win 0.73 held; sold  2347.41 vs held  2493.35; policy    24.72 ( -145.94)
+  N 60 z 5.0: sold   64 (4%), win 0.78 held; sold   833.08 vs held   829.02; policy   174.72 (   +4.06)
+  N 60 z 6.0: sold   11 (1%), win 0.64 held; sold   159.82 vs held   109.17; policy   221.31 (  +50.65)
+  N 60 z 8.0: sold    0 (0%), win 0.00 held; sold     0.00 vs held     0.00; policy   170.66 (   +0.00)
+
+24 s
