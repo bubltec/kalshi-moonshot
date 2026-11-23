@@ -30,7 +30,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
 
 
 VETO_RULES: list[tuple[str, Callable[[Any], bool], tuple[str, ...], str]] = [
-    ("whipsaw", lambda v: v is not False, ("wave_take", "wave_salvage"), "is_whipsaw_behavior: a whipsaw is held to settlement, and the shape is not read for the first seconds after the buy"),
+    ("whipsaw", lambda v: v is True, ("wave_salvage",), "is_whipsaw_behavior: the salvage does not run on a whipsaw; the staircase keeps reading the price and widens its swing to the bet's own range (2026-11-23: SILVER 22:00 peaked at +48% inside the old blind window and again at 0.87 and was held to zero); a shape not read yet holds nothing"),
 ]  # (fact, vetoes when this is true of its value, the steps it stops, the label the log carries)
 VETO_RULES.append(("shift_out", lambda v: v is not None, ("priskp",), "shift_out_of_cushion"))  # user, 2026-11-22: no buy on the side a confirmed shift took out of its cushion, against the current target
 VETOED_STEPS = frozenset(step for _, _, steps, _ in VETO_RULES for step in steps)
@@ -116,9 +116,9 @@ class View:
             raise KeyError(f"step {self.step!r} read the fact {name!r}, which it did not name in facts.NEEDS")
         return self.board.get(name)
 
-    def cleared(self) -> bool:
-        """False when a veto rule stops this step on this check: the step must not sell (the walk refuses it if it does)."""
-        return self.board.vetoes(self.step) is None
+    def cleared(self, part: str = "") -> bool:
+        """False when a veto rule stops this step (or its `part`, as "wave_take:staircase") on this check: it must not sell (the walk refuses a vetoed step if it does)."""
+        return self.board.vetoes(f"{self.step}:{part}" if part else self.step) is None
 
     def weigh(self, weight: float, why: str = "") -> None:
         self.board.weigh(self.step, weight, why)

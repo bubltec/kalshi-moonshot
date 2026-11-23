@@ -211,6 +211,8 @@ class Target:
     wave_kind: str = ""  # the kind-of-wave switch: "" not read yet, "whipsaw" (held), "other"
     wave_range_u: float = 0.0
     wave_dir: int = 0  # the staircase: 1 rising, -1 pulling back, 0 not started
+    wave_path_hi: float = 0.0  # the highest and lowest bid since the buy: a whipsaw's own range, the least a reversal must be before it counts (the staircase keeps reading the price)
+    wave_path_lo: float = 0.0
     wave_hi: float = 0.0
     wave_lo: float = 0.0
     wave_last_low: float = 0.0  # the last confirmed swing low (0 = none yet)
@@ -810,7 +812,7 @@ class ProfitWatcher:
     def _sell_wave_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid:
         1. the staircase: the bid's swings are cut at rev = max(TICK, wave_rev_k x the bid's typical minute x (max(left, 60) / 60)^wave_rev_p x the cushion factor 2 x (1 - P_lose), wave_cushion); the first time the bid falls under the previous swing low (a lower low: the climb is done) it is sold, if the bet has ever been ahead after both fees: at a gain, or at a small loss (the backup that avoids a total loss);
-        2. from HIGH (0.80) up, a bet that is ahead is sold when the chance of losing it (wavetop.p_lose: the spot's cushion in its own typical moves against the time left) is at least what the sale gives up over holding, 1 - bid + fee.
+        2. at any bid, a bet that is ahead is sold when the chance of losing it (wavetop.p_lose: the spot's cushion in its own typical moves against the time left) is at least what the sale gives up over holding, 1 - bid + fee.
         Reads the quote and tick memory only."""
         if t.bought_ts <= 0 or bid <= 0 or t.entry <= 0:
             return None
@@ -826,6 +828,9 @@ class ProfitWatcher:
         lose = fx.get("p_lose")
         cushion = fx.get("cushion_factor")  # 0 to 2: wide with a cushion, tight with a deficit, 1 when off or unread
         rev = max(wavetop.TICK, t.wave_rev_k * unit * (max(left, 60.0) / 60.0) ** t.wave_rev_p * cushion) if unit else max(wavetop.TICK, 0.05)
+        t.wave_path_hi, t.wave_path_lo = (bid, bid) if t.wave_path_hi <= 0 else (max(t.wave_path_hi, bid), min(t.wave_path_lo, bid))
+        if fx.get("whipsaw") is True:  # a whipsaw: a swing smaller than the bet's own range so far is its ordinary motion, not a reversal; the price is still read on every tick
+            rev = max(rev, t.wave_path_hi - t.wave_path_lo)
         if t.wave_hi <= 0:
             t.wave_hi = t.wave_lo = bid
         if t.wave_dir >= 0:
@@ -840,10 +845,10 @@ class ProfitWatcher:
         if t.wave_best_net > 0 and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
             where = f"a gain of {net * 100:.1f}c a contract" if net > 0 else f"a small loss of {-net * 100:.1f}c a contract (the bet had been ahead by {t.wave_best_net * 100:.1f}c)"
             reason, kind = f"wave take: the bid {bid:.2f} fell under its last swing low {t.wave_last_low:.2f} (swings of {rev:.3f}, cushion factor {cushion:.2f}, {left:.0f} s left): the climb is done, sold at {where}", "lower low"
-        elif t.wave_high_zone and net > 0 and bid >= wavetop.HIGH - 1e-9:
+        elif t.wave_high_zone and net > 0:  # the sale against holding, from the spot's own math at any bid: no fixed price line
             if lose is not None and lose >= 1.0 - bid + fee_per_contract(bid):
-                reason, kind = f"wave take: the bid {bid:.2f} is in the high zone and the chance of losing it is {lose:.2f}, at least the {1.0 - bid + fee_per_contract(bid):.2f} the sale gives up over holding ({left:.0f} s left)", "high zone"
-        if not reason or not fx.cleared():  # the board vetoes a sale while the bet is a whipsaw (or its shape is unknown)
+                reason, kind = f"wave take: the bid {bid:.2f} is worth more sold than held: the chance of losing it is {lose:.2f}, at least the {1.0 - bid + fee_per_contract(bid):.2f} the sale gives up over holding ({left:.0f} s left)", "hold value"
+        if not reason or (False):  # the staircase reads a whipsaw's price too (it only widens the swing to the bet's own range); the board holds nothing here
             return None
         reason += fx.note()
         extra = {"gain": round(gain, 4), "net": round(net, 4), "rev": round(rev, 4), "last_low": round(t.wave_last_low, 4), "p_lose": None if lose is None else round(lose, 4), "kind": kind}
@@ -869,7 +874,7 @@ class ProfitWatcher:
     def _wave_salvage_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, fx: Any) -> str | None:
         from . import binaryrisk, wavetop
 
-        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0 or not fx.cleared():  # the board vetoes a sale while the bet is a whipsaw (or its shape is unknown)
+        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0 or not fx.cleared():  # the board holds the salvage of a whipsaw (a shape not read yet holds nothing)
             return None
         spot = fx.get("spot")
         if spot is not None and spot[0] > 0:  # user, 2026-11-22: "salvage shouldn't sell winners": a bet whose spot average is on its side of the target is winning now and is not salvaged

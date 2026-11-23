@@ -69,16 +69,18 @@ def test_a_veto_stops_a_step_and_the_walk_refuses_a_step_that_sells_anyway(tmp_p
 
     w, t, close = switch_target(tmp_path, monkeypatch, [0.30] * 140)
     risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
-    t.sell_chain = ("wave_take",)
-    monkeypatch.setitem(watcher._SELL, "wave_take", lambda self, tt, r, bid, now, left, pnl, c: "wave take: a sale that ignores the board")
-    now = close - 700.0  # 100 s after the buy: the shape is not read yet, so the whipsaw fact is unknown and the veto holds
+    t.sell_chain = ("wave_salvage",)
+    t.wave_kind = "whipsaw"  # read as a whipsaw (a shape not read yet holds nothing)
+    monkeypatch.setitem(watcher._SELL, "wave_salvage", lambda self, tt, r, bid, now, left, pnl, c: "wave salvage: a sale that ignores the board")
+    now = close - 700.0
     with memguard.decision("sell"):
         assert w._risk_decide(t, risk, 0.30, now, close - now, 0.0) is None
     assert "sold against the veto" in caplog.text
     t.wave_whipsaw = 0.0  # the switch off: nothing vetoes, the same step's sale goes through
+    t.wave_kind = ""
     with memguard.decision("sell"):
         got = w._risk_decide(t, risk, 0.30, now + 1.0, close - now - 1.0, 0.0)
-    assert got and got.startswith("wave take")
+    assert got and got.startswith("wave salvage")
 
 
 def test_the_sale_reason_carries_the_facts_it_was_judged_on(tmp_path, monkeypatch, mem):  # noqa: F811
