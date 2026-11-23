@@ -207,10 +207,12 @@ class Target:
     wave_cushion: bool = True
     wave_high_zone: bool = True
     wave_whipsaw: float = 0.0
-    wave_shape_s: float = 120.0
-    wave_kind: str = ""  # the kind-of-wave switch: "" not read yet, "whipsaw" (held), "other"
+    wave_kind: str = ""  # "whipsaw" once the bet has followed the whipsaw shape, else ""
     wave_range_u: float = 0.0
     wave_dir: int = 0  # the staircase: 1 rising, -1 pulling back, 0 not started
+    wave_spike: float = 0.0
+    wave_path_hi: float = 0.0  # the highest and lowest bid since the buy: a whipsaw's own range, the least a reversal must be before it counts (the staircase keeps reading the price)
+    wave_path_lo: float = 0.0
     wave_hi: float = 0.0
     wave_lo: float = 0.0
     wave_last_low: float = 0.0  # the last confirmed swing low (0 = none yet)
@@ -775,6 +777,8 @@ class ProfitWatcher:
     def _board(self, c: _SellWalk, t: Target, now: float, left: float, bid: float) -> Any:
         """The facts board of this check (facts.py): one per risk check, shared by every step on it, so two steps that need a fact read the same value and a veto is judged once."""
         if c.facts is None or c.facts.now != now:
+            if bid > 0:  # the bet's own bid range since the buy, kept on every check (the whipsaw variant reads it)
+                t.wave_path_hi, t.wave_path_lo = (bid, bid) if t.wave_path_hi <= 0 else (max(t.wave_path_hi, bid), min(t.wave_path_lo, bid))
             c.facts = facts_mod.Board(self, t, now, left, bid)
         return c.facts
 
@@ -787,25 +791,21 @@ class ProfitWatcher:
         got = ticks_mod.history.window(t.shock_index, now - 620.0, now)
         return wavetop.spot_read(got[0], got[1], now, t.shock_ref, t.side) if got and got[0] else None
 
-    def _is_whipsaw_behavior(self, t: Target, now: float) -> bool | None:
-        """The is_whipsaw_behavior switch of the wave sales (lane field wave_whipsaw_range; user, 2026-11-22: "it needs to be integrated as a switch into the existing logic, so its not a separate step", "so staircase has a is_whipsaw_behavior switch"). The bet's bid range over its first wave_shape_seconds, in the bid's typical minutes, read once from the quote memory: at or over wave_whipsaw_range it is a whipsaw (True: held to settlement), under it another kind (False). None while the shape is not readable yet, and always False with the field at 0 (no switch)."""
+    def _is_whipsaw_behavior(self, t: Target, now: float) -> bool:
+        """The whipsaw VARIANT of the staircase (lane field wave_whipsaw_range; user, 2026-11-22/23: "whipsaw was a variant", "it just needs to monitor it on each tick to see if it's following"). Read on every check, never a gate and never a wait: the bet's bid range since the buy, in the bid's typical minutes, at or over wave_whipsaw_range means the bet is following the whipsaw shape, and the staircase then widens its swing to that range (a variant of its swing size, nothing is held). Once following it stays so. False with the field at 0 (no variant)."""
         if t.wave_whipsaw <= 0 or t.bought_ts <= 0:
             return False
-        if t.wave_kind:
-            return t.wave_kind == "whipsaw"
-        if now - t.bought_ts < t.wave_shape_s:
-            return None
-        from . import wavetop
-
-        a = int(t.bought_ts)
-        path = [x for x in wavetop.side_bids(ticks_mod.mids.quotes(t.ticker), t.side, a, a + int(t.wave_shape_s) + 1) if x is not None]
+        if t.wave_kind == "whipsaw":
+            return True
         unit = self._risk_unit(t, now)
-        if len(path) < int(t.wave_shape_s * 0.5) or not unit:
-            return None
-        t.wave_range_u = (max(path) - min(path)) / unit
-        t.wave_kind = "whipsaw" if t.wave_range_u >= t.wave_whipsaw else "other"
-        log.info("wave kind: %s %s is_whipsaw_behavior=%s (its bid range in the first %.0f s is %.2f typical minutes, the switch at %.2f)", t.ticker, t.lane, t.wave_kind == "whipsaw", t.wave_shape_s, t.wave_range_u, t.wave_whipsaw)
-        return t.wave_kind == "whipsaw"
+        if not unit or t.wave_path_hi <= 0:
+            return False
+        t.wave_range_u = (t.wave_path_hi - t.wave_path_lo) / unit
+        if t.wave_range_u >= t.wave_whipsaw:
+            t.wave_kind = "whipsaw"
+            log.info("wave kind: %s %s is following the whipsaw shape (its bid range since the buy is %.2f typical minutes, the shape at %.2f): the staircase widens its swing to the range", t.ticker, t.lane, t.wave_range_u, t.wave_whipsaw)
+            return True
+        return False
 
     def _sell_wave_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid:
@@ -826,6 +826,8 @@ class ProfitWatcher:
         lose = fx.get("p_lose")
         cushion = fx.get("cushion_factor")  # 0 to 2: wide with a cushion, tight with a deficit, 1 when off or unread
         rev = max(wavetop.TICK, t.wave_rev_k * unit * (max(left, 60.0) / 60.0) ** t.wave_rev_p * cushion) if unit else max(wavetop.TICK, 0.05)
+        if fx.get("whipsaw"):  # the whipsaw variant: a swing smaller than the bet's own range so far is its ordinary motion, not a reversal; the price is read on every tick all the same
+            rev = max(rev, t.wave_path_hi - t.wave_path_lo)
         if t.wave_hi <= 0:
             t.wave_hi = t.wave_lo = bid
         if t.wave_dir >= 0:
@@ -837,13 +839,19 @@ class ProfitWatcher:
             if bid - t.wave_lo >= rev - 1e-9:
                 t.wave_last_low, t.wave_dir, t.wave_hi = t.wave_lo, 1, bid
         reason, kind = "", ""
-        if t.wave_best_net > 0 and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
+        spike = 0.0
+        if t.wave_spike > 0 and unit and net > 0:  # the spike sale: a rise this fast, in the bid's own typical minutes, is taken at the highest price seen so far
+            win = [x for x in wavetop.side_bids(ticks_mod.mids.quotes(t.ticker), t.side, int(now) - 60, int(now) + 1) if x is not None]
+            spike = (bid - min(win)) / unit if win else 0.0
+        if spike >= t.wave_spike > 0:
+            reason, kind = f"wave take: the bid rose {spike:.1f} of its typical minutes in the last 60 s (to {bid:.2f}, the highest so far {t.wave_peak_bid:.2f}), at least the {t.wave_spike:.1f} the lane sells on: sold at the spike, a gain of {net * 100:.1f}c a contract", "spike"
+        elif t.wave_best_net > 0 and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
             where = f"a gain of {net * 100:.1f}c a contract" if net > 0 else f"a small loss of {-net * 100:.1f}c a contract (the bet had been ahead by {t.wave_best_net * 100:.1f}c)"
             reason, kind = f"wave take: the bid {bid:.2f} fell under its last swing low {t.wave_last_low:.2f} (swings of {rev:.3f}, cushion factor {cushion:.2f}, {left:.0f} s left): the climb is done, sold at {where}", "lower low"
         elif t.wave_high_zone and net > 0 and bid >= wavetop.HIGH - 1e-9:
             if lose is not None and lose >= 1.0 - bid + fee_per_contract(bid):
                 reason, kind = f"wave take: the bid {bid:.2f} is in the high zone and the chance of losing it is {lose:.2f}, at least the {1.0 - bid + fee_per_contract(bid):.2f} the sale gives up over holding ({left:.0f} s left)", "high zone"
-        if not reason or not fx.cleared():  # the board vetoes a sale while the bet is a whipsaw (or its shape is unknown)
+        if not reason:
             return None
         reason += fx.note()
         extra = {"gain": round(gain, 4), "net": round(net, 4), "rev": round(rev, 4), "last_low": round(t.wave_last_low, 4), "p_lose": None if lose is None else round(lose, 4), "kind": kind}
@@ -869,7 +877,7 @@ class ProfitWatcher:
     def _wave_salvage_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, fx: Any) -> str | None:
         from . import binaryrisk, wavetop
 
-        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0 or not fx.cleared():  # the board vetoes a sale while the bet is a whipsaw (or its shape is unknown)
+        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0:
             return None
         spot = fx.get("spot")
         if spot is not None and spot[0] > 0:  # user, 2026-11-22: "salvage shouldn't sell winners": a bet whose spot average is on its side of the target is winning now and is not salvaged
@@ -1351,7 +1359,7 @@ class ProfitWatcher:
                 held.risk_take_trail_timed = spec.curve_take_trail_timed
                 held.risk_never_ahead = spec.curve_risk_never_ahead
                 held.wave_rev_k, held.wave_rev_p, held.wave_cushion, held.wave_high_zone = spec.wave_rev_k, spec.wave_rev_p, spec.wave_cushion, spec.wave_high_zone
-                held.wave_whipsaw, held.wave_shape_s = spec.wave_whipsaw_range, spec.wave_shape_seconds
+                held.wave_whipsaw, held.wave_spike = spec.wave_whipsaw_range, spec.wave_spike_units
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.risk_time_to_go, held.risk_time_to_go_chance, held.risk_time_to_go_wait_share = spec.curve_risk_time_to_go, spec.curve_risk_time_to_go_chance, spec.curve_risk_time_to_go_wait_share
                 held.risk_late_tight, held.risk_late_tight_share, held.risk_late_tight_live = spec.curve_risk_late_tight, spec.curve_risk_late_tight_share, spec.curve_risk_late_tight_live

@@ -411,7 +411,7 @@ def test_integration_the_staircase_sells_the_first_lower_low_ahead_and_no_fixed_
     why = ask(0.34, 60)
     assert why and why.startswith("wave take") and "last swing low 0.35" in why and "a gain of" in why and "swings of 0.050" in why
     t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
-    assert ask(0.70, 50) is None  # +0.40 and over is no sale by itself (user, 2026-11-22: the 40c line is out): only the staircase and the high zone sell
+    assert ask(0.70, 50) is None  # +0.40 and over is no sale by itself (user, 2026-11-22: the 40c line is out): only the staircase and the hold-value sale sell
 
 
 def test_integration_the_backup_accepts_a_small_loss_on_a_bet_that_was_ahead(tmp_path, monkeypatch, mem):
@@ -490,54 +490,67 @@ def test_integration_the_exponent_sets_how_fast_the_swing_narrows(tmp_path, monk
     assert t.wave_last_low == pytest.approx(0.30)
 
 
-def switch_target(tmp_path, monkeypatch, bids, entry=0.30):
-    """A wave bet with the is_whipsaw_behavior switch ON, bought 800 s before the close, whose first bids (one a second from the buy) are `bids`."""
-    from tests.test_risk_exit_flow import TICKER as HELD
-
+def switch_target(tmp_path, monkeypatch, entry=0.30):
+    """A wave bet with the whipsaw variant ON (2.16 typical minutes; the bid's typical minute is 0.10 here, so a range of 0.216), bought 800 s before the close."""
     w, t, close = take_target(tmp_path, monkeypatch, entry, unit=0.10)
-    t.wave_whipsaw, t.wave_shape_s = 2.16, 120.0
-    for k, b in enumerate(bids):
-        ticks_mod.mids.note(HELD, t.bought_ts + k, b, b + 0.01)
+    t.wave_whipsaw = 2.16
     return w, t, close
 
 
-def test_integration_is_whipsaw_behavior_holds_a_whipsaw_and_lets_the_sales_work_on_other_kinds(tmp_path, monkeypatch, mem):
-    # a whipsaw: the bid swings 0.24 to 0.55 in its first 120 s (a range of 3.1 typical minutes at a unit of 0.10)
-    wild = [0.24 + 0.31 * ((k // 15) % 2) for k in range(140)]
-    w, t, close = switch_target(tmp_path, monkeypatch, wild)
+def test_integration_the_whipsaw_variant_is_read_on_every_tick_and_never_holds_the_staircase(tmp_path, monkeypatch, mem):
+    # a calm bet: the bid's range stays at 0.12 (1.2 typical minutes): not the whipsaw shape, the staircase works as it does
+    w, t, close = switch_target(tmp_path, monkeypatch)
     ask = asker(w, t, close)
-    assert w._is_whipsaw_behavior(t, t.bought_ts + 60.0) is None  # not read before the shape time
-    for bid in (0.36, 0.42, 0.35, 0.41, 0.48, 0.41, 0.34):  # the staircase's own climb and lower low (as in the staircase test)
-        assert ask(bid, 600) is None
-    assert w._is_whipsaw_behavior(t, t.bought_ts + 200.0) is True and t.wave_kind == "whipsaw" and t.wave_range_u == pytest.approx(3.1, abs=0.2)
-    t.wave_dir, t.wave_hi, t.wave_lo, t.wave_last_low = 0, 0.0, 0.0, 0.0
-    t.wave_best_net = -9.0
-    for bid in (0.36, 0.42, 0.35, 0.41, 0.48, 0.41, 0.36, 0.30):
-        assert ask(bid, 60) is None  # held: a whipsaw is not sold by the staircase, even on a lower low under cost after being ahead
-    # a calm bet: a range of 0.6 typical minutes
-    tame = [0.30 + 0.06 * ((k // 20) % 2) for k in range(140)]
-    ticks_mod.mids.clear()
-    w2, t2, close2 = switch_target(tmp_path, monkeypatch, tame)
-    ask2 = asker(w2, t2, close2)
-    for bid in (0.36, 0.42, 0.36, 0.42, 0.36):
-        ask2(bid, 600)  # inside the first 120 s of the buy time (no sale) ... and after: asked below
-    assert w2._is_whipsaw_behavior(t2, t2.bought_ts + 200.0) is False and t2.wave_kind == "other"
-    t2.wave_dir, t2.wave_hi, t2.wave_lo, t2.wave_last_low = 0, 0.0, 0.0, 0.0
-    t2.wave_best_net = -9.0
-    for bid in (0.28, 0.36, 0.41, 0.35, 0.41, 0.48, 0.41, 0.36):
-        assert ask2(bid, 60) is None
-    why = ask2(0.34, 60)
-    assert why and "last swing low" in why  # another kind: the staircase sells as it does
+    for bid in (0.36, 0.42, 0.35, 0.41, 0.48, 0.41, 0.36):
+        assert ask(bid, 60) is None
+    assert t.wave_kind == "" and t.wave_range_u == pytest.approx(1.3, abs=0.1)
+    why = ask(0.34, 60)
+    assert why and "last swing low" in why
 
 
-def test_integration_no_wave_sale_inside_the_shape_time_with_the_switch_on(tmp_path, monkeypatch, mem):
-    tame = [0.30 + 0.06 * ((k // 20) % 2) for k in range(140)]
-    w, t, close = switch_target(tmp_path, monkeypatch, tame)
+def test_integration_no_blackout_a_sale_right_after_the_buy_goes_through(tmp_path, monkeypatch, mem):
+    # 2026-11-23 SILVER 22:00: up 48% inside the first 120 s and nothing sold; no wait, no shape time
+    w, t, close = switch_target(tmp_path, monkeypatch)
     ask = asker(w, t, close)
     t.wave_best_net = 0.05
     t.wave_dir, t.wave_last_low = -1, 0.35
     t.wave_hi = t.wave_lo = 0.30
-    # 60 s after the buy (740 s left of 800): the staircase's lower low would sell, the switch holds it
-    assert ask(0.20, 740) is None
-    t.wave_kind = ""
-    assert ask(0.20, 600)  # 200 s after the buy: read as another kind, then the same lower low sells
+    assert ask(0.20, 790)  # 10 s after the buy
+
+
+def test_integration_a_bet_following_the_whipsaw_shape_widens_its_swing_to_its_own_range_and_is_still_read(tmp_path, monkeypatch, mem):
+    w, t, close = switch_target(tmp_path, monkeypatch)
+    ask = asker(w, t, close)
+    for bid in (0.30, 0.55, 0.30, 0.58):  # the bet's own range so far reaches 0.28: 2.8 typical minutes, over the shape's 2.16
+        assert ask(bid, 600) is None
+    assert t.wave_kind == "whipsaw" and t.wave_range_u == pytest.approx(2.5, abs=0.1)
+    assert t.wave_path_hi == pytest.approx(0.58) and t.wave_path_lo == pytest.approx(0.30)  # the price is read on every check
+    assert ask(0.50, 600) is None  # a 0.08 fall is inside the whipsaw's own range: ordinary motion, no reversal
+    assert ask(0.28, 600)  # a fall out of its range: the climb is done and the staircase sells
+
+
+def test_integration_a_spike_is_sold_at_the_high_by_the_ratio_of_change(tmp_path, monkeypatch, mem):
+    # 2026-11-23 SILVER 22:00: the bid went from 0.39 to 0.63 inside a minute and was never sold
+    from tests.test_risk_exit_flow import TICKER as HELD
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.39, unit=0.10)
+    t.wave_spike = 2.0
+    now = close - 600.0
+    for k in range(61):  # the bid climbs 0.39 -> 0.63 over the last 60 s
+        b = 0.39 + 0.24 * k / 60.0
+        ticks_mod.mids.note(HELD, now - 60 + k, b, b + 0.01)
+    ask = asker(w, t, close)
+    why = ask(0.63, 600)
+    assert why and "rose 2.4 of its typical minutes" in why and "sold at the spike" in why
+    # the same rise over ten minutes is slow: held
+    ticks_mod.mids.clear()
+    w2, t2, close2 = take_target(tmp_path, monkeypatch, 0.39, unit=0.10)
+    t2.wave_spike = 2.0
+    for k in range(601):
+        b = 0.39 + 0.24 * k / 600.0
+        ticks_mod.mids.note(HELD, close2 - 1200 + k, b, b + 0.01)
+    assert asker(w2, t2, close2)(0.63, 600) is None
+    # the setting at 0 is off
+    t.wave_spike = 0.0
+    t.wave_best_net, t.wave_dir = -9.0, 0
+    assert asker(w, t, close)(0.63, 600) is None
