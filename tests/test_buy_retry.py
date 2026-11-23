@@ -340,7 +340,7 @@ def test_the_real_gate_still_refuses_a_second_ordinary_buy_of_a_held_market(real
     """The top-up gets past the holding check, nothing else does."""
     from kalshi_moonshot import risk
 
-    s, store, shot, spec = real_gate
+    s, store, shot, _spec = real_gate
     store.add_order(ticker=shot.ticker, env=s.env, count=1.0, price=0.3, fill_count=1.0, cost_usd=0.3, fee_usd=0.0, order_id="o", contract="yes")
     assert risk.check(s, store, shot.ticker, 0.3, max_trade=0.3).ok is False
     assert risk.check(s, store, shot.ticker, 0.3, max_trade=0.3, allow_held=True).ok is True

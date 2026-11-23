@@ -86,7 +86,7 @@ def test_a_connection_that_ends_makes_every_listing_unproven():
 
 
 def test_a_created_market_appears_in_the_live_listing_with_its_times_and_strike():
-    cache, clock = seeded_live()
+    cache, _clock = seeded_live()
     nxt = "KXBTC15M-26NOV141215-15"
     cache.apply_market(created(nxt, close_ts=CLOSE + 900))
     row = next(m for m in cache.get_event("KXBTC15M-26NOV141215", 60) if m["ticker"] == nxt)
@@ -192,7 +192,7 @@ def test_raw_lifecycle_messages_keep_the_clients_listing_current_with_no_rest_ca
 
 def test_an_event_for_a_market_the_listing_does_not_hold_makes_the_listing_unproven():
     """The 08:15 live miss: the next window arrived as a strike event with no created event, so the kept listing never held it."""
-    cache, clock = seeded_live()
+    cache, _clock = seeded_live()
     assert cache.live("KXBTC15M")
     cache.apply_market({"kind": "market", "event": "activated", "ticker": "KXBTC15M-26NOV141215-15"})  # a market it holds no row for, and no strike to build one from
     assert not cache.live("KXBTC15M")
@@ -268,7 +268,6 @@ def test_a_row_built_from_the_stream_can_be_priced_by_the_ladder():
     p = commodities.market_prob(built, 101.0, 0.5)
     assert p is not None and 0.5 < p <= 1.0  # the price is above the strike: YES is the likelier side
     assert commodities.market_prob(built, 99.0, 0.5) < 0.5
-    created_row = dict(next(m for m in cache.get_series("KXBTC15M", 180) if m["ticker"] == T), ticker="KXBTC15M-26NOV141230-30")
     cache.apply_market(created("KXBTC15M-26NOV141230-30", strike_type="greater_or_equal"))
     row = next(m for m in cache.get_series("KXBTC15M", 180) if m["ticker"] == "KXBTC15M-26NOV141230-30")
     assert row["strike_type"] == "greater_or_equal" and commodities.market_prob(row, 101.0, 0.5) is not None

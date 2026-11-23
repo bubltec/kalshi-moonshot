@@ -174,7 +174,7 @@ def shadow_pass(s: Any, store: Any, tape: Any, specs: dict[str, Any], now: float
         if not q or q["bid"] is None or q["ask"] is None or now - float(q["ts"]) > 20.0:
             continue
         bid = float(q["bid"]) if side == "yes" else 1.0 - float(q["ask"])
-        cuts = _cuts_for(idx, now)
+        cuts = _cuts_for(idx, now)  # type: ignore[arg-type]
         _seen.add(key)
         out.append({
             "kind": "signal", "ts": round(now, 1), "ticker": ticker, "lane": lane, "side": side, "left": round(left, 1), "entry": round(float(row["stake_usd"] or 0.0) / float(row["contracts"]), 4),

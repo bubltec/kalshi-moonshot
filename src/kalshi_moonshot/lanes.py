@@ -29,9 +29,9 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import overrides, sellchain
+from .config import Settings
 
 log = logging.getLogger("moonshot")
-from .config import Settings
 
 # Paper twin of the commodity lane. It reads Polymarket and never places an order, even if named in LIVE_LANES.
 POLY_LANE = "commodity_poly"
@@ -242,8 +242,8 @@ def _overlay(base: LaneSpec | None, name: str, row: dict[str, Any]) -> LaneSpec:
             parse_window(window)
         except ValueError as exc:
             raise ValueError(f"lane {name!r}: {exc}") from exc
-    if bad := set(row.get("sides", ())) - {"yes", "no"}:
-        raise ValueError(f"lane {name!r}: sides must be \"yes\" and/or \"no\", got {sorted(bad)}")
+    if bad_sides := set(row.get("sides", ())) - {"yes", "no"}:
+        raise ValueError(f"lane {name!r}: sides must be \"yes\" and/or \"no\", got {sorted(bad_sides)}")
     if base is None:
         missing = {"estimator", "price", "hours"} - set(row)
         if missing:

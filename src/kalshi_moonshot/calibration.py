@@ -20,8 +20,9 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from .report import _yes, first_per_market
 
@@ -156,7 +157,7 @@ class Calibrator:
     def adjust(self, lane: str, category: str, ask: float, p_model: float, trust: float = 1.0) -> Calibration:
         sm = self._lanes().get(lane)
         n = sm.n if sm else 0
-        if n == 0:
+        if sm is None or n == 0:
             return Calibration(p_model, 1.0, ask, 0, None, 0)
         mkt, mod = sm.mkt_sq / n, sm.mod_sq / n
         skill = 1.0 - mod / mkt if mkt > 0 else None

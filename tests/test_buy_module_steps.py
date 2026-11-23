@@ -7,7 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from kalshi_moonshot import buychain, config, curverisk, lanes, runner, ticks, variants, volregime, watcher
+from kalshi_moonshot import (
+    buychain,
+    config,
+    curverisk,
+    lanes,
+    runner,
+    ticks,
+    variants,
+    volregime,
+    watcher,
+)
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
 
@@ -189,7 +199,7 @@ def test_unit_an_exit_module_needs_steps_and_a_lane_may_not_write_its_own_chain_
 
 
 def test_integration_a_step_that_says_no_keeps_the_buy_out_and_the_note_names_it(tmp_path, monkeypatch):
-    from tests.test_buychain import Fixed, LANE
+    from tests.test_buychain import LANE, Fixed
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(LANE.format(chain="['price','spike']").replace("buy_chain=", "entry_spike_seconds=90\nbuy_chain="))

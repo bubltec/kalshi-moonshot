@@ -4,10 +4,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-import decide_support as T  # noqa: E402
+import decide_support as T
 
-from kalshi_moonshot import config, runner  # noqa: E402
-from kalshi_moonshot.store import Store  # noqa: E402
+from kalshi_moonshot import config, runner
+from kalshi_moonshot.store import Store
 
 VIEWS = "[crossed 8] [spike view z -0.4, 74 of 120 as large] [scenario: target low in the 60 min, cushion against | target in range 15:0.19 30:0.11 60:0.08 | drift 15:-1.0 30:-1.3 60:-0.7 | cushion -0.67 | spot in range now 15:0.78 30:0.43 60:0.34 | last markets margin/flips -0.7/8 -0.6/5 +0.1/8 -0.3/5]"
 

@@ -1,6 +1,7 @@
 """Memory is filled from the tape before the bot decides anything (2026-11-14, user: "I just want to make sure that's filled when we rebuild or restart"). Until then the reload ran inside a low-priority job and finished 30 to 85 s after the bot was already deciding; nothing waited for it and nothing said how complete it was. Unit tests of the pieces, then the pieces through the real tape and the real evaluate job."""
 
 import datetime
+import itertools
 import logging
 import time
 
@@ -9,8 +10,6 @@ import pytest
 from kalshi_moonshot import config
 from kalshi_moonshot import ticks as ticks_mod
 from kalshi_moonshot.tape import Tape
-
-
 
 TICKER = ""
 
@@ -174,9 +173,9 @@ def test_integration_the_two_stages_together_hold_every_tick_once_and_in_order(t
     report = ticks_mod.reload_from_tape(s, ["BTCUSD_RTI"], now)
     got = ticks_mod.history.window("BTCUSD_RTI", now - 8 * 3600.0, now)
     assert got is not None
-    ts, vs = got
+    ts, _vs = got
     assert len(ts) == n == report["ticks"]  # no tick twice, none missing
-    assert all(a < b for a, b in zip(ts, ts[1:], strict=False))
+    assert all(a < b for a, b in itertools.pairwise(ts))
     assert ts[0] <= now - 3 * 3600.0 + 15.0 and ts[-1] >= now - 15.0
 
 

@@ -115,9 +115,10 @@ class _SellWalk:
 
     def __init__(self, look: float, basis: float, net: float, long_chance: float | None) -> None:
         self.look, self.basis, self.net, self.long_chance = look, basis, net, long_chance
-        self.facts = None  # the facts board of this check (facts.py), made the first time a step or a veto asks
+        self.facts: facts_mod.Board | None = None  # the facts board of this check (facts.py), made the first time a step or a veto asks
         self.shared = False  # the slope history (_sell_shared)
-        self.take_state, self.gain, self.room, self.rebuy, self.unit, self.bar = False, 0.0, 0.0, 0.0, None, 0.0  # the gain's readings (_sell_take_state)
+        self.unit: float | None = None
+        self.take_state, self.gain, self.room, self.rebuy, self.bar = False, 0.0, 0.0, 0.0, 0.0  # the gain's readings (_sell_take_state)
         self.taken, self.early = False, False  # what the profit take decided on this check, for the trail
 
 
@@ -515,9 +516,10 @@ class ProfitWatcher:
         account = self.manual.account
         with self._lock:
             watched = [(tk, lane, t) for (tk, lane), t in self.targets.items() if lane != manual.LANE]
-        seen = getattr(self, "_short_seen", None)
+        seen: dict[str, float] | None = getattr(self, "_short_seen", None)
         if seen is None:
-            seen = self._short_seen = {}
+            seen = {}
+            self._short_seen = seen
         now = time.time()
         for tk, lane, t in watched:
             if not s.is_live(lane, tk.split("-")[0]):
@@ -863,9 +865,8 @@ class ProfitWatcher:
         elif t.wave_best_net > 0 and (net > 0 or t.wave_best_net > t.wave_arm_swings * rev) and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
             where = f"a gain of {net * 100:.1f}c a contract" if net > 0 else f"a small loss of {-net * 100:.1f}c a contract (the bet had been ahead by {t.wave_best_net * 100:.1f}c)"
             reason, kind = f"wave take: the bid {bid:.2f} fell under its last swing low {t.wave_last_low:.2f} (swings of {rev:.3f}, cushion factor {cushion:.2f}, {left:.0f} s left): the climb is done, sold at {where}", "lower low"
-        elif t.wave_high_zone and net > 0 and bid >= wavetop.HIGH - 1e-9:
-            if lose is not None and lose >= 1.0 - bid + fee_per_contract(bid):
-                reason, kind = f"wave take: the bid {bid:.2f} is in the high zone and the chance of losing it is {lose:.2f}, at least the {1.0 - bid + fee_per_contract(bid):.2f} the sale gives up over holding ({left:.0f} s left)", "high zone"
+        elif t.wave_high_zone and net > 0 and bid >= wavetop.HIGH - 1e-9 and lose is not None and lose >= 1.0 - bid + fee_per_contract(bid):
+            reason, kind = f"wave take: the bid {bid:.2f} is in the high zone and the chance of losing it is {lose:.2f}, at least the {1.0 - bid + fee_per_contract(bid):.2f} the sale gives up over holding ({left:.0f} s left)", "high zone"
         if not reason:
             return None
         reason += fx.note()
@@ -906,9 +907,9 @@ class ProfitWatcher:
         sell, info = wavetop.salvage(ticks_mod.mids.quotes(t.ticker), t.side, t.close_ts - 900.0, t.bought_ts, now, got[0], got[1])
         if not sell:
             return None
-        reason = f"wave salvage: the bid fell to {info['low']:.2f} (its own typical minute {info['unit']:.3f} under the {info['entry_bid']:.2f} at the buy, or more), has come back to {bid:.2f}, its climb over the last {info['window']:.0f}s has slowed to {info['recent'] * 60:+.3f} a minute against the run's {info['run'] * 60:+.3f}, and the spot has stopped moving its way; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"
+        reason = f"wave salvage: the bid fell to {info['low']:.2f} (its own typical minute {info['unit']:.3f} under the {info['entry_bid']:.2f} at the buy, or more), has come back to {bid:.2f}, its climb over the last {info['window']:.0f}s has slowed to {info['recent'] * 60:+.3f} a minute against the run's {info['run'] * 60:+.3f}, and the spot has stopped moving its way; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"  # type: ignore[operator]
         reason += fx.note()
-        extra = {k: round(v, 5) for k, v in info.items()}
+        extra = {k: round(v, 5) for k, v in info.items()}  # type: ignore[arg-type]
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="wave salvage", extra=extra)
             return reason
@@ -1507,7 +1508,7 @@ class ProfitWatcher:
         live = s.mode == "trade" and (s.env != "prod" or s.allow_real_money)
         now = time.time()
         for p in self.manual.positions(s, store):
-            t = fresh.get((p.ticker, manual.LANE))
+            t = fresh.get((p.ticker, manual.LANE))  # type: ignore[assignment]
             series = p.ticker.split("-")[0]
             if t is None or not series.endswith("15M"):
                 continue

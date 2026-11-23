@@ -272,8 +272,8 @@ def shadow_pass(s: Any, store: Any, tape: Any, specs: dict[str, Any], strike_of:
     if out:
         try:
             with path.open("a") as fh:
-                for line in out:
-                    fh.write(json.dumps(line) + "\n")
+                for rec in out:
+                    fh.write(json.dumps(rec) + "\n")
         except OSError:
             log.debug("confidence: could not write %s", path, exc_info=True)
         for r in out:

@@ -60,10 +60,10 @@ def growth(top: int = 6) -> str:
     snap = tracemalloc.take_snapshot().filter_traces((tracemalloc.Filter(False, tracemalloc.__file__), tracemalloc.Filter(False, "<frozen importlib._bootstrap>")))
     if _baseline is None:
         _baseline = snap
-        cur, peak = tracemalloc.get_traced_memory()
+        cur, _peak = tracemalloc.get_traced_memory()
         return f"baseline taken (traced {cur / 1048576:.0f} MiB)"
     diffs = snap.compare_to(_baseline, "lineno")[:top]
-    cur, peak = tracemalloc.get_traced_memory()
+    cur, _peak = tracemalloc.get_traced_memory()
     return f"traced {cur / 1048576:.0f} MiB; grew since the baseline: " + "; ".join(f"{d.size_diff / 1048576:+.1f} MiB {d.traceback[0].filename.split('/')[-1]}:{d.traceback[0].lineno} (+{d.count_diff} blocks)" for d in diffs)
 
 

@@ -6,7 +6,6 @@ from kalshi_moonshot.estimators import Estimate
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
 
-
 LANE = "[lane.rs]\nestimator='market'\nprice=[0.05,0.97]\nhours=[0.0,1.0]\nalways=true\nfixed_stake=1.0\nseries=['KXBTC15M']\n{extra}\n"
 
 
@@ -34,16 +33,6 @@ def mids(opened, now, level=0.80, flip_at=None):
     return [(opened + k, (1.0 - level if flip_at and k < flip_at else level) + (0.004 if k % 2 else -0.004)) for k in range(int(now - opened) + 1)]
 
 
-def test_unit_a_wide_cushion_and_a_high_price_read_as_low_risk_and_the_two_sides_add_to_one():
-    now = 1_000_000.0
-    opened = now - 480.0
-    ts, vs = index(opened, now, lift=0.004)
-    x = riskscore.features(ts, vs, now, opened, 100.0, mids(opened, now), [])
-    assert x is not None and len(x) == len(riskscore.NAMES)
-    yes, no = riskscore.chance(x, "yes"), riskscore.chance(x, "no")
-    assert yes > 0.75 and abs(yes + no - 1.0) < 1e-9
-
-
 def decide(tmp_path, monkeypatch, now, extra, level=0.80, lift=0.004, flip_at=None, ask=0.81, seed=True):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(LANE.format(extra=extra))
@@ -55,7 +44,7 @@ def decide(tmp_path, monkeypatch, now, extra, level=0.80, lift=0.004, flip_at=No
     ticks.mids.clear()
     ticks.history.clear()
     if seed:
-        for ts, v in zip(*index(opened, now, lift=lift)):
+        for ts, v in zip(*index(opened, now, lift=lift), strict=False):
             ticks.history.note(variants.crypto_index("KXBTC15M"), ts, v)
         for ts, mid in mids(opened, now, level=level, flip_at=flip_at):
             ticks.mids.note("KXBTC15M-7", ts, mid - 0.005, mid + 0.005)

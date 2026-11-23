@@ -107,7 +107,8 @@ def tick_stats() -> dict[str, dict[str, float]]:
             if not rows:
                 continue
             xs = sorted(rows)
-            q = lambda p: xs[min(len(xs) - 1, int(p * len(xs)))]  # noqa: E731
+            def q(p: float, xs: list[float] = xs) -> float:
+                return xs[min(len(xs) - 1, int(p * len(xs)))]
             out[kind] = {"n": float(_counts.get(kind, 0)), "over": float(_over.get(kind, 0)), "p50": q(0.5), "p95": q(0.95), "p99": q(0.99), "max": xs[-1]}
     return out
 
@@ -121,12 +122,14 @@ def tick_report(now: float | None = None, force: bool = False) -> str | None:
     stats = tick_stats()
     if not stats:
         return None
-    return "tick latency (ms, budget %.0f): " % TICK_BUDGET_MS + "; ".join(
+    return f"tick latency (ms, budget {TICK_BUDGET_MS:.0f}): " + "; ".join(
         f"{k} n {int(v['n'])} p50 {v['p50']:.1f} p95 {v['p95']:.1f} p99 {v['p99']:.1f} max {v['max']:.1f} over {int(v['over'])}" for k, v in sorted(stats.items())
     )
 
 
 def tick_reset() -> None:
     with _lock:
-        _ticks.clear(); _counts.clear(); _over.clear()
+        _ticks.clear()
+        _counts.clear()
+        _over.clear()
     _reported[0] = 0.0

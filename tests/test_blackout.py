@@ -19,7 +19,7 @@ def blackout_spec(tmp_path, *windows):
 
 def test_the_window_follows_the_new_york_clock_through_daylight_saving(tmp_path):
     _s, spec = blackout_spec(tmp_path, "17:00-18:00")
-    at = lambda *a: datetime(*a, tzinfo=UTC)  # noqa: E731
+    at = lambda *a: datetime(*a, tzinfo=UTC)
     assert lanes.in_blackout(spec, at(2026, 10, 29, 21, 30))  # 17:30 EDT
     assert not lanes.in_blackout(spec, at(2026, 10, 29, 22, 0))  # 18:00 EDT: the window is over
     assert not lanes.in_blackout(spec, at(2026, 10, 29, 20, 59))  # 16:59 EDT
@@ -29,7 +29,7 @@ def test_the_window_follows_the_new_york_clock_through_daylight_saving(tmp_path)
 
 def test_a_window_may_cross_midnight_and_a_lane_may_have_several(tmp_path):
     _s, spec = blackout_spec(tmp_path, "23:30-00:30", "08:00-08:15")
-    at = lambda h, m: datetime(2026, 10, 29, h, m, tzinfo=UTC) + timedelta(hours=4)  # noqa: E731  (UTC time that is h:m in New York)
+    at = lambda h, m: datetime(2026, 10, 29, h, m, tzinfo=UTC) + timedelta(hours=4)
     assert lanes.in_blackout(spec, at(23, 45)) and lanes.in_blackout(spec, at(0, 10))
     assert not lanes.in_blackout(spec, at(0, 30)) and not lanes.in_blackout(spec, at(23, 29))
     assert lanes.in_blackout(spec, at(8, 5)) and not lanes.in_blackout(spec, at(8, 15))

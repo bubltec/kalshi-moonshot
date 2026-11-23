@@ -7,6 +7,7 @@ retrieve similar past cases. Prices are not stored in that index.
 from __future__ import annotations
 
 import collections
+import contextlib
 import json
 import logging
 import queue
@@ -334,21 +335,21 @@ _MEMO_LOCK = threading.Lock()
 
 
 _BACKGROUND = {"on": False}  # the running bot turns this on (serve_from_memory): a remembered answer whose time is up is still served, and re-read by the refresher thread, not by the caller
-_REFRESH: "queue.Queue[tuple]" = queue.Queue()
+_REFRESH: queue.Queue[tuple] = queue.Queue()
 _REFRESHING: set[tuple] = set()
 _REFRESH_STORES = threading.local()
 
 
 # ---- decision rows written off the evaluation's thread ----
 # 2026-11-17, user: "why are you waiting on a database?"; "you shouldn't be using the db. everything in current scope for a buy/sell judgement comes from memory". Every evaluation ended by INSERTing its decision row and COMMITting it on the worker's one shared connection, so evaluations stood in line behind each other's writes (on the host at 09:58: a median 45 ms of database per evaluation, 427 ms at the 90th percentile, lock waits up to 591 ms; 99 of 100 evaluations are passes). In the running bot (queue_decisions) a row that is not a bet is handed to a writer thread, which inserts what has gathered and commits once. A bet's row is still written at once: the watcher and the books need it the moment the order is placed, and it comes after the judgement, not in it.
-_DEC_Q: "queue.Queue[tuple[str, Any, dict]]" = queue.Queue()
+_DEC_Q: queue.Queue[tuple[str, Any, dict]] = queue.Queue()
 _DEC_BG = {"on": False, "started": False}
 _LAST_DEC: dict[tuple[str, str, Any], float] = {}  # (store path, ticker, lane or None for any lane) -> the time of the latest decision logged by this process
 _LAST_DEC_LOCK = threading.Lock()
 _WATCH: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}  # (store path, lane) -> the lane's watchlist, kept in memory: set_watch writes it first, watch() reads it
 
 
-def watched_in_memory(path: str) -> dict[tuple[str, str], dict[str, Any]]:
+def watched_in_memory(path: Path | str) -> dict[tuple[str, str], dict[str, Any]]:
     """Every (lane, event) this process watches for the store at `path`, with the scoping pass's info for it. Memory only."""
     key = str(path)
     return {(lane, ev): info for (p, lane), events in list(_WATCH.items()) if p == key for ev, info in list(events.items())}
@@ -430,12 +431,12 @@ def _decision_writer() -> None:
             _DEC_Q.task_done()
 
 
-_BEHIND_Q: "queue.Queue[tuple[str, tuple, Any]]" = queue.Queue()
+_BEHIND_Q: queue.Queue[tuple[str, tuple, Any]] = queue.Queue()
 _BEHIND_STARTED = [False]
 
 # ---- memory-first writes (2026-11-19, user: "why do we have anything in SQL? It should be in memory") ----
 # A bet used to wait for its own INSERT (2 to 40 ms) and then for two SELECTs that rebuilt the bet book (10 to 100 ms, 250 to 460 ms behind a lock). Now the row gets an id from a pool reserved by a background job, joins the in-memory book at once, and is written behind. Until the write lands the row stays in _PENDING_BETS, so a rebuild of the book from the table does not drop it.
-_ID_POOL: "collections.deque[int]" = collections.deque()
+_ID_POOL: collections.deque[int] = collections.deque()
 _ID_LOCK = threading.Lock()
 ID_POOL_LOW = 24  # below this many reserved ids a refill is queued
 ID_POOL_SIZE = 64
@@ -888,7 +889,7 @@ class Store:
         return row_id
 
     def _fill_later(self, row_id: int, base: dict[str, Any], extra: dict[str, Any]) -> None:
-        def fill(st: "Store") -> None:
+        def fill(st: Store) -> None:
             full = _with_snapshot(dict(base, **extra))
             changed = {k: v for k, v in full.items() if k not in base or base[k] != v}
             if changed and row_id:
@@ -902,7 +903,7 @@ class Store:
     def _add_bet_memory(self, row_id: int, base: dict[str, Any], extra: dict[str, Any]) -> int:
         p = str(self.path)
         cols = self._decision_columns()
-        row = {c: None for c in cols}
+        row = dict.fromkeys(cols)
         row.update(base)
         row["id"] = row_id
         with _PENDING_LOCK:
@@ -916,7 +917,7 @@ class Store:
         if cur is None:
             self.rebuild_book()  # no list yet: built now, with the pending row in it
 
-        def write(st: "Store") -> None:
+        def write(st: Store) -> None:
             cols_w = ",".join(["id", *base])
             marks = ",".join("?" for _ in range(len(base) + 1))
             for attempt in range(5):
@@ -926,10 +927,8 @@ class Store:
                     break
                 except Exception:
                     _log.exception("bet row %s not written (try %d of 5)", row_id, attempt + 1)
-                    try:
+                    with contextlib.suppress(Exception):
                         st.db.rollback()
-                    except Exception:
-                        pass
                     time.sleep(1.0)
             else:
                 _log.error("bet row %s for %s was NOT stored after 5 tries: the order exists, the decision row does not", row_id, base.get("ticker"))
@@ -942,7 +941,7 @@ class Store:
         return row_id
 
     @staticmethod
-    def _fill_now(st: "Store", row_id: int, base: dict[str, Any], extra: dict[str, Any]) -> None:
+    def _fill_now(st: Store, row_id: int, base: dict[str, Any], extra: dict[str, Any]) -> None:
         full = _with_snapshot(dict(base, **extra))
         changed = {k: v for k, v in full.items() if k not in base or base[k] != v}
         if changed and row_id:
@@ -1277,7 +1276,7 @@ class Store:
         key = (str(self.path), env)
         with _HELD_LOCK:
             cur = _HELD.get(key, {})
-            for t, at in [(t, a) for (pp, e, t), a in _HELD_AT.items() if pp == key[0] and e == env and a >= started]:
+            for t, _at in [(t, a) for (pp, e, t), a in _HELD_AT.items() if pp == key[0] and e == env and a >= started]:
                 if t in cur:
                     fresh[t] = cur[t]
             _HELD[key] = fresh
@@ -1320,7 +1319,7 @@ class Store:
         """Record the first time a version of a lane is used, with its settings, so the changes between versions can be read back."""
         first_ts = time.time()
 
-        def write(st: "Store") -> None:
+        def write(st: Store) -> None:
             st.db.execute("INSERT OR IGNORE INTO lane_versions (lane, ver, first_ts, settings) VALUES (?,?,?,?)", (lane, ver, first_ts, json.dumps(settings)))
             st.db.commit()
 

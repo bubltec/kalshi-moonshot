@@ -2,6 +2,7 @@
 Three roles share one setting, TAPE_ROLE: "both" (a process that streams and writes, as before), "memory" (the bot: it keeps the Kalshi streams for its own memory and leaves their database rows to the recorder) and "record" (the recorder process: the Kalshi streams, nothing else).
 Unit tests of the tape and the settings, then the recorder object in each role, then a recorder and a bot over one tape."""
 import dataclasses
+import itertools
 import time
 
 import pytest
@@ -124,7 +125,6 @@ def test_integration_the_recorder_process_does_not_prune_and_the_bot_does(tmp_pa
         rec._stop.set()
         rec._stop.wait = lambda t=None: rec._stop.clear() or True  # one pass of the loop, then stop
         calls = []
-        real_is_set = rec._stop.is_set
         rec._stop.is_set = lambda: bool(calls) or calls.append(1) or False  # run the body once
         rec._run()
         assert pruned.count(role) == expect, role
@@ -164,14 +164,14 @@ def test_integration_the_bot_alone_in_memory_role_leaves_a_gap_the_recorder_fill
     s_rec = settings(tmp_path, monkeypatch, "record")
     recorder = TapeRecorder(object(), s_rec, None)  # type: ignore[arg-type]
     bot = TapeRecorder(object(), dataclasses.replace(s_rec, tape_role="memory"), None)  # type: ignore[arg-type]
-    for k in range(0, 20):
+    for k in range(20):
         e = {"kind": "quote", "ticker": TICKER, "ts": NOW + k, "bid": 0.5 + 0.01 * (k % 7), "ask": 0.52 + 0.01 * (k % 7)}
         recorder._on_kalshi(dict(e))
         if not 5 <= k < 15:  # the bot is down for ten seconds
             bot._on_kalshi(dict(e))
     recorder.tape.flush(NOW + 60)
     got = sorted(r[0] for r in recorder.tape.db.execute("SELECT ts FROM quotes"))
-    assert len(got) == 20 and max(b - a for a, b in zip(got, got[1:], strict=False)) <= 1.0001  # no hole in the tape
+    assert len(got) == 20 and max(b - a for a, b in itertools.pairwise(got)) <= 1.0001  # no hole in the tape
 
 
 # ---- the bot writes again when the recorder container is down ----

@@ -64,7 +64,7 @@ def test_weights_accumulate_on_the_board_and_show_in_the_note():
     assert "wave_take +0.60" in b.note() and "wave_salvage -0.20" in b.note() and "= +0.40" in b.note()
 
 
-def test_a_veto_stops_a_step_and_the_walk_refuses_a_step_that_sells_anyway(tmp_path, monkeypatch, mem, caplog):  # noqa: F811
+def test_a_veto_stops_a_step_and_the_walk_refuses_a_step_that_sells_anyway(tmp_path, monkeypatch, mem, caplog):
     from kalshi_moonshot import curverisk
 
     w, t, close = switch_target(tmp_path, monkeypatch)
@@ -85,7 +85,7 @@ def test_a_veto_stops_a_step_and_the_walk_refuses_a_step_that_sells_anyway(tmp_p
     assert got and got.startswith("wave salvage")
 
 
-def test_the_sale_reason_carries_the_facts_it_was_judged_on(tmp_path, monkeypatch, mem):  # noqa: F811
+def test_the_sale_reason_carries_the_facts_it_was_judged_on(tmp_path, monkeypatch, mem):
     w, t, close = take_target(tmp_path, monkeypatch, 0.30, unit=0.20)
     ask = asker(w, t, close)
     spot_feed(close - 2.0, 98.0)

@@ -18,16 +18,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable
 from typing import Any
 
-from .kalshi import KalshiClient
-
 from . import ticks as books_mod
+from .kalshi import KalshiClient
 
 log = logging.getLogger("moonshot")
 

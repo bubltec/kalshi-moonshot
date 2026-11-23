@@ -113,9 +113,9 @@ class ManualRest:
                 return f"ask at {w.price:.2f} withdrawn"
             return ""
         alive = w is not None and w.at + ORDER_LIFE > now + 3.0
-        if alive and now - w.at < REPRICE_EVERY:
+        if alive and now - w.at < REPRICE_EVERY:  # type: ignore[union-attr]
             return ""  # the replay reprices every 15 s; between reprices the ask stands
-        if alive and abs(w.price - price) < 0.005 and abs(w.count - count) < 0.005 and w.at + ORDER_LIFE > now + REPRICE_EVERY:
+        if alive and abs(w.price - price) < 0.005 and abs(w.count - count) < 0.005 and w.at + ORDER_LIFE > now + REPRICE_EVERY:  # type: ignore[union-attr]
             return ""  # same price and still good for another cycle
         if not live:
             if abs(self.said.get(ticker, -1.0) - price) >= 0.005:

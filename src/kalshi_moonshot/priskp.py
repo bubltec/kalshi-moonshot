@@ -18,13 +18,12 @@ Memory only, stdlib only: no table, no file read on a tick.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import bisect
+import itertools
 import json
 import math
 import threading
-from collections import deque
+from types import SimpleNamespace
 from typing import Any
 
 from . import binaryrisk
@@ -66,7 +65,7 @@ def side_readings(T: list[float], V: list[float], quotes: list[tuple[float, floa
                     break
                 mids.append((quotes[k][1] + quotes[k][2]) / 2.0)
             if len(mids) >= 3:
-                ch = [b - a for a, b in zip(mids, mids[1:])]
+                ch = [b - a for a, b in itertools.pairwise(mids)]
                 pu = math.sqrt(sum(c * c for c in ch) / len(ch) * 12.0)
                 if pu > 0:
                     back = min(180.0, span)
@@ -248,7 +247,7 @@ def typical_minute(T: list[float], V: list[float], now: float, span: float = 900
         t += 10.0
     if len(lv) < 10:
         return 0.0
-    d = [b - a for a, b in zip(lv, lv[1:])]
+    d = [b - a for a, b in itertools.pairwise(lv)]
     return math.sqrt(sum(x * x for x in d) / len(d) * 6.0)
 
 
@@ -394,7 +393,7 @@ def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bo
 
 def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """The fact `priskp_screen`: the five checks for the shot's side now, as the note dict (verb buy / wait), and the latest confirmed shift (or None) for the fact `shift_out`. No shift rule here: the board's veto does that."""
-    now, hours, s = host.now, host.hours, host.s
+    now, hours = host.now, host.hours
     close = now + hours * 3600.0
     minute = (now - (close - 900.0)) / 60.0
     ro, sh, strike, why = _readings(shot, now, hours)

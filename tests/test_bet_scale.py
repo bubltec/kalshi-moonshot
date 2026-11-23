@@ -70,7 +70,7 @@ class _ThinBook:
         return getattr(self.inner, name)
 
 
-def test_a_thin_book_passes_the_flat_minimum_but_not_a_share_of_a_big_order(setup):  # noqa: F811
+def test_a_thin_book_passes_the_flat_minimum_but_not_a_share_of_a_big_order(setup):
     import dataclasses
 
     from tests.test_buy_retry import Client
@@ -97,7 +97,7 @@ class _RanAwayBook:
         return getattr(self.inner, name)
 
 
-def test_a_skip_for_nothing_offered_says_when_the_ask_ran_away(setup):  # noqa: F811
+def test_a_skip_for_nothing_offered_says_when_the_ask_ran_away(setup):
     import dataclasses
 
     from tests.test_buy_retry import Client

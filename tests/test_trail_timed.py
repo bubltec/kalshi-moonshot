@@ -1,4 +1,5 @@
 """The trail_timed step: a shadow-only sell step that asks the trail's question with the static typical minute and with the time-aware one (pricevol.py), and records both verdicts (2026-11-18, user: "so having a static volatility number is pointless"). Integration: lane file -> watcher -> signals and rows."""
+import itertools
 import json
 import logging
 
@@ -35,7 +36,7 @@ def test_integration_it_records_both_verdicts_both_units_and_never_sells(tmp_pat
     assert first["hit_static"] is True and first["ticker"] == TICKER and first["live"] is False and first["bid"] == 0.86 and first["high"] == 0.9 and first["units"] == 1.0
     assert first["unit_static"] > 0 and first["unit_timed"] > 0 and first["would_differ"] is (first["hit_static"] != first["hit_timed"])
     assert all(x["would_differ"] is (x["hit_static"] != x["hit_timed"]) for x in got)
-    assert all((x["hit_static"], x["hit_timed"]) != (y["hit_static"], y["hit_timed"]) for x, y in zip(got, got[1:]))  # one row a change of verdict, not one a check
+    assert all((x["hit_static"], x["hit_timed"]) != (y["hit_static"], y["hit_timed"]) for x, y in itertools.pairwise(got))  # one row a change of verdict, not one a check
 
 
 def test_integration_a_verdict_that_differs_is_marked(tmp_path, monkeypatch):

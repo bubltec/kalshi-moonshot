@@ -176,9 +176,8 @@ def perp_worth_step(ctx: Ctx, shot: LongShot) -> Check:
     """Kalshi's own price backs the side (2026-11-18, user, on the commodity lanes' gates: "these are model concepts, they shouldn't be lane options"). The reading is the side's chance from the Kalshi perp reference (variants.curve_edge_now, source "kalshi"). It needs no model estimate. No reading is a no.
     As a LEVEL (lane field perp_chance_quantile, 2026-11-21): the chance is at or over its own bar, that quantile of this series' own readings of the last day (perpchance.py; CLAUDE.md rule 2, no fixed number). The gap to the ask stays in the note with what the old rule would have said, so both are scored on the bets that follow. While the series' history is short there is no bar and the gap rule answers.
     As a GAP (perp_chance_quantile 0, the rule until 2026-11-21): the chance is no more than the lane's buy_curve_edge_min under the ask."""
-    from . import perpchance
+    from . import perpchance, variants
     from . import ticks as ticks_mod
-    from . import variants
 
     floor, q = ctx.spec.buy_curve_edge_min, ctx.spec.perp_chance_quantile
     if floor <= -1.0 and q <= 0:

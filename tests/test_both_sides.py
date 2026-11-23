@@ -96,7 +96,7 @@ def test_integration_a_pass_on_one_side_says_what_the_rule_made_of_the_other(tmp
 def test_integration_the_same_market_reads_the_same_from_either_side(tmp_path, monkeypatch):
     from_yes = decide(tmp_path, monkeypatch, 0.60, side="yes").note
     from_no = decide(tmp_path, monkeypatch, 0.60, side="no").note
-    tag = lambda note: note[note.index("[both sides:") : note.index("]", note.index("[both sides:")) + 1]  # noqa: E731
+    tag = lambda note: note[note.index("[both sides:") : note.index("]", note.index("[both sides:")) + 1]
     assert tag(from_yes) == tag(from_no)
 
 

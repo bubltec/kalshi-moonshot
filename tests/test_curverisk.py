@@ -1,4 +1,5 @@
 import pytest
+
 """The single risk exit (curverisk.py, 2026-11-13, user): the worse of the price cushion and the spot cushion, widened by the hour's jumps, sold within a max loss or min profit, with a wait that scales with the time left."""
 
 import math
@@ -51,8 +52,8 @@ CLOSE = 9_900.0
 
 
 def target(**kw):
-    base = dict(ticker="KXWTI15M-1", lane="x", side="no", entry=0.80, close_ts=CLOSE, shock_ref=100.0, shock_index="BQ_WTI", curve_scales="900+180",
-                risk_sell=0.5, risk_live=False, risk_spot_weight=0.5, risk_history=False, risk_max_loss=0.5, risk_early_hold=0.0, risk_early_off=False, risk_min_profit=0.01, risk_stop_hold=0.0, risk_take=False, risk_take_slope=10.0, risk_take_hist=[], risk_squeeze=0.0, risk_unit=None, risk_unit_at=0.0, risk_at=0.0, risk_noted=0.0, risk_since=0.0, risk_hist=1.0, risk_hist_at=0.0, risk_logged=False, risk_confirm=-1.0, risk_long=None, risk_long_at=0.0, retry_after=0.0, risk_long_fallback=False, risk_long_missing=False)
+    base = {"ticker": "KXWTI15M-1", "lane": "x", "side": "no", "entry": 0.80, "close_ts": CLOSE, "shock_ref": 100.0, "shock_index": "BQ_WTI", "curve_scales": "900+180",
+                "risk_sell": 0.5, "risk_live": False, "risk_spot_weight": 0.5, "risk_history": False, "risk_max_loss": 0.5, "risk_early_hold": 0.0, "risk_early_off": False, "risk_min_profit": 0.01, "risk_stop_hold": 0.0, "risk_take": False, "risk_take_slope": 10.0, "risk_take_hist": [], "risk_squeeze": 0.0, "risk_unit": None, "risk_unit_at": 0.0, "risk_at": 0.0, "risk_noted": 0.0, "risk_since": 0.0, "risk_hist": 1.0, "risk_hist_at": 0.0, "risk_logged": False, "risk_confirm": -1.0, "risk_long": None, "risk_long_at": 0.0, "retry_after": 0.0, "risk_long_fallback": False, "risk_long_missing": False}
     base.setdefault("risk_held_kind", "")
     base.setdefault("risk_nudge_units", 0.0)
     base.setdefault("risk_nudge_hour", False)
@@ -117,11 +118,11 @@ def test_unit_take_profit_needs_a_gain_over_the_buy_back_fee_and_a_live_clock():
 
 
 def test_unit_still_rising_follows_the_short_slope():
-    up = [(float(t), 0.80 + 0.01 * t) for t in range(0, 11)]  # a climb to 0.90
+    up = [(float(t), 0.80 + 0.01 * t) for t in range(11)]  # a climb to 0.90
     assert curverisk.still_rising(up, 10.0, 10.0) is True
-    turned = up + [(11.0, 0.89)]
+    turned = [*up, (11.0, 0.89)]
     assert curverisk.still_rising(turned, 11.0, 10.0) is False  # under the window's high
-    flat = [(float(t), 0.90) for t in range(0, 12)]
+    flat = [(float(t), 0.90) for t in range(12)]
     assert curverisk.still_rising(flat, 11.0, 10.0) is False  # levelled out: back at the start
     assert curverisk.still_rising([(5.0, 0.8), (6.0, 0.9)], 6.0, 10.0) is True  # under 10 s of readings: unknown, no sale
     assert curverisk.still_rising(up, 10.0, 0.0) is False  # no look back asked
@@ -129,17 +130,17 @@ def test_unit_still_rising_follows_the_short_slope():
 
 def test_unit_late_in_the_market_a_flat_bid_holds_and_only_a_dip_sells():
     # a typical minute of 0.10: the noise over 10 s is 0.041
-    flat = [(float(t), 0.90) for t in range(0, 11)]
+    flat = [(float(t), 0.90) for t in range(11)]
     assert curverisk.still_rising(flat, 10.0, 10.0, 0.10) is False  # the live test outside the last fifth: flat sells
     assert curverisk.still_rising(flat, 10.0, 10.0, 0.10, flat_ok=True) is True  # in the last fifth a flat bid is held
-    up_then_flat = [(float(t), 0.80 + 0.01 * min(t, 5)) for t in range(0, 11)]
+    up_then_flat = [(float(t), 0.80 + 0.01 * min(t, 5)) for t in range(11)]
     assert curverisk.still_rising(up_then_flat, 10.0, 10.0, 0.10, flat_ok=True) is True
-    pause = up_then_flat + [(11.0, 0.84)]  # one tick back, inside the noise
+    pause = [*up_then_flat, (11.0, 0.84)]  # one tick back, inside the noise
     assert curverisk.still_rising(pause, 11.0, 10.0, 0.10, flat_ok=True) is True
-    dip = up_then_flat + [(11.0, 0.80)]  # 0.05 off the high: more than the noise: it has started to dip
+    dip = [*up_then_flat, (11.0, 0.80)]  # 0.05 off the high: more than the noise: it has started to dip
     assert curverisk.still_rising(dip, 11.0, 10.0, 0.10, flat_ok=True) is False
     assert curverisk.still_rising(flat, 10.0, 10.0, None, flat_ok=True) is True  # no unit: the newest bid is at the high
-    assert curverisk.still_rising(flat + [(11.0, 0.89)], 11.0, 10.0, None, flat_ok=True) is False
+    assert curverisk.still_rising([*flat, (11.0, 0.89)], 11.0, 10.0, None, flat_ok=True) is False
 
 
 def test_unit_a_flat_bid_is_held_late_only_while_the_cushion_backs_the_price():
@@ -153,25 +154,25 @@ def test_unit_a_flat_bid_is_held_late_only_while_the_cushion_backs_the_price():
 
 def test_unit_a_climb_that_inflated_its_own_noise_is_still_a_slope():
     # SOL 21:15 YES, 2026-11-14: over the 43 s look back the bid rose 0.102 (0.880 to 0.982) in a market whose 15-minute typical minute, run-up included, was 0.124: a noise bar of 0.105
-    path = [(float(t), 0.880 + 0.102 * t / 43.0) for t in range(0, 44)]
+    path = [(float(t), 0.880 + 0.102 * t / 43.0) for t in range(44)]
     assert curverisk.still_rising(path, 43.0, 43.0, 0.124) is True
-    pause = path + [(44.0, 0.981)]  # the last tick back by 0.001, as it was
+    pause = [*path, (44.0, 0.981)]  # the last tick back by 0.001, as it was
     assert curverisk.still_rising(pause, 44.0, 43.0, 0.124) is True
 
 
 def test_unit_still_rising_in_the_markets_own_noise():
     # a typical minute of 0.10: the noise over 10 s is 0.10 * sqrt(10 / 60) = 0.041
-    up = [(float(t), 0.80 + 0.01 * t) for t in range(0, 11)]  # +0.10 in 10 s
+    up = [(float(t), 0.80 + 0.01 * t) for t in range(11)]  # +0.10 in 10 s
     assert curverisk.still_rising(up, 10.0, 10.0, 0.10) is True
-    pause = up + [(11.0, 0.89)]  # one tick back: inside the noise, the rise over the look back is still 0.08
+    pause = [*up, (11.0, 0.89)]  # one tick back: inside the noise, the rise over the look back is still 0.08
     assert curverisk.still_rising(pause, 11.0, 10.0, 0.10) is True
     assert curverisk.still_rising(pause, 11.0, 10.0, None) is False  # the plain test calls the same tick a turn
-    fell = up + [(11.0, 0.85)]  # 0.05 off the high: more than the noise
+    fell = [*up, (11.0, 0.85)]  # 0.05 off the high: more than the noise
     assert curverisk.still_rising(fell, 11.0, 10.0, 0.10) is False
-    slow = [(float(t), 0.80 + 0.002 * t) for t in range(0, 11)]  # +0.02 in 10 s: under this market's noise
+    slow = [(float(t), 0.80 + 0.002 * t) for t in range(11)]  # +0.02 in 10 s: under this market's noise
     assert curverisk.still_rising(slow, 10.0, 10.0, 0.10) is True  # any rise at the high is a slope (2026-11-14: the rise no longer has to beat the noise)
     assert curverisk.still_rising(slow, 10.0, 10.0, 0.01) is True  # and in a quiet market too
-    flat_top = [(float(t), 0.80) for t in range(0, 11)]
+    flat_top = [(float(t), 0.80) for t in range(11)]
     assert curverisk.still_rising(flat_top, 10.0, 10.0, 0.10) is False  # no rise at all is not a slope
     level = up + [(float(t), 0.90) for t in range(11, 22)]  # the climb has aged out of the look back
     assert curverisk.still_rising(level, 21.0, 10.0, 0.10) is False
@@ -179,17 +180,17 @@ def test_unit_still_rising_in_the_markets_own_noise():
 
 # ---- the squeeze on sales (2026-11-14, user: "If something missed the bar to sell and history thinks we should ... minimizing loss is always more important") ----
 def test_unit_still_falling_is_a_slide_that_has_lasted_not_one_bad_print():
-    slide = [(float(t), 0.80 - 0.01 * t) for t in range(0, 11)]  # -0.10 in 10 s
+    slide = [(float(t), 0.80 - 0.01 * t) for t in range(11)]  # -0.10 in 10 s
     assert curverisk.still_falling(slide, 10.0, 10.0, 0.10) is True  # noise over 10 s is 0.041
-    crash = [(float(t), 0.80) for t in range(0, 10)] + [(10.0, 0.60)]
+    crash = [(float(t), 0.80) for t in range(10)] + [(10.0, 0.60)]
     assert curverisk.still_falling(crash, 10.0, 10.0, 0.10) is False  # one print: half the look back ago it was still at the start
     stayed = crash + [(float(t), 0.60) for t in range(11, 17)]
     assert curverisk.still_falling(stayed, 16.0, 10.0, 0.10) is True  # it has stayed down for over half the look back
-    bounced = slide + [(11.0, 0.76)]
+    bounced = [*slide, (11.0, 0.76)]
     assert curverisk.still_falling(bounced, 11.0, 10.0, 0.10) is False  # 0.06 off the low: more than the noise
-    steep = [(float(t), 0.80 - 0.02 * t) for t in range(0, 11)] + [(11.0, 0.66)]  # down 0.20, then 0.06 back up
+    steep = [(float(t), 0.80 - 0.02 * t) for t in range(11)] + [(11.0, 0.66)]  # down 0.20, then 0.06 back up
     assert curverisk.still_falling(steep, 11.0, 10.0, 0.10) is False  # still far under its start, but it has bounced by more than the noise
-    drift = [(float(t), 0.80 - 0.002 * t) for t in range(0, 11)]
+    drift = [(float(t), 0.80 - 0.002 * t) for t in range(11)]
     assert curverisk.still_falling(drift, 10.0, 10.0, 0.10) is False  # -0.02 in 10 s: inside this market's noise
     assert curverisk.still_falling(drift, 10.0, 10.0, 0.01) is True  # the same slide in a quiet market
     assert curverisk.still_falling(slide[-3:], 10.0, 10.0, 0.10) is False  # under 10 s of readings: unknown, no squeeze

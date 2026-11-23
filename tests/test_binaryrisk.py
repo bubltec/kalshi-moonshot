@@ -286,7 +286,7 @@ def test_unit_the_win_chance_fit_finds_the_cushion_has_no_ask_reading_and_is_cal
 
 def test_unit_the_win_chance_does_not_move_with_the_price():
     m = binaryrisk.fit_win(win_rows())
-    f = {k: 0.0 for k in FLAT}
+    f = dict.fromkeys(FLAT, 0.0)
     f.update(czb=1.0, left=5.0)
     assert binaryrisk.win_vector(f, "yes") == binaryrisk.side_vector(f, "yes", 0.31)[2:] == binaryrisk.side_vector(f, "yes", 0.93)[2:]
     assert binaryrisk.win_chance(m, binaryrisk.win_vector(f, "yes")) > binaryrisk.win_chance(m, binaryrisk.win_vector(f, "no"))  # NO is the side's own view
@@ -299,7 +299,7 @@ def test_integration_the_win_chance_step_never_says_no_reads_every_ask_and_notes
     got = buychain.STEPS["win_chance_shadow"](ctx, shot())
     assert got.ok and "no model" in got.why  # no model yet: a shadow, not a block
     (tmp_path / "binary_win_model.json").write_text(json.dumps(binaryrisk.fit_win(win_rows())))
-    f = {k: 0.0 for k in FLAT}
+    f = dict.fromkeys(FLAT, 0.0)
     f.update(cz1=1.0, cz3=1.0, cz5=1.0, czb=1.0, left=5.0)
     monkeypatch.setattr(binaryrisk, "_curve", lambda shot, now: (f, ""))
     notes = set()

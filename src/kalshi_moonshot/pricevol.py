@@ -8,6 +8,7 @@ Every function takes `seq`, the market's mid (the YES mid; a NO side's moves are
 from __future__ import annotations
 
 import bisect
+import itertools
 import math
 from collections.abc import Sequence
 from statistics import NormalDist
@@ -37,7 +38,7 @@ def grid(rows: list[tuple[float, float]], now: float, n: int = SPAN) -> list[flo
 
 
 def _rms(seq: Sequence[float]) -> float | None:
-    d = [b - a for a, b in zip(seq, seq[1:], strict=False)]
+    d = [b - a for a, b in itertools.pairwise(seq)]
     if not d:
         return None
     v = sum(x * x for x in d) / len(d)

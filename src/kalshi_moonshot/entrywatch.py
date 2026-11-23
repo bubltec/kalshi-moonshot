@@ -22,17 +22,17 @@ import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from . import runner, steptime
+from . import store as store_mod
 from .config import Settings
 from .estimators import Estimator
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import index_for_series
 from .lanes import LaneSpec, in_blackout, job_priority, lane_specs
 from .marketdata import shared_for
-from . import store as store_mod
 from .store import Store
 
 log = logging.getLogger("moonshot")
@@ -89,7 +89,7 @@ def in_window(spec: LaneSpec, close: str, now: datetime, series: str = "") -> bo
 
 class EntryWatcher:
     def __init__(
-        self, get_settings: Callable[[], Settings], client: KalshiClient, store_factory: Callable[[], Store],
+        self, get_settings: Callable[[], Settings], client: KalshiClient, store_factory: Callable[..., Store],
         estimators: Callable[[Store], dict[str, Estimator]],
     ):
         self.get_settings = get_settings
@@ -170,7 +170,7 @@ class EntryWatcher:
 
     def _watched(self) -> dict[tuple[str, str], dict[str, Any]]:
         """The watched events, from memory: the scoping pass puts them there (Store.set_watch), a restart loads them once (start). No table read on a tick. `self.watch`, when a test or a caller sets it, wins."""
-        return self.watch if self.watch else store_mod.watched_in_memory(self.get_settings().db_path)
+        return self.watch or store_mod.watched_in_memory(self.get_settings().db_path)
 
     def _prune_maybe(self) -> None:
         """Forget old markets, run from the socket events themselves at most every 30 s: there is no timer thread."""

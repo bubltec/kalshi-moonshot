@@ -154,7 +154,8 @@ def test_the_market_comes_from_the_streams_copy_and_a_market_with_no_streamed_qu
 
 
 def test_a_socket_review_never_asks_kalshi(tmp_path):
-    from tests.test_two_level import Client, live_event, settings as two_level_settings
+    from tests.test_two_level import Client, live_event
+    from tests.test_two_level import settings as two_level_settings
 
     s = two_level_settings(tmp_path)
     store = Store(s.db_path)
@@ -308,4 +309,4 @@ def test_unit_the_memory_fill_loads_every_feed_and_index_history_before_the_firs
             return ["GOLD"]
 
     n = tape.TapeRecorder.arm_static(Rec(), 1.0)
-    assert n == 5 and {x for x in loaded} == {("feed", "S-KXBTC15M"), ("feed", "S-KXETH15M"), ("feed", "GOLD"), ("index", "I-KXBTC15M"), ("index", "I-KXETH15M")}
+    assert n == 5 and set(loaded) == {("feed", "S-KXBTC15M"), ("feed", "S-KXETH15M"), ("feed", "GOLD"), ("index", "I-KXBTC15M"), ("index", "I-KXETH15M")}

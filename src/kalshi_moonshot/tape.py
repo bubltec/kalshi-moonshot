@@ -25,12 +25,12 @@ from .biquotefeed import BiQuoteFeed
 from .biquotefeed import enabled as biquote_enabled
 from .commodities import instrument_for, load_instruments
 from .config import Settings
-from .perpref import PerpRefFeed
-from .perpref import enabled as perpref_enabled
 from .futflow import FuturesFlow
 from .kalshi import KalshiClient, KalshiError
 from .kalshiws import KalshiStream, index_for_series
 from .marketdata import shared_for
+from .perpref import PerpRefFeed
+from .perpref import enabled as perpref_enabled
 from .pythfeed import PythFeed
 from .pythfeed import api_key as pyth_key
 from .store import Store

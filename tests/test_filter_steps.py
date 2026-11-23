@@ -106,7 +106,7 @@ def test_the_live_lane_file_lists_a_step_for_every_bound_a_module_lane_sets():
 def test_the_socket_trigger_holds_only_the_bounds_the_module_lists():
     from kalshi_moonshot import entrywatch
 
-    s, old = lane()
+    _s, old = lane()
     close = (NOW + timedelta(minutes=14)).isoformat()  # one minute in: before the entry window
     assert not entrywatch.in_window(old, close, NOW, "KXBTC15M")
     assert not entrywatch.in_window(replace(old, buy_chain=("price", "entry_window")), close, NOW, "KXBTC15M")

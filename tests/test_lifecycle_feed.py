@@ -26,7 +26,7 @@ def test_the_live_stream_subscribes_and_the_extra_stream_does_not(monkeypatch):
     monkeypatch.delenv("KALSHI_LIFECYCLE", raising=False)
     live = kalshiws.KalshiStream(None, lambda e: None)
     extra = kalshiws.KalshiStream(None, lambda e: None, index_feed=False, fills=False)
-    chan = lambda st: [c for cmd in st.subscriptions([]) for c in cmd["params"]["channels"]]  # noqa: E731
+    chan = lambda st: [c for cmd in st.subscriptions([]) for c in cmd["params"]["channels"]]
     assert "market_lifecycle_v2" in chan(live) and "market_lifecycle_v2" not in chan(extra)
     monkeypatch.setenv("KALSHI_LIFECYCLE", "0")
     assert "market_lifecycle_v2" not in chan(kalshiws.KalshiStream(None, lambda e: None))

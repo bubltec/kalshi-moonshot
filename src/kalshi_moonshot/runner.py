@@ -33,10 +33,10 @@ from .lanes import (
     LADDER,
     LaneSpec,
     edge_verdict,
+    enabled_lanes,
     lane_specs,
     settings_of,
     spec_for,
-    enabled_lanes,
     version_of,
     wants_bet,
 )
@@ -60,7 +60,6 @@ from .strategy import (
     side_ask_notional,
     side_prob,
 )
-
 
 log = logging.getLogger("moonshot")
 
@@ -1341,16 +1340,16 @@ def _rest_wait(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: 
                 moved = _rest_follow(s, client, shot, spec, count, order_key, order_id, price, deadline, started, follows, rest)
                 if moved == "withdrawn":
                     break
-                if moved is not None:
+                if isinstance(moved, tuple):
                     follows += 1
-                    order_id, price = moved  # type: ignore[misc]
+                    order_id, price = moved
                     rest.add_order(order_id)
     finally:
         restbuys.close(rest)
     filled, spent, fee = _own_fills(client, shot, rest.order_ids, started)
     if rest.filled > filled + 1e-9:  # the account's list can trail the stream by a moment: what the stream said was filled stands (a resting fill is a maker's, no fee), the account sync settles the figures
         extra = rest.filled - filled
-        filled, spent = rest.filled, spent + extra * (price if shot.side == "yes" else price)
+        filled, spent = rest.filled, spent + extra * price
     return filled, spent, fee, price
 
 

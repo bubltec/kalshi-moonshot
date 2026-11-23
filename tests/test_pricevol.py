@@ -15,7 +15,7 @@ def market(rate=0.02, seconds=900, seed=1):
     rng = np.random.default_rng(seed)
     c = np.cumsum(rng.normal(0.0, rate, seconds + 1)) + 0.3
     lefts = np.arange(seconds, -1, -1, dtype=float) + 1.0
-    return np.array([N.cdf(x / math.sqrt(l)) for x, l in zip(c, lefts)])
+    return np.array([N.cdf(x / math.sqrt(l)) for x, l in zip(c, lefts, strict=False)])
 
 
 def at(seq, left):

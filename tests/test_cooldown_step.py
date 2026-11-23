@@ -1,7 +1,6 @@
 """The cooldown buy step with its two waits (buychain.cooldown_step; lane settings rebuy_opposite_after_gain_seconds and reentry_cooldown_seconds, set in a buy module).
 
 2026-11-19, user: "put both into one buy step, cooldown. After a sale, the same side waits N seconds (15 on crypto_risk_score, 120 on the commodity lanes). A sale at a loss blocks the market for reentry_cooldown_seconds. The opposite side goes straight through the other steps after a gain." The HYPE case of 2026-11-08 (sold YES at 0.67 for a gain, bought it again 94 s later at 0.67, lost $2.22) is the reason for the first wait."""
-import time
 
 from kalshi_moonshot import buychain, config, lanes
 from kalshi_moonshot.store import Store

@@ -13,7 +13,7 @@ import threading
 import time
 from array import array
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 log = logging.getLogger("kalshi_moonshot.ticks")
@@ -150,7 +150,7 @@ class MidHistory:
             self._prune_locked(now)
             return before - len(self._rows)
 
-    def warm(self, rows_by_ticker: dict[str, Sequence[tuple[float, float, float]]]) -> int:
+    def warm(self, rows_by_ticker: Mapping[str, Sequence[tuple[float, float, float]]]) -> int:
         """Put older (time, bid, ask) quotes in front of what a ticker already holds (a restart's tape load). A ticker keeps its live rows; only quotes older than its first live row are added, on the one-row-a-second grid."""
         added = 0
         with self._lock:

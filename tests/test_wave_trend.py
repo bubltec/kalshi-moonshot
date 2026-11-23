@@ -4,7 +4,6 @@ import math
 import pytest
 
 from kalshi_moonshot import buychain, config, db, wavetrend
-from kalshi_moonshot import ticks as ticks_mod
 from tests.test_wave_top import INDEX, OPEN, TICKER, TOML, background, feed, mem, segments, shot  # noqa: F401  (mem: the fixture)
 
 
@@ -28,7 +27,7 @@ def clean():
     wavetrend.clear()
 
 
-def test_the_template_holds_one_sample_a_minute_and_answers_by_the_sample_before_the_time(tmp_path, monkeypatch, mem):  # noqa: F811
+def test_the_template_holds_one_sample_a_minute_and_answers_by_the_sample_before_the_time(tmp_path, monkeypatch, mem):
     s, tape, now = tape_with_minutes(tmp_path, monkeypatch, per_minute=lambda ts: 100.0 + ts / 3600.0 - OPEN / 3600.0)
     n = wavetrend.refresh(s, [INDEX, INDEX], tape, now)
     assert 1500 <= n <= 1620  # 26 hours of minutes, once for the index named twice
@@ -39,7 +38,7 @@ def test_the_template_holds_one_sample_a_minute_and_answers_by_the_sample_before
     assert wavetrend.refresh(s, [INDEX], None, now) == 0  # no tape: nothing, no error
 
 
-def test_the_trend_is_the_drift_against_a_random_walks_spread_in_the_markets_own_units(tmp_path, monkeypatch, mem):  # noqa: F811
+def test_the_trend_is_the_drift_against_a_random_walks_spread_in_the_markets_own_units(tmp_path, monkeypatch, mem):
     s, tape, now = tape_with_minutes(tmp_path, monkeypatch, per_minute=lambda ts: 100.0 + (ts - OPEN) / 3600.0)  # a rise of 1 an hour
     wavetrend.refresh(s, [INDEX], tape, now)
     got = wavetrend.trends(INDEX, OPEN, 100.0, 0.5)  # the spot at the open is 100 and its typical minute 0.5
@@ -54,12 +53,12 @@ def test_signed_for_the_bet_a_rise_runs_a_yes_bets_way_and_a_nos_against_it_and_
     assert wavetrend.nudge(-9.0) == pytest.approx(0.0708) and wavetrend.nudge(0.0) == 0.0  # clipped to three units
 
 
-def test_the_note_reads_memory_signs_the_trend_for_the_bet_and_never_raises(tmp_path, monkeypatch, mem):  # noqa: F811
+def test_the_note_reads_memory_signs_the_trend_for_the_bet_and_never_raises(tmp_path, monkeypatch, mem):
     s, tape, now = tape_with_minutes(tmp_path, monkeypatch, per_minute=lambda ts: 100.0 - (ts - OPEN) / 3600.0)  # a fall of 1 an hour into the open
     wavetrend.refresh(s, [INDEX], tape, now)
     assert "no tick history" in wavetrend.note(INDEX, OPEN, OPEN + 100, "yes")
     T, V, v = background(lead=4000)
-    T, V, last = segments(T, V, v, [(100, 0.0)])
+    T, V, _last = segments(T, V, v, [(100, 0.0)])
     feed(T, V)
     yes, no = wavetrend.note(INDEX, OPEN, OPEN + 100, "yes"), wavetrend.note(INDEX, OPEN, OPEN + 100, "no")
     assert "trend for the bet" in yes and "24h" in yes and "nudge" in yes and yes.endswith("(shadow, nothing changes)")
@@ -73,7 +72,7 @@ def test_the_note_reads_memory_signs_the_trend_for_the_bet_and_never_raises(tmp_
     assert "(shadow" in wavetrend.note(INDEX, OPEN + 99999.0, OPEN + 100000.0, "yes")  # no history for that hour: a sentence, not an error
 
 
-def test_the_buy_step_only_writes_the_note_and_never_says_no(tmp_path, monkeypatch, mem):  # noqa: F811
+def test_the_buy_step_only_writes_the_note_and_never_says_no(tmp_path, monkeypatch, mem):
     from kalshi_moonshot import lanes
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))

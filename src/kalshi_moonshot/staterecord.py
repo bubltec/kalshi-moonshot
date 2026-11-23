@@ -41,7 +41,7 @@ def band(ask: float) -> int:
 def state_key(letters: dict[str, str]) -> str | None:
     """The state of a bet, its letters at SCALES in order ("DF" = 5-minute D, 60-minute F); None when a scale is unread."""
     got = [letters.get(sc) for sc in SCALES]
-    return None if any(x is None for x in got) else "".join(got)
+    return None if any(x is None for x in got) else "".join(x or "" for x in got)
 
 
 def add_reading(cells: dict[str, list[float]], seen: set[tuple], market: str, side: str, state: str, ask: float, net_per_dollar: float) -> None:

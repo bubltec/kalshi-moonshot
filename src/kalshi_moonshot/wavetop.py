@@ -22,6 +22,7 @@ Memory only: the tick history and the quote history. Nothing here reads the data
 from __future__ import annotations
 
 import bisect
+import itertools
 import math
 import threading
 from dataclasses import dataclass
@@ -99,7 +100,7 @@ def spot_read(T: list[float], V: list[float], now: float, strike: float, side: s
     if len(last) < AVG_SECONDS or None in last:
         return None
     avg = sum(last) / AVG_SECONDS  # type: ignore[arg-type]
-    ch = [b - a for a, b in zip(sp, sp[1:], strict=False) if a is not None and b is not None]
+    ch = [b - a for a, b in itertools.pairwise(sp) if a is not None and b is not None]
     if len(ch) < 60:
         return None
     unit = math.sqrt(sum(c * c for c in ch) / len(ch)) * math.sqrt(60.0)
@@ -301,7 +302,7 @@ def side_bids(quotes: list[tuple[float, float, float]], side: str, a: int, b: in
     return [first if x is None else x for x in sb]
 
 
-def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, bought: float, now: float, T: list[float], V: list[float]) -> tuple[bool, dict[str, float]]:
+def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, bought: float, now: float, T: list[float], V: list[float]) -> tuple[bool, dict[str, float | None]]:
     """Whether a bet bought at `bought` is sold now by the salvage rule, and the readings. quotes = the market's (time, YES bid, YES ask) rows; T, V = the spot's ticks."""
     a = int(opened)
     i0, i = int(bought) - a, int(now) - a
@@ -340,7 +341,7 @@ def time_factor(curve: tuple[tuple[float, float], ...], left: float, p: float) -
         return (max(left, 60.0) / 60.0) ** p
     if left >= curve[0][0]:
         return curve[0][1]
-    for (s0, m0), (s1, m1) in zip(curve, curve[1:]):
+    for (s0, m0), (s1, m1) in itertools.pairwise(curve):
         if left >= s1:
             return m1 + (m0 - m1) * (left - s1) / (s0 - s1) if s0 > s1 else m1
     return curve[-1][1]

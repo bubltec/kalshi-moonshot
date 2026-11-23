@@ -188,11 +188,11 @@ class PgCursor:
 class _GuardedSqlite(sqlite3.Connection):
     """The memory guard's hook on a SQLite connection (the tests): each statement is shown to memguard first."""
 
-    def execute(self, sql, *a, **k):  # type: ignore[override]
+    def execute(self, sql, *a, **k):
         memguard.note("db", sql)
         return super().execute(sql, *a, **k)
 
-    def executemany(self, sql, *a, **k):  # type: ignore[override]
+    def executemany(self, sql, *a, **k):
         memguard.note("db", sql)
         return super().executemany(sql, *a, **k)
 

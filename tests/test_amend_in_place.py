@@ -48,7 +48,7 @@ class Amends(Socket):
         return {"order_id": order_id}
 
 
-def test_a_fall_in_the_ask_amends_the_order_where_it_stands(setup):  # noqa: F811
+def test_a_fall_in_the_ask_amends_the_order_where_it_stands(setup):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=60.0, buy_retries=0, buy_rest_follow=True)
     client = Amends(asks=[0.31, 0.27], account={"r1": 1.5})
@@ -64,7 +64,7 @@ def test_a_fall_in_the_ask_amends_the_order_where_it_stands(setup):  # noqa: F81
     assert out["got"].filled == 1.5
 
 
-def test_a_refused_amend_falls_back_to_cancel_and_place(setup):  # noqa: F811
+def test_a_refused_amend_falls_back_to_cancel_and_place(setup):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=60.0, buy_retries=0, buy_rest_follow=True)
     client = Amends(asks=[0.31, 0.27], account={"r2": 1.5}, refuse=True)

@@ -1,10 +1,9 @@
 """The buy as a chain of named steps in the lane's own order (buychain.py, lane field buy_chain): 2026-11-17, user: "ladder should not be the entry point"; "the risk score makes way more sense to go FIRST"; "you need to write new code that is modular and can fit in logic in any order"; and, on the shape: the lane's normal gates decide what is eligible, the risk model chooses yes or no, then more analysis confirms it. Unit tests on the walk; integration through a lane file into the review (runner.lane_shots) and the decision (runner.evaluate)."""
 import time
+import types
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
-import types
 
 from kalshi_moonshot import buychain, config, lanes, regime, runner, ticks
 from kalshi_moonshot.estimators import Estimate

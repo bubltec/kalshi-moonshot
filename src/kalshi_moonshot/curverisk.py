@@ -84,8 +84,8 @@ def multiscale_rate(ts: list[float], vs: list[float], now: float, scales: tuple[
         return None
     # A scale of 0 is the market so far (2026-11-15 night, user: "start with the view from now - market start, 15 after that, 60, 180"): from the market's open to now, `elapsed` seconds, at least two minutes. Every scale ends now.
     # A negative scale reaches back that many minutes PAST the market's open (2026-11-15 night, user: "I meant 15 min after the first segment"): -15 is the market so far plus the 15 minutes before it, every window still ending now.
-    so_far = max(2, int(round(elapsed / MINUTE))) if elapsed is not None else None
-    minutes = [m if m > 0 else so_far - m for m in scales if m > 0 or so_far is not None]
+    so_far = max(2, round(elapsed / MINUTE)) if elapsed is not None else None
+    minutes = [m if m > 0 else (so_far or 0) - m for m in scales if m > 0 or so_far is not None]
     if not minutes:
         return None
     # Late in a market the market so far (0) and the 15-minute segment are the same stretch of history and would count twice in the mean (user, 2026-11-16: "0 being the current market, so nearly the end of a market the 0 and 15 values are likely identical and count double"). Windows within one minute of each other, the resolution of the moves, are one segment.

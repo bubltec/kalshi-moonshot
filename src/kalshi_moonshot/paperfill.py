@@ -97,7 +97,7 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                         break
             came = fill is not None
             if came:
-                price = fill
+                price = fill  # type: ignore[assignment]
             reason = (r["reason"] or "").split(" " + OLD_MARK)[0].split(" " + MARK)[0]
             if not crossed and came:
                 stake = spec.fixed_stake or float(r["stake_usd"] or 0.0)

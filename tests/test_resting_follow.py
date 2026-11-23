@@ -68,7 +68,7 @@ def feed(client_ticker="KXBTC15M-1"):
     restbuys.on_event({"kind": "quote", "ticker": "other", "bid": 0.5, "ask": 0.6, "ts": time.time()})  # the socket is feeding
 
 
-def test_a_streamed_fill_ends_the_wait_at_once_and_the_account_is_read_once(setup):  # noqa: F811
+def test_a_streamed_fill_ends_the_wait_at_once_and_the_account_is_read_once(setup):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=60.0, buy_retries=0)
     client = Socket(asks=[0.31], account={"r1": 1.5})
@@ -82,7 +82,7 @@ def test_a_streamed_fill_ends_the_wait_at_once_and_the_account_is_read_once(setu
     assert out["got"].filled == 1.5 and client.requests == 1 and client.cancels == []
 
 
-def test_a_fall_in_the_ask_moves_the_order_down_when_the_lane_follows(setup):  # noqa: F811
+def test_a_fall_in_the_ask_moves_the_order_down_when_the_lane_follows(setup):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=60.0, buy_retries=0, buy_rest_follow=True)
     client = Socket(asks=[0.31, 0.27], account={"r2": 1.5})
@@ -98,7 +98,7 @@ def test_a_fall_in_the_ask_moves_the_order_down_when_the_lane_follows(setup):  #
     assert out["got"].filled == 1.5
 
 
-def test_a_risen_ask_never_raises_the_price(setup):  # noqa: F811
+def test_a_risen_ask_never_raises_the_price(setup):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=60.0, buy_retries=0, buy_rest_follow=True)
     client = Socket(asks=[0.31, 0.36], account={"r1": 1.5})
@@ -113,7 +113,7 @@ def test_a_risen_ask_never_raises_the_price(setup):  # noqa: F811
     assert out["got"].filled == 1.5
 
 
-def test_an_ask_that_falls_under_the_lanes_floor_withdraws_the_order(setup):  # noqa: F811
+def test_an_ask_that_falls_under_the_lanes_floor_withdraws_the_order(setup):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=60.0, buy_retries=0, buy_rest_follow=True)
     client = Socket(asks=[0.31, 0.01], account={})
@@ -125,7 +125,7 @@ def test_an_ask_that_falls_under_the_lanes_floor_withdraws_the_order(setup):  # 
     assert not th.is_alive() and client.cancels == ["r1"] and len(client.rested) == 1 and out["got"].filled == 0
 
 
-def test_without_the_lane_field_a_quote_wakes_the_wait_and_changes_nothing(setup):  # noqa: F811
+def test_without_the_lane_field_a_quote_wakes_the_wait_and_changes_nothing(setup):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=60.0, buy_retries=0)
     client = Socket(asks=[0.31, 0.27], account={"r1": 1.5})
@@ -140,7 +140,7 @@ def test_without_the_lane_field_a_quote_wakes_the_wait_and_changes_nothing(setup
     assert out["got"].filled == 1.5
 
 
-def test_the_stream_filled_figure_stands_when_the_accounts_list_trails_it(setup):  # noqa: F811
+def test_the_stream_filled_figure_stands_when_the_accounts_list_trails_it(setup):
     s, store, shot, spec = setup
     spec(buy_rest_seconds=60.0, buy_retries=0)
     client = Socket(asks=[0.31], account={})  # the list shows nothing yet

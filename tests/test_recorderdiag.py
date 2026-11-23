@@ -1,7 +1,9 @@
 """The recorder's memory report (2026-11-15): it reads every in-memory store the recorder feeds and says what grew; it changes nothing."""
 from types import SimpleNamespace
 
-from kalshi_moonshot import recorderdiag, tape as tape_mod, ticks as ticks_mod
+from kalshi_moonshot import recorderdiag
+from kalshi_moonshot import tape as tape_mod
+from kalshi_moonshot import ticks as ticks_mod
 
 
 def test_sizes_counts_every_store_the_recorder_feeds():

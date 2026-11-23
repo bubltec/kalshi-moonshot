@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
-import decide_support as T  # noqa: E402
+import decide_support as T
 
-from kalshi_moonshot import config  # noqa: E402
-from kalshi_moonshot import store as store_mod  # noqa: E402
-from kalshi_moonshot.store import Store  # noqa: E402
+from kalshi_moonshot import config
+from kalshi_moonshot import store as store_mod
+from kalshi_moonshot.store import Store
 
 
 @pytest.fixture(autouse=True)
@@ -81,7 +81,7 @@ def test_unit_on_a_bet_is_still_written_at_once(tmp_path, monkeypatch):
 
 
 def test_unit_the_review_cooldown_is_answered_from_memory(tmp_path, monkeypatch):
-    s, store = mk(tmp_path, monkeypatch)
+    _s, store = mk(tmp_path, monkeypatch)
     store_mod.queue_decisions()
     w = Watch(store)
     now = time.time()
@@ -319,7 +319,7 @@ def test_unit_a_lane_version_is_written_behind(tmp_path, monkeypatch):
 
 
 def test_unit_the_open_position_check_reads_the_count_held_in_memory(tmp_path, monkeypatch):
-    s, store = mk(tmp_path, monkeypatch)
+    _s, store = mk(tmp_path, monkeypatch)
     _memory_on()
     try:
         store.refresh_held("prod")

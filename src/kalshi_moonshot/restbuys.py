@@ -43,7 +43,7 @@ class Resting:
             return self.version
 
 
-def open(ticker: str, count: float, order_id: str) -> Resting:  # noqa: A001
+def open(ticker: str, count: float, order_id: str) -> Resting:
     r = Resting(ticker, count)
     with _lock:
         _by_ticker.setdefault(ticker, []).append(r)

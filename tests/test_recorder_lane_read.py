@@ -3,7 +3,6 @@
 2026-11-18: the recorder, on an older image, refused the lane file's new `exit_module` and recorded nothing from 08:16 to 09:00 ET (the same on 2026-11-16 with another field). User: "it should only parse what it needs to record. so the updates to it are less often"."""
 import dataclasses
 
-
 from kalshi_moonshot import config, lanes, runner
 
 BASE = "estimator='market'\nprice=[0.10,0.85]\nhours=[0.0,1.0]\nmax_spread=0.05\nmin_volume=0\n"

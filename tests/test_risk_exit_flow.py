@@ -333,12 +333,12 @@ def sold_after(w, bid, left, step=1, limit=200):
 # the market's recovery time (15 s here, the lane's default) x (1 - how deep the chance is under the line) x the share of the market still to run, never over the lane's share of the time left.
 def test_integration_a_dip_that_recovers_inside_the_wait_does_not_sell_and_the_clock_restarts(tmp_path, monkeypatch):
     w = held(tmp_path, monkeypatch, live=True, hold=0.5)
-    for k in range(0, 5):  # 5 s under the stop, shorter than the 7.5 s wait
+    for k in range(5):  # 5 s under the stop, shorter than the 7.5 s wait
         yes_bid(w, 0.55, 450 - k)
         assert signals(w) == []
     yes_bid(w, 0.80, 445)  # it recovers: the wait is cancelled
     assert signals(w) == []
-    for k in range(0, 5):  # a second dip gets its own wait
+    for k in range(5):  # a second dip gets its own wait
         yes_bid(w, 0.55, 444 - k)
         assert signals(w) == []
 
@@ -543,8 +543,8 @@ SIT = [0.78] * 12
 # the fixture bet costs about 0.80 all-in; the max loss (0.5 x the chance) is reached at a net bid of about 0.571. A bid of 0.59 nets about 0.574, which is about 0.003 short of it; a bid of 0.60 about 0.017 short
 TO_59 = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 20)] + [0.59] * 6  # slides to 0.59 and stops: never reaches the max loss
 TO_60 = SIT + [round(0.78 - 0.01 * k, 2) for k in range(1, 19)] + [0.60] * 6
-NO_HOLDS = dict(hold=0, share=0.08)  # the bar alone, so the test reads the squeeze and nothing else
-LIVE = dict(hold=0.5, share=0.08)  # the live lane's holds
+NO_HOLDS = {"hold": 0, "share": 0.08}  # the bar alone, so the test reads the squeeze and nothing else
+LIVE = {"hold": 0.5, "share": 0.08}  # the live lane's holds
 CAP = 0.02  # two cents
 
 
@@ -725,7 +725,7 @@ def high_flat(tmp_path, monkeypatch, over_strike, top):
     feed_history(0.013, from_left=1300, to_left=401)  # a typical minute of about 0.10
     w = held(tmp_path, monkeypatch, live=True, take="true", share=0.08)
     assert climb(w, 0.82, top, 400, step=0.0025) is None  # still rising, slowly enough that the look back (32 s at 400 s left) has history behind it
-    steps = int(round((top - 0.82) / 0.0025)) + 1  # the climb's quotes end this many seconds after 400 s left; the level starts right after them
+    steps = round((top - 0.82) / 0.0025) + 1  # the climb's quotes end this many seconds after 400 s left; the level starts right after them
     return level(w, top, 400 - steps + 30, seconds=40)
 
 
@@ -1131,7 +1131,7 @@ def test_integration_a_bet_never_in_profit_is_sold_at_the_mark_and_not_before(tm
 
 def test_integration_a_bet_that_was_in_profit_once_is_kept(tmp_path, monkeypatch):
     w = held(tmp_path, monkeypatch, live=True, max_loss=0, extra="curve_risk_never_ahead=90")
-    path = flat(0.78, 445, 305) + [(300, 0.86)] + flat(0.78, 295, 10)  # one reading over cost after the fee, then under it to the end
+    path = [*flat(0.78, 445, 305), (300, 0.86), *flat(0.78, 295, 10)]  # one reading over cost after the fee, then under it to the end
     assert quotes(w, path) == []
     assert w.targets[(TICKER, "risk_only")].risk_never_state == 1
 
@@ -1281,16 +1281,16 @@ def test_unit_the_under_even_sale_changes_a_lanes_version_only_when_it_is_live(t
 
 # The sure hold, time based with no cut-off (2026-11-17, user, after cashing out KXNEAR15M-26NOV171500 by hand at about 0.95 with over four minutes left: "we want the sure win, but it should be time based"; "if there's 90s left and we are in the 90s, probably a good chance of winning"; "5 mins left? that is too much time"; "do not use hard limits").
 def test_unit_the_sliding_bar_rises_with_the_time_left_and_has_no_step():
-    bar = lambda left: curverisk.sure_bar(left, 0.90, slide=1 / 3)  # noqa: E731
+    bar = lambda left: curverisk.sure_bar(left, 0.90, slide=1 / 3)
     assert bar(0) == pytest.approx(0.90) and bar(60) == pytest.approx(0.92) and bar(90) == pytest.approx(0.93) and bar(180) == pytest.approx(0.96)
     assert bar(300) == pytest.approx(1.0) and bar(700) == pytest.approx(1.0)  # five minutes or more: nothing is sure
-    steps = [bar(k + 1) - bar(k) for k in range(0, 299)]
+    steps = [bar(k + 1) - bar(k) for k in range(299)]
     assert max(steps) - min(steps) < 1e-9 and min(steps) > 0  # a straight line: one second more left always asks the same little more
     assert curverisk.sure_bar(90, 0.90, slide=-1.0) is None and curverisk.sure_bar(90, -1.0, slide=1 / 3) is None  # off
 
 
 def test_unit_a_sure_win_by_the_sliding_bar():
-    sw = lambda bid, left: curverisk.sure_win(bid, left, -1.0, 0.90, slide=1 / 3)  # noqa: E731
+    sw = lambda bid, left: curverisk.sure_win(bid, left, -1.0, 0.90, slide=1 / 3)
     assert sw(0.94, 90) and not sw(0.92, 90)  # 90 s left: the bar is 0.93
     assert sw(0.91, 20) and not sw(0.89, 20)
     assert not sw(0.957, 282)  # the NEAR bet: the bar is 0.994 with 282 s left

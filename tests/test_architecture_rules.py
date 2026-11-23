@@ -48,11 +48,10 @@ def test_the_worker_has_no_review_or_scope_timer_for_a_driven_lane():
 
 
 # ---- 2026-11-19, part two: queues and threads on shared memory, under 60 ms a tick, no database or Kalshi read in a decision ----
-import threading  # noqa: E402
 
-import pytest  # noqa: E402
+import pytest
 
-from kalshi_moonshot import memguard, steptime  # noqa: E402
+from kalshi_moonshot import memguard, steptime
 
 
 @pytest.fixture
@@ -119,7 +118,6 @@ def decide_with(store, tmp_path, monkeypatch, s):
     from kalshi_moonshot.strategy import LongShot
     from tests import decide_support as T
 
-    now = __import__("time").time()
     shot = LongShot("KXBTC15M-7", "t", "", 0.80, 0.81, 420.0 / 3600.0, "2099-01-01T00:00:00Z", 420.0 / 3600.0, lane="rs", series="KXBTC15M", side="yes")
     assert ticks is not None
     return runner.evaluate(s, None, None, store, shot, estimators={"market": T.Fixed()})

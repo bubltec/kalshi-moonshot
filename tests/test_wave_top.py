@@ -241,7 +241,7 @@ def test_integration_a_dip_bet_is_not_taken_after_a_rising_hour_and_is_taken_aft
 
 def test_integration_no_history_or_no_index_is_a_no(tmp_path, monkeypatch, mem):
     sp = spec(tmp_path, monkeypatch)
-    T, V, _ = peak_path()
+    _T, _V, _ = peak_path()
     ticks_mod.strikes.note(TICKER, START - 5.0)
     now = OPEN + 100
     assert "no tick history" in ask_step(sp, shot(now, "no"), now).why
@@ -300,7 +300,8 @@ def test_unit_it_is_not_sold_while_the_spot_still_moves_the_bets_way():
 
 def test_integration_the_sell_step_sells_a_dipped_bet(tmp_path, monkeypatch, mem):
     from kalshi_moonshot import curverisk, watcher
-    from tests.test_risk_exit_flow import CLOSE, TICKER as HELD, held
+    from tests.test_risk_exit_flow import CLOSE, held
+    from tests.test_risk_exit_flow import TICKER as HELD
 
     w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['wave_salvage']")
     t = w.targets[(HELD, "risk_only")]
@@ -327,7 +328,8 @@ def test_integration_the_sell_step_sells_a_dipped_bet(tmp_path, monkeypatch, mem
 
 def test_integration_the_salvage_does_not_sell_a_bet_that_is_winning_on_the_spot(tmp_path, monkeypatch, mem):
     from kalshi_moonshot import curverisk, watcher
-    from tests.test_risk_exit_flow import CLOSE, TICKER as HELD, held
+    from tests.test_risk_exit_flow import CLOSE, held
+    from tests.test_risk_exit_flow import TICKER as HELD
 
     w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['wave_salvage']")
     t = w.targets[(HELD, "risk_only")]
@@ -363,7 +365,8 @@ def spot_feed(now, level, wobble=0.01):
 
 
 def take_target(tmp_path, monkeypatch, entry, unit=0.10):
-    from tests.test_risk_exit_flow import CLOSE, TICKER as HELD, held
+    from tests.test_risk_exit_flow import CLOSE, held
+    from tests.test_risk_exit_flow import TICKER as HELD
 
     w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['wave_take']")
     t = w.targets[(HELD, "risk_only")]

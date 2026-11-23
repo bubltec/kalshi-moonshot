@@ -43,7 +43,7 @@ def test_a_sequence_gap_drops_the_books_and_ignores_the_delta():
     ticks.books.snapshot("M", [(0.4, 1)], [], 1.0)
     seen = []
     s = KalshiStream(types.SimpleNamespace(), seen.append, books=True)
-    ev = lambda kind, seq: {"kind": kind, "seq": seq, "sid": 3}  # noqa: E731
+    ev = lambda kind, seq: {"kind": kind, "seq": seq, "sid": 3}
     assert s._book_in_order(ev("book_snapshot", 1)) and s._book_in_order(ev("book_delta", 2))
     assert s._book_in_order(ev("book_delta", 4)) is False
     assert ticks.books.levels("M", "yes") is None  # cleared: fresh snapshots will rebuild it

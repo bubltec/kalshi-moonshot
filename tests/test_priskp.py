@@ -27,10 +27,10 @@ def test_cutoffs_need_a_hundred_readings_a_bucket():
 
 
 def test_a_check_with_no_history_is_unread_not_a_pass():
-    assert set(priskp.fifths("KXBTC15M", 300.0, {c: 1.0 for c in priskp.CHECKS}).values()) == {"unread"}
+    assert set(priskp.fifths("KXBTC15M", 300.0, dict.fromkeys(priskp.CHECKS, 1.0)).values()) == {"unread"}
     cut = {f"KXBTC15M|1|{c}": [0.0, 2.0, 4.0, 6.0, 8.0, 10.0] for c in priskp.CHECKS}
     assert priskp.load(cut) == 5 and priskp.loaded() == 5
-    st = priskp.fifths("KXBTC15M", 200.0, {c: 9.0 for c in priskp.CHECKS})
+    st = priskp.fifths("KXBTC15M", 200.0, dict.fromkeys(priskp.CHECKS, 9.0))
     assert set(st.values()) == {5} and priskp.candidate(st)
     st["trend"] = 5.0
     assert not priskp.candidate({**st, "trend": 3}) and not priskp.candidate({**st, "cushion": 4})
@@ -99,7 +99,7 @@ def test_side_readings_without_enough_index_history_are_none():
 
 
 def test_the_note_is_properties_the_bot_can_read():
-    ok = {c: 4 for c in priskp.CHECKS} | {"cushion": 5}
+    ok = dict.fromkeys(priskp.CHECKS, 4) | {"cushion": 5}
     n = priskp.note("yes", ok, 3, 5.0)
     assert (n["verb"], n["why"], n["failing"], n["cushion_fifth"], n["confirm"], n["need"]) == ("buy", "pass", [], 5, 3, 3)
     assert priskp.note("no", ok, 2, 5.0)["verb"] == "wait" and priskp.note("no", ok, 2, 5.0)["why"] == "confirming"
@@ -110,7 +110,7 @@ def test_the_note_is_properties_the_bot_can_read():
 
 
 def test_a_note_written_as_yaml_like_lines_reads_back_the_same():
-    ok = {c: 4 for c in priskp.CHECKS} | {"cushion": 5, "trend": "anomaly"}
+    ok = dict.fromkeys(priskp.CHECKS, 4) | {"cushion": 5, "trend": "anomaly"}
     n = priskp.note("yes", ok, 1, 7.25)
     text = priskp.render(n)
     assert "verb: refuse" in text and "failing: [trend]" in text and "trend_fifth: anomaly" in text
@@ -121,8 +121,8 @@ def _steps(levels, per=60, hold_noise=0.0001, seed=3):
     """A spot made of flat stretches at the given levels (index units), `per` seconds each at 1 tick a second, with a little noise."""
     rnd = random.Random(seed)
     T, V = [], []
-    for k, lv in enumerate(levels):
-        for i in range(per):
+    for _k, lv in enumerate(levels):
+        for _i in range(per):
             T.append(float(len(T)))
             V.append(lv * (1.0 + rnd.gauss(0, hold_noise)))
     return T, V

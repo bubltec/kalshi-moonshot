@@ -176,7 +176,7 @@ def test_integration_the_contract_sizes_are_read_once_before_the_socket_opens(mo
         await ws.send(json.dumps(ticker_msg(ts_ms=1000)))
         await asyncio.sleep(30)
 
-    url, seen, stop = serve(script)
+    url, _seen, stop = serve(script)
     calls = []
 
     class Resp:

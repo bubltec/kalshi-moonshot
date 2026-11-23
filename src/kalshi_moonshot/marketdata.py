@@ -122,7 +122,7 @@ class MarketCache:
                        "rules_primary": e.get("rules") or "", "floor_strike": e.get("strike"), "cap_strike": e.get("cap"), "strike_type": self._strike_type(e, series), "open_time": self._iso(e.get("open_ts")), "close_time": self._iso(e.get("close_ts")),
                        "status": "active", "market_type": "binary", "yes_bid_dollars": "0.0000", "yes_ask_dollars": "0.0000", "volume_fp": "0"}
                 self._created[ticker] = new
-                self._event_series[new["event_ticker"]] = series
+                self._event_series[new["event_ticker"]] = series  # type: ignore[index]
                 self._ticker_series[ticker] = series
                 if rows is not None and row is None:
                     rows.append(dict(new))
@@ -140,7 +140,7 @@ class MarketCache:
                     new = {"ticker": ticker, "event_ticker": ticker.rsplit("-", 1)[0], "series_ticker": series, "title": "", "yes_sub_title": "", "rules_primary": "", "floor_strike": e["strike"], "cap_strike": None, "strike_type": self._strike_type(e, series),
                            "open_time": "", "close_time": close, "status": "active", "market_type": "binary", "yes_bid_dollars": "0.0000", "yes_ask_dollars": "0.0000", "volume_fp": "0"}
                     self._created[ticker] = new
-                    self._event_series[new["event_ticker"]] = series
+                    self._event_series[new["event_ticker"]] = series  # type: ignore[index]
                     self._ticker_series[ticker] = series
                     rows.append(dict(new))
                 else:
@@ -185,7 +185,7 @@ class MarketCache:
         out = []
         for m in rows:
             try:
-                if datetime.fromisoformat(str(m.get("close_time", "")).replace("Z", "+00:00")).timestamp() <= now:
+                if datetime.fromisoformat(str(m.get("close_time", ""))).timestamp() <= now:
                     continue
             except ValueError:
                 pass
@@ -346,7 +346,7 @@ class Discovery:
         self._stop.clear()
         cache = getattr(self.get_client(), "cache", None)
         if cache is not None and hasattr(cache, "fed_listeners"):
-            cache.fed_listeners.append(lambda up: (self._wake.set(), self._wake_hot.set()) if up else None)
+            cache.fed_listeners.append(lambda up: (self._wake.set(), self._wake_hot.set()) if up else None)  # type: ignore[func-returns-value]
         self._thread = threading.Thread(target=self._run, name="discovery", daemon=True)
         self._thread.start()
         if self.hot is not None:
@@ -367,7 +367,7 @@ class Discovery:
         age = cache.series_age(series) if cache is not None and hasattr(cache, "series_age") else None
         if age is None or age >= within:
             return False
-        return not cache.series_rolled(series) if hasattr(cache, "series_rolled") else True
+        return not cache.series_rolled(series) if hasattr(cache, "series_rolled") else True  # type: ignore[union-attr]
 
     def cycle(self) -> int:
         """List every wanted series once, except those listed within the last cycle by the fast tier. Returns how many succeeded."""

@@ -73,7 +73,7 @@ _category_cache: dict[str, dict[str, Any]] = {}  # the other categories' models,
 def features(g: list[float | None], sq: list[float], k: int, strike_log: float, sign: int, why: list[str] | None = None, left: float | None = None) -> list[float] | None:
     """The 18 curve readings at index k of a one-second log-price grid g (sq: running sum of squared one-second log steps), plus the 13 time-left readings when `left` (seconds to the close) is given. None when a look-back is not covered or has no spread; `why` then gets the reason."""
     out: list[float] = []
-    cushion = (g[k] - strike_log) * sign if g[k] is not None else 0.0
+    cushion = (g[k] - strike_log) * sign if g[k] is not None else 0.0  # type: ignore[operator]
     timed: dict[int, tuple[float, float]] = {}
     for m in FIB:
         look = 60 * m
@@ -94,9 +94,9 @@ def features(g: list[float | None], sq: list[float], k: int, strike_log: float, 
             return None
         mean = sum(seg) / len(seg)
         sd = math.sqrt(sum((x - mean) ** 2 for x in seg) / len(seg))
-        out += [((g[k] - g[k - look]) * sign) / unit, sd / unit]
+        out += [((g[k] - g[k - look]) * sign) / unit, sd / unit]  # type: ignore[operator]
         if m in TIME_SCALES:
-            timed[m] = (rate, (g[k] - g[k - look]) * sign / look)
+            timed[m] = (rate, (g[k] - g[k - look]) * sign / look)  # type: ignore[operator]
     if left is not None:
         span = max(left, 1.0)
         spread = {m: r * math.sqrt(span) for m, (r, _) in timed.items()}

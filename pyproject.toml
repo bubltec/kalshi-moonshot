@@ -61,6 +61,10 @@ select = ["E", "F", "I", "B", "UP", "SIM", "FURB", "RUF", "C4", "PIE"]
 # one bad pass never stops the bot.
 ignore = ["E501"]
 
+# Tests (2026-11-23): pytest fixtures are redefined as arguments (F811), imports follow a sys.path or monkeypatch setup (E402), and tests write compact one-line setups and closures (E702, E731, E741, B023, RUF012). None of these changes what a test checks.
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E402", "E702", "E731", "E741", "F811", "B023", "RUF012"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["kalshi_moonshot"]
 

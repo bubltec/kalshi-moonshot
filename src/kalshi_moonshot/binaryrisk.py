@@ -9,6 +9,7 @@ How it runs (CLAUDE.md architecture rules): the step reads only memory: the sett
 from __future__ import annotations
 
 import bisect
+import contextlib
 import json
 import logging
 import math
@@ -94,14 +95,14 @@ def shape(T: list[float], V: list[float], now: float, mins: int, u15: float) -> 
     n = SHAPE_BINS
     x = [-1.0 + 2.0 * (k + 0.5) / n for k in range(n)]
     sx2 = sum(a * a for a in x)
-    b = sum(a * c for a, c in zip(x, y)) / sx2  # the line through the centre of x (mean x is 0)
+    b = sum(a * c for a, c in zip(x, y, strict=False)) / sx2  # the line through the centre of x (mean x is 0)
     my = sum(y) / n
     ssy = sum((c - my) ** 2 for c in y)
     # parabola y = a + b x + c x^2 on symmetric x: b is the same, c from the centred x^2
     x2 = [a * a - sx2 / n for a in x]
     sx4 = sum(a * a for a in x2)
-    c2 = sum(a * (c - my) for a, c in zip(x2, y)) / sx4 if sx4 > 0 else 0.0
-    ss_line = sum((c - my - b * a) ** 2 for a, c in zip(x, y))
+    c2 = sum(a * (c - my) for a, c in zip(x2, y, strict=False)) / sx4 if sx4 > 0 else 0.0
+    ss_line = sum((c - my - b * a) ** 2 for a, c in zip(x, y, strict=False))
     ft = 1.0 - ss_line / ssy if ssy > 1e-18 else 1.0
     return max(-60.0, min(60.0, b)), max(-60.0, min(60.0, c2)), max(0.0, min(1.0, ft))
 
@@ -190,7 +191,7 @@ def side_vector(f: dict[str, float], side: str, ask: float, *unused: float) -> l
 
 def _solve(A: list[list[float]], b: list[float]) -> list[float]:
     n = len(b)
-    M = [A[i][:] + [b[i]] for i in range(n)]
+    M = [[*A[i][:], b[i]] for i in range(n)]
     for i in range(n):
         p = max(range(i, n), key=lambda k: abs(M[k][i]))
         M[i], M[p] = M[p], M[i]
@@ -252,7 +253,7 @@ def fit_win(rows: list[tuple[list[float], list[float], float]], now: float | Non
     model: dict[str, Any] = {"names": WIN_NAMES, "mu": mu, "sd": sd, "w": w, "built_at": time.time() if now is None else now, "rows": len(rows), "train_hours": TRAIN_HOURS}
     preds = [win_chance(model, x) for x in xs]
     cal = []
-    for lo, hi in zip(WIN_BANDS, WIN_BANDS[1:] + (1.01,), strict=True):
+    for lo, hi in zip(WIN_BANDS, (*WIN_BANDS[1:], 1.01), strict=True):
         got = [y for p, y in zip(preds, ys, strict=True) if lo <= p < hi]
         cal.append({"lo": lo, "hi": hi, "n": len(got), "win": round(sum(got) / len(got), 4) if got else None})
     model["calibration"] = cal
@@ -356,10 +357,8 @@ def maybe_refit(s: Any, now: float | None = None) -> bool:
     if _fitting is not None and _fitting.poll() is None:
         return False
     wm = None
-    try:
+    with contextlib.suppress(OSError, ValueError):
         wm = json.loads(win_path(s).read_text())
-    except (OSError, ValueError):
-        pass
     if wm and wm.get("names") == WIN_NAMES and now - wm["built_at"] < REFIT_EVERY:
         return False
     log.info("binary risk: refitting from the tape (separate process)")
@@ -404,7 +403,7 @@ def build_rows(s: Any, now: float) -> list[tuple[list[float], list[float], float
             qt, qb, qa = [float(r[0]) for r in q], [float(r[1]) for r in q], [float(r[2]) for r in q]
             scale = 100.0 if max(qa) > 1.5 else 1.0
 
-            def quote_at(t: float) -> tuple[float, float] | None:
+            def quote_at(t: float, qt: list[float] = qt, qb: list[float] = qb, qa: list[float] = qa, scale: float = scale) -> tuple[float, float] | None:
                 k = bisect.bisect_right(qt, t) - 1
                 return (qb[k] / scale, qa[k] / scale) if k >= 0 and t - qt[k] <= 60.0 else None
 

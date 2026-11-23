@@ -7,8 +7,7 @@ import pytest
 from kalshi_moonshot import config, curverisk, regime, runner, ticks, variants
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.strategy import LongShot
-
-from tests.entry_helpers_phase import Fixed, LANE, seed  # noqa: F401  (the same lane file and perp seeding)
+from tests.entry_helpers_phase import LANE, Fixed, seed
 
 
 def perp(now, jump_pct=0.0, noise_pct=0.01, minutes=200):

@@ -1,9 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from kalshi_moonshot import config, runner
-from kalshi_moonshot.kalshi import KalshiError, KalshiRateLimited
+from kalshi_moonshot.kalshi import KalshiRateLimited
 from kalshi_moonshot.store import Store
 from kalshi_moonshot.worker import Worker
 

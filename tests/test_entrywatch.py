@@ -57,7 +57,7 @@ def test_the_band_check_looks_at_either_side_the_lane_may_buy():
 def test_the_entry_window_follows_minutes_elapsed():
     spec = lanes.LaneSpec("x", "ladder", "x", (0.0, 1.0), (0, 1), 0.05, 0.0, timed_suffix="15M", timed_minutes=15.0, entry_elapsed=(4.0, 12.0))
     now = datetime.now(UTC)
-    iso = lambda minutes_left: (now + timedelta(minutes=minutes_left)).isoformat()  # noqa: E731
+    iso = lambda minutes_left: (now + timedelta(minutes=minutes_left)).isoformat()
     assert not entrywatch.in_window(spec, iso(13), now)  # 2 minutes in
     assert entrywatch.in_window(spec, iso(8), now)  # 7 minutes in
     assert not entrywatch.in_window(spec, iso(1), now)  # 14 minutes in

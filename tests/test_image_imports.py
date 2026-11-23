@@ -49,7 +49,7 @@ def test_the_time_aware_volatility_runs_without_numpy(monkeypatch):
     monkeypatch.setitem(sys.modules, "numpy", None)  # an import of it now raises ImportError, as on the host
     sys.modules.pop("kalshi_moonshot.pricevol", None)
     pv = importlib.import_module("kalshi_moonshot.pricevol")
-    rows = [(float(t), 0.5 + 0.0004 * t) for t in range(0, 600)]
+    rows = [(float(t), 0.5 + 0.0004 * t) for t in range(600)]
     seq = pv.grid(rows, 600.0)
     assert seq is not None and isinstance(seq, list)
     assert pv.static_rate(seq) is not None and pv.implied_rate(seq, 200.0) is not None

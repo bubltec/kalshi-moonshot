@@ -26,8 +26,8 @@ from . import jobs as jobs_mod
 from . import manual as manual_mod
 from . import memguard, orderkeys, reqstats, risk, runner, steptime
 from . import ticks as ticks_mod
-from .commodities import CommodityPricer
 from .bankroll import ColdMemory
+from .commodities import CommodityPricer
 from .config import Settings
 from .estimators import EstimateShare, build_estimators
 from .jobs import PLACING, Job, Jobs
@@ -256,7 +256,6 @@ class Worker:
 
     def _warm_memory(self) -> None:
         """A background job (2026-11-19: database and Kalshi reads belong to background jobs only): fills what a buy decision reads from memory (the earlier decisions of each market for the cooldown, the open positions, the account balance, today's realized result) and keeps it fresh every Bankroll.REFRESH_EVERY seconds. The socket path decides nothing until the first pass is done."""
-        from . import store as store_mod
 
         first = True
         while not self.stopping:
@@ -265,9 +264,9 @@ class Worker:
                     store = Store(self.s.db_path, self.s.exclude_versions) if first else self._warm_store
                     self._warm_store = store
                     if first:
-                        store.preload_decisions()
-                    store.refresh_held(self.s.env)
-                    store.reserve_ids()
+                        store.preload_decisions()  # type: ignore[union-attr]
+                    store.refresh_held(self.s.env)  # type: ignore[union-attr]
+                    store.reserve_ids()  # type: ignore[union-attr]
                     if first and self.recorder is not None and hasattr(self.recorder, "arm_static"):
                         log.info("memory fill: tick history loaded for %d feeds and indexes", self.recorder.arm_static(time.time()))
                     if first and self.quant is not None and hasattr(self.quant, "warm"):
