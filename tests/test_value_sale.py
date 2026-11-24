@@ -234,6 +234,26 @@ def test_integration_early_take_stall_sells_a_flat_profit(tmp_path, monkeypatch,
     assert why and "no new high" in why
 
 
+def test_integration_early_take_a_bid_pinned_near_the_ceiling_is_not_a_stall(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.70, unit=0.10)
+    t.entry, t.early_take_share, t.early_take_stall_share = 0.70, 1.0, 0.1
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.10)  # the bid's typical minute
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.98, 600) is None  # armed at its high, 0.02 of room left
+    assert ask(0.98, 500) is None  # 100 s flat: over a tenth of the time left, but the bid cannot climb the move it typically makes in that time
+    assert ask(0.98, 400) is None
+    assert "fell" in ask(0.90, 380)  # a real fall still sells (the fall rule, its hold share is 0 here)
+
+
 def late_dip_ask(w, t, close):
     from kalshi_moonshot import curverisk, watcher
 

@@ -1013,7 +1013,9 @@ class ProfitWatcher:
         else:
             t.early_take_fall_since = 0.0  # a new high, or the bid back within a wobble of it: the climb goes on
         fell = fell and now - t.early_take_fall_since >= t.early_take_hold_share * left and now - t.early_take_spot_ts >= t.early_take_hold_share * left  # the fall must hold for a share of the time left, and the spot must not have been climbing in that time (BTC 13:00 sold at 0.79 on a 5c dip that was a new high ten seconds later, and the bid went on to 0.97)
-        stalled = stall > 0 and now - max(t.early_take_high_ts, t.early_take_spot_ts) >= stall  # no new high of the bid AND none of the spot's cushion for that share of the time left
+        room = 1.0 - bid  # a bid near the ceiling cannot make a new high: flat there is not a stall (2026-11-24, user: "just because it isn't raising while its in the 90s doesn't mean we should sell"; BTC/ETH/SOL/XRP 16:30 sold at 0.96-0.98 on 40-50 s of a pinned bid). The stall counts only while the bid has room for the move it typically makes in the stall's own time (the unit scaled to the stall); the fall still sells.
+        pinned = bool(unit) and stall > 0 and room < unit * math.sqrt(stall / 60.0)
+        stalled = stall > 0 and not pinned and now - max(t.early_take_high_ts, t.early_take_spot_ts) >= stall  # no new high of the bid AND none of the spot's cushion for that share of the time left
         if not (fell or stalled):
             return None
         why = f"the bid fell {t.early_take_high - bid:.3f} from its high {t.early_take_high:.2f} (the bid's typical 10 s move {trail:.3f})" if fell else f"no new high of the bid or of the spot's cushion for {now - max(t.early_take_high_ts, t.early_take_spot_ts):.0f} s (a share {t.early_take_stall_share:.0%} of the {left:.0f} s left is {stall:.0f} s)"
