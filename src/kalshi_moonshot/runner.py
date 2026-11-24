@@ -1293,6 +1293,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}.{rest_note} {why}", filled, spent, price)
 
 
+REST_GONE_GRACE = 6.0  # seconds to wait for a fill after a 404 on a resting buy (the fill is announced a few seconds after the exchange says the order is gone)
 REST_FOLLOW_MAX = 20  # the most times one resting buy is moved (amended, or cancelled and placed again). A safety cap on churn, not a rule: since 2026-11-24 the order is re-judged on every quote and moves both ways, and a move is made only when the wanted price is a whole tick away, so a 5 s rest on a market quoting about once a second makes a handful at most; 3 (the cap while it only followed a falling ask) would freeze an order that the module still wants moved. 20 never binds in normal running and keeps a runaway (a flickering book) to a few requests a second, far under Kalshi's write limits
 
 
@@ -1410,7 +1411,13 @@ def _rest_wait(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: 
                     withdrawn = moved.why
                     break
                 if moved is not None and moved.kind == "gone":
-                    break  # the order left the book (filled or expired): no more moves, the fills list says what it got
+                    # the order left the book (filled or expired): no more moves. A fill is announced a few seconds after the 404 (DOGE 08:15 on 11-24: 404 at 13:03:00, fill at 13:03:04, so the lane saw nothing, recorded no bet and the fill became a "manual" position with no exit), so give the stream and the account's list a short grace before reading what it got
+                    grace = time.time() + REST_GONE_GRACE
+                    while time.time() < grace and rest.filled < count - 1e-9:
+                        if _own_fills(client, shot, rest.order_ids, started)[0] > 0 or rest.filled > 0:
+                            break
+                        rest.wait(seen, 0.5)
+                    break
                 if moved is not None:
                     follows += 1
                     order_id, price, total = moved.order_id, moved.price, moved.total
