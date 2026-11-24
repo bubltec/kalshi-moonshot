@@ -56,6 +56,7 @@ def build_one(T: list[float], V: list[float], now: float, strike: float) -> dict
         "eff": abs(math.log(g[-1] / g[0])) / mv if mv > 0 else 0.0,
         "hi_yes_ago": (360 - hi) / 6.0,
         "lo_yes_ago": (360 - lo) / 6.0,
+        "bins_yes": [round(math.log(max(sum(g[30 * b : 30 * b + 30]) / 30.0, 1e-12) / strike) / u, 3) for b in range(12)],  # twelve 5-minute averages against the strike, in u (the study's `bins`)
     }
 
 
@@ -116,7 +117,7 @@ def maybe_refresh(s: Any, now: float | None = None) -> bool:
     return True
 
 
-def read(ticker: str, side: str, now: float | None = None) -> dict[str, float] | None:
+def read(ticker: str, side: str, now: float | None = None) -> dict[str, Any] | None:
     """The hour view of a market for the bet's side, from memory: drift (positive = the hour went the bet's way), range, cross, eff, hi_ago and lo_ago (minutes since the side's best and worst), age (seconds since it was built). None when the market has no view or it is older than twice EVERY."""
     now = time.time() if now is None else now
     with _lock:
@@ -125,7 +126,24 @@ def read(ticker: str, side: str, now: float | None = None) -> dict[str, float] |
         return None
     sg = 1.0 if side == "yes" else -1.0
     hi, lo = ("hi_yes_ago", "lo_yes_ago") if side == "yes" else ("lo_yes_ago", "hi_yes_ago")
-    return {"drift": round(sg * v["drift_yes"], 2), "range": round(v["range"], 2), "cross": v["cross"], "eff": round(v["eff"], 3), "hi_ago": v[hi], "lo_ago": v[lo], "age": round(now - v["built_at"], 0)}
+    bins = [round(sg * x, 3) for x in v.get("bins_yes", [])]
+    return {"drift": round(sg * v["drift_yes"], 2), "range": round(v["range"], 2), "cross": v["cross"], "eff": round(v["eff"], 3), "hi_ago": v[hi], "lo_ago": v[lo], "age": round(now - v["built_at"], 0),
+            "bins": bins, "bounce": round(bins[-1] - bins[-2], 3) if len(bins) >= 2 else 0.0, "lower_highs": 1.0 if lower_highs(bins) else 0.0}
+
+
+HOUR_DOWN = -3.5  # the hour's drift in the bet's direction, in typical minutes, at the lower third of the 6,639 PriskP buys of 11-09 to 11-23 (a cut chosen from that sample, said so; scripts/priskp_ridge_study.py)
+BOUNCE_MIN = 1.0  # the last 5-minute average up at least one typical minute on the one before: "bought a bounce"; my choice, not scored
+
+
+def lower_highs(bins: list[float]) -> bool:
+    """Three or more interior peaks of the 5-minute averages (the bet's direction), each at least half a typical minute under the one before: the hour is a staircase of failed bounces (user, on BTC 13:45, 2026-11-24: "its a trend down, and we bought UP")."""
+    p = [i for i in range(1, len(bins) - 1) if bins[i] > bins[i - 1] and bins[i] >= bins[i + 1]]
+    return len(p) >= 3 and all(bins[p[k + 1]] < bins[p[k]] - 0.5 for k in range(len(p) - 1))
+
+
+def would_skip(hv: dict[str, Any]) -> bool:
+    """The SHADOW verdict (rule 5; nothing is refused): the hour went against the bet (drift at or under HOUR_DOWN) and the buy is at a bounce (at least BOUNCE_MIN up on the 5 minutes before)."""
+    return hv["drift"] <= HOUR_DOWN and hv.get("bounce", 0.0) >= BOUNCE_MIN
 
 
 def clear() -> None:

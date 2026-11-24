@@ -392,6 +392,10 @@ def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bo
     if hv is not None:
         n["hour_drift"] = hv["drift"]
         n["hour_tie"] = "unsure" if 4 in [n.get(f"{c}_fifth") for c in CHECKS] else "sure"  # a check in fifth 4 and not 5: the risk is not sure; the hour would speak there
+        from . import hourview
+
+        n["hour_bounce"], n["hour_lower_highs"] = hv.get("bounce", 0.0), int(hv.get("lower_highs", 0.0))
+        n["hour_shadow"] = "would skip" if hourview.would_skip(hv) else "ok"  # 2026-11-24 (user, on the 14:00 ET wave, five YES buys in a stagnant hour trending down: "the risk should have been high considering the hour view"): a SHADOW verdict, nothing is refused; scored on the bets that follow (rule 5)
     return n["verb"] == "buy", one_line(n) + board.note()
 
 

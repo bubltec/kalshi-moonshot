@@ -73,3 +73,24 @@ def test_the_board_reads_it_as_a_fact_with_no_database_call():
     assert got["drift"] < 0  # a NO into a rising hour
     assert "hour_view={drift=" in b.note()  # it is on the line the buy writes
     assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "hour_view")
+
+
+def test_the_hour_view_reads_a_bounce_in_a_falling_hour_and_flags_it_for_the_shadow():
+    now = 1_900_000_000.0
+    T = [now - 4000 + k for k in range(4001)]
+    # a falling hour (lower highs every 20 minutes) that bounces in its last five minutes
+    def level(t):
+        m = (t - (now - 3600.0)) / 60.0
+        base = 100.0 - 0.004 * m
+        return base + 0.02 * math.sin(m / 3.2) + (0.03 if m > 54 else 0.0)
+
+    V = [level(t) for t in T]
+    v = hourview.build_one(T, V, now, 100.0)
+    assert v is not None and len(v["bins_yes"]) == 12
+    hourview._VIEW["KXBTC15M-X-00"] = dict(v, built_at=now)
+    yes = hourview.read("KXBTC15M-X-00", "yes", now + 5)
+    assert yes["drift"] < 0 and yes["bounce"] > 0 and len(yes["bins"]) == 12
+    no = hourview.read("KXBTC15M-X-00", "no", now + 5)
+    assert no["bounce"] == pytest.approx(-yes["bounce"])  # a bounce up is a drop for the other side
+    assert hourview.would_skip({"drift": -5.0, "bounce": 1.2}) and not hourview.would_skip({"drift": -5.0, "bounce": 0.2}) and not hourview.would_skip({"drift": 1.0, "bounce": 2.0})
+    assert hourview.lower_highs([1.0, 3.0, 1.0, 2.0, 0.5, 1.4, 0.0, 0.8, -0.5, 0.2, -1.0, -0.8]) and not hourview.lower_highs([1.0, 3.0, 1.0, 3.2, 0.5, 4.0, 0.0])
