@@ -1016,13 +1016,12 @@ class ProfitWatcher:
         stalled = stall > 0 and now - max(t.early_take_high_ts, t.early_take_spot_ts) >= stall  # no new high of the bid AND none of the spot's cushion for that share of the time left
         if not (fell or stalled):
             return None
-        if stalled and not fell:  # a stall only sells when the sale beats holding (2026-11-24, user: flat in the 90s is not a reason to sell; "it needs to mathematically know it's still profitable and not to sell it"): the same hold value value_sale uses, 1 - the spot's chance of ending on the wrong side, against what the bid pays after the sale fee
-            lose = self._board(c, t, now, left, bid).view("value_sale").get("p_lose")
-            if lose is not None and bid - fee_per_contract(bid) < 1.0 - lose:
-                return None  # holding is worth more than selling: a flat bid is not a reason
+        lose = self._board(c, t, now, left, bid).view("value_sale").get("p_lose")  # a fall or a stall sells only when the sale beats holding (2026-11-24, user: "this had plenty of cushion still i don't understand why it sold"; replay over 27 live early takes, scripts/priskp_hold_check_replay.py: the check held 18 bets that all won and sold the 4 that lost if held): the hold value is 1 - the spot's chance of ending on the wrong side (the value_sale board's p_lose), against what the bid pays after the sale fee. Unread p_lose holds too: nothing sells on a number that is not there (the other steps, late_dip, wave_take and value_sale, still decide).
+        if lose is None or bid - fee_per_contract(bid) < 1.0 - lose:
+            return None
         why = f"the bid fell {t.early_take_high - bid:.3f} from its high {t.early_take_high:.2f} (the bid's typical 10 s move {trail:.3f})" if fell else f"no new high of the bid or of the spot's cushion for {now - max(t.early_take_high_ts, t.early_take_spot_ts):.0f} s (a share {t.early_take_stall_share:.0%} of the {left:.0f} s left is {stall:.0f} s)"
-        reason = f"early take: the bet is in profit, +{net * 100:.1f}c a contract at the bid {bid:.2f} over the price paid {t.entry:.2f} after both fees, and it stopped climbing: {why}; inside the first {t.early_take_share:.0%} of the market: sold"
-        extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "high": round(t.early_take_high, 4), "trail": round(trail, 4), "kind": "fell" if fell else "stalled"}
+        reason = f"early take: the bet is in profit, +{net * 100:.1f}c a contract at the bid {bid:.2f} over the price paid {t.entry:.2f} after both fees, and it stopped climbing: {why}; the sale pays {bid - fee_per_contract(bid):.3f} after the sale fee against a hold value of {1.0 - lose:.3f} (the spot's chance of ending on the wrong side {lose:.3f}); inside the first {t.early_take_share:.0%} of the market: sold"
+        extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "high": round(t.early_take_high, 4), "trail": round(trail, 4), "kind": "fell" if fell else "stalled", "p_lose": round(lose, 4)}
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="early take", extra=extra)
             return reason

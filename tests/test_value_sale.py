@@ -187,10 +187,21 @@ def test_integration_no_loss_share_bars_an_early_loss_sale_and_never_a_gain(tmp_
     assert ask(0.95, 800) is not None  # a gain early is never barred
 
 
+def thin_cushion(monkeypatch, lose=0.3):
+    from kalshi_moonshot import watcher
+
+    class Board:
+        def view(self, name):
+            return {"p_lose": lose}
+
+    monkeypatch.setattr(watcher.ProfitWatcher, "_board", lambda self, c, t, now, left, bid: Board())
+
+
 def test_integration_early_take_follows_a_profit_and_sells_when_it_stops_climbing(tmp_path, monkeypatch, mem):
     from kalshi_moonshot import curverisk, watcher
 
     w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    thin_cushion(monkeypatch)  # a spot cushion that does not hold the bet: p_lose 0.3
     t.entry, t.early_take_share, t.early_take_stall_share = 0.80, 0.5, 0.0
     risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
     c = watcher._SellWalk(30.0, 0.83, 0.78, None)
@@ -219,6 +230,7 @@ def test_integration_early_take_stall_sells_a_flat_profit(tmp_path, monkeypatch,
     from kalshi_moonshot import curverisk, watcher
 
     w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    thin_cushion(monkeypatch)  # a spot cushion that does not hold the bet: p_lose 0.3
     t.entry, t.early_take_share, t.early_take_stall_share = 0.80, 0.5, 0.1
     risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
     c = watcher._SellWalk(30.0, 0.83, 0.78, None)
@@ -259,6 +271,35 @@ def test_integration_early_take_a_stall_sells_only_when_the_sale_beats_holding(t
     Board.lose = 0.12  # the spot's cushion has gone: holding is worth 0.88, the sale pays more
     why = ask(0.96, 480)
     assert why and "no new high" in why
+
+
+def test_integration_early_take_a_fall_with_cushion_or_no_reading_holds(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.70, unit=0.10)
+    t.entry, t.early_take_share, t.early_take_stall_share, t.early_take_hold_share = 0.70, 1.0, 0.0, 0.0
+    lose = [0.005]
+
+    class Board:
+        def view(self, name):
+            return {"p_lose": lose[0]}
+
+    monkeypatch.setattr(watcher.ProfitWatcher, "_board", lambda self, c, tt, now, left, bid: Board())
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.90, 700) is None  # armed at its high
+    assert ask(0.80, 690) is None  # the bid fell a wobble, but the spot's wrong-ending chance is 0.5%: holding is worth 0.995 against 0.79 from selling
+    lose[0] = None
+    assert ask(0.80, 680) is None  # no reading of the spot: nothing sells on a number that is not there
+    lose[0] = 0.3
+    why = ask(0.80, 670)  # the cushion is gone: holding is worth 0.70 against 0.79
+    assert why and "hold value" in why
 
 
 def late_dip_ask(w, t, close):
@@ -308,6 +349,7 @@ def test_integration_early_take_a_fall_must_hold_and_a_new_high_starts_it_over(t
     from kalshi_moonshot import curverisk, watcher
 
     w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    thin_cushion(monkeypatch)  # a spot cushion that does not hold the bet: p_lose 0.3
     t.entry, t.early_take_share, t.early_take_stall_share, t.early_take_hold_share = 0.80, 1.0, 0.0, 0.05
     risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
     c = watcher._SellWalk(30.0, 0.83, 0.78, None)
