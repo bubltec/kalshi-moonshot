@@ -1302,6 +1302,11 @@ def _own_fills(client: Any, shot: LongShot, order_ids: set[str], since: float) -
     return filled, spent, fee_paid
 
 
+def _order_gone(exc: Exception) -> bool:
+    text = str(exc)
+    return "404" in text or "not_found" in text
+
+
 def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: float, order_key: str | None, order_id: str, price: float, deadline: float, since: float, n: int, rest: Any) -> tuple[str, float] | str | None:
     """One quote on a resting buy's market asks where the order should sit now (lane field buy_rest_follow). From memory (the stream's book): None = leave it; "withdrawn" = the order was cancelled and is not placed again; (order id, price) = it was cancelled and placed again, lower, for what is left unfilled."""
     book = client.orderbook(shot.ticker)  # the stream's copy of the book, never a request
@@ -1324,6 +1329,9 @@ def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count
             try:
                 resp = client.amend_resting(order_id, shot.ticker, shot.side, "buy", want, count)
             except KalshiError as exc:
+                if _order_gone(exc):  # 404: the order is no longer on the book (filled or expired); stop following it, the account's fills settle what it got
+                    log.info("resting buy %s %s: the order is gone from the book (%s); no more moves", shot.ticker, shot.side, exc)
+                    return "withdrawn"
                 log.info("resting buy %s %s: the amend to %.2f was refused (%s); cancelling and placing again", shot.ticker, shot.side, want, exc)
             else:
                 log.info("resting buy %s %s: the ask fell to %.2f, the order amended in place from %.2f to %.2f for %g", shot.ticker, shot.side, live_ask, price, want, left_now)
@@ -1332,7 +1340,7 @@ def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count
         client.cancel_order(order_id)
     except KalshiError as exc:
         log.warning("resting buy %s %s: could not cancel to follow the ask (%s)", shot.ticker, shot.side, exc)
-        return None
+        return "withdrawn" if _order_gone(exc) else None
     done, _, _ = _own_fills(client, shot, rest.order_ids, since)  # a fill that beat the cancel is in the account's list
     left = round(count - done, 2)
     if withdraw or left * want < s.min_order_usd or time.time() >= deadline - 1.0:

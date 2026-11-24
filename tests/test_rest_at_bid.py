@@ -68,3 +68,11 @@ def test_the_rest_is_a_share_of_the_time_left_never_fixed_seconds(setup):
     soon = (datetime.now(UTC) + timedelta(seconds=400)).isoformat()
     s2 = type(shot)(shot.ticker, "t", "r", 0.30, 0.35, 100.0, soon, 0.1, lane="scalpy", series="KXBTC15M", event_ticker="KXBTC15M-E", side="yes")
     assert 95.0 <= runner._rest_wait_for(s2, sp) <= 100.0  # 0.25 of the 400 s to the close
+
+
+def test_gone_order_stops_following():
+    from kalshi_moonshot import runner
+    from kalshi_moonshot.kalshi import KalshiError
+
+    assert runner._order_gone(KalshiError('POST /x/amend -> 404: {"error":{"code":"not_found"}}'))
+    assert not runner._order_gone(KalshiError("POST /x -> 500: boom"))
