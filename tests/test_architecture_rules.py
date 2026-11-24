@@ -170,3 +170,33 @@ def test_a_quote_tick_wakes_a_waiting_resting_buy_and_nothing_sleeps_on_a_timer(
     src = inspect.getsource(runner._rest_wait) + inspect.getsource(restbuys.Resting.wait)
     assert "sleep(" not in src
     assert "wait_for" in src  # the wait is on the socket's events
+
+
+def test_the_wave_shape_step_reads_memory_only_and_holds_the_budget(guarded, tmp_path, monkeypatch):
+    """The buy step wave_shape (waveshape.py, 2026-11-24): a full market's broad curve and turns, read on each second's tick from the tick memory, both sides, with the guard raising on any table read or Kalshi GET, every tick under 60 ms."""
+    from kalshi_moonshot import buychain, config, waveshape
+    from kalshi_moonshot import ticks as ticks_mod
+    from tests import test_wave_shape as ws
+
+    sp = ws.spec(tmp_path, monkeypatch)
+    s = config.load()
+    ticks_mod.history.clear()
+    ticks_mod.strikes._v.clear()
+    waveshape._memo.clear()
+    try:
+        T, V = ws.curve([*ws.REPEATED, (400, 0.5)])
+        ws.feed(T, V)
+        ticks_mod.strikes.note(ws.TICKER, ws.K)
+        bought = 0
+        for off in range(120, 600, 3):
+            now = ws.OPEN + off + 0.5
+            with steptime.tick("buy evaluate"), memguard.decision("buy"):
+                for side in ("no", "yes"):
+                    bought += buychain.decide(buychain.Ctx(s, sp, now=now), ws.shot(now, side))[0]
+        assert bought and not memguard.breaches
+        stats = steptime.tick_stats()["buy evaluate"]
+        assert stats["n"] == 160 and stats["max"] < steptime.TICK_BUDGET_MS and stats["over"] == 0, stats
+    finally:
+        ticks_mod.history.clear()
+        ticks_mod.strikes._v.clear()
+        waveshape._memo.clear()

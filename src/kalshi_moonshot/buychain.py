@@ -427,6 +427,17 @@ def wave_flag_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
+@step("wave_shape")
+def wave_shape_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The wave shape (waveshape.py; 2026-11-24, PAPER, in place of wave_top and wave_flag: the classifier the study wrote against the user's chart labels, scripts/wave_buy_shape_classifier.py): on the broad curve of Kalshi's own spot (a median over 60 s / rho^2, 30 to 240 s), bought AT the turn (the broad extreme at most 0.3 of that window ago, at most 0.10 of the swing given back) with a base within one typical minute of the target on the extreme's side, and either a repeated swing (R: an earlier same-way swing 0.75-1.35x this one that came back, bases close, the swing at least 0.4 of the market's range since the open) or one wide swing (S: the market's extreme since the open, at least 0.3 of the hour's broad range, made at 0.6 typical minutes a minute or faster). NO at a peak over the target, YES at a trough under it. No price band. The note carries the branch, the swing, W, rho, the base's distance and the turn's age. Memory only (the tick history and the target in memory)."""
+    from . import ticks as ticks_mod
+    from . import waveshape
+
+    strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
+    ok, why = waveshape.admits(ctx.s, shot, ctx.now, strike)
+    return Check(ok, why)
+
+
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""

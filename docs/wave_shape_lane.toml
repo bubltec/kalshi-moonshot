@@ -1,0 +1,54 @@
+# PROPOSED lane-file blocks for data/strategies.toml (2026-11-24; not applied: the lane file is untracked and shipped by scripts/cloud_push.sh).
+# Needs the image with waveshape.py (--build): an old image refuses the unknown step `wave_shape`.
+# Apply together with: remove [lane.wave_top], [lane.wave_flag1], [lane.wave_flag2] and [module.wave_top] from the lane file, and take
+# wave_top, wave_flag1 and wave_flag2 out of PAPER_LANE_NAMES in .env, adding wave_shape (PAPER_LANE_NAMES=priskp,wave_shape).
+# Keep [module.wave_flag_buy]: wave_live still uses it. Validate the file with the deploying code before the push.
+
+# The wave-shape paper lane (2026-11-24, PAPER; the user approved it on paper in place of wave_top and the wave flags, which did not make money):
+# wave_flag2's lane exactly (window, resting buy, exit) with the buy step wave_shape (src/kalshi_moonshot/waveshape.py), the classifier written against
+# the user's chart labels (scripts/wave_buy_shape_classifier.py, studies/results/2026-11-24-wave-buy-shape-classifier.txt: 5 of 5 qualified pass,
+# 0 of 16 not qualified; every setting chosen after seeing the labels, so a lead). No price band (the study: price did not separate the labels).
+# Not in LIVE_LANES.
+[lane.wave_shape]
+enabled = true
+label = "wave shape (PAPER): the broad curve's turn with its base near the target, on a repeated swing or one wide swing; NO at a peak over the target, YES at a trough under it; wave_flag2's window, resting buy and exit"
+estimator = "market"
+numeric = "allow"
+one_per = "event"
+series = ["KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M", "KXDOGE15M", "KXADA15M", "KXBCH15M", "KXBNB15M", "KXHYPE15M", "KXNEAR15M", "KXZEC15M", "KXGOLD15M", "KXSILVER15M", "KXWTI15M", "KXBRENT15M", "KXNATGAS15M", "KXCOPPER15M", "KXPLATINUM15M", "KXPALLADIUM15M"]   # wave_live's 19 series
+sides = ["yes", "no"]
+timed_suffix = "15M"
+shadow_suffix = "15M"
+price = [0.01, 0.99]            # NO price band: the module lists no `price` step; this range only keeps the resting-buy and paper-fill floors (runner._resting_price, restcheck, paperfill) from refusing a cheap side
+hours = [0.0, 0.26]
+entry_elapsed = [2, 10]         # minutes after the open, the wave lanes' window (user, 2026-11-22)
+max_spread = 1.0
+min_volume = 0
+shortlist = 12
+scope_minutes = 2
+review_minutes = 1
+fixed_stake = 5.0
+buy_rest_seconds = 5
+buy_rest_follow = true          # the resting buy is re-judged on every quote (restcheck.py): once wave_shape says no (past the turn) the order is withdrawn
+buy_rest_avg_seconds = 5
+buy_rest_below = 0.02
+max_bet_pct = 0.5
+max_open = 3
+max_exposure_pct = 0.4
+paper_fill_model = true
+priority = 47
+buy_module = "wave_shape_buy"
+exit_module = "wave_exit"       # unchanged: the wave lanes' exit with wave_flag2's settings below
+wave_rev_k = 1.0
+wave_rev_p = 1.0
+wave_spike_z = 5.0
+wave_spike_seconds = 20
+wave_spike_trail = 1.0
+wave_give_up_share = 0.1
+value_after_flip = true
+value_sale_premium = 0.02
+wave_rest_share = 0.05
+
+[module.wave_shape_buy]
+label = "the wave shape: the broad curve's turn, base near the target, a repeated swing (R) or one wide swing (S); the trend reading stays in shadow"
+steps = ["entry_window", "wave_shape", "wave_trend"]   # entry_window and the shadow wave_trend are wave_flag_buy's; its `price` step is left out (no price band); nothing else can turn a buy down
