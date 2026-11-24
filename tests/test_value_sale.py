@@ -203,8 +203,8 @@ def test_integration_early_take_follows_a_profit_and_sells_when_it_stops_climbin
             return w._sell_early_take(t, risk, bid, now[0], left, 0.0, c)
 
     assert ask(0.78, 800) is None  # under the price paid: not armed, never a loss
-    assert ask(0.84, 790) is None  # in profit: armed, climbing
-    assert ask(0.90, 780) is None  # still climbing
+    assert ask(0.84, 790) is None  # in profit by about 2c after fees, under one wobble (0.041): not armed
+    assert ask(0.90, 780) is None  # over a wobble: armed, climbing
     why = ask(0.80, 770)  # fell from 0.90 but 0.80 pays under the price paid after fees: never a loss
     assert why is None
     t.unit_min_history = 0.0

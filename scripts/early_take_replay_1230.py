@@ -4,6 +4,9 @@ import math
 
 from kalshi_moonshot import config, db, quoteshock
 
+import os
+
+BAR = os.environ.get("BAR", "1") == "1"  # 2026-11-24: arm only once the profit is one wobble (the bid's typical 10 s move); BAR=0 = any profit
 s = config.load()
 st = db.connect(s.db_path, "main", shared=True)
 tape = db.connect(s.tape_path, "tape", shared=True)
@@ -38,16 +41,16 @@ for r in rows:
             if left <= (1.0 - share) * 900.0:
                 return None
             net = bid - fee(bid) - cost
+            unit = quoteshock.typical_minute([m for m in mids if m[0] <= sec], sec)
+            trail = max(0.01, unit * math.sqrt(10.0 / 60.0)) if unit else 0.01
             if not armed:
-                if net <= 0:
+                if net < (trail if BAR else 0.0) or net <= 0:
                     continue
                 armed, high, high_ts = True, bid, sec
             if bid > high + 1e-9:
                 high, high_ts = bid, sec
             if net <= 0:
                 continue
-            unit = quoteshock.typical_minute([m for m in mids if m[0] <= sec], sec)
-            trail = max(0.01, unit * math.sqrt(10.0 / 60.0)) if unit else 0.01
             if high - bid >= trail - 1e-9 or sec - high_ts >= 0.1 * left:
                 return bid, sec, net
         return None

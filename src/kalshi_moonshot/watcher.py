@@ -975,7 +975,7 @@ class ProfitWatcher:
         return None
 
     def _sell_early_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
-        """Sell step early_take (2026-11-24, user, on the 10:45 ET wave and the NEAR 11:15 bet: "early market, take early profit", "we're recording events on the fact board, we should know it profited, if it doesn't keep increasing just sell for a profit"; not a fixed number of cents). In the first early_take_share of the market's 900 s: once the bid after the sale fee is over the price paid with its buy fee (the bet has profited, at any size), the step follows the bid's high from there and sells, always at a gain, the first tick the bid has stopped climbing: it has fallen from that high by the bid's own typical 10 s move (the unit's sqrt(10/60); one tick when no unit is read yet, so nothing waits for a reading), or it has made no new high for early_take_stall_share of the time left (a share, never fixed seconds). Reads the bid, the price paid and the unit from memory."""
+        """Sell step early_take (2026-11-24, user, on the 10:45 ET wave and the NEAR 11:15 bet: "early market, take early profit", "we're recording events on the fact board, we should know it profited, if it doesn't keep increasing just sell for a profit"; not a fixed number of cents). In the first early_take_share of the market's 900 s: once the bid after the sale fee is over the price paid with its buy fee by at least one wobble (the bid's own typical 10 s move: a profit that size has happened, and nothing smaller counts), the step follows the bid's high from there and sells, always at a gain, the first tick the bid has stopped climbing: it has fallen from that high by the bid's own typical 10 s move (the unit's sqrt(10/60); one tick when no unit is read yet, so nothing waits for a reading), or it has made no new high for early_take_stall_share of the time left (a share, never fixed seconds). Reads the bid, the price paid and the unit from memory."""
         if t.early_take_share <= 0 or t.entry <= 0 or bid <= 0 or t.close_ts <= 0:
             return None
         if left <= (1.0 - t.early_take_share) * 900.0:
@@ -983,16 +983,16 @@ class ProfitWatcher:
         from . import wavetop
 
         net = bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry))
+        unit = ProfitWatcher._risk_unit(self, t, now)
+        trail = max(wavetop.TICK, unit * math.sqrt(10.0 / 60.0)) if unit else wavetop.TICK  # the bid's own typical 10 s move, its "wobble"
         if not t.early_take_armed:
-            if net <= 0:
-                return None
+            if net < trail - 1e-9:
+                return None  # in profit by less than one wobble is not a profit yet (2026-11-24: a sale at +0.0c gives up the fee and the rest of the move for nothing)
             t.early_take_armed, t.early_take_high, t.early_take_high_ts = True, bid, now  # the bet has profited: the fact board's note of it is the sale's reason below
         if bid > t.early_take_high + 1e-9:
             t.early_take_high, t.early_take_high_ts = bid, now
         if net <= 0:
             return None  # never a loss; the other steps decide
-        unit = ProfitWatcher._risk_unit(self, t, now)
-        trail = max(wavetop.TICK, unit * math.sqrt(10.0 / 60.0)) if unit else wavetop.TICK
         stall = t.early_take_stall_share * left
         fell = t.early_take_high - bid >= trail - 1e-9
         stalled = stall > 0 and now - t.early_take_high_ts >= stall
