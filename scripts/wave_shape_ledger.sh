@@ -18,3 +18,20 @@ p as (
 select br, case when gb<0 then 'n/a' when gb<0.02 then 'given back <0.02' else 'given back >=0.02' end turn, count(*) bets,
        round(sum(pnl)::numeric,2) pnl, count(*) filter (where pnl>0) wins
 from p group by 1,2 order by 1,2"
+
+# Same-bets view (rule 4): wave_live is a paper lane that bets on the same markets with the old wave_flag buy step. For each closed wave_live bet since
+# wave_shape started (2026-11-24 11:45 ET), did wave_shape buy the same market and side within 120 s? Own-exit P&L of the wave_live bet (no entry fee: resting
+# buys), split by that. 'rule skipped' = what wave_shape left out; 'rule bought' = what it also took.
+AWS_PROFILE="${AWS_PROFILE:-jjosefaws}" scripts/cloud.sh sql "
+with l as (
+  select ts, ticker, side, stake_usd/nullif(contracts,0) en, contracts c, exit_price ex,
+         coalesce(exit_reason like 'curve exit (resting ask)%', false) rf
+  from moonshot.decisions where lane='wave_live' and action='bet' and stake_usd is not null and exit_price is not null
+    and ts > extract(epoch from timestamp '2026-11-24 16:45')),
+s as (select ticker, side, ts from moonshot.decisions where lane='wave_shape' and action='bet' and stake_usd is not null),
+p as (
+  select l.*, exists(select 1 from s where s.ticker=l.ticker and s.side=l.side and abs(s.ts-l.ts)<=120) bought,
+         c*(ex-en) - case when rf then 0 else c*0.07*ex*(1-ex) end pnl from l)
+select case when bought then 'rule bought' else 'rule skipped' end as wave_live_bets, count(*) bets, round(sum(pnl)::numeric,2) pnl,
+       count(*) filter (where pnl>0) wins, round((sum(pnl)/nullif(sum(c*en),0))::numeric,3) per_dollar
+from p group by 1 order by 1"
