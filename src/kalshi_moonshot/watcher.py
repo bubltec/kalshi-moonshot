@@ -191,6 +191,13 @@ class Target:
     early_take_share: float = 0.0
     early_take_stall_share: float = 0.0
     early_take_logged: bool = False
+    late_dip_share: float = 0.0
+    late_dip_units: float = 3.0
+    late_dip_look_s: float = 30.0
+    late_dip_wait_share: float = 0.1
+    late_dip_since: float = 0.0
+    late_dip_logged: bool = False
+    late_dip_spot: list = field(default_factory=list)  # (time, the spot's cushion) of the last late_dip_look_s seconds
     early_take_armed: bool = False
     early_take_high: float = 0.0
     early_take_high_ts: float = 0.0
@@ -926,6 +933,47 @@ class ProfitWatcher:
             return True
         return False
 
+    def _sell_late_dip(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step late_dip (2026-11-24, user, on the NEAR 11:15 bet at 0.99 with two minutes left: "if you see a sharp dip on price or spot to strike, it means sell immediately under a minute left", "like the spike watch at the end"). In the last late_dip_share of the market's 900 s, on every tick: a SHARP DIP is the bid, or the spot's cushion over the target, down from its high of the last late_dip_look_s seconds by late_dip_units of its own typical 10 s move (the typical minute x sqrt(10/60); the bid with one tick as the move until it has a reading, so nothing waits for one). A dip that holds for late_dip_wait_share of the time left is sold, at any result (it is the safety exit); a share of the time left is a few seconds under a minute, so it sells almost at once there, and a dip that bounces back starts over. A bid still rising is never a dip. The spot's cushion is its 60 s average, so a sharp spot dip is a large one. Reads the quote and tick memory only."""
+        if t.late_dip_share <= 0 or bid <= 0 or t.close_ts <= 0 or left <= 0:
+            return None
+        if left > t.late_dip_share * 900.0:
+            t.late_dip_since = 0.0
+            return None
+        from . import wavetop
+
+        unit = ProfitWatcher._risk_unit(self, t, now)
+        bid_move = unit * math.sqrt(10.0 / 60.0) if unit else wavetop.TICK
+        win = [x for x in wavetop.side_bids(ticks_mod.mids.quotes(t.ticker), t.side, int(now) - int(t.late_dip_look_s), int(now) + 1) if x is not None]
+        bid_dip = (max(win) - bid) / bid_move if win and bid_move > 0 else 0.0
+        spot_dip = 0.0
+        spot = ProfitWatcher._wave_spot(self, t, now)
+        if spot is not None:
+            t.late_dip_spot = [(ts, cu) for ts, cu in t.late_dip_spot if now - ts <= t.late_dip_look_s] + [(now, spot[0])]
+            spot_move = spot[1] * math.sqrt(10.0 / 60.0)
+            if spot_move > 0:
+                spot_dip = (max(cu for _, cu in t.late_dip_spot) - spot[0]) / spot_move
+        dip = max(bid_dip, spot_dip)
+        if dip < t.late_dip_units - 1e-9:
+            t.late_dip_since = 0.0
+            return None
+        if t.late_dip_since <= 0:
+            t.late_dip_since = now
+        wait = t.late_dip_wait_share * left
+        if now - t.late_dip_since < wait:
+            return None
+        what = f"the bid is down {bid_dip:.1f} of its typical 10 s moves from its high of the last {t.late_dip_look_s:.0f} s" if bid_dip >= spot_dip else f"the spot's cushion over the target is down {spot_dip:.1f} of its typical 10 s moves from its high of the last {t.late_dip_look_s:.0f} s"
+        reason = f"late dip: {what} (the bar is {t.late_dip_units:g}), held {now - t.late_dip_since:.0f} s of a {wait:.0f} s wait ({t.late_dip_wait_share:.0%} of the {left:.0f} s left), in the last {t.late_dip_share:.0%} of the market: sold"
+        extra = {"bid": round(bid, 4), "bid_dip": round(bid_dip, 2), "spot_dip": round(spot_dip, 2), "units": t.late_dip_units, "wait": round(wait, 1)}
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="late dip", extra=extra)
+            return reason
+        if not t.late_dip_logged:
+            t.late_dip_logged = True
+            log.info("late dip shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="late dip", extra=extra)
+        return None
+
     def _sell_early_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step early_take (2026-11-24, user, on the 10:45 ET wave and the NEAR 11:15 bet: "early market, take early profit", "we're recording events on the fact board, we should know it profited, if it doesn't keep increasing just sell for a profit"; not a fixed number of cents). In the first early_take_share of the market's 900 s: once the bid after the sale fee is over the price paid with its buy fee (the bet has profited, at any size), the step follows the bid's high from there and sells, always at a gain, the first tick the bid has stopped climbing: it has fallen from that high by the bid's own typical 10 s move (the unit's sqrt(10/60); one tick when no unit is read yet, so nothing waits for a reading), or it has made no new high for early_take_stall_share of the time left (a share, never fixed seconds). Reads the bid, the price paid and the unit from memory."""
         if t.early_take_share <= 0 or t.entry <= 0 or bid <= 0 or t.close_ts <= 0:
@@ -1600,6 +1648,7 @@ class ProfitWatcher:
                 held.value_crossed, held.value_wait_share = spec.value_sale_crossed, spec.value_sale_wait_share
                 held.unit_min_history, held.no_loss_share = spec.bid_unit_min_seconds, spec.no_loss_share
                 held.early_take_share, held.early_take_stall_share = spec.early_take_share, spec.early_take_stall_share
+                held.late_dip_share, held.late_dip_units, held.late_dip_look_s, held.late_dip_wait_share = spec.late_dip_share, spec.late_dip_units, spec.late_dip_look_seconds, spec.late_dip_wait_share
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
@@ -1909,7 +1958,7 @@ class ProfitWatcher:
                 with contextlib.suppress(TypeError, ValueError):
                     bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
-            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit", "wave give-up", "value sale")) and not runner.is_profit_sale(why)  # 2026-11-23: the wave give-up is a safety exit, a sale at a loss by design (user: "if the scalp isn't working we should exit ... just exit"); without it here _sell backs off every give-up under the cost, as it does the wave salvage (which sells only for a small gain)
+            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit", "wave give-up", "value sale", "late dip")) and not runner.is_profit_sale(why)  # 2026-11-23: the wave give-up is a safety exit, a sale at a loss by design (user: "if the scalp isn't working we should exit ... just exit"); without it here _sell backs off every give-up under the cost, as it does the wave salvage (which sells only for a small gain)
             if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not cut:  # a profit take never sells for a loss after both fees; the crash exit, the stop and the risk exit's sales do (the point is to get out)
                 self._back_off(ticker, lane)
                 return

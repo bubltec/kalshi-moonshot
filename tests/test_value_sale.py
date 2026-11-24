@@ -232,3 +232,46 @@ def test_integration_early_take_stall_sells_a_flat_profit(tmp_path, monkeypatch,
     assert ask(0.90, 760) is None  # 40 s of no new high: under a tenth of the 760 s left (76 s)
     why = ask(0.90, 700)  # 100 s with no new high: over 70 s
     assert why and "no new high" in why
+
+
+def late_dip_ask(w, t, close):
+    from kalshi_moonshot import curverisk, watcher
+
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_late_dip(t, risk, bid, close - left, left, 0.0, c)
+
+    return ask
+
+
+def test_integration_late_dip_sells_a_sharp_spot_dip_after_a_short_scaled_wait(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.late_dip_share, t.late_dip_units, t.late_dip_look_s, t.late_dip_wait_share = 0.25, 3.0, 30.0, 0.1
+    ask = late_dip_ask(w, t, close)
+    spot_feed(close - 100, 100.5)  # the spot safely over the target, 100 s left
+    assert ask(0.95, 100) is None  # no dip yet
+    spot_feed(close - 95, 99.95)  # the cushion drops by half a point in 5 s: many typical 10 s moves
+    assert ask(0.90, 95) is None  # sharp, but a dip has to hold a tenth of the time left (9.5 s)
+    spot_feed(close - 80, 99.95)
+    why = ask(0.90, 80)  # held 15 s: over its 8 s wait
+    assert why and why.startswith("late dip:") and "spot's cushion" in why
+
+
+def test_integration_late_dip_a_bounce_starts_the_wait_over_and_early_is_not_its_part(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.late_dip_share, t.late_dip_units, t.late_dip_look_s, t.late_dip_wait_share = 0.25, 3.0, 30.0, 0.1
+    ask = late_dip_ask(w, t, close)
+    spot_feed(close - 400, 100.5)
+    assert ask(0.95, 400) is None  # 400 s left: not the last quarter (225 s)
+    spot_feed(close - 100, 100.5)
+    assert ask(0.95, 100) is None
+    spot_feed(close - 95, 99.95)
+    assert ask(0.90, 95) is None  # sharp, waiting
+    spot_feed(close - 90, 100.5)
+    t.late_dip_spot = []  # the high of the look-back is gone with the bounce
+    assert ask(0.95, 90) is None  # bounced: the wait is gone
+    assert t.late_dip_since == 0.0
