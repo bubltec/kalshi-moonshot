@@ -192,6 +192,9 @@ class Target:
     early_take_stall_share: float = 0.0
     early_take_hold_share: float = 0.0
     early_take_fall_since: float = 0.0
+    early_take_spot_high: float = 0.0
+    early_take_spot_ts: float = 0.0
+    early_take_spot_set: bool = False
     early_take_logged: bool = False
     late_dip_share: float = 0.0
     late_dip_units: float = 3.0
@@ -996,17 +999,24 @@ class ProfitWatcher:
         if net <= 0:
             return None  # never a loss; the other steps decide
         stall = t.early_take_stall_share * left
+        spot = ProfitWatcher._wave_spot(self, t, now)  # the spot's cushion over the target for the bet (memory): while it still climbs by a wobble of its own the bet is not stalled, whatever the bid does (DOGE 14:45 NO, 2026-11-24: sold at 0.85 on a 56 s flat bid while the spot kept moving the bet's way, "pretty much a sure bet")
+        if spot is not None:
+            spot_move = spot[1] * math.sqrt(10.0 / 60.0)
+            if not t.early_take_spot_set:
+                t.early_take_spot_high, t.early_take_spot_ts, t.early_take_spot_set = spot[0], now, True
+            elif spot[0] >= t.early_take_spot_high + spot_move:
+                t.early_take_spot_high, t.early_take_spot_ts = spot[0], now
         fell = t.early_take_high - bid >= trail - 1e-9
         if fell:
             if t.early_take_fall_since <= 0:
                 t.early_take_fall_since = now
         else:
             t.early_take_fall_since = 0.0  # a new high, or the bid back within a wobble of it: the climb goes on
-        fell = fell and now - t.early_take_fall_since >= t.early_take_hold_share * left  # the fall must hold for a share of the time left (BTC 13:00 sold at 0.79 on a 5c dip that was a new high ten seconds later, and the bid went on to 0.97)
-        stalled = stall > 0 and now - t.early_take_high_ts >= stall
+        fell = fell and now - t.early_take_fall_since >= t.early_take_hold_share * left and now - t.early_take_spot_ts >= t.early_take_hold_share * left  # the fall must hold for a share of the time left, and the spot must not have been climbing in that time (BTC 13:00 sold at 0.79 on a 5c dip that was a new high ten seconds later, and the bid went on to 0.97)
+        stalled = stall > 0 and now - max(t.early_take_high_ts, t.early_take_spot_ts) >= stall  # no new high of the bid AND none of the spot's cushion for that share of the time left
         if not (fell or stalled):
             return None
-        why = f"the bid fell {t.early_take_high - bid:.3f} from its high {t.early_take_high:.2f} (the bid's typical 10 s move {trail:.3f})" if fell else f"no new high for {now - t.early_take_high_ts:.0f} s (a share {t.early_take_stall_share:.0%} of the {left:.0f} s left is {stall:.0f} s)"
+        why = f"the bid fell {t.early_take_high - bid:.3f} from its high {t.early_take_high:.2f} (the bid's typical 10 s move {trail:.3f})" if fell else f"no new high of the bid or of the spot's cushion for {now - max(t.early_take_high_ts, t.early_take_spot_ts):.0f} s (a share {t.early_take_stall_share:.0%} of the {left:.0f} s left is {stall:.0f} s)"
         reason = f"early take: the bet is in profit, +{net * 100:.1f}c a contract at the bid {bid:.2f} over the price paid {t.entry:.2f} after both fees, and it stopped climbing: {why}; inside the first {t.early_take_share:.0%} of the market: sold"
         extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "high": round(t.early_take_high, 4), "trail": round(trail, 4), "kind": "fell" if fell else "stalled"}
         if t.risk_live:

@@ -297,3 +297,24 @@ def test_integration_early_take_a_fall_must_hold_and_a_new_high_starts_it_over(t
     assert ask(0.88, 550) is None  # 20 s of it: under 5% of 550 s (27 s)
     why = ask(0.88, 535)  # 35 s: held
     assert why and why.startswith("early take:")
+
+
+def test_integration_early_take_a_spot_still_climbing_is_not_a_stall(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.entry, t.early_take_share, t.early_take_stall_share, t.early_take_hold_share = 0.80, 1.0, 0.1, 0.0
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left, level):
+        spot_feed(close - left, level)
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.90, 800, 100.1) is None  # armed; the spot's cushion is 0.1
+    assert ask(0.90, 760, 100.4) is None  # the bid is flat but the spot's cushion climbed more than a wobble of its own: the climb goes on
+    assert ask(0.90, 700, 100.4) is None  # 100 s since the bid's high but 60 s since the spot's climb: under 10% of 700 s (70 s)
+    why = ask(0.90, 650, 100.4)  # 110 s since the spot's last climb: over the 65 s wait
+    assert why and "spot's cushion" in why
