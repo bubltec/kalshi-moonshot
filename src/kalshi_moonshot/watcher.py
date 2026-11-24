@@ -1013,11 +1013,13 @@ class ProfitWatcher:
         else:
             t.early_take_fall_since = 0.0  # a new high, or the bid back within a wobble of it: the climb goes on
         fell = fell and now - t.early_take_fall_since >= t.early_take_hold_share * left and now - t.early_take_spot_ts >= t.early_take_hold_share * left  # the fall must hold for a share of the time left, and the spot must not have been climbing in that time (BTC 13:00 sold at 0.79 on a 5c dip that was a new high ten seconds later, and the bid went on to 0.97)
-        room = 1.0 - bid  # a bid near the ceiling cannot make a new high: flat there is not a stall (2026-11-24, user: "just because it isn't raising while its in the 90s doesn't mean we should sell"; BTC/ETH/SOL/XRP 16:30 sold at 0.96-0.98 on 40-50 s of a pinned bid). The stall counts only while the bid has room for the move it typically makes in the stall's own time (the unit scaled to the stall); the fall still sells.
-        pinned = bool(unit) and stall > 0 and room < unit * math.sqrt(stall / 60.0)
-        stalled = stall > 0 and not pinned and now - max(t.early_take_high_ts, t.early_take_spot_ts) >= stall  # no new high of the bid AND none of the spot's cushion for that share of the time left
+        stalled = stall > 0 and now - max(t.early_take_high_ts, t.early_take_spot_ts) >= stall  # no new high of the bid AND none of the spot's cushion for that share of the time left
         if not (fell or stalled):
             return None
+        if stalled and not fell:  # a stall only sells when the sale beats holding (2026-11-24, user: flat in the 90s is not a reason to sell; "it needs to mathematically know it's still profitable and not to sell it"): the same hold value value_sale uses, 1 - the spot's chance of ending on the wrong side, against what the bid pays after the sale fee
+            lose = self._board(c, t, now, left, bid).view("value_sale").get("p_lose")
+            if lose is not None and bid - fee_per_contract(bid) < 1.0 - lose:
+                return None  # holding is worth more than selling: a flat bid is not a reason
         why = f"the bid fell {t.early_take_high - bid:.3f} from its high {t.early_take_high:.2f} (the bid's typical 10 s move {trail:.3f})" if fell else f"no new high of the bid or of the spot's cushion for {now - max(t.early_take_high_ts, t.early_take_spot_ts):.0f} s (a share {t.early_take_stall_share:.0%} of the {left:.0f} s left is {stall:.0f} s)"
         reason = f"early take: the bet is in profit, +{net * 100:.1f}c a contract at the bid {bid:.2f} over the price paid {t.entry:.2f} after both fees, and it stopped climbing: {why}; inside the first {t.early_take_share:.0%} of the market: sold"
         extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "high": round(t.early_take_high, 4), "trail": round(trail, 4), "kind": "fell" if fell else "stalled"}
