@@ -200,6 +200,10 @@ class Target:
     late_dip_units: float = 3.0
     late_dip_look_s: float = 30.0
     late_dip_wait_share: float = 0.1
+    no_recovery_share: float = 0.0  # lane field: the share of the market's 900 s since the buy after which a bet never once in profit is sold (0 = the no_recovery step is off)
+    no_rec_logged: bool = False
+    no_rec_seen: float = 0.0  # the first check the no_recovery step saw this bet (a bet it did not see from the buy is not judged)
+    no_rec_ahead: bool = False  # the bid less the sale fee has been over the price paid with its buy fee at some check since the buy
     late_dip_since: float = 0.0
     late_dip_logged: bool = False
     late_dip_spot: list = field(default_factory=list)  # (time, the spot's cushion) of the last late_dip_look_s seconds
@@ -938,6 +942,35 @@ class ProfitWatcher:
             return True
         return False
 
+    def _sell_no_recovery(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step no_recovery (2026-11-24, user, on HYPE 17:45 NO bought at 0.57 and slid to 0 with nothing selling it: "i think we just need to accept its a loss when it doesn't come back after the wait"; "time since bet > (length of market / 2) sell if never profitable"). A bet that has never once been in profit after both fees is sold at the bid, at a loss, the first check once its time since the buy passes the lane's no_recovery_share of the market's length (half of the 900 s). A bet that has been ahead is not this step's: early_take, wave_take and value_sale decide it. Needs to have been watched from the buy. Reads the bid and the price paid from memory."""
+        if t.no_recovery_share <= 0 or t.entry <= 0 or bid <= 0 or t.close_ts <= 0:
+            return None
+        net = bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry))
+        if t.no_rec_seen <= 0:
+            t.no_rec_seen = now
+        if net > 0:
+            t.no_rec_ahead = True
+        if t.no_rec_ahead or net > 0:
+            return None
+        start = t.bought_ts if t.bought_ts > 0 else t.no_rec_seen
+        held_for = now - start
+        wait = t.no_recovery_share * 900.0
+        if held_for < wait:
+            return None  # an early loss is waited out: the bet is given its share of the market's length to come back
+        if t.bought_ts > 0 and t.no_rec_seen > t.bought_ts + 30.0:
+            return None  # not watched from the buy (a restart): its past is unknown
+        reason = f"no recovery: the bet has not once been in profit since the buy ({t.entry:.2f} paid), {held_for:.0f} s held, past its {wait:.0f} s ({t.no_recovery_share:.0%} of the market's length) to come back, {left:.0f} s left; accepted as a loss: sold at the bid {bid:.2f} ({net * 100:.1f}c a contract after both fees)"
+        extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "held": round(held_for, 1)}
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="no recovery", extra=extra)
+            return reason
+        if not t.no_rec_logged:
+            t.no_rec_logged = True
+            log.info("no recovery shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="no recovery", extra=extra)
+        return None
+
     def _sell_late_dip(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step late_dip (2026-11-24, user, on the NEAR 11:15 bet at 0.99 with two minutes left: "if you see a sharp dip on price or spot to strike, it means sell immediately under a minute left", "like the spike watch at the end"). In the last late_dip_share of the market's 900 s, on every tick: a SHARP DIP is the bid, or the spot's cushion over the target, down from its high of the last late_dip_look_s seconds by late_dip_units of its own typical 10 s move (the typical minute x sqrt(10/60); the bid with one tick as the move until it has a reading, so nothing waits for one). A dip that holds for late_dip_wait_share of the time left is sold, at any result (it is the safety exit); a share of the time left is a few seconds under a minute, so it sells almost at once there, and a dip that bounces back starts over. A bid still rising is never a dip. The spot's cushion is its 60 s average, so a sharp spot dip is a large one. Reads the quote and tick memory only."""
         if t.late_dip_share <= 0 or bid <= 0 or t.close_ts <= 0 or left <= 0:
@@ -1670,6 +1703,7 @@ class ProfitWatcher:
                 held.unit_min_history, held.no_loss_share = spec.bid_unit_min_seconds, spec.no_loss_share
                 held.early_take_share, held.early_take_stall_share, held.early_take_hold_share = spec.early_take_share, spec.early_take_stall_share, spec.early_take_hold_share
                 held.late_dip_share, held.late_dip_units, held.late_dip_look_s, held.late_dip_wait_share = spec.late_dip_share, spec.late_dip_units, spec.late_dip_look_seconds, spec.late_dip_wait_share
+                held.no_recovery_share = spec.no_recovery_share
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
@@ -1979,7 +2013,7 @@ class ProfitWatcher:
                 with contextlib.suppress(TypeError, ValueError):
                     bid = float(quoted.get("yes_bid_dollars") or 0.0)
             entry = store.entry_fill(ticker, side, float(row["ts"] or 0.0)) or float(row["ask"] or 0.0)  # what the buy filled at: the decision ask understates it when the take chased the ask
-            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit", "wave give-up", "value sale", "late dip")) and not runner.is_profit_sale(why)  # 2026-11-23: the wave give-up is a safety exit, a sale at a loss by design (user: "if the scalp isn't working we should exit ... just exit"); without it here _sell backs off every give-up under the cost, as it does the wave salvage (which sells only for a small gain)
+            cut = why.startswith(("peak-crash", "stop-loss", "curve risk exit", "wave give-up", "value sale", "late dip", "no recovery")) and not runner.is_profit_sale(why)  # 2026-11-23: the wave give-up is a safety exit, a sale at a loss by design (user: "if the scalp isn't working we should exit ... just exit"); without it here _sell backs off every give-up under the cost, as it does the wave salvage (which sells only for a small gain)
             if bid - fee_per_contract(bid) <= entry + fee_per_contract(entry) and not cut:  # a profit take never sells for a loss after both fees; the crash exit, the stop and the risk exit's sales do (the point is to get out)
                 self._back_off(ticker, lane)
                 return

@@ -302,6 +302,47 @@ def test_integration_early_take_a_fall_with_cushion_or_no_reading_holds(tmp_path
     assert why and "hold value" in why
 
 
+def test_integration_no_recovery_sells_a_never_profitable_bet_after_half_a_market_since_the_buy(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.57, unit=0.10)
+    t.entry, t.no_recovery_share, t.bought_ts = 0.57, 0.5, close - 800.0
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_no_recovery(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.55, 800) is None  # seen from the buy
+    assert ask(0.40, 600) is None  # 200 s since the buy: an early loss is waited out
+    assert ask(0.30, 400) is None  # 400 s: under half the market's length (450 s)
+    why = ask(0.26, 340)  # 460 s since the buy, never ahead
+    assert why and "no recovery" in why and "0.26" in why
+
+
+def test_integration_no_recovery_leaves_a_bet_that_was_ahead_alone(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.57, unit=0.10)
+    t.entry, t.no_recovery_share, t.bought_ts = 0.57, 0.5, close - 800.0
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_no_recovery(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.55, 800) is None
+    assert ask(0.70, 700) is None  # in profit once: not this step's
+    assert ask(0.30, 340) is None  # back under, 460 s since the buy: the other steps decide
+    t2 = t
+    t2.no_recovery_share = 0.0
+    assert ask(0.30, 300) is None  # off when the lane does not set it
+
+
 def late_dip_ask(w, t, close):
     from kalshi_moonshot import curverisk, watcher
 
