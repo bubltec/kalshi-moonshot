@@ -156,7 +156,7 @@ def test_integration_spot_perp_reads_the_perp_against_its_own_open(tmp_path, mon
     now = close - 300
     spot_feed(now, 100.3)  # the settlement index: 0.3 over the target, the bet's side
     T = [close - 1500.0 + k for k in range(1501 - 300)]
-    V = [100.0 if x <= close - 900.0 + 5 else 99.7 + 0.01 * (-1) ** int(x) for x in T]  # the perp: 100.0 at the open, 99.7 now
+    V = [100.3 if x <= close - 900.0 + 5 else 99.7 + 0.01 * (-1) ** int(x) for x in T]  # the perp: with the settlement index at the open (no basis), 99.7 now: under the 100.0 target
     ticks_mod.history.warm("KP_BTC", list(zip(T, V, strict=True)), T[0] - 1.0)
     assert asker(w, t, close)(0.50, 300) is None  # off: the settlement index says the spot is on the bet's side
     t.spot_perp = True
@@ -165,6 +165,19 @@ def test_integration_spot_perp_reads_the_perp_against_its_own_open(tmp_path, mon
     spot_feed(now, 100.3)
     t.perp_ref = 0.0
     assert asker(w, t, close)(0.50, 300) is None  # no perp reading: the settlement index again
+
+
+def test_integration_spot_perp_measures_from_the_markets_own_target_not_the_perps_open(tmp_path, monkeypatch, mem):
+    # DOGE 18:30 YES (2026-11-24): the perp read against its own value at the open gave +9 bp where the Kalshi strike gave +17 bp, and p_lose 0.16 sold a bet with a real cushion
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.spot_perp = True
+    now = close - 300
+    spot_feed(now, 100.5)  # the settlement index: 100.5 all through the window, the target (strike) is 100.0 (t.shock_ref)
+    T = [close - 1500.0 + k for k in range(1501 - 300)]
+    V = [100.5 + 0.01 * (-1) ** int(x) for x in T]  # the perp tracks it exactly: its own open is 100.5, 0.5 over the strike
+    ticks_mod.history.warm("KP_BTC", list(zip(T, V, strict=True)), T[0] - 1.0)
+    cushion = w._wave_spot(t, now)
+    assert cushion is not None and cushion[0] > 0.45  # measured from the 100.0 strike, not from 100.5 (which would read 0)
 
 
 def test_the_lane_file_sets_spot_perp(tmp_path, monkeypatch):

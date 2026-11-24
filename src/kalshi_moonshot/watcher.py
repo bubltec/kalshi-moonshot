@@ -247,6 +247,7 @@ class Target:
     value_crossed: bool = False
     spot_perp: bool = False
     perp_ref: float = 0.0
+    perp_adj_ref: float = 0.0  # the perp's reference for the cushion: the market's own target (the strike for crypto) shifted by the perp's basis to the settlement index at the open
     value_wait_share: float = 0.0
     value_since: float = 0.0
     value_sale_logged: bool = False
@@ -918,9 +919,12 @@ class ProfitWatcher:
             if kp:
                 if t.perp_ref <= 0:
                     t.perp_ref = ticks_mod.history.first_at_or_after(kp, t.close_ts - 900.0, 60.0) or 0.0
+                if t.perp_ref > 0 and t.perp_adj_ref <= 0:
+                    idx_open = ticks_mod.history.first_at_or_after(t.shock_index, t.close_ts - 900.0, 60.0) or 0.0  # the settlement index at the open: the perp's basis to it drops out, the market's own target stays the reference (DOGE 18:30 YES, 2026-11-24: the perp measured against its own value at the open read +9.3 bp and p_lose 0.16 where the Kalshi strike gives +17.0 bp and 0.03, and a bet with a real cushion was sold)
+                    t.perp_adj_ref = t.shock_ref + (t.perp_ref - idx_open) if idx_open > 0 else t.perp_ref
                 if t.perp_ref > 0:
                     pg = ticks_mod.history.window(kp, now - 620.0, now)
-                    read = wavetop.spot_read(pg[0], pg[1], now, t.perp_ref, t.side) if pg and pg[0] else None
+                    read = wavetop.spot_read(pg[0], pg[1], now, t.perp_adj_ref, t.side) if pg and pg[0] else None
                     if read is not None:
                         return read
         got = ticks_mod.history.window(t.shock_index, now - 620.0, now)
