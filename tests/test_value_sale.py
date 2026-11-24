@@ -275,3 +275,25 @@ def test_integration_late_dip_a_bounce_starts_the_wait_over_and_early_is_not_its
     t.late_dip_spot = []  # the high of the look-back is gone with the bounce
     assert ask(0.95, 90) is None  # bounced: the wait is gone
     assert t.late_dip_since == 0.0
+
+
+def test_integration_early_take_a_fall_must_hold_and_a_new_high_starts_it_over(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.entry, t.early_take_share, t.early_take_stall_share, t.early_take_hold_share = 0.80, 1.0, 0.0, 0.05
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.90, 600) is None  # armed at its high
+    assert ask(0.85, 590) is None  # fell 5c (over one wobble, 0.041): the fall starts, it has to hold 5% of 590 s = 29 s
+    assert ask(0.93, 580) is None  # a new high: the fall is forgotten, the climb goes on
+    assert ask(0.88, 570) is None  # a new fall starts
+    assert ask(0.88, 550) is None  # 20 s of it: under 5% of 550 s (27 s)
+    why = ask(0.88, 535)  # 35 s: held
+    assert why and why.startswith("early take:")

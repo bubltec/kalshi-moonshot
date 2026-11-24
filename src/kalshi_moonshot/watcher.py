@@ -190,6 +190,8 @@ class Target:
     no_loss_share: float = 0.0
     early_take_share: float = 0.0
     early_take_stall_share: float = 0.0
+    early_take_hold_share: float = 0.0
+    early_take_fall_since: float = 0.0
     early_take_logged: bool = False
     late_dip_share: float = 0.0
     late_dip_units: float = 3.0
@@ -995,6 +997,12 @@ class ProfitWatcher:
             return None  # never a loss; the other steps decide
         stall = t.early_take_stall_share * left
         fell = t.early_take_high - bid >= trail - 1e-9
+        if fell:
+            if t.early_take_fall_since <= 0:
+                t.early_take_fall_since = now
+        else:
+            t.early_take_fall_since = 0.0  # a new high, or the bid back within a wobble of it: the climb goes on
+        fell = fell and now - t.early_take_fall_since >= t.early_take_hold_share * left  # the fall must hold for a share of the time left (BTC 13:00 sold at 0.79 on a 5c dip that was a new high ten seconds later, and the bid went on to 0.97)
         stalled = stall > 0 and now - t.early_take_high_ts >= stall
         if not (fell or stalled):
             return None
@@ -1647,7 +1655,7 @@ class ProfitWatcher:
                 held.value_sale_premium, held.value_after_flip = spec.value_sale_premium, spec.value_after_flip
                 held.value_crossed, held.value_wait_share = spec.value_sale_crossed, spec.value_sale_wait_share
                 held.unit_min_history, held.no_loss_share = spec.bid_unit_min_seconds, spec.no_loss_share
-                held.early_take_share, held.early_take_stall_share = spec.early_take_share, spec.early_take_stall_share
+                held.early_take_share, held.early_take_stall_share, held.early_take_hold_share = spec.early_take_share, spec.early_take_stall_share, spec.early_take_hold_share
                 held.late_dip_share, held.late_dip_units, held.late_dip_look_s, held.late_dip_wait_share = spec.late_dip_share, spec.late_dip_units, spec.late_dip_look_seconds, spec.late_dip_wait_share
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
