@@ -188,6 +188,12 @@ class Target:
     risk_unit_at: float = 0.0
     unit_min_history: float = 0.0
     no_loss_share: float = 0.0
+    early_take_share: float = 0.0
+    early_take_stall_share: float = 0.0
+    early_take_logged: bool = False
+    early_take_armed: bool = False
+    early_take_high: float = 0.0
+    early_take_high_ts: float = 0.0
     risk_unit_timed: float | None = None  # the time-aware typical minute (pricevol.implied_rate), read at most every 5 s (sell step trail_timed, shadow)
     risk_unit_timed_at: float = 0.0
     trail_timed_last: tuple = (False, False)  # the (static, time-aware) trail verdicts last written for this bet
@@ -920,6 +926,42 @@ class ProfitWatcher:
             return True
         return False
 
+    def _sell_early_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step early_take (2026-11-24, user, on the 10:45 ET wave and the NEAR 11:15 bet: "early market, take early profit", "we're recording events on the fact board, we should know it profited, if it doesn't keep increasing just sell for a profit"; not a fixed number of cents). In the first early_take_share of the market's 900 s: once the bid after the sale fee is over the price paid with its buy fee (the bet has profited, at any size), the step follows the bid's high from there and sells, always at a gain, the first tick the bid has stopped climbing: it has fallen from that high by the bid's own typical 10 s move (the unit's sqrt(10/60); one tick when no unit is read yet, so nothing waits for a reading), or it has made no new high for early_take_stall_share of the time left (a share, never fixed seconds). Reads the bid, the price paid and the unit from memory."""
+        if t.early_take_share <= 0 or t.entry <= 0 or bid <= 0 or t.close_ts <= 0:
+            return None
+        if left <= (1.0 - t.early_take_share) * 900.0:
+            return None  # past the early part of the market: the other steps decide
+        from . import wavetop
+
+        net = bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry))
+        if not t.early_take_armed:
+            if net <= 0:
+                return None
+            t.early_take_armed, t.early_take_high, t.early_take_high_ts = True, bid, now  # the bet has profited: the fact board's note of it is the sale's reason below
+        if bid > t.early_take_high + 1e-9:
+            t.early_take_high, t.early_take_high_ts = bid, now
+        if net <= 0:
+            return None  # never a loss; the other steps decide
+        unit = ProfitWatcher._risk_unit(self, t, now)
+        trail = max(wavetop.TICK, unit * math.sqrt(10.0 / 60.0)) if unit else wavetop.TICK
+        stall = t.early_take_stall_share * left
+        fell = t.early_take_high - bid >= trail - 1e-9
+        stalled = stall > 0 and now - t.early_take_high_ts >= stall
+        if not (fell or stalled):
+            return None
+        why = f"the bid fell {t.early_take_high - bid:.3f} from its high {t.early_take_high:.2f} (the bid's typical 10 s move {trail:.3f})" if fell else f"no new high for {now - t.early_take_high_ts:.0f} s (a share {t.early_take_stall_share:.0%} of the {left:.0f} s left is {stall:.0f} s)"
+        reason = f"early take: the bet is in profit, +{net * 100:.1f}c a contract at the bid {bid:.2f} over the price paid {t.entry:.2f} after both fees, and it stopped climbing: {why}; inside the first {t.early_take_share:.0%} of the market: sold"
+        extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "high": round(t.early_take_high, 4), "trail": round(trail, 4), "kind": "fell" if fell else "stalled"}
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="early take", extra=extra)
+            return reason
+        if not t.early_take_logged:
+            t.early_take_logged = True
+            log.info("early take shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="early take", extra=extra)
+        return None
+
     def _sell_wave_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step wave_take (wavetop.py; 2026-11-22, user: "aim for +20c or more", "staircase, with this: the size should scale with the bid's own typical minute and with time left, not sit at a fixed 5c", "I like wide early with a back up for avoid loss that accepts a small loss"). Sales at the bid, both by the staircase (the high-zone sale was removed 2026-11-23, user: it was never part of the design):
         1. the staircase: the bid's swings are cut at rev = max(TICK, wave_rev_k x the bid's typical minute x (max(left, 60) / 60)^wave_rev_p x the cushion factor 2 x (1 - P_lose), wave_cushion); the first time the bid falls under the previous swing low (a lower low: the climb is done) it is sold, if the bet has ever been ahead after both fees: at a gain, or at a small loss (the backup that avoids a total loss);
@@ -1557,6 +1599,7 @@ class ProfitWatcher:
                 held.value_sale_premium, held.value_after_flip = spec.value_sale_premium, spec.value_after_flip
                 held.value_crossed, held.value_wait_share = spec.value_sale_crossed, spec.value_sale_wait_share
                 held.unit_min_history, held.no_loss_share = spec.bid_unit_min_seconds, spec.no_loss_share
+                held.early_take_share, held.early_take_stall_share = spec.early_take_share, spec.early_take_stall_share
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail

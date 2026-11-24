@@ -185,3 +185,50 @@ def test_integration_no_loss_share_bars_an_early_loss_sale_and_never_a_gain(tmp_
     assert ask(0.50, 300) is not None  # past the first half the loss sale is open again
     spot_feed(close - 800, 100.5)
     assert ask(0.95, 800) is not None  # a gain early is never barred
+
+
+def test_integration_early_take_follows_a_profit_and_sells_when_it_stops_climbing(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.entry, t.early_take_share, t.early_take_stall_share = 0.80, 0.5, 0.0
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+    now = [close - 800.0]
+
+    def ask(bid, left):
+        c.facts = None
+        now[0] = close - left
+        with memguard.decision("sell"):
+            return w._sell_early_take(t, risk, bid, now[0], left, 0.0, c)
+
+    assert ask(0.78, 800) is None  # under the price paid: not armed, never a loss
+    assert ask(0.84, 790) is None  # in profit: armed, climbing
+    assert ask(0.90, 780) is None  # still climbing
+    why = ask(0.80, 770)  # fell from 0.90 but 0.80 pays under the price paid after fees: never a loss
+    assert why is None
+    t.unit_min_history = 0.0
+    assert ask(0.93, 760) is None
+    why = ask(0.88, 750)  # fell 5c from the 0.93 high, still in profit
+    assert why and why.startswith("early take:") and "stopped climbing" in why
+    t.early_take_armed = False
+    assert ask(0.99, 300) is None  # past the first half of the market: not this step's
+
+
+def test_integration_early_take_stall_sells_a_flat_profit(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.entry, t.early_take_share, t.early_take_stall_share = 0.80, 0.5, 0.1
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.90, 800) is None  # armed at its high
+    assert ask(0.90, 760) is None  # 40 s of no new high: under a tenth of the 760 s left (76 s)
+    why = ask(0.90, 700)  # 100 s with no new high: over 70 s
+    assert why and "no new high" in why
