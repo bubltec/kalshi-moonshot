@@ -9,10 +9,18 @@ import bisect, gzip, json, math, multiprocessing, os, time
 from datetime import datetime, timezone
 from pathlib import Path
 from kalshi_moonshot import binaryrisk as br, config, db, priskp
-from kalshi_moonshot.kalshiws import index_for_series as settlement_index
+from kalshi_moonshot.kalshiws import index_for_series as _crypto_index
+from kalshi_moonshot import perpref
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
 t0 = time.time()
+KIND = os.environ.get("SERIES", "crypto")  # 2026-11-24 (user: "would the priskp work on commodities?"): SERIES=commodity reads the commodity series on Kalshi's perp reference ticks (the target is the perp's value at the window's open); crypto stays the default
+
+
+def settlement_index(series):
+    return perpref.index_for_series(series) if KIND == "commodity" else _crypto_index(series)
+
+
 START = datetime(2026, 11, 9, 7, tzinfo=timezone.utc).timestamp()
 LIMIT = int(os.environ.get("LIMIT", "0"))
 STEP, WIN_LO, WIN_HI, STALE, STAKE = 10, 2.0, 14.0, 10.0, 10.0
@@ -205,6 +213,18 @@ def build(job):
                     jq = bisect.bisect_right(m["qt"], m["opened"] + 10.0 * x) - 1
                     bids.append(None if jq < 0 or m["opened"] + 10.0 * x - m["qt"][jq] > 30.0 else round(m["qb"][jq] if sd == "yes" else 1.0 - m["qa"][jq], 3))
                 row["bids"] = bids
+                # the perp's 60 s average against the target for the side at the same 10 s marks (negative = crossed; None = too few ticks), for the cross exit
+                cu = []
+                for x in range(int(s_open // 10) + 1, 91):
+                    tt = m["opened"] + 10.0 * x
+                    a, b2 = bisect.bisect_left(T, tt - 59.0), bisect.bisect_right(T, tt)
+                    seg = V[a:b2]
+                    if len(seg) < 20:
+                        cu.append(None)
+                    else:
+                        av = sum(seg) / len(seg)
+                        cu.append(round((av - m["strike"]) if sd == "yes" else (m["strike"] - av), 6))
+                row["cross"] = cu
             out.append(row)
     return out, len(M), decisions
 
@@ -214,8 +234,8 @@ with multiprocessing.get_context("fork").Pool(4) as pool:
     for out, nm, dec in pool.imap_unordered(build, list(jobs.items())):
         rows += out; NM += nm; DEC += dec
         print(f"  an index done: {nm} markets, {time.time() - t0:.0f}s", flush=True)
-Path(os.environ.get("DATA_DIR", "/data"), "priskp_buys_crypto.json.gz").write_bytes(gzip.compress(json.dumps(rows).encode()))
-Path(os.environ.get("DATA_DIR", "/data"), "priskp_decisions.json.gz").write_bytes(gzip.compress(json.dumps(DEC).encode()))
+Path(os.environ.get("DATA_DIR", "/data"), f"priskp_buys_{KIND}.json.gz").write_bytes(gzip.compress(json.dumps(rows).encode()))
+Path(os.environ.get("DATA_DIR", "/data"), f"priskp_decisions_{KIND}.json.gz").write_bytes(gzip.compress(json.dumps(DEC).encode()))
 model = [r for r in rows if r["rule"] == "model"]; plain = [r for r in rows if r["rule"] == "plain"]
 mk = {r["ticker"] for r in model}; refused = [r for r in plain if r["ticker"] not in mk]
 print(f"{NM} markets; plain buys {len(plain)}, model buys {len(model)}, refused {len(refused)}; {time.time() - t0:.0f}s\n")
