@@ -3,13 +3,16 @@ QUESTION (one, on the same bets): on every settled live bet of the commodity lan
 Run: PYTHONPATH=src .venv/bin/python scripts/commodity_cross_exit_replay.py comm_lines.txt (from scripts/commodity_lane_dump.py on the host)."""
 import json
 import math
+import os
 import sys
+from datetime import UTC, datetime
 
 
 def fee(p):
     return 0.07 * p * (1.0 - p)
 
 
+FROM = datetime.fromisoformat(os.environ["FROM"]).replace(tzinfo=UTC).timestamp() if os.environ.get("FROM") else 0.0  # FROM=2026-11-17: only bets from the day the commodity tape is whole (perp ticks 97-99% of windows, quotes 98-100%)
 recs = []
 for line in open(sys.argv[1]):
     if line.startswith("DUMP"):
@@ -21,6 +24,9 @@ res, skipped = [], 0
 for rec in recs:
     q, ticks = rec["quotes"], {int(a): float(b) for a, b in rec["ticks"]}
     for b in rec["bets"]:
+        if FROM and float(b["ts"]) < FROM:
+            skipped += 1
+            continue
         t0, close, n = float(b["ts"]), float(b["close_ts"]), float(b["contracts"])
         basis, side = float(b["stake_usd"]) / n, b["side"]
         opened = [v for k, v in sorted(ticks.items()) if close - 900 <= k <= close - 840]
