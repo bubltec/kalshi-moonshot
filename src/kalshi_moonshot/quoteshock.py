@@ -30,15 +30,15 @@ def held(mid: float, side: str) -> float:
     return mid if side == "yes" else 1.0 - mid
 
 
-def typical_minute(rows: list[tuple[float, float]], now: float, span: float = UNIT_SPAN) -> float | None:
+def typical_minute(rows: list[tuple[float, float]], now: float, span: float = UNIT_SPAN, min_history: float = UNIT_MIN_HISTORY) -> float | None:
     """sqrt(60) times the root-mean-square one-second change of the mid over the last `span` seconds, from the quote mids on a 1 s grid that carries the last quote forward, in probability. None when the history is under UNIT_MIN_HISTORY seconds, the newest quote is stale, or the mid never moved."""
     if not rows:
         return None
     ts = [r[0] for r in rows]
-    if ts[-1] < now - FRESH or ts[0] > now - UNIT_MIN_HISTORY:
+    if ts[-1] < now - FRESH or ts[0] > now - min_history:
         return None
     n = int(min(span, now - ts[0] - 1.0))
-    if n < UNIT_MIN_HISTORY:
+    if n < min_history:
         return None
     seq = []
     for k in range(n + 1):

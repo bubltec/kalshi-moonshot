@@ -173,3 +173,15 @@ def test_the_lane_file_sets_spot_perp(tmp_path, monkeypatch):
     spec(tmp_path, monkeypatch)
     (tmp_path / "strategies.toml").write_text(TOML.replace("wave_top_trend_hours = 1.0", "wave_top_trend_hours = 1.0\nspot_perp = true\n"))
     assert lanes.lane_specs(config.load())["wt"].spot_perp is True
+
+
+def test_integration_no_loss_share_bars_an_early_loss_sale_and_never_a_gain(tmp_path, monkeypatch, mem):
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.no_loss_share = 0.5
+    ask = asker(w, t, close)
+    spot_feed(close - 800, 99.7)  # the spot on the wrong side, 800 s left: the first 100 s of the market
+    assert ask(0.50, 800) is None  # a sale under the price paid in the first half: barred
+    spot_feed(close - 300, 99.7)
+    assert ask(0.50, 300) is not None  # past the first half the loss sale is open again
+    spot_feed(close - 800, 100.5)
+    assert ask(0.95, 800) is not None  # a gain early is never barred

@@ -186,6 +186,8 @@ class Target:
     risk_min_profit: float = 0.01
     risk_unit: float | None = None
     risk_unit_at: float = 0.0
+    unit_min_history: float = 0.0
+    no_loss_share: float = 0.0
     risk_unit_timed: float | None = None  # the time-aware typical minute (pricevol.implied_rate), read at most every 5 s (sell step trail_timed, shadow)
     risk_unit_timed_at: float = 0.0
     trail_timed_last: tuple = (False, False)  # the (static, time-aware) trail verdicts last written for this bet
@@ -666,7 +668,7 @@ class ProfitWatcher:
         """The market's own typical minute (quoteshock.typical_minute: sqrt(60) times the root-mean-square one-second change of its mid over the last 15 minutes), read from the quotes at most every 5 s and kept on the target."""
         if now - t.risk_unit_at >= 5.0:
             t.risk_unit_at = now
-            t.risk_unit = quoteshock.typical_minute(ticks_mod.mids.rows(t.ticker), now)
+            t.risk_unit = quoteshock.typical_minute(ticks_mod.mids.rows(t.ticker), now, min_history=t.unit_min_history or quoteshock.UNIT_MIN_HISTORY)
         return t.risk_unit
 
     def _risk_unit_timed(self, t: Target, now: float, left: float) -> float | None:
@@ -964,7 +966,7 @@ class ProfitWatcher:
                     reason, kind = f"wave take: the spike peaked at {t.wave_ride_high:.2f} and the bid fell {t.wave_spike_tr:.1f} of its usual {t.wave_spike_s:.0f} s moves ({t.wave_spike_tr * move:.3f}) under it to {bid:.2f}: sold at the end of the ride, a gain of {net * 100:.1f}c a contract", "spike"
         if kind == "spike" or t.wave_ride:  # a ride is held until it peaks: the staircase does not end it
             pass
-        elif t.wave_best_net > 0 and (net > 0 or t.wave_best_net > t.wave_arm_swings * rev) and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
+        elif t.wave_best_net > 0 and (net > 0 or (t.wave_best_net > t.wave_arm_swings * rev and not ProfitWatcher._early_loss_barred(self, t, bid, left))) and t.wave_dir < 0 and t.wave_last_low > 0 and bid < t.wave_last_low - 1e-9:
             where = f"a gain of {net * 100:.1f}c a contract" if net > 0 else f"a small loss of {-net * 100:.1f}c a contract (the bet had been ahead by {t.wave_best_net * 100:.1f}c)"
             reason, kind = f"wave take: the bid {bid:.2f} fell under its last swing low {t.wave_last_low:.2f} (swings of {rev:.3f}, cushion factor {cushion:.2f}, {left:.0f} s left): the climb is done, sold at {where}", "lower low"
         if not reason:
@@ -1032,12 +1034,21 @@ class ProfitWatcher:
                 log.warning("value sale: the step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
         return None
 
+    def _early_loss_barred(self, t: Target, bid: float, left: float) -> bool:
+        """True while the market is inside the lane's no_loss_share of its 900 s and a sale at this bid would be under the price paid after both fees (2026-11-24, user: "early loss is not acceptable. early profit is totally acceptable")."""
+        if t.no_loss_share <= 0 or t.entry <= 0 or left <= (1.0 - t.no_loss_share) * 900.0:
+            return False
+        return bid - fee_per_contract(bid) < t.entry + fee_per_contract(t.entry)
+
     def _value_sale_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, fx: Any) -> str | None:
         if t.close_ts <= 0 or bid <= 0 or left <= 0:
             return None
         lose = fx.get("p_lose")
         if lose is None:
             return None
+        if ProfitWatcher._early_loss_barred(self, t, bid, left):
+            t.value_since = 0.0
+            return None  # early: never a loss (lane field no_loss_share)
         if t.value_after_flip:
             spot = fx.get("spot")
             if spot is None or spot[0] <= 0:
@@ -1545,6 +1556,7 @@ class ProfitWatcher:
                 held.wave_time_curve, held.wave_arm_swings = spec.wave_time_curve, spec.wave_arm_swings
                 held.value_sale_premium, held.value_after_flip = spec.value_sale_premium, spec.value_after_flip
                 held.value_crossed, held.value_wait_share = spec.value_sale_crossed, spec.value_sale_wait_share
+                held.unit_min_history, held.no_loss_share = spec.bid_unit_min_seconds, spec.no_loss_share
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
