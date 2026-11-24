@@ -98,17 +98,18 @@ def test_a_fall_in_the_ask_moves_the_order_down_when_the_lane_follows(setup):
     assert out["got"].filled == 1.5
 
 
-def test_a_risen_ask_never_raises_the_price(setup):
+def test_a_risen_ask_raises_the_price_while_the_module_still_buys(setup):
+    """Since 2026-11-24 (restcheck.py) the order follows the ask both ways while the lane's module still buys at the new ask (it was never up before). With no amend call on this client it is cancelled and placed again."""
     s, store, shot, spec = setup
     spec(buy_rest_seconds=60.0, buy_retries=0, buy_rest_follow=True)
-    client = Socket(asks=[0.31, 0.36], account={"r1": 1.5})
+    client = Socket(asks=[0.31, 0.36], account={"r2": 1.5})
     feed()
     th, out = run_place(s, client, store, shot)
     assert wait_for(lambda: restbuys._by_order.get("r1") is not None)
     restbuys.on_event({"kind": "quote", "ticker": shot.ticker, "bid": 0.34, "ask": 0.36, "ts": time.time()})
-    time.sleep(0.2)
-    assert client.cancels == [] and len(client.rested) == 1
-    restbuys.on_event({"kind": "fill", "ticker": shot.ticker, "order_id": "r1", "count": 1.5, "action": "buy"})
+    assert wait_for(lambda: len(client.rested) == 2)
+    assert client.cancels == ["r1"] and client.rested[1][1] == 0.35  # one cent under the risen ask
+    restbuys.on_event({"kind": "fill", "ticker": shot.ticker, "order_id": "r2", "count": 1.5, "action": "buy"})
     th.join(3.0)
     assert out["got"].filled == 1.5
 

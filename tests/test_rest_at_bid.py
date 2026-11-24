@@ -45,15 +45,18 @@ class Amend:
         return {"order_id": order_id}
 
 
-def test_integration_the_order_follows_a_falling_bid_down_and_not_a_rising_one(setup):
+def test_integration_the_order_follows_the_bid_down_and_up_while_the_module_buys(setup):
     s, _store, shot, spec = setup
     sp = spec(buy_rest_seconds=5.0, buy_rest_below=0.01, buy_rest_at_bid=True, buy_rest_follow=True, price=(0.02, 0.39))
     rest = SimpleNamespace(filled=0.0)
     c = Amend(book(0.28, 0.31))
     got = runner._rest_follow(s, c, shot, sp, 1.5, "k", "o1", 0.30, time.time() + 30, 0.0, 0, rest)
-    assert got == ("o1", 0.28) and c.amends == [("o1", 0.28, 1.5)]  # amended in place to the bid
+    assert (got.kind, got.order_id, got.price) == ("moved", "o1", 0.28) and c.amends == [("o1", 0.28, 1.5)]  # amended in place to the bid
     c2 = Amend(book(0.33, 0.35))
-    assert runner._rest_follow(s, c2, shot, sp, 1.5, "k", "o1", 0.30, time.time() + 30, 0.0, 0, rest) is None and not c2.amends  # a risen bid never raises the price
+    got = runner._rest_follow(s, c2, shot, sp, 1.5, "k", "o1", 0.30, time.time() + 30, 0.0, 0, rest)
+    assert got.price == 0.33 and c2.amends == [("o1", 0.33, 1.5)]  # since 2026-11-24 (restcheck.py) a risen bid raises the order too, while the lane's module still buys (it never did before)
+    c3 = Amend(book(0.30, 0.32))
+    assert runner._rest_follow(s, c3, shot, sp, 1.5, "k", "o1", 0.30, time.time() + 30, 0.0, 0, rest) is None and not c3.amends  # on the bid already: nothing sent
 
 
 def test_the_rest_is_a_share_of_the_time_left_never_fixed_seconds(setup):

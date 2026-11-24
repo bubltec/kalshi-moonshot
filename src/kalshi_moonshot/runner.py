@@ -473,6 +473,12 @@ def evaluate(
             note = f"not sized: {sized.why}. {note}"
         else:
             note = f"{sized.why}. {note}"
+    judge = None
+    paper_at: float | None = None
+    if bet and not dry and spec.buy_rest_seconds > 0 and spec.buy_rest_follow:  # the resting buy is re-judged on every quote while it waits (restcheck.py, 2026-11-24): the lane's module with this decision's estimate and books
+        from . import restcheck
+
+        judge = restcheck.judge_for(s, spec, shot, p_yes=cal.p if shot.side == "yes" else 1.0 - cal.p, store=store, why=why)
     if bet and dry:
         note = f"[dry: a decision to buy, nothing ordered] {note}"
     elif bet and s.is_live(shot.lane, shot.series):
@@ -480,7 +486,7 @@ def evaluate(
         with contextlib.nullcontext() if spec.buy_rest_seconds > 0 else _ORDER_LOCK:  # a resting buy waits for its fill: it must not hold every other lane's order
             placed = place(
                 s, client, store, shot, note, sized.contracts,
-                order_key=order_key, before_order=before_order,
+                order_key=order_key, before_order=before_order, judge=judge,
             )
         note = placed.note
         if spec.buy_redecide_shadow and getattr(_MISS, "missed", False):
@@ -492,8 +498,14 @@ def evaluate(
             sized = Sizing(round(placed.filled, 2), placed.cost, sized.why)
         else:
             bet = False  # blocked, refused, failed or unfilled: there is no position to track
+    elif bet and judge is not None and sized.ok and restbuys.live(client):
+        # Paper judges the same way (CLAUDE.md): the paper resting order waits on the same quotes for the same time and is kept, moved or withdrawn by the same judge, holding this lane's evaluations as the live wait does. The trail goes on the decision; paperfill.settle reads it to judge the fill on the tape.
+        paper_at, trail = _paper_rest_wait(s, client, shot, spec, judge)
+        note = f"{note} {trail}"
     action = "bet" if bet else "pass"
     held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
+    if paper_at is not None and held:
+        held["ts"] = paper_at  # the paper order's own time, which the tape judge reads its window from
     if dry:
         return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
     if bet and spec.stake_vol_shadow and s.is_live(shot.lane, shot.series):
@@ -992,9 +1004,9 @@ def buy_limit(spec: LaneSpec | None, ticker: str, side: str, decision_ask: float
 
 def place(
     s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float,
-    order_key: str | None = None, before_order: Callable[[], None] | None = None,
+    order_key: str | None = None, before_order: Callable[[], None] | None = None, judge: Any = None,
 ) -> Placed:
-    """Send the order for `count` contracts (sized by sizing.py) if the book and risk gate agree."""
+    """Send the order for `count` contracts (sized by sizing.py) if the book and risk gate agree. `judge`: the per-quote re-judgement of a resting buy (restcheck.py), bound by evaluate()."""
     cost = shot.ask * count + order_fee(shot.ask, count)
     if cost + 1e-9 < s.min_order_usd:
         return Placed(f"skipped: order ${cost:.2f} is under the ${s.min_order_usd:.2f} minimum")
@@ -1044,8 +1056,8 @@ def place(
     if before_order:
         before_order()
     if lane_spec is not None and lane_spec.buy_rest_seconds > 0:
-        placed = _place_resting(s, client, store, shot, why, count, lane_spec, order_key, book)
-        if 0 < placed.filled < count - 1e-9 and lane_spec.buy_rest_then_take and lane_spec.buy_rest_top_up:
+        placed = _place_resting(s, client, store, shot, why, count, lane_spec, order_key, book, judge=judge)
+        if 0 < placed.filled < count - 1e-9 and lane_spec.buy_rest_then_take and lane_spec.buy_rest_top_up and "was withdrawn at" not in placed.note:  # a part left because a step said no is not topped up at the ask
             placed = _top_up_rest(s, client, store, shot, lane_spec, placed, count, order_key)
         _MISS.missed = placed.filled <= 0 and "did not fill" in placed.note  # a bid that rested its time and filled nothing
         if placed.filled > 0 or not lane_spec.buy_rest_then_take or "did not fill" not in placed.note:
@@ -1178,12 +1190,12 @@ def _rest_wait_for(shot: LongShot, spec: LaneSpec) -> float:
 
 
 def _rest_start(shot: LongShot, spec: LaneSpec) -> float:
-    """Where the resting buy starts: `buy_rest_below` under the ask, or under the lower of the ask and its average of the last buy_rest_avg_seconds (restprice.py). Reads the quote memory only."""
-    from . import restprice
+    """Where the resting buy starts: `buy_rest_below` under the ask, or under the lower of the ask and its average of the last buy_rest_avg_seconds, or the side's bid with buy_rest_at_bid (restprice.py), on Kalshi's tick grid (restcheck.on_grid, through kalshi.book_price: the price the exchange will hold, so the per-quote re-judgement compares like with like). Reads the quote memory only."""
+    from . import restcheck, restprice
     from . import ticks as ticks_mod
 
     rows = ticks_mod.mids.quotes(shot.ticker) if spec.buy_rest_avg_seconds > 0 else ()
-    return restprice.rest_price(spec, shot.side, shot.ask, rows, time.time(), bid=shot.bid)
+    return restcheck.on_grid(restprice.rest_price(spec, shot.side, shot.ask, rows, time.time(), bid=shot.bid), shot.side)
 
 
 def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) -> tuple[float | None, str]:
@@ -1207,13 +1219,15 @@ def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) 
         if lowered < price and not spec.buy_rest_at_bid:
             log.info("resting buy %s %s: the ask fell from %.2f to %.2f, resting at %.2f instead of %.2f", shot.ticker, shot.side, shot.ask, live_ask, lowered, price)
             price = lowered
-    return price, ""
+    from . import restcheck
+
+    return restcheck.on_grid(price, shot.side), ""  # the price the exchange holds (kalshi.book_price), so the order's recorded price and the re-judgement's compare like with like
 
 
-def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None, book: dict[str, Any] | None = None, price: float | None = None, seconds: float | None = None, hold_price: bool = False) -> Placed:
+def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None, book: dict[str, Any] | None = None, price: float | None = None, seconds: float | None = None, hold_price: bool = False, judge: Any = None) -> Placed:
     """Rest a post-only buy `spec.buy_rest_below` under the ask for `spec.buy_rest_seconds`, then report what filled. Nothing is bought if it does not fill. A resting order that fills is charged no taker fee, and the fee Kalshi charged is recorded as it came.
 
-    `price` and `seconds` fix both, for a bid that must stay at one price (the lane's floor). `hold_price` refuses a cross instead of walking that price down."""
+    `price` and `seconds` fix both, for a bid that must stay at one price (the lane's floor). `hold_price` refuses a cross instead of walking that price down. `judge` is the per-quote re-judgement evaluate() bound (restcheck.py), used on a lane with buy_rest_follow."""
     from . import account
 
     wait = _rest_wait_for(shot, spec) if seconds is None else seconds
@@ -1249,8 +1263,9 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     filled = spent = fee_paid = 0.0
     seen: set[str] = set()
     deadline = started + wait + 3.0
+    withdrawn = ""
     if restbuys.live(client):  # the socket feeds fills and quotes: wait on them, no sleeping and no polling
-        filled, spent, fee_paid, price = _rest_wait(s, client, shot, spec, count, order_key, order_id, price, started, deadline)
+        filled, spent, fee_paid, price, withdrawn = _rest_wait(s, client, shot, spec, count, order_key, order_id, price, started, deadline, judge)
     while time.time() < deadline and filled < count - 1e-9 and not restbuys.live(client):
         time.sleep(2.0)
         try:
@@ -1270,12 +1285,15 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     store.add_order(
         ticker=shot.ticker, env=s.env, count=count, price=price, fill_count=filled, cost_usd=spent, fee_usd=fee_paid, order_id=order_id, contract=shot.side,
     )
+    if filled <= 0 and withdrawn:
+        return Placed(f"resting buy {withdrawn}; nothing bought.")  # not "did not fill": a withdrawn order is not taken at the ask afterwards (buy_rest_then_take)
     if filled <= 0:
         return Placed(f"resting buy at {price:.2f} for {wait:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought.")
-    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}. {why}", filled, spent, price)
+    rest_note = f" The rest of the order was {withdrawn}." if withdrawn and filled < count - 1e-9 else ""
+    return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}.{rest_note} {why}", filled, spent, price)
 
 
-REST_FOLLOW_MAX = 3  # the most times one resting buy is cancelled and placed again (structural: each is two requests)
+REST_FOLLOW_MAX = 20  # the most times one resting buy is moved (amended, or cancelled and placed again). A safety cap on churn, not a rule: since 2026-11-24 the order is re-judged on every quote and moves both ways, and a move is made only when the wanted price is a whole tick away, so a 5 s rest on a market quoting about once a second makes a handful at most; 3 (the cap while it only followed a falling ask) would freeze an order that the module still wants moved. 20 never binds in normal running and keeps a runaway (a flickering book) to a few requests a second, far under Kalshi's write limits
 
 
 def _own_fills(client: Any, shot: LongShot, order_ids: set[str], since: float) -> tuple[float, float, float]:
@@ -1307,72 +1325,95 @@ def _order_gone(exc: Exception) -> bool:
     return "404" in text or "not_found" in text
 
 
-def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: float, order_key: str | None, order_id: str, price: float, deadline: float, since: float, n: int, rest: Any) -> tuple[str, float] | str | None:
-    """One quote on a resting buy's market asks where the order should sit now (lane field buy_rest_follow). From memory (the stream's book): None = leave it; "withdrawn" = the order was cancelled and is not placed again; (order id, price) = it was cancelled and placed again, lower, for what is left unfilled."""
+class Follow(NamedTuple):
+    """What one quote did to a resting buy (runner._rest_follow): kind "moved" (order_id and price are where it sits now, total its order's whole count), "withdrawn" (why says so) or "gone" (the exchange answered 404: the order is no longer on the book, filled or expired; stop following it, the account's fills settle what it got)."""
+
+    kind: str
+    order_id: str = ""
+    price: float = 0.0
+    total: float = 0.0
+    why: str = ""
+
+
+def _rest_judge(s: Settings, shot: LongShot, spec: LaneSpec, judge: Any = None) -> Any:
+    """The per-quote judge of a resting buy (restcheck.py): the one evaluate() bound with the decision's estimate and books, or, for a caller that gave none, the lane's module with no estimate (its steps up to the first that needs one) and the price step."""
+    from . import restcheck
+
+    return judge if judge is not None else restcheck.judge_for(s, spec, shot)
+
+
+def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: float, order_key: str | None, order_id: str, price: float, deadline: float, since: float, n: int, rest: Any, judge: Any = None, total: float | None = None) -> Follow | None:
+    """One quote on a resting buy's market re-judges the order (lane field buy_rest_follow; restcheck.py, 2026-11-24): the lane's buy module is asked again for this market and side at the side's ask now, from memory (the stream's book, the tick store, the bet book). None = keep it where it is; Follow("moved", ...) = amended in place to the price the module's price step wants (buy_rest_below under the ask, or the side's bid with buy_rest_at_bid), lower or higher (cancel and place again for what is left unfilled only when the exchange refuses the amend; the expiry is kept either way); Follow("withdrawn", why=...) = a step said no (or the ask fell under the floor, or what is left is under the minimum or out of time): the order is cancelled and not placed again; Follow("gone") = a 404 on the amend or the cancel. `total` is the current order's whole count (what Kalshi's amend calls count)."""
+    total = count if total is None else total
     book = client.orderbook(shot.ticker)  # the stream's copy of the book, never a request
     live_ask = best_ask(book, shot.side) if book else None
-    if live_ask is None:
+    live_bid = best_bid(book, shot.side) if book else None
+    v = _rest_judge(s, shot, spec, judge)(price, live_bid, live_ask, time.time())
+    if v.action == "keep":
         return None
-    withdraw = live_ask < spec.price[0] - 1e-9
-    want = round(max(0.01, live_ask - spec.buy_rest_below), 4)
-    if spec.buy_rest_at_bid:  # the order sits on the bid and follows a falling bid down
-        live_bid = best_bid(book, shot.side)
-        if live_bid is None:
-            return None
-        want = round(max(0.01, live_bid), 4)
-    if not withdraw and want >= price - 1e-9:
-        return None  # a risen ask never raises the price
-    if not withdraw and hasattr(client, "amend_resting"):
-        # Update the order where it stands (CLAUDE.md, 2026-11-22: "a resting order is updated in place"): same order, same expiry, the new price, for the whole count (what has filled stays filled). Cancel and place is the fallback when the exchange refuses the amend.
+    want = v.price
+    if v.action == "move" and hasattr(client, "amend_resting"):
+        # Update the order where it stands (CLAUDE.md, 2026-11-22: "a resting order is updated in place"): same order, same expiry, the new price, for the order's whole count (what has filled stays filled). Cancel and place is the fallback when the exchange refuses the amend.
         left_now = round(count - rest.filled, 2)
         if left_now * want >= s.min_order_usd:
             try:
-                resp = client.amend_resting(order_id, shot.ticker, shot.side, "buy", want, count)
+                resp = client.amend_resting(order_id, shot.ticker, shot.side, "buy", want, total)
             except KalshiError as exc:
-                if _order_gone(exc):  # 404: the order is no longer on the book (filled or expired); stop following it, the account's fills settle what it got
-                    log.info("resting buy %s %s: the order is gone from the book (%s); no more moves", shot.ticker, shot.side, exc)
-                    return "withdrawn"
-                log.info("resting buy %s %s: the amend to %.2f was refused (%s); cancelling and placing again", shot.ticker, shot.side, want, exc)
+                if _order_gone(exc):  # 404: the order is no longer on the book (filled or expired); stop following it, the account's fills settle what it got (SOL 19:45 looped 46 amends and 46 cancels)
+                    log.info("resting buy %s %s %s: the order is gone from the book (%s); no more moves", shot.lane, shot.ticker, shot.side, exc)
+                    return Follow("gone")
+                log.info("resting buy %s %s %s: the amend from %.3f to %.3f was refused (%s); cancelling and placing again", shot.lane, shot.ticker, shot.side, price, want, exc)
             else:
-                log.info("resting buy %s %s: the ask fell to %.2f, the order amended in place from %.2f to %.2f for %g", shot.ticker, shot.side, live_ask, price, want, left_now)
-                return resp.get("order_id") or order_id, want
+                log.info("resting buy %s %s %s: moved in place from %.3f to %.3f for %g (%s)", shot.lane, shot.ticker, shot.side, price, want, left_now, v.why)
+                return Follow("moved", resp.get("order_id") or order_id, want, total)
     try:
         client.cancel_order(order_id)
     except KalshiError as exc:
-        log.warning("resting buy %s %s: could not cancel to follow the ask (%s)", shot.ticker, shot.side, exc)
-        return "withdrawn" if _order_gone(exc) else None
+        log.warning("resting buy %s %s %s: could not cancel the order at %.3f (%s)", shot.lane, shot.ticker, shot.side, price, exc)
+        return Follow("gone") if _order_gone(exc) else None
     done, _, _ = _own_fills(client, shot, rest.order_ids, since)  # a fill that beat the cancel is in the account's list
+    done = max(done, rest.filled)  # or in the stream's, if the list trails it
     left = round(count - done, 2)
-    if withdraw or left * want < s.min_order_usd or time.time() >= deadline - 1.0:
-        log.info("resting buy %s %s: %s", shot.ticker, shot.side, f"withdrawn, the ask fell to {live_ask:.2f} under the lane's {spec.price[0]:.2f} floor" if withdraw else "cancelled, what is left is under the minimum or out of time")
-        return "withdrawn"
+    if v.action == "cancel":
+        why = f"withdrawn at {price:.3f}: {v.why}"
+        log.info("resting buy %s %s %s: %s (ask %s, %g of %g filled before the cancel)", shot.lane, shot.ticker, shot.side, why, f"{v.ask:.3f}" if v.ask is not None else "none", done, count)
+        return Follow("withdrawn", why=why)
+    if left * want < s.min_order_usd or time.time() >= deadline - 1.0:
+        why = f"cancelled at {price:.3f} to move to {want:.3f}; what is left is under the minimum or out of time"
+        log.info("resting buy %s %s %s: %s", shot.lane, shot.ticker, shot.side, why)
+        return Follow("withdrawn", why=why)
     try:
         resp = client.buy_resting(shot.ticker, shot.side, left, want, max(1.0, deadline - 3.0 - time.time()), client_order_id=f"{order_key}-f{n}" if order_key else None)
     except KalshiError as exc:
-        log.warning("resting buy %s %s: could not place again at %.2f (%s)", shot.ticker, shot.side, want, exc)
-        return "withdrawn"
+        log.warning("resting buy %s %s %s: could not place again at %.3f (%s)", shot.lane, shot.ticker, shot.side, want, exc)
+        return Follow("withdrawn", why=f"cancelled at {price:.3f} and could not be placed again at {want:.3f} ({exc})")
     new_id = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
-    log.info("resting buy %s %s: the ask fell to %.2f, the order moved from %.2f to %.2f for %g", shot.ticker, shot.side, live_ask, price, want, left)
-    return new_id, want
+    log.info("resting buy %s %s %s: cancelled at %.3f and placed again at %.3f for %g (%s)", shot.lane, shot.ticker, shot.side, price, want, left, v.why)
+    return Follow("moved", new_id, want, left)
 
 
-def _rest_wait(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: float, order_key: str | None, order_id: str, price: float, started: float, deadline: float) -> tuple[float, float, float, float]:
-    """Wait for a resting buy on the socket: a streamed fill or quote wakes the thread; a complete fill ends the wait; each quote asks the follow rule when the lane has one. Returns what filled (read from the account once, after) and the order's last price."""
+def _rest_wait(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: float, order_key: str | None, order_id: str, price: float, started: float, deadline: float, judge: Any = None) -> tuple[float, float, float, float, str]:
+    """Wait for a resting buy on the socket: a streamed fill or quote wakes the thread; a complete fill ends the wait; on a lane with buy_rest_follow each quote re-judges the order (_rest_follow: keep, move or withdraw). The fixed deadline is only the ceiling (the order's own expiry); no timer is added. Returns what filled (read from the account once, after), the order's last price, and why it was withdrawn ("" when it was not)."""
     rest = restbuys.open(shot.ticker, count, order_id)
     follows = 0
     seen = 0
+    total = count
+    withdrawn = ""
     try:
         while time.time() < deadline and rest.filled < count - 1e-9:
             seen = rest.wait(seen, deadline - time.time())
             if rest.filled >= count - 1e-9 or time.time() >= deadline:
                 break
             if spec.buy_rest_follow and follows < REST_FOLLOW_MAX:
-                moved = _rest_follow(s, client, shot, spec, count, order_key, order_id, price, deadline, started, follows, rest)
-                if moved == "withdrawn":
+                moved = _rest_follow(s, client, shot, spec, count, order_key, order_id, price, deadline, started, follows, rest, judge, total)
+                if moved is not None and moved.kind == "withdrawn":
+                    withdrawn = moved.why
                     break
-                if isinstance(moved, tuple):
+                if moved is not None and moved.kind == "gone":
+                    break  # the order left the book (filled or expired): no more moves, the fills list says what it got
+                if moved is not None:
                     follows += 1
-                    order_id, price = moved
+                    order_id, price, total = moved.order_id, moved.price, moved.total
                     rest.add_order(order_id)
     finally:
         restbuys.close(rest)
@@ -1380,7 +1421,45 @@ def _rest_wait(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: 
     if rest.filled > filled + 1e-9:  # the account's list can trail the stream by a moment: what the stream said was filled stands (a resting fill is a maker's, no fee), the account sync settles the figures
         extra = rest.filled - filled
         filled, spent = rest.filled, spent + extra * price
-    return filled, spent, fee, price
+    return filled, spent, fee, price, withdrawn
+
+
+def _paper_rest_wait(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, judge: Any, started: float | None = None) -> tuple[float, str]:
+    """The paper twin of _rest_wait for a lane with buy_rest_follow (CLAUDE.md "Paper judges the same way"): the same wait on the socket's quotes for the same time, the same per-quote judge (restcheck.py), and no order. The order is filled, as far as memory can tell, when the side's ask comes down to it (the tape judge, paperfill.settle, decides the fill afterwards, trades at our price included); until then each quote keeps, moves or withdraws it as the live order would be. Returns (when the paper order went in, the trail tag for the decision's note), which paperfill.settle reads in place of its own follow rule."""
+    from . import restcheck
+
+    started = time.time() if started is None else started
+    price = _rest_start(shot, spec)
+    moves: list[tuple[float, float]] = [(started, price)]
+    withdrawn: tuple[float, str] | None = None
+    deadline = started + _rest_wait_for(shot, spec)  # the live order's own rest time (buy_rest_wait_share included)
+    rest = restbuys.open(shot.ticker, 0.0, f"paper:{shot.lane}:{shot.ticker}:{started:.3f}")
+    seen = follows = 0
+    try:
+        while time.time() < deadline:
+            seen = rest.wait(seen, deadline - time.time())
+            now = time.time()
+            if now >= deadline:
+                break
+            book = client.orderbook(shot.ticker)  # the stream's copy of the book, never a request
+            ask = best_ask(book, shot.side) if book else None
+            if ask is not None and ask <= price + 1e-9:
+                break  # the ask came down to the paper order: filled here (the tape judge confirms it)
+            if follows >= REST_FOLLOW_MAX:
+                continue
+            v = judge(price, best_bid(book, shot.side) if book else None, ask, now)
+            if v.action == "cancel":
+                withdrawn = (now, f"withdrawn at {price:.3f}: {v.why}")
+                log.info("paper resting buy %s %s %s: %s", shot.lane, shot.ticker, shot.side, withdrawn[1])
+                break
+            if v.action == "move":
+                log.info("paper resting buy %s %s %s: moved from %.3f to %.3f (%s)", shot.lane, shot.ticker, shot.side, price, v.price, v.why)
+                price = v.price
+                follows += 1
+                moves.append((now, price))
+    finally:
+        restbuys.close(rest)
+    return started, restcheck.trail_mark(moves, started, withdrawn)
 
 
 def _hours_left(close_time: str, now: datetime | None = None) -> float | None:

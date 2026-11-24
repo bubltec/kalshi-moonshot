@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from . import restprice
+from . import restcheck, restprice
 from .config import Settings
 from .fillmodel import simulate_taker_buy
 from .lanes import lane_specs
@@ -84,16 +84,29 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                 bid_at = restprice.side_bid(float(at_order[-1][1]), float(at_order[-1][2]), r["side"])
                 if bid_at is not None:
                     price = restprice.rest_price(spec, r["side"], float(r["ask"]), [], float(r["ts"]), bid=bid_at)
+            price = restcheck.on_grid(price, r["side"])  # the price the live order is sent at (kalshi.book_price), so paper and live start alike
             crossed = bool(at_order) and side_ask(at_order[-1]) <= price + 1e-9
             later = [q for q in quotes if r["ts"] < q[0] <= r["ts"] + window]
             flows = tape.execute("SELECT ts, yes_vol, no_vol, vwap FROM flow_1s WHERE ticker=? AND ts > ? AND ts <= ?", (r["ticker"], int(r["ts"]), int(r["ts"] + window))).fetchall()
+            trail = restcheck.parse_trail(r["reason"] or "", float(r["ts"])) if spec.buy_rest_follow else None
+            withdrawn_why = ""
+            if trail is not None:  # the per-quote judge ran while the paper order waited (runner._paper_rest_wait, restcheck.py): where it sat and whether a step withdrew it are on the note
+                moves, gone = trail
+                price = moves[0][1]
+                crossed = bool(at_order) and side_ask(at_order[-1]) <= price + 1e-9
+                if gone is not None:
+                    later = [q for q in later if q[0] <= gone[0]]  # nothing after the withdrawal can fill it
+                    flows = [fl for fl in flows if fl[0] <= gone[0]]
+                    withdrawn_why = gone[1]
             start = price
-            moves = [(float(r["ts"]), price)]  # (when, where the order sat from then): one entry unless the lane follows the ask down
-            if spec.buy_rest_follow:
-                price, moves, withdrawn = _follow_down(spec, later, side_ask, price, float(r["ts"]), side_bid_q)
+            if trail is None:
+                moves = [(float(r["ts"]), price)]  # (when, where the order sat from then): one entry unless the lane follows the ask
+            if trail is None and spec.buy_rest_follow:  # no trail (the socket was not feeding, or a row from before 2026-11-24): the price part of the rule on the tape
+                price, moves, withdrawn = _follow_ask(spec, later, side_ask, price, float(r["ts"]), r["side"], quotes, side_bid_q)
                 if withdrawn:
                     later = []  # the live lane cancels an order whose ask fell under the lane's floor and does not place it again
                     flows = []
+                    withdrawn_why = "withdrawn: the ask fell under the lane's price floor"
             fill = next((_sat(moves, q[0]) for q in later if side_ask(q) <= _sat(moves, q[0]) + 1e-9), None)
             if fill is None:  # a seller can hit our bid while the ask stays above it: a trade by a taker against our side at our price or better
                 for fl in flows:
@@ -114,10 +127,10 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                 n = round(stake / (price + fee_per_contract(price)), 2) if r["action"] == "pass" else None
                 store.db.execute(
                     "UPDATE decisions SET action='bet', ask=?, contracts=COALESCE(?, contracts), stake_usd=COALESCE(?, stake_usd), reason=? WHERE id=?",
-                    (price, n, round(stake, 4) if n is not None else None, f"{reason} {MARK}: a resting bid at {price:.2f} would have filled{f' (it followed the ask down from {start:.2f})' if abs(price - start) > 1e-9 and spec.buy_rest_follow else ''}]", r["id"]),
+                    (price, n, round(stake, 4) if n is not None else None, f"{reason} {MARK}: a resting bid at {price:.2f} would have filled{f' (it followed the ask from {start:.2f})' if abs(price - start) > 1e-9 and spec.buy_rest_follow else ''}]", r["id"]),
                 )
                 out["filled"] += 1
-            elif spec.buy_rest_then_take and not crossed and (follow := _take_after_rest(spec, r, quotes, window)) is not None:
+            elif spec.buy_rest_then_take and not crossed and not withdrawn_why and (follow := _take_after_rest(spec, r, quotes, window)) is not None:
                 stake = spec.fixed_stake or float(r["stake_usd"] or 0.0)
                 n = round(stake / (follow + fee_per_contract(follow)), 2) if r["action"] == "pass" and stake > 0 else None
                 store.db.execute(
@@ -126,7 +139,7 @@ def settle(s: Settings, store: Store, tape: Any, now: float | None = None) -> di
                 )
                 out["filled"] += 1
             else:
-                why = "the ask was already at our bid (post only cross)" if crossed else "nothing traded at our bid and the ask never came down to it"
+                why = "the ask was already at our bid (post only cross)" if crossed else f"it was {withdrawn_why}" if withdrawn_why else "nothing traded at our bid and the ask never came down to it"
                 store.db.execute(
                     "UPDATE decisions SET action='pass', contracts=NULL, stake_usd=NULL, outcome=NULL, reason=? WHERE id=?",
                     (f"{reason} {MARK}: a resting bid at {price:.2f} would not have filled, {why}]", r["id"]),
@@ -146,25 +159,21 @@ def _sat(moves: list[tuple[float, float]], when: float) -> float:
     return out
 
 
-def _follow_down(spec: Any, later: list[Any], side_ask: Any, price: float, started: float, side_bid: Any = None) -> tuple[float, list[tuple[float, float]], bool]:
-    """The live follow rule (runner._rest_follow, lane field buy_rest_follow) on the tape's quotes: each quote asks where the order should sit, `buy_rest_below` under the ask; when that is lower than the order it moves there (at most REST_FOLLOW_MAX times), a risen ask never raises it, and an ask under the lane's price floor withdraws it. An order that the ask reached before the quote that would have moved it stays where it was. Returns (the order's last price, its moves as (when, price), withdrawn)."""
+def _follow_ask(spec: Any, later: list[Any], side_ask: Any, price: float, started: float, side: str = "yes", quotes: Any = (), side_bid: Any = None) -> tuple[float, list[tuple[float, float]], bool]:
+    """The price part of the live re-judgement (restcheck.py) on the tape's quotes, for a paper bet with no trail of its own (the socket was not feeding while it waited, or the row is older than 2026-11-24): each quote asks where the order should sit (restcheck.want_price: buy_rest_below under the ask or its recent average, or the side's bid with buy_rest_at_bid, on the tick grid); when that is a whole tick away the order moves there, lower or higher (at most REST_FOLLOW_MAX times), and an ask under the lane's price floor withdraws it. The module's other steps read live memory and cannot be asked of old quotes, so they are not applied here. An order that the ask reached before the quote that would have moved it stays where it was. Returns (the order's last price, its moves as (when, price), withdrawn)."""
     from .runner import REST_FOLLOW_MAX
 
     moves = [(started, price)]
     follows = 0
+    rows = [(float(q[0]), float(q[1]), float(q[2])) for q in quotes]
     for q in later:
         a = side_ask(q)
         if a <= price + 1e-9:
             break  # filled here at the order's price
         if a < spec.price[0] - 1e-9:
             return price, moves, True
-        want = round(max(0.01, a - spec.buy_rest_below), 4)
-        if spec.buy_rest_at_bid and side_bid is not None:  # the order follows the side's bid down
-            b = side_bid(q)
-            if b is None:
-                continue
-            want = round(max(0.01, b), 4)
-        if follows < REST_FOLLOW_MAX and want < price - 1e-9:
+        want = restcheck.want_price(spec, side, a, [x for x in rows if x[0] <= float(q[0])], float(q[0]), bid=side_bid(q) if side_bid is not None else None)
+        if follows < REST_FOLLOW_MAX and want is not None and restcheck.differs(want, price):
             price = want
             follows += 1
             moves.append((float(q[0]), price))

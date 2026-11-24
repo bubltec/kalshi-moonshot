@@ -36,7 +36,7 @@ def test_the_live_order_starts_where_the_rule_says_from_the_quote_memory():
         ticks.mids.note("KXBTC15M-LIVE", now - 4 + i, ask - 0.01, ask)
     shot = LongShot(ticker="KXBTC15M-LIVE", title="", rules="", bid=0.33, ask=0.34, volume=0.0, close_time="", hours_to_close=0.2, subtitle="", lane="x", side="yes")
     try:
-        assert runner._rest_start(shot, spec) == pytest.approx(0.284, abs=0.004)  # the average of the five quotes is about 0.304
+        assert runner._rest_start(shot, spec) == pytest.approx(0.28, abs=0.004)  # the average of the five quotes is about 0.304
         assert runner._rest_start(shot, replace(spec, buy_rest_avg_seconds=0.0)) == pytest.approx(0.32)
     finally:
         ticks.mids.clear()
@@ -65,7 +65,7 @@ def test_the_paper_judge_starts_the_order_under_the_average_too(tmp_path, monkey
             store.add_decision(ticker=tk, title="", bid=0.0, ask=ask, model_p=0.0, edge=0.0, action="bet", mode="observe", lane=lane, side="yes", contracts=3, stake_usd=3.0, close_time="2099-01-01T00:00:00Z", ts=100.0)
     paperfill.settle(s, store, tape, now=1000.0)
     got = {(r["lane"], r["ticker"]): r for r in store.db.execute("SELECT lane, ticker, action, ask FROM decisions").fetchall()}
-    assert got[("avg", "KXBTC15M-UP")]["action"] == "bet" and got[("avg", "KXBTC15M-UP")]["ask"] == pytest.approx(0.284)  # under the 0.304 average, not under the 0.34 ask
+    assert got[("avg", "KXBTC15M-UP")]["action"] == "bet" and got[("avg", "KXBTC15M-UP")]["ask"] == pytest.approx(0.28)  # under the 0.304 average, not under the 0.34 ask; 0.284 put on the cent grid (2026-11-24: the paper start is the price the live order is sent at, kalshi.book_price)
     assert got[("plain", "KXBTC15M-UP")]["ask"] == pytest.approx(0.32)
     assert got[("avg", "KXBTC15M-DOWN")]["ask"] == pytest.approx(0.24)  # under the ask, never raised to the average
     assert got[("plain", "KXBTC15M-DOWN")]["ask"] == pytest.approx(0.24)

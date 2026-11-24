@@ -112,7 +112,7 @@ def test_a_refused_amend_of_the_sale_cancels_and_places_the_new_ask():
 
 
 def test_the_followed_buy_still_rests_where_the_runner_says():
-    assert runner.REST_FOLLOW_MAX == 3  # the cap on moves stays: each is a request, whichever call makes it
+    assert runner.REST_FOLLOW_MAX == 20  # the cap on moves stays (each is a request, whichever call makes it); raised from 3 on 2026-11-24, when the order began to be re-judged on every quote and moved both ways
 
 
 # ---- the resting orders go out on the tick grid (2026-11-23): a live GOLD NO buy resting at 0.894 went out as a YES ask of 0.106, off the cent grid of the 10c to 90c zone of the tapered ladder, and Kalshi refused it with invalid_price ----

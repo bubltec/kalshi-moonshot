@@ -1,7 +1,7 @@
 """Prove Kalshi's amend-order call on the DEMO exchange before the bot uses it (2026-11-22, user: "you could test it against the demo environment ... once the function confirms it works you can implement it").
 
 What it does, in order, with one contract of play money: rests a YES buy at 1c (far under the bid, so it cannot fill), amends it to 2c through
-POST /portfolio/events/orders/{order_id}/amend, reads the order back, and cancels it. It refuses to run unless the configured base URL is the
+POST /portfolio/events/orders/{order_id}/amend, reads the order back, amends it back down to 1c, and cancels it; then the same for a NO buy (2026-11-24: the re-judged resting buy moves either way, on either side). It refuses to run unless the configured base URL is the
 demo exchange. It prints what Kalshi answered at each step and never prints a key.
 
     ENV_FILE=.env.demo .venv/bin/python scripts/demo_amend_check.py
@@ -104,9 +104,34 @@ try:
             show("4. the same amend again", "accepted (no error)")
         except KalshiError as exc:
             show("4. the same amend again (expect a no-op refusal)", str(exc))
+        try:  # 2026-11-24: the per-quote re-judgement (restcheck.py) moves a resting buy both ways
+            show("4b. amended back DOWN to 0.01", c.amend_resting(order_id, ticker, "yes", "buy", 0.01, 1.0))
+        except KalshiError as exc:
+            show("4b. the amend down REFUSED", str(exc))
 finally:
     if order_id:
         try:
             show("5. cancelled", c.cancel_order(order_id))
         except KalshiError as exc:
             show("5. cancel", str(exc))
+
+# 6. A NO buy (sent as an ask on the YES book at 1 - price), amended up and down: the re-judged resting buy buys either side (2026-11-24).
+no_id = None
+try:
+    placed_no = c.buy_resting(ticker, "no", 1, 0.01, 120)
+    show("6. rested a NO buy at 0.01", placed_no)
+    no_id = placed_no.get("order_id") or (placed_no.get("order") or {}).get("order_id")
+    for px in (0.02, 0.01):
+        try:
+            show(f"6. NO buy amended to {px:.2f}", c.amend_resting(no_id, ticker, "no", "buy", px, 1.0))
+        except KalshiError as exc:
+            show(f"6. NO amend to {px:.2f} REFUSED", str(exc))
+except KalshiError as exc:
+    show("6. NO buy not placed", str(exc))
+finally:
+    if no_id:
+        try:
+            show("7. NO buy cancelled", c.cancel_order(no_id))
+        except KalshiError as exc:
+            show("7. cancel", str(exc))
+# Not checked here: an upward amend of a post-only buy to a price at or over the ask (what Kalshi does then is unknown; restcheck keeps every price a tick under the ask it read).
