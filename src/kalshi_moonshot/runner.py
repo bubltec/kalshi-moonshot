@@ -1326,6 +1326,18 @@ def _order_gone(exc: Exception) -> bool:
     return "404" in text or "not_found" in text
 
 
+def _order_state(client: Any, ticker: str, order_id: str) -> str | None:
+    """The exchange's own status of one order ("resting", "executed", "canceled"), or None when it cannot be read. A 404 on a cancel or an amend does NOT say the order is gone: ZEC 12:30 on 2026-11-24 (order 01a20e92-2320, placed 17:19:48.17 UTC) got a 404 on its cancel one second later, was resting all that time and filled at 17:20:31, after the lane had dropped it, so the fill was adopted as a "manual" position that no exit watched. Only this status says."""
+    try:
+        body = client._request("GET", "/portfolio/orders", params={"ticker": ticker, "limit": 50}, auth=True)
+    except Exception:
+        return None
+    for o in body.get("orders", []):
+        if o.get("order_id") == order_id:
+            return str(o.get("status") or "") or None
+    return None
+
+
 class Follow(NamedTuple):
     """What one quote did to a resting buy (runner._rest_follow): kind "moved" (order_id and price are where it sits now, total its order's whole count), "withdrawn" (why says so) or "gone" (the exchange answered 404: the order is no longer on the book, filled or expired; stop following it, the account's fills settle what it got)."""
 
@@ -1360,18 +1372,33 @@ def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count
             try:
                 resp = client.amend_resting(order_id, shot.ticker, shot.side, "buy", want, total)
             except KalshiError as exc:
-                if _order_gone(exc):  # 404: the order is no longer on the book (filled or expired); stop following it, the account's fills settle what it got (SOL 19:45 looped 46 amends and 46 cancels)
-                    log.info("resting buy %s %s %s: the order is gone from the book (%s); no more moves", shot.lane, shot.ticker, shot.side, exc)
+                if _order_gone(exc):  # 404: the order may be filled or expired (SOL 19:45 looped 46 amends and 46 cancels), or only not yet visible to the call (ZEC 12:30): the exchange's own status decides
+                    state = _order_state(client, shot.ticker, order_id)
+                    if state == "resting":
+                        log.info("resting buy %s %s %s: the amend answered 404 but the order is still resting; kept as it is", shot.lane, shot.ticker, shot.side)
+                        return None
+                    log.info("resting buy %s %s %s: the order is gone from the book (%s, status %s); no more moves", shot.lane, shot.ticker, shot.side, exc, state)
                     return Follow("gone")
                 log.info("resting buy %s %s %s: the amend from %.3f to %.3f was refused (%s); cancelling and placing again", shot.lane, shot.ticker, shot.side, price, want, exc)
             else:
                 log.info("resting buy %s %s %s: moved in place from %.3f to %.3f for %g (%s)", shot.lane, shot.ticker, shot.side, price, want, left_now, v.why)
                 return Follow("moved", resp.get("order_id") or order_id, want, total)
-    try:
-        client.cancel_order(order_id)
-    except KalshiError as exc:
-        log.warning("resting buy %s %s %s: could not cancel the order at %.3f (%s)", shot.lane, shot.ticker, shot.side, price, exc)
-        return Follow("gone") if _order_gone(exc) else None
+    cancelled = False
+    for _attempt in range(3):
+        try:
+            client.cancel_order(order_id)
+            cancelled = True
+            break
+        except KalshiError as exc:
+            log.warning("resting buy %s %s %s: could not cancel the order at %.3f (%s)", shot.lane, shot.ticker, shot.side, price, exc)
+            if not _order_gone(exc):
+                return None
+            state = _order_state(client, shot.ticker, order_id)
+            if state != "resting":
+                return Follow("gone")  # executed or cancelled (or unreadable): the account's fills settle what it got
+            time.sleep(0.7)  # the order rests but the cancel cannot find it yet: try again
+    if not cancelled:
+        return None  # still resting and not cancellable this quote: it is followed on the next one, never dropped
     done, _, _ = _own_fills(client, shot, rest.order_ids, since)  # a fill that beat the cancel is in the account's list
     done = max(done, rest.filled)  # or in the stream's, if the list trails it
     left = round(count - done, 2)

@@ -79,3 +79,53 @@ def test_gone_order_stops_following():
 
     assert runner._order_gone(KalshiError('POST /x/amend -> 404: {"error":{"code":"not_found"}}'))
     assert not runner._order_gone(KalshiError("POST /x -> 500: boom"))
+
+
+class Cancel404:
+    """A client whose cancel answers 404 `fails` times (the exchange has not indexed the order yet) while the order rests, then works; `state` is what the order's status reads."""
+
+    def __init__(self, fails, state):
+        self.fails, self.state, self.cancels = fails, state, 0
+
+    def orderbook(self, ticker):
+        return book(0.28, 0.31)
+
+    def cancel_order(self, order_id):
+        from kalshi_moonshot.kalshi import KalshiError
+
+        self.cancels += 1
+        if self.cancels <= self.fails:
+            raise KalshiError('DELETE /portfolio/events/orders/x -> 404: {"error":{"code":"not_found","message":"not found"}}')
+        return {}
+
+    def _request(self, method, path, params=None, auth=False):
+        return {"orders": [{"order_id": "o1", "status": self.state}]}
+
+
+def judge_cancel(price, bid, ask, now):
+    return SimpleNamespace(action="cancel", price=0.0, why="a step said no", ask=0.5)
+
+
+def test_a_404_on_the_cancel_of_a_resting_order_is_retried_not_dropped(setup, monkeypatch):
+    s, _store, shot, spec = setup
+    monkeypatch.setattr(time, "sleep", lambda x: None)
+    monkeypatch.setattr(runner, "_own_fills", lambda *a, **k: (0.0, 0.0, 0.0))
+    sp = spec(buy_rest_seconds=5.0, buy_rest_at_bid=True, buy_rest_follow=True, price=(0.02, 0.39))
+    rest = SimpleNamespace(filled=0.0, order_ids=["o1"])
+    c = Cancel404(fails=2, state="resting")  # ZEC 12:30: a 404 one second after placing, the order resting
+    got = runner._rest_follow(s, c, shot, sp, 1.5, "k", "o1", 0.30, time.time() + 30, 0.0, 0, rest, judge_cancel)
+    assert got.kind == "withdrawn" and c.cancels == 3  # the third try cancelled it: the lane's "no" holds
+    c = Cancel404(fails=9, state="resting")
+    assert runner._rest_follow(s, c, shot, sp, 1.5, "k", "o1", 0.30, time.time() + 30, 0.0, 0, rest, judge_cancel) is None  # still resting, still not cancellable: kept, followed on the next quote
+    assert c.cancels == 3
+
+
+def test_a_404_on_an_order_that_is_executed_or_cancelled_is_gone(setup, monkeypatch):
+    s, _store, shot, spec = setup
+    monkeypatch.setattr(time, "sleep", lambda x: None)
+    sp = spec(buy_rest_seconds=5.0, buy_rest_at_bid=True, buy_rest_follow=True, price=(0.02, 0.39))
+    rest = SimpleNamespace(filled=0.0, order_ids=["o1"])
+    for state in ("executed", "canceled"):
+        c = Cancel404(fails=9, state=state)
+        got = runner._rest_follow(s, c, shot, sp, 1.5, "k", "o1", 0.30, time.time() + 30, 0.0, 0, rest, judge_cancel)
+        assert got.kind == "gone" and c.cancels == 1
