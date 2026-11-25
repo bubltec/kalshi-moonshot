@@ -312,7 +312,7 @@ def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
     from . import ticks
 
     window = shot.ticker.split("-")[1]
-    total, spent, n, unread = 0.0, 0.0, 0, 0
+    total, spent, n, unread, worst, worst_tk = 0.0, 0.0, 0, 0, 0.0, ""
     for r in ctx.store.open_bets():
         tk = r["ticker"]
         if (r["lane"] or "moonshot") != shot.lane or r["side"] != shot.side or tk == shot.ticker or tk.count("-") < 2 or tk.split("-")[1] != window:
@@ -325,15 +325,18 @@ def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
         yes_bid, yes_ask = rows[-1][1], rows[-1][2]
         bid = yes_bid if shot.side == "yes" else 1.0 - yes_ask
         paid = float(r["stake_usd"] or 0.0) / contracts
-        total += (bid - fee_per_contract(bid) - paid - fee_per_contract(paid)) * contracts
+        net_each = bid - fee_per_contract(bid) - paid - fee_per_contract(paid)
+        total += net_each * contracts
         spent += (paid + fee_per_contract(paid)) * contracts
         n += 1
+        under = -net_each / (paid + fee_per_contract(paid))  # this one bet's own share under what it cost (2026-11-25, user: "this should block ANY, so if ANY are losing by side_losing_share it should block more buys")
+        if under > worst:
+            worst, worst_tk = under, tk
     if n == 0:
         return Check(True, "no other bet of the lane on this side in this window" + (f" with a quote ({unread} unread)" if unread else ""))
     share = ctx.spec.side_losing_share
-    down = -total / spent if spent > 0 else 0.0
-    ok = down <= share
-    return Check(ok, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars at their bids now, {down:.0%} under what they cost" + ("" if ok else f", past the {share:.0%} the lane allows: no more of the side"))
+    ok = worst <= share + 1e-12  # ANY one of them under the share blocks, not their total
+    return Check(ok, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars at their bids now; the worst, {worst_tk.split('-')[0] if worst_tk else 'none'}, is {worst:.0%} under what it cost" + ("" if ok else f", past the {share:.0%} the lane allows: no more of the side"))
 
 
 _CONFIRM_FIRST: dict[tuple[str, str], list[float]] = {}  # (ticker, side) -> [when the lane first would have bought, the spot then, the spot's typical minute then]

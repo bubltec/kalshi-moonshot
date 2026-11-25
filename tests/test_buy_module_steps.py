@@ -395,6 +395,21 @@ def test_unit_side_losing_refuses_more_of_a_side_whose_open_bets_stand_under_wat
     assert ask("side_losing", sp, new).ok is True  # the review has no books
 
 
+def test_unit_side_losing_blocks_when_any_one_open_bet_is_under_the_share_whatever_the_total(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    store = Store(config.load().db_path)
+    for tk in ("KXBTC15M-30JAN010015-15", "KXETH15M-30JAN010015-15"):
+        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (time.time(), tk, "bet", "observe", 0.8, "yes", "x", 10, 8.0, "2099-01-01T00:00:00Z"))
+    store.db.commit()
+    new = dataclasses.replace(shot(), ticker="KXSOL15M-30JAN010015-15", series="KXSOL15M")
+    bids = {"KXBTC15M-30JAN010015-15": (0.70, 0.72), "KXETH15M-30JAN010015-15": (0.98, 0.99)}  # BTC about 15% under what it cost, ETH well ahead: together they are in profit
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(time.time(), *bids[t])])
+    sp = spec(side_losing_share=0.1)
+    c = ask("side_losing", sp, new, store=store)
+    assert c.ok is False and "KXBTC15M" in c.why  # 2026-11-25, user: "if ANY are losing by side_losing_share it should block more buys", "they all share the same losses"
+    assert ask("side_losing", spec(side_losing_share=0.2), new, store=store).ok is True
+
+
 def test_unit_settle_confirm_buys_only_once_the_spot_has_moved_the_bets_way_by_its_own_typical_minute(monkeypatch):
     from kalshi_moonshot import binaryrisk, priskp
 
