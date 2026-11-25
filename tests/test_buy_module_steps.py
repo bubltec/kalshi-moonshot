@@ -434,6 +434,23 @@ def test_unit_side_losing_values_an_open_bet_at_the_better_of_its_bid_and_its_ho
     assert ask("side_losing", sp, new, store=store, now=now).ok is False
 
 
+def test_unit_side_losing_counts_the_move_since_the_buy_not_the_spread_and_fees_paid_at_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    store = Store(config.load().db_path)
+    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, bid, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?,?)", (time.time(), "KXBTC15M-30JAN010015-15", "bet", "observe", 0.77, 0.79, "yes", "x", 10, 7.9, "2099-01-01T00:00:00Z"))  # bought at 0.79 with the bid at 0.77: a 2c spread
+    store.db.commit()
+    new = dataclasses.replace(shot(), ticker="KXSOL15M-30JAN010015-15", series="KXSOL15M")
+    sp = spec(side_losing_share=0.05)
+    now = time.time()
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(now, 0.77, 0.79)])  # nothing has moved since the buy
+    c = ask("side_losing", sp, new, store=store, now=now)
+    assert c.ok is True and "0% under where it stood when bought" in c.why  # the spread and fees alone (about 6% under its cost at the bid) no longer block (2026-11-25, user: "i think we need to fix that gap")
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(now, 0.74, 0.76)])  # the bid has fallen 3c since the buy: about 4% of its cost
+    assert ask("side_losing", sp, new, store=store, now=now).ok is True
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(now, 0.70, 0.72)])  # 7c down: about 9% under
+    assert ask("side_losing", sp, new, store=store, now=now).ok is False
+
+
 def test_unit_settle_confirm_buys_only_once_the_spot_has_moved_the_bets_way_by_its_own_typical_minute(monkeypatch):
     from kalshi_moonshot import binaryrisk, priskp
 

@@ -353,14 +353,19 @@ def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
         total += net_each * contracts
         spent += (paid + fee_per_contract(paid)) * contracts
         n += 1
-        under = -net_each / (paid + fee_per_contract(paid))  # this one bet's own share under what it cost (2026-11-25, user: "this should block ANY, so if ANY are losing by side_losing_share it should block more buys")
+        try:
+            entry_bid = float(r["bid"] or 0.0)  # the bet side's bid when the bet was bought (the decision's own quote)
+        except (KeyError, IndexError, TypeError, ValueError):
+            entry_bid = 0.0
+        baseline = entry_bid - fee_per_contract(entry_bid) if 0.0 < entry_bid < 1.0 else paid + fee_per_contract(paid)  # 2026-11-25, user: "i think we need to fix that gap": a bet is losing by how far it has MOVED since it was bought (what a sale would have paid then against its worth now), so the spread and the fees paid at the buy do not count; with no bid stored the cost is the baseline as before
+        under = max(0.0, (baseline - worth) / (paid + fee_per_contract(paid)))
         if under > worst:
             worst, worst_tk = under, tk
     if n == 0:
         return Check(True, "no other bet of the lane on this side in this window" + (f" with a quote ({unread} unread)" if unread else ""))
     share = ctx.spec.side_losing_share
     ok = worst <= share + 1e-12  # ANY one of them under the share blocks, not their total
-    return Check(ok, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars now (each valued at the better of its bid after the fee and its hold value on the spot's cushion); the worst, {worst_tk.split('-')[0] if worst_tk else 'none'}, is {worst:.0%} under what it cost" + ("" if ok else f", past the {share:.0%} the lane allows: no more of the side"))
+    return Check(ok, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars now (each valued at the better of its bid after the fee and its hold value on the spot's cushion); the worst, {worst_tk.split('-')[0] if worst_tk else 'none'}, is {worst:.0%} under where it stood when bought" + ("" if ok else f", past the {share:.0%} the lane allows: no more of the side"))
 
 
 _CONFIRM_FIRST: dict[tuple[str, str], list[float]] = {}  # (ticker, side) -> [when the lane first would have bought, the spot then, the spot's typical minute then]
