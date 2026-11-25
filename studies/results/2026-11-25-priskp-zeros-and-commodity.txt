@@ -1,0 +1,10 @@
+2026-11-25. User: "we had a lot of zeros over the past 7 hours ... commodities had a lot of failures and was massively negative".
+Run with scripts/cloud.sh sql (host Postgres, tape.quotes), nets after both fees, settled or sold bets only.
+
+LAST 7 HOURS (00:47-07:25 ET): priskp 40 bets -$72.54 (4 held to zero -$60.4, 3 sold at 0.07-0.30 -$36.5, the rest +$24); commodity lanes -$37 (open bet counted out: about -$27).
+WHY THE ZEROS: the held side's bid slides to 0 over 3-7 minutes. no_recovery waits 450 s from the last profit, so it fires after the bid is dead (XRP 06:20 sold at 0.002, 0 of 20 filled, settled 0). HYPE 04:34 and BNB 01:02 touched profit briefly, which restarted the 450 s clock.
+STOPS DO NOT HELP (scripts/priskp_stop_sim_study.sql, 148 priskp bets since 2026-11-24 05:00 UTC, spread <= 8c): bid at or under 0.9/0.8/0.7/0.6/0.5 of the price paid changes the net by -$59.5/-$91.1/-$50.4/-$61.1/-$45.6 against the bets as run (-$61.10). Price-collapse stops lose, as the 2026-11-24 cross+stop study found.
+EARLIER NO_RECOVERY (scripts/priskp_no_recovery_wait_study.sql, same 148 bets, wait runs from the last time ahead, sold at the bid): wait 120 s -$34.2 (63 sold), 180 s +$36.3 (36), 240 s +$28.6 (24), 300 s +$18.4 (21), 450 s (the live setting) +$19.0 (11; the sim sells at the bid, live sold at 0.00-0.13 or not at all). WAIT CHOSEN AFTER SEEING THE RESULTS; small n; a lead.
+PRICE PAID (priskp since 11-24): 0.82-0.88: 25 bets, 40% lost, -$48.23; 0.65-0.82 flat. Commodity since 11-09: every band negative but 0.92+ (n=1240, about -$389).
+COMMODITY BY DAY (ET): 11-15 +7.8, 11-16 +7.2, 11-17 -128.6, 11-18 -37.7, 11-19 -39.6, 11-20 -68.5, 11-22 -11.8, 11-23 +68.5, 11-24 -60.3, 11-25 -35.2.
+COMMODITY EXITS (since 11-18, 547 settled bets): held to end 408 bets +$498.38 (8 zeros); risk exit under even 77 bets -$577.16 (would be -$594.33 held; 14 would have won); time-to-go exit 18 bets -$134.00; profit take 42 bets +$29.44. The exits are not the cost: 17% of bets fail against about 14% break-even.

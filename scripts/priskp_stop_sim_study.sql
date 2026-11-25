@@ -1,0 +1,7 @@
+WITH b AS (SELECT ticker, side, ts, stake_usd/contracts pay, contracts n, exit_ts, exit_price, outcome FROM decisions WHERE lane='priskp' AND action='bet' AND mode='trade' AND ts > 1795500000 AND (exit_ts IS NOT NULL OR outcome IS NOT NULL)),
+b2 AS (SELECT *, pay+0.07*pay*(1-pay) cost, CASE WHEN exit_ts IS NOT NULL THEN exit_price-0.07*exit_price*(1-exit_price) WHEN outcome=side THEN 1.0 ELSE 0.0 END got FROM b),
+k AS (SELECT unnest(ARRAY[0.9,0.8,0.7,0.6,0.5]) f),
+hit AS (SELECT b2.ticker, b2.ts, k.f, min(t.ts) hts FROM b2 CROSS JOIN k JOIN tape.quotes t ON t.ticker=b2.ticker AND t.ts > b2.ts+30 AND t.ts < coalesce(b2.exit_ts, b2.ts+900) AND t.bid IS NOT NULL AND t.ask IS NOT NULL AND t.ask-t.bid <= 0.08 AND (CASE b2.side WHEN 'yes' THEN t.bid ELSE 1-t.ask END) <= k.f*b2.pay GROUP BY 1,2,3),
+alt AS (SELECT h.f, b2.n, b2.got, b2.cost, (SELECT CASE b2.side WHEN 'yes' THEN t.bid ELSE 1-t.ask END FROM tape.quotes t WHERE t.ticker=b2.ticker AND t.ts=h.hts AND t.bid IS NOT NULL AND t.ask IS NOT NULL LIMIT 1) sb FROM hit h JOIN b2 ON b2.ticker=h.ticker AND b2.ts=h.ts)
+SELECT 'as run' f, count(*) n, round(sum(n*(got-cost))::numeric,2) net, null::bigint stopped, null::numeric delta FROM b2
+UNION ALL SELECT f::text, (SELECT count(*) FROM b2), round(((SELECT sum(n*(got-cost)) FROM b2) + sum(n*((sb-0.07*sb*(1-sb))-got)))::numeric,2), count(*), round(sum(n*((sb-0.07*sb*(1-sb))-got))::numeric,2) FROM alt WHERE sb IS NOT NULL GROUP BY f ORDER BY 1 DESC;
