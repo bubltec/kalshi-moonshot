@@ -679,16 +679,20 @@ def test_unit_wave_leg_refuses_an_unturned_dip_and_passes_what_it_cannot_read(mo
     monkeypatch.setattr(ticks_mod.strikes, "get", lambda tk, *a: None)
     assert buychain.STEPS["wave_leg"](buychain.Ctx(config.load(), sp, now=opened + 150.0), sh).ok is True  # no target in memory: no read is no refusal
 
-def test_unit_wave_leg_passes_a_leg_part_way_through_and_refuses_it_at_its_extreme(monkeypatch):
+def test_unit_wave_leg_refuses_an_against_or_turned_bet_always_and_an_inside_bet_only_at_its_extreme(monkeypatch):
     from kalshi_moonshot import wavefacts
 
     wavefacts._before.clear()
     wavefacts._big.clear()
-    # a steady climb for the hour, then a dip from 560 s that runs against a YES: 40 s in, it has travelled well under a usual 10 minute wave (the NEAR YES 11:48 and BTC YES 12:33 refusals, 2026-11-25, were legs part-way through)
+    # a steady climb for the hour, then a dip from 560 s that runs against a YES: 40 s in it is part-way through its leg, but it is AGAINST the bet: it waits (ZEC 18:15 NO, 2026-11-25: bought as the dip turned up)
     path = lambda s: 100.0 + 0.01 * s - (0.04 * (s - 560.0) if s > 560.0 else 0.0)
     opened = _wave_history(monkeypatch, path)
     young = wavefacts.leg("IDX", opened, opened + 600.0, 100.0, "yes", 300.0)
-    assert young is not None and young["class"] == "against" and young["travel"] is not None and young["travel"] < wavefacts.EXTREME
-    assert young["would_refuse"] is False  # part-way through: passes
-    old = wavefacts.leg("IDX", opened, opened + 800.0, 100.0, "yes", 100.0)
-    assert old["class"] == "against" and old["travel"] >= wavefacts.EXTREME and old["would_refuse"] is True  # the same leg 240 s in has outrun a usual wave: at its extreme
+    assert young is not None and young["class"] == "against" and young["travel"] < wavefacts.EXTREME
+    assert young["would_refuse"] is True  # against: always
+    # the same market for a NO: the dip runs WITH it and is young, so it is inside and part-way: bought
+    no = wavefacts.leg("IDX", opened, opened + 600.0, 100.0, "no", 300.0)
+    assert no["class"] == "inside" and no["would_refuse"] is False
+    old = wavefacts.leg("IDX", opened, opened + 800.0, 100.0, "no", 100.0)
+    assert old["class"] == "inside" and old["travel"] >= wavefacts.EXTREME and old["would_refuse"] is True  # inside, but at its extreme
+

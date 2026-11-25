@@ -456,7 +456,7 @@ def wave_leg_step(ctx: Ctx, shot: LongShot) -> Check:
         travel = "n/a" if got["travel"] is None else f"{got['travel']:.2f}"
         told = f"{got['class']} (swing {got['swing_u']:.2f} typical minutes, gave back {got['gb_u']:.2f}; the big leg has run {age} of a usual one and the leg has travelled {travel} of a usual wave; 30 minute R^2 {r2}, for the record)"
         if got["would_refuse"]:
-            return Check(False, f"the {shot.side.upper()} is {told}: at the extreme of its leg, where the wave is likely to repeat or turn into a long leg: not bought now")
+            return Check(False, f"the {shot.side.upper()} is {told}: the swing runs against it or its leg has already turned against it, or it is at the extreme of its own leg, where the wave is likely to repeat or turn into a long leg: not bought now")
         return Check(True, f"the {shot.side.upper()} is {told}: not refused")
     except Exception as exc:  # a reading that fails is no refusal: the other steps decide
         return Check(True, f"leg unreadable ({exc!r}), so no refusal")
