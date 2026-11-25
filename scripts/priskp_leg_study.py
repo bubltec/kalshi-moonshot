@@ -48,6 +48,17 @@ for b in json.load(open(f"{D}/bets24.json")):
     if h.u is None:
         continue
     r = waveturn.reading(win, now - op, K, h.u)
+    from kalshi_moonshot.waveshape import broad
+    sm = broad(win, 0, now - op, waveturn.SMOOTH // 2, now - op)
+    pts, _d, _ek, _ev = waveturn.zigzag(sm, waveturn.ZZ * h.u)
+    st = pts[-1][0] if pts else 0
+    seg = [float(x) for x in win[st:now - op + 1]]
+    leg_r2 = None
+    if len(seg) >= 60:
+        m_ = len(seg); mu_ = sum(seg) / m_; xm_ = (m_ - 1) / 2
+        sxx_ = sum((i - xm_) ** 2 for i in range(m_)); sl_ = sum((i - xm_) * (y - mu_) for i, y in enumerate(seg)) / sxx_
+        ss_ = sum((y - mu_) ** 2 for y in seg); rs_ = sum((y - (mu_ - sl_ * xm_ + sl_ * i)) ** 2 for i, y in enumerate(seg))
+        leg_r2 = 1.0 - rs_ / ss_ if ss_ > 0 else None
     want = -1 if b["side"] == "no" else 1  # the swing direction that runs in the bet's winning direction
     if r.d == 0 or r.swing_u < waveturn.SWING:
         cls = "NONE (no swing of 0.5 u yet)"
@@ -68,7 +79,7 @@ for b in json.load(open(f"{D}/bets24.json")):
     pay, n = float(b["pay"]), float(b["n"])
     cost = pay + fee(pay)
     got = (float(b["xp"]) - fee(float(b["xp"]))) if b["xts"] else (1.0 if b["out"] == b["side"] else 0.0)
-    rows.append({"tk": b["ticker"], "ts": b["ts"], "stake": pay * n, "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
+    rows.append({"leg_r2": leg_r2, "leg_len": len(seg), "tk": b["ticker"], "ts": b["ts"], "stake": pay * n, "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
 
 
 def line(label, g):
@@ -96,10 +107,17 @@ print("\nTHE REFUSED SET (AGAINST or INSIDE, in wave markets) BY SIDE (added 202
 refused_set = [x for x in rows if (x["cls"].startswith("AGAINST") or x["cls"].startswith("INSIDE")) and x["r2"] < med]
 line("  NO bets (a dip: the side bought after a fall)", [x for x in refused_set if x["side"] == "no"])
 line("  YES bets (a rise: the side bought after a rise)", [x for x in refused_set if x["side"] == "yes"])
+print("\nINSIDE the leg, by how straight the CURRENT LEG is (the line fit from the last zig-zag pivot to now, 60 s or longer; the cut 0.9 fixed before this run; added 2026-11-25 after BTC YES 12:33, a clean straight rise, was called a wave because the 30 minute window held an earlier hump):")
+ins = [x for x in rows if x["cls"].startswith("INSIDE") and x["leg_r2"] is not None]
+line("  the leg is straight (leg R^2 0.9 or more)", [x for x in ins if x["leg_r2"] >= 0.9])
+line("  the leg is not straight (under 0.9)", [x for x in ins if x["leg_r2"] < 0.9])
+print("  the 30 minute R^2 wave-trend split of the same bets: wave", len([x for x in ins if x["r2"] < med]), "trend", len([x for x in ins if x["r2"] >= med]))
+line("  straight leg, 30 minute R^2 says wave (the BTC 12:33 case)", [x for x in ins if x["leg_r2"] >= 0.9 and x["r2"] < med])
+line("  not-straight leg, 30 minute R^2 says wave", [x for x in ins if x["leg_r2"] < 0.9 and x["r2"] < med])
 print("\nthe 08:30 round:")
 for x in rows:
     if "26NOV250830" in x["tk"]:
-        print(f"  {x['tk'][:24]:24s} {x['side']:3s} {x['cls'][:34]:34s} swing {x['swing']:.2f}u given back {x['gb']:.2f}u R^2 {x['r2']:.2f} net ${x['net']:+.2f}")
+        print(f"  {x['tk'][:24]:24s} {x['side']:3s} {x['cls'][:34]:34s} leg R^2 {x["leg_r2"] if x["leg_r2"] is None else round(x["leg_r2"], 2)} swing {x['swing']:.2f}u given back {x['gb']:.2f}u R^2 {x['r2']:.2f} net ${x['net']:+.2f}")
 
 
 # ---- the FLIP (user, 2026-11-25: "your numbers don't matter, because those losses likely would have flipped to wins on the opposite buy (how this should pan out)") ----
