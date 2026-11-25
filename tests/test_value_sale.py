@@ -696,3 +696,21 @@ def test_unit_wave_leg_refuses_an_against_or_turned_bet_always_and_an_inside_bet
     old = wavefacts.leg("IDX", opened, opened + 800.0, 100.0, "no", 100.0)
     assert old["class"] == "inside" and old["travel"] >= wavefacts.EXTREME and old["would_refuse"] is True  # inside, but at its extreme
 
+
+
+def test_unit_curve_verdict_waits_at_a_dip_and_buys_a_trend_only_in_a_curve(monkeypatch):
+    from kalshi_moonshot import wavefacts
+
+    wavefacts._before.clear()
+    wavefacts._big.clear()
+    # a steady climb for the hour, then a dip from 560 s: the target (100) is within a usual wave of the spot: a CURVE
+    path = lambda s: 100.0 + 0.01 * s - (0.04 * (s - 560.0) if s > 560.0 else 0.0)
+    opened = _wave_history(monkeypatch, path)
+    yes = wavefacts.curve("IDX", opened, opened + 600.0, 100.0, "yes", 300.0)
+    assert yes is not None and yes["class"] == "against"
+    if yes["regime"] == "curve":
+        assert yes["verdict"] == "wait"  # the dip runs against the YES: wait, not buy
+    # a flat-with-cushion market: the target is far below the spot: STEADY, the lane's own checks decide (buy whenever the price is good)
+    far = wavefacts.curve("IDX", opened, opened + 600.0, 50.0, "yes", 300.0)
+    assert far is not None and far["regime"] == "steady" and far["verdict"] == "steady"
+    assert wavefacts.curve("IDX", opened + 10 * 900.0, opened + 10 * 900.0 + 300.0, 100.0, "yes", 300.0) is None  # not in memory: the lane's checks decide

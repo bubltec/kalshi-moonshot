@@ -404,6 +404,20 @@ def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bo
     return n["verb"] == "buy", one_line(n) + board.note()
 
 
+def _curve_verdict(shot: Any, now: float, hours: float, strike: float) -> dict[str, Any] | None:
+    """The curve verdict (wavefacts.curve) for the shot's side now, or None when it cannot be read: the lane's own checks then decide."""
+    from . import binaryrisk, wavefacts
+
+    try:
+        index = binaryrisk.curve_index(shot.series or shot.ticker.split("-")[0])
+        if not index or strike <= 0:
+            return None
+        opened = round((now + hours * 3600.0) / 900.0) * 900.0 - 900.0
+        return wavefacts.curve(index, opened, now, float(strike), shot.side, max(hours * 3600.0, 1.0))
+    except Exception:
+        return None
+
+
 def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """The fact `priskp_screen`: the five checks for the shot's side now, as the note dict (verb buy / wait), and the latest confirmed shift (or None) for the fact `shift_out`. No shift rule here: the board's veto does that."""
     now, hours = host.now, host.hours
@@ -420,6 +434,19 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     reached, count = confirmed(shot.ticker, shot.side, ok, now, need)
     n = note(shot.side, states, count, minute, need)
     n["ask"] = round(shot.ask, 3)
+    cv = _curve_verdict(shot, now, hours, strike)
+    if cv is not None:
+        n["regime"] = cv["regime"]
+        if cv["regime"] == "curve":  # in a curve the trend entry decides, both ways (the five rank checks neither buy nor stop it): wait at a dip or a peak, buy on the trend
+            n["curve"] = f"{cv['class']}, swing {cv['swing_u']:.2f} u gave back {cv['gb_u']:.2f}, big leg {cv['age'] if cv['age'] is not None else 'n/a'} and travel {cv['travel'] if cv['travel'] is not None else 'n/a'} of a usual one, target {cv['reach']:.2f} wave travels away"
+            inwin = WINDOW[0] <= minute <= WINDOW[1] and not DEAD[0] <= shot.ask <= DEAD[1]
+            if cv["verdict"] == "buy" and inwin:
+                n["verb"], n["why"] = "buy", "curve_trend_entry"
+                n["failing"] = []
+            elif cv["verdict"] == "buy":
+                n["verb"], n["why"] = "wait", "window" if not WINDOW[0] <= minute <= WINDOW[1] else "dead_ask_band"
+            else:
+                n["verb"], n["why"] = "wait", "curve_wait"
     if DEAD[0] <= shot.ask <= DEAD[1]:
         n["verb"], n["why"] = "wait", "dead_ask_band"
     elif n["verb"] == "buy" and not reached:

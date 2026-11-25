@@ -234,4 +234,29 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
     travel = abs(float(win[int(now - opened)]) - float(win[small_start])) / w10 if w10 else None
     at_extreme = (age is not None and age >= EXTREME) or (travel is not None and travel >= EXTREME)
     refuse = cls in ("against", "turned") or (cls == "inside" and at_extreme)  # 2026-11-25 ~18:15 (user, on ZEC 18:15 NO bought at 18:07:11 at the bottom of a dip as it turned up, then a straight run through the strike: "It bought right in the dip. Why??! Why doesn't it wait??"): a bet whose side the current swing runs AGAINST, or whose leg has already TURNED against it, always waits; only a bet inside its own leg is bought, and not at that leg's extreme. 24 hours of bets: against 18 bets -$42.92 (44% lost), turned 16 bets -$0.17 (31% lost)
-    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse}
+    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse, "usual_leg_s": usual, "w10": w10, "at_extreme": at_extreme, "spot": float(win[int(now - opened)])}
+
+
+TREND_MIN = 1.0  # a swing counts as a TREND once it has run this many typical minutes with the bet and has not turned: my choice, twice wave_turn's 0.5 u swing, not scored
+REACH = 1.0  # the target is IN REACH of the curve when the spot is within this many of the market's usual 10 minute wave travels of it (the hour before the open): outside that the market is flat with cushion
+
+
+def curve(index: str, opened: float, now: float, target: float, side: str, left: float) -> dict[str, Any] | None:
+    """The curve verdict for one side (2026-11-25 ~18:30, user, after ZEC 18:15 NO was bought at the bottom of a dip as it turned up and the lane then sat out the whole rise: "ONLY in the curve do you buy on a trend. If it's flat with cushion or a trend market you buy whenever price is good"; "I'm asked you to wait in the dip or peaks. You need to buy on a trend").
+    regime  'curve' when the market has waves (at least two confirmed big legs in the hour before the open) AND the target is within REACH usual wave travels of the spot; else 'steady' (flat with cushion, or one trending line): the lane's own checks decide there, whenever the price is good
+    verdict (curve only) 'buy' when the bet's side runs WITH the current swing ('inside'), the swing has run TREND_MIN typical minutes without turning, and the leg is not at its extreme: the trend entry, which replaces the five rank checks; otherwise 'wait' (at a dip or a peak: the swing is against the bet, or it has turned, or it is young, or at its extreme)
+    None when the leg cannot be read (the hour before the open or the path since it is not in memory): the lane's checks decide."""
+    base = leg(index, opened, now, target, side, left)
+    if base is None:
+        return None
+    w10 = base.get("w10")
+    usual = base.get("usual_leg_s")
+    if not w10 or w10 <= 0:
+        return None
+    reach = abs(base["spot"] - target) / w10
+    wavy = usual is not None and reach < REACH
+    out = {**base, "reach": round(reach, 2), "regime": "curve" if wavy else "steady", "verdict": "steady"}
+    if wavy:
+        trend = base["class"] == "inside" and base["swing_u"] >= TREND_MIN and not base["at_extreme"]
+        out["verdict"] = "buy" if trend else "wait"
+    return out

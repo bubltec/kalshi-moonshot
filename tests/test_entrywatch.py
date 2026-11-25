@@ -39,7 +39,7 @@ def test_a_two_level_lane_reviews_on_the_socket_and_there_is_no_switch(tmp_path)
 
 
 def test_the_look_rate_is_one_global_setting(tmp_path, monkeypatch):
-    assert settings(tmp_path).entry_min_gap_seconds == 5.0
+    assert settings(tmp_path).entry_min_gap_seconds == 0.0  # 2026-11-25: the look runs on every tick
     monkeypatch.setenv("ENTRY_MIN_GAP_SECONDS", "12")
     from kalshi_moonshot import config
 
