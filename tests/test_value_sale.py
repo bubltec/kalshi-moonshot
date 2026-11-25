@@ -485,7 +485,7 @@ def test_integration_early_take_a_spot_still_climbing_is_not_a_stall(tmp_path, m
     assert why and "spot's cushion" in why
 
 
-def test_integration_early_take_waits_while_the_spot_cushion_is_a_typical_minute_or_more(tmp_path, monkeypatch, mem):
+def test_integration_early_take_holds_on_a_cushion_that_scales_with_the_time_left(tmp_path, monkeypatch, mem):
     from kalshi_moonshot import watcher
 
     lose = [None]
@@ -493,10 +493,18 @@ def test_integration_early_take_waits_while_the_spot_cushion_is_a_typical_minute
     spot = [(0.30, 0.10)]  # cushion 0.30 = three typical minutes of 0.10
     monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, t, now, avg_seconds=60: spot[0])
     ask.target.early_take_cushion_units = 1.0
-    assert ask(0.90, 700) is None  # armed
-    assert ask(0.80, 690) is None  # fell a wobble, but the cushion is 3 typical minutes: it waits
-    spot[0] = (0.05, 0.10)  # the cushion has thinned to half a minute
-    why = ask(0.79, 680)
+    assert ask(0.90, 100) is None  # armed with 100 s left
+    assert ask(0.80, 95) is None  # fell a wobble: three typical minutes over a bar of 1 x sqrt(95/60) = 1.3 typical minutes: it waits
+    ask2 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
+    ask2.target.early_take_cushion_units = 1.0
+    assert ask2(0.90, 700) is None  # armed with 700 s left (SOL 17:00 NO, 2026-11-25: 1.4 to 2.5 typical minutes of cushion and 8 to 12 minutes left)
+    why = ask2(0.80, 690)  # the same three typical minutes now sit under the bar of 1 x sqrt(690/60) = 3.4 typical minutes: it sells on the fall
+    assert why and "bid fell" in why
+    spot[0] = (0.05, 0.10)
+    ask3 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
+    ask3.target.early_take_cushion_units = 1.0
+    assert ask3(0.90, 100) is None
+    why = ask3(0.79, 95)  # a thin cushion under the bar at any time left: it sells
     assert why and "bid fell" in why
 
 

@@ -1051,7 +1051,7 @@ class ProfitWatcher:
             return None  # never a loss; the other steps decide
         stall = t.early_take_stall_share * left
         spot = ProfitWatcher._wave_spot(self, t, now)  # the spot's cushion over the target for the bet (memory): while it still climbs by a wobble of its own the bet is not stalled, whatever the bid does (DOGE 14:45 NO, 2026-11-24: sold at 0.85 on a 56 s flat bid while the spot kept moving the bet's way, "pretty much a sure bet")
-        if spot is not None and t.early_take_cushion_units > 0 and spot[1] > 0 and spot[0] >= t.early_take_cushion_units * spot[1]:
+        if spot is not None and t.early_take_cushion_units > 0 and spot[1] > 0 and spot[0] >= t.early_take_cushion_units * spot[1] * math.sqrt(max(left, 1.0) / 60.0):  # the bar is in sigma over the time left, not in fixed typical minutes (2026-11-25, user: "profit at 2-5 mins should sell as soon as it stagnates"; SOL 17:00 NO had 1.4 to 2.5 typical minutes of cushion and 8 to 12 minutes left, a z of 0.5, and was held to the close by a fixed bar of 1 typical minute)
             return None  # a cushion waits: the spot is that many of its own typical minutes on the bet's side of the target (2026-11-25, user: "it needs to wait on cushion")
         if spot is not None:
             spot_move = spot[1] * math.sqrt(10.0 / 60.0)
