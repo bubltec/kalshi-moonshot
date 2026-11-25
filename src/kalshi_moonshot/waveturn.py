@@ -15,14 +15,20 @@ The rule, in the market's own typical minute u (the root-mean-square 1 s move ov
           NO after a rise, YES after a fall
   side    NO only when the smoothed curve is not more than BAND u under the target; YES only when not more than BAND u over it
   once    once per swing (its number in the zig-zag and its direction), and not the same side again within SAME_SIDE_GAP s of the last fire
-  gate    the pre-open hour's mean crossings of each 15-minute window's opening price >= CROSS_MIN (marketprofile.profile_from over the hour
-          before the open; the hour must be in the tick memory, else 'no reading' and no buy)
-Logged with every answer (shadow, never gating): the pre-open per-window efficiency (the study's pair cut was <= 0.066), waves completed so far,
+  gate    at least DONE_MIN completed swings of DONE_U u so far (a zig-zag of DONE_U u on the same smoothed curve: the curve has gone DONE_U u one way
+          and DONE_U u back); a one-way line has none and is refused. The pre-open hour must be in the tick memory for u, else 'no reading' and no buy.
+Logged with every answer (shadow, never gating): the pre-open hour's crossings of the window's open and efficiency, waves (0.5 u turns) so far,
 the efficiency of the smoothed curve over the last 5 minutes, the curve's and the swing extreme's distance from the target, the swing size, the
 give-back, and the second of the market.
 
 A fire is a yes for the second it is first seen and the entry thread's look gap after it (`hold`, entry_min_gap_seconds), as waveflag.py does, so a
 look every few seconds does not miss it; after that the swing has had its buy.
+
+Gate change (2026-11-25, user): the pre-open crossings gate did not hold on 28 new marked markets (it let through 13 of the 16 the user called 'no good buy'
+and 12 of 12 picks), and the user's own reading is that the no-good markets are plain trends with no waves, and that this lane is for wave shapes. The gate is now
+in-market: a completed swing (the smoothed curve moved DONE_U u one way and DONE_U u back, a zig-zag reversal of DONE_U u) before the buy, DONE_MIN of them ("find
+one wave first, then buy the next turn"). On those 28 markets' 36 bets, needing one completed swing passed 23 bets (+19.72) and blocked 13 (-14.82); the cut and
+the look were chosen after seeing the marks (studies/results/2026-11-25-wave-swing-gate.txt). The pre-open hour is now read only for u and as shadow readings.
 
 Memory only: the tick history (ticks.history) and the target in memory; the hour's profile is read once per market from memory and kept. stdlib only.
 """
@@ -42,7 +48,8 @@ ZZ = 0.5  # the zig-zag's reversal, in u
 SWING = 0.5  # the least swing, in u
 GB = 0.2  # given back from the swing's extreme before the buy, in u
 BAND = 0.5  # the side gate's band around the target, in u
-CROSS_MIN = 8.0  # the pre-open hour's crossings of the window's open per 15 minutes (the study's single cut)
+DONE_U = 1.0  # a completed swing: the curve has gone this far one way and this far back, in u (chosen after seeing the user's 28 marks)
+DONE_MIN = 2  # the completed swings needed before a turn is bought: one confirmed leg is a trend with a pullback, two is the curve coming back (chosen after seeing the user's 45 marked markets, 2026-11-25; a trend has fewer)
 SAME_SIDE_GAP = 30  # no second fire on the same side within this many seconds
 PRE = 3600  # the hour before the open
 
@@ -117,6 +124,7 @@ class Reading:
     pos_u: float  # the smoothed curve against the target
     ext_u: float  # the swing's extreme from the target
     eff300: float
+    done: int = 0  # completed swings of DONE_U u so far
 
 
 def reading(window: list[float], t: int, K: float, u: float) -> Reading:
@@ -124,7 +132,9 @@ def reading(window: list[float], t: int, K: float, u: float) -> Reading:
     sm = broad(window, 0, t, SMOOTH // 2, t)
     pts, d, _ek, ev = zigzag(sm, ZZ * u)
     start = pts[-1][1] if pts else sm[0]
-    return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]))
+    big, _d, _k, _v = zigzag(sm, DONE_U * u)
+    return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),
+                   max(0, len(big) - 1))
 
 
 @dataclass
@@ -157,6 +167,8 @@ def judge(r: Reading, fires: Fires, hold: float) -> tuple[str | None, str]:
         return None, f"a NO turn with the curve {r.pos_u:+.2f}u from the target, more than {BAND:g}u under it"
     if side == "yes" and r.pos_u > BAND:
         return None, f"a YES turn with the curve {r.pos_u:+.2f}u from the target, more than {BAND:g}u over it"
+    if r.done < DONE_MIN:
+        return None, f"{r.done} completed swings of {DONE_U:g}u so far, the lane needs {DONE_MIN}: a trend has a pull-back at most, a wave comes back (not a wave shape yet)"
     fires.done[key] = r.t
     fires.last = (r.t, side)
     return side, "fired"
@@ -247,11 +259,11 @@ def clear() -> None:
 
 def note(r: Reading | None, h: Hour, K: float) -> str:
     """The readings for the decision's note (the gate's reading and the shadow ones)."""
-    head = f"pre-open hour: crossings of the window's open {h.cross:.2f} per 15 min (gate >= {CROSS_MIN:g}), efficiency {h.eff:.3f} (shadow; the study's pair cut <= 0.066)" if h.cross is not None else f"pre-open hour: {h.why}"
+    head = f"pre-open hour: crossings of the window's open {h.cross:.2f} per 15 min, efficiency {h.eff:.3f} (shadow only)" if h.cross is not None else f"pre-open hour: {h.why}"
     if r is None:
         return f"{head} (target {K:.6g})"
     return (f"{head}; {r.t}s in, {SMOOTH}s smoothing: swing {r.swing_u:.2f}u {'up' if r.d == 1 else 'down' if r.d == -1 else '-'}, {r.gb_u:.2f}u given back, "
-            f"waves so far {r.turns}, curve {r.pos_u:+.2f}u and the swing's extreme {r.ext_u:.2f}u from the target, last-5-min efficiency {r.eff300:.2f}, "
+            f"completed swings of {DONE_U:g}u {r.done} (gate >= {DONE_MIN}), waves so far {r.turns}, curve {r.pos_u:+.2f}u and the swing's extreme {r.ext_u:.2f}u from the target, last-5-min efficiency {r.eff300:.2f}, "
             f"u {h.u:.6g} (target {K:.6g})")
 
 
@@ -270,10 +282,6 @@ def admits(s: Any, shot: Any, now: float, strike: float | None) -> tuple[bool, s
     hold = float(getattr(s, "entry_min_gap_seconds", 0.0) or 0.0)
     side, why, r, h = read_index(index, opened, now, K, hold)
     told = note(r, h, K)
-    if h.cross is None:
-        return False, f"no wave turn: {why}; {told}"
-    if h.cross < CROSS_MIN:
-        return False, f"no wave turn: the market's pre-open hour is not choppy ({h.cross:.2f} crossings of the window's open per 15 min, the gate is {CROSS_MIN:g}); {told}"
     if side is None:
         return False, f"no wave turn: {why}; {told}"
     if shot.side != side:

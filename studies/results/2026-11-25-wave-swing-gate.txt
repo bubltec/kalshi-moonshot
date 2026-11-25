@@ -1,0 +1,30 @@
+2026-11-25  wave_turn gate: wave shape vs plain trend, on the user's marked markets
+
+Question: which reading of Kalshi's own spot tells the markets the user marked with a buy ("waves") from those ticked "No good buy here" ("plain
+trends"), using only the path up to the decision? Labels: 45 markets, 20 with a pick, 24 no-good (one market had no pre-open hour, left out).
+Set A = the first 17 (tests/fixtures/wave_turn_marks.json.gz), set B = the 28 most recent (2026-11-25 07:45-08:45 ET rounds, click-map "Recent Wave Bets").
+Settings were chosen after seeing these marks. n is tiny: an AUC difference under about 0.15 is noise. Forward paper scoring is the real test.
+
+Measure (AUC of pick vs no-good, 0.5 = chance), by minutes into the market:
+  completed swings of 1 typical minute (zig-zag on the 30 s median)  all 0.80 / 0.79 / 0.77 at 4 / 6 / 8 min; A 0.81 / 0.73 / 0.74; B 0.79 / 0.81 / 0.76
+  fixed-fraction legs (share of range)                               0.61-0.72, A good, B near 0.5
+  efficiency, range/net                                              weaker, 0.30-0.47
+  per-lookback straight-line R2 / tau on the path since the open     A and B disagree (0.69 vs 0.22 at 8 min)
+  Gaussian (OU) wave readings, 30 min window (wavefacts)             0.38-0.59, chance
+  sine templates on 2-30 min lookbacks                               0.41-0.76, noisy
+  real-wave templates, leave one market out (nearest wave vs trend)  0.63-0.69 at 2-6 min, 0.81-0.82 at 8-10 min; both sets agree by 8 min; 1-NN accuracy 0.60-0.73
+  scale-free "biggest reversal share of range that still loops"      0.46-0.63 before minute 5, 0.73 at 6, 0.79-0.82 at 10
+
+Pass counts of the swing gate (picks passing / no-good passing), minutes 3 / 4 / 6 / 8 / 10:
+  >= 1 swing of 1u:  12/20 vs 4/24;  18/20 vs 10/24;  19/20 vs 14/24;  20/20 vs 19/24;  20/20 vs 20/24
+  >= 2 swings of 1u: 2/20 vs 0/24;   9/20 vs 2/24;    15/20 vs 6/24;   15/20 vs 8/24;   18/20 vs 12/24
+  Swings accumulate with time, so one swing stops separating after about minute 6. Two swings by minute 6: 15 of 20 picks pass, 6 of 24 no-good.
+
+Code-path replay of the gate (tests/test_wave_turn.py::test_replay...) on set A: 2 swings = 5 of 18 marked buys fired within 30 s, 3 of 9 no-good silent,
+18 other fires (1 swing was 9 / 1 / 28; the old pre-open gate was 9 / 8 / 27). The gate is much weaker on set A than on set B.
+
+Decision (user, 2026-11-25: yes): DONE_MIN = 2, DONE_U = 1 in waveturn.py, paper only. The lane will mostly buy from minute 4 on. The user does not normally
+bet early because most 15-minute markets shift after the open. To read from the paper bets: result by minute of the buy, by completed swings, and the
+note's waves-so-far reading. Not done: the template-match score as a shadow reading (needs a background job to build the wave library); the entry
+window [2, 10] min is unchanged (13 of the 27 picks were before minute 2 or after minute 10).
+Scripts (scratchpad, not in the repo): study45.py, scale.py, tmpl.py, ou.py, ou2.py.

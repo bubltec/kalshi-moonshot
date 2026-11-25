@@ -63,17 +63,18 @@ def feed(hour, window, index=INDEX, opened=OPEN):
     ticks_mod.history.warm(index, rows, rows[0][0] - 1.0)
 
 
-def fires(index=INDEX, opened=OPEN, target=K, last=840, gate=True):
+def fires(index=INDEX, opened=OPEN, target=K, last=840):
     out = []
     for t in range(60, last + 1):
-        side, why, _r, h = waveturn.read_index(index, opened, opened + t + 0.5, target, 0.0)
-        if side is not None and why == "fired" and (not gate or (h.cross is not None and h.cross >= waveturn.CROSS_MIN)):
+        side, why, _r, _h = waveturn.read_index(index, opened, opened + t + 0.5, target, 0.0)
+        if side is not None and why == "fired":
             out.append((t, side))
     return out
 
 
 # a swing up of 2 u, back down 2 u, up 2 u, down 2 u (each 60 s), from the target
 REPEATED = [(60, 2.0), (60, -2.0), (60, 2.0), (60, -2.0), (300, 0.0)]
+LONG = [(60, 2.0), (60, -2.0), (60, 2.0), (60, -2.0), (60, 2.0), (60, -2.0), (300, 0.0)]
 
 
 def u_of(hour):
@@ -81,16 +82,17 @@ def u_of(hour):
 
 
 # ---- unit ----
-def test_unit_a_repeated_swing_fires_NO_after_each_peak_and_YES_after_each_dip(mem):
+def test_unit_a_repeated_swing_fires_YES_after_a_dip_and_NO_after_a_peak_once_two_swings_are_complete(mem):
     hour = hour_path()
     u = u_of(hour)
-    feed(hour, window_path(REPEATED, u))
-    got = fires(last=300)
-    sides = [s for _, s in got]
-    assert "no" in sides and "yes" in sides, got
-    first_no = next(t for t, s in got if s == "no")
-    assert 60 < first_no < 100  # just after the first peak at 60 s, once 0.2 u has come back on the 30 s median
-    assert all(abs(t - 60 * k) < 40 for t, _ in got for k in [round(t / 60)])  # every fire is near a turn (60, 120, 180, 240 s)
+    feed(hour, window_path(LONG, u))
+    got = fires(last=400)
+    assert got == [(201, "no"), (261, "yes"), (321, "no")], got  # the turns at 81 s and 141 s come before the second completed swing (about 150 s) or are refused by the side band
+    assert not [t for t, _ in got if t < 180]
+    side, why, r, _ = waveturn.read_index(INDEX, OPEN, OPEN + 81.5, K, 0.0)  # the first peak's turn: refused for want of completed swings
+    assert side is None and "completed swings" in why and r.done == 0
+    side, why, r, _ = waveturn.read_index(INDEX, OPEN, OPEN + 201.5, K, 0.0)
+    assert side == "no" and why == "fired" and r.done >= waveturn.DONE_MIN
 
 
 def test_unit_a_one_way_drift_does_not_fire(mem):
@@ -102,19 +104,30 @@ def test_unit_a_one_way_drift_does_not_fire(mem):
     assert side is None and "given back" in why and r.gb_u < waveturn.GB
 
 
-def test_unit_a_calm_pre_open_hour_gates_it_off_and_says_so(mem, tmp_path, monkeypatch):
-    hour = hour_path(choppy=False)
-    h = waveturn.hour_of(hour)
-    assert h.cross is not None and h.cross < waveturn.CROSS_MIN
-    feed(hour, window_path(REPEATED, h.u))
-    assert fires(last=300, gate=False) and fires(last=300) == []  # the turns are there, the gate refuses them
-    sp = spec(tmp_path, monkeypatch)
-    now = OPEN + fires(last=300, gate=False)[0][0] + 0.5
+# a trend with small pull-backs: up 3 u in two minutes, back 0.6 u (a turn of 0.5 u: the old rule fires on it), then on up. No swing of 1 u back is ever made.
+TREND = [(120, 3.0), (30, -0.6), (120, 3.0), (30, -0.6), (300, 1.0)]
+
+
+def test_unit_a_trend_with_small_pull_backs_is_refused_for_want_of_a_completed_swing(mem, tmp_path, monkeypatch):
+    hour = hour_path()
+    u = u_of(hour)
+    feed(hour, window_path(TREND, u))
+    spec(tmp_path, monkeypatch)
+    pulled = [t for t in range(125, 200) if waveturn.read_index(INDEX, OPEN, OPEN + t + 0.5, K, 0.0)[1].startswith("0 completed swings")]
+    assert pulled and fires(last=600) == []  # the turns are there (0.5 u swings given back 0.2 u), the gate refuses every one
+    now = OPEN + pulled[0] + 0.5
     waveturn.clear()
-    feed(hour, window_path(REPEATED, h.u))
+    feed(hour, window_path(TREND, u))
     ok, why = waveturn.admits(config.load(), shot(now, "no"), now, K)
-    assert not ok and "pre-open hour is not choppy" in why and "crossings" in why
-    assert sp is not None
+    assert not ok and "0 completed swings" in why and "a trend has a pull-back at most" in why and "completed swings of 1u 0 (gate >= 2)" in why
+
+
+def test_unit_the_pre_open_hour_no_longer_gates_it(mem):
+    hour = hour_path(choppy=False)  # a calm, one-way hour before the open
+    h = waveturn.hour_of(hour)
+    assert h.cross is not None and h.cross < 8
+    feed(hour, window_path(REPEATED, h.u))
+    assert fires(last=300)  # waves in the window are what count; the hour only gives u and the shadow readings
 
 
 def test_unit_the_side_gate_refuses_a_NO_turn_far_under_the_target(mem):
@@ -149,19 +162,19 @@ def test_unit_once_per_swing_and_held_for_the_look_gap(mem):
 FIXTURE = Path(__file__).parent / "fixtures" / "wave_turn_marks.json.gz"
 
 
-def replay(m, gate):
+def replay(m):
     waveturn.clear()
     ticks_mod.history.clear()
     index = binaryrisk.curve_index(m["ticker"].split("-")[0])
     feed(m["hour"], m["v"], index=index)
-    return fires(index=index, target=m["target"], gate=gate)
+    return fires(index=index, target=m["target"])
 
 
-def counts(rows, gate):
+def counts(rows):
     hits = extra = 0
     silent = 0
     for m in rows:
-        f = replay(m, gate)
+        f = replay(m)
         if m["nogood"]:
             silent += not f
             continue
@@ -179,11 +192,12 @@ def counts(rows, gate):
 def test_replay_the_study_counts_on_the_users_marks(mem):
     rows = json.load(gzip.open(FIXTURE, "rt"))
     assert len(rows) == 17 and sum(len(m["buy"]) for m in rows) == 18
-    # the study: the turn rule with the side band, 12/18 hits, 0/9 silent, 34 other fires. One difference: the PLATINUM 18:30 path lacks the first
-    # 310 s of its pre-open hour (the commodity session break; the study's pull had no tick before it). The study read u and the profile from the
-    # seconds it had; the step says 'no reading' for an hour not fully in memory and stays silent there, so 1/9 no-good markets is silent here.
-    assert counts(rows, gate=False) == (12, 1, 34)
-    assert counts(rows, gate=True) == (9, 8, 27)  # the study: with the pre-open crossings gate >= 8, 9/18 hits, 8/9 silent, 27 other fires
+    # Measured 2026-11-25 with the in-market gate (2 completed swings of 1u), chosen AFTER seeing the user's 45 marks (these 17 and 28 more): 5 of the 18
+    # marked buys are fired within 30 s, 3 of the 9 no-good markets stay silent, 18 other fires. The old pre-open gate on this first set was 9 / 8 / 27 (the
+    # study's own counts were 12 / 0 / 34 with no gate). This is a pin of the code's behaviour on these marks, not a claim that it is good: the 45-market
+    # study is studies/results/2026-11-25-wave-swing-gate.txt and forward paper scoring is the test. The PLATINUM 18:30 path lacks the first 310 s of its
+    # pre-open hour; the step says 'no reading' for an hour not fully in memory and stays silent there.
+    assert counts(rows) == (5, 3, 18)
 
 
 # ---- the buy step, through the lane file ----
@@ -241,7 +255,7 @@ def test_integration_the_chain_buys_at_the_turn_from_memory_only_and_notes_the_r
         bet, note = buychain.decide(buychain.Ctx(s, sp, now=now), shot(now, side))
     assert bet, note
     assert "[chain wave_turn_buy: entry_window > wave_turn > wave_trend |" in note
-    for reading in ("wave turn (fired): buys", "crossings of the window's open", "efficiency", "waves so far", "given back", "from the target", "last-5-min efficiency"):
+    for reading in ("wave turn (fired): buys", "crossings of the window's open", "efficiency", "completed swings of 1u", "waves so far", "given back", "from the target", "last-5-min efficiency"):
         assert reading in note, reading
     other = "yes" if side == "no" else "no"
     assert f"{other.upper()} out at wave_turn" in note and "not this side" in note
@@ -253,12 +267,14 @@ def test_integration_the_chain_buys_at_the_turn_from_memory_only_and_notes_the_r
 def test_integration_the_review_drops_a_gated_market_with_the_reason_for_screen_log(tmp_path, monkeypatch, mem):
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
-    hour = hour_path(choppy=False)
-    feed(hour, window_path(LATE, waveturn.hour_of(hour).u))
+    hour = hour_path()
+    u = u_of(hour)
+    feed(hour, window_path(TREND, u))
     ticks_mod.strikes.note(TICKER, K)
-    now = OPEN + 200.5
+    t_pull = next(t for t in range(125, 200) if waveturn.read_index(INDEX, OPEN, OPEN + t + 0.5, K, 0.0)[1].startswith("0 completed swings"))
+    now = OPEN + t_pull + 0.5
     assert buychain.screen(buychain.Ctx(s, sp, None, now), [shot(now, "no"), shot(now, "yes")]) == []
-    assert any("out at wave_turn" in d["reason"] and "not choppy" in d["reason"] for d in buychain.DROPPED["wt"])
+    assert any("out at wave_turn" in d["reason"] and "0 completed swings" in d["reason"] for d in buychain.DROPPED["wt"])
 
 
 def test_integration_through_the_runners_evaluation(tmp_path, monkeypatch, mem):
