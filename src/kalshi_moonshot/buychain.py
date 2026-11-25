@@ -374,6 +374,30 @@ def settle_confirm_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(False, f"waiting for the spot to confirm: it has moved {moved:+g} the bet's way since {got[1]:g} ({waited:.0f}s ago) and needs {need:g} ({units:g} typical minutes of {got[2]:g})")
 
 
+@step("wave_leg_shadow")
+def wave_leg_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
+    """SHADOW ONLY, never says no (2026-11-25, user, after the 08:30 round where BTC, ETH, HYPE and BNB NO favourites were bought inside a dip: "why can't it walk the curve back and identify it was inside a dip?"; "yes" to a shadow build): walks the spot back from now to the window's open with the wave lane's zig-zag (wavefacts.leg) and writes into the decision's note which leg the bet's side is in (inside it, not turned; turned; against the current swing; none), the swing and its give-back in typical minutes, the 30 minute R^2 and whether the rule of scripts/priskp_leg_study.py would REFUSE (the swing runs against the bet, or the bet is inside an unturned leg in a wavy market; a trend's leg is never refused). Changes nothing the lane buys; scored later against the bets that follow."""
+    from . import binaryrisk, ticks, wavefacts
+
+    try:
+        series = shot.series or shot.ticker.split("-")[0]
+        index = binaryrisk.curve_index(series)
+        if not index:
+            return Check(True, "shadow: leg: no index is read for this series")
+        opened = round((ctx.now + shot.hours_to_close * 3600.0) / 900.0) * 900.0 - 900.0
+        strike = ticks.strikes.get(shot.ticker) or _window_strike(ctx, shot)
+        if not strike:
+            return Check(True, "shadow: leg: the market's target is not in memory yet")
+        got = wavefacts.leg(index, opened, ctx.now, float(strike), shot.side, max(opened + 900.0 - ctx.now, 1.0))
+        if got is None:
+            return Check(True, "shadow: leg: unread (the hour before the open or the path since it is not in memory)")
+        r2 = "n/a" if got["r2"] is None else f"{got['r2']:.2f}"
+        told = f"{got['class']} (swing {got['swing_u']:.2f} typical minutes, gave back {got['gb_u']:.2f}, 30 minute R^2 {r2}, a trend at or over {wavefacts.R2_CUT:g})"
+        return Check(True, f"shadow: would {'REFUSE' if got['would_refuse'] else 'buy'}: the {shot.side.upper()} is {told}")
+    except Exception as exc:  # a shadow reading that fails must never stop a buy
+        return Check(True, f"shadow: leg unreadable ({exc!r})")
+
+
 @step("cooldown", needs_estimate=True)
 def cooldown_step(ctx: Ctx, shot: LongShot) -> Check:
     """The lane does not buy back too soon what it just sold in this market (2026-11-19, user: "put both into one buy step, cooldown"; the rebuy wait and the reentry cooldown were lane options the cleanup took out, "should be part of buy logic"). After a sale FOR A GAIN the same side waits rebuy_opposite_after_gain_seconds (2026-11-08, HYPE 09:15: sold YES at 0.67 for a gain, bought YES again 94 s later at 0.67 and lost $2.22); the other side goes straight through the other steps, so a rebuy is usually the opposite end. After a sale at a loss, or when the lane sets no rebuy wait, the whole market (either side) waits reentry_cooldown_seconds. A lane sets either or both (in its buy module); a gain sale on a lane with a rebuy wait is not held to the reentry cooldown. Reads the bet book in memory (Store.last_exit_ts, Store.last_gain_sale), so it is asked at the decision only."""

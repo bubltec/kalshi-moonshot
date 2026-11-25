@@ -21,7 +21,7 @@ def asker(w, t, close):
 
 def test_the_step_is_known_and_reads_only_p_lose():
     sellchain.check(("value_sale",), "x")
-    assert facts.NEEDS["value_sale"] == ("p_lose", "spot", "waves_before", "wave_now")  # the wave facts (2026-11-25) are on the board for every step to read; value_sale does not act on them yet
+    assert facts.NEEDS["value_sale"] == ("p_lose", "spot", "waves_before", "wave_now", "wave_leg")  # the wave facts (2026-11-25) are on the board for every step to read; value_sale does not act on them yet
 
 
 def test_integration_it_sells_when_the_bid_pays_the_hold_value_and_not_before(tmp_path, monkeypatch, mem):
@@ -584,3 +584,45 @@ def test_unit_the_board_serves_the_wave_facts_to_the_steps_that_name_them(monkey
     with pytest.raises(KeyError):
         b.view("late_dip").get("wave_now")  # a step that did not name it cannot read it
     facts.check_needs(["priskp", "value_sale", "wave_take", "value_hold"], "test")
+
+
+def test_unit_wave_leg_names_the_leg_the_side_is_in_and_refuses_only_a_wavy_markets_unturned_leg(monkeypatch):
+    import math
+
+    from kalshi_moonshot import wavefacts
+
+    wavefacts._before.clear()
+    # a wavy hour before the open, then a fall of 0.02 a second for 150 s from the open: a falling swing that has not turned
+    opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.3 * math.sin(2 * math.pi * s / 120.0) if s < 0 else 100.0 - 0.02 * min(s, 150.0))
+    now = opened + 150.0
+    no = wavefacts.leg("IDX", opened, now, 99.0, "no", 750.0)
+    yes = wavefacts.leg("IDX", opened, now, 99.0, "yes", 750.0)
+    assert no["class"] == "inside" and no["swing_u"] >= 0.5 and no["would_refuse"] is True  # a NO inside the dip, in a wavy market: the 08:30 HYPE, BNB and ETH shape
+    assert yes["class"] == "against" and yes["would_refuse"] is True  # a YES against the fall
+    wavefacts._before.clear()
+    # a straight climb the whole hour and after: the YES is inside a leg too, but it is a trend: a normal favourite buy, never refused
+    opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.02 * s)
+    got = wavefacts.leg("IDX", opened, opened + 300.0, 105.0, "yes", 600.0)
+    assert got is not None and got["r2"] is not None and got["r2"] >= wavefacts.R2_CUT and got["would_refuse"] is False
+    assert wavefacts.leg("IDX", opened + 10 * 900.0, opened + 10 * 900.0 + 300.0, 105.0, "yes", 600.0) is None  # not in memory
+
+
+def test_unit_wave_leg_shadow_never_says_no_and_writes_the_verdict(monkeypatch):
+    import math
+
+    from kalshi_moonshot import binaryrisk, wavefacts
+
+    wavefacts._before.clear()
+    opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.3 * math.sin(2 * math.pi * s / 120.0) if s < 0 else 100.0 - 0.02 * min(s, 150.0))
+    monkeypatch.setattr(binaryrisk, "curve_index", lambda series: "IDX")
+    monkeypatch.setattr(ticks_mod.strikes, "get", lambda tk, *a: 99.0)
+    from kalshi_moonshot import buychain, config, lanes
+    from kalshi_moonshot.strategy import LongShot
+
+    sp = lanes.LaneSpec("x", "ladder", "x", (0.60, 0.92), (0, 1), 0.05, 0.0, sides=("yes", "no"))
+    left = 750.0
+    sh = LongShot("KXGOLD15M-30JAN010015-15", "t", "", 0.79, 0.80, left / 3600.0, "2099-01-01T00:00:00Z", left / 3600.0, lane="x", series="KXGOLD15M", side="no", event_ticker="KXGOLD15M-30JAN010015")
+    c = buychain.STEPS["wave_leg_shadow"](buychain.Ctx(config.load(), sp, now=opened + 150.0), sh)
+    assert c.ok is True and "would REFUSE" in c.why and "inside" in c.why  # the shadow says what the rule would do and changes nothing
+    monkeypatch.setattr(ticks_mod.strikes, "get", lambda tk, *a: None)
+    assert buychain.STEPS["wave_leg_shadow"](buychain.Ctx(config.load(), sp, now=opened + 150.0), sh).ok is True  # no target in memory: still a yes

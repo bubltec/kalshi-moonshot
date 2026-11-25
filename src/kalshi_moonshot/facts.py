@@ -23,11 +23,11 @@ log = logging.getLogger("moonshot")
 
 READERS: dict[str, Callable[[Board], tuple[Any, str]]] = {}
 NEEDS: dict[str, tuple[str, ...]] = {
-    "wave_take": ("whipsaw", "bid_unit", "p_lose", "cushion_factor", "waves_before", "wave_now"),
+    "wave_take": ("whipsaw", "bid_unit", "p_lose", "cushion_factor", "waves_before", "wave_now", "wave_leg"),
     "wave_salvage": ("spot",),
-    "value_sale": ("p_lose", "spot", "waves_before", "wave_now"),  # early_take, no_recovery and late_dip read the board through this view
-    "value_hold": ("p_lose", "spot", "waves_before", "wave_now"),
-    "priskp": ("priskp_screen", "shift_out", "hour_view", "waves_before", "wave_now"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
+    "value_sale": ("p_lose", "spot", "waves_before", "wave_now", "wave_leg"),  # early_take, no_recovery and late_dip read the board through this view
+    "value_hold": ("p_lose", "spot", "waves_before", "wave_now", "wave_leg"),
+    "priskp": ("priskp_screen", "shift_out", "hour_view", "waves_before", "wave_now", "wave_leg"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
 }
 
 
@@ -248,3 +248,13 @@ def _wave_now(b: Board) -> tuple[Any, str]:
     ctx = _wave_ctx(b)
     got = wavefacts.now_read(ctx[0], b.now, ctx[2], ctx[3], b.left) if ctx and ctx[3] in ("yes", "no") else None
     return got, "the last 30 minutes on a 10 s grid, signed for the side" if got else "no waves now (no curve armed, or the last 30 minutes are not in memory)"
+
+
+@reader("wave_leg")
+def _wave_leg(b: Board) -> tuple[Any, str]:
+    """Where the bet's side stands in the curve's current leg (wavefacts.leg): the class (inside an unturned leg, turned, against the current swing, none), the swing and its give-back in typical minutes, the 30 minute R^2 and the shadow verdict would_refuse. Memory only; None when the hour before the open or the path since it is not in memory."""
+    from . import wavefacts
+
+    ctx = _wave_ctx(b)
+    got = wavefacts.leg(ctx[0], ctx[1], b.now, ctx[2], ctx[3], b.left) if ctx and ctx[3] in ("yes", "no") else None
+    return got, "the wave lane's zig-zag walked back from now to the window's open" if got else "no leg reading (no curve armed, or the hour before the open or the path since it is not in memory)"

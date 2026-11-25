@@ -149,3 +149,45 @@ def now_read(index: str, now: float, target: float, side: str, left: float) -> d
         "tau_s": None if tau is None else round(tau, 1),
         "chance": round(chance, 4),
     }
+
+
+R2_CUT = 0.24  # the median R^2 of the straight-line fit over the 24 hours of priskp bets studied (studies/results/2026-11-25-priskp-zscore-wave.txt): trend at or over it, wave under it. A fixed study number for the SHADOW verdict only (CLAUDE.md rule 2 wants the market's own history; the R^2 is logged with every verdict so a rolling cut can replace this)
+
+
+def leg(index: str, opened: float, now: float, target: float, side: str, left: float) -> dict[str, Any] | None:
+    """Where the bet's side stands in the curve's current LEG, by walking the spot back from now to the window's open with the wave lane's zig-zag (waveturn.reading: swings of 0.5 typical minutes on a 30 s median, the pre-open hour's typical minute as the unit; no crossings, no gate). (2026-11-25, user: "why can't it walk the curve back and identify it was inside a dip?")
+    class  'inside' (the current swing runs in the side's winning direction, is at least 0.5 u and has given back under 0.2 u: not turned), 'turned' (that swing has given back 0.2 u or more), 'against' (the current swing runs against the side), 'none' (no swing of 0.5 u yet)
+    swing_u, gb_u   the current swing's size and what it has given back, in typical minutes; r2 the 30 minute straight-line fit (a trend when at or over R2_CUT)
+    would_refuse    the shadow verdict of scripts/priskp_leg_study.py: 'against', or 'inside' in a wave market (R^2 under R2_CUT). A trend's leg is a normal favourite buy and is never refused.
+    None when the pre-open hour, the path since the open or the typical minute is not in the tick memory."""
+    from . import ticks, waveturn
+    from .wavetop import grid
+
+    h = waveturn._hour(index, int(round(opened)))
+    if h.u is None or now - opened < 30:
+        return None
+    got = ticks.history.window(index, opened, now)
+    if not got or not got[0]:
+        return None
+    T, V = got
+    if T[0] > opened:
+        prev = ticks.history.last_at_or_before(index, opened)
+        if prev is not None:
+            T, V = [prev[0], *T], [prev[1], *V]
+    win = grid(T, V, int(opened), int(now) + 1)
+    if len(win) < 31 or None in win:
+        return None
+    r = waveturn.reading(win, int(now - opened), target, h.u)  # type: ignore[arg-type]
+    want = -1 if side == "no" else 1
+    if r.d == 0 or r.swing_u < waveturn.SWING:
+        cls = "none"
+    elif r.d == -want:
+        cls = "against"
+    elif r.gb_u < waveturn.GB:
+        cls = "inside"
+    else:
+        cls = "turned"
+    nowr = now_read(index, now, target, side, left)
+    r2 = None if nowr is None else nowr["r2"]
+    refuse = cls == "against" or (cls == "inside" and r2 is not None and r2 < R2_CUT)
+    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "would_refuse": refuse}

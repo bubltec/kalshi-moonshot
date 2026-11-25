@@ -68,7 +68,7 @@ for b in json.load(open(f"{D}/bets24.json")):
     pay, n = float(b["pay"]), float(b["n"])
     cost = pay + fee(pay)
     got = (float(b["xp"]) - fee(float(b["xp"]))) if b["xts"] else (1.0 if b["out"] == b["side"] else 0.0)
-    rows.append({"tk": b["ticker"], "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
+    rows.append({"tk": b["ticker"], "ts": b["ts"], "stake": pay * n, "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
 
 
 def line(label, g):
@@ -92,3 +92,33 @@ print("\nthe 08:30 round:")
 for x in rows:
     if "26NOV250830" in x["tk"]:
         print(f"  {x['tk'][:24]:24s} {x['side']:3s} {x['cls'][:34]:34s} swing {x['swing']:.2f}u given back {x['gb']:.2f}u R^2 {x['r2']:.2f} net ${x['net']:+.2f}")
+
+
+# ---- the FLIP (user, 2026-11-25: "your numbers don't matter, because those losses likely would have flipped to wins on the opposite buy (how this should pan out)") ----
+# For each bet the rule would refuse (AGAINST, or INSIDE an unturned leg in a wavy market), what the OPPOSITE side would have made bought at its ask at that moment (1 - the bet side's stored bid), the same dollar stake, held to the market's own result, fee on the buy. Quotes: the decision's own bid and ask for the bet's side.
+quotes = {(q["ticker"], q["ts"] // 5): q for q in json.load(open(f"{D}/quotes24.json"))}
+flips = []
+for x in rows:
+    if not (x["cls"].startswith("AGAINST") or (x["cls"].startswith("INSIDE") and x["r2"] < med)):
+        continue
+    q = quotes.get((x["tk"], int(x["ts"]) // 5)) or quotes.get((x["tk"], int(x["ts"]) // 5 - 1)) or quotes.get((x["tk"], int(x["ts"]) // 5 + 1))
+    res = (targets.get(x["tk"]) or [None, None])[1]
+    if q is None or not res or q["bid"] is None:
+        continue
+    opp = "yes" if x["side"] == "no" else "no"
+    ask = 1.0 - float(q["bid"])
+    if not (0.02 < ask < 0.98):
+        continue
+    net = ((1.0 if res == opp else 0.0) - ask - fee(ask)) * x["stake"] / ask
+    flips.append({**x, "opp": opp, "ask": ask, "flip": net, "won": res == opp})
+print(f"\nFLIP of the {len(flips)} refused bets with a quote and a result (the opposite side at its ask, the bet's own stake, held to the result):")
+print(f"  as run (the refused bets): ${sum(x['net'] for x in flips):+.2f}")
+print(f"  the opposite side bought instead: ${sum(x['flip'] for x in flips):+.2f}  ({sum(1 for x in flips if x['won'])} won, {sum(1 for x in flips if not x['won'])} lost)")
+for lo, hi, label in ((0.0, 0.55, "opposite ask under 0.55 (the cheap side: the wave lane's price range)"), (0.55, 0.85, "opposite ask 0.55 to 0.85 (PriskP's own band)"), (0.85, 1.0, "opposite ask over 0.85")):
+    g = [x for x in flips if lo <= x["ask"] < hi]
+    if g:
+        print(f"  {label}: n {len(g)}, as run ${sum(x['net'] for x in g):+.2f}, flipped ${sum(x['flip'] for x in g):+.2f}, {sum(1 for x in g if x['won'])} won")
+print("  the 08:30 round:")
+for x in flips:
+    if "26NOV250830" in x["tk"]:
+        print(f"    {x['tk'][:24]:24s} bet {x['side'].upper()} ${x['net']:+.2f} -> {x['opp'].upper()} at {x['ask']:.2f} ${x['flip']:+.2f}")
