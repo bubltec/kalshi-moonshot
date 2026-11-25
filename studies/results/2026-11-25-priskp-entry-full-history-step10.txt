@@ -1,0 +1,32 @@
+2026-11-25 (run 20261125-170428-14991: priskp_run.py STEP=10, no LIMIT, every market in the nightly backup since 2026-11-09; scripts/priskp_entry_study.py on its priskp_decisions_crypto.json.gz). Held to settlement, a take at the ask, fee on both legs, one buy a market, never an ask 0.45-0.55. THE OLD CADENCE (10 s readings), FULL HISTORY: 12,870 markets.
+CORRECTION: the 270-market quick runs of the same day (30 markets per index, STEP=10 and STEP=1) showed E0 +12.5c and +9.7c per $1 and E3 (from minute 4) +15.5c and +15.3c. Those were a small, favourable sample; the full history does not agree. The recommendation drawn from them (move the buy window start from minute 2 to 4) is NOT supported.
+
+12870 markets with a decision log
+
+E0 first pass (the model as run)                                  n  7626 of 12870  net   -1164$  -1.5c per $1  ahead 77% need 78% paid 0.770 no
+E1 confirm 3 readings (30 s)                                      n  6475 of 12870  net    -823$  -1.3c per $1  ahead 80% need 81% paid 0.802 no
+E2 confirm 6 readings (60 s)                                      n  4968 of 12870  net    -445$  -0.9c per $1  ahead 84% need 85% paid 0.843 no
+E3 first pass from minute 4                                       n  7016 of 12870  net    -757$  -1.1c per $1  ahead 81% need 82% paid 0.812 no
+E4 strong cushion (fifth 5)                                       n  5005 of 12870  net    -340$  -0.7c per $1  ahead 82% need 83% paid 0.819 no
+E5 strong cushion and confirm 3                                   n  4387 of 12870  net    -115$  -0.3c per $1  ahead 85% need 85% paid 0.840 no
+E6 the other side's first later pass (a second buy on the same market) n   23 (too few)
+
+BY BUY MINUTE
+  E0: 2-4: n  3729    -989$  -2.7c | 4-7: n  1555    +163$  +1.1c | 7-10: n  1213    -271$  -2.2c | 10-12: n   682     -30$  -0.4c | 12-14: n   447     -37$  -0.8c
+  E1: 2-4: n  2500    -789$  -3.2c | 4-7: n  1663    +211$  +1.3c | 7-10: n  1274    -190$  -1.5c | 10-12: n   697     -85$  -1.2c | 12-14: n   341     +30$  +0.9c
+  E2: 2-4: n  1231    -292$  -2.4c | 4-7: n  1530     -11$  -0.1c | 7-10: n  1295     -26$  -0.2c | 10-12: n   694    -178$  -2.6c | 12-14: n   218     +62$  +2.9c
+  E3: 2-4: few | 4-7: n  4244    -173$  -0.4c | 7-10: n  1500    -492$  -3.3c | 10-12: n   766     -75$  -1.0c | 12-14: n   506     -17$  -0.3c
+  E4: 2-4: n  2408    -107$  -0.4c | 4-7: n  1086    -142$  -1.3c | 7-10: n   854     -80$  -0.9c | 10-12: n   628     +14$  +0.2c | 12-14: few
+  E5: 2-4: n  1742    -109$  -0.6c | 4-7: n  1160     -13$  -0.1c | 7-10: n   887     -30$  -0.3c | 10-12: n   581     +45$  +0.8c | 12-14: few
+  E6: 2-4: few | 4-7: few | 7-10: few | 10-12: few | 12-14: few
+
+BY PRICE PAID
+  E0: 0.55-0.65: -0.6c n1135 | 0.65-0.85: -2.3c n4387 | 0.85-1.00: -0.8c n2073
+  E1: 0.55-0.65: +0.6c n446 | 0.65-0.85: -2.3c n3704 | 0.85-1.00: -0.0c n2320
+  E2: 0.55-0.65: +1.5c n121 | 0.65-0.85: -0.9c n2282 | 0.85-1.00: -1.0c n2565
+  E3: 0.55-0.65: +4.7c n477 | 0.65-0.85: -2.6c n3668 | 0.85-1.00: -0.5c n2855
+  E4: 0.55-0.65: -3.7c n318 | 0.65-0.85: -0.4c n2511 | 0.85-1.00: -0.6c n2166
+  E5: 0.55-0.65: -11.5c n132 | 0.65-0.85: +0.3c n2041 | 0.85-1.00: -0.2c n2212
+  E6: 0.55-0.65: few | 0.65-0.85: few | 0.85-1.00: few
+
+READING: held to settlement every entry rule is about break-even to slightly negative (E0 -1.5c per $1 on 7,626 buys, ahead 77% against a need of 78%); minutes 2-4 -2.7c, 4-7 +1.1c, 7-10 -2.2c. The model's picks carry no edge against the price paid; the lane's result comes from its exits, not from the entry. The STEP=1 full run (job 20261125-170429-15015) was still running at 18:05 ET after an hour (the STEP=10 run took 819 s).
