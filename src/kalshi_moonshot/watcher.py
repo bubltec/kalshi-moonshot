@@ -191,6 +191,7 @@ class Target:
     early_take_share: float = 0.0
     early_take_stall_share: float = 0.0
     early_take_hold_share: float = 0.0
+    early_take_cushion_units: float = 0.0
     early_take_fall_since: float = 0.0
     early_take_spot_high: float = 0.0
     early_take_spot_ts: float = 0.0
@@ -1038,6 +1039,8 @@ class ProfitWatcher:
             return None  # never a loss; the other steps decide
         stall = t.early_take_stall_share * left
         spot = ProfitWatcher._wave_spot(self, t, now)  # the spot's cushion over the target for the bet (memory): while it still climbs by a wobble of its own the bet is not stalled, whatever the bid does (DOGE 14:45 NO, 2026-11-24: sold at 0.85 on a 56 s flat bid while the spot kept moving the bet's way, "pretty much a sure bet")
+        if spot is not None and t.early_take_cushion_units > 0 and spot[1] > 0 and spot[0] >= t.early_take_cushion_units * spot[1]:
+            return None  # a cushion waits: the spot is that many of its own typical minutes on the bet's side of the target (2026-11-25, user: "it needs to wait on cushion")
         if spot is not None:
             spot_move = spot[1] * math.sqrt(10.0 / 60.0)
             if not t.early_take_spot_set:
@@ -1709,7 +1712,7 @@ class ProfitWatcher:
                 held.value_sale_premium, held.value_after_flip = spec.value_sale_premium, spec.value_after_flip
                 held.value_crossed, held.value_wait_share = spec.value_sale_crossed, spec.value_sale_wait_share
                 held.unit_min_history, held.no_loss_share = spec.bid_unit_min_seconds, spec.no_loss_share
-                held.early_take_share, held.early_take_stall_share, held.early_take_hold_share = spec.early_take_share, spec.early_take_stall_share, spec.early_take_hold_share
+                held.early_take_share, held.early_take_stall_share, held.early_take_hold_share, held.early_take_cushion_units = spec.early_take_share, spec.early_take_stall_share, spec.early_take_hold_share, spec.early_take_cushion_units
                 held.late_dip_share, held.late_dip_units, held.late_dip_look_s, held.late_dip_wait_share = spec.late_dip_share, spec.late_dip_units, spec.late_dip_look_seconds, spec.late_dip_wait_share
                 held.no_recovery_share = spec.no_recovery_share
                 held.spot_perp = spec.spot_perp

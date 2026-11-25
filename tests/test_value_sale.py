@@ -305,6 +305,7 @@ def _early_take_asker(tmp_path, monkeypatch, mem, stall_share, lose):
         with memguard.decision("sell"):
             return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
 
+    ask.target = t
     return ask
 
 
@@ -460,3 +461,18 @@ def test_integration_early_take_a_spot_still_climbing_is_not_a_stall(tmp_path, m
     assert ask(0.90, 700, 100.4) is None  # 100 s since the bid's high but 60 s since the spot's climb: under 10% of 700 s (70 s)
     why = ask(0.90, 650, 100.4)  # 110 s since the spot's last climb: over the 65 s wait
     assert why and "spot's cushion" in why
+
+
+def test_integration_early_take_waits_while_the_spot_cushion_is_a_typical_minute_or_more(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import watcher
+
+    lose = [None]
+    ask = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
+    spot = [(0.30, 0.10)]  # cushion 0.30 = three typical minutes of 0.10
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, t, now: spot[0])
+    ask.target.early_take_cushion_units = 1.0
+    assert ask(0.90, 700) is None  # armed
+    assert ask(0.80, 690) is None  # fell a wobble, but the cushion is 3 typical minutes: it waits
+    spot[0] = (0.05, 0.10)  # the cushion has thinned to half a minute
+    why = ask(0.79, 680)
+    assert why and "bid fell" in why
