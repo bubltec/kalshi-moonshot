@@ -1,0 +1,8 @@
+-- 2026-11-25, user: "had briefly touched profit -- sell it". The 40 live priskp bets of the 7 hours to 07:30 ET: sell at the first quote where the bid after its sale fee beats the price paid with its buy fee by M, vs the bets as run. Only the last 7 hours, as asked. M chosen after seeing the zeros.
+WITH b AS (SELECT ticker, side, ts, stake_usd/contracts pay, contracts n, exit_ts, exit_price, outcome FROM decisions WHERE lane='priskp' AND action='bet' AND mode='trade' AND ts > extract(epoch from now())-7*3600 AND (exit_ts IS NOT NULL OR outcome IS NOT NULL)),
+b2 AS (SELECT *, pay+0.07*pay*(1-pay) cost, CASE WHEN exit_ts IS NOT NULL THEN exit_price-0.07*exit_price*(1-exit_price) WHEN outcome=side THEN 1.0 ELSE 0.0 END got FROM b),
+m AS (SELECT unnest(ARRAY[0.0,0.02,0.04,0.06]) M),
+q AS (SELECT b2.ticker, b2.ts, b2.cost, m.M, t.ts qts, (CASE b2.side WHEN 'yes' THEN t.bid ELSE 1-t.ask END) sb FROM b2 CROSS JOIN m JOIN tape.quotes t ON t.ticker=b2.ticker AND t.ts BETWEEN b2.ts AND coalesce(b2.exit_ts,b2.ts+900) AND t.bid IS NOT NULL AND t.ask IS NOT NULL AND t.ask-t.bid<=0.08),
+hit AS (SELECT ticker, ts, M, min(qts) hts FROM q WHERE sb-0.07*sb*(1-sb) >= cost+M GROUP BY 1,2,3),
+alt AS (SELECT h.M, b2.n, b2.got, b2.ts, b2.ticker, (SELECT q.sb FROM q WHERE q.ticker=h.ticker AND q.ts=h.ts AND q.M=h.M AND q.qts=h.hts LIMIT 1) sb FROM hit h JOIN b2 ON b2.ticker=h.ticker AND b2.ts=h.ts)
+SELECT M, count(*) sold_on_touch, sum((got<0.3)::int) of_them_ended_near_zero, round(sum(n*((sb-0.07*sb*(1-sb))-got))::numeric,2) delta_vs_as_run, (SELECT round(sum(n*(got-cost))::numeric,2) FROM b2) as_run_all FROM alt WHERE sb IS NOT NULL GROUP BY M ORDER BY M;
