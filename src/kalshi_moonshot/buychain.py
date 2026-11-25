@@ -304,6 +304,34 @@ def same_side_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(same < cap, f"{same} of the lane's bets already {shot.side.upper()} in this window, the lane holds at most {cap}")
 
 
+@step("side_losing", needs_estimate=True)
+def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The lane does not buy more of a side while its open bets on that side in this window are losing at their current bids (2026-11-24, user, after the 22:15 round where four NO bets in four markets all lost together: "we need a rule where it stops buying more of the same side when the current bids are losing"). Each open bet of this lane on the same side in the same window (the part of the ticker after the series), in another market, is marked at its side's bid now: bid less the sale fee, against the price paid with its buy fee, times its contracts. When those bets' total is under zero the buy is refused; the first bet of a round (nothing open on the side) and a round whose bets are ahead go through. No number: the sign of what the lane already holds. A bet with no quote in memory yet is not counted. Reads the bet book and the in-memory quotes only, so it is asked at the decision."""
+    if ctx.store is None or shot.ticker.count("-") < 2:
+        return Check(True, "no bets to count")
+    from . import ticks
+
+    window = shot.ticker.split("-")[1]
+    total, n, unread = 0.0, 0, 0
+    for r in ctx.store.open_bets():
+        tk = r["ticker"]
+        if (r["lane"] or "moonshot") != shot.lane or r["side"] != shot.side or tk == shot.ticker or tk.count("-") < 2 or tk.split("-")[1] != window:
+            continue
+        rows = ticks.mids.quotes(tk)
+        contracts = float(r["contracts"] or 0.0)
+        if not rows or contracts <= 0:
+            unread += 1
+            continue
+        yes_bid, yes_ask = rows[-1][1], rows[-1][2]
+        bid = yes_bid if shot.side == "yes" else 1.0 - yes_ask
+        paid = float(r["stake_usd"] or 0.0) / contracts
+        total += (bid - fee_per_contract(bid) - paid - fee_per_contract(paid)) * contracts
+        n += 1
+    if n == 0:
+        return Check(True, "no other bet of the lane on this side in this window" + (f" with a quote ({unread} unread)" if unread else ""))
+    return Check(total >= 0.0, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars at their bids now" + (", so no more of the side" if total < 0.0 else ""))
+
+
 @step("cooldown", needs_estimate=True)
 def cooldown_step(ctx: Ctx, shot: LongShot) -> Check:
     """The lane does not buy back too soon what it just sold in this market (2026-11-19, user: "put both into one buy step, cooldown"; the rebuy wait and the reentry cooldown were lane options the cleanup took out, "should be part of buy logic"). After a sale FOR A GAIN the same side waits rebuy_opposite_after_gain_seconds (2026-11-08, HYPE 09:15: sold YES at 0.67 for a gain, bought YES again 94 s later at 0.67 and lost $2.22); the other side goes straight through the other steps, so a rebuy is usually the opposite end. After a sale at a loss, or when the lane sets no rebuy wait, the whole market (either side) waits reentry_cooldown_seconds. A lane sets either or both (in its buy module); a gain sale on a lane with a rebuy wait is not held to the reentry cooldown. Reads the bet book in memory (Store.last_exit_ts, Store.last_gain_sale), so it is asked at the decision only."""

@@ -369,3 +369,22 @@ def test_integration_the_real_lane_file_loads_and_no_lane_keeps_the_retired_step
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     got = lanes.lane_specs_from(config.load(), LANES_FILE.read_text())
     assert got and all("context_score" not in sp.buy_chain for sp in got.values())
+
+
+def test_unit_side_losing_refuses_more_of_a_side_whose_open_bets_stand_under_water(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    store = Store(config.load().db_path)
+    for tk in ("KXBTC15M-30JAN010015-15", "KXETH15M-30JAN010015-15"):
+        store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (time.time(), tk, "bet", "observe", 0.8, "yes", "x", 10, 8.0, "2099-01-01T00:00:00Z"))
+    store.db.commit()
+    sp = spec()
+    new = dataclasses.replace(shot(), ticker="KXSOL15M-30JAN010015-15", series="KXSOL15M")
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [])
+    assert ask("side_losing", sp, new, store=store).ok is True  # no quote in memory yet: nothing to count
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(time.time(), 0.55, 0.57)])
+    assert ask("side_losing", sp, new, store=store).ok is False  # paid 0.80, the bid is 0.55
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(time.time(), 0.90, 0.92)])
+    assert ask("side_losing", sp, new, store=store).ok is True  # ahead at the bid
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(time.time(), 0.55, 0.57)])
+    assert ask("side_losing", sp, shot("no", 0.2), store=store).ok is True  # the open bets are YES: the NO side is another side
+    assert ask("side_losing", sp, new).ok is True  # the review has no books
