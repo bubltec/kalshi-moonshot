@@ -332,6 +332,51 @@ def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(total >= 0.0, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars at their bids now" + (", so no more of the side" if total < 0.0 else ""))
 
 
+_HOLD_FIRST: dict[tuple[str, str], list[float]] = {}  # (ticker, side) -> [when the lane first would have bought, the spot then, when it last would have]
+
+
+def _settle_hold(ctx: Ctx, shot: LongShot, shadow: bool) -> Check:
+    """Hold a buy until the market has shown its hand (2026-11-24, user, on the 22:15 NO bets, all four bought in a chop and lost: "if we don't see a direction yet we shouldn't bet yet", "if we held for 2 minutes we would have seen the trend change"; scripts/priskp_hold_two_minutes_study.py: on 64 bets, buying only where the spot had not moved against the bet during a 2-minute wait kept 20 bets for +$21.36, the 44 whose spot turned lost $26.38 bought for real). Put it LAST in a module's list: the hold starts the first time every other step would have bought, and the spot is noted then. The buy waits settle_hold_share of the market's 900 s (a share of its life, never fixed seconds), then goes through only while the spot is not on the wrong side of where it stood when the hold began (a fall for YES, a rise for NO). A hold is a wait and not a pass: the entry thread asks again on every tick. If the other steps said no for longer than the wait itself in between, the hold starts over (the signal broke). As a SHADOW step it never says no: its note says what the live step would have done. Memory only (the in-memory index ticks)."""
+    share = ctx.spec.settle_hold_share
+    if share <= 0:
+        return Check(shadow, "the lane sets no wait (settle_hold_share)")
+    from . import binaryrisk, ticks
+
+    index = binaryrisk.curve_index(shot.series)
+    last = ticks.history.last_at_or_before(index, ctx.now) if index else None
+    if last is None or ctx.now - last[0] > 30.0:
+        return Check(shadow, "no fresh spot reading for the hold" + (" (shadow: passes)" if shadow else ""))
+    spot, need = float(last[1]), share * 900.0
+    key = (shot.ticker, shot.side)
+    got = _HOLD_FIRST.get(key)
+    if got is None or ctx.now - got[2] > max(need, 1.0):
+        got = _HOLD_FIRST[key] = [ctx.now, spot, ctx.now]
+        if len(_HOLD_FIRST) > 2048:
+            for k in [k for k, v in _HOLD_FIRST.items() if ctx.now - v[2] > 3600.0]:
+                del _HOLD_FIRST[k]
+    got[2] = ctx.now
+    waited = ctx.now - got[0]
+    prefix = "would hold: " if shadow else ""
+    if waited < need:
+        return Check(shadow, f"{prefix}the lane first would have bought {waited:.0f}s ago and waits {need:.0f}s ({share:g} of the market) to see where the spot goes")
+    against = spot < got[1] if shot.side == "yes" else spot > got[1]
+    if against:
+        return Check(shadow, f"{prefix}after the {need:.0f}s wait the spot is {spot:g}, on the wrong side of {got[1]:g} where it stood when the hold began: no direction with the bet yet")
+    return Check(True, f"waited {waited:.0f}s of {need:.0f}s; the spot {spot:g} has not moved against the bet since {got[1]:g}")
+
+
+@step("settle_hold", needs_estimate=True)
+def settle_hold_step(ctx: Ctx, shot: LongShot) -> Check:
+    """Live: see _settle_hold."""
+    return _settle_hold(ctx, shot, False)
+
+
+@step("settle_hold_shadow", needs_estimate=True)
+def settle_hold_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
+    """SHADOW, never says no: see _settle_hold. The note on the decision says what settle_hold would have done."""
+    return _settle_hold(ctx, shot, True)
+
+
 @step("cooldown", needs_estimate=True)
 def cooldown_step(ctx: Ctx, shot: LongShot) -> Check:
     """The lane does not buy back too soon what it just sold in this market (2026-11-19, user: "put both into one buy step, cooldown"; the rebuy wait and the reentry cooldown were lane options the cleanup took out, "should be part of buy logic"). After a sale FOR A GAIN the same side waits rebuy_opposite_after_gain_seconds (2026-11-08, HYPE 09:15: sold YES at 0.67 for a gain, bought YES again 94 s later at 0.67 and lost $2.22); the other side goes straight through the other steps, so a rebuy is usually the opposite end. After a sale at a loss, or when the lane sets no rebuy wait, the whole market (either side) waits reentry_cooldown_seconds. A lane sets either or both (in its buy module); a gain sale on a lane with a rebuy wait is not held to the reentry cooldown. Reads the bet book in memory (Store.last_exit_ts, Store.last_gain_sale), so it is asked at the decision only."""

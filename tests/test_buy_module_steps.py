@@ -388,3 +388,34 @@ def test_unit_side_losing_refuses_more_of_a_side_whose_open_bets_stand_under_wat
     monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(time.time(), 0.55, 0.57)])
     assert ask("side_losing", sp, shot("no", 0.2), store=store).ok is True  # the open bets are YES: the NO side is another side
     assert ask("side_losing", sp, new).ok is True  # the review has no books
+
+
+def test_unit_settle_hold_waits_then_releases_only_while_the_spot_is_not_against_the_bet(monkeypatch):
+    monkeypatch.setattr(buychain, "_HOLD_FIRST", {})
+    spot = {"v": 100.0}
+    clock = {"t": 1000.0}
+    from kalshi_moonshot import binaryrisk
+
+    monkeypatch.setattr(binaryrisk, "curve_index", lambda series: "IDX")
+    monkeypatch.setattr(ticks.history, "last_at_or_before", lambda index, ts: (clock["t"], spot["v"]))
+    sp = spec(settle_hold_share=0.13)  # 117 s of 900
+
+    def live(sh=None, shadow=False):
+        step = "settle_hold_shadow" if shadow else "settle_hold"
+        return ask(step, sp, sh, now=clock["t"])
+
+    assert live().ok is False  # the hold starts
+    clock["t"] += 60.0
+    assert live().ok is False  # still waiting
+    assert live(shadow=True).ok is True  # the shadow never says no
+    clock["t"] += 70.0
+    assert live().ok is True  # waited, the spot is where it was: not against a YES
+    spot["v"] = 99.0
+    assert live().ok is False  # the spot fell against a YES bet
+    assert live(shot("no", 0.2)).ok is False  # a NO's own hold has only just begun
+    clock["t"] += 100.0
+    assert live(shot("no", 0.2)).ok is False  # still waiting (asked every tick, so the hold goes on)
+    clock["t"] += 30.0
+    assert live(shot("no", 0.2)).ok is True  # the spot fell: with a NO bet
+    assert ask("settle_hold", spec(), now=clock["t"]).ok is False  # no share on the lane: no
+    assert ask("settle_hold_shadow", spec(), now=clock["t"]).ok is True  # the shadow passes
