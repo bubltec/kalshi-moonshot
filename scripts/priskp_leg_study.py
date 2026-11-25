@@ -57,6 +57,20 @@ for b in json.load(open(f"{D}/bets24.json")):
     # how far this market's own waves usually travel in 10 minutes (the root-mean-square 600 s change over the hour before the open) against how far the CURRENT leg has already travelled
     w10 = (sum((pre[i + 600] - pre[i]) ** 2 for i in range(0, len(pre) - 600, 10)) / max(len(range(0, len(pre) - 600, 10)), 1)) ** 0.5
     travel = abs(float(win[now - op]) - float(win[st])) if st < now - op else 0.0
+    # TIMING (user: "its about the timing"): how long the current leg has run against how long this market's own legs usually last (the zig-zag's confirmed legs over the hour before the open)
+    smp = broad([float(x) for x in pre], 0, len(pre) - 1, waveturn.SMOOTH // 2, len(pre) - 1)
+    ppts, _pd, _pk, _pv = waveturn.zigzag(smp, waveturn.ZZ * h.u)
+    durs = [b[0] - a[0] for a, b in zip(ppts, ppts[1:])]
+    typ_dur = sorted(durs)[len(durs) // 2] if len(durs) >= 3 else None
+    leg_age = (now - op) - st
+    # the same timing at the scale of the BIG swings (a reversal of 2 typical minutes, fixed before the run; the user: some waves traverse 10 minutes, others 3)
+    ppts2, _a, _b, _c = waveturn.zigzag(smp, 2.0 * h.u)
+    durs2 = [b[0] - a[0] for a, b in zip(ppts2, ppts2[1:])]
+    typ_dur2 = sorted(durs2)[len(durs2) // 2] if len(durs2) >= 2 else None
+    wpts2, _d2, _e2, _f2 = waveturn.zigzag(sm, 2.0 * h.u)
+    st2 = wpts2[-1][0] if wpts2 else 0
+    age_ratio2 = ((now - op) - st2) / typ_dur2 if typ_dur2 else None
+    age_ratio = leg_age / typ_dur if typ_dur else None
     leg_ratio = travel / w10 if w10 > 0 else None
     if len(seg) >= 60:
         m_ = len(seg); mu_ = sum(seg) / m_; xm_ = (m_ - 1) / 2
@@ -83,7 +97,7 @@ for b in json.load(open(f"{D}/bets24.json")):
     pay, n = float(b["pay"]), float(b["n"])
     cost = pay + fee(pay)
     got = (float(b["xp"]) - fee(float(b["xp"]))) if b["xts"] else (1.0 if b["out"] == b["side"] else 0.0)
-    rows.append({"leg_ratio": leg_ratio, "leg_r2": leg_r2, "leg_len": len(seg), "tk": b["ticker"], "ts": b["ts"], "stake": pay * n, "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
+    rows.append({"age_ratio2": age_ratio2, "typ_dur2": typ_dur2, "age_ratio": age_ratio, "leg_age": leg_age, "typ_dur": typ_dur, "leg_ratio": leg_ratio, "leg_r2": leg_r2, "leg_len": len(seg), "tk": b["ticker"], "ts": b["ts"], "stake": pay * n, "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
 
 
 def line(label, g):
@@ -126,6 +140,23 @@ line("  leg 1.5 or more (further than a usual wave goes)", [x for x in ins2 if x
 for x in rows:
     if "26NOV250830" in x["tk"] and x["leg_ratio"] is not None:
         print(f"    08:30 {x['tk'][:10]} {x['side']} leg travel {x['leg_ratio']:.2f} of the usual 10 minute wave, net ${x['net']:+.2f}")
+print("\nTIMING: INSIDE the leg, by how long the current leg has run against how long this market's own legs usually last (the median confirmed zig-zag leg of the hour before the open; cuts 0.5 and 1.0 fixed before this run; the user: 'its about the timing'):")
+ins3 = [x for x in rows if x["cls"].startswith("INSIDE") and x["age_ratio"] is not None]
+line("  the leg is young (under 0.5 of a usual leg's length)", [x for x in ins3 if x["age_ratio"] < 0.5])
+line("  middle (0.5 to 1.0)", [x for x in ins3 if 0.5 <= x["age_ratio"] < 1.0])
+line("  the leg has run as long as a usual leg or longer (1.0 or more)", [x for x in ins3 if x["age_ratio"] >= 1.0])
+for x in rows:
+    if "26NOV250830" in x["tk"] and x["age_ratio"] is not None:
+        print(f"    08:30 {x['tk'][:10]} {x['side']} leg age {x['leg_age']}s of a usual {x['typ_dur']}s = {x['age_ratio']:.2f}, net ${x['net']:+.2f}")
+print("\nTIMING AT THE BIG-SWING SCALE (reversal 2 typical minutes): INSIDE bets by the current big leg's age against this market's usual big leg of the hour before (cuts 0.5 and 1.0):")
+ins4 = [x for x in rows if x["cls"].startswith("INSIDE") and x["age_ratio2"] is not None]
+line("  young (under 0.5 of a usual big leg)", [x for x in ins4 if x["age_ratio2"] < 0.5])
+line("  middle (0.5 to 1.0)", [x for x in ins4 if 0.5 <= x["age_ratio2"] < 1.0])
+line("  as long as a usual big leg or longer (1.0 or more)", [x for x in ins4 if x["age_ratio2"] >= 1.0])
+print("  markets with no usual big leg in the hour before (under 2 confirmed legs):", len([x for x in rows if x["cls"].startswith("INSIDE") and x["age_ratio2"] is None]))
+for x in rows:
+    if "26NOV250830" in x["tk"] and x["age_ratio2"] is not None:
+        print(f"    08:30 {x['tk'][:10]} {x['side']} big leg {x['age_ratio2']:.2f} of a usual {x['typ_dur2']}s, net ${x['net']:+.2f}")
 print("\nthe 08:30 round:")
 for x in rows:
     if "26NOV250830" in x["tk"]:
