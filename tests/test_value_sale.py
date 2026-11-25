@@ -335,7 +335,7 @@ def test_integration_no_recovery_sells_a_never_profitable_bet_after_half_a_marke
     assert why and "no recovery" in why and "0.26" in why
 
 
-def test_integration_no_recovery_leaves_a_bet_that_was_ahead_alone(tmp_path, monkeypatch, mem):
+def test_integration_no_recovery_waits_from_the_last_profit_and_sells_once_that_expires(tmp_path, monkeypatch, mem):
     from kalshi_moonshot import curverisk, watcher
 
     w, t, close = take_target(tmp_path, monkeypatch, 0.57, unit=0.10)
@@ -350,7 +350,9 @@ def test_integration_no_recovery_leaves_a_bet_that_was_ahead_alone(tmp_path, mon
 
     assert ask(0.55, 800) is None
     assert ask(0.70, 700) is None  # in profit once: not this step's
-    assert ask(0.30, 340) is None  # back under, 460 s since the buy: the other steps decide
+    assert ask(0.30, 340) is None  # back under, but only 360 s since it was last ahead: still waiting
+    why = ask(0.28, 240)  # 460 s since it was last ahead (left 700): the profit has expired
+    assert why and "no recovery" in why and "last ahead" in why
     t2 = t
     t2.no_recovery_share = 0.0
     assert ask(0.30, 300) is None  # off when the lane does not set it

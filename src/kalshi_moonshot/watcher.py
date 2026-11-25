@@ -203,7 +203,8 @@ class Target:
     no_recovery_share: float = 0.0  # lane field: the share of the market's 900 s since the buy after which a bet never once in profit is sold (0 = the no_recovery step is off)
     no_rec_logged: bool = False
     no_rec_seen: float = 0.0  # the first check the no_recovery step saw this bet (a bet it did not see from the buy is not judged)
-    no_rec_ahead: bool = False  # the bid less the sale fee has been over the price paid with its buy fee at some check since the buy
+    no_rec_ahead: bool = False  # (kept: the bid less the sale fee has been over the price paid with its buy fee at some check since the buy)
+    no_rec_last_ahead: float = 0.0  # when the bid less the sale fee was last over the price paid with its buy fee (a profit expires: the no_recovery wait runs from here, or from the buy)
     late_dip_since: float = 0.0
     late_dip_logged: bool = False
     late_dip_spot: list = field(default_factory=list)  # (time, the spot's cushion) of the last late_dip_look_s seconds
@@ -947,7 +948,7 @@ class ProfitWatcher:
         return False
 
     def _sell_no_recovery(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
-        """Sell step no_recovery (2026-11-24, user, on HYPE 17:45 NO bought at 0.57 and slid to 0 with nothing selling it: "i think we just need to accept its a loss when it doesn't come back after the wait"; "time since bet > (length of market / 2) sell if never profitable"). A bet that has never once been in profit after both fees is sold at the bid, at a loss, the first check once its time since the buy passes the lane's no_recovery_share of the market's length (half of the 900 s). A bet that has been ahead is not this step's: early_take, wave_take and value_sale decide it. Needs to have been watched from the buy. Reads the bid and the price paid from memory."""
+        """Sell step no_recovery (2026-11-24, user, on HYPE 17:45 NO bought at 0.57 and slid to 0 with nothing selling it: "i think we just need to accept its a loss when it doesn't come back after the wait"; "time since bet > (length of market / 2) sell if never profitable"). A bet that has never once been in profit after both fees is sold at the bid, at a loss, the first check once its time since the buy passes the lane's no_recovery_share of the market's length (half of the 900 s). A profit expires (user, 2026-11-24, after DOGE and SOL 22:15 NO touched +1c to +3c in their first 14 s and then fell to 0 with no_recovery off for good: "I think the profit should have an expiration"): the wait runs from the last moment the bet was ahead after both fees, or from the buy if it never was, so a bet that is in profit now is not this step's and one whose profit is older than the wait is. Needs to have been watched from the buy. Reads the bid and the price paid from memory."""
         if t.no_recovery_share <= 0 or t.entry <= 0 or bid <= 0 or t.close_ts <= 0:
             return None
         net = bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry))
@@ -955,16 +956,16 @@ class ProfitWatcher:
             t.no_rec_seen = now
         if net > 0:
             t.no_rec_ahead = True
-        if t.no_rec_ahead or net > 0:
+            t.no_rec_last_ahead = now  # a profit expires (user, 2026-11-24: "I think the profit should have an expiration"): the wait below starts over from the last moment the bet was ahead
             return None
-        start = t.bought_ts if t.bought_ts > 0 else t.no_rec_seen
+        start = max(t.bought_ts if t.bought_ts > 0 else t.no_rec_seen, t.no_rec_last_ahead)
         held_for = now - start
         wait = t.no_recovery_share * 900.0
         if held_for < wait:
             return None  # an early loss is waited out: the bet is given its share of the market's length to come back
         if t.bought_ts > 0 and t.no_rec_seen > t.bought_ts + 30.0:
             return None  # not watched from the buy (a restart): its past is unknown
-        reason = f"no recovery: the bet has not once been in profit since the buy ({t.entry:.2f} paid), {held_for:.0f} s held, past its {wait:.0f} s ({t.no_recovery_share:.0%} of the market's length) to come back, {left:.0f} s left; accepted as a loss: sold at the bid {bid:.2f} ({net * 100:.1f}c a contract after both fees)"
+        reason = f"no recovery: the bet has not been in profit {"since the buy" if t.no_rec_last_ahead <= 0 else f"since it was last ahead {held_for:.0f} s ago"} ({t.entry:.2f} paid), {held_for:.0f} s without, past its {wait:.0f} s ({t.no_recovery_share:.0%} of the market's length) to come back, {left:.0f} s left; accepted as a loss: sold at the bid {bid:.2f} ({net * 100:.1f}c a contract after both fees)"
         extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "held": round(held_for, 1)}
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="no recovery", extra=extra)
