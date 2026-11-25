@@ -286,12 +286,11 @@ def test_integration_early_take_a_stall_sells_only_when_the_sale_beats_holding(t
     assert why and "no new high" in why
 
 
-def test_integration_early_take_a_fall_with_cushion_or_no_reading_holds(tmp_path, monkeypatch, mem):
+def _early_take_asker(tmp_path, monkeypatch, mem, stall_share, lose):
     from kalshi_moonshot import curverisk, watcher
 
     w, t, close = take_target(tmp_path, monkeypatch, 0.70, unit=0.10)
-    t.entry, t.early_take_share, t.early_take_stall_share, t.early_take_hold_share = 0.70, 1.0, 0.0, 0.0
-    lose = [0.005]
+    t.entry, t.early_take_share, t.early_take_stall_share, t.early_take_hold_share = 0.70, 1.0, stall_share, 0.0
 
     class Board:
         def view(self, name):
@@ -306,13 +305,32 @@ def test_integration_early_take_a_fall_with_cushion_or_no_reading_holds(tmp_path
         with memguard.decision("sell"):
             return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
 
+    return ask
+
+
+def test_integration_early_take_a_stall_with_cushion_or_no_reading_holds(tmp_path, monkeypatch, mem):
+    lose = [0.005]
+    ask = _early_take_asker(tmp_path, monkeypatch, mem, 0.1, lose)  # falls are not asked: only the stall can sell here
     assert ask(0.90, 700) is None  # armed at its high
-    assert ask(0.80, 690) is None  # the bid fell a wobble, but the spot's wrong-ending chance is 0.5%: holding is worth 0.995 against 0.79 from selling
+    assert ask(0.90, 600) is None  # no new high for 100 s (over 10% of the time left), but the spot's wrong-ending chance is 0.5%: holding is worth 0.995 against 0.89 from selling
     lose[0] = None
-    assert ask(0.80, 680) is None  # no reading of the spot: nothing sells on a number that is not there
+    assert ask(0.90, 590) is None  # no reading of the spot: nothing sells a stall on a number that is not there
     lose[0] = 0.3
-    why = ask(0.80, 670)  # the cushion is gone: holding is worth 0.70 against 0.79
-    assert why and "hold value" in why
+    why = ask(0.90, 580)  # the cushion is gone: holding is worth 0.70 against 0.89
+    assert why and "hold value" in why and "stopped climbing" in why
+
+
+def test_integration_early_take_a_held_fall_in_profit_sells_whatever_the_model_says(tmp_path, monkeypatch, mem):
+    lose = [0.005]
+    ask = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
+    assert ask(0.90, 700) is None  # armed at its high
+    why = ask(0.80, 690)  # fell a wobble with +7c in hand and a 0.5% chance of ending wrong: the market is turning, the model does not hold it (2026-11-25, NEAR 00:30)
+    assert why and "bid fell" in why
+    lose[0] = None
+    ask2 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
+    assert ask2(0.90, 700) is None
+    why = ask2(0.80, 690)  # and with no reading of the spot at all
+    assert why and "bid fell" in why and "hold value" not in why
 
 
 def test_integration_no_recovery_sells_a_never_profitable_bet_after_half_a_market_since_the_buy(tmp_path, monkeypatch, mem):
