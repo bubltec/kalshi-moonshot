@@ -95,6 +95,17 @@ def test_unit_a_repeated_swing_fires_YES_after_a_dip_and_NO_after_a_peak_once_tw
     assert side == "no" and why == "fired" and r.done >= waveturn.need(r.t)
 
 
+def test_unit_the_note_carries_the_leg_time_and_the_room_left_as_shadow(mem):
+    hour = hour_path()
+    feed(hour, window_path(LONG, u_of(hour)))
+    side, why, r, h = waveturn.read_index(INDEX, OPEN, OPEN + 250.5, K, 0.0)
+    assert 50 <= r.leg_s <= 70 and 1.0 < r.leg_u <= 2.0  # legs of 60 s and 2 u, a little less after the 30 s smoothing
+    told = waveturn.note(r, h, K)
+    assert "legs: median" in told and "legs left" in told and "(shadow)" in told
+    early = waveturn.read_index(INDEX, OPEN, OPEN + 70.5, K, 0.0)[2]
+    assert "no completed leg yet" in waveturn.room(early)
+
+
 def test_unit_the_swings_needed_grow_with_the_minutes_into_the_market():
     assert [waveturn.need(m * 60.0) for m in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12)] == [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 5]
 

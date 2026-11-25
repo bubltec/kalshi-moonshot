@@ -36,6 +36,7 @@ Memory only: the tick history (ticks.history) and the target in memory; the hour
 from __future__ import annotations
 
 import math
+import statistics
 import threading
 from dataclasses import dataclass, field
 from typing import Any
@@ -132,6 +133,8 @@ class Reading:
     eff300: float
     done: int = 0  # completed swings of DONE_U u so far
     ev_u: float = 0.0  # the swing's running extreme against the target, signed, in u
+    leg_s: float = 0.0  # shadow: the median seconds of this market's completed legs of DONE_U u (0 = none yet)
+    leg_u: float = 0.0  # shadow: the median size of those legs in u
 
 
 def reading(window: list[float], t: int, K: float, u: float) -> Reading:
@@ -140,8 +143,11 @@ def reading(window: list[float], t: int, K: float, u: float) -> Reading:
     pts, d, _ek, ev = zigzag(sm, ZZ * u)
     start = pts[-1][1] if pts else sm[0]
     big, _d, _k, _v = zigzag(sm, DONE_U * u)
+    legs = [(b[0] - a[0], abs(b[1] - a[1]) / u) for a, b in zip(big, big[1:])]
+    leg_s = statistics.median(x for x, _ in legs) if legs else 0.0
+    leg_u = statistics.median(y for _, y in legs) if legs else 0.0
     return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),
-                   max(0, len(big) - 1), (ev - K) / u if d else 0.0)
+                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u))
 
 
 @dataclass
@@ -271,6 +277,13 @@ def clear() -> None:
         _reads.clear()
 
 
+def room(r: Reading) -> str:
+    """Shadow: the time left in the window in this market's own leg times (a turn needs about one leg to play out); 'no legs yet' before a completed leg."""
+    if r.leg_s <= 0:
+        return "no completed leg yet"
+    return f"{max(0.0, 900.0 - r.t) / r.leg_s:.1f} legs left ({max(0, 900 - r.t)}s of {r.leg_s:.0f}s legs)"
+
+
 def note(r: Reading | None, h: Hour, K: float) -> str:
     """The readings for the decision's note (the gate's reading and the shadow ones)."""
     head = f"pre-open hour: crossings of the window's open {h.cross:.2f} per 15 min, efficiency {h.eff:.3f} (shadow only)" if h.cross is not None else f"pre-open hour: {h.why}"
@@ -278,6 +291,7 @@ def note(r: Reading | None, h: Hour, K: float) -> str:
         return f"{head} (target {K:.6g})"
     return (f"{head}; {r.t}s in, {SMOOTH}s smoothing: swing {r.swing_u:.2f}u {'up' if r.d == 1 else 'down' if r.d == -1 else '-'}, {r.gb_u:.2f}u given back, "
             f"completed swings of {DONE_U:g}u {r.done} (gate >= {need(r.t)}), waves so far {r.turns}, curve {r.pos_u:+.2f}u and the swing's extreme {r.ext_u:.2f}u from the target, last-5-min efficiency {r.eff300:.2f}, "
+            f"legs: median {r.leg_s:.0f}s and {r.leg_u:.2f}u, room {room(r)} (shadow), "
             f"u {h.u:.6g} (target {K:.6g})")
 
 
