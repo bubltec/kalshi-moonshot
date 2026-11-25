@@ -54,6 +54,10 @@ for b in json.load(open(f"{D}/bets24.json")):
     st = pts[-1][0] if pts else 0
     seg = [float(x) for x in win[st:now - op + 1]]
     leg_r2 = None
+    # how far this market's own waves usually travel in 10 minutes (the root-mean-square 600 s change over the hour before the open) against how far the CURRENT leg has already travelled
+    w10 = (sum((pre[i + 600] - pre[i]) ** 2 for i in range(0, len(pre) - 600, 10)) / max(len(range(0, len(pre) - 600, 10)), 1)) ** 0.5
+    travel = abs(float(win[now - op]) - float(win[st])) if st < now - op else 0.0
+    leg_ratio = travel / w10 if w10 > 0 else None
     if len(seg) >= 60:
         m_ = len(seg); mu_ = sum(seg) / m_; xm_ = (m_ - 1) / 2
         sxx_ = sum((i - xm_) ** 2 for i in range(m_)); sl_ = sum((i - xm_) * (y - mu_) for i, y in enumerate(seg)) / sxx_
@@ -79,7 +83,7 @@ for b in json.load(open(f"{D}/bets24.json")):
     pay, n = float(b["pay"]), float(b["n"])
     cost = pay + fee(pay)
     got = (float(b["xp"]) - fee(float(b["xp"]))) if b["xts"] else (1.0 if b["out"] == b["side"] else 0.0)
-    rows.append({"leg_r2": leg_r2, "leg_len": len(seg), "tk": b["ticker"], "ts": b["ts"], "stake": pay * n, "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
+    rows.append({"leg_ratio": leg_ratio, "leg_r2": leg_r2, "leg_len": len(seg), "tk": b["ticker"], "ts": b["ts"], "stake": pay * n, "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
 
 
 def line(label, g):
@@ -114,6 +118,14 @@ line("  the leg is not straight (under 0.9)", [x for x in ins if x["leg_r2"] < 0
 print("  the 30 minute R^2 wave-trend split of the same bets: wave", len([x for x in ins if x["r2"] < med]), "trend", len([x for x in ins if x["r2"] >= med]))
 line("  straight leg, 30 minute R^2 says wave (the BTC 12:33 case)", [x for x in ins if x["leg_r2"] >= 0.9 and x["r2"] < med])
 line("  not-straight leg, 30 minute R^2 says wave", [x for x in ins if x["leg_r2"] < 0.9 and x["r2"] < med])
+print("\nINSIDE the leg, by how far the current leg has travelled against how far this market's own waves usually travel in 10 minutes (leg travel / the hour before the open's rms 10 minute change; cuts 1.0 and 1.5 fixed before this run; added 2026-11-25, user: 'if it had traced back it would have seen this'; the range of a wave differs by market):")
+ins2 = [x for x in rows if x["cls"].startswith("INSIDE") and x["leg_ratio"] is not None]
+line("  leg under 1.0 of the usual wave travel", [x for x in ins2 if x["leg_ratio"] < 1.0])
+line("  leg 1.0 to 1.5", [x for x in ins2 if 1.0 <= x["leg_ratio"] < 1.5])
+line("  leg 1.5 or more (further than a usual wave goes)", [x for x in ins2 if x["leg_ratio"] >= 1.5])
+for x in rows:
+    if "26NOV250830" in x["tk"] and x["leg_ratio"] is not None:
+        print(f"    08:30 {x['tk'][:10]} {x['side']} leg travel {x['leg_ratio']:.2f} of the usual 10 minute wave, net ${x['net']:+.2f}")
 print("\nthe 08:30 round:")
 for x in rows:
     if "26NOV250830" in x["tk"]:
