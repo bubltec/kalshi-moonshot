@@ -410,6 +410,30 @@ def test_unit_side_losing_blocks_when_any_one_open_bet_is_under_the_share_whatev
     assert ask("side_losing", spec(side_losing_share=0.2), new, store=store).ok is True
 
 
+def test_unit_side_losing_values_an_open_bet_at_the_better_of_its_bid_and_its_hold_on_the_cushion(tmp_path, monkeypatch):
+    from kalshi_moonshot import binaryrisk
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    store = Store(config.load().db_path)
+    store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time) VALUES (?,?,?,?,?,?,?,?,?,?)", (time.time(), "KXBTC15M-30JAN010015-15", "bet", "observe", 0.8, "yes", "x", 10, 8.0, "2099-01-01T00:00:00Z"))
+    store.db.commit()
+    new = dataclasses.replace(shot(), ticker="KXSOL15M-30JAN010015-15", series="KXSOL15M")
+    now = time.time()
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(now, 0.55, 0.57)])  # the bid has dipped from the 0.80 paid: 33% under at the bid
+    sp = spec(side_losing_share=0.05)
+    monkeypatch.setattr(binaryrisk, "curve_index", lambda series: "IDX")
+    T = [now - 620.0 + i for i in range(621)]
+    V = [100.0 + (0.01 if i % 2 else -0.01) for i in range(621)]  # a spot of about 100 moving a hundredth a second
+    monkeypatch.setattr(ticks.history, "window", lambda index, a, b: (T, V))
+    monkeypatch.setattr(ticks.strikes, "get", lambda tk, *a: 99.0)  # a cushion of 1.0, about a hundred typical minutes
+    c = ask("side_losing", sp, new, store=store, now=now)
+    assert c.ok is True and "hold value" in c.why  # 2026-11-25, user: "side_losing needs to account for cushion also": a dip with plenty of cushion is not losing
+    monkeypatch.setattr(ticks.strikes, "get", lambda tk, *a: 100.0)  # the spot sits on the target: no cushion
+    assert ask("side_losing", sp, new, store=store, now=now).ok is False  # the bid decides again
+    monkeypatch.setattr(ticks.strikes, "get", lambda tk, *a: None)  # no target in memory
+    assert ask("side_losing", sp, new, store=store, now=now).ok is False
+
+
 def test_unit_settle_confirm_buys_only_once_the_spot_has_moved_the_bets_way_by_its_own_typical_minute(monkeypatch):
     from kalshi_moonshot import binaryrisk, priskp
 

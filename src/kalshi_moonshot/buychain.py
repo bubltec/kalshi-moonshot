@@ -304,6 +304,26 @@ def same_side_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(same < cap, f"{same} of the lane's bets already {shot.side.upper()} in this window, the lane holds at most {cap}")
 
 
+def _hold_value(ticker: str, shot: LongShot, now: float) -> float | None:
+    """What an open bet on `ticker` (the shot's side, in the shot's own window, so the same time left) is worth HELD to the close: 1 - the chance the spot's 60 s average ends on the wrong side, from its cushion over this market's target in the spot's own typical minute (wavetop.spot_read, wavetop.p_lose: the sell side's own reading). None when the spot, its typical minute or the target is not in the tick memory. Memory only."""
+    from . import binaryrisk, ticks, wavetop
+
+    try:
+        index = binaryrisk.curve_index(ticker.split("-")[0])
+        strike = ticks.strikes.get(ticker)
+        if not index or not strike:
+            return None
+        got = ticks.history.window(index, now - 620.0, now)
+        if not got or not got[0]:
+            return None
+        read = wavetop.spot_read(got[0], got[1], now, float(strike), shot.side)
+        if read is None:
+            return None
+        return 1.0 - wavetop.p_lose(read[0], read[1], max(shot.hours_to_close * 3600.0, 1.0))
+    except Exception:  # a reading that fails is no cushion: the bid decides
+        return None
+
+
 @step("side_losing", needs_estimate=True)
 def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
     """The lane does not buy more of a side while its open bets on that side in this window are losing at their current bids (2026-11-24, user, after the 22:15 round where four NO bets in four markets all lost together: "we need a rule where it stops buying more of the same side when the current bids are losing"). Each open bet of this lane on the same side in the same window (the part of the ticker after the series), in another market, is marked at its side's bid now: bid less the sale fee, against the price paid with its buy fee, times its contracts. When those bets stand under what they cost by more than the lane's side_losing_share (2026-11-24, user: "it needs to be losing by like a decent percentage, like 20% or something"; 0.2 in the priskp module, my reading of 'like 20%') the buy is refused; the first bet of a round (nothing open on the side) and a round whose bets are ahead go through. No number: the sign of what the lane already holds. A bet with no quote in memory yet is not counted. Reads the bet book and the in-memory quotes only, so it is asked at the decision."""
@@ -325,7 +345,11 @@ def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
         yes_bid, yes_ask = rows[-1][1], rows[-1][2]
         bid = yes_bid if shot.side == "yes" else 1.0 - yes_ask
         paid = float(r["stake_usd"] or 0.0) / contracts
-        net_each = bid - fee_per_contract(bid) - paid - fee_per_contract(paid)
+        worth = bid - fee_per_contract(bid)  # what a sale at the bid pays now, after its fee
+        hold = _hold_value(tk, shot, ctx.now)  # 2026-11-25, user, on a BNB bet with a minor dip and plenty of cushion: "side_losing needs to account for cushion also, add cushion to the value in some pricing sense": the bet is worth the better of selling it and holding it on the spot's cushion
+        if hold is not None and hold > worth:
+            worth = hold
+        net_each = worth - paid - fee_per_contract(paid)
         total += net_each * contracts
         spent += (paid + fee_per_contract(paid)) * contracts
         n += 1
@@ -336,7 +360,7 @@ def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
         return Check(True, "no other bet of the lane on this side in this window" + (f" with a quote ({unread} unread)" if unread else ""))
     share = ctx.spec.side_losing_share
     ok = worst <= share + 1e-12  # ANY one of them under the share blocks, not their total
-    return Check(ok, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars at their bids now; the worst, {worst_tk.split('-')[0] if worst_tk else 'none'}, is {worst:.0%} under what it cost" + ("" if ok else f", past the {share:.0%} the lane allows: no more of the side"))
+    return Check(ok, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars now (each valued at the better of its bid after the fee and its hold value on the spot's cushion); the worst, {worst_tk.split('-')[0] if worst_tk else 'none'}, is {worst:.0%} under what it cost" + ("" if ok else f", past the {share:.0%} the lane allows: no more of the side"))
 
 
 _CONFIRM_FIRST: dict[tuple[str, str], list[float]] = {}  # (ticker, side) -> [when the lane first would have bought, the spot then, the spot's typical minute then]
