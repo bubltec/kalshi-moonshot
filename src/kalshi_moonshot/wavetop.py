@@ -89,16 +89,16 @@ def norm_cdf(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
-def spot_read(T: list[float], V: list[float], now: float, strike: float, side: str) -> tuple[float, float] | None:
+def spot_read(T: list[float], V: list[float], now: float, strike: float, side: str, avg_seconds: int = AVG_SECONDS) -> tuple[float, float] | None:
     """The spot's cushion over the target for the bet and its typical minute, from the last ten minutes of ticks: (cushion, unit), the cushion the 60-second average's distance past the strike on the bet's side (negative = on the wrong side), the unit the root-mean-square one-second change times sqrt(60). None when the ticks do not cover the last minute or are too few."""
     if not T or now - T[-1] > 10.0 or strike <= 0:
         return None
     end = int(now) + 1
     sp = grid(T, V, end - 600, end)
-    last = sp[-AVG_SECONDS:]
-    if len(last) < AVG_SECONDS or None in last:
+    last = sp[-avg_seconds:]
+    if len(last) < avg_seconds or None in last:
         return None
-    avg = sum(last) / AVG_SECONDS  # type: ignore[arg-type]
+    avg = sum(last) / avg_seconds  # type: ignore[arg-type]
     ch = [b - a for a, b in itertools.pairwise(sp) if a is not None and b is not None]
     if len(ch) < 60:
         return None

@@ -491,7 +491,7 @@ def test_integration_early_take_waits_while_the_spot_cushion_is_a_typical_minute
     lose = [None]
     ask = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     spot = [(0.30, 0.10)]  # cushion 0.30 = three typical minutes of 0.10
-    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, t, now: spot[0])
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, t, now, avg_seconds=60: spot[0])
     ask.target.early_take_cushion_units = 1.0
     assert ask(0.90, 700) is None  # armed
     assert ask(0.80, 690) is None  # fell a wobble, but the cushion is 3 typical minutes: it waits
@@ -500,13 +500,14 @@ def test_integration_early_take_waits_while_the_spot_cushion_is_a_typical_minute
     assert why and "bid fell" in why
 
 
-def test_integration_no_recovery_waits_while_the_spot_is_on_the_bets_side_of_the_target(tmp_path, monkeypatch, mem):
+def test_integration_no_recovery_waits_while_either_spot_reading_is_on_the_bets_side(tmp_path, monkeypatch, mem):
     from kalshi_moonshot import curverisk, watcher
 
     w, t, close = take_target(tmp_path, monkeypatch, 0.82, unit=0.10)
     t.entry, t.no_recovery_share, t.bought_ts = 0.82, 0.2, close - 800.0
-    spot = [(0.30, 0.10)]
-    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now: spot[0])
+    avg60 = [(0.30, 0.10)]  # the spot's 60 s average over the target for the bet's side
+    last5 = [(0.30, 0.10)]  # its last 5 s
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: avg60[0] if avg_seconds == 60 else last5[0])
     risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
     c = watcher._SellWalk(30.0, 0.83, 0.78, None)
 
@@ -517,10 +518,13 @@ def test_integration_no_recovery_waits_while_the_spot_is_on_the_bets_side_of_the
 
     assert ask(0.80, 800) is None  # seen from the buy
     assert ask(0.53, 600) is None  # 200 s, past the wait, the bid is under cost, but the spot is 3 typical minutes on the bet's side: it waits
-    spot[0] = (0.04, 0.10)  # a thin cushion, still on the bet's side of the target (BNB 13:30 YES, 2026-11-25: +0.4 typical minutes)
-    assert ask(0.50, 590) is None  # still waits: the user's rule, "just don't sell if it isn't on the other side of the target"
-    spot[0] = (-0.02, 0.10)  # the spot is now on the other side
-    why = ask(0.45, 580)
+    avg60[0] = (0.04, 0.10)  # a thin cushion (BNB 13:30 YES, 2026-11-25: +0.4 typical minutes)
+    assert ask(0.50, 590) is None
+    avg60[0] = (-0.02, 0.10)  # the 60 s average has gone to the other side, but the last 5 s is still on the bet's side (DOGE 17:00 NO, 16:53:21: the spot had just come back under the strike)
+    last5[0] = (0.01, 0.10)
+    assert ask(0.45, 580) is None  # still waits: it cannot sell blindly (user, 2026-11-25)
+    last5[0] = (-0.02, 0.10)  # both readings are on the other side
+    why = ask(0.45, 570)
     assert why and "no recovery" in why
 
 

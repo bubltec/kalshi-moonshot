@@ -208,6 +208,7 @@ class Target:
     no_rec_last_ahead: float = 0.0  # when the bid less the sale fee was last over the price paid with its buy fee (a profit expires: the no_recovery wait runs from here, or from the buy)
     late_dip_since: float = 0.0
     late_dip_logged: bool = False
+    veto_logged_at: float = 0.0
     late_dip_spot: list = field(default_factory=list)  # (time, the spot's cushion) of the last late_dip_look_s seconds
     early_take_armed: bool = False
     early_take_high: float = 0.0
@@ -910,7 +911,7 @@ class ProfitWatcher:
             c.facts = facts_mod.Board(self, t, now, left, bid)
         return c.facts
 
-    def _wave_spot(self, t: Target, now: float) -> tuple[float, float] | None:
+    def _wave_spot(self, t: Target, now: float, avg_seconds: int = 60) -> tuple[float, float] | None:
         """The spot's cushion over the target for this bet and the spot's typical minute (wavetop.spot_read), from the tick memory; None when the lane has no reading armed or the ticks are stale."""
         if not t.shock_index or t.shock_ref <= 0:
             return None
@@ -926,11 +927,11 @@ class ProfitWatcher:
                     t.perp_adj_ref = t.shock_ref + (t.perp_ref - idx_open) if idx_open > 0 else t.perp_ref
                 if t.perp_ref > 0:
                     pg = ticks_mod.history.window(kp, now - 620.0, now)
-                    read = wavetop.spot_read(pg[0], pg[1], now, t.perp_adj_ref, t.side) if pg and pg[0] else None
+                    read = wavetop.spot_read(pg[0], pg[1], now, t.perp_adj_ref, t.side, avg_seconds) if pg and pg[0] else None
                     if read is not None:
                         return read
         got = ticks_mod.history.window(t.shock_index, now - 620.0, now)
-        return wavetop.spot_read(got[0], got[1], now, t.shock_ref, t.side) if got and got[0] else None
+        return wavetop.spot_read(got[0], got[1], now, t.shock_ref, t.side, avg_seconds) if got and got[0] else None
 
     def _is_whipsaw_behavior(self, t: Target, now: float) -> bool:
         """The whipsaw VARIANT of the staircase (lane field wave_whipsaw_range; user, 2026-11-22/23: "whipsaw was a variant", "it just needs to monitor it on each tick to see if it's following"). Read on every check, never a gate and never a wait: the bet's bid range since the buy, in the bid's typical minutes, at or over wave_whipsaw_range means the bet is following the whipsaw shape, and the staircase then widens its swing to that range (a variant of its swing size, nothing is held). Once following it stays so. False with the field at 0 (no variant)."""
@@ -965,8 +966,12 @@ class ProfitWatcher:
         wait = t.no_recovery_share * 900.0
         if held_for < wait:
             return None  # an early loss is waited out: the bet is given its share of the market's length to come back
-        if self._board(c, t, now, left, bid).vetoes("no_recovery"):
-            return None  # the same: the market has not recovered only when the spot is on the other side of the target (2026-11-25, user)
+        stop = self._board(c, t, now, left, bid).vetoes("no_recovery")
+        if stop:
+            if now - t.veto_logged_at >= 30.0:
+                t.veto_logged_at = now
+                log.info("sale held: %s %s step no_recovery would sell at the bid %.2f (paid %.2f) but the spot is still on the bet's side of the target (%s)", t.ticker, t.lane, bid, t.entry, stop)
+            return None  # a sale under cost while the spot is on the bet's side of the target waits (2026-11-25, user)
         reason = f"no recovery: the bet has not been in profit {("since the buy" if watched else "since it was first watched") if t.no_rec_last_ahead <= 0 else f"since it was last ahead {held_for:.0f} s ago"} ({t.entry:.2f} paid), {held_for:.0f} s without, past its {wait:.0f} s ({t.no_recovery_share:.0%} of the market's length) to come back, {left:.0f} s left; accepted as a loss: sold at the bid {bid:.2f} ({net * 100:.1f}c a contract after both fees)"
         extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "held": round(held_for, 1)}
         if t.risk_live:
@@ -1008,8 +1013,12 @@ class ProfitWatcher:
         if now - t.late_dip_since < wait:
             return None
         what = f"the bid is down {bid_dip:.1f} of its typical 10 s moves from its high of the last {t.late_dip_look_s:.0f} s" if bid_dip >= spot_dip else f"the spot's cushion over the target is down {spot_dip:.1f} of its typical 10 s moves from its high of the last {t.late_dip_look_s:.0f} s"
-        if self._board(c, t, now, left, bid).vetoes("late_dip"):
-            return None  # a sale under cost while the spot is still on the bet's side of the target waits (2026-11-25, user)
+        stop = self._board(c, t, now, left, bid).vetoes("late_dip")
+        if stop:
+            if now - t.veto_logged_at >= 30.0:
+                t.veto_logged_at = now
+                log.info("sale held: %s %s step late_dip would sell at the bid %.2f (paid %.2f) but the spot is still on the bet's side of the target (%s)", t.ticker, t.lane, bid, t.entry, stop)
+            return None  # a sale under cost while the spot is on the bet's side of the target waits (2026-11-25, user)
         reason = f"late dip: {what} (the bar is {t.late_dip_units:g}), held {now - t.late_dip_since:.0f} s of a {wait:.0f} s wait ({t.late_dip_wait_share:.0%} of the {left:.0f} s left), in the last {t.late_dip_share:.0%} of the market: sold"
         extra = {"bid": round(bid, 4), "bid_dip": round(bid_dip, 2), "spot_dip": round(spot_dip, 2), "units": t.late_dip_units, "wait": round(wait, 1)}
         if t.risk_live:

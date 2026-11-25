@@ -261,13 +261,23 @@ def _wave_leg(b: Board) -> tuple[Any, str]:
     return got, "the wave lane's zig-zag walked back from now to the window's open" if got else "no leg reading (no curve armed, or the hour before the open or the path since it is not in memory)"
 
 
+@reader("spot_now")
+def _spot_now(b: Board) -> tuple[Any, str]:
+    """(cushion, typical minute) of the spot against the target for the bet's side over the last 5 seconds only (wavetop.spot_read with a 5 s span): the 60 s average of the fact `spot` lags a spot that has just crossed (2026-11-25, DOGE 17:00 NO sold at 0.53 at 16:53:21, 16 s after the spot came back under the strike, while its 60 s average was still over it, and it kept falling to -0.12%)."""
+    got = b.host._wave_spot(b.t, b.now, 5)
+    return got, "the spot's last 5 s against the target, in the spot's own typical minute" if got else "no spot reading (none armed, or stale ticks)"
+
+
 @reader("loss_while_ahead")
 def _loss_while_ahead(b: Board) -> tuple[Any, str]:
-    """True when a sale now would be a LOSS (the bid after its fee under the price paid with its fee) while the spot's 60 s average is still on the bet's own side of the target (2026-11-25, user: "just don't sell if it isn't on the other side of the target"). False when the sale is not a loss or the spot has reached or passed the target; None when no spot is read (the sale is then not vetoed). The veto rule on the board stops the loss-sale steps with it."""
+    """True when a sale now would be a LOSS (the bid after its fee under the price paid with its fee) while the spot is still on the bet's own side of the target by EITHER reading: the 60 s average or the last 5 s (2026-11-25, user: "just don't sell if it isn't on the other side of the target"; "it cannot just sell blindly", after the 60 s average let a sale through 16 s after the spot had come back). A sale goes through only when both are on the other side. False when the sale is not a loss; None when no spot is read (the sale is then not vetoed). The veto rule on the board stops the loss-sale steps with it."""
     from .strategy import fee_per_contract
 
     spot = b.get("spot")
-    if spot is None:
+    fast = b.get("spot_now")
+    if spot is None and fast is None:
         return None, "no spot reading"
     loss = (b.bid - fee_per_contract(b.bid)) < (b.t.entry + fee_per_contract(b.t.entry))
-    return bool(loss and spot[0] > 0), f"the sale would be a {'loss' if loss else 'gain'}; the spot's average is {spot[0]:+.4g} over the target for the bet's side"
+    ahead = (spot is not None and spot[0] > 0) or (fast is not None and fast[0] > 0)
+    told = ", ".join(f"{n} {v[0]:+.4g}" for n, v in (("60 s average", spot), ("last 5 s", fast)) if v is not None)
+    return bool(loss and ahead), f"the sale would be a {'loss' if loss else 'gain'}; the spot over the target for the bet's side: {told}"
