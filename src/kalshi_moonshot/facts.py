@@ -33,6 +33,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
 
 VETO_RULES: list[tuple[str, Callable[[Any], bool], tuple[str, ...], str]] = []  # (fact, vetoes when this is true of its value, the steps it stops, the label the log carries)
 VETO_RULES.append(("shift_out", lambda v: v is not None, ("priskp",), "shift_out_of_cushion"))  # user, 2026-11-22: no buy on the side a confirmed shift took out of its cushion, against the current target
+VETO_RULES.append(("loss_while_ahead", lambda v: v is True, ("late_dip", "no_recovery", "value_sale"), "still_on_the_winning_side_of_the_target"))  # user, 2026-11-25, on BNB and DOGE 13:30 YES sold at 0.60 and 0.71 with the spot over the strike (both settled YES): "we were winning", "is it selling because it thinks its losing when its over 50c?", "just don't sell if it isn't on the other side of the target": a sale under what the bet cost needs the spot on the OTHER side of the target
 VETOED_STEPS = frozenset(step for _, _, steps, _ in VETO_RULES for step in steps)
 
 
@@ -258,3 +259,15 @@ def _wave_leg(b: Board) -> tuple[Any, str]:
     ctx = _wave_ctx(b)
     got = wavefacts.leg(ctx[0], ctx[1], b.now, ctx[2], ctx[3], b.left) if ctx and ctx[3] in ("yes", "no") else None
     return got, "the wave lane's zig-zag walked back from now to the window's open" if got else "no leg reading (no curve armed, or the hour before the open or the path since it is not in memory)"
+
+
+@reader("loss_while_ahead")
+def _loss_while_ahead(b: Board) -> tuple[Any, str]:
+    """True when a sale now would be a LOSS (the bid after its fee under the price paid with its fee) while the spot's 60 s average is still on the bet's own side of the target (2026-11-25, user: "just don't sell if it isn't on the other side of the target"). False when the sale is not a loss or the spot has reached or passed the target; None when no spot is read (the sale is then not vetoed). The veto rule on the board stops the loss-sale steps with it."""
+    from .strategy import fee_per_contract
+
+    spot = b.get("spot")
+    if spot is None:
+        return None, "no spot reading"
+    loss = (b.bid - fee_per_contract(b.bid)) < (b.t.entry + fee_per_contract(b.t.entry))
+    return bool(loss and spot[0] > 0), f"the sale would be a {'loss' if loss else 'gain'}; the spot's average is {spot[0]:+.4g} over the target for the bet's side"
