@@ -15,4 +15,4 @@
 
 [module.wave_turn_buy]
 label = "the wave turn: a swing of >= 0.5 u on the 30 s median bought once 0.2 u has come back, once per swing, side by the target (0.5 u band), gated on the pre-open hour's crossings of each window's open (>= 8 per 15 min); the trend reading stays in shadow"
-steps = ["entry_window", "wave_turn", "wave_trend"]   # wave_shape_buy's list with wave_turn in place of wave_shape: entry_window is the lane's existing window (2-10 min), wave_trend is shadow and never says no; nothing else can turn a buy down
+steps = ["price", "entry_window", "wave_turn", "wave_trend"]   # wave_flag_buy's list with wave_turn in place of wave_flag; price is the structural bound only (the lane price = [0.01, 0.99]: the test_filter_steps policy needs a price step when a lane sets one; it refuses almost nothing); entry_window is the lane's existing window (2-10 min), wave_trend is shadow and never says no; nothing else can turn a buy down
