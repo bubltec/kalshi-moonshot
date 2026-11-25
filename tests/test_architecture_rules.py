@@ -200,3 +200,33 @@ def test_the_wave_shape_step_reads_memory_only_and_holds_the_budget(guarded, tmp
         ticks_mod.history.clear()
         ticks_mod.strikes._v.clear()
         waveshape._memo.clear()
+
+
+def test_the_wave_turn_step_reads_memory_only_and_holds_the_budget(guarded, tmp_path, monkeypatch):
+    """The buy step wave_turn (waveturn.py, 2026-11-24): the pre-open hour's profile and the turn reading on every second of a market from the tick memory, both sides, with the guard raising on any table read or Kalshi GET, every tick under 60 ms."""
+    from kalshi_moonshot import buychain, config, waveturn
+    from kalshi_moonshot import ticks as ticks_mod
+    from tests import test_wave_turn as wt
+
+    sp = wt.spec(tmp_path, monkeypatch)
+    s = config.load()
+    ticks_mod.history.clear()
+    ticks_mod.strikes._v.clear()
+    waveturn.clear()
+    try:
+        hour = wt.hour_path()
+        wt.feed(hour, wt.window_path(wt.LATE, waveturn.hour_of(hour).u))
+        ticks_mod.strikes.note(wt.TICKER, wt.K)
+        bought = 0
+        for off in range(120, 600):
+            now = wt.OPEN + off + 0.5
+            with steptime.tick("buy evaluate"), memguard.decision("buy"):
+                for side in ("no", "yes"):
+                    bought += buychain.decide(buychain.Ctx(s, sp, now=now), wt.shot(now, side))[0]
+        assert bought and not memguard.breaches
+        stats = steptime.tick_stats()["buy evaluate"]
+        assert stats["n"] == 480 and stats["max"] < steptime.TICK_BUDGET_MS and stats["over"] == 0, stats
+    finally:
+        ticks_mod.history.clear()
+        ticks_mod.strikes._v.clear()
+        waveturn.clear()

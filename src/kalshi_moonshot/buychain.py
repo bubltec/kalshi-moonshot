@@ -438,6 +438,17 @@ def wave_shape_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
+@step("wave_turn")
+def wave_turn_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The wave turn (waveturn.py; 2026-11-24, PAPER, in place of wave_shape on the wave_shape lane: the rule of the study on the user's own marked buys, scripts/wave_turn_chop.py): on Kalshi's own spot smoothed over 30 s, a swing of at least 0.5 typical minutes (u, from the hour before the open) is bought once 0.2 u has come back from its extreme (NO after a rise, YES after a fall), once per swing, NO only when the curve is not more than 0.5 u under the target and YES only when not more than 0.5 u over it; and only in a market whose pre-open hour crossed each 15-minute window's opening price at least 8 times on average (marketprofile.profile_from; an hour not in memory is no reading and no buy). The note carries the gate's reading and, as shadow, the hour's efficiency, waves so far, the last-5-min efficiency, the distances from the target, the swing and the give-back. Memory only."""
+    from . import ticks as ticks_mod
+    from . import waveturn
+
+    strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
+    ok, why = waveturn.admits(ctx.s, shot, ctx.now, strike)
+    return Check(ok, why)
+
+
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""
