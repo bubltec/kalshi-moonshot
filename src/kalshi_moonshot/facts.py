@@ -23,11 +23,11 @@ log = logging.getLogger("moonshot")
 
 READERS: dict[str, Callable[[Board], tuple[Any, str]]] = {}
 NEEDS: dict[str, tuple[str, ...]] = {
-    "wave_take": ("whipsaw", "bid_unit", "p_lose", "cushion_factor"),
+    "wave_take": ("whipsaw", "bid_unit", "p_lose", "cushion_factor", "waves_before", "wave_now"),
     "wave_salvage": ("spot",),
-    "value_sale": ("p_lose", "spot"),
-    "value_hold": ("p_lose", "spot"),
-    "priskp": ("priskp_screen", "shift_out", "hour_view"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
+    "value_sale": ("p_lose", "spot", "waves_before", "wave_now"),  # early_take, no_recovery and late_dip read the board through this view
+    "value_hold": ("p_lose", "spot", "waves_before", "wave_now"),
+    "priskp": ("priskp_screen", "shift_out", "hour_view", "waves_before", "wave_now"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
 }
 
 
@@ -210,3 +210,41 @@ def _shift_out(b: Board) -> tuple[Any, str]:
     """The latest confirmed shift (a dict) when it took the spot out of this side's cushion against this market's target; None otherwise (and None until the checks are read)."""
     b.get("priskp_screen")
     return getattr(b.host, "shift", None), "the latest confirmed shift, against this market's own target"
+
+
+# ---- the wave readings (wavefacts.py; memory only; 2026-11-25, user: "those can go on the fact board for all steps to use") ----
+def _wave_ctx(b: Board) -> tuple[str, float, float, str] | None:
+    """(the curve's index, its open, the target on the curve's own scale, the bet's side) for the bet or the shot on this board, or None when no reading is armed. A watched bet carries them (shock_index, shock_ref); a buy's shot is read the way the wave lane's step reads it."""
+    t = b.t
+    side = getattr(t, "side", "") or ""
+    if getattr(t, "shock_index", "") and getattr(t, "shock_ref", 0.0) > 0 and getattr(t, "close_ts", 0.0) > 0:
+        return t.shock_index, t.close_ts - 900.0, float(t.shock_ref), side
+    from . import binaryrisk, ticks
+
+    series = getattr(t, "series", "") or str(getattr(t, "ticker", "")).split("-")[0]
+    index = binaryrisk.curve_index(series) if series else None
+    strike = ticks.strikes.get(getattr(t, "ticker", ""))
+    hours = getattr(t, "hours_to_close", None)
+    if not index or not strike or hours is None:
+        return None
+    return index, round((b.now + hours * 3600.0) / 900.0) * 900.0 - 900.0, float(strike), side
+
+
+@reader("waves_before")
+def _waves_before(b: Board) -> tuple[Any, str]:
+    """The market's waves before its open (wavefacts.before): its typical minute, its time scale tau, how far its waves travel in 3, 10 and 15 minutes and its wave width; read once per market from the tick memory. None when no curve is read or the hour before the open is not in memory."""
+    from . import wavefacts
+
+    ctx = _wave_ctx(b)
+    got = wavefacts.before(ctx[0], ctx[1]) if ctx else None
+    return got, "the hour before the open on a 10 s grid: typical minute, tau, 3/10/15 minute travel, wave width" if got else "no waves before (no curve armed, or the hour before the open is not in memory)"
+
+
+@reader("wave_now")
+def _wave_now(b: Board) -> tuple[Any, str]:
+    """The waves now for the bet's side (wavefacts.now_read): z against the 30 minute mean, the line's R^2 and slope, the run and pull-back of the last 5 minutes in typical 10 s moves, the last minute's move, the target's distance in wave widths, tau and the mean-reverting chance of the side winning. None when the last 30 minutes are not in memory."""
+    from . import wavefacts
+
+    ctx = _wave_ctx(b)
+    got = wavefacts.now_read(ctx[0], b.now, ctx[2], ctx[3], b.left) if ctx and ctx[3] in ("yes", "no") else None
+    return got, "the last 30 minutes on a 10 s grid, signed for the side" if got else "no waves now (no curve armed, or the last 30 minutes are not in memory)"

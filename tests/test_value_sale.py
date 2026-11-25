@@ -21,7 +21,7 @@ def asker(w, t, close):
 
 def test_the_step_is_known_and_reads_only_p_lose():
     sellchain.check(("value_sale",), "x")
-    assert facts.NEEDS["value_sale"] == ("p_lose", "spot")
+    assert facts.NEEDS["value_sale"] == ("p_lose", "spot", "waves_before", "wave_now")  # the wave facts (2026-11-25) are on the board for every step to read; value_sale does not act on them yet
 
 
 def test_integration_it_sells_when_the_bid_pays_the_hold_value_and_not_before(tmp_path, monkeypatch, mem):
@@ -517,3 +517,70 @@ def test_integration_no_recovery_counts_a_picked_up_bets_wait_from_when_it_was_f
     assert ask(0.40, 600) is None  # 100 s since first seen: under the 180 s
     why = ask(0.30, 510)  # 190 s since first seen
     assert why and "no recovery" in why and "first watched" in why
+
+
+def _wave_history(monkeypatch, path):
+    """A tick memory holding `path` (a callable of seconds -> value) on a 1 s grid from 4000 s before the open to 1000 s after it."""
+    from kalshi_moonshot import ticks
+
+    OPEN = 900.0 * 2000
+    T = [OPEN - 4000 + i for i in range(5000)]
+    V = [path(t - OPEN) for t in T]
+
+    class H:
+        def window(self, index, a, b):
+            import bisect
+
+            lo, hi = bisect.bisect_left(T, a), bisect.bisect_right(T, b)
+            return (T[lo:hi], V[lo:hi]) if lo < hi and T[0] <= a else None
+
+    monkeypatch.setattr(ticks, "history", H())
+    return OPEN
+
+
+def test_unit_waves_before_reads_the_hour_before_the_open_in_the_markets_own_units(monkeypatch):
+    import math
+
+    from kalshi_moonshot import wavefacts
+
+    wavefacts._before.clear()
+    quick = _wave_history(monkeypatch, lambda s: 100.0 + 1.0 * math.sin(2 * math.pi * s / 360.0))  # a 6 minute wave of width about 0.7
+    a = wavefacts.before("QUICK", quick)
+    wavefacts._before.clear()
+    slow = _wave_history(monkeypatch, lambda s: 100.0 + 5.0 * math.sin(2 * math.pi * s / 1200.0))  # a 20 minute wave five times as wide
+    b = wavefacts.before("SLOW", slow)
+    assert a and b and b["sd30"] > 3 * a["sd30"]  # the range differs ...
+    assert b["w10"] > a["w10"]
+    assert b["tau_s"] is None or a["tau_s"] is None or b["tau_s"] > a["tau_s"]  # ... and the slow wave decays more slowly
+    wavefacts._before.clear()
+    assert wavefacts.before("NONE", quick + 10 * 900.0) is None  # an hour the memory does not hold
+
+
+def test_unit_waves_now_is_signed_for_the_side_and_reads_a_trend_as_a_trend(monkeypatch):
+    from kalshi_moonshot import wavefacts
+
+    opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.01 * s)  # a straight climb
+    up = wavefacts.now_read("IDX", opened + 600.0, 105.0, "yes", 300.0)
+    dn = wavefacts.now_read("IDX", opened + 600.0, 105.0, "no", 300.0)
+    assert up["r2"] > 0.95 and up["z"] > 0 > dn["z"]  # a trend: the line fits; the climb is toward YES and against NO
+    assert up["slope"] > 0 > dn["slope"] and up["run5"] > 0 and dn["pull5"] > 0
+    assert wavefacts.now_read("IDX", opened - 4500.0, 105.0, "yes", 300.0) is None  # not in memory
+
+
+def test_unit_the_board_serves_the_wave_facts_to_the_steps_that_name_them(monkeypatch):
+    from kalshi_moonshot import facts, wavefacts
+
+    opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.01 * s)
+
+    class T:
+        side, shock_index, shock_ref, close_ts, ticker = "yes", "IDX", 105.0, opened + 900.0, "KXBTC15M-30JAN010015-15"
+
+    wavefacts._before.clear()
+    b = facts.Board(None, T(), opened + 600.0, 300.0, 0.5)
+    view = b.view("value_sale")
+    assert view.get("waves_before")["sd30"] > 0 and view.get("wave_now")["z"] != 0
+    import pytest
+
+    with pytest.raises(KeyError):
+        b.view("late_dip").get("wave_now")  # a step that did not name it cannot read it
+    facts.check_needs(["priskp", "value_sale", "wave_take", "value_hold"], "test")
