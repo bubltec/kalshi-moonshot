@@ -122,7 +122,7 @@ def test_the_buy_reads_the_facts_board_and_the_veto_rule_is_the_board_s_not_the_
     ok, why = outs[2]
     assert ok is False and "shift_out_of_cushion" in why and "[facts read: priskp_screen=" in why and "shift_out=" in why  # the note shows what the buy was judged on
     assert "priskp" in facts.VETOED_STEPS and any(rule[0] == "shift_out" and rule[2] == ("priskp",) for rule in facts.VETO_RULES)
-    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "hour_view") and all(n in facts.READERS for n in facts.NEEDS["priskp"])
+    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "hour_view", "waves_before", "wave_now", "wave_leg") and all(n in facts.READERS for n in facts.NEEDS["priskp"])  # the wave facts (2026-11-25) are on the board for every step to read
 
 
 def test_a_buy_logs_the_hour_view_and_whether_the_risk_was_sure():
