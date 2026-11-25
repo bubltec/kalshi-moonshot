@@ -336,49 +336,39 @@ def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars at their bids now, {down:.0%} under what they cost" + ("" if ok else f", past the {share:.0%} the lane allows: no more of the side"))
 
 
-_HOLD_FIRST: dict[tuple[str, str], list[float]] = {}  # (ticker, side) -> [when the lane first would have bought, the spot then, when it last would have]
+_CONFIRM_FIRST: dict[tuple[str, str], list[float]] = {}  # (ticker, side) -> [when the lane first would have bought, the spot then, the spot's typical minute then]
 
 
-def _settle_hold(ctx: Ctx, shot: LongShot, shadow: bool) -> Check:
-    """Hold a buy until the market has shown its hand (2026-11-24, user, on the 22:15 NO bets, all four bought in a chop and lost: "if we don't see a direction yet we shouldn't bet yet", "if we held for 2 minutes we would have seen the trend change"; scripts/priskp_hold_two_minutes_study.py: on 64 bets, buying only where the spot had not moved against the bet during a 2-minute wait kept 20 bets for +$21.36, the 44 whose spot turned lost $26.38 bought for real). Put it LAST in a module's list: the hold starts the first time every other step would have bought, and the spot is noted then. The buy waits settle_hold_share of the market's 900 s (a share of its life, never fixed seconds), then goes through only while the spot is not on the wrong side of where it stood when the hold began (a fall for YES, a rise for NO). A hold is a wait and not a pass: the entry thread asks again on every tick. If the other steps said no for longer than the wait itself in between, the hold starts over (the signal broke). As a SHADOW step it never says no: its note says what the live step would have done. Memory only (the in-memory index ticks)."""
-    share = ctx.spec.settle_hold_share
-    if share <= 0:
-        return Check(shadow, "the lane sets no wait (settle_hold_share)")
-    from . import binaryrisk, ticks
+@step("settle_confirm", needs_estimate=True)
+def settle_confirm_step(ctx: Ctx, shot: LongShot) -> Check:
+    """Buy only once the spot has CONFIRMED the bet's direction, in its own units, with no clock (2026-11-24, user, on the 22:15 NO bets and ZEC 23:00 NO, all bought in a chop and lost: "if we don't see a direction yet we shouldn't bet yet"; on a fixed 2-minute wait: "what's the point in adding a fixed wait if there's no logic to it. That's just a mutation of the time lapsed"; "Let's just go live with it"; scripts/priskp_confirm_study.py, 106 bets, one day, held to settlement: 26 bets +$33.00 against the fixed wait's 23 bets +$18.98, median wait 68 s). Put it LAST in a module's list: it starts the first time every other step would have bought, and notes the spot and its typical minute (the hour before, priskp.typical_minute) then. From then on the buy goes through at the first tick where the spot has moved the bet's way (a rise for YES, a fall for NO) by at least the lane's settle_confirm_units typical minutes since that moment; until then it is a wait, not a pass: the entry thread asks again on every tick. A calm market confirms at once, a chop takes long, a reversal never confirms (the lane's own minute limit ends it). The hold is per market and side and lasts until it is bought or the market ends. Memory only (the in-memory index ticks)."""
+    units = ctx.spec.settle_confirm_units
+    if units <= 0:
+        return Check(False, "the lane sets no confirmation (settle_confirm_units)")
+    from . import binaryrisk, priskp, ticks
 
     index = binaryrisk.curve_index(shot.series)
     last = ticks.history.last_at_or_before(index, ctx.now) if index else None
     if last is None or ctx.now - last[0] > 30.0:
-        return Check(shadow, "no fresh spot reading for the hold" + (" (shadow: passes)" if shadow else ""))
-    spot, need = float(last[1]), share * 900.0
+        return Check(False, "no fresh spot reading to confirm a direction with")
+    spot = float(last[1])
     key = (shot.ticker, shot.side)
-    got = _HOLD_FIRST.get(key)
-    if got is None or ctx.now - got[2] > max(need, 1.0):
-        got = _HOLD_FIRST[key] = [ctx.now, spot, ctx.now]
-        if len(_HOLD_FIRST) > 2048:
-            for k in [k for k, v in _HOLD_FIRST.items() if ctx.now - v[2] > 3600.0]:
-                del _HOLD_FIRST[k]
-    got[2] = ctx.now
+    got = _CONFIRM_FIRST.get(key)
+    if got is None:
+        win = ticks.history.window(index, ctx.now - 3600.0, ctx.now)
+        unit = priskp.typical_minute(win[0], win[1], ctx.now, 3600.0) if win and win[0] else 0.0
+        if unit <= 0:
+            return Check(False, "the spot's typical minute cannot be read yet")
+        got = _CONFIRM_FIRST[key] = [ctx.now, spot, unit]
+        if len(_CONFIRM_FIRST) > 2048:
+            for k in [k for k, v in _CONFIRM_FIRST.items() if ctx.now - v[0] > 3600.0]:
+                del _CONFIRM_FIRST[k]
+    moved = (spot - got[1]) if shot.side == "yes" else (got[1] - spot)
+    need = units * got[2]
     waited = ctx.now - got[0]
-    prefix = "would hold: " if shadow else ""
-    if waited < need:
-        return Check(shadow, f"{prefix}the lane first would have bought {waited:.0f}s ago and waits {need:.0f}s ({share:g} of the market) to see where the spot goes")
-    against = spot < got[1] if shot.side == "yes" else spot > got[1]
-    if against:
-        return Check(shadow, f"{prefix}after the {need:.0f}s wait the spot is {spot:g}, on the wrong side of {got[1]:g} where it stood when the hold began: no direction with the bet yet")
-    return Check(True, f"waited {waited:.0f}s of {need:.0f}s; the spot {spot:g} has not moved against the bet since {got[1]:g}")
-
-
-@step("settle_hold", needs_estimate=True)
-def settle_hold_step(ctx: Ctx, shot: LongShot) -> Check:
-    """Live: see _settle_hold."""
-    return _settle_hold(ctx, shot, False)
-
-
-@step("settle_hold_shadow", needs_estimate=True)
-def settle_hold_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
-    """SHADOW, never says no: see _settle_hold. The note on the decision says what settle_hold would have done."""
-    return _settle_hold(ctx, shot, True)
+    if moved >= need:
+        return Check(True, f"the spot confirmed the bet's way after {waited:.0f}s: moved {moved:g} since {got[1]:g}, over the {need:g} ({units:g} typical minutes of {got[2]:g}) it needed")
+    return Check(False, f"waiting for the spot to confirm: it has moved {moved:+g} the bet's way since {got[1]:g} ({waited:.0f}s ago) and needs {need:g} ({units:g} typical minutes of {got[2]:g})")
 
 
 @step("cooldown", needs_estimate=True)
