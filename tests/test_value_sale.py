@@ -626,3 +626,13 @@ def test_unit_wave_leg_refuses_an_unturned_dip_and_passes_what_it_cannot_read(mo
     assert c.ok is False and "inside" in c.why and "not bought" in c.why  # a NO inside the dip in a wavy market is refused (2026-11-25, the 08:30 and 11:30 rounds)
     monkeypatch.setattr(ticks_mod.strikes, "get", lambda tk, *a: None)
     assert buychain.STEPS["wave_leg"](buychain.Ctx(config.load(), sp, now=opened + 150.0), sh).ok is True  # no target in memory: no read is no refusal
+
+def test_unit_wave_leg_does_not_refuse_an_against_swing_in_a_trend_market(monkeypatch):
+    from kalshi_moonshot import wavefacts
+
+    wavefacts._before.clear()
+    # a steady climb for the hour (a trend) then a small dip at the end: a YES is against a falling swing, but the market is a trend: a normal favourite buy (the NEAR YES 11:48 refusal, 2026-11-25)
+    opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.01 * s - (0.04 * (s - 400.0) if s > 400.0 else 0.0))
+    got = wavefacts.leg("IDX", opened, opened + 600.0, 100.0, "yes", 300.0)
+    assert got is not None and got["class"] == "against" and got["r2"] >= wavefacts.R2_CUT
+    assert got["would_refuse"] is False  # against, in a trend: never refused

@@ -405,7 +405,7 @@ def settle_confirm_step(ctx: Ctx, shot: LongShot) -> Check:
 
 @step("wave_leg")
 def wave_leg_step(ctx: Ctx, shot: LongShot) -> Check:
-    """Refuses a side bought inside the curve's current leg (2026-11-25, user: "why can't it walk the curve back and identify it was inside a dip?"; "yes" to the shadow, then "yes" to enforcing it after the 11:30 round's HYPE and ETH NO bets were both flagged 'would REFUSE' and lost): walks the spot back from now to the window's open with the wave lane's zig-zag (wavefacts.leg) and says NO when the current swing runs AGAINST the bet's side, or the bet is INSIDE a leg in its winning direction that has not turned (under 0.2 typical minutes given back) in a WAVY market (the 30 minute straight-line R^2 under wavefacts.R2_CUT). A trend's leg is a normal favourite buy and passes. A curve that cannot be read (no index, no target, the hour or the path not in memory) passes with that said: no read is no refusal. The note says which leg, the swing, the give-back and the R^2. Studies: studies/results/2026-11-25-priskp-zscore-wave.txt (24 hours of bets: the refused classes lost $121.18 as run; the opposite side would have made +$631.30 held)."""
+    """Refuses a side bought inside the curve's current leg (2026-11-25, user: "why can't it walk the curve back and identify it was inside a dip?"; "yes" to the shadow, then "yes" to enforcing it after the 11:30 round's HYPE and ETH NO bets were both flagged 'would REFUSE' and lost): walks the spot back from now to the window's open with the wave lane's zig-zag (wavefacts.leg) and says NO when the bet is INSIDE a leg in its winning direction that has not turned (under 0.2 typical minutes given back), or the current swing runs AGAINST the bet's side, in a WAVY market only (the 30 minute straight-line R^2 under wavefacts.R2_CUT). A trend's leg is a normal favourite buy and passes. A curve that cannot be read (no index, no target, the hour or the path not in memory) passes with that said: no read is no refusal. The note says which leg, the swing, the give-back and the R^2. Studies: studies/results/2026-11-25-priskp-zscore-wave.txt (24 hours of bets: the refused classes lost $121.18 as run; the opposite side would have made +$631.30 held)."""
     from . import binaryrisk, ticks, wavefacts
 
     try:
@@ -423,7 +423,7 @@ def wave_leg_step(ctx: Ctx, shot: LongShot) -> Check:
         r2 = "n/a" if got["r2"] is None else f"{got['r2']:.2f}"
         told = f"{got['class']} (swing {got['swing_u']:.2f} typical minutes, gave back {got['gb_u']:.2f}, 30 minute R^2 {r2}, a trend at or over {wavefacts.R2_CUT:g})"
         if got["would_refuse"]:
-            return Check(False, f"the {shot.side.upper()} is {told}: a bet inside a dip or against the swing in a wavy market is not bought")
+            return Check(False, f"the {shot.side.upper()} is {told}: a bet inside an unturned dip or against the swing in a wavy market is not bought")
         return Check(True, f"the {shot.side.upper()} is {told}: not refused")
     except Exception as exc:  # a reading that fails is no refusal: the other steps decide
         return Check(True, f"leg unreadable ({exc!r}), so no refusal")

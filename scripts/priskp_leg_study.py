@@ -88,6 +88,10 @@ inside = [x for x in rows if x["cls"].startswith("INSIDE")]
 print("\nINSIDE the leg, by the 30 minute straight-line fit:")
 line("  trend (R^2 at or over the median): the rule would leave these", [x for x in inside if x["r2"] >= med])
 line("  wave (R^2 under the median): the rule would refuse these", [x for x in inside if x["r2"] < med])
+print("\nAGAINST the current swing, by the 30 minute straight-line fit (added 2026-11-25 after the first live refusal, NEAR YES 11:48 against a 0.50 u swing at R^2 0.59, which settled YES):")
+against = [x for x in rows if x["cls"].startswith("AGAINST")]
+line("  trend (R^2 at or over the median)", [x for x in against if x["r2"] >= med])
+line("  wave (R^2 under the median)", [x for x in against if x["r2"] < med])
 print("\nthe 08:30 round:")
 for x in rows:
     if "26NOV250830" in x["tk"]:

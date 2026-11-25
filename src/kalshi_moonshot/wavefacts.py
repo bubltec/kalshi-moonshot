@@ -158,7 +158,7 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
     """Where the bet's side stands in the curve's current LEG, by walking the spot back from now to the window's open with the wave lane's zig-zag (waveturn.reading: swings of 0.5 typical minutes on a 30 s median, the pre-open hour's typical minute as the unit; no crossings, no gate). (2026-11-25, user: "why can't it walk the curve back and identify it was inside a dip?")
     class  'inside' (the current swing runs in the side's winning direction, is at least 0.5 u and has given back under 0.2 u: not turned), 'turned' (that swing has given back 0.2 u or more), 'against' (the current swing runs against the side), 'none' (no swing of 0.5 u yet)
     swing_u, gb_u   the current swing's size and what it has given back, in typical minutes; r2 the 30 minute straight-line fit (a trend when at or over R2_CUT)
-    would_refuse    the shadow verdict of scripts/priskp_leg_study.py: 'against', or 'inside' in a wave market (R^2 under R2_CUT). A trend's leg is a normal favourite buy and is never refused.
+    would_refuse    the verdict of scripts/priskp_leg_study.py: 'against' or 'inside' in a WAVE market (R^2 under R2_CUT). A trend's leg, against or inside, is a normal favourite buy and is never refused.
     None when the pre-open hour, the path since the open or the typical minute is not in the tick memory."""
     from . import ticks, waveturn
     from .wavetop import grid
@@ -189,5 +189,5 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
         cls = "turned"
     nowr = now_read(index, now, target, side, left)
     r2 = None if nowr is None else nowr["r2"]
-    refuse = cls == "against" or (cls == "inside" and r2 is not None and r2 < R2_CUT)
+    refuse = cls in ("against", "inside") and r2 is not None and r2 < R2_CUT  # both only in a WAVY market (2026-11-25: the first live refusal, NEAR YES 11:48 against a 0.50 u swing at R^2 0.59, was a trend buy and settled YES; the 24 hours: AGAINST in trend markets 3 bets +$1.09, in wave markets 15 bets -$44.02)
     return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "would_refuse": refuse}
