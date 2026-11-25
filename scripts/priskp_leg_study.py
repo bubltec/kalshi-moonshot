@@ -92,6 +92,10 @@ print("\nAGAINST the current swing, by the 30 minute straight-line fit (added 20
 against = [x for x in rows if x["cls"].startswith("AGAINST")]
 line("  trend (R^2 at or over the median)", [x for x in against if x["r2"] >= med])
 line("  wave (R^2 under the median)", [x for x in against if x["r2"] < med])
+print("\nTHE REFUSED SET (AGAINST or INSIDE, in wave markets) BY SIDE (added 2026-11-25 after BTC YES 12:33 was refused inside a 3.27 u rise and settled YES):")
+refused_set = [x for x in rows if (x["cls"].startswith("AGAINST") or x["cls"].startswith("INSIDE")) and x["r2"] < med]
+line("  NO bets (a dip: the side bought after a fall)", [x for x in refused_set if x["side"] == "no"])
+line("  YES bets (a rise: the side bought after a rise)", [x for x in refused_set if x["side"] == "yes"])
 print("\nthe 08:30 round:")
 for x in rows:
     if "26NOV250830" in x["tk"]:
