@@ -57,13 +57,20 @@ def test_without_a_cutoffs_file_it_waits_it_does_not_buy():
     assert not ok and "no cutoffs file" in why
 
 
-def test_it_buys_on_the_third_reading_in_a_row_inside_the_window():
+def test_it_buys_on_the_first_candidate_reading_inside_the_window():
     feed(lambda s: 100.5, OPEN + 600.0)
     cuts()
-    got = [ask_at(5.0 + k / 6.0) for k in range(3)]  # readings 10 s apart
-    assert [g[0] for g in got] == [False, False, True]
-    assert "verb: wait" in got[0][1] and "why: confirming" in got[0][1] and "verb: buy" in got[2][1] and "why: pass" in got[2][1]
-    assert "failing: []" in got[2][1] and "cushion_fifth: 5" in got[2][1]
+    got = [ask_at(5.0 + k / 12.0) for k in range(3)]  # readings 5 s apart
+    assert [g[0] for g in got] == [True, True, True]  # one reading (2026-11-25, user: "it should be like 5s max")
+    assert "verb: buy" in got[0][1] and "why: pass" in got[0][1] and "need: 1" in got[0][1]
+    assert "failing: []" in got[0][1] and "cushion_fifth: 5" in got[0][1]
+
+
+def test_the_confirmation_is_one_reading_whatever_the_time_left():
+    from kalshi_moonshot import priskp
+
+    assert priskp.need_readings(780.0) == 1 and priskp.need_readings(300.0) == 1 and priskp.need_readings(0.0) == 1
+    assert priskp.EVERY <= 5.0  # a reading every 5 s at most: no decision is older than that
 
 
 def test_outside_minutes_2_to_14_and_in_the_dead_ask_band_it_does_not_buy():
@@ -110,7 +117,7 @@ def test_the_lane_step_asks_priskp_through_the_buy_chain():
     assert "priskp" in buychain.STEPS and "priskp" in __import__("kalshi_moonshot.lanes", fromlist=["BUY_STEPS"]).BUY_STEPS
     now = OPEN + 5.0 * 60.0
     res = [buychain.STEPS["priskp"](buychain.Ctx(s=s, spec=spec, now=now + k * 10.0), shot()) for k in range(3)]
-    assert [r.ok for r in res] == [False, False, True] and res[2].why.startswith("verb: buy")
+    assert [r.ok for r in res] == [True, True, True] and res[0].why.startswith("verb: buy")
 
 
 def test_the_buy_reads_the_facts_board_and_the_veto_rule_is_the_board_s_not_the_step_s():

@@ -194,7 +194,7 @@ def _priskp_screen(b: Board) -> tuple[Any, str]:
 
     note, shift = priskp.screen(b.host, b.t)
     b.host.shift = shift
-    return note, "the five checks in the market's own fifths, held three readings, minutes 2-14, no ask 0.45-0.55"
+    return note, "the five checks in the market's own fifths, held for the readings the time left asks, minutes 2-14, no ask 0.45-0.55"
 
 
 @reader("hour_view")

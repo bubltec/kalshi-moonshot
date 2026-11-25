@@ -11,7 +11,7 @@ THE CHECKS, in the side's view, in the market's own typical minute u15 (the last
 
 A reading's FIFTH is its place among the series' readings of the previous 24 hours in the same bucket of the market (bucket = minutes since the open // 3, at most 4), with cutoffs at the 20th, 40th, 60th and 80th percentiles; beyond the 1st or 99th is ANOMALY; with fewer than NEED readings the check is UNREAD. A check passes in fifths 4 and 5. The cutoffs are built by a background job into a file (cutoffs()/load()); nothing here reads a table.
 
-THE ENTRY (E5 in scripts/priskp_entry_study.py): a side is a candidate at a reading when all five checks are read and pass, its cushion is in fifth 5, and it has been a candidate at three readings in a row (readings are EVERY seconds apart). A buy is a take at the ask. The window (minutes 2 to 14 after the open) and the dead ask band (0.45 to 0.55) are the user's and are read by the buy step, not here.
+THE ENTRY (E5 in scripts/priskp_entry_study.py): a side is a candidate at a reading when all five checks are read and pass, its cushion is in fifth 5, and it is a candidate at the reading (priskp.need_readings: one; readings are EVERY seconds apart). A buy is a take at the ask. The window (minutes 2 to 14 after the open) and the dead ask band (0.45 to 0.55) are the user's and are read by the buy step, not here.
 
 Memory only, stdlib only: no table, no file read on a tick.
 """
@@ -31,8 +31,8 @@ from . import binaryrisk
 CHECKS = ("cushion", "trend", "history", "price", "pricedip")
 QS = (0.01, 0.2, 0.4, 0.6, 0.8, 0.99)  # the cutoffs: the 1st and 99th bound the anomaly, the 20th to 80th cut the fifths
 NEED = 100  # readings a bucket needs before its checks are read (a shorter history is UNREAD, not a pass)
-EVERY = 10.0  # seconds between two readings of one market side (the step is asked on every tick)
-CONFIRM = 3  # readings in a row a side must be a candidate
+EVERY = 5.0  # seconds between two readings of one market side (the step is asked on every tick); 2026-11-25, user: "it should be like 5s max" (was 10 s)
+CONFIRM = 1  # readings in a row a side must be a candidate: ONE, the first candidate reading buys (2026-11-25, user: "thats problematic, i think with our new wave logic that helps wait we should maybe disable that or drop it to 2 readings", "and it needs to scale too", "later in the market it needs to move quicker", "if its taking 20 seconds to make a decision that too long", "it should be like 5s max"; it was three readings, a fixed 20 to 30 s in which the ask could leave the 0.55 to 0.85 band, as BTC YES 12:33 did). A decision is never more than one reading, EVERY seconds, old
 BUCKET_S = 180.0  # three minutes of the market
 
 
@@ -159,8 +159,13 @@ def candidate(states: dict[str, int | str]) -> bool:
     return all(states[c] in (4, 5) for c in CHECKS) and states["cushion"] == 5
 
 
-def confirmed(ticker: str, side: str, ok: bool, now: float) -> tuple[bool, int]:
-    """Count the readings in a row at which a side has been a candidate (one per EVERY seconds however often asked); (CONFIRM reached, the count). A reading that is not a candidate, or a gap of two readings or more, starts the count again."""
+def need_readings(left: float) -> int:
+    """Readings in a row a side must be a candidate: CONFIRM (one), whatever the time left. Kept as a function so the step's note and a later scaled rule have one place to ask."""
+    return CONFIRM
+
+
+def confirmed(ticker: str, side: str, ok: bool, now: float, need: int) -> tuple[bool, int]:
+    """Count the readings in a row at which a side has been a candidate (one per EVERY seconds however often asked); (`need` reached, the count). A reading that is not a candidate, or a gap of two readings or more, starts the count again."""
     with _lock:
         t, n = _runs.get((ticker, side), (-1e18, 0))
         if not ok:
@@ -175,10 +180,10 @@ def confirmed(ticker: str, side: str, ok: bool, now: float) -> tuple[bool, int]:
         if len(_runs) > 4096:  # markets long closed
             for k in [k for k, (tt, _n) in _runs.items() if now - tt > 3600.0]:
                 del _runs[k]
-        return n >= CONFIRM, n
+        return n >= need, n
 
 
-def note(side: str, states: dict[str, int | str], count: int, minute: float) -> dict[str, Any]:
+def note(side: str, states: dict[str, int | str], count: int, minute: float, need: int) -> dict[str, Any]:
     """The market note for one side at one reading, as PROPERTIES the bot can read (user, 2026-11-22: "it could be more yaml like so it's just properties"). A later reading, a sell step and the review page read the keys; render() writes it as YAML-like lines for a log or a decision's note and parse() reads those lines back.
 
         verb: refuse | wait | buy
@@ -187,11 +192,11 @@ def note(side: str, states: dict[str, int | str], count: int, minute: float) -> 
         why: trend_low | unread | cushion_not_strong | confirming | window | pass
         failing: [trend, price]     the checks not in fifths 4-5 (empty when none)
         cushion_fifth: 5            1-5, or anomaly / unread
-        confirm: 2                  readings in a row so far
-        need: 3                     readings in a row needed
+        confirm: 1                  readings in a row so far
+        need: 2                     readings in a row needed
         <check>_fifth: ...          each of the five checks' fifth
     """
-    d: dict[str, Any] = {"verb": "", "side": side, "minute": round(minute, 2), "why": "", "failing": [c for c in CHECKS if states[c] not in (4, 5)], "cushion_fifth": states["cushion"], "confirm": count, "need": CONFIRM}
+    d: dict[str, Any] = {"verb": "", "side": side, "minute": round(minute, 2), "why": "", "failing": [c for c in CHECKS if states[c] not in (4, 5)], "cushion_fifth": states["cushion"], "confirm": count, "need": need}
     for c in CHECKS:
         d[f"{c}_fifth"] = states[c]
     if minute < 2.0 or minute > 14.0:
@@ -200,7 +205,7 @@ def note(side: str, states: dict[str, int | str], count: int, minute: float) -> 
         d["verb"], d["why"] = "refuse", "unread" if any(states[c] == "unread" for c in d["failing"]) else "check_not_passing"
     elif states["cushion"] != 5:
         d["verb"], d["why"] = "wait", "cushion_not_strong"
-    elif count < CONFIRM:
+    elif count < need:
         d["verb"], d["why"] = "wait", "confirming"
     else:
         d["verb"], d["why"] = "buy", "pass"
@@ -373,7 +378,7 @@ def _readings(shot: Any, now: float, hours: float) -> tuple[dict[str, Any] | Non
 def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bool, str]:
     """The buy step's answer for one side now: (ok, the note as one line). Memory only.
 
-    The rules are the user's and the study's: minutes 2 to 14; never an ask of 0.45 to 0.55; all five checks read and in fifths 4-5 with the cushion in fifth 5 (E5), held three readings in a row; and no buy on the side a confirmed shift hurt: the LATEST confirmed shift took the spot out of this side's cushion against this market's target (user, 2026-11-22). A take at the ask is the lane's order.
+    The rules are the user's and the study's: minutes 2 to 14; never an ask of 0.45 to 0.55; all five checks read and in fifths 4-5 with the cushion in fifth 5 (E5), held for the readings the time left asks; and no buy on the side a confirmed shift hurt: the LATEST confirmed shift took the spot out of this side's cushion against this market's target (user, 2026-11-22). A take at the ask is the lane's order.
 
     The step reads the facts board (facts.py, 2026-11-22: the buy side adopts it): the checks are the fact `priskp_screen`, the shift is the fact `shift_out`, and a veto rule (not the step's own `if`) stops the buy when the shift took the spot out of the side's cushion. The note carries the facts read."""
     from . import facts
@@ -411,8 +416,9 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
         return {"verb": "wait", "side": shot.side, "minute": round(minute, 2), "why": "no cutoffs file loaded yet"}, None
     states = fifths(shot.series, minute * 60.0, ro[shot.side])
     ok = candidate(states) and WINDOW[0] <= minute <= WINDOW[1] and not DEAD[0] <= shot.ask <= DEAD[1]
-    reached, count = confirmed(shot.ticker, shot.side, ok, now)
-    n = note(shot.side, states, count, minute)
+    need = need_readings(hours * 3600.0)
+    reached, count = confirmed(shot.ticker, shot.side, ok, now, need)
+    n = note(shot.side, states, count, minute, need)
     n["ask"] = round(shot.ask, 3)
     if DEAD[0] <= shot.ask <= DEAD[1]:
         n["verb"], n["why"] = "wait", "dead_ask_band"
