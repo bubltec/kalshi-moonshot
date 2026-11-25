@@ -1048,6 +1048,7 @@ class ProfitWatcher:
         if bid > t.early_take_high + 1e-9:
             t.early_take_high, t.early_take_high_ts = bid, now
         if net <= 0:
+            t.early_take_armed, t.early_take_fall_since = False, 0.0  # a fall under cost ENDS the profit run: its old high is gone, and a recovery has to climb a wobble over cost and stall from a new high before it sells (2026-11-25, user, on DOGE 17:30 YES: the bid went 0.78 -> 0.89 -> 0.52 -> 0.82 and was sold at 0.81, +1.8c, on 'fell 0.07 from its high 0.89' ten minutes old; it settled YES)
             return None  # never a loss; the other steps decide
         stall = t.early_take_stall_share * left
         spot = ProfitWatcher._wave_spot(self, t, now)  # the spot's cushion over the target for the bet (memory): while it still climbs by a wobble of its own the bet is not stalled, whatever the bid does (DOGE 14:45 NO, 2026-11-24: sold at 0.85 on a 56 s flat bid while the spot kept moving the bet's way, "pretty much a sure bet")

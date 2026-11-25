@@ -485,6 +485,19 @@ def test_integration_early_take_a_spot_still_climbing_is_not_a_stall(tmp_path, m
     assert why and "spot's cushion" in why
 
 
+def test_integration_early_take_a_fall_under_cost_ends_the_profit_run_and_a_recovery_is_not_sold_on_the_old_high(tmp_path, monkeypatch, mem):
+    # DOGE 17:30 YES, 2026-11-25: bought 0.78, high 0.89, fell to 0.52, recovered to 0.82 and was sold at 0.81 on "fell 0.07 from its high 0.89", ten minutes old
+    lose = [None]
+    ask = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)  # entry 0.70
+    assert ask(0.90, 700) is None  # armed: +20c
+    assert ask(0.60, 600) is None  # under cost: the run is over, nothing sells at a loss
+    assert ask(0.73, 500) is None  # back to +1c: under a wobble over cost, so not armed again, and the old 0.90 high is gone
+    assert ask(0.74, 490) is None
+    assert ask(0.82, 480) is None  # +10c over cost: armed again with a NEW high of 0.82
+    why = ask(0.76, 470)  # now a real fall from the new high
+    assert why and "bid fell" in why and "0.82" in why
+
+
 def test_integration_early_take_holds_on_a_cushion_that_scales_with_the_time_left(tmp_path, monkeypatch, mem):
     from kalshi_moonshot import watcher
 
