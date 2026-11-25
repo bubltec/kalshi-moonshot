@@ -1,0 +1,7 @@
+2026-11-25. User: "gaussian curve math"; "just the ones from the past 24 hours"; "we need to make sure this doesn't kill normal favorite trends buys". scripts/priskp_zscore_wave_study.py on the 131 live priskp bets of the 24 hours to 10:20 ET (as run, fee on every leg; spot 10 s averages from the host tape, one query per coin).
+Settings fixed before the run: 30 minute window, z bar 1.0, wave/trend split at the median R^2 (0.26) of a straight-line fit. Nothing else tried.
+All 131: -$140.46 (86 won, 41 lost... 45 lost). TREND bets (R^2 >= 0.26) 66: -$40.25. WAVE bets 65: -$100.21.
+Stretched with the bet (the side's own z >= 1.0): in TREND markets 9 bets +$7.87 (8 won, 1 lost): left alone. In WAVE markets 27 bets -$66.32 (16 won, 11 lost): REFUSED by the rule. Wave, not stretched: 38 bets -$33.89: left alone.
+Refusing the 27 changes the 24 hour total by +$66.32 in this sample. The refused winners were small (about +$3.4 to +$3.8 each); the refused losers -$13 to -$16 each (SOL and DOGE 22:15 NO, HYPE 08:30 NO, BNB 14:00 YES).
+The 08:30 round: HYPE (side z +2.21, R^2 0.20) and BNB (+1.84, 0.15) refused (-$15.93 and -$5.88); BTC (+0.09, R^2 0.01) and ETH (+0.73, 0.01) kept (-$7.69, -$4.04).
+LIMITS: 24 hours, one regime, 131 bets; in-sample (the rule was not fitted, but the choice of the idea came from looking at the 08:30 round); as run mixes the lane's exits with the entry; 38 wave bets and the BTC/ETH cases are not caught. A lead for shadow, not a rule.
