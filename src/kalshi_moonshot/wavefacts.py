@@ -151,14 +151,45 @@ def now_read(index: str, now: float, target: float, side: str, left: float) -> d
     }
 
 
-R2_CUT = 0.24  # the median R^2 of the straight-line fit over the 24 hours of priskp bets studied (studies/results/2026-11-25-priskp-zscore-wave.txt): trend at or over it, wave under it. A fixed study number for the SHADOW verdict only (CLAUDE.md rule 2 wants the market's own history; the R^2 is logged with every verdict so a rolling cut can replace this)
+R2_CUT = 0.24  # kept for the note only since 2026-11-25 (the straight-line fit of the last 30 minutes; the verdict no longer reads it)
+EXTREME = 1.0  # a leg is AT ITS EXTREME when it has already run a usual big leg's length or already travelled a usual wave's distance (the market's own, from the hour before the open); fixed before the study that chose it, studies/results/2026-11-25-priskp-zscore-wave.txt
+BIG_REVERSAL = 2.0  # the big swings: a reversal of this many typical minutes
+
+_big: dict[tuple[str, int], float | None] = {}
+
+
+def _usual_big_leg(index: str, opened: float, u: float) -> float | None:
+    """The median length in seconds of the market's confirmed BIG legs (zig-zag reversals of BIG_REVERSAL typical minutes on the 30 s median) over the hour before the open, kept per market; None with fewer than two."""
+    from . import ticks, waveturn
+    from .waveshape import broad
+    from .wavetop import grid
+
+    key = (index, int(round(opened)))
+    with _lock:
+        if key in _big:
+            return _big[key]
+    got = ticks.history.window(index, opened - HOUR - GRID, opened - 1e-6)
+    out: float | None = None
+    if got and got[0]:
+        pre = grid(got[0], got[1], int(opened) - HOUR, int(opened))
+        if len(pre) >= HOUR - 5 and None not in pre:
+            sm = broad([float(x) for x in pre], 0, len(pre) - 1, waveturn.SMOOTH // 2, len(pre) - 1)
+            pts, _d, _k, _v = waveturn.zigzag(sm, BIG_REVERSAL * u)
+            durs = [b[0] - a[0] for a, b in zip(pts, pts[1:])]
+            out = float(sorted(durs)[len(durs) // 2]) if len(durs) >= 2 else None
+    with _lock:
+        if len(_big) > 512:
+            _big.clear()
+        _big[key] = out
+    return out
 
 
 def leg(index: str, opened: float, now: float, target: float, side: str, left: float) -> dict[str, Any] | None:
     """Where the bet's side stands in the curve's current LEG, by walking the spot back from now to the window's open with the wave lane's zig-zag (waveturn.reading: swings of 0.5 typical minutes on a 30 s median, the pre-open hour's typical minute as the unit; no crossings, no gate). (2026-11-25, user: "why can't it walk the curve back and identify it was inside a dip?")
     class  'inside' (the current swing runs in the side's winning direction, is at least 0.5 u and has given back under 0.2 u: not turned), 'turned' (that swing has given back 0.2 u or more), 'against' (the current swing runs against the side), 'none' (no swing of 0.5 u yet)
     swing_u, gb_u   the current swing's size and what it has given back, in typical minutes; r2 the 30 minute straight-line fit (a trend when at or over R2_CUT)
-    would_refuse    the verdict of scripts/priskp_leg_study.py: 'against' or 'inside' in a WAVE market (R^2 under R2_CUT). A trend's leg, against or inside, is a normal favourite buy and is never refused.
+    age, travel     how long the current BIG leg (reversal of 2 typical minutes) has run against the market's usual big leg of the hour before the open, and how far the current leg has travelled against the market's usual 10 minute wave travel (both 1.0 = a usual one)
+    would_refuse    (2026-11-25, user: "this new curve logic is supposed to just stop us from betting in a dip or peak when its super likely that the wave pattern will either repeat or turn into a long leg") 'inside' or 'against' AND AT ITS EXTREME: the leg has already run a usual big leg's length (age >= 1) or already travelled a usual wave's distance (travel >= 1). A young leg part-way through, and a straight breakout still short of a usual wave (BTC 12:45 at 12:33: age 0.52, travel 0.63), pass.
     None when the pre-open hour, the path since the open or the typical minute is not in the tick memory."""
     from . import ticks, waveturn
     from .wavetop import grid
@@ -189,5 +220,18 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
         cls = "turned"
     nowr = now_read(index, now, target, side, left)
     r2 = None if nowr is None else nowr["r2"]
-    refuse = cls in ("against", "inside") and r2 is not None and r2 < R2_CUT  # both only in a WAVY market (2026-11-25: the first live refusal, NEAR YES 11:48 against a 0.50 u swing at R^2 0.59, was a trend buy and settled YES; the 24 hours: AGAINST in trend markets 3 bets +$1.09, in wave markets 15 bets -$44.02)
-    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "would_refuse": refuse}
+    from .waveshape import broad
+
+    sm = broad([float(x) for x in win], 0, int(now - opened), waveturn.SMOOTH // 2, int(now - opened))
+    big, _d, _k, _v = waveturn.zigzag(sm, BIG_REVERSAL * h.u)
+    big_start = big[-1][0] if big else 0
+    usual = _usual_big_leg(index, opened, h.u)
+    age = ((now - opened) - big_start) / usual if usual else None
+    small, _d2, _k2, _v2 = waveturn.zigzag(sm, waveturn.ZZ * h.u)
+    small_start = small[-1][0] if small else 0
+    bef = before(index, opened)
+    w10 = bef["w10"] if bef and bef.get("w10") else None
+    travel = abs(float(win[int(now - opened)]) - float(win[small_start])) / w10 if w10 else None
+    at_extreme = (age is not None and age >= EXTREME) or (travel is not None and travel >= EXTREME)
+    refuse = cls in ("against", "inside") and at_extreme
+    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse}

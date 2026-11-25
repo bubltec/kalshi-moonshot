@@ -586,12 +586,13 @@ def test_unit_the_board_serves_the_wave_facts_to_the_steps_that_name_them(monkey
     facts.check_needs(["priskp", "value_sale", "wave_take", "value_hold"], "test")
 
 
-def test_unit_wave_leg_names_the_leg_the_side_is_in_and_refuses_only_a_wavy_markets_unturned_leg(monkeypatch):
+def test_unit_wave_leg_names_the_leg_the_side_is_in_and_refuses_only_a_leg_at_its_extreme(monkeypatch):
     import math
 
     from kalshi_moonshot import wavefacts
 
     wavefacts._before.clear()
+    wavefacts._big.clear()
     # a wavy hour before the open, then a fall of 0.02 a second for 150 s from the open: a falling swing that has not turned
     opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.3 * math.sin(2 * math.pi * s / 120.0) if s < 0 else 100.0 - 0.02 * min(s, 150.0))
     now = opened + 150.0
@@ -600,7 +601,8 @@ def test_unit_wave_leg_names_the_leg_the_side_is_in_and_refuses_only_a_wavy_mark
     assert no["class"] == "inside" and no["swing_u"] >= 0.5 and no["would_refuse"] is True  # a NO inside the dip, in a wavy market: the 08:30 HYPE, BNB and ETH shape
     assert yes["class"] == "against" and yes["would_refuse"] is True  # a YES against the fall
     wavefacts._before.clear()
-    # a straight climb the whole hour and after: the YES is inside a leg too, but it is a trend: a normal favourite buy, never refused
+    wavefacts._big.clear()
+    # a straight climb the whole hour and after: the YES is inside a leg too, but no usual big leg or wave travel has been outrun: a normal favourite buy, not refused
     opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.02 * s)
     got = wavefacts.leg("IDX", opened, opened + 300.0, 105.0, "yes", 600.0)
     assert got is not None and got["r2"] is not None and got["r2"] >= wavefacts.R2_CUT and got["would_refuse"] is False
@@ -627,12 +629,16 @@ def test_unit_wave_leg_refuses_an_unturned_dip_and_passes_what_it_cannot_read(mo
     monkeypatch.setattr(ticks_mod.strikes, "get", lambda tk, *a: None)
     assert buychain.STEPS["wave_leg"](buychain.Ctx(config.load(), sp, now=opened + 150.0), sh).ok is True  # no target in memory: no read is no refusal
 
-def test_unit_wave_leg_does_not_refuse_an_against_swing_in_a_trend_market(monkeypatch):
+def test_unit_wave_leg_passes_a_leg_part_way_through_and_refuses_it_at_its_extreme(monkeypatch):
     from kalshi_moonshot import wavefacts
 
     wavefacts._before.clear()
-    # a steady climb for the hour (a trend) then a small dip at the end: a YES is against a falling swing, but the market is a trend: a normal favourite buy (the NEAR YES 11:48 refusal, 2026-11-25)
-    opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.01 * s - (0.04 * (s - 400.0) if s > 400.0 else 0.0))
-    got = wavefacts.leg("IDX", opened, opened + 600.0, 100.0, "yes", 300.0)
-    assert got is not None and got["class"] == "against" and got["r2"] >= wavefacts.R2_CUT
-    assert got["would_refuse"] is False  # against, in a trend: never refused
+    wavefacts._big.clear()
+    # a steady climb for the hour, then a dip from 560 s that runs against a YES: 40 s in, it has travelled well under a usual 10 minute wave (the NEAR YES 11:48 and BTC YES 12:33 refusals, 2026-11-25, were legs part-way through)
+    path = lambda s: 100.0 + 0.01 * s - (0.04 * (s - 560.0) if s > 560.0 else 0.0)
+    opened = _wave_history(monkeypatch, path)
+    young = wavefacts.leg("IDX", opened, opened + 600.0, 100.0, "yes", 300.0)
+    assert young is not None and young["class"] == "against" and young["travel"] is not None and young["travel"] < wavefacts.EXTREME
+    assert young["would_refuse"] is False  # part-way through: passes
+    old = wavefacts.leg("IDX", opened, opened + 800.0, 100.0, "yes", 100.0)
+    assert old["class"] == "against" and old["travel"] >= wavefacts.EXTREME and old["would_refuse"] is True  # the same leg 240 s in has outrun a usual wave: at its extreme

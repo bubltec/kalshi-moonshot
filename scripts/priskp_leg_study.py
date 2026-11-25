@@ -63,6 +63,9 @@ for b in json.load(open(f"{D}/bets24.json")):
     durs = [b[0] - a[0] for a, b in zip(ppts, ppts[1:])]
     typ_dur = sorted(durs)[len(durs) // 2] if len(durs) >= 3 else None
     leg_age = (now - op) - st
+    # WHERE THE LEG TURNED relative to the target (user: "they just reversed at different points, and depending on the target location is what would adjust whether we bet or not and which side"): the price at the current leg's start (the last zig-zag turn, or the open), on the bet's winning side of the target in typical minutes (negative = the leg started on the losing side and crossed the target)
+    _sgn = 1.0 if b["side"] == "yes" else -1.0
+    start_side_u = _sgn * (float(win[st]) - K) / h.u
     # the same timing at the scale of the BIG swings (a reversal of 2 typical minutes, fixed before the run; the user: some waves traverse 10 minutes, others 3)
     ppts2, _a, _b, _c = waveturn.zigzag(smp, 2.0 * h.u)
     durs2 = [b[0] - a[0] for a, b in zip(ppts2, ppts2[1:])]
@@ -97,7 +100,7 @@ for b in json.load(open(f"{D}/bets24.json")):
     pay, n = float(b["pay"]), float(b["n"])
     cost = pay + fee(pay)
     got = (float(b["xp"]) - fee(float(b["xp"]))) if b["xts"] else (1.0 if b["out"] == b["side"] else 0.0)
-    rows.append({"age_ratio2": age_ratio2, "typ_dur2": typ_dur2, "age_ratio": age_ratio, "leg_age": leg_age, "typ_dur": typ_dur, "leg_ratio": leg_ratio, "leg_r2": leg_r2, "leg_len": len(seg), "tk": b["ticker"], "ts": b["ts"], "stake": pay * n, "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
+    rows.append({"start_side_u": start_side_u, "age_ratio2": age_ratio2, "typ_dur2": typ_dur2, "age_ratio": age_ratio, "leg_age": leg_age, "typ_dur": typ_dur, "leg_ratio": leg_ratio, "leg_r2": leg_r2, "leg_len": len(seg), "tk": b["ticker"], "ts": b["ts"], "stake": pay * n, "side": b["side"], "cls": cls, "r2": r2, "swing": r.swing_u, "gb": r.gb_u, "net": (got - cost) * n, "pc": got - cost})
 
 
 def line(label, g):
@@ -157,6 +160,33 @@ print("  markets with no usual big leg in the hour before (under 2 confirmed leg
 for x in rows:
     if "26NOV250830" in x["tk"] and x["age_ratio2"] is not None:
         print(f"    08:30 {x['tk'][:10]} {x['side']} big leg {x['age_ratio2']:.2f} of a usual {x['typ_dur2']}s, net ${x['net']:+.2f}")
+print("\nWHERE THE CURRENT LEG STARTED relative to the target, on the bet's winning side, in typical minutes (cuts -0.5 and +0.5 fixed before this run; negative = the leg started on the losing side and crossed the target to get here):")
+ins5 = [x for x in rows if x["cls"].startswith("INSIDE")]
+line("  started on the LOSING side (under -0.5 u): the leg crossed the target", [x for x in ins5 if x["start_side_u"] < -0.5])
+line("  started at the target (-0.5 to +0.5 u)", [x for x in ins5 if -0.5 <= x["start_side_u"] <= 0.5])
+line("  started on the WINNING side (over +0.5 u)", [x for x in ins5 if x["start_side_u"] > 0.5])
+for x in rows:
+    if "26NOV250830" in x["tk"]:
+        print(f"    08:30 {x['tk'][:10]} {x['side']} leg started {x['start_side_u']:+.2f} u on the winning side of the target, net ${x['net']:+.2f}")
+print("\nTHE USER'S RULE (2026-11-25: 'the same rules still apply, we need some cushion and/or a trend to bet on'): for a bet INSIDE a leg or AGAINST the swing, bet only with a cushion from BEFORE the leg (the leg started 1.0 typical minute or more on the bet's winning side of the target) or with a straight trend (the current leg's line fit 0.9 or more). Both cuts fixed before this run; the 1.0 u is a round number, the 08:30 starts were +0.80, +0.89, +3.33 and +0.18 u:")
+rule = [x for x in rows if (x["cls"].startswith("INSIDE") or x["cls"].startswith("AGAINST"))]
+def ok_(x):
+    return x["start_side_u"] >= 1.0 or (x["leg_r2"] is not None and x["leg_r2"] >= 0.9)
+line("  INSIDE or AGAINST bets the rule REFUSES (no pre-existing cushion and no straight trend)", [x for x in rule if not ok_(x)])
+line("  INSIDE or AGAINST bets the rule KEEPS", [x for x in rule if ok_(x)])
+for x in rows:
+    if "26NOV250830" in x["tk"]:
+        print(f"    08:30 {x['tk'][:10]} {x['side']}: {x['cls'][:10]}, started {x['start_side_u']:+.2f} u, leg R^2 {x['leg_r2'] if x['leg_r2'] is None else round(x['leg_r2'], 2)}: {'KEPT' if (x['cls'].startswith('INSIDE') or x['cls'].startswith('AGAINST')) and ok_(x) else ('REFUSED' if (x['cls'].startswith('INSIDE') or x['cls'].startswith('AGAINST')) else 'not in the classes')}, net ${x['net']:+.2f}")
+print("\nTHE NARROW RULE (user, 2026-11-25: 'this new curve logic is supposed to just stop us from betting in a dip or peak when its super likely that the wave pattern will either repeat or turn into a long leg'): refuse an INSIDE or AGAINST bet only AT THE EXTREME of the leg: the current big leg has already run a usual big leg's length (age ratio 1.0 or more) OR the current leg has already travelled a usual wave's distance (travel ratio 1.0 or more). Both cuts were fixed before the earlier runs (1.0); the union of the two is chosen now, after seeing both split results:")
+ext = [x for x in rows if (x["cls"].startswith("INSIDE") or x["cls"].startswith("AGAINST")) and ((x["age_ratio2"] is not None and x["age_ratio2"] >= 1.0) or (x["leg_ratio"] is not None and x["leg_ratio"] >= 1.0))]
+rest = [x for x in rows if (x["cls"].startswith("INSIDE") or x["cls"].startswith("AGAINST")) and x not in ext]
+line("  REFUSED (at the extreme)", ext)
+line("  KEPT (the rest of the INSIDE and AGAINST bets)", rest)
+print("  and the bets not in those classes (turned or none) are untouched:", len([x for x in rows if not (x["cls"].startswith("INSIDE") or x["cls"].startswith("AGAINST"))]))
+print("  winners among the refused:", sum(1 for x in ext if x["pc"] > 0), " losers:", sum(1 for x in ext if x["pc"] <= 0))
+for x in rows:
+    if "26NOV250830" in x["tk"]:
+        print(f"    08:30 {x['tk'][:10]} {x['side']}: {'REFUSED at the extreme' if x in ext else 'kept'} (big leg age {x['age_ratio2'] if x['age_ratio2'] is None else round(x['age_ratio2'], 2)}, travel {x['leg_ratio'] if x['leg_ratio'] is None else round(x['leg_ratio'], 2)}), net ${x['net']:+.2f}")
 print("\nthe 08:30 round:")
 for x in rows:
     if "26NOV250830" in x["tk"]:
