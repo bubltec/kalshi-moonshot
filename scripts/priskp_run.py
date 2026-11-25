@@ -23,7 +23,7 @@ def settlement_index(series):
 
 START = datetime(2026, 11, 9, 7, tzinfo=timezone.utc).timestamp()
 LIMIT = int(os.environ.get("LIMIT", "0"))
-STEP, WIN_LO, WIN_HI, STALE, STAKE = 10, 2.0, 14.0, 10.0, 10.0
+STEP, WIN_LO, WIN_HI, STALE, STAKE = float(os.environ.get("STEP", "10")), 2.0, 14.0, 10.0, 10.0  # 2026-11-25: STEP is the reading cadence in seconds (10 = the old regime, one look per 5 to 10 s; 1 = the per-tick regime: user, "it will change everything", "we should re-evaluate like all of our replays")
 DEAD = (0.45, 0.55)  # the user's own: never an ask here
 CHECKS = ("cushion", "trend", "history", "price", "pricedip")
 FEAT_SIGNED = ("czb", "czlb", "tr13", "tr35", "mv15", "mv30", "mv60", "sl15", "sl30", "sl60", "cv15", "cv30", "cv60")
