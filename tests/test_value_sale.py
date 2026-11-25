@@ -607,7 +607,7 @@ def test_unit_wave_leg_names_the_leg_the_side_is_in_and_refuses_only_a_wavy_mark
     assert wavefacts.leg("IDX", opened + 10 * 900.0, opened + 10 * 900.0 + 300.0, 105.0, "yes", 600.0) is None  # not in memory
 
 
-def test_unit_wave_leg_shadow_never_says_no_and_writes_the_verdict(monkeypatch):
+def test_unit_wave_leg_refuses_an_unturned_dip_and_passes_what_it_cannot_read(monkeypatch):
     import math
 
     from kalshi_moonshot import binaryrisk, wavefacts
@@ -622,7 +622,7 @@ def test_unit_wave_leg_shadow_never_says_no_and_writes_the_verdict(monkeypatch):
     sp = lanes.LaneSpec("x", "ladder", "x", (0.60, 0.92), (0, 1), 0.05, 0.0, sides=("yes", "no"))
     left = 750.0
     sh = LongShot("KXGOLD15M-30JAN010015-15", "t", "", 0.79, 0.80, left / 3600.0, "2099-01-01T00:00:00Z", left / 3600.0, lane="x", series="KXGOLD15M", side="no", event_ticker="KXGOLD15M-30JAN010015")
-    c = buychain.STEPS["wave_leg_shadow"](buychain.Ctx(config.load(), sp, now=opened + 150.0), sh)
-    assert c.ok is True and "would REFUSE" in c.why and "inside" in c.why  # the shadow says what the rule would do and changes nothing
+    c = buychain.STEPS["wave_leg"](buychain.Ctx(config.load(), sp, now=opened + 150.0), sh)
+    assert c.ok is False and "inside" in c.why and "not bought" in c.why  # a NO inside the dip in a wavy market is refused (2026-11-25, the 08:30 and 11:30 rounds)
     monkeypatch.setattr(ticks_mod.strikes, "get", lambda tk, *a: None)
-    assert buychain.STEPS["wave_leg_shadow"](buychain.Ctx(config.load(), sp, now=opened + 150.0), sh).ok is True  # no target in memory: still a yes
+    assert buychain.STEPS["wave_leg"](buychain.Ctx(config.load(), sp, now=opened + 150.0), sh).ok is True  # no target in memory: no read is no refusal

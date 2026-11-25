@@ -403,28 +403,30 @@ def settle_confirm_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(False, f"waiting for the spot to confirm: it has moved {moved:+g} the bet's way since {got[1]:g} ({waited:.0f}s ago) and needs {need:g} ({units:g} typical minutes of {got[2]:g})")
 
 
-@step("wave_leg_shadow")
-def wave_leg_shadow_step(ctx: Ctx, shot: LongShot) -> Check:
-    """SHADOW ONLY, never says no (2026-11-25, user, after the 08:30 round where BTC, ETH, HYPE and BNB NO favourites were bought inside a dip: "why can't it walk the curve back and identify it was inside a dip?"; "yes" to a shadow build): walks the spot back from now to the window's open with the wave lane's zig-zag (wavefacts.leg) and writes into the decision's note which leg the bet's side is in (inside it, not turned; turned; against the current swing; none), the swing and its give-back in typical minutes, the 30 minute R^2 and whether the rule of scripts/priskp_leg_study.py would REFUSE (the swing runs against the bet, or the bet is inside an unturned leg in a wavy market; a trend's leg is never refused). Changes nothing the lane buys; scored later against the bets that follow."""
+@step("wave_leg")
+def wave_leg_step(ctx: Ctx, shot: LongShot) -> Check:
+    """Refuses a side bought inside the curve's current leg (2026-11-25, user: "why can't it walk the curve back and identify it was inside a dip?"; "yes" to the shadow, then "yes" to enforcing it after the 11:30 round's HYPE and ETH NO bets were both flagged 'would REFUSE' and lost): walks the spot back from now to the window's open with the wave lane's zig-zag (wavefacts.leg) and says NO when the current swing runs AGAINST the bet's side, or the bet is INSIDE a leg in its winning direction that has not turned (under 0.2 typical minutes given back) in a WAVY market (the 30 minute straight-line R^2 under wavefacts.R2_CUT). A trend's leg is a normal favourite buy and passes. A curve that cannot be read (no index, no target, the hour or the path not in memory) passes with that said: no read is no refusal. The note says which leg, the swing, the give-back and the R^2. Studies: studies/results/2026-11-25-priskp-zscore-wave.txt (24 hours of bets: the refused classes lost $121.18 as run; the opposite side would have made +$631.30 held)."""
     from . import binaryrisk, ticks, wavefacts
 
     try:
         series = shot.series or shot.ticker.split("-")[0]
         index = binaryrisk.curve_index(series)
         if not index:
-            return Check(True, "shadow: leg: no index is read for this series")
+            return Check(True, "leg: no index is read for this series, so no refusal")
         opened = round((ctx.now + shot.hours_to_close * 3600.0) / 900.0) * 900.0 - 900.0
         strike = ticks.strikes.get(shot.ticker) or _window_strike(ctx, shot)
         if not strike:
-            return Check(True, "shadow: leg: the market's target is not in memory yet")
+            return Check(True, "leg: the market's target is not in memory yet, so no refusal")
         got = wavefacts.leg(index, opened, ctx.now, float(strike), shot.side, max(opened + 900.0 - ctx.now, 1.0))
         if got is None:
-            return Check(True, "shadow: leg: unread (the hour before the open or the path since it is not in memory)")
+            return Check(True, "leg: unread (the hour before the open or the path since it is not in memory), so no refusal")
         r2 = "n/a" if got["r2"] is None else f"{got['r2']:.2f}"
         told = f"{got['class']} (swing {got['swing_u']:.2f} typical minutes, gave back {got['gb_u']:.2f}, 30 minute R^2 {r2}, a trend at or over {wavefacts.R2_CUT:g})"
-        return Check(True, f"shadow: would {'REFUSE' if got['would_refuse'] else 'buy'}: the {shot.side.upper()} is {told}")
-    except Exception as exc:  # a shadow reading that fails must never stop a buy
-        return Check(True, f"shadow: leg unreadable ({exc!r})")
+        if got["would_refuse"]:
+            return Check(False, f"the {shot.side.upper()} is {told}: a bet inside a dip or against the swing in a wavy market is not bought")
+        return Check(True, f"the {shot.side.upper()} is {told}: not refused")
+    except Exception as exc:  # a reading that fails is no refusal: the other steps decide
+        return Check(True, f"leg unreadable ({exc!r}), so no refusal")
 
 
 @step("cooldown", needs_estimate=True)
