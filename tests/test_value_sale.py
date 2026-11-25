@@ -320,16 +320,15 @@ def test_integration_early_take_a_stall_with_cushion_or_no_reading_holds(tmp_pat
     assert why and "hold value" in why and "stopped climbing" in why
 
 
-def test_integration_early_take_a_held_fall_in_profit_sells_whatever_the_model_says(tmp_path, monkeypatch, mem):
+def test_integration_early_take_a_cushion_holds_a_fall_and_no_reading_sells_it(tmp_path, monkeypatch, mem):
     lose = [0.005]
     ask = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     assert ask(0.90, 700) is None  # armed at its high
-    why = ask(0.80, 690)  # fell a wobble with +7c in hand and a 0.5% chance of ending wrong: the market is turning, the model does not hold it (2026-11-25, NEAR 00:30)
-    assert why and "bid fell" in why
+    assert ask(0.80, 690) is None  # fell a wobble, +7c in hand, but a 0.5% chance of ending wrong: the hold is worth more than the sale (2026-11-25, SOL 07:34 NO: "with that much cushion it should not sell")
     lose[0] = None
     ask2 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     assert ask2(0.90, 700) is None
-    why = ask2(0.80, 690)  # and with no reading of the spot at all
+    why = ask2(0.80, 690)  # no reading of the spot at all: nothing says hold, the fall sells (BNB 01:02 NO, HYPE 04:34 YES)
     assert why and "bid fell" in why and "hold value" not in why
 
 
