@@ -230,3 +230,11 @@ def test_the_wave_turn_step_reads_memory_only_and_holds_the_budget(guarded, tmp_
         ticks_mod.history.clear()
         ticks_mod.strikes._v.clear()
         waveturn.clear()
+
+
+def test_the_entry_thread_looks_on_every_tick_with_no_look_gap(monkeypatch):
+    """The look rate is a core function of the websocket design (user, 2026-11-25: "that's from the old REST logic", "it makes no sense in a websocket", "a core function"): every tick on a watched event asks the entry logic; only a look still running holds the next one (entrywatch._pending). No timer gap by default."""
+    from kalshi_moonshot import config
+
+    monkeypatch.delenv("ENTRY_MIN_GAP_SECONDS", raising=False)
+    assert config.load().entry_min_gap_seconds == 0.0
