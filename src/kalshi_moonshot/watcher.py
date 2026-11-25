@@ -201,6 +201,7 @@ class Target:
     late_dip_units: float = 3.0
     late_dip_look_s: float = 30.0
     late_dip_wait_share: float = 0.1
+    no_recovery_cushion_units: float = 0.0
     no_recovery_share: float = 0.0  # lane field: the share of the market's 900 s since the buy after which a bet never once in profit is sold (0 = the no_recovery step is off)
     no_rec_logged: bool = False
     no_rec_seen: float = 0.0  # the first check the no_recovery step saw this bet (a bet it did not see from the buy is not judged)
@@ -964,6 +965,10 @@ class ProfitWatcher:
         wait = t.no_recovery_share * 900.0
         if held_for < wait:
             return None  # an early loss is waited out: the bet is given its share of the market's length to come back
+        if t.no_recovery_cushion_units > 0:
+            spot = ProfitWatcher._wave_spot(self, t, now)
+            if spot is not None and spot[1] > 0 and spot[0] >= t.no_recovery_cushion_units * spot[1]:
+                return None  # a cushion waits (2026-11-25, user: "this needs to hold on cushion"): the spot is still that many of its own typical minutes on the bet's side of the target
         if t.bought_ts > 0 and t.no_rec_seen > t.bought_ts + 30.0:
             return None  # not watched from the buy (a restart): its past is unknown
         reason = f"no recovery: the bet has not been in profit {"since the buy" if t.no_rec_last_ahead <= 0 else f"since it was last ahead {held_for:.0f} s ago"} ({t.entry:.2f} paid), {held_for:.0f} s without, past its {wait:.0f} s ({t.no_recovery_share:.0%} of the market's length) to come back, {left:.0f} s left; accepted as a loss: sold at the bid {bid:.2f} ({net * 100:.1f}c a contract after both fees)"
@@ -1714,7 +1719,7 @@ class ProfitWatcher:
                 held.unit_min_history, held.no_loss_share = spec.bid_unit_min_seconds, spec.no_loss_share
                 held.early_take_share, held.early_take_stall_share, held.early_take_hold_share, held.early_take_cushion_units = spec.early_take_share, spec.early_take_stall_share, spec.early_take_hold_share, spec.early_take_cushion_units
                 held.late_dip_share, held.late_dip_units, held.late_dip_look_s, held.late_dip_wait_share = spec.late_dip_share, spec.late_dip_units, spec.late_dip_look_seconds, spec.late_dip_wait_share
-                held.no_recovery_share = spec.no_recovery_share
+                held.no_recovery_share, held.no_recovery_cushion_units = spec.no_recovery_share, spec.no_recovery_cushion_units
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail

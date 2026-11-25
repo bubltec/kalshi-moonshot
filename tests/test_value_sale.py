@@ -476,3 +476,25 @@ def test_integration_early_take_waits_while_the_spot_cushion_is_a_typical_minute
     spot[0] = (0.05, 0.10)  # the cushion has thinned to half a minute
     why = ask(0.79, 680)
     assert why and "bid fell" in why
+
+
+def test_integration_no_recovery_waits_while_the_spot_cushion_is_a_typical_minute_or_more(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.82, unit=0.10)
+    t.entry, t.no_recovery_share, t.bought_ts, t.no_recovery_cushion_units = 0.82, 0.2, close - 800.0, 1.0
+    spot = [(0.30, 0.10)]
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now: spot[0])
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_no_recovery(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.80, 800) is None  # seen from the buy
+    assert ask(0.53, 600) is None  # 200 s, past the wait, but a 3 minute cushion: it waits
+    spot[0] = (0.04, 0.10)  # the cushion is gone
+    why = ask(0.50, 590)
+    assert why and "no recovery" in why
