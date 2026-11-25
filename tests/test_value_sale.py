@@ -498,3 +498,22 @@ def test_integration_no_recovery_waits_while_the_spot_cushion_is_a_typical_minut
     spot[0] = (0.04, 0.10)  # the cushion is gone
     why = ask(0.50, 590)
     assert why and "no recovery" in why
+
+
+def test_integration_no_recovery_counts_a_picked_up_bets_wait_from_when_it_was_first_watched(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.73, unit=0.10)
+    t.entry, t.no_recovery_share, t.bought_ts = 0.73, 0.2, close - 800.0  # bought 800 s before the close, first watched 100 s later (a restart)
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_no_recovery(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.60, 700) is None  # first seen: the clock starts here
+    assert ask(0.40, 600) is None  # 100 s since first seen: under the 180 s
+    why = ask(0.30, 510)  # 190 s since first seen
+    assert why and "no recovery" in why and "first watched" in why

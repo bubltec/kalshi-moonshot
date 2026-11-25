@@ -960,7 +960,8 @@ class ProfitWatcher:
             t.no_rec_ahead = True
             t.no_rec_last_ahead = now  # a profit expires (user, 2026-11-24: "I think the profit should have an expiration"): the wait below starts over from the last moment the bet was ahead
             return None
-        start = max(t.bought_ts if t.bought_ts > 0 else t.no_rec_seen, t.no_rec_last_ahead)
+        watched = t.bought_ts > 0 and t.no_rec_seen <= t.bought_ts + 30.0
+        start = max(t.bought_ts if watched else t.no_rec_seen, t.no_rec_last_ahead)  # a bet picked up after a restart has an unknown past (2026-11-25, user, on HYPE 08:30 NO bought 08:17:41 and picked up by the 08:18 restart: it fell to 0.26 and nothing sold it, "it's only supposed to fire if they aren't winning"): its wait counts from when the watcher first saw it, never skipped
         held_for = now - start
         wait = t.no_recovery_share * 900.0
         if held_for < wait:
@@ -969,9 +970,7 @@ class ProfitWatcher:
             spot = ProfitWatcher._wave_spot(self, t, now)
             if spot is not None and spot[1] > 0 and spot[0] >= t.no_recovery_cushion_units * spot[1]:
                 return None  # a cushion waits (2026-11-25, user: "this needs to hold on cushion"): the spot is still that many of its own typical minutes on the bet's side of the target
-        if t.bought_ts > 0 and t.no_rec_seen > t.bought_ts + 30.0:
-            return None  # not watched from the buy (a restart): its past is unknown
-        reason = f"no recovery: the bet has not been in profit {"since the buy" if t.no_rec_last_ahead <= 0 else f"since it was last ahead {held_for:.0f} s ago"} ({t.entry:.2f} paid), {held_for:.0f} s without, past its {wait:.0f} s ({t.no_recovery_share:.0%} of the market's length) to come back, {left:.0f} s left; accepted as a loss: sold at the bid {bid:.2f} ({net * 100:.1f}c a contract after both fees)"
+        reason = f"no recovery: the bet has not been in profit {("since the buy" if watched else "since it was first watched") if t.no_rec_last_ahead <= 0 else f"since it was last ahead {held_for:.0f} s ago"} ({t.entry:.2f} paid), {held_for:.0f} s without, past its {wait:.0f} s ({t.no_recovery_share:.0%} of the market's length) to come back, {left:.0f} s left; accepted as a loss: sold at the bid {bid:.2f} ({net * 100:.1f}c a contract after both fees)"
         extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "held": round(held_for, 1)}
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="no recovery", extra=extra)
