@@ -306,13 +306,13 @@ def same_side_step(ctx: Ctx, shot: LongShot) -> Check:
 
 @step("side_losing", needs_estimate=True)
 def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The lane does not buy more of a side while its open bets on that side in this window are losing at their current bids (2026-11-24, user, after the 22:15 round where four NO bets in four markets all lost together: "we need a rule where it stops buying more of the same side when the current bids are losing"). Each open bet of this lane on the same side in the same window (the part of the ticker after the series), in another market, is marked at its side's bid now: bid less the sale fee, against the price paid with its buy fee, times its contracts. When those bets' total is under zero the buy is refused; the first bet of a round (nothing open on the side) and a round whose bets are ahead go through. No number: the sign of what the lane already holds. A bet with no quote in memory yet is not counted. Reads the bet book and the in-memory quotes only, so it is asked at the decision."""
+    """The lane does not buy more of a side while its open bets on that side in this window are losing at their current bids (2026-11-24, user, after the 22:15 round where four NO bets in four markets all lost together: "we need a rule where it stops buying more of the same side when the current bids are losing"). Each open bet of this lane on the same side in the same window (the part of the ticker after the series), in another market, is marked at its side's bid now: bid less the sale fee, against the price paid with its buy fee, times its contracts. When those bets stand under what they cost by more than the lane's side_losing_share (2026-11-24, user: "it needs to be losing by like a decent percentage, like 20% or something"; 0.2 in the priskp module, my reading of 'like 20%') the buy is refused; the first bet of a round (nothing open on the side) and a round whose bets are ahead go through. No number: the sign of what the lane already holds. A bet with no quote in memory yet is not counted. Reads the bet book and the in-memory quotes only, so it is asked at the decision."""
     if ctx.store is None or shot.ticker.count("-") < 2:
         return Check(True, "no bets to count")
     from . import ticks
 
     window = shot.ticker.split("-")[1]
-    total, n, unread = 0.0, 0, 0
+    total, spent, n, unread = 0.0, 0.0, 0, 0
     for r in ctx.store.open_bets():
         tk = r["ticker"]
         if (r["lane"] or "moonshot") != shot.lane or r["side"] != shot.side or tk == shot.ticker or tk.count("-") < 2 or tk.split("-")[1] != window:
@@ -326,10 +326,14 @@ def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
         bid = yes_bid if shot.side == "yes" else 1.0 - yes_ask
         paid = float(r["stake_usd"] or 0.0) / contracts
         total += (bid - fee_per_contract(bid) - paid - fee_per_contract(paid)) * contracts
+        spent += (paid + fee_per_contract(paid)) * contracts
         n += 1
     if n == 0:
         return Check(True, "no other bet of the lane on this side in this window" + (f" with a quote ({unread} unread)" if unread else ""))
-    return Check(total >= 0.0, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars at their bids now" + (", so no more of the side" if total < 0.0 else ""))
+    share = ctx.spec.side_losing_share
+    down = -total / spent if spent > 0 else 0.0
+    ok = down <= share
+    return Check(ok, f"the lane's {n} other {shot.side.upper()} bet(s) in this window stand {total:+.2f} dollars at their bids now, {down:.0%} under what they cost" + ("" if ok else f", past the {share:.0%} the lane allows: no more of the side"))
 
 
 _HOLD_FIRST: dict[tuple[str, str], list[float]] = {}  # (ticker, side) -> [when the lane first would have bought, the spot then, when it last would have]

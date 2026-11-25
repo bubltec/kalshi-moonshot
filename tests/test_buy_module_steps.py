@@ -383,6 +383,11 @@ def test_unit_side_losing_refuses_more_of_a_side_whose_open_bets_stand_under_wat
     assert ask("side_losing", sp, new, store=store).ok is True  # no quote in memory yet: nothing to count
     monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(time.time(), 0.55, 0.57)])
     assert ask("side_losing", sp, new, store=store).ok is False  # paid 0.80, the bid is 0.55
+    sp20 = spec(side_losing_share=0.2)
+    assert ask("side_losing", sp20, new, store=store).ok is False  # about 33% under what they cost
+    monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(time.time(), 0.70, 0.72)])
+    assert ask("side_losing", sp20, new, store=store).ok is True  # about 15% under: not enough
+    assert ask("side_losing", sp, new, store=store).ok is False  # with no share any loss refuses
     monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(time.time(), 0.90, 0.92)])
     assert ask("side_losing", sp, new, store=store).ok is True  # ahead at the bid
     monkeypatch.setattr(ticks.mids, "quotes", lambda t: [(time.time(), 0.55, 0.57)])
