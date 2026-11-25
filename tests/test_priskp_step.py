@@ -70,7 +70,7 @@ def test_the_confirmation_is_one_reading_whatever_the_time_left():
     from kalshi_moonshot import priskp
 
     assert priskp.need_readings(780.0) == 1 and priskp.need_readings(300.0) == 1 and priskp.need_readings(0.0) == 1
-    assert priskp.EVERY <= 1.0  # a cut every second at most: no decision is older than that (user: it makes no sense in a websocket)
+    assert priskp.EVERY <= 5.0  # the readings are cut at most every 5 s and read from memory in between; the market's pricing is live on every look (user: "the only thing we need evaluated every tick, is the market pricing")
 
 
 def test_outside_minutes_2_to_14_and_in_the_dead_ask_band_it_does_not_buy():

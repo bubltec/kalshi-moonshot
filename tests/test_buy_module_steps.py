@@ -482,3 +482,26 @@ def test_unit_settle_confirm_buys_only_once_the_spot_has_moved_the_bets_way_by_i
     clock["t"] += 3.0
     assert live(shot("no", 0.2)).ok is True  # a fall of 0.6 is with a NO bet
     assert ask("settle_confirm", spec(), now=clock["t"]).ok is False  # no setting on the lane: a no
+
+
+def test_unit_the_heavy_steps_are_throttled_and_the_ticks_between_read_the_kept_answer(monkeypatch):
+    """User, 2026-11-25: "the only thing we need evaluated every tick, is the market pricing. others can be throttled"."""
+    calls = {"n": 0}
+
+    def fake(ctx, shot):
+        calls["n"] += 1
+        return buychain.Check(True, f"call {calls['n']}")
+
+    wrapped = buychain.throttled("probe")(fake)
+    monkeypatch.setattr(buychain, "THROTTLE_S", 3.0)
+    buychain._THROTTLED.clear()
+    sp = spec()
+    c1 = wrapped(buychain.Ctx(config.load(), sp, now=1000.0), shot())
+    c2 = wrapped(buychain.Ctx(config.load(), sp, now=1002.0), shot())  # 2 s later: the kept answer
+    assert c1.why == c2.why == "call 1" and calls["n"] == 1
+    c3 = wrapped(buychain.Ctx(config.load(), sp, now=1003.5), shot())  # past the throttle: asked again
+    assert c3.why == "call 2" and calls["n"] == 2
+    c4 = wrapped(buychain.Ctx(config.load(), sp, now=1003.6), shot("no"))  # another side has its own answer
+    assert c4.why == "call 3"
+    monkeypatch.setattr(buychain, "THROTTLE_S", 0.0)
+    assert wrapped(buychain.Ctx(config.load(), sp, now=1003.7), shot()).why == "call 4"  # off: every tick

@@ -31,7 +31,7 @@ from . import binaryrisk
 CHECKS = ("cushion", "trend", "history", "price", "pricedip")
 QS = (0.01, 0.2, 0.4, 0.6, 0.8, 0.99)  # the cutoffs: the 1st and 99th bound the anomaly, the 20th to 80th cut the fifths
 NEED = 100  # readings a bucket needs before its checks are read (a shorter history is UNREAD, not a pass)
-EVERY = 1.0  # seconds between two cuts of one market's readings (the step is asked on every tick; the ask is live on every look); 2026-11-25, user: "it should be like 5s max" (was 10 s), then "that's from the old REST logic... it makes no sense in a websocket" (5 s, then 1 s). Watch `tick latency`: the cut is the heavy part
+EVERY = 5.0  # seconds between two cuts of one market's readings (the step is asked on every tick; the ask is live on every look; user, 2026-11-25: "the only thing we need evaluated every tick, is the market pricing. others can be throttled"); 2026-11-25, user: "it should be like 5s max" (was 10 s), then "that's from the old REST logic... it makes no sense in a websocket" (5 s, then 1 s). Watch `tick latency`: the cut is the heavy part
 CONFIRM = 1  # readings in a row a side must be a candidate: ONE, the first candidate reading buys (2026-11-25, user: "thats problematic, i think with our new wave logic that helps wait we should maybe disable that or drop it to 2 readings", "and it needs to scale too", "later in the market it needs to move quicker", "if its taking 20 seconds to make a decision that too long", "it should be like 5s max"; it was three readings, a fixed 20 to 30 s in which the ask could leave the 0.55 to 0.85 band, as BTC YES 12:33 did). A decision is never more than one reading, EVERY seconds, old
 BUCKET_S = 180.0  # three minutes of the market
 

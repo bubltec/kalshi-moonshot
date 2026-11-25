@@ -17,6 +17,7 @@ The steps read the lane's existing settings (its price range, entry_trend_second
 
 from __future__ import annotations
 
+import functools
 import logging
 import time
 from collections.abc import Callable
@@ -324,7 +325,35 @@ def _hold_value(ticker: str, shot: LongShot, now: float) -> float | None:
         return None
 
 
+THROTTLE_S = 3.0  # 2026-11-25 (user: "the only thing we need evaluated every tick, is the market pricing. others can be throttled"): a heavy step's answer for one (lane, market, side) is kept this many seconds and read from memory on the ticks in between; the price step and the lane's own quote checks still run on every tick. 0 turns it off (the tests do)
+_THROTTLED: dict[tuple[str, str, str, str], tuple[float, "Check"]] = {}
+
+
+def throttled(name: str) -> Callable[[Step], Step]:
+    """Wrap a buy step so its answer is reused for THROTTLE_S seconds per (lane, market, side). For the steps that read the tick memory or the books and change slowly: side_losing and wave_leg."""
+    def deco(fn: Step) -> Step:
+        @functools.wraps(fn)
+        def wrapper(ctx: "Ctx", shot: "LongShot") -> "Check":
+            if THROTTLE_S <= 0:
+                return fn(ctx, shot)
+            key = (name, str(shot.lane), shot.ticker, shot.side)
+            hit = _THROTTLED.get(key)
+            if hit is not None and 0.0 <= ctx.now - hit[0] < THROTTLE_S:
+                return hit[1]
+            got = fn(ctx, shot)
+            if len(_THROTTLED) > 4096:
+                for k in [k for k, v in _THROTTLED.items() if ctx.now - v[0] > 600.0]:
+                    del _THROTTLED[k]
+            _THROTTLED[key] = (ctx.now, got)
+            return got
+
+        return wrapper
+
+    return deco
+
+
 @step("side_losing", needs_estimate=True)
+@throttled("side_losing")
 def side_losing_step(ctx: Ctx, shot: LongShot) -> Check:
     """The lane does not buy more of a side while its open bets on that side in this window are losing at their current bids (2026-11-24, user, after the 22:15 round where four NO bets in four markets all lost together: "we need a rule where it stops buying more of the same side when the current bids are losing"). Each open bet of this lane on the same side in the same window (the part of the ticker after the series), in another market, is marked at its side's bid now: bid less the sale fee, against the price paid with its buy fee, times its contracts. When those bets stand under what they cost by more than the lane's side_losing_share (2026-11-24, user: "it needs to be losing by like a decent percentage, like 20% or something"; 0.2 in the priskp module, my reading of 'like 20%') the buy is refused; the first bet of a round (nothing open on the side) and a round whose bets are ahead go through. No number: the sign of what the lane already holds. A bet with no quote in memory yet is not counted. Reads the bet book and the in-memory quotes only, so it is asked at the decision."""
     if ctx.store is None or shot.ticker.count("-") < 2:
@@ -404,6 +433,7 @@ def settle_confirm_step(ctx: Ctx, shot: LongShot) -> Check:
 
 
 @step("wave_leg")
+@throttled("wave_leg")
 def wave_leg_step(ctx: Ctx, shot: LongShot) -> Check:
     """Refuses a side bought inside the curve's current leg (2026-11-25, user: "why can't it walk the curve back and identify it was inside a dip?"; "yes" to the shadow, then "yes" to enforcing it after the 11:30 round's HYPE and ETH NO bets were both flagged 'would REFUSE' and lost): walks the spot back from now to the window's open with the wave lane's zig-zag (wavefacts.leg) and says NO when the bet is INSIDE a leg in its winning direction that has not turned (under 0.2 typical minutes given back), or the current swing runs AGAINST the bet's side, AND that leg is AT ITS EXTREME: it has already run a usual big leg's length of this market or already travelled a usual wave's distance (user, 2026-11-25: "this new curve logic is supposed to just stop us from betting in a dip or peak when its super likely that the wave pattern will either repeat or turn into a long leg"). A leg part-way through passes. A trend's leg is a normal favourite buy and passes. A curve that cannot be read (no index, no target, the hour or the path not in memory) passes with that said: no read is no refusal. The note says which leg, the swing, the give-back and the R^2. Studies: studies/results/2026-11-25-priskp-zscore-wave.txt (24 hours of bets: the refused classes lost $121.18 as run; the opposite side would have made +$631.30 held)."""
     from . import binaryrisk, ticks, wavefacts

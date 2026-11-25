@@ -67,3 +67,12 @@ def _database(request, tmp_path, monkeypatch):
     local.clear()
     store._PREPARED.clear()
     db.drop_test_schemas()
+
+
+@pytest.fixture(autouse=True)
+def _no_step_throttle(monkeypatch):
+    """The heavy buy steps keep their answer for a few seconds (buychain.THROTTLE_S); a test asks the same step twice with different memory and expects the new answer, so the throttle is off unless a test turns it on."""
+    from kalshi_moonshot import buychain
+
+    monkeypatch.setattr(buychain, "THROTTLE_S", 0.0)
+    buychain._THROTTLED.clear()
