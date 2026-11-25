@@ -38,22 +38,25 @@ def test_a_check_with_no_history_is_unread_not_a_pass():
 
 
 def test_a_side_must_be_a_candidate_three_readings_in_a_row():
-    out = [priskp.confirmed("T", "yes", True, t)[0] for t in (0.0, 10.0, 20.0)]
+    E = priskp.EVERY
+    out = [priskp.confirmed("T", "yes", True, t * E, 3)[0] for t in (0, 1, 2)]
     assert out == [False, False, True]
-    assert priskp.confirmed("T", "yes", False, 30.0) == (False, 0)  # one miss starts the count again
-    assert [priskp.confirmed("T", "yes", True, t)[0] for t in (40.0, 50.0, 60.0)] == [False, False, True]
+    assert priskp.confirmed("T", "yes", False, 3 * E, 3) == (False, 0)  # one miss starts the count again
+    assert [priskp.confirmed("T", "yes", True, t * E, 3)[0] for t in (4, 5, 6)] == [False, False, True]
 
 
-def test_asking_on_every_tick_counts_one_reading_per_ten_seconds():
-    for t in (0.0, 1.0, 2.0, 3.0, 9.0):
-        assert priskp.confirmed("T", "no", True, t) == (False, 1)
-    assert priskp.confirmed("T", "no", True, 10.0) == (False, 2)
-    assert priskp.confirmed("T", "no", True, 20.5) == (True, 3)
+def test_asking_on_every_tick_counts_one_reading_per_every_seconds():
+    E = priskp.EVERY
+    for t in (0.0, 0.2 * E, 0.4 * E, 0.8 * E):
+        assert priskp.confirmed("T", "no", True, t, 3) == (False, 1)
+    assert priskp.confirmed("T", "no", True, E, 3) == (False, 2)
+    assert priskp.confirmed("T", "no", True, 2.1 * E, 3) == (True, 3)
 
 
 def test_a_gap_of_readings_starts_the_count_again():
-    priskp.confirmed("T", "yes", True, 0.0), priskp.confirmed("T", "yes", True, 10.0)
-    assert priskp.confirmed("T", "yes", True, 60.0) == (False, 1)
+    E = priskp.EVERY
+    priskp.confirmed("T", "yes", True, 0.0, 3), priskp.confirmed("T", "yes", True, E, 3)
+    assert priskp.confirmed("T", "yes", True, 6 * E, 3) == (False, 1)
 
 
 
@@ -100,18 +103,18 @@ def test_side_readings_without_enough_index_history_are_none():
 
 def test_the_note_is_properties_the_bot_can_read():
     ok = dict.fromkeys(priskp.CHECKS, 4) | {"cushion": 5}
-    n = priskp.note("yes", ok, 3, 5.0)
+    n = priskp.note("yes", ok, 3, 5.0, 3)
     assert (n["verb"], n["why"], n["failing"], n["cushion_fifth"], n["confirm"], n["need"]) == ("buy", "pass", [], 5, 3, 3)
-    assert priskp.note("no", ok, 2, 5.0)["verb"] == "wait" and priskp.note("no", ok, 2, 5.0)["why"] == "confirming"
-    assert priskp.note("yes", ok | {"cushion": 4}, 3, 5.0)["why"] == "cushion_not_strong"
-    r = priskp.note("yes", ok | {"trend": 2, "price": "unread"}, 3, 5.0)
+    assert priskp.note("no", ok, 2, 5.0, 3)["verb"] == "wait" and priskp.note("no", ok, 2, 5.0, 3)["why"] == "confirming"
+    assert priskp.note("yes", ok | {"cushion": 4}, 3, 5.0, 3)["why"] == "cushion_not_strong"
+    r = priskp.note("yes", ok | {"trend": 2, "price": "unread"}, 3, 5.0, 3)
     assert (r["verb"], r["why"], r["failing"]) == ("refuse", "unread", ["trend", "price"])
-    assert priskp.note("yes", ok, 3, 1.5)["why"] == "window" and priskp.note("yes", ok, 3, 14.5)["verb"] == "wait"
+    assert priskp.note("yes", ok, 3, 1.5, 3)["why"] == "window" and priskp.note("yes", ok, 3, 14.5, 3)["verb"] == "wait"
 
 
 def test_a_note_written_as_yaml_like_lines_reads_back_the_same():
     ok = dict.fromkeys(priskp.CHECKS, 4) | {"cushion": 5, "trend": "anomaly"}
-    n = priskp.note("yes", ok, 1, 7.25)
+    n = priskp.note("yes", ok, 1, 7.25, 3)
     text = priskp.render(n)
     assert "verb: refuse" in text and "failing: [trend]" in text and "trend_fifth: anomaly" in text
     assert priskp.parse(text) == n
