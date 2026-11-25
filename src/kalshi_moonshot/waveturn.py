@@ -15,7 +15,7 @@ The rule, in the market's own typical minute u (the root-mean-square 1 s move ov
           NO after a rise, YES after a fall
   side    NO only when the smoothed curve is not more than BAND u under the target; YES only when not more than BAND u over it
   once    once per swing (its number in the zig-zag and its direction), and not the same side again within SAME_SIDE_GAP s of the last fire
-  gate    at least DONE_MIN completed swings of DONE_U u so far (a zig-zag of DONE_U u on the same smoothed curve: the curve has gone DONE_U u one way
+  gate    at least need(t) completed swings of DONE_U u so far (1 before minute 5, 2 at 6, 3 at 8, 4 at 10) (a zig-zag of DONE_U u on the same smoothed curve: the curve has gone DONE_U u one way
           and DONE_U u back); a one-way line has none and is refused. The pre-open hour must be in the tick memory for u, else 'no reading' and no buy.
 Logged with every answer (shadow, never gating): the pre-open hour's crossings of the window's open and efficiency, waves (0.5 u turns) so far,
 the efficiency of the smoothed curve over the last 5 minutes, the curve's and the swing extreme's distance from the target, the swing size, the
@@ -26,7 +26,7 @@ look every few seconds does not miss it; after that the swing has had its buy.
 
 Gate change (2026-11-25, user): the pre-open crossings gate did not hold on 28 new marked markets (it let through 13 of the 16 the user called 'no good buy'
 and 12 of 12 picks), and the user's own reading is that the no-good markets are plain trends with no waves, and that this lane is for wave shapes. The gate is now
-in-market: a completed swing (the smoothed curve moved DONE_U u one way and DONE_U u back, a zig-zag reversal of DONE_U u) before the buy, DONE_MIN of them ("find
+in-market: a completed swing (the smoothed curve moved DONE_U u one way and DONE_U u back, a zig-zag reversal of DONE_U u) before the buy, need(t) of them ("find
 one wave first, then buy the next turn"). On those 28 markets' 36 bets, needing one completed swing passed 23 bets (+19.72) and blocked 13 (-14.82); the cut and
 the look were chosen after seeing the marks (studies/results/2026-11-25-wave-swing-gate.txt). The pre-open hour is now read only for u and as shadow readings.
 
@@ -49,7 +49,13 @@ SWING = 0.5  # the least swing, in u
 GB = 0.2  # given back from the swing's extreme before the buy, in u
 BAND = 0.5  # the side gate's band around the target, in u
 DONE_U = 1.0  # a completed swing: the curve has gone this far one way and this far back, in u (chosen after seeing the user's 28 marks)
-DONE_MIN = 2  # the completed swings needed before a turn is bought: one confirmed leg is a trend with a pullback, two is the curve coming back (chosen after seeing the user's 45 marked markets, 2026-11-25; a trend has fewer)
+DONE_OFFSET_MIN = 2.0  # the completed swings needed grow with the minutes into the market: one before about minute 5, two at 6, three at 8, four at 10 (swings pile up with time, so a fixed count lets trends in late). From the leave-one-market-out of the swing count on the user's 45 marks (studies/results/2026-11-25-wave-swing-gate.txt): best count 1 at 4 min, 2 at 6, 3 at 8-10; chosen after seeing the marks.
+DONE_SLOPE = 0.5  # swings needed per minute after DONE_OFFSET_MIN
+
+
+def need(t: float) -> int:
+    """The completed swings of DONE_U u the lane needs `t` seconds into the market."""
+    return max(1, math.floor((t / 60.0 - DONE_OFFSET_MIN) * DONE_SLOPE + 0.25))
 SAME_SIDE_GAP = 30  # no second fire on the same side within this many seconds
 PRE = 3600  # the hour before the open
 
@@ -125,6 +131,7 @@ class Reading:
     ext_u: float  # the swing's extreme from the target
     eff300: float
     done: int = 0  # completed swings of DONE_U u so far
+    ev_u: float = 0.0  # the swing's running extreme against the target, signed, in u
 
 
 def reading(window: list[float], t: int, K: float, u: float) -> Reading:
@@ -134,7 +141,7 @@ def reading(window: list[float], t: int, K: float, u: float) -> Reading:
     start = pts[-1][1] if pts else sm[0]
     big, _d, _k, _v = zigzag(sm, DONE_U * u)
     return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),
-                   max(0, len(big) - 1))
+                   max(0, len(big) - 1), (ev - K) / u if d else 0.0)
 
 
 @dataclass
@@ -143,11 +150,17 @@ class Fires:
 
     done: dict[tuple[int, int], int] = field(default_factory=dict)  # (turns, direction) -> the second it fired
     last: tuple[int, str] | None = None
+    stand: dict[str, tuple[int, int, float]] = field(default_factory=dict)  # side -> (second it fired, the swing's direction, its extreme against the target in u): what a resting order stands on
 
 
-def judge(r: Reading, fires: Fires, hold: float) -> tuple[str | None, str]:
+def judge(r: Reading, fires: Fires, hold: float, resting: str | None = None) -> tuple[str | None, str]:
     """The side the turn buys at this reading, or None with why; records a new fire in `fires`. The study's order: the swing, the turn, once per
     swing and the same-side gap, then the side gate; a fire is recorded only when it passes all of them."""
+    if resting is not None and resting in fires.stand:
+        t0, d0, ev0 = fires.stand[resting]  # a resting buy's own re-ask: its turn stands while the curve has not passed the extreme it turned from (a NO after a rise: no new high), and is then out
+        if (r.pos_u - ev0) * d0 < 0:
+            return resting, f"the {resting.upper()} turn fired {r.t - t0}s ago and its order stands: the curve has not passed the swing's extreme"
+        return None, f"the curve passed the swing's extreme ({r.pos_u:+.2f}u, the {resting.upper()} turn was {ev0:+.2f}u): the turn failed"
     if r.d == 0:
         return None, "no swing yet"
     side = "no" if r.d == 1 else "yes"
@@ -167,17 +180,18 @@ def judge(r: Reading, fires: Fires, hold: float) -> tuple[str | None, str]:
         return None, f"a NO turn with the curve {r.pos_u:+.2f}u from the target, more than {BAND:g}u under it"
     if side == "yes" and r.pos_u > BAND:
         return None, f"a YES turn with the curve {r.pos_u:+.2f}u from the target, more than {BAND:g}u over it"
-    if r.done < DONE_MIN:
-        return None, f"{r.done} completed swings of {DONE_U:g}u so far, the lane needs {DONE_MIN}: a trend has a pull-back at most, a wave comes back (not a wave shape yet)"
+    if r.done < need(r.t):
+        return None, f"{r.done} completed swings of {DONE_U:g}u so far, the lane needs {need(r.t)} at {r.t}s: a trend has a pull-back at most, a wave comes back (not a wave shape yet)"
     fires.done[key] = r.t
     fires.last = (r.t, side)
+    fires.stand[side] = (r.t, r.d, r.ev_u)
     return side, "fired"
 
 
 _lock = threading.Lock()
 _hours: dict[tuple[str, int], Hour] = {}
 _fires: dict[tuple[str, int], Fires] = {}
-_reads: dict[tuple[str, int, int], tuple[str | None, str, Reading | None, Hour]] = {}
+_reads: dict[tuple[str, int, int, str | None], tuple[str | None, str, Reading | None, Hour]] = {}
 
 
 def _hour(index: str, opened: int) -> Hour:
@@ -206,13 +220,13 @@ def _hour(index: str, opened: int) -> Hour:
     return h
 
 
-def read_index(index: str, opened: float, now: float, K: float, hold: float) -> tuple[str | None, str, Reading | None, Hour]:
+def read_index(index: str, opened: float, now: float, K: float, hold: float, resting: str | None = None) -> tuple[str | None, str, Reading | None, Hour]:
     """(the side the rule buys at `now` or None, why, the reading, the hour) on the tick memory; kept for the second (both sides and every lane
     ask the same question, and a fire is recorded once)."""
     from . import ticks as ticks_mod
 
     op = round(opened)
-    key = (index, op, int(now))
+    key = (index, op, int(now), resting)
     with _lock:
         if key in _reads:
             return _reads[key]
@@ -238,7 +252,7 @@ def read_index(index: str, opened: float, now: float, K: float, hold: float) -> 
                 r = reading(win, t, K, h.u)  # type: ignore[arg-type]
                 with _lock:
                     fires = _fires.setdefault((index, op), Fires())
-                    side, why = judge(r, fires, hold)
+                    side, why = judge(r, fires, hold, resting)
                 out = (side, why, r, h)
     with _lock:
         if len(_reads) > 2000:
@@ -263,11 +277,11 @@ def note(r: Reading | None, h: Hour, K: float) -> str:
     if r is None:
         return f"{head} (target {K:.6g})"
     return (f"{head}; {r.t}s in, {SMOOTH}s smoothing: swing {r.swing_u:.2f}u {'up' if r.d == 1 else 'down' if r.d == -1 else '-'}, {r.gb_u:.2f}u given back, "
-            f"completed swings of {DONE_U:g}u {r.done} (gate >= {DONE_MIN}), waves so far {r.turns}, curve {r.pos_u:+.2f}u and the swing's extreme {r.ext_u:.2f}u from the target, last-5-min efficiency {r.eff300:.2f}, "
+            f"completed swings of {DONE_U:g}u {r.done} (gate >= {need(r.t)}), waves so far {r.turns}, curve {r.pos_u:+.2f}u and the swing's extreme {r.ext_u:.2f}u from the target, last-5-min efficiency {r.eff300:.2f}, "
             f"u {h.u:.6g} (target {K:.6g})")
 
 
-def admits(s: Any, shot: Any, now: float, strike: float | None) -> tuple[bool, str]:
+def admits(s: Any, shot: Any, now: float, strike: float | None, resting: bool = False) -> tuple[bool, str]:
     """The buy step's answer for one side: (buy?, the sentence for the decision's note). Memory only."""
     from . import binaryrisk, waveflag
 
@@ -280,7 +294,7 @@ def admits(s: Any, shot: Any, now: float, strike: float | None) -> tuple[bool, s
     if K is None:
         return False, why
     hold = float(getattr(s, "entry_min_gap_seconds", 0.0) or 0.0)
-    side, why, r, h = read_index(index, opened, now, K, hold)
+    side, why, r, h = read_index(index, opened, now, K, hold, shot.side if resting else None)
     told = note(r, h, K)
     if side is None:
         return False, f"no wave turn: {why}; {told}"

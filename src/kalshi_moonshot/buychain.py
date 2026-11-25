@@ -45,6 +45,7 @@ class Ctx:
     now: float = field(default_factory=time.time)
     store: Any = None  # the books, at a decision only (the review has none): a step that counts the lane's open bets, or needs a window's strike the tick memory lacks
     why: str = ""  # the estimator's note on the market, at a decision only
+    resting: bool = False  # the per-quote re-judge of a resting buy (restcheck.recheck), not a new entry: a step that fires once per swing keeps its order standing
 
 
 Step = Callable[[Ctx, LongShot], Check]
@@ -597,12 +598,12 @@ def wave_shape_step(ctx: Ctx, shot: LongShot) -> Check:
 
 @step("wave_turn")
 def wave_turn_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The wave turn (waveturn.py; 2026-11-24, PAPER, in place of wave_shape on the wave_shape lane: the rule of the study on the user's own marked buys, scripts/wave_turn_chop.py): on Kalshi's own spot smoothed over 30 s, a swing of at least 0.5 typical minutes (u, from the hour before the open) is bought once 0.2 u has come back from its extreme (NO after a rise, YES after a fall), once per swing, NO only when the curve is not more than 0.5 u under the target and YES only when not more than 0.5 u over it; and only after at least one completed swing of one typical minute (the curve has gone 1 u one way and 1 u back; 2026-11-25, user: the no-good markets are plain trends with no waves, this lane is for wave shapes; the pre-open crossings gate it replaced did not hold on 28 new marks). An hour not in memory is no reading and no buy. The note carries the swing count and, as shadow, the pre-open hour's crossings and efficiency, waves so far, the last-5-min efficiency, the distances from the target, the swing and the give-back. Memory only."""
+    """The wave turn (waveturn.py; 2026-11-24, PAPER, in place of wave_shape on the wave_shape lane: the rule of the study on the user's own marked buys, scripts/wave_turn_chop.py): on Kalshi's own spot smoothed over 30 s, a swing of at least 0.5 typical minutes (u, from the hour before the open) is bought once 0.2 u has come back from its extreme (NO after a rise, YES after a fall), once per swing, NO only when the curve is not more than 0.5 u under the target and YES only when not more than 0.5 u over it; and only after enough completed swings of one typical minute (waveturn.need: 1 before minute 5, 2 at 6, 3 at 8, 4 at 10; a resting order from a fire stands until the curve passes the swing's extreme; the curve has gone 1 u one way and 1 u back; 2026-11-25, user: the no-good markets are plain trends with no waves, this lane is for wave shapes; the pre-open crossings gate it replaced did not hold on 28 new marks). An hour not in memory is no reading and no buy. The note carries the swing count and, as shadow, the pre-open hour's crossings and efficiency, waves so far, the last-5-min efficiency, the distances from the target, the swing and the give-back. Memory only."""
     from . import ticks as ticks_mod
     from . import waveturn
 
     strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
-    ok, why = waveturn.admits(ctx.s, shot, ctx.now, strike)
+    ok, why = waveturn.admits(ctx.s, shot, ctx.now, strike, ctx.resting)
     return Check(ok, why)
 
 

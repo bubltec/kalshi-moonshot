@@ -103,7 +103,7 @@ def recheck(s: Any, spec: Any, shot: Any, price: float, bid: float | None, ask: 
             fresh = replace(shot, ask=round(ask, 4), bid=round(bid, 4) if bid is not None and bid > 0 else shot.bid, hours_to_close=left)
             order = tuple(getattr(spec, "buy_chain", ()) or ())
             if chain and order:
-                trail = buychain.walk(buychain.Ctx(s, spec, p_yes, now=now, store=store, why=why), fresh, order)
+                trail = buychain.walk(buychain.Ctx(s, spec, p_yes, now=now, store=store, why=why, resting=True), fresh, order)
                 if not trail.alive:
                     name, check = trail.said[-1]
                     return Verdict("cancel", price, name, f"out at {name} ({_clean(check.why)})", ask)

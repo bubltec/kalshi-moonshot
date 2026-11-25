@@ -87,12 +87,42 @@ def test_unit_a_repeated_swing_fires_YES_after_a_dip_and_NO_after_a_peak_once_tw
     u = u_of(hour)
     feed(hour, window_path(LONG, u))
     got = fires(last=400)
-    assert got == [(201, "no"), (261, "yes"), (321, "no")], got  # the turns at 81 s and 141 s come before the second completed swing (about 150 s) or are refused by the side band
-    assert not [t for t, _ in got if t < 180]
+    assert got == [(141, "yes"), (201, "no"), (261, "yes"), (321, "no")], got  # the turn at 81 s comes before the first completed swing (about 90 s); one swing is enough before minute 5
+    assert not [t for t, _ in got if t < 120]
     side, why, r, _ = waveturn.read_index(INDEX, OPEN, OPEN + 81.5, K, 0.0)  # the first peak's turn: refused for want of completed swings
     assert side is None and "completed swings" in why and r.done == 0
     side, why, r, _ = waveturn.read_index(INDEX, OPEN, OPEN + 201.5, K, 0.0)
-    assert side == "no" and why == "fired" and r.done >= waveturn.DONE_MIN
+    assert side == "no" and why == "fired" and r.done >= waveturn.need(r.t)
+
+
+def test_unit_the_swings_needed_grow_with_the_minutes_into_the_market():
+    assert [waveturn.need(m * 60.0) for m in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12)] == [1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 5]
+
+
+def test_unit_a_resting_order_stands_on_its_fire_until_the_curve_passes_the_swing_extreme(mem):
+    hour = hour_path()
+    u = u_of(hour)
+    feed(hour, window_path(LONG, u))
+    t_fire, side = next((t, sd) for t, sd in fires(last=400) if t >= 190)  # the NO at 201 s, after a peak at 180 s
+    waveturn.clear()
+    feed(hour, window_path(LONG, u))
+    assert waveturn.read_index(INDEX, OPEN, OPEN + t_fire + 0.5, K, 0.0)[:2] == (side, "fired")
+    later = t_fire + 20
+    entry = waveturn.read_index(INDEX, OPEN, OPEN + later + 0.5, K, 0.0)  # a new entry: the swing has had its buy
+    assert entry[0] is None, entry  # the swing has had its buy: no second entry, whatever the reason said (once per swing, or not turned yet)
+    stands = waveturn.read_index(INDEX, OPEN, OPEN + later + 0.5, K, 0.0, side)  # the resting order's re-ask: its turn stands
+    assert stands[0] == side and "its order stands" in stands[1]
+    # the curve climbs back past the peak it turned from: a new high, the turn failed, the order is out
+    waveturn.clear()
+    ticks_mod.history.clear()
+    feed(hour, window_path(LONG[:4] + [(120, 4.0)], u))
+    fire_t = next(t for t, sd in fires(last=400) if sd == side and t >= 190)
+    waveturn.clear()
+    feed(hour, window_path(LONG[:4] + [(120, 4.0)], u))
+    assert waveturn.read_index(INDEX, OPEN, OPEN + fire_t + 0.5, K, 0.0)[0] == side
+    assert waveturn.read_index(INDEX, OPEN, OPEN + 270.5, K, 0.0, side)[0] == side  # still under the 2 u peak it turned from
+    out = waveturn.read_index(INDEX, OPEN, OPEN + 330.5, K, 0.0, side)  # 3 u: past it
+    assert out[0] is None and "passed the swing's extreme" in out[1], out
 
 
 def test_unit_a_one_way_drift_does_not_fire(mem):
@@ -119,7 +149,7 @@ def test_unit_a_trend_with_small_pull_backs_is_refused_for_want_of_a_completed_s
     waveturn.clear()
     feed(hour, window_path(TREND, u))
     ok, why = waveturn.admits(config.load(), shot(now, "no"), now, K)
-    assert not ok and "0 completed swings" in why and "a trend has a pull-back at most" in why and "completed swings of 1u 0 (gate >= 2)" in why
+    assert not ok and "0 completed swings" in why and "a trend has a pull-back at most" in why and "completed swings of 1u 0 (gate >= 1)" in why
 
 
 def test_unit_the_pre_open_hour_no_longer_gates_it(mem):
@@ -150,11 +180,11 @@ def test_unit_no_pre_open_hour_in_memory_is_no_reading(mem):
 def test_unit_once_per_swing_and_held_for_the_look_gap(mem):
     hour = hour_path()
     feed(hour, window_path(REPEATED, u_of(hour)))
-    first = fires(last=300)[0][0]
+    first, first_side = fires(last=300)[0]
     waveturn.clear()
     feed(hour, window_path(REPEATED, u_of(hour)))
     said = [waveturn.read_index(INDEX, OPEN, OPEN + t + 0.5, K, 5.0)[0] for t in range(60, first + 20)]
-    yes_at = [60 + i for i, s in enumerate(said) if s == "no"]
+    yes_at = [60 + i for i, s in enumerate(said) if s == first_side]
     assert yes_at == list(range(first, first + 6))  # the fire second and the 5 s look gap after it, then this swing has had its buy
 
 
@@ -192,12 +222,12 @@ def counts(rows):
 def test_replay_the_study_counts_on_the_users_marks(mem):
     rows = json.load(gzip.open(FIXTURE, "rt"))
     assert len(rows) == 17 and sum(len(m["buy"]) for m in rows) == 18
-    # Measured 2026-11-25 with the in-market gate (2 completed swings of 1u), chosen AFTER seeing the user's 45 marks (these 17 and 28 more): 5 of the 18
-    # marked buys are fired within 30 s, 3 of the 9 no-good markets stay silent, 18 other fires. The old pre-open gate on this first set was 9 / 8 / 27 (the
+    # Measured 2026-11-25 with the in-market gate (need(t) completed swings of 1u, growing with the minute), chosen AFTER seeing the user's 45 marks (these 17 and 28 more): 6 of the 18
+    # marked buys are fired within 30 s, 6 of the 9 no-good markets stay silent, 14 other fires. The old pre-open gate on this first set was 9 / 8 / 27 (the
     # study's own counts were 12 / 0 / 34 with no gate). This is a pin of the code's behaviour on these marks, not a claim that it is good: the 45-market
     # study is studies/results/2026-11-25-wave-swing-gate.txt and forward paper scoring is the test. The PLATINUM 18:30 path lacks the first 310 s of its
     # pre-open hour; the step says 'no reading' for an hour not fully in memory and stays silent there.
-    assert counts(rows) == (5, 3, 18)
+    assert counts(rows) == (6, 6, 14)
 
 
 # ---- the buy step, through the lane file ----
@@ -262,6 +292,26 @@ def test_integration_the_chain_buys_at_the_turn_from_memory_only_and_notes_the_r
     later = now + 40.0
     bet, note = buychain.decide(buychain.Ctx(s, sp, now=later), shot(later, side))
     assert not bet and "out at wave_turn" in note
+
+
+def test_integration_a_resting_buy_from_a_fire_survives_the_per_quote_recheck_and_a_new_entry_does_not_refire(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import restcheck
+
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    window = window_path(LATE, u_of(hour))
+    feed(hour, window)
+    ticks_mod.strikes.note(TICKER, K)
+    t_fire, side = next((t, sd) for t, sd in fires() if t >= 120)
+    waveturn.clear()
+    feed(hour, window)
+    now = OPEN + t_fire + 0.5
+    assert buychain.decide(buychain.Ctx(s, sp, now=now), shot(now, side))[0]  # the entry: the turn fires, the resting buy is placed
+    later = now + 6.0
+    v = restcheck.recheck(s, sp, shot(later, side), 0.29, 0.28, 0.30, later)
+    assert v.action != "cancel", v  # the per-quote judge keeps it: its turn stands
+    assert not buychain.decide(buychain.Ctx(s, sp, now=later), shot(later, side))[0]  # a new entry on the same swing is still refused
 
 
 def test_integration_the_review_drops_a_gated_market_with_the_reason_for_screen_log(tmp_path, monkeypatch, mem):

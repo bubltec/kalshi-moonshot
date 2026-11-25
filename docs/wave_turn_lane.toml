@@ -6,13 +6,13 @@
 #   1. In [lane.wave_shape], change ONE line:
 #        buy_module = "wave_shape_buy"
 #      to
-#        buy_module = "wave_turn_buy"   # 2026-11-24 (user: paper only): the turn rule plus, from 2026-11-25, the in-market gate of 2 completed swings of 1 u (studies/results/2026-11-25-wave-swing-gate.txt)
+#        buy_module = "wave_turn_buy"   # 2026-11-24 (user: paper only): the turn rule plus, from 2026-11-25, the in-market gate of need(t) completed swings of 1 u (1 before minute 5, 2 at 6, 3 at 8, 4 at 10) (studies/results/2026-11-25-wave-swing-gate.txt)
 #      and (optional, wording only) the label to:
-#        label = "wave turn (PAPER): a swing of 0.5 typical minutes bought once 0.2 has come back, NO after a rise, YES after a fall, side by the target, only once the curve has completed 2 swings of 1 u since the open; wave_exit unchanged"
+#        label = "wave turn (PAPER): a swing of 0.5 typical minutes bought once 0.2 has come back, NO after a rise, YES after a fall, side by the target, only once the curve has completed need(t) swings of 1 u since the open; wave_exit unchanged"
 #      Every other setting of the lane stays as it is (exit_module = "wave_exit" and its settings, entry_elapsed = [2, 10], price = [0.01, 0.99],
 #      fixed_stake, max_open, the resting buy).
 #   2. Add the module below. Keep [module.wave_shape_buy] in the file until waveshape.py is removed (it then serves no lane).
 
 [module.wave_turn_buy]
-label = "the wave turn: a swing of >= 0.5 u on the 30 s median bought once 0.2 u has come back, once per swing, side by the target (0.5 u band), gated on 2 completed swings of 1 u since the open; the trend reading stays in shadow"
+label = "the wave turn: a swing of >= 0.5 u on the 30 s median bought once 0.2 u has come back, once per swing, side by the target (0.5 u band), gated on need(t) completed swings of 1 u since the open; the trend reading stays in shadow"
 steps = ["price", "entry_window", "wave_turn", "wave_trend"]   # wave_flag_buy's list with wave_turn in place of wave_flag; price is the structural bound only (the lane price = [0.01, 0.99]: the test_filter_steps policy needs a price step when a lane sets one; it refuses almost nothing); entry_window is the lane's existing window (2-10 min), wave_trend is shadow and never says no; nothing else can turn a buy down
