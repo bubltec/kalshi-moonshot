@@ -401,6 +401,9 @@ def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bo
 
         n["hour_bounce"], n["hour_lower_highs"] = hv.get("bounce", 0.0), int(hv.get("lower_highs", 0.0))
         n["hour_shadow"] = "would skip" if hourview.would_skip(hv) else "ok"  # 2026-11-24 (user, on the 14:00 ET wave, five YES buys in a stagnant hour trending down: "the risk should have been high considering the hour view"): a SHADOW verdict, nothing is refused; scored on the bets that follow (rule 5)
+    pg = view.get("price_gap")
+    if pg is not None:  # an INFLUENCE, not a gate (2026-11-26, user: "it should have an influence but it shouldn't be the factor in whether we buy", "now we have a fact board and vetoes and stuff"): the gap between the bet's chance and what it costs goes on the board's ledger as a signed weight; nothing here buys or refuses on the total (the board's own rule: no step acts on the ledger until the user chooses)
+        view.weigh(pg["gap"], f"the chance {pg['chance']:.2f} against the ask {pg['ask']:.2f} and its fee")
     return n["verb"] == "buy", one_line(n) + board.note()
 
 
@@ -437,7 +440,7 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     z = ro[shot.side].get("cushion")
     if z is not None:  # SHADOW (2026-11-25, user: "it should have an influence but it shouldn't be the factor in whether we buy"): the Gaussian chance of ending on the bet's side (the blended cushion IS that z, over the typical minute and the time left) against what the bet costs with its fee; logged on every look, decides nothing
         chance = 0.5 * (1.0 + math.erf(float(z) / math.sqrt(2.0)))
-        n["chance"], n["gap"] = round(chance, 3), round(chance - shot.ask - 0.07 * shot.ask * (1.0 - shot.ask), 3)
+        n["chance"] = round(chance, 3)  # the fact `price_gap` (facts.py) turns it into the gap to the ask and weighs it on the board
     cv = _curve_verdict(shot, now, hours, strike)
     if cv is not None:
         n["regime"] = cv["regime"]

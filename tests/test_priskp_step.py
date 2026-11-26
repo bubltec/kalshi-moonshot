@@ -129,7 +129,7 @@ def test_the_buy_reads_the_facts_board_and_the_veto_rule_is_the_board_s_not_the_
     ok, why = outs[2]
     assert ok is False and "shift_out_of_cushion" in why and "[facts read: priskp_screen=" in why and "shift_out=" in why  # the note shows what the buy was judged on
     assert "priskp" in facts.VETOED_STEPS and any(rule[0] == "shift_out" and rule[2] == ("priskp",) for rule in facts.VETO_RULES)
-    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "hour_view", "waves_before", "wave_now", "wave_leg") and all(n in facts.READERS for n in facts.NEEDS["priskp"])  # the wave facts (2026-11-25) are on the board for every step to read
+    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "hour_view", "price_gap", "waves_before", "wave_now", "wave_leg") and all(n in facts.READERS for n in facts.NEEDS["priskp"])  # the wave facts (2026-11-25) are on the board for every step to read
 
 
 def test_a_buy_logs_the_hour_view_and_whether_the_risk_was_sure():
@@ -146,3 +146,21 @@ def test_a_buy_logs_the_hour_view_and_whether_the_risk_was_sure():
     ok, why = ask_at(5.0 + 20.0 / 60.0, "yes")
     assert ok is True and "hour_drift: 3.0" in why and "hour_tie: sure" in why  # every check in fifth 5 here: the risk was sure
     hourview.clear()
+
+
+def test_the_price_gap_is_a_weight_on_the_board_and_never_a_reason_to_refuse():
+    """2026-11-26, user: "it should have an influence but it shouldn't be the factor in whether we buy". The gap (chance minus the ask and its fee) is a signed weight on the board's ledger; the buy verdict is the same with a gap of either sign."""
+    from kalshi_moonshot import facts
+
+    class T:
+        ask = 0.80
+
+    b = facts.Board(None, T(), 0.0, 600.0, 0.78)
+    b._v["priskp_screen"] = ({"verb": "buy", "chance": 0.70, "ask": 0.80}, "")
+    got = b.view("priskp").get("price_gap")
+    assert got["gap"] < 0 and abs(got["gap"] - (0.70 - 0.80 - 0.07 * 0.8 * 0.2)) < 1e-3
+    b.view("priskp").weigh(got["gap"], "x")
+    assert b.score() == got["gap"] and b.vetoes("priskp") is None  # a ledger entry, no veto
+    b2 = facts.Board(None, T(), 0.0, 600.0, 0.78)
+    b2._v["priskp_screen"] = ({"verb": "buy"}, "")
+    assert b2.view("priskp").get("price_gap") is None  # no chance read: no weight

@@ -27,7 +27,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "wave_salvage": ("spot",),
     "value_sale": ("p_lose", "spot", "waves_before", "wave_now", "wave_leg"),  # early_take, no_recovery and late_dip read the board through this view
     "value_hold": ("p_lose", "spot", "waves_before", "wave_now", "wave_leg"),
-    "priskp": ("priskp_screen", "shift_out", "hour_view", "waves_before", "wave_now", "wave_leg"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
+    "priskp": ("priskp_screen", "shift_out", "hour_view", "price_gap", "waves_before", "wave_now", "wave_leg"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
 }
 
 
@@ -204,6 +204,17 @@ def _hour_view(b: Board) -> tuple[Any, str]:
 
     got = hourview.read(b.t.ticker, b.t.side, b.now)
     return got, "the hour before now, built in the background every five minutes" if got else "no hour view for this market (not built yet, or stale)"
+
+
+@reader("price_gap")
+def _price_gap(b: Board) -> tuple[Any, str]:
+    """What the bet costs against its chance (2026-11-26, user: "it should have an influence but it shouldn't be the factor in whether we buy"): the Gaussian chance of ending on the bet's side (the screen's blended cushion through the normal CDF) minus the ask and its buy fee. Signed: positive when the price is below the chance. None when the chance is not read."""
+    note = b.get("priskp_screen")
+    chance, ask = note.get("chance"), note.get("ask")
+    if chance is None or ask is None:
+        return None, "the chance is not read (no cushion reading yet)"
+    ask = float(ask)
+    return {"chance": float(chance), "ask": ask, "gap": round(float(chance) - ask - 0.07 * ask * (1.0 - ask), 4)}, "the chance of ending on the bet's side minus the ask and its buy fee"
 
 
 @reader("shift_out")

@@ -72,7 +72,7 @@ def test_the_board_reads_it_as_a_fact_with_no_database_call():
         got = b.view("priskp").get("hour_view")
     assert got["drift"] < 0  # a NO into a rising hour
     assert "hour_view={drift=" in b.note()  # it is on the line the buy writes
-    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "hour_view", "waves_before", "wave_now", "wave_leg")  # the wave facts (2026-11-25) are on the board for every step to read
+    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "hour_view", "price_gap", "waves_before", "wave_now", "wave_leg")  # the wave facts (2026-11-25) are on the board for every step to read
 
 
 def test_the_hour_view_reads_a_bounce_in_a_falling_hour_and_flags_it_for_the_shadow():
