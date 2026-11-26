@@ -434,6 +434,10 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     reached, count = confirmed(shot.ticker, shot.side, ok, now, need)
     n = note(shot.side, states, count, minute, need)
     n["ask"] = round(shot.ask, 3)
+    z = ro[shot.side].get("cushion")
+    if z is not None:  # SHADOW (2026-11-25, user: "it should have an influence but it shouldn't be the factor in whether we buy"): the Gaussian chance of ending on the bet's side (the blended cushion IS that z, over the typical minute and the time left) against what the bet costs with its fee; logged on every look, decides nothing
+        chance = 0.5 * (1.0 + math.erf(float(z) / math.sqrt(2.0)))
+        n["chance"], n["gap"] = round(chance, 3), round(chance - shot.ask - 0.07 * shot.ask * (1.0 - shot.ask), 3)
     cv = _curve_verdict(shot, now, hours, strike)
     if cv is not None:
         n["regime"] = cv["regime"]
