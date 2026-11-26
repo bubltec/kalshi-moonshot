@@ -1,5 +1,7 @@
 FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1
+# 2026-11-26: the bot runs 77-84 threads and glibc gives each its own malloc arena; a memory census (memcensus.py) showed 1,656 of 2,137 MB held by the allocator and freed by malloc_trim, the live Python data about 34 MB. Two arenas keep the freed memory shared.
+ENV MALLOC_ARENA_MAX=2
 WORKDIR /app
 # pg_dump (for the nightly database backup). It must be at least the database server's major version, so the client comes from the Postgres
 # project's own apt repository (version 18, matching the database service) instead of Debian's older one.
