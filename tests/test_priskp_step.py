@@ -222,26 +222,28 @@ def test_in_a_curve_the_trend_entry_waits_until_the_move_has_held(monkeypatch):
     assert priskp.HELD == 0.5
 
 
-def test_an_early_curve_entry_waits_while_the_swing_aware_chance_is_under_a_half(monkeypatch):
-    """2026-11-26 (user: "Fix it"; 2026-11-25: "If you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history (hour)"): in the first third of the market a curve trend entry waits while wave_now's chance is under 0.5; later, or with the chance over a half or unread, it buys. A board veto that waits, not a refusal."""
+def test_a_curve_entry_waits_on_the_swing_aware_chance_with_a_bar_that_slides_with_the_time_left(monkeypatch):
+    """2026-11-26 (user: "Fix it", then "Make sure the early rule has a slide with time left"; 2026-11-25: "If you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history (hour)"): a curve trend entry waits while wave_now's chance is under 0.5 x the share of the market left. No cut-off minute. A board veto that waits, not a refusal."""
     from kalshi_moonshot import facts
 
-    feed(lambda s: 100.5, OPEN + 600.0)
+    assert facts.swing_bar(900.0) == 0.5 and abs(facts.swing_bar(600.0) - 1 / 3) < 1e-9 and facts.swing_bar(450.0) == 0.25 and facts.swing_bar(0.0) == 0.0 and facts.swing_bar(2000.0) == 0.5
+    feed(lambda s: 100.5, OPEN + 800.0)
     cuts()
     curve = {"regime": "curve", "verdict": "buy", "class": "inside", "swing_u": 1.6, "prev_u": 1.5, "gb_u": 0.0, "age": 0.6, "travel": 0.7, "reach": 0.6}
     monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve))
     swing = [0.30]
     monkeypatch.setitem(facts.READERS, "wave_now", lambda b: ({"chance": swing[0]} if swing[0] is not None else None, "test"))
-    ok, why = ask_at(3.0)
+    ok, why = ask_at(3.0)  # 720 s left: the bar is 0.40
     assert not ok and "verb: wait" in why and "why: early_swings_not_cleared" in why and "early_swings=yes" in why
-    ok, why = ask_at(6.0)  # past the first third: the same reading buys
-    assert ok and "why: curve_trend_entry" in why
+    ok, why = ask_at(6.5)  # 510 s left: the bar has slid to 0.28 and the same reading buys
+    assert ok and "why: curve_trend_entry" in why and "early_swings=no" in why
     priskp._runs.clear()
-    swing[0] = 0.55
-    ok, why = ask_at(3.0)  # early, but the swings are cleared
-    assert ok and "early_swings=no" in why
+    swing[0] = 0.155  # ZEC 13:30 NO: minute 5.9, the first form's minute-5 cut-off let it through
+    ok, why = ask_at(5.9)
+    assert not ok and "early_swings_not_cleared" in why
+    ok, why = ask_at(11.0)  # 240 s left: the bar is 0.13
+    assert ok
     priskp._runs.clear()
     swing[0] = None
     assert ask_at(3.0)[0]  # an unread chance waits nothing
-    assert facts.EARLY_SHARE * 15.0 == 5.0 and facts.SWING_HALF == 0.5
     assert ("early_swings", "early_swings_not_cleared") in [(f, lab) for f, _t, _s, lab in facts.VETO_RULES]

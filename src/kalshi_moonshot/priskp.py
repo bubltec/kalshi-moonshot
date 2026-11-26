@@ -392,7 +392,7 @@ def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bo
     if n["verb"] == "buy":
         label = board.vetoes("priskp")
         if label == "early_swings_not_cleared":
-            n["verb"], n["why"] = "wait", label  # a WAIT, not a refusal: an early curve entry is bought once the swing-aware chance clears a half, or the early part of the market is over
+            n["verb"], n["why"] = "wait", label  # a WAIT, not a refusal: the entry is bought once the swing-aware chance clears its bar, which slides down with the time left
         elif label:
             n["verb"], n["why"] = "refuse", label
             n["shift_ago_min"] = round(view.get("shift_out")["ago"] / 60.0, 1)

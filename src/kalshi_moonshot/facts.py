@@ -34,7 +34,7 @@ NEEDS: dict[str, tuple[str, ...]] = {
 VETO_RULES: list[tuple[str, Callable[[Any], bool], tuple[str, ...], str]] = []  # (fact, vetoes when this is true of its value, the steps it stops, the label the log carries)
 VETO_RULES.append(("shift_out", lambda v: v is not None, ("priskp",), "shift_out_of_cushion"))  # user, 2026-11-22: no buy on the side a confirmed shift took out of its cushion, against the current target
 VETO_RULES.append(("loss_while_ahead", lambda v: v is True, ("late_dip", "no_recovery", "value_sale"), "still_on_the_winning_side_of_the_target"))  # user, 2026-11-25, on BNB and DOGE 13:30 YES sold at 0.60 and 0.71 with the spot over the strike (both settled YES): "we were winning", "is it selling because it thinks its losing when its over 50c?", "just don't sell if it isn't on the other side of the target": a sale under what the bet cost needs the spot on the OTHER side of the target
-VETO_RULES.append(("early_swings", lambda v: v is True, ("priskp",), "early_swings_not_cleared"))  # user, 2026-11-25: "If you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history (hour)"; 2026-11-26 "Fix it": a curve trend entry in the first third of the market WAITS while the swing-aware chance (wave_now) of ending on its side is under a half
+VETO_RULES.append(("early_swings", lambda v: v is True, ("priskp",), "early_swings_not_cleared"))  # user, 2026-11-25: "If you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history (hour)"; 2026-11-26 "Fix it": a curve trend entry WAITS while the swing-aware chance (wave_now) of ending on its side is under a bar that slides with the time left (swing_bar)
 VETOED_STEPS = frozenset(step for _, _, steps, _ in VETO_RULES for step in steps)
 
 
@@ -224,24 +224,26 @@ def _price_gap(b: Board) -> tuple[Any, str]:
     return out, "the chance of ending on the bet's side (the swing-aware one when read, else the random-walk one) minus the ask and its buy fee"
 
 
-EARLY_SHARE = 1.0 / 3.0  # the early part of a market for the fact `early_swings`: its first third (minute 5 of 15). From the 36 trend entries of 2026-11-26 11:02-12:45 ET, seen after the fact: bought before minute 5, 13 bets -$38.59; minute 5-10, 14 bets +$1.10; minute 10 on, 8 bets +$27.32
-SWING_HALF = 0.5  # the swing-aware chance under which an early trend entry waits: less likely than not to end on its side once the hour's swings are counted (structural)
+SWING_HALF = 0.5  # the swing-aware chance an entry at the OPEN needs: more likely than not to end on its side once the hour's swings are counted (structural). The bar slides with the time left (user, 2026-11-26: "Make sure the early rule has a slide with time left"): SWING_HALF x the share of the market still to run, so 0.5 at the open, 0.33 at minute 5, 0.25 at the half, 0 at the close
+
+
+def swing_bar(left: float) -> float:
+    """The least swing-aware chance a curve trend entry needs with `left` seconds to the close: SWING_HALF x left / 900. The more of the market is still to run, the more swings can still come, and the more the entry has to have on its side."""
+    return SWING_HALF * min(1.0, max(0.0, left / 900.0))
 
 
 @reader("early_swings")
 def _early_swings(b: Board) -> tuple[Any, str]:
-    """True when the buy is a curve TREND ENTRY in the first EARLY_SHARE of the market and the swing-aware chance of ending on its side (wave_now: the hour's swings and the time left, not a random walk) is under SWING_HALF. The veto rule turns it into a WAIT: the bet is bought once the chance clears a half or the early part is over. False otherwise; None when the swing-aware chance is not read (nothing waits on a number that is not there). 2026-11-26: the 11 such bets of 11:02-12:45 ET lost $36.71 (5 on the winning side); the cut was seen after the fact, score it forward."""
+    """True when the buy is a curve TREND ENTRY and the swing-aware chance of ending on its side (wave_now: the hour's swings and the time left, not a random walk) is under swing_bar(left), a bar that slides down as the market runs out (no cut-off minute). The veto rule turns it into a WAIT: the bet is bought once the chance clears the bar, which falls every second. False otherwise; None when the swing-aware chance is not read (nothing waits on a number that is not there). 2026-11-26, the 38 trend entries of 11:02-13:30 ET with a reading (exchange results, seen after the fact, score it forward): under the bar 11 bets -$52.38 (4 on the winning side), over it 27 bets +$23.07 (23). The first form cut off at minute 5 and missed ZEC 13:30 NO, bought at minute 5.9 with a chance of 0.16, -$13.83."""
     n = b.get("priskp_screen")
     if n.get("why") != "curve_trend_entry":
         return False, "not a curve trend entry"
-    minute = n.get("minute")
-    if minute is None or float(minute) >= EARLY_SHARE * 15.0:
-        return False, "past the early part of the market"
     wn = b.get("wave_now")
     ch = wn.get("chance") if isinstance(wn, dict) else None
     if ch is None:
         return None, "the swing-aware chance is not read"
-    return bool(float(ch) < SWING_HALF), f"minute {float(minute):.1f} of the first {EARLY_SHARE * 15.0:.0f}; the swing-aware chance {float(ch):.2f} against {SWING_HALF}"
+    bar = swing_bar(b.left)
+    return bool(float(ch) < bar), f"the swing-aware chance {float(ch):.2f} against a bar of {bar:.2f} ({SWING_HALF} x {b.left:.0f} s of 900 left)"
 
 
 @reader("shift_out")
