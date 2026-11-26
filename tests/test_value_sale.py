@@ -441,6 +441,19 @@ def test_integration_late_dip_a_bounce_starts_the_wait_over_and_early_is_not_its
     assert t.late_dip_since == 0.0
 
 
+def test_integration_late_dip_watches_from_close_enough_to_the_last_quarter(tmp_path, monkeypatch, mem):
+    """2026-11-26, user: "close enough" on a time line, applied to late_dip's on their word. With a quarter (225 s) and watcher.CLOSE_ENOUGH 0.10 the step watches from 247.5 s left; DOGE 11:45 NO collapsed a minute before the old line."""
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.late_dip_share, t.late_dip_units, t.late_dip_look_s, t.late_dip_wait_share = 0.25, 3.0, 30.0, 0.1
+    ask = late_dip_ask(w, t, close)
+    spot_feed(close - 255, 100.5)
+    assert ask(0.95, 255) is None and t.late_dip_spot == []  # 255 s left: outside the band, the step is not looking yet
+    spot_feed(close - 245, 100.5)
+    assert ask(0.95, 245) is None and len(t.late_dip_spot) == 1  # 245 s left: inside the band (247.5), 20 s before the last quarter: it looks
+    spot_feed(close - 240, 99.95)
+    assert ask(0.90, 240) is None and t.late_dip_since > 0  # a sharp dip there is seen and its wait starts
+
+
 def test_integration_early_take_a_fall_must_hold_and_a_new_high_starts_it_over(tmp_path, monkeypatch, mem):
     from kalshi_moonshot import curverisk, watcher
 
@@ -515,10 +528,15 @@ def test_integration_early_take_holds_on_a_cushion_that_scales_with_the_time_lef
     assert why and "bid fell" in why
     ask4 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     ask4.target.early_take_cushion_units = 1.0
-    spot[0] = (0.10, 0.10)  # one typical minute: under the bar of 1 x sqrt(440/60) = 2.7
-    assert ask4(0.90, 445) is None  # armed just inside the second half (watcher.WINNING_HOLD_SHARE of 900 s)
-    assert ask4(0.80, 440) is None  # the same fall later in the market, the spot still on the winning side: held (SOL 08:30 NO, 2026-11-26: "it was on the WINNING side, and it still sold it")
-    assert watcher.WINNING_HOLD_SHARE == 0.5
+    spot[0] = (0.10, 0.10)  # one typical minute: under the bar of 1 x sqrt(400/60) = 2.6
+    assert ask4(0.90, 404) is None  # armed just inside the hold: the second half less the close-enough band (450 x 0.9 = 405 s left)
+    assert ask4(0.80, 400) is None  # the same fall later in the market, the spot still on the winning side: held (SOL 08:30 NO, 2026-11-26: "it was on the WINNING side, and it still sold it")
+    ask5 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
+    ask5.target.early_take_cushion_units = 1.0
+    assert ask5(0.90, 440) is None  # 10 s past the half
+    why = ask5(0.80, 430)  # 20 s past the half is close enough to the first half: the fall still sells (user, 2026-11-26: "if that missed by 30s or 45s when the scale is 5 mins it should allow")
+    assert why and "bid fell" in why
+    assert watcher.WINNING_HOLD_SHARE == 0.5 and watcher.CLOSE_ENOUGH == 0.10
     spot[0] = (0.05, 0.10)
     ask3 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     ask3.target.early_take_cushion_units = 1.0
