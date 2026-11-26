@@ -1238,6 +1238,12 @@ class ProfitWatcher:
                 t.value_since = now
             if now - t.value_since < t.value_wait_share * left:
                 return None  # it has not held long enough yet: a share of the time left, never fixed seconds
+        stop = fx.board.vetoes("value_sale")
+        if stop:
+            if now - t.veto_logged_at >= 30.0:
+                t.veto_logged_at = now
+                log.info("sale held: %s %s step value_sale would sell at the bid %.2f (paid %.2f) but the spot is still on the bet's side of the target (%s)", t.ticker, t.lane, bid, t.entry, stop)
+            return None  # asked here like no_recovery and late_dip, so the walk's belt-and-braces refusal never has to throw the sale out every second
         reason = f"value sale: the bid {bid:.2f} pays {pays:.3f} after the sale fee, at or over the hold value {hold:.3f} (the spot's chance of ending on the wrong side {lose:.3f}) plus a premium of {t.value_sale_premium:g}"
         reason += fx.note()
         extra = {"bid": round(bid, 4), "pays": round(pays, 4), "hold": round(hold, 4), "p_lose": round(lose, 4), "premium": t.value_sale_premium}

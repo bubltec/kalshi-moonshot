@@ -779,3 +779,13 @@ def test_integration_early_take_one_wobble_fall_with_time_left_is_not_a_stop_and
     assert ask(0.86) is None  # fell 0.04 again: held
     why = ask(0.82)  # fell 0.08 from 0.90: more than the 0.071 a fall needs now, still in profit
     assert why and why.startswith("early take:") and "stopped climbing" in why
+
+
+def test_integration_a_loss_while_ahead_is_held_by_asking_the_veto_not_by_the_walks_refusal(tmp_path, monkeypatch, mem, caplog):
+    """2026-11-26: value_sale built a sale on NEAR every second and the walk's belt-and-braces refusal threw it out with an error line each time. The step asks the board itself now: a sale under what the bet cost with the spot still on the bet's side is held quietly (user, 2026-11-25: "just don't sell if it isn't on the other side of the target")."""
+    w, t, close = take_target(tmp_path, monkeypatch, 0.95, unit=0.10)
+    spot_feed(close - 300, 100.3)  # the spot is over the target on the bet's side: holding is worth about 0.81
+    assert asker(w, t, close)(0.85, 300) is None  # the bid pays about 0.84, over the hold value, but under the 0.95 the bet cost
+    assert "sold against the veto" not in caplog.text
+    spot_feed(close - 300, 99.7)  # the spot has crossed to the wrong side: the same loss is sold
+    assert asker(w, t, close)(0.50, 300) is not None
