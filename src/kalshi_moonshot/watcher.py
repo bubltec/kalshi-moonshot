@@ -971,13 +971,15 @@ class ProfitWatcher:
         wait = t.no_recovery_share * 900.0
         if held_for < wait:
             return None  # an early loss is waited out: the bet is given its share of the market's length to come back
-        stop = self._board(c, t, now, left, bid).vetoes("no_recovery")
+        fx = self._board(c, t, now, left, bid)
+        stop = fx.vetoes("no_recovery")
         if stop:
             if now - t.veto_logged_at >= 30.0:
                 t.veto_logged_at = now
                 log.info("sale held: %s %s step no_recovery would sell at the bid %.2f (paid %.2f) but the spot is still on the bet's side of the target (%s)", t.ticker, t.lane, bid, t.entry, stop)
             return None  # a sale under cost while the spot is on the bet's side of the target waits (2026-11-25, user)
         reason = f"no recovery: the bet has not been in profit {("since the buy" if watched else "since it was first watched") if t.no_rec_last_ahead <= 0 else f"since it was last ahead {held_for:.0f} s ago"} ({t.entry:.2f} paid), {held_for:.0f} s without, past its {wait:.0f} s ({t.no_recovery_share:.0%} of the market's length) to come back, {left:.0f} s left; accepted as a loss: sold at the bid {bid:.2f} ({net * 100:.1f}c a contract after both fees)"
+        reason += fx.note()  # the spot readings the veto was judged on go in the sale's note (2026-11-26: BTC 11:15 YES was sold by late_dip with the index's 60 s average over the target and nothing recorded what the step had read)
         extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "held": round(held_for, 1)}
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="no recovery", extra=extra)
@@ -1018,13 +1020,15 @@ class ProfitWatcher:
         if now - t.late_dip_since < wait:
             return None
         what = f"the bid is down {bid_dip:.1f} of its typical 10 s moves from its high of the last {t.late_dip_look_s:.0f} s" if bid_dip >= spot_dip else f"the spot's cushion over the target is down {spot_dip:.1f} of its typical 10 s moves from its high of the last {t.late_dip_look_s:.0f} s"
-        stop = self._board(c, t, now, left, bid).vetoes("late_dip")
+        fx = self._board(c, t, now, left, bid)
+        stop = fx.vetoes("late_dip")
         if stop:
             if now - t.veto_logged_at >= 30.0:
                 t.veto_logged_at = now
                 log.info("sale held: %s %s step late_dip would sell at the bid %.2f (paid %.2f) but the spot is still on the bet's side of the target (%s)", t.ticker, t.lane, bid, t.entry, stop)
             return None  # a sale under cost while the spot is on the bet's side of the target waits (2026-11-25, user)
         reason = f"late dip: {what} (the bar is {t.late_dip_units:g}), held {now - t.late_dip_since:.0f} s of a {wait:.0f} s wait ({t.late_dip_wait_share:.0%} of the {left:.0f} s left), in the last {t.late_dip_share:.0%} of the market: sold"
+        reason += fx.note()
         extra = {"bid": round(bid, 4), "bid_dip": round(bid_dip, 2), "spot_dip": round(spot_dip, 2), "units": t.late_dip_units, "wait": round(wait, 1)}
         if t.risk_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="late dip", extra=extra)

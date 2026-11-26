@@ -549,6 +549,7 @@ def test_integration_no_recovery_waits_while_either_spot_reading_is_on_the_bets_
     last5[0] = (-0.02, 0.10)  # both readings are on the other side
     why = ask(0.45, 570)
     assert why and "no recovery" in why
+    assert "[facts read:" in why and "loss_while_ahead=no" in why and "spot=(-0.02" in why and "spot_now=(-0.02" in why  # the readings the veto was judged on are in the sale's note (2026-11-26)
 
 
 
