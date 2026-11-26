@@ -101,3 +101,46 @@ def test_integration_without_its_own_switch_the_step_only_logs_what_it_would_do(
     with caplog.at_level(logging.INFO, logger="moonshot"):
         assert ask(145, 0.30) is None and ask(146, 0.30) is None  # the lane's exit is live, this step is not: no sale
     assert caplog.text.count("turn sale shadow:") == 1 and "would sell: turn sale: the wave turned back" in caplog.text  # said once a bet
+
+
+# ---- the whole leg (2026-11-26, the user's second mark on ZEC 10:30: the bottom of the pull-back, where the NO bid was 0.30): the sale does not wait for the bounce ----
+# three legs of 2 u (the market's own leg), then the bet's leg: a peak at second 180, a fall of 2 u to 240, a bounce
+LEGS = [(60, 2.0), (60, -2.0), (60, 2.0), (60, -2.0), (60, 1.0), (300, 0.0)]
+
+
+def test_unit_a_move_that_has_run_the_markets_own_leg_is_done_before_any_bounce(mem):
+    from tests.test_wave_turn import OPEN
+
+    hour = hour_path()
+    feed(hour, window_path(LEGS, u_of(hour)), opened=OPEN)
+
+    def rd(t):
+        return waveturn.peek(INDEX, OPEN, OPEN + t + 0.5, K)
+
+    early, late = rd(225), rd(245)  # the 30 s smoothing trails the path by about 15 s
+    assert early.d == -1 and early.leg_u > 0 and not waveturn.leg_done(early, "no")  # the fall has only begun
+    assert late.d == -1 and late.gb_u < waveturn.GB and waveturn.leg_done(late, "no")  # near the low, nothing given back yet: the leg is done
+    assert not waveturn.turned_against(late, "no", 185) and not waveturn.leg_done(late, "yes")
+    assert not waveturn.leg_done(rd(30), "yes")  # no completed leg yet: no measure of a leg, no sale
+
+
+def test_integration_the_bet_is_sold_into_the_move_when_the_leg_is_done(tmp_path, monkeypatch, mem):
+    from tests.test_risk_exit_flow import CLOSE, TICKER, held
+
+    w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['turn_sale']\nturn_sale_live=true")
+    t = w.targets[(TICKER, "risk_only")]
+    opened = CLOSE - 900.0
+    t.side, t.entry, t.bought_ts, t.strike = "no", 0.18, opened + 190.0, K
+    hour = hour_path()
+    feed(hour, window_path(LEGS, u_of(hour)), opened=opened)
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+
+    def ask(sec, bid):
+        now = opened + sec + 0.5
+        with memguard.decision("sell"):
+            return w._risk_decide(t, risk, bid, now, CLOSE - now, 0.0)
+
+    assert ask(225, 0.24) is None  # ahead, the fall has only begun
+    why = ask(245, 0.30)
+    assert why and why.startswith("turn sale: the move has run a whole leg: the spot fell") and "the market's own median leg is" in why
+    assert ask(245, 0.15) is None  # never a loss sale

@@ -313,6 +313,12 @@ def turned_against(r: Reading, side: str, bought_at: float) -> bool:
     return r.d == want and r.swing_u >= SWING and r.gb_u >= GB and r.ext_t > bought_at
 
 
+def leg_done(r: Reading, side: str) -> bool:
+    """True when the bet's move has run a whole leg of this market's own size: for a NO the curve is in a fall at least as large as the median of the market's completed legs (`leg_u`); a YES mirrors it. No wait for the bounce: the user's mark on ZEC 10:30 (2026-11-26) is the bottom of the pull-back, and the bid had lost a third of its gain by the time the turn was confirmed. False before the market has a completed leg."""
+    want = -1 if side == "no" else 1
+    return r.d == want and r.leg_u > 0 and r.swing_u >= r.leg_u
+
+
 def clear() -> None:
     with _lock:
         _hours.clear()

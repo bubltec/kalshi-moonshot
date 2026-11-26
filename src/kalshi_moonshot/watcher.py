@@ -1230,10 +1230,17 @@ class ProfitWatcher:
         if K is None:
             return None
         rd = waveturn.peek(index, opened, now, K)
-        if rd is None or not waveturn.turned_against(rd, t.side, t.bought_ts - opened):
+        if rd is None:
             return None
-        reason = f"turn sale: the wave turned back: the spot {'fell' if t.side == 'no' else 'rose'} {rd.swing_u:.2f}u since the buy and has come {rd.gb_u:.2f}u off its {'low' if t.side == 'no' else 'high'} (the lane's turn: a swing of {waveturn.SWING:g}u, {waveturn.GB:g}u given back; the extreme {rd.t - rd.ext_t}s ago, curve {rd.pos_u:+.2f}u from the target); sells at the bid {bid:.2f} for {(c.net - c.basis) * 100:+.1f}c a contract after both fees ({t.entry:.2f} paid), {left:.0f}s left"
-        extra = {"bid": round(bid, 4), "entry": round(t.entry, 4), "swing_u": round(rd.swing_u, 3), "gb_u": round(rd.gb_u, 3), "pos_u": round(rd.pos_u, 3), "since_extreme": rd.t - rd.ext_t}
+        move = "fell" if t.side == "no" else "rose"
+        tail = f"curve {rd.pos_u:+.2f}u from the target); sells at the bid {bid:.2f} for {(c.net - c.basis) * 100:+.1f}c a contract after both fees ({t.entry:.2f} paid), {left:.0f}s left"
+        if waveturn.leg_done(rd, t.side):  # asked first: it sells into the move, before the bounce takes the gain back
+            reason = f"turn sale: the move has run a whole leg: the spot {move} {rd.swing_u:.2f}u, the market's own median leg is {rd.leg_u:.2f}u ({tail}"
+        elif waveturn.turned_against(rd, t.side, t.bought_ts - opened):
+            reason = f"turn sale: the wave turned back: the spot {move} {rd.swing_u:.2f}u since the buy and has come {rd.gb_u:.2f}u off its {'low' if t.side == 'no' else 'high'} (the lane's turn: a swing of {waveturn.SWING:g}u, {waveturn.GB:g}u given back; the extreme {rd.t - rd.ext_t}s ago, {tail}"
+        else:
+            return None
+        extra = {"bid": round(bid, 4), "entry": round(t.entry, 4), "swing_u": round(rd.swing_u, 3), "gb_u": round(rd.gb_u, 3), "pos_u": round(rd.pos_u, 3), "since_extreme": rd.t - rd.ext_t, "leg_u": round(rd.leg_u, 3)}
         if t.risk_live and t.turn_sale_live:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="turn sale", extra=extra)
             return reason
