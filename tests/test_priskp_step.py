@@ -183,3 +183,22 @@ def test_the_price_gap_uses_the_swing_aware_chance_when_it_is_read():
     b2._v["wave_now"] = (None, "")  # no swing read: the random walk's chance
     got2 = b2.view("priskp").get("price_gap")
     assert got2["chance"] == 0.60 and got2["swing"] is None
+
+
+def test_in_a_curve_the_trend_entry_buys_without_the_five_checks_passing(monkeypatch):
+    """2026-11-26: a curve 'buy' was held at 'confirming' 0 of 1 for ever because the readings in a row counted the five checks (4027 looks on 27 markets in 3 h, one bet). In a curve the count follows the curve's verdict; outside one, the checks."""
+    feed(lambda s: 100.5, OPEN + 600.0)
+    priskp.load({f"KXBTC15M|{b}|{c}": [1e6, 2e6, 3e6, 4e6, 5e6, 6e6] for b in range(5) for c in priskp.CHECKS})  # every check in fifth 1: the five checks refuse
+    curve = {"regime": "curve", "verdict": "buy", "class": "inside", "swing_u": 1.5, "prev_u": 1.2, "gb_u": 0.0, "age": 0.3, "travel": 0.3, "reach": 0.4}
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve))
+    ok, why = ask_at(5.0)
+    assert ok and "why: curve_trend_entry" in why and "confirm: 1" in why
+    assert not ask_at(5.1, ask=0.50)[0]  # the dead ask band still holds
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, verdict="wait"))
+    ok, why = ask_at(5.0)
+    assert not ok and "why: curve_wait" in why and "confirm: 0" in why
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, regime="steady"))
+    ok, why = ask_at(5.0)
+    assert not ok and "check_not_passing" in why  # a steady market: the five checks decide as before

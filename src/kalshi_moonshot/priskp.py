@@ -432,7 +432,12 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     if loaded() == 0:
         return {"verb": "wait", "side": shot.side, "minute": round(minute, 2), "why": "no cutoffs file loaded yet"}, None
     states = fifths(shot.series, minute * 60.0, ro[shot.side])
-    ok = candidate(states) and WINDOW[0] <= minute <= WINDOW[1] and not DEAD[0] <= shot.ask <= DEAD[1]
+    inwin = WINDOW[0] <= minute <= WINDOW[1] and not DEAD[0] <= shot.ask <= DEAD[1]
+    cv = _curve_verdict(shot, now, hours, strike)
+    # the readings in a row count what DECIDES the buy: in a curve that is the trend entry, elsewhere the five checks. (Until 2026-11-26 the count
+    # read the five checks in a curve too, so a curve 'buy' whose checks did not also pass stayed at 0 of 1 'confirming' for ever: 4027 looks on 27
+    # markets in three hours, one bet.)
+    ok = inwin and (cv["verdict"] == "buy" if cv is not None and cv["regime"] == "curve" else candidate(states))
     need = need_readings(hours * 3600.0)
     reached, count = confirmed(shot.ticker, shot.side, ok, now, need)
     n = note(shot.side, states, count, minute, need)
@@ -441,12 +446,10 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     if z is not None:  # SHADOW (2026-11-25, user: "it should have an influence but it shouldn't be the factor in whether we buy"): the Gaussian chance of ending on the bet's side (the blended cushion IS that z, over the typical minute and the time left) against what the bet costs with its fee; logged on every look, decides nothing
         chance = 0.5 * (1.0 + math.erf(float(z) / math.sqrt(2.0)))
         n["chance"] = round(chance, 3)  # the fact `price_gap` (facts.py) turns it into the gap to the ask and weighs it on the board
-    cv = _curve_verdict(shot, now, hours, strike)
     if cv is not None:
         n["regime"] = cv["regime"]
         if cv["regime"] == "curve":  # in a curve the trend entry decides, both ways (the five rank checks neither buy nor stop it): wait at a dip or a peak, buy on the trend
             n["curve"] = f"{cv['class']}, swing {cv['swing_u']:.2f} u after a turn of {cv['prev_u']:.2f} u, gave back {cv['gb_u']:.2f}, big leg {cv['age'] if cv['age'] is not None else 'n/a'} and travel {cv['travel'] if cv['travel'] is not None else 'n/a'} of a usual one, target {cv['reach']:.2f} wave travels away"
-            inwin = WINDOW[0] <= minute <= WINDOW[1] and not DEAD[0] <= shot.ask <= DEAD[1]
             if cv["verdict"] == "buy" and inwin:
                 n["verb"], n["why"] = "buy", "curve_trend_entry"
                 n["failing"] = []
