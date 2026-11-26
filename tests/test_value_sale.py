@@ -481,8 +481,7 @@ def test_integration_early_take_a_spot_still_climbing_is_not_a_stall(tmp_path, m
     assert ask(0.90, 800, 100.1) is None  # armed; the spot's cushion is 0.1
     assert ask(0.90, 760, 100.4) is None  # the bid is flat but the spot's cushion climbed more than a wobble of its own: the climb goes on
     assert ask(0.90, 700, 100.4) is None  # 100 s since the bid's high but 60 s since the spot's climb: under 10% of 700 s (70 s)
-    assert ask(0.90, 650, 100.4) is None  # 110 s since the spot's last climb, over the 65 s wait, but the spot is still on the winning side: a stall never sells that (2026-11-25, user, on HYPE 20:30: "the same issue over and over")
-    why = ask(0.90, 640, 99.9)  # the spot slipped to the wrong side of the target: now the stall sells
+    why = ask(0.90, 650, 100.4)  # 110 s since the spot's last climb, over the 65 s wait: in the FIRST half of the market a profit that has stopped climbing is sold, the spot on the winning side or not (2026-11-26, user: "At 7 mins that should have exited, the 'don't sell on the winning side' is only for later in the market")
     assert why and "no new high" in why
 
 
@@ -512,7 +511,14 @@ def test_integration_early_take_holds_on_a_cushion_that_scales_with_the_time_lef
     ask2 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     ask2.target.early_take_cushion_units = 1.0
     assert ask2(0.90, 700) is None  # armed with 700 s left (SOL 17:00 NO, 2026-11-25: 1.4 to 2.5 typical minutes of cushion and 8 to 12 minutes left)
-    assert ask2(0.80, 690) is None  # under the bar of 3.4 typical minutes, but the spot is still on the winning side: nothing in this step sells that (2026-11-26, user, on SOL 08:30 NO: "it was on the WINNING side, and it still sold it")
+    why = ask2(0.80, 690)  # under the bar of 3.4 typical minutes and in the first half of the market: the fall sells, the spot on the winning side or not (2026-11-26, user: the winning-side hold "is only for later in the market")
+    assert why and "bid fell" in why
+    ask4 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
+    ask4.target.early_take_cushion_units = 1.0
+    spot[0] = (0.10, 0.10)  # one typical minute: under the bar of 1 x sqrt(440/60) = 2.7
+    assert ask4(0.90, 445) is None  # armed just inside the second half (watcher.WINNING_HOLD_SHARE of 900 s)
+    assert ask4(0.80, 440) is None  # the same fall later in the market, the spot still on the winning side: held (SOL 08:30 NO, 2026-11-26: "it was on the WINNING side, and it still sold it")
+    assert watcher.WINNING_HOLD_SHARE == 0.5
     spot[0] = (0.05, 0.10)
     ask3 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     ask3.target.early_take_cushion_units = 1.0
