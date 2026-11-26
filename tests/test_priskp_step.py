@@ -164,3 +164,22 @@ def test_the_price_gap_is_a_weight_on_the_board_and_never_a_reason_to_refuse():
     b2 = facts.Board(None, T(), 0.0, 600.0, 0.78)
     b2._v["priskp_screen"] = ({"verb": "buy"}, "")
     assert b2.view("priskp").get("price_gap") is None  # no chance read: no weight
+
+
+def test_the_price_gap_uses_the_swing_aware_chance_when_it_is_read():
+    """2026-11-26, user: "if you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history". The gap is built on wave_now's mean-reverting chance when read, else the random-walk one."""
+    from kalshi_moonshot import facts
+
+    class T:
+        ask = 0.75
+
+    b = facts.Board(None, T(), 0.0, 780.0, 0.72)
+    b._v["priskp_screen"] = ({"verb": "buy", "chance": 0.60, "ask": 0.75}, "")
+    b._v["wave_now"] = ({"chance": 0.48}, "")  # a spike away from the market's centre: expected to swing back
+    got = b.view("priskp").get("price_gap")
+    assert got["chance"] == 0.48 and got["swing"] == 0.48 and got["gauss"] == 0.60 and got["gap"] < -0.27
+    b2 = facts.Board(None, T(), 0.0, 780.0, 0.72)
+    b2._v["priskp_screen"] = ({"verb": "buy", "chance": 0.60, "ask": 0.75}, "")
+    b2._v["wave_now"] = (None, "")  # no swing read: the random walk's chance
+    got2 = b2.view("priskp").get("price_gap")
+    assert got2["chance"] == 0.60 and got2["swing"] is None

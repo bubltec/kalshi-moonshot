@@ -208,13 +208,19 @@ def _hour_view(b: Board) -> tuple[Any, str]:
 
 @reader("price_gap")
 def _price_gap(b: Board) -> tuple[Any, str]:
-    """What the bet costs against its chance (2026-11-26, user: "it should have an influence but it shouldn't be the factor in whether we buy"): the Gaussian chance of ending on the bet's side (the screen's blended cushion through the normal CDF) minus the ask and its buy fee. Signed: positive when the price is below the chance. None when the chance is not read."""
+    """What the bet costs against its chance (2026-11-26, user: "it should have an influence but it shouldn't be the factor in whether we buy"; then "if you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history"). The chance is the SWING-AWARE one when it can be read: `wave_now`'s mean-reverting chance (the market's own centre, width and time scale from its recent history: a spike away from the centre is expected to swing back, and the more time is left the more it can), else the plain Gaussian chance of the screen's blended cushion (a random walk, no swings). The gap is that chance minus the ask and its buy fee: signed, positive when the price is below the chance. None when no chance is read."""
     note = b.get("priskp_screen")
-    chance, ask = note.get("chance"), note.get("ask")
-    if chance is None or ask is None:
+    gauss, ask = note.get("chance"), note.get("ask")
+    if ask is None or (gauss is None and not isinstance(b.get("wave_now"), dict)):
+        return None, "the chance is not read (no cushion reading yet)"
+    wn = b.get("wave_now")
+    swing = wn.get("chance") if isinstance(wn, dict) else None
+    chance = swing if swing is not None else gauss
+    if chance is None:
         return None, "the chance is not read (no cushion reading yet)"
     ask = float(ask)
-    return {"chance": float(chance), "ask": ask, "gap": round(float(chance) - ask - 0.07 * ask * (1.0 - ask), 4)}, "the chance of ending on the bet's side minus the ask and its buy fee"
+    out = {"chance": float(chance), "gauss": None if gauss is None else float(gauss), "swing": None if swing is None else float(swing), "ask": ask, "gap": round(float(chance) - ask - 0.07 * ask * (1.0 - ask), 4)}
+    return out, "the chance of ending on the bet's side (the swing-aware one when read, else the random-walk one) minus the ask and its buy fee"
 
 
 @reader("shift_out")

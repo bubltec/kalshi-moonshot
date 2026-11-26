@@ -403,7 +403,7 @@ def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bo
         n["hour_shadow"] = "would skip" if hourview.would_skip(hv) else "ok"  # 2026-11-24 (user, on the 14:00 ET wave, five YES buys in a stagnant hour trending down: "the risk should have been high considering the hour view"): a SHADOW verdict, nothing is refused; scored on the bets that follow (rule 5)
     pg = view.get("price_gap")
     if pg is not None:  # an INFLUENCE, not a gate (2026-11-26, user: "it should have an influence but it shouldn't be the factor in whether we buy", "now we have a fact board and vetoes and stuff"): the gap between the bet's chance and what it costs goes on the board's ledger as a signed weight; nothing here buys or refuses on the total (the board's own rule: no step acts on the ledger until the user chooses)
-        view.weigh(pg["gap"], f"the chance {pg['chance']:.2f} against the ask {pg['ask']:.2f} and its fee")
+        view.weigh(pg["gap"], f"the chance {pg['chance']:.2f} ({'swing-aware' if pg['swing'] is not None else 'random walk'}) against the ask {pg['ask']:.2f} and its fee")
     return n["verb"] == "buy", one_line(n) + board.note()
 
 
