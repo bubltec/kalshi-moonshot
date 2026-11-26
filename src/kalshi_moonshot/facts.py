@@ -338,4 +338,9 @@ def _loss_while_ahead(b: Board) -> tuple[Any, str]:
     loss = (b.bid - fee_per_contract(b.bid)) < (b.t.entry + fee_per_contract(b.t.entry))
     ahead = (spot is not None and spot[0] > 0) or (fast is not None and fast[0] > 0)
     told = ", ".join(f"{n} {v[0]:+.4g}" for n, v in ((slow_name, spot), ("last 5 s", fast)) if v is not None)
+    if slow_name != "60 s average" and spot is not None and fast is not None:  # inside the settlement window with both read: what settles is the WHOLE window's average, so the bet is ahead only if the banked part plus the rest of the window at the spot's level now still ends on its side. 2026-11-26, ZEC 15:45 YES (bought 0.80, bid 0.99 at 15:44:15, a full loss of $15.18): the spot fell through the target with 30 s left, late_dip was held at 15:44:43 because the 43 s banked were still over it, and the market settled NO
+        done = SETTLE_S - b.left
+        ends = (spot[0] * done + fast[0] * b.left) / SETTLE_S
+        ahead = ends > 0
+        told += f"; the window would end {ends:+.4g} if the spot stays where it is"
     return bool(loss and ahead), f"the sale would be a {'loss' if loss else 'gain'}; the spot over the target for the bet's side: {told}"

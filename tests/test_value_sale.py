@@ -879,6 +879,8 @@ def test_integration_in_the_settlement_window_the_loss_veto_reads_the_window_so_
     why = ask(0.30, 40)  # 20 s into the settlement window: what has been banked is under the target, and so is the last 5 s
     assert why and "no recovery" in why and "spot_settling=(-0.02" in why and 20 in asked
     assert facts.SETTLE_S == 60.0
-    read["banked"] = (0.02, 0.10)  # the window so far is on the bet's side: held, whatever the last 5 s say
-    t.no_rec_logged = False
-    assert ask(0.30, 39) is None
+    read["banked"] = (0.02, 0.10)  # 21 s banked over the target by 0.02, the last 5 s under it by 0.03 with 39 s to run: the window would end (0.02 x 21 - 0.03 x 39) / 60 < 0, so the bet is NOT ahead and the sale goes (ZEC 15:45 YES, 2026-11-26: held on the banked part while the spot had fallen through the target, a full loss)
+    why = ask(0.30, 39)
+    assert why and "no recovery" in why
+    read["banked"] = (0.20, 0.10)  # a banked lead the rest of the window cannot undo at the spot's level now: (0.20 x 22 - 0.03 x 38) / 60 > 0: held
+    assert ask(0.30, 38) is None
