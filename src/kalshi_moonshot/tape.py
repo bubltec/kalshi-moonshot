@@ -367,9 +367,8 @@ class Tape:
                     self._index.append((e["ts"], e["index_id"], e["value"], e.get("avg60"), e.get("quarter_avg"),
                                         e.get("src_ms")))
                 recent.note_index(e["index_id"], e["ts"], e["value"])
-            elif e["kind"] == "index_fast":  # recorded for replays; kept out of the live index window, which is one tick a second
-                if not mem_only:
-                    self._fast.append((e["ts"], e["index_id"], e["value"], e.get("src_ms")))
+            elif e["kind"] == "index_fast" and not mem_only:  # recorded for replays; kept out of the live index window, which is one tick a second
+                self._fast.append((e["ts"], e["index_id"], e["value"], e.get("src_ms")))
 
     def add_fut(self, coin: str, ts: float, px: float, size: float, bought: bool) -> None:
         """One live perpetual-futures trade: folded into its second's row (see futflow.py), put in memory at once under "hl:<coin>" (ticks.py, the same store the index ticks are in, for the spike read; a few microseconds on this socket thread, no database and no request), and, when its price differs from the coin's previous trade, queued for the millisecond fut_ticks record."""
