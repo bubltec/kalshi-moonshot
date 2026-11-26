@@ -22,7 +22,7 @@ class BotStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         ctx = self.node.try_get_context
-        instance_type = str(ctx("bot_instance") or "t4g.medium")
+        instance_type = str(ctx("bot_instance") or "t4g.xlarge")
         volume_gb = int(ctx("bot_volume_gb") or 100)
         az = str(ctx("bot_az") or self.availability_zones[0])
 
