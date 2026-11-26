@@ -729,20 +729,21 @@ def test_unit_a_lane_file_names_the_give_up(tmp_path, monkeypatch):
     assert (sp.wave_give_up_share, sp.wave_give_up_turn) == (0.2, 0.4)
 
 
-def _gu_held(tmp_path, monkeypatch, side, shock_ref=None, share=0.1):
+def _gu_held(tmp_path, monkeypatch, side, shock_ref=None, share=0.1, arm=None, bids=None, n0=300):
     from kalshi_moonshot import curverisk, watcher
     from tests.test_risk_exit_flow import CLOSE, held
     from tests.test_risk_exit_flow import TICKER as HELD
 
-    w = held(tmp_path, monkeypatch, live=True, extra=f"sell_chain=['wave_salvage']\nwave_give_up_share={share}\nwave_give_up_turn=0.5")
+    w = held(tmp_path, monkeypatch, live=True, extra=f"sell_chain=['wave_salvage']\nwave_give_up_share={share}\nwave_give_up_turn=0.5" + (f"\nwave_give_up_arm_share={arm}" if arm is not None else ""))
     t = w.targets[(HELD, "risk_only")]
     assert (t.wave_give_up_share, t.wave_give_up_turn) == (share, 0.5)  # the lane file reached the target through the refresh
     t.wave_whipsaw = 0.0
     t.side = side
     opened = CLOSE - 900.0
-    n0 = 300
+    assert t.wave_give_up_arm_share == (arm or 0.0)  # the lane file reached the target
     t.bought_ts = opened + n0
-    bids = [0.50 + 0.02 * ((k // 60) % 2) for k in range(n0)] + [0.50] + [max(0.50 - 0.01 * k, 0.35) for k in range(1, 100)]
+    if bids is None:
+        bids = [0.50 + 0.02 * ((k // 60) % 2) for k in range(n0)] + [0.50] + [max(0.50 - 0.01 * k, 0.35) for k in range(1, 100)]
     for k, b in enumerate(bids):
         if side == "yes":
             ticks_mod.mids.note(HELD, opened + k, b, b + 0.01)
@@ -781,3 +782,64 @@ def test_integration_the_give_up_skips_a_bet_that_is_winning_on_the_spot(tmp_pat
     # a YES bet wins while the spot's average is over the target; a NO bet while it is under
     got = _gu_held(tmp_path, monkeypatch, side, shock_ref=ref)(390)
     assert bool(got) is sold
+
+
+# ---- the give-up's ARM SHARE (2026-11-26): PLATINUM 10:15 YES was bought at a 0.05 bid 104 s before the close and held to zero; the give-up arms one typical minute under the bid at the buy, and a bid that has just fallen to 5c has a typical minute of 5c or more, so it could never arm ----
+def cheap_bids(n0=800):
+    """A side bid flat at 0.45, falling 0.10 a minute over the last four minutes to 0.05 at the buy (second n0), then 0.05 for 10 s, 0.03 for 20 s, 0.02 for 10 s and 0.01 to the close."""
+    b = [0.45 if k < n0 - 240 else round(0.45 - 0.40 * (k - (n0 - 240)) / 240.0, 4) for k in range(n0)] + [0.05]
+    for k in range(1, 900 - n0):
+        b.append(0.05 if k < 10 else 0.03 if k < 30 else 0.02 if k < 40 else 0.01)
+    return b
+
+
+def cheap_first(arm, n0=800):
+    q = quotes(cheap_bids(n0), OPEN)
+    T, V = flat_spot(900, drift=0.5)
+    last = {}
+    for now in range(n0 + 1, 899):
+        sell, last = wavetop.salvage(q, "yes", OPEN, OPEN + n0, OPEN + now, T, V, 0.1, 0.5, 1.0 / 3.0, arm)
+        if sell:
+            return now, last
+    return None, last
+
+
+def test_unit_a_cheap_bet_could_never_arm_and_with_an_arm_share_it_is_given_up_on():
+    now, info = cheap_first(0.0)
+    assert now is None and not info["armed"] and info["unit"] > 0.05  # as it was: the bid's typical minute is larger than the 0.05 bid, so `bid at the buy - unit` is under zero and nothing arms; held to the close
+    now, info = cheap_first(0.5)
+    assert now is not None and info["give_up"] == 1.0
+    assert info["arm_unit"] == pytest.approx(0.025) and info["unit"] > 0.05  # half the bid at the buy, the smaller of the two
+    assert info["armed_at"] == OPEN + 830 and info["low"] == pytest.approx(0.02)  # armed when the bid went under 0.025, at 0.02
+    assert 830 < now < 840 and info["waited"] >= info["allowed"]  # the wait is short this late: 0.1 x 65 s left x 0.5
+
+
+def test_unit_the_arm_share_changes_nothing_for_a_bet_whose_typical_minute_is_the_smaller():
+    q = quotes(gu_bids(400), OPEN)  # bought at 0.30 with a typical minute of 0.02: half the bid is 0.15, far larger
+    T, V = flat_spot(900, drift=0.5)
+
+    def first(arm):
+        for now in range(401, 899):
+            sell, info = wavetop.salvage(q, "yes", OPEN, OPEN + 400, OPEN + now, T, V, 0.1, 0.5, 1.0 / 3.0, arm)
+            if sell:
+                return now, info["arm_unit"]
+        return None, None
+
+    assert first(0.0) == first(0.5) and first(0.5)[1] == pytest.approx(0.02)
+
+
+def test_unit_a_lane_file_names_the_arm_share(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "strategies.toml").write_text(TOML)
+    assert lanes.lane_specs(config.load())["wt"].wave_give_up_arm_share == 0.0  # off by default: the typical minute alone, as before
+    (tmp_path / "strategies.toml").write_text(TOML.replace("wave_top_trend_hours = 1.0", "wave_top_trend_hours = 1.0\nwave_give_up_arm_share = 0.5"))
+    assert lanes.lane_specs(config.load())["wt"].wave_give_up_arm_share == 0.5
+
+
+def test_integration_a_cheap_bet_is_given_up_on_through_the_lane_file_and_says_so(tmp_path, monkeypatch, mem):
+    bids = cheap_bids(800)
+    assert _gu_held(tmp_path, monkeypatch, "yes", bids=bids, n0=800)(845) is None  # no arm share: nothing can sell it
+    ticks_mod.mids.clear()
+    why = _gu_held(tmp_path, monkeypatch, "yes", arm=0.5, bids=bids, n0=800)(845)
+    assert why and why.startswith("wave give-up") and "0.5 of the bid at the buy" in why and "0.025 under the 0.05" in why
+

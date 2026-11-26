@@ -301,7 +301,7 @@ def side_bids(quotes: list[tuple[float, float, float]], side: str, a: int, b: in
     return [first if x is None else x for x in sb]
 
 
-def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, bought: float, now: float, T: list[float], V: list[float], give_share: float = 0.0, give_turn: float = 0.5, give_peak: float = 1.0 / 3.0) -> tuple[bool, dict[str, float | None]]:
+def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, bought: float, now: float, T: list[float], V: list[float], give_share: float = 0.0, give_turn: float = 0.5, give_peak: float = 1.0 / 3.0, arm_share: float = 0.0) -> tuple[bool, dict[str, float | None]]:
     """Whether a bet bought at `bought` is sold now by the salvage rule, and the readings. quotes = the market's (time, YES bid, YES ask) rows; T, V = the spot's ticks.
 
     The GIVE-UP branch (2026-11-23, user: "the other exit needs to be a safety exit. If the scalp isn't working we should exit ... we just need to exit if it dips and doesn't turn"; "if it DOES [turn], we can wait"): with give_share > 0, a bet that is armed (its bid fell one typical minute under the bid at the buy) and whose bid has not TURNED (come give_turn x the typical minute off the lowest bid since the buy) is sold once the time since the later of its arming and the last turn reaches W = give_share x min(e, left x p / (1 - p)), e = seconds since the open, left = seconds to the close, p = give_peak (user, 2026-11-23: "slightly slanted, so peak around 5 mins"): a line rising from 0 at the open to give_share x p x 900 at the share p of the market (minute 5 at 1/3) and falling linearly to 0 at the close (short early so there is time to re-buy, short late). A turn restarts the clock; the rebound sale keeps running unchanged. The info then carries give_up = 1 with the readings. An unreadable typical minute (under a minute of bids before the buy) is no sale: the info says unit_unreadable = 1."""
@@ -317,10 +317,12 @@ def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, 
         return False, {"unit_unreadable": 1.0}
     qu = max(math.sqrt(sum(c * c for c in ch) / len(ch)), 0.01)  # the side bid's own typical minute before the buy
     b0 = sb[i0]
+    # ARM SHARE (2026-11-26, user, on PLATINUM 10:15 YES bought at a 0.05 bid and held to zero: "it also got a full 0, which isn't acceptable"; "Why didn't it sell?"): a bid that has just fallen to a few cents has a typical minute as large as itself, so `b0 - qu` is at or under zero and the give-up could never arm on a cheap bet. With arm_share > 0 the size that arms the bet and counts as a turn is the smaller of the typical minute and arm_share x the bid at the buy (a share of what was paid, never a number of cents). 0 = the typical minute alone, as before.
+    qa = min(qu, arm_share * b0) if arm_share > 0 and b0 > 0 else qu  # type: ignore[operator]
     armed, lo_b, ilo = False, b0, i0
     iarm, iturn, lo_run = -1, -1, b0
     for j in range(i0 + 1, i + 1):
-        if sb[j] < b0 - qu:  # type: ignore[operator]
+        if sb[j] < b0 - qa:  # type: ignore[operator]
             if not armed:
                 iarm = j
             armed = True
@@ -328,9 +330,9 @@ def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, 
             lo_b, ilo = sb[j], j
         if sb[j] < lo_run:  # type: ignore[operator]
             lo_run = sb[j]
-        elif armed and sb[j] - lo_run >= give_turn * qu:  # type: ignore[operator]
+        elif armed and sb[j] - lo_run >= give_turn * qa:  # type: ignore[operator]
             iturn = j
-    info = {"unit": qu, "entry_bid": b0, "low": lo_b, "armed": float(armed)}
+    info = {"unit": qu, "arm_unit": qa, "entry_bid": b0, "low": lo_b, "armed": float(armed)}
     sold = _rebound_sale(sb, armed, i0, i, ilo, lo_b, qu, now, T, V, side, info)  # type: ignore[arg-type]
     if sold or give_share <= 0.0 or not armed:
         return sold, info
