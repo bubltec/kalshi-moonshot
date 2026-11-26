@@ -138,6 +138,7 @@ class Reading:
     leg_s: float = 0.0  # shadow: the median seconds of this market's completed legs of DONE_U u (0 = none yet)
     leg_u: float = 0.0  # shadow: the median size of those legs in u
     big_d: int = 0  # the direction of the market's larger leg (the DONE_U zig-zag): +1 rising, -1 falling, 0 none yet
+    raw_gb_u: float = 0.0  # how far the LAST TICK (not the smoothed curve) has come off the swing's extreme, in u: what the move has already run in fact
     ext_t: int = 0  # the second since the open of the swing's running extreme (where the swing turned, once it has given back)
 
 
@@ -151,7 +152,7 @@ def reading(window: list[float], t: int, K: float, u: float) -> Reading:
     leg_s = statistics.median(x for x, _ in legs) if legs else 0.0
     leg_u = statistics.median(y for _, y in legs) if legs else 0.0
     return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),
-                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d, ek)
+                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d, (ev - window[min(t, len(window) - 1)]) * d / u if d else 0.0, ek)
 
 
 @dataclass
@@ -195,6 +196,9 @@ def judge(r: Reading, fires: Fires, hold: float, resting: str | None = None) -> 
         return None, f"the {r.swing_u:.2f}u {'rise' if r.d == 1 else 'fall'} runs against the market's larger leg (a {'fall' if r.big_d == -1 else 'rise'} of {DONE_U:g}u or more still in force): a pull-back inside it, not the wave's {'peak' if r.d == 1 else 'dip'}"
     if r.leg_u > 0 and r.swing_u < LEG_SHARE * r.leg_u:
         return None, f"the swing that turned is {r.swing_u:.2f}u and the market's own median leg is {r.leg_u:.2f}u: under {LEG_SHARE:g} of it, a wobble inside the wave, not one of its turns"
+    if r.leg_u > 0 and r.raw_gb_u >= LEG_SHARE * r.leg_u:
+        # 2026-11-26 (user, on SILVER 11:15 NO bought at 535 s at the bottom of a dip: "Just did it again bought down in a dip. Opposite direction"): the peak was read right, but on the 30 s smoothed curve it had given back 0.21u when the price itself had already fallen about 1.2u (41.667 to 41.627 in 20 s; the NO ask went 0.16 -> 0.34), most of a leg of that market (1.41u). The move the bet wants had run before the signal came. A turn whose last tick is already LEG_SHARE of a leg off the extreme (the same share that makes a swing a leg) is too late and is not bought.
+        return None, f"the price itself is already {r.raw_gb_u:.2f}u off the swing's extreme, {LEG_SHARE:g} or more of this market's leg ({r.leg_u:.2f}u), while the smoothed curve shows {r.gb_u:.2f}u: the move the bet wants has already run"
     if r.done < need(r.t):
         return None, f"{r.done} completed swings of {DONE_U:g}u so far, the lane needs {need(r.t)} at {r.t}s: a trend has a pull-back at most, a wave comes back (not a wave shape yet)"
     fires.done[key] = r.t

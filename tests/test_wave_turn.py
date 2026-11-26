@@ -426,3 +426,27 @@ def test_the_leg_scale_does_not_apply_before_the_market_has_a_leg(mem):
     feed(hour, window_path(REPEATED, u_of(hour)))
     assert fires()[0] == (141, "yes")  # the first turn after one completed swing: no median leg worth the name yet refuses it, and it fires as before
 
+
+# ---- too late (2026-11-26): SILVER 11:15 NO was bought at the bottom of a dip; the smoothed curve had given back 0.21u when the price had fallen 1.2u in 20 s ----
+# legs of 2 u, then a peak and a drop of 1.8 u in 12 s: the 30 s smoothing shows a small give-back while the price is already most of a leg down
+FAST = [(60, 2.0), (60, -2.0), (60, 2.0), (60, -2.0), (60, 2.0), (30, 0.0), (12, -1.8), (300, 0.0)]
+
+
+def test_a_turn_seen_after_the_price_has_already_run_most_of_a_leg_is_too_late(mem):
+    hour = hour_path()
+    feed(hour, window_path(FAST, u_of(hour)))
+    assert not [f for f in fires() if 325 <= f[0] <= 345 and f[1] == "no"]  # no NO at the bottom of the drop
+    late = []
+    for t in range(330, 345):
+        side, why, r, _h = waveturn.read_index(INDEX, OPEN, OPEN + t + 0.5, K, 0.0)
+        if r is not None and r.d == 1 and r.gb_u >= waveturn.GB and r.raw_gb_u >= waveturn.LEG_SHARE * r.leg_u:
+            late.append((side, why, r.gb_u, r.raw_gb_u))
+    assert late and all(side is None for side, *_ in late)
+    assert any("the move the bet wants has already run" in why and raw > gb for _s, why, gb, raw in late)  # the price is far ahead of the smoothed curve
+
+
+def test_a_turn_seen_in_time_is_bought_as_before(mem):
+    hour = hour_path()
+    feed(hour, window_path(REPEATED, u_of(hour)))
+    assert fires() == [(141, "yes"), (201, "no")]  # an ordinary turn: the price is not a leg ahead of the curve
+
