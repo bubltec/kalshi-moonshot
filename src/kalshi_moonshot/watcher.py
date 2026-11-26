@@ -1060,7 +1060,8 @@ class ProfitWatcher:
                 t.early_take_spot_high, t.early_take_spot_ts, t.early_take_spot_set = spot[0], now, True
             elif spot[0] >= t.early_take_spot_high + spot_move:
                 t.early_take_spot_high, t.early_take_spot_ts = spot[0], now
-        fell = t.early_take_high - bid >= trail - 1e-9
+        fall_need = trail * (1.0 + 2.0 * min(left, 900.0) / 900.0)  # a fall counts as 'stopped climbing' only when it is MORE than one wobble, and the earlier in the market the more it takes: 3 wobbles at the open, 2 with half the time left, 1 at the close (2026-11-25 19:38 ET, user, on DOGE 19:45 NO: sold at +3.7c on a fall of 0.04 from 0.86, one wobble of 0.038, with 396 s left: "why did this sell?! it sold right when it was turning back down... the side it is winning on"; user: "yes make that change"). My choice of the scale, not scored
+        fell = t.early_take_high - bid >= fall_need - 1e-9
         if fell:
             if t.early_take_fall_since <= 0:
                 t.early_take_fall_since = now
@@ -1071,12 +1072,13 @@ class ProfitWatcher:
         if not (fell or stalled):
             return None
         lose = self._board(c, t, now, left, bid).view("value_sale").get("p_lose")  # a STALL sells only when the sale beats holding (2026-11-24, user: "this had plenty of cushion still i don't understand why it sold"; replay over 27 live early takes, scripts/priskp_hold_check_replay.py: the check held 18 bets that all won and sold the 4 that lost if held): the hold value is 1 - the spot's chance of ending on the wrong side (the value_sale board's p_lose), against what the bid pays after the sale fee. Unread p_lose holds a stall too (nothing sells a stall on a number that is not there). A held FALL from the bid's high, with the bet in profit after both fees, is the market turning and is not held by the model (2026-11-25, user, on KXNEAR15M-26NOV250030 YES bought at 0.82: armed at 0.92, fell to 0.86 with +0.02 in hand, held by the check at 0.852 against 0.93, then 0.91 -> 0.55 -> 0.24 and late_dip sold at 0.29, a $10 loss: "our early profit should have fired"; the bid led the spot down on SOL, DOGE, XRP, HYPE and NEAR)
-        if lose is not None and bid - fee_per_contract(bid) < 1.0 - lose:
+        hold_margin = trail * min(left, 900.0) / 900.0  # the sale must beat holding by a margin too, one wobble at the open and none at the close (DOGE 19:45: the sale paid 0.810 against a hold value of 0.797, 1.3c, with 396 s left)
+        if lose is not None and bid - fee_per_contract(bid) < 1.0 - lose + hold_margin:
             return None  # a cushion holds a FALL as well as a stall (2026-11-25, user, on SOL 07:34 NO sold at 0.82 on a fall from 0.90 with the spot falling away from the target, hold value 0.822: "with that much cushion it should not sell, for almost anything"); an unread spot holds a stall only
         if not fell and lose is None:
             return None
         held = "" if lose is None else f"; the sale pays {bid - fee_per_contract(bid):.3f} after the sale fee against a hold value of {1.0 - lose:.3f} (the spot's chance of ending on the wrong side {lose:.3f})"
-        why = f"the bid fell {t.early_take_high - bid:.3f} from its high {t.early_take_high:.2f} (the bid's typical 10 s move {trail:.3f})" if fell else f"no new high of the bid or of the spot's cushion for {now - max(t.early_take_high_ts, t.early_take_spot_ts):.0f} s (a share {t.early_take_stall_share:.0%} of the {left:.0f} s left is {stall:.0f} s)"
+        why = f"the bid fell {t.early_take_high - bid:.3f} from its high {t.early_take_high:.2f} (the bid's typical 10 s move {trail:.3f}; a fall of {fall_need:.3f} counts at {left:.0f} s left)" if fell else f"no new high of the bid or of the spot's cushion for {now - max(t.early_take_high_ts, t.early_take_spot_ts):.0f} s (a share {t.early_take_stall_share:.0%} of the {left:.0f} s left is {stall:.0f} s)"
         reason = f"early take: the bet is in profit, +{net * 100:.1f}c a contract at the bid {bid:.2f} over the price paid {t.entry:.2f} after both fees, and it stopped climbing: {why}{held}; inside the first {t.early_take_share:.0%} of the market: sold"
         extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4), "high": round(t.early_take_high, 4), "trail": round(trail, 4), "kind": "fell" if fell else "stalled", "p_lose": None if lose is None else round(lose, 4)}
         if t.risk_live:

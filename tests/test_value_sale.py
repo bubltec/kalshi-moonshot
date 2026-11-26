@@ -754,3 +754,28 @@ def test_unit_curve_verdict_is_mirror_symmetric(monkeypatch):
                 if key(a) != key(b):
                     bad.append((t, side, key(a), key(b)))
     assert read > 10 and not bad, (read, bad[:5])
+
+
+def test_integration_early_take_one_wobble_fall_with_time_left_is_not_a_stop_and_a_bigger_one_is(tmp_path, monkeypatch, mem):
+    """2026-11-25 19:38 ET, user, on DOGE 19:45 NO bought at 0.76: the bid ran to 0.86, fell 0.04 (one wobble of 0.038) with 396 s left and it was sold at 0.82, +3.7c. A fall now has to be more than one wobble early in the market (3 at the open, 2 with half the time left, 1 at the close)."""
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.76, unit=0.093)  # the bid's wobble: 0.093 x sqrt(10/60) = 0.038
+    thin_cushion(monkeypatch)
+    t.entry, t.early_take_share, t.early_take_stall_share, t.early_take_hold_share = 0.76, 1.0, 0.0, 0.0
+    t.risk_unit, t.risk_unit_at = 0.093, 1e12  # the cached unit: the bid's wobble is read from it, not from quotes
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.86, 0.80, None)
+    left = 396.0
+
+    def ask(bid):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.86) is None  # armed and climbing: +10c
+    assert ask(0.82) is None  # fell 0.04 from 0.86, one wobble, with 396 s left: a fall needs about 0.071: held (the DOGE sale)
+    assert ask(0.90) is None  # a new high
+    assert ask(0.86) is None  # fell 0.04 again: held
+    why = ask(0.82)  # fell 0.08 from 0.90: more than the 0.071 a fall needs now, still in profit
+    assert why and why.startswith("early take:") and "stopped climbing" in why
