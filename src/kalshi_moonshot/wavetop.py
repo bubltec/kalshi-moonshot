@@ -327,11 +327,11 @@ def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, 
         if armed and sb[j] < lo_b:  # type: ignore[operator]
             lo_b, ilo = sb[j], j
         if sb[j] < lo_run:  # type: ignore[operator]
-            lo_run = sb[j]  # type: ignore[assignment]
+            lo_run = sb[j]
         elif armed and sb[j] - lo_run >= give_turn * qu:  # type: ignore[operator]
             iturn = j
     info = {"unit": qu, "entry_bid": b0, "low": lo_b, "armed": float(armed)}
-    sold = _rebound_sale(sb, armed, i0, i, ilo, lo_b, qu, now, T, V, side, info)
+    sold = _rebound_sale(sb, armed, i0, i, ilo, lo_b, qu, now, T, V, side, info)  # type: ignore[arg-type]
     if sold or give_share <= 0.0 or not armed:
         return sold, info
     left = max(opened + 900.0 - now, 0.0)

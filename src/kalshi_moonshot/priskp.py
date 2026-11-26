@@ -438,7 +438,7 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     if cv is not None:
         n["regime"] = cv["regime"]
         if cv["regime"] == "curve":  # in a curve the trend entry decides, both ways (the five rank checks neither buy nor stop it): wait at a dip or a peak, buy on the trend
-            n["curve"] = f"{cv['class']}, swing {cv['swing_u']:.2f} u gave back {cv['gb_u']:.2f}, big leg {cv['age'] if cv['age'] is not None else 'n/a'} and travel {cv['travel'] if cv['travel'] is not None else 'n/a'} of a usual one, target {cv['reach']:.2f} wave travels away"
+            n["curve"] = f"{cv['class']}, swing {cv['swing_u']:.2f} u after a turn of {cv['prev_u']:.2f} u, gave back {cv['gb_u']:.2f}, big leg {cv['age'] if cv['age'] is not None else 'n/a'} and travel {cv['travel'] if cv['travel'] is not None else 'n/a'} of a usual one, target {cv['reach']:.2f} wave travels away"
             inwin = WINDOW[0] <= minute <= WINDOW[1] and not DEAD[0] <= shot.ask <= DEAD[1]
             if cv["verdict"] == "buy" and inwin:
                 n["verb"], n["why"] = "buy", "curve_trend_entry"

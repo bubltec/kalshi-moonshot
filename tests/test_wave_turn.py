@@ -98,7 +98,7 @@ def test_unit_a_repeated_swing_fires_YES_after_a_dip_and_NO_after_a_peak_once_tw
 def test_unit_the_note_carries_the_leg_time_and_the_room_left_as_shadow(mem):
     hour = hour_path()
     feed(hour, window_path(LONG, u_of(hour)))
-    side, why, r, h = waveturn.read_index(INDEX, OPEN, OPEN + 250.5, K, 0.0)
+    _side, _why, r, h = waveturn.read_index(INDEX, OPEN, OPEN + 250.5, K, 0.0)
     assert 50 <= r.leg_s <= 70 and 1.0 < r.leg_u <= 2.0  # legs of 60 s and 2 u, a little less after the 30 s smoothing
     told = waveturn.note(r, h, K)
     assert "legs: median" in told and "legs left" in told and "(shadow)" in told
@@ -126,10 +126,10 @@ def test_unit_a_resting_order_stands_on_its_fire_until_the_curve_passes_the_swin
     # the curve climbs back past the peak it turned from: a new high, the turn failed, the order is out
     waveturn.clear()
     ticks_mod.history.clear()
-    feed(hour, window_path(LONG[:4] + [(120, 4.0)], u))
+    feed(hour, window_path([*LONG[:4], (120, 4.0)], u))
     fire_t = next(t for t, sd in fires(last=400) if sd == side and t >= 190)
     waveturn.clear()
-    feed(hour, window_path(LONG[:4] + [(120, 4.0)], u))
+    feed(hour, window_path([*LONG[:4], (120, 4.0)], u))
     assert waveturn.read_index(INDEX, OPEN, OPEN + fire_t + 0.5, K, 0.0)[0] == side
     assert waveturn.read_index(INDEX, OPEN, OPEN + 270.5, K, 0.0, side)[0] == side  # still under the 2 u peak it turned from
     out = waveturn.read_index(INDEX, OPEN, OPEN + 330.5, K, 0.0, side)  # 3 u: past it
@@ -231,7 +231,8 @@ def counts(rows):
 
 
 def test_replay_the_study_counts_on_the_users_marks(mem):
-    rows = json.load(gzip.open(FIXTURE, "rt"))
+    with gzip.open(FIXTURE, "rt") as fh:
+        rows = json.load(fh)
     assert len(rows) == 17 and sum(len(m["buy"]) for m in rows) == 18
     # Measured 2026-11-25 with the in-market gate (need(t) completed swings of 1u, growing with the minute), chosen AFTER seeing the user's 45 marks (these 17 and 28 more): 6 of the 18
     # marked buys are fired within 30 s, 6 of the 9 no-good markets stay silent, 14 other fires. The old pre-open gate on this first set was 9 / 8 / 27 (the

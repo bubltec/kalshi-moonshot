@@ -125,7 +125,7 @@ def _run(tape: Tape) -> Outcome:
             while not w._jobs.empty():
                 sig = w._jobs.get_nowait()
                 signals += 1
-                w._sell(sig.ticker, sig.lane, sig.why)
+                w._sell(sig.ticker, sig.lane, getattr(sig, "why", "sync"))
             if not store.open_bets():
                 exit_at = clock.now
                 break

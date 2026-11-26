@@ -30,7 +30,7 @@ _VIEW: dict[str, dict[str, Any]] = {}
 _built_at = 0.0
 
 
-def build_one(T: list[float], V: list[float], now: float, strike: float) -> dict[str, float] | None:
+def build_one(T: list[float], V: list[float], now: float, strike: float) -> dict[str, Any] | None:
     """The side-neutral (YES-view) hour readings from one index's ticks at `now`, or None when the history is too thin (under 25 of the last 60 minutes, or under 5 of the last 15, of one-second ticks) or the index did not move."""
     if not T or strike <= 0:
         return None

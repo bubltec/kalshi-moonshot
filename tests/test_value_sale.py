@@ -714,3 +714,43 @@ def test_unit_curve_verdict_waits_at_a_dip_and_buys_a_trend_only_in_a_curve(monk
     far = wavefacts.curve("IDX", opened, opened + 600.0, 50.0, "yes", 300.0)
     assert far is not None and far["regime"] == "steady" and far["verdict"] == "steady"
     assert wavefacts.curve("IDX", opened + 10 * 900.0, opened + 10 * 900.0 + 300.0, 100.0, "yes", 300.0) is None  # not in memory: the lane's checks decide
+
+
+def test_unit_curve_trend_needs_a_turn_before_it(monkeypatch):
+    import math
+
+    from kalshi_moonshot import wavefacts
+
+    wavefacts._before.clear()
+    wavefacts._big.clear()
+    # a wavy hour, then a plain fall from the open: a NO inside a fall that never turned from anything (no swing before it): not a trend entry
+    opened = _wave_history(monkeypatch, lambda s: 100.0 + 0.3 * math.sin(2 * math.pi * s / 120.0) if s < 0 else 100.0 - 0.02 * min(s, 150.0))
+    got = wavefacts.curve("IDX", opened, opened + 150.0, 99.0, "no", 750.0)
+    assert got is not None and got["class"] == "inside" and got["prev_u"] < wavefacts.TREND_MIN
+    assert got["verdict"] != "buy"
+
+
+def test_unit_curve_verdict_is_mirror_symmetric(monkeypatch):
+    """User, 2026-11-25 ~19:40: "every loss I look at is down, in a dip; something is wrong with the calculations that it is only buying down". A path and its mirror image about the target must give the YES verdict on one exactly what the NO verdict is on the other, at every second."""
+    import math
+
+    from kalshi_moonshot import wavefacts
+
+    wavy = lambda s: 100.0 + 0.4 * math.sin(2 * math.pi * s / 150.0) + (0.003 * s if s > 0 else 0.0) + (0.6 * math.sin(2 * math.pi * s / 400.0))
+    bad, read = [], 0
+    for f, g in ((wavy, lambda s: 200.0 - wavy(s)),):
+        for t in range(120, 800, 40):
+            for side, other in (("yes", "no"), ("no", "yes")):
+                wavefacts._before.clear()
+                wavefacts._big.clear()
+                opened = _wave_history(monkeypatch, f)
+                a = wavefacts.curve("IDX", opened, opened + t, 100.2, side, 900.0 - t)
+                wavefacts._before.clear()
+                wavefacts._big.clear()
+                opened = _wave_history(monkeypatch, g)
+                b = wavefacts.curve("IDX", opened, opened + t, 200.0 - 100.2, other, 900.0 - t)
+                key = lambda c: None if c is None else (c["class"], c["regime"], c["verdict"], c["swing_u"], c["prev_u"], c["at_extreme"])
+                read += a is not None
+                if key(a) != key(b):
+                    bad.append((t, side, key(a), key(b)))
+    assert read > 10 and not bad, (read, bad[:5])

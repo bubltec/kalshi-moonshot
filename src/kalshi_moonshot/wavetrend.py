@@ -110,12 +110,12 @@ def now_drift(sp: list[Any], unit: float, side: str) -> dict[int, float]:
     tail = sp[-(max(NOW_SECONDS) + NOW_SMOOTH + 1) :]
     if None in tail:
         return out
-    now_v = sum(tail[-NOW_SMOOTH:]) / NOW_SMOOTH  # type: ignore[arg-type]
+    now_v = sum(tail[-NOW_SMOOTH:]) / NOW_SMOOTH
     for h in NOW_SECONDS:
         old = tail[len(tail) - 1 - h - NOW_SMOOTH + 1 : len(tail) - h]
         if len(old) < NOW_SMOOTH:
             continue
-        z = (now_v - sum(old) / len(old)) / (unit * math.sqrt(h / 60.0))  # type: ignore[arg-type]
+        z = (now_v - sum(old) / len(old)) / (unit * math.sqrt(h / 60.0))
         out[h] = for_bet(z, side)
     return out
 

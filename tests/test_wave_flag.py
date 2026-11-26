@@ -16,7 +16,7 @@ OPEN = 1_900_000_800.0  # a quarter-hour
 INDEX = "BRTI"
 START = 100_000.0
 TICKER = "KXBTC15M-30JAN010015-15"
-DEFAULTS = dict(z_min=3.0, turn=0.35, m=1, window=180.0)
+DEFAULTS = {"z_min": 3.0, "turn": 0.35, "m": 1, "window": 180.0}
 
 
 def background(lead=3700):

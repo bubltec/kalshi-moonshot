@@ -99,7 +99,7 @@ def test_unit_the_drift_over_the_last_half_minute_to_five_minutes_is_signed_for_
     assert all(up[h] > 0 and down[h] == pytest.approx(-up[h]) for h in up)  # a climb runs a YES bet's way and a NO bet's against it
     # 300 s of climb is 3.0 against a random walk's spread of unit x sqrt(5) = 0.671: 4.47 units
     assert up[300] == pytest.approx(3.0 / (0.30 * math.sqrt(5.0)), rel=0.01)
-    assert wavetrend.now_drift([100.0] * 900, 0.30, "yes") == {h: 0.0 for h in (30, 60, 120, 300)}  # flat: no drift
+    assert wavetrend.now_drift([100.0] * 900, 0.30, "yes") == dict.fromkeys((30, 60, 120, 300), 0.0)  # flat: no drift
     assert wavetrend.now_drift(ramp, 0.0, "yes") == {}  # no unit, no reading
     assert wavetrend.now_drift(ramp[:200], 0.30, "yes") == {}  # under five minutes of history: nothing, no error
 

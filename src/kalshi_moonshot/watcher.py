@@ -382,7 +382,7 @@ class ProfitWatcher:
         self._ledger_at = 0.0
         self._ticks_warm = False
         self._lock = threading.Lock()
-        self._jobs: queue.SimpleQueue[SellSignal] = queue.SimpleQueue()  # sells for the sell worker. The socket only enqueues
+        self._jobs: queue.SimpleQueue[SellSignal | RestOrder] = queue.SimpleQueue()  # sells for the sell worker. The socket only enqueues
         self._inflight: set[tuple[str, str]] = set()
         self._signalled: dict[tuple[str, str], float] = {}  # when each sell signal was queued, to time the sale (queue, checks, order)
         self.follow: Callable[[set[str]], None] | None = None  # start streaming these tickers now (the tape recorder's follow)
@@ -2148,7 +2148,7 @@ class ProfitWatcher:
         """(contracts, proceeds, fee) a live resting sale's orders filled: the account's fills list (one read on the order side, after the orders, as a resting buy reconciles), or what the socket reported at the order's price when the list trails it (a maker's fill, no fee)."""
         from types import SimpleNamespace
 
-        filled, spent, fee = runner._own_fills(book, SimpleNamespace(side=t.side, ticker=t.ticker), set(r.ids), r.started)
+        filled, spent, fee = runner._own_fills(book, SimpleNamespace(side=t.side, ticker=t.ticker), set(r.ids), r.started)  # type: ignore[arg-type]
         proceeds = spent - fee  # _own_fills adds the fee to the price paid: a sale's proceeds are the price alone
         if r.filled > filled + 1e-9:
             proceeds += (r.filled - filled) * r.price

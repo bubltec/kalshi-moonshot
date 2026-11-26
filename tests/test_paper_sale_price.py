@@ -69,7 +69,7 @@ def test_integration_a_stale_read_cannot_sell_a_bid_that_has_gone_under_the_cost
 
 
 # ---- the wave give-up is a sale at a loss by design (2026-11-23). _sell backs off a sale under the cost after both fees unless the reason is one of the exits that exist to get out; the wave salvage sells only for a small gain, the give-up must not be refused for being under the cost. ----
-import pytest  # noqa: E402
+import pytest
 
 
 @pytest.mark.parametrize("live", [False, True])

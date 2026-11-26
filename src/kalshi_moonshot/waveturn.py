@@ -35,6 +35,7 @@ Memory only: the tick history (ticks.history) and the target in memory; the hour
 
 from __future__ import annotations
 
+import itertools
 import math
 import statistics
 import threading
@@ -143,7 +144,7 @@ def reading(window: list[float], t: int, K: float, u: float) -> Reading:
     pts, d, _ek, ev = zigzag(sm, ZZ * u)
     start = pts[-1][1] if pts else sm[0]
     big, _d, _k, _v = zigzag(sm, DONE_U * u)
-    legs = [(b[0] - a[0], abs(b[1] - a[1]) / u) for a, b in zip(big, big[1:])]
+    legs = [(b[0] - a[0], abs(b[1] - a[1]) / u) for a, b in itertools.pairwise(big)]
     leg_s = statistics.median(x for x, _ in legs) if legs else 0.0
     leg_u = statistics.median(y for _, y in legs) if legs else 0.0
     return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),

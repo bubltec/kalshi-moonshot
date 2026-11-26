@@ -25,6 +25,7 @@ Studies behind the choices: studies/results/2026-11-25-priskp-zscore-wave.txt (2
 from __future__ import annotations
 
 import bisect
+import itertools
 import math
 import statistics
 import threading
@@ -54,7 +55,7 @@ def _tau(w: list[float]) -> float | None:
     den = sum(x * x for x in xc)
     if den <= 0:
         return None
-    phi = sum(a * b for a, b in zip(xc, xc[1:])) / den
+    phi = sum(a * b for a, b in itertools.pairwise(xc)) / den
     return -GRID / math.log(phi) if 0.0 < phi < 0.9999 else None
 
 
@@ -70,7 +71,7 @@ def before(index: str, opened: float) -> dict[str, Any] | None:
     """The market's waves before its open (see the module doc), read once and kept; None when the hour before the open is not in the tick memory."""
     from . import ticks
 
-    key = (index, int(round(opened)))
+    key = (index, round(opened))
     with _lock:
         if key in _before:
             return _before[key]
@@ -79,7 +80,7 @@ def before(index: str, opened: float) -> dict[str, Any] | None:
     if got and got[0]:
         g = _grid(got[0], got[1], opened - HOUR, opened - GRID)
         if len(g) >= 300:
-            d = [b - a for a, b in zip(g, g[1:])]
+            d = [b - a for a, b in itertools.pairwise(g)]
             u = math.sqrt(sum(x * x for x in d) / len(d) * 6.0)
             half = g[-HALF // GRID:]
             tau = _tau(half)
@@ -123,7 +124,7 @@ def now_read(index: str, now: float, target: float, side: str, left: float) -> d
     icpt = mu - slope * xm
     res = sum((y - (icpt + slope * i)) ** 2 for i, y in enumerate(w))
     r2 = 1.0 - res / (sd * sd * n)
-    d10 = [b - a for a, b in zip(w, w[1:])]
+    d10 = [b - a for a, b in itertools.pairwise(w)]
     u10 = math.sqrt(sum(x * x for x in d10) / len(d10)) or 1e-12
     five = w[-HALF // 6 // GRID:]  # the last 5 minutes (30 samples)
     x = w[-1]
@@ -164,7 +165,7 @@ def _usual_big_leg(index: str, opened: float, u: float) -> float | None:
     from .waveshape import broad
     from .wavetop import grid
 
-    key = (index, int(round(opened)))
+    key = (index, round(opened))
     with _lock:
         if key in _big:
             return _big[key]
@@ -173,9 +174,10 @@ def _usual_big_leg(index: str, opened: float, u: float) -> float | None:
     if got and got[0]:
         pre = grid(got[0], got[1], int(opened) - HOUR, int(opened))
         if len(pre) >= HOUR - 5 and None not in pre:
-            sm = broad([float(x) for x in pre], 0, len(pre) - 1, waveturn.SMOOTH // 2, len(pre) - 1)
+            sm = broad([float(x) for x in pre],  # type: ignore[arg-type]
+                 0, len(pre) - 1, waveturn.SMOOTH // 2, len(pre) - 1)
             pts, _d, _k, _v = waveturn.zigzag(sm, BIG_REVERSAL * u)
-            durs = [b[0] - a[0] for a, b in zip(pts, pts[1:])]
+            durs = [b[0] - a[0] for a, b in itertools.pairwise(pts)]
             out = float(sorted(durs)[len(durs) // 2]) if len(durs) >= 2 else None
     with _lock:
         if len(_big) > 512:
@@ -194,7 +196,7 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
     from . import ticks, waveturn
     from .wavetop import grid
 
-    h = waveturn._hour(index, int(round(opened)))
+    h = waveturn._hour(index, round(opened))
     if h.u is None or now - opened < 30:
         return None
     got = ticks.history.window(index, opened, now)
@@ -222,19 +224,20 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
     r2 = None if nowr is None else nowr["r2"]
     from .waveshape import broad
 
-    sm = broad([float(x) for x in win], 0, int(now - opened), waveturn.SMOOTH // 2, int(now - opened))
+    sm = broad([float(x) for x in win], 0, int(now - opened), waveturn.SMOOTH // 2, int(now - opened))  # type: ignore[arg-type]
     big, _d, _k, _v = waveturn.zigzag(sm, BIG_REVERSAL * h.u)
     big_start = big[-1][0] if big else 0
     usual = _usual_big_leg(index, opened, h.u)
     age = ((now - opened) - big_start) / usual if usual else None
     small, _d2, _k2, _v2 = waveturn.zigzag(sm, waveturn.ZZ * h.u)
     small_start = small[-1][0] if small else 0
+    prev_u = abs(small[-1][1] - small[-2][1]) / h.u if len(small) >= 2 else 0.0  # the swing BEFORE the current one (it ran the other way): the size of the turn the current swing started from
     bef = before(index, opened)
     w10 = bef["w10"] if bef and bef.get("w10") else None
-    travel = abs(float(win[int(now - opened)]) - float(win[small_start])) / w10 if w10 else None
+    travel = abs(float(win[int(now - opened)]) - float(win[small_start])) / w10 if w10 else None  # type: ignore[arg-type]
     at_extreme = (age is not None and age >= EXTREME) or (travel is not None and travel >= EXTREME)
     refuse = cls in ("against", "turned") or (cls == "inside" and at_extreme)  # 2026-11-25 ~18:15 (user, on ZEC 18:15 NO bought at 18:07:11 at the bottom of a dip as it turned up, then a straight run through the strike: "It bought right in the dip. Why??! Why doesn't it wait??"): a bet whose side the current swing runs AGAINST, or whose leg has already TURNED against it, always waits; only a bet inside its own leg is bought, and not at that leg's extreme. 24 hours of bets: against 18 bets -$42.92 (44% lost), turned 16 bets -$0.17 (31% lost)
-    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse, "usual_leg_s": usual, "w10": w10, "at_extreme": at_extreme, "spot": float(win[int(now - opened)])}
+    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse, "usual_leg_s": usual, "w10": w10, "at_extreme": at_extreme, "prev_u": round(prev_u, 2), "spot": float(win[int(now - opened)])}  # type: ignore[arg-type]
 
 
 TREND_MIN = 1.0  # a swing counts as a TREND once it has run this many typical minutes with the bet and has not turned: my choice, twice wave_turn's 0.5 u swing, not scored
@@ -244,7 +247,7 @@ REACH = 1.0  # the target is IN REACH of the curve when the spot is within this 
 def curve(index: str, opened: float, now: float, target: float, side: str, left: float) -> dict[str, Any] | None:
     """The curve verdict for one side (2026-11-25 ~18:30, user, after ZEC 18:15 NO was bought at the bottom of a dip as it turned up and the lane then sat out the whole rise: "ONLY in the curve do you buy on a trend. If it's flat with cushion or a trend market you buy whenever price is good"; "I'm asked you to wait in the dip or peaks. You need to buy on a trend").
     regime  'curve' when the market has waves (at least two confirmed big legs in the hour before the open) AND the target is within REACH usual wave travels of the spot; else 'steady' (flat with cushion, or one trending line): the lane's own checks decide there, whenever the price is good
-    verdict (curve only) 'buy' when the bet's side runs WITH the current swing ('inside'), the swing has run TREND_MIN typical minutes without turning, and the leg is not at its extreme: the trend entry, which replaces the five rank checks; otherwise 'wait' (at a dip or a peak: the swing is against the bet, or it has turned, or it is young, or at its extreme)
+    verdict (curve only) 'buy' when the bet's side runs WITH the current swing ('inside'), the swing has run TREND_MIN typical minutes without turning, and started from a turn (the swing before it, the other way, ran TREND_MIN too), and the leg is not at its extreme: the trend entry, which replaces the five rank checks; otherwise 'wait' (at a dip or a peak: the swing is against the bet, or it has turned, or it is young, or at its extreme)
     None when the leg cannot be read (the hour before the open or the path since it is not in memory): the lane's checks decide."""
     base = leg(index, opened, now, target, side, left)
     if base is None:
@@ -257,6 +260,6 @@ def curve(index: str, opened: float, now: float, target: float, side: str, left:
     wavy = usual is not None and reach < REACH
     out = {**base, "reach": round(reach, 2), "regime": "curve" if wavy else "steady", "verdict": "steady"}
     if wavy:
-        trend = base["class"] == "inside" and base["swing_u"] >= TREND_MIN and not base["at_extreme"]
+        trend = base["class"] == "inside" and base["swing_u"] >= TREND_MIN and base["prev_u"] >= TREND_MIN and not base["at_extreme"]  # 2026-11-25 ~19:30: the swing must have STARTED FROM A TURN (the swing before it, the other way, was a real one), not be a fall or rise continuing into its low or high (BTC 19:05 NO: a 1.05 u fall bought mid-dip, -$13; user: "wait in the dip", "buy on a trend")
         out["verdict"] = "buy" if trend else "wait"
     return out

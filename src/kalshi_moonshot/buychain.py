@@ -327,14 +327,14 @@ def _hold_value(ticker: str, shot: LongShot, now: float) -> float | None:
 
 
 THROTTLE_S = 3.0  # 2026-11-25 (user: "the only thing we need evaluated every tick, is the market pricing. others can be throttled"): a heavy step's answer for one (lane, market, side) is kept this many seconds and read from memory on the ticks in between; the price step and the lane's own quote checks still run on every tick. 0 turns it off (the tests do)
-_THROTTLED: dict[tuple[str, str, str, str], tuple[float, "Check"]] = {}
+_THROTTLED: dict[tuple[str, str, str, str], tuple[float, Check]] = {}
 
 
 def throttled(name: str) -> Callable[[Step], Step]:
     """Wrap a buy step so its answer is reused for THROTTLE_S seconds per (lane, market, side). For the steps that read the tick memory or the books and change slowly: side_losing and wave_leg."""
     def deco(fn: Step) -> Step:
         @functools.wraps(fn)
-        def wrapper(ctx: "Ctx", shot: "LongShot") -> "Check":
+        def wrapper(ctx: Ctx, shot: LongShot) -> Check:
             if THROTTLE_S <= 0:
                 return fn(ctx, shot)
             key = (name, str(shot.lane), shot.ticker, shot.side)
@@ -417,7 +417,7 @@ def settle_confirm_step(ctx: Ctx, shot: LongShot) -> Check:
     key = (shot.ticker, shot.side)
     got = _CONFIRM_FIRST.get(key)
     if got is None:
-        win = ticks.history.window(index, ctx.now - 3600.0, ctx.now)
+        win = ticks.history.window(index, ctx.now - 3600.0, ctx.now) if index else None
         unit = priskp.typical_minute(win[0], win[1], ctx.now, 3600.0) if win and win[0] else 0.0
         if unit <= 0:
             return Check(False, "the spot's typical minute cannot be read yet")

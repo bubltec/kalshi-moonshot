@@ -683,8 +683,8 @@ def test_unit_give_up_the_wait_peaks_at_minute_five_and_is_short_at_the_open_and
 
 
 def test_unit_give_up_the_peak_is_the_lanes_and_must_lie_inside_the_market():
-    now_a, info_a = first_give_up(gu_bids(450), 450, 0.2, peak=1.0 / 3.0)
-    now_b, info_b = first_give_up(gu_bids(450), 450, 0.2, peak=0.5)  # the peak moved to minute 7.5: a longer wait there
+    _now_a, info_a = first_give_up(gu_bids(450), 450, 0.2, peak=1.0 / 3.0)
+    _now_b, info_b = first_give_up(gu_bids(450), 450, 0.2, peak=0.5)  # the peak moved to minute 7.5: a longer wait there
     assert info_b["waited"] > info_a["waited"] and info_b["peak"] == 0.5
     assert info_b["allowed"] == pytest.approx(tent(0.2, info_b["elapsed"], info_b["left"], 0.5))
     for bad in (0.0, 1.0, -0.2, 1.5):
@@ -731,7 +731,8 @@ def test_unit_a_lane_file_names_the_give_up(tmp_path, monkeypatch):
 
 def _gu_held(tmp_path, monkeypatch, side, shock_ref=None, share=0.1):
     from kalshi_moonshot import curverisk, watcher
-    from tests.test_risk_exit_flow import CLOSE, TICKER as HELD, held
+    from tests.test_risk_exit_flow import CLOSE, held
+    from tests.test_risk_exit_flow import TICKER as HELD
 
     w = held(tmp_path, monkeypatch, live=True, extra=f"sell_chain=['wave_salvage']\nwave_give_up_share={share}\nwave_give_up_turn=0.5")
     t = w.targets[(HELD, "risk_only")]
