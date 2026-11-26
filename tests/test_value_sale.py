@@ -512,13 +512,14 @@ def test_integration_early_take_holds_on_a_cushion_that_scales_with_the_time_lef
     ask2 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     ask2.target.early_take_cushion_units = 1.0
     assert ask2(0.90, 700) is None  # armed with 700 s left (SOL 17:00 NO, 2026-11-25: 1.4 to 2.5 typical minutes of cushion and 8 to 12 minutes left)
-    why = ask2(0.80, 690)  # the same three typical minutes now sit under the bar of 1 x sqrt(690/60) = 3.4 typical minutes: it sells on the fall
-    assert why and "bid fell" in why
+    assert ask2(0.80, 690) is None  # under the bar of 3.4 typical minutes, but the spot is still on the winning side: nothing in this step sells that (2026-11-26, user, on SOL 08:30 NO: "it was on the WINNING side, and it still sold it")
     spot[0] = (0.05, 0.10)
     ask3 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     ask3.target.early_take_cushion_units = 1.0
     assert ask3(0.90, 100) is None
-    why = ask3(0.79, 95)  # a thin cushion under the bar at any time left: it sells
+    assert ask3(0.79, 95) is None  # a thin cushion, still on the winning side: held
+    spot[0] = (-0.05, 0.10)
+    why = ask3(0.79, 94)  # the spot has crossed to the wrong side with the bet still in profit: the fall sells
     assert why and "bid fell" in why
 
 
@@ -792,7 +793,7 @@ def test_integration_a_loss_while_ahead_is_held_by_asking_the_veto_not_by_the_wa
     assert asker(w, t, close)(0.50, 300) is not None
 
 
-def test_integration_early_take_a_stall_with_the_spot_ahead_never_sells_but_a_fall_does(tmp_path, monkeypatch, mem):
+def test_integration_early_take_never_sells_with_the_spot_ahead_and_sells_once_it_crosses(tmp_path, monkeypatch, mem):
     """2026-11-25 20:30 ET, user, on HYPE 20:30 YES (sold at 0.92 with 45 s left on a 4 s stall): a pause in the bid is not a reason to sell while the spot is on the winning side; a FALL from the high still is."""
     from kalshi_moonshot import curverisk, watcher
 
@@ -811,8 +812,9 @@ def test_integration_early_take_a_stall_with_the_spot_ahead_never_sells_but_a_fa
     assert ask(0.92, 300, 100.3) is None  # armed, spot ahead
     for left in (240, 180, 120, 60, 45):
         assert ask(0.92, left, 100.3) is None  # the bid is flat for minutes, the spot sits ahead: held
-    why = ask(0.86, 44, 100.3)  # a real fall of 0.06 from the 0.92 high, still in profit after both fees: sold even with the spot ahead
-    assert why and why.startswith("early take:") and "the bid fell" in why
+    assert ask(0.86, 44, 100.3) is None  # a real fall of 0.06 from the 0.92 high with the spot still ahead: held too (2026-11-26, SOL 08:30 NO)
+    why = ask(0.86, 43, 99.9)  # the spot crossed to the wrong side, the bet still in profit: now it sells
+    assert why and why.startswith("early take:")
 
 
 def test_unit_travel_left_grows_with_the_time_left():
