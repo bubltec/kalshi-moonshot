@@ -93,3 +93,27 @@ def test_the_sale_reason_carries_the_facts_it_was_judged_on(tmp_path, monkeypatc
         ask(bid, 60)
     why = ask(0.34, 60)
     assert why and "[facts read:" in why and "cushion_factor=" in why and "whipsaw=no" in why
+
+
+def test_inside_the_settlement_window_p_lose_reads_where_the_window_would_end():
+    """2026-11-26 (user, on ZEC 15:45 YES: "I'm sure the priskp score said NO. Which at the end of a market should matter most"; "Yes do it"): in the last 60 s the chance of losing comes from the settlement window (the seconds banked plus the spot now, against the random walk left in it), not from the trailing minute over the whole time left."""
+    from types import SimpleNamespace
+
+    from kalshi_moonshot import facts
+
+    read = {60: (0.50, 0.10), 5: (-0.40, 0.10)}  # the trailing minute is half a point over the target; the last 5 s are 0.4 UNDER it
+
+    def host(banked):
+        return SimpleNamespace(_wave_spot=lambda t, now, avg_seconds=60: read.get(avg_seconds, banked))
+
+    t = SimpleNamespace(entry=0.80, wave_cushion=False)
+    out = facts.Board(host((0.30, 0.10)), t, 1000.0, 90.0, 0.90)  # 90 s left: outside the window, the old reading
+    assert out.get("p_lose") < 0.01 and facts.settle_end(out) is None
+    b = facts.Board(host((0.30, 0.10)), t, 1000.0, 20.0, 0.90)  # 40 s banked at +0.30, 20 s to run at -0.40: ends (0.30 x 40 - 0.40 x 20) / 60 = +0.067
+    ends, sd = facts.settle_end(b)
+    assert abs(ends - (0.30 * 40 - 0.40 * 20) / 60) < 1e-9 and abs(sd - (20 / 60) * (0.10 / 60 ** 0.5) * (20 / 3) ** 0.5) < 1e-9
+    assert b.get("p_lose") < 0.01  # banked far enough ahead that 20 s cannot undo it
+    b2 = facts.Board(host((0.10, 0.10)), t, 1000.0, 40.0, 0.90)  # 20 s banked at +0.10, 40 s to run at -0.40: ends -0.233: the bet is losing, whatever the trailing minute says
+    assert b2.get("p_lose") > 0.99
+    b3 = facts.Board(SimpleNamespace(_wave_spot=lambda t, now, avg_seconds=60: None if avg_seconds == 5 else (0.5, 0.1)), t, 1000.0, 40.0, 0.90)
+    assert facts.settle_end(b3) is None and b3.get("p_lose") < 0.01  # no 5 s reading: the old reading stands

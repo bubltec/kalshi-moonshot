@@ -16,6 +16,7 @@ To add a fact: write a reader with @reader("name") returning (value, why), and a
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -156,10 +157,27 @@ def _p_lose(b: Board) -> tuple[Any, str]:
     """The chance the spot's average ends on the wrong side: its cushion over what a random walk moves in the time left (wavetop.p_lose). None without a spot reading."""
     from . import wavetop
 
+    end = settle_end(b)
+    if end is not None:  # inside the settlement window the trailing 60 s average and the whole time left are the wrong reading (2026-11-26, user, on ZEC 15:45 YES: "I'm sure the priskp score said NO. Which at the end of a market should matter most"; it read 0.95 for YES at 15:44:40 as the spot fell through the target, off a 1/3/5 minute blend): what settles is this window's average, part of it already banked
+        ends, sd = end
+        lose = (0.0 if ends > 0 else 1.0) if sd <= 0 else wavetop.norm_cdf(-ends / sd)
+        return lose, f"the settlement window: it would end {ends:+.4g} for the bet if the spot stays where it is, against {sd:.4g} of random walk left in it"
     spot = b.get("spot")
     if spot is None:
         return None, "no spot reading"
     return wavetop.p_lose(spot[0], spot[1], b.left), "the cushion against a random walk's move over the time left"
+
+
+def settle_end(b: Board) -> tuple[float, float] | None:
+    """Inside the settlement window (the market's last SETTLE_S seconds, what Kalshi settles on): (where the window's average would end for the bet's side if the spot stays at its last 5 s level, the standard deviation a random walk still adds to that average). The first is (the banked average x seconds done + the last 5 s x seconds left) / 60; the second is (left / 60) x the 1 s move x sqrt(left / 3), the 1 s move being the typical minute / sqrt(60) (the mean of a random walk over T seconds has variance T / 3 per unit of 1 s variance). None outside the window or without both readings."""
+    if not 0 < b.left < SETTLE_S:
+        return None
+    banked, fast = b.get("spot_settling"), b.get("spot_now")
+    if banked is None or fast is None:
+        return None
+    ends = (banked[0] * (SETTLE_S - b.left) + fast[0] * b.left) / SETTLE_S
+    sd = (b.left / SETTLE_S) * (fast[1] / math.sqrt(60.0)) * math.sqrt(b.left / 3.0)
+    return ends, sd
 
 
 @reader("cushion_factor")
@@ -339,8 +357,7 @@ def _loss_while_ahead(b: Board) -> tuple[Any, str]:
     ahead = (spot is not None and spot[0] > 0) or (fast is not None and fast[0] > 0)
     told = ", ".join(f"{n} {v[0]:+.4g}" for n, v in ((slow_name, spot), ("last 5 s", fast)) if v is not None)
     if slow_name != "60 s average" and spot is not None and fast is not None:  # inside the settlement window with both read: what settles is the WHOLE window's average, so the bet is ahead only if the banked part plus the rest of the window at the spot's level now still ends on its side. 2026-11-26, ZEC 15:45 YES (bought 0.80, bid 0.99 at 15:44:15, a full loss of $15.18): the spot fell through the target with 30 s left, late_dip was held at 15:44:43 because the 43 s banked were still over it, and the market settled NO
-        done = SETTLE_S - b.left
-        ends = (spot[0] * done + fast[0] * b.left) / SETTLE_S
+        ends = (spot[0] * (SETTLE_S - b.left) + fast[0] * b.left) / SETTLE_S  # the same projection as settle_end
         ahead = ends > 0
         told += f"; the window would end {ends:+.4g} if the spot stays where it is"
     return bool(loss and ahead), f"the sale would be a {'loss' if loss else 'gain'}; the spot over the target for the bet's side: {told}"
