@@ -813,3 +813,13 @@ def test_integration_early_take_a_stall_with_the_spot_ahead_never_sells_but_a_fa
         assert ask(0.92, left, 100.3) is None  # the bid is flat for minutes, the spot sits ahead: held
     why = ask(0.86, 44, 100.3)  # a real fall of 0.06 from the 0.92 high, still in profit after both fees: sold even with the spot ahead
     assert why and why.startswith("early take:") and "the bid fell" in why
+
+
+def test_unit_travel_left_grows_with_the_time_left():
+    """2026-11-26, user: "if you're betting on a curve early you need to be calculating for additional swings and variance". How far the market's waves usually travel in the time left: the 3, 10 and 15 minute travels joined, grown by sqrt beyond 15 minutes, shrunk by sqrt under 3."""
+    from kalshi_moonshot import wavefacts
+
+    bef = {"w3": 0.10, "w10": 0.20, "w15": 0.25}
+    assert wavefacts.travel_left(None, 600.0) is None and wavefacts.travel_left({"w3": 0.1}, 600.0) is None
+    assert abs(wavefacts.travel_left(bef, 180.0) - 0.10) < 1e-9 and abs(wavefacts.travel_left(bef, 600.0) - 0.20) < 1e-9 and abs(wavefacts.travel_left(bef, 900.0) - 0.25) < 1e-9
+    assert wavefacts.travel_left(bef, 780.0) > wavefacts.travel_left(bef, 600.0) > wavefacts.travel_left(bef, 400.0) > wavefacts.travel_left(bef, 120.0)

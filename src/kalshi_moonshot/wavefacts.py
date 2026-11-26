@@ -240,6 +240,23 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
     return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse, "usual_leg_s": usual, "w10": w10, "at_extreme": at_extreme, "prev_u": round(prev_u, 2), "spot": float(win[int(now - opened)])}  # type: ignore[arg-type]
 
 
+def travel_left(bef: dict[str, Any] | None, left: float) -> float | None:
+    """How far the market's waves usually travel in `left` seconds, from the hour before the open (`before`): its 3, 10 and 15 minute travels joined by straight lines; beyond 15 minutes the 15 minute travel grown by the square root of the extra time (a random walk's reach), under 3 minutes the 3 minute travel shrunk by the square root. None when the hour is not read."""
+    if not bef:
+        return None
+    w3, w10, w15 = bef.get("w3"), bef.get("w10"), bef.get("w15")
+    if not (w3 and w10 and w15):
+        return None
+    m = max(left, 1.0) / 60.0
+    if m <= 3.0:
+        return float(w3) * math.sqrt(m / 3.0)
+    if m <= 10.0:
+        return float(w3) + (float(w10) - float(w3)) * (m - 3.0) / 7.0
+    if m <= 15.0:
+        return float(w10) + (float(w15) - float(w10)) * (m - 10.0) / 5.0
+    return float(w15) * math.sqrt(m / 15.0)
+
+
 TREND_MIN = 1.0  # a swing counts as a TREND once it has run this many typical minutes with the bet and has not turned: my choice, twice wave_turn's 0.5 u swing, not scored
 REACH = 1.0  # the target is IN REACH of the curve when the spot is within this many of the market's usual 10 minute wave travels of it (the hour before the open): outside that the market is flat with cushion
 
@@ -252,11 +269,12 @@ def curve(index: str, opened: float, now: float, target: float, side: str, left:
     base = leg(index, opened, now, target, side, left)
     if base is None:
         return None
-    w10 = base.get("w10")
     usual = base.get("usual_leg_s")
-    if not w10 or w10 <= 0:
+    bef = before(index, opened)
+    room = travel_left(bef, left)
+    if not room or room <= 0:
         return None
-    reach = abs(base["spot"] - target) / w10
+    reach = abs(base["spot"] - target) / room  # the target's distance in the market's usual wave travel over the TIME LEFT, not over a fixed 10 minutes (2026-11-26, user, on HYPE 21:00 NO bought at minute 2.1 with 12.9 minutes left: "if you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history"): early in the market there is time for a longer swing than a 10 minute one
     wavy = usual is not None and reach < REACH
     out = {**base, "reach": round(reach, 2), "regime": "curve" if wavy else "steady", "verdict": "steady"}
     if wavy:
