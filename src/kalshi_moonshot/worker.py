@@ -435,6 +435,9 @@ class Worker:
         self._split = True
         threading.Thread(target=self._maintenance_loop, name="maintenance", daemon=True).start()
         threading.Thread(target=reqstats.log_loop, args=(lambda: self.stopping,), name="req-stats", daemon=True).start()
+        from . import orderjournal
+
+        threading.Thread(target=orderjournal.run, args=(lambda: self.s, self.client, lambda: Store(self.s.db_path, self.s.exclude_versions), lambda: self.stopping), name="order-journal", daemon=True).start()  # the dead-letter retry: an order sent with no bet row (a restart, a failed write) gets its row from the fills (orderjournal.py)
         for i in range(self.s.buy_workers):
             threading.Thread(target=self._buy_loop, name=f"buy-job-{i}", daemon=True).start()
         self._buy_threads = self.s.buy_workers

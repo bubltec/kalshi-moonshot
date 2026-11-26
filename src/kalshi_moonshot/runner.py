@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from . import curverisk, factors, memguard, restbuys, risk, shadow, steptime
+from . import curverisk, factors, memguard, orderjournal, restbuys, risk, shadow, steptime
 from .calibration import Calibration
 from .commodities import CommodityPricer, load_instruments
 from .config import Settings
@@ -1095,6 +1095,7 @@ def place(
                 if why_not:
                     return Placed(why_not)
             return Placed(f"order failed: {exc}")
+        orderjournal.intent(s.data_dir, lane=(lane_spec.name if lane_spec is not None else shot.lane), shot=shot, order_id=resp.get("order_id", ""), count=count, price=limit, kind="immediate")
         filled = float(resp.get("fill_count") or 0.0)
         avg = float(resp.get("average_fill_price") or shot.ask)
         fee = float(resp.get("average_fee_paid") or 0.0) * filled
@@ -1260,6 +1261,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
         except KalshiError as exc2:
             return Placed(f"resting buy refused: {exc2}")
     order_id = resp.get("order_id") or (resp.get("order") or {}).get("order_id") or ""
+    orderjournal.intent(s.data_dir, lane=spec.name, shot=shot, order_id=order_id, count=count, price=price, kind="resting")  # before the wait: a restart in the next minute must still find this order (orderjournal.py)
     filled = spent = fee_paid = 0.0
     seen: set[str] = set()
     deadline = started + wait + 3.0
