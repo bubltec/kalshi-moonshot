@@ -240,7 +240,8 @@ def test_replay_the_study_counts_on_the_users_marks(mem):
     # study is studies/results/2026-11-25-wave-swing-gate.txt and forward paper scoring is the test. The PLATINUM 18:30 path lacks the first 310 s of its
     # pre-open hour; the step says 'no reading' for an hour not fully in memory and stays silent there.
     # 2026-11-26: with the larger-leg rule (a turn against the market's 1u leg is a pull-back, not the wave's turn) the other fires fall from 14 to 11; the 6 marked buys and the 6 silent no-goods are unchanged. Two other rules tried the same day and NOT kept, because each cut the marked buys the lane fires from 6 to 2: the wave's last opposite extreme on the bet's side of the target, and the swing at least as large as its extreme's distance from the target.
-    assert counts(rows) == (6, 6, 11)
+    # 2026-11-26, later: with the leg-scale rule (the swing that turns must be 0.75 of the market's median completed leg) 5 of the 18 marked buys are fired, the same 6 no-goods are silent, 9 other fires. The rule costs one marked buy on these markets; it was chosen after seeing this count and the day's five wrong live buys.
+    assert counts(rows) == (5, 6, 9)
 
 
 # ---- the buy step, through the lane file ----
@@ -400,3 +401,28 @@ def test_the_turns_of_the_larger_leg_itself_fire_as_before(mem):
     hour = hour_path()
     feed(hour, window_path(REPEATED, u_of(hour)))
     assert fires() == [(141, "yes"), (201, "no")]  # each is the larger leg's own turn: the rule does not touch them
+
+
+# ---- the leg scale (2026-11-26): SILVER 10:45 YES was bought on the bounce off a 1.09u fall in a market whose legs are 2.19u ----
+# legs of 2, 2, 2 and 3 u, a rise of 1.4 u, then a fall of 1.4 u and a bounce: the last fall is a wobble against legs of 2 u
+WOBBLE = [(60, 2.0), (60, -2.0), (60, 2.0), (60, -3.0), (60, 1.4), (45, -1.4), (30, 0.6), (300, 0.0)]
+
+
+def test_a_turn_on_a_swing_well_under_the_markets_own_leg_is_a_wobble_and_buys_nothing(mem):
+    hour = hour_path()
+    feed(hour, window_path(WOBBLE, u_of(hour)))
+    assert not [f for f in fires() if 330 <= f[0] <= 400]  # nothing bought on the bounce
+    seen = []
+    for t in range(345, 400):
+        side, why, r, _h = waveturn.read_index(INDEX, OPEN, OPEN + t + 0.5, K, 0.0)
+        if r is not None and r.d == -1 and r.big_d == -1 and r.gb_u >= waveturn.GB:  # the fall has turned, and it is the larger leg too (over 1 u): only the leg scale refuses it
+            seen.append((side, why, r.swing_u, r.leg_u))
+    assert seen and all(side is None for side, *_ in seen)
+    assert any("a wobble inside the wave, not one of its turns" in why and sw < waveturn.LEG_SHARE * leg for _s, why, sw, leg in seen)
+
+
+def test_the_leg_scale_does_not_apply_before_the_market_has_a_leg(mem):
+    hour = hour_path()
+    feed(hour, window_path(REPEATED, u_of(hour)))
+    assert fires()[0] == (141, "yes")  # the first turn after one completed swing: no median leg worth the name yet refuses it, and it fires as before
+

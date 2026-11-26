@@ -50,6 +50,7 @@ ZZ = 0.5  # the zig-zag's reversal, in u
 SWING = 0.5  # the least swing, in u
 GB = 0.2  # given back from the swing's extreme before the buy, in u
 BAND = 0.5  # the side gate's band around the target, in u
+LEG_SHARE = 0.75  # 2026-11-26 (user, on SILVER 10:45 YES bought on a small bounce: "Again, makes no sense. It bought yes in the wrong place"): the swing that turns must be this share of the market's own median completed leg, or it is a wobble. The swing over the leg on the day's wrong buys: SILVER 10:45 0.50, GOLD 10:30 0.50, PLATINUM 10:15 0.41, DOGE 10:30 NO 0.68, NATGAS 10:00 0.91; on the good ZEC 10:30 NO 2.3. On the user's 17 marked markets: 0.6 keeps the 6 marked buys fired (other fires 11 -> 10), 0.75 keeps 5 (9 others), 1.0 keeps 4 (8 others, one more no-good silent). 0.75 was CHOSEN AFTER SEEING both; it does not apply before a market has a completed leg
 DONE_U = 1.0  # a completed swing: the curve has gone this far one way and this far back, in u (chosen after seeing the user's 28 marks)
 DONE_OFFSET_MIN = 2.0  # the completed swings needed grow with the minutes into the market: one before about minute 5, two at 6, three at 8, four at 10 (swings pile up with time, so a fixed count lets trends in late). From the leave-one-market-out of the swing count on the user's 45 marks (studies/results/2026-11-25-wave-swing-gate.txt): best count 1 at 4 min, 2 at 6, 3 at 8-10; chosen after seeing the marks.
 DONE_SLOPE = 0.5  # swings needed per minute after DONE_OFFSET_MIN
@@ -192,6 +193,8 @@ def judge(r: Reading, fires: Fires, hold: float, resting: str | None = None) -> 
     if r.big_d != 0 and r.big_d != r.d:
         # 2026-11-26 (user, on GOLD 10:30 YES bought at 281 s on the second high of a 2u rise: "This bought UP AT THE PEAK ... That's the opposite of what it should do", "it keeps buying the wrong sides!!!! Fix this"): the side comes from the 0.5u swing, and a 0.6u pull-back at the top of a rise read as a dip turning up. A turn that runs against the market's larger leg (the DONE_U zig-zag, still in force) is a pull-back inside it, not the wave's dip or peak. On the user's 17 marked markets this keeps all 6 marked buys the lane fires, the 6 silent no-goods, and cuts the other fires from 14 to 11.
         return None, f"the {r.swing_u:.2f}u {'rise' if r.d == 1 else 'fall'} runs against the market's larger leg (a {'fall' if r.big_d == -1 else 'rise'} of {DONE_U:g}u or more still in force): a pull-back inside it, not the wave's {'peak' if r.d == 1 else 'dip'}"
+    if r.leg_u > 0 and r.swing_u < LEG_SHARE * r.leg_u:
+        return None, f"the swing that turned is {r.swing_u:.2f}u and the market's own median leg is {r.leg_u:.2f}u: under {LEG_SHARE:g} of it, a wobble inside the wave, not one of its turns"
     if r.done < need(r.t):
         return None, f"{r.done} completed swings of {DONE_U:g}u so far, the lane needs {need(r.t)} at {r.t}s: a trend has a pull-back at most, a wave comes back (not a wave shape yet)"
     fires.done[key] = r.t
