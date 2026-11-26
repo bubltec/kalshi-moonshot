@@ -109,6 +109,9 @@ def cmd_run(s: config.Settings, args: argparse.Namespace) -> int:
     )
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: worker.stop())  # finish the current job, then exit
+    from . import memcensus
+
+    memcensus.start()  # `docker kill -s USR1 moonshot-bot-1` writes a memory census to the log
     bad = lanes.unknown_live_lanes(s)
     if bad:
         log.warning(
