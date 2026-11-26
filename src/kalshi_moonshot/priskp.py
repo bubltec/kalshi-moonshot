@@ -391,7 +391,9 @@ def admit(s: Any, shot: Any, now: float, hours: float | None = None) -> tuple[bo
     n = view.get("priskp_screen")
     if n["verb"] == "buy":
         label = board.vetoes("priskp")
-        if label:
+        if label == "early_swings_not_cleared":
+            n["verb"], n["why"] = "wait", label  # a WAIT, not a refusal: an early curve entry is bought once the swing-aware chance clears a half, or the early part of the market is over
+        elif label:
             n["verb"], n["why"] = "refuse", label
             n["shift_ago_min"] = round(view.get("shift_out")["ago"] / 60.0, 1)
     hv = view.get("hour_view") if n["verb"] == "buy" else None  # the hour before now, from memory (hourview.py): logged only, a tie-breaker the user wants for a risk that is not sure

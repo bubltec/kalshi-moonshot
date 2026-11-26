@@ -27,13 +27,14 @@ NEEDS: dict[str, tuple[str, ...]] = {
     "wave_salvage": ("spot",),
     "value_sale": ("p_lose", "spot", "waves_before", "wave_now", "wave_leg"),  # early_take, no_recovery and late_dip read the board through this view
     "value_hold": ("p_lose", "spot", "waves_before", "wave_now", "wave_leg"),
-    "priskp": ("priskp_screen", "shift_out", "hour_view", "price_gap", "waves_before", "wave_now", "wave_leg"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
+    "priskp": ("priskp_screen", "shift_out", "early_swings", "hour_view", "price_gap", "waves_before", "wave_now", "wave_leg"),  # the buy side (2026-11-22): the board's host is a small holder of the settings, the moment and the hours, the bet is the shot
 }
 
 
 VETO_RULES: list[tuple[str, Callable[[Any], bool], tuple[str, ...], str]] = []  # (fact, vetoes when this is true of its value, the steps it stops, the label the log carries)
 VETO_RULES.append(("shift_out", lambda v: v is not None, ("priskp",), "shift_out_of_cushion"))  # user, 2026-11-22: no buy on the side a confirmed shift took out of its cushion, against the current target
 VETO_RULES.append(("loss_while_ahead", lambda v: v is True, ("late_dip", "no_recovery", "value_sale"), "still_on_the_winning_side_of_the_target"))  # user, 2026-11-25, on BNB and DOGE 13:30 YES sold at 0.60 and 0.71 with the spot over the strike (both settled YES): "we were winning", "is it selling because it thinks its losing when its over 50c?", "just don't sell if it isn't on the other side of the target": a sale under what the bet cost needs the spot on the OTHER side of the target
+VETO_RULES.append(("early_swings", lambda v: v is True, ("priskp",), "early_swings_not_cleared"))  # user, 2026-11-25: "If you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history (hour)"; 2026-11-26 "Fix it": a curve trend entry in the first third of the market WAITS while the swing-aware chance (wave_now) of ending on its side is under a half
 VETOED_STEPS = frozenset(step for _, _, steps, _ in VETO_RULES for step in steps)
 
 
@@ -221,6 +222,26 @@ def _price_gap(b: Board) -> tuple[Any, str]:
     ask = float(ask)
     out = {"chance": float(chance), "gauss": None if gauss is None else float(gauss), "swing": None if swing is None else float(swing), "ask": ask, "gap": round(float(chance) - ask - 0.07 * ask * (1.0 - ask), 4)}
     return out, "the chance of ending on the bet's side (the swing-aware one when read, else the random-walk one) minus the ask and its buy fee"
+
+
+EARLY_SHARE = 1.0 / 3.0  # the early part of a market for the fact `early_swings`: its first third (minute 5 of 15). From the 36 trend entries of 2026-11-26 11:02-12:45 ET, seen after the fact: bought before minute 5, 13 bets -$38.59; minute 5-10, 14 bets +$1.10; minute 10 on, 8 bets +$27.32
+SWING_HALF = 0.5  # the swing-aware chance under which an early trend entry waits: less likely than not to end on its side once the hour's swings are counted (structural)
+
+
+@reader("early_swings")
+def _early_swings(b: Board) -> tuple[Any, str]:
+    """True when the buy is a curve TREND ENTRY in the first EARLY_SHARE of the market and the swing-aware chance of ending on its side (wave_now: the hour's swings and the time left, not a random walk) is under SWING_HALF. The veto rule turns it into a WAIT: the bet is bought once the chance clears a half or the early part is over. False otherwise; None when the swing-aware chance is not read (nothing waits on a number that is not there). 2026-11-26: the 11 such bets of 11:02-12:45 ET lost $36.71 (5 on the winning side); the cut was seen after the fact, score it forward."""
+    n = b.get("priskp_screen")
+    if n.get("why") != "curve_trend_entry":
+        return False, "not a curve trend entry"
+    minute = n.get("minute")
+    if minute is None or float(minute) >= EARLY_SHARE * 15.0:
+        return False, "past the early part of the market"
+    wn = b.get("wave_now")
+    ch = wn.get("chance") if isinstance(wn, dict) else None
+    if ch is None:
+        return None, "the swing-aware chance is not read"
+    return bool(float(ch) < SWING_HALF), f"minute {float(minute):.1f} of the first {EARLY_SHARE * 15.0:.0f}; the swing-aware chance {float(ch):.2f} against {SWING_HALF}"
 
 
 @reader("shift_out")

@@ -129,7 +129,7 @@ def test_the_buy_reads_the_facts_board_and_the_veto_rule_is_the_board_s_not_the_
     ok, why = outs[2]
     assert ok is False and "shift_out_of_cushion" in why and "[facts read: priskp_screen=" in why and "shift_out=" in why  # the note shows what the buy was judged on
     assert "priskp" in facts.VETOED_STEPS and any(rule[0] == "shift_out" and rule[2] == ("priskp",) for rule in facts.VETO_RULES)
-    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "hour_view", "price_gap", "waves_before", "wave_now", "wave_leg") and all(n in facts.READERS for n in facts.NEEDS["priskp"])  # the wave facts (2026-11-25) are on the board for every step to read
+    assert facts.NEEDS["priskp"] == ("priskp_screen", "shift_out", "early_swings", "hour_view", "price_gap", "waves_before", "wave_now", "wave_leg") and all(n in facts.READERS for n in facts.NEEDS["priskp"])  # the wave facts (2026-11-25) are on the board for every step to read
 
 
 def test_a_buy_logs_the_hour_view_and_whether_the_risk_was_sure():
@@ -220,3 +220,28 @@ def test_in_a_curve_the_trend_entry_waits_until_the_move_has_held(monkeypatch):
     monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, regime="steady"))
     assert "curve_not_held" not in ask_at(5.0, side="no")[1]  # only in a curve
     assert priskp.HELD == 0.5
+
+
+def test_an_early_curve_entry_waits_while_the_swing_aware_chance_is_under_a_half(monkeypatch):
+    """2026-11-26 (user: "Fix it"; 2026-11-25: "If you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history (hour)"): in the first third of the market a curve trend entry waits while wave_now's chance is under 0.5; later, or with the chance over a half or unread, it buys. A board veto that waits, not a refusal."""
+    from kalshi_moonshot import facts
+
+    feed(lambda s: 100.5, OPEN + 600.0)
+    cuts()
+    curve = {"regime": "curve", "verdict": "buy", "class": "inside", "swing_u": 1.6, "prev_u": 1.5, "gb_u": 0.0, "age": 0.6, "travel": 0.7, "reach": 0.6}
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve))
+    swing = [0.30]
+    monkeypatch.setitem(facts.READERS, "wave_now", lambda b: ({"chance": swing[0]} if swing[0] is not None else None, "test"))
+    ok, why = ask_at(3.0)
+    assert not ok and "verb: wait" in why and "why: early_swings_not_cleared" in why and "early_swings=yes" in why
+    ok, why = ask_at(6.0)  # past the first third: the same reading buys
+    assert ok and "why: curve_trend_entry" in why
+    priskp._runs.clear()
+    swing[0] = 0.55
+    ok, why = ask_at(3.0)  # early, but the swings are cleared
+    assert ok and "early_swings=no" in why
+    priskp._runs.clear()
+    swing[0] = None
+    assert ask_at(3.0)[0]  # an unread chance waits nothing
+    assert facts.EARLY_SHARE * 15.0 == 5.0 and facts.SWING_HALF == 0.5
+    assert ("early_swings", "early_swings_not_cleared") in [(f, lab) for f, _t, _s, lab in facts.VETO_RULES]
