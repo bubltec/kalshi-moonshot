@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from .manualrest import REST_PREFIX
 from .strategy import fee_per_contract
 
-REST_STEPS = ("wave take", "wave salvage", "value sale")  # the reasons of the gain-side sales that may rest; "wave give-up" (salvage's safety exit) and every other reason stay immediate taker sales
+REST_STEPS = ("wave take", "wave salvage", "value sale", "turn sale")  # the reasons of the gain-side sales that may rest; "wave give-up" (salvage's safety exit) and every other reason stay immediate taker sales
 KEEP = 900  # what Store.mark_exited keeps of a reason (sellchain.KEEP)
 MOVE = 0.0005  # a smaller change of the ask is no move (prices are on Kalshi's grid: a tenth of a cent at the finest)
 

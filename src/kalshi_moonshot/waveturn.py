@@ -137,19 +137,20 @@ class Reading:
     leg_s: float = 0.0  # shadow: the median seconds of this market's completed legs of DONE_U u (0 = none yet)
     leg_u: float = 0.0  # shadow: the median size of those legs in u
     big_d: int = 0  # the direction of the market's larger leg (the DONE_U zig-zag): +1 rising, -1 falling, 0 none yet
+    ext_t: int = 0  # the second since the open of the swing's running extreme (where the swing turned, once it has given back)
 
 
 def reading(window: list[float], t: int, K: float, u: float) -> Reading:
     """The turn reading at `t` s after the open from the 1 s path `window` (index 0 = the open) and the target K."""
     sm = broad(window, 0, t, SMOOTH // 2, t)
-    pts, d, _ek, ev = zigzag(sm, ZZ * u)
+    pts, d, ek, ev = zigzag(sm, ZZ * u)
     start = pts[-1][1] if pts else sm[0]
     big, big_d, _k, _v = zigzag(sm, DONE_U * u)
     legs = [(b[0] - a[0], abs(b[1] - a[1]) / u) for a, b in itertools.pairwise(big)]
     leg_s = statistics.median(x for x, _ in legs) if legs else 0.0
     leg_u = statistics.median(y for _, y in legs) if legs else 0.0
     return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),
-                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d)
+                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d, ek)
 
 
 @dataclass
@@ -203,6 +204,7 @@ _lock = threading.Lock()
 _hours: dict[tuple[str, int], Hour] = {}
 _fires: dict[tuple[str, int], Fires] = {}
 _reads: dict[tuple[str, int, int, str | None], tuple[str | None, str, Reading | None, Hour]] = {}
+_peeks: dict[tuple[str, int, int, float], Reading | None] = {}
 
 
 def _hour(index: str, opened: int) -> Hour:
@@ -275,11 +277,48 @@ def read_index(index: str, opened: float, now: float, K: float, hold: float, res
     return out
 
 
+def peek(index: str, opened: float, now: float, K: float) -> Reading | None:
+    """The turn reading at `now`, for the SELL side (the watcher's `turn_sale` step): the same curve the buy reads, with no judgement and no fire recorded, so asking it never uses up a swing's buy. None when the hour or the path cannot be read. Kept for the second. Memory only."""
+    from . import ticks as ticks_mod
+
+    op = round(opened)
+    key = (index, op, int(now), round(K, 9))
+    with _lock:
+        if key in _peeks:
+            return _peeks[key]
+    h = _hour(index, op)
+    out: Reading | None = None
+    t = int(now) - op
+    if h.u is not None and t >= 1:
+        got = ticks_mod.history.window(index, op, now)
+        if got and got[0]:
+            T, V = got
+            if T[0] > op:
+                prev = ticks_mod.history.last_at_or_before(index, op)
+                if prev is not None:
+                    T, V = [prev[0], *T], [prev[1], *V]
+            win = grid(T, V, op, int(now) + 1)
+            if None not in win:
+                out = reading(win, t, K, h.u)  # type: ignore[arg-type]
+    with _lock:
+        if len(_peeks) > 2000:
+            _peeks.clear()
+        _peeks[key] = out
+    return out
+
+
+def turned_against(r: Reading, side: str, bought_at: float) -> bool:
+    """True when the wave has turned the bet's way and turned back: for a NO (bought at a peak, it wants the fall) the curve is in a fall of SWING u or more that has given GB u back, and the fall's low came after the buy; a YES mirrors it. This is the buy rule's own turn, read for the other side: where the lane would buy the opposite, the bet's move is over."""
+    want = -1 if side == "no" else 1
+    return r.d == want and r.swing_u >= SWING and r.gb_u >= GB and r.ext_t > bought_at
+
+
 def clear() -> None:
     with _lock:
         _hours.clear()
         _fires.clear()
         _reads.clear()
+        _peeks.clear()
 
 
 def room(r: Reading) -> str:

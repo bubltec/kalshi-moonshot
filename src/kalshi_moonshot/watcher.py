@@ -256,6 +256,9 @@ class Target:
     value_wait_share: float = 0.0
     value_since: float = 0.0
     value_sale_logged: bool = False
+    turn_sale_live: bool = False
+    turn_sale_logged: bool = False
+    turn_sale_failed: bool = False
     value_sale_failed: bool = False
     wave_cushion: bool = True
     wave_whipsaw: float = 0.0
@@ -1203,6 +1206,43 @@ class ProfitWatcher:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="wave salvage", extra=extra)
         return None
 
+    def _sell_turn_sale(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step turn_sale (2026-11-26, user, on ZEC 10:30 NO bought at 0.18, bid 0.30-0.32 two minutes later, sold at 0.02 by the give-up: "This bought a DOWN correctly but it didn't take the profit it had", "It waited until it was no longer profitable", "The curve followed the expected pattern and it just didn't exit"). No step sold into the bet's own move: the staircase sells after a lower low sized in the bid's typical minute, which was as large as the bet. This step sells a bet that is a GAIN after both fees at the bid when the wave has turned back, read on the buy step's own curve (waveturn.peek, the spot's 30 s smoothed zig-zag): a NO's fall, or a YES's rise, of the lane's swing size that has given back the turn size, its extreme after the buy. Never a loss sale. Memory only; an error is logged once a bet and the next step is asked."""
+        try:
+            return ProfitWatcher._turn_sale_read(self, t, r, bid, now, left, pnl, c)
+        except Exception as e:
+            if not t.turn_sale_failed:
+                t.turn_sale_failed = True
+                log.warning("turn sale: the step failed on %s %s and is passed over: %r", t.ticker, t.lane, e)
+        return None
+
+    def _turn_sale_read(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | None:
+        from . import binaryrisk, waveflag, waveturn
+
+        if t.close_ts <= 0 or t.bought_ts <= 0 or bid <= 0 or left <= 0 or c.net <= c.basis:
+            return None  # only a gain after both fees is sold here
+        series = t.ticker.split("-")[0]
+        index = binaryrisk.curve_index(series)
+        if not index:
+            return None
+        opened = t.close_ts - 900.0
+        K, _why = waveflag.target(series, index, opened, t.strike or None)
+        if K is None:
+            return None
+        rd = waveturn.peek(index, opened, now, K)
+        if rd is None or not waveturn.turned_against(rd, t.side, t.bought_ts - opened):
+            return None
+        reason = f"turn sale: the wave turned back: the spot {'fell' if t.side == 'no' else 'rose'} {rd.swing_u:.2f}u since the buy and has come {rd.gb_u:.2f}u off its {'low' if t.side == 'no' else 'high'} (the lane's turn: a swing of {waveturn.SWING:g}u, {waveturn.GB:g}u given back; the extreme {rd.t - rd.ext_t}s ago, curve {rd.pos_u:+.2f}u from the target); sells at the bid {bid:.2f} for {(c.net - c.basis) * 100:+.1f}c a contract after both fees ({t.entry:.2f} paid), {left:.0f}s left"
+        extra = {"bid": round(bid, 4), "entry": round(t.entry, 4), "swing_u": round(rd.swing_u, 3), "gb_u": round(rd.gb_u, 3), "pos_u": round(rd.pos_u, 3), "since_extreme": rd.t - rd.ext_t}
+        if t.risk_live and t.turn_sale_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="turn sale", extra=extra)
+            return reason
+        if not t.turn_sale_logged:
+            t.turn_sale_logged = True
+            log.info("turn sale shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="turn sale", extra=extra)
+        return None
+
     def _sell_value_sale(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step value_sale (2026-11-23, user: "value sale looks good", "our goal is avoiding loss"; scripts/priskp_favorite_exit_replay.py): a favourite is sold when the market pays what the spot says holding is worth. Hold value = 1 - p_lose (the spot's chance of ending on the wrong side, its cushion over a random walk's move in the time left); the bet is sold at the bid when the bid after the sale fee is at least that plus the lane's value_sale_premium, at a gain or a loss. No spot reading: held. Memory only."""
         try:
@@ -1748,6 +1788,7 @@ class ProfitWatcher:
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_give_up_arm_share = spec.wave_give_up_arm_share
+                held.turn_sale_live = spec.turn_sale_live
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
                 held.wave_rest_share, held.rest_live = spec.wave_rest_share, s.is_live(lane, ticker.split("-")[0])  # a gain-side wave sale rests at the ask (restsell.py); a live lane's rest is a real order
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
