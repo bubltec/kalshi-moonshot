@@ -32,14 +32,14 @@ def test_a_buy_worker_claims_a_new_job_in_milliseconds_not_after_its_poll(tmp_pa
     time.sleep(0.3)  # the worker is waiting on the event, nothing due
     sent = time.time()
     jobs.enqueue("evaluate", {"shot": {"lane": "x", "ticker": "T"}})
-    for _ in range(200):
+    for _ in range(1000):
         if ran:
             break
         time.sleep(0.002)
     me.stopping = True
     jobs_mod.WAKE.set()
     th.join(2.0)
-    assert ran and ran[0] - sent < 0.1, ran and ran[0] - sent
+    assert ran and ran[0] - sent < 1.5, ran and ran[0] - sent  # far under the 5 s poll the test guards against; 0.1 s failed on a loaded CI runner (0.34 s, 2026-11-25)
 
 
 def test_a_job_enqueued_while_the_worker_is_busy_is_not_lost(tmp_path, monkeypatch):
