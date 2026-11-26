@@ -481,8 +481,9 @@ def test_integration_early_take_a_spot_still_climbing_is_not_a_stall(tmp_path, m
     assert ask(0.90, 800, 100.1) is None  # armed; the spot's cushion is 0.1
     assert ask(0.90, 760, 100.4) is None  # the bid is flat but the spot's cushion climbed more than a wobble of its own: the climb goes on
     assert ask(0.90, 700, 100.4) is None  # 100 s since the bid's high but 60 s since the spot's climb: under 10% of 700 s (70 s)
-    why = ask(0.90, 650, 100.4)  # 110 s since the spot's last climb: over the 65 s wait
-    assert why and "spot's cushion" in why
+    assert ask(0.90, 650, 100.4) is None  # 110 s since the spot's last climb, over the 65 s wait, but the spot is still on the winning side: a stall never sells that (2026-11-25, user, on HYPE 20:30: "the same issue over and over")
+    why = ask(0.90, 640, 99.9)  # the spot slipped to the wrong side of the target: now the stall sells
+    assert why and "no new high" in why
 
 
 def test_integration_early_take_a_fall_under_cost_ends_the_profit_run_and_a_recovery_is_not_sold_on_the_old_high(tmp_path, monkeypatch, mem):
@@ -789,3 +790,26 @@ def test_integration_a_loss_while_ahead_is_held_by_asking_the_veto_not_by_the_wa
     assert "sold against the veto" not in caplog.text
     spot_feed(close - 300, 99.7)  # the spot has crossed to the wrong side: the same loss is sold
     assert asker(w, t, close)(0.50, 300) is not None
+
+
+def test_integration_early_take_a_stall_with_the_spot_ahead_never_sells_but_a_fall_does(tmp_path, monkeypatch, mem):
+    """2026-11-25 20:30 ET, user, on HYPE 20:30 YES (sold at 0.92 with 45 s left on a 4 s stall): a pause in the bid is not a reason to sell while the spot is on the winning side; a FALL from the high still is."""
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    thin_cushion(monkeypatch)
+    t.entry, t.early_take_share, t.early_take_stall_share, t.early_take_hold_share = 0.80, 1.0, 0.1, 0.0
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left, level):
+        spot_feed(close - left, level)
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.92, 300, 100.3) is None  # armed, spot ahead
+    for left in (240, 180, 120, 60, 45):
+        assert ask(0.92, left, 100.3) is None  # the bid is flat for minutes, the spot sits ahead: held
+    why = ask(0.86, 44, 100.3)  # a real fall of 0.06 from the 0.92 high, still in profit after both fees: sold even with the spot ahead
+    assert why and why.startswith("early take:") and "the bid fell" in why

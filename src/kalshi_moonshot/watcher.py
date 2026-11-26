@@ -197,6 +197,7 @@ class Target:
     early_take_spot_ts: float = 0.0
     early_take_spot_set: bool = False
     early_take_logged: bool = False
+    early_take_veto_logged: bool = False
     late_dip_share: float = 0.0
     late_dip_units: float = 3.0
     late_dip_look_s: float = 30.0
@@ -1071,6 +1072,13 @@ class ProfitWatcher:
         stalled = stall > 0 and now - max(t.early_take_high_ts, t.early_take_spot_ts) >= stall  # no new high of the bid AND none of the spot's cushion for that share of the time left
         if not (fell or stalled):
             return None
+        if stalled and not fell:  # A STALL NEVER SELLS A BET THE SPOT IS STILL WINNING (2026-11-25 20:30 ET, user, on HYPE 20:30 YES sold at 0.92 with 45 s left on 'no new high for 5 s' (a 4 s stall at that point): "why did this sell again when it was winning??", then "this is the same issue over and over"; earlier DOGE 19:45, SOL 17:00, DOGE 14:45): the bid pausing is not a reason while the spot, on both its 60 s and its 5 s average, sits on the bet's winning side of the target. Only a FALL from the bid's high sells such a bet. Not scored; a rule on the user's repeated word
+            now_spot = ProfitWatcher._wave_spot(self, t, now, avg_seconds=5)
+            if spot is not None and now_spot is not None and spot[0] > 0 and now_spot[0] > 0:
+                if not t.early_take_veto_logged:
+                    t.early_take_veto_logged = True
+                    log.info("sale held: %s %s early_take stall at the bid %.2f, the spot is still on the winning side of the target (60 s %+.4f, 5 s %+.4f)", t.ticker, t.lane, bid, spot[0], now_spot[0])
+                return None
         lose = self._board(c, t, now, left, bid).view("value_sale").get("p_lose")  # a STALL sells only when the sale beats holding (2026-11-24, user: "this had plenty of cushion still i don't understand why it sold"; replay over 27 live early takes, scripts/priskp_hold_check_replay.py: the check held 18 bets that all won and sold the 4 that lost if held): the hold value is 1 - the spot's chance of ending on the wrong side (the value_sale board's p_lose), against what the bid pays after the sale fee. Unread p_lose holds a stall too (nothing sells a stall on a number that is not there). A held FALL from the bid's high, with the bet in profit after both fees, is the market turning and is not held by the model (2026-11-25, user, on KXNEAR15M-26NOV250030 YES bought at 0.82: armed at 0.92, fell to 0.86 with +0.02 in hand, held by the check at 0.852 against 0.93, then 0.91 -> 0.55 -> 0.24 and late_dip sold at 0.29, a $10 loss: "our early profit should have fired"; the bid led the spot down on SOL, DOGE, XRP, HYPE and NEAR)
         hold_margin = trail * min(left, 900.0) / 900.0  # the sale must beat holding by a margin too, one wobble at the open and none at the close (DOGE 19:45: the sale paid 0.810 against a hold value of 0.797, 1.3c, with 396 s left)
         if lose is not None and bid - fee_per_contract(bid) < 1.0 - lose + hold_margin:
