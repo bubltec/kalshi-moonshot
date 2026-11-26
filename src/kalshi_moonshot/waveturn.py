@@ -136,6 +136,7 @@ class Reading:
     ev_u: float = 0.0  # the swing's running extreme against the target, signed, in u
     leg_s: float = 0.0  # shadow: the median seconds of this market's completed legs of DONE_U u (0 = none yet)
     leg_u: float = 0.0  # shadow: the median size of those legs in u
+    big_d: int = 0  # the direction of the market's larger leg (the DONE_U zig-zag): +1 rising, -1 falling, 0 none yet
 
 
 def reading(window: list[float], t: int, K: float, u: float) -> Reading:
@@ -143,12 +144,12 @@ def reading(window: list[float], t: int, K: float, u: float) -> Reading:
     sm = broad(window, 0, t, SMOOTH // 2, t)
     pts, d, _ek, ev = zigzag(sm, ZZ * u)
     start = pts[-1][1] if pts else sm[0]
-    big, _d, _k, _v = zigzag(sm, DONE_U * u)
+    big, big_d, _k, _v = zigzag(sm, DONE_U * u)
     legs = [(b[0] - a[0], abs(b[1] - a[1]) / u) for a, b in itertools.pairwise(big)]
     leg_s = statistics.median(x for x, _ in legs) if legs else 0.0
     leg_u = statistics.median(y for _, y in legs) if legs else 0.0
     return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),
-                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u))
+                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d)
 
 
 @dataclass
@@ -187,6 +188,9 @@ def judge(r: Reading, fires: Fires, hold: float, resting: str | None = None) -> 
         return None, f"a NO turn with the curve {r.pos_u:+.2f}u from the target, more than {BAND:g}u under it"
     if side == "yes" and r.pos_u > BAND:
         return None, f"a YES turn with the curve {r.pos_u:+.2f}u from the target, more than {BAND:g}u over it"
+    if r.big_d != 0 and r.big_d != r.d:
+        # 2026-11-26 (user, on GOLD 10:30 YES bought at 281 s on the second high of a 2u rise: "This bought UP AT THE PEAK ... That's the opposite of what it should do", "it keeps buying the wrong sides!!!! Fix this"): the side comes from the 0.5u swing, and a 0.6u pull-back at the top of a rise read as a dip turning up. A turn that runs against the market's larger leg (the DONE_U zig-zag, still in force) is a pull-back inside it, not the wave's dip or peak. On the user's 17 marked markets this keeps all 6 marked buys the lane fires, the 6 silent no-goods, and cuts the other fires from 14 to 11.
+        return None, f"the {r.swing_u:.2f}u {'rise' if r.d == 1 else 'fall'} runs against the market's larger leg (a {'fall' if r.big_d == -1 else 'rise'} of {DONE_U:g}u or more still in force): a pull-back inside it, not the wave's {'peak' if r.d == 1 else 'dip'}"
     if r.done < need(r.t):
         return None, f"{r.done} completed swings of {DONE_U:g}u so far, the lane needs {need(r.t)} at {r.t}s: a trend has a pull-back at most, a wave comes back (not a wave shape yet)"
     fires.done[key] = r.t

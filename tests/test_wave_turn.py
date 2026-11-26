@@ -239,7 +239,8 @@ def test_replay_the_study_counts_on_the_users_marks(mem):
     # study's own counts were 12 / 0 / 34 with no gate). This is a pin of the code's behaviour on these marks, not a claim that it is good: the 45-market
     # study is studies/results/2026-11-25-wave-swing-gate.txt and forward paper scoring is the test. The PLATINUM 18:30 path lacks the first 310 s of its
     # pre-open hour; the step says 'no reading' for an hour not fully in memory and stays silent there.
-    assert counts(rows) == (6, 6, 14)
+    # 2026-11-26: with the larger-leg rule (a turn against the market's 1u leg is a pull-back, not the wave's turn) the other fires fall from 14 to 11; the 6 marked buys and the 6 silent no-goods are unchanged. Two other rules tried the same day and NOT kept, because each cut the marked buys the lane fires from 6 to 2: the wave's last opposite extreme on the bet's side of the target, and the swing at least as large as its extreme's distance from the target.
+    assert counts(rows) == (6, 6, 11)
 
 
 # ---- the buy step, through the lane file ----
@@ -373,3 +374,29 @@ def test_integration_one_tick_is_fast_and_memory_only(tmp_path, monkeypatch, mem
         for side in ("yes", "no"):
             buychain.STEPS["wave_turn"](buychain.Ctx(s, sp, now=OPEN + 600.5), shot(OPEN + 600.5, side))
     assert time.perf_counter() - began < 0.06
+
+
+
+# ---- the larger leg (2026-11-26): GOLD 10:30 YES was bought at 281 s on the second high of a 2u rise; the 0.6u pull-back there read as a dip turning up ----
+# a dip of 1.4 u, a rise of 2 u, a pull-back of 0.9 u, a bounce of 0.5 u, then the fall: the shape of GOLD 10:30 on 2026-11-26 (the pull-back a little deeper, so the 30 s smoothing still shows it)
+RIM = [(120, -1.4), (75, 2.0), (45, -0.9), (30, 0.5), (120, -3.0), (200, 0.0)]
+
+
+def test_a_pull_back_at_the_top_of_a_rise_is_not_a_dip_and_buys_no_yes(mem):
+    hour = hour_path()
+    feed(hour, window_path(RIM, u_of(hour)))
+    assert not [f for f in fires() if f[1] == "yes" and 200 <= f[0] <= 300]  # no YES on the rim
+    seen = []
+    for t in range(240, 290):
+        side, why, r, _h = waveturn.read_index(INDEX, OPEN, OPEN + t + 0.5, K, 0.0)
+        if r is not None and r.d == -1 and r.gb_u >= waveturn.GB and r.swing_u >= waveturn.SWING:  # the bounce off the pull-back: the old rule's YES
+            seen.append((side, why, r.big_d))
+    assert seen, "the pull-back's bounce was never read as a turned fall"
+    assert all(side is None and big == 1 for side, _why, big in seen)  # the larger leg is still the rise
+    assert any("runs against the market's larger leg" in why and "a pull-back inside it, not the wave's dip" in why for _s, why, _b in seen)
+
+
+def test_the_turns_of_the_larger_leg_itself_fire_as_before(mem):
+    hour = hour_path()
+    feed(hour, window_path(REPEATED, u_of(hour)))
+    assert fires() == [(141, "yes"), (201, "no")]  # each is the larger leg's own turn: the rule does not touch them
