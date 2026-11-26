@@ -202,3 +202,21 @@ def test_in_a_curve_the_trend_entry_buys_without_the_five_checks_passing(monkeyp
     monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, regime="steady"))
     ok, why = ask_at(5.0)
     assert not ok and "check_not_passing" in why  # a steady market: the five checks decide as before
+
+
+def test_in_a_curve_the_trend_entry_waits_until_the_move_has_held(monkeypatch):
+    """2026-11-26 (user, on SOL 11:15 NO and ZEC 11:30 YES: "They should have bought yes by waiting"): a trend entry waits while the lane's own chance for the bet's side is under 0.5 (the cushion has not come over to the bet's side), and buys once it has. An unread chance waits nothing."""
+    feed(lambda s: 100.5, OPEN + 600.0)  # the spot is OVER the 100 target: YES has the cushion, NO does not
+    cuts()
+    curve = {"regime": "curve", "verdict": "buy", "class": "inside", "swing_u": 1.6, "prev_u": 1.5, "gb_u": 0.0, "age": 0.6, "travel": 0.7, "reach": 0.2}
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve))
+    ok, why = ask_at(5.0, side="no")
+    assert not ok and "why: curve_not_held" in why and "confirm: 0" in why
+    chance = float(why.split("chance: ")[1].split(";")[0])
+    assert chance < priskp.HELD
+    ok, why = ask_at(5.0, side="yes")
+    assert ok and "why: curve_trend_entry" in why and float(why.split("chance: ")[1].split(";")[0]) >= priskp.HELD
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, regime="steady"))
+    assert "curve_not_held" not in ask_at(5.0, side="no")[1]  # only in a curve
+    assert priskp.HELD == 0.5

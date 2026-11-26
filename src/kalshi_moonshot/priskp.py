@@ -305,6 +305,7 @@ def shifts(T: list[float], V: list[float], now: float, u: float, hold: float = 1
 
 STEP = "priskp"  # the buy step's name (buychain.py)
 WINDOW = (2.0, 14.0)  # the user's: minutes since the open ("like 2-14")
+HELD = 0.5  # in a curve, the least chance of ending on the bet's side (from the blended cushion) at which a trend entry buys: under it the move has only just crossed the target and has not held (structural: the cushion is on the bet's side or it is not)
 DEAD = (0.45, 0.55)  # the user's own rule for this model: never an ask here
 _read_cache: dict[str, tuple[int, dict[str, Any] | None, list[dict[str, float]], float]] = {}  # ticker -> (the EVERY-second bucket it was read in, the readings, the shifts, the strike): a tick asks every 250 ms, the readings are cut once a bucket (CLAUDE.md: under 60 ms a tick)
 
@@ -437,20 +438,29 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     # the readings in a row count what DECIDES the buy: in a curve that is the trend entry, elsewhere the five checks. (Until 2026-11-26 the count
     # read the five checks in a curve too, so a curve 'buy' whose checks did not also pass stayed at 0 of 1 'confirming' for ever: 4027 looks on 27
     # markets in three hours, one bet.)
-    ok = inwin and (cv["verdict"] == "buy" if cv is not None and cv["regime"] == "curve" else candidate(states))
+    z = ro[shot.side].get("cushion")
+    chance = 0.5 * (1.0 + math.erf(float(z) / math.sqrt(2.0))) if z is not None else None  # the Gaussian chance of ending on the bet's side: the blended cushion IS that z, over the typical minute and the time left
+    # In a curve a trend entry WAITS while the lane's own chance for the bet's side is under HELD (0.5: the blended cushion has not yet come over to the
+    # bet's side). 2026-11-26, user, on SOL 11:15 NO (bought at the bottom of a drop 8 s after the spot crossed the target, chance 0.38, the spot came
+    # straight back) and ZEC 11:30 YES (bought at the top of a bounce, chance 0.46, -$11.60): "They should have bought yes by waiting". A move that has
+    # only just crossed the target has not held; the seven other trend entries of those two rounds read 0.52 to 0.81 and all won their side. Nine bets,
+    # the bar chosen after seeing them: scored forward. A wait, not a refusal: the bet is bought once the move has held. An unread chance waits nothing.
+    held = chance is None or chance >= HELD
+    in_curve = cv is not None and cv["regime"] == "curve"
+    ok = inwin and (cv["verdict"] == "buy" and held if in_curve else candidate(states))  # type: ignore[index]
     need = need_readings(hours * 3600.0)
     reached, count = confirmed(shot.ticker, shot.side, ok, now, need)
     n = note(shot.side, states, count, minute, need)
     n["ask"] = round(shot.ask, 3)
-    z = ro[shot.side].get("cushion")
-    if z is not None:  # SHADOW (2026-11-25, user: "it should have an influence but it shouldn't be the factor in whether we buy"): the Gaussian chance of ending on the bet's side (the blended cushion IS that z, over the typical minute and the time left) against what the bet costs with its fee; logged on every look, decides nothing
-        chance = 0.5 * (1.0 + math.erf(float(z) / math.sqrt(2.0)))
+    if chance is not None:  # SHADOW (2026-11-25, user: "it should have an influence but it shouldn't be the factor in whether we buy"): the Gaussian chance of ending on the bet's side (the blended cushion IS that z, over the typical minute and the time left) against what the bet costs with its fee; logged on every look, decides nothing
         n["chance"] = round(chance, 3)  # the fact `price_gap` (facts.py) turns it into the gap to the ask and weighs it on the board
     if cv is not None:
         n["regime"] = cv["regime"]
         if cv["regime"] == "curve":  # in a curve the trend entry decides, both ways (the five rank checks neither buy nor stop it): wait at a dip or a peak, buy on the trend
             n["curve"] = f"{cv['class']}, swing {cv['swing_u']:.2f} u after a turn of {cv['prev_u']:.2f} u, gave back {cv['gb_u']:.2f}, big leg {cv['age'] if cv['age'] is not None else 'n/a'} and travel {cv['travel'] if cv['travel'] is not None else 'n/a'} of a usual one, target {cv['reach']:.2f} wave travels away"
-            if cv["verdict"] == "buy" and inwin:
+            if cv["verdict"] == "buy" and inwin and not held:
+                n["verb"], n["why"] = "wait", "curve_not_held"  # the swing runs with the bet but the cushion has not come over to its side yet
+            elif cv["verdict"] == "buy" and inwin:
                 n["verb"], n["why"] = "buy", "curve_trend_entry"
                 n["failing"] = []
             elif cv["verdict"] == "buy":
