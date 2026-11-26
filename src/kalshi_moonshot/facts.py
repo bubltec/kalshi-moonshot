@@ -285,6 +285,19 @@ def _spot_now(b: Board) -> tuple[Any, str]:
     return got, "the spot's last 5 s against the target, in the spot's own typical minute" if got else "no spot reading (none armed, or stale ticks)"
 
 
+SETTLE_S = 60.0  # the settlement window: Kalshi settles these markets on the index's average over the last 60 s (docs/architecture.md section 6)
+
+
+@reader("spot_settling")
+def _spot_settling(b: Board) -> tuple[Any, str]:
+    """(cushion, typical minute) of the spot's average SINCE THE SETTLEMENT WINDOW OPENED, for the bet's side: the part of the settlement average already banked. None outside the window, in its first second, or without a reading."""
+    banked = int(SETTLE_S - b.left)
+    if not 0 < b.left < SETTLE_S or banked < 1:
+        return None, "not inside the settlement window"
+    got = b.host._wave_spot(b.t, b.now, banked)
+    return got, f"the spot's average over the {banked} s of the settlement window so far, against the target" if got else "no spot reading (none armed, or stale ticks)"
+
+
 @reader("loss_while_ahead")
 def _loss_while_ahead(b: Board) -> tuple[Any, str]:
     """True when a sale now would be a LOSS (the bid after its fee under the price paid with its fee) while the spot is still on the bet's own side of the target by EITHER reading: the 60 s average or the last 5 s (2026-11-25, user: "just don't sell if it isn't on the other side of the target"; "it cannot just sell blindly", after the 60 s average let a sale through 16 s after the spot had come back). A sale goes through only when both are on the other side. False when the sale is not a loss; None when no spot is read (the sale is then not vetoed). The veto rule on the board stops the loss-sale steps with it."""
@@ -292,9 +305,14 @@ def _loss_while_ahead(b: Board) -> tuple[Any, str]:
 
     spot = b.get("spot")
     fast = b.get("spot_now")
+    slow_name = "60 s average"
+    if 0 < b.left < SETTLE_S:  # inside the settlement window (structural: Kalshi settles on the index's average over the market's last 60 s) the trailing 60 s average is mostly prices that do NOT count; what counts is the average since the window opened. 2026-11-26, NEAR 12:45 YES: the spot went under the target as the window opened (12:44:00), late_dip wanted to sell for 48 s while the bid went 0.28 -> 0.01, and this veto held it on a 60 s average still lifted by the minute before; sold at 0.011 with 20 s left, -$14.78
+        banked = b.get("spot_settling")
+        if banked is not None:
+            spot, slow_name = banked, f"settlement window so far ({SETTLE_S - b.left:.0f} s)"
     if spot is None and fast is None:
         return None, "no spot reading"
     loss = (b.bid - fee_per_contract(b.bid)) < (b.t.entry + fee_per_contract(b.t.entry))
     ahead = (spot is not None and spot[0] > 0) or (fast is not None and fast[0] > 0)
-    told = ", ".join(f"{n} {v[0]:+.4g}" for n, v in (("60 s average", spot), ("last 5 s", fast)) if v is not None)
+    told = ", ".join(f"{n} {v[0]:+.4g}" for n, v in ((slow_name, spot), ("last 5 s", fast)) if v is not None)
     return bool(loss and ahead), f"the sale would be a {'loss' if loss else 'gain'}; the spot over the target for the bet's side: {told}"

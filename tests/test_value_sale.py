@@ -832,3 +832,35 @@ def test_unit_travel_left_grows_with_the_time_left():
     assert wavefacts.travel_left(None, 600.0) is None and wavefacts.travel_left({"w3": 0.1}, 600.0) is None
     assert abs(wavefacts.travel_left(bef, 180.0) - 0.10) < 1e-9 and abs(wavefacts.travel_left(bef, 600.0) - 0.20) < 1e-9 and abs(wavefacts.travel_left(bef, 900.0) - 0.25) < 1e-9
     assert wavefacts.travel_left(bef, 780.0) > wavefacts.travel_left(bef, 600.0) > wavefacts.travel_left(bef, 400.0) > wavefacts.travel_left(bef, 120.0)
+
+
+def test_integration_in_the_settlement_window_the_loss_veto_reads_the_window_so_far_not_the_trailing_minute(tmp_path, monkeypatch, mem):
+    """2026-11-26, NEAR 12:45 YES: the spot went under the target as the last minute opened; late_dip was held 48 s by a trailing 60 s average still lifted by the minute before, and sold at 0.011. Kalshi settles on the last 60 s, so inside it the veto reads the average since the window opened."""
+    from kalshi_moonshot import curverisk, facts, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.82, unit=0.10)
+    t.entry, t.no_recovery_share, t.bought_ts = 0.82, 0.2, close - 800.0
+    read = {60: (0.05, 0.10), 5: (-0.03, 0.10), "banked": (-0.02, 0.10)}  # the trailing minute is still over the target; the window so far and the last 5 s are under it
+    asked = []
+
+    def spot(self, tt, now, avg_seconds=60):
+        asked.append(avg_seconds)
+        return read[avg_seconds] if avg_seconds in read else read["banked"]
+
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", spot)
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_no_recovery(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.80, 800) is None  # seen from the buy
+    assert ask(0.40, 90) is None  # before the window: the trailing 60 s average is on the bet's side, the sale waits as before
+    why = ask(0.30, 40)  # 20 s into the settlement window: what has been banked is under the target, and so is the last 5 s
+    assert why and "no recovery" in why and "spot_settling=(-0.02" in why and 20 in asked
+    assert facts.SETTLE_S == 60.0
+    read["banked"] = (0.02, 0.10)  # the window so far is on the bet's side: held, whatever the last 5 s say
+    t.no_rec_logged = False
+    assert ask(0.30, 39) is None
