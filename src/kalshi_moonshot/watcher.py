@@ -213,6 +213,7 @@ class Target:
     no_rec_last_ahead: float = 0.0  # when the bid less the sale fee was last over the price paid with its buy fee (a profit expires: the no_recovery wait runs from here, or from the buy)
     late_dip_since: float = 0.0
     late_dip_logged: bool = False
+    top_take_logged: bool = False
     veto_logged_at: float = 0.0
     late_dip_spot: list = field(default_factory=list)  # (time, the spot's cushion) of the last late_dip_look_s seconds
     early_take_armed: bool = False
@@ -992,6 +993,24 @@ class ProfitWatcher:
             t.no_rec_logged = True
             log.info("no recovery shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="no recovery", extra=extra)
+        return None
+
+    def _sell_top_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step top_take (2026-11-26, user, on ZEC 15:45 YES: bought 0.80, the bid stood at 0.99 to 1.00 from 15:44:00 to about 15:44:25, the spot fell through the target with 30 s left and the bet settled at 0, -$15.18: "here should have cashed out at the last second"). When the bid leaves a tick or less to win (1 - bid <= wavetop.TICK: 0.99 or better) the bet is sold at the bid: there is a cent left to gain and the whole bid to lose, and no other step takes it (value_sale needs the bid over the hold value plus its premium, which a bid at 0.99 cannot be; early_take holds a winning side late). The tick is structural, so the step has no lane field. On the 65 settled PriskP bets of 2026-11-26 from 11:02 ET: 33 reached 0.99 while held, 30 of them won (the last cent and the sale fee given up, about $6.28 in all) and 1 lost ($18.78 saved); one day, one loser: score it forward. Reads the bid from memory."""
+        from . import wavetop
+
+        if t.entry <= 0 or t.close_ts <= 0 or left <= 0 or bid < 1.0 - wavetop.TICK - 1e-9:
+            return None
+        net = bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry))
+        reason = f"top take: the bid {bid:.3g} leaves {max(0.0, 1.0 - bid):.3g} to win (a tick or less) with {left:.0f} s left: nothing more to gain by holding, sold at the bid ({net * 100:+.1f}c a contract after both fees)"
+        extra = {"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4)}
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="top take", extra=extra)
+            return reason
+        if not t.top_take_logged:
+            t.top_take_logged = True
+            log.info("top take shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="top take", extra=extra)
         return None
 
     def _sell_late_dip(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:

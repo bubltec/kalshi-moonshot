@@ -884,3 +884,25 @@ def test_integration_in_the_settlement_window_the_loss_veto_reads_the_window_so_
     assert why and "no recovery" in why
     read["banked"] = (0.20, 0.10)  # a banked lead the rest of the window cannot undo at the spot's level now: (0.20 x 22 - 0.03 x 38) / 60 > 0: held
     assert ask(0.30, 38) is None
+
+
+def test_integration_top_take_sells_when_the_bid_leaves_a_tick_or_less_to_win(tmp_path, monkeypatch, mem):
+    """2026-11-26, user, on ZEC 15:45 YES (bid 0.99-1.00 for 25 s, then the spot fell through the target and the bet settled at 0): "here should have cashed out at the last second". A bid of 0.99 or better is sold; 0.98 is not this step's."""
+    from kalshi_moonshot import curverisk, sellchain, watcher
+
+    assert "top_take" in sellchain.SELL_STEPS
+    w, t, close = take_target(tmp_path, monkeypatch, 0.80, unit=0.10)
+    t.entry = 0.80
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.83, 0.78, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_top_take(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.98, 60) is None and ask(0.90, 20) is None
+    why = ask(0.99, 45)
+    assert why and why.startswith("top take:") and "a tick or less" in why
+    assert ask(1.00, 30) and ask(0.993, 500)  # any time, and on a sub-cent grid too
+    assert ask(0.99, 0) is None  # nothing after the close
