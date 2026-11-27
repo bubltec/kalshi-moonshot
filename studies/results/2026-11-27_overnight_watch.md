@@ -277,3 +277,38 @@ That is the fourth and fifth zero of the night with this ending (BTC, BNB and DO
 wave_shape (the other session's lane): 106 closed bets, about -$2.30 (it has recovered about $20 in the last half hour).
 
 Nothing changed this pass.
+
+## Pass 12, 06:19 (bets bought 05:37 to 06:02) and the night so far
+
+Live build unchanged (b2480d4a).
+
+This pass: five closed bets, four gains (two tops, two fast, about +$10) and one zero: ZEC 05:45 NO, bought back at 0.74 seventeen seconds after the fast clause sold the same side at 0.71; no sale, the market settled YES, -$15.20. The seventh buy-back after a profit sale tonight: two paid, five lost the stake, one flat.
+
+THE NIGHT, PriskP live bets since the one rule went on (21:37), as run (the sale after its fee, or settlement, less the price paid; the buys rested):
+
+| Stretch | What was live | Bets | Net | Gains | Zeros |
+|---|---|---|---|---|---|
+| 21:37 to 22:47 | the one rule, its loss sales dropped by the selling thread (my bug) | 13 | -$36.68 | 8 | 5 (-$74.56) |
+| 22:47 to 01:00 | loss sales placed; the fade and two-wobble changes | 37 | -$93.75 | 24 | 2 (-$30.23) |
+| 01:00 to 01:45 | the pullback wait on | 6 | +$23.46 | 6 | 0 |
+| 01:45 to 06:15 | the rule as it stands | 57 | -$2.74 | 45 | 9 (-$130.29) |
+
+Since 01:45, on the 56 bets whose markets have settled, by how the bet ended:
+
+| Ended by | Bets | As run | Held to settlement | Settled the bet's way |
+|---|---|---|---|---|
+| the top (0.99) | 19 | +$87.92 | +$91.61 | 19 |
+| profit gained too fast | 19 | +$40.22 | +$15.25 | 15 |
+| early profit (fall or stall) | 7 | +$12.79 | -$21.71 | 4 |
+| salvage | 2 | -$16.21 | -$8.14 | 1 |
+| no sale, settled against | 9 | -$130.29 | -$130.29 | 0 |
+| ALL | 56 | -$5.56 | -$53.27 | 39 |
+
+What that says:
+- The exits are earning their keep: the same 56 bets held to settlement would have made -$53.27; as run -$5.56. The fast clause and the early profit together took +$53 where holding those 26 bets would have lost $6.
+- The bets themselves were not good enough: 39 of 56 settled the bet's way, 70%, at an average price paid of about 0.73. At that price a lane needs about 75% to break even before any exit. The user's reading ("It's an entry issue when they all fail like that. The exit failing was just the safety net") is what the numbers show.
+- Nine bets were held to a total loss, about $14.50 each, against 45 gains of about $2.80 each. Five of the nine ended in the settlement minute from a bid near the cost (passes 8 and 11); three were bought back seconds after the lane's own profit sale.
+
+Nothing changed this pass. For the user: (1) whether the lane may buy the same side back seconds after its own profit sale; (2) whether to design a late-market rule for a bet near its cost with a minute or two left; (3) the entries, which is where the night was lost.
+
+wave_shape (the other session's lane): 119 closed bets, about +$9.
