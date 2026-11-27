@@ -403,3 +403,6 @@ Two live bets, both sold at a gain by the fast clause: BTC 12:30 NO 0.79 to 0.94
 
 ## Pass 26 (12:49 to 13:19 ET)
 Two live bets, both sold at a gain by the fast clause: NEAR 13:00 YES 0.83 to 0.9376 (+9.5c), BTC 13:00 YES 0.77 to 0.964 (+18.0c). No losses, no `fast drop` sale yet since the exit design went live at 12:30:05. CI on `571c56ab` (the five mypy errors fixed) is still running. Nothing changed.
+
+## Pass 27 (13:19 to 13:49 ET)
+No live bets in the half hour (the last were NEAR and BTC 13:00 at 12:49 and 12:51). CI on `571c56ab` passed (ruff, mypy, the suite with coverage): CI is green on `main` again. No `fast drop` sale yet. Nothing changed.
