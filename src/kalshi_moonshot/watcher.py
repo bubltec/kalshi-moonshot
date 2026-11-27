@@ -214,6 +214,8 @@ class Target:
     late_dip_since: float = 0.0
     late_dip_logged: bool = False
     top_take_logged: bool = False
+    one_rule: Any = None  # fallrule.State: what the one exit rule remembers about this bet
+    one_rule_logged: bool = False
     veto_logged_at: float = 0.0
     late_dip_spot: list = field(default_factory=list)  # (time, the spot's cushion) of the last late_dip_look_s seconds
     early_take_armed: bool = False
@@ -993,6 +995,55 @@ class ProfitWatcher:
             t.no_rec_logged = True
             log.info("no recovery shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="no recovery", extra=extra)
+        return None
+
+    def _sell_one_rule(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step one_rule (fallrule.py; 2026-11-26, user: "We keep adding patches instead of fixing the core issue", "we need to consolidate one rule that handles them all", "One rule. For sure", "We need to return to our original concepts like early profit, salvage, and no loss", "make sure late profit doesn't sell if it's not under the target"). The whole exit of a lane that names it: early profit (fading with the time elapsed), no loss, salvage, the time backstop and the top, as one function of the bid against its own swing in its own wobbles, moved by the time left and the spot's cushion. This method only reads the tick's numbers from memory and hands them to fallrule.decide: the bid's wobble (its typical minute x sqrt(10/60), a tick when unread), the spot's cushion over the target and its typical minute (the 60 s average; the cross test reads the better for the bet of the 60 s and the 5 s averages, so the spot has crossed only when both have), and it asks the board's loss veto before a sale under cost (inside the settlement window that veto reads the window's own average). It replaces top_take, early_take, late_dip, no_recovery, wave_take and value_sale on the priskp exit."""
+        if t.entry <= 0 or bid <= 0 or t.close_ts <= 0 or left <= 0:
+            return None
+        from . import fallrule, wavetop
+
+        unit = ProfitWatcher._risk_unit(self, t, now)
+        wobble = max(wavetop.TICK, unit * math.sqrt(10.0 / 60.0)) if unit else wavetop.TICK
+        spot = ProfitWatcher._wave_spot(self, t, now)
+        fast = ProfitWatcher._wave_spot(self, t, now, avg_seconds=5) if spot is not None else None
+        cushion, spot_unit = spot if spot is not None else (None, None)
+        cross = None if cushion is None else (max(cushion, fast[0]) if fast is not None else cushion)
+        if t.one_rule is None:
+            t.one_rule = fallrule.State()
+        rd = fallrule.decide(t.one_rule, bid, t.entry, fee_per_contract(bid), fee_per_contract(t.entry), fee_per_contract, wobble, now, left, cushion, spot_unit, cross)
+        if not rd.sell:
+            return None
+        note = ""
+        if rd.net <= 0:
+            fx = self._board(c, t, now, left, bid)
+            stop = fx.vetoes("one_rule")
+            if stop:
+                if now - t.veto_logged_at >= 30.0:
+                    t.veto_logged_at = now
+                    log.info("sale held: %s %s step one_rule (%s) would sell at the bid %.2f (paid %.2f) but the spot is still on the bet's side of the target (%s)", t.ticker, t.lane, rd.kind, bid, t.entry, stop)
+                return None
+            note = fx.note()
+        zs = "unread" if rd.z is None else f"{rd.z:+.2f} sigma of the time left"
+        if rd.kind == "top":
+            why = f"the top: the bid {bid:.3g} leaves {max(0.0, 1.0 - bid):.3g} to win (a tick or less), nothing more to gain by holding"
+        elif rd.kind == "fall":
+            why = f"early profit: +{rd.net * 100:.1f}c a contract after both fees and the bid fell {rd.fall:.3f} from its high {rd.high:.2f} (a fall of {rd.bar:.3f} counts: wobble {wobble:.3f}, the fade {rd.fade:.2f}, the spot's cushion {zs})"
+        elif rd.kind == "stall":
+            why = f"early profit: +{rd.net * 100:.1f}c a contract after both fees and no new high over {rd.high:.2f} for {fallrule.STALL_SHARE:.0%} of the time left (the fade {rd.fade:.2f}, the spot's cushion {zs})"
+        elif rd.kind == "salvage":
+            why = f"salvage: under the price paid ({rd.net * 100:.1f}c a contract after both fees), the spot has crossed the target ({zs}) and the bounce to {rd.high:.2f} has failed by {rd.fall:.3f} (a fall of {rd.bar:.3f} counts)"
+        else:
+            why = f"no recovery: under the price paid ({rd.net * 100:.1f}c a contract after both fees) for {fallrule.NO_RECOVERY_SHARE:.0%} of the market's length with no profit and no bounce to sell, the spot crossed ({zs})"
+        reason = f"one rule, {why}; {left:.0f} s left: sold at the bid {bid:.2f} (paid {t.entry:.2f}){note}"
+        extra = {"bid": round(bid, 4), "net": round(rd.net, 4), "entry": round(t.entry, 4), "rule": rd.kind, "high": round(rd.high, 4), "fall": round(rd.fall, 4), "bar": round(rd.bar, 4), "wobble": round(wobble, 4), "z": None if rd.z is None else round(rd.z, 3), "fade": round(rd.fade, 3)}
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="one rule", extra=extra)
+            return reason
+        if not t.one_rule_logged:
+            t.one_rule_logged = True
+            log.info("one rule shadow: %s %s would sell: %s", t.ticker, t.lane, reason)
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="one rule", extra=extra)
         return None
 
     def _sell_top_take(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:

@@ -10,7 +10,9 @@ THREE FACTORS move the bar the reading has to pass:
 THE THREE CONCEPTS:
   early profit  the bet is ahead after both fees by a wobble: follow the high of this profit run and sell, at a gain, when the bid falls the bar under it or makes no new high for STALL_SHARE of the time left. Fades with the time elapsed (above).
   no loss       nothing here sells under the price paid while the spot has not crossed. A bet that falls back under cost ends its profit run; it is not sold on the way down.
-  salvage       the bet is under cost and the spot has crossed: it is not sold at its low. It is sold when it has bounced a bar off its low and the bounce has failed (the bid is a bar under the bounce's high): a small loss on a lower high in place of the low or a total loss. A bet that never bounces is the time backstop's (the no_recovery step).
+  salvage       the bet is under cost and the spot has crossed: it is not sold at its low. It is sold when it has bounced a bar off its low and the bounce has failed (the bid is a bar under the bounce's high): a small loss on a lower high in place of the low or a total loss. A bet that does not bounce is sold by the time backstop: NO_RECOVERY_SHARE of the market's length under cost since it was last ahead (or first seen), the spot crossed.
+  the top       a bid that leaves a tick or less to win is sold: nothing more to gain, the whole bid to lose.
+LATE PROFIT IS LEFT ALONE WHILE THE SPOT HAS NOT CROSSED (user, 2026-11-26: "make sure late profit doesn't sell if it's not under the target. We keep losing a ton late market from sales for no reason"): the fade applies to every profit whose spot is not a wobble on the wrong side of the target.
 
 Pure and stdlib only: the watcher's step and the replay call the same function. Z_HOLD and STALL_SHARE are the numbers early_take ran with; FADE_S is "about ten minutes" read as a curve that is a tenth at minute 10; its power was 4 on the first run and was made 8 after seeing that 4 already widened the bar at minute 5.6 enough to miss BTC 17:00 (said so: chosen after the result)."""
 from __future__ import annotations
@@ -21,6 +23,9 @@ from dataclasses import dataclass
 MARKET_S = 900.0
 Z_HOLD = 1.0  # sigma of the time left on the bet's side that holds a profit (early_take_cushion_units)
 STALL_SHARE = 0.1  # a profit with no new high for this share of the time left has stopped climbing (early_take_stall_share)
+TICK = 0.01
+GRID = TICK / 2.0  # the bid moves in ticks, so a fall is compared with its bar to the nearest tick: a fall of 0.06 passes a bar of 0.0603 (BTC 17:00 sat on exactly that edge; user, 2026-11-26: "close enough")
+NO_RECOVERY_SHARE = 0.33  # the time backstop: this share of the market's length under cost with no profit (the priskp lane's no_recovery_share)
 FADE_S = 0.6 * MARKET_S  # early profit's fade: exp(-(elapsed / FADE_S)^8), a tenth at minute 10
 
 
@@ -32,6 +37,8 @@ class State:
     run_high_ts: float = 0.0
     low: float = 0.0  # the bid's low since it went under cost; 0 = it is not under cost
     bounce_high: float = 0.0  # the high of the bounce off that low; 0 = no bounce of a bar yet
+    first_ts: float = 0.0  # the first tick the rule saw this bet (the buy, or the pick-up after a restart)
+    last_ahead_ts: float = 0.0  # the last tick the bet was ahead after both fees
 
 
 @dataclass
@@ -39,7 +46,7 @@ class Read:
     """One tick's answer: sell or not, the kind of sale, and every number it was judged on (for the log and the record)."""
 
     sell: bool
-    kind: str  # "fall", "stall", "salvage", or why it held: "cushion", "under bar", "no cross", "no bounce", "nothing"
+    kind: str  # "top", "fall", "stall", "salvage", "no recovery", or why it held: "cushion", "under bar", "no cross", "no bounce", "nothing"
     net: float = 0.0
     fall: float = 0.0  # the fall from the high used, in price
     bar: float = 0.0  # the fall needed, in price
@@ -73,15 +80,21 @@ def crossed(cushion: float | None, spot_unit: float | None) -> bool:
     return cushion is not None and bool(spot_unit) and cushion <= -spot_unit * math.sqrt(10.0 / 60.0)
 
 
-def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None) -> Read:
-    """Ask the rule on one tick. `fee_bid` and `fee_entry` are the fee per contract at the bid and at the price paid, `fee_of` the fee function (for the gain at the high), `wobble` the bid's typical 10 s move (a tick when it has no reading)."""
+def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None) -> Read:
+    """Ask the rule on one tick. `fee_bid` and `fee_entry` are the fee per contract at the bid and at the price paid, `fee_of` the fee function (for the gain at the high), `wobble` the bid's typical 10 s move (a tick when it has no reading). `cross_cushion`, when given, is the cushion the cross test reads in place of `cushion` (the watcher gives the better for the bet of the spot's 60 s and 5 s averages: the spot has crossed only when both have)."""
     cost = entry + fee_entry
     net = bid - fee_bid - cost
     z = cushion_z(cushion, spot_unit, left)
     bar_w = bar_wobbles(left, z)
+    over = crossed(cushion if cross_cushion is None else cross_cushion, spot_unit)
+    if s.first_ts <= 0:
+        s.first_ts = now
+    if 1.0 - bid <= TICK + 1e-9:
+        return Read(True, "top", net, 0.0, 0.0, bid, z)  # THE TOP: a tick or less left to win and the whole bid to lose
     if net > 0:  # EARLY PROFIT
         s.low = s.bounce_high = 0.0
-        f = fade(left)
+        s.last_ahead_ts = now
+        f = 1.0 if over else fade(left)  # the fade is for a profit whose spot has not crossed: late in the market such a bet is left alone (user, 2026-11-26: "make sure late profit doesn't sell if it's not under the target"); with the spot on the wrong side a profit is still taken at any minute
         if s.run_high <= 0:
             if net < wobble - 1e-9:
                 return Read(False, "nothing", net, 0.0, 0.0, bid, z, f)  # ahead by less than a wobble is not a profit yet
@@ -93,7 +106,7 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
             return Read(False, "cushion", net, fall, 0.0, s.run_high, z, f)
         high_net = s.run_high - fee_of(s.run_high) - cost
         bar = max(wobble, min(bar_w * wobble, high_net - wobble)) / max(f, 1e-9)
-        if fall >= bar - 1e-9:
+        if fall >= bar - GRID:
             return Read(True, "fall", net, fall, bar, s.run_high, z, f)
         if now - s.run_high_ts >= STALL_SHARE * left / max(f, 1e-9):
             return Read(True, "stall", net, fall, bar, s.run_high, z, f)
@@ -104,11 +117,10 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         s.low, s.bounce_high = bid, 0.0  # a new low: any bounce before it is over
     if bid - s.low >= bar - 1e-9 or s.bounce_high > 0:
         s.bounce_high = max(s.bounce_high, bid)
-    if s.bounce_high <= 0:
-        return Read(False, "no bounce", net, 0.0, bar, s.low, z)
-    fall = s.bounce_high - bid
-    if fall < bar - 1e-9:
-        return Read(False, "under bar", net, fall, bar, s.bounce_high, z)
-    if not crossed(cushion, spot_unit):
-        return Read(False, "no cross", net, fall, bar, s.bounce_high, z)  # NO LOSS while the spot has not crossed
-    return Read(True, "salvage", net, fall, bar, s.bounce_high, z)  # SALVAGE: the bounce off the low has failed with the spot on the wrong side
+    if not over:
+        return Read(False, "no cross", net, 0.0, bar, s.bounce_high or s.low, z)  # NO LOSS while the spot has not crossed
+    if s.bounce_high > 0 and s.bounce_high - bid >= bar - GRID:
+        return Read(True, "salvage", net, s.bounce_high - bid, bar, s.bounce_high, z)
+    if now - max(s.first_ts, s.last_ahead_ts) >= NO_RECOVERY_SHARE * MARKET_S:
+        return Read(True, "no recovery", net, 0.0, bar, s.bounce_high or s.low, z)  # THE TIME BACKSTOP: a third of the market under cost with the spot crossed (user, 2026-11-24: "accept its a loss when it doesn't come back after the wait"; a profit expires)
+    return Read(False, "no bounce" if s.bounce_high <= 0 else "under bar", net, max(0.0, s.bounce_high - bid), bar, s.bounce_high or s.low, z)  # SALVAGE: the bounce off the low has failed with the spot on the wrong side

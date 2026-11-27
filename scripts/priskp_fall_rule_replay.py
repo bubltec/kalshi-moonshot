@@ -1,9 +1,9 @@
-"""Does the one fall rule (src/kalshi_moonshot/fallrule.py) beat the exits the live PriskP bets actually got? (2026-11-26; user: "We keep adding patches instead of fixing the core issue", "we need to consolidate one rule that handles them all".)
-QUESTION (one, on the same bets): every live PriskP bet since the per-tick entry change (2026-11-25 15:57 ET), walked second by second from its buy on its own taped quotes with the chain top_take > fall rule > no_recovery in place of top_take > early_take > late_dip > no_recovery > wave_take > value_sale. What does each bet make against what it actually made?
-HOW A BET IS SCORED: the new chain is walked from the buy. If it sells before the bet's actual exit, that sale is the result. If the bet was actually sold by wave_take or value_sale (steps that stay) before the new chain sold, the actual sale stands. Otherwise (the actual sale was by a step this rule replaces or re-walks, or there was none) the walk goes on to the close and the bet settles on the market's own result. A sale is at that second's bid less the sale fee 0.07 p (1 - p); the buys rested (no buy fee), the same for both sides of the comparison, though the rule itself judges profit after both fees as the live steps do.
-HONEST LIMITS: the bid is the tape's last quote of each second, no fill modelled (a collapsing bid may not fill at the printed price). The spot is the settlement index's 60 s average against the market's strike; the live code reads the Kalshi perp adjusted to the strike where it has one. The wobble is the mid's typical minute since the open once there are 90 s of it. no_recovery is walked as 297 s without a profit and the spot crossed by the rule's own test (a wobble of the spot under the target, not the live step's bare sign). The rule's three numbers are the ones early_take and late_dip ran with; nothing was fitted to this file. One and a half days of bets: a lead, to be scored forward.
+"""Does the one exit rule (src/kalshi_moonshot/fallrule.py) beat the exits the live PriskP bets actually got? (2026-11-26; user: "We keep adding patches instead of fixing the core issue", "we need to consolidate one rule that handles them all", "One rule. For sure".)
+QUESTION (one, on the same bets): every live PriskP bet since the per-tick entry change (2026-11-25 15:57 ET), walked second by second from its buy on its own taped quotes with the one rule as the whole exit (early profit, no loss, salvage, the time backstop, the top) in place of top_take > early_take > late_dip > no_recovery > wave_take > value_sale. What does each bet make against what it actually made?
+HOW A BET IS SCORED: the rule is walked from the buy to the close. Its first sale is the result; with no sale the bet settles on the market's own result. A sale is at that second's bid less the sale fee 0.07 p (1 - p); the buys rested (no buy fee), the same for both sides of the comparison, though the rule itself judges profit after both fees as the live steps do.
+HONEST LIMITS: the bid is the tape's last quote of each second, no fill modelled (a collapsing bid may not fill at the printed price). The spot is the settlement index's 60 s average against the market's strike; the live step reads the Kalshi perp adjusted to the strike where it has one, takes the better of the 60 s and 5 s averages for the cross test and asks the settlement-window veto before a loss sale, none of which is walked here. The wobble is the mid's typical minute since the open once there are 90 s of it. The rule's numbers are the ones early_take, late_dip and no_recovery ran with, except the fade (a curve for "about 10 mins"), whose power was 4 on the first run and 8 after seeing that 4 missed BTC 17:00, and the nearest-tick comparison, added after seeing BTC 17:00 sit 0.0003 from its bar. One and a half days of bets: a lead, scored forward from here.
 SHAPES: thirds of the bet's own wobble at the buy (the bid's typical 10 s move) and the spot's cushion in sigma at the buy; no asset.
-Run: .venv/bin/python scripts/priskp_fall_rule_replay.py TAPE.json.gz   (the tape from scripts/priskp_exit_tape_pull.py)"""
+Run: PYTHONPATH=src .venv/bin/python scripts/priskp_fall_rule_replay.py TAPE.json.gz   (the tape from scripts/priskp_exit_tape_pull.py)"""
 import datetime
 import gzip
 import json
@@ -49,7 +49,7 @@ def walk(b: dict) -> dict | None:
     won = 1.0 if b["result"] == side else 0.0
     actual_sale = b["exit_price"] if b["exit_ts"] else None
     actual = (actual_sale - fee(actual_sale) if actual_sale is not None else won) - entry
-    kept = b["exit_reason"].startswith(("wave take", "value sale"))
+    kept = False  # the one rule is the whole chain: wave_take and value_sale are not kept either
     stop_at = b["exit_ts"] if (b["exit_ts"] and kept) else close - 1.0
     st = fallrule.State()
     last_ahead, first = 0.0, None
@@ -78,15 +78,11 @@ def walk(b: dict) -> dict | None:
         if net > 0:
             last_ahead = now
         sale, kind, why = None, "", ""
-        if 1.0 - x <= TICK + 1e-9:
-            sale, kind = x, "top take"
-        else:
+        if True:
             r = fallrule.decide(st, x, entry, fee(x), fee(entry), fee, wob, now, left, cushion, sunit)
             if r.sell:
                 sale, kind = x, r.kind
-                why = f"high {r.high:.2f} fell {r.fall:.3f} (bar {r.bar:.3f}, wobble {wob:.3f}) z {'n/a' if r.z is None else f'{r.z:+.2f}'} {left:.0f}s left"
-            elif net <= 0 and now - max(first, last_ahead) >= 0.33 * 900.0 and fallrule.crossed(cushion, sunit):
-                sale, kind = x, "no recovery"
+                why = "" if r.kind in ("top", "no recovery") else f"high {r.high:.2f} fell {r.fall:.3f} (bar {r.bar:.3f}, wobble {wob:.3f}) z {'n/a' if r.z is None else f'{r.z:+.2f}'} {left:.0f}s left"
         if sale is not None:
             out.update(new=sale - fee(sale) - entry, kind=kind, at=now, px=sale, why=why)
             break
