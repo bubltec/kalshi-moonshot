@@ -228,3 +228,30 @@ Noticed:
 wave_shape (the other session's lane): 80 closed bets, about -$23.15.
 
 Nothing changed this pass.
+
+## Pass 10, 05:19 (bets bought 04:33 to 05:06)
+
+Live build unchanged (b2480d4a).
+
+PriskP: eight closed bets, six gains, one salvage and one zero, about -$6 as run.
+
+| Bet | Paid | Ended | Market | As run |
+|---|---|---|---|---|
+| ZEC 04:45 YES | 0.84 | fast 0.90 | YES | +$1.00 |
+| BNB 04:45 YES | 0.82 | fast 0.87 | NO | +$0.75 (a save) |
+| NEAR 04:45 YES 04:35:54 | 0.83 | NO SALE | NO | -$15.20 |
+| ETH 05:00 YES 04:47:07 | 0.59 | salvage 0.37 at 04:49:19 | NO | -$6.30 (held: -$14.75; the salvage was right) |
+| DOGE 05:15 NO | 0.74 | top 0.99 | not in | +$5.00 |
+| SOL 05:15 NO | 0.74 | early profit 0.77 | not in | +$0.30 |
+| NEAR 05:15 NO | 0.75 | top 0.99 | not in | +$4.70 |
+| SOL 05:15 NO (bought back 48 s after its own sale) | 0.80 | top 0.99 | not in | +$3.60 |
+
+The zero, NEAR 04:45 YES: a steady-market buy at 0.83 (chance 0.82, cushion in the top fifth, note "3 of 4, off the peak, would buy too"). The bid stood at 0.90 to 0.92 from 04:38:00 to 04:39:20, about +7c after both fees, then slid to 0.83, 0.70, 0.51 and was 0.12 with two minutes left. No profit was taken: +7c is under two wobbles, so no profit run started, and the spot's cushion would have held it as well. Under cost the spot was not as far under the target as it had been over it until late.
+
+A fix tried on the tape and NOT made: letting a stall take a profit of one wobble (a fall and the fast clause still needing two). On the 210 bets: +$89.64 against +$97.46 as live; the four extra stall sales were all on bets that went on to win. The same shape as DOGE 02:45 (+7c, then zero): two zeros tonight from a profit under two wobbles, and the replay still says taking those costs more than it saves. Left; counted.
+
+The sixth buy-back after a profit sale (SOL 05:15 NO, bought back at 0.80 forty-eight seconds after selling at 0.77) paid: top at 0.99. Buy-backs tonight: two paid, four lost the stake, one flat.
+
+wave_shape (the other session's lane): 96 closed bets, about -$22.50.
+
+Nothing changed this pass.
