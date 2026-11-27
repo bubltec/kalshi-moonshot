@@ -1067,6 +1067,8 @@ class ProfitWatcher:
             why = f"early profit: +{rd.net * 100:.1f}c a contract after both fees and the bid fell {rd.fall:.3f} from its high {rd.high:.2f} (a fall of {rd.bar:.3f} counts: wobble {wobble:.3f}, the fade {rd.fade:.2f}, the spot's cushion {zs})"
         elif rd.kind == "stall":
             why = f"early profit: +{rd.net * 100:.1f}c a contract after both fees and no new high over {rd.high:.2f} for {fallrule.STALL_SHARE:.0%} of the time left (the fade {rd.fade:.2f}, the spot's cushion {zs})"
+        elif rd.kind == "fast drop":
+            why = f"fast drop: under the price paid ({rd.net * 100:.1f}c a contract after both fees), the spot's cushion is falling in a straight line toward the target ({zs}) and at that slope reaches it within {fallrule.FAST_DROP_TTC_SHARE:.0%} of the {left:.0f} s left: sold at the bid {bid:.3g} for a small loss"
         elif rd.kind == "salvage":
             why = f"salvage: under the price paid ({rd.net * 100:.1f}c a contract after both fees), the spot has crossed the target ({zs}) and the bounce to {rd.high:.2f} has failed by {rd.fall:.3f} (a fall of {rd.bar:.3f} counts)"
         else:

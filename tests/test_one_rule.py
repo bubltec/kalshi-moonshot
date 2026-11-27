@@ -1,5 +1,6 @@
 """The one exit rule (fallrule.py; user, 2026-11-26: "we need to consolidate one rule that handles them all"): early profit that fades with the time elapsed, no loss while the spot has not crossed, salvage on a failed bounce, the time backstop and the top. Unit tests on the pure function, then the watcher's step through a held bet."""
 import itertools
+import math
 
 import pytest
 
@@ -335,3 +336,88 @@ def test_the_top_holds_at_any_minute_when_the_cushion_makes_holding_worth_more_t
     near = asker(0.64, spot_unit=18.0)(0.991, 164, 50.0)  # $50 over: 1.7 sigma, not enough to be worth more than 0.99
     assert near.sell and near.kind == "top"
     assert asker(0.64, spot_unit=18.0)(0.991, 164).kind == "top"  # the spot unread: sold as before
+
+
+def test_a_straight_fast_drop_toward_the_target_late_in_the_market_is_sold_for_a_small_loss():
+    """User, 2026-11-27 11:50 ET: "it should also salvage if we get a fast drop that approaches the target when time remaining is low. Fast drop happens when the slope away from winning side shows no/little curvature and approaches the target". ETH 08:00 NO, ZEC 08:00 NO, XRP/HYPE/BNB 10:15 NO fell under cost with the cushion still positive and were never sold. The spot's cushion falling in a straight line, with little time left, a small cushion for the time left, and reaching the target within half the time left."""
+    ask = asker(0.70, wobble=0.045)
+    sold = None
+    for k in range(40):
+        left = 170 - 2 * k
+        r = ask(0.55, left, 7.0 - 0.2 * k * 2)  # the cushion falls 0.4 a tick, every 2 s: a straight line
+        if r.sell:
+            sold = (k, r)
+            break
+    assert sold is not None and sold[1].kind == "fast drop" and sold[1].net < 0, sold
+    assert 8 <= sold[0] <= 20  # once the window has filled, not on the first tick
+    # a fall that slows (curvature) is not a straight one: the same cushion path flattening out is held
+    ask = asker(0.70, wobble=0.045)
+    path = [1.0 + 6.0 * math.exp(-k / 6.0) for k in range(40)]  # a fall that decays: it flattens out well above the target
+    assert not any(ask(0.55, 170 - 2 * k, c).sell for k, c in enumerate(path))
+    # with a lot of time left it is not read at all
+    ask = asker(0.70, wobble=0.045)
+    assert not any(ask(0.55, 500 - 2 * k, 7.0 - 0.4 * k).sell for k in range(30))
+    # nor with a cushion that is still large for the time left
+    ask = asker(0.70, wobble=0.045)
+    assert not any(ask(0.55, 170 - 2 * k, 60.0 - 0.4 * k).sell for k in range(40))
+
+
+def test_the_fast_early_take_is_inert_in_the_last_tenth_of_the_market():
+    """User, 2026-11-27 11:50 ET: the fast early take "waits longer with less time remaining, with about 90s left making it inert"."""
+    ask = asker(0.64, wobble=0.040, bought=700.0)  # bought with 200 s left
+    ask(0.70, 195, 40.0)
+    assert not ask(0.84, 170, 40.0).sell  # 30 s in, most of the profit in hand: a fast profit
+    assert ask(0.84, 150, 40.0).kind == "fast"  # 20 s without a new high with 150 s left: sold
+    ask = asker(0.64, wobble=0.040, bought=700.0)
+    ask(0.70, 195, 40.0)
+    ask(0.84, 170, 40.0)
+    assert ask(0.84, 85, 40.0).kind != "fast"  # the same bid with 85 s left: the fast clause is inert, the ordinary early take decides
+
+
+def test_integration_a_fast_drop_sale_goes_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
+    """The fast drop is a sale under cost, so its reason must pass sellchain.may_sell_under_cost and the selling thread must place it (the 11-26 lesson: a step is tested through to the client's order)."""
+    from kalshi_moonshot import config, watcher
+    from kalshi_moonshot.store import Store
+    from tests.test_risk_exit_flow import CLOSE, Client, held, live, signals, yes_bid
+
+    live(monkeypatch)
+    client = Client(bid=0.30, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['one_rule']")
+    t = w.targets[("KXFAKE", "risk_only")] if ("KXFAKE", "risk_only") in w.targets else next(iter(w.targets.values()))
+    t.shock_index, t.shock_ref = "X", 100.0
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: (7.0 - 0.2 * (170 - (CLOSE - now)), 10.0))  # the cushion falls 0.2 a second, in a straight line
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.12)
+    got = []
+    for k in range(40):
+        yes_bid(w, 0.45, 170 - 2 * k)
+        got += signals(w)
+        if got:
+            break
+    assert got and got[0].why.startswith("one rule, fast drop:"), got
+    w._sell(got[0].ticker, got[0].lane, got[0].why)
+    assert len(client.sold) == 1, "the selling thread did not place the fast drop's sale under cost"
+    assert len(Store(config.load().db_path).open_bets()) == 0
+
+
+def test_early_take_holds_a_fall_while_the_cushion_approaches_the_target_with_curvature_and_sells_it_when_the_approach_is_straight():
+    """User, 2026-11-27 12:15 ET: normal early take "should hold as long as it has a curvature while approaching the target which indicates it will likely hold on the winning side. The other exits should handle the case where it doesn't". The cushion is small for the time left in both runs (under a sigma), and the bid falls the same way."""
+
+    def run(path):
+        ask = asker(0.64, wobble=0.040, bought=1e-9)
+        out = None
+        for k, c in enumerate(path):
+            out = ask(0.80, 600 - 5 * k, c)  # a profit run at 0.80 while the cushion moves
+        return ask, out
+
+    straight = [9.0 - 0.3 * k for k in range(15)]  # falls in a straight line toward the target
+    ask, _ = run(straight)
+    r = ask(0.69, 600 - 5 * 15, straight[-1] - 0.3)
+    assert r.sell and r.kind == "fall", r
+    curved = [4.5 + 4.5 * math.exp(-k / 4.0) for k in range(15)]  # falls but slows: it flattens above the target
+    ask, _ = run(curved)
+    r = ask(0.69, 600 - 5 * 15, curved[-1] - 0.01)
+    assert not r.sell and r.kind == "cushion", r
+    rising = [4.5 + 0.2 * k for k in range(15)]  # moving away from the target
+    ask, _ = run(rising)
+    r = ask(0.69, 600 - 5 * 15, rising[-1])
+    assert not r.sell and r.kind == "cushion", r

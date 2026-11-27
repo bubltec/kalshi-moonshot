@@ -20,13 +20,19 @@ Pure and stdlib only: the watcher's step and the replay call the same function. 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 MARKET_S = 900.0
 Z_HOLD = 1.0  # sigma of the time left on the bet's side that holds a profit (early_take_cushion_units)
 ARM_WOBBLES = 2.0  # a profit run starts when the bet is ahead by two wobbles after both fees, so that a sale after the smallest fall that counts (one wobble) still keeps a wobble of profit. It was one wobble until 2026-11-26 ~23:40 ET: DOGE 23:30 YES was sold twice "for garbage profit, while it was winning" (user): bought 0.66, high 0.76 (+7c, 1.6 wobbles), sold at 0.69 for +2.0c on a fall of one wobble, the bid went on to 0.80; bought back at 0.78, high 0.87, sold at 0.80 for +0.4c. HYPE 21:45 the same (+0.7c). A profit under two wobbles left nothing to keep once a wobble had been given back, and one wobble is the bid's ordinary motion. Structural (it is what makes the profit cap mean something), not a fitted number; chosen after seeing those sales
 FAST_PACE = 2.0  # a profit gained too fast to risk (2026-11-27 ~01:00 ET, user, on NEAR 00:00 NO: bought 0.64, +22c within two minutes of a bet with nine left, held by the cushion and gone to zero: "We need a rule where the time to profit increase becomes too valuable to risk, and it needs to sell it"; "Let's add the profit gained too fast rule"). PACE is the share of the bet's possible profit already in hand (the gain after both fees over 1 less the cost) divided by the share of the bet's life used (its age over the time it had left at its buy): 1 is a straight line from the buy to a full win at the close. At FAST_PACE or more, with a profit run started (two wobbles), the bet is sold the moment it stops climbing (a wobble off its high, or no new high for STALL_SHARE of the time left; while it keeps making highs it is held: SOL 01:15, 2026-11-27, was sold at 0.91 still rising and went to 1.00, user: "It shouldn't sell if it doesn't stop"): it has been paid at twice the pace a full win needs, and what the rest of the market can add is small against what is in hand. A ratio of the bet's own profit and life, no cents and no seconds. On NEAR's tape it sells at 0.83 at 23:53:14, +$4.29 against -$15.23. SAID PLAINLY: on the 210 live bets of 11-25/26 it makes 99 such sales at a median 0.87, 86 of which would have gone on to win, and the replay total is +$110.14 against +$149.66 without it (2 was tried beside 3 and 4, +$124.72 and +$134.76, which do not sell NEAR; 2 chosen for that, after seeing; no buy-back modelled). On the user's word; score the `fast` sales and the buy-backs after them forward
+INERT_SHARE = 0.1  # the fast early take is inert in the last tenth of the market, about 90 s (user, 2026-11-27 11:50 ET: "with about 90s left making it inert"): early take's weight has faded to nothing by then
+FAST_DROP_LEFT_SHARE = 0.2  # THE FAST DROP (user, 2026-11-27 11:50 ET: "it should also salvage if we get a fast drop that approaches the target when time remaining is low. Fast drop happens when the slope away from winning side shows no/little curvature and approaches the target"): it is read only in the last fifth of the market, 180 s
+FAST_DROP_Z = 0.5  # and only while the spot's cushion is under this many of its own typical moves over the time left (it is approaching the target)
+FAST_DROP_TTC_SHARE = 0.5  # and the straight line it is falling on reaches the target within this share of the time left
+FAST_DROP_WINDOW_SHARE = 0.15  # the spot's path is read over this share of the time left (never under 10 s)
+FAST_DROP_STRAIGHT = 0.6  # no curvature: the later half of the window falls at least this share as fast as the earlier half (a fall that slows is not a straight one)
 FAST_BEAT_SHARE = 0.05  # THE HEARTBEAT of a fast profit (2026-11-27 ~08:00 ET, user, on the fast sales that went on to 1.00: "It should be a heart beat check. That looks at the buy and the current price and keep track of the high point ... if it stops increasing over 5s (or a similar scaled timer) it should execute"): a fast profit is sold only when the bid has made no new high for this share of the time left (about 5 s with 100 s left, 28 s with 550), never on a one-wobble dip while highs are still coming. Replay on the 312 live bets of 11-25 to 11-27 07:23 (scripts/priskp_fall_rule_replay.py, no buy-back): the whole book +$29.01 with it against +$11.85 with the wobble clause (a 3 s beat +$26.00, 5 s +$25.82, 10 s +$20.29, 20 s +$27.86, 0.02 of the time left +$20.10, 0.1 +$-20.58: every beat under a tenth beat the wobble clause; the share was picked after seeing these, and 25 fast sales are few)
 STALL_SHARE = 0.1  # a profit with no new high for this share of the time left has stopped climbing (early_take_stall_share)
 TICK = 0.01
@@ -48,6 +54,7 @@ class State:
     best_cushion: float = 0.0  # the best cushion the spot has had on the bet's side over the WHOLE MARKET (seeded from the open by the caller, then every tick)
     first_ts: float = 0.0  # the first tick the rule saw this bet (the buy, or the pick-up after a restart)
     last_ahead_ts: float = 0.0  # the last tick the bet was ahead after both fees
+    ch: list[tuple[float, float]] = field(default_factory=list)  # (second, cushion) of the spot's own recent path, read for the fast drop
 
 
 @dataclass
@@ -96,6 +103,33 @@ def settle_z(banked: float | None, cushion_now: float | None, spot_unit: float |
     return need / (spot_unit * math.sqrt(left / 60.0))
 
 
+def cushion_path(s: State, now: float, left: float) -> tuple[str, float]:
+    """How the spot's cushion has moved over the last part of the market (a share of the time left, never under 10 s): "rising", "straight" (falling with no curvature: the later half of the window falls at least FAST_DROP_STRAIGHT as fast as the earlier half), "curved" (falling but slowing) or "unread"; and its slope a second over the whole window."""
+    w = max(10.0, FAST_DROP_WINDOW_SHARE * left)
+    win = [(t, c) for t, c in s.ch if t >= now - w]
+    if len(win) < 6 or win[-1][0] - win[0][0] < 0.7 * w:
+        return "unread", 0.0
+    mid = 0.5 * (win[0][0] + win[-1][0])
+    a = [(t, c) for t, c in win if t <= mid]
+    b = [(t, c) for t, c in win if t >= mid]
+    if len(a) < 2 or len(b) < 2 or a[-1][0] <= a[0][0] or b[-1][0] <= b[0][0]:
+        return "unread", 0.0
+    s1 = (a[-1][1] - a[0][1]) / (a[-1][0] - a[0][0])
+    s2 = (b[-1][1] - b[0][1]) / (b[-1][0] - b[0][0])
+    full = (win[-1][1] - win[0][1]) / (win[-1][0] - win[0][0])
+    if full >= 0 or s2 >= 0:
+        return "rising", full
+    return ("straight" if (s1 < 0 and s2 <= FAST_DROP_STRAIGHT * s1) else "curved"), full
+
+
+def fast_drop(s: State, cc: float | None, z: float | None, now: float, left: float) -> bool:
+    """The spot's cushion is falling in a straight line toward the target (no curvature), in the last minutes, with the cushion already small for the time left, and at that slope it reaches the target within half the time left. All ratios of the time left and of the spot's own typical move, no cents."""
+    if cc is None or left > FAST_DROP_LEFT_SHARE * MARKET_S or (z is not None and z > FAST_DROP_Z):
+        return False
+    kind, full = cushion_path(s, now, left)
+    return kind == "straight" and cc / -full <= FAST_DROP_TTC_SHARE * left
+
+
 def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None, settle: float | None = None, bought: float | None = None, wave: object = "off") -> Read:
     """Ask the rule on one tick. `fee_bid` and `fee_entry` are the fee per contract at the bid and at the price paid, `fee_of` the fee function (for the gain at the high), `wobble` the bid's typical 10 s move (a tick when it has no reading). `cross_cushion`, when given, is the cushion the cross test reads in place of `cushion` (the watcher gives the better for the bet of the spot's 60 s and 5 s averages: the spot has crossed only when both have)."""
     cost = entry + fee_entry
@@ -110,6 +144,10 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         over = -cc >= s.best_cushion - 1e-12  # CROSSED FOR A LOSS SALE ONLY WHEN THE SPOT IS AS FAR UNDER THE TARGET AS IT HAS BEEN OVER IT: see the module doc ("no loss")
     if s.first_ts <= 0:
         s.first_ts = now
+    if cc is not None:
+        s.ch.append((now, cc))
+        if len(s.ch) > 400:
+            del s.ch[:100]
     if 1.0 - bid <= TICK + 1e-9:
         if settle is not None and 0.5 * (1.0 + math.erf(settle / math.sqrt(2.0))) > bid - fee_bid:
             return Read(False, "locked", net, 0.0, 0.0, bid, settle)  # the settlement average is locked in: holding is worth more than the bid pays
@@ -144,10 +182,10 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         life = age + left
         if life > 0 and age > 0 and (net / max(1.0 - cost, 1e-9)) / (age / life) >= FAST_PACE:
             s.fast = True  # A PROFIT GAINED TOO FAST TO RISK (FAST_PACE): from here the bet is sold THE MOMENT IT STOPS CLIMBING, and not before (2026-11-27 ~01:20 ET, user, on SOL 01:15 YES: bought 0.73, sold by this clause at 0.91 thirty-six seconds later while the bid was still rising, and it went straight on to 1.00: "It never dropped going up in price", "It shouldn't sell if it doesn't stop"). It stays so for the rest of the profit run
-        if s.fast and now - s.run_high_ts >= FAST_BEAT_SHARE * left:  # asked before the cushion hold and never faded: a wobble off the high, or no new high for STALL_SHARE of the time left
+        if s.fast and left > INERT_SHARE * MARKET_S and now - s.run_high_ts >= FAST_BEAT_SHARE * left:  # asked before the cushion hold and never faded: a wobble off the high, or no new high for STALL_SHARE of the time left
             return Read(True, "fast", net, fall, wobble, s.run_high, z, f)
-        if z is not None and z >= Z_HOLD:
-            return Read(False, "cushion", net, fall, 0.0, s.run_high, z, f)
+        if (z is not None and z >= Z_HOLD) or cushion_path(s, now, left)[0] in ("rising", "curved"):
+            return Read(False, "cushion", net, fall, 0.0, s.run_high, z, f)  # the cushion is large for the time left, OR the spot is moving away from the target or approaching it with curvature (a fall that slows: it will likely hold on the winning side; user, 2026-11-27 12:15 ET: "this should hold as long as it has a curvature while approaching the target ... The other exits should handle the case where it doesn't"): a straight fall toward the target is the fast drop's, the bid's own fall the bar's
         high_net = s.run_high - fee_of(s.run_high) - cost
         bar = max(wobble, min(bar_w * wobble, high_net - wobble)) / max(f, 1e-9)
         if fall >= bar - GRID:
@@ -162,6 +200,8 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         s.low, s.bounce_high = bid, 0.0  # a new low: any bounce before it is over
     if bid - s.low >= bar - 1e-9 or s.bounce_high > 0:
         s.bounce_high = max(s.bounce_high, bid)
+    if not over and fast_drop(s, cc, z, now, left):
+        return Read(True, "fast drop", net, 0.0, bar, s.bounce_high or s.low, z)  # THE SPOT FALLS IN A STRAIGHT LINE toward the target in the last minutes and would reach it before the close: a small loss now, not the whole stake at the end
     if not over:
         return Read(False, "no cross", net, 0.0, bar, s.bounce_high or s.low, z)  # NO LOSS while the spot has not crossed
     if s.bounce_high > 0 and s.bounce_high - bid >= bar - GRID:
