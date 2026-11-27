@@ -324,8 +324,8 @@ def test_integration_early_take_a_stall_with_cushion_or_no_reading_holds(tmp_pat
 def test_integration_early_take_a_cushion_holds_a_fall_and_no_reading_sells_it(tmp_path, monkeypatch, mem):
     lose = [0.005]
     ask = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
-    assert ask(0.90, 700) is None  # armed at its high
-    assert ask(0.80, 690) is None  # fell a wobble, +7c in hand, but a 0.5% chance of ending wrong: the hold is worth more than the sale (2026-11-25, SOL 07:34 NO: "with that much cushion it should not sell")
+    assert ask(0.90, 400) is None  # armed at its high, in the second half of the market
+    assert ask(0.80, 390) is None  # fell over a wobble, +7c in hand, but a 0.5% chance of ending wrong: the hold is worth more than the sale (2026-11-25, SOL 07:34 NO: "with that much cushion it should not sell"). Second half only since 2026-11-26 (BTC 17:00): in the first half a fall is not held by the hold value
     lose[0] = None
     ask2 = _early_take_asker(tmp_path, monkeypatch, mem, 0.0, lose)
     assert ask2(0.90, 700) is None
@@ -806,6 +806,34 @@ def test_integration_early_take_one_wobble_fall_with_time_left_is_not_a_stop_and
     assert ask(0.86) is None  # fell 0.04 again: held
     why = ask(0.82)  # fell 0.08 from 0.90: more than the 0.071 a fall needs now, still in profit
     assert why and why.startswith("early take:") and "stopped climbing" in why
+
+
+def test_integration_early_take_in_the_first_half_a_fall_sells_while_the_sale_still_keeps_a_profit(tmp_path, monkeypatch, mem):
+    """2026-11-26, user, on BTC 17:00 YES bought at 0.64: the bid stood at 0.74 to 0.77 with 590 s left, then 0.72 -> 0.65 in a second, and the bet was sold at 0.07 by no_recovery: "It is an early profit candidate and it needs to sell", "Do not wait on these". The scaled fall (0.098 on a wobble of 0.043) put the sale's line at the bet's break-even, and the hold value (about 0.73 against a sale paying 0.70) would have held it as well. The bids below are the tape's."""
+    from kalshi_moonshot import curverisk, watcher
+
+    w, t, close = take_target(tmp_path, monkeypatch, 0.64, unit=0.1044)  # the bid's wobble: 0.1044 x sqrt(10/60) = 0.043
+    thin_cushion(monkeypatch, lose=0.27)  # the hold value 0.73 is over what a bid of 0.71 pays
+    t.entry, t.early_take_share, t.early_take_stall_share, t.early_take_hold_share = 0.64, 1.0, 0.0, 0.0
+    t.risk_unit, t.risk_unit_at = 0.1044, 1e12
+    risk = curverisk.Risk(0.5, 0.5, 0.5, "price")
+    c = watcher._SellWalk(30.0, 0.77, 0.64, None)
+
+    def ask(bid, left):
+        c.facts = None
+        with memguard.decision("sell"):
+            return w._sell_early_take(t, risk, bid, close - left, left, 0.0, c)
+
+    assert ask(0.74, 590) is None  # 16:50:10, +7c after both fees: armed
+    assert ask(0.77, 588) is None  # the high
+    assert ask(0.74, 576) is None  # fell 0.03, under a wobble: the climb goes on
+    assert ask(0.76, 568) is None
+    assert ask(0.72, 565) is None  # 16:50:35, fell 0.05: the gain at the high is 0.10 and the sale keeps a wobble of it, so a fall needs 0.059
+    why = ask(0.71, 563)  # 16:50:37, fell 0.06: sold at +4c a contract, not held by the hold value
+    assert why and why.startswith("early take:") and "bid fell" in why
+    t.early_take_armed, t.early_take_high = False, 0.0
+    assert ask(0.90, 400) is None  # the second half is as before: armed at 0.90
+    assert ask(0.84, 398) is None  # fell 0.06, over the first half's line, but the scaled fall (0.081 at 398 s left) is not met
 
 
 def test_integration_a_loss_while_ahead_is_held_by_asking_the_veto_not_by_the_walks_refusal(tmp_path, monkeypatch, mem, caplog):
