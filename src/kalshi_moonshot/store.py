@@ -1382,6 +1382,17 @@ class Store:
         ).fetchone()
         return float(row["t"]) if row and row["t"] is not None else None
 
+    def lane_bet_times(self, ticker: str, lane: str, side: str) -> list[float]:
+        """When this lane bought this market and side before (every bet row, open or sold), oldest first. From the bet book in memory in the running bot."""
+        book = self._book()
+        if book is not None:
+            return sorted(float(r["ts"]) for r in book if r["ticker"] == ticker and _lane_of(r) == lane and (r["side"] or "yes") == side and r["stake_usd"] is not None)
+        rows = self.db.execute(
+            "SELECT ts FROM decisions WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND COALESCE(side,'yes')=? AND action='bet' AND stake_usd IS NOT NULL ORDER BY ts",
+            (ticker, lane, side),
+        ).fetchall()
+        return [float(r["ts"]) for r in rows]
+
     def last_exit_ts(self, ticker: str, lane: str) -> float | None:
         """When this lane last sold this market (a gain or a loss), else None; from the bet book in memory in the running bot."""
         return self._last_exit(ticker, lane)

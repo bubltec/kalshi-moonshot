@@ -438,6 +438,34 @@ def _nest(shot: Any, now: float, hours: float) -> dict[str, Any] | None:
         return None
 
 
+LOW_CUSHION_SHARE = 0.5  # a curve buy waits while the spot's cushion over the target is under this share of the turn the bet's swing started from (2026-11-27, user: "betting Yes at the end peak of a U shaped curve (with almost no cushion) ... I have never asked for that logic"; earlier: "Just seems like a bad idea with low cushion to buy in a curve like that. Would have been better to wait"). A ratio of the curve's own swing, in the market's own units. Bins stated before the run: on the 167 curve buys the lane made 11-25 to 11-27, cushion under half the turn 68 bets, settled their way 54%, -$200.22 held, -$141.10 as run; half the turn or more 99 bets, 81%, +$168.69 held, +$74.60 as run (scripts/priskp_curve_waits_table.py). One half is the lower bin's edge, not fitted
+
+
+def swing_played(shot: Any, now: float, hours: float, bet_times: list[float]) -> bool:
+    """True when this lane already bought the swing this side is in now (2026-11-27, user, on re-buys: "why doesn't the rebuy follow priskp logic, which should have done none of this and waited for the next curve"). The curve entry buys a swing that started from a turn; after the lane has bought and sold it, the same swing is not bought again: the lane waits for the next one, so the wait is the curve's own and needs no timer. The swing is the leg reading's current swing (wavefacts.leg, walked from an hour before the open); two readings are the same swing when its start is the same within the reading's own smoothing. On the 23 re-buys of 11-25 to 11-27, 11 were in the same swing as the bet they re-bought (6 won, -$44.37 held, -$45.42 as run); 12 were in a new swing (9 won, -$2.64 held). Memory only; False when it cannot be read or the market is not a curve."""
+    from . import binaryrisk, ticks, wavefacts, waveturn
+
+    if not bet_times:
+        return False
+    try:
+        index = binaryrisk.curve_index(shot.series or shot.ticker.split("-")[0])
+        strike = ticks.strikes.get(shot.ticker)
+        if not index or not strike:
+            return False
+        close = now + hours * 3600.0
+        opened = round(close / 900.0) * 900.0 - 900.0
+        cur = wavefacts.curve(index, opened, now, float(strike), shot.side, max(close - now, 1.0), wavefacts.HOUR)
+        if cur is None or cur.get("regime") != "curve":
+            return False
+        for t in bet_times:
+            then = wavefacts.leg(index, opened, t, float(strike), shot.side, max(close - t, 1.0), wavefacts.HOUR)
+            if then is not None and abs(float(then["swing_start"]) - float(cur["swing_start"])) <= waveturn.SMOOTH:
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def _price_rising(shot: Any, now: float, hours: float) -> bool | None:
     """True when the side's OWN PRICE is still climbing at both small swing sizes since the market opened (wavefacts.price_swings, from the market's quotes in memory), False when it has pulled back at one of them, None when it cannot be read. Memory only."""
     from . import ticks, wavefacts
@@ -502,7 +530,8 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     rising = _price_rising(shot, now, hours) if (inwin and in_curve) else None  # THE PRICE'S OWN PEAK (2026-11-27, user: "The peak reading looks at the spot's swings ... this is a bug we need to fix"; "I'd rather have that than a wait ... The wait should just happen"): a buy whose own price is still climbing at both small swing sizes is at the price's peak, however the spot's swings read. A lane that has just sold at the top meets the same reading: the price is still there, so it is not bought until it has pulled back, with no timer
     spot_peak = in_curve and nest is not None and bool(nest.get("at_peak"))
     peak = spot_peak or bool(in_curve and rising)
-    ok = inwin and (cv["verdict"] == "buy" and held and not peak if in_curve else candidate(states))  # type: ignore[index]
+    low = bool(in_curve and cv is not None and cv.get("cushion_u") is not None and cv.get("prev_u", 0.0) > 0 and cv["cushion_u"] < LOW_CUSHION_SHARE * cv["prev_u"])  # the spot is barely over the target for the swing the bet rides: wait for the cushion the curve itself calls for
+    ok = inwin and (cv["verdict"] == "buy" and held and not peak and not low if in_curve else candidate(states))  # type: ignore[index]
     need = need_readings(hours * 3600.0)
     reached, count = confirmed(shot.ticker, shot.side, ok, now, need)
     n = note(shot.side, states, count, minute, need)
@@ -515,6 +544,9 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
             n["curve"] = f"{cv['class']}, swing {cv['swing_u']:.2f} u after a turn of {cv['prev_u']:.2f} u, gave back {cv['gb_u']:.2f}, big leg {cv['age'] if cv['age'] is not None else 'n/a'} and travel {cv['travel'] if cv['travel'] is not None else 'n/a'} of a usual one, target {cv['reach']:.2f} wave travels away"
             if cv["verdict"] == "buy" and inwin and not held:
                 n["verb"], n["why"] = "wait", "curve_not_held"  # the swing runs with the bet but the cushion has not come over to its side yet
+            elif cv["verdict"] == "buy" and inwin and low:
+                n["verb"], n["why"] = "wait", "curve_low_cushion"  # the cushion is under a share of the turn the swing came from
+                n["cushion_u"], n["turn_u"] = cv["cushion_u"], cv["prev_u"]
             elif cv["verdict"] == "buy" and inwin and peak:
                 n["verb"], n["why"] = "wait", "curve_peak"  # the bet's own swing or its own price is at its top: wait for the pullback
                 n["peak_by"] = "price" if (rising and not spot_peak) else "spot" if (spot_peak and not rising) else "price and spot"

@@ -299,3 +299,45 @@ def test_in_a_curve_the_trend_entry_waits_while_its_own_price_is_still_climbing(
     monkeypatch.setattr(priskp, "_price_rising", lambda *a, **k: True)
     monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, regime="steady"))
     assert "curve_peak" not in ask_at(5.0, side="yes")[1]  # only in a curve
+
+
+def test_in_a_curve_the_trend_entry_waits_while_the_cushion_is_under_half_the_turn_it_came_from(monkeypatch):
+    """2026-11-27 (user: "betting Yes at the end peak of a U shaped curve (with almost no cushion) ... I have never asked for that logic"; "Just seems like a bad idea with low cushion to buy in a curve like that. Would have been better to wait"): the spot's cushion over the target must be at least half the turn the bet's swing started from, both in the market's typical minutes; below it the lane waits for the next place to bet."""
+    feed(lambda s: 100.5, OPEN + 600.0)
+    cuts()
+    curve = {"regime": "curve", "verdict": "buy", "class": "inside", "swing_u": 1.6, "prev_u": 2.0, "gb_u": 0.0, "age": 0.6, "travel": 0.7, "reach": 0.2, "cushion_u": 0.7}
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve))
+    ok, why = ask_at(5.0, side="yes")
+    assert not ok and "why: curve_low_cushion" in why and "cushion_u: 0.7" in why and "turn_u: 2.0" in why  # 0.7 against half of 2.0
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, cushion_u=1.0))
+    assert ask_at(5.0, side="yes")[0]  # exactly half the turn: bought
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: {k2: v for k2, v in curve.items() if k2 != "cushion_u"})
+    assert ask_at(5.0, side="yes")[0]  # no reading of the cushion: nothing is held back
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, regime="steady"))
+    assert "curve_low_cushion" not in ask_at(5.0, side="yes")[1]  # only in a curve
+
+
+def test_the_lane_does_not_buy_the_same_swing_twice_and_waits_for_the_next_one(monkeypatch):
+    """2026-11-27 (user, on the re-buys: "why doesn't the rebuy follow priskp logic, which should have done none of this and waited for the next curve"): a bet in the swing the lane already bought waits; once the swing has turned (a new swing start) it is bought again."""
+    from kalshi_moonshot import binaryrisk, wavefacts
+    from types import SimpleNamespace
+
+    ticks.strikes.note(TICKER, 100.0)
+    monkeypatch.setattr(binaryrisk, "curve_index", lambda series: "IDX")
+    cur = {"regime": "curve", "swing_start": 1000.0}
+    monkeypatch.setattr(wavefacts, "curve", lambda *a, **k: dict(cur))
+    monkeypatch.setattr(wavefacts, "leg", lambda index, opened, t, *a, **k: {"swing_start": 1000.0 if t < 500.0 else 1400.0})
+    shot = SimpleNamespace(ticker=TICKER, series="KXBTC15M", side="yes")
+    hours = 0.1
+    assert priskp.swing_played(shot, 600.0, hours, [100.0]) is True  # the earlier bet was in the swing that started at 1000: the same one
+    assert priskp.swing_played(shot, 600.0, hours, [100.0, 700.0]) is True
+    assert priskp.swing_played(shot, 600.0, hours, [700.0]) is False  # that bet was in a swing that started at 1400: a different one
+    assert priskp.swing_played(shot, 600.0, hours, []) is False  # nothing bought yet
+    cur["swing_start"] = 1700.0  # the swing has turned: a new one
+    assert priskp.swing_played(shot, 600.0, hours, [100.0]) is False
+    cur["swing_start"] = 1000.0
+    cur["regime"] = "steady"
+    assert priskp.swing_played(shot, 600.0, hours, [100.0]) is False  # only in a curve

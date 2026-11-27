@@ -543,6 +543,10 @@ def priskp_step(ctx: Ctx, shot: LongShot) -> Check:
 
     try:
         ok, why = priskp.admit(ctx.s, shot, ctx.now, _hours_left(ctx, shot))
+        if ok and ctx.store is not None:  # THE LANE DOES NOT BUY A SWING TWICE (2026-11-27, user, on re-buys: "why doesn't the rebuy follow priskp logic, which should have done none of this and waited for the next curve"): read from the lane's own bet rows, so it holds for a resting buy that is judged again on every quote (its bet row does not exist yet) and for no other lane's bets
+            times = ctx.store.lane_bet_times(shot.ticker, shot.lane, shot.side)
+            if times and priskp.swing_played(shot, ctx.now, _hours_left(ctx, shot), times):
+                return Check(False, "curve_played: this lane already bought the swing this side is in; it waits for the next one")
     except Exception as exc:
         return Check(False, f"priskp unreadable ({exc})")
     return Check(ok, why)

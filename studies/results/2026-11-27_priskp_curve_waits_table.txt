@@ -1,0 +1,13 @@
+167 curve buys the lane makes
+
+   all curve buys                                             n 167  settled its way  70%  held $  -31.52 (-0.19 a bet)  as run $  -66.50
+   HELD BACK by: price still rising                           n 119  settled its way  70%  held $  -57.90 (-0.49 a bet)  as run $  -65.35
+      not held back by it                                     n  48  settled its way  71%  held $   26.38 (+0.55 a bet)  as run $   -1.15
+   HELD BACK by: cushion under half the turn                  n  68  settled its way  54%  held $ -200.22 (-2.94 a bet)  as run $ -141.10
+      not held back by it                                     n  99  settled its way  81%  held $  168.69 (+1.70 a bet)  as run $   74.60
+   HELD BACK by: the same swing as an earlier bet of the lane n  11  settled its way  55%  held $  -44.37 (-4.03 a bet)  as run $  -45.42
+      not held back by it                                     n 156  settled its way  71%  held $   12.84 (+0.08 a bet)  as run $  -21.08
+
+   held back by any of the three                              n 146  settled its way  68%  held $  -81.59 (-0.56 a bet)  as run $ -114.30
+   LEFT after all three                                       n  21  settled its way  81%  held $   50.06 (+2.38 a bet)  as run $   47.80
+   left after price rising and low cushion only               n  25  settled its way  84%  held $   68.72 (+2.75 a bet)  as run $   46.09

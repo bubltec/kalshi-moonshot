@@ -238,7 +238,8 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
     travel = abs(float(win[int(now - start)]) - float(win[small_start])) / w10 if w10 else None  # type: ignore[arg-type]
     at_extreme = (age is not None and age >= EXTREME) or (travel is not None and travel >= EXTREME)
     refuse = cls in ("against", "turned") or (cls == "inside" and at_extreme)  # 2026-11-25 ~18:15 (user, on ZEC 18:15 NO bought at 18:07:11 at the bottom of a dip as it turned up, then a straight run through the strike: "It bought right in the dip. Why??! Why doesn't it wait??"): a bet whose side the current swing runs AGAINST, or whose leg has already TURNED against it, always waits; only a bet inside its own leg is bought, and not at that leg's extreme. 24 hours of bets: against 18 bets -$42.92 (44% lost), turned 16 bets -$0.17 (31% lost)
-    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse, "usual_leg_s": usual, "w10": w10, "at_extreme": at_extreme, "prev_u": round(prev_u, 2), "spot": float(win[int(now - start)])}  # type: ignore[arg-type]
+    cushion_u = (1.0 if side == "yes" else -1.0) * (float(win[int(now - start)]) - target) / h.u  # type: ignore[arg-type]  # the spot's distance past the target on the bet's side, in the market's typical minutes
+    return {"cushion_u": round(cushion_u, 3), "swing_start": float(start + small_start), "class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse, "usual_leg_s": usual, "w10": w10, "at_extreme": at_extreme, "prev_u": round(prev_u, 2), "spot": float(win[int(now - start)])}  # type: ignore[arg-type]
 
 
 def travel_left(bef: dict[str, Any] | None, left: float) -> float | None:
