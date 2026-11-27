@@ -228,7 +228,7 @@ def test_a_paper_bet_on_the_same_market_does_not_hide_a_hand_placed_position(s):
 def test_only_the_part_of_a_position_you_bought_is_yours(s):
     store = Store(s.db_path)
     # the bot bought 3 of the same NO contracts for $0.75; the account holds 10 in all ($4.60 in)
-    store.add_order(ticker="KXNASDAQ100U-X", env=s.env, count=3, price=0.25, fill_count=3, cost_usd=0.75, fee_usd=0.0, side="buy")
+    store.add_order(ticker="KXNASDAQ100U-X", env=s.env, count=3, price=0.25, fill_count=3, cost_usd=0.75, fee_usd=0.0, side="buy", contract="no")  # the order's contract is recorded (it has been on every order the bot places): the position's own side is what the bot's count is read on
     got = {p.ticker: p for p in manual.ManualPositions(Client()).positions(s, store, fresh=True)}
     p = got["KXNASDAQ100U-X"]
     assert p.count == pytest.approx(7.0) and p.entry == pytest.approx((4.60 - 0.75) / 7.0)
