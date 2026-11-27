@@ -312,3 +312,26 @@ What that says:
 Nothing changed this pass. For the user: (1) whether the lane may buy the same side back seconds after its own profit sale; (2) whether to design a late-market rule for a bet near its cost with a minute or two left; (3) the entries, which is where the night was lost.
 
 wave_shape (the other session's lane): 119 closed bets, about +$9.
+
+## Pass 13, 06:49 (bets bought 06:21 to 06:40)
+
+Live build unchanged (b2480d4a).
+
+PriskP: six closed bets, four gains and two losses, about -$15 as run.
+
+| Bet | Paid | Ended | Market | As run |
+|---|---|---|---|---|
+| DOGE 06:30 YES | 0.78 | top 0.99 | YES | +$4.00 |
+| XRP 06:30 YES 06:21:58 | 0.70 | fast 0.78 | NO | +$0.90 (a save) |
+| BNB 06:30 YES | 0.75 | top 0.99 | YES | +$4.90 |
+| XRP 06:30 YES 06:23:46 (bought back 16 s after its own sale, 1c higher) | 0.79 | NO SALE | NO | -$15.00 |
+| NEAR 06:45 YES 06:34:02 | 0.61 | salvage 0.17 at 06:38:42 | not in | -$11.60 |
+| NEAR 06:45 NO 06:40:22 (the other side, after the salvage) | 0.73 | fast 0.82 | not in | +$2.20 |
+
+Noticed:
+- XRP 06:30: the fast clause sold at 0.78 a bet whose market then lost, a whole stake saved, and sixteen seconds later the lane bought the same side back at 0.79 and lost that stake. The eighth buy-back of the same side within a minute of the lane's own profit sale tonight: two paid (+$9.20 together), six lost the stake (about -$90 together), one flat. It is the single most repeated loss of the night. It is entry logic and a new refusal, so by the rules of this watch it is not changed; it has been put to the user at 04:19, 04:49, 05:19 and 06:19 and is the first thing for them to decide.
+- NEAR 06:45: a loss sale and then a buy of the OTHER side that paid: the re-buy the user described on 11-26 ("it could have rebought after the down trend and would have made money on both halves").
+
+wave_shape (the other session's lane): 136 closed bets, about -$3.
+
+Nothing changed this pass.
