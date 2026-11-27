@@ -42,3 +42,30 @@ Two fixes tried on the tape, neither shipped:
 So protecting against this zero costs about $60 to $90 on a day and a half of bets. Not a low-risk change; nothing was changed. Decision for the user.
 
 Worth looking at next (not built): on this bet the bid collapsed while the index still showed a cushion. The cushion hold trusts the index's 60 s average absolutely once it is a sigma out. Whether a large fall of the bid should weaken that hold is a question about which of the two leads, to be answered on the tape, not by a number of mine.
+
+## Pass 2, 00:24 (bets bought 00:17 to 00:21, the 00:30 markets)
+
+Live build: still the 23:46 one. The stall change (35f4b558), the nested-swings shadow note and the leg's walk from before the open are on main and pushed, NOT deployed: the user questioned the stall change at ~00:23 ("That's not what I said exactly... What did you do?"), so the 00:30 deploy was stopped and waits for their answer.
+
+| Bet | Paid | Ended | As run |
+|---|---|---|---|
+| ZEC 00:30 NO, 00:17:13 | 0.73 | salvage 0.33 at 00:21:20 | -$9.18 |
+| BTC 00:30 NO, 00:17:15 | 0.64 | salvage 0.27 | -$9.08 |
+| BNB 00:30 NO, 00:17:34 | 0.58 | salvage 0.18 | -$11.11 |
+| ETH 00:30 NO, 00:17:52 | 0.65 | salvage 0.28 | -$9.52 |
+| XRP 00:30 NO, 00:17:53 | 0.63 | salvage 0.17 | -$10.79 |
+| NEAR 00:30 NO, 00:18:02 | 0.62 | salvage 0.15 | -$13.31 |
+| SOL 00:30 YES, 00:18:42 | 0.71 | early profit (stall) 0.84 | +$0.75 (7.1 contracts) |
+| BTC 00:30 YES, 00:21:22 | 0.72 | early profit (fall) 0.81 | +$1.14 |
+| DOGE 00:30 YES, 00:21:28 | 0.67 | open at the pass | |
+
+SIX NO BETS IN 50 SECONDS, ALL LOST: about -$63. The loss sales worked (salvage sold each at 0.15 to 0.33 inside five minutes, about $35 back of $94 staked; before 22:47 these would have gone to zero), but the entries are the problem, as the user said of the 22:30 round ("It's an entry issue when they all fail like that").
+
+What the curve was doing: in the 20 minutes before these buys the spot had RISEN 2.5 to 8.1 of its typical minutes against every one of the six (BTC -7.3, BNB -8.1, ETH -7.8, XRP -6.5, ZEC -3.4, NEAR -2.5 for the NO side). Two minutes into the market the lane read a small dip as a down swing from a turn and bought NO on all six within 50 seconds. The same shape as BTC, ZEC and DOGE 22:30 and BTC and BNB 23:00.
+
+What the readings would have said (computed after, from the index tape; the shadow note is not deployed):
+- nested swings: BNB, ETH, XRP, NEAR read "- + - +", 2 of 4 with the bet: shadow would WAIT. ZEC and BTC read "- + + +", 3 of 4: would have bought too. Four of six.
+- the leg walked from before the open (the change waiting to deploy): would not have waited on these; the small down swing began after the open, so it is young however far back the walk starts.
+- side_losing let all six through: each was seconds old and none was 5% under yet when the next was bought.
+
+Not a low-risk change, nothing changed. For the user: six same-side buys inside one minute are one bet at six times the stake, and nothing in the buy module sees the run the market had just made the other way.
