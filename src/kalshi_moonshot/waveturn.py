@@ -51,6 +51,9 @@ SWING = 0.5  # the least swing, in u
 GB = 0.2  # given back from the swing's extreme before the buy, in u
 BAND = 0.5  # the side gate's band around the target, in u
 LEG_SHARE = 0.75  # 2026-11-26 (user, on SILVER 10:45 YES bought on a small bounce: "Again, makes no sense. It bought yes in the wrong place"): the swing that turns must be this share of the market's own median completed leg, or it is a wobble. The swing over the leg on the day's wrong buys: SILVER 10:45 0.50, GOLD 10:30 0.50, PLATINUM 10:15 0.41, DOGE 10:30 NO 0.68, NATGAS 10:00 0.91; on the good ZEC 10:30 NO 2.3. On the user's 17 marked markets: 0.6 keeps the 6 marked buys fired (other fires 11 -> 10), 0.75 keeps 5 (9 others), 1.0 keeps 4 (8 others, one more no-good silent). 0.75 was CHOSEN AFTER SEEING both; it does not apply before a market has a completed leg
+JUMPY = 7.0  # 2026-11-27 (user, on SILVER 09:15 YES bought after a 3.36u fall and sold at 0.05: "It isn't in a wave curve it's just in spikes and those are different"; "Let's try to teach the spike"): a market that moves in JUMPS is not a wave market and is not bought. The reading is the kurtosis of the market's own 10 s moves (absolute, in u) over the hour before the open and the window so far: about 3 to 6 when the movement is spread over a back-and-forth, higher when a few jumps carry it. On the user's 17 marked markets (tests/fixtures/wave_turn_marks.json.gz) the five marked buys the reader fires read 3.7 to 6.6, the four fires in markets he marked no-good 7.6 to 8.2, and SILVER 09:15 reads 8.2; the cut sits between them and was CHOSEN AFTER SEEING those numbers, on 5 buys against 4 (studies/results/2026-11-27-wave-spike-attempt.txt). The SIZE of the swing does not tell a spike: his marked BTC and BNB buys were swings of 3.0 and 2.3 times the market's usual leg
+JUMPY_LIVE = False  # SHADOW (2026-11-27): the jump reading is in every note with what it would do, and refuses nothing. Why not live: the split on the marks comes from the HOUR BEFORE THE OPEN alone (hour only: marked 3.8 to 6.4, no-good 8.3 to 8.8, SILVER 09:15 8.0); read on the window alone, or on the last 20 or 30 minutes, it does not separate them (a marked BNB buy reads 9.3 on the last 20 minutes), and a quiet hour followed by a wavy window reads as jumpy. That is a gate on the pre-open hour, which the user took off this lane on 2026-11-25, standing on 5 marked buys against 4 fires. It is scored on the lane's own bets before anyone turns it on (CLAUDE.md rule 5); the switch is the user's
+STEP_S = 10  # the seconds of one move in the jump reading
 DONE_U = 1.0  # a completed swing: the curve has gone this far one way and this far back, in u (chosen after seeing the user's 28 marks)
 DONE_OFFSET_MIN = 2.0  # the completed swings needed grow with the minutes into the market: one before about minute 5, two at 6, three at 8, four at 10 (swings pile up with time, so a fixed count lets trends in late). From the leave-one-market-out of the swing count on the user's 45 marks (studies/results/2026-11-25-wave-swing-gate.txt): best count 1 at 4 min, 2 at 6, 3 at 8-10; chosen after seeing the marks.
 DONE_SLOPE = 0.5  # swings needed per minute after DONE_OFFSET_MIN
@@ -105,6 +108,9 @@ class Hour:
     cross: float | None
     eff: float | None
     why: str = ""
+    leg_u: float = 0.0  # the median size of the hour's completed legs of DONE_U u, in u (0 = none): the market's usual leg before the window has made its own
+    leg_s: float = 0.0  # the median seconds of those legs
+    moves: tuple[float, float, float, float, int] = (0.0, 0.0, 0.0, 0.0, 0)  # the hour's 10 s moves (absolute, in u): the sums of their 1st to 4th powers and their count, for the jump reading (JUMPY)
 
 
 def hour_of(sp: list[float | None]) -> Hour:
@@ -120,7 +126,46 @@ def hour_of(sp: list[float | None]) -> Hour:
     prof = marketprofile.profile_from([float(k) for k in range(PRE)], h, float(PRE - 1), 1.0)
     if not prof:
         return Hour(u, None, None, "the hour before the open does not give a profile (too few whole windows or ticks)")
-    return Hour(u, float(prof["cross"]), float(prof["eff"]))
+    lu, ls = _hour_legs(h, u)
+    return Hour(u, float(prof["cross"]), float(prof["eff"]), "", lu, ls, _moves(h, u))
+
+
+def _moves(path: list[float], u: float) -> tuple[float, float, float, float, int]:
+    """The sums of the 1st to 4th powers of the path's STEP_S moves (absolute, in u), and their count."""
+    s1 = s2 = s3 = s4 = 0.0
+    n = 0
+    for i in range(0, len(path) - STEP_S, STEP_S):
+        x = abs(path[i + STEP_S] - path[i]) / u
+        s1 += x
+        s2 += x * x
+        s3 += x * x * x
+        s4 += x * x * x * x
+        n += 1
+    return s1, s2, s3, s4, n
+
+
+def jumpiness(a: tuple[float, float, float, float, int], b: tuple[float, float, float, float, int]) -> float:
+    """The kurtosis of two sets of moves taken together (the hour's and the window's), from their power sums; 0 when there are too few moves or they do not vary."""
+    n = a[4] + b[4]
+    if n < 30:
+        return 0.0
+    s1, s2, s3, s4 = a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3]
+    m = s1 / n
+    var = s2 / n - m * m
+    if var <= 1e-18:
+        return 0.0
+    m4 = s4 / n - 4.0 * m * s3 / n + 6.0 * m * m * s2 / n - 3.0 * m ** 4
+    return m4 / (var * var)
+
+
+def _hour_legs(h: list[float], u: float) -> tuple[float, float]:
+    """(median size in u, median seconds) of the completed legs of DONE_U u on the hour's smoothed path; (0, 0) with none. Read once per market, with the hour."""
+    sm = broad(h, 0, len(h) - 1, SMOOTH // 2, len(h) - 1)
+    big, _d, _k, _v = zigzag(sm, DONE_U * u)
+    legs = [(b[0] - a[0], abs(b[1] - a[1]) / u) for a, b in itertools.pairwise(big)]
+    if not legs:
+        return 0.0, 0.0
+    return float(statistics.median(y for _, y in legs)), float(statistics.median(x for x, _ in legs))
 
 
 @dataclass
@@ -140,10 +185,26 @@ class Reading:
     big_d: int = 0  # the direction of the market's larger leg (the DONE_U zig-zag): +1 rising, -1 falling, 0 none yet
     raw_gb_u: float = 0.0  # how far the LAST TICK (not the smoothed curve) has come off the swing's extreme, in u: what the move has already run in fact
     ext_t: int = 0  # the second since the open of the swing's running extreme (where the swing turned, once it has given back)
+    swing_s: int = 0  # the seconds the swing took from its start to its extreme
+    usual_u: float = 0.0  # the market's usual leg (shadow, in the note): this window's median completed leg, else the pre-open hour's; 0 = neither is read
+    usual_s: float = 0.0  # that leg's median seconds
+    jumpy: float = 0.0  # the kurtosis of the market's 10 s moves over the hour before the open and the window so far (JUMPY); 0 = unread
+
+    @property
+    def size_x(self) -> float:
+        """The swing as a multiple of the market's usual leg (0 when no usual leg is read)."""
+        return self.swing_u / self.usual_u if self.usual_u > 0 else 0.0
+
+    @property
+    def pace_x(self) -> float:
+        """The swing's pace (u a second) as a multiple of the usual leg's (0 when it cannot be read). Shadow: in the note, not judged."""
+        if self.usual_u <= 0 or self.usual_s <= 0 or self.swing_s <= 0:
+            return 0.0
+        return (self.swing_u / self.swing_s) / (self.usual_u / self.usual_s)
 
 
-def reading(window: list[float], t: int, K: float, u: float) -> Reading:
-    """The turn reading at `t` s after the open from the 1 s path `window` (index 0 = the open) and the target K."""
+def reading(window: list[float], t: int, K: float, u: float, hour_leg_u: float = 0.0, hour_leg_s: float = 0.0, hour_moves: tuple[float, float, float, float, int] | None = None) -> Reading:
+    """The turn reading at `t` s after the open from the 1 s path `window` (index 0 = the open) and the target K. `hour_leg_u` / `hour_leg_s`: the pre-open hour's usual leg (Hour.leg_u, leg_s), the measure of a spike until the window has a completed leg of its own."""
     sm = broad(window, 0, t, SMOOTH // 2, t)
     pts, d, ek, ev = zigzag(sm, ZZ * u)
     start = pts[-1][1] if pts else sm[0]
@@ -152,7 +213,9 @@ def reading(window: list[float], t: int, K: float, u: float) -> Reading:
     leg_s = statistics.median(x for x, _ in legs) if legs else 0.0
     leg_u = statistics.median(y for _, y in legs) if legs else 0.0
     return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),
-                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d, (ev - window[min(t, len(window) - 1)]) * d / u if d else 0.0, ek)
+                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d, (ev - window[min(t, len(window) - 1)]) * d / u if d else 0.0, ek,
+                   max(0, ek - (pts[-1][0] if pts else 0)), float(leg_u) if leg_u > 0 else float(hour_leg_u), float(leg_s) if leg_u > 0 else float(hour_leg_s),
+                   jumpiness(hour_moves, _moves(window[: t + 1], u)) if hour_moves is not None else 0.0)
 
 
 @dataclass
@@ -199,6 +262,9 @@ def judge(r: Reading, fires: Fires, hold: float, resting: str | None = None) -> 
     if r.leg_u > 0 and r.raw_gb_u >= LEG_SHARE * r.leg_u:
         # 2026-11-26 (user, on SILVER 11:15 NO bought at 535 s at the bottom of a dip: "Just did it again bought down in a dip. Opposite direction"): the peak was read right, but on the 30 s smoothed curve it had given back 0.21u when the price itself had already fallen about 1.2u (41.667 to 41.627 in 20 s; the NO ask went 0.16 -> 0.34), most of a leg of that market (1.41u). The move the bet wants had run before the signal came. A turn whose last tick is already LEG_SHARE of a leg off the extreme (the same share that makes a swing a leg) is too late and is not bought.
         return None, f"the price itself is already {r.raw_gb_u:.2f}u off the swing's extreme, {LEG_SHARE:g} or more of this market's leg ({r.leg_u:.2f}u), while the smoothed curve shows {r.gb_u:.2f}u: the move the bet wants has already run"
+    if JUMPY_LIVE and r.jumpy >= JUMPY:
+        # 2026-11-27 (user, SILVER 09:15 YES: "It isn't in a wave curve it's just in spikes and those are different"; "Let's try to teach the spike"): a market whose movement is carried by a few jumps has no wave to turn. The swing the reader sees there is one of the jumps, and it does not come back the way a wave's leg does.
+        return None, f"the market moves in jumps, not waves: its 10 s moves over the hour before the open and the window so far have a kurtosis of {r.jumpy:.1f}, {JUMPY:g} or more (a spike market, not bought)"
     if r.done < need(r.t):
         return None, f"{r.done} completed swings of {DONE_U:g}u so far, the lane needs {need(r.t)} at {r.t}s: a trend has a pull-back at most, a wave comes back (not a wave shape yet)"
     fires.done[key] = r.t
@@ -269,7 +335,7 @@ def read_index(index: str, opened: float, now: float, K: float, hold: float, res
             if None in win:
                 out = (None, "the spot's path since the open has a gap at its start", None, h)
             else:
-                r = reading(win, t, K, h.u)  # type: ignore[arg-type]
+                r = reading(win, t, K, h.u, h.leg_u, h.leg_s, h.moves)  # type: ignore[arg-type]
                 with _lock:
                     fires = _fires.setdefault((index, op), Fires())
                     side, why = judge(r, fires, hold, resting)
@@ -306,7 +372,7 @@ def peek(index: str, opened: float, now: float, K: float) -> Reading | None:
                     T, V = [prev[0], *T], [prev[1], *V]
             win = grid(T, V, op, int(now) + 1)
             if None not in win:
-                out = reading(win, t, K, h.u)  # type: ignore[arg-type]
+                out = reading(win, t, K, h.u, h.leg_u, h.leg_s, h.moves)  # type: ignore[arg-type]
     with _lock:
         if len(_peeks) > 2000:
             _peeks.clear()
@@ -348,27 +414,47 @@ def note(r: Reading | None, h: Hour, K: float) -> str:
         return f"{head} (target {K:.6g})"
     return (f"{head}; {r.t}s in, {SMOOTH}s smoothing: swing {r.swing_u:.2f}u {'up' if r.d == 1 else 'down' if r.d == -1 else '-'}, {r.gb_u:.2f}u given back, "
             f"completed swings of {DONE_U:g}u {r.done} (gate >= {need(r.t)}), waves so far {r.turns}, curve {r.pos_u:+.2f}u and the swing's extreme {r.ext_u:.2f}u from the target, last-5-min efficiency {r.eff300:.2f}, "
-            f"legs: median {r.leg_s:.0f}s and {r.leg_u:.2f}u, room {room(r)} (shadow), "
+            f"legs: median {r.leg_s:.0f}s and {r.leg_u:.2f}u, room {room(r)} (shadow), the swing is {r.size_x:.2f} x the usual leg ({r.usual_u:.2f}u) and {r.pace_x:.2f} x its pace (shadow), jump reading {r.jumpy:.1f} (a spike market at {JUMPY:g}: {'WOULD NOT BUY' if r.jumpy >= JUMPY else 'would buy'}, shadow), "
             f"u {h.u:.6g} (target {K:.6g})")
+
+
+def facts(r: Reading | None, h: Hour) -> dict[str, Any]:
+    """The reading as NAMED VALUES for the decision's record (buychain.Check.facts): what `note` says in words, as data. Stored with every decision of the step, a buy or a pass, so the reader's logic can be corrected and learned from (user, 2026-11-27: "Building a decision engine is the ultimate goal")."""
+    out: dict[str, Any] = {"u": None if h.u is None else round(h.u, 8), "hour_cross": h.cross, "hour_eff": h.eff, "hour_leg_u": round(h.leg_u, 3), "hour_leg_s": round(h.leg_s, 1)}
+    if r is None:
+        return out
+    out.update({
+        "t": r.t, "dir": r.d, "swing_u": round(r.swing_u, 3), "gb_u": round(r.gb_u, 3), "raw_gb_u": round(r.raw_gb_u, 3), "pos_u": round(r.pos_u, 3), "ext_u": round(r.ext_u, 3), "swing_s": r.swing_s,
+        "turns": r.turns, "done": r.done, "need": need(r.t), "big_dir": r.big_d, "leg_u": round(r.leg_u, 3), "leg_s": round(r.leg_s, 1), "eff300": round(r.eff300, 3),
+        "size_x": round(r.size_x, 3), "pace_x": round(r.pace_x, 3), "jumpy": round(r.jumpy, 2), "jumpy_would_refuse": bool(r.jumpy >= JUMPY),
+    })
+    return out
 
 
 def admits(s: Any, shot: Any, now: float, strike: float | None, resting: bool = False) -> tuple[bool, str]:
     """The buy step's answer for one side: (buy?, the sentence for the decision's note). Memory only."""
+    ok, why, _facts = admits_facts(s, shot, now, strike, resting)
+    return ok, why
+
+
+def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: bool = False) -> tuple[bool, str, dict[str, Any] | None]:
+    """`admits` with the reading as named values (facts): (buy?, the sentence, the facts or None when the market could not be read at all)."""
     from . import binaryrisk, waveflag
 
     series = shot.series or shot.ticker.split("-")[0]
     index = binaryrisk.curve_index(series)
     if not index:
-        return False, f"no Kalshi index or perp reference is read for {series}"
+        return False, f"no Kalshi index or perp reference is read for {series}", None
     opened = round((now + shot.hours_to_close * 3600.0) / 900.0) * 900.0 - 900.0
     K, why = waveflag.target(series, index, opened, strike)
     if K is None:
-        return False, why
+        return False, why, None
     hold = float(getattr(s, "entry_min_gap_seconds", 0.0) or 0.0)
     side, why, r, h = read_index(index, opened, now, K, hold, shot.side if resting else None)
     told = note(r, h, K)
+    got = {**facts(r, h), "turn_side": side, "verdict": why.split(":")[0][:60]}
     if side is None:
-        return False, f"no wave turn: {why}; {told}"
+        return False, f"no wave turn: {why}; {told}", got
     if shot.side != side:
-        return False, f"wave turn ({why}): the bet is {side.upper()}, not this side; {told}"
-    return True, f"wave turn ({why}): buys {side.upper()}; {told}"
+        return False, f"wave turn ({why}): the bet is {side.upper()}, not this side; {told}", got
+    return True, f"wave turn ({why}): buys {side.upper()}; {told}", got

@@ -352,6 +352,17 @@ def stored_reason(note: str) -> str:
     return " ".join(x for x in (text, " ".join(tags)) if x)[:REASON_MAX]
 
 
+def _with_steps(factors_json: str, steps: dict[str, dict[str, Any]]) -> str:
+    """The row's `factors` JSON with the buy steps' verdicts and named readings under "steps" (2026-11-27, user: "a fact board that is really a logic model", "Building a decision engine is the ultimate goal"): each decision, a buy or a pass, keeps what every step read as data, beside the sentence in its note. A value JSON cannot hold is written as text."""
+    try:
+        base = json.loads(factors_json) if factors_json else {}
+    except ValueError:
+        base = {}
+    if not isinstance(base, dict):
+        base = {}
+    return json.dumps({**base, "steps": steps}, default=str, separators=(",", ":"))
+
+
 def _log(store: Store, s: Settings, shot: LongShot, **fields) -> None:
     fields.setdefault("lane_ver", _lane_version(store, s, shot.lane))
     if shot.factors:
@@ -418,6 +429,7 @@ def evaluate(
         cal = Calibration(p, 1.0, cal.band_p, cal.band_n, cal.skill, cal.n)  # the lane bets on its estimator's own chance: the adjustment is noted, not applied
     e = edge(cal.p, shot.ask)
     chain = bool(spec.buy_chain)  # the lane's buy module decides, step by step in its order (buychain.py); a lane with none (the old LLM lanes) keeps the edge screen
+    step_facts: dict[str, dict[str, Any]] = {}
     bet = True if chain else wants_bet(spec, cal.p, shot.ask, e)
     note = why if not adjusted_note else f"{why} | {adjusted_note}" if spec.record_adjust else f"{why} | record adjustment off for this lane, betting on {p:.2f} (it would have read: {adjusted_note})"
     both = None
@@ -432,7 +444,9 @@ def evaluate(
         from . import buychain
 
         p_yes = cal.p if shot.side == "yes" else 1.0 - cal.p
-        bet, chain_note = buychain.decide(buychain.Ctx(s, spec, p_yes, store=store, why=why), shot)
+        chain_ctx = buychain.Ctx(s, spec, p_yes, store=store, why=why)
+        bet, chain_note = buychain.decide(chain_ctx, shot)
+        step_facts = chain_ctx.facts
         note = f"{chain_note} {note}"
     if bet and shot.mutually_exclusive:
         others = store.bet_tickers_in_event(shot.event_ticker) - {shot.ticker}
@@ -510,6 +524,8 @@ def evaluate(
         return Outcome(shot.ticker, shot.title, shot.ask, p, e, action, note, shot.lane)
     if bet and spec.stake_vol_shadow and s.is_live(shot.lane, shot.series):
         _stake_vol_shadow(s, shot, sized)
+    if step_facts:  # the steps' verdicts and named readings go on the row with the entry snapshot (the row's `factors` JSON, under "steps"; the snapshot is merged with them when the row is written)
+        held = {**held, "factors": _with_steps(shot.factors, step_facts)}
     _log(
         store, s, shot, model_p=p, edge=e, action=action, reason=stored_reason(note),
         context=got.context[:1500], cal_p=cal.p, side=shot.side, **held,

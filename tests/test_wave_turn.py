@@ -230,7 +230,7 @@ def counts(rows):
     return hits, silent, extra
 
 
-def test_replay_the_study_counts_on_the_users_marks(mem):
+def test_replay_the_study_counts_on_the_users_marks(mem, monkeypatch):
     with gzip.open(FIXTURE, "rt") as fh:
         rows = json.load(fh)
     assert len(rows) == 17 and sum(len(m["buy"]) for m in rows) == 18
@@ -242,6 +242,57 @@ def test_replay_the_study_counts_on_the_users_marks(mem):
     # 2026-11-26: with the larger-leg rule (a turn against the market's 1u leg is a pull-back, not the wave's turn) the other fires fall from 14 to 11; the 6 marked buys and the 6 silent no-goods are unchanged. Two other rules tried the same day and NOT kept, because each cut the marked buys the lane fires from 6 to 2: the wave's last opposite extreme on the bet's side of the target, and the swing at least as large as its extreme's distance from the target.
     # 2026-11-26, later: with the leg-scale rule (the swing that turns must be 0.75 of the market's median completed leg) 5 of the 18 marked buys are fired, the same 6 no-goods are silent, 9 other fires. The rule costs one marked buy on these markets; it was chosen after seeing this count and the day's five wrong live buys.
     assert counts(rows) == (5, 6, 9)
+    # 2026-11-27, the jump reading (SHADOW; a market whose 10 s moves over the hour before the open and the window so far have a kurtosis of JUMPY or more is a spike market): if it refused, the same 5 marked buys would be fired (they read 3.7 to 6.6), ALL 9 no-good markets would be silent (the four fires in three of them read 7.6 to 8.2) and the other fires would fall from 9 to 7. The cut was chosen after seeing these numbers, and the split comes from the pre-open hour alone: it is in shadow.
+    monkeypatch.setattr(waveturn, "JUMPY_LIVE", True)
+    assert counts(rows) == (5, 9, 7)
+
+
+# ---- the spike market (2026-11-27, SILVER 09:15 YES; user: "It isn't in a wave curve it's just in spikes and those are different"; "Let's try to teach the spike") ----
+def test_unit_the_jump_reading_is_low_for_an_even_back_and_forth_and_high_when_a_few_jumps_carry_the_movement():
+    even = [K + 2.0 * (1 if (k // 60) % 2 == 0 else -1) * ((k % 60) / 60.0) for k in range(3600)]  # steady legs: every 10 s move is the same size
+    rnd = random.Random(7)
+    jumps = [K] * 3600
+    level = K
+    for k in range(3600):
+        if k % 400 == 399:
+            level += rnd.choice((-1, 1)) * 5.0  # a flat line with a jump every few minutes
+        jumps[k] = level + rnd.gauss(0.0, 0.01)
+    none = (0.0, 0.0, 0.0, 0.0, 0)
+    low = waveturn.jumpiness(waveturn._moves(even, 1.0), none)
+    high = waveturn.jumpiness(waveturn._moves(jumps, 1.0), none)
+    assert low < waveturn.JUMPY < high and high > 5 * low, (low, high)
+    assert waveturn.jumpiness(none, none) == 0.0 and waveturn.jumpiness((1.0, 1.0, 1.0, 1.0, 5), none) == 0.0  # too few moves: unread, and an unread market is not refused for it
+
+
+def test_unit_the_two_halves_of_the_jump_reading_add_up_to_the_whole_paths():
+    rnd = random.Random(11)
+    path, x = [], 0.0
+    for _ in range(4500):
+        x += rnd.gauss(0.0, 1.0) * (6.0 if rnd.random() < 0.01 else 1.0)
+        path.append(x)
+    whole = waveturn.jumpiness(waveturn._moves(path, 2.0), (0.0, 0.0, 0.0, 0.0, 0))
+    split = waveturn.jumpiness(waveturn._moves(path[:3601], 2.0), waveturn._moves(path[3600:], 2.0))  # the hour and the window, as the reader holds them
+    assert split == pytest.approx(whole, rel=1e-9)
+
+
+def test_replay_silver_0915_the_note_says_a_spike_market_and_the_switch_would_refuse_it(mem, monkeypatch):
+    """KXSILVER15M 09:15 on 2026-11-27, the lane's live bet: YES bought at 09:08:34 (511 s in) after a fall of 3.36u, sold by the give-up at 0.05. The market's 10 s moves read a kurtosis of about 8. In SHADOW the reader still buys it and its note says what the reading would do; with the switch on it is not bought at any second of the window."""
+    with gzip.open(Path(__file__).parent / "fixtures" / "wave_spike_silver_0915.json.gz", "rt") as fh:
+        m = json.load(fh)
+    rows = [(float(t), float(v)) for t, v in m["ticks"]]
+    op = float(m["open"])
+    ticks_mod.history.warm(m["index"], rows, rows[0][0] - 1.0)
+    assert waveturn.JUMPY_LIVE is False
+    side, why, r, h = waveturn.read_index(m["index"], op, op + m["bought_s"] + 0.5, m["target"], 0.0)
+    assert (side, why) == ("yes", "fired") and r.jumpy >= waveturn.JUMPY  # shadow: bought, as it was live
+    assert 3.2 < r.swing_u < 3.5 and r.d == -1  # the same fall the live bet's note carries
+    told = waveturn.note(r, h, m["target"])
+    assert "jump reading" in told and "WOULD NOT BUY" in told and "shadow" in told
+    waveturn.clear()
+    monkeypatch.setattr(waveturn, "JUMPY_LIVE", True)
+    side, why, _r, _h = waveturn.read_index(m["index"], op, op + m["bought_s"] + 0.5, m["target"], 0.0)
+    assert side is None and "moves in jumps, not waves" in why
+    assert [t for t in range(60, 841) if waveturn.read_index(m["index"], op, op + t + 0.5, m["target"], 0.0)[1] == "fired"] == []
 
 
 # ---- the buy step, through the lane file ----
@@ -362,6 +413,14 @@ def test_integration_through_the_runners_evaluation(tmp_path, monkeypatch, mem):
     monkeypatch.setattr(buychain, "Ctx", functools.partial(real_ctx, now=now))
     out = runner.evaluate(s, None, None, store, shot(now, side), estimators={"market": Fixed()})
     assert "[chain wave_turn_buy: entry_window > wave_turn > wave_trend |" in out.note and "wave_turn yes (wave turn (fired)" in out.note, out.note
+    # the decision's row keeps what each step read as DATA, beside the sentence (2026-11-27, user: "Building a decision engine is the ultimate goal")
+    row = store.db.execute("SELECT action, factors FROM decisions ORDER BY id DESC LIMIT 1").fetchone()
+    steps = json.loads(row["factors"])["steps"]
+    assert list(steps) == ["entry_window", "wave_turn", "wave_trend"] and all(v["ok"] is True for v in steps.values())
+    wtf = steps["wave_turn"]
+    assert wtf["turn_side"] == side and wtf["verdict"] == "fired" and wtf["swing_u"] >= waveturn.SWING and wtf["gb_u"] >= waveturn.GB and wtf["done"] >= wtf["need"]
+    for name in ("t", "dir", "pos_u", "ext_u", "leg_u", "leg_s", "size_x", "pace_x", "jumpy", "jumpy_would_refuse", "u"):
+        assert name in wtf, name
 
 
 def test_integration_one_tick_is_fast_and_memory_only(tmp_path, monkeypatch, mem):
@@ -450,3 +509,18 @@ def test_a_turn_seen_in_time_is_bought_as_before(mem):
     feed(hour, window_path(REPEATED, u_of(hour)))
     assert fires() == [(141, "yes"), (201, "no")]  # an ordinary turn: the price is not a leg ahead of the curve
 
+
+def test_integration_a_pass_keeps_its_steps_facts_too_and_a_step_with_no_facts_keeps_its_verdict(tmp_path, monkeypatch, mem):
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    feed(hour, window_path([(890, 0.0)], u_of(hour)))  # a flat window: no swing, so no turn
+    ticks_mod.strikes.note(TICKER, K)
+    now = OPEN + 300.5
+    ctx = buychain.Ctx(s, sp, now=now)
+    bet, _note = buychain.decide(ctx, shot(now, "yes"))
+    assert not bet
+    assert list(ctx.facts) == ["entry_window", "wave_turn"]  # the walk stopped at the step that said no
+    assert ctx.facts["entry_window"] == {"ok": True}  # a step that gives no readings is kept with its verdict alone
+    wtf = ctx.facts["wave_turn"]
+    assert wtf["ok"] is False and wtf["turn_side"] is None and wtf["verdict"] == "no swing yet" and wtf["dir"] == 0
