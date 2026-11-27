@@ -421,3 +421,6 @@ One live bet: BNB 15:45 YES 0.82 bought 15:34:59 and SOLD BY THE FAST DROP at 0.
 
 ## Pass 32 (15:49 to 16:19 ET)
 One live bet in the window: DOGE 16:00 NO 0.89 to 0.995 (top, a gain). No new bets after 15:51. The fast drop has fired once (BNB 15:45 YES, a miss against holding, about $13); no second sale. The bot restarted at about 16:01 (up 17 minutes, kill switch off), not by this session: the other session's push. Nothing changed.
+
+## Pass 33 (16:19 to 16:49 ET)
+One new live bet: HYPE 16:30 YES 0.83 bought 16:19:58, no sale (the bid ran 0.64 to 0.97 and then 1.00 at the close), held to settlement and won, about +$3.3. The fast drop is exempt from the loss-while-ahead veto since about 16:32 (the other session's push carried commit `dcb8aa76`; my 16:45:05 build push recreated nothing, the image unchanged); no fast drop sale since the exemption, so the count of fast drop sales is still 1 (BNB 15:45 YES, a miss, before the exemption). Bot up 17 minutes at the pass, kill switch off. Nothing changed.
