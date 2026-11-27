@@ -1,0 +1,85 @@
+skipped (no tape, strike or result): KXSOL15M-26NOV260830-30 11-26 08:19:33
+window: 11-25 16:32:11 to 11-26 22:56:29 ET, 210 live PriskP bets
+
+ALL                                n 210  actual $   52.38  one rule $   95.85  change $  +43.47  beat  73  lost 119  same  18
+
+by how the bet actually ended:
+  early take                         n  11  actual $   19.68  one rule $   24.02  change $   +4.34  beat   7  lost   4  same   0
+  held to settlement                 n  61  actual $  107.04  one rule $  110.83  change $   +3.79  beat   5  lost  53  same   3
+  late dip                           n  18  actual $ -105.15  one rule $  -75.39  change $  +29.76  beat   8  lost   9  same   1
+  no recovery                        n  31  actual $ -259.68  one rule $ -171.98  change $  +87.69  beat  17  lost  14  same   0
+  one rule, early profit             n   1  actual $    0.84  one rule $    1.85  change $   +1.01  beat   1  lost   0  same   0
+  one rule, no recovery              n   1  actual $  -14.62  one rule $  -14.60  change $   +0.02  beat   1  lost   0  same   0
+  one rule, salvage                  n   1  actual $  -10.44  one rule $  -11.23  change $   -0.78  beat   0  lost   1  same   0
+  one rule, the top                  n   8  actual $   39.32  one rule $   35.70  change $   -3.63  beat   3  lost   3  same   2
+  top take                           n  48  actual $  236.93  one rule $  150.83  change $  -86.10  beat   8  lost  30  same  10
+  value sale                         n  14  actual $   20.99  one rule $    7.69  change $  -13.30  beat   8  lost   5  same   1
+  wave take                          n  16  actual $   17.46  one rule $   38.13  change $  +20.67  beat  15  lost   0  same   1
+
+by how the one rule ends it:
+  fall                               n  11  actual $  -27.64  one rule $   12.28  change $  +39.93  beat   5  lost   6  same   0
+  fast                               n  93  actual $  216.73  one rule $  207.91  change $   -8.82  beat  33  lost  58  same   2
+  no recovery                        n   6  actual $  -63.06  one rule $  -71.17  change $   -8.10  beat   3  lost   3  same   0
+  salvage                            n  13  actual $  -91.00  one rule $ -108.11  change $  -17.10  beat   5  lost   8  same   0
+  settled                            n  18  actual $ -167.17  one rule $ -236.53  change $  -69.36  beat   0  lost  15  same   3
+  stall                              n   6  actual $   24.94  one rule $   14.73  change $  -10.22  beat   1  lost   4  same   1
+  top                                n  63  actual $  159.59  one rule $  276.74  change $ +117.15  beat  26  lost  25  same  12
+
+by the bid's wobble at the buy (thirds at 0.045 and 0.052):
+  calm                               n  70  actual $   45.51  one rule $   66.20  change $  +20.68  beat  26  lost  37  same   7
+  middle                             n  70  actual $  -34.06  one rule $   20.46  change $  +54.52  beat  28  lost  36  same   6
+  jumpy                              n  70  actual $   40.92  one rule $    9.19  change $  -31.72  beat  19  lost  46  same   5
+
+by the spot's cushion at the buy, in sigma of the time left:
+  z under 0 (wrong side)             n   9  actual $  -12.44  one rule $   -7.97  change $   +4.47  beat   5  lost   3  same   1
+  z 0 to 0.5                         n 112  actual $   32.17  one rule $   77.63  change $  +45.46  beat  44  lost  61  same   7
+  z 0.5 to 1                         n  69  actual $   27.03  one rule $   41.24  change $  +14.21  beat  22  lost  39  same   8
+  z 1 and over                       n  20  actual $    5.62  one rule $  -15.05  change $  -20.67  beat   2  lost  16  same   2
+  unread                             n   0
+
+by day:
+  11-25                              n  30  actual $   -9.50  one rule $  -41.67  change $  -32.17  beat   7  lost  23  same   0
+  11-26                              n 180  actual $   61.88  one rule $  137.52  change $  +75.64  beat  66  lost  96  same  18
+
+the bets the user flagged:
+  SOL15M-26NOV251700     no  11-25 16:47:21 paid 0.71 | actual: settled won                            $  +6.21 | one rule: top 16:57:09 @0.99             $  +5.98 |   -0.23  
+  DOGE15M-26NOV251730    yes 11-25 17:17:39 paid 0.78 | actual: early take 17:27:49 @0.81              $  +0.40 | one rule: top 17:29:14 @0.99             $  +4.09 |   +3.69  
+  DOGE15M-26NOV251945    no  11-25 19:35:16 paid 0.76 | actual: early take 19:38:24 @0.82              $  +0.99 | one rule: fall 19:38:24 @0.81            $  +0.78 |   -0.21  high 0.86 fell 0.050 (bar 0.040, wobble 0.039) z +0.83 396s left
+  HYPE15M-26NOV252030    yes 11-25 20:21:28 paid 0.80 | actual: early take 20:29:15 @0.92              $  +2.17 | one rule: fast 20:24:42 @0.90            $  +1.80 |   -0.38  high 0.96 fell 0.062 (bar 0.045, wobble 0.045) z +1.96 318s left
+  DOGE15M-26NOV261145    no  11-26 11:35:03 paid 0.70 | actual: settled lost                           $ -15.90 | one rule: fast 11:37:17 @0.81            $  +2.25 |  +18.16  high 0.88 fell 0.070 (bar 0.046, wobble 0.046) z +0.88 463s left
+  HYPE15M-26NOV261200    no  11-26 11:47:24 paid 0.68 | actual: late dip 11:58:01 @0.27                $  -9.34 | one rule: fall 11:52:08 @0.75            $  +1.25 |  +10.60  high 0.80 fell 0.050 (bar 0.049, wobble 0.045) z +0.70 472s left
+  ZEC15M-26NOV261545     yes 11-26 15:38:20 paid 0.80 | actual: settled lost                           $ -15.18 | one rule: top 15:44:06 @0.99             $  +3.67 |  +18.86  
+  BTC15M-26NOV261700     yes 11-26 16:48:20 paid 0.64 | actual: no recovery 16:57:00 @0.08             $ -13.29 | one rule: fall 16:50:37 @0.71            $  +1.30 |  +14.59  high 0.77 fell 0.060 (bar 0.058, wobble 0.043) z +0.68 563s left
+  XRP15M-26NOV261700     yes 11-26 16:49:05 paid 0.70 | actual: no recovery 16:56:10 @0.16             $ -11.77 | one rule: fast 16:50:35 @0.77            $  +1.23 |  +13.00  high 0.83 fell 0.060 (bar 0.040, wobble 0.040) z +0.89 565s left
+  SOL15M-26NOV262030     no  11-26 20:24:14 paid 0.78 | actual: settled lost                           $ -14.80 | one rule: settled (lost)                 $ -14.80 |   +0.00  
+  DOGE15M-26NOV262045    no  11-26 20:32:19 paid 0.80 | actual: no recovery 20:37:17 @0.28             $  -9.77 | one rule: settled (lost)                 $ -14.63 |   -4.86  
+  DOGE15M-26NOV262045    no  11-26 20:38:44 paid 0.71 | actual: late dip 20:42:16 @0.21                $ -10.81 | one rule: settled (lost)                 $ -15.00 |   -4.19  
+  NEAR15M-26NOV262100    yes 11-26 20:50:01 paid 0.82 | actual: no recovery 20:55:42 @0.46             $  -6.99 | one rule: top 20:59:01 @0.99             $  +3.13 |  +10.12  
+
+the 12 bets the one rule does worst on:
+  SOL15M-26NOV251900     no  11-25 18:47:21 paid 0.77 | actual: value sale 18:53:52 @0.81              $  +0.59 | one rule: settled (lost)                 $ -15.61 |  -16.20  
+  HYPE15M-26NOV261230    no  11-26 12:18:06 paid 0.64 | actual: value sale 12:27:30 @0.74              $  +2.03 | one rule: salvage 12:26:52 @0.31         $  -8.08 |  -10.11  high 0.38 fell 0.070 (bar 0.053, wobble 0.053) z -1.76 188s left
+  ZEC15M-26NOV261730     yes 11-26 17:18:37 paid 0.57 | actual: value sale 17:20:15 @0.62              $  +0.88 | one rule: salvage 17:22:58 @0.24         $  -9.02 |   -9.90  high 0.30 fell 0.060 (bar 0.050, wobble 0.050) z -0.75 422s left
+  XRP15M-26NOV261615     yes 11-26 16:07:08 paid 0.79 | actual: late dip 16:14:11 @0.50                $  -6.18 | one rule: settled (lost)                 $ -15.80 |   -9.62  
+  NEAR15M-26NOV261200    yes 11-26 11:49:35 paid 0.54 | actual: value sale 11:54:08 @0.62              $  +1.76 | one rule: salvage 11:52:04 @0.28         $  -7.61 |   -9.38  high 0.37 fell 0.090 (bar 0.076, wobble 0.054) z -0.40 476s left
+  HYPE15M-26NOV252115    no  11-25 21:02:16 paid 0.80 | actual: no recovery 21:11:06 @0.46             $  -6.96 | one rule: settled (lost)                 $ -15.58 |   -8.62  
+  HYPE15M-26NOV261445    yes 11-26 14:34:26 paid 0.84 | actual: no recovery 14:41:25 @0.46             $  -7.09 | one rule: settled (lost)                 $ -14.99 |   -7.90  
+  XRP15M-26NOV261830     no  11-26 18:25:36 paid 0.58 | actual: top take 18:28:59 @0.99                $ +10.62 | one rule: fast 18:26:28 @0.71            $  +2.99 |   -7.63  high 0.76 fell 0.050 (bar 0.048, wobble 0.048) z +0.27 212s left
+  BNB15M-26NOV261200     yes 11-26 11:58:22 paid 0.64 | actual: settled won                            $  +9.31 | one rule: fast 11:58:44 @0.73            $  +1.97 |   -7.34  high 0.84 fell 0.110 (bar 0.064, wobble 0.064) z +0.44 76s left
+  BTC15M-26NOV261515     no  11-26 15:03:31 paid 0.57 | actual: no recovery 15:10:53 @0.33             $  -6.72 | one rule: no recovery 15:12:49 @0.04     $ -13.99 |   -7.27  
+  XRP15M-26NOV261330     yes 11-26 13:20:54 paid 0.68 | actual: settled won                            $  +7.18 | one rule: fast 13:21:31 @0.73            $  +0.83 |   -6.35  high 0.82 fell 0.090 (bar 0.041, wobble 0.041) z +0.76 509s left
+  BNB15M-26NOV261900     yes 11-26 18:51:05 paid 0.65 | actual: top take 18:55:35 @0.99                $  +8.90 | one rule: fast 18:52:40 @0.76            $  +2.56 |   -6.34  high 0.83 fell 0.070 (bar 0.050, wobble 0.050) z +0.73 440s left
+
+the 12 it does best on:
+  ZEC15M-26NOV261545     yes 11-26 15:38:20 paid 0.80 | actual: settled lost                           $ -15.18 | one rule: top 15:44:06 @0.99             $  +3.67 |  +18.86  
+  DOGE15M-26NOV261145    no  11-26 11:35:03 paid 0.70 | actual: settled lost                           $ -15.90 | one rule: fast 11:37:17 @0.81            $  +2.25 |  +18.16  high 0.88 fell 0.070 (bar 0.046, wobble 0.046) z +0.88 463s left
+  HYPE15M-26NOV262245    yes 11-26 22:38:15 paid 0.64 | actual: settled lost                           $ -14.54 | one rule: fast 22:39:35 @0.75            $  +2.20 |  +16.74  high 0.80 fell 0.050 (bar 0.048, wobble 0.048) z +0.49 325s left
+  XRP15M-26NOV262245     yes 11-26 22:39:16 paid 0.67 | actual: settled lost                           $ -14.99 | one rule: fall 22:40:40 @0.75            $  +1.50 |  +16.49  high 0.81 fell 0.060 (bar 0.060, wobble 0.054) z +0.24 260s left
+  HYPE15M-26NOV262015    no  11-26 20:03:33 paid 0.60 | actual: no recovery 20:13:21 @0.05             $ -13.88 | one rule: fast 20:05:33 @0.70            $  +2.13 |  +16.01  high 0.76 fell 0.060 (bar 0.053, wobble 0.053) z +0.59 567s left
+  ZEC15M-26NOV262230     no  11-26 22:21:01 paid 0.67 | actual: settled lost                           $ -14.77 | one rule: fall 22:23:56 @0.73            $  +1.02 |  +15.79  high 0.79 fell 0.060 (bar 0.053, wobble 0.040) z +0.65 364s left
+  BTC15M-26NOV261700     yes 11-26 16:48:20 paid 0.64 | actual: no recovery 16:57:00 @0.08             $ -13.29 | one rule: fall 16:50:37 @0.71            $  +1.30 |  +14.59  high 0.77 fell 0.060 (bar 0.058, wobble 0.043) z +0.68 563s left
+  ZEC15M-26NOV261430     yes 11-26 14:20:34 paid 0.72 | actual: late dip 14:28:26 @0.14                $ -12.26 | one rule: fast 14:22:18 @0.79            $  +1.22 |  +13.47  high 0.84 fell 0.050 (bar 0.047, wobble 0.047) z +0.83 462s left
+  ETH15M-26NOV262030     no  11-26 20:23:20 paid 0.78 | actual: late dip 20:27:16 @0.22                $ -11.01 | one rule: fast 20:25:03 @0.90            $  +2.19 |  +13.20  high 0.95 fell 0.047 (bar 0.049, wobble 0.049) z +1.02 297s left
+  XRP15M-26NOV261700     yes 11-26 16:49:05 paid 0.70 | actual: no recovery 16:56:10 @0.16             $ -11.77 | one rule: fast 16:50:35 @0.77            $  +1.23 |  +13.00  high 0.83 fell 0.060 (bar 0.040, wobble 0.040) z +0.89 565s left
+  SOL15M-26NOV261200     yes 11-26 11:48:46 paid 0.63 | actual: no recovery 11:54:24 @0.20             $ -11.61 | one rule: fast 11:49:02 @0.69            $  +1.18 |  +12.79  high 0.75 fell 0.060 (bar 0.044, wobble 0.044) z +0.20 658s left
+  DOGE15M-26NOV261200    yes 11-26 11:49:36 paid 0.74 | actual: no recovery 11:54:34 @0.37             $  -7.73 | one rule: top 11:59:05 @0.99             $  +5.01 |  +12.73  

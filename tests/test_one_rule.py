@@ -242,8 +242,18 @@ def test_a_profit_gained_too_fast_is_taken_even_with_a_cushion_near_0000():
     """NEAR 00:00 NO, 2026-11-27: bought 0.64 with 519 s left, 0.83 a hundred and thirteen seconds later, held by the cushion, then zero. User: "We need a rule where the time to profit increase becomes too valuable to risk, and it needs to sell it". Pace = the share of the possible profit in hand over the share of the bet's life used; 2 or more sells."""
     ask = asker(0.64, wobble=0.040, bought=381.0)  # bought with 519 s left
     assert not ask(0.70, 480, 40.0).sell  # +4c: under two wobbles, no profit run, so no pace is read
-    r = ask(0.83, 406, 40.0)  # 113 s in (22% of its life) with 47% of the possible profit in hand: pace 2.2, with the spot a sigma on its side
+    assert not ask(0.83, 406, 40.0).sell  # 113 s in (22% of its life) with 47% of the possible profit in hand: pace 2.2, but still at its high: held while it climbs (SOL 01:15: "It shouldn't sell if it doesn't stop")
+    assert not ask(0.88, 380, 40.0).sell  # a new high
+    r = ask(0.84, 370, 40.0)  # a wobble off the high, with the spot a sigma on its side: it has stopped, sold
     assert r.sell and r.kind == "fast" and r.net > 0.15
+    flat = asker(0.64, wobble=0.040, bought=381.0)
+    flat(0.70, 480, 40.0), flat(0.83, 406, 40.0)
+    assert not flat(0.82, 390, 40.0).sell  # sixteen seconds flat: not a stall yet
+    r2 = flat(0.82, 360, 40.0)  # no new high for 46 s, over a tenth of the 360 s left
+    assert r2.sell and r2.kind == "fast"
+    sol = asker(0.73, wobble=0.045, bought=697.0)  # SOL 01:15: bought with 203 s left, 0.91 thirty-six seconds later and still rising
+    assert not sol(0.83, 190, 5.0).sell and not sol(0.91, 167, 5.0).sell and not sol(0.96, 150, 5.0).sell
+    assert sol(0.99, 110, 5.0).kind == "top"
     slow = asker(0.64, wobble=0.040, bought=381.0)
     assert not slow(0.76, 300, 40.0).sell  # the same bet 219 s in with 26% in hand: pace 0.6
     assert slow(0.83, 150, 40.0).kind == "cushion"  # 47% in hand at 71% of its life: pace 0.7, an ordinary winner, left to the rest of the rule
@@ -254,13 +264,15 @@ def test_integration_a_fast_profit_sale_goes_through_the_selling_thread_to_an_or
     from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
 
     live(monkeypatch)
-    client = Client(bid=0.95, account=None)
+    client = Client(bid=0.90, account=None)
     w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['one_rule']")
     t = w.targets[(TICKER, "risk_only")]
     t.shock_index, t.shock_ref = "X", 100.0
     monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: (40.0, 10.0))  # a cushion that would hold a fall
     monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.10)
-    yes_bid(w, 0.95, 440)  # bought at about 0.79 ten seconds before: most of the possible profit already in hand
+    yes_bid(w, 0.95, 440)  # bought at about 0.79 ten seconds before: most of the possible profit already in hand, still at its high
+    assert signals(w) == []  # held while it climbs
+    yes_bid(w, 0.90, 437)  # a wobble off the high: it has stopped
     got = signals(w)
     assert got and got[0].why.startswith("one rule, profit gained too fast to risk:"), got
     w._sell(got[0].ticker, got[0].lane, got[0].why)

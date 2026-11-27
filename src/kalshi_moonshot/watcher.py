@@ -1061,7 +1061,7 @@ class ProfitWatcher:
         if rd.kind == "top":
             why = f"the top: the bid {bid:.3g} leaves {max(0.0, 1.0 - bid):.3g} to win (a tick or less), nothing more to gain by holding"
         elif rd.kind == "fast":
-            why = f"profit gained too fast to risk: +{rd.net * 100:.1f}c a contract after both fees, a share of the bet's possible profit {fallrule.FAST_PACE:g} or more times the share of its life used (the spot's cushion {zs})"
+            why = f"profit gained too fast to risk: +{rd.net * 100:.1f}c a contract after both fees, paid at {fallrule.FAST_PACE:g} or more times the pace of a full win, and it has stopped climbing (the bid is {rd.fall:.3f} off its high {rd.high:.2f}; the spot's cushion {zs})"
         elif rd.kind == "fall":
             why = f"early profit: +{rd.net * 100:.1f}c a contract after both fees and the bid fell {rd.fall:.3f} from its high {rd.high:.2f} (a fall of {rd.bar:.3f} counts: wobble {wobble:.3f}, the fade {rd.fade:.2f}, the spot's cushion {zs})"
         elif rd.kind == "stall":
