@@ -69,3 +69,30 @@ What the readings would have said (computed after, from the index tape; the shad
 - side_losing let all six through: each was seconds old and none was 5% under yet when the next was bought.
 
 Not a low-risk change, nothing changed. For the user: six same-side buys inside one minute are one bet at six times the stake, and nothing in the buy module sees the run the market had just made the other way.
+
+## Pass 3, 00:49 (bets bought 00:21 to 00:47)
+
+Deployed since pass 2: 00:33 the nested-swings shadow note and the leg's walk from an hour before the open; 00:45 the "profit gained too fast" clause (FAST_PACE 2, the user's rule); 00:48 the same again with the shadow note's "at a peak / off the peak" wording (the user: "Just deploy again now"). The stall change was set aside on the branch stall-before-cushion, never deployed. ZEC 01:00 NO (0.73, bought 00:47:53) was open across the 00:48 restart.
+
+About -$26 as run on ten closed bets.
+
+| Bet | Paid | Ended | Market | As run | Note |
+|---|---|---|---|---|---|
+| BTC 00:30 YES 00:21:22 | 0.72 | early profit 0.81 | YES | +$1.14 | small gain, the market won: about $4 more held |
+| DOGE 00:30 YES 00:21:28 | 0.67 | early profit 0.72 | YES | +$0.86 | the same, about $6 more held; the lane bought it back at 0.82 |
+| DOGE 00:30 YES 00:26:49 | 0.82 | top 0.99 | YES | +$3.25 | the buy-back |
+| HYPE 00:30 YES 00:27:24 | 0.68 | no sale | NO | about -$15 | A ZERO. Bought at minute 12.4 at the top of a 50 s spike (0.45 to 0.69), chance 0.519; the bid then swung 0.31 to 0.75 and went to 0 inside the last minute |
+| ZEC 00:45 YES | 0.70 | early profit 0.72 | YES | +$0.47 | small gain, the market won |
+| HYPE 00:45 YES | 0.58 | early profit 0.65 | NO | +$1.19 | a save |
+| SOL 00:45 YES | 0.78 | early profit 0.84 | NO | +$0.56 | a save |
+| BNB 00:45 YES 00:35:38 | 0.84 | salvage 0.32 | YES | -$9.86 | bought at the top (0.85), fell to 0.26, salvaged at 0.32, then the market ran to 1.00: held it paid +$2.9 |
+| ETH 00:45 YES 00:36:06 | 0.65 | salvage 0.09 | NO | -$9.84 | the user's "another bad buy": the top of the fourth bounce of a fade |
+| BTC 00:45 YES 00:42:32 | 0.63 | early profit (stall) 0.71 | YES | +$1.64 | |
+
+Noticed:
+- All three losses were BOUGHT AT A PEAK of their own swing: HYPE 00:30 at the top of a spike with under three minutes left, BNB 00:45 at 0.84 with the bid at its high, ETH 00:45 at the top of a bounce. This is the user's point ("It also bought on a peak which it should never do for a favorite") and the table's (off-the-peak buys made about four times as much a bet). The shadow note on BNB and ETH said "3 of 4 with: would buy too" (that build had no peak wording yet). The wait for a pullback is put to the user; it is entry logic, not a low-risk change.
+- HYPE 00:30 went to zero with no sale: bought with 156 s left, it was never two wobbles ahead and the spot did not cross by a wobble on both averages until the settlement window. A buy that late on a 0.52 chance has no room for any exit to work; again an entry matter.
+- BNB 00:45: the salvage sold at 0.32 a bet that then won. Known weak spot (the replay's salvage sales came out behind what those bets made). One bet; no change.
+- Small gains that could have been more: BTC and DOGE 00:30 and ZEC 00:45 sold 2 to 5.5c ahead on markets that then won; HYPE and SOL 00:45 sold the same way on markets that lost. Three against two this pass; no change.
+
+Nothing changed this pass.
