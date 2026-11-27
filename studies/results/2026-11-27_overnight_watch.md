@@ -406,3 +406,6 @@ Two live bets, both sold at a gain by the fast clause: NEAR 13:00 YES 0.83 to 0.
 
 ## Pass 27 (13:19 to 13:49 ET)
 No live bets in the half hour (the last were NEAR and BTC 13:00 at 12:49 and 12:51). CI on `571c56ab` passed (ruff, mypy, the suite with coverage): CI is green on `main` again. No `fast drop` sale yet. Nothing changed.
+
+## Pass 28 (13:49 to 14:19 ET)
+Five live bets: DOGE 14:00 YES 0.76 to 0.9918 and ZEC 14:15 YES 0.86 to 0.995 (both the top, gains); then BTC 14:30 YES 0.77 (14:17:26), BNB 14:30 YES 0.88 (14:18:16) and ETH 14:30 YES 0.82 (14:18:22), three YES bets on three coins within a minute, open at the pass (the same shape as the three 10:06 NO zeros: one view of the market on several coins at once; no rule has been found for it that holds on the bets in hand). The bot restarted about 13:46 (up 32 minutes, kill switch off), most likely the other session's push of its wave-lane commit. No `fast drop` sale yet. Nothing changed.
