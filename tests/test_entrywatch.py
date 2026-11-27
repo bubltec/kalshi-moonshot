@@ -301,3 +301,28 @@ def test_market_threads_share_one_store_connection(tmp_path):
     [t.start() for t in threads]
     [t.join() for t in threads]
     assert len({id(x) for x in seen}) == 1 and made == [True]
+
+
+def test_a_bet_in_a_closed_market_does_not_hold_a_slot_when_the_lane_counts_trading_bets_only(tmp_path):
+    """2026-11-27 (user: "why did it allow it to keep betting after it expired? That's a bug"): a bet in a market past its close stays an open bet until its settlement is recorded, minutes later, and held the lane's slots in the next window. Lane field max_open_trading_only counts the bets whose market is still trading."""
+    from datetime import UTC, datetime, timedelta
+
+    (tmp_path / "strategies.toml").write_text("[lane.commodity]\nmax_open = 2\n")
+    s = settings(tmp_path)
+    store = Store(s.db_path)
+    now = datetime.now(UTC)
+
+    def hold_closing(ticker, close):
+        store.add_decision(ticker=ticker, title="t", bid=0.3, ask=0.32, model_p=0.9, edge=0.05, action="bet", mode="observe", lane="commodity", side="yes", close_time=close.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+    hold_closing("KXA-26NOV271600-00", now - timedelta(seconds=90))  # closed 90 s ago, not settled yet
+    hold_closing("KXB-26NOV271600-00", now - timedelta(seconds=90))
+    keys = {"KXC-26NOV271615"}
+    assert entrywatch.lane_full(store, lanes.spec_for(s, "commodity"), keys)  # as before: two closed bets still fill a lane of two
+    (tmp_path / "strategies.toml").write_text("[lane.commodity]\nmax_open = 2\nmax_open_trading_only = true\n")
+    spec = lanes.spec_for(settings(tmp_path), "commodity")
+    assert spec.max_open_trading_only and not entrywatch.lane_full(store, spec, keys)  # counting trading bets only: the lane is empty
+    hold_closing("KXC-26NOV271615-15", now + timedelta(seconds=600))
+    hold_closing("KXD-26NOV271615-15", now + timedelta(seconds=600))
+    assert entrywatch.lane_full(store, spec, {"KXE-26NOV271615"})  # two bets still trading fill it
+    assert len(store.open_bets_trading()) == 2 and len(store.open_bets()) == 4

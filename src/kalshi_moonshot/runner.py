@@ -454,7 +454,8 @@ def evaluate(
             bet = False
             note = f"other side already taken ({min(others)}). {note}"
     if bet and spec.max_open > 0:
-        open_now = sum(1 for r in store.open_bets() if (r["lane"] or "moonshot") == shot.lane and r["ticker"] != shot.ticker)
+        held_rows = store.open_bets_trading() if spec.max_open_trading_only else store.open_bets()
+        open_now = sum(1 for r in held_rows if (r["lane"] or "moonshot") == shot.lane and r["ticker"] != shot.ticker)
         if open_now >= spec.max_open:
             bet = False
             note = f"lane full: {open_now} bets already open (the lane holds at most {spec.max_open}). {note}"

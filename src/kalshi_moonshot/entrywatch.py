@@ -58,7 +58,7 @@ def lane_full(store: Store, spec: LaneSpec, keys: set[str]) -> bool:
     """Whether the lane already holds its max_open bets in markets outside `keys` (the event keys of the market being looked at). An evaluation would end in "lane full" (runner.evaluate) after the review had read the market for it: this answers first, from the store. The evaluation keeps its own check, which stays the one that decides."""
     if spec.max_open <= 0:
         return False
-    held = [r["ticker"] for r in store.open_bets() if (r["lane"] or "moonshot") == spec.name]
+    held = [r["ticker"] for r in (store.open_bets_trading() if spec.max_open_trading_only else store.open_bets()) if (r["lane"] or "moonshot") == spec.name]
     return sum(1 for t in held if not (quote_keys(t) & keys)) >= spec.max_open
 
 

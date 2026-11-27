@@ -1466,6 +1466,21 @@ class Store:
         book = self._book()
         return book_open_bets(book) if book is not None else self._open_bets_read()
 
+    def open_bets_trading(self, now: float | None = None) -> list[db.Row]:
+        """open_bets without the bets whose market has already closed (their close_time is at or before `now`): the ones waiting only for settlement. A row whose close time cannot be read is kept. Memory only in the running bot."""
+        from datetime import datetime
+
+        t = time.time() if now is None else now
+        out = []
+        for r in self.open_bets():
+            try:
+                closed = datetime.fromisoformat(str(r["close_time"]).replace("Z", "+00:00")).timestamp() <= t
+            except (TypeError, ValueError):
+                closed = False
+            if not closed:
+                out.append(r)
+        return out
+
     @remembers('bets')
     def _open_bets_read(self) -> list[db.Row]:
         return self.db.execute(
