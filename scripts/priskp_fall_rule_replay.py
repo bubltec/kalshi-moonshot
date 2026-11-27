@@ -1,7 +1,7 @@
 """Does the one fall rule (src/kalshi_moonshot/fallrule.py) beat the exits the live PriskP bets actually got? (2026-11-26; user: "We keep adding patches instead of fixing the core issue", "we need to consolidate one rule that handles them all".)
 QUESTION (one, on the same bets): every live PriskP bet since the per-tick entry change (2026-11-25 15:57 ET), walked second by second from its buy on its own taped quotes with the chain top_take > fall rule > no_recovery in place of top_take > early_take > late_dip > no_recovery > wave_take > value_sale. What does each bet make against what it actually made?
 HOW A BET IS SCORED: the new chain is walked from the buy. If it sells before the bet's actual exit, that sale is the result. If the bet was actually sold by wave_take or value_sale (steps that stay) before the new chain sold, the actual sale stands. Otherwise (the actual sale was by a step this rule replaces or re-walks, or there was none) the walk goes on to the close and the bet settles on the market's own result. A sale is at that second's bid less the sale fee 0.07 p (1 - p); the buys rested (no buy fee), the same for both sides of the comparison, though the rule itself judges profit after both fees as the live steps do.
-HONEST LIMITS: the bid is the tape's last quote of each second, no fill modelled (a collapsing bid may not fill at the printed price). The spot is the settlement index's 60 s average against the market's strike; the live code reads the Kalshi perp adjusted to the strike where it has one. The wobble is the mid's typical minute since the open once there are 90 s of it. no_recovery is walked as 297 s without a profit and the spot's cushion under zero. The rule's three numbers are the ones early_take and late_dip ran with; nothing was fitted to this file. One and a half days of bets: a lead, to be scored forward.
+HONEST LIMITS: the bid is the tape's last quote of each second, no fill modelled (a collapsing bid may not fill at the printed price). The spot is the settlement index's 60 s average against the market's strike; the live code reads the Kalshi perp adjusted to the strike where it has one. The wobble is the mid's typical minute since the open once there are 90 s of it. no_recovery is walked as 297 s without a profit and the spot crossed by the rule's own test (a wobble of the spot under the target, not the live step's bare sign). The rule's three numbers are the ones early_take and late_dip ran with; nothing was fitted to this file. One and a half days of bets: a lead, to be scored forward.
 SHAPES: thirds of the bet's own wobble at the buy (the bid's typical 10 s move) and the spot's cushion in sigma at the buy; no asset.
 Run: .venv/bin/python scripts/priskp_fall_rule_replay.py TAPE.json.gz   (the tape from scripts/priskp_exit_tape_pull.py)"""
 import datetime
@@ -14,7 +14,7 @@ from kalshi_moonshot import fallrule
 
 ET = datetime.timezone(datetime.timedelta(hours=-5))
 TICK = 0.01
-FLAG = ("KXBTC15M-26NOV261700", "KXXRP15M-26NOV261700", "KXSOL15M-26NOV262030", "KXDOGE15M-26NOV262045", "KXDOGE15M-26NOV251945", "KXSOL15M-26NOV260830", "KXHYPE15M-26NOV261200", "KXDOGE15M-26NOV261145", "KXHYPE15M-26NOV252030", "KXZEC15M-26NOV261545", "KXSOL15M-26NOV251700", "KXDOGE15M-26NOV251730")
+FLAG = ("KXNEAR15M-26NOV262100", "KXBTC15M-26NOV261700", "KXXRP15M-26NOV261700", "KXSOL15M-26NOV262030", "KXDOGE15M-26NOV262045", "KXDOGE15M-26NOV251945", "KXSOL15M-26NOV260830", "KXHYPE15M-26NOV261200", "KXDOGE15M-26NOV261145", "KXHYPE15M-26NOV252030", "KXZEC15M-26NOV261545", "KXSOL15M-26NOV251700", "KXDOGE15M-26NOV251730")
 
 
 def fee(p: float) -> float:
@@ -85,7 +85,7 @@ def walk(b: dict) -> dict | None:
             if r.sell:
                 sale, kind = x, r.kind
                 why = f"high {r.high:.2f} fell {r.fall:.3f} (bar {r.bar:.3f}, wobble {wob:.3f}) z {'n/a' if r.z is None else f'{r.z:+.2f}'} {left:.0f}s left"
-            elif net <= 0 and now - max(first, last_ahead) >= 0.33 * 900.0 and cushion is not None and cushion < 0:
+            elif net <= 0 and now - max(first, last_ahead) >= 0.33 * 900.0 and fallrule.crossed(cushion, sunit):
                 sale, kind = x, "no recovery"
         if sale is not None:
             out.update(new=sale - fee(sale) - entry, kind=kind, at=now, px=sale, why=why)
