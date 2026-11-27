@@ -51,7 +51,9 @@ SWING = 0.5  # the least swing, in u
 GB = 0.2  # given back from the swing's extreme before the buy, in u
 BAND = 0.5  # the side gate's band around the target, in u
 LEG_SHARE = 0.75  # 2026-11-26 (user, on SILVER 10:45 YES bought on a small bounce: "Again, makes no sense. It bought yes in the wrong place"): the swing that turns must be this share of the market's own median completed leg, or it is a wobble. The swing over the leg on the day's wrong buys: SILVER 10:45 0.50, GOLD 10:30 0.50, PLATINUM 10:15 0.41, DOGE 10:30 NO 0.68, NATGAS 10:00 0.91; on the good ZEC 10:30 NO 2.3. On the user's 17 marked markets: 0.6 keeps the 6 marked buys fired (other fires 11 -> 10), 0.75 keeps 5 (9 others), 1.0 keeps 4 (8 others, one more no-good silent). 0.75 was CHOSEN AFTER SEEING both; it does not apply before a market has a completed leg
-SPIKE = 2.0  # 2026-11-27 (user, on SILVER 09:15 YES bought at 512 s after a fall of 3.36u in a market whose own legs were 1.44u, sold by the give-up at 0.05: "It isn't in a wave curve it's just in spikes and those are different"; "Let's try to teach the spike"): a swing this many times the market's own usual leg is a SPIKE, not one of the wave's turns, and is not bought. The usual leg is the median completed leg of this window (DONE_U zig-zag) or, before the window has one, of the hour before the open. The number is set from the user's one marked spike (2.33 x) against the three other bets of that morning (0.93, 1.13 and 1.29 x): it is a first setting to be scored on the lane's own bets, not a studied one (the night's earlier results were set aside by the user: mixed logic)
+JUMPY = 7.0  # 2026-11-27 (user, on SILVER 09:15 YES bought after a 3.36u fall and sold at 0.05: "It isn't in a wave curve it's just in spikes and those are different"; "Let's try to teach the spike"): a market that moves in JUMPS is not a wave market and is not bought. The reading is the kurtosis of the market's own 10 s moves (absolute, in u) over the hour before the open and the window so far: about 3 to 6 when the movement is spread over a back-and-forth, higher when a few jumps carry it. On the user's 17 marked markets (tests/fixtures/wave_turn_marks.json.gz) the five marked buys the reader fires read 3.7 to 6.6, the four fires in markets he marked no-good 7.6 to 8.2, and SILVER 09:15 reads 8.2; the cut sits between them and was CHOSEN AFTER SEEING those numbers, on 5 buys against 4 (studies/results/2026-11-27-wave-spike-attempt.txt). The SIZE of the swing does not tell a spike: his marked BTC and BNB buys were swings of 3.0 and 2.3 times the market's usual leg
+JUMPY_LIVE = False  # SHADOW (2026-11-27): the jump reading is in every note with what it would do, and refuses nothing. Why not live: the split on the marks comes from the HOUR BEFORE THE OPEN alone (hour only: marked 3.8 to 6.4, no-good 8.3 to 8.8, SILVER 09:15 8.0); read on the window alone, or on the last 20 or 30 minutes, it does not separate them (a marked BNB buy reads 9.3 on the last 20 minutes), and a quiet hour followed by a wavy window reads as jumpy. That is a gate on the pre-open hour, which the user took off this lane on 2026-11-25, standing on 5 marked buys against 4 fires. It is scored on the lane's own bets before anyone turns it on (CLAUDE.md rule 5); the switch is the user's
+STEP_S = 10  # the seconds of one move in the jump reading
 DONE_U = 1.0  # a completed swing: the curve has gone this far one way and this far back, in u (chosen after seeing the user's 28 marks)
 DONE_OFFSET_MIN = 2.0  # the completed swings needed grow with the minutes into the market: one before about minute 5, two at 6, three at 8, four at 10 (swings pile up with time, so a fixed count lets trends in late). From the leave-one-market-out of the swing count on the user's 45 marks (studies/results/2026-11-25-wave-swing-gate.txt): best count 1 at 4 min, 2 at 6, 3 at 8-10; chosen after seeing the marks.
 DONE_SLOPE = 0.5  # swings needed per minute after DONE_OFFSET_MIN
@@ -108,6 +110,7 @@ class Hour:
     why: str = ""
     leg_u: float = 0.0  # the median size of the hour's completed legs of DONE_U u, in u (0 = none): the market's usual leg before the window has made its own
     leg_s: float = 0.0  # the median seconds of those legs
+    moves: tuple[float, float, float, float, int] = (0.0, 0.0, 0.0, 0.0, 0)  # the hour's 10 s moves (absolute, in u): the sums of their 1st to 4th powers and their count, for the jump reading (JUMPY)
 
 
 def hour_of(sp: list[float | None]) -> Hour:
@@ -124,7 +127,35 @@ def hour_of(sp: list[float | None]) -> Hour:
     if not prof:
         return Hour(u, None, None, "the hour before the open does not give a profile (too few whole windows or ticks)")
     lu, ls = _hour_legs(h, u)
-    return Hour(u, float(prof["cross"]), float(prof["eff"]), "", lu, ls)
+    return Hour(u, float(prof["cross"]), float(prof["eff"]), "", lu, ls, _moves(h, u))
+
+
+def _moves(path: list[float], u: float) -> tuple[float, float, float, float, int]:
+    """The sums of the 1st to 4th powers of the path's STEP_S moves (absolute, in u), and their count."""
+    s1 = s2 = s3 = s4 = 0.0
+    n = 0
+    for i in range(0, len(path) - STEP_S, STEP_S):
+        x = abs(path[i + STEP_S] - path[i]) / u
+        s1 += x
+        s2 += x * x
+        s3 += x * x * x
+        s4 += x * x * x * x
+        n += 1
+    return s1, s2, s3, s4, n
+
+
+def jumpiness(a: tuple[float, float, float, float, int], b: tuple[float, float, float, float, int]) -> float:
+    """The kurtosis of two sets of moves taken together (the hour's and the window's), from their power sums; 0 when there are too few moves or they do not vary."""
+    n = a[4] + b[4]
+    if n < 30:
+        return 0.0
+    s1, s2, s3, s4 = a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3]
+    m = s1 / n
+    var = s2 / n - m * m
+    if var <= 1e-18:
+        return 0.0
+    m4 = s4 / n - 4.0 * m * s3 / n + 6.0 * m * m * s2 / n - 3.0 * m ** 4
+    return m4 / (var * var)
 
 
 def _hour_legs(h: list[float], u: float) -> tuple[float, float]:
@@ -155,8 +186,9 @@ class Reading:
     raw_gb_u: float = 0.0  # how far the LAST TICK (not the smoothed curve) has come off the swing's extreme, in u: what the move has already run in fact
     ext_t: int = 0  # the second since the open of the swing's running extreme (where the swing turned, once it has given back)
     swing_s: int = 0  # the seconds the swing took from its start to its extreme
-    usual_u: float = 0.0  # the market's usual leg the swing is measured against (SPIKE): this window's median completed leg, else the pre-open hour's; 0 = neither is read
+    usual_u: float = 0.0  # the market's usual leg (shadow, in the note): this window's median completed leg, else the pre-open hour's; 0 = neither is read
     usual_s: float = 0.0  # that leg's median seconds
+    jumpy: float = 0.0  # the kurtosis of the market's 10 s moves over the hour before the open and the window so far (JUMPY); 0 = unread
 
     @property
     def size_x(self) -> float:
@@ -171,7 +203,7 @@ class Reading:
         return (self.swing_u / self.swing_s) / (self.usual_u / self.usual_s)
 
 
-def reading(window: list[float], t: int, K: float, u: float, hour_leg_u: float = 0.0, hour_leg_s: float = 0.0) -> Reading:
+def reading(window: list[float], t: int, K: float, u: float, hour_leg_u: float = 0.0, hour_leg_s: float = 0.0, hour_moves: tuple[float, float, float, float, int] | None = None) -> Reading:
     """The turn reading at `t` s after the open from the 1 s path `window` (index 0 = the open) and the target K. `hour_leg_u` / `hour_leg_s`: the pre-open hour's usual leg (Hour.leg_u, leg_s), the measure of a spike until the window has a completed leg of its own."""
     sm = broad(window, 0, t, SMOOTH // 2, t)
     pts, d, ek, ev = zigzag(sm, ZZ * u)
@@ -182,7 +214,8 @@ def reading(window: list[float], t: int, K: float, u: float, hour_leg_u: float =
     leg_u = statistics.median(y for _, y in legs) if legs else 0.0
     return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),
                    max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d, (ev - window[min(t, len(window) - 1)]) * d / u if d else 0.0, ek,
-                   max(0, ek - (pts[-1][0] if pts else 0)), float(leg_u) if leg_u > 0 else float(hour_leg_u), float(leg_s) if leg_u > 0 else float(hour_leg_s))
+                   max(0, ek - (pts[-1][0] if pts else 0)), float(leg_u) if leg_u > 0 else float(hour_leg_u), float(leg_s) if leg_u > 0 else float(hour_leg_s),
+                   jumpiness(hour_moves, _moves(window[: t + 1], u)) if hour_moves is not None else 0.0)
 
 
 @dataclass
@@ -229,9 +262,9 @@ def judge(r: Reading, fires: Fires, hold: float, resting: str | None = None) -> 
     if r.leg_u > 0 and r.raw_gb_u >= LEG_SHARE * r.leg_u:
         # 2026-11-26 (user, on SILVER 11:15 NO bought at 535 s at the bottom of a dip: "Just did it again bought down in a dip. Opposite direction"): the peak was read right, but on the 30 s smoothed curve it had given back 0.21u when the price itself had already fallen about 1.2u (41.667 to 41.627 in 20 s; the NO ask went 0.16 -> 0.34), most of a leg of that market (1.41u). The move the bet wants had run before the signal came. A turn whose last tick is already LEG_SHARE of a leg off the extreme (the same share that makes a swing a leg) is too late and is not bought.
         return None, f"the price itself is already {r.raw_gb_u:.2f}u off the swing's extreme, {LEG_SHARE:g} or more of this market's leg ({r.leg_u:.2f}u), while the smoothed curve shows {r.gb_u:.2f}u: the move the bet wants has already run"
-    if r.usual_u > 0 and r.swing_u >= SPIKE * r.usual_u:
-        # 2026-11-27 (user, SILVER 09:15 YES: a 3.36u fall bought as a dip in a market whose legs were 1.44u; "It isn't in a wave curve it's just in spikes and those are different"; "Let's try to teach the spike"): a move far beyond the market's own legs is a spike. The reader took it for a big dip or peak; a spike does not come back the way a wave's leg does.
-        return None, f"the swing is {r.swing_u:.2f}u, {r.size_x:.2f} times the market's own usual leg ({r.usual_u:.2f}u): {SPIKE:g} times or more is a spike, not one of the wave's turns"
+    if JUMPY_LIVE and r.jumpy >= JUMPY:
+        # 2026-11-27 (user, SILVER 09:15 YES: "It isn't in a wave curve it's just in spikes and those are different"; "Let's try to teach the spike"): a market whose movement is carried by a few jumps has no wave to turn. The swing the reader sees there is one of the jumps, and it does not come back the way a wave's leg does.
+        return None, f"the market moves in jumps, not waves: its 10 s moves over the hour before the open and the window so far have a kurtosis of {r.jumpy:.1f}, {JUMPY:g} or more (a spike market, not bought)"
     if r.done < need(r.t):
         return None, f"{r.done} completed swings of {DONE_U:g}u so far, the lane needs {need(r.t)} at {r.t}s: a trend has a pull-back at most, a wave comes back (not a wave shape yet)"
     fires.done[key] = r.t
@@ -302,7 +335,7 @@ def read_index(index: str, opened: float, now: float, K: float, hold: float, res
             if None in win:
                 out = (None, "the spot's path since the open has a gap at its start", None, h)
             else:
-                r = reading(win, t, K, h.u, h.leg_u, h.leg_s)  # type: ignore[arg-type]
+                r = reading(win, t, K, h.u, h.leg_u, h.leg_s, h.moves)  # type: ignore[arg-type]
                 with _lock:
                     fires = _fires.setdefault((index, op), Fires())
                     side, why = judge(r, fires, hold, resting)
@@ -339,7 +372,7 @@ def peek(index: str, opened: float, now: float, K: float) -> Reading | None:
                     T, V = [prev[0], *T], [prev[1], *V]
             win = grid(T, V, op, int(now) + 1)
             if None not in win:
-                out = reading(win, t, K, h.u, h.leg_u, h.leg_s)  # type: ignore[arg-type]
+                out = reading(win, t, K, h.u, h.leg_u, h.leg_s, h.moves)  # type: ignore[arg-type]
     with _lock:
         if len(_peeks) > 2000:
             _peeks.clear()
@@ -381,7 +414,7 @@ def note(r: Reading | None, h: Hour, K: float) -> str:
         return f"{head} (target {K:.6g})"
     return (f"{head}; {r.t}s in, {SMOOTH}s smoothing: swing {r.swing_u:.2f}u {'up' if r.d == 1 else 'down' if r.d == -1 else '-'}, {r.gb_u:.2f}u given back, "
             f"completed swings of {DONE_U:g}u {r.done} (gate >= {need(r.t)}), waves so far {r.turns}, curve {r.pos_u:+.2f}u and the swing's extreme {r.ext_u:.2f}u from the target, last-5-min efficiency {r.eff300:.2f}, "
-            f"legs: median {r.leg_s:.0f}s and {r.leg_u:.2f}u, room {room(r)} (shadow), the swing is {r.size_x:.2f} x the usual leg ({r.usual_u:.2f}u; a spike at {SPIKE:g}) and {r.pace_x:.2f} x its pace (shadow), "
+            f"legs: median {r.leg_s:.0f}s and {r.leg_u:.2f}u, room {room(r)} (shadow), the swing is {r.size_x:.2f} x the usual leg ({r.usual_u:.2f}u) and {r.pace_x:.2f} x its pace (shadow), jump reading {r.jumpy:.1f} (a spike market at {JUMPY:g}: {'WOULD NOT BUY' if r.jumpy >= JUMPY else 'would buy'}, shadow), "
             f"u {h.u:.6g} (target {K:.6g})")
 
 
