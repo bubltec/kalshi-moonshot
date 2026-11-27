@@ -51,6 +51,7 @@ SWING = 0.5  # the least swing, in u
 GB = 0.2  # given back from the swing's extreme before the buy, in u
 BAND = 0.5  # the side gate's band around the target, in u
 LEG_SHARE = 0.75  # 2026-11-26 (user, on SILVER 10:45 YES bought on a small bounce: "Again, makes no sense. It bought yes in the wrong place"): the swing that turns must be this share of the market's own median completed leg, or it is a wobble. The swing over the leg on the day's wrong buys: SILVER 10:45 0.50, GOLD 10:30 0.50, PLATINUM 10:15 0.41, DOGE 10:30 NO 0.68, NATGAS 10:00 0.91; on the good ZEC 10:30 NO 2.3. On the user's 17 marked markets: 0.6 keeps the 6 marked buys fired (other fires 11 -> 10), 0.75 keeps 5 (9 others), 1.0 keeps 4 (8 others, one more no-good silent). 0.75 was CHOSEN AFTER SEEING both; it does not apply before a market has a completed leg
+SPIKE = 2.0  # 2026-11-27 (user, on SILVER 09:15 YES bought at 512 s after a fall of 3.36u in a market whose own legs were 1.44u, sold by the give-up at 0.05: "It isn't in a wave curve it's just in spikes and those are different"; "Let's try to teach the spike"): a swing this many times the market's own usual leg is a SPIKE, not one of the wave's turns, and is not bought. The usual leg is the median completed leg of this window (DONE_U zig-zag) or, before the window has one, of the hour before the open. The number is set from the user's one marked spike (2.33 x) against the three other bets of that morning (0.93, 1.13 and 1.29 x): it is a first setting to be scored on the lane's own bets, not a studied one (the night's earlier results were set aside by the user: mixed logic)
 DONE_U = 1.0  # a completed swing: the curve has gone this far one way and this far back, in u (chosen after seeing the user's 28 marks)
 DONE_OFFSET_MIN = 2.0  # the completed swings needed grow with the minutes into the market: one before about minute 5, two at 6, three at 8, four at 10 (swings pile up with time, so a fixed count lets trends in late). From the leave-one-market-out of the swing count on the user's 45 marks (studies/results/2026-11-25-wave-swing-gate.txt): best count 1 at 4 min, 2 at 6, 3 at 8-10; chosen after seeing the marks.
 DONE_SLOPE = 0.5  # swings needed per minute after DONE_OFFSET_MIN
@@ -105,6 +106,8 @@ class Hour:
     cross: float | None
     eff: float | None
     why: str = ""
+    leg_u: float = 0.0  # the median size of the hour's completed legs of DONE_U u, in u (0 = none): the market's usual leg before the window has made its own
+    leg_s: float = 0.0  # the median seconds of those legs
 
 
 def hour_of(sp: list[float | None]) -> Hour:
@@ -120,7 +123,18 @@ def hour_of(sp: list[float | None]) -> Hour:
     prof = marketprofile.profile_from([float(k) for k in range(PRE)], h, float(PRE - 1), 1.0)
     if not prof:
         return Hour(u, None, None, "the hour before the open does not give a profile (too few whole windows or ticks)")
-    return Hour(u, float(prof["cross"]), float(prof["eff"]))
+    lu, ls = _hour_legs(h, u)
+    return Hour(u, float(prof["cross"]), float(prof["eff"]), "", lu, ls)
+
+
+def _hour_legs(h: list[float], u: float) -> tuple[float, float]:
+    """(median size in u, median seconds) of the completed legs of DONE_U u on the hour's smoothed path; (0, 0) with none. Read once per market, with the hour."""
+    sm = broad(h, 0, len(h) - 1, SMOOTH // 2, len(h) - 1)
+    big, _d, _k, _v = zigzag(sm, DONE_U * u)
+    legs = [(b[0] - a[0], abs(b[1] - a[1]) / u) for a, b in itertools.pairwise(big)]
+    if not legs:
+        return 0.0, 0.0
+    return float(statistics.median(y for _, y in legs)), float(statistics.median(x for x, _ in legs))
 
 
 @dataclass
@@ -140,10 +154,25 @@ class Reading:
     big_d: int = 0  # the direction of the market's larger leg (the DONE_U zig-zag): +1 rising, -1 falling, 0 none yet
     raw_gb_u: float = 0.0  # how far the LAST TICK (not the smoothed curve) has come off the swing's extreme, in u: what the move has already run in fact
     ext_t: int = 0  # the second since the open of the swing's running extreme (where the swing turned, once it has given back)
+    swing_s: int = 0  # the seconds the swing took from its start to its extreme
+    usual_u: float = 0.0  # the market's usual leg the swing is measured against (SPIKE): this window's median completed leg, else the pre-open hour's; 0 = neither is read
+    usual_s: float = 0.0  # that leg's median seconds
+
+    @property
+    def size_x(self) -> float:
+        """The swing as a multiple of the market's usual leg (0 when no usual leg is read)."""
+        return self.swing_u / self.usual_u if self.usual_u > 0 else 0.0
+
+    @property
+    def pace_x(self) -> float:
+        """The swing's pace (u a second) as a multiple of the usual leg's (0 when it cannot be read). Shadow: in the note, not judged."""
+        if self.usual_u <= 0 or self.usual_s <= 0 or self.swing_s <= 0:
+            return 0.0
+        return (self.swing_u / self.swing_s) / (self.usual_u / self.usual_s)
 
 
-def reading(window: list[float], t: int, K: float, u: float) -> Reading:
-    """The turn reading at `t` s after the open from the 1 s path `window` (index 0 = the open) and the target K."""
+def reading(window: list[float], t: int, K: float, u: float, hour_leg_u: float = 0.0, hour_leg_s: float = 0.0) -> Reading:
+    """The turn reading at `t` s after the open from the 1 s path `window` (index 0 = the open) and the target K. `hour_leg_u` / `hour_leg_s`: the pre-open hour's usual leg (Hour.leg_u, leg_s), the measure of a spike until the window has a completed leg of its own."""
     sm = broad(window, 0, t, SMOOTH // 2, t)
     pts, d, ek, ev = zigzag(sm, ZZ * u)
     start = pts[-1][1] if pts else sm[0]
@@ -152,7 +181,8 @@ def reading(window: list[float], t: int, K: float, u: float) -> Reading:
     leg_s = statistics.median(x for x, _ in legs) if legs else 0.0
     leg_u = statistics.median(y for _, y in legs) if legs else 0.0
     return Reading(t, len(pts), d, (ev - start) * d / u if d else 0.0, (ev - sm[-1]) * d / u if d else 0.0, (sm[-1] - K) / u, abs(ev - K) / u, efficiency(sm[-301:]),
-                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d, (ev - window[min(t, len(window) - 1)]) * d / u if d else 0.0, ek)
+                   max(0, len(big) - 1), (ev - K) / u if d else 0.0, float(leg_s), float(leg_u), big_d, (ev - window[min(t, len(window) - 1)]) * d / u if d else 0.0, ek,
+                   max(0, ek - (pts[-1][0] if pts else 0)), float(leg_u) if leg_u > 0 else float(hour_leg_u), float(leg_s) if leg_u > 0 else float(hour_leg_s))
 
 
 @dataclass
@@ -199,6 +229,9 @@ def judge(r: Reading, fires: Fires, hold: float, resting: str | None = None) -> 
     if r.leg_u > 0 and r.raw_gb_u >= LEG_SHARE * r.leg_u:
         # 2026-11-26 (user, on SILVER 11:15 NO bought at 535 s at the bottom of a dip: "Just did it again bought down in a dip. Opposite direction"): the peak was read right, but on the 30 s smoothed curve it had given back 0.21u when the price itself had already fallen about 1.2u (41.667 to 41.627 in 20 s; the NO ask went 0.16 -> 0.34), most of a leg of that market (1.41u). The move the bet wants had run before the signal came. A turn whose last tick is already LEG_SHARE of a leg off the extreme (the same share that makes a swing a leg) is too late and is not bought.
         return None, f"the price itself is already {r.raw_gb_u:.2f}u off the swing's extreme, {LEG_SHARE:g} or more of this market's leg ({r.leg_u:.2f}u), while the smoothed curve shows {r.gb_u:.2f}u: the move the bet wants has already run"
+    if r.usual_u > 0 and r.swing_u >= SPIKE * r.usual_u:
+        # 2026-11-27 (user, SILVER 09:15 YES: a 3.36u fall bought as a dip in a market whose legs were 1.44u; "It isn't in a wave curve it's just in spikes and those are different"; "Let's try to teach the spike"): a move far beyond the market's own legs is a spike. The reader took it for a big dip or peak; a spike does not come back the way a wave's leg does.
+        return None, f"the swing is {r.swing_u:.2f}u, {r.size_x:.2f} times the market's own usual leg ({r.usual_u:.2f}u): {SPIKE:g} times or more is a spike, not one of the wave's turns"
     if r.done < need(r.t):
         return None, f"{r.done} completed swings of {DONE_U:g}u so far, the lane needs {need(r.t)} at {r.t}s: a trend has a pull-back at most, a wave comes back (not a wave shape yet)"
     fires.done[key] = r.t
@@ -269,7 +302,7 @@ def read_index(index: str, opened: float, now: float, K: float, hold: float, res
             if None in win:
                 out = (None, "the spot's path since the open has a gap at its start", None, h)
             else:
-                r = reading(win, t, K, h.u)  # type: ignore[arg-type]
+                r = reading(win, t, K, h.u, h.leg_u, h.leg_s)  # type: ignore[arg-type]
                 with _lock:
                     fires = _fires.setdefault((index, op), Fires())
                     side, why = judge(r, fires, hold, resting)
@@ -306,7 +339,7 @@ def peek(index: str, opened: float, now: float, K: float) -> Reading | None:
                     T, V = [prev[0], *T], [prev[1], *V]
             win = grid(T, V, op, int(now) + 1)
             if None not in win:
-                out = reading(win, t, K, h.u)  # type: ignore[arg-type]
+                out = reading(win, t, K, h.u, h.leg_u, h.leg_s)  # type: ignore[arg-type]
     with _lock:
         if len(_peeks) > 2000:
             _peeks.clear()
@@ -348,7 +381,7 @@ def note(r: Reading | None, h: Hour, K: float) -> str:
         return f"{head} (target {K:.6g})"
     return (f"{head}; {r.t}s in, {SMOOTH}s smoothing: swing {r.swing_u:.2f}u {'up' if r.d == 1 else 'down' if r.d == -1 else '-'}, {r.gb_u:.2f}u given back, "
             f"completed swings of {DONE_U:g}u {r.done} (gate >= {need(r.t)}), waves so far {r.turns}, curve {r.pos_u:+.2f}u and the swing's extreme {r.ext_u:.2f}u from the target, last-5-min efficiency {r.eff300:.2f}, "
-            f"legs: median {r.leg_s:.0f}s and {r.leg_u:.2f}u, room {room(r)} (shadow), "
+            f"legs: median {r.leg_s:.0f}s and {r.leg_u:.2f}u, room {room(r)} (shadow), the swing is {r.size_x:.2f} x the usual leg ({r.usual_u:.2f}u; a spike at {SPIKE:g}) and {r.pace_x:.2f} x its pace (shadow), "
             f"u {h.u:.6g} (target {K:.6g})")
 
 
