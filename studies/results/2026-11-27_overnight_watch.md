@@ -361,3 +361,6 @@ Noticed:
 - Nothing lost, so nothing to trace; nothing changed in this pass.
 
 In progress and not in this pass: a lane sells only its own bets' contracts on its own side (the ZEC 05:45 cross-lane bleed; deploys after its full test run), and the curve entry's peak reading including the side's own price (branch price-peak).
+
+## Pass 15 (07:23 to 07:49 ET)
+Four live bets, all sold at a gain: HYPE 07:30 NO 0.64 to 0.76 (fast-profit clause); SOL 07:30 NO 0.80 to 0.92 (fast-profit clause, 0.038 off its high, cushion +1.19 sigma, the market then settled our way: left about $1.37, the user's "sold while price rising" message; proposed: the fast clause defers to the cushion hold, not yet replayed); ZEC 07:45 YES 0.71 to 0.997 (top); HYPE 07:45 NO 0.84 to 0.995 (top). Nothing changed this pass. Curve waits plus lane isolation merged on branch price-peak (3070afdb); full suite running, deploy at the next quarter-hour gap after it passes.
