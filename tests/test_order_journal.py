@@ -154,3 +154,18 @@ def test_both_buy_paths_record_the_order_before_they_wait():
     assert src.count("orderjournal.intent(") == 2
     resting = inspect.getsource(runner._place_resting)
     assert resting.index("orderjournal.intent(") < resting.index("_rest_wait(")  # before the wait on the fill, not after
+
+
+def test_a_recovered_bet_gets_its_buy_order_row_so_its_sale_is_a_real_one(env):
+    """SOL 00:45 YES, 2026-11-27: the bet was recovered from the journal after a restart, the one rule sold it at 0.84 and the sale was booked on paper, because a live sale sells what the orders table says is held and the recovery wrote no order row; the real contracts went to zero."""
+    s, store = env
+    sent(s)
+    assert store.net_contracts(TICKER, s.env) == 0
+    orderjournal.recover_once(s, Client([fill()]), store)
+    assert store.net_contracts(TICKER, s.env) == pytest.approx(16.66)  # what a live sale will sell
+    ts = store.db.execute("SELECT ts FROM decisions WHERE ticker=? AND action='bet'", (TICKER,)).fetchone()["ts"]
+    assert store.entry_fill(TICKER, "yes", float(ts)) == pytest.approx(0.28, abs=0.005)  # and the price the exits judge a profit against
+    n = store.db.execute("SELECT COUNT(*) AS n FROM orders WHERE order_id='oid-1'").fetchone()["n"]
+    assert n == 1
+    orderjournal.recover_once(s, Client([fill()]), store)
+    assert store.net_contracts(TICKER, s.env) == pytest.approx(16.66)  # a second pass adds nothing

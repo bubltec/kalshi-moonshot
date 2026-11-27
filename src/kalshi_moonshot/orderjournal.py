@@ -96,7 +96,7 @@ def _filled(client: Any, e: dict[str, Any]) -> tuple[float, float]:
 
     with memguard.allowed():
         rows = client.portfolio_rows("/portfolio/fills", "fills", int(e["ts"]) - 5, pages=1)
-    filled = spent = 0.0
+    filled = spent = fees = 0.0
     seen: set[str] = set()
     for f in rows:
         row = account.fill_row(f)
@@ -106,7 +106,8 @@ def _filled(client: Any, e: dict[str, Any]) -> tuple[float, float]:
         n, yes_price, fee = float(row[4]), float(row[5]), float(row[7] or 0.0)
         filled += n
         spent += (yes_price if e["side"] == "yes" else 1.0 - yes_price) * n + fee
-    return filled, spent
+        fees += fee
+    return filled, spent, fees
 
 
 def _recover(s: Any, client: Any, store: Any, e: dict[str, Any]) -> str:
@@ -119,11 +120,17 @@ def _recover(s: Any, client: Any, store: Any, e: dict[str, Any]) -> str:
         with contextlib.suppress(Exception):
             client.cancel_order(e["order_id"])  # an order nobody is watching is not left to fill
         time.sleep(2.0)
-    filled, spent = _filled(client, e)
+    filled, spent, fees = _filled(client, e)
     if filled <= 0:
         settle(s.data_dir, e["order_id"], "nothing filled")
         return f"{e['ticker']}: nothing filled"
     paid = spent / filled
+    # THE BUY'S ORDER ROW IS RECOVERED WITH THE BET (2026-11-27, SOL 00:45 YES: a resting buy was sent at 00:32:56, a push restarted the bot seconds later, the
+    # bet's row was recovered from this journal, and the one rule's sale at 0.84 at 00:36:12 was booked ON PAPER, because a live sale sells what the orders
+    # table says the account holds (store.net_contracts) and the recovery wrote no order row; the real 19.23 contracts went to zero, about -$15. User:
+    # "another zero. This was a tough one it had several places it could have sold at"). Without this row every exit of a recovered bet is a paper one.
+    if e["order_id"] and not store.db.execute("SELECT 1 FROM orders WHERE order_id=? AND COALESCE(side,'buy')='buy' LIMIT 1", (e["order_id"],)).fetchone():
+        store.add_order(ticker=e["ticker"], env=s.env, count=e["count"], price=round((spent - fees) / filled, 4), fill_count=filled, cost_usd=round(spent, 4), fee_usd=round(fees, 4), order_id=e["order_id"], contract=e["side"])
     store.add_decision(
         ticker=e["ticker"], title="", bid=round(e["bid"], 4), ask=round(e["ask"], 4), model_p=round(e["ask"], 4), edge=0.0, action="bet", mode=s.mode,
         reason=f"bought {e['side'].upper()} {filled:g}/{e['count']:g} at about {paid:.2f}, fee included: RECOVERED from the order journal ({e['kind']} order {e['order_id'][:13]} sent {time.strftime('%H:%M:%S', time.gmtime(e['ts']))} UTC; the bot stopped or the write failed before the bet's own row was made). Its entry reasoning was not kept.",
