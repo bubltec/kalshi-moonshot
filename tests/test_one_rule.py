@@ -53,8 +53,8 @@ def test_late_profit_is_not_sold_unless_the_spot_is_under_the_target():
     assert not ask(0.90, 120, 3.0).sell
     assert not ask(0.75, 110, 3.0).sell  # fell 15c late with the spot still over the target: held
     assert not ask(0.75, 100, -1.0).sell  # a hair under the target is not a cross (a wobble of the spot is 4.1)
-    r = ask(0.75, 95, -6.0)  # the spot is a wobble under the target: the profit is taken
-    assert r.sell and r.kind == "fall" and r.net > 0
+    r = ask(0.75, 95, -6.0)  # the spot is a wobble under the target: the profit is taken (as a stall or a fall, whichever the rule meets first)
+    assert r.sell and r.kind in ("fall", "stall") and r.net > 0
 
 
 def test_no_loss_while_the_spot_has_not_crossed_near_2100():
@@ -234,3 +234,17 @@ def test_a_small_profit_is_not_sold_for_pennies_on_one_wobble_doge_2330():
     assert not ask(0.80, 330, 3.0).sell  # +11c: the run starts here
     r = ask(0.73, 300, 3.0)  # a fall that still keeps a wobble of profit is taken
     assert r.sell and r.kind == "fall" and r.net >= 0.04  # about a wobble kept (the sale fee is a little higher at the lower bid)
+
+
+def test_a_profit_that_stops_climbing_is_taken_even_with_a_cushion_near_0000():
+    """NEAR 00:00 NO, 2026-11-27: bought 0.64, the bid at 0.82 to 0.88 for three minutes, then to zero with no sale; the cushion hold stood in front of the stall. User: "It hit a profit and should have exited", "Not every curve is going to wobble". A stall needs no fall of the bid."""
+    ask = asker(0.64, wobble=0.040, bought=381.0)  # bought with 519 s left
+    assert not ask(0.76, 435, 0.0032 * 3000)  .sell  # +9c: the run starts
+    assert not ask(0.84, 400, 40.0).sell  # the high, with the spot over a sigma of the time left on the bet's side
+    held = ask(0.83, 390, 40.0)  # ten seconds on: not a stall yet, and the cushion holds the small fall
+    assert not held.sell and held.kind == "cushion"
+    r = ask(0.83, 360, 40.0)  # no new high for 40 s, more than a tenth of the 360 s left: taken, cushion or not
+    assert r.sell and r.kind == "stall" and r.net > 0.15
+    fall = asker(0.64, wobble=0.040, bought=381.0)
+    fall(0.76, 435, 40.0), fall(0.90, 400, 40.0)
+    assert fall(0.80, 395, 40.0).kind == "cushion"  # a FALL with a cushion is still held (SOL 07:34)
