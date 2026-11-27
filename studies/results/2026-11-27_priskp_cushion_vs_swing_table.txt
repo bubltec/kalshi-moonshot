@@ -1,0 +1,6 @@
+99 curve buys (as the lane now reads the curve)
+
+the spot's cushion over the target at the buy, against the turn the bet's swing started from:
+   cushion under half the turn                    n  36  settled its way  67%  avg paid 0.67  median cushion 0.7 u, turn 2.7 u  held $    1.33 (+0.04 a bet)  as run $  -50.61  by day {'11-26': 1.33}
+   half the turn to the whole of it               n  35  settled its way  86%  avg paid 0.70  median cushion 1.4 u, turn 2.0 u  held $  106.05 (+3.03 a bet)  as run $   93.55  by day {'11-25': -10.34, '11-26': 116.38}
+   the whole turn and more (held by the curve)    n  28  settled its way  75%  avg paid 0.75  median cushion 2.1 u, turn 1.4 u  held $   11.91 (+0.43 a bet)  as run $  -14.59  by day {'11-25': 1.03, '11-26': 10.88}
