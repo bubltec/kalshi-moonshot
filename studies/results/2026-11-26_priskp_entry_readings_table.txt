@@ -1,0 +1,62 @@
+207 bets, as run $68.70, held to settlement $174.81, settled on the bet's side 157
+
+by why
+  curve_trend_entry n 146  settled its way  73%  avg paid 0.70  as run $   17.95 (+0.12 a bet)  held $  115.37
+  pass           n  60  settled its way  85%  avg paid 0.79  as run $   57.34 (+0.96 a bet)  held $   70.56
+
+by regime
+  curve          n 146  settled its way  73%  avg paid 0.70  as run $   17.95 (+0.12 a bet)  held $  115.37
+  steady         n  40  settled its way  90%  avg paid 0.80  as run $   56.85 (+1.42 a bet)  held $   76.05
+
+by minute of the buy
+  2-5            n  89  settled its way  71%  avg paid 0.73  as run $  -33.34 (-0.37 a bet)  held $   -5.49
+  5-8            n  80  settled its way  84%  avg paid 0.72  as run $  110.01 (+1.38 a bet)  held $  180.23
+  8-11           n  25  settled its way  68%  avg paid 0.73  as run $  -21.18 (-0.85 a bet)  held $  -20.14
+  11+            n  12  settled its way  83%  avg paid 0.73  as run $   19.79 (+1.65 a bet)  held $   31.33
+
+by same-side bets the lane had already bought in the window
+  0              n  85  settled its way  72%  avg paid 0.71  as run $  -27.16 (-0.32 a bet)  held $   11.49
+  1              n  47  settled its way  74%  avg paid 0.73  as run $   30.69 (+0.65 a bet)  held $   38.05
+  2              n  31  settled its way  81%  avg paid 0.73  as run $   29.86 (+0.96 a bet)  held $   42.47
+  3              n  44  settled its way  82%  avg paid 0.74  as run $   35.31 (+0.80 a bet)  held $   82.81
+
+by price paid
+  0.55-0.65      n  39  settled its way  54%  avg paid 0.60  as run $  -46.72 (-1.20 a bet)  held $  -47.79
+  0.65-0.75      n  77  settled its way  79%  avg paid 0.70  as run $   87.73 (+1.14 a bet)  held $  174.50
+  0.75+          n  91  settled its way  82%  avg paid 0.80  as run $   27.68 (+0.30 a bet)  held $   48.10
+
+by the model's chance
+  under 0.55     n  61  settled its way  64%  avg paid 0.66  as run $  -83.71 (-1.37 a bet)  held $  -12.39
+  0.55-0.65      n  58  settled its way  74%  avg paid 0.72  as run $   52.98 (+0.91 a bet)  held $   48.45
+  0.65+          n  65  settled its way  91%  avg paid 0.78  as run $  117.31 (+1.80 a bet)  held $  166.88
+
+by cushion_fifth
+  2              n   1  settled its way 100%  avg paid 0.66  as run $   -4.70 (-4.70 a bet)  held $    8.09
+  3              n  77  settled its way  66%  avg paid 0.67  as run $  -64.12 (-0.83 a bet)  held $   -6.01
+  4              n  49  settled its way  80%  avg paid 0.71  as run $   87.80 (+1.79 a bet)  held $  102.70
+  5              n  79  settled its way  84%  avg paid 0.79  as run $   56.31 (+0.71 a bet)  held $   81.15
+
+by trend_fifth
+  1              n  15  settled its way  73%  avg paid 0.68  as run $   15.85 (+1.06 a bet)  held $   13.18
+  2              n  18  settled its way  83%  avg paid 0.68  as run $   51.63 (+2.87 a bet)  held $   66.54
+  3              n  31  settled its way  90%  avg paid 0.73  as run $   81.13 (+2.62 a bet)  held $  116.38
+  4              n  70  settled its way  69%  avg paid 0.73  as run $  -28.83 (-0.41 a bet)  held $  -89.44
+  5              n  71  settled its way  76%  avg paid 0.74  as run $  -47.80 (-0.67 a bet)  held $   75.97
+  anomaly        n   1  settled its way 100%  avg paid 0.82  as run $    3.29 (+3.29 a bet)  held $    3.29
+
+by history_fifth
+  1              n  21  settled its way  71%  avg paid 0.66  as run $   23.68 (+1.13 a bet)  held $   57.95
+  2              n  41  settled its way  85%  avg paid 0.69  as run $  129.12 (+3.15 a bet)  held $  143.18
+  3              n  32  settled its way  66%  avg paid 0.70  as run $  -64.74 (-2.02 a bet)  held $  -39.84
+  4              n  56  settled its way  70%  avg paid 0.76  as run $  -32.54 (-0.58 a bet)  held $  -53.78
+  5              n  53  settled its way  83%  avg paid 0.76  as run $    4.56 (+0.09 a bet)  held $   63.21
+  anomaly        n   3  settled its way 100%  avg paid 0.74  as run $   15.21 (+5.07 a bet)  held $   15.21
+
+with or against the hour's drift
+  against        n  46  settled its way  74%  avg paid 0.73  as run $   -2.77 (-0.06 a bet)  held $  -16.83
+  with           n 130  settled its way  76%  avg paid 0.72  as run $   51.45 (+0.40 a bet)  held $  169.01
+
+by swing size (u)
+  under 1.2      n  46  settled its way  80%  avg paid 0.70  as run $   83.86 (+1.82 a bet)  held $  104.07
+  1.2-2          n  58  settled its way  71%  avg paid 0.69  as run $  -29.36 (-0.51 a bet)  held $   26.48
+  2+             n  41  settled its way  68%  avg paid 0.71  as run $  -23.34 (-0.57 a bet)  held $   -0.19
