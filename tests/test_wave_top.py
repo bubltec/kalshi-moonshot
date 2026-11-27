@@ -729,12 +729,12 @@ def test_unit_a_lane_file_names_the_give_up(tmp_path, monkeypatch):
     assert (sp.wave_give_up_share, sp.wave_give_up_turn) == (0.2, 0.4)
 
 
-def _gu_held(tmp_path, monkeypatch, side, shock_ref=None, share=0.1, arm=None, bids=None, n0=300):
+def _gu_held(tmp_path, monkeypatch, side, shock_ref=None, share=0.1, arm=None, bids=None, n0=300, left=None):
     from kalshi_moonshot import curverisk, watcher
     from tests.test_risk_exit_flow import CLOSE, held
     from tests.test_risk_exit_flow import TICKER as HELD
 
-    w = held(tmp_path, monkeypatch, live=True, extra=f"sell_chain=['wave_salvage']\nwave_give_up_share={share}\nwave_give_up_turn=0.5" + (f"\nwave_give_up_arm_share={arm}" if arm is not None else ""))
+    w = held(tmp_path, monkeypatch, live=True, extra=f"sell_chain=['wave_salvage']\nwave_give_up_share={share}\nwave_give_up_turn=0.5" + (f"\nwave_give_up_arm_share={arm}" if arm is not None else "") + (f"\nwave_give_up_left_share={left}" if left is not None else ""))
     t = w.targets[(HELD, "risk_only")]
     assert (t.wave_give_up_share, t.wave_give_up_turn) == (share, 0.5)  # the lane file reached the target through the refresh
     t.wave_whipsaw = 0.0
@@ -770,6 +770,57 @@ def test_integration_the_give_up_sells_a_dip_that_does_not_turn(tmp_path, monkey
     assert at(320) is None  # armed 17 s ago, 32 s allowed
     why = at(360)  # 57 s without a turn against 0.1 x min(360, 540 x 0.5) = 27 s
     assert why and why.startswith("wave give-up") and "has not turned" in why and "allowed" in why and "typical minute" in why
+
+
+# ---- the wait as a share of the time left (2026-11-27, user: "The exit is based on time remaining ... if time allows, wait, if there not a lot of time left (under 3 mins) it should be a short wait, but still wait") ----
+def long_dip(n0=300):
+    """The give-up tests' dip carried to the close: the side's bid wobbles 0.50 / 0.52 a minute until the buy at n0, falls a cent a second to 0.35 and stays there."""
+    return [0.50 + 0.02 * ((k // 60) % 2) for k in range(n0)] + [0.50] + [max(0.50 - 0.01 * k, 0.35) for k in range(1, 900 - n0)]
+
+
+def test_integration_with_time_left_the_give_up_waits_a_share_of_it_and_a_blip_is_not_sold(tmp_path, monkeypatch, mem):
+    """The same dip the peaked wait sells at 360 s (27 s allowed): bought at 300 s, armed at 303 s, never turned. With a third of the time left it waits until the wait (the second less 303) reaches 0.33 x the seconds left, at about 451 s."""
+    at = _gu_held(tmp_path, monkeypatch, "yes", left=0.33, bids=long_dip())
+    assert at(360) is None  # 57 s unturned, 178 s allowed with 540 s left: a blip has time to come back
+    assert at(445) is None  # 142 s against 150 s
+    why = at(455)  # 152 s against 0.33 x 445 = 147 s
+    assert why and why.startswith("wave give-up") and "0.33 x the 445s left to the close" in why and "has not turned" in why
+
+
+def test_integration_near_the_close_the_wait_is_short_but_it_still_waits(tmp_path, monkeypatch, mem):
+    """Bought at 780 s (two minutes left), armed at 783 s: not sold on the spot, sold once the wait reaches a third of what is left (about 812 s)."""
+    at = _gu_held(tmp_path, monkeypatch, "yes", left=0.33, n0=780, bids=long_dip(780))
+    assert at(790) is None and at(805) is None  # 22 s unturned against 31 s allowed
+    why = at(815)  # 32 s against 0.33 x 85 = 28 s
+    assert why and why.startswith("wave give-up") and "left to the close" in why
+
+
+def test_integration_the_time_left_wait_stands_alone_and_is_off_by_default(tmp_path, monkeypatch, mem):
+    from kalshi_moonshot import lanes
+
+    at = _gu_held(tmp_path, monkeypatch, "yes", share=0.0, left=0.33, bids=long_dip())  # the lane names only the time-left share
+    assert at(445) is None and at(455)
+    assert lanes.LaneSpec.__dataclass_fields__["wave_give_up_left_share"].default == 0.0
+
+
+def test_unit_the_time_left_wait_is_a_line_with_no_cut_at_any_minute():
+    """What the wait allows at each moment, read off salvage itself: a third of the seconds left, from the open to the close."""
+    from kalshi_moonshot import wavetop
+
+    allowed = {}
+    for n0 in (120, 300, 600, 720, 840):
+        bids = [0.50 + 0.02 * ((k // 60) % 2) for k in range(n0)] + [0.50] + [0.30] * (899 - n0)
+        q = quotes(bids, OPEN)
+        T, V = flat_spot(900, drift=0.5)
+        for now in range(n0 + 2, 899):
+            sell, info = wavetop.salvage(q, "yes", OPEN, OPEN + n0, OPEN + now, T, V, 0.0, 0.5, 1.0 / 3.0, 0.0, 0.33)
+            if sell and info.get("give_up"):
+                allowed[n0] = (info["allowed"], info["left"], info["waited"])
+                break
+    assert set(allowed) == {120, 300, 600, 720, 840}, allowed
+    for n0, (w, left, waited) in allowed.items():
+        assert w == pytest.approx(0.33 * left) and waited >= w, (n0, w, left, waited)
+    assert allowed[120][0] > allowed[300][0] > allowed[600][0] > allowed[720][0] > allowed[840][0] > 0  # longer with more time left, never nothing
 
 
 def test_integration_the_give_up_is_off_unless_the_lane_names_a_share(tmp_path, monkeypatch, mem):

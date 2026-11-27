@@ -301,7 +301,7 @@ def side_bids(quotes: list[tuple[float, float, float]], side: str, a: int, b: in
     return [first if x is None else x for x in sb]
 
 
-def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, bought: float, now: float, T: list[float], V: list[float], give_share: float = 0.0, give_turn: float = 0.5, give_peak: float = 1.0 / 3.0, arm_share: float = 0.0) -> tuple[bool, dict[str, float | None]]:
+def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, bought: float, now: float, T: list[float], V: list[float], give_share: float = 0.0, give_turn: float = 0.5, give_peak: float = 1.0 / 3.0, arm_share: float = 0.0, left_share: float = 0.0) -> tuple[bool, dict[str, float | None]]:
     """Whether a bet bought at `bought` is sold now by the salvage rule, and the readings. quotes = the market's (time, YES bid, YES ask) rows; T, V = the spot's ticks.
 
     The GIVE-UP branch (2026-11-23, user: "the other exit needs to be a safety exit. If the scalp isn't working we should exit ... we just need to exit if it dips and doesn't turn"; "if it DOES [turn], we can wait"): with give_share > 0, a bet that is armed (its bid fell one typical minute under the bid at the buy) and whose bid has not TURNED (come give_turn x the typical minute off the lowest bid since the buy) is sold once the time since the later of its arming and the last turn reaches W = give_share x min(e, left x p / (1 - p)), e = seconds since the open, left = seconds to the close, p = give_peak (user, 2026-11-23: "slightly slanted, so peak around 5 mins"): a line rising from 0 at the open to give_share x p x 900 at the share p of the market (minute 5 at 1/3) and falling linearly to 0 at the close (short early so there is time to re-buy, short late). A turn restarts the clock; the rebound sale keeps running unchanged. The info then carries give_up = 1 with the readings. An unreadable typical minute (under a minute of bids before the buy) is no sale: the info says unit_unreadable = 1."""
@@ -334,10 +334,19 @@ def salvage(quotes: list[tuple[float, float, float]], side: str, opened: float, 
             iturn = j
     info = {"unit": qu, "arm_unit": qa, "entry_bid": b0, "low": lo_b, "armed": float(armed)}
     sold = _rebound_sale(sb, armed, i0, i, ilo, lo_b, qu, now, T, V, side, info)  # type: ignore[arg-type]
-    if sold or give_share <= 0.0 or not armed:
+    if sold or (give_share <= 0.0 and left_share <= 0.0) or not armed:
         return sold, info
     left = max(opened + 900.0 - now, 0.0)
     elapsed = max(now - opened, 0.0)
+    if left_share > 0.0:
+        # THE WAIT IS A SHARE OF THE TIME LEFT (2026-11-27, user: "The exit is based on time remaining. Obviously we want fast profit, but if time allows, wait, if there not a lot of time left (under 3 mins) it should be a short wait, but still wait. Since these are low buys anyway a small increase in price is worth a lot"; and on the buy: "blips ... will still happen but we can usually recover from"). Long while the market has long to run, short near its close, never nothing: a line, with no cut at any minute. It replaces the peaked wait below for a lane that sets it. Why: under the peaked wait at 0.1 a blip had about 24 s (PALLADIUM 08:45 on 2026-11-27: a YES bought near the low at 08:34:58 was sold at the second low 0.10 after 26 s unturned with 487 s left, and the price then climbed); on the reader's 239 bets the give-up's 90 sales were all losses (-18.9c a contract, -232.57) while every other sale together made +197.81.
+        W = left_share * left
+        since = max(iarm, iturn)
+        waited = float(i - since)
+        if waited >= W:
+            info.update({"give_up": 1.0, "armed_at": float(iarm + a), "since": float(since + a), "waited": waited, "allowed": W, "share": left_share, "left": left, "elapsed": elapsed, "turn": give_turn, "peak": give_peak, "by_left": 1.0})
+            return True, info
+        return False, info
     if not 0.0 < give_peak < 1.0:
         return False, info
     W = give_share * min(elapsed, left * give_peak / (1.0 - give_peak))  # user, 2026-11-23: "the earlier in the market it is, the less we should wait" (time to re-buy) and "we can't wait too long": short early, short late, longest mid-market
