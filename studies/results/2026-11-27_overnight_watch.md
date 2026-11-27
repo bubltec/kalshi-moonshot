@@ -400,3 +400,6 @@ Four live bets: ZEC 12:00 NO 0.60 to 0.976 (top), NEAR 12:15 YES 0.67 to 0.99 (t
 
 ## Pass 25 (12:19 to 12:49 ET)
 Two live bets, both sold at a gain by the fast clause: BTC 12:30 NO 0.79 to 0.941 (+13.6c), BNB 12:45 NO 0.61 to 0.87 (+22.5c). NEAR 12:00 YES (bought 0.67, held, the nest said 4 of 4 and its own shadow said would wait) lost the full stake, about $14.77; the exit design that went live at 12:30:05 would have sold it at 0.20 (a -$10.61 loss) in replay. CI failed on the push at mypy only (five type errors in `oscillation.py` and `runner.py` from the other session's commits); fixed with a type annotation and a None guard, no change in behaviour. Bot up, kill switch off. Nothing else changed.
+
+## Pass 26 (12:49 to 13:19 ET)
+Two live bets, both sold at a gain by the fast clause: NEAR 13:00 YES 0.83 to 0.9376 (+9.5c), BTC 13:00 YES 0.77 to 0.964 (+18.0c). No losses, no `fast drop` sale yet since the exit design went live at 12:30:05. CI on `571c56ab` (the five mypy errors fixed) is still running. Nothing changed.
