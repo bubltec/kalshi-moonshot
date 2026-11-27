@@ -3,7 +3,7 @@
 ONE READING: where the bid is against its own swing, in the bid's own wobbles (its typical 10 s move: the typical minute x sqrt(10/60)). A move under a wobble is the bid's ordinary motion and is never acted on.
 
 THREE FACTORS move the bar the reading has to pass:
-  time     the bar is 1 + 2 x the share of the market still to run wobbles (3 at the open, 1 at the close), and EARLY PROFIT FADES with the time elapsed: its bar and its stall wait are divided by exp(-(elapsed / FADE_S)^8), which is 1.0 at minute 5, 0.8 at 7.5, 0.4 at 9, 0.1 at 10 and 0.01 at 11, so it approaches no action after about ten minutes with no line anywhere.
+  time     the bar is 1 + 2 x the share of the market still to run wobbles (3 at the open, 1 at the close), and EARLY PROFIT FADES with the bet's own age (the time since its buy, not the market's clock: see fade): its bar and its stall wait are divided by exp(-(elapsed / FADE_S)^8), which is 1.0 at minute 5, 0.8 at 7.5, 0.4 at 9, 0.1 at 10 and 0.01 at 11, so it approaches no action after about ten minutes with no line anywhere.
   cushion  z = the spot's cushion over the target for the bet / (the spot's typical minute x sqrt(minutes left)), positive on the bet's side and negative on the wrong side. z >= Z_HOLD holds a profit whatever the bid does; under it the bar is multiplied by 2 x Phi(z) (wide with a cushion, tight against one). The spot has CROSSED only when its cushion is under zero by a wobble of its own (its typical 10 s move): a hair under the target is not a cross.
   profit   once the bet has been ahead by a wobble after both fees, the fall allowed is at most the gain at the high less one wobble.
 
@@ -27,7 +27,7 @@ TICK = 0.01
 SETTLE_S = 60.0  # structural: Kalshi settles these markets on the index average over the last 60 s
 GRID = TICK / 2.0  # the bid moves in ticks, so a fall is compared with its bar to the nearest tick: a fall of 0.06 passes a bar of 0.0603 (BTC 17:00 sat on exactly that edge; user, 2026-11-26: "close enough")
 NO_RECOVERY_SHARE = 0.33  # the time backstop: this share of the market's length under cost with no profit (the priskp lane's no_recovery_share)
-FADE_S = 0.6 * MARKET_S  # early profit's fade: exp(-(elapsed / FADE_S)^8), a tenth at minute 10
+FADE_S = 0.6 * MARKET_S  # early profit's fade: exp(-(the bet's age / FADE_S)^8), a tenth ten minutes after the buy
 
 
 @dataclass
@@ -70,10 +70,9 @@ def bar_wobbles(left: float, z: float | None) -> float:
     return max(1.0, time_f * cushion_f)
 
 
-def fade(left: float) -> float:
-    """Early profit's weight by the time elapsed in the market: 1 at the open, approaching 0 after about ten minutes, with no line."""
-    elapsed = MARKET_S - min(max(left, 0.0), MARKET_S)
-    return math.exp(-((elapsed / FADE_S) ** 8))
+def fade(age: float) -> float:
+    """Early profit's weight by the BET'S OWN AGE, the seconds since its buy: 1 at the buy, approaching 0 after about ten minutes, with no line. It counted the market's clock until 2026-11-26 ~23:10 ET: ZEC 22:30 NO, HYPE 22:45 YES and XRP 22:45 YES were bought at minute 6 to 9 of their markets, were 9c to 19c ahead after both fees at minute 9 to 10.7, where the market's clock had already faded early profit to nothing, and went to zero (user: "And those should have been Profits And rebuys"; "When we lose that bad on so many things at a problem with not waiting"). A bet bought late had no early-profit window at all; "early" is early in the bet."""
+    return math.exp(-((max(age, 0.0) / FADE_S) ** 8))
 
 
 def crossed(cushion: float | None, spot_unit: float | None) -> bool:
@@ -89,7 +88,7 @@ def settle_z(banked: float | None, cushion_now: float | None, spot_unit: float |
     return need / (spot_unit * math.sqrt(left / 60.0))
 
 
-def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None, settle: float | None = None) -> Read:
+def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None, settle: float | None = None, bought: float | None = None) -> Read:
     """Ask the rule on one tick. `fee_bid` and `fee_entry` are the fee per contract at the bid and at the price paid, `fee_of` the fee function (for the gain at the high), `wobble` the bid's typical 10 s move (a tick when it has no reading). `cross_cushion`, when given, is the cushion the cross test reads in place of `cushion` (the watcher gives the better for the bet of the spot's 60 s and 5 s averages: the spot has crossed only when both have)."""
     cost = entry + fee_entry
     net = bid - fee_bid - cost
@@ -105,7 +104,7 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
     if net > 0:  # EARLY PROFIT
         s.low = s.bounce_high = 0.0
         s.last_ahead_ts = now
-        f = 1.0 if over else fade(left)  # the fade is for a profit whose spot has not crossed: late in the market such a bet is left alone (user, 2026-11-26: "make sure late profit doesn't sell if it's not under the target"); with the spot on the wrong side a profit is still taken at any minute
+        f = 1.0 if over else fade(now - (bought if bought is not None and bought > 0 else s.first_ts))  # `bought` is the bet's buy time (the first tick seen when it is not given). the fade is for a profit whose spot has not crossed: late in the market such a bet is left alone (user, 2026-11-26: "make sure late profit doesn't sell if it's not under the target"); with the spot on the wrong side a profit is still taken at any minute
         if s.run_high <= 0:
             if net < wobble - 1e-9:
                 return Read(False, "nothing", net, 0.0, 0.0, bid, z, f)  # ahead by less than a wobble is not a profit yet

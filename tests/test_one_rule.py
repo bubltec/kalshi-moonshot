@@ -3,11 +3,12 @@ from kalshi_moonshot import fallrule, memguard
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
 
-def asker(entry, wobble=0.043, spot_unit=10.0):
+def asker(entry, wobble=0.043, spot_unit=10.0, bought=1e-9):
+    """`bought` is the bet's buy time on a clock where the market opens at 0 and closes at 900 (the default: bought at the open, so the bet's age is the market's clock)."""
     s = fallrule.State()
 
     def ask(bid, left, cushion=None, cross=None):
-        return fallrule.decide(s, bid, entry, fee(bid), fee(entry), fee, wobble, 900.0 - left, left, cushion, spot_unit if cushion is not None else None, cross)
+        return fallrule.decide(s, bid, entry, fee(bid), fee(entry), fee, wobble, 900.0 - left, left, cushion, spot_unit if cushion is not None else None, cross, None, bought)
 
     ask.state = s
     return ask
@@ -36,7 +37,7 @@ def test_a_profit_under_a_wobble_is_not_a_profit_and_a_strong_cushion_holds():
 
 def test_early_profit_fades_with_the_time_elapsed_and_has_no_line():
     """User: "the early profit concept needs to expire but not with a hard stop it should just approach no action after about 10 mins elapsed"."""
-    fades = [fallrule.fade(900.0 - 60.0 * m) for m in range(0, 15)]
+    fades = [fallrule.fade(60.0 * m) for m in range(0, 15)]  # by the bet's age in minutes
     assert all(a >= b for a, b in zip(fades, fades[1:], strict=False))  # it only ever weakens
     assert fades[5] > 0.95 and 0.05 < fades[10] < 0.2 and fades[12] < 0.01
     ask = asker(0.64)
@@ -204,3 +205,15 @@ def test_every_sell_step_declares_whether_it_may_sell_under_cost_and_the_selling
     src = inspect.getsource(sellchain).replace("SELL_STEPS = (", "SELL_STEPS = ('a_new_step',) + (", 1)  # the module as it would be with a step nobody declared
     with pytest.raises(RuntimeError, match="a_new_step"):
         exec(compile(src, "sellchain_with_a_new_step", "exec"), {"__name__": "sellchain_with_a_new_step"})
+
+
+def test_a_bet_bought_late_still_has_its_early_profit_zec_2230():
+    """ZEC 22:30 NO, 2026-11-26: bought 0.67 at minute 6, 9c ahead at minute 9, then to zero. The fade counts the bet's own age, so a late buy is not born with its early profit already faded. User: "those should have been Profits And rebuys"."""
+    ask = asker(0.67, wobble=0.040, bought=361.0)  # bought with 539 s left
+    assert not ask(0.70, 400, 5.0).sell
+    assert not ask(0.79, 369, 5.0).sell  # 22:23:51: +9c after both fees, at minute 8.9 of the market and 170 s into the bet
+    r = ask(0.73, 364, 5.0)  # 22:23:56 on the tape: fell 0.06
+    assert r.sell and r.kind == "fall" and r.net > 0 and r.fade > 0.99
+    old = asker(0.67, wobble=0.040)  # the same bids on a bet as old as the market: left alone, as the rule did that night
+    old(0.70, 400, 5.0), old(0.79, 369, 5.0)
+    assert not old(0.73, 364, 5.0).sell

@@ -1016,7 +1016,7 @@ class ProfitWatcher:
         if 1.0 - bid <= fallrule.TICK + 1e-9 and 1.0 <= fallrule.SETTLE_S - left < fallrule.SETTLE_S and fast is not None:  # at the top inside the settlement window: how locked in is the average that settles the bet
             banked = ProfitWatcher._wave_spot(self, t, now, int(fallrule.SETTLE_S - left))
             settle = fallrule.settle_z(banked[0], fast[0], spot_unit, left) if banked is not None else None
-        rd = fallrule.decide(t.one_rule, bid, t.entry, fee_per_contract(bid), fee_per_contract(t.entry), fee_per_contract, wobble, now, left, cushion, spot_unit, cross, settle)
+        rd = fallrule.decide(t.one_rule, bid, t.entry, fee_per_contract(bid), fee_per_contract(t.entry), fee_per_contract, wobble, now, left, cushion, spot_unit, cross, settle, t.bought_ts if t.bought_ts > 0 else None)
         if rd.kind == "locked" and now - t.veto_logged_at >= 30.0:
             t.veto_logged_at = now
             log.info("one rule: %s %s holds the top at the bid %.3g with %.0f s left: the settlement average is locked in (the spot would have to move %.1f sigma of the time left against the bet)", t.ticker, t.lane, bid, left, rd.z)

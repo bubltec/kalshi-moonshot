@@ -83,7 +83,7 @@ def walk(b: dict) -> dict | None:
             if 1.0 - x <= TICK + 1e-9 and 1 <= 60 - left < 60 and sunit and j >= 60 and iok[j + 1] - iok[j + 1 - (60 - left)] == 60 - left and iok[j + 1] - iok[j - 4] == 5:
                 sg = 1.0 if side == "yes" else -1.0
                 settle = fallrule.settle_z(sg * ((isum[j + 1] - isum[j + 1 - (60 - left)]) / (60 - left) - strike), sg * ((isum[j + 1] - isum[j - 4]) / 5.0 - strike), sunit, left)
-            r = fallrule.decide(st, x, entry, fee(x), fee(entry), fee, wob, now, left, cushion, sunit, None, settle)
+            r = fallrule.decide(st, x, entry, fee(x), fee(entry), fee, wob, now, left, cushion, sunit, None, settle, b["ts"])
             if r.sell:
                 sale, kind = x, r.kind
                 why = "" if r.kind in ("top", "no recovery") else f"high {r.high:.2f} fell {r.fall:.3f} (bar {r.bar:.3f}, wobble {wob:.3f}) z {'n/a' if r.z is None else f'{r.z:+.2f}'} {left:.0f}s left"
