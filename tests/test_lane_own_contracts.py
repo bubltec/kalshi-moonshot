@@ -72,3 +72,18 @@ def test_unit_a_hand_sale_is_written_off_against_its_own_side_only(tmp_path, mon
     gone = runner.book_hand_sale(s, st, TICKER, "yes", 0.0, 0.30)  # the account holds no YES: the YES side is written off, 4.65, and nothing more
     assert gone == pytest.approx(4.65)
     assert st.net_contracts(TICKER, s.env, "yes") == pytest.approx(0.0) and st.net_contracts(TICKER, s.env, "no") == pytest.approx(25.0)
+
+
+def test_a_lane_is_held_back_by_its_own_position_on_a_market_and_not_by_another_lanes(tmp_path, monkeypatch):
+    """2026-11-27, user: "It shouldn't block the whole market though. The wave bets are short": risk.check refused every buy on a market the ACCOUNT held, so wave_shape's short bets stopped PriskP buying the same market (511 refusals on 11 markets in 110 minutes). Now a lane is held back by its own open bet on the market only."""
+    from kalshi_moonshot import risk
+
+    live(monkeypatch)
+    held(tmp_path, monkeypatch, live=True)  # the lane risk_only holds a YES bet on TICKER
+    s = config.load()
+    monkeypatch.setenv("ALLOW_REAL_MONEY", "true")
+    s = config.load()
+    st = Store(s.db_path)
+    assert risk.check(s, st, TICKER, 1.0, max_trade=5.0).reason == "already holding this market"  # no lane given: the account's rule, as before
+    assert risk.check(s, st, TICKER, 1.0, max_trade=5.0, lane="risk_only").reason == "already holding this market"  # its own position blocks it
+    assert risk.check(s, st, TICKER, 1.0, max_trade=5.0, lane="wave_shape").reason != "already holding this market"  # another lane's does not

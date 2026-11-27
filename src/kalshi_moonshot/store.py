@@ -1303,6 +1303,15 @@ class Store:
         ).fetchone()
         return float(row["n"])
 
+    def held_by_other_lanes_only(self, ticker: str, lane: str) -> bool:
+        """True when this market's open bets all belong to OTHER lanes and this lane has none on it (either side). The whole-market holding check in risk.py reads the account, which cannot tell the lanes apart: a short wave bet on a market stopped PriskP buying it (2026-11-27, user: "It shouldn't block the whole market though. The wave bets are short"). False when no lane's open bet is found at all (a position opened by hand stays a block)."""
+        book = self._book()
+        if book is not None:
+            lanes = {_lane_of(r) for r in book if r["ticker"] == ticker and r["stake_usd"] is not None and r["outcome"] is None and r["exit_ts"] is None and float(r["contracts"] or 0.0) > 0.0}
+        else:
+            lanes = {r["lane"] for r in self.db.execute("SELECT COALESCE(lane,'moonshot') AS lane FROM decisions WHERE ticker=? AND action='bet' AND stake_usd IS NOT NULL AND outcome IS NULL AND exit_ts IS NULL AND COALESCE(contracts,0)>0", (ticker,)).fetchall()}
+        return bool(lanes) and lane not in lanes
+
     def lane_contracts(self, ticker: str, lane: str, side: str) -> float:
         """The contracts of this lane's OWN open bets on this market and side (the sum of their rows), 0 when the lane has none. A lane sells at most what its own bets hold, never another lane's contracts on the same side. From the bet book in memory in the running bot."""
         book = self._book()

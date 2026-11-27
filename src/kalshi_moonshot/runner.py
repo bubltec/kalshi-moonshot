@@ -1098,7 +1098,7 @@ def _place(
     with steptime.step("risk check"):
         verdict = risk.check(
             s, store, shot.ticker, cost, max_trade=cap,
-            event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store),
+            event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store), lane=shot.lane,
         )
     if not verdict.ok:
         return Placed(f"blocked by risk: {verdict.reason}")
@@ -1229,7 +1229,7 @@ def _requote_why(s: Settings, client: KalshiClient, store: Store, shot: LongShot
     if limit > shot.ask + max(0.0, spec.buy_slip) + max(0.0, spec.buy_retry_chase) + 1e-9:
         return None, f"the limit {limit:.2f} is over the decided ask {shot.ask:.2f} plus the slip and the chase"
     cost = limit * count + order_fee(limit, count)
-    verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store), allow_held=topping_up)  # a top-up's first part is already a position: the holding check would refuse every one
+    verdict = risk.check(s, store, shot.ticker, cost, max_trade=cost, event_ticker=shot.event_ticker, mutually_exclusive=shot.mutually_exclusive, equity=_cap_equity(s, client, store), lane=shot.lane, allow_held=topping_up)  # a top-up's first part is already a position: the holding check would refuse every one
     if not verdict.ok:
         log.info("buy %s %s: %s at %.2f not placed: the risk gate refused (%s)", shot.ticker, shot.side, "the top-up" if topping_up else "the second try", limit, verdict.reason)
     return (limit, "") if verdict.ok else (None, f"the risk gate refused ({verdict.reason})")
