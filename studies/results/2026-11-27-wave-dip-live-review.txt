@@ -1,0 +1,83 @@
+THE WAVE LANE'S LIVE BETS WITH THE wave_dip BUY, AS ROUND TRIPS (2026-11-27, 01:30 to 07:15 ET, real money, $2 a bet)
+Question (user: "Definitely have plenty of live bets for analysis"): on the lane's own live bets, where did the round trips make and lose money: the buy, or the exit?
+Bets: moonshot.decisions, lane wave_shape, mode trade, action bet, 01:30 to 07:15 ET: 152 closed rows; 145 with a stake of $3 or less are the lane's own (7 rows carry $3.26 to $15.20 and are not explained; left out). 118 markets, 1.23 trips a market.
+Prices are the decision's ask and the recorded exit price; "gross" is before fees. Fees: every filled BUY order on these markets paid $0.00 (resting orders); the sells paid $12.46 in all, PriskP's sells on the same markets included (not split).
+
+RESULT: 145 bets, 61 at a gain (+16.2c a contract), 84 at a loss (-19.5c), 10 whole stakes lost, gross -41.42.
+1. THE EXIT IS WHERE IT IS LOST, AT BOTH ENDS.
+   wave give-up: 67 sales, 66 at a loss, -18.6c, gross -72.09. Sold at 0.15 on average (paid 0.33) a median 78 s after the buy with 313 s left; the bid's low while held was 0.13, so the sale is at the low. After the sale the bid was back over cost + 3c on 26 of 67 (39%), on 13 inside two minutes; 7 settled a win. Sold at their later peak those bets were +13.63 (a ceiling, nobody sells the peak).
+   turn sale: 32 sales, all at a gain, +12.4c, gross +24.67. Sold at 0.45 on average (paid 0.32) a median 122 s after the buy with 466 s left; the bid's later peak was 0.90 at the median and it went 10c or more past the sale on 24 of 32. 17 of the 32 later settled a loss, so a sale was right; it came early.
+   value sale 19 (+13.82), wave salvage 11 (+6.44, all gains), wave take 3 (+1.37), settled unsold 11 (-16.07, 10 whole stakes), closed by hand 2.
+2. THE BUY DID WHAT THE STUDY SAID. The side's bid reached 0.50 after the buy on 56% of the bets, 0.60 on 46%, 0.70 on 38%, 0.80 on 33% (the replay: 60 / 50 / 44 / 39). While the bet was HELD the bid was 10c over cost on 50% and 20c over on only 19%: the sales came before the move.
+   Buys filled resting at no fee: 164 of 263 buy orders on these markets filled (62%; PriskP's included), every one with a fee of zero.
+3. THE BUY'S READINGS (thirds, 45-52 bets each; small): the target close to the spot (within 0.21 of the usual travel for the time left) won 57% and is the only third that is not negative (+1.67); further away 36% and 34%. Bets in the first 5 minutes won 53% at +10.9c, after minute 10 32% at +24.7c. Second trips in a market (25) won 32%. Nothing else separates.
+Reading: the lane buys cheap, at no fee, and half its buys go on to 0.50 or more. Its give-up sells the dip buy at the low about a minute in (a dip buy is bought while the price is still falling, so a rule that gives up on a falling bid fires by design), and its turn sale takes 12c of moves that ran to 0.90 at the median.
+Limits: one night, 145 bets; "later peak" is hindsight and no sale gets the peak; the sell fees are not split by lane; the 7 oversized rows are unexplained.
+Queries: the three COPY statements run through scripts/cloud.sh sql (decisions with the reading's sentence; per-bet path summary from tape.quotes: peak and low of the side's bid while held, peak after the sale, peak in the two minutes after; moonshot.orders on the lane's markets). Script: scripts/wave_dip_live_review.py.
+
+=== OUTPUT ===
+the lane's own bets (stake <= $3, closed): 145; markets 118; trips per market 1.23
+  ALL                                n=145 wins  61 ( 42%) +16.2c | losses  84  -19.5c | gross  -41.42
+
+1. BY KIND OF SALE, and what the bid did AFTER the sale (peak of the side's bid from the sale to the close)
+  wave give-up                       n= 67 wins   1 (  1%) +18.0c | losses  66  -18.6c | gross  -72.09 | sold at 0.15 (paid 0.33), held 78s, 313s left; later bid peak median 0.27; bid later over cost+3c on 26 (39%); within 2 min on 13; settled a win 7
+  turn sale                          n= 32 wins  32 (100%) +12.4c | losses   0   +0.0c | gross  +24.67 | sold at 0.45 (paid 0.32), held 122s, 466s left; later bid peak median 0.90; bid later over cost+3c on 32 (100%); within 2 min on 31; settled a win 15
+  value sale                         n= 19 wins  14 ( 74%) +25.1c | losses   5  -19.9c | gross  +13.82 | sold at 0.50 (paid 0.37), held 30s, 164s left; later bid peak median 0.99; bid later over cost+3c on 16 (84%); within 2 min on 16; settled a win 11
+  wave salvage                       n= 11 wins  11 (100%) +11.1c | losses   0   +0.0c | gross   +6.44 | sold at 0.48 (paid 0.37), held 77s, 424s left; later bid peak median 0.69; bid later over cost+3c on 10 (91%); within 2 min on 10; settled a win 4
+  settled                            n= 11 wins   1 (  9%) +65.0c | losses  10  -26.4c | gross  -16.07
+  wave take                          n=  3 wins   1 ( 33%) +28.0c | losses   2  -10.8c | gross   +1.37 | sold at 0.23 (paid 0.21), held 42s, 30s left; later bid peak median 0.14; bid later over cost+3c on 1 (33%); within 2 min on 1; settled a win 0
+  closed by hand                     n=  2 wins   1 ( 50%)  +6.0c | losses   1  -21.0c | gross   +0.45 | sold at 0.23 (paid 0.30), held 150s, 363s left; later bid peak median 0.66; bid later over cost+3c on 2 (100%); within 2 min on 2; settled a win 1
+
+   give-ups: sold at 0.15; the bid's LOW while held 0.13; its peak while held 0.33 (paid 0.33); ever ahead of cost+3c while held: 19
+   if every give-up had instead been sold at its later peak bid: +13.63 (a ceiling: nobody sells the peak) against -72.09 as sold
+   turn sales: sold at 0.45, later peak median 0.90; the bid went on 10c or more past the sale on 24 of 32; fell back under cost later on 17 (settled a loss)
+
+2. WHAT WAS ON OFFER WHILE HELD OR AFTER (peak bid from the buy to the close, all closed bets)
+   bid reached 0.50: 56%   bid reached 0.60: 46%   bid reached 0.70: 38%   bid reached 0.80: 33%
+   peak bid while HELD at least cost+5c: 57%; +10c: 50%; +20c: 19%
+
+3. THE BUY'S READINGS, winners against losers (thirds on the lane's bets)
+ price paid (cuts 0.31, 0.38)
+  low                                n= 52 wins  16 ( 31%) +16.4c | losses  36  -17.3c | gross  -26.19
+  mid                                n= 46 wins  24 ( 52%) +16.1c | losses  22  -20.9c | gross   -7.01
+  high                               n= 47 wins  21 ( 45%) +16.0c | losses  26  -21.3c | gross   -8.22
+ minutes into the market (cuts 5.28, 9.97)
+  low                                n= 49 wins  26 ( 53%) +10.9c | losses  23  -20.7c | gross  -13.33
+  mid                                n= 48 wins  20 ( 42%) +16.6c | losses  28  -17.9c | gross   -6.55
+  high                               n= 47 wins  15 ( 32%) +24.7c | losses  32  -19.9c | gross  -19.30
+ the dip or peak's size at the buy, typical minutes (cuts 1.18, 1.69)
+  low                                n= 48 wins  17 ( 35%) +20.4c | losses  31  -19.0c | gross  -10.89
+  mid                                n= 45 wins  24 ( 53%) +13.9c | losses  21  -19.5c | gross   -7.75
+  high                               n= 45 wins  18 ( 40%) +16.7c | losses  27  -20.0c | gross  -16.81
+ the swing before it (cuts 0.70, 1.72)
+  low                                n= 48 wins  24 ( 50%) +12.4c | losses  24  -19.6c | gross  -12.06
+  mid                                n= 45 wins  17 ( 38%) +13.0c | losses  28  -19.3c | gross  -20.14
+  high                               n= 45 wins  18 ( 40%) +25.6c | losses  27  -19.5c | gross   -3.25
+ big leg run / usual (cuts 0.36, 0.90)
+  low                                n= 47 wins  21 ( 45%) +13.1c | losses  26  -19.5c | gross  -17.52
+  mid                                n= 46 wins  24 ( 52%) +15.5c | losses  22  -19.8c | gross   -3.09
+  high                               n= 45 wins  14 ( 31%) +23.7c | losses  31  -19.2c | gross  -14.84
+ leg travel / usual wave (cuts 0.42, 0.64)
+  low                                n= 47 wins  18 ( 38%) +11.2c | losses  29  -18.6c | gross  -20.68
+  mid                                n= 46 wins  21 ( 46%) +20.8c | losses  25  -18.7c | gross   -4.02
+  high                               n= 45 wins  20 ( 44%) +17.2c | losses  25  -21.3c | gross  -10.76
+ target distance / usual travel for the time left (cuts 0.21, 0.49)
+  low                                n= 47 wins  27 ( 57%) +15.5c | losses  20  -18.8c | gross   +1.67
+  mid                                n= 47 wins  17 ( 36%) +14.5c | losses  30  -22.2c | gross  -25.30
+  high                               n= 44 wins  15 ( 34%) +21.1c | losses  29  -17.1c | gross  -11.82
+ at its extreme
+  yes                                n= 48 wins  17 ( 35%) +21.3c | losses  31  -19.3c | gross  -15.20
+  no                                 n= 90 wins  42 ( 47%) +14.7c | losses  48  -19.6c | gross  -20.25
+ side
+  YES (dip)                          n= 71 wins  27 ( 38%) +17.8c | losses  44  -18.6c | gross  -19.00
+  NO (peak)                          n= 74 wins  34 ( 46%) +14.9c | losses  40  -20.5c | gross  -22.42
+ by the bet's order in its market
+  1st trip                           n=118 wins  53 ( 45%) +16.0c | losses  65  -19.4c | gross  -26.04
+  2nd trip                           n= 25 wins   8 ( 32%) +17.4c | losses  17  -20.8c | gross  -13.96
+  3rd+ trip                          n=  2 wins   0 (  0%)  +0.0c | losses   2  -10.3c | gross   -1.42
+
+4. THE ORDERS (every order on these markets in the window, PriskP's included)
+   buy orders 263, filled 164 (62%); with a fee of zero 164; fees paid on buys $0.00
+   sell orders 240, filled 150; with a fee of zero 3; fees paid on sells $12.46
+
+5. THE OVERSIZED ROWS: [('KXZEC15M', 'yes', 0.4, 7.61, 0.998, 'turn sale'), ('KXBNB15M', 'yes', 0.32, 14.99, 0.998, 'turn sale'), ('KXZEC15M', 'yes', 0.25, 3.26, 0.998, 'turn sale'), ('KXNEAR15M', 'yes', 0.38, 15.2, 0.13, 'wave give-up'), ('KXNEAR15M', 'yes', 0.21, 3.64, 0.034, 'closed by hand'), ('KXNEAR15M', 'yes', 0.21, 5.96, 0.999, 'turn sale'), ('KXHYPE15M', 'yes', 0.39, 5.45, None, 'open')]
