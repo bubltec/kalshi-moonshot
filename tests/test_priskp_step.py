@@ -222,6 +222,29 @@ def test_in_a_curve_the_trend_entry_waits_until_the_move_has_held(monkeypatch):
     assert priskp.HELD == 0.5
 
 
+def test_in_a_curve_the_trend_entry_waits_at_the_peak_of_its_own_swing_and_buys_after_the_pullback(monkeypatch):
+    """2026-11-27 (user, on ETH 00:45 YES bought at the top of a bounce: "It also bought on a peak which it should never do for a favorite"; "I think we should set the off the peak after a pullback on. It will change when we bet which is better"): in a curve a buy whose own swing is at its peak waits (curve_peak), and is bought once the swing has pulled back; outside a curve the reading is only noted."""
+    feed(lambda s: 100.5, OPEN + 600.0)
+    cuts()
+    curve = {"regime": "curve", "verdict": "buy", "class": "inside", "swing_u": 1.6, "prev_u": 1.5, "gb_u": 0.0, "age": 0.6, "travel": 0.7, "reach": 0.2}
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve))
+    at_peak = {"signs": "- + + +", "with": 3, "biggest_u": 6.0, "levels": [-1, 1, 1, 1], "peak": [True, True], "at_peak": True}
+    monkeypatch.setattr(priskp, "_nest", lambda *a, **k: dict(at_peak))
+    ok, why = ask_at(5.0, side="yes")
+    assert not ok and "why: curve_peak" in why and "confirm: 0" in why and "at a peak" in why
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_nest", lambda *a, **k: dict(at_peak, peak=[False, True], at_peak=False))  # the quarter-size swing has pulled back
+    ok, why = ask_at(5.0, side="yes")
+    assert ok and "why: curve_trend_entry" in why and "off the peak" in why
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_nest", lambda *a, **k: None)  # no reading: the wait holds nothing back
+    assert ask_at(5.0, side="yes")[0]
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_nest", lambda *a, **k: dict(at_peak))
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, regime="steady"))
+    assert "curve_peak" not in ask_at(5.0, side="yes")[1]  # only in a curve
+
+
 def test_a_curve_entry_waits_on_the_swing_aware_chance_with_a_bar_that_slides_with_the_time_left(monkeypatch):
     """2026-11-26 (user: "Fix it", then "Make sure the early rule has a slide with time left"; 2026-11-25: "If you're betting on a curve early you need to be calculating for additional swings and variance possibilities based on the recent history (hour)"): a curve trend entry waits while wave_now's chance is under 0.5 x the share of the market left. No cut-off minute. A board veto that waits, not a refusal."""
     from kalshi_moonshot import facts

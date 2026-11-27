@@ -424,8 +424,8 @@ def _curve_verdict(shot: Any, now: float, hours: float, strike: float) -> dict[s
         return None
 
 
-def _nest_note(shot: Any, now: float, hours: float, buying: bool) -> str | None:
-    """SHADOW (2026-11-26, user, on recording the nested-swings reading on every buy and logging what it would do before it decides anything: "Ok I like that"): how the market's own swings nest for the shot's side (wavefacts.nest), and what the reading would have said of a buy. On 210 live bets a buy with 3 of the 4 levels running its way settled its way 84% of the time; with 2 of 4 (a bounce against the larger move) 62% and with 4 of 4 (the move fully run) 71%, both negative on both days. It decides nothing: the note only says so. None when the reading cannot be made."""
+def _nest(shot: Any, now: float, hours: float) -> dict[str, Any] | None:
+    """The nested-swings reading (wavefacts.nest) for the shot's side now, or None when it cannot be made."""
     from . import binaryrisk, wavefacts
 
     try:
@@ -433,13 +433,19 @@ def _nest_note(shot: Any, now: float, hours: float, buying: bool) -> str | None:
         if not index:
             return None
         opened = round((now + hours * 3600.0) / 900.0) * 900.0 - 900.0
-        got = wavefacts.nest(index, opened, now, shot.side)
+        return wavefacts.nest(index, opened, now, shot.side)
     except Exception:
         return None
+
+
+def _nest_note(shot: Any, now: float, hours: float, buying: bool, got: dict[str, Any] | None | bool = False) -> str | None:
+    """SHADOW (2026-11-26, user, on recording the nested-swings reading on every buy and logging what it would do before it decides anything: "Ok I like that"): how the market's own swings nest for the shot's side (wavefacts.nest), and what the reading would have said of a buy. On 210 live bets a buy with 3 of the 4 levels running its way settled its way 84% of the time; with 2 of 4 (a bounce against the larger move) 62% and with 4 of 4 (the move fully run) 71%, both negative on both days. It decides nothing: the note only says so. None when the reading cannot be made."""
+    if got is False:
+        got = _nest(shot, now, hours)
     if got is None:
         return None
     would = "" if not buying else {2: "; shadow: would WAIT (a bounce against the larger move)", 4: "; shadow: would WAIT (the move has fully run)"}.get(got["with"], "; shadow: would buy too")
-    if buying and got.get("at_peak"):  # 2026-11-27, user: "It also bought on a peak which it should never do for a favorite"
+    if buying and got.get("at_peak"):  # only where the peak wait does not act (outside a curve): 2026-11-27, user: "It also bought on a peak which it should never do for a favorite"
         would += "; shadow: would WAIT for a pullback (bought at the peak of its own swing)"
     big = "n/a" if got["biggest_u"] is None else f"{got['biggest_u']:g} u"
     peak = "at a peak" if got.get("at_peak") else "off the peak"
@@ -471,7 +477,18 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     # the bar chosen after seeing them: scored forward. A wait, not a refusal: the bet is bought once the move has held. An unread chance waits nothing.
     held = chance is None or chance >= HELD
     in_curve = cv is not None and cv["regime"] == "curve"
-    ok = inwin and (cv["verdict"] == "buy" and held if in_curve else candidate(states))  # type: ignore[index]
+    # IN A CURVE THE LANE DOES NOT BUY AT THE PEAK OF THE BET'S OWN SWING: IT WAITS FOR A PULLBACK (2026-11-27 ~01:00 ET, user, on ETH 00:45 YES bought at the top
+    # of a bounce: "It also bought on a peak which it should never do for a favorite"; on the shadow note: "I think we should set the off the peak after a
+    # pullback on. It will change when we bet which is better"). AT A PEAK (wavefacts.nest at_peak): at the quarter and at the eighth of the market's own
+    # biggest swing, the swing runs the bet's way and has pulled back under a tenth of its size. The trend entry buys INTO the running swing, so most of its
+    # buys were at one. On the lane's 174 curve buys of 11-25 16:32 to 11-26 22:56 ET (the production reading): at a peak 92 bets, settled their way 68%,
+    # -$69.47 held, -$71.56 as run, negative on both days; off the peak 82 bets, 76%, +$146.32 held, +$71.29 as run. Outside a curve (flat with cushion) a
+    # buy at a peak did as well as one off it (91% and 93%), so the wait is the curve's only. HYPE 00:30, BNB 00:45 and ETH 00:45 of 11-27 were all bought
+    # at a peak and lost. A wait, not a refusal: the bet is bought once the swing has pulled back and the trend entry still says buy. The table can only
+    # show buys the wait holds back, not where the lane then buys: score the curve buys forward. An unread nest waits nothing.
+    nest = _nest(shot, now, hours) if inwin else None
+    peak = in_curve and nest is not None and bool(nest.get("at_peak"))
+    ok = inwin and (cv["verdict"] == "buy" and held and not peak if in_curve else candidate(states))  # type: ignore[index]
     need = need_readings(hours * 3600.0)
     reached, count = confirmed(shot.ticker, shot.side, ok, now, need)
     n = note(shot.side, states, count, minute, need)
@@ -484,6 +501,8 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
             n["curve"] = f"{cv['class']}, swing {cv['swing_u']:.2f} u after a turn of {cv['prev_u']:.2f} u, gave back {cv['gb_u']:.2f}, big leg {cv['age'] if cv['age'] is not None else 'n/a'} and travel {cv['travel'] if cv['travel'] is not None else 'n/a'} of a usual one, target {cv['reach']:.2f} wave travels away"
             if cv["verdict"] == "buy" and inwin and not held:
                 n["verb"], n["why"] = "wait", "curve_not_held"  # the swing runs with the bet but the cushion has not come over to its side yet
+            elif cv["verdict"] == "buy" and inwin and peak:
+                n["verb"], n["why"] = "wait", "curve_peak"  # the bet's own swing is at its top: wait for the pullback
             elif cv["verdict"] == "buy" and inwin:
                 n["verb"], n["why"] = "buy", "curve_trend_entry"
                 n["failing"] = []
@@ -496,9 +515,9 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     elif n["verb"] == "buy" and not reached:
         n["verb"], n["why"] = "wait", "confirming"
     if inwin:  # the nested swings are read only where the lane may buy (the look's cost is a few milliseconds, shared for 5 s per index)
-        nest = _nest_note(shot, now, hours, n["verb"] == "buy")
-        if nest:
-            n["nest"] = nest
+        told = _nest_note(shot, now, hours, n["verb"] == "buy", nest)
+        if told:
+            n["nest"] = told
     last = sh[-1] if sh and out_of_cushion(sh[-1], strike, shot.side) else None
     return n, last
 
