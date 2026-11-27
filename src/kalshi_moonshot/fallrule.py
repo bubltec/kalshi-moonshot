@@ -111,6 +111,8 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
     if 1.0 - bid <= TICK + 1e-9:
         if settle is not None and 0.5 * (1.0 + math.erf(settle / math.sqrt(2.0))) > bid - fee_bid:
             return Read(False, "locked", net, 0.0, 0.0, bid, settle)  # the settlement average is locked in: holding is worth more than the bid pays
+        if z is not None and 0.5 * (1.0 + math.erf(z / math.sqrt(2.0))) > bid - fee_bid:
+            return Read(False, "locked", net, 0.0, 0.0, bid, z)  # THE SAME TEST AT ANY MINUTE (2026-11-27 ~01:40 ET, user, on BTC 01:15 YES sold at 0.991 with 164 s left, outside the last minute the hold above covers: "this also sold again at 99c, didn't we get it to stop this?"): the spot is so far from the target for the time left that the chance of ending on the bet's side, Phi(z), is worth more than the bid pays after its fee (about 2.3 sigma of the time left at 0.99). On the 210 live bets of 11-25/26 it holds 11 of the 61 bets that reached 0.99, all 11 went on to win (+$1.61); the other 50 sell as before. Removing the top altogether gained $9.17 on 58 bets and lost $45.60 on 3, so the top stays
         return Read(True, "top", net, 0.0, 0.0, bid, z)  # THE TOP: a tick or less left to win and the whole bid to lose
     if net > 0:  # EARLY PROFIT
         s.low = s.bounce_high = 0.0

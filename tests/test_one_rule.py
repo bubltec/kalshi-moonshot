@@ -317,3 +317,13 @@ def test_integration_the_watcher_seeds_the_best_cushion_from_the_markets_open(tm
         assert watcher.ProfitWatcher._best_cushion_since_open(w, t, CLOSE - 440.0) < 0  # never on the NO side: nothing to compare a dip with
     finally:
         ticks.history.clear()
+
+
+def test_the_top_holds_at_any_minute_when_the_cushion_makes_holding_worth_more_than_the_bid():
+    """BTC 01:15 YES, 2026-11-27: sold at 0.991 with 164 s left, outside the last minute the locked-in hold covers. User: "this also sold again at 99c, didn't we get it to stop this?". The same test on the plain cushion: about 2.3 sigma of the time left at 0.99."""
+    ask = asker(0.64, spot_unit=18.0)
+    far = ask(0.991, 164, 80.0)  # $80 over the target with 164 s left: 2.7 sigma
+    assert not far.sell and far.kind == "locked"
+    near = asker(0.64, spot_unit=18.0)(0.991, 164, 50.0)  # $50 over: 1.7 sigma, not enough to be worth more than 0.99
+    assert near.sell and near.kind == "top"
+    assert asker(0.64, spot_unit=18.0)(0.991, 164).kind == "top"  # the spot unread: sold as before
