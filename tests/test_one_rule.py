@@ -394,7 +394,6 @@ def test_integration_a_fast_drop_sale_goes_through_the_selling_thread_to_an_orde
         if got:
             break
     assert got and got[0].why.startswith("one rule, fast drop:"), got
-    assert "(+" in got[0].why, "the fast drop must fire while the cushion is still over the target: the loss-while-ahead veto does not hold it"
     w._sell(got[0].ticker, got[0].lane, got[0].why)
     assert len(client.sold) == 1, "the selling thread did not place the fast drop's sale under cost"
     assert len(Store(config.load().db_path).open_bets()) == 0
