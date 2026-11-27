@@ -376,3 +376,6 @@ Two live bets, both sold at the top for a gain: BTC 08:15 NO 0.72 to 0.99 (+$5.7
 
 ## Pass 17 (08:18 to 08:49 ET)
 One live bet: XRP 08:30 NO 0.66 to 0.914, the FIRST SALE ON THE HEARTBEAT (fast profit, +23.6c after fees, 113 s left, the bid at its high 0.92 for 5% of the time left with no new high, cushion +0.67 sigma); the market settled NO, so holding paid about $1.96 more on 22.7 contracts. That is the price of a stop on a fast climb that stalls and then finishes, the same trade the replay scored; one sale is not a verdict. Bot up, no errors in its log. Nothing changed.
+
+## Pass 18 (08:49 to 09:19 ET)
+No live bets since XRP 08:27 (about 50 minutes), with the user's price band 0.35 to 0.75 on the host (lane file pushed between 08:48 and 09:10; the host's notes read the band as 0.35 to 0.75 at 09:09:58). Refusals on PriskP's passes in the last 40 minutes by the entry's own words: check_not_passing 255, curve_not_held 250, curve_low_cushion 144, curve_peak 82, cushion_not_strong 14. The curve waits (low cushion, peak with the side's price) are acting as built; the expected cut was about 87% of curve buys (21 of 167 survive all three in the replay). Nothing changed. To score: the bets in the 0.35 to 0.75 band are a separate group from the 0.55 to 0.85 ones.
