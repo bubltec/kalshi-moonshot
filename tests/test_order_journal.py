@@ -169,3 +169,77 @@ def test_a_recovered_bet_gets_its_buy_order_row_so_its_sale_is_a_real_one(env):
     assert n == 1
     orderjournal.recover_once(s, Client([fill()]), store)
     assert store.net_contracts(TICKER, s.env) == pytest.approx(16.66)  # a second pass adds nothing
+
+
+# ---- only the buy's own orders count (2026-11-27: with two live lanes on one market the recovery booked the other lane's contracts on an order that never filled) ----
+def test_another_orders_fill_on_the_same_market_and_side_is_not_booked_on_an_order_that_never_filled(env):
+    """BNB 05:56 on 2026-11-27: wave_shape's resting YES buy of 6.89 contracts did not fill; PriskP then bought 21.42 YES on the same market, and the recovery booked those on the wave lane."""
+    s, store = env
+    sent(s)
+    other = {**fill(n=21.42, yes=0.70, fid="f-priskp"), "order_id": "oid-priskp"}
+    out = orderjournal.recover_once(s, Client([other]), store)
+    assert "nothing filled" in out[0] and bets(store) == [] and orderjournal.pending(s.data_dir) == []
+    assert store.db.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 0
+
+
+def test_the_other_lanes_sale_of_the_other_side_is_not_booked_as_this_buy(env):
+    """ZEC 05:45 on 2026-11-27: PriskP sold 25 NO at 0.71, which the exchange lists as a YES fill at 0.29; the wave lane's unfilled YES buy was recovered as 25 YES at about 0.30."""
+    s, store = env
+    sent(s)
+    sale = {**fill(n=25, yes=0.29, fid="f-sale"), "order_id": "oid-priskp-sale"}
+    out = orderjournal.recover_once(s, Client([sale]), store)
+    assert "nothing filled" in out[0] and bets(store) == []
+
+
+def test_only_the_buys_own_fill_is_booked_when_both_are_in_the_list(env):
+    s, store = env
+    sent(s)
+    out = orderjournal.recover_once(s, Client([fill(n=5), {**fill(n=21.42, yes=0.70, fid="f2"), "order_id": "oid-priskp"}]), store)
+    assert "recovered 5 contracts" in out[0]
+    [b] = bets(store)
+    assert b[2] == pytest.approx(5) and b[3] == pytest.approx(5 * 0.28)
+
+
+def test_an_order_the_follow_rule_placed_again_under_a_new_id_is_still_recovered(env):
+    s, store = env
+    sent(s)
+    orderjournal.moved(s.data_dir, "oid-1", "oid-2")
+    orderjournal.moved(s.data_dir, "oid-1", "oid-3")
+    [e] = orderjournal.pending(s.data_dir)
+    assert e["order_ids"] == ["oid-1", "oid-2", "oid-3"]
+    out = orderjournal.recover_once(s, Client([{**fill(n=7, fid="f3"), "order_id": "oid-3"}]), store)
+    assert "recovered 7 contracts" in out[0] and bets(store)[0][2] == pytest.approx(7)
+
+
+def test_the_moved_ids_survive_the_journals_compaction(env, monkeypatch):
+    s, _ = env
+    monkeypatch.setattr(orderjournal, "COMPACT_LINES", 3)
+    sent(s)
+    orderjournal.moved(s.data_dir, "oid-1", "oid-2")
+    for k in range(4):
+        orderjournal.settle(s.data_dir, f"gone-{k}", "x")
+    assert orderjournal.pending(s.data_dir)[0]["order_ids"] == ["oid-1", "oid-2"]  # this read rewrote the file with only what is pending
+    assert orderjournal.pending(s.data_dir)[0]["order_ids"] == ["oid-1", "oid-2"]  # and the ids are still there after it
+
+
+def test_an_intent_with_no_order_id_books_nothing_and_says_so(env, caplog):
+    s, store = env
+    orderjournal.intent(s.data_dir, lane="wave_shape", shot=shot(), order_id="", count=16.66, price=0.28, kind="immediate")
+    import json
+
+    p = orderjournal.path(s.data_dir)
+    row = json.loads(p.read_text().splitlines()[-1])
+    row["ts"] = time.time() - 1000.0
+    p.write_text(json.dumps(row) + "\n")
+    with caplog.at_level("ERROR"):
+        out = orderjournal.recover_once(s, Client([fill(n=5)]), store)
+    assert "nothing filled" in out[0] and bets(store) == [] and "no order id" in caplog.text
+
+
+def test_the_resting_wait_tells_the_journal_when_the_order_gets_a_new_id():
+    import inspect
+
+    from kalshi_moonshot import runner
+
+    src = inspect.getsource(runner._rest_wait)
+    assert "first_id = order_id" in src and "orderjournal.moved(s.data_dir, first_id, order_id)" in src

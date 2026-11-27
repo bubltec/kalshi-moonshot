@@ -1425,6 +1425,7 @@ def _rest_follow(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count
 def _rest_wait(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: float, order_key: str | None, order_id: str, price: float, started: float, deadline: float, judge: Any = None) -> tuple[float, float, float, float, str]:
     """Wait for a resting buy on the socket: a streamed fill or quote wakes the thread; a complete fill ends the wait; on a lane with buy_rest_follow each quote re-judges the order (_rest_follow: keep, move or withdraw). The fixed deadline is only the ceiling (the order's own expiry); no timer is added. Returns what filled (read from the account once, after), the order's last price, and why it was withdrawn ("" when it was not)."""
     rest = restbuys.open(shot.ticker, count, order_id)
+    first_id = order_id  # the id the order journal holds for this buy (orderjournal.intent)
     follows = 0
     seen = 0
     total = count
@@ -1451,6 +1452,7 @@ def _rest_wait(s: Settings, client: Any, shot: LongShot, spec: LaneSpec, count: 
                     follows += 1
                     order_id, price, total = moved.order_id, moved.price, moved.total
                     rest.add_order(order_id)
+                    orderjournal.moved(s.data_dir, first_id, order_id)  # the recovery counts only this buy's own order ids, so it must know each one
     finally:
         restbuys.close(rest)
     filled, spent, fee = _own_fills(client, shot, rest.order_ids, started)
