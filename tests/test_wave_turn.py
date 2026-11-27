@@ -413,6 +413,14 @@ def test_integration_through_the_runners_evaluation(tmp_path, monkeypatch, mem):
     monkeypatch.setattr(buychain, "Ctx", functools.partial(real_ctx, now=now))
     out = runner.evaluate(s, None, None, store, shot(now, side), estimators={"market": Fixed()})
     assert "[chain wave_turn_buy: entry_window > wave_turn > wave_trend |" in out.note and "wave_turn yes (wave turn (fired)" in out.note, out.note
+    # the decision's row keeps what each step read as DATA, beside the sentence (2026-11-27, user: "Building a decision engine is the ultimate goal")
+    row = store.db.execute("SELECT action, factors FROM decisions ORDER BY id DESC LIMIT 1").fetchone()
+    steps = json.loads(row["factors"])["steps"]
+    assert list(steps) == ["entry_window", "wave_turn", "wave_trend"] and all(v["ok"] is True for v in steps.values())
+    wtf = steps["wave_turn"]
+    assert wtf["turn_side"] == side and wtf["verdict"] == "fired" and wtf["swing_u"] >= waveturn.SWING and wtf["gb_u"] >= waveturn.GB and wtf["done"] >= wtf["need"]
+    for name in ("t", "dir", "pos_u", "ext_u", "leg_u", "leg_s", "size_x", "pace_x", "jumpy", "jumpy_would_refuse", "u"):
+        assert name in wtf, name
 
 
 def test_integration_one_tick_is_fast_and_memory_only(tmp_path, monkeypatch, mem):
@@ -501,3 +509,18 @@ def test_a_turn_seen_in_time_is_bought_as_before(mem):
     feed(hour, window_path(REPEATED, u_of(hour)))
     assert fires() == [(141, "yes"), (201, "no")]  # an ordinary turn: the price is not a leg ahead of the curve
 
+
+def test_integration_a_pass_keeps_its_steps_facts_too_and_a_step_with_no_facts_keeps_its_verdict(tmp_path, monkeypatch, mem):
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    feed(hour, window_path([(890, 0.0)], u_of(hour)))  # a flat window: no swing, so no turn
+    ticks_mod.strikes.note(TICKER, K)
+    now = OPEN + 300.5
+    ctx = buychain.Ctx(s, sp, now=now)
+    bet, _note = buychain.decide(ctx, shot(now, "yes"))
+    assert not bet
+    assert list(ctx.facts) == ["entry_window", "wave_turn"]  # the walk stopped at the step that said no
+    assert ctx.facts["entry_window"] == {"ok": True}  # a step that gives no readings is kept with its verdict alone
+    wtf = ctx.facts["wave_turn"]
+    assert wtf["ok"] is False and wtf["turn_side"] is None and wtf["verdict"] == "no swing yet" and wtf["dir"] == 0

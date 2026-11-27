@@ -33,6 +33,7 @@ log = logging.getLogger("moonshot")
 class Check(NamedTuple):
     ok: bool
     why: str  # one short clause: what the step read and what it made of it
+    facts: dict[str, Any] | None = None  # the step's readings as NAMED VALUES (2026-11-27, user: "a fact board that is really a logic model", "Building a decision engine is the ultimate goal"): what the sentence says, as data. Stored with the decision (ctx.facts -> the row's factors under "steps"), so a decision is a set of facts and verdicts that can be corrected, scored and learned from. A step that gives none is stored with its verdict alone
 
 
 @dataclass
@@ -45,6 +46,7 @@ class Ctx:
     now: float = field(default_factory=time.time)
     store: Any = None  # the books, at a decision only (the review has none): a step that counts the lane's open bets, or needs a window's strike the tick memory lacks
     why: str = ""  # the estimator's note on the market, at a decision only
+    facts: dict[str, dict[str, Any]] = field(default_factory=dict)  # filled by decide(): {step: {"ok": its verdict, ...its named readings}} for the candidate's own side, in the order asked
     resting: bool = False  # the per-quote re-judge of a resting buy (restcheck.recheck), not a new entry: a step that fires once per swing keeps its order standing
 
 
@@ -609,8 +611,8 @@ def wave_turn_step(ctx: Ctx, shot: LongShot) -> Check:
     from . import waveturn
 
     strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
-    ok, why = waveturn.admits(ctx.s, shot, ctx.now, strike, ctx.resting)
-    return Check(ok, why)
+    ok, why, facts = waveturn.admits_facts(ctx.s, shot, ctx.now, strike, ctx.resting)
+    return Check(ok, why, facts)
 
 
 @step("wave_dip")
@@ -691,6 +693,7 @@ def decide(ctx: Ctx, shot: LongShot) -> tuple[bool, str]:
     mine = walk(ctx, shot, order)
     theirs = walk(ctx, other_side(shot), order)
     trails = [mine, theirs] if shot.side == "yes" else [theirs, mine]
+    ctx.facts = {name: {"ok": bool(c.ok), **(c.facts or {})} for name, c in mine.said}
     return mine.alive, describe(order, trails, ctx.spec.buy_module)
 
 

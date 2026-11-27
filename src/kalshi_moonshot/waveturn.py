@@ -418,23 +418,43 @@ def note(r: Reading | None, h: Hour, K: float) -> str:
             f"u {h.u:.6g} (target {K:.6g})")
 
 
+def facts(r: Reading | None, h: Hour) -> dict[str, Any]:
+    """The reading as NAMED VALUES for the decision's record (buychain.Check.facts): what `note` says in words, as data. Stored with every decision of the step, a buy or a pass, so the reader's logic can be corrected and learned from (user, 2026-11-27: "Building a decision engine is the ultimate goal")."""
+    out: dict[str, Any] = {"u": None if h.u is None else round(h.u, 8), "hour_cross": h.cross, "hour_eff": h.eff, "hour_leg_u": round(h.leg_u, 3), "hour_leg_s": round(h.leg_s, 1)}
+    if r is None:
+        return out
+    out.update({
+        "t": r.t, "dir": r.d, "swing_u": round(r.swing_u, 3), "gb_u": round(r.gb_u, 3), "raw_gb_u": round(r.raw_gb_u, 3), "pos_u": round(r.pos_u, 3), "ext_u": round(r.ext_u, 3), "swing_s": r.swing_s,
+        "turns": r.turns, "done": r.done, "need": need(r.t), "big_dir": r.big_d, "leg_u": round(r.leg_u, 3), "leg_s": round(r.leg_s, 1), "eff300": round(r.eff300, 3),
+        "size_x": round(r.size_x, 3), "pace_x": round(r.pace_x, 3), "jumpy": round(r.jumpy, 2), "jumpy_would_refuse": bool(r.jumpy >= JUMPY),
+    })
+    return out
+
+
 def admits(s: Any, shot: Any, now: float, strike: float | None, resting: bool = False) -> tuple[bool, str]:
     """The buy step's answer for one side: (buy?, the sentence for the decision's note). Memory only."""
+    ok, why, _facts = admits_facts(s, shot, now, strike, resting)
+    return ok, why
+
+
+def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: bool = False) -> tuple[bool, str, dict[str, Any] | None]:
+    """`admits` with the reading as named values (facts): (buy?, the sentence, the facts or None when the market could not be read at all)."""
     from . import binaryrisk, waveflag
 
     series = shot.series or shot.ticker.split("-")[0]
     index = binaryrisk.curve_index(series)
     if not index:
-        return False, f"no Kalshi index or perp reference is read for {series}"
+        return False, f"no Kalshi index or perp reference is read for {series}", None
     opened = round((now + shot.hours_to_close * 3600.0) / 900.0) * 900.0 - 900.0
     K, why = waveflag.target(series, index, opened, strike)
     if K is None:
-        return False, why
+        return False, why, None
     hold = float(getattr(s, "entry_min_gap_seconds", 0.0) or 0.0)
     side, why, r, h = read_index(index, opened, now, K, hold, shot.side if resting else None)
     told = note(r, h, K)
+    got = {**facts(r, h), "turn_side": side, "verdict": why.split(":")[0][:60]}
     if side is None:
-        return False, f"no wave turn: {why}; {told}"
+        return False, f"no wave turn: {why}; {told}", got
     if shot.side != side:
-        return False, f"wave turn ({why}): the bet is {side.upper()}, not this side; {told}"
-    return True, f"wave turn ({why}): buys {side.upper()}; {told}"
+        return False, f"wave turn ({why}): the bet is {side.upper()}, not this side; {told}", got
+    return True, f"wave turn ({why}): buys {side.upper()}; {told}", got
