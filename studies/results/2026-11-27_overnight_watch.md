@@ -335,3 +335,16 @@ Noticed:
 wave_shape (the other session's lane): 136 closed bets, about -$3.
 
 Nothing changed this pass.
+
+## The user's XRP 06:30 message (07:00 to 07:25): re-buys, and what the total losses look like
+
+User, on XRP 06:30 YES (the second bet, bought at 0.79 at 06:23:46, sixteen seconds after the first was sold at 0.78; the bid went 0.81 to 0.19 in 75 s and to 0): "we are still getting a lot of these total losses"; then: "Looks like repeated buys don't have any delay after. But it also looks like it said yes to a repeated buy on a peak. Which we aren't supposed to buy on a peak. Why aren't repeat buys following the same logic?"
+
+Findings, from the decisions and the tape:
+1. PriskP's buy module never listed the `cooldown` step (the commodity lanes have had it since 11-19), so the lane did not remember its own sale. FIXED and deployed at 07:30: `cooldown` in `[module.priskp]` with `rebuy_wait_share` 0.1 (a tenth of the time the market had left at the sale; never fixed seconds). Same side waits after a sale for a gain; the other side goes through at once; a sale at a loss sets no wait.
+2. The 12 settled same-side re-buys since 00:33: eight came within 20 s of their sale (two won, +$6.23; six lost, -$67.93), the four that came 48 s or more after it all won (+$13.41); net -$48.29. My earlier tallies in this log (two paid, five or six lost) were wrong; these are from the decisions table.
+3. The peak: re-buys go through the same peak reading as any buy and every curve re-buy read "off the peak", because the reading is of the SPOT's swings and the quarter-size swing ran a little against the bet; the PRICE was the one the lane had just sold at (1c to 3c above it). Three steady-market re-buys read "at a peak" and the peak wait is a curve-only wait. Not changed; a reading of the bid's own peak is open.
+4. The XRP bet itself: two gates failed. The loss side's cross test (as far under the target as the best cushion in the market) was set by a +16.9 spike at minute 2 that had faded before the buy and was reached at minute 12 with the bid at 0.01; and salvage waits for a bounce off the low, and this bid fell straight down, so only the time backstop (a third of the market, about 06:29:20) was left. The bid led the spot down, as on NEAR 00:00.
+5. Total losses in general, on the 312 bets with tape since 11-25: of the 86 bets whose market went against them and whose bid fell under 0.05 at some point, the median fastest 60 s fall of the bid was 10.5 of its own wobbles; of the 68 that won the market after being 25c or more under the price paid, 6.6. A sale on a fast fall of 12 wobbles flags 33 of the 86 and 4 of the 68; of 14, 19 and 0. Replayed as a loss sale on the full set: a fall of 10 wobbles in 60 s sells five bets, all losers, at a median 0.10, for +$15 over 312 bets; 12 and 14 sell one bet each. The bid falls faster than any rule can read it: by the time a 60 s fall is 10 wobbles it is near zero. Not shipped: a fixed number of wobbles and a gain of about $0.05 a bet. The lever on total losses is the buy, not the exit.
+
+Nothing else changed.
