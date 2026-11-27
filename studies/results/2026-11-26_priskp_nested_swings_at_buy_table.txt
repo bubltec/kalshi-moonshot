@@ -1,0 +1,25 @@
+how many of the four levels run WITH the bet:
+   1 of 4                                                     n  11  settled its way  82%  avg paid 0.71  held $   34.59 (+3.14 a bet)  as run $  -11.96  by day {'11-25': -9.68, '11-26': 44.27}
+   2 of 4                                                     n  56  settled its way  62%  avg paid 0.69  held $  -78.66 (-1.40 a bet)  as run $  -12.05  by day {'11-25': -20.79, '11-26': -57.86}
+   3 of 4                                                     n  95  settled its way  84%  avg paid 0.73  held $  222.42 (+2.34 a bet)  as run $   94.08  by day {'11-25': 14.33, '11-26': 208.09}
+   4 of 4                                                     n  48  settled its way  71%  avg paid 0.76  held $  -29.97 (-0.62 a bet)  as run $  -17.69  by day {'11-25': -7.95, '11-26': -22.01}
+
+the larger half of the nest (biggest, half) against the smaller half (quarter, eighth):
+   larger AGAINST, smaller WITH (a bounce against the move)   n  34  settled its way  62%  avg paid 0.70  held $  -59.75 (-1.76 a bet)  as run $  -12.68  by day {'11-25': -29.06, '11-26': -30.69}
+   larger WITH, smaller AGAINST (a pullback inside the move)  n   2  settled its way 100%  avg paid 0.75  held $   10.58 (+5.29 a bet)  as run $   10.40  by day {'11-26': 10.58}
+   larger WITH, smaller WITH                                  n  48  settled its way  71%  avg paid 0.76  held $  -29.97 (-0.62 a bet)  as run $  -17.69  by day {'11-25': -7.95, '11-26': -22.01}
+   mixed (a level split in a half)                            n 126  settled its way  80%  avg paid 0.72  held $  227.53 (+1.81 a bet)  as run $   72.35  by day {'11-25': 12.92, '11-26': 214.61}
+
+every nest (biggest, 1/2, 1/4, 1/8):
+   - + + +                                                    n  53  settled its way  85%  avg paid 0.74  held $  128.64 (+2.43 a bet)  as run $   33.35  by day {'11-25': 12.12, '11-26': 116.52}
+   + + + +                                                    n  48  settled its way  71%  avg paid 0.76  held $  -29.97 (-0.62 a bet)  as run $  -17.69  by day {'11-25': -7.95, '11-26': -22.01}
+   - - + +                                                    n  34  settled its way  62%  avg paid 0.70  held $  -59.75 (-1.76 a bet)  as run $  -12.68  by day {'11-25': -29.06, '11-26': -30.69}
+   + - + +                                                    n  19  settled its way  84%  avg paid 0.70  held $   57.54 (+3.03 a bet)  as run $   31.15  by day {'11-25': -0.9, '11-26': 58.44}
+   + + - +                                                    n  17  settled its way  82%  avg paid 0.71  held $   29.20 (+1.72 a bet)  as run $   18.60  by day {'11-26': 29.2}
+   - - - +                                                    n  10  settled its way  90%  avg paid 0.70  held $   44.27 (+4.43 a bet)  as run $   -4.86  by day {'11-26': 44.27}
+   - + + -                                                    n   8  settled its way  50%  avg paid 0.70  held $  -40.31 (-5.04 a bet)  as run $  -12.82  by day {'11-25': 8.27, '11-26': -48.58}
+   - + - +                                                    n   7  settled its way  57%  avg paid 0.67  held $   -0.16 (-0.02 a bet)  as run $   -7.25  by day {'11-26': -0.16}
+   + + + -                                                    n   6  settled its way  83%  avg paid 0.79  held $    7.04 (+1.17 a bet)  as run $   10.98  by day {'11-25': 3.11, '11-26': 3.94}
+   + - - +                                                    n   5  settled its way  80%  avg paid 0.68  held $   10.98 (+2.20 a bet)  as run $   10.31  by day {'11-26': 10.98}
+   + + - -                                                    n   2  settled its way 100%  avg paid 0.75  held $   10.58 (+5.29 a bet)  as run $   10.40  by day {'11-26': 10.58}
+   - - + -                                                    n   1  settled its way   0%  avg paid 0.78  held $   -9.68 (-9.68 a bet)  as run $   -7.10  by day {'11-25': -9.68}
