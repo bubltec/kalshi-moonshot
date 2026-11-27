@@ -1,0 +1,26 @@
+0.5 u (entry's)
+   bought WITH      n 185  settled its way  76%  avg paid 0.72  held $  148.21 (+0.80 a bet)  as run $   53.36
+   bought AGAINST   n  25  settled its way  72%  avg paid 0.75  held $    0.18 (+0.01 a bet)  as run $   -0.98
+1 u
+   bought WITH      n 199  settled its way  75%  avg paid 0.72  held $  130.33 (+0.65 a bet)  as run $   32.93
+   bought AGAINST   n  11  settled its way  82%  avg paid 0.77  held $   18.06 (+1.64 a bet)  as run $   19.45
+2 u
+   bought WITH      n 151  settled its way  77%  avg paid 0.74  held $  123.66 (+0.82 a bet)  as run $   59.38
+   bought AGAINST   n  59  settled its way  69%  avg paid 0.69  held $   24.74 (+0.42 a bet)  as run $   -7.01
+w3 (3 min travel)
+   bought WITH      n 152  settled its way  74%  avg paid 0.74  held $   32.71 (+0.22 a bet)  as run $  -49.33
+   bought AGAINST   n  58  settled its way  79%  avg paid 0.69  held $  115.68 (+1.99 a bet)  as run $  101.70
+w10 (10 min travel)
+   bought WITH      n 133  settled its way  80%  avg paid 0.74  held $  191.93 (+1.44 a bet)  as run $  138.42
+   bought AGAINST   n  75  settled its way  65%  avg paid 0.69  held $  -58.84 (-0.78 a bet)  as run $  -93.43
+   bought none yet  n   2  settled its way 100%  avg paid 0.67  held $   15.30 (+7.65 a bet)  as run $    7.38
+tau travel
+   bought WITH      n 154  settled its way  73%  avg paid 0.73  held $   21.17 (+0.14 a bet)  as run $  -67.11
+   bought AGAINST   n  56  settled its way  82%  avg paid 0.71  held $  127.22 (+2.27 a bet)  as run $  119.48
+
+10 minute swing x 3 minute swing at the buy:
+   10 min AGAINST  3 min AGAINST  n  31  settled its way  74%  avg paid 0.67  held $   35.53 (+1.15 a bet)  as run $    9.93  held by day {'11-26': 35.53}
+   10 min AGAINST  3 min WITH     n  44  settled its way  59%  avg paid 0.71  held $  -94.37 (-2.14 a bet)  as run $ -103.36  held by day {'11-25': -28.07, '11-26': -66.3}
+   10 min WITH     3 min AGAINST  n  27  settled its way  85%  avg paid 0.71  held $   80.15 (+2.97 a bet)  as run $   91.77  held by day {'11-26': 80.15}
+   10 min WITH     3 min WITH     n 106  settled its way  79%  avg paid 0.75  held $  111.78 (+1.05 a bet)  as run $   46.65  held by day {'11-25': 3.97, '11-26': 107.81}
+   10 min none     3 min WITH     n   2  settled its way 100%  avg paid 0.67  held $   15.30 (+7.65 a bet)  as run $    7.38  held by day {'11-26': 15.3}

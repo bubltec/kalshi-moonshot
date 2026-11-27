@@ -1,0 +1,9 @@
+210 live PriskP bets. actual $52.38   held to settlement $148.39   one rule with the bid-fall profit side (deployed) $149.66
+
+reversal size             n  in u | winners: changes time WITH | losers: never AGAINST first AGAINST after bid then vs paid | as the profit side:     total turn sales kept a sale
+0.5 u (entry's)         210   0.5 | winners:       6       56% | losers:      0 of  52                32 s             -5c | as the profit side: $   61.88        106       +1.7c
+1 u                     210   1.0 | winners:       3       61% | losers:      0 of  52                80 s            -11c | as the profit side: $   23.64         81       +1.2c
+2 u                     210   2.0 | winners:       1       77% | losers:      3 of  52                68 s            -13c | as the profit side: $   80.26         78       +1.2c
+w3 (3 min travel)       210   1.8 | winners:       1       73% | losers:      1 of  52                88 s            -16c | as the profit side: $   18.34         85       +1.1c
+w10 (10 min travel)     210   3.1 | winners:       0       91% | losers:      2 of  52                 0 s             -9c | as the profit side: $  -27.14         75       +1.1c
+tau travel              210   2.2 | winners:       1       75% | losers:      3 of  52               122 s            -24c | as the profit side: $   -0.76         76       +1.2c
