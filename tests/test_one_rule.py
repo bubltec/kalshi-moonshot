@@ -115,4 +115,19 @@ def test_integration_the_watchers_step_sells_through_the_rule_and_names_what_it_
     assert why and why.startswith("one rule, early profit:") and "sold at the bid 0.71" in why
     t.one_rule = None
     assert ask(0.60, 400) is None  # under cost with the spot on the bet's side: no loss
-    assert ask(0.99, 30).startswith("one rule, the top:")
+    assert ask(0.99, 300).startswith("one rule, the top:")  # outside the settlement window the top sells
+    assert ask(0.99, 30) is None  # inside it, with the spot 20 over the target all window, the settlement is locked in: held
+
+
+def test_the_top_holds_when_the_settlement_average_is_locked_in_and_sells_when_nothing_is_banked():
+    """NEAR 21:45 YES, 2026-11-26: sold at 0.991 with 14 s left and settled YES; user: "still selling when it's like a 99% chance". ZEC 15:45 reached 0.99 with 60 s left and lost: nothing was banked, and that still sells."""
+    z = fallrule.settle_z(5.0, 5.0, 10.0, 14.0)  # 46 s banked 5 over the target, spot 5 over now: it must fall 21.4, against a sigma of 4.8
+    assert z is not None and z > 4
+    ask = asker(0.80)
+    held = fallrule.decide(ask.state, 0.991, 0.80, fee(0.991), fee(0.80), fee, 0.043, 886.0, 14.0, 5.0, 10.0, None, z)
+    assert not held.sell and held.kind == "locked"
+    assert fallrule.settle_z(5.0, 5.0, 10.0, 60.0) is None and fallrule.settle_z(None, 5.0, 10.0, 14.0) is None  # nothing banked, or unread
+    thin = fallrule.settle_z(0.5, 0.2, 10.0, 40.0)  # barely over the target with 40 s left: far from locked
+    sold = fallrule.decide(ask.state, 0.991, 0.80, fee(0.991), fee(0.80), fee, 0.043, 860.0, 40.0, 5.0, 10.0, None, thin)
+    assert sold.sell and sold.kind == "top"
+    assert fallrule.decide(ask.state, 0.991, 0.80, fee(0.991), fee(0.80), fee, 0.043, 840.0, 60.0, 5.0, 10.0).sell  # 60 s left: the top sells as before

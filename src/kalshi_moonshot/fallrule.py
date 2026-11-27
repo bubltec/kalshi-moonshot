@@ -11,7 +11,7 @@ THE THREE CONCEPTS:
   early profit  the bet is ahead after both fees by a wobble: follow the high of this profit run and sell, at a gain, when the bid falls the bar under it or makes no new high for STALL_SHARE of the time left. Fades with the time elapsed (above).
   no loss       nothing here sells under the price paid while the spot has not crossed. A bet that falls back under cost ends its profit run; it is not sold on the way down.
   salvage       the bet is under cost and the spot has crossed: it is not sold at its low. It is sold when it has bounced a bar off its low and the bounce has failed (the bid is a bar under the bounce's high): a small loss on a lower high in place of the low or a total loss. A bet that does not bounce is sold by the time backstop: NO_RECOVERY_SHARE of the market's length under cost since it was last ahead (or first seen), the spot crossed.
-  the top       a bid that leaves a tick or less to win is sold: nothing more to gain, the whole bid to lose.
+  the top       a bid that leaves a tick or less to win is sold: nothing more to gain, the whole bid to lose. UNLESS THE SETTLEMENT IS LOCKED IN (user, 2026-11-26, on NEAR 21:45 YES sold at 0.991 with 14 s left and settled YES: "still selling when it's like a 99% chance, how can we stop this?"; "Option 2"): Kalshi settles on the spot's average over the market's last 60 s, so inside that window part of the result is already banked. settle_z is how many sigma of the time left the spot would have to move against the bet, from where it is now, for the rest of the window to drag the whole average across the target; the top holds when the chance of that not happening, Phi(settle_z), is worth more than the bid pays after its fee. No number of its own: the bid sets the bar (about 2.3 sigma at 0.99). With nothing banked (60 s or more left, ZEC 15:45) the top sells as before.
 LATE PROFIT IS LEFT ALONE WHILE THE SPOT HAS NOT CROSSED (user, 2026-11-26: "make sure late profit doesn't sell if it's not under the target. We keep losing a ton late market from sales for no reason"): the fade applies to every profit whose spot is not a wobble on the wrong side of the target.
 
 Pure and stdlib only: the watcher's step and the replay call the same function. Z_HOLD and STALL_SHARE are the numbers early_take ran with; FADE_S is "about ten minutes" read as a curve that is a tenth at minute 10; its power was 4 on the first run and was made 8 after seeing that 4 already widened the bar at minute 5.6 enough to miss BTC 17:00 (said so: chosen after the result)."""
@@ -24,6 +24,7 @@ MARKET_S = 900.0
 Z_HOLD = 1.0  # sigma of the time left on the bet's side that holds a profit (early_take_cushion_units)
 STALL_SHARE = 0.1  # a profit with no new high for this share of the time left has stopped climbing (early_take_stall_share)
 TICK = 0.01
+SETTLE_S = 60.0  # structural: Kalshi settles these markets on the index average over the last 60 s
 GRID = TICK / 2.0  # the bid moves in ticks, so a fall is compared with its bar to the nearest tick: a fall of 0.06 passes a bar of 0.0603 (BTC 17:00 sat on exactly that edge; user, 2026-11-26: "close enough")
 NO_RECOVERY_SHARE = 0.33  # the time backstop: this share of the market's length under cost with no profit (the priskp lane's no_recovery_share)
 FADE_S = 0.6 * MARKET_S  # early profit's fade: exp(-(elapsed / FADE_S)^8), a tenth at minute 10
@@ -46,7 +47,7 @@ class Read:
     """One tick's answer: sell or not, the kind of sale, and every number it was judged on (for the log and the record)."""
 
     sell: bool
-    kind: str  # "top", "fall", "stall", "salvage", "no recovery", or why it held: "cushion", "under bar", "no cross", "no bounce", "nothing"
+    kind: str  # "top", "fall", "stall", "salvage", "no recovery", or why it held: "locked", "cushion", "under bar", "no cross", "no bounce", "nothing"
     net: float = 0.0
     fall: float = 0.0  # the fall from the high used, in price
     bar: float = 0.0  # the fall needed, in price
@@ -80,7 +81,15 @@ def crossed(cushion: float | None, spot_unit: float | None) -> bool:
     return cushion is not None and bool(spot_unit) and cushion <= -spot_unit * math.sqrt(10.0 / 60.0)
 
 
-def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None) -> Read:
+def settle_z(banked: float | None, cushion_now: float | None, spot_unit: float | None, left: float, window: float = 60.0) -> float | None:
+    """Inside the settlement window: the move against the bet the spot needs, from its level now, for the seconds left to pull the window's average across the target (the banked average x the seconds banked / the seconds left, plus the cushion now), in sigma of the time left. Taking the whole move at once is the cautious reading: an average over the seconds left moves less than the spot does. None outside the window or unread."""
+    if banked is None or cushion_now is None or not spot_unit or spot_unit <= 0 or not 0 < left < window:
+        return None
+    need = cushion_now + banked * (window - left) / left
+    return need / (spot_unit * math.sqrt(left / 60.0))
+
+
+def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None, settle: float | None = None) -> Read:
     """Ask the rule on one tick. `fee_bid` and `fee_entry` are the fee per contract at the bid and at the price paid, `fee_of` the fee function (for the gain at the high), `wobble` the bid's typical 10 s move (a tick when it has no reading). `cross_cushion`, when given, is the cushion the cross test reads in place of `cushion` (the watcher gives the better for the bet of the spot's 60 s and 5 s averages: the spot has crossed only when both have)."""
     cost = entry + fee_entry
     net = bid - fee_bid - cost
@@ -90,6 +99,8 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
     if s.first_ts <= 0:
         s.first_ts = now
     if 1.0 - bid <= TICK + 1e-9:
+        if settle is not None and 0.5 * (1.0 + math.erf(settle / math.sqrt(2.0))) > bid - fee_bid:
+            return Read(False, "locked", net, 0.0, 0.0, bid, settle)  # the settlement average is locked in: holding is worth more than the bid pays
         return Read(True, "top", net, 0.0, 0.0, bid, z)  # THE TOP: a tick or less left to win and the whole bid to lose
     if net > 0:  # EARLY PROFIT
         s.low = s.bounce_high = 0.0
