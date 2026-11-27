@@ -736,7 +736,7 @@ class ProfitWatcher:
         c = _SellWalk(look, basis, net, long_chance)
         for name in t.sell_chain:
             got = _SELL[name](self, t, r, bid, now, left, pnl, c)
-            if isinstance(got, str) and name in facts_mod.VETOED_STEPS:
+            if isinstance(got, str) and name in facts_mod.VETOED_STEPS and not got.startswith("one rule, fast drop"):  # the fast drop is exempt from the loss-while-ahead veto here as in the step (2026-11-27 16:40 ET)
                 stop = self._board(c, t, now, left, bid).vetoes(name)
                 if stop:  # belt and braces: a step that sold against a veto is refused here (the steps ask the board first; this catches one that did not)
                     log.error("wave sale refused: %s %s step %s sold against the veto (%s)", t.ticker, t.lane, name, stop)
@@ -1051,7 +1051,7 @@ class ProfitWatcher:
         note = ""
         if rd.net <= 0:
             fx = self._board(c, t, now, left, bid)
-            stop = fx.vetoes("one_rule")
+            stop = None if rd.kind == "fast drop" else fx.vetoes("one_rule")  # THE FAST DROP IS NOT HELD BY THE LOSS-WHILE-AHEAD VETO (user, 2026-11-27 16:40 ET: "If exempt has best replay value let's try that"): it sells while the cushion is still over the target and the spot is still on the bet's side, which is exactly what that veto holds. The replay of the design had no veto (+$91.75, against +$70.96 for a fast drop that waits until the spot is at or under the target, which is all the veto let it do live: BNB 15:45 YES was sold at 0.30 at -0.08 and settled YES); the other loss sales are held by it as before
             if stop:
                 if now - t.veto_logged_at >= 30.0:
                     t.veto_logged_at = now
