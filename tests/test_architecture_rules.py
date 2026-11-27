@@ -232,42 +232,6 @@ def test_the_wave_turn_step_reads_memory_only_and_holds_the_budget(guarded, tmp_
         waveturn.clear()
 
 
-def test_the_wave_dip_step_reads_memory_only_and_holds_the_budget(guarded, tmp_path, monkeypatch):
-    """The buy step wave_dip (wavedip.py, 2026-11-27): PriskP's curve reading (wavefacts.curve, the walk back to the window's open) on every second of a market from the tick memory, both sides, unthrottled, with the guard raising on any table read or Kalshi GET, every tick under 60 ms."""
-    from kalshi_moonshot import buychain, config, wavedip, wavefacts, waveturn
-    from kalshi_moonshot import ticks as ticks_mod
-    from tests import test_wave_dip as wd
-
-    def clear():
-        ticks_mod.history.clear()
-        ticks_mod.strikes._v.clear()
-        waveturn.clear()
-        wavedip.clear()
-        wavefacts._before.clear()
-        wavefacts._big.clear()
-        buychain._THROTTLED.clear()
-
-    sp = wd.spec(tmp_path, monkeypatch)
-    s = config.load()
-    clear()
-    monkeypatch.setattr(buychain, "THROTTLE_S", 0.0)
-    try:
-        wd.feed()
-        for side in ("no", "yes"):  # the market's hour profile is built once per market and kept; the first look pays for it
-            buychain.decide(buychain.Ctx(s, sp, now=wd.OPEN + 119.5), wd.shot(wd.OPEN + 119.5, side))
-        bought = 0
-        for off in range(120, 600):
-            now = wd.OPEN + off + 0.5
-            with steptime.tick("buy evaluate"), memguard.decision("buy"):
-                for side in ("no", "yes"):
-                    bought += buychain.decide(buychain.Ctx(s, sp, now=now), wd.shot(now, side))[0]
-        assert bought and not memguard.breaches
-        stats = steptime.tick_stats()["buy evaluate"]
-        assert stats["n"] == 480 and stats["max"] < steptime.TICK_BUDGET_MS and stats["over"] == 0, stats
-    finally:
-        clear()
-
-
 def test_the_entry_thread_looks_on_every_tick_with_no_look_gap(monkeypatch):
     """The look rate is a core function of the websocket design (user, 2026-11-25: "that's from the old REST logic", "it makes no sense in a websocket", "a core function"): every tick on a watched event asks the entry logic; only a look still running holds the next one (entrywatch._pending). No timer gap by default."""
     from kalshi_moonshot import config

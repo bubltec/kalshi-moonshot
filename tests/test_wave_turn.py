@@ -308,6 +308,7 @@ entry_elapsed = [2, 10]
 series = ["KXBTC15M"]
 timed_suffix = "15M"
 buy_module = "wave_turn_buy"
+record_step_facts = true
 
 [module.wave_turn_buy]
 steps = ["entry_window", "wave_turn", "wave_trend"]

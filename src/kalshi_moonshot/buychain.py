@@ -615,21 +615,6 @@ def wave_turn_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why, facts)
 
 
-@step("wave_dip")
-@throttled("wave_dip")
-def wave_dip_step(ctx: Ctx, shot: LongShot) -> Check:
-    """The wave lane's dip-and-peak buy on PriskP's curve reading (wavedip.py; 2026-11-27, PAPER on the wave_shape lane, in place of wave_turn; user: "I want to utilize the curve logic in priskp", "right on the dip as it starts to turn we buy Yes. The same for peaks, right as a peak crests we buy No"): in a curve market (wavefacts.curve) the cheap side is bought when the swing against it has run a typical minute AND has started to turn (0.2 typical minutes back from its extreme): YES as a dip turns, NO as a peak crests, once per swing, and never on a swing that was already running when the lane last sold a bet on the market (2026-11-27, the lane's 145 live bets: the first version bought into running moves and bought the other side seconds after a sale; user: "it follows some weird reversal logic on sell/buy with rebuying"). A resting buy's re-ask stands while the turn holds and the price has not left. The answer is kept for THROTTLE_S per (lane, market, side), like wave_leg: the walk back is a heavy reading. Memory only. Evidence and limits: studies/results/2026-11-26-wave-scalp-entry.txt (in sample; positive before the spread and fees, so the resting buy and sale decide)."""
-    from . import ticks as ticks_mod
-    from . import wavedip
-
-    try:
-        strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
-        ok, why = wavedip.admits(shot, ctx.now, strike, ctx.resting, ctx.store)
-        return Check(ok, why)
-    except Exception as exc:  # a trigger that cannot be read does not buy
-        return Check(False, f"the curve reading failed ({exc!r}): no buy")
-
-
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""
@@ -693,7 +678,8 @@ def decide(ctx: Ctx, shot: LongShot) -> tuple[bool, str]:
     mine = walk(ctx, shot, order)
     theirs = walk(ctx, other_side(shot), order)
     trails = [mine, theirs] if shot.side == "yes" else [theirs, mine]
-    ctx.facts = {name: {"ok": bool(c.ok), **(c.facts or {})} for name, c in mine.said}
+    if getattr(ctx.spec, "record_step_facts", False):  # opt-in per lane (lanes.LaneSpec.record_step_facts): a lane that does not name it keeps its decisions exactly as they were
+        ctx.facts = {name: {"ok": bool(c.ok), **(c.facts or {})} for name, c in mine.said}
     return mine.alive, describe(order, trails, ctx.spec.buy_module)
 
 
