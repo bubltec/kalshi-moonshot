@@ -72,10 +72,12 @@ def test_integration_the_priskp_look_carries_the_nest_as_a_shadow_note_and_says_
     with memguard.decision("buy"):
         looking = priskp._nest_note(shot, now, hours, False)
         buying = priskp._nest_note(shot, now, hours, True)
-    assert looking.startswith("- - + + (2 of 4 with the bet") and "shadow" not in looking  # a look that is not a buy only records the reading
+    assert looking.startswith("- - + + (2 of 4 with the bet") and "shadow" not in looking and "off the peak)" in looking  # the bet's small swing up has been followed by a dip: not a peak  # a look that is not a buy only records the reading
     assert buying.endswith("shadow: would WAIT (a bounce against the larger move)")
-    monkeypatch.setattr(wavefacts, "nest", lambda *a: {"signs": "- + + +", "with": 3, "biggest_u": 6.4, "levels": [-1, 1, 1, 1]})
-    assert priskp._nest_note(shot, now, hours, True).endswith("the biggest swing in view 6.4 u); shadow: would buy too")
+    monkeypatch.setattr(wavefacts, "nest", lambda *a: {"signs": "- + + +", "with": 3, "biggest_u": 6.4, "levels": [-1, 1, 1, 1], "at_peak": False})
+    assert priskp._nest_note(shot, now, hours, True).endswith("the biggest swing in view 6.4 u; off the peak); shadow: would buy too")
+    monkeypatch.setattr(wavefacts, "nest", lambda *a: {"signs": "- + + +", "with": 3, "biggest_u": 6.4, "levels": [-1, 1, 1, 1], "at_peak": True})
+    assert priskp._nest_note(shot, now, hours, True).endswith("at a peak); shadow: would buy too; shadow: would WAIT for a pullback (bought at the peak of its own swing)")
     monkeypatch.setattr(wavefacts, "nest", lambda *a: {"signs": "+ + + +", "with": 4, "biggest_u": None, "levels": [1, 1, 1, 1]})
     assert priskp._nest_note(shot, now, hours, True).endswith("shadow: would WAIT (the move has fully run)")
     monkeypatch.setattr(wavefacts, "nest", lambda *a: None)
@@ -102,3 +104,13 @@ def test_the_leg_walked_from_before_the_open_knows_a_move_that_began_before_it()
     assert not short["at_extreme"] and short["travel"] < 1.0  # from the open: a young swing that has travelled under half a usual wave, bought
     assert long["at_extreme"] and long["travel"] > short["travel"] * 3  # from before the open: it has travelled more than three usual waves
     assert ten["at_extreme"] and ten["travel"] > 1.0  # ten minutes back already sees it
+
+
+def test_a_buy_at_the_top_of_its_own_swing_is_read_as_at_a_peak_and_one_after_a_pullback_is_not():
+    """User, 2026-11-27, on ETH 00:45 YES: "It also bought on a peak which it should never do for a favorite"."""
+    top = feed("PEAK", [(1800, 10.0), (1200, -6.0), (600, 3.0)])  # a rise still at its high at the buy
+    assert wavefacts.nest("PEAK", OPEN - 0.0, top, "yes")["at_peak"] is True
+    assert wavefacts.nest("PEAK", OPEN - 0.0, top, "no")["at_peak"] is False  # not the NO side's swing
+    wavefacts._nest.clear()
+    feed("DIPPED", [(1800, 10.0), (1200, -6.0), (540, 3.0), (60, -0.6)])  # the same rise after giving a fifth of it back
+    assert wavefacts.nest("DIPPED", OPEN, OPEN, "yes")["at_peak"] is False

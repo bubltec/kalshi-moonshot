@@ -439,8 +439,11 @@ def _nest_note(shot: Any, now: float, hours: float, buying: bool) -> str | None:
     if got is None:
         return None
     would = "" if not buying else {2: "; shadow: would WAIT (a bounce against the larger move)", 4: "; shadow: would WAIT (the move has fully run)"}.get(got["with"], "; shadow: would buy too")
+    if buying and got.get("at_peak"):  # 2026-11-27, user: "It also bought on a peak which it should never do for a favorite"
+        would += "; shadow: would WAIT for a pullback (bought at the peak of its own swing)"
     big = "n/a" if got["biggest_u"] is None else f"{got['biggest_u']:g} u"
-    return f"{got['signs']} ({got['with']} of 4 with the bet, biggest first; the biggest swing in view {big}){would}"
+    peak = "at a peak" if got.get("at_peak") else "off the peak"
+    return f"{got['signs']} ({got['with']} of 4 with the bet, biggest first; the biggest swing in view {big}; {peak}){would}"
 
 
 def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]:

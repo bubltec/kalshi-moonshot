@@ -259,7 +259,26 @@ def travel_left(bef: dict[str, Any] | None, left: float) -> float | None:
 
 
 NEST_LEVELS = (1.0, 0.5, 0.25, 0.125)  # the swing sizes of `nest`, as shares of the market's own biggest swing
-_nest: dict[tuple[str, int, int], tuple[float, tuple[int, ...]] | None] = {}
+PEAK_SHARE = 0.1  # a bet is bought AT A PEAK when the swing it rides has pulled back less than this share of its own size from its extreme
+_nest: dict[tuple[str, int, int], tuple[float, tuple[int, ...], tuple[tuple[int, float], ...]] | None] = {}
+
+
+def _swing_state(g: list[float], rev: float) -> tuple[int, float]:
+    """(the current direction, how far the path has pulled back from the current swing's extreme as a share of that swing's size) of a zig-zag of reversal `rev`; (0, 0.0) before the first swing."""
+    d, lo, hi, ev, start = 0, g[0], g[0], g[0], g[0]
+    for v in g[1:]:
+        if d == 0:
+            lo, hi = min(lo, v), max(hi, v)
+            if v - lo >= rev:
+                d, start, ev = 1, lo, v
+            elif hi - v >= rev:
+                d, start, ev = -1, hi, v
+        elif (v - ev) * d > 0:
+            ev = v
+        elif (ev - v) * d >= rev:
+            d, start, ev = -d, ev, v
+    size = abs(ev - start)
+    return d, (abs(g[-1] - ev) / size if d and size > 0 else 0.0)
 
 
 def _swing_dir(g: list[float], rev: float) -> tuple[int, int]:
@@ -286,6 +305,7 @@ def nest(index: str, opened: float, now: float, side: str) -> dict[str, Any] | N
     signs    the same as text, e.g. "- + + +"
     with     how many levels run with the bet
     biggest_u  the biggest swing in the market's typical minutes (the hour before the open), None when that is unread
+    peak, at_peak  (2026-11-27, user, on ETH 00:45 YES bought at the top of a bounce: "It also bought on a peak which it should never do for a favorite") at the quarter and at the eighth of the biggest swing, whether the swing runs the bet's way and has pulled back less than PEAK_SHARE of its own size from its extreme; at_peak when both say so. On 210 live bets (scripts/priskp_pivot_trend_table.py) a buy at a peak made +$0.12 to +$0.38 a bet held and lost as run at both sizes, a buy off the peak +$1.25 to +$1.43 a bet; the trend of the swing highs and lows did not separate the bets
     A FACT, deciding nothing: studies/results/2026-11-26_priskp_nested_swings_at_buy_table.txt (210 live bets: 3 of 4 with settled the bet's way 84% and was positive on both days; 2 of 4, the bounce against the larger move, 62%, and 4 of 4, the move fully run, 71%, both negative on both days; a day and a half, a lead). None when the hour before the open is not in the tick memory or the path never turned. Memory only; the swings are kept per index for 5 s (both sides and every look in that time share one cut)."""
     from . import ticks
 
@@ -308,19 +328,20 @@ def nest(index: str, opened: float, now: float, side: str) -> dict[str, Any] | N
                 if lo > 0:
                     dirs = tuple(_swing_dir(g, lo * s * 0.999)[1] for s in NEST_LEVELS)
                     if 0 not in dirs:
-                        hit = (lo, dirs)
+                        hit = (lo, dirs, tuple(_swing_state(g, lo * s) for s in (0.25, 0.125)))
         with _lock:
             if len(_nest) > 2048:
                 _nest.clear()
             _nest[key] = hit
     if hit is None or side not in ("yes", "no"):
         return None
-    big, dirs = hit
+    big, dirs, states = hit
     want = 1 if side == "yes" else -1
     levels = [d * want for d in dirs]
+    peak = [d == want and back <= PEAK_SHARE for d, back in states]  # at the quarter and at the eighth of the biggest swing: the swing runs the bet's way and has not pulled back
     bef = before(index, opened)
     u = bef["u"] if bef and bef.get("u") else None
-    return {"levels": levels, "signs": " ".join("+" if v > 0 else "-" for v in levels), "with": sum(v > 0 for v in levels), "biggest_u": None if not u else round(big / u, 1)}
+    return {"levels": levels, "signs": " ".join("+" if v > 0 else "-" for v in levels), "with": sum(v > 0 for v in levels), "biggest_u": None if not u else round(big / u, 1), "peak": peak, "at_peak": all(peak)}
 
 
 TREND_MIN = 1.0  # a swing counts as a TREND once it has run this many typical minutes with the bet and has not turned: my choice, twice wave_turn's 0.5 u swing, not scored

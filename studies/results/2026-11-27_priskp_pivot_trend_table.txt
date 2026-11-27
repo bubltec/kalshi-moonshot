@@ -1,0 +1,25 @@
+
+swings of 1/4 of the market's biggest (210 bets):
+   the highs and lows trend WITH the bet        n  54  settled its way  67%  avg paid 0.73  held $  -45.58 (-0.84 a bet)  as run $  -44.61  by day {'11-25': -20.18, '11-26': -25.4}
+   the highs and lows trend MIXED the bet       n  92  settled its way  78%  avg paid 0.71  held $  160.50 (+1.74 a bet)  as run $   84.80  by day {'11-25': -2.89, '11-26': 163.39}
+   the highs and lows trend AGAINST the bet     n  59  settled its way  76%  avg paid 0.74  held $    0.81 (+0.01 a bet)  as run $    8.85  by day {'11-25': -1.03, '11-26': 1.85}
+     ... against, and the swings are shrinking  n   4  settled its way 100%  avg paid 0.70  held $   26.30 (+6.58 a bet)  as run $   23.58  by day {'11-26': 26.3}
+   unread (fewer than two highs and two lows)   n   5  settled its way 100%  avg paid 0.72  held $   32.66 (+6.53 a bet)  as run $    3.33  by day {'11-26': 32.66}
+   bought AT A PEAK of the bet's own swing      n 124  settled its way  73%  avg paid 0.73  held $   14.55 (+0.12 a bet)  as run $  -11.63  by day {'11-25': -25.1, '11-26': 39.65}
+   bought off the peak (pulled back, or against) n  81  settled its way  77%  avg paid 0.72  held $  101.18 (+1.25 a bet)  as run $   60.68  by day {'11-25': 1.0, '11-26': 100.18}
+
+swings of 1/8 of the market's biggest (210 bets):
+   the highs and lows trend WITH the bet        n  82  settled its way  77%  avg paid 0.75  held $   51.66 (+0.63 a bet)  as run $    8.01  by day {'11-25': 11.38, '11-26': 40.28}
+   the highs and lows trend MIXED the bet       n  88  settled its way  76%  avg paid 0.72  held $   99.76 (+1.13 a bet)  as run $   66.11  by day {'11-25': -20.61, '11-26': 120.37}
+   the highs and lows trend AGAINST the bet     n  40  settled its way  70%  avg paid 0.70  held $   -3.02 (-0.08 a bet)  as run $  -21.74  by day {'11-25': -14.86, '11-26': 11.84}
+     ... against, and the swings are shrinking  n   1  settled its way   0%  avg paid 0.79  held $  -15.80 (-15.80 a bet)  as run $   -6.18  by day {'11-26': -15.8}
+   bought AT A PEAK of the bet's own swing      n 145  settled its way  75%  avg paid 0.73  held $   55.64 (+0.38 a bet)  as run $  -19.98  by day {'11-25': -24.14, '11-26': 79.78}
+   bought off the peak (pulled back, or against) n  65  settled its way  75%  avg paid 0.72  held $   92.75 (+1.43 a bet)  as run $   72.35  by day {'11-25': 0.05, '11-26': 92.71}
+
+swings of 1/16 of the market's biggest (210 bets):
+   the highs and lows trend WITH the bet        n  82  settled its way  78%  avg paid 0.75  held $   24.01 (+0.29 a bet)  as run $    6.64  by day {'11-25': -40.55, '11-26': 64.56}
+   the highs and lows trend MIXED the bet       n  72  settled its way  72%  avg paid 0.71  held $   83.48 (+1.16 a bet)  as run $   39.04  by day {'11-25': 7.35, '11-26': 76.13}
+   the highs and lows trend AGAINST the bet     n  56  settled its way  75%  avg paid 0.71  held $   40.90 (+0.73 a bet)  as run $    6.69  by day {'11-25': 9.1, '11-26': 31.8}
+     ... against, and the swings are shrinking  n   3  settled its way 100%  avg paid 0.71  held $   17.98 (+5.99 a bet)  as run $   17.81  by day {'11-26': 17.98}
+   bought AT A PEAK of the bet's own swing      n 145  settled its way  77%  avg paid 0.73  held $   97.12 (+0.67 a bet)  as run $   23.14  by day {'11-25': -4.36, '11-26': 101.48}
+   bought off the peak (pulled back, or against) n  65  settled its way  72%  avg paid 0.72  held $   51.27 (+0.79 a bet)  as run $   29.23  by day {'11-25': -19.73, '11-26': 71.01}
