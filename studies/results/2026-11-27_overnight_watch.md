@@ -409,3 +409,6 @@ No live bets in the half hour (the last were NEAR and BTC 13:00 at 12:49 and 12:
 
 ## Pass 28 (13:49 to 14:19 ET)
 Five live bets: DOGE 14:00 YES 0.76 to 0.9918 and ZEC 14:15 YES 0.86 to 0.995 (both the top, gains); then BTC 14:30 YES 0.77 (14:17:26), BNB 14:30 YES 0.88 (14:18:16) and ETH 14:30 YES 0.82 (14:18:22), three YES bets on three coins within a minute, open at the pass (the same shape as the three 10:06 NO zeros: one view of the market on several coins at once; no rule has been found for it that holds on the bets in hand). The bot restarted about 13:46 (up 32 minutes, kill switch off), most likely the other session's push of its wave-lane commit. No `fast drop` sale yet. Nothing changed.
+
+## Pass 29 (14:19 to 14:49 ET)
+The three correlated 14:30 YES bets all ended in gains: BTC 0.78 to 0.931 (fast clause, +13.7c), BNB 0.88 to 0.992 and ETH 0.82 to 0.99 (both the top). No new bets after them. No losses, no `fast drop` sale yet, nothing changed.
