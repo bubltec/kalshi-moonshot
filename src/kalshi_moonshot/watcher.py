@@ -214,6 +214,7 @@ class Target:
     late_dip_since: float = 0.0
     late_dip_logged: bool = False
     top_take_logged: bool = False
+    bet_ts: float = 0.0  # the buy time of the bet this target watches (its open-bets row); a different one on the same market and lane is a new bet and gets a new target
     one_rule: Any = None  # fallrule.State: what the one exit rule remembers about this bet
     one_rule_logged: bool = False
     veto_logged_at: float = 0.0
@@ -1847,8 +1848,14 @@ class ProfitWatcher:
             ticker, lane = row["ticker"], row["lane"] or "moonshot"
             with self._lock:
                 old = self.targets.get((ticker, lane))
+            bet_ts = float(row["ts"] or 0.0)
+            if old is not None and old.bet_ts > 0 and abs(old.bet_ts - bet_ts) > 0.5:
+                # A NEW BET ON THE SAME MARKET IS A NEW TARGET (2026-11-26, HYPE 21:45 YES: bought 0.61 at 21:37:01, sold at 21:37:30, bought again at 0.67 at 21:37:35 before a refresh had dropped the first bet's target, and the second bet was watched with the first one's price paid ("paid 0.61" in its sale's note), buy time, side and every step's memory). The open-bets row is that lane's first open bet on the market, so a different buy time means the earlier bet is closed
+                log.info("watcher: %s %s is a new bet (bought %.0f s after the one watched before): its price paid and the exit's memory start over", ticker, lane, bet_ts - old.bet_ts)
+                old = None
             fresh[(ticker, lane)] = old or Target(ticker, lane, row["side"] or "yes", float(row["ask"] or 0.0), peak=float(row["ask"] or 0.0))
             held = fresh[(ticker, lane)]
+            held.bet_ts = bet_ts
             held.bought_ts = held.bought_ts or float(row["ts"] or 0.0)
             if not held.entry_filled:  # the price paid is what the buy filled at (a take chases the ask, a resting bid fills under it): the exits' "never a loss after both fees" is judged against it
                 filled_at = store.entry_fill(ticker, held.side, float(row["ts"] or 0.0))

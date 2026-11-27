@@ -131,3 +131,31 @@ def test_the_top_holds_when_the_settlement_average_is_locked_in_and_sells_when_n
     sold = fallrule.decide(ask.state, 0.991, 0.80, fee(0.991), fee(0.80), fee, 0.043, 860.0, 40.0, 5.0, 10.0, None, thin)
     assert sold.sell and sold.kind == "top"
     assert fallrule.decide(ask.state, 0.991, 0.80, fee(0.991), fee(0.80), fee, 0.043, 840.0, 60.0, 5.0, 10.0).sell  # 60 s left: the top sells as before
+
+
+def test_integration_a_rebuy_of_the_same_market_is_watched_as_a_new_bet(tmp_path, monkeypatch):
+    """HYPE 21:45 YES, 2026-11-26: bought 0.61, sold 29 s later, bought again at 0.67 five seconds after that, before a refresh had dropped the first bet's target; the second bet was watched with the first one's price paid ("paid 0.61" in its sale's note), buy time and exit memory."""
+    from kalshi_moonshot import config
+    from kalshi_moonshot.store import Store
+    from tests.test_risk_exit_flow import CLOSE, TICKER, held
+
+    w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['one_rule']")
+    first = w.targets[(TICKER, "risk_only")]
+    first.one_rule = fallrule.State(run_high=0.9, first_ts=CLOSE - 450)
+    assert abs(first.entry - 0.789) < 0.01 and first.side == "yes"
+    s = config.load()
+    st = Store(s.db_path)
+    st.db.execute("UPDATE decisions SET exit_ts=?, exit_price=0.85 WHERE ticker=? AND action='bet'", (CLOSE - 300, TICKER))
+    st.db.execute(
+        "INSERT INTO decisions (ts, ticker, action, mode, ask, side, lane, contracts, stake_usd, close_time, reason) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (CLOSE - 295, TICKER, "bet", "trade", 0.30, "no", "risk_only", 10.0, 3.0, "2030-01-01T00:15:00Z", None))
+    st.db.execute(
+        "INSERT INTO orders (ts, ticker, env, count, price, fill_count, cost_usd, fee_usd, order_id, side, contract) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (CLOSE - 294, TICKER, s.env, 10.0, 0.30, 10.0, 3.0, 0.0, "o2", "buy", "no"))
+    st.db.commit()
+    w.refresh()  # no refresh ran between the sale and the new buy
+    second = w.targets[(TICKER, "risk_only")]
+    assert second is not first
+    assert second.side == "no" and abs(second.entry - 0.30) < 1e-6 and second.bought_ts == CLOSE - 295 and second.one_rule is None
+    w.refresh()
+    assert w.targets[(TICKER, "risk_only")] is second  # the same bet keeps its target and its memory
