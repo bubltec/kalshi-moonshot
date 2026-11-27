@@ -412,3 +412,6 @@ Five live bets: DOGE 14:00 YES 0.76 to 0.9918 and ZEC 14:15 YES 0.86 to 0.995 (b
 
 ## Pass 29 (14:19 to 14:49 ET)
 The three correlated 14:30 YES bets all ended in gains: BTC 0.78 to 0.931 (fast clause, +13.7c), BNB 0.88 to 0.992 and ETH 0.82 to 0.99 (both the top). No new bets after them. No losses, no `fast drop` sale yet, nothing changed.
+
+## Pass 30 (14:49 to 15:19 ET)
+Five live bets, all NO, all sold at a gain: DOGE 15:00 0.88 to 0.972 (fast clause, +8.3c), NEAR 15:00 0.89 to 0.992 (top), BNB 15:00 0.89 to 0.99 (top), HYPE 15:15 0.81 to 0.9191 (fast clause, +9.5c), DOGE 15:15 0.83 to 0.991 (top). Three of them were bought at 0.89, the top of the 0.35 to 0.90 band. No losses, no `fast drop` sale yet. Bot up 2 hours, kill switch off, CI green. Nothing changed.
