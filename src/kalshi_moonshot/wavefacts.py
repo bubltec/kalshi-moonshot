@@ -344,7 +344,7 @@ def nest(index: str, opened: float, now: float, side: str) -> dict[str, Any] | N
 
     key = (index, round(opened), int(now // 5))
     with _lock:
-        hit = _nest.get(key, False)
+        hit: Any = _nest.get(key, False)
     if hit is False:
         hit = None
         got = ticks.history.window(index, opened - HOUR - GRID, now)

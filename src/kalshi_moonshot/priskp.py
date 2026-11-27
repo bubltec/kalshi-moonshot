@@ -478,11 +478,11 @@ def _price_rising(shot: Any, now: float, hours: float) -> bool | None:
     return None if got is None else bool(got["rising"])
 
 
-def _nest_note(shot: Any, now: float, hours: float, buying: bool, got: dict[str, Any] | None | bool = False) -> str | None:
+def _nest_note(shot: Any, now: float, hours: float, buying: bool, got: dict[str, Any] | bool | None = False) -> str | None:
     """SHADOW (2026-11-26, user, on recording the nested-swings reading on every buy and logging what it would do before it decides anything: "Ok I like that"): how the market's own swings nest for the shot's side (wavefacts.nest), and what the reading would have said of a buy. On 210 live bets a buy with 3 of the 4 levels running its way settled its way 84% of the time; with 2 of 4 (a bounce against the larger move) 62% and with 4 of 4 (the move fully run) 71%, both negative on both days. It decides nothing: the note only says so. None when the reading cannot be made."""
     if got is False:
         got = _nest(shot, now, hours)
-    if got is None:
+    if not isinstance(got, dict):
         return None
     would = "" if not buying else {2: "; shadow: would WAIT (a bounce against the larger move)", 4: "; shadow: would WAIT (the move has fully run)"}.get(got["with"], "; shadow: would buy too")
     if buying and got.get("at_peak"):  # only where the peak wait does not act (outside a curve): 2026-11-27, user: "It also bought on a peak which it should never do for a favorite"

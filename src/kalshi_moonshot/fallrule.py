@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 MARKET_S = 900.0
 Z_HOLD = 1.0  # sigma of the time left on the bet's side that holds a profit (early_take_cushion_units)
@@ -84,7 +85,7 @@ def fade(age: float, life: float = MARKET_S) -> float:
 
 def crossed(cushion: float | None, spot_unit: float | None) -> bool:
     """The spot is on the wrong side of the target by at least a wobble of its own (its typical 10 s move). Unread is not a cross."""
-    return cushion is not None and bool(spot_unit) and cushion <= -spot_unit * math.sqrt(10.0 / 60.0)
+    return cushion is not None and spot_unit is not None and spot_unit != 0 and cushion <= -spot_unit * math.sqrt(10.0 / 60.0)
 
 
 def settle_z(banked: float | None, cushion_now: float | None, spot_unit: float | None, left: float, window: float = 60.0) -> float | None:
@@ -105,7 +106,7 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
     if cc is not None:
         s.best_cushion = max(s.best_cushion, cc)
     over = crossed(cc, spot_unit)
-    if over and s.best_cushion > 0:
+    if over and cc is not None and s.best_cushion > 0:
         over = -cc >= s.best_cushion - 1e-12  # CROSSED FOR A LOSS SALE ONLY WHEN THE SPOT IS AS FAR UNDER THE TARGET AS IT HAS BEEN OVER IT: see the module doc ("no loss")
     if s.first_ts <= 0:
         s.first_ts = now
@@ -121,6 +122,8 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         if wave != "off":  # THE WAVE EXIT, REPLAY ONLY, NOT LIVE AND NOT TO BE MADE LIVE AS IT IS: on 210 live bets (scripts/priskp_wave_exit_replay.py, studies/results/2026-11-26_priskp_wave_exit_replay.txt) it made +$47.83 against +$149.66 for the bid-fall profit side below, +$148.39 held to settlement and +$52.38 actual: a swing that has given back 0.2 typical minutes sells a winner for a cent or two. Kept so the replay runs. The profit is the swing.s. `wave` is (class, at_extreme) of the bet's side in the curve's current leg, the entry's own reading (wavefacts.leg), or None when it cannot be read
             if wave is None:
                 return Read(False, "no wave", net, 0.0, 0.0, bid, z)
+            cls: Any
+            extreme: Any
             cls, extreme = wave  # type: ignore[misc]
             if z is not None and z >= Z_HOLD:
                 return Read(False, "cushion", net, 0.0, 0.0, bid, z)
@@ -141,9 +144,8 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         life = age + left
         if life > 0 and age > 0 and (net / max(1.0 - cost, 1e-9)) / (age / life) >= FAST_PACE:
             s.fast = True  # A PROFIT GAINED TOO FAST TO RISK (FAST_PACE): from here the bet is sold THE MOMENT IT STOPS CLIMBING, and not before (2026-11-27 ~01:20 ET, user, on SOL 01:15 YES: bought 0.73, sold by this clause at 0.91 thirty-six seconds later while the bid was still rising, and it went straight on to 1.00: "It never dropped going up in price", "It shouldn't sell if it doesn't stop"). It stays so for the rest of the profit run
-        if s.fast:  # asked before the cushion hold and never faded: a wobble off the high, or no new high for STALL_SHARE of the time left
-            if now - s.run_high_ts >= FAST_BEAT_SHARE * left:
-                return Read(True, "fast", net, fall, wobble, s.run_high, z, f)
+        if s.fast and now - s.run_high_ts >= FAST_BEAT_SHARE * left:  # asked before the cushion hold and never faded: a wobble off the high, or no new high for STALL_SHARE of the time left
+            return Read(True, "fast", net, fall, wobble, s.run_high, z, f)
         if z is not None and z >= Z_HOLD:
             return Read(False, "cushion", net, fall, 0.0, s.run_high, z, f)
         high_net = s.run_high - fee_of(s.run_high) - cost

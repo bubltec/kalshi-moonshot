@@ -322,8 +322,9 @@ def test_in_a_curve_the_trend_entry_waits_while_the_cushion_is_under_half_the_tu
 
 def test_the_lane_does_not_buy_the_same_swing_twice_and_waits_for_the_next_one(monkeypatch):
     """2026-11-27 (user, on the re-buys: "why doesn't the rebuy follow priskp logic, which should have done none of this and waited for the next curve"): a bet in the swing the lane already bought waits; once the swing has turned (a new swing start) it is bought again."""
-    from kalshi_moonshot import binaryrisk, wavefacts
     from types import SimpleNamespace
+
+    from kalshi_moonshot import binaryrisk, wavefacts
 
     ticks.strikes.note(TICKER, 100.0)
     monkeypatch.setattr(binaryrisk, "curve_index", lambda series: "IDX")

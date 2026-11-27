@@ -21,17 +21,17 @@ BASE = [(240, 0.28), (240, -0.18), (180, 0.26)]
 
 
 def test_a_price_still_climbing_at_its_top_is_rising_and_one_that_has_pulled_back_is_not():
-    rows, now = path(BASE + [(30, 0.0)])
+    rows, now = path([*BASE, (30, 0.0)])
     top = wavefacts.price_swings(rows, OPEN, now, "yes")
     assert top is not None and top["rising"] is True and top["dirs"] == [1, 1]
-    rows2, now2 = path(BASE + [(40, -0.05)])  # the price gives back 0.05 (a fifth of its last swing)
+    rows2, now2 = path([*BASE, (40, -0.05)])  # the price gives back 0.05 (a fifth of its last swing)
     pulled = wavefacts.price_swings(rows2, OPEN, now2, "yes")
-    assert pulled["rising"] is False and 1 in pulled["dirs"] or pulled["dirs"][1] == -1  # the small level has turned down
+    assert (pulled["rising"] is False and 1 in pulled["dirs"]) or pulled["dirs"][1] == -1  # the small level has turned down
     assert pulled["rising"] is False
 
 
 def test_the_no_side_reads_one_minus_the_mid():
-    rows, now = path(BASE + [(30, 0.0)])
+    rows, now = path([*BASE, (30, 0.0)])
     assert wavefacts.price_swings(rows, OPEN, now, "no")["rising"] is False  # the YES price is at its top: the NO price is at its bottom
     flipped = [(t, 1.0 - m) for t, m in rows]
     assert wavefacts.price_swings(flipped, OPEN, now, "no")["rising"] is True  # a NO side whose own price climbs
@@ -50,7 +50,7 @@ def test_the_lane_reads_the_markets_own_quotes_from_memory_and_waits_at_the_pric
     """The re-buy: the lane sold at the top of the climb and the price is still there. No timer: the same reading says wait now and buy once the price has pulled back."""
     ticks.mids.clear()
     tk = "KXXRP15M-26NOV270630-30"
-    rows, now = path(BASE + [(30, 0.0)])
+    rows, now = path([*BASE, (30, 0.0)])
     for t, m in rows:
         ticks.mids.note(tk, t, m - 0.005, m + 0.005)
     shot = SimpleNamespace(ticker=tk, side="yes")

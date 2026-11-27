@@ -1,4 +1,6 @@
 """The one exit rule (fallrule.py; user, 2026-11-26: "we need to consolidate one rule that handles them all"): early profit that fades with the time elapsed, no loss while the spot has not crossed, salvage on a failed bounce, the time backstop and the top. Unit tests on the pure function, then the watcher's step through a held bet."""
+import itertools
+
 import pytest
 
 from kalshi_moonshot import fallrule, memguard
@@ -39,8 +41,8 @@ def test_a_profit_under_a_wobble_is_not_a_profit_and_a_strong_cushion_holds():
 
 def test_early_profit_fades_with_the_time_elapsed_and_has_no_line():
     """User: "the early profit concept needs to expire but not with a hard stop it should just approach no action after about 10 mins elapsed"."""
-    fades = [fallrule.fade(60.0 * m) for m in range(0, 15)]  # by the bet's age in minutes
-    assert all(a >= b for a, b in zip(fades, fades[1:], strict=False))  # it only ever weakens
+    fades = [fallrule.fade(60.0 * m) for m in range(15)]  # by the bet's age in minutes
+    assert all(a >= b for a, b in itertools.pairwise(fades))  # it only ever weakens
     assert fades[5] > 0.95 and 0.05 < fades[10] < 0.2 and fades[12] < 0.01
     ask = asker(0.64)
     assert not ask(0.80, 240, 5.0).sell  # minute 11: a profit run
@@ -198,6 +200,7 @@ def test_every_sell_step_declares_whether_it_may_sell_under_cost_and_the_selling
     import inspect
 
     import pytest
+
     from kalshi_moonshot import sellchain, watcher
 
     assert set(sellchain.LOSS_REASONS) == set(sellchain.SELL_STEPS)
@@ -313,7 +316,7 @@ def test_integration_the_watcher_seeds_the_best_cushion_from_the_markets_open(tm
     t = w.targets[(TICKER, "risk_only")]
     t.shock_index, t.shock_ref, t.side = "SEED", 100.0, "yes"
     ticks.history.clear()
-    for k in range(0, 460):  # from the open: 100 s at 101.5 (a cushion of 1.5 for YES, long before the buy), then back to 100.2
+    for k in range(460):  # from the open: 100 s at 101.5 (a cushion of 1.5 for YES, long before the buy), then back to 100.2
         ticks.history.note("SEED", CLOSE - 900.0 + k, 101.5 if k < 100 else 100.2)
     try:
         best = watcher.ProfitWatcher._best_cushion_since_open(w, t, CLOSE - 440.0)

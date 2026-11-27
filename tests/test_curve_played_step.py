@@ -1,6 +1,6 @@
 """The priskp buy step refuses a swing the lane already bought, from the lane's OWN bet rows (buychain.priskp_step; Store.lane_bet_times). 2026-11-27, user: "why doesn't the rebuy follow priskp logic, which should have done none of this and waited for the next curve"; "lanes only manage their own bets"."""
 from kalshi_moonshot import buychain, config, priskp
-from tests.test_cooldown_step import NOW, TICKER, shot, spec, store_with
+from tests.test_cooldown_step import NOW, shot, spec, store_with
 
 
 def ask(st, lane="x"):
