@@ -373,3 +373,6 @@ Replay on the 312 live bets (baseline with heartbeat +$29.01): a bid under 0.50 
 
 ## Pass 16 (07:49 to 08:18 ET)
 Two live bets, both sold at the top for a gain: BTC 08:15 NO 0.72 to 0.99 (+$5.7), HYPE 08:15 NO 0.84 to 0.992 (+$2.2). The ETH and ZEC 08:00 total losses are written up above. The heartbeat (fast profit sold on no new high for 5% of the time left) went live at 08:15:05 with the curve waits, lane isolation and the order-journal fix; the bot is up with no errors in its log. No fast-profit sale on the heartbeat yet to score. Nothing changed this pass.
+
+## Pass 17 (08:18 to 08:49 ET)
+One live bet: XRP 08:30 NO 0.66 to 0.914, the FIRST SALE ON THE HEARTBEAT (fast profit, +23.6c after fees, 113 s left, the bid at its high 0.92 for 5% of the time left with no new high, cushion +0.67 sigma); the market settled NO, so holding paid about $1.96 more on 22.7 contracts. That is the price of a stop on a fast climb that stalls and then finishes, the same trade the replay scored; one sale is not a verdict. Bot up, no errors in its log. Nothing changed.
