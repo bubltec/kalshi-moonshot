@@ -166,3 +166,38 @@ PriskP: one closed bet, a gain of about +$1.50 (SOL 03:30 YES, 0.84, sold by the
 wave_shape (the other session's lane): 57 closed bets, about -$17.50.
 
 Nothing to trace (no loss, no small gain that ran far), nothing changed.
+
+## Pass 8, 04:19 (bets bought 03:48 to 04:18)
+
+Live build unchanged at the pass (51c09740).
+
+PriskP: twelve closed bets: nine gains (about +$23) and THREE ZEROS in the 04:15 markets (about -$46). About -$23 as run. Six bets open in the 04:30 markets at the pass.
+
+| Bet | Paid | Ended | Market | As run |
+|---|---|---|---|---|
+| SOL 04:00 YES 03:48:39 | 0.68 | early profit (stall) 0.78 | YES | +$1.75 |
+| DOGE 04:00 YES 03:51:03 | 0.60 | fast 0.71 | YES | +$2.40 |
+| DOGE 04:00 YES 03:52:35 (bought back) | 0.73 | top 0.99 | YES | +$5.60 |
+| SOL 04:00 YES 03:53:08 (bought back) | 0.80 | sold 1 s later at 0.80 on the first bet's memory | YES | about -$0.25 (the fee) |
+| SOL 04:00 YES 03:53:11 (bought a third time) | 0.80 | fast 0.84 | YES | +$0.35 |
+| HYPE 04:00 NO | 0.77 | top 0.99 | NO | +$4.55 |
+| BTC 04:15 YES 04:02:08 | 0.78 | NO SALE | NO | -$15.60 |
+| BNB 04:15 YES 04:05:09 | 0.65 | early profit 0.72 | NO | +$0.95 (a save) |
+| SOL 04:15 YES | 0.84 | top 0.99 | YES | +$2.70 |
+| DOGE 04:15 YES 04:08:04 | 0.65 | early profit 0.74 | NO | +$1.15 (a save) |
+| BNB 04:15 YES 04:09:10 (bought back 8 s after its own sale) | 0.73 | NO SALE | NO | -$15.20 |
+| DOGE 04:15 YES 04:09:59 (bought back 3 s after its own sale) | 0.76 | NO SALE | NO | -$15.40 |
+| ETH 04:30 YES | 0.58 | fast 0.67 | not in | +$1.45 |
+
+The three zeros, traced on the bids:
+- BTC 04:15 YES (0.78 at minute 2): dipped to 0.56, climbed to 0.92 at minute 9.7 (+12c after both fees, a real profit run), was 0.84 twenty seconds later and 0.58 a minute after, hovered 0.61 to 0.79, and went from 0.66 to 0 in the last forty seconds. The profit was not taken because the bet was two thirds of the way through its life, where early profit has faded to a tenth (the user's fade); its pace was 0.98, under the fast clause's 2. Under cost, the spot was never as far under the target as it had been over it until the settlement minute.
+- BNB and DOGE 04:15 YES were BOUGHT BACK seconds after the rule had sold the same side at a profit because the bid had stopped climbing (BNB sold 0.72, bought 0.73 eight seconds later; DOGE sold 0.74, bought 0.76 three seconds later). Neither reached two wobbles of profit again; both fell to 0.39 within a minute, bounced, and went to 0 in the last forty seconds with the others.
+- All three markets flipped in their final minute: a bid of 0.66 to 0.70 at 04:14:00 was 0.33 to 0.39 at 04:14:20 and 0 at 04:14:40. No exit of this rule acts on that.
+
+What could have prevented them:
+- BNB and DOGE: not buying the same side back seconds after the lane's own exit said the climb had stopped. Seen also on ETH 23:30 (sold 0.68, bought back 0.61, salvaged at 0.12) and SOL 04:00 above. It is entry logic (when a re-buy is allowed), so it is put to the user, not changed. Where the buy-back followed a sale and the market kept going (DOGE 04:00: sold 0.71, bought back 0.73, top at 0.99) it paid; tonight's count is one paid, three lost, one flat.
+- BTC: only a profit that does not fade, which the replay of 00:20 priced at -$60 to -$90 on 210 bets. Not changed.
+
+CHANGED (low risk, a bug): a bet that is sold out takes its watcher target with it. SOL 04:00's second bet was sold one second after its buy on the first bet's memory ("early profit: +8.3c" against the 0.68 the first bet paid), because the re-buy fix of 22:40 replaces the target only at the next 3 s refresh. `watcher._sell` now drops the target when the lane has no open bet left on the market; the end-to-end sale test checks it. Exit tests 152 passed. Deployed in the 04:30 gap.
+
+wave_shape (the other session's lane): 67 closed bets, about -$17.30.

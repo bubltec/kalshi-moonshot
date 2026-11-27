@@ -186,6 +186,7 @@ def test_integration_a_loss_sale_by_the_one_rule_goes_through_the_selling_thread
     assert got and got[0].why.startswith("one rule, salvage:"), got
     w._sell(got[0].ticker, got[0].lane, got[0].why)
     assert [n for n, _ in client.sold] == [4.65], "the selling thread did not place the one rule's loss sale"
+    assert (got[0].ticker, got[0].lane) not in w.targets  # the sold bet's target is gone at once: a re-buy seconds later is watched from a fresh one, not on this bet's price and memory (SOL 04:00, 2026-11-27)
     from kalshi_moonshot import config
     from kalshi_moonshot.store import Store
 

@@ -2275,6 +2275,14 @@ class ProfitWatcher:
                     self._back_off(ticker, lane, seconds=min(60.0, 2.0 ** t.sell_misses))
                 else:
                     t.sell_misses = 0
+                    # A BET THAT IS SOLD OUT TAKES ITS TARGET WITH IT (2026-11-27, SOL 04:00 YES: sold at 0.78 at 03:53:04, bought again at 0.80 at 03:53:08, and the
+                    # new bet was sold one second later at 0.80 on the old bet's memory ("early profit: +8.3c", judged against the 0.68 the FIRST bet paid), before
+                    # the 3 s refresh had seen that it was a new bet; it was then bought a third time). The refresh's check on the buy time (Target.bet_ts) only
+                    # acts at the next refresh; with the target gone, a re-buy is watched from a fresh one and no tick is judged on the sold bet's price or state.
+                    if not any(r["ticker"] == ticker and (r["lane"] or "moonshot") == lane for r in store.open_bets()):
+                        with self._lock:
+                            if self.targets.get((ticker, lane)) is t:
+                                self.targets.pop((ticker, lane), None)
         except KalshiError as exc:
             log.warning("watcher: could not sell %s (%s)", ticker, exc)
         finally:
