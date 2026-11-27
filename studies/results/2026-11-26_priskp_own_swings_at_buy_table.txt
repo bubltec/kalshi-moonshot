@@ -1,0 +1,17 @@
+210 bets. The market's biggest swing in what the lane could see, in typical minutes: median 6.4, from 3.1 to 16.0
+
+swings of 1 x the biggest: the current swing had run a median 32.4 minutes at the buy (a tenth under 11.3, a tenth over 51.7)
+   bought WITH     n  97  settled its way  77%  avg paid 0.74  held $   85.38 (+0.88 a bet)  as run $   63.75  held by day {'11-25': -5.74, '11-26': 91.12}
+   bought AGAINST  n 113  settled its way  73%  avg paid 0.72  held $   63.02 (+0.56 a bet)  as run $  -11.37  held by day {'11-25': -18.35, '11-26': 81.37}
+
+swings of 0.5 x the biggest: the current swing had run a median 10.1 minutes at the buy (a tenth under 3.4, a tenth over 33.0)
+   bought WITH     n 141  settled its way  77%  avg paid 0.74  held $  105.03 (+0.74 a bet)  as run $   35.57  held by day {'11-25': 15.54, '11-26': 89.49}
+   bought AGAINST  n  69  settled its way  72%  avg paid 0.70  held $   43.36 (+0.63 a bet)  as run $   16.81  held by day {'11-25': -39.64, '11-26': 83.0}
+
+swings of 0.25 x the biggest: the current swing had run a median 3.7 minutes at the buy (a tenth under 1.1, a tenth over 10.8)
+   bought WITH     n 169  settled its way  74%  avg paid 0.73  held $   53.52 (+0.32 a bet)  as run $   25.18  held by day {'11-25': -24.1, '11-26': 77.61}
+   bought AGAINST  n  41  settled its way  80%  avg paid 0.70  held $   94.88 (+2.31 a bet)  as run $   27.20  held by day {'11-26': 94.88}
+
+swings of 0.125 x the biggest: the current swing had run a median 1.7 minutes at the buy (a tenth under 0.7, a tenth over 3.9)
+   bought WITH     n 193  settled its way  76%  avg paid 0.72  held $  180.76 (+0.94 a bet)  as run $   50.92  held by day {'11-25': -25.8, '11-26': 206.55}
+   bought AGAINST  n  17  settled its way  65%  avg paid 0.74  held $  -32.36 (-1.90 a bet)  as run $    1.46  held by day {'11-25': 1.7, '11-26': -34.06}
