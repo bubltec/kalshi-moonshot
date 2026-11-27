@@ -151,3 +151,31 @@ def test_the_stream_filled_figure_stands_when_the_accounts_list_trails_it(setup)
     restbuys.on_event({"kind": "fill", "ticker": shot.ticker, "order_id": "r1", "count": 1.5, "action": "buy"})
     th.join(3.0)
     assert out["got"].filled == 1.5
+
+
+class _RanAway(Socket):
+    """A client whose book has already run away from the decided ask: the cheapest YES offer (1 - the best NO bid of 0.56) is 0.44, the lane decided at 0.30."""
+
+    def orderbook(self, ticker):
+        return {"orderbook_fp": {"no_dollars": [["0.5600", "50.00"]]}}
+
+
+def test_a_resting_buy_is_not_skipped_for_depth_at_the_ask_when_the_lane_says_so(setup):
+    """HYPE 15:16:35 YES, 2026-11-27: decided at 0.37, the ask ran to 0.40 before the book was read, and the order was skipped for '$0.00 offered at 0.37'. A resting buy under the ask takes nothing from the ask's depth."""
+    import dataclasses
+
+    s, store, shot, spec = setup
+    ratio = dataclasses.replace(s, min_offer_ratio=0.5)
+    spec(buy_rest_seconds=60.0, buy_retries=0)
+    feed()
+    got = runner.place(ratio, _RanAway(asks=[0.44]), store, shot, "why", 1.5, order_key="k0")
+    assert got.filled == 0 and "offered" in got.note and "ran away" in got.note  # the lane that does not name the field is unchanged: skipped as before
+
+    spec(buy_rest_seconds=60.0, buy_retries=0, buy_rest_ignore_depth=True)
+    client = _RanAway(asks=[0.44], account={"r1": 1.5})
+    th, out = run_place(ratio, client, store, shot)
+    assert wait_for(lambda: client.rested), "the resting buy was placed, not skipped for depth"
+    assert client.rested[0][1] < shot.ask  # under the decided ask
+    restbuys.on_event({"kind": "fill", "ticker": shot.ticker, "order_id": "r1", "count": 1.5, "action": "buy"})
+    th.join(3.0)
+    assert not th.is_alive() and out["got"].filled == 1.5

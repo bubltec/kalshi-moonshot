@@ -1084,7 +1084,8 @@ def _place(
         if fresh is not None and fresh < shot.ask - lane_spec.buy_max_move - 1e-9:
             return Placed(f"skipped: the {shot.side} ask fell from {shot.ask:.2f} to {fresh:.2f} while the order waited (the lane allows a fall of {lane_spec.buy_max_move:.2f})")
     need = s.min_offer_ratio * cost if s.min_offer_ratio > 0 else s.min_order_usd  # a share of our own order when the ratio is set, else the old flat dollars
-    if offered + 1e-9 < need:
+    resting_here = lane_spec is not None and lane_spec.buy_rest_seconds > 0 and lane_spec.buy_rest_ignore_depth  # a resting buy takes nothing from the ask's depth (lane field buy_rest_ignore_depth, 2026-11-27)
+    if offered + 1e-9 < need and not resting_here:
         now_ask = best_ask(book, shot.side)
         moved = f"; the {shot.side} ask is now {now_ask:.2f}, over the {limit:.2f} limit (it was {shot.ask:.2f} when the lane decided): the price ran away while the order waited" if now_ask is not None and now_ask > limit + 1e-9 else ""
         return Placed(
