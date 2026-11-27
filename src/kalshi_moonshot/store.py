@@ -1294,11 +1294,11 @@ class Store:
         return float(row["t"])
 
     def net_contracts(self, ticker: str, env: str, side: str | None = None) -> float:
-        """Contracts the bot's orders hold on this ticker (bought less sold). With `side` ("yes" or "no"), only that contract: a market can hold both, and a sale of one must never be sized by, or written off against, the other (2026-11-27, ZEC 05:45: a YES sale sized by the NO contracts another lane held on the same market, then 20.54 of them booked as "sold by hand" and the real NO position adopted as hand-placed and held to zero)."""
+        """Contracts the bot's orders hold on this ticker (bought less sold). With `side` ("yes" or "no"), only that contract (an old order row with no contract recorded counts for either side, as it always did): a market can hold both, and a sale of one must never be sized by, or written off against, the other (2026-11-27, ZEC 05:45: a YES sale sized by the NO contracts another lane held on the same market, then 20.54 of them booked as "sold by hand" and the real NO position adopted as hand-placed and held to zero)."""
         row = self.db.execute(
             """SELECT COALESCE(SUM(CASE WHEN COALESCE(side,'buy')='buy' THEN fill_count
                                         ELSE -fill_count END), 0) AS n
-               FROM orders WHERE ticker=? AND env=? AND (? IS NULL OR COALESCE(contract,'yes')=?)""",
+               FROM orders WHERE ticker=? AND env=? AND (? IS NULL OR contract IS NULL OR contract=?)""",
             (ticker, env, side, side),
         ).fetchone()
         return float(row["n"])
@@ -1324,7 +1324,7 @@ class Store:
 
     def net_cost(self, ticker: str, env: str, side: str | None = None) -> float:
         """Dollars the bot's own orders have put into this ticker (buys cost, sales return), fees included in the order cost; with `side`, only that contract's orders."""
-        row = self.db.execute("SELECT COALESCE(SUM(cost_usd + CASE WHEN COALESCE(side,'buy')='buy' THEN COALESCE(fee_usd, 0) ELSE 0 END), 0) AS c FROM orders WHERE ticker=? AND env=? AND (? IS NULL OR COALESCE(contract,'yes')=?)", (ticker, env, side, side)).fetchone()
+        row = self.db.execute("SELECT COALESCE(SUM(cost_usd + CASE WHEN COALESCE(side,'buy')='buy' THEN COALESCE(fee_usd, 0) ELSE 0 END), 0) AS c FROM orders WHERE ticker=? AND env=? AND (? IS NULL OR contract IS NULL OR contract=?)", (ticker, env, side, side)).fetchone()
         return float(row["c"])
 
     def note_lane_version(self, lane: str, ver: str, settings: dict[str, str]) -> None:
