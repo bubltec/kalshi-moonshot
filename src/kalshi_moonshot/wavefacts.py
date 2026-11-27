@@ -186,7 +186,7 @@ def _usual_big_leg(index: str, opened: float, u: float) -> float | None:
     return out
 
 
-def leg(index: str, opened: float, now: float, target: float, side: str, left: float) -> dict[str, Any] | None:
+def leg(index: str, opened: float, now: float, target: float, side: str, left: float, back: float = 0.0) -> dict[str, Any] | None:
     """Where the bet's side stands in the curve's current LEG, by walking the spot back from now to the window's open with the wave lane's zig-zag (waveturn.reading: swings of 0.5 typical minutes on a 30 s median, the pre-open hour's typical minute as the unit; no crossings, no gate). (2026-11-25, user: "why can't it walk the curve back and identify it was inside a dip?")
     class  'inside' (the current swing runs in the side's winning direction, is at least 0.5 u and has given back under 0.2 u: not turned), 'turned' (that swing has given back 0.2 u or more), 'against' (the current swing runs against the side), 'none' (no swing of 0.5 u yet)
     swing_u, gb_u   the current swing's size and what it has given back, in typical minutes; r2 the 30 minute straight-line fit (a trend when at or over R2_CUT)
@@ -199,18 +199,19 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
     h = waveturn._hour(index, round(opened))
     if h.u is None or now - opened < 30:
         return None
-    got = ticks.history.window(index, opened, now)
+    start = opened - max(back, 0.0)  # `back`: seconds before the open the walk starts from (0 = the open, as the lane has read it since 2026-11-25); the typical minute and the usual leg stay the hour before the open's
+    got = ticks.history.window(index, start, now)
     if not got or not got[0]:
         return None
     T, V = got
-    if T[0] > opened:
-        prev = ticks.history.last_at_or_before(index, opened)
+    if T[0] > start:
+        prev = ticks.history.last_at_or_before(index, start)
         if prev is not None:
             T, V = [prev[0], *T], [prev[1], *V]
-    win = grid(T, V, int(opened), int(now) + 1)
+    win = grid(T, V, int(start), int(now) + 1)
     if len(win) < 31 or None in win:
         return None
-    r = waveturn.reading(win, int(now - opened), target, h.u)  # type: ignore[arg-type]
+    r = waveturn.reading(win, int(now - start), target, h.u)  # type: ignore[arg-type]
     want = -1 if side == "no" else 1
     if r.d == 0 or r.swing_u < waveturn.SWING:
         cls = "none"
@@ -224,20 +225,20 @@ def leg(index: str, opened: float, now: float, target: float, side: str, left: f
     r2 = None if nowr is None else nowr["r2"]
     from .waveshape import broad
 
-    sm = broad([float(x) for x in win], 0, int(now - opened), waveturn.SMOOTH // 2, int(now - opened))  # type: ignore[arg-type]
+    sm = broad([float(x) for x in win], 0, int(now - start), waveturn.SMOOTH // 2, int(now - start))  # type: ignore[arg-type]
     big, _d, _k, _v = waveturn.zigzag(sm, BIG_REVERSAL * h.u)
     big_start = big[-1][0] if big else 0
     usual = _usual_big_leg(index, opened, h.u)
-    age = ((now - opened) - big_start) / usual if usual else None
+    age = ((now - start) - big_start) / usual if usual else None
     small, _d2, _k2, _v2 = waveturn.zigzag(sm, waveturn.ZZ * h.u)
     small_start = small[-1][0] if small else 0
     prev_u = abs(small[-1][1] - small[-2][1]) / h.u if len(small) >= 2 else 0.0  # the swing BEFORE the current one (it ran the other way): the size of the turn the current swing started from
     bef = before(index, opened)
     w10 = bef["w10"] if bef and bef.get("w10") else None
-    travel = abs(float(win[int(now - opened)]) - float(win[small_start])) / w10 if w10 else None  # type: ignore[arg-type]
+    travel = abs(float(win[int(now - start)]) - float(win[small_start])) / w10 if w10 else None  # type: ignore[arg-type]
     at_extreme = (age is not None and age >= EXTREME) or (travel is not None and travel >= EXTREME)
     refuse = cls in ("against", "turned") or (cls == "inside" and at_extreme)  # 2026-11-25 ~18:15 (user, on ZEC 18:15 NO bought at 18:07:11 at the bottom of a dip as it turned up, then a straight run through the strike: "It bought right in the dip. Why??! Why doesn't it wait??"): a bet whose side the current swing runs AGAINST, or whose leg has already TURNED against it, always waits; only a bet inside its own leg is bought, and not at that leg's extreme. 24 hours of bets: against 18 bets -$42.92 (44% lost), turned 16 bets -$0.17 (31% lost)
-    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse, "usual_leg_s": usual, "w10": w10, "at_extreme": at_extreme, "prev_u": round(prev_u, 2), "spot": float(win[int(now - opened)])}  # type: ignore[arg-type]
+    return {"class": cls, "swing_u": round(r.swing_u, 2), "gb_u": round(r.gb_u, 2), "r2": r2, "age": None if age is None else round(age, 2), "travel": None if travel is None else round(travel, 2), "would_refuse": refuse, "usual_leg_s": usual, "w10": w10, "at_extreme": at_extreme, "prev_u": round(prev_u, 2), "spot": float(win[int(now - start)])}  # type: ignore[arg-type]
 
 
 def travel_left(bef: dict[str, Any] | None, left: float) -> float | None:
@@ -326,12 +327,12 @@ TREND_MIN = 1.0  # a swing counts as a TREND once it has run this many typical m
 REACH = 1.0  # the target is IN REACH of the curve when the spot is within this many of the market's usual 10 minute wave travels of it (the hour before the open): outside that the market is flat with cushion
 
 
-def curve(index: str, opened: float, now: float, target: float, side: str, left: float) -> dict[str, Any] | None:
+def curve(index: str, opened: float, now: float, target: float, side: str, left: float, back: float = 0.0) -> dict[str, Any] | None:
     """The curve verdict for one side (2026-11-25 ~18:30, user, after ZEC 18:15 NO was bought at the bottom of a dip as it turned up and the lane then sat out the whole rise: "ONLY in the curve do you buy on a trend. If it's flat with cushion or a trend market you buy whenever price is good"; "I'm asked you to wait in the dip or peaks. You need to buy on a trend").
     regime  'curve' when the market has waves (at least two confirmed big legs in the hour before the open) AND the target is within REACH usual wave travels of the spot; else 'steady' (flat with cushion, or one trending line): the lane's own checks decide there, whenever the price is good
     verdict (curve only) 'buy' when the bet's side runs WITH the current swing ('inside'), the swing has run TREND_MIN typical minutes without turning, and started from a turn (the swing before it, the other way, ran TREND_MIN too), and the leg is not at its extreme: the trend entry, which replaces the five rank checks; otherwise 'wait' (at a dip or a peak: the swing is against the bet, or it has turned, or it is young, or at its extreme)
     None when the leg cannot be read (the hour before the open or the path since it is not in memory): the lane's checks decide."""
-    base = leg(index, opened, now, target, side, left)
+    base = leg(index, opened, now, target, side, left, back)
     if base is None:
         return None
     usual = base.get("usual_leg_s")

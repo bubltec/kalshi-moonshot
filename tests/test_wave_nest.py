@@ -80,3 +80,25 @@ def test_integration_the_priskp_look_carries_the_nest_as_a_shadow_note_and_says_
     assert priskp._nest_note(shot, now, hours, True).endswith("shadow: would WAIT (the move has fully run)")
     monkeypatch.setattr(wavefacts, "nest", lambda *a: None)
     assert priskp._nest_note(shot, now, hours, True) is None
+
+
+def test_the_leg_walked_from_before_the_open_knows_a_move_that_began_before_it():
+    """User, 2026-11-27: "Why doesn't it read before the markets open? It buys starting at 3 mins how would it know if it's not inside a curve?"; "Can we make it look at least 10mins back?". A climb that began 27 minutes before the open and is still going at minute 4: walked from the open it is a young swing that has travelled little; walked from before the open it has already run past a usual leg and is at its extreme."""
+    import random
+
+    rnd = random.Random(7)
+    t, v = OPEN - 3600.0, 100.0
+    ticks.history.note("LEGX", t - 30.0, v)
+    for seconds, change in [(500, 4.0), (500, -4.0), (500, 4.0), (500, -4.0), (1600, 7.0), (240, 1.0)]:  # four big legs in the hour, then the climb through the open
+        for k in range(1, seconds + 1):
+            ticks.history.note("LEGX", t + k, v + change * k / seconds + rnd.uniform(-0.02, 0.02))
+        t, v = t + seconds, v + change
+    now = OPEN + 240.0
+    with memguard.decision("buy"):
+        short = wavefacts.leg("LEGX", OPEN, now, 106.0, "yes", 660.0)
+        long = wavefacts.leg("LEGX", OPEN, now, 106.0, "yes", 660.0, wavefacts.HOUR)
+        ten = wavefacts.leg("LEGX", OPEN, now, 106.0, "yes", 660.0, 600.0)
+    assert short["class"] == long["class"] == ten["class"] == "inside"  # the same direction either way
+    assert not short["at_extreme"] and short["travel"] < 1.0  # from the open: a young swing that has travelled under half a usual wave, bought
+    assert long["at_extreme"] and long["travel"] > short["travel"] * 3  # from before the open: it has travelled more than three usual waves
+    assert ten["at_extreme"] and ten["travel"] > 1.0  # ten minutes back already sees it

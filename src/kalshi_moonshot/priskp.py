@@ -419,7 +419,7 @@ def _curve_verdict(shot: Any, now: float, hours: float, strike: float) -> dict[s
         if not index or strike <= 0:
             return None
         opened = round((now + hours * 3600.0) / 900.0) * 900.0 - 900.0
-        return wavefacts.curve(index, opened, now, float(strike), shot.side, max(hours * 3600.0, 1.0))
+        return wavefacts.curve(index, opened, now, float(strike), shot.side, max(hours * 3600.0, 1.0), wavefacts.HOUR)  # THE WALK STARTS AN HOUR BEFORE THE OPEN, not at it (2026-11-27, user: "Why doesn't it read before the markets open? It buys starting at 3 mins how would it know if it's not inside a curve?"; "Can we make it look at least 10mins back?"; "the current one that only looks at the market start"). Walked from the open, a leg that began before it was aged from the open, so a move that had already run a usual leg's length read as young and was bought. On the lane's 133 curve buys of 11-25 16:32 to 11-26 22:56 ET (scripts/priskp_leg_walk_back_table.py) the longer walk waits on 36 as "the leg is at its extreme": those settled their way 69% and made -$4.85 held (-$18.05 as run); the 97 it still buys 76% and +$129.62 (+$22.49). The same 36 whether the walk starts 10, 30 or 60 minutes back, so the figure is not doing the work; the hour is what the reading's typical minute and usual leg already use. It can only be shown waiting, not what it would buy later: score the curve buys forward
     except Exception:
         return None
 

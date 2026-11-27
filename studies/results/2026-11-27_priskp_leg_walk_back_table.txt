@@ -1,0 +1,14 @@
+210 bets with tape; 133 of them bought on a curve 'buy' as the lane reads it (walked from the open)
+
+walk started 10 minutes before the open:
+   WAIT: the leg is at its extreme                                n  36  settled its way  69%  avg paid 0.68  held $   -4.85 (-0.13 a bet)  as run $  -18.05  by day {'11-25': 3.07, '11-26': -7.93}
+   still BUY                                                      n  97  settled its way  76%  avg paid 0.70  held $  129.62 (+1.34 a bet)  as run $   22.49  by day {'11-25': 1.03, '11-26': 128.59}
+
+walk started 30 minutes before the open:
+   WAIT: the leg is at its extreme                                n  36  settled its way  69%  avg paid 0.68  held $   -4.85 (-0.13 a bet)  as run $  -18.05  by day {'11-25': 3.07, '11-26': -7.93}
+   still BUY                                                      n  97  settled its way  76%  avg paid 0.70  held $  129.62 (+1.34 a bet)  as run $   22.49  by day {'11-25': 1.03, '11-26': 128.59}
+
+walk started 60 minutes before the open:
+   WAIT: the leg is at its extreme                                n  36  settled its way  69%  avg paid 0.68  held $   -4.85 (-0.13 a bet)  as run $  -18.05  by day {'11-25': 3.07, '11-26': -7.93}
+   still BUY                                                      n  97  settled its way  76%  avg paid 0.70  held $  129.62 (+1.34 a bet)  as run $   22.49  by day {'11-25': 1.03, '11-26': 128.59}
+
