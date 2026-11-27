@@ -62,3 +62,18 @@ def test_the_lane_reads_the_markets_own_quotes_from_memory_and_waits_at_the_pric
     assert priskp._price_rising(shot, now + 22.0, hours - 22.0 / 3600.0) is False  # pulled back at the small level: the wait has ended
     assert priskp._price_rising(SimpleNamespace(ticker="KXNONE15M-26NOV270630-30", side="yes"), now, hours) is None  # no quotes: nothing is held back
     ticks.mids.clear()
+
+
+def test_the_price_reading_is_the_same_for_a_yes_bet_and_its_mirror_no_bet():
+    """User, 2026-11-27: the peak reading "should work the same way for yes buys too (peaks)". A YES price curve and the NO bet on the mirrored quotes (1 - the mid) read the same: rising, or pulled back."""
+    from kalshi_moonshot import wavefacts
+
+    def zig(i, end):  # up, down, up, then to `end`
+        return 0.50 + 0.1 * abs(((i // 40) % 4) - 2) + 0.0006 * i if i < end else 0.80 - 0.003 * (i - end)
+
+    for path in ([zig(i, 300) for i in range(300)], [zig(i, 220) for i in range(300)]):
+        yes_rows = [(float(i), p) for i, p in enumerate(path)]
+        no_rows = [(float(i), 1.0 - p) for i, p in enumerate(path)]
+        a = wavefacts.price_swings(yes_rows, 0.0, 299.0, "yes")
+        b = wavefacts.price_swings(no_rows, 0.0, 299.0, "no")
+        assert a is not None and b is not None and a["rising"] == b["rising"] and a["dirs"] == b["dirs"]
