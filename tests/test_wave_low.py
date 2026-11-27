@@ -212,3 +212,30 @@ def test_replay_silver_1145_a_climb_is_still_read_as_a_peak_known_limit(tmp_path
     m = load_paths()["silver-1145"]
     no = replay(m, "no", range(240, 275, 5), sp, s)
     assert any(bet for _, bet, _ in no)
+
+
+def test_the_price_curve_is_a_shadow_reading_in_the_facts_and_changes_no_answer(tmp_path, monkeypatch, mem):
+    """2026-11-27 (user: "Using the price is probably better than the spot value for these tight turns"): the market's own YES mid, read with the zig-zag in its own typical minute and a 5 s smoothing, is stored with the step's facts. It never says yes or no."""
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    feed(hour, window_path([(120, 0.0), (60, -2.0), (300, 0.0)], u_of(hour)))
+    ticks_mod.strikes.note(TICKER, K)
+    ticks_mod.mids.clear()
+    mid = 0.5
+    for k in range(0, 200):
+        mid = 0.5 - 0.004 * max(0, k - 120) if k < 180 else mid  # flat, then the YES price falls for 60 s
+        ticks_mod.mids.note(TICKER, OPEN + k, mid - 0.005, mid + 0.005)
+    now = OPEN + 165
+    ctx = buychain.Ctx(s, sp, now=now, store=Store())
+    with memguard.decision("buy"):
+        bet, note = buychain.decide(ctx, shot(now, "yes"))
+    assert bet, note  # the same answer as without the price curve (test_a_fall_is_a_dip_for_yes...)
+    w = ctx.facts["wave_low"]
+    assert w["pr_dir"] == -1 and w["pr_swing_u"] > 1.0 and w["pr_gb_u"] < 0.2 and w["pr_s"] >= 120 and w["pr_age"] <= 5, w
+    ticks_mod.mids.clear()
+    wavelow.clear()
+    with memguard.decision("buy"):
+        ctx2 = buychain.Ctx(s, sp, now=now, store=Store())
+        bet2, _ = buychain.decide(ctx2, shot(now, "yes"))
+    assert bet2 and "pr_dir" not in ctx2.facts["wave_low"]  # no quotes in memory: no price reading, the buy is unchanged
