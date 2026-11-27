@@ -201,3 +201,30 @@ What could have prevented them:
 CHANGED (low risk, a bug): a bet that is sold out takes its watcher target with it. SOL 04:00's second bet was sold one second after its buy on the first bet's memory ("early profit: +8.3c" against the 0.68 the first bet paid), because the re-buy fix of 22:40 replaces the target only at the next 3 s refresh. `watcher._sell` now drops the target when the lane has no open bet left on the market; the end-to-end sale test checks it. Exit tests 152 passed. Deployed in the 04:30 gap.
 
 wave_shape (the other session's lane): 67 closed bets, about -$17.30.
+
+## Pass 9, 04:49 (bets bought 04:17 to 04:47)
+
+Live build: b2480d4a since 04:30 (a sold bet takes its target with it). Full test suite on it: 1746 passed, 5 skipped.
+
+PriskP: nine closed bets, seven gains and two losses, about +$9 as run. Two open at the pass.
+
+| Bet | Paid | Ended | Market | As run |
+|---|---|---|---|---|
+| ETH 04:30 YES | 0.58 | fast 0.67 | YES | +$1.45 (about $9 more held) |
+| DOGE 04:30 YES | 0.58 | top 0.99 | YES | +$5.70 |
+| BTC 04:30 YES | 0.69 | top 0.99 | YES | +$6.30 |
+| XRP 04:30 YES 04:17:44 | 0.70 | salvage 0.25 at 04:22:09 | YES | -$10.60 (held: +$6.60) |
+| HYPE 04:30 NO 04:18:01 | 0.66 | fast 0.81 | YES | +$2.90 (a save) |
+| ZEC 04:30 YES | 0.64 | top 1.00 | YES | +$8.30 |
+| HYPE 04:30 NO 04:20:57 (bought back 19 s after its own sale, a steady-market buy at a peak) | 0.80 | no sale | YES | -$7.00 (8.7 contracts) |
+| ZEC 04:45 YES | 0.84 | fast 0.90 | not in | +$1.00 |
+| BNB 04:45 YES | 0.82 | fast 0.87 | not in | +$0.75 |
+
+Noticed:
+- XRP 04:30 YES: a salvage at 0.25 on a market that then settled YES. The loss side's cross (as far under the target as the spot had been over it in the market) passed: four and a half minutes into its life, the market's best cushion on the YES side had been small, so a small dip under counted. The weak case said to the user at 01:20 (a bet whose side never had much cushion still takes loss sales). One bet; with DOGE 02:45 (held to zero by the same test) the change stands one each way tonight. Not changed.
+- HYPE 04:30 NO: the lane's fifth buy-back of the night within seconds of its own profit sale, and the fourth to lose its stake (paid once, flat once). The question is with the user since 04:19; not changed.
+- ETH 04:30: the fast clause sold at 0.67 a bet that went to 1.00; the bid had stopped for a wobble 69 s after the buy. The price of the clause on a bet that only paused.
+
+wave_shape (the other session's lane): 80 closed bets, about -$23.15.
+
+Nothing changed this pass.
