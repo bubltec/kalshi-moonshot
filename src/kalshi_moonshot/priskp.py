@@ -438,7 +438,6 @@ def _nest(shot: Any, now: float, hours: float) -> dict[str, Any] | None:
         return None
 
 
-BOUNCE_WAIT = 0.25  # a curve buy waits while the spot has come back from its best level on the bet's side since the swing began by this many of the market's typical minutes: the swing has turned and the bet would be bought into the bounce (2026-11-27 10:06, user, on XRP, HYPE and BNB 10:15 NO bought into a bounce up off the low, all three to zero: "Why does it buy the opposite of what it needs to buy? It buys down while trending up?"; "It's supposed to wait, and then it would have bought up properly and won"). On 318 live bets, the spot's bounce off its 5-minute best (the raw 10 s mean, in typical minutes): under 0.1 won 81% and held +$94.56 (91 bets), 0.1 to 0.25 -$28.25, 0.25 to 0.5 -$19.73, 0.5 to 1 -$66.63, over 1 -$63.76; the edge 0.25 was picked after seeing these buckets
 LOW_CUSHION_SHARE = 0.5  # a curve buy waits while the spot's cushion over the target is under this share of the turn the bet's swing started from (2026-11-27, user: "betting Yes at the end peak of a U shaped curve (with almost no cushion) ... I have never asked for that logic"; earlier: "Just seems like a bad idea with low cushion to buy in a curve like that. Would have been better to wait"). A ratio of the curve's own swing, in the market's own units. Bins stated before the run: on the 167 curve buys the lane made 11-25 to 11-27, cushion under half the turn 68 bets, settled their way 54%, -$200.22 held, -$141.10 as run; half the turn or more 99 bets, 81%, +$168.69 held, +$74.60 as run (scripts/priskp_curve_waits_table.py). One half is the lower bin's edge, not fitted
 
 
@@ -532,8 +531,7 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     spot_peak = in_curve and nest is not None and bool(nest.get("at_peak"))
     peak = spot_peak or bool(in_curve and rising)
     low = bool(in_curve and cv is not None and cv.get("cushion_u") is not None and cv.get("prev_u", 0.0) > 0 and cv["cushion_u"] < LOW_CUSHION_SHARE * cv["prev_u"])  # the spot is barely over the target for the swing the bet rides: wait for the cushion the curve itself calls for
-    bounced = bool(in_curve and cv is not None and (cv.get("bounce_u") or 0.0) >= BOUNCE_WAIT)
-    ok = inwin and (cv["verdict"] == "buy" and held and not peak and not low and not bounced if in_curve else candidate(states))  # type: ignore[index]
+    ok = inwin and (cv["verdict"] == "buy" and held and not peak and not low if in_curve else candidate(states))  # type: ignore[index]
     need = need_readings(hours * 3600.0)
     reached, count = confirmed(shot.ticker, shot.side, ok, now, need)
     n = note(shot.side, states, count, minute, need)
@@ -549,9 +547,6 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
             elif cv["verdict"] == "buy" and inwin and low:
                 n["verb"], n["why"] = "wait", "curve_low_cushion"  # the cushion is under a share of the turn the swing came from
                 n["cushion_u"], n["turn_u"] = cv["cushion_u"], cv["prev_u"]
-            elif cv["verdict"] == "buy" and inwin and bounced:
-                n["verb"], n["why"] = "wait", "curve_bounce"  # the spot has turned back against the bet since the swing began: wait for the next curve
-                n["bounce_u"] = cv["bounce_u"]
             elif cv["verdict"] == "buy" and inwin and peak:
                 n["verb"], n["why"] = "wait", "curve_peak"  # the bet's own swing or its own price is at its top: wait for the pullback
                 n["peak_by"] = "price" if (rising and not spot_peak) else "spot" if (spot_peak and not rising) else "price and spot"

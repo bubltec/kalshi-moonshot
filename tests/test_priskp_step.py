@@ -342,22 +342,3 @@ def test_the_lane_does_not_buy_the_same_swing_twice_and_waits_for_the_next_one(m
     cur["swing_start"] = 1000.0
     cur["regime"] = "steady"
     assert priskp.swing_played(shot, 600.0, hours, [100.0]) is False  # only in a curve
-
-
-def test_in_a_curve_the_trend_entry_waits_while_the_spot_is_bouncing_back_against_the_bet(monkeypatch):
-    """2026-11-27 10:06 (user, on XRP, HYPE and BNB 10:15 NO bought into a bounce up off the low: "Why does it buy the opposite of what it needs to buy? It buys down while trending up?"; "It's supposed to wait"): a curve buy waits while the spot has come back from its best level on the bet's side by a quarter of a typical minute or more since the swing began."""
-    feed(lambda s: 100.5, OPEN + 600.0)
-    cuts()
-    curve = {"regime": "curve", "verdict": "buy", "class": "inside", "swing_u": 1.6, "prev_u": 2.0, "gb_u": 0.0, "age": 0.6, "travel": 0.7, "reach": 0.2, "cushion_u": 1.5, "bounce_u": 0.5}
-    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve))
-    ok, why = ask_at(5.0, side="yes")
-    assert not ok and "why: curve_bounce" in why and "bounce_u: 0.5" in why
-    priskp._runs.clear()
-    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, bounce_u=0.1))
-    assert ask_at(5.0, side="yes")[0]  # a tenth of a typical minute off the best level: still the trend, bought
-    priskp._runs.clear()
-    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: {k2: v for k2, v in curve.items() if k2 != "bounce_u"})
-    assert ask_at(5.0, side="yes")[0]  # no reading: nothing is held back
-    priskp._runs.clear()
-    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, regime="steady"))
-    assert "curve_bounce" not in ask_at(5.0, side="yes")[1]  # only in a curve
