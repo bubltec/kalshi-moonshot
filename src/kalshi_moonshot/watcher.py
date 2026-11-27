@@ -998,6 +998,31 @@ class ProfitWatcher:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="no recovery", extra=extra)
         return None
 
+    def _best_cushion_since_open(self, t: Target, now: float) -> float | None:
+        """The best cushion the spot has had on this bet's side since its market opened: the largest 60 s average past the target, from the tick memory, on the same source and reference _wave_spot reads (the Kalshi perp against its adjusted reference when the lane uses it and it is read, else the settlement index against the target). None when unread. Asked once per bet, when the one rule first sees it."""
+        index, ref = t.shock_index, t.shock_ref
+        if t.spot_perp and t.perp_ref > 0 and t.perp_adj_ref > 0:
+            kp = perp_index(t.ticker.split("-")[0])
+            if kp:
+                index, ref = kp, t.perp_adj_ref
+        if not index or ref <= 0 or t.close_ts <= 0:
+            return None
+        got = ticks_mod.history.window(index, t.close_ts - 900.0, now)
+        if not got or not got[0]:
+            return None
+        T, V = got
+        sign = 1.0 if t.side == "yes" else -1.0
+        best, total, lo = None, 0.0, 0
+        for k in range(len(T)):
+            total += V[k]
+            while T[k] - T[lo] > 60.0:
+                total -= V[lo]
+                lo += 1
+            c = sign * (total / (k - lo + 1) - ref)
+            if best is None or c > best:
+                best = c
+        return best
+
     def _sell_one_rule(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step one_rule (fallrule.py; 2026-11-26, user: "We keep adding patches instead of fixing the core issue", "we need to consolidate one rule that handles them all", "One rule. For sure", "We need to return to our original concepts like early profit, salvage, and no loss", "make sure late profit doesn't sell if it's not under the target"). The whole exit of a lane that names it: early profit (fading with the time elapsed), no loss, salvage, the time backstop and the top, as one function of the bid against its own swing in its own wobbles, moved by the time left and the spot's cushion. This method only reads the tick's numbers from memory and hands them to fallrule.decide: the bid's wobble (its typical minute x sqrt(10/60), a tick when unread), the spot's cushion over the target and its typical minute (the 60 s average; the cross test reads the better for the bet of the 60 s and the 5 s averages, so the spot has crossed only when both have), and it asks the board's loss veto before a sale under cost (inside the settlement window that veto reads the window's own average). It replaces top_take, early_take, late_dip, no_recovery, wave_take and value_sale on the priskp exit."""
         if t.entry <= 0 or bid <= 0 or t.close_ts <= 0 or left <= 0:
@@ -1011,7 +1036,7 @@ class ProfitWatcher:
         cushion, spot_unit = spot if spot is not None else (None, None)
         cross = None if cushion is None else (max(cushion, fast[0]) if fast is not None else cushion)
         if t.one_rule is None:
-            t.one_rule = fallrule.State()
+            t.one_rule = fallrule.State(best_cushion=max(0.0, ProfitWatcher._best_cushion_since_open(self, t, now) or 0.0))  # the bet starts knowing the best cushion its side has had since the market opened (the user: "It can't be since the buy. It needs to be the entire market")
         settle = None
         if 1.0 - bid <= fallrule.TICK + 1e-9 and 1.0 <= fallrule.SETTLE_S - left < fallrule.SETTLE_S and fast is not None:  # at the top inside the settlement window: how locked in is the average that settles the bet
             banked = ProfitWatcher._wave_spot(self, t, now, int(fallrule.SETTLE_S - left))

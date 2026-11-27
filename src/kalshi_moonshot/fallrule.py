@@ -11,7 +11,7 @@ A PROFIT GAINED TOO FAST IS TAKEN: once a profit run has started, a bet whose sh
 
 THE THREE CONCEPTS:
   early profit  the bet is ahead after both fees by two wobbles (ARM_WOBBLES): follow the high of this profit run and sell, at a gain, when the bid falls the bar under it or makes no new high for STALL_SHARE of the time left. Fades with the time elapsed (above).
-  no loss       nothing here sells under the price paid while the spot has not crossed. A bet that falls back under cost ends its profit run; it is not sold on the way down.
+  no loss       nothing here sells under the price paid while the spot has not crossed. FOR A LOSS, CROSSED MEANS AS FAR UNDER THE TARGET AS THE SPOT HAS BEEN OVER IT (2026-11-27, user, on BNB 00:45 YES: bought 0.84 with the spot about $1.00 over the target, the spot went $0.20 to $0.33 under for three minutes, the salvage sold at 0.32 and the market settled YES: "why did this one sell? It was barely under the target for a short period"; "compared to how far the cushion was above earlier in the market it should allow a wait before selling to see if it comes back up"; on measuring it since the buy: "It can't be since the buy. It needs to be the entire market"). State.best_cushion is the best cushion the spot has had on the bet's side since the market opened; a loss is sold only when the spot is a wobble under the target AND at least that far under. ETH 00:45 YES of the same night (best $1.76, $1.77 under 82 s after the buy and falling) is crossed; BNB is not. On the 210 live bets of 11-25/26 the loss side with this: +$116.02 against +$110.14 as it was (13 salvage sales for 37); measured since the buy +$137.72, with the typical cushion over the whole market +$107.90, with a time limit worse (+$80.31): the whole market and the best cushion are the user's rule and the better of the whole-market two. A bet with no cushion in the whole market (best 0) is crossed by a wobble as before. A bet that falls back under cost ends its profit run; it is not sold on the way down.
   salvage       the bet is under cost and the spot has crossed: it is not sold at its low. It is sold when it has bounced a bar off its low and the bounce has failed (the bid is a bar under the bounce's high): a small loss on a lower high in place of the low or a total loss. A bet that does not bounce is sold by the time backstop: NO_RECOVERY_SHARE of the market's length under cost since it was last ahead (or first seen), the spot crossed.
   the top       a bid that leaves a tick or less to win is sold: nothing more to gain, the whole bid to lose. UNLESS THE SETTLEMENT IS LOCKED IN (user, 2026-11-26, on NEAR 21:45 YES sold at 0.991 with 14 s left and settled YES: "still selling when it's like a 99% chance, how can we stop this?"; "Option 2"): Kalshi settles on the spot's average over the market's last 60 s, so inside that window part of the result is already banked. settle_z is how many sigma of the time left the spot would have to move against the bet, from where it is now, for the rest of the window to drag the whole average across the target; the top holds when the chance of that not happening, Phi(settle_z), is worth more than the bid pays after its fee. No number of its own: the bid sets the bar (about 2.3 sigma at 0.99). With nothing banked (60 s or more left, ZEC 15:45) the top sells as before.
 LATE PROFIT IS LEFT ALONE WHILE THE SPOT HAS NOT CROSSED (user, 2026-11-26: "make sure late profit doesn't sell if it's not under the target. We keep losing a ton late market from sales for no reason"): the fade applies to every profit whose spot is not a wobble on the wrong side of the target.
@@ -42,6 +42,7 @@ class State:
     run_high_ts: float = 0.0
     low: float = 0.0  # the bid's low since it went under cost; 0 = it is not under cost
     bounce_high: float = 0.0  # the high of the bounce off that low; 0 = no bounce of a bar yet
+    best_cushion: float = 0.0  # the best cushion the spot has had on the bet's side over the WHOLE MARKET (seeded from the open by the caller, then every tick)
     first_ts: float = 0.0  # the first tick the rule saw this bet (the buy, or the pick-up after a restart)
     last_ahead_ts: float = 0.0  # the last tick the bet was ahead after both fees
 
@@ -98,7 +99,12 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
     net = bid - fee_bid - cost
     z = cushion_z(cushion, spot_unit, left)
     bar_w = bar_wobbles(left, z)
-    over = crossed(cushion if cross_cushion is None else cross_cushion, spot_unit)
+    cc = cushion if cross_cushion is None else cross_cushion
+    if cc is not None:
+        s.best_cushion = max(s.best_cushion, cc)
+    over = crossed(cc, spot_unit)
+    if over and s.best_cushion > 0:
+        over = -cc >= s.best_cushion - 1e-12  # CROSSED FOR A LOSS SALE ONLY WHEN THE SPOT IS AS FAR UNDER THE TARGET AS IT HAS BEEN OVER IT: see the module doc ("no loss")
     if s.first_ts <= 0:
         s.first_ts = now
     if 1.0 - bid <= TICK + 1e-9:

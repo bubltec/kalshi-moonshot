@@ -1,4 +1,6 @@
 """The one exit rule (fallrule.py; user, 2026-11-26: "we need to consolidate one rule that handles them all"): early profit that fades with the time elapsed, no loss while the spot has not crossed, salvage on a failed bounce, the time backstop and the top. Unit tests on the pure function, then the watcher's step through a held bet."""
+import pytest
+
 from kalshi_moonshot import fallrule, memguard
 from kalshi_moonshot.strategy import fee_per_contract as fee
 
@@ -263,3 +265,43 @@ def test_integration_a_fast_profit_sale_goes_through_the_selling_thread_to_an_or
     assert got and got[0].why.startswith("one rule, profit gained too fast to risk:"), got
     w._sell(got[0].ticker, got[0].lane, got[0].why)
     assert [n for n, _ in client.sold] == [4.65]
+
+
+def test_a_loss_is_sold_only_when_the_spot_is_as_far_under_the_target_as_it_has_been_over_it():
+    """BNB 00:45 YES, 2026-11-27: the spot had been about $1.00 over the target, went $0.20 to $0.33 under for three minutes, the salvage sold at 0.32 and the market settled YES. ETH 00:45 YES: best $1.76, then $1.77 under and falling. User: "compared to how far the cushion was above earlier in the market it should allow a wait before selling to see if it comes back up"; "It needs to be the entire market"."""
+    def bounce_fail(ask, cushion):
+        ask(0.40, 300, cushion), ask(0.26, 280, cushion), ask(0.38, 260, cushion)  # a collapse, a low, a bounce of more than the bar
+        return ask(0.30, 244, cushion)  # the bounce fails
+
+    bnb = asker(0.84, wobble=0.05, spot_unit=0.44)  # a wobble of the spot is 0.18
+    assert not bnb(0.85, 560, 1.00).sell  # the spot $1.00 over the target: the best cushion of the market so far
+    r = bounce_fail(bnb, -0.25)  # $0.25 under: past a wobble, a quarter of what it had been over
+    assert not r.sell and r.kind == "no cross"
+    eth = asker(0.84, wobble=0.05, spot_unit=0.44)
+    assert not eth(0.85, 560, 1.00).sell
+    r = bounce_fail(eth, -1.10)  # further under than it was ever over: crossed
+    assert r.sell and r.kind == "salvage"
+    seeded = asker(0.84, wobble=0.05, spot_unit=0.44)
+    seeded.state.best_cushion = 1.00  # the best came BEFORE the buy (the watcher seeds it from the market's open): the same answer
+    assert bounce_fail(seeded, -0.25).kind == "no cross"
+    none = asker(0.84, wobble=0.05, spot_unit=0.44)  # a market whose spot was never on the bet's side: a wobble under is a cross, as before
+    assert bounce_fail(none, -0.25).kind == "salvage"
+
+
+def test_integration_the_watcher_seeds_the_best_cushion_from_the_markets_open(tmp_path, monkeypatch):
+    from kalshi_moonshot import ticks, watcher
+    from tests.test_risk_exit_flow import CLOSE, TICKER, held
+
+    w = held(tmp_path, monkeypatch, live=True, extra="sell_chain=['one_rule']")
+    t = w.targets[(TICKER, "risk_only")]
+    t.shock_index, t.shock_ref, t.side = "SEED", 100.0, "yes"
+    ticks.history.clear()
+    for k in range(0, 460):  # from the open: 100 s at 101.5 (a cushion of 1.5 for YES, long before the buy), then back to 100.2
+        ticks.history.note("SEED", CLOSE - 900.0 + k, 101.5 if k < 100 else 100.2)
+    try:
+        best = watcher.ProfitWatcher._best_cushion_since_open(w, t, CLOSE - 440.0)
+        assert best == pytest.approx(1.5, abs=0.01)
+        t.side = "no"
+        assert watcher.ProfitWatcher._best_cushion_since_open(w, t, CLOSE - 440.0) < 0  # never on the NO side: nothing to compare a dip with
+    finally:
+        ticks.history.clear()

@@ -52,6 +52,10 @@ def walk(b: dict) -> dict | None:
     kept = False  # the one rule is the whole chain: wave_take and value_sale are not kept either
     stop_at = b["exit_ts"] if (b["exit_ts"] and kept) else close - 1.0
     st = fallrule.State()
+    for kk in range(0, max(int(math.ceil(b["ts"])) + 1 - (q0 + 1), 1)):  # the market before the buy: the best 60 s average cushion on the bet's side since the open (the live step seeds the rule the same way)
+        jj = (q0 + 1 + kk) - (i0 + 1)
+        if jj >= 59 and iok[jj + 1] - iok[jj - 59] == 60:
+            st.best_cushion = max(st.best_cushion, ((isum[jj + 1] - isum[jj - 59]) / 60.0 - strike) * (1.0 if side == "yes" else -1.0))
     last_ahead, first = 0.0, None
     k_buy = int(math.ceil(b["ts"])) + 1 - (q0 + 1)
     out = {"actual": actual, "new": actual if kept else won - entry, "kind": "as actual" if kept else "settled", "at": None, "px": None, "wob": None, "z0": None, "why": ""}
