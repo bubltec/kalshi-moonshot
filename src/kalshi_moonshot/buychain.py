@@ -465,22 +465,24 @@ def wave_leg_step(ctx: Ctx, shot: LongShot) -> Check:
 @step("cooldown", needs_estimate=True)
 def cooldown_step(ctx: Ctx, shot: LongShot) -> Check:
     """The lane does not buy back too soon what it just sold in this market (2026-11-19, user: "put both into one buy step, cooldown"; the rebuy wait and the reentry cooldown were lane options the cleanup took out, "should be part of buy logic"). After a sale FOR A GAIN the same side waits rebuy_opposite_after_gain_seconds (2026-11-08, HYPE 09:15: sold YES at 0.67 for a gain, bought YES again 94 s later at 0.67 and lost $2.22); the other side goes straight through the other steps, so a rebuy is usually the opposite end. After a sale at a loss, or when the lane sets no rebuy wait, the whole market (either side) waits reentry_cooldown_seconds. A lane sets either or both (in its buy module); a gain sale on a lane with a rebuy wait is not held to the reentry cooldown. Reads the bet book in memory (Store.last_exit_ts, Store.last_gain_sale), so it is asked at the decision only."""
-    reentry, rebuy = ctx.spec.reentry_cooldown_seconds, ctx.spec.rebuy_opposite_after_gain_seconds
-    if reentry <= 0 and rebuy <= 0:
-        return Check(False, "the lane sets no wait (reentry_cooldown_seconds, rebuy_opposite_after_gain_seconds)")
+    reentry, rebuy, share = ctx.spec.reentry_cooldown_seconds, ctx.spec.rebuy_opposite_after_gain_seconds, ctx.spec.rebuy_wait_share
+    if reentry <= 0 and rebuy <= 0 and share <= 0:
+        return Check(False, "the lane sets no wait (reentry_cooldown_seconds, rebuy_opposite_after_gain_seconds, rebuy_wait_share)")
     if ctx.store is None:
         return Check(True, "no books to read")
     last = ctx.store.last_exit_ts(shot.ticker, shot.lane)
     if last is None:
         return Check(True, "not sold in this lane lately")
-    gain = ctx.store.last_gain_sale(shot.ticker, shot.lane) if rebuy > 0 else None
+    gain = ctx.store.last_gain_sale(shot.ticker, shot.lane) if (rebuy > 0 or share > 0) else None
     if gain is not None and gain[1] >= last - 1e-6:  # the latest sale of this market was for a gain
         if shot.side != gain[0]:
             return Check(True, f"the lane sold {gain[0].upper()} of this market for a gain: the other side goes through")
-        wait = gain[1] + rebuy - ctx.now
+        left_at_sale = max(ctx.now + shot.hours_to_close * 3600.0 - gain[1], 0.0)  # the time the market had left when the lane sold (its close is fixed)
+        held = max(rebuy, share * left_at_sale)  # a share of that time, never fixed seconds (the fixed rebuy wait, where a lane sets one, is the floor)
+        wait = gain[1] + held - ctx.now
         if wait > 0:
-            return Check(False, f"this lane sold {shot.side.upper()} of {shot.ticker} for a gain {rebuy - wait:.0f}s ago; only the other side may be bought for {wait:.0f}s more")
-        return Check(True, f"this side was sold for a gain {rebuy - wait:.0f}s ago, past the {rebuy:.0f}s wait")
+            return Check(False, f"this lane sold {shot.side.upper()} of {shot.ticker} for a gain {held - wait:.0f}s ago; only the other side may be bought for {wait:.0f}s more" + (f" (a share {share:.0%} of the {left_at_sale:.0f}s the market had left at the sale)" if share > 0 else ""))
+        return Check(True, f"this side was sold for a gain {held - wait:.0f}s ago, past its {held:.0f}s wait")
     if reentry > 0:
         wait = last + reentry - ctx.now
         if wait > 0:

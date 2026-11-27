@@ -67,3 +67,19 @@ def test_unit_a_lane_that_sets_no_wait_gets_a_no_and_a_market_never_sold_gets_a_
     st = store_with(tmp_path, monkeypatch, [])
     assert ask(spec(), "yes", st).ok is False
     assert ask(spec(rebuy_opposite_after_gain_seconds=15.0, reentry_cooldown_seconds=90.0), "yes", st).ok is True
+
+
+def test_unit_the_rebuy_wait_is_a_share_of_the_time_the_market_had_left_at_the_sale(tmp_path, monkeypatch):
+    """XRP 06:30 YES, 2026-11-27: sold at 0.78 with about 6 minutes left and bought back 16 s later at 0.79; the whole stake was lost. Twelve same-side re-buys since 00:33 (the settled ones): eight came within 20 s of the sale, two won (+$6.23) and six lost (-$67.93: one for $0.22, five for $6.92 to $15.41); the four that came 48 s or more after it all won (+$13.41). User: "repeated buys don't have any delay after". The wait is a tenth of the time the market had left at the sale (shot: 400 s left now, sold 10 s ago, so 410 s at the sale: 41 s)."""
+    st = store_with(tmp_path, monkeypatch, [("yes", 0.67, 0.80, 10.0)])
+    sp = spec(rebuy_wait_share=0.1)
+    got = ask(sp, "yes", st)
+    assert got.ok is False and "31s more" in got.why and "10%" in got.why  # 41 s wait, 10 s gone
+    assert ask(sp, "no", st).ok is True  # the other side goes through at once: out of one half, into the other
+    st2 = store_with(tmp_path / "late", monkeypatch, [("yes", 0.67, 0.80, 48.0)])
+    assert ask(sp, "yes", st2).ok is True  # 48 s ago: past the 41 s
+    st3 = store_with(tmp_path / "loss", monkeypatch, [("yes", 0.70, 0.40, 10.0)])
+    assert ask(sp, "yes", st3).ok is True and ask(sp, "no", st3).ok is True  # a sale at a loss sets no wait: both halves stay open
+    assert ask(spec(), "yes", st).ok is False and "sets no wait" in ask(spec(), "yes", st).why  # a lane with no wait setting
+    floor = spec(rebuy_wait_share=0.1, rebuy_opposite_after_gain_seconds=90.0)  # the fixed wait, where a lane sets one, is the floor
+    assert ask(floor, "yes", st2).ok is False
