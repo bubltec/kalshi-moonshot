@@ -658,7 +658,7 @@ class ProfitWatcher:
             if t.close_ts <= 0 or now >= t.close_ts - CURVE_MIN_LEFT or t.cur_bid <= 0:
                 seen.pop(tk, None)  # a market at or past its close leaves the account when it settles: that is not a hand sale (2026-11-13: two settled bets were closed "by hand" at a price of 0 half a minute after their close)
                 continue
-            held = store.net_contracts(tk, s.env)
+            held = store.net_contracts(tk, s.env, t.side)
             side, count = account.get(tk, (t.side, 0.0))
             real = count if side == t.side else 0.0
             if held < 0.05 or real >= held - 0.05:
@@ -2411,7 +2411,10 @@ class ProfitWatcher:
         if life < 1.0:
             return  # the window is over: the next tick takes the bid
         if not r.order_id:
-            count = round(store.net_contracts(t.ticker, s.env), 2)
+            count = round(store.net_contracts(t.ticker, s.env, t.side), 2)
+            own = store.lane_contracts(t.ticker, t.lane, t.side)
+            if own > 0.005:
+                count = min(count, round(own, 2))
             if count <= 0:
                 log.info("resting sale %s %s: the books hold no contracts to rest a sale for; withdrawn", t.ticker, t.lane)
                 t.rest = None

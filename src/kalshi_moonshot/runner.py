@@ -1555,7 +1555,7 @@ def account_count(client: Any, ticker: str, side: str) -> float | None:
 
 def book_hand_sale(s: Settings, store: Store, ticker: str, side: str, real: float, bid: float) -> float:
     """Take off the bot's books the contracts the account no longer holds (sold by hand, or netted by a hand buy of the other side). Returns how many were written off, 0 when the books already agree or the bot's last order is too fresh to trust the read. The written-off contracts are booked at `bid`: the real fill is the user's and is not known here."""
-    held = store.net_contracts(ticker, s.env)
+    held = store.net_contracts(ticker, s.env, side)  # THIS SIDE'S contracts only: the account's `real` is this side's count, and the other side's orders (another lane's, or the lane's own other half) are not written off against it (ZEC 05:45, 2026-11-27)
     gone = round(held - max(real, 0.0), 2)
     if gone < 0.05 or time.time() - store.last_order_ts(ticker, s.env) < HAND_SALE_MIN_AGE:
         return 0.0
@@ -1572,7 +1572,7 @@ def close_by_hand(s: Settings, store: Store, row: Any, real: float, bid: float) 
         gone = book_hand_sale(s, store, row["ticker"], side, real, bid)
         if gone <= 0:
             return None
-        if store.net_contracts(row["ticker"], s.env) < 0.005:
+        if store.net_contracts(row["ticker"], s.env, side) < 0.005:
             store.mark_exited(row["ticker"], bid, f"closed by hand: the account no longer holds these contracts (booked at the bid {bid:.2f} when the bot noticed, not at your fill)", lane, side=side)
             return f"{row['ticker']}: closed by hand, {gone:g} contracts written off at the bid {bid:.2f}"
         return f"{row['ticker']}: {gone:g} contracts sold by hand, {real:g} still held"
@@ -1600,10 +1600,16 @@ def exit_position(
             price = manualrest.rest_fill_price(why) or price  # a resting ask fills at its own price, not the bid this re-read catches
             store.mark_exited(row["ticker"], price, why, lane, seen, side=side)
             return f"paper-sold {row['ticker']} @ {price:.2f}. {why}"
-        count = round(store.net_contracts(row["ticker"], s.env), 2)
+        # A LANE SELLS ITS OWN BETS' CONTRACTS ON ITS OWN SIDE (2026-11-27, ZEC 05:45; user: "lanes are not keeping track of their own bets and logic is bleeding across wave and priskp. Simple fix ... is making sure lanes only manage their own bets"): the count is this side's contracts on the books, capped at what this lane's own open bets on this market and side hold. Until then it was every contract on the ticker, both sides and every lane: wave_shape's give-up on a 0.4-contract YES bet sold 25 YES (priskp's NO count) 27 times, then 20.54 of priskp's re-bought NO contracts were booked as "sold by hand" against it and the real NO position was adopted as hand-placed and held to zero.
+        count = round(store.net_contracts(row["ticker"], s.env, side), 2)
+        own = store.lane_contracts(row["ticker"], lane, side)
+        if own > 0.005:
+            count = min(count, round(own, 2))
         real = account_count(client, row["ticker"], side) if count > 0 else None  # what the account really holds: the user may have sold some by hand (2026-11-13: 100 sell orders in 77 s for 1.72 contracts that were gone)
         if real is not None and real < count - 0.05 and book_hand_sale(s, store, row["ticker"], side, real, bid) > 0:
-            count = round(store.net_contracts(row["ticker"], s.env), 2)
+            count = round(store.net_contracts(row["ticker"], s.env, side), 2)
+            if own > 0.005:
+                count = min(count, round(own, 2))
             if count < 0.005:
                 store.mark_exited(row["ticker"], bid, f"closed by hand: the account no longer holds these contracts (booked at the bid {bid:.2f} when the bot noticed, not at your fill). {why}", lane, seen, side=side)
                 return f"{row['ticker']}: closed by hand, nothing left to sell. {why}"
@@ -1636,7 +1642,7 @@ def exit_position(
             side="sell", contract=side,
         )
         proceeds, sold = avg * filled, filled
-        left = store.net_contracts(row["ticker"], s.env)
+        left = round(count - filled, 2)  # what is left of THIS sale's own count: not the ticker's, which can hold another lane's contracts on the same side
         if left >= 0.005:
             # A sale into a book that has just been cleared fills nothing at a bid read a moment ago (burst and crash exits do this). Read the book again and sell what is left a little lower each time.
             # A profit sale (2026-11-14: a take at 0.88 sold its second leg at 0.860) is retried once, at a fresh read of the bid with no slip and never under its floor; the rest waits for the next quote.
@@ -1663,12 +1669,12 @@ def exit_position(
                 )
                 proceeds += a2 * f2
                 sold += f2
-                left = store.net_contracts(row["ticker"], s.env)
+                left = round(left - f2, 2)
                 if left < 0.005:
                     break
             avg = proceeds / sold if sold > 0 else avg
             filled = sold
-        if store.net_contracts(row["ticker"], s.env) < 0.005:
+        if left < 0.005:
             store.mark_exited(row["ticker"], avg if filled else bid, why, lane, seen, side=side)
             return f"sold {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
         return f"partial exit {filled:g}/{count} {row['ticker']} @ {avg:.4f}. {why}"
