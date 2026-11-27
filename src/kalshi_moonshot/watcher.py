@@ -251,6 +251,7 @@ class Target:
     wave_rev_p: float = 0.5
     wave_time_curve: tuple = ()
     wave_give_up_share: float = 0.0
+    wave_give_up_left_share: float = 0.0
     wave_give_up_arm_share: float = 0.0
     wave_give_up_turn: float = 0.5
     wave_give_up_peak: float = 1.0 / 3.0
@@ -1305,11 +1306,11 @@ class ProfitWatcher:
         got = ticks_mod.history.window(index, now - 300.0, now)
         if not got or not got[0]:
             return None
-        sell, info = wavetop.salvage(ticks_mod.mids.quotes(t.ticker), t.side, t.close_ts - 900.0, t.bought_ts, now, got[0], got[1], t.wave_give_up_share, t.wave_give_up_turn, t.wave_give_up_peak, t.wave_give_up_arm_share)
+        sell, info = wavetop.salvage(ticks_mod.mids.quotes(t.ticker), t.side, t.close_ts - 900.0, t.bought_ts, now, got[0], got[1], t.wave_give_up_share, t.wave_give_up_turn, t.wave_give_up_peak, t.wave_give_up_arm_share, t.wave_give_up_left_share)
         if not sell:
             return None
         if info.get("give_up"):
-            reason = f"wave give-up: the bid fell to {info['low']:.2f} ({'its own typical minute' if info['arm_unit'] >= info['unit'] else f'{t.wave_give_up_arm_share:g} of the bid at the buy, less than its typical minute {info["unit"]:.3f}:'} {info['arm_unit']:.3f} under the {info['entry_bid']:.2f} at the buy, armed at {info['armed_at']:.0f}) and has not turned (a rebound of {info['turn']:g} x the unit = {info['turn'] * info['arm_unit']:.3f} off its low) for {info['waited']:.0f}s since {info['since']:.0f}, against the {info['allowed']:.0f}s allowed ({info['share']:g} x the lesser of {info['elapsed']:.0f}s since the open and {info['left']:.0f}s left x {info['peak']:.3f} / (1 - {info['peak']:.3f})); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"  # type: ignore[operator]
+            reason = f"wave give-up: the bid fell to {info['low']:.2f} ({'its own typical minute' if info['arm_unit'] >= info['unit'] else f'{t.wave_give_up_arm_share:g} of the bid at the buy, less than its typical minute {info["unit"]:.3f}:'} {info['arm_unit']:.3f} under the {info['entry_bid']:.2f} at the buy, armed at {info['armed_at']:.0f}) and has not turned (a rebound of {info['turn']:g} x the unit = {info['turn'] * info['arm_unit']:.3f} off its low) for {info['waited']:.0f}s since {info['since']:.0f}, against the {info['allowed']:.0f}s allowed ({f"{info['share']:g} x the {info['left']:.0f}s left to the close" if info.get('by_left') else f"{info['share']:g} x the lesser of {info['elapsed']:.0f}s since the open and {info['left']:.0f}s left x {info['peak']:.3f} / (1 - {info['peak']:.3f})"}); sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost"  # type: ignore[operator]
         else:
             reason = f"wave salvage: the bid fell to {info['low']:.2f} (its own typical minute {info['unit']:.3f} under the {info['entry_bid']:.2f} at the buy, or more), has come back to {bid:.2f}, its climb over the last {info['window']:.0f}s has slowed to {info['recent'] * 60:+.3f} a minute against the run's {info['run'] * 60:+.3f}, and the spot has stopped moving its way; sells at {bid:.2f} for {pnl * 100.0:+.1f}% of cost, {left:.0f}s left"  # type: ignore[operator]
         reason += fx.note()
@@ -1918,6 +1919,7 @@ class ProfitWatcher:
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_give_up_arm_share = spec.wave_give_up_arm_share
+                held.wave_give_up_left_share = spec.wave_give_up_left_share
                 held.turn_sale_live = spec.turn_sale_live
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
                 held.wave_rest_share, held.rest_live = spec.wave_rest_share, s.is_live(lane, ticker.split("-")[0])  # a gain-side wave sale rests at the ask (restsell.py); a live lane's rest is a real order
