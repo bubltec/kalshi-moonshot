@@ -7,6 +7,8 @@ THREE FACTORS move the bar the reading has to pass:
   cushion  z = the spot's cushion over the target for the bet / (the spot's typical minute x sqrt(minutes left)), positive on the bet's side and negative on the wrong side. z >= Z_HOLD holds a profit whatever the bid does; under it the bar is multiplied by 2 x Phi(z) (wide with a cushion, tight against one). The spot has CROSSED only when its cushion is under zero by a wobble of its own (its typical 10 s move): a hair under the target is not a cross.
   profit   once the bet has been ahead by a wobble after both fees, the fall allowed is at most the gain at the high less one wobble.
 
+A PROFIT GAINED TOO FAST IS TAKEN: once a profit run has started, a bet whose share of its possible profit in hand is FAST_PACE times the share of its life used is sold, cushion or not (FAST_PACE).
+
 THE THREE CONCEPTS:
   early profit  the bet is ahead after both fees by two wobbles (ARM_WOBBLES): follow the high of this profit run and sell, at a gain, when the bid falls the bar under it or makes no new high for STALL_SHARE of the time left. Fades with the time elapsed (above).
   no loss       nothing here sells under the price paid while the spot has not crossed. A bet that falls back under cost ends its profit run; it is not sold on the way down.
@@ -23,6 +25,7 @@ from dataclasses import dataclass
 MARKET_S = 900.0
 Z_HOLD = 1.0  # sigma of the time left on the bet's side that holds a profit (early_take_cushion_units)
 ARM_WOBBLES = 2.0  # a profit run starts when the bet is ahead by two wobbles after both fees, so that a sale after the smallest fall that counts (one wobble) still keeps a wobble of profit. It was one wobble until 2026-11-26 ~23:40 ET: DOGE 23:30 YES was sold twice "for garbage profit, while it was winning" (user): bought 0.66, high 0.76 (+7c, 1.6 wobbles), sold at 0.69 for +2.0c on a fall of one wobble, the bid went on to 0.80; bought back at 0.78, high 0.87, sold at 0.80 for +0.4c. HYPE 21:45 the same (+0.7c). A profit under two wobbles left nothing to keep once a wobble had been given back, and one wobble is the bid's ordinary motion. Structural (it is what makes the profit cap mean something), not a fitted number; chosen after seeing those sales
+FAST_PACE = 2.0  # a profit gained too fast to risk (2026-11-27 ~01:00 ET, user, on NEAR 00:00 NO: bought 0.64, +22c within two minutes of a bet with nine left, held by the cushion and gone to zero: "We need a rule where the time to profit increase becomes too valuable to risk, and it needs to sell it"; "Let's add the profit gained too fast rule"). PACE is the share of the bet's possible profit already in hand (the gain after both fees over 1 less the cost) divided by the share of the bet's life used (its age over the time it had left at its buy): 1 is a straight line from the buy to a full win at the close. At FAST_PACE or more, with a profit run started (two wobbles), the bet is sold: it has been paid at twice the pace a full win needs, and what the rest of the market can add is small against what is in hand. A ratio of the bet's own profit and life, no cents and no seconds. On NEAR's tape it sells at 0.83 at 23:53:14, +$4.29 against -$15.23. SAID PLAINLY: on the 210 live bets of 11-25/26 it makes 99 such sales at a median 0.87, 86 of which would have gone on to win, and the replay total is +$110.14 against +$149.66 without it (2 was tried beside 3 and 4, +$124.72 and +$134.76, which do not sell NEAR; 2 chosen for that, after seeing; no buy-back modelled). On the user's word; score the `fast` sales and the buy-backs after them forward
 STALL_SHARE = 0.1  # a profit with no new high for this share of the time left has stopped climbing (early_take_stall_share)
 TICK = 0.01
 SETTLE_S = 60.0  # structural: Kalshi settles these markets on the index average over the last 60 s
@@ -48,7 +51,7 @@ class Read:
     """One tick's answer: sell or not, the kind of sale, and every number it was judged on (for the log and the record)."""
 
     sell: bool
-    kind: str  # "top", "fall", "stall", "salvage", "no recovery", or why it held: "locked", "cushion", "under bar", "no cross", "no bounce", "nothing"
+    kind: str  # "top", "fast", "fall", "stall", "salvage", "no recovery", or why it held: "locked", "cushion", "under bar", "no cross", "no bounce", "nothing"
     net: float = 0.0
     fall: float = 0.0  # the fall from the high used, in price
     bar: float = 0.0  # the fall needed, in price
@@ -125,6 +128,9 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         elif bid > s.run_high + 1e-9:
             s.run_high, s.run_high_ts = bid, now
         fall = s.run_high - bid
+        life = age + left
+        if life > 0 and age > 0 and (net / max(1.0 - cost, 1e-9)) / (age / life) >= FAST_PACE:
+            return Read(True, "fast", net, fall, 0.0, s.run_high, z, f)  # A PROFIT GAINED TOO FAST TO RISK: see FAST_PACE. Asked before the cushion hold and never faded: it is about what the bet has already been paid, not about the bid falling or stalling
         if z is not None and z >= Z_HOLD:
             return Read(False, "cushion", net, fall, 0.0, s.run_high, z, f)
         high_net = s.run_high - fee_of(s.run_high) - cost

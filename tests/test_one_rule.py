@@ -234,3 +234,32 @@ def test_a_small_profit_is_not_sold_for_pennies_on_one_wobble_doge_2330():
     assert not ask(0.80, 330, 3.0).sell  # +11c: the run starts here
     r = ask(0.73, 300, 3.0)  # a fall that still keeps a wobble of profit is taken
     assert r.sell and r.kind == "fall" and r.net >= 0.04  # about a wobble kept (the sale fee is a little higher at the lower bid)
+
+
+def test_a_profit_gained_too_fast_is_taken_even_with_a_cushion_near_0000():
+    """NEAR 00:00 NO, 2026-11-27: bought 0.64 with 519 s left, 0.83 a hundred and thirteen seconds later, held by the cushion, then zero. User: "We need a rule where the time to profit increase becomes too valuable to risk, and it needs to sell it". Pace = the share of the possible profit in hand over the share of the bet's life used; 2 or more sells."""
+    ask = asker(0.64, wobble=0.040, bought=381.0)  # bought with 519 s left
+    assert not ask(0.70, 480, 40.0).sell  # +4c: under two wobbles, no profit run, so no pace is read
+    r = ask(0.83, 406, 40.0)  # 113 s in (22% of its life) with 47% of the possible profit in hand: pace 2.2, with the spot a sigma on its side
+    assert r.sell and r.kind == "fast" and r.net > 0.15
+    slow = asker(0.64, wobble=0.040, bought=381.0)
+    assert not slow(0.76, 300, 40.0).sell  # the same bet 219 s in with 26% in hand: pace 0.6
+    assert slow(0.83, 150, 40.0).kind == "cushion"  # 47% in hand at 71% of its life: pace 0.7, an ordinary winner, left to the rest of the rule
+
+
+def test_integration_a_fast_profit_sale_goes_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
+    from kalshi_moonshot import watcher
+    from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
+
+    live(monkeypatch)
+    client = Client(bid=0.95, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['one_rule']")
+    t = w.targets[(TICKER, "risk_only")]
+    t.shock_index, t.shock_ref = "X", 100.0
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: (40.0, 10.0))  # a cushion that would hold a fall
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.10)
+    yes_bid(w, 0.95, 440)  # bought at about 0.79 ten seconds before: most of the possible profit already in hand
+    got = signals(w)
+    assert got and got[0].why.startswith("one rule, profit gained too fast to risk:"), got
+    w._sell(got[0].ticker, got[0].lane, got[0].why)
+    assert [n for n, _ in client.sold] == [4.65]
