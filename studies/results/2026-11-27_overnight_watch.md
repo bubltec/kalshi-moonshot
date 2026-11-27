@@ -26,3 +26,19 @@ Noticed, nothing changed:
 - The three small sales on the 23:30 markets that the user flagged as garbage were on markets that then settled against the bets. Selling small was right there by outcome; the two-wobble start would have held all three into a loss sale. One evening's bets cut both ways on that setting: leave it, score it.
 - ETH 23:30 re-buy: the lane sold at 0.68 and bought the same side back at 0.61 seventy seconds later while the price was falling away. That is entry logic (a re-buy right after the lane's own exit said the move had stopped), not an exit factor. Not a low-risk change; written up for the user.
 - NEAR 23:45: a 5c fall from 0.95 sold a bet that won. One bet, and the same fall rule saved the three above. No change.
+
+## NEAR 00:00 NO, a zero the user flagged at ~00:20 ("this cannot happen. Why are we still getting 0s???")
+
+Bought NO at 0.64 at 23:51:21 (519 s left). The bid stood at 0.83 to 0.88 from 23:53:10 to 23:56:20 (about +22c after both fees, for three minutes), fell to 0.67 by 23:57:20, was 0.34 ten seconds later, bounced to 0.60 at 23:58:20 and went to 0. No sale. About -$15.
+
+What the rule read (traced on the bet's own quotes and index, with the target taken from the market's page, 3.1044, because the windows row was not in yet; the cushion figures depend on that):
+- 23:53:33 to 23:57:27: HELD BY THE CUSHION. The spot's 60 s average was a sigma of the time left on the bet's side, and the rule holds a profit there whatever the bid does (user, 2026-11-25: "with that much cushion it should not sell, for almost anything"). The bid fell 0.23, almost six wobbles, while the index still read as safe: the bid moved first.
+- The fade would have held it as well: the bet was two thirds of the way through its life, where early profit is a tenth (the user's own rule, to stop late profits being sold).
+- Under cost from 23:57:27: NO LOSS, the spot had not crossed the target by a wobble on both its 60 s and 5 s averages. It crossed in the last seconds.
+
+Two fixes tried on the tape, neither shipped:
+1. A profit floor that never fades and that no cushion holds (sell when the profit is down to its last wobble): the 210 bets fall from +$149.66 to +$59.73.
+2. The same floor only when the fall is also large for the market: +$88.39. It makes 27 sales, and 23 of those 27 markets went on to settle the bet's way: a bet that falls back to its cost after a good profit usually still wins.
+So protecting against this zero costs about $60 to $90 on a day and a half of bets. Not a low-risk change; nothing was changed. Decision for the user.
+
+Worth looking at next (not built): on this bet the bid collapsed while the index still showed a cushion. The cushion hold trusts the index's 60 s average absolutely once it is a sigma out. Whether a large fall of the bid should weaken that hold is a question about which of the two leads, to be answered on the tape, not by a number of mine.
