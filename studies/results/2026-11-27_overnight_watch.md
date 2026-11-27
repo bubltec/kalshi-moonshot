@@ -138,3 +138,21 @@ Noticed:
 - wave_shape (not this watch's lane; the other session's, live from about 01:36 at $2): eight closed bets, about -$2 in all (five give-ups at a loss, a turn sale, a value sale and a salvage at a gain).
 
 Nothing changed this pass.
+
+## Pass 6, 03:19 (bets bought 01:49 to 03:17; the passes between did not run)
+
+Live build unchanged since 01:45 (51c09740). The full test suite on it passed: 1746 passed, 5 skipped.
+
+PriskP: 21 closed bets, 20 gains and one total loss, about +$48 as run. The quiet stretch of pass 5 ended at 01:49:53 without anything being changed.
+
+- Eight sold at the top (0.98 to 0.99): about +$34.
+- Ten sold by the fast clause once the bid stopped climbing, at 0.78 to 0.98: about +$23. Two of them (SOL 02:45 YES at 0.94, HYPE 02:30 NO at 0.78... the latter won) were on markets that then went against the bet: SOL 02:45 settled NO, so its sale was a save of a whole stake.
+- Two early profits: ETH 02:15 NO sold at 0.83 on a stall (+$5.80; the market then settled YES, a save), BNB 02:30 NO at 0.76 (+$0.70; the market won).
+- ONE LOSS, a zero: DOGE 02:45 YES, bought 0.78 at 02:34:56 (a steady-market buy, chance 0.66, the note "4 of 4 with the bet ... at a peak"). The bid reached 0.87 (+7c, under two wobbles, so no profit run), went 0.87 to 0.25 in ninety seconds, bounced to 0.32 and failed, and went to 0. About -$15.20. No sale: under cost the loss side now asks for the spot to be as far under the target as it had been over it in the market (live since 01:24), and this market's cushion had been large. Under the cross test as it was before, the failed bounce near 0.27 would have been salvaged, about $3.70 better on this one bet. One bet against the 13-for-37 fewer salvage sales of the replay; not changed, to be counted with the next losses.
+
+Noticed:
+- Every curve buy of this pass was "off the peak" (the wait), and the four buys noted "at a peak" were steady-market buys, where the wait does not act: of those four, three were gains and one is the zero above. The table said a peak made no difference outside a curve (91% against 93%); four bets do not change that, but the zero is the kind of buy the user called bad. Left for the user.
+- No sale at 0.99 was held by the wider top hold in the reasons seen here; all eight tops sold.
+- wave_shape (the other session's lane, live at $2 a bet since about 01:36): 44 closed bets, about -$15.90. Not this watch's lane; told to the user.
+
+Nothing changed this pass.
