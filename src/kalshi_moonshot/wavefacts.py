@@ -257,6 +257,71 @@ def travel_left(bef: dict[str, Any] | None, left: float) -> float | None:
     return float(w15) * math.sqrt(m / 15.0)
 
 
+NEST_LEVELS = (1.0, 0.5, 0.25, 0.125)  # the swing sizes of `nest`, as shares of the market's own biggest swing
+_nest: dict[tuple[str, int, int], tuple[float, tuple[int, ...]] | None] = {}
+
+
+def _swing_dir(g: list[float], rev: float) -> tuple[int, int]:
+    """(turns confirmed, the current direction +1 / -1 / 0) of a zig-zag of reversal `rev` over the path."""
+    d, lo, hi, ev, turns = 0, g[0], g[0], g[0], 0
+    for v in g[1:]:
+        if d == 0:
+            lo, hi = min(lo, v), max(hi, v)
+            if v - lo >= rev:
+                d, ev, turns = 1, v, turns + 1
+            elif hi - v >= rev:
+                d, ev, turns = -1, v, turns + 1
+        elif (v - ev) * d > 0:
+            ev = v
+        elif (ev - v) * d >= rev:
+            d, ev, turns = -d, v, turns + 1
+    return turns, d
+
+
+def nest(index: str, opened: float, now: float, side: str) -> dict[str, Any] | None:
+    """How the market's OWN swings nest for the bet's side now, with no wave length anywhere (2026-11-26, user: "Don't build on waves that are specific lengths. There could by multiple waves in 3 mins, or one wave in 15"; "Why doesn't it read before the markets open? It buys starting at 3 mins how would it know if it's not inside a curve?"; on putting this reading on the buy note first: "Ok I like that"). `leg` walks back only to the open with a swing of half a typical minute, so at minute 3 it reads a ripple as a swing and cannot see the move the market opened inside (BTC, ZEC and DOGE 22:30 NO, 2026-11-26: a one-typical-minute dip bought against a five-typical-minute climb into the open).
+    The path is everything the lane can see: the hour before the open and the market so far, on the 10 s grid. It is cut into swings by SIZE: BIGGEST is the largest reversal at which the path still shows a turn (the biggest wave this market has made in view), and the levels are NEST_LEVELS shares of it. A swing takes whatever time it took.
+    levels   the bet's side WITH (+1) or AGAINST (-1) the current swing at each level, biggest first
+    signs    the same as text, e.g. "- + + +"
+    with     how many levels run with the bet
+    biggest_u  the biggest swing in the market's typical minutes (the hour before the open), None when that is unread
+    A FACT, deciding nothing: studies/results/2026-11-26_priskp_nested_swings_at_buy_table.txt (210 live bets: 3 of 4 with settled the bet's way 84% and was positive on both days; 2 of 4, the bounce against the larger move, 62%, and 4 of 4, the move fully run, 71%, both negative on both days; a day and a half, a lead). None when the hour before the open is not in the tick memory or the path never turned. Memory only; the swings are kept per index for 5 s (both sides and every look in that time share one cut)."""
+    from . import ticks
+
+    key = (index, round(opened), int(now // 5))
+    with _lock:
+        hit = _nest.get(key, False)
+    if hit is False:
+        hit = None
+        got = ticks.history.window(index, opened - HOUR - GRID, now)
+        if got and got[0]:
+            g = _grid(got[0], got[1], opened - HOUR, now)
+            if len(g) >= 300:
+                lo, hi = 0.0, max(g) - min(g)
+                for _ in range(30):  # the largest reversal that still shows two swings
+                    mid = (lo + hi) / 2.0
+                    if _swing_dir(g, mid)[0] >= 2:
+                        lo = mid
+                    else:
+                        hi = mid
+                if lo > 0:
+                    dirs = tuple(_swing_dir(g, lo * s * 0.999)[1] for s in NEST_LEVELS)
+                    if 0 not in dirs:
+                        hit = (lo, dirs)
+        with _lock:
+            if len(_nest) > 2048:
+                _nest.clear()
+            _nest[key] = hit
+    if hit is None or side not in ("yes", "no"):
+        return None
+    big, dirs = hit
+    want = 1 if side == "yes" else -1
+    levels = [d * want for d in dirs]
+    bef = before(index, opened)
+    u = bef["u"] if bef and bef.get("u") else None
+    return {"levels": levels, "signs": " ".join("+" if v > 0 else "-" for v in levels), "with": sum(v > 0 for v in levels), "biggest_u": None if not u else round(big / u, 1)}
+
+
 TREND_MIN = 1.0  # a swing counts as a TREND once it has run this many typical minutes with the bet and has not turned: my choice, twice wave_turn's 0.5 u swing, not scored
 REACH = 1.0  # the target is IN REACH of the curve when the spot is within this many of the market's usual 10 minute wave travels of it (the hour before the open): outside that the market is flat with cushion
 

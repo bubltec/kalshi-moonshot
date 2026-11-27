@@ -424,6 +424,25 @@ def _curve_verdict(shot: Any, now: float, hours: float, strike: float) -> dict[s
         return None
 
 
+def _nest_note(shot: Any, now: float, hours: float, buying: bool) -> str | None:
+    """SHADOW (2026-11-26, user, on recording the nested-swings reading on every buy and logging what it would do before it decides anything: "Ok I like that"): how the market's own swings nest for the shot's side (wavefacts.nest), and what the reading would have said of a buy. On 210 live bets a buy with 3 of the 4 levels running its way settled its way 84% of the time; with 2 of 4 (a bounce against the larger move) 62% and with 4 of 4 (the move fully run) 71%, both negative on both days. It decides nothing: the note only says so. None when the reading cannot be made."""
+    from . import binaryrisk, wavefacts
+
+    try:
+        index = binaryrisk.curve_index(shot.series or shot.ticker.split("-")[0])
+        if not index:
+            return None
+        opened = round((now + hours * 3600.0) / 900.0) * 900.0 - 900.0
+        got = wavefacts.nest(index, opened, now, shot.side)
+    except Exception:
+        return None
+    if got is None:
+        return None
+    would = "" if not buying else {2: "; shadow: would WAIT (a bounce against the larger move)", 4: "; shadow: would WAIT (the move has fully run)"}.get(got["with"], "; shadow: would buy too")
+    big = "n/a" if got["biggest_u"] is None else f"{got['biggest_u']:g} u"
+    return f"{got['signs']} ({got['with']} of 4 with the bet, biggest first; the biggest swing in view {big}){would}"
+
+
 def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """The fact `priskp_screen`: the five checks for the shot's side now, as the note dict (verb buy / wait), and the latest confirmed shift (or None) for the fact `shift_out`. No shift rule here: the board's veto does that."""
     now, hours = host.now, host.hours
@@ -473,6 +492,10 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
         n["verb"], n["why"] = "wait", "dead_ask_band"
     elif n["verb"] == "buy" and not reached:
         n["verb"], n["why"] = "wait", "confirming"
+    if inwin:  # the nested swings are read only where the lane may buy (the look's cost is a few milliseconds, shared for 5 s per index)
+        nest = _nest_note(shot, now, hours, n["verb"] == "buy")
+        if nest:
+            n["nest"] = nest
     last = sh[-1] if sh and out_of_cushion(sh[-1], strike, shot.side) else None
     return n, last
 
