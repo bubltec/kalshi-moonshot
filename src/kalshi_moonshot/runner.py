@@ -1241,11 +1241,13 @@ def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) 
     """(the price a resting buy sits at, "") or (None, why it is skipped). It rests `buy_rest_below` under the ask. The ask was read some time ago and may have fallen since; a post-only buy at or over the ask
     is refused ("post only cross": 94% of 275 refusals in two days), so when the live book's ask is lower it rests the same distance under that one. A fallen ask under the lane's price floor skips the buy.
     A risen ask does not raise the price, and a missing or empty book leaves the planned price."""
+    from . import restprice
+
     price = _rest_start(shot, spec)
     if spec.buy_rest_at_bid:  # the price is the side's bid: the live book's bid when there is one, else the decision's
         live_bid = best_bid(book, shot.side) if book else None
         if live_bid is not None:
-            price = round(max(0.01, live_bid), 4)
+            price = round(restprice.in_band(spec, max(0.01, live_bid), shot.ask), 4)
         if price <= 0.01 and shot.bid <= 0:
             return None, "skipped: nobody bids for this side, so a resting buy has no bid to sit on"
     if price >= shot.ask - 1e-9:
@@ -1254,13 +1256,18 @@ def _resting_price(shot: LongShot, spec: LaneSpec, book: dict[str, Any] | None) 
     if live_ask is not None and live_ask < shot.ask - 1e-9:
         if live_ask < spec.price[0] - 1e-9:
             return None, f"skipped: the {shot.side} ask fell from {shot.ask:.2f} to {live_ask:.2f}, under the lane's {spec.price[0]:.2f} floor"
-        lowered = round(max(0.01, live_ask - spec.buy_rest_below), 4)
+        lowered = round(restprice.in_band(spec, max(0.01, live_ask - spec.buy_rest_below), live_ask), 4)
         if lowered < price and not spec.buy_rest_at_bid:
             log.info("resting buy %s %s: the ask fell from %.2f to %.2f, resting at %.2f instead of %.2f", shot.ticker, shot.side, shot.ask, live_ask, lowered, price)
             price = lowered
     from . import restcheck
 
-    return restcheck.on_grid(price, shot.side), ""  # the price the exchange holds (kalshi.book_price), so the order's recorded price and the re-judgement's compare like with like
+    price = restcheck.on_grid(price, shot.side)
+    if price < restprice.floor_of(spec) - 1e-9 and shot.ask >= restprice.floor_of(spec) - 1e-9:
+        return None, f"skipped: a resting buy under the {shot.side} ask {shot.ask:.2f} would sit at {price:.2f}, under the lane's {spec.price[0]:.2f} floor"
+    if price >= (live_ask if live_ask is not None else shot.ask) - 1e-9:
+        return None, f"skipped: no resting buy fits between the lane's {spec.price[0]:.2f} floor and the {shot.side} ask {(live_ask if live_ask is not None else shot.ask):.2f}"
+    return price, ""  # the price the exchange holds (kalshi.book_price), so the order's recorded price and the re-judgement's compare like with like
 
 
 def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float, spec: LaneSpec, order_key: str | None, book: dict[str, Any] | None = None, price: float | None = None, seconds: float | None = None, hold_price: bool = False, judge: Any = None) -> Placed:

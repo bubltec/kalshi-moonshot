@@ -21,7 +21,7 @@ def test_a_paper_resting_bid_follows_the_ask_the_way_the_live_lane_does(tmp_path
             tape.execute("INSERT INTO quotes (ts, ticker, bid, ask) VALUES (?, ?, ?, ?)", (ts, tk, round(ask - 0.01, 4), ask))
 
     quotes("KXBTC15M-FALL", [(99.0, 0.30), (101.0, 0.29), (102.0, 0.28), (103.0, 0.26)])  # decided at 0.30: rests at 0.28, moves to 0.27 (ask 0.29), then 0.26 (ask 0.28), the ask 0.26 reaches it
-    quotes("KXBTC15M-FLOOR", [(99.0, 0.20), (101.0, 0.19), (103.0, 0.175)])  # decided at 0.20: rests at 0.18, moves to 0.17 (ask 0.19), and the ask 0.175 is under the lane's 0.18 floor and over the order: withdrawn. The lane that stays at 0.18 is reached by the ask 0.175
+    quotes("KXBTC15M-FLOOR", [(99.0, 0.20), (101.0, 0.19), (103.0, 0.175)])  # decided at 0.20: rests at 0.18. At the ask 0.19 the order would sit at 0.17, under the lane's 0.18 floor: since 2026-11-27 a resting buy never rests under the floor (restprice.in_band; 12 of the wave lane's 145 live buys had filled at 0.14 to 0.17), so it stays at 0.18 and the ask 0.175 reaches it there, as it reaches the lane that stays
     quotes("KXBTC15M-RISE", [(99.0, 0.30), (101.0, 0.33), (103.0, 0.35)])  # a risen ask raises the order (0.31, then 0.33), and the ask never comes down to it: nothing fills
     tape.commit()
     for lane, tk in (("follows", "KXBTC15M-FALL"), ("stays", "KXBTC15M-FALL"), ("follows", "KXBTC15M-FLOOR"), ("stays", "KXBTC15M-FLOOR"), ("follows", "KXBTC15M-RISE")):
@@ -31,7 +31,8 @@ def test_a_paper_resting_bid_follows_the_ask_the_way_the_live_lane_does(tmp_path
     fall, stays = rows[("follows", "KXBTC15M-FALL")], rows[("stays", "KXBTC15M-FALL")]
     assert fall["action"] == "bet" and fall["ask"] == pytest.approx(0.26) and "followed the ask from 0.28" in fall["reason"]
     assert stays["action"] == "bet" and stays["ask"] == pytest.approx(0.28) and "followed" not in stays["reason"]  # the same tape, judged at its first price
-    assert rows[("follows", "KXBTC15M-FLOOR")]["action"] == "pass"  # withdrawn under the floor
+    floor = rows[("follows", "KXBTC15M-FLOOR")]
+    assert floor["action"] == "bet" and floor["ask"] == pytest.approx(0.18)  # held at the floor, never moved under it, and filled there (before 2026-11-27 it moved to 0.17 and was withdrawn when the ask went under the floor)
     assert rows[("stays", "KXBTC15M-FLOOR")]["action"] == "bet" and rows[("stays", "KXBTC15M-FLOOR")]["ask"] == pytest.approx(0.18)  # the order that stayed was reached by the drop
     assert rows[("follows", "KXBTC15M-RISE")]["action"] == "pass"
-    assert got == {"filled": 3, "missed": 2}
+    assert got == {"filled": 4, "missed": 1}  # the floor case fills at 0.18 since 2026-11-27 (it used to be withdrawn under the floor)

@@ -45,8 +45,26 @@ def side_bid(bid: float, ask: float, side: str) -> float | None:
     return 1.0 - ask if 0 < ask < 1 else None
 
 
+def floor_of(spec: Any) -> float:
+    """The lowest price the lane buys at: the low end of its `price` range (0 for a spec without one)."""
+    band = getattr(spec, "price", None)
+    try:
+        return float(band[0]) if band else 0.0
+    except (TypeError, ValueError, IndexError):
+        return 0.0
+
+
+def in_band(spec: Any, price: float, ask: float | None = None) -> float:
+    """A resting buy's price, never under the lane's floor (2026-11-27, user, on the wave lane's live bets: "not betting in the price range"): the order rests under the ask, so with the ask a cent or two over the floor it sat UNDER the floor, and
+    12 of the lane's 145 live buys of 01:30 to 07:15 ET filled at 0.14 to 0.17 on a lane whose range starts at 0.18. The floor is the lane's own; a price at or over the ask is the caller's to refuse (no resting buy fits between the floor and the ask)."""
+    lo = floor_of(spec)
+    if ask is not None and lo >= ask - 1e-9:
+        return price  # the ask itself is at or under the floor: the lane's price step and the floor check on the ask decide that, not this price
+    return max(price, lo)
+
+
 def rest_price(spec: Any, side: str, ask: float, rows: Sequence[Sequence[float]], now: float, bid: float | None = None) -> float:
-    """The price a resting buy starts at: the side's bid when the lane sets buy_rest_at_bid and a bid is known, else under the ask."""
+    """The price a resting buy starts at: the side's bid when the lane sets buy_rest_at_bid and a bid is known, else under the ask; never under the lane's price floor (in_band)."""
     if getattr(spec, "buy_rest_at_bid", False) and bid is not None and bid > 0:
-        return round(max(0.01, bid), 4)
-    return round(max(0.01, base_ask(spec, side, ask, rows, now) - spec.buy_rest_below), 4)
+        return round(in_band(spec, max(0.01, bid), ask), 4)
+    return round(in_band(spec, max(0.01, base_ask(spec, side, ask, rows, now) - spec.buy_rest_below), ask), 4)

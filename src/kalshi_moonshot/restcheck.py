@@ -59,14 +59,14 @@ def differs(a: float, b: float) -> bool:
 
 def rest_below(spec: Any, side: str, ask: float, bid: float | None, rows: Sequence[Sequence[float]], now: float) -> float | None:
     """The `rest_below` pricer: buy_rest_below under the ask, or under the lower of the ask and its recent average (restprice.base_ask), on the grid and under the ask."""
-    return on_grid(restprice.base_ask(spec, side, ask, rows, now) - spec.buy_rest_below, side, ask)
+    return on_grid(restprice.in_band(spec, restprice.base_ask(spec, side, ask, rows, now) - spec.buy_rest_below, ask), side, ask)
 
 
 def rest_at_bid(spec: Any, side: str, ask: float, bid: float | None, rows: Sequence[Sequence[float]], now: float) -> float | None:
     """The `rest_at_bid` pricer (lane field buy_rest_at_bid): the order sits on the side's bid, on the grid and under the ask. No bid, no price (the order is kept where it is)."""
     if bid is None or bid <= 0:
         return None
-    return on_grid(bid, side, ask)
+    return on_grid(restprice.in_band(spec, bid, ask), side, ask)
 
 
 PRICERS: dict[str, Callable[[Any, str, float, float | None, Sequence[Sequence[float]], float], float | None]] = {"rest_below": rest_below, "rest_at_bid": rest_at_bid}
@@ -111,6 +111,8 @@ def recheck(s: Any, spec: Any, shot: Any, price: float, bid: float | None, ask: 
                 return Verdict("cancel", price, "price floor", f"the {shot.side} ask {ask:.3f} is under the lane's {spec.price[0]:g} floor", ask)
             name = pricer_for(spec)
             want = want_price(spec, shot.side, ask, rows, now, bid=bid)
+            if want is not None and want < restprice.floor_of(spec) - 1e-9 and ask >= spec.price[0] - 1e-9:  # the ask is so close to the floor that no resting buy fits between them: an order under the lane's range is not left on the book
+                return Verdict("cancel", price, "price floor", f"the {shot.side} ask {ask:.3f} leaves no price for a resting buy at or over the lane's {spec.price[0]:g} floor", ask)
             if want is None or not differs(want, price):
                 return Verdict("keep", price, name, f"ask {ask:.3f}, the order at {price:.3f} is where the price step ({name}) wants it", ask)
             return Verdict("move", want, name, f"ask {ask:.3f}, bid {bid or 0:.3f}: the price step ({name}) wants {want:.3f} (was {price:.3f})", ask)
