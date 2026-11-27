@@ -80,7 +80,7 @@ def read(y: list[float], target: float | None = None) -> dict[str, Any] | None:
         res = sum((q - c1 * p - c2 * v) ** 2 for p, v, q in zip(pos, vel, acc, strict=True))
         fit = max(0.0, 1.0 - res / saa)
     period = zeta = None
-    if w0sq is not None and w0sq > 0:
+    if w0sq is not None and g is not None and w0sq > 0:
         w0 = math.sqrt(w0sq)
         zeta = g / w0
         wd2 = w0sq - g * g

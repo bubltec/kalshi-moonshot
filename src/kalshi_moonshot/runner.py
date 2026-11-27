@@ -517,7 +517,7 @@ def evaluate(
         paper_at, trail = _paper_rest_wait(s, client, shot, spec, judge)
         note = f"{note} {trail}"
     action = "bet" if bet else "pass"
-    held = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
+    held: dict[str, Any] = {"contracts": sized.contracts, "stake_usd": sized.cost_usd} if bet and sized.ok else {}
     if paper_at is not None and held:
         held["ts"] = paper_at  # the paper order's own time, which the tape judge reads its window from
     if dry:
