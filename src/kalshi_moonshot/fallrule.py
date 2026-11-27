@@ -89,7 +89,7 @@ def settle_z(banked: float | None, cushion_now: float | None, spot_unit: float |
     return need / (spot_unit * math.sqrt(left / 60.0))
 
 
-def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None, settle: float | None = None, bought: float | None = None) -> Read:
+def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None, settle: float | None = None, bought: float | None = None, wave: object = "off") -> Read:
     """Ask the rule on one tick. `fee_bid` and `fee_entry` are the fee per contract at the bid and at the price paid, `fee_of` the fee function (for the gain at the high), `wobble` the bid's typical 10 s move (a tick when it has no reading). `cross_cushion`, when given, is the cushion the cross test reads in place of `cushion` (the watcher gives the better for the bet of the spot's 60 s and 5 s averages: the spot has crossed only when both have)."""
     cost = entry + fee_entry
     net = bid - fee_bid - cost
@@ -105,6 +105,17 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
     if net > 0:  # EARLY PROFIT
         s.low = s.bounce_high = 0.0
         s.last_ahead_ts = now
+        if wave != "off":  # THE WAVE EXIT, REPLAY ONLY, NOT LIVE AND NOT TO BE MADE LIVE AS IT IS: on 210 live bets (scripts/priskp_wave_exit_replay.py, studies/results/2026-11-26_priskp_wave_exit_replay.txt) it made +$47.83 against +$149.66 for the bid-fall profit side below, +$148.39 held to settlement and +$52.38 actual: a swing that has given back 0.2 typical minutes sells a winner for a cent or two. Kept so the replay runs. The profit is the swing.s. `wave` is (class, at_extreme) of the bet's side in the curve's current leg, the entry's own reading (wavefacts.leg), or None when it cannot be read
+            if wave is None:
+                return Read(False, "no wave", net, 0.0, 0.0, bid, z)
+            cls, extreme = wave  # type: ignore[misc]
+            if z is not None and z >= Z_HOLD:
+                return Read(False, "cushion", net, 0.0, 0.0, bid, z)
+            if cls in ("turned", "against"):
+                return Read(True, "turn", net, 0.0, 0.0, bid, z)  # the swing the bet was riding has turned: what it gave is taken
+            if cls == "inside" and extreme:
+                return Read(True, "leg done", net, 0.0, 0.0, bid, z)  # the leg has run a usual one's length or travel: taken into its top
+            return Read(False, "riding", net, 0.0, 0.0, bid, z)
         age = now - (bought if bought is not None and bought > 0 else s.first_ts)
         f = 1.0 if over else fade(age, age + left)  # `bought` is the bet's buy time (the first tick seen when it is not given). the fade is for a profit whose spot has not crossed: late in the market such a bet is left alone (user, 2026-11-26: "make sure late profit doesn't sell if it's not under the target"); with the spot on the wrong side a profit is still taken at any minute
         if s.run_high <= 0:

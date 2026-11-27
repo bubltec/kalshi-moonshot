@@ -1,0 +1,65 @@
+window: 11-25 16:32:11 to 11-26 22:56:29 ET, 210 live PriskP bets (a bet with no tape, strike or result is left out)
+
+actual $   52.38   held to settlement $  148.39   bid fall $  149.66   WAVE $   47.83
+
+by how the wave rule ends the bet:
+  leg done                   n  66  actual $  105.43  bid fall $  124.16  wave $   95.49  wave against actual: beat  24 lost  42
+  no recovery                n   2  actual $  -16.87  bid fall $  -16.87  wave $  -16.87  wave against actual: beat   0 lost   0
+  salvage                    n  24  actual $ -213.98  bid fall $ -187.54  wave $ -187.54  wave against actual: beat  14 lost  10
+  settled                    n   1  actual $  -11.46  bid fall $  -15.00  wave $  -15.00  wave against actual: beat   0 lost   1
+  top                        n  33  actual $   99.64  bid fall $   98.53  wave $  104.38  wave against actual: beat   6 lost  19
+  turn                       n  84  actual $   89.61  bid fall $  146.39  wave $   67.37  wave against actual: beat  29 lost  52
+
+by the bid's wobble at the buy (thirds at 0.045 and 0.052):
+  calm                       n  70  actual $   45.51  bid fall $   86.07  wave $   61.58  wave against actual: beat  23 lost  41
+  middle                     n  70  actual $  -34.06  bid fall $   41.71  wave $  -26.37  wave against actual: beat  28 lost  40
+  jumpy                      n  70  actual $   40.92  bid fall $   21.87  wave $   12.62  wave against actual: beat  22 lost  43
+
+by the leg's class for the bet's side at the buy:
+  against                    n  14  actual $   14.54  bid fall $   16.87  wave $    9.83  wave against actual: beat   7 lost   5
+  inside                     n 181  actual $   38.61  bid fall $   98.25  wave $   48.74  wave against actual: beat  62 lost 109
+  turned                     n  15  actual $   -0.77  bid fall $   34.54  wave $  -10.74  wave against actual: beat   4 lost  10
+
+by day:
+  11-25                      n  30  actual $   -9.50  bid fall $   -4.40  wave $  -18.95  wave against actual: beat   9 lost  19
+  11-26                      n 180  actual $   61.88  bid fall $  154.06  wave $   66.79  wave against actual: beat  64 lost 105
+
+the bets the user flagged:
+  DOGE15M-26NOV251945  no  19:35:16 paid 0.76 | actual early take @0.82             $  +0.99 | bid fall fall 19:38:24 @0.81        $  +0.78 | wave turn 19:36:39 @0.79        $  +0.37  turned, swing 1.36 u gave back 0.41 u, travel 0.46, age 0.15, 501s left, +0.6c
+  DOGE15M-26NOV261145  no  11:35:03 paid 0.70 | actual settled lost                 $ -15.90 | bid fall fall 11:37:39 @0.77        $  +1.31 | wave leg done 11:35:59 @0.81    $  +2.25  inside, swing 1.76 u gave back -0.0 u, travel 0.62, age 1.0, 541s left, +8.5c
+  ZEC15M-26NOV261545   yes 15:38:20 paid 0.80 | actual settled lost                 $ -15.18 | bid fall top 15:44:06 @0.99         $  +3.67 | wave turn 15:39:36 @0.83        $  +0.38  against, swing 0.6 u gave back 0.04 u, travel 0.22, age 0.78, 324s left, +0.9c
+  BTC15M-26NOV261700   yes 16:48:20 paid 0.64 | actual no recovery @0.08            $ -13.29 | bid fall fall 16:50:37 @0.71        $  +1.30 | wave leg done 16:50:10 @0.74    $  +2.03  inside, swing 2.3 u gave back 0.17 u, travel 1.12, age 0.27, 590s left, +7.0c
+  SOL15M-26NOV262030   no  20:24:14 paid 0.78 | actual settled lost                 $ -14.80 | bid fall salvage 20:26:05 @0.22     $ -10.86 | wave salvage 20:26:05 @0.22     $ -10.86  
+  NEAR15M-26NOV262100  yes 20:50:01 paid 0.82 | actual no recovery @0.46            $  -6.99 | bid fall top 20:59:01 @0.99         $  +3.13 | wave leg done 20:57:15 @0.89    $  +1.17  inside, swing 0.78 u gave back 0.0 u, travel 0.53, age 1.45, 165s left, +5.3c
+  HYPE15M-26NOV262145  yes 21:37:01 paid 0.61 | actual one rule, early profit @0.66 $  +0.84 | bid fall fall 21:39:02 @0.70        $  +1.85 | wave turn 21:37:45 @0.67        $  +1.09  turned, swing 1.68 u gave back 0.25 u, travel 0.24, age 0.62, 435s left, +2.8c
+  HYPE15M-26NOV262145  yes 21:37:35 paid 0.67 | actual one rule, the top @0.99      $  +7.44 | bid fall top 21:43:15 @0.99         $  +7.44 | wave turn 21:37:49 @0.75        $  +1.54  turned, swing 1.63 u gave back 0.2 u, travel 0.45, age 0.63, 431s left, +5.1c
+  NEAR15M-26NOV262145  yes 21:39:37 paid 0.80 | actual one rule, the top @0.99      $  +3.61 | bid fall top 21:44:46 @0.99         $  +3.61 | wave turn 21:40:59 @0.83        $  +0.38  against, swing 0.9 u gave back -0.0 u, travel 0.28, age 0.44, 241s left, +0.9c
+  BTC15M-26NOV262230   no  22:20:34 paid 0.58 | actual settled lost                 $ -15.26 | bid fall salvage 22:25:22 @0.35     $  -6.47 | wave salvage 22:25:22 @0.35     $  -6.47  
+  ZEC15M-26NOV262230   no  22:21:01 paid 0.67 | actual settled lost                 $ -14.77 | bid fall fall 22:23:56 @0.73        $  +1.02 | wave turn 22:23:13 @0.72        $  +0.79  against, swing 0.71 u gave back 0.32 u, travel 0.03, age 0.57, 407s left, +2.0c
+  DOGE15M-26NOV262230  no  22:23:18 paid 0.73 | actual settled lost                 $ -14.99 | bid fall salvage 22:27:24 @0.26     $  -9.93 | wave salvage 22:27:24 @0.26     $  -9.93  
+  HYPE15M-26NOV262245  yes 22:38:15 paid 0.64 | actual settled lost                 $ -14.54 | bid fall fall 22:39:39 @0.71        $  +1.26 | wave turn 22:39:50 @0.69        $  +0.80  turned, swing 2.03 u gave back 0.24 u, travel 0.43, age 0.27, 310s left, +1.9c
+  XRP15M-26NOV262245   yes 22:39:16 paid 0.67 | actual settled lost                 $ -14.99 | bid fall fall 22:40:40 @0.75        $  +1.50 | wave turn 22:41:35 @0.75        $  +1.50  against, swing 0.58 u gave back 0.18 u, travel 0.03, age 0.94, 205s left, +5.1c
+
+the 10 bets the wave rule does worst on against actual:
+  ETH15M-26NOV261230   no  12:22:12 paid 0.75 | actual value sale @0.86             $  +2.06 | bid fall salvage 12:25:04 @0.31     $  -9.22 | wave salvage 12:25:04 @0.31     $  -9.22  
+  XRP15M-26NOV261830   no  18:25:36 paid 0.58 | actual top take @0.99               $ +10.62 | bid fall top 18:28:59 @0.99         $ +10.64 | wave turn 18:26:00 @0.63        $  +0.87  turned, swing 1.13 u gave back 0.26 u, travel 0.26, age 0.64, 240s left, +1.7c
+  NEAR15M-26NOV261200  yes 11:49:35 paid 0.54 | actual value sale @0.62             $  +1.76 | bid fall salvage 11:52:04 @0.28     $  -7.61 | wave salvage 11:52:04 @0.28     $  -7.61  
+  XRP15M-26NOV262130   yes 21:22:20 paid 0.59 | actual top take @0.99               $ +10.18 | bid fall fall 21:24:06 @0.71        $  +2.68 | wave turn 21:23:54 @0.64        $  +0.86  against, swing 0.65 u gave back 0.11 u, travel 0.06, age 0.82, 366s left, +1.7c
+  BNB15M-26NOV261200   yes 11:58:22 paid 0.64 | actual settled won                  $  +9.31 | bid fall fall 11:58:44 @0.73        $  +1.97 | wave turn 11:58:31 @0.68        $  +0.64  turned, swing 0.82 u gave back 0.28 u, travel 0.17, age 0.55, 89s left, +0.9c
+  ETH15M-26NOV262130   yes 21:22:17 paid 0.61 | actual top take @0.99               $  +9.23 | bid fall top 21:26:17 @0.99         $  +9.20 | wave turn 21:23:54 @0.66        $  +0.83  turned, swing 1.35 u gave back 0.23 u, travel 0.4, age 0.93, 366s left, +1.8c
+  BTC15M-26NOV261815   no  18:05:48 paid 0.62 | actual top take @0.99               $  +8.96 | bid fall stall 18:09:41 @0.85       $  +5.35 | wave leg done 18:07:15 @0.66    $  +0.59  inside, swing 1.19 u gave back -0.0 u, travel 0.52, age 1.1, 465s left, +0.8c
+  BNB15M-26NOV262030   yes 20:25:40 paid 0.63 | actual top take @0.99               $  +8.80 | bid fall stall 20:27:23 @0.93       $  +7.15 | wave turn 20:26:50 @0.72        $  +1.84  against, swing 0.67 u gave back 0.01 u, travel 0.6, age 0.78, 190s left, +6.0c
+  HYPE15M-26NOV261630  no  16:20:38 paid 0.70 | actual top take @0.99               $  +7.23 | bid fall top 16:28:53 @0.99         $  +7.23 | wave leg done 16:21:38 @0.73    $  +0.41  inside, swing 1.9 u gave back -0.0 u, travel 0.53, age 1.0, 502s left, +0.2c
+  HYPE15M-26NOV261130  no  11:19:38 paid 0.68 | actual settled won                  $  +7.16 | bid fall top 11:25:15 @0.99         $  +6.92 | wave leg done 11:20:54 @0.71    $  +0.35  inside, swing 1.89 u gave back 0.09 u, travel 0.47, age 1.04, 546s left, +0.0c
+
+the 10 it does best on:
+  DOGE15M-26NOV261145  no  11:35:03 paid 0.70 | actual settled lost                 $ -15.90 | bid fall fall 11:37:39 @0.77        $  +1.31 | wave leg done 11:35:59 @0.81    $  +2.25  inside, swing 1.76 u gave back -0.0 u, travel 0.62, age 1.0, 541s left, +8.5c
+  BTC15M-26NOV262300   yes 22:52:01 paid 0.63 | actual one rule, no recovery @0.02  $ -14.62 | bid fall no recovery 22:58:07 @0.02 $ -14.60 | wave turn 22:53:09 @0.75        $  +2.54  turned, swing 1.02 u gave back 0.35 u, travel 0.48, age 0.72, 411s left, +9.1c
+  XRP15M-26NOV262245   yes 22:39:16 paid 0.67 | actual settled lost                 $ -14.99 | bid fall fall 22:40:40 @0.75        $  +1.50 | wave turn 22:41:35 @0.75        $  +1.50  against, swing 0.58 u gave back 0.18 u, travel 0.03, age 0.94, 205s left, +5.1c
+  ZEC15M-26NOV261545   yes 15:38:20 paid 0.80 | actual settled lost                 $ -15.18 | bid fall top 15:44:06 @0.99         $  +3.67 | wave turn 15:39:36 @0.83        $  +0.38  against, swing 0.6 u gave back 0.04 u, travel 0.22, age 0.78, 324s left, +0.9c
+  ZEC15M-26NOV262230   no  22:21:01 paid 0.67 | actual settled lost                 $ -14.77 | bid fall fall 22:23:56 @0.73        $  +1.02 | wave turn 22:23:13 @0.72        $  +0.79  against, swing 0.71 u gave back 0.32 u, travel 0.03, age 0.57, 407s left, +2.0c
+  HYPE15M-26NOV262245  yes 22:38:15 paid 0.64 | actual settled lost                 $ -14.54 | bid fall fall 22:39:39 @0.71        $  +1.26 | wave turn 22:39:50 @0.69        $  +0.80  turned, swing 2.03 u gave back 0.24 u, travel 0.43, age 0.27, 310s left, +1.9c
+  BTC15M-26NOV261700   yes 16:48:20 paid 0.64 | actual no recovery @0.08            $ -13.29 | bid fall fall 16:50:37 @0.71        $  +1.30 | wave leg done 16:50:10 @0.74    $  +2.03  inside, swing 2.3 u gave back 0.17 u, travel 1.12, age 0.27, 590s left, +7.0c
+  NEAR15M-26NOV261245  yes 12:36:47 paid 0.76 | actual late dip @0.01               $ -14.79 | bid fall settled lost               $ -14.99 | wave turn 12:37:35 @0.79        $  +0.36  turned, swing 1.43 u gave back 0.22 u, travel 0.42, age 0.91, 445s left, +0.6c
+  HYPE15M-26NOV262015  no  20:03:33 paid 0.60 | actual no recovery @0.05            $ -13.88 | bid fall fall 20:06:02 @0.67        $  +1.36 | wave turn 20:04:24 @0.64        $  +0.60  against, swing 0.57 u gave back 0.37 u, travel 0.07, age 0.76, 636s left, +0.7c
+  SOL15M-26NOV261200   yes 11:48:46 paid 0.63 | actual no recovery @0.20            $ -11.61 | bid fall fall 11:49:02 @0.69        $  +1.18 | wave leg done 11:49:00 @0.75    $  +2.81  inside, swing 1.54 u gave back 0.0 u, travel 1.05, age 0.46, 660s left, +9.1c
