@@ -255,3 +255,25 @@ The sixth buy-back after a profit sale (SOL 05:15 NO, bought back at 0.80 forty-
 wave_shape (the other session's lane): 96 closed bets, about -$22.50.
 
 Nothing changed this pass.
+
+## Pass 11, 05:49 (bets bought 05:20 to 05:41)
+
+Live build unchanged (b2480d4a).
+
+PriskP: five closed bets, three gains and TWO ZEROS, about -$23 as run. One open at the pass (ZEC 05:45 NO, 0.74, bought back 17 s after a fast sale at 0.71).
+
+| Bet | Paid | Ended | Market | As run |
+|---|---|---|---|---|
+| BTC 05:30 NO 05:20:24 | 0.62 | NO SALE | YES | -$16.60 |
+| ETH 05:30 NO 05:20:36 | 0.64 | NO SALE | YES | -$15.00 |
+| BTC 05:45 NO | 0.83 | top 0.99 | not in | +$2.90 |
+| ZEC 05:45 NO | 0.60 | fast 0.71 | not in | +$2.00 |
+| BNB 05:45 YES | 0.80 | top 0.99 | not in | +$3.60 |
+
+The two zeros, the same path on both markets: bought NO twelve seconds apart at minute 5.4; the bid fell to 0.27 and 0.33 by minute 9.7 (no loss sale: the spot was not as far under the target as it had been over it), came all the way back to 0.69 and 0.76 by minute 11 (BTC +4c, ETH +9c after both fees for about a minute: under or at two wobbles, late in the bets' lives, nothing taken), held 0.56 to 0.76 until ninety seconds from the close, and went to zero in the last minute.
+
+That is the fourth and fifth zero of the night with this ending (BTC, BNB and DOGE 04:15 were the others): a bet near its cost with one or two minutes left, and the market decided against it in the settlement minute. The exits as they stand do nothing there by design: a profit that small is not taken, a late profit is not sold while the spot has not crossed, and a loss is not sold until the spot is well under. A late-market rule would be a new piece of logic, the kind the user asked to be shown, not built: put to the user with the count.
+
+wave_shape (the other session's lane): 106 closed bets, about -$2.30 (it has recovered about $20 in the last half hour).
+
+Nothing changed this pass.
