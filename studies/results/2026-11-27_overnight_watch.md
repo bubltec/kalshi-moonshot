@@ -120,3 +120,21 @@ Noticed:
 - BTC 01:15 sold at 0.99 with 164 s left (the user: "didn't we get it to stop this?"). The locked-in hold is the last minute's only. On the 210 bets, widening it to hold at 0.99 whenever the spot's cushion for the time left makes holding worth more than the bid changes 11 bets, all for the better (+$1.61), where removing the top clause gains $9.17 on 58 bets and loses $45.60 on 3. The wider hold is a factor of the existing test and is being built after the test run in progress.
 
 Nothing changed in this pass itself.
+
+## Pass 5, 01:49 (bets bought 01:21 to 01:48)
+
+Deployed since pass 4: 01:45 the top's hold at any minute when the cushion makes holding worth more than the bid (the user, on BTC 01:15 sold at 0.99 with 164 s left). That deploy also carried the shared .env with LIVE_LANES=priskp,wave_shape: another session put wave_shape live at $2 a bet (said to the user before the deploy; no answer came).
+
+PriskP: two closed bets, both gains, about +$5; NO PRISKP BUY SINCE 01:23:29.
+
+| Bet | Paid | Ended | As run |
+|---|---|---|---|
+| DOGE 01:30 NO 01:21:18 | 0.66 | fast 0.81 | +$2.80 |
+| DOGE 01:30 NO 01:23:29 | 0.84 | fast 0.97 (after the 01:24 change: sold once the bid stopped climbing) | +$2.20 |
+
+Noticed:
+- Twenty-five minutes with no PriskP buy (the whole 01:45 market and the first four minutes of the 02:00 one). The looks are running: since 01:24:30 the lane's passes read curve_wait 6899, dead_ask_band 458, check_not_passing 450, window 430, curve_not_held 81, cushion_not_strong 48, curve_peak 36, confirming 31. So the new peak wait is a small part of it (36 looks); the curve's own wait is what is holding, at about the rate it did before (7499 in the 25 minutes from 00:35, when the lane was buying). It may be the markets of this half hour; it may be the leg reading's longer walk (live since 00:33) calling more legs old. Not enough to tell, and nothing to change on one quiet stretch: to be watched on the next passes. If the lane stays silent through 02:15 the user is told.
+- The DOGE 01:23:29 sale is the first by the fast clause as changed: it held from the pace being reached until the bid stopped, and sold at 0.97.
+- wave_shape (not this watch's lane; the other session's, live from about 01:36 at $2): eight closed bets, about -$2 in all (five give-ups at a loss, a turn sale, a value sale and a salvage at a gain).
+
+Nothing changed this pass.
