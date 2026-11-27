@@ -96,3 +96,27 @@ Noticed:
 - Small gains that could have been more: BTC and DOGE 00:30 and ZEC 00:45 sold 2 to 5.5c ahead on markets that then won; HYPE and SOL 00:45 sold the same way on markets that lost. Three against two this pass; no change.
 
 Nothing changed this pass.
+
+## Pass 4, 01:25 (bets bought 00:47 to 01:23)
+
+Deployed since pass 3: 01:00 the curve entry's wait at the peak of the bet's own swing (the user: "I think we should set the off the peak after a pullback on") and the order journal's buy order row on a recovered bet (SOL 00:45 YES had gone to zero because the 00:33 push orphaned its resting buy and its sale at 0.84 was booked on paper); 01:24 the loss side's cross measured against the best cushion of the whole market (the user, on BNB 00:45) and the fast clause selling only once the bid stops climbing (the user, on SOL 01:15), with another session's paper wave_dip step that had landed on main.
+
+About +$23 as run on seven closed bets, no loss.
+
+| Bet | Paid | Ended | As run | Nest note at the buy |
+|---|---|---|---|---|
+| ZEC 01:00 NO 00:47:53 | 0.73 | early profit 0.79 | +$0.72 | 3 of 4 |
+| ZEC 01:00 NO 00:52:48 | 0.84 | top 0.99 | +$2.67 | 4 of 4, at a peak (a steady-market buy: the peak wait is the curve's only) |
+| BTC 01:15 YES 01:02:16 | 0.64 | top 0.99 with 164 s left | +$7.90 | 2 of 4, off the peak |
+| SOL 01:15 YES 01:11:36 | 0.73 | fast 0.91, 36 s after the buy | +$3.30 | 2 of 4, off the peak. The bid was still rising and went to 1.00 (about +$5.10 held): the user's "It shouldn't sell if it doesn't stop", fixed at 01:24 |
+| SOL 01:30 NO 01:17:33 | 0.66 | fast 0.86 | +$4.20 | 2 of 4, off the peak (sold before the 01:24 change) |
+| XRP 01:30 NO 01:17:38 | 0.59 | early profit 0.69 | +$1.65 | 2 of 4, off the peak |
+| DOGE 01:30 NO 01:21:18 | 0.66 | fast 0.81 | +$2.80 | 2 of 4, off the peak |
+| DOGE 01:30 NO 01:23:29 | 0.84 | open at the pass | | 2 of 4, off the peak |
+
+Noticed:
+- Since the peak wait went live at 01:00 every curve buy's note reads "off the peak", and there are fewer buys: six in the 25 minutes from 01:00 against ten to twelve in the 25-minute stretches before. None of the six lost. Far too few to call; it is the first sign the wait changes when the lane buys, as the user expected.
+- The shadow's "2 of 4 with the bet: would WAIT (a bounce against the larger move)" was on five of these six winners. On tonight's bets that shadow line is wrong more often than right; the peak reading is the part that is holding up. To be judged on more bets before anything is done with it.
+- BTC 01:15 sold at 0.99 with 164 s left (the user: "didn't we get it to stop this?"). The locked-in hold is the last minute's only. On the 210 bets, widening it to hold at 0.99 whenever the spot's cushion for the time left makes holding worth more than the bid changes 11 bets, all for the better (+$1.61), where removing the top clause gains $9.17 on 58 bets and loses $45.60 on 3. The wider hold is a factor of the existing test and is being built after the test run in progress.
+
+Nothing changed in this pass itself.
