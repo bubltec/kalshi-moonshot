@@ -156,3 +156,13 @@ Noticed:
 - wave_shape (the other session's lane, live at $2 a bet since about 01:36): 44 closed bets, about -$15.90. Not this watch's lane; told to the user.
 
 Nothing changed this pass.
+
+## Pass 7, 03:49 (bets bought 03:17 to 03:48)
+
+Live build unchanged (51c09740).
+
+PriskP: one closed bet, a gain of about +$1.50 (SOL 03:30 YES, 0.84, sold by the fast clause at 0.93 once the bid stopped; the market settled YES, about $1.10 more held). One open at the pass (SOL 04:00 YES, 0.68, a curve buy off the peak). No buy between 03:17:12 and 03:48:39, thirty-one minutes; the earlier quiet stretch (01:23 to 01:49) ended by itself, so nothing is read into this one.
+
+wave_shape (the other session's lane): 57 closed bets, about -$17.50.
+
+Nothing to trace (no loss, no small gain that ran far), nothing changed.
