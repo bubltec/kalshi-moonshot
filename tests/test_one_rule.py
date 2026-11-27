@@ -213,7 +213,13 @@ def test_a_bet_bought_late_still_has_its_early_profit_zec_2230():
     assert not ask(0.70, 400, 5.0).sell
     assert not ask(0.79, 369, 5.0).sell  # 22:23:51: +9c after both fees, at minute 8.9 of the market and 170 s into the bet
     r = ask(0.73, 364, 5.0)  # 22:23:56 on the tape: fell 0.06
-    assert r.sell and r.kind == "fall" and r.net > 0 and r.fade > 0.99
+    assert r.sell and r.kind == "fall" and r.net > 0 and r.fade > 0.98
+    # and it fades quicker the less time the bet had (user: "it should fade quicker based o the time left"): a tenth two thirds of the way through the bet's own life
+    assert 0.05 < fallrule.fade(600.0, 900.0) < 0.2 and 0.05 < fallrule.fade(360.0, 540.0) < 0.2 and 0.05 < fallrule.fade(120.0, 180.0) < 0.2
+    assert fallrule.fade(360.0, 900.0) > 0.95 > 0.2 > fallrule.fade(360.0, 540.0)  # six minutes in: fresh for a bet bought at the open, nearly gone for one bought with nine minutes left
+    late = asker(0.67, wobble=0.040, bought=361.0)
+    late(0.70, 400, 5.0), late(0.90, 150, 5.0)  # the same bet 6.5 minutes into its 9: a 9c fall is left alone
+    assert not late(0.81, 145, 5.0).sell
     old = asker(0.67, wobble=0.040)  # the same bids on a bet as old as the market: left alone, as the rule did that night
     old(0.70, 400, 5.0), old(0.79, 369, 5.0)
     assert not old(0.73, 364, 5.0).sell
