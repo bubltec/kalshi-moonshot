@@ -607,6 +607,21 @@ def wave_turn_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why)
 
 
+@step("wave_dip")
+@throttled("wave_dip")
+def wave_dip_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The wave lane's dip-and-peak buy on PriskP's curve reading (wavedip.py; 2026-11-27, PAPER on the wave_shape lane, in place of wave_turn; user: "I want to utilize the curve logic in priskp", "right on the dip as it starts to turn we buy Yes. The same for peaks, right as a peak crests we buy No"): in a curve market (wavefacts.curve) the cheap side is bought while the spot's swing runs against it and has run a typical minute: YES in a dip, NO at a peak, once per swing. A resting buy's re-ask stands while the swing still runs against the side. The answer is kept for THROTTLE_S per (lane, market, side), like wave_leg: the walk back is a heavy reading. Memory only. Evidence and limits: studies/results/2026-11-26-wave-scalp-entry.txt (in sample; positive before the spread and fees, so the resting buy and sale decide)."""
+    from . import ticks as ticks_mod
+    from . import wavedip
+
+    try:
+        strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
+        ok, why = wavedip.admits(shot, ctx.now, strike, ctx.resting)
+        return Check(ok, why)
+    except Exception as exc:  # a trigger that cannot be read does not buy
+        return Check(False, f"the curve reading failed ({exc!r}): no buy")
+
+
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""
