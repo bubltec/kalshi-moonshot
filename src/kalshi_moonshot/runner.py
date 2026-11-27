@@ -1002,7 +1002,45 @@ def buy_limit(spec: LaneSpec | None, ticker: str, side: str, decision_ask: float
     return round(min(0.99, cap, base + max(delta, 0.0)), 4)
 
 
+_CLAIMS: dict[str, str] = {}  # market -> the lane whose buy is being placed on it right now (from before the risk gate until its order row is written)
+_CLAIMS_LOCK = threading.Lock()
+
+
+def claim(ticker: str, lane: str) -> str | None:
+    """Take the market for this lane's buy; returns None when it is taken, or the OTHER lane that holds it. One lane places a buy on a market at a time.
+    Why (2026-11-27, user: "Each lane should only look at what it has placed"): the risk gate refuses a market the bot's orders already hold, but an order is on the books only when it is done, so two lanes could each rest a buy on one market
+    for some seconds, both fill, and then hold it together (or hold its two sides, which the exchange nets against each other and a reduce-only sale cannot sell). The claim closes that gap: the second lane is told no before its order is sent.
+    It goes with the lane isolation of the same day (a sale is sized by the lane's own bets on its own side: store.lane_contracts, net_contracts by side)."""
+    with _CLAIMS_LOCK:
+        held = _CLAIMS.get(ticker)
+        if held is not None and held != lane:
+            return held
+        _CLAIMS[ticker] = lane
+        return None
+
+
+def release(ticker: str, lane: str) -> None:
+    with _CLAIMS_LOCK:
+        if _CLAIMS.get(ticker) == lane:
+            del _CLAIMS[ticker]
+
+
 def place(
+    s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float,
+    order_key: str | None = None, before_order: Callable[[], None] | None = None, judge: Any = None,
+) -> Placed:
+    """Send the order for `count` contracts if the book and risk gate agree (_place), with the market claimed for this lane from before the risk gate until the order's row is written (claim)."""
+    lane = shot.lane or "moonshot"
+    other = claim(shot.ticker, lane)
+    if other is not None:
+        return Placed(f"blocked: the lane {other} is placing a buy on this market right now (one lane buys a market at a time, so each lane sells only what it bought)")
+    try:
+        return _place(s, client, store, shot, why, count, order_key, before_order, judge)
+    finally:
+        release(shot.ticker, lane)
+
+
+def _place(
     s: Settings, client: KalshiClient, store: Store, shot: LongShot, why: str, count: float,
     order_key: str | None = None, before_order: Callable[[], None] | None = None, judge: Any = None,
 ) -> Placed:
