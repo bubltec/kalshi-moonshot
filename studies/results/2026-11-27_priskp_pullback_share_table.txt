@@ -1,0 +1,14 @@
+210 bets
+
+by the share of the move against it that the bet's swing had taken back at the buy:
+   under a quarter taken back                   n  30  settled its way  80%  avg paid 0.71  held $   70.02 (+2.33 a bet)  as run $    9.98  by day {'11-25': 8.58, '11-26': 61.44}
+   a quarter to a half                          n  63  settled its way  79%  avg paid 0.71  held $   93.07 (+1.48 a bet)  as run $   50.22  by day {'11-25': -12.08, '11-26': 105.15}
+   a half to three quarters                     n  53  settled its way  70%  avg paid 0.73  held $   -1.83 (-0.03 a bet)  as run $   -1.64  by day {'11-25': -19.39, '11-26': 17.56}
+   three quarters and more                      n  15  settled its way  87%  avg paid 0.73  held $   39.12 (+2.61 a bet)  as run $   19.95  by day {'11-25': 3.52, '11-26': 35.61}
+   nothing against the bet at any size          n  49  settled its way  69%  avg paid 0.75  held $  -51.99 (-1.06 a bet)  as run $  -26.13  by day {'11-25': -4.73, '11-26': -47.26}
+
+the same, split by the model's own chance at the buy (the buy note's `chance`):
+   chance under 0.6, under a half taken back    n  41  settled its way  78%  avg paid 0.67  held $  100.45 (+2.45 a bet)  as run $   21.09  by day {'11-26': 100.45}
+   chance under 0.6, a half and more, or nothing against n  47  settled its way  62%  avg paid 0.68  held $  -52.67 (-1.12 a bet)  as run $  -43.78  by day {'11-26': -52.67}
+   chance 0.6 and over, under a half taken back n  36  settled its way  89%  avg paid 0.74  held $   95.47 (+2.65 a bet)  as run $   67.54  by day {'11-25': 3.75, '11-26': 91.72}
+   chance 0.6 and over, a half and more, or nothing against n  59  settled its way  80%  avg paid 0.77  held $   55.30 (+0.94 a bet)  as run $   41.98  by day {'11-25': -10.84, '11-26': 66.13}
