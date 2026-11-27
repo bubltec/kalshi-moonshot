@@ -397,3 +397,27 @@ def test_integration_a_fast_drop_sale_goes_through_the_selling_thread_to_an_orde
     w._sell(got[0].ticker, got[0].lane, got[0].why)
     assert len(client.sold) == 1, "the selling thread did not place the fast drop's sale under cost"
     assert len(Store(config.load().db_path).open_bets()) == 0
+
+
+def test_early_take_holds_a_fall_while_the_cushion_approaches_the_target_with_curvature_and_sells_it_when_the_approach_is_straight():
+    """User, 2026-11-27 12:15 ET: normal early take "should hold as long as it has a curvature while approaching the target which indicates it will likely hold on the winning side. The other exits should handle the case where it doesn't". The cushion is small for the time left in both runs (under a sigma), and the bid falls the same way."""
+
+    def run(path):
+        ask = asker(0.64, wobble=0.040, bought=1e-9)
+        out = None
+        for k, c in enumerate(path):
+            out = ask(0.80, 600 - 5 * k, c)  # a profit run at 0.80 while the cushion moves
+        return ask, out
+
+    straight = [9.0 - 0.3 * k for k in range(15)]  # falls in a straight line toward the target
+    ask, _ = run(straight)
+    r = ask(0.69, 600 - 5 * 15, straight[-1] - 0.3)
+    assert r.sell and r.kind == "fall", r
+    curved = [4.5 + 4.5 * math.exp(-k / 4.0) for k in range(15)]  # falls but slows: it flattens above the target
+    ask, _ = run(curved)
+    r = ask(0.69, 600 - 5 * 15, curved[-1] - 0.01)
+    assert not r.sell and r.kind == "cushion", r
+    rising = [4.5 + 0.2 * k for k in range(15)]  # moving away from the target
+    ask, _ = run(rising)
+    r = ask(0.69, 600 - 5 * 15, rising[-1])
+    assert not r.sell and r.kind == "cushion", r

@@ -103,23 +103,31 @@ def settle_z(banked: float | None, cushion_now: float | None, spot_unit: float |
     return need / (spot_unit * math.sqrt(left / 60.0))
 
 
-def fast_drop(s: State, cc: float | None, z: float | None, now: float, left: float) -> bool:
-    """The spot's cushion is falling in a straight line (no curvature: the later half of the window falls about as fast as the earlier one) toward the target, in the last minutes, with the cushion already small for the time left, and at that slope it reaches the target within half the time left. All ratios of the time left and of the spot's own typical move, no cents."""
-    if cc is None or left > FAST_DROP_LEFT_SHARE * MARKET_S or (z is not None and z > FAST_DROP_Z):
-        return False
+def cushion_path(s: State, now: float, left: float) -> tuple[str, float]:
+    """How the spot's cushion has moved over the last part of the market (a share of the time left, never under 10 s): "rising", "straight" (falling with no curvature: the later half of the window falls at least FAST_DROP_STRAIGHT as fast as the earlier half), "curved" (falling but slowing) or "unread"; and its slope a second over the whole window."""
     w = max(10.0, FAST_DROP_WINDOW_SHARE * left)
     win = [(t, c) for t, c in s.ch if t >= now - w]
     if len(win) < 6 or win[-1][0] - win[0][0] < 0.7 * w:
-        return False
+        return "unread", 0.0
     mid = 0.5 * (win[0][0] + win[-1][0])
     a = [(t, c) for t, c in win if t <= mid]
     b = [(t, c) for t, c in win if t >= mid]
     if len(a) < 2 or len(b) < 2 or a[-1][0] <= a[0][0] or b[-1][0] <= b[0][0]:
-        return False
+        return "unread", 0.0
     s1 = (a[-1][1] - a[0][1]) / (a[-1][0] - a[0][0])
     s2 = (b[-1][1] - b[0][1]) / (b[-1][0] - b[0][0])
     full = (win[-1][1] - win[0][1]) / (win[-1][0] - win[0][0])
-    return full < 0 and s1 < 0 and s2 < 0 and s2 <= FAST_DROP_STRAIGHT * s1 and cc / -full <= FAST_DROP_TTC_SHARE * left
+    if full >= 0 or s2 >= 0:
+        return "rising", full
+    return ("straight" if (s1 < 0 and s2 <= FAST_DROP_STRAIGHT * s1) else "curved"), full
+
+
+def fast_drop(s: State, cc: float | None, z: float | None, now: float, left: float) -> bool:
+    """The spot's cushion is falling in a straight line toward the target (no curvature), in the last minutes, with the cushion already small for the time left, and at that slope it reaches the target within half the time left. All ratios of the time left and of the spot's own typical move, no cents."""
+    if cc is None or left > FAST_DROP_LEFT_SHARE * MARKET_S or (z is not None and z > FAST_DROP_Z):
+        return False
+    kind, full = cushion_path(s, now, left)
+    return kind == "straight" and cc / -full <= FAST_DROP_TTC_SHARE * left
 
 
 def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None, settle: float | None = None, bought: float | None = None, wave: object = "off") -> Read:
@@ -176,8 +184,8 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
             s.fast = True  # A PROFIT GAINED TOO FAST TO RISK (FAST_PACE): from here the bet is sold THE MOMENT IT STOPS CLIMBING, and not before (2026-11-27 ~01:20 ET, user, on SOL 01:15 YES: bought 0.73, sold by this clause at 0.91 thirty-six seconds later while the bid was still rising, and it went straight on to 1.00: "It never dropped going up in price", "It shouldn't sell if it doesn't stop"). It stays so for the rest of the profit run
         if s.fast and left > INERT_SHARE * MARKET_S and now - s.run_high_ts >= FAST_BEAT_SHARE * left:  # asked before the cushion hold and never faded: a wobble off the high, or no new high for STALL_SHARE of the time left
             return Read(True, "fast", net, fall, wobble, s.run_high, z, f)
-        if z is not None and z >= Z_HOLD:
-            return Read(False, "cushion", net, fall, 0.0, s.run_high, z, f)
+        if (z is not None and z >= Z_HOLD) or cushion_path(s, now, left)[0] in ("rising", "curved"):
+            return Read(False, "cushion", net, fall, 0.0, s.run_high, z, f)  # the cushion is large for the time left, OR the spot is moving away from the target or approaching it with curvature (a fall that slows: it will likely hold on the winning side; user, 2026-11-27 12:15 ET: "this should hold as long as it has a curvature while approaching the target ... The other exits should handle the case where it doesn't"): a straight fall toward the target is the fast drop's, the bid's own fall the bar's
         high_net = s.run_high - fee_of(s.run_high) - cost
         bar = max(wobble, min(bar_w * wobble, high_net - wobble)) / max(f, 1e-9)
         if fall >= bar - GRID:
