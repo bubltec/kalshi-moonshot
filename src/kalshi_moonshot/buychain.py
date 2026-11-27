@@ -615,6 +615,18 @@ def wave_turn_step(ctx: Ctx, shot: LongShot) -> Check:
     return Check(ok, why, facts)
 
 
+@step("wave_low")
+def wave_low_step(ctx: Ctx, shot: LongShot) -> Check:
+    """The low side in a dip or a peak (wavelow.py; 2026-11-27, user: "Whichever side is low. That's what you buy in the dip or peak"; "We already have the curve logic"): the wave lane's own curve reading says the spot's swing has run a typical minute or more; YES is bought in a fall, NO in a rise, with no confirmation wait. Which side is cheap is the module's `price` step. Memory only."""
+    from . import ticks as ticks_mod
+    from . import wavelow
+
+    strike = ticks_mod.strikes.get(shot.ticker) or _window_strike(ctx, shot)
+    times = ctx.store.lane_bet_times(shot.ticker, shot.lane, shot.side) if ctx.store is not None else []
+    ok, why, facts = wavelow.admits_facts(ctx.s, shot, ctx.now, strike, ctx.resting, times)
+    return Check(ok, why, facts)
+
+
 @step("ladder", needs_estimate=True)
 def ladder_step(ctx: Ctx, shot: LongShot) -> Check:
     """The worth of the bet: the model's chance for the side against what it costs, by the lane's own edge rule (lanes.wants_bet: min_edge_room, min_edge, max_lag) and its chance band."""
