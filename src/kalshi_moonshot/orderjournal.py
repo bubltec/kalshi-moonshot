@@ -51,6 +51,14 @@ def intent(data_dir: Any, *, lane: str, shot: Any, order_id: str, count: float, 
         log.warning("order journal: could not record the order %s on %s (%r); a restart now would not find it", order_id, getattr(shot, "ticker", "?"), exc)
 
 
+def moved(data_dir: Any, first_id: str, new_id: str) -> None:
+    """A buy's order was placed again under a new id (the follow rule's cancel-and-place, or an amend that answered with another id): the recovery counts the fills of every id the buy used, and of no other order. Never raises."""
+    if not first_id or not new_id or first_id == new_id:
+        return
+    with contextlib.suppress(Exception):
+        _append(data_dir, {"moved": first_id, "to": new_id, "ts": time.time()})
+
+
 def settle(data_dir: Any, order_id: str, note: str) -> None:
     with contextlib.suppress(Exception):
         _append(data_dir, {"done": order_id, "ts": time.time(), "note": note})
@@ -65,6 +73,7 @@ def pending(data_dir: Any, now: float | None = None) -> list[dict[str, Any]]:
         return []
     intents: dict[str, dict[str, Any]] = {}
     done: set[str] = set()
+    more: dict[str, list[str]] = {}
     for ln in lines:
         try:
             row = json.loads(ln)
@@ -72,9 +81,13 @@ def pending(data_dir: Any, now: float | None = None) -> list[dict[str, Any]]:
             continue
         if "done" in row:
             done.add(row["done"])
+        elif "moved" in row:
+            more.setdefault(row["moved"], []).append(row.get("to") or "")
         elif row.get("order_id") is not None:
             intents[row["order_id"] or f"{row.get('ticker')}@{row.get('ts')}"] = row
     left = [r for k, r in intents.items() if k not in done]
+    for r in left:  # every order id this buy used: its own, the ones a compacted file kept, and the ones it was moved to
+        r["order_ids"] = [x for x in dict.fromkeys([r.get("order_id") or "", *r.get("order_ids", []), *more.get(r.get("order_id") or "", [])]) if x]
     if len(lines) > COMPACT_LINES:
         with contextlib.suppress(OSError):
             tmp = p.with_suffix(".tmp")
@@ -90,17 +103,23 @@ def _has_bet(store: Any, e: dict[str, Any]) -> bool:
     return row is not None
 
 
-def _filled(client: Any, e: dict[str, Any]) -> tuple[float, float]:
-    """(contracts, dollars including fee) the account's fills show for this market and side since the order was sent: every order of the buy, so an order the follow rule moved by cancel-and-place is counted too."""
+def _filled(client: Any, e: dict[str, Any]) -> tuple[float, float, float]:
+    """(contracts, dollars including fee, fee) the account's fills show FOR THIS BUY'S OWN ORDERS: the order id the intent recorded and every id the follow rule moved it to (`moved`). No other order on the market counts.
+    Until 2026-11-27 this counted every fill on the market and side since the order was sent. On the night of 11-27, with two live lanes on the same markets, that booked another lane's contracts onto an order that never filled: ZEC 05:45, a wave_shape
+    resting YES buy of 5.26 contracts that did not fill was "recovered" as 25 YES at about 0.30, which was PriskP's sale of 25 NO at 0.71 (the exchange lists a NO sale as a YES fill); the wave exit then sent about 20 sales of contracts the account did not
+    hold. BNB 05:56 (6.89 sent, 21.42 booked at about 0.70) and NEAR 06:36 (5.55 sent, 25 booked at about 0.61, then sold by the wave lane's give-up at 0.13) were PriskP's own buys booked the same way. Eight such rows that night."""
     from . import account, memguard
 
+    ids = {x for x in (e.get("order_ids") or [e.get("order_id")]) if x}
+    if not ids:
+        return 0.0, 0.0, 0.0  # an intent with no order id cannot name its fills: nothing is booked on a guess (the caller says so loudly)
     with memguard.allowed():
         rows = client.portfolio_rows("/portfolio/fills", "fills", int(e["ts"]) - 5, pages=1)
     filled = spent = fees = 0.0
     seen: set[str] = set()
     for f in rows:
         row = account.fill_row(f)
-        if row is None or row[0] in seen or row[2] != e["ticker"] or row[11] != e["side"] or (row[10] or "buy") != "buy":
+        if row is None or row[0] in seen or row[9] not in ids:
             continue
         seen.add(row[0])
         n, yes_price, fee = float(row[4]), float(row[5]), float(row[7] or 0.0)
@@ -122,6 +141,8 @@ def _recover(s: Any, client: Any, store: Any, e: dict[str, Any]) -> str:
         time.sleep(2.0)
     filled, spent, fees = _filled(client, e)
     if filled <= 0:
+        if not e["order_id"]:
+            log.error("order journal: %s %s %s was sent with no order id, so its fills cannot be told from another order's: nothing is booked; check the account", e["lane"], e["ticker"], e["side"])
         settle(s.data_dir, e["order_id"], "nothing filled")
         return f"{e['ticker']}: nothing filled"
     paid = spent / filled
