@@ -8,7 +8,7 @@ THREE FACTORS move the bar the reading has to pass:
   profit   once the bet has been ahead by a wobble after both fees, the fall allowed is at most the gain at the high less one wobble.
 
 THE THREE CONCEPTS:
-  early profit  the bet is ahead after both fees by a wobble: follow the high of this profit run and sell, at a gain, when the bid falls the bar under it or makes no new high for STALL_SHARE of the time left. Fades with the time elapsed (above).
+  early profit  the bet is ahead after both fees by two wobbles (ARM_WOBBLES): follow the high of this profit run and sell, at a gain, when the bid falls the bar under it or makes no new high for STALL_SHARE of the time left. Fades with the time elapsed (above).
   no loss       nothing here sells under the price paid while the spot has not crossed. A bet that falls back under cost ends its profit run; it is not sold on the way down.
   salvage       the bet is under cost and the spot has crossed: it is not sold at its low. It is sold when it has bounced a bar off its low and the bounce has failed (the bid is a bar under the bounce's high): a small loss on a lower high in place of the low or a total loss. A bet that does not bounce is sold by the time backstop: NO_RECOVERY_SHARE of the market's length under cost since it was last ahead (or first seen), the spot crossed.
   the top       a bid that leaves a tick or less to win is sold: nothing more to gain, the whole bid to lose. UNLESS THE SETTLEMENT IS LOCKED IN (user, 2026-11-26, on NEAR 21:45 YES sold at 0.991 with 14 s left and settled YES: "still selling when it's like a 99% chance, how can we stop this?"; "Option 2"): Kalshi settles on the spot's average over the market's last 60 s, so inside that window part of the result is already banked. settle_z is how many sigma of the time left the spot would have to move against the bet, from where it is now, for the rest of the window to drag the whole average across the target; the top holds when the chance of that not happening, Phi(settle_z), is worth more than the bid pays after its fee. No number of its own: the bid sets the bar (about 2.3 sigma at 0.99). With nothing banked (60 s or more left, ZEC 15:45) the top sells as before.
@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 MARKET_S = 900.0
 Z_HOLD = 1.0  # sigma of the time left on the bet's side that holds a profit (early_take_cushion_units)
+ARM_WOBBLES = 2.0  # a profit run starts when the bet is ahead by two wobbles after both fees, so that a sale after the smallest fall that counts (one wobble) still keeps a wobble of profit. It was one wobble until 2026-11-26 ~23:40 ET: DOGE 23:30 YES was sold twice "for garbage profit, while it was winning" (user): bought 0.66, high 0.76 (+7c, 1.6 wobbles), sold at 0.69 for +2.0c on a fall of one wobble, the bid went on to 0.80; bought back at 0.78, high 0.87, sold at 0.80 for +0.4c. HYPE 21:45 the same (+0.7c). A profit under two wobbles left nothing to keep once a wobble had been given back, and one wobble is the bid's ordinary motion. Structural (it is what makes the profit cap mean something), not a fitted number; chosen after seeing those sales
 STALL_SHARE = 0.1  # a profit with no new high for this share of the time left has stopped climbing (early_take_stall_share)
 TICK = 0.01
 SETTLE_S = 60.0  # structural: Kalshi settles these markets on the index average over the last 60 s
@@ -107,8 +108,8 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         age = now - (bought if bought is not None and bought > 0 else s.first_ts)
         f = 1.0 if over else fade(age, age + left)  # `bought` is the bet's buy time (the first tick seen when it is not given). the fade is for a profit whose spot has not crossed: late in the market such a bet is left alone (user, 2026-11-26: "make sure late profit doesn't sell if it's not under the target"); with the spot on the wrong side a profit is still taken at any minute
         if s.run_high <= 0:
-            if net < wobble - 1e-9:
-                return Read(False, "nothing", net, 0.0, 0.0, bid, z, f)  # ahead by less than a wobble is not a profit yet
+            if net < ARM_WOBBLES * wobble - 1e-9:
+                return Read(False, "nothing", net, 0.0, 0.0, bid, z, f)  # ahead by less than two wobbles is not a profit this rule can take: see ARM_WOBBLES
             s.run_high, s.run_high_ts = bid, now
         elif bid > s.run_high + 1e-9:
             s.run_high, s.run_high_ts = bid, now

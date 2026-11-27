@@ -223,3 +223,14 @@ def test_a_bet_bought_late_still_has_its_early_profit_zec_2230():
     old = asker(0.67, wobble=0.040)  # the same bids on a bet as old as the market: left alone, as the rule did that night
     old(0.70, 400, 5.0), old(0.79, 369, 5.0)
     assert not old(0.73, 364, 5.0).sell
+
+
+def test_a_small_profit_is_not_sold_for_pennies_on_one_wobble_doge_2330():
+    """DOGE 23:30 YES, 2026-11-26: bought 0.66, high 0.76, sold at 0.69 for +2.0c on a one-wobble fall while the spot was on the bet's side; the bid went on to 0.80. User: "for garbage profit, while it was winning. Twice". A profit run starts at two wobbles, so a sale always keeps one."""
+    ask = asker(0.66, wobble=0.045, bought=473.0)  # bought 23:22:49, 427 s left
+    assert not ask(0.73, 380, 3.0).sell
+    assert ask(0.76, 370, 3.0).kind == "nothing"  # +7c after both fees, 1.6 wobbles: not a profit run
+    assert not ask(0.71, 359, 3.0).sell  # 23:24:01, the sale that night: left alone
+    assert not ask(0.80, 330, 3.0).sell  # +11c: the run starts here
+    r = ask(0.73, 300, 3.0)  # a fall that still keeps a wobble of profit is taken
+    assert r.sell and r.kind == "fall" and r.net >= 0.04  # about a wobble kept (the sale fee is a little higher at the lower bid)
