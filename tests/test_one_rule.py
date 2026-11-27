@@ -159,3 +159,31 @@ def test_integration_a_rebuy_of_the_same_market_is_watched_as_a_new_bet(tmp_path
     assert second.side == "no" and abs(second.entry - 0.30) < 1e-6 and second.bought_ts == CLOSE - 295 and second.one_rule is None
     w.refresh()
     assert w.targets[(TICKER, "risk_only")] is second  # the same bet keeps its target and its memory
+
+
+def test_integration_a_loss_sale_by_the_one_rule_goes_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
+    """BTC, ZEC and DOGE 22:30 NO, 2026-11-26: the one rule decided its salvage sales on the tick and the selling thread backed every one of them off, because a sale under cost is placed only when its reason starts with a phrase on the thread's list and "one rule" was not there; all three went to zero. Quotes in, an order out."""
+    from kalshi_moonshot import watcher
+    from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
+
+    live(monkeypatch)
+    client = Client(bid=0.30, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['one_rule']")
+    t = w.targets[(TICKER, "risk_only")]
+    assert t.sell_chain == ("one_rule",)
+    t.shock_index, t.shock_ref = "X", 100.0
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: (-8.0, 10.0))  # the spot is two wobbles of its own on the wrong side
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.12)  # the bid's wobble is 0.049
+    got = []
+    for k, bid in enumerate([0.60, 0.40, 0.20, 0.25, 0.33, 0.40, 0.45, 0.42, 0.36, 0.30, 0.30, 0.30]):  # the collapse, a bounce off 0.20 to 0.45, and the bounce failing
+        yes_bid(w, bid, 400 - 3 * k)
+        got += signals(w)
+        if got:
+            break
+    assert got and got[0].why.startswith("one rule, salvage:"), got
+    w._sell(got[0].ticker, got[0].lane, got[0].why)
+    assert [n for n, _ in client.sold] == [4.65], "the selling thread did not place the one rule's loss sale"
+    from kalshi_moonshot import config
+    from kalshi_moonshot.store import Store
+
+    assert len(Store(config.load().db_path).open_bets()) == 0  # and the bet is closed
