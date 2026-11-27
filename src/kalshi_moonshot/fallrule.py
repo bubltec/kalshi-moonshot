@@ -4,7 +4,7 @@ ONE READING: where the bid is against its own swing, in the bid's own wobbles (i
 
 THREE FACTORS move the bar the reading has to pass:
   time     the bar is 1 + 2 x the share of the market still to run wobbles (3 at the open, 1 at the close), and EARLY PROFIT FADES with the bet's own age (the time since its buy, not the market's clock: see fade): its bar and its stall wait are divided by exp(-(age / (FADE_SHARE x the time the bet had left at its buy))^8): for a bet bought at the open that is 1.0 at minute 5, 0.8 at 7.5, 0.4 at 9, 0.1 at 10 and 0.01 at 11, and a bet bought later runs through the same curve in the time it has, so early profit approaches no action two thirds of the way through the bet's own life with no line anywhere.
-  cushion  z = the spot's cushion over the target for the bet / (the spot's typical minute x sqrt(minutes left)), positive on the bet's side and negative on the wrong side. z >= Z_HOLD holds a profit against a FALL of the bid (not against a stall: a profit that has stopped climbing is taken, cushion or not, since 2026-11-27); under it the bar is multiplied by 2 x Phi(z) (wide with a cushion, tight against one). The spot has CROSSED only when its cushion is under zero by a wobble of its own (its typical 10 s move): a hair under the target is not a cross.
+  cushion  z = the spot's cushion over the target for the bet / (the spot's typical minute x sqrt(minutes left)), positive on the bet's side and negative on the wrong side. z >= Z_HOLD holds a profit whatever the bid does; under it the bar is multiplied by 2 x Phi(z) (wide with a cushion, tight against one). The spot has CROSSED only when its cushion is under zero by a wobble of its own (its typical 10 s move): a hair under the target is not a cross.
   profit   once the bet has been ahead by a wobble after both fees, the fall allowed is at most the gain at the high less one wobble.
 
 THE THREE CONCEPTS:
@@ -125,14 +125,14 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         elif bid > s.run_high + 1e-9:
             s.run_high, s.run_high_ts = bid, now
         fall = s.run_high - bid
+        if z is not None and z >= Z_HOLD:
+            return Read(False, "cushion", net, fall, 0.0, s.run_high, z, f)
         high_net = s.run_high - fee_of(s.run_high) - cost
         bar = max(wobble, min(bar_w * wobble, high_net - wobble)) / max(f, 1e-9)
-        if now - s.run_high_ts >= STALL_SHARE * left / max(f, 1e-9):
-            return Read(True, "stall", net, fall, bar, s.run_high, z, f)  # A PROFIT THAT HAS STOPPED CLIMBING IS TAKEN, CUSHION OR NOT (2026-11-27 ~00:40 ET, user, on NEAR 00:00 NO: bought 0.64, the bid stood at 0.82 to 0.88 for three minutes, +22c after both fees, then went to zero with no sale: "It hit a profit and should have exited", "That's a bug in the early take. Fixnit", "Not every curve is going to wobble"). The cushion hold stood in front of the stall: the spot was a sigma of the time left on the bet's side, so the rule held the profit whatever the bid did, and the bid then fell 0.23 while the index still read as safe. A stall needs no fall and no wobble of the bid: no new high for STALL_SHARE of the time left. On this bet's tape it sells at 0.82 at 23:53:53, +$4.04 against -$15.23. SAID PLAINLY: on the 210 live bets of 11-25/26 this takes 78 stalled profits where it took 16 and the replay falls from +$149.66 to +$70.38 (no buy-back modelled), because most stalled profits with a cushion went on to win. On the user's word (2026-11-14: a locked gain that trails holding is fine; 2026-11-24: "early profit is totally acceptable"); score the stall sales forward
-        if z is not None and z >= Z_HOLD:
-            return Read(False, "cushion", net, fall, 0.0, s.run_high, z, f)  # the cushion still holds a FALL (user, 2026-11-25, SOL 07:34: "with that much cushion it should not sell")
         if fall >= bar - GRID:
             return Read(True, "fall", net, fall, bar, s.run_high, z, f)
+        if now - s.run_high_ts >= STALL_SHARE * left / max(f, 1e-9):
+            return Read(True, "stall", net, fall, bar, s.run_high, z, f)
         return Read(False, "under bar", net, fall, bar, s.run_high, z, f)
     s.run_high = s.run_high_ts = 0.0  # under cost: the profit run is over (NO LOSS: it is not sold on the way down)
     bar = bar_w * wobble
