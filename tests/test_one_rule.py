@@ -245,12 +245,14 @@ def test_a_profit_gained_too_fast_is_taken_even_with_a_cushion_near_0000():
     assert not ask(0.70, 480, 40.0).sell  # +4c: under two wobbles, no profit run, so no pace is read
     assert not ask(0.83, 406, 40.0).sell  # 113 s in (22% of its life) with 47% of the possible profit in hand: pace 2.2, but still at its high: held while it climbs (SOL 01:15: "It shouldn't sell if it doesn't stop")
     assert not ask(0.88, 380, 40.0).sell  # a new high
-    r = ask(0.84, 370, 40.0)  # a wobble off the high, with the spot a sigma on its side: it has stopped, sold
+    assert not ask(0.84, 370, 40.0).sell  # a wobble off the high but only 10 s without a new high (the heartbeat is 5% of the 370 s left, 18 s): not stopped
+    assert not ask(0.89, 366, 40.0).sell  # a new high: the beat starts again
+    r = ask(0.88, 345, 40.0)  # 21 s without a new high, over the 17 s beat: it has stopped, sold
     assert r.sell and r.kind == "fast" and r.net > 0.15
     flat = asker(0.64, wobble=0.040, bought=381.0)
     flat(0.70, 480, 40.0), flat(0.83, 406, 40.0)
     assert not flat(0.82, 390, 40.0).sell  # sixteen seconds flat: not a stall yet
-    r2 = flat(0.82, 360, 40.0)  # no new high for 46 s, over a tenth of the 360 s left
+    r2 = flat(0.82, 360, 40.0)  # no new high for 46 s, over the 18 s beat
     assert r2.sell and r2.kind == "fast"
     sol = asker(0.73, wobble=0.045, bought=697.0)  # SOL 01:15: bought with 203 s left, 0.91 thirty-six seconds later and still rising
     assert not sol(0.83, 190, 5.0).sell and not sol(0.91, 167, 5.0).sell and not sol(0.96, 150, 5.0).sell
@@ -273,7 +275,9 @@ def test_integration_a_fast_profit_sale_goes_through_the_selling_thread_to_an_or
     monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.10)
     yes_bid(w, 0.95, 440)  # bought at about 0.79 ten seconds before: most of the possible profit already in hand, still at its high
     assert signals(w) == []  # held while it climbs
-    yes_bid(w, 0.90, 437)  # a wobble off the high: it has stopped
+    yes_bid(w, 0.90, 437)  # a wobble off the high, but only 3 s without a new high: not stopped (the heartbeat is 5% of the time left, about 22 s)
+    assert signals(w) == []
+    yes_bid(w, 0.92, 410)  # 30 s without a new high: it has stopped
     got = signals(w)
     assert got and got[0].why.startswith("one rule, profit gained too fast to risk:"), got
     w._sell(got[0].ticker, got[0].lane, got[0].why)
