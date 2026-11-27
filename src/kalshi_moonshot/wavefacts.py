@@ -263,6 +263,38 @@ PEAK_SHARE = 0.1  # a bet is bought AT A PEAK when the swing it rides has pulled
 _nest: dict[tuple[str, int, int], tuple[float, tuple[int, ...], tuple[tuple[int, float], ...]] | None] = {}
 
 
+def price_swings(rows: list[tuple[float, float]], opened: float, now: float, side: str) -> dict[str, Any] | None:
+    """The side's OWN PRICE swings since the market opened, cut by size from the market's own biggest price swing (2026-11-27, user, on the XRP 06:30 YES re-buy bought 16 s after the lane sold the same side at the top of its climb: "The peak reading looks at the spot's swings ... This is a bug we need to fix"; "I'd rather have that than a wait. The wait is a patch fix. This is a real fix. Ideally it shouldn't need a wait. The wait should just happen"). `rows` are the market's (time, YES mid) from the tick memory; the bet's side price is the mid (YES) or 1 - mid (NO), on a 10 s grid with the last quote carried. BIGGEST is the largest reversal at which that path still shows two swings; the swings are read at a quarter and an eighth of it, as `nest` reads the spot's. rising = the price's current swing runs UP at both sizes: it is still climbing, nothing has been given back at the small scale, so a buy now is a buy at the price's own peak. No length, no number of mine. On 312 live bets of 11-25/26 in curve markets (scripts/priskp_price_swings_table.py): buys with the price rising at both sizes 154, settled their way 68%, -$126.16 held, -$91.96 as run; buys after the price had pulled back at one of them 73, 71%, +$75.90 held. The wait it asks of a lane that has just sold at the top is not a timer: the price is still at its high. None with under two minutes of quotes or a path that never turned."""
+    if side not in ("yes", "no"):
+        return None
+    pts = [(t, (m if side == "yes" else 1.0 - m)) for t, m in rows if opened <= t <= now]
+    if len(pts) < 12:
+        return None
+    ts = [t for t, _ in pts]
+    g: list[float] = []
+    t = opened
+    while t <= now:
+        k = bisect.bisect_right(ts, t) - 1
+        if k >= 0:
+            g.append(pts[k][1])
+        t += GRID
+    if len(g) < 12:
+        return None
+    lo, hi = 0.0, max(g) - min(g)
+    if hi <= 0:
+        return None
+    for _ in range(30):  # the largest reversal that still shows two swings
+        mid = (lo + hi) / 2.0
+        if _swing_dir(g, mid)[0] >= 2:
+            lo = mid
+        else:
+            hi = mid
+    if lo <= 0:
+        return None
+    dirs = [_swing_state(g, lo * s)[0] for s in (0.25, 0.125)]
+    return {"dirs": dirs, "rising": all(d > 0 for d in dirs), "biggest": round(lo, 4)}
+
+
 def _swing_state(g: list[float], rev: float) -> tuple[int, float]:
     """(the current direction, how far the path has pulled back from the current swing's extreme as a share of that swing's size) of a zig-zag of reversal `rev`; (0, 0.0) before the first swing."""
     d, lo, hi, ev, start = 0, g[0], g[0], g[0], g[0]

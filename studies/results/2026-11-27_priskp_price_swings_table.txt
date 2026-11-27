@@ -1,0 +1,17 @@
+312 bets with a price reading at the buy
+
+ALL
+   price rising at both small sizes         n 206  settled its way  73%  held $  -47.26 (-0.23 a bet)  as run $  -45.56
+   price pulled back at one of them         n 106  settled its way  72%  held $   30.71 (+0.29 a bet)  as run $   27.14
+
+CURVE markets
+   price rising at both small sizes         n 158  settled its way  68%  held $ -118.63 (-0.75 a bet)  as run $ -110.43
+   price pulled back at one of them         n  69  settled its way  71%  held $   68.38 (+0.99 a bet)  as run $   23.39
+
+STEADY markets
+   price rising at both small sizes         n  37  settled its way  86%  held $   40.87 (+1.10 a bet)  as run $   45.32
+   price pulled back at one of them         n  26  settled its way  85%  held $   25.97 (+1.00 a bet)  as run $   26.46
+
+RE-BUYS (the lane sold this side within 5 minutes before)
+   price rising at both small sizes         n   9  settled its way  67%  held $  -17.11 (-1.90 a bet)  as run $    3.27
+   price pulled back at one of them         n  14  settled its way  64%  held $  -29.90 (-2.14 a bet)  as run $  -48.55

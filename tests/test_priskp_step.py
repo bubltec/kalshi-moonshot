@@ -23,6 +23,12 @@ def clean():
     ticks.history.clear(); ticks.mids.clear(); ticks.strikes.clear()
 
 
+@pytest.fixture(autouse=True)
+def no_price_peak(monkeypatch):
+    """The fed quotes are a random walk whose price may happen to be climbing: the price-peak wait (priskp._price_rising) is off here unless a test turns it on, so the other waits are tested as they were."""
+    monkeypatch.setattr(priskp, "_price_rising", lambda *a, **k: None)
+
+
 def feed(levels, upto, strike=100.0, seed=1):
     """An hour and more of 1-second ticks: `levels` is a function of seconds since OPEN returning the spot, noise added; quotes on a random walk."""
     rnd = random.Random(seed)
@@ -270,3 +276,26 @@ def test_a_curve_entry_waits_on_the_swing_aware_chance_with_a_bar_that_slides_wi
     swing[0] = None
     assert ask_at(3.0)[0]  # an unread chance waits nothing
     assert ("early_swings", "early_swings_not_cleared") in [(f, lab) for f, _t, _s, lab in facts.VETO_RULES]
+
+
+def test_in_a_curve_the_trend_entry_waits_while_its_own_price_is_still_climbing(monkeypatch):
+    """2026-11-27 (user, on the XRP 06:30 YES re-buy at the price the lane had just sold at: "The peak reading looks at the spot's swings ... this is a bug we need to fix"; "The wait should just happen"): the peak is the side's OWN PRICE as well as the spot's swings; a buy while its price still climbs at both small sizes waits (curve_peak, peak_by price) and is bought once the price has pulled back."""
+    feed(lambda s: 100.5, OPEN + 600.0)
+    cuts()
+    curve = {"regime": "curve", "verdict": "buy", "class": "inside", "swing_u": 1.6, "prev_u": 1.5, "gb_u": 0.0, "age": 0.6, "travel": 0.7, "reach": 0.2}
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve))
+    monkeypatch.setattr(priskp, "_nest", lambda *a, **k: {"signs": "- + + +", "with": 3, "biggest_u": 6.0, "levels": [-1, 1, 1, 1], "peak": [False, False], "at_peak": False})  # the spot reads off the peak, as it did on the re-buy
+    monkeypatch.setattr(priskp, "_price_rising", lambda *a, **k: True)
+    ok, why = ask_at(5.0, side="yes")
+    assert not ok and "why: curve_peak" in why and "peak_by: price" in why
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_price_rising", lambda *a, **k: False)  # pulled back
+    ok, why = ask_at(5.0, side="yes")
+    assert ok and "why: curve_trend_entry" in why
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_price_rising", lambda *a, **k: None)  # unread
+    assert ask_at(5.0, side="yes")[0]
+    priskp._runs.clear()
+    monkeypatch.setattr(priskp, "_price_rising", lambda *a, **k: True)
+    monkeypatch.setattr(priskp, "_curve_verdict", lambda *a, **k: dict(curve, regime="steady"))
+    assert "curve_peak" not in ask_at(5.0, side="yes")[1]  # only in a curve

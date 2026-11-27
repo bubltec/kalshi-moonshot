@@ -438,6 +438,18 @@ def _nest(shot: Any, now: float, hours: float) -> dict[str, Any] | None:
         return None
 
 
+def _price_rising(shot: Any, now: float, hours: float) -> bool | None:
+    """True when the side's OWN PRICE is still climbing at both small swing sizes since the market opened (wavefacts.price_swings, from the market's quotes in memory), False when it has pulled back at one of them, None when it cannot be read. Memory only."""
+    from . import ticks, wavefacts
+
+    try:
+        opened = round((now + hours * 3600.0) / 900.0) * 900.0 - 900.0
+        got = wavefacts.price_swings(ticks.mids.rows(shot.ticker), opened, now, shot.side)
+    except Exception:
+        return None
+    return None if got is None else bool(got["rising"])
+
+
 def _nest_note(shot: Any, now: float, hours: float, buying: bool, got: dict[str, Any] | None | bool = False) -> str | None:
     """SHADOW (2026-11-26, user, on recording the nested-swings reading on every buy and logging what it would do before it decides anything: "Ok I like that"): how the market's own swings nest for the shot's side (wavefacts.nest), and what the reading would have said of a buy. On 210 live bets a buy with 3 of the 4 levels running its way settled its way 84% of the time; with 2 of 4 (a bounce against the larger move) 62% and with 4 of 4 (the move fully run) 71%, both negative on both days. It decides nothing: the note only says so. None when the reading cannot be made."""
     if got is False:
@@ -487,7 +499,9 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
     # at a peak and lost. A wait, not a refusal: the bet is bought once the swing has pulled back and the trend entry still says buy. The table can only
     # show buys the wait holds back, not where the lane then buys: score the curve buys forward. An unread nest waits nothing.
     nest = _nest(shot, now, hours) if inwin else None
-    peak = in_curve and nest is not None and bool(nest.get("at_peak"))
+    rising = _price_rising(shot, now, hours) if (inwin and in_curve) else None  # THE PRICE'S OWN PEAK (2026-11-27, user: "The peak reading looks at the spot's swings ... this is a bug we need to fix"; "I'd rather have that than a wait ... The wait should just happen"): a buy whose own price is still climbing at both small swing sizes is at the price's peak, however the spot's swings read. A lane that has just sold at the top meets the same reading: the price is still there, so it is not bought until it has pulled back, with no timer
+    spot_peak = in_curve and nest is not None and bool(nest.get("at_peak"))
+    peak = spot_peak or bool(in_curve and rising)
     ok = inwin and (cv["verdict"] == "buy" and held and not peak if in_curve else candidate(states))  # type: ignore[index]
     need = need_readings(hours * 3600.0)
     reached, count = confirmed(shot.ticker, shot.side, ok, now, need)
@@ -502,7 +516,8 @@ def screen(host: Any, shot: Any) -> tuple[dict[str, Any], dict[str, Any] | None]
             if cv["verdict"] == "buy" and inwin and not held:
                 n["verb"], n["why"] = "wait", "curve_not_held"  # the swing runs with the bet but the cushion has not come over to its side yet
             elif cv["verdict"] == "buy" and inwin and peak:
-                n["verb"], n["why"] = "wait", "curve_peak"  # the bet's own swing is at its top: wait for the pullback
+                n["verb"], n["why"] = "wait", "curve_peak"  # the bet's own swing or its own price is at its top: wait for the pullback
+                n["peak_by"] = "price" if (rising and not spot_peak) else "spot" if (spot_peak and not rising) else "price and spot"
             elif cv["verdict"] == "buy" and inwin:
                 n["verb"], n["why"] = "buy", "curve_trend_entry"
                 n["failing"] = []
