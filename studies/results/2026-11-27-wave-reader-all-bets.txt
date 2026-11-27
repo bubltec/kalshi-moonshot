@@ -1,0 +1,39 @@
+EVERY BET OF THE WAVE LANE'S OWN READER (wave_turn), LIVE AND PAPER, AS ROUND TRIPS (2026-11-25 19:03 to 2026-11-27 09:11 ET)
+Question (user, on SILVER 09:15 YES bought into a spike: "these commodity bets just don't make any sense. It isn't in a wave curve it's just in spikes and those are different"; "That's just one example and it's done dozens of live bets"): on all of the reader's bets, is the loss in spikes, in commodities, or in the exit?
+Bets: moonshot.decisions, lane wave_shape, 'wave turn (fired)' in the note, closed, stake $6 or less: 239 (28 live, 211 paper). Gross is before fees. Script: scripts/wave_reader_bets_review.py.
+ANSWER
+1. THE EXIT: the wave give-up made 90 sales, every one a loss (-18.9c a contract), -232.57. Every other bet together made +197.81. The lane's whole loss (-34.76) is the give-up.
+2. SPIKES: where the swing bought against was 1.5 times the market's own median leg or more (61 bets), the reader won 41-45% and lost -46.93; under 1.5 (178 bets) it won 57-60% and made +12.17. Inside the 0.18-0.40 band the lane buys now: under 1.5 x 53 bets +66.53 (51% wins at +28.5c); 1.5 x or more 32 bets -28.28 (31% wins).
+3. NOT THE ASSET: metals 81 bets -7.75 (48% wins), coins 158 bets -27.02 (58% wins); a swing of 1.5 x the usual leg or more on 23% of the metal bets and 27% of the coin bets. Spikes are as common on coins.
+4. THE BAND: 0.18-0.40 85 bets +38.25; outside it 154 bets -73.01 (the lane has bought only inside it since 2026-11-27).
+Limits: 239 bets over a day and a half, mostly paper; the 1.5 cut was chosen after seeing the result; the reader's guards changed during 11-26, so the bets are not all from one version; paper fills are the paper model's.
+
+239 closed bets of the lane's own reader: live 28, paper 211
+  ALL                                    n=239 wins  54% +15.2c | losses  -17.4c | gross   -34.76 | give-ups  90 (-232.57)
+  live                                   n= 28 wins  43% +14.9c | losses  -19.8c | gross   -26.25 | give-ups  13 (-30.60)
+  paper                                  n=211 wins  56% +15.2c | losses  -16.9c | gross    -8.51 | give-ups  77 (-201.97)
+  metals                                 n= 81 wins  48% +19.2c | losses  -16.4c | gross    -7.75 | give-ups  32 (-77.15)
+  coins                                  n=158 wins  58% +13.5c | losses  -17.9c | gross   -27.02 | give-ups  58 (-155.42)
+    metals: swing / usual leg median 1.00; 1.5 x or more on 23%
+    coins: swing / usual leg median 1.07; 1.5 x or more on 27%
+ the swing bought against / the market's own median leg
+  0 to 1                                 n=102 wins  60% +15.8c | losses  -18.7c | gross    +5.59 | give-ups  32 (-84.56)
+  1 to 1.5                               n= 76 wins  57% +15.2c | losses  -18.2c | gross    +6.58 | give-ups  29 (-67.17)
+  1.5 to 2                               n= 32 wins  41% +14.5c | losses  -14.8c | gross   -25.35 | give-ups  17 (-44.63)
+  over 2                                 n= 29 wins  45% +13.2c | losses  -15.1c | gross   -21.58 | give-ups  12 (-36.21)
+ inside the 0.18-0.40 band
+  all                                    n= 85 wins  44% +26.8c | losses  -16.2c | gross   +38.25 | give-ups  45 (-117.93)
+  swing under 1.5 x                      n= 53 wins  51% +28.5c | losses  -16.0c | gross   +66.53 | give-ups  24 (-57.16)
+  swing 1.5 x or more (a spike)          n= 32 wins  31% +22.1c | losses  -16.4c | gross   -28.28 | give-ups  21 (-60.76)
+ outside the band
+  all                                    n=154 wins  60% +10.6c | losses  -18.3c | gross   -73.01 | give-ups  45 (-114.64)
+  swing under 1.5 x                      n=125 wins  62% +11.0c | losses  -19.9c | gross   -54.36 | give-ups  37 (-94.57)
+  swing 1.5 x or more                    n= 29 wins  55%  +8.7c | losses  -12.6c | gross   -18.65 | give-ups   8 (-20.08)
+ by kind of sale
+  curve exit (resting ask)               n=104 wins 100% +14.6c | losses   +0.0c | gross  +208.41 | give-ups   0 (+0.00)
+  wave give-up                           n= 90 wins   0%  +0.0c | losses  -18.9c | gross  -232.57 | give-ups  90 (-232.57)
+  settled                                n= 19 wins  16% +62.0c | losses  -11.6c | gross   -51.40 | give-ups   0 (+0.00)
+  value sale                             n= 19 wins  84% +10.8c | losses   -0.3c | gross   +24.67 | give-ups   0 (+0.00)
+  turn sale                              n=  5 wins 100% +10.5c | losses   +0.0c | gross   +10.15 | give-ups   0 (+0.00)
+  wave take                              n=  1 wins 100% +43.7c | losses   +0.0c | gross    +5.60 | give-ups   0 (+0.00)
+  wave salvage                           n=  1 wins 100%  +4.0c | losses   +0.0c | gross    +0.38 | give-ups   0 (+0.00)
