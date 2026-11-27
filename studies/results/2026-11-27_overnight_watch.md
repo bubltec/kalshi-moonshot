@@ -348,3 +348,16 @@ Findings, from the decisions and the tape:
 5. Total losses in general, on the 312 bets with tape since 11-25: of the 86 bets whose market went against them and whose bid fell under 0.05 at some point, the median fastest 60 s fall of the bid was 10.5 of its own wobbles; of the 68 that won the market after being 25c or more under the price paid, 6.6. A sale on a fast fall of 12 wobbles flags 33 of the 86 and 4 of the 68; of 14, 19 and 0. Replayed as a loss sale on the full set: a fall of 10 wobbles in 60 s sells five bets, all losers, at a median 0.10, for +$15 over 312 bets; 12 and 14 sell one bet each. The bid falls faster than any rule can read it: by the time a 60 s fall is 10 wobbles it is near zero. Not shipped: a fixed number of wobbles and a gain of about $0.05 a bet. The lever on total losses is the buy, not the exit.
 
 Nothing else changed.
+
+## Pass 14, 07:31 (bets bought 06:40 to 07:23)
+
+Live build: the cooldown (re-buys of the same side wait a tenth of the time left after a profit sale) deployed at 07:30; before that b2480d4a. Not yet tested by a bet.
+
+PriskP: nine bets in this stretch, eight closed at a gain (about +$18 as run: two sold at 0.99-class tops, six by the fast clause or early profit), none lost. One open at the pass: XRP 07:15 NO, bought 07:11:09 at 0.74, outcome not in yet.
+
+Noticed:
+- HYPE 07:15 NO was sold at 0.79 by the fast clause and bought back TWO SECONDS later at 0.78; the re-buy then sold at 0.93 (+$2.76). A re-buy that paid, before the cooldown existed; the night's count of same-side re-buys within a minute of the lane's own sale: 13 settled, seven won, six lost (about -$68 net of the winners' +$25).
+- Two buys read "pass" (the steady-market path) at 0.78 and 0.83: both won.
+- Nothing lost, so nothing to trace; nothing changed in this pass.
+
+In progress and not in this pass: a lane sells only its own bets' contracts on its own side (the ZEC 05:45 cross-lane bleed; deploys after its full test run), and the curve entry's peak reading including the side's own price (branch price-peak).
