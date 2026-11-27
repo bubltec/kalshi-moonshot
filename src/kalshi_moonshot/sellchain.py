@@ -43,6 +43,40 @@ from __future__ import annotations
 SELL_STEPS = ("never_ahead", "under_even", "profit_take", "trail", "long_hold", "shape", "shape_timed", "trail_timed", "late_tight", "time_to_go", "wave_take", "wave_salvage", "value_sale", "value_hold", "early_take", "late_dip", "no_recovery", "turn_sale", "top_take", "one_rule")  # the steps a lane may name in its exit module; the watcher holds one method for each (_sell_<name>). `shape` and `trail_timed` are shadow only
 KEEP = 900  # what Store.mark_exited keeps of a sale's reason
 
+# EVERY SELL STEP SAYS HERE WHETHER IT MAY SELL UNDER THE PRICE PAID (2026-11-26, user, after the one rule's loss sales were decided on the tick and then dropped by the selling thread, which placed a sale under cost only when its reason started with a phrase on a hand-kept list that the new step was not on; BTC, ZEC and DOGE 22:30 went to zero: "Make a note when adding rules that it must be in this list or set up a coding mechanism to make this automatic"). The value is the opening words of the step's reasons that the selling thread (watcher._sell) will place as a loss; an empty tuple means the step only ever sells at a gain and a sale of its under cost is backed off. A step in SELL_STEPS with no entry here stops the program at import (below), so a new step cannot be added without this decision, and the selling thread's list is built from this table and from nothing else.
+LOSS_REASONS: dict[str, tuple[str, ...]] = {
+    "never_ahead": ("curve risk exit",),
+    "under_even": ("curve risk exit",),
+    "profit_take": ("curve risk exit",),  # its own reasons open "curve risk exit (profit take)", which runner.is_profit_sale keeps at a gain
+    "trail": ("curve risk exit",),
+    "long_hold": ("curve risk exit",),
+    "shape": ("curve risk exit",),
+    "shape_timed": ("curve risk exit",),
+    "trail_timed": ("curve risk exit",),
+    "late_tight": ("curve risk exit",),
+    "time_to_go": ("curve risk exit",),
+    "wave_take": (),
+    "wave_salvage": ("wave give-up",),  # the salvage itself sells for a small gain; its safety exit, the give-up, sells at a loss by design
+    "value_sale": ("value sale",),
+    "value_hold": (),
+    "early_take": (),
+    "late_dip": ("late dip",),
+    "no_recovery": ("no recovery",),
+    "turn_sale": (),
+    "top_take": (),
+    "one_rule": ("one rule",),  # salvage and the time backstop sell under cost; its gains and the top pass as any gain does
+}
+OTHER_LOSS_REASONS = ("peak-crash", "stop-loss")  # sales that do not come from a sell step: the crash exit and the stop
+_undeclared = [x for x in SELL_STEPS if x not in LOSS_REASONS] + [x for x in LOSS_REASONS if x not in SELL_STEPS]
+if _undeclared:
+    raise RuntimeError(f"sellchain: every sell step must say in LOSS_REASONS whether it may sell under the price paid (the opening words of its loss reasons, or () for gain only); not matching SELL_STEPS: {', '.join(_undeclared)}")
+LOSS_PREFIXES: tuple[str, ...] = OTHER_LOSS_REASONS + tuple(dict.fromkeys(p for step in SELL_STEPS for p in LOSS_REASONS[step]))  # what watcher._sell places under cost
+
+
+def may_sell_under_cost(why: str) -> bool:
+    """True when a sale with this reason may be placed under the price paid (the selling thread asks this and nothing else)."""
+    return why.startswith(LOSS_PREFIXES)
+
 
 class _Hold:
     """A step's answer that ends the walk with no sale."""

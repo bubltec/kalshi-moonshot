@@ -187,3 +187,20 @@ def test_integration_a_loss_sale_by_the_one_rule_goes_through_the_selling_thread
     from kalshi_moonshot.store import Store
 
     assert len(Store(config.load().db_path).open_bets()) == 0  # and the bet is closed
+
+
+def test_every_sell_step_declares_whether_it_may_sell_under_cost_and_the_selling_thread_reads_only_that():
+    """User, 2026-11-26: "Make a note when adding rules that it must be in this list or set up a coding mechanism to make this automatic". A step with no entry stops the import; the selling thread's list is the table."""
+    import inspect
+
+    import pytest
+    from kalshi_moonshot import sellchain, watcher
+
+    assert set(sellchain.LOSS_REASONS) == set(sellchain.SELL_STEPS)
+    assert sellchain.LOSS_PREFIXES == ("peak-crash", "stop-loss", "curve risk exit", "wave give-up", "value sale", "late dip", "no recovery", "one rule")  # the list as it stood, in the same order, now built from the table
+    assert sellchain.may_sell_under_cost("one rule, salvage: under the price paid") and not sellchain.may_sell_under_cost("wave take: the bid fell")
+    body = inspect.getsource(watcher.ProfitWatcher._sell)
+    assert "sellchain.may_sell_under_cost(why)" in body and 'why.startswith(("peak-crash", "stop-loss", "curve risk exit"' not in body
+    src = inspect.getsource(sellchain).replace("SELL_STEPS = (", "SELL_STEPS = ('a_new_step',) + (", 1)  # the module as it would be with a step nobody declared
+    with pytest.raises(RuntimeError, match="a_new_step"):
+        exec(compile(src, "sellchain_with_a_new_step", "exec"), {"__name__": "sellchain_with_a_new_step"})
