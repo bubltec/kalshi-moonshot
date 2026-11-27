@@ -1293,12 +1293,24 @@ class Store:
         row = self.db.execute("SELECT COALESCE(MAX(ts), 0) AS t FROM orders WHERE ticker=? AND env=?", (ticker, env)).fetchone()
         return float(row["t"])
 
-    def net_contracts(self, ticker: str, env: str) -> float:
+    def net_contracts(self, ticker: str, env: str, side: str | None = None) -> float:
+        """Contracts the bot's orders hold on this ticker (bought less sold). With `side` ("yes" or "no"), only that contract: a market can hold both, and a sale of one must never be sized by, or written off against, the other (2026-11-27, ZEC 05:45: a YES sale sized by the NO contracts another lane held on the same market, then 20.54 of them booked as "sold by hand" and the real NO position adopted as hand-placed and held to zero)."""
         row = self.db.execute(
             """SELECT COALESCE(SUM(CASE WHEN COALESCE(side,'buy')='buy' THEN fill_count
                                         ELSE -fill_count END), 0) AS n
-               FROM orders WHERE ticker=? AND env=?""",
-            (ticker, env),
+               FROM orders WHERE ticker=? AND env=? AND (? IS NULL OR COALESCE(contract,'yes')=?)""",
+            (ticker, env, side, side),
+        ).fetchone()
+        return float(row["n"])
+
+    def lane_contracts(self, ticker: str, lane: str, side: str) -> float:
+        """The contracts of this lane's OWN open bets on this market and side (the sum of their rows), 0 when the lane has none. A lane sells at most what its own bets hold, never another lane's contracts on the same side. From the bet book in memory in the running bot."""
+        book = self._book()
+        if book is not None:
+            return sum(float(r["contracts"] or 0.0) for r in book if r["ticker"] == ticker and _lane_of(r) == lane and (r["side"] or "yes") == side and r["stake_usd"] is not None and r["outcome"] is None and r["exit_ts"] is None)
+        row = self.db.execute(
+            "SELECT COALESCE(SUM(contracts), 0) AS n FROM decisions WHERE ticker=? AND COALESCE(lane,'moonshot')=? AND COALESCE(side,'yes')=? AND action='bet' AND stake_usd IS NOT NULL AND outcome IS NULL AND exit_ts IS NULL",
+            (ticker, lane, side),
         ).fetchone()
         return float(row["n"])
 
@@ -1310,9 +1322,9 @@ class Store:
 
 
 
-    def net_cost(self, ticker: str, env: str) -> float:
-        """Dollars the bot's own orders have put into this ticker (buys cost, sales return), fees included in the order cost."""
-        row = self.db.execute("SELECT COALESCE(SUM(cost_usd + CASE WHEN COALESCE(side,'buy')='buy' THEN COALESCE(fee_usd, 0) ELSE 0 END), 0) AS c FROM orders WHERE ticker=? AND env=?", (ticker, env)).fetchone()
+    def net_cost(self, ticker: str, env: str, side: str | None = None) -> float:
+        """Dollars the bot's own orders have put into this ticker (buys cost, sales return), fees included in the order cost; with `side`, only that contract's orders."""
+        row = self.db.execute("SELECT COALESCE(SUM(cost_usd + CASE WHEN COALESCE(side,'buy')='buy' THEN COALESCE(fee_usd, 0) ELSE 0 END), 0) AS c FROM orders WHERE ticker=? AND env=? AND (? IS NULL OR COALESCE(contract,'yes')=?)", (ticker, env, side, side)).fetchone()
         return float(row["c"])
 
     def note_lane_version(self, lane: str, ver: str, settings: dict[str, str]) -> None:

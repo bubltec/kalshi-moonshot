@@ -114,12 +114,12 @@ class ManualPositions:
             for p in every:
                 if skipped(p.ticker, s) or bot_buying(p.ticker):
                     continue  # a prefix to leave alone, or the bot's own buy still in flight: its fill is on the account before its order is on the books
-                bot_n = store.net_contracts(p.ticker, s.env)
+                bot_n = store.net_contracts(p.ticker, s.env, p.side)  # the position's own side: the bot's orders on the other side are not what it holds here (ZEC 05:45, 2026-11-27: priskp's re-bought NO was adopted as hand-placed after another lane's contracts on the other side had been written off against it)
                 if bot_n > 0.005:
                     left = p.count - bot_n
                     if left < 0.05:
                         continue  # all of it is the bot's
-                    paid = p.entry * p.count - store.net_cost(p.ticker, s.env)
+                    paid = p.entry * p.count - store.net_cost(p.ticker, s.env, p.side)
                     p = Position(p.ticker, p.side, left, paid / left if paid > 0 else p.entry)
                 mine.append(p)
             self._cache = mine
