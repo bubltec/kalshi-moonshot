@@ -370,3 +370,6 @@ ETH NO 0.84 held at +9 to +12c (bid 0.95 to 0.97, cushion 1.1 to 1.4 sigma) then
 
 ## The user's rule: bid under 50c, spot not crossed, no bounce or slow, sell (replayed 08:25 ET)
 Replay on the 312 live bets (baseline with heartbeat +$29.01): a bid under 0.50 that is still making lows (no new low-free stretch longer than 5% of the time left, no bounce of a bar) with the spot not crossed: -$129.17 (126 sales, 61 beat hold, 65 lost), under 0.40 -$74.18, under 0.30 -$8.81. ETH 08:00 sold at 0.46 (-$7.09 against -$14.99), ZEC at 0.45 (-$4.94 against -$14.34), both at the 0.50 setting. Adding that the spot's cushion has shrunk by x sigma over three beats: x 0.1 -$92.28, 0.3 -$70.76, 0.45 -$28.54, 0.6 +$50.39, 0.8 +$6.37, 1.0 +$22.32; none of the settings that help the book sell ETH or ZEC, and all that sell them lose on it. Not shipped.
+
+## Pass 16 (07:49 to 08:18 ET)
+Two live bets, both sold at the top for a gain: BTC 08:15 NO 0.72 to 0.99 (+$5.7), HYPE 08:15 NO 0.84 to 0.992 (+$2.2). The ETH and ZEC 08:00 total losses are written up above. The heartbeat (fast profit sold on no new high for 5% of the time left) went live at 08:15:05 with the curve waits, lane isolation and the order-journal fix; the bot is up with no errors in its log. No fast-profit sale on the heartbeat yet to score. Nothing changed this pass.
