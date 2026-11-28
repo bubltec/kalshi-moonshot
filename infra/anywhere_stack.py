@@ -73,6 +73,10 @@ class AnywhereStack(Stack):
         allow("RunOnBotHost", ["ssm:SendCommand"], [f"arn:aws:ec2:us-east-2:{acct}:instance/{instance_id}", "arn:aws:ssm:us-east-2::document/AWS-RunShellScript"])
         allow("SessionOnBotHost", ["ssm:StartSession"], [f"arn:aws:ec2:us-east-2:{acct}:instance/{instance_id}", "arn:aws:ssm:us-east-2::document/AWS-StartInteractiveCommand", "arn:aws:ssm:us-east-2::document/SSM-SessionManagerRunShell"])
         allow("SessionAndCommandReads", ["ssm:TerminateSession", "ssm:ResumeSession", "ssm:GetCommandInvocation", "ssm:ListCommandInvocations", "ssm:DescribeInstanceInformation", "ssm:DescribeSessions"], ["*"])
+        # 2026-11-28 (user: "fix your permissions so you can do this kind of stuff", after the host's SSM agent dropped and only an EC2 reboot could bring it back): reboot the bot host, and read its state. Reboot only, on this one instance: no stop, terminate, start, resize or security-group change.
+        allow("RebootBotHost", ["ec2:RebootInstances"], [f"arn:aws:ec2:us-east-2:{acct}:instance/{instance_id}"])
+        allow("HostStateReads", ["ec2:DescribeInstances", "ec2:DescribeInstanceStatus", "ssm:ListCommands", "ssm:ListInstanceAssociations", "ssm:DescribeInstanceProperties"], ["*"])
+        allow("CancelHostCommands", ["ssm:CancelCommand"], [f"arn:aws:ec2:us-east-2:{acct}:instance/{instance_id}", "arn:aws:ssm:us-east-2::document/AWS-RunShellScript"])
         # cloud_push.sh: the bot's dotenv and secret parameters.
         allow("BotParameters", ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath", "ssm:PutParameter", "ssm:DeleteParameter"], [f"arn:aws:ssm:us-east-2:{acct}:parameter/kalshi-moonshot*"])
         allow("DecryptParameters", ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"], ["*"], conditions={"StringEquals": {"kms:ViaService": "ssm.us-east-2.amazonaws.com"}})
