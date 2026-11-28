@@ -23,15 +23,37 @@ from .wavetop import grid
 
 DIP_U = 1.0  # the least swing, in typical minutes, that is a dip or a peak (waveturn.DONE_U's size: a leg, not a wobble); chosen by me, not scored
 
+HALF_U_BOW = 0.15  # 2026-11-27 (user: "All it needs to look for is a half U or the inverse and bet in the middle"): the swing must be BOWED, its path lying this share of its own size past the straight line from its start to now (a fall that dropped fast and is rounding off, the left half of a U; a rise, the left half of a peak). A straight swing is the user's "linear shape". Chosen from the user's description before the replay, not tuned
+HALF_U_FLAT = 0.5  # and FLATTENING: over the last quarter of the swing the spot moved at no more than this share of the swing's average pace (the middle of the U). Chosen the same way
 SWING_SLACK = 5.0  # seconds: a bet this close before the swing's start still belongs to it (the zig-zag finds a swing's start a little late)
 
 _lock = threading.Lock()
-_reads: dict[tuple[str, int, int], tuple[waveturn.Reading | None, waveturn.Hour, str]] = {}
+_reads: dict[tuple[str, int, int], tuple[waveturn.Reading | None, waveturn.Hour, str, dict[str, float] | None]] = {}
 _prices: dict[tuple[str, int], dict[str, Any] | None] = {}
 
 
-def read(index: str, opened: float, now: float, K: float) -> tuple[waveturn.Reading | None, waveturn.Hour, str]:
-    """(the reading at `now`, the pre-open hour, why it is None) on the tick memory, kept for the second. Changes no wave-turn state."""
+def shape_of(win: list[float], t: int, u: float) -> dict[str, float] | None:
+    """The shape of the current swing, from its start (the last confirmed turn of the 0.5 u zig-zag on the 30 s median) to now: `bow` (the largest distance of the smoothed path past the straight line from the swing's start to now, as a share of the swing's size, positive when the path ran ahead of the line: a fall that dropped fast and rounds off, a rise that shot up and rounds off), `flat` (the pace over the last quarter of the swing as a share of its average pace: small is the bottom or top of the arc), `size` (in u), `secs`. None when there is no swing of a few seconds. Memory only."""
+    from .waveshape import broad
+
+    sm = broad(win, 0, t, waveturn.SMOOTH // 2, t)
+    pts, d, _ek, _ev = waveturn.zigzag(sm, waveturn.ZZ * u)
+    if not pts or d == 0:
+        return None
+    k0 = pts[-1][0]
+    n_secs = t - k0
+    size = abs(sm[t] - sm[k0])
+    if n_secs < 5 or size <= 0:
+        return None
+    y0, y1 = sm[k0], sm[t]
+    bow = max((sm[k] - (y0 + (y1 - y0) * (k - k0) / n_secs)) * d for k in range(k0, t + 1)) / size
+    q = max(2, n_secs // 4)
+    flat = (abs(sm[t] - sm[t - q]) / q) / (size / n_secs)
+    return {"bow": round(bow, 3), "flat": round(flat, 3), "size": round(size / u, 3), "secs": float(n_secs)}
+
+
+def read(index: str, opened: float, now: float, K: float) -> tuple[waveturn.Reading | None, waveturn.Hour, str, dict[str, float] | None]:
+    """(the reading at `now`, the pre-open hour, why it is None, the swing's shape) on the tick memory, kept for the second. Changes no wave-turn state."""
     from . import ticks as ticks_mod
 
     op = round(opened)
@@ -40,14 +62,14 @@ def read(index: str, opened: float, now: float, K: float) -> tuple[waveturn.Read
         if key in _reads:
             return _reads[key]
     h = waveturn._hour(index, op)
-    out: tuple[waveturn.Reading | None, waveturn.Hour, str]
+    out: tuple[waveturn.Reading | None, waveturn.Hour, str, dict[str, float] | None]
     if h.u is None:
-        out = (None, h, f"no reading of the pre-open hour: {h.why}")
+        out = (None, h, f"no reading of the pre-open hour: {h.why}", None)
     else:
         got = ticks_mod.history.window(index, op, now)
         t = int(now) - op
         if not got or not got[0] or t < 1:
-            out = (None, h, "no tick since the open in memory")
+            out = (None, h, "no tick since the open in memory", None)
         else:
             T, V = got
             if T[0] > op:
@@ -56,9 +78,9 @@ def read(index: str, opened: float, now: float, K: float) -> tuple[waveturn.Read
                     T, V = [prev[0], *T], [prev[1], *V]
             win = grid(T, V, op, int(now) + 1)
             if None in win:
-                out = (None, h, "the spot's path since the open has a gap at its start")
+                out = (None, h, "the spot's path since the open has a gap at its start", None)
             else:
-                out = (waveturn.reading(win, t, K, h.u, h.leg_u, h.leg_s, h.moves), h, "")  # type: ignore[arg-type]
+                out = (waveturn.reading(win, t, K, h.u, h.leg_u, h.leg_s, h.moves), h, "", shape_of(win, t, h.u))  # type: ignore[arg-type]
     with _lock:
         if len(_reads) > 2000:
             _reads.clear()
@@ -123,12 +145,14 @@ def clear() -> None:
         _prices.clear()
 
 
-def facts(r: waveturn.Reading | None, h: waveturn.Hour, side: str, ok: bool, price: dict[str, Any] | None = None) -> dict[str, Any]:
+def facts(r: waveturn.Reading | None, h: waveturn.Hour, side: str, ok: bool, price: dict[str, Any] | None = None, shape: dict[str, float] | None = None) -> dict[str, Any]:
     """The reading as named values for the decision's record (buychain.Check.facts)."""
     out: dict[str, Any] = {"u": None if h.u is None else round(h.u, 8), "hour_leg_u": round(h.leg_u, 3), "hour_leg_s": round(h.leg_s, 1), "side": side, "buy": ok}
     if r is not None:
         out.update({"t": r.t, "dir": r.d, "swing_u": round(r.swing_u, 3), "gb_u": round(r.gb_u, 3), "raw_gb_u": round(r.raw_gb_u, 3), "pos_u": round(r.pos_u, 3), "swing_s": r.swing_s,
                     "leg_u": round(r.leg_u, 3), "size_x": round(r.size_x, 3), "pace_x": round(r.pace_x, 3), "jumpy": round(r.jumpy, 2)})
+    if shape:
+        out.update({"bow": shape["bow"], "flat": shape["flat"], "shape_size": shape["size"], "shape_secs": shape["secs"]})
     if price:
         out.update(price)
     return out
@@ -146,25 +170,31 @@ def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: b
     K, why = waveflag.target(series, index, opened, strike)
     if K is None:
         return False, why, None
-    r, h, bad = read(index, opened, now, K)
+    r, h, bad, shape = read(index, opened, now, K)
     try:
         pc = price_curve(shot.ticker, opened, now)
     except Exception:  # a shadow reading never stops a buy
         pc = None
     if r is None:
-        return False, f"no low-side buy: {bad}", facts(None, h, shot.side, False, pc)
+        return False, f"no low-side buy: {bad}", facts(None, h, shot.side, False, pc, shape)
     if h.leg_u <= 0:
-        return False, f"no low-side buy: the hour before the open had no completed leg of {waveturn.DONE_U:g}u, not a wave market", facts(r, h, shot.side, False, pc)
+        return False, f"no low-side buy: the hour before the open had no completed leg of {waveturn.DONE_U:g}u, not a wave market", facts(r, h, shot.side, False, pc, shape)
     want = -1 if shot.side == "yes" else 1  # YES is the low side in a dip (the spot falling), NO in a peak (rising)
     word = "dip" if shot.side == "yes" else "peak"
     move = "fall" if want == -1 else "rise"
     told = f"{r.t}s in: swing {r.swing_u:.2f}u {'up' if r.d == 1 else 'down' if r.d == -1 else '-'}, {r.gb_u:.2f}u given back, usual leg {h.leg_u:.2f}u, u {h.u:.6g} (target {K:.6g})"
     if r.d != want:
-        return False, f"not in a {word} for {shot.side.upper()}: the swing is {'a rise' if r.d == 1 else 'a fall' if r.d == -1 else 'not there yet'}, not a {move}; {told}", facts(r, h, shot.side, False, pc)
+        return False, f"not in a {word} for {shot.side.upper()}: the swing is {'a rise' if r.d == 1 else 'a fall' if r.d == -1 else 'not there yet'}, not a {move}; {told}", facts(r, h, shot.side, False, pc, shape)
     if r.swing_u < DIP_U:
-        return False, f"the {move} is {r.swing_u:.2f}u, under {DIP_U:g}u: not yet a {word}; {told}", facts(r, h, shot.side, False, pc)
+        return False, f"the {move} is {r.swing_u:.2f}u, under {DIP_U:g}u: not yet a {word}; {told}", facts(r, h, shot.side, False, pc, shape)
+    if shape is None:
+        return False, f"no half U: the {move}'s shape cannot be read yet; {told}", facts(r, h, shot.side, False, pc, shape)
+    if shape["bow"] < HALF_U_BOW:
+        return False, f"no half U: the {move} is straight (its path is {shape['bow']:.2f} of its size past the straight line, the least is {HALF_U_BOW:g}); {told}", facts(r, h, shot.side, False, pc, shape)
+    if shape["flat"] > HALF_U_FLAT:
+        return False, f"not at the middle of a half U: the {move} is still running at {shape['flat']:.2f} of its average pace over its last quarter (the most is {HALF_U_FLAT:g}); {told}", facts(r, h, shot.side, False, pc, shape)
     start = opened + r.ext_t - r.swing_s  # the second this swing began
     if not resting and bet_times and any(b >= start - SWING_SLACK for b in bet_times):
-        return False, f"swing_played: this lane already bought {shot.side.upper()} in this {move} (it began {int(now - start)}s ago); it waits for the next {word}; {told}", facts(r, h, shot.side, False, pc)
+        return False, f"swing_played: this lane already bought {shot.side.upper()} in this {move} (it began {int(now - start)}s ago); it waits for the next {word}; {told}", facts(r, h, shot.side, False, pc, shape)
     state = "its order stands" if resting else "buys"
-    return True, f"in a {word}: the {move} has run {r.swing_u:.2f}u, {shot.side.upper()} is the low side, {state}; {told}", facts(r, h, shot.side, True, pc)
+    return True, f"in a {word} (a half U: bowed {shape['bow']:.2f}, pace {shape['flat']:.2f} of its average): the {move} has run {r.swing_u:.2f}u, {shot.side.upper()} is the low side, {state}; {told}", facts(r, h, shot.side, True, pc, shape)

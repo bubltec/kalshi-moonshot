@@ -42,6 +42,18 @@ steps = ["price", "entry_window", "wave_low"]
 """
 
 
+def arc_path(plan, u):
+    """The window from the open: (seconds, change in u, arc) segments from the target. An arc segment shoots off and rounds out (its pace falls to nothing at its end: the left half of a U, or of its inverse); a straight one keeps its pace (the user's 'linear shape')."""
+    v, out = K, [K]
+    for seconds, change, arc in plan:
+        base = v
+        for i in range(1, seconds + 1):
+            x = i / seconds
+            out.append(base + change * u * ((1 - (1 - x) ** 3) if arc else x))
+        v = base + change * u
+    return out
+
+
 def spec(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(TOML)
@@ -93,13 +105,13 @@ def test_a_fall_is_a_dip_for_yes_and_a_rise_a_peak_for_no(tmp_path, monkeypatch,
     s = config.load()
     hour = hour_path()
     u = u_of(hour)
-    for plan, want, other in (([(120, 0.0), (60, -2.0), (300, 0.0)], "yes", "no"), ([(120, 0.0), (60, 2.0), (300, 0.0)], "no", "yes")):
+    for plan, want, other in (([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], "yes", "no"), ([(40, -1.5, False), (60, 3.0, True), (300, 0.0, False)], "no", "yes")):
         waveturn.clear()
         wavelow.clear()
         ticks_mod.history.clear()
-        feed(hour, window_path(plan, u))
+        feed(hour, arc_path(plan, u))
         ticks_mod.strikes.note(TICKER, K)
-        now = OPEN + 120 + 45  # three quarters of the way down (or up) the 2u swing: it has run 1.5u
+        now = OPEN + 40 + 52  # most of the way down (or up) the rounded 3u swing: its pace has nearly gone
         bet, note = ask(sp, s, now, want)
         assert bet, note
         assert "in a dip" in note or "in a peak" in note
@@ -131,9 +143,9 @@ def test_the_lane_buys_a_swing_once_and_waits_for_the_next(tmp_path, monkeypatch
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
-    feed(hour, window_path([(120, 0.0), (60, -2.0), (300, 0.0)], u_of(hour)))
+    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u_of(hour)))
     ticks_mod.strikes.note(TICKER, K)
-    now = OPEN + 165
+    now = OPEN + 92
     assert ask(sp, s, now, "yes", Store())[0]
     bet, note = ask(sp, s, now + 5, "yes", Store([now + 1]))
     assert not bet and "swing_played" in note, note
@@ -144,11 +156,11 @@ def test_a_bet_in_an_earlier_swing_does_not_count_against_the_next_one(tmp_path,
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
-    feed(hour, window_path([(120, 0.0), (60, -2.0), (60, 2.0), (60, -2.5), (240, 0.0)], u_of(hour)))
+    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (60, 3.0, True), (60, -3.5, True), (240, 0.0, False)], u_of(hour)))
     ticks_mod.strikes.note(TICKER, K)
-    first = OPEN + 165
+    first = OPEN + 92
     assert ask(sp, s, first, "yes", Store())[0]
-    second = OPEN + 120 + 60 + 60 + 50  # in the second fall, 2.1u run
+    second = OPEN + 160 + 52  # in the second fall, rounding off
     assert ask(sp, s, second, "yes", Store([first]))[0]
     bet, note = ask(sp, s, second, "yes", Store([first, second - 2]))
     assert not bet and "swing_played" in note, note
@@ -158,10 +170,10 @@ def test_a_resting_buy_is_withdrawn_once_the_swing_has_turned(tmp_path, monkeypa
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
-    feed(hour, window_path([(120, 0.0), (60, -2.0), (60, 2.0), (240, 0.0)], u_of(hour)))
+    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (60, 3.0, True), (240, 0.0, False)], u_of(hour)))
     ticks_mod.strikes.note(TICKER, K)
-    assert ask(sp, s, OPEN + 165, "yes", resting=True)[0]
-    bet, note = ask(sp, s, OPEN + 120 + 60 + 55, "yes", resting=True)
+    assert ask(sp, s, OPEN + 92, "yes", resting=True)[0]
+    bet, note = ask(sp, s, OPEN + 100 + 55, "yes", resting=True)
     assert not bet and "not in a dip" in note, note
 
 
@@ -204,38 +216,27 @@ def test_replay_eth_1300_the_dip_the_live_reader_missed_is_bought_inside_the_yes
     assert not any(bet for _, bet, _ in no)
 
 
-def test_replay_silver_1145_a_climb_is_still_read_as_a_peak_known_limit(tmp_path, monkeypatch, mem):
-    """SILVER 11:34 ET: a straight climb the user called linear. The market's pre-open hour had waves, so the step reads the rise as a peak and buys NO, as the live reader did.
-    Pinned as a KNOWN LIMIT, not a claim of being right: a reading of the window's own shape is not built."""
+def test_replay_silver_1145_the_linear_climb_is_not_a_half_u_and_is_not_bought(tmp_path, monkeypatch, mem):
+    """SILVER 11:34 ET, 2026-11-27: a straight climb the user called linear. The step bought NO at 11:34:31 (271 s in) before the half-U test. Now the seconds around it are refused, as 'straight' or 'still running'. Not claimed: the climb has rounded stretches earlier (about 156 s and 176 s in) where the test says yes."""
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     m = load_paths()["silver-1145"]
-    no = replay(m, "no", range(240, 275, 5), sp, s)
-    assert any(bet for _, bet, _ in no)
+    no = replay(m, "no", range(240, 285, 3), sp, s)
+    assert not any(bet for _, bet, _ in no)
+    assert any("no half U" in note or "not at the middle of a half U" in note for _, _, note in no)
 
 
-def test_the_price_curve_is_a_shadow_reading_in_the_facts_and_changes_no_answer(tmp_path, monkeypatch, mem):
-    """2026-11-27 (user: "Using the price is probably better than the spot value for these tight turns"): the market's own YES mid, read with the zig-zag in its own typical minute and a 5 s smoothing, is stored with the step's facts. It never says yes or no."""
+def test_a_straight_fall_is_not_a_half_u_and_a_fall_still_at_full_pace_is_not_at_the_middle(tmp_path, monkeypatch, mem):
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
-    feed(hour, window_path([(120, 0.0), (60, -2.0), (300, 0.0)], u_of(hour)))
+    u = u_of(hour)
+    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, False), (300, 0.0, False)], u))  # the same 2u fall, in a straight line
     ticks_mod.strikes.note(TICKER, K)
-    ticks_mod.mids.clear()
-    mid = 0.5
-    for k in range(0, 200):
-        mid = 0.5 - 0.004 * max(0, k - 120) if k < 180 else mid  # flat, then the YES price falls for 60 s
-        ticks_mod.mids.note(TICKER, OPEN + k, mid - 0.005, mid + 0.005)
-    now = OPEN + 165
-    ctx = buychain.Ctx(s, sp, now=now, store=Store())
-    with memguard.decision("buy"):
-        bet, note = buychain.decide(ctx, shot(now, "yes"))
-    assert bet, note  # the same answer as without the price curve (test_a_fall_is_a_dip_for_yes...)
-    w = ctx.facts["wave_low"]
-    assert w["pr_dir"] == -1 and w["pr_swing_u"] > 1.0 and w["pr_gb_u"] < 0.2 and w["pr_s"] >= 120 and w["pr_age"] <= 5, w
-    ticks_mod.mids.clear()
+    bet, note = ask(sp, s, OPEN + 40 + 50, "yes")
+    assert not bet and "no half U" in note and "straight" in note, note
     wavelow.clear()
-    with memguard.decision("buy"):
-        ctx2 = buychain.Ctx(s, sp, now=now, store=Store())
-        bet2, _ = buychain.decide(ctx2, shot(now, "yes"))
-    assert bet2 and "pr_dir" not in ctx2.facts["wave_low"]  # no quotes in memory: no price reading, the buy is unchanged
+    ticks_mod.history.clear()
+    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u))
+    bet, note = ask(sp, s, OPEN + 40 + 30, "yes")  # the rounded fall, 30 s in: past a typical minute and still at full pace
+    assert not bet and ("half U" in note), note
