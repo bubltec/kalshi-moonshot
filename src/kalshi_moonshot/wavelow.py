@@ -105,7 +105,7 @@ def read(index: str, opened: float, now: float, K: float) -> tuple[waveturn.Read
             out = (None, h, "the spot's path in the window has a gap at its start", None)
         else:
             if h.u is None:  # 2026-11-28 (user: nothing waits on a typical-minute calculation): no pre-open hour in memory (a restart, a new market) = this window's own typical minute, read now, never a wait
-                u_w = math.sqrt(sum((win[k] - win[k - 1]) ** 2 for k in range(1, len(win))) / max(len(win) - 1, 1)) * math.sqrt(60)  # type: ignore[operator]
+                u_w = math.sqrt(sum((win[k] - win[k - 1]) ** 2 for k in range(1, len(win))) / max(len(win) - 1, 1)) * math.sqrt(60)  # type: ignore[operator,misc]
                 h = waveturn.Hour(u_w, None, None, "", 0.0, 0.0, waveturn._moves(win, u_w)) if u_w > 0 else h  # type: ignore[arg-type]
             if h.u is None:
                 out = (None, h, f"the spot did not move in the window: {h.why}", None)

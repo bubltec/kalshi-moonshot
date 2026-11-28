@@ -23,7 +23,7 @@ class S3(FakeS3):
             raise self.exceptions.NoSuchKey()
         return {"Body": io.BytesIO(self.objects[(Bucket, Key)][0])}
 
-    class exceptions:  # noqa: N801
+    class exceptions:
         class NoSuchKey(Exception):
             pass
 
@@ -103,7 +103,7 @@ def test_a_failed_upload_leaves_the_watermark_alone(env):
 
 def test_it_is_off_without_a_bucket_or_with_the_switch_off():
     s = config.load()
-    mk = lambda **kw: type(s)(**{**s.__dict__, **kw})  # noqa: E731
+    mk = lambda **kw: type(s)(**{**s.__dict__, **kw})
     assert not liveship.enabled(mk(archive_bucket="")) and not liveship.enabled(mk(archive_bucket="b", live_ship=False)) and liveship.enabled(mk(archive_bucket="b", live_ship=True))
 
 

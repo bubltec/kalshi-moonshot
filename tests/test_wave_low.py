@@ -12,10 +12,10 @@ from kalshi_moonshot import buychain, config, lanes, memguard, wavelow, waveturn
 from kalshi_moonshot import ticks as ticks_mod
 from kalshi_moonshot.strategy import LongShot
 from tests.test_wave_turn import (  # noqa: F401  (feed etc.: the helpers)
+    INDEX,
     OPEN,
     TICKER,
     K,
-    INDEX,
     feed,
     hour_path,
     mem,
@@ -153,7 +153,7 @@ def test_a_calm_hour_does_not_stop_the_look(tmp_path, monkeypatch, mem):
     hour = [K - (waveturn.PRE - 1 - k) * 0.001 for k in range(waveturn.PRE)]  # a straight line: no leg of a typical minute turns in it
     feed(hour, window_path([(120, 0.0), (60, -2.0), (300, 0.0)], u_of(hour)))
     ticks_mod.strikes.note(TICKER, K)
-    bet, note = ask(sp, s, OPEN + 165, "yes")
+    _bet, note = ask(sp, s, OPEN + 165, "yes")
     assert "not a wave market" not in note and "no reading" not in note, note
 
 
@@ -167,7 +167,7 @@ def test_no_pre_open_hour_still_reads_the_window(tmp_path, monkeypatch, mem):
     rows = [(OPEN - 1200 + k, K) for k in range(1200)] + [(OPEN + k, v) for k, v in enumerate(path)]  # only the last 20 minutes before the open and the window are in memory
     ticks_mod.history.warm(INDEX, rows, rows[0][0] - 1.0)
     ticks_mod.strikes.note(TICKER, K)
-    bet, note = ask(sp, s, OPEN + 40 + 52, "yes")
+    _bet, note = ask(sp, s, OPEN + 40 + 52, "yes")
     assert "pre-open hour" not in note and "the tape in memory" not in note, note
 
 
