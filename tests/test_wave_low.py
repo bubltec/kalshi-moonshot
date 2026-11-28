@@ -363,7 +363,7 @@ def test_a_bounce_off_a_bigger_move_is_not_faded(tmp_path, monkeypatch, mem):
     assert bet and ("in a dip" in note or "in a peak" in note), note
 
 
-def test_the_price_turn_switch_is_off_by_default_and_never_blocks_an_unread_price(tmp_path, monkeypatch, mem):
+def test_the_price_turn_switch_blocks_only_a_price_moving_against_the_buy_and_never_an_unread_one(tmp_path, monkeypatch, mem):
     """2026-11-28: PRICE_TURN_LIVE is the user's switch. Off, a dip buys as before. On, a price still falling blocks a YES (a turned or a flat one passes); a price not read yet (pc None) never blocks."""
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
@@ -372,7 +372,7 @@ def test_the_price_turn_switch_is_off_by_default_and_never_blocks_an_unread_pric
     feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u))
     ticks_mod.strikes.note(TICKER, K)
     now = OPEN + 40 + 52
-    assert wavelow.PRICE_TURN_LIVE is False
+    monkeypatch.setattr(wavelow, "PRICE_TURN_LIVE", False)
     bet, note = ask(sp, s, now, "yes")
     assert bet, note
     monkeypatch.setattr(wavelow, "PRICE_TURN_LIVE", True)
