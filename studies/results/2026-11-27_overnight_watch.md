@@ -511,3 +511,6 @@ BTC 06:15 NO (0.86 at 06:05:36, minute 5.6) and SOL 06:15 NO (0.89 at 06:11:38, 
 
 ## Pass 63 (06:49 to 07:19 ET)
 Five gains sold: XRP 07:00 YES 0.86 to 0.932 (fast clause, +4.2c), ETH 07:00 YES 0.89 to 0.99 (top), NEAR 07:15 YES 0.75 to 0.991 (top), BNB 07:15 YES 0.82 to 0.931 (fast clause, +9.6c), ZEC 07:15 YES 0.86 to 0.996 (top). Open: DOGE 07:30 YES 0.74 (07:17:28). NEAR 06:45 NO 0.81 (bought 06:32:04, held to the close): the result was not readable at the pass (the host query timed out): to read next pass. No new zero in the readable bets. Bot up 8 hours, kill switch off. Nothing changed.
+
+## Addendum to pass 63 (07:20 ET): NEAR 06:45 NO lost the stake
+NEAR 06:45 NO (0.81, bought 06:32:04 at minute 2.1, held with no sale): the YES bid was 1.00 at 06:44:40, 06:44:50 and the close, so the NO side lost the full stake (about -$15). Sixth zero since 01:15 (ETH 01:15 NO, XRP 02:00 YES, BNB 05:30 YES, BTC and SOL 06:15 NO, NEAR 06:45 NO), about -$90. Trace to run when the market result is recorded. Nothing changed.
