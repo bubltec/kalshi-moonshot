@@ -123,7 +123,9 @@ def test_a_swing_under_a_typical_minute_is_not_a_dip(tmp_path, monkeypatch, mem)
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
-    feed(hour, window_path([(120, 0.0), (60, -0.8), (300, 0.0)], u_of(hour)))
+    u = u_of(hour)
+    hour = hour[:-720] + [K] * 720  # the last 12 minutes before the open are flat (the step now reads 10 minutes before the decision)
+    feed(hour, window_path([(120, 0.0), (60, -0.8), (300, 0.0)], u))
     ticks_mod.strikes.note(TICKER, K)
     bet, note = ask(sp, s, OPEN + 120 + 60, "yes")
     assert not bet and "not yet a dip" in note, note
@@ -240,3 +242,20 @@ def test_a_straight_fall_is_not_a_half_u_and_a_fall_still_at_full_pace_is_not_at
     feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u))
     bet, note = ask(sp, s, OPEN + 40 + 30, "yes")  # the rounded fall, 30 s in: past a typical minute and still at full pace
     assert not bet and ("half U" in note), note
+
+
+def test_the_swing_is_read_from_ten_minutes_before_the_decision_across_the_open(tmp_path, monkeypatch, mem):
+    """2026-11-27 (user: "It's supposed to read at least 10 mins before the marker"; HYPE 22:45, the market opened at the bottom of a 9-minute fall and the step, reading from the open alone, called the rise off it a peak). A fall that runs through the open and rounds off 40 s into the market is one dip, bought as such; read from the open alone it would be a 40 s wobble."""
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    u = u_of(hour)
+    # eight minutes of fall into the open, rounding off, then 40 s of the market at the bottom
+    fall = [K + 6.0 * u * (1 - i / 540.0) ** 3 for i in range(540)]  # from 6u over the target down to the target at the open, flattening
+    hour = hour[:-540] + fall
+    feed(hour, window_path([(60, 0.0)], u))
+    ticks_mod.strikes.note(TICKER, K)
+    assert wavelow.window_start(int(OPEN), OPEN + 40) == int(OPEN) - 560  # 10 minutes before the decision, across the open
+    bet, note = ask(sp, s, OPEN + 40, "yes")
+    assert bet and "a half U" in note, note
+    assert float(next(w for w in [note] if "swing" in w).split("swing ")[1].split("u")[0]) > 2.0, note  # the swing read is the long fall, not the 40 s of the market
