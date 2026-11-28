@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from .manualrest import REST_PREFIX
 from .strategy import fee_per_contract
 
-REST_STEPS = ("wave take", "wave salvage", "value sale", "turn sale")  # the reasons of the gain-side sales that may rest; "wave give-up" (salvage's safety exit) and every other reason stay immediate taker sales
+REST_STEPS = ("wave take", "wave salvage", "value sale", "turn sale", "early take")  # the reasons of the gain-side sales that may rest; "wave give-up" (salvage's safety exit) and every other reason stay immediate taker sales
 KEEP = 900  # what Store.mark_exited keeps of a reason (sellchain.KEEP)
 MOVE = 0.0005  # a smaller change of the ask is no move (prices are on Kalshi's grid: a tenth of a cent at the finest)
 
@@ -58,6 +58,7 @@ class RestSell:
     base: float = 0.0  # LIVE: contracts filled on earlier orders of this sale (a cancel-and-place fallback starts a new order for the rest)
     ids: list = field(default_factory=list)  # LIVE: every order id this sale used
     pending: bool = False  # LIVE: a place or an amend is waiting on the sell thread (moves coalesce: it reads the latest price)
+    premium: float = 0.0  # 2026-11-28 (user: "When profit exit, always put it a few cents above"): the order rests this far ABOVE the side's ask (lane field wave_rest_premium x the bid's own typical 10 s move); 0 = at the ask
 
 
 def side_ask(side: str, yes_bid: float, yes_ask: float) -> float:
@@ -75,7 +76,12 @@ def eligible(reason: str) -> bool:
     return reason.startswith(REST_STEPS)
 
 
-def start(share: float, reason: str, ask: float, entry: float, now: float, close_ts: float, min_left: float, live: bool = False) -> RestSell | None:
+def target_price(ask: float, premium: float) -> float:
+    """Where the order rests: the ask plus the premium, never at or over 0.99 (a sale at the top of the grid is no sale)."""
+    return min(ask + max(premium, 0.0), 0.99)
+
+
+def start(share: float, reason: str, ask: float, entry: float, now: float, close_ts: float, min_left: float, live: bool = False, premium: float = 0.0) -> RestSell | None:
     """A new resting sale for a step's sale, or None when it does not rest (the switch is off, the sale is not a gain-side
     wave sale, there is no ask, the ask is not a gain after both fees, or there is no window left)."""
     if share <= 0 or not eligible(reason) or not (0.0 < ask < 1.0) or entry <= 0 or not is_gain(ask, entry):
@@ -84,7 +90,8 @@ def start(share: float, reason: str, ask: float, entry: float, now: float, close
     deadline = min(now + share * left, close_ts - min_left)
     if left <= 0 or deadline <= now:
         return None
-    return RestSell(reason=reason, price=ask, first=ask, started=now, window=deadline - now, deadline=deadline, left0=left, share=share, live=live)
+    price = target_price(ask, premium)
+    return RestSell(reason=reason, price=price, first=price, started=now, window=deadline - now, deadline=deadline, left0=left, share=share, live=live, premium=premium)
 
 
 def keeps(r: RestSell, reason: str, entry: float) -> bool:
@@ -104,13 +111,13 @@ def tick(r: RestSell, bid: float, ask: float, entry: float, now: float) -> tuple
     if now >= r.deadline:
         r.done = "ended"
         return "ended", ended_reason(r, now, bid, "the window ended")
-    if 0.0 < ask < 1.0 and abs(ask - r.price) >= MOVE:
+    if 0.0 < ask < 1.0 and abs(target_price(ask, r.premium) - r.price) >= MOVE:
         if not is_gain(ask, entry):
             r.done = "ended"
             return "ended", ended_reason(r, now, bid, f"the ask fell to {ask:.3f}, no longer a gain after both fees")
-        was = r.price
-        r.price, r.moves = ask, r.moves + 1
-        return "moved", f"the ask moved from {was:.3f} to {ask:.3f}: the resting sale amended to {ask:.3f} ({r.moves} moves, {now - r.started:.0f}s of its {r.window:.0f}s window)"
+        was, want = r.price, target_price(ask, r.premium)
+        r.price, r.moves = want, r.moves + 1
+        return "moved", f"the ask moved to {ask:.3f}: the resting sale amended from {was:.3f} to {want:.3f} ({r.premium:.3f} above the ask; {r.moves} moves, {now - r.started:.0f}s of its {r.window:.0f}s window)"
     return "", ""
 
 

@@ -353,3 +353,32 @@ def test_unit_a_lane_file_names_the_share_and_a_bad_one_is_refused(tmp_path, mon
     (tmp_path / "strategies.toml").write_text(TOML.replace("wave_top_trend_hours = 1.0", "wave_top_trend_hours = 1.0\nwave_rest_share = 1.5"))
     with pytest.raises(ValueError, match="wave_rest_share"):
         lanes.lane_specs(config.load())
+
+
+# ---- 2026-11-28 (user: "When profit exit, always put it a few cents above"): the early take rests above the ask ----
+def test_unit_a_resting_sale_rests_a_premium_above_the_ask_and_follows_it():
+    r = restsell.start(0.2, "early take: x", 0.84, 0.31, 1000.0, 1400.0, 30.0, premium=0.04)
+    assert r is not None and r.price == pytest.approx(0.88) and r.first == pytest.approx(0.88) and r.premium == 0.04
+    assert restsell.tick(r, 0.83, 0.85, 0.31, 1001.0)[0] == "moved" and r.price == pytest.approx(0.89)  # the ask moved: the order follows, still 4c above
+    assert restsell.tick(r, 0.89, 0.90, 0.31, 1002.0)[0] in ("moved", "filled")
+    capped = restsell.start(0.2, "early take: x", 0.98, 0.31, 1000.0, 1400.0, 30.0, premium=0.04)
+    assert capped.price == pytest.approx(0.99)
+    assert restsell.eligible("early take: x") and not restsell.eligible("expiry sale: x") and not restsell.eligible("wave give-up: x")  # the bid is taken by a salvage sale and the expiry sale only
+
+
+def test_integration_the_bid_only_early_take_rests_above_the_ask_instead_of_taking_the_bid(tmp_path, monkeypatch, mem):
+    client = Client(bid=0.90, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['early_take']\nearly_take_share=1.0\nearly_take_stall_share=0.005\nearly_take_cushion_units=0.0\nearly_take_hold_share=0.0\nearly_take_bid_only=true\nwave_rest_share=0.2\nwave_rest_premium=1.0")
+    t = w.targets[(TICKER, LANE)]
+    assert t.wave_rest_premium == 1.0 and t.wave_rest_share == 0.2  # the lane file reached the target
+    from kalshi_moonshot import watcher
+
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.10)
+    path = [0.84, 0.88, 0.93, 0.95, 0.94, 0.92, 0.91, 0.90, 0.89, 0.88, 0.88]
+    for k, bid in enumerate(path):
+        tick(w, bid, 370 - k)
+    assert t.rest is not None, "the profit sale did not rest"
+    assert t.rest.reason.startswith("early take") and t.rest.premium == pytest.approx(0.1 * (10 / 60) ** 0.5)
+    assert t.rest.price >= t.cur_ask + t.rest.premium - 1e-6, (t.rest.price, t.cur_ask)  # a few cents above the ask
+    queued = jobs(w)
+    assert not [j for j in queued if hasattr(j, "why") and j.why.startswith("early take")], "the bid was taken"

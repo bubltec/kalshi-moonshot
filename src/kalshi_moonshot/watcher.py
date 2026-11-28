@@ -330,6 +330,7 @@ class Target:
     cur_bid: float = 0.0  # the latest bid and the opposite side's ask, from the socket
     cur_other_ask: float = 0.0
     history: deque = field(default_factory=lambda: deque(maxlen=400))
+    wave_rest_premium: float = 0.0  # lane field wave_rest_premium: the resting sale rests this many of the bid's typical 10 s moves above the ask
     wave_rest_share: float = 0.0  # lane field wave_rest_share: a gain-side wave sale rests at the ask for this share of the time left (restsell.py); 0 = off
     rest: Any = None  # the resting gain-side sale now working (restsell.RestSell), None = none
     rest_live: bool = False  # the lane places real orders, so the rest is a real post-only sell placed by the sell thread
@@ -518,7 +519,13 @@ class ProfitWatcher:
             r.done = r.done or "ended"
             log.info("resting sale %s %s: withdrawn, another exit decided: %s", t.ticker, t.lane, reason[:200])
             return restsell.stopped_reason(r, now, reason)
-        got = restsell.start(t.wave_rest_share, reason, t.cur_ask, t.entry, now, t.close_ts, CURVE_MIN_LEFT, live=t.rest_live) if t.close_ts > 0 else None
+        premium = 0.0
+        if t.wave_rest_premium > 0:
+            from . import wavetop
+
+            unit = ProfitWatcher._risk_unit(self, t, now)
+            premium = t.wave_rest_premium * (max(wavetop.TICK, unit * math.sqrt(10.0 / 60.0)) if unit else wavetop.TICK)  # the bid's own typical 10 s move, at least a tick; memory only
+        got = restsell.start(t.wave_rest_share, reason, t.cur_ask, t.entry, now, t.close_ts, CURVE_MIN_LEFT, live=t.rest_live, premium=premium) if t.close_ts > 0 else None
         if got is None:
             return reason
         t.rest = got
@@ -1942,6 +1949,7 @@ class ProfitWatcher:
                 held.wave_give_up_left_share = spec.wave_give_up_left_share
                 held.turn_sale_live = spec.turn_sale_live
                 held.wave_whipsaw, held.wave_spike, held.wave_spike_s, held.wave_spike_tr = spec.wave_whipsaw_range, spec.wave_spike_z, spec.wave_spike_seconds, spec.wave_spike_trail
+                held.wave_rest_premium = spec.wave_rest_premium
                 held.wave_rest_share, held.rest_live = spec.wave_rest_share, s.is_live(lane, ticker.split("-")[0])  # a gain-side wave sale rests at the ask (restsell.py); a live lane's rest is a real order
                 held.risk_under_even, held.risk_under_even_live = spec.curve_risk_under_even, spec.curve_risk_under_even_live
                 held.risk_time_to_go, held.risk_time_to_go_chance, held.risk_time_to_go_wait_share = spec.curve_risk_time_to_go, spec.curve_risk_time_to_go_chance, spec.curve_risk_time_to_go_wait_share
