@@ -457,3 +457,6 @@ Live PriskP bets since 21:30: ZEC 21:45 NO 0.86 to 0.992 (top, gain), XRP 22:00 
 
 ## Pass 45 (22:19 to 22:49 ET)
 Two live bets, both NO on the 22:30 market, both gains: SOL 0.89 to 0.99 (top, 169 s left), NEAR 0.84 to 0.916 (fast clause, +6.4c). No bets after 22:24:41 (about 25 minutes). No losses. The curved-only curvature hold, the salvage gate and the opposite-side block are live (the bot restarted at about 22:16, up 32 minutes at the pass, kill switch off); no early-profit fall sale on a rising cushion yet to confirm the 22:16 build carries the curvature change. Nothing changed.
+
+## Pass 46 (22:49 to 23:19 ET)
+No live PriskP bets since NEAR 22:30 NO (22:24:41), about 55 minutes. PriskP kept evaluating (passes since 22:25 by reason: dead_ask_band 6166, window 1569, curve_not_held 662, check_not_passing 441, curve_peak 265, curve_low_cushion 173, shift_out_of_cushion 109), the wave lane made 31 bets in the same time: the markets sit near 50/50 (the ask in the 0.45 to 0.55 dead band), where a favourites lane has nothing to buy; not a fault. The bot restarted at about 23:16 (up 2 minutes at the pass, kill switch off), not by this session. No losses, nothing changed.
