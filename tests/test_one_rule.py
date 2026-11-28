@@ -338,7 +338,8 @@ def test_the_top_holds_at_any_minute_when_the_cushion_makes_holding_worth_more_t
     assert asker(0.64, spot_unit=18.0)(0.991, 164).kind == "top"  # the spot unread: sold as before
 
 
-def test_a_straight_fast_drop_toward_the_target_late_in_the_market_is_sold_for_a_small_loss():
+def test_a_straight_fast_drop_toward_the_target_late_in_the_market_is_sold_for_a_small_loss(monkeypatch):
+    monkeypatch.setattr(fallrule, "FAST_DROP_ON", True)
     """User, 2026-11-27 11:50 ET: "it should also salvage if we get a fast drop that approaches the target when time remaining is low. Fast drop happens when the slope away from winning side shows no/little curvature and approaches the target". ETH 08:00 NO, ZEC 08:00 NO, XRP/HYPE/BNB 10:15 NO fell under cost with the cushion still positive and were never sold. The spot's cushion falling in a straight line, with little time left, a small cushion for the time left, and reaching the target within half the time left."""
     ask = asker(0.70, wobble=0.045)
     sold = None
@@ -375,6 +376,7 @@ def test_the_fast_early_take_is_inert_in_the_last_tenth_of_the_market():
 
 
 def test_integration_a_fast_drop_sale_goes_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
+    monkeypatch.setattr(fallrule, "FAST_DROP_ON", True)
     """The fast drop is a sale under cost, so its reason must pass sellchain.may_sell_under_cost and the selling thread must place it (the 11-26 lesson: a step is tested through to the client's order)."""
     from kalshi_moonshot import config, watcher
     from kalshi_moonshot.store import Store
@@ -421,3 +423,10 @@ def test_early_take_holds_a_fall_while_the_cushion_approaches_the_target_with_cu
     ask, _ = run(rising)
     r = ask(0.69, 600 - 5 * 15, rising[-1])
     assert not r.sell and r.kind == "cushion", r
+
+
+def test_the_fast_drop_is_switched_off():
+    """User, 2026-11-27 19:55 ET, "Yes turn it off": five live sales were about -$45.4 against holding. A straight fast fall of the cushion near the close no longer sells."""
+    assert fallrule.FAST_DROP_ON is False
+    ask = asker(0.70, wobble=0.045)
+    assert not any(ask(0.45, 170 - 2 * k, 7.0 - 0.4 * k).sell for k in range(14))
