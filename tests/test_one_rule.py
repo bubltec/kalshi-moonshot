@@ -435,17 +435,20 @@ def test_the_fast_drop_is_switched_off():
     assert not any(ask(0.45, 170 - 2 * k, 7.0 - 0.4 * k).sell for k in range(14))
 
 
-def test_salvage_waits_for_the_spot_to_be_a_typical_move_of_the_time_left_under_the_target():
-    """User, 2026-11-27 21:25 ET, "Let's fix the salvage", after BTC 21:00 NO (bought 0.58) was sold by the salvage at 0.31 with 369 s left and the spot -0.53 of a typical move under the target: it recovered and settled NO, holding paid +$10.9 where the sale cost -$8.1. The failed bounce is sold only once the cushion is under SALVAGE_Z (-1) in sigma of the time left."""
-    def run(cushion):
+def test_salvage_depth_is_scaled_by_the_time_left_and_inert_in_the_last_minutes():
+    """User, 2026-11-28 ~09:30 ET: "The salvage rule needs to stop waiting a typical minute on the last minutes that's stupid. The time scalar should make that minute rule inert." The failed bounce is sold only once the spot's cushion is under SALVAGE_Z (-1) typical moves of the time left TIMES the share of the market left (and the cross needs the best cushion times it): deep when the market is young, nothing in its last minutes. BTC 21:00 NO (369 s left, -0.53 under, settled NO) and BTC 06:15 NO (the last three minutes, never sold) are the two sides."""
+    def run(cushion, left_at):
         ask = asker(0.58, wobble=0.05, spot_unit=10.0)
-        ask(0.40, 420, cushion), ask(0.26, 400, cushion), ask(0.38, 380, cushion)  # a collapse, a low, a bounce of more than the bar
-        return ask(0.30, 369, cushion)  # the bounce fails with 369 s left
+        ask(0.40, left_at + 51, cushion), ask(0.26, left_at + 31, cushion), ask(0.38, left_at + 11, cushion)  # a collapse, a low, a bounce of more than the bar
+        return ask(0.30, left_at, cushion)  # the bounce fails
 
-    shallow = run(-13.0)  # -13 against 10 x sqrt(369/60) = 24.8: -0.52 of a typical move
-    assert not shallow.sell and shallow.kind in ("under bar", "no bounce"), shallow
-    deep = run(-30.0)  # -1.2 of a typical move
-    assert deep.sell and deep.kind == "salvage", deep
+    young = run(-13.0, 700)  # -13 against 10 x sqrt(700/60) = 34: -0.38 of a typical move, the gate -0.78 at 700 s left
+    assert not young.sell, young
+    young_deep = run(-40.0, 700)  # -1.2 of a typical move
+    assert young_deep.sell and young_deep.kind == "salvage", young_deep
+    last = run(-6.0, 120)  # -6 against 10 x sqrt(120/60) = 14: -0.42 of a typical move, the gate -0.13 at 120 s left
+    assert last.sell and last.kind == "salvage", last
+
 
 
 def test_integration_the_uptick_take_follows_a_rising_bid_and_sells_when_it_pauses_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):

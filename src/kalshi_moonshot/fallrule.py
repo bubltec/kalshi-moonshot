@@ -133,6 +133,11 @@ def fast_drop(s: State, cc: float | None, z: float | None, now: float, left: flo
     return kind == "straight" and cc / -full <= FAST_DROP_TTC_SHARE * left
 
 
+def time_share(left: float) -> float:
+    """THE TIME SCALAR on the salvage's depth rules (user, 2026-11-28 ~09:30 ET: "The salvage rule needs to stop waiting a typical minute on the last minutes that's stupid. The time scalar should make that minute rule inert"): the share of the market still to run, 1 at the open and 0 at the close. The spot must be under the target by the best cushion it has had since the open (the cross) and by SALVAGE_Z typical moves of the time left (the salvage's gate) times this share, so that late in the market the depth asked for goes to nothing and the rules are inert. Replay on 416 live bets (today +$152.61): the cross depth scaled +$169.20, with the gate scaled too +$174.25 (BTC 06:15 NO sold at 0.17 instead of settling 0); twice the share (capped at 1) +$110.79, with the backstop's wait scaled as well +$123.51 and +$91.80: not built; chosen after seeing, in sample."""
+    return min(max(left, 0.0) / MARKET_S, 1.0)
+
+
 def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float, fee_of, wobble: float, now: float, left: float, cushion: float | None, spot_unit: float | None, cross_cushion: float | None = None, settle: float | None = None, bought: float | None = None, wave: object = "off") -> Read:
     """Ask the rule on one tick. `fee_bid` and `fee_entry` are the fee per contract at the bid and at the price paid, `fee_of` the fee function (for the gain at the high), `wobble` the bid's typical 10 s move (a tick when it has no reading). `cross_cushion`, when given, is the cushion the cross test reads in place of `cushion` (the watcher gives the better for the bet of the spot's 60 s and 5 s averages: the spot has crossed only when both have)."""
     cost = entry + fee_entry
@@ -144,7 +149,7 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         s.best_cushion = max(s.best_cushion, cc)
     over = crossed(cc, spot_unit)
     if over and cc is not None and s.best_cushion > 0:
-        over = -cc >= s.best_cushion - 1e-12  # CROSSED FOR A LOSS SALE ONLY WHEN THE SPOT IS AS FAR UNDER THE TARGET AS IT HAS BEEN OVER IT: see the module doc ("no loss")
+        over = -cc >= s.best_cushion * time_share(left) - 1e-12  # CROSSED FOR A LOSS SALE ONLY WHEN THE SPOT IS AS FAR UNDER THE TARGET AS IT HAS BEEN OVER IT: see the module doc ("no loss")
     if s.first_ts <= 0:
         s.first_ts = now
     if cc is not None:
@@ -209,7 +214,7 @@ def decide(s: State, bid: float, entry: float, fee_bid: float, fee_entry: float,
         return Read(True, "fast drop", net, 0.0, bar, s.bounce_high or s.low, z)  # THE SPOT FALLS IN A STRAIGHT LINE toward the target in the last minutes and would reach it before the close: a small loss now, not the whole stake at the end
     if not over:
         return Read(False, "no cross", net, 0.0, bar, s.bounce_high or s.low, z)  # NO LOSS while the spot has not crossed
-    if s.bounce_high > 0 and s.bounce_high - bid >= bar - GRID and (z is None or z <= SALVAGE_Z):
+    if s.bounce_high > 0 and s.bounce_high - bid >= bar - GRID and (z is None or z <= SALVAGE_Z * time_share(left)):
         return Read(True, "salvage", net, s.bounce_high - bid, bar, s.bounce_high, z)
     if now - max(s.first_ts, s.last_ahead_ts) >= NO_RECOVERY_SHARE * MARKET_S:
         return Read(True, "no recovery", net, 0.0, bar, s.bounce_high or s.low, z)  # THE TIME BACKSTOP: a third of the market under cost with the spot crossed (user, 2026-11-24: "accept its a loss when it doesn't come back after the wait"; a profit expires)
