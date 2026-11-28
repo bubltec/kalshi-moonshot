@@ -87,3 +87,20 @@ def test_a_lane_is_held_back_by_its_own_position_on_a_market_and_not_by_another_
     assert risk.check(s, st, TICKER, 1.0, max_trade=5.0).reason == "already holding this market"  # no lane given: the account's rule, as before
     assert risk.check(s, st, TICKER, 1.0, max_trade=5.0, lane="risk_only").reason == "already holding this market"  # its own position blocks it
     assert risk.check(s, st, TICKER, 1.0, max_trade=5.0, lane="wave_shape").reason != "already holding this market"  # another lane's does not
+
+
+def test_a_lane_may_not_buy_the_other_side_of_a_market_another_lane_holds(tmp_path, monkeypatch):
+    """2026-11-27 evening: the wave lane's short bets no longer block PriskP (a lane is held back only by its own position), but Kalshi nets a market's YES and NO contracts, so a lane buying the OTHER side of another lane's open bet cancels contracts against it: BTC 20:00 NO, HYPE 20:15 YES and ZEC 21:30 YES (PriskP, 1.0, 1.2 and 5.0 contracts) were booked 'closed by hand: the account no longer holds these contracts' while the wave lane held the opposite side. The same side is allowed, the other side is refused."""
+    from kalshi_moonshot import risk
+
+    live(monkeypatch)
+    held(tmp_path, monkeypatch, live=True)  # the lane risk_only holds a YES bet on TICKER
+    monkeypatch.setenv("ALLOW_REAL_MONEY", "true")
+    s = config.load()
+    st = Store(s.db_path)
+    other = risk.check(s, st, TICKER, 1.0, max_trade=5.0, lane="wave_shape", side="no")
+    assert other.reason == "another lane holds the other side of this market (the exchange nets the two)"
+    same = risk.check(s, st, TICKER, 1.0, max_trade=5.0, lane="wave_shape", side="yes")
+    assert same.reason != "another lane holds the other side of this market (the exchange nets the two)" and "other side" not in same.reason
+    own = risk.check(s, st, TICKER, 1.0, max_trade=5.0, lane="risk_only", side="no")
+    assert "other side" not in own.reason  # its own bet is the lane's own business, held back by the holding rule as before
