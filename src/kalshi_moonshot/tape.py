@@ -405,10 +405,8 @@ class Tape:
             return 0
         try:
             self.db.executemany("INSERT INTO quotes (ts, ticker, bid, ask, last, sts, bid_size, ask_size) VALUES (?,?,?,?,?,?,?,?)", q)
-            self.db.executemany(
-                "INSERT INTO flow_1s VALUES (?,?,?,?,?,?)",
-                [(sec, tk, v[0], v[1], int(v[2]), (v[3] / (v[0] + v[1])) if (v[0] + v[1]) else None) for (sec, tk), v in fl.items()],
-            )
+            flow_rows = [(sec, tk, v[0], v[1], int(v[2]), (v[3] / (v[0] + v[1])) if (v[0] + v[1]) else None) for (sec, tk), v in fl.items()]
+            self.db.executemany("INSERT INTO flow_1s VALUES (?,?,?,?,?,?)", flow_rows)
             self.db.executemany("INSERT INTO index_ticks VALUES (?,?,?,?,?,?)", i)
             self.db.executemany("INSERT INTO index_fast VALUES (?,?,?,?)", fast)
             self.db.executemany("INSERT INTO feed_ticks VALUES (?,?,?)", f)
@@ -416,6 +414,12 @@ class Tape:
             if ticks_out:
                 self.db.executemany("INSERT INTO fut_ticks VALUES (?,?,?,?,?)", ticks_out)
             self.db.commit()
+            try:
+                from . import liveship
+
+                liveship.tee({"quotes": q, "flow_1s": flow_rows, "index_ticks": i, "index_fast": fast})  # the rows just written, handed to the S3 shipper from memory (it reads no tape table)
+            except Exception:
+                log.debug("liveship tee failed", exc_info=True)
             recent.prune(now if now is not None else time.time())
         except Exception:
             self.db.rollback()

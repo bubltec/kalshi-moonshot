@@ -32,15 +32,19 @@ class S3(FakeS3):
 def env(tmp_path):
     store = Store(tmp_path / "m.db", frozenset())
     tape = Tape(tmp_path / "t.db")
+    for t in liveship._buf:
+        liveship._buf[t].clear()
     tape.db.executemany("INSERT INTO quotes (ts, ticker, bid, ask, last, sts, bid_size, ask_size) VALUES (?,?,?,?,?,?,?,?)",
                         [(BASE + 5 + i, "KXBTC15M-X", 0.4, 0.41, 0.4, 7, 10.0, 12.0) for i in range(10)] + [(BASE + 70, "KXBTC15M-X", 0.5, 0.51, 0.5, 7, 1.0, 1.0)])
     tape.db.executemany("INSERT INTO index_ticks VALUES (?,?,?,?,?,?)", [(BASE + 3 * i, "BRTI", 80000.5, 80001.0, None, 123) for i in range(5)])
     tape.db.commit()
+    liveship.tee({"quotes": tape.db.execute("SELECT ts, ticker, bid, ask, last, sts, bid_size, ask_size FROM quotes").fetchall(),
+                  "index_ticks": tape.db.execute("SELECT ts, index_id, value, avg60, quarter_avg, src_ms FROM index_ticks").fetchall()})
     store.db.execute("INSERT INTO decisions (ts, ticker, action, mode, lane, side, ask) VALUES (?,?,?,?,?,?,?)", (BASE + 10, "KXBTC15M-X", "bet", "trade", "wave_shape", "yes", 0.3))
     store.db.execute("INSERT INTO screen_log (ts, lane, ticker, side, reason) VALUES (?,?,?,?,?)", (BASE + 11, "wave_shape", "KXBTC15M-X", "no", "out at price"))
     store.db.execute("INSERT INTO orders (ts, ticker, env, count, price, fill_count, cost_usd, fee_usd) VALUES (?,?,?,?,?,?,?,?)", (BASE + 12, "KXBTC15M-X", "prod", 5, 0.3, 0, 0, 0))
     store.db.commit()
-    return store, tape.db, S3()
+    return store, S3()
 
 
 def table_at(s3, table, minute):
@@ -48,32 +52,32 @@ def table_at(s3, table, minute):
 
 
 def test_a_closed_minute_is_one_file_with_exactly_its_rows(env):
-    store, tape_db, s3 = env
+    store, s3 = env
     m = BASE // 60
-    assert liveship.ship_minute(s3, "b", tape_db, store.db, "quotes", m) == 10  # the row at +70 s belongs to the next minute
+    assert liveship.ship_rows(s3, "b", "quotes", m, liveship.buffered("quotes", m)) == 10  # the row at +70 s belongs to the next minute
     t = table_at(s3, "quotes", m)
     assert t.num_rows == 10 and t.column_names == [c for c, _ in liveship.LIVE_TABLES["quotes"]]
     assert liveship.key_for("quotes", m).startswith("tape/live/quotes/day=") and liveship.key_for("quotes", m).endswith(f"m{m}.parquet")
-    assert liveship.ship_minute(s3, "b", tape_db, store.db, "quotes", m + 5) == 0 and not any(f"m{m + 5}" in k for _, k in s3.objects)  # an empty minute writes nothing
+    assert liveship.ship_rows(s3, "b", "quotes", m + 5, liveship.buffered("quotes", m + 5)) == 0 and not any(f"m{m + 5}" in k for _, k in s3.objects)  # an empty minute writes nothing
 
 
 def test_shipping_a_minute_twice_never_duplicates_rows(env):
-    store, tape_db, s3 = env
+    store, s3 = env
     m = BASE // 60
-    liveship.ship_minute(s3, "b", tape_db, store.db, "quotes", m)
-    liveship.ship_minute(s3, "b", tape_db, store.db, "quotes", m)
+    liveship.ship_rows(s3, "b", "quotes", m, liveship.buffered("quotes", m))
+    liveship.ship_rows(s3, "b", "quotes", m, liveship.buffered("quotes", m))
     assert len(s3.objects) == 1 and table_at(s3, "quotes", m).num_rows == 10
 
 
 def test_a_decision_is_shipped_again_in_the_minute_of_its_exit_and_the_newest_copy_wins(env):
-    store, tape_db, s3 = env
+    store, s3 = env
     m = BASE // 60
-    liveship.ship_minute(s3, "b", tape_db, store.db, "decisions", m)
+    liveship.pass_once(s3, "b", store.db, None, (m + 10) * 60.0 + 50)
     first = table_at(s3, "decisions", m).to_pylist()[0]
     assert first["exit_price"] is None and first["factors"] is None and first["shipped_ts"] > 0
     store.db.execute("UPDATE decisions SET exit_price = 0.6, exit_ts = ?, exit_reason = 'uptick take' WHERE id = ?", (BASE + 125, first["id"]))
     store.db.commit()
-    liveship.ship_minute(s3, "b", tape_db, store.db, "decisions", m + 2)  # its exit falls in the minute two later
+    liveship.pass_once(s3, "b", store.db, None, (m + 10) * 60.0 + 50)  # its exit falls in the minute two later
     assert table_at(s3, "decisions", m + 2).to_pylist()[0]["exit_price"] == 0.6
     import live_pull
 
@@ -82,23 +86,22 @@ def test_a_decision_is_shipped_again_in_the_minute_of_its_exit_and_the_newest_co
 
 
 def test_a_pass_ships_only_closed_minutes_and_a_second_pass_ships_the_next_ones(env):
-    store, tape_db, s3 = env
+    store, s3 = env
     now = BASE + 120 + liveship.GRACE + 1  # the minute at BASE+60 has just closed past the grace; BASE+120's has not
-    done, n = liveship.pass_once(s3, "b", tape_db, store.db, None, now)
+    done, n = liveship.pass_once(s3, "b", store.db, None, now)
     assert done == BASE // 60 + 1 and n > 0
     keys = {k for _, k in s3.objects}
     assert liveship.key_for("quotes", BASE // 60) in keys and liveship.key_for("quotes", BASE // 60 + 1) in keys and liveship.key_for("quotes", BASE // 60 + 2) not in keys
-    tape_db.execute("INSERT INTO quotes (ts, ticker, bid, ask, last, sts, bid_size, ask_size) VALUES (?,?,?,?,?,?,?,?)", (BASE + 130, "KXBTC15M-X", 0.4, 0.41, 0.4, 7, 1.0, 1.0))
-    tape_db.commit()
-    done2, _ = liveship.pass_once(s3, "b", tape_db, store.db, done, now + 60)
+    liveship.tee({"quotes": [(BASE + 130, "KXBTC15M-X", 0.4, 0.41, 0.4, 7, 1.0, 1.0)]})
+    done2, _ = liveship.pass_once(s3, "b", store.db, done, now + 60)
     assert done2 == done + 1 and liveship.key_for("quotes", done2) in {k for _, k in s3.objects}
 
 
 def test_a_failed_upload_leaves_the_watermark_alone(env):
-    store, tape_db, s3 = env
+    store, s3 = env
     s3.fail_put = True
     with pytest.raises(RuntimeError):
-        liveship.pass_once(s3, "b", tape_db, store.db, None, BASE + 200)
+        liveship.pass_once(s3, "b", store.db, None, BASE + 200)
 
 
 def test_it_is_off_without_a_bucket_or_with_the_switch_off():
@@ -121,5 +124,5 @@ def test_the_columns_match_the_athena_tables_defined_in_infra():
 def test_no_hot_path_module_imports_it():
     root = Path(__file__).resolve().parents[1] / "src" / "kalshi_moonshot"
     users = [p.name for p in root.glob("*.py") if p.name != "liveship.py" and "import liveship" in p.read_text().replace("from . import liveship", "import liveship")]
-    assert users == ["worker.py"], users  # only the worker starts the thread; no tick, buy or sell path touches it
+    assert sorted(users) == ["tape.py", "worker.py"], users  # the worker starts the thread and the tape writer (a background flush) hands it rows; no tick, buy or sell path touches it
     assert time.time() > 0
