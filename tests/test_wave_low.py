@@ -364,7 +364,7 @@ def test_a_bounce_off_a_bigger_move_is_not_faded(tmp_path, monkeypatch, mem):
 
 
 def test_the_price_turn_switch_is_off_by_default_and_never_blocks_an_unread_price(tmp_path, monkeypatch, mem):
-    """2026-11-28: PRICE_TURN_LIVE is the user's switch. Off, a dip buys as before. On, a price that is still falling (or flat) blocks a YES; a price not read yet (pc None) never blocks."""
+    """2026-11-28: PRICE_TURN_LIVE is the user's switch. Off, a dip buys as before. On, a price still falling blocks a YES (a turned or a flat one passes); a price not read yet (pc None) never blocks."""
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
@@ -379,11 +379,12 @@ def test_the_price_turn_switch_is_off_by_default_and_never_blocks_an_unread_pric
     monkeypatch.setattr(wavelow, "price_curve", lambda *a, **k: {"pr_dir": -1, "pr_swing_u": 1.0, "pr_gb_u": 0.0, "pr_age": 3, "pr_u": 0.01, "pr_s": 300})
     wavelow.clear()
     bet, note = ask(sp, s, now, "yes")
-    assert not bet and "not ticking up" in note, note
-    monkeypatch.setattr(wavelow, "price_curve", lambda *a, **k: {"pr_dir": 1, "pr_swing_u": 1.0, "pr_gb_u": 0.0, "pr_age": 3, "pr_u": 0.01, "pr_s": 300})
-    wavelow.clear()
-    bet, note = ask(sp, s, now, "yes")
-    assert bet, note
+    assert not bet and "still moving against" in note, note
+    for pdir in (1, 0):  # turned or flat: not against
+        monkeypatch.setattr(wavelow, "price_curve", lambda *a, pdir=pdir, **k: {"pr_dir": pdir, "pr_swing_u": 1.0, "pr_gb_u": 0.0, "pr_age": 3, "pr_u": 0.01, "pr_s": 300})
+        wavelow.clear()
+        bet, note = ask(sp, s, now, "yes")
+        assert bet, note
     monkeypatch.setattr(wavelow, "price_curve", lambda *a, **k: None)
     wavelow.clear()
     bet, note = ask(sp, s, now, "yes")
