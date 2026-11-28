@@ -76,24 +76,24 @@ def test_no_loss_while_the_spot_has_not_crossed_near_2100():
 def test_salvage_sells_the_failed_bounce_not_the_low_and_the_backstop_sells_no_bounce():
     ask = asker(0.78, wobble=0.05)
     assert not ask(0.80, 345, 2.0).sell
-    assert not ask(0.57, 285, -8.0).sell  # the collapse, spot crossed: not sold on the way down
-    assert not ask(0.15, 273, -8.0).sell  # the low
-    assert not ask(0.30, 250, -8.0).sell  # bounced a bar off the low
-    r = ask(0.20, 235, -8.0)  # the bounce failed
+    assert not ask(0.57, 285, -30.0).sell  # the collapse, spot crossed: not sold on the way down
+    assert not ask(0.15, 273, -30.0).sell  # the low
+    assert not ask(0.30, 250, -30.0).sell  # bounced a bar off the low
+    r = ask(0.20, 235, -30.0)  # the bounce failed
     assert r.sell and r.kind == "salvage" and r.net < 0
     ask = asker(0.80, wobble=0.05)
-    assert not ask(0.78, 760, -8.0).sell
-    assert not ask(0.60, 600, -8.0).sell  # sliding with no bounce
-    r = ask(0.40, 460, -8.0)  # 300 s under cost since first seen, spot crossed
+    assert not ask(0.78, 760, -30.0).sell
+    assert not ask(0.60, 600, -30.0).sell  # sliding with no bounce
+    r = ask(0.40, 460, -30.0)  # 300 s under cost since first seen, spot crossed
     assert r.sell and r.kind == "no recovery"
 
 
 def test_the_cross_reads_the_better_of_two_cushions_and_the_top_sells():
     ask = asker(0.78, wobble=0.05)
-    ask(0.15, 273, -8.0)
-    ask(0.30, 250, -8.0)
-    assert not ask(0.20, 235, -8.0, cross=1.0).sell  # the 5 s average is back over the target: not crossed
-    assert ask(0.20, 234, -8.0, cross=-8.0).sell
+    ask(0.15, 273, -30.0)
+    ask(0.30, 250, -30.0)
+    assert not ask(0.20, 235, -30.0, cross=1.0).sell  # the 5 s average is back over the target: not crossed
+    assert ask(0.20, 234, -30.0, cross=-30.0).sell
     ask = asker(0.80)
     assert not ask(0.98, 60, 5.0).sell
     r = ask(0.99, 45, 5.0)
@@ -178,7 +178,7 @@ def test_integration_a_loss_sale_by_the_one_rule_goes_through_the_selling_thread
     t = w.targets[(TICKER, "risk_only")]
     assert t.sell_chain == ("one_rule",)
     t.shock_index, t.shock_ref = "X", 100.0
-    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: (-8.0, 10.0))  # the spot is two wobbles of its own on the wrong side
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: (-30.0, 10.0))  # the spot is two wobbles of its own on the wrong side
     monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.12)  # the bid's wobble is 0.049
     got = []
     for k, bid in enumerate([0.60, 0.40, 0.20, 0.25, 0.33, 0.40, 0.45, 0.42, 0.36, 0.30, 0.30, 0.30]):  # the collapse, a bounce off 0.20 to 0.45, and the bounce failing
@@ -306,7 +306,7 @@ def test_a_loss_is_sold_only_when_the_spot_is_as_far_under_the_target_as_it_has_
     seeded.state.best_cushion = 1.00  # the best came BEFORE the buy (the watcher seeds it from the market's open): the same answer
     assert bounce_fail(seeded, -0.25).kind == "no cross"
     none = asker(0.84, wobble=0.05, spot_unit=0.44)  # a market whose spot was never on the bet's side: a wobble under is a cross, as before
-    assert bounce_fail(none, -0.25).kind == "salvage"
+    assert bounce_fail(none, -1.0).kind == "salvage"  # a full typical move of the time left under the target (the salvage's gate, SALVAGE_Z)
 
 
 def test_integration_the_watcher_seeds_the_best_cushion_from_the_markets_open(tmp_path, monkeypatch):
@@ -430,3 +430,16 @@ def test_the_fast_drop_is_switched_off():
     assert fallrule.FAST_DROP_ON is False
     ask = asker(0.70, wobble=0.045)
     assert not any(ask(0.45, 170 - 2 * k, 7.0 - 0.4 * k).sell for k in range(14))
+
+
+def test_salvage_waits_for_the_spot_to_be_a_typical_move_of_the_time_left_under_the_target():
+    """User, 2026-11-27 21:25 ET, "Let's fix the salvage", after BTC 21:00 NO (bought 0.58) was sold by the salvage at 0.31 with 369 s left and the spot -0.53 of a typical move under the target: it recovered and settled NO, holding paid +$10.9 where the sale cost -$8.1. The failed bounce is sold only once the cushion is under SALVAGE_Z (-1) in sigma of the time left."""
+    def run(cushion):
+        ask = asker(0.58, wobble=0.05, spot_unit=10.0)
+        ask(0.40, 420, cushion), ask(0.26, 400, cushion), ask(0.38, 380, cushion)  # a collapse, a low, a bounce of more than the bar
+        return ask(0.30, 369, cushion)  # the bounce fails with 369 s left
+
+    shallow = run(-13.0)  # -13 against 10 x sqrt(369/60) = 24.8: -0.52 of a typical move
+    assert not shallow.sell and shallow.kind in ("under bar", "no bounce"), shallow
+    deep = run(-30.0)  # -1.2 of a typical move
+    assert deep.sell and deep.kind == "salvage", deep
