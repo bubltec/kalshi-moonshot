@@ -26,6 +26,14 @@ TAPE_TABLES: dict[str, list[tuple[str, str]]] = {
     "feed_ticks": [("ts", "double"), ("symbol", "string"), ("px", "double")],
     "fut_1s": [("ts", "bigint"), ("symbol", "string"), ("px", "double"), ("buy_usd", "double"), ("sell_usd", "double"), ("buy_n", "int"), ("sell_n", "int")],
 }
+# The live minute files liveship.py writes under tape/live/ (the tape tables above, plus the bot's own records). decisions, screen_log and orders carry `shipped_ts`:
+# a row can be shipped again after it changes, so read the newest copy of each id (row_number() over (partition by id order by shipped_ts desc)).
+LIVE_TABLES: dict[str, list[tuple[str, str]]] = {
+    **{n: TAPE_TABLES[n] for n in ("quotes", "flow_1s", "index_ticks", "index_fast")},
+    "decisions": [("id", "bigint"), ("ts", "double"), ("ticker", "string"), ("lane", "string"), ("mode", "string"), ("action", "string"), ("side", "string"), ("bid", "double"), ("ask", "double"), ("model_p", "double"), ("edge", "double"), ("reason", "string"), ("close_time", "string"), ("outcome", "string"), ("settled_ts", "double"), ("exit_price", "double"), ("exit_ts", "double"), ("exit_reason", "string"), ("contracts", "double"), ("stake_usd", "double"), ("event_ticker", "string"), ("version", "string"), ("factors", "string"), ("exit_factors", "string"), ("shipped_ts", "double")],
+    "screen_log": [("id", "bigint"), ("ts", "double"), ("lane", "string"), ("ticker", "string"), ("side", "string"), ("ask", "double"), ("model_p", "double"), ("edge", "double"), ("reason", "string"), ("shipped_ts", "double")],
+    "orders": [("id", "bigint"), ("ts", "double"), ("ticker", "string"), ("env", "string"), ("count", "double"), ("price", "double"), ("fill_count", "double"), ("cost_usd", "double"), ("fee_usd", "double"), ("order_id", "string"), ("side", "string"), ("contract", "string"), ("shipped_ts", "double")],
+}
 PARQUET_IN = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
 PARQUET_OUT = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
 PARQUET_SERDE = "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
@@ -97,7 +105,8 @@ class ArchiveStack(Stack):
                 ),
             ),
         )
-        for name, columns in TAPE_TABLES.items():
+        tables = [(name, columns, f"tape/{name}") for name, columns in TAPE_TABLES.items()] + [(f"live_{name}", columns, f"tape/live/{name}") for name, columns in LIVE_TABLES.items()]
+        for name, columns, prefix in tables:
             glue.CfnTable(
                 self, f"Table{name}", catalog_id=self.account, database_name=db_name,
                 table_input=glue.CfnTable.TableInputProperty(
@@ -110,12 +119,12 @@ class ArchiveStack(Stack):
                         "projection.day.range": f"{FIRST_DAY},NOW",
                         "projection.day.interval": "1",
                         "projection.day.interval.unit": "DAYS",
-                        "storage.location.template": f"s3://{bucket.bucket_name}/tape/{name}/day=" + "${day}/",
+                        "storage.location.template": f"s3://{bucket.bucket_name}/{prefix}/day=" + "${day}/",
                     },
                     partition_keys=[glue.CfnTable.ColumnProperty(name="day", type="string")],
                     storage_descriptor=glue.CfnTable.StorageDescriptorProperty(
                         columns=[glue.CfnTable.ColumnProperty(name=c, type=t) for c, t in columns],
-                        location=f"s3://{bucket.bucket_name}/tape/{name}/",
+                        location=f"s3://{bucket.bucket_name}/{prefix}/",
                         input_format=PARQUET_IN, output_format=PARQUET_OUT,
                         serde_info=glue.CfnTable.SerdeInfoProperty(serialization_library=PARQUET_SERDE),
                     ),

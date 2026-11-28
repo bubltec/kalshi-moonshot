@@ -173,6 +173,11 @@ class Worker:
         archive.start_nightly(
             lambda: self.s, lambda: Store(self.s.db_path, self.s.exclude_versions), lambda: Tape(self.s.tape_path).db
         )  # idle until ARCHIVE_BUCKET is set
+        from . import liveship
+
+        liveship.start(
+            lambda: self.s, lambda: Store(self.s.db_path, self.s.exclude_versions), lambda: Tape(self.s.tape_path).db
+        )  # the last hours of tape and records go to S3 a minute at a time; idle until ARCHIVE_BUCKET is set
         from . import sitepub
 
         sitepub.start(lambda: self.s, lambda: Store(self.s.db_path, self.s.exclude_versions))  # idle until SITE_BUCKET is set

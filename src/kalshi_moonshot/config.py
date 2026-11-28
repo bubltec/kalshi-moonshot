@@ -156,6 +156,7 @@ class Settings:
     heartbeat_enabled: bool  # send the watchdog heartbeat to CloudWatch (heartbeat.py); on for the cloud host only
     heartbeat_region: str
     site_publish_minutes: int  # how often public.json is rebuilt and uploaded
+    live_ship: bool  # on (with ARCHIVE_BUCKET set): liveship.py sends each closed minute of the tape, decisions, screen_log and orders to S3, so a review of the last hours never reads the live host
     archive_delete_local: bool  # off: the archive only uploads. On: archived days older than archive_hot_days are deleted from the local tape
     max_rps: float  # Kalshi requests per second the bot paces itself to
     page_size: int  # markets and events per Kalshi page (max 1000)
@@ -419,6 +420,7 @@ def load() -> Settings:
         archive_region=os.environ.get("ARCHIVE_REGION", "us-east-1").strip() or "us-east-1",
         archive_hot_days=max(2, _i("ARCHIVE_HOT_DAYS", 14)),
         archive_delete_local=_b("ARCHIVE_DELETE_LOCAL", False),
+        live_ship=_b("LIVE_SHIP", True),
         site_bucket=os.environ.get("SITE_BUCKET", "").strip(),
         site_region=os.environ.get("SITE_REGION", "us-east-1").strip() or "us-east-1",
         heartbeat_enabled=os.environ.get("HEARTBEAT_ENABLED", "").strip().lower() in ("1", "true", "yes"),
