@@ -419,10 +419,10 @@ def test_early_take_holds_a_fall_while_the_cushion_approaches_the_target_with_cu
     ask, _ = run(curved)
     r = ask(0.69, 600 - 5 * 15, curved[-1] - 0.01)
     assert not r.sell and r.kind == "cushion", r
-    rising = [4.5 + 0.2 * k for k in range(15)]  # moving away from the target
+    rising = [4.5 + 0.2 * k for k in range(15)]  # moving away from the target: no longer a hold of its own (XRP 22:00 YES, 2026-11-27: a +17c profit held through falls of 11 to 15c by a rising cushion, then to zero)
     ask, _ = run(rising)
     r = ask(0.69, 600 - 5 * 15, rising[-1])
-    assert not r.sell and r.kind == "cushion", r
+    assert r.sell and r.kind == "fall", r
 
 
 def test_the_fast_drop_is_switched_off():
