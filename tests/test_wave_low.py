@@ -223,15 +223,12 @@ def test_replay_eth_1300_the_dip_the_live_reader_missed_is_bought_inside_the_yes
     assert not any(bet for _, bet, _ in no)
 
 
-def test_replay_silver_1145_the_linear_climb_is_bought_again_now_that_the_shape_test_is_shadow(tmp_path, monkeypatch, mem):
-    """SILVER 11:34 ET, 2026-11-27, a straight climb the user called linear. The half-U shape test refused it (HALF_U_LIVE True); since 2026-11-28 the shape is a reading only (it removed V-bottoms like ETH 07:30 and added nothing in the replay), so the step buys the rise again. Pinned as a known limit, not a claim of being right. With the test back on the seconds around the old bet are refused."""
+def test_replay_silver_1145_the_linear_climb_is_not_a_curve_and_is_not_bought(tmp_path, monkeypatch, mem):
+    """SILVER 11:34 ET, 2026-11-27, a straight climb the user called linear. The shape test refuses the seconds around the old bet. (It was shadow from 2026-11-28 08:15 to 09:00 ET and bought straight trends: BNB 08:45, XRP 08:45.) Not claimed: the climb has rounded stretches earlier that pass."""
+    assert wavelow.HALF_U_LIVE
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     m = load_paths()["silver-1145"]
-    no = replay(m, "no", range(240, 285, 3), sp, s)
-    assert any(bet for _, bet, _ in no)
-    monkeypatch.setattr(wavelow, "HALF_U_LIVE", True)
-    wavelow.clear()
     no = replay(m, "no", range(240, 285, 3), sp, s)
     assert not any(bet for _, bet, _ in no)
     assert any("no half U" in note or "not at the middle of a half U" in note for _, _, note in no)
@@ -254,9 +251,10 @@ def test_a_straight_fall_is_not_a_half_u_and_a_fall_still_at_full_pace_is_not_at
     assert not bet and ("half U" in note), note
 
 
-def test_the_shape_is_a_reading_only_by_default_a_straight_fall_is_bought_and_the_reading_is_stored(tmp_path, monkeypatch, mem):
+def test_with_the_shape_test_off_a_straight_fall_is_bought_and_the_reading_is_stored(tmp_path, monkeypatch, mem):
     """ETH 07:30, 2026-11-28 (user: "still having the same issue where it won't buy the correct side in a dip?"): a sharp V-bottom was refused as straight / still running. With the shape test shadow a straight fall of 3 typical minutes is bought and bow and flat are in the facts."""
     sp = spec(tmp_path, monkeypatch)
+    monkeypatch.setattr(wavelow, "HALF_U_LIVE", False)  # the shape test is live by default since 2026-11-28 09:00; this is what shadow mode does
     s = config.load()
     hour = hour_path()
     u = u_of(hour)
