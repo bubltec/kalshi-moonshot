@@ -463,3 +463,6 @@ No live PriskP bets since NEAR 22:30 NO (22:24:41), about 55 minutes. PriskP kep
 
 ## Pass 47 (23:19 to 23:49 ET)
 Three live bets: HYPE 23:45 NO 0.59 to 0.86 (fast clause, +22.4c), ZEC 23:45 YES 0.83 to 0.993 (top, 64 s left), and HYPE 00:00 NO 0.86 bought 23:48:51, open at the pass. No losses; the quiet after 22:24 ended at 23:35. Bot up 32 minutes, kill switch off. Nothing changed.
+
+## Pass 48 (23:49 to 00:19 ET, 2026-11-28)
+Three live bets, all gains: HYPE 00:00 NO 0.86 to 0.9687 (fast clause, +10.0c), XRP 00:00 YES 0.89 to 0.995 (top, 42 s left), XRP 00:15 NO 0.82 to 0.9667 (fast clause, +13.7c). No losses, nothing open at the pass. Bot up about an hour, kill switch off. Nothing changed.
