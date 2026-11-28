@@ -195,36 +195,46 @@ def backfill_tape(client: Any, bucket: str, tape_db: Any, tickers: list[str], in
     return shipped
 
 
-def ship_bet_updates(client: Any, bucket: str, store_db: Any, now: float) -> int:
-    """A bet's decision row changes after it is written (its exit, its settlement). The bets seen in the id window are followed by primary key; a changed one is shipped as a new
-    `-b` file in the minute of its change (unique per pass, so no file overwrites another). A reader keeps the newest copy of each id."""
+def bet_rows(store_db: Any, now: float, first_pass: bool) -> list[tuple]:
+    """The bets to look at this pass, by index only. A bet's decision row does NOT sit in the id window of the pass rows (its id comes from a reserved pool, `Store._reserved_id`),
+    so bets are read through their own partial indexes: the open ones (`idx_decisions_bets_open`: action='bet' and no outcome yet), the ones tracked here that have since settled
+    (by primary key), and on the first pass after a start the bets of the markets in the orders of the last BET_KEEP_S (`orders.ts` index, then `idx_decisions_ticker`)."""
+    cols = ", ".join(DECISION_COLS)
+    out: dict[int, tuple] = {}
+    for r in store_db.execute(f"SELECT {cols} FROM decisions WHERE action = 'bet' AND outcome IS NULL AND ts > ?", (now - BET_KEEP_S,)).fetchall():
+        out[r[0]] = tuple(r)
+    gone = [i for i in _bets if i not in out]  # tracked, not open any more: settled (or sold and settled)
+    for k in range(0, len(gone), 400):
+        chunk = gone[k:k + 400]
+        for r in store_db.execute(f"SELECT {cols} FROM decisions WHERE id IN ({','.join('?' * len(chunk))})", tuple(chunk)).fetchall():
+            out[r[0]] = tuple(r)
+    if first_pass:
+        tickers = [r[0] for r in store_db.execute("SELECT DISTINCT ticker FROM orders WHERE ts > ?", (now - BET_KEEP_S,)).fetchall()]
+        for k in range(0, len(tickers), 100):
+            chunk = tickers[k:k + 100]
+            for r in store_db.execute(f"SELECT {cols} FROM decisions WHERE ticker IN ({','.join('?' * len(chunk))}) AND action = 'bet'", tuple(chunk)).fetchall():
+                out[r[0]] = tuple(r)
+    return list(out.values())
+
+
+def ship_bet_updates(client: Any, bucket: str, store_db: Any, now: float, first_pass: bool = False) -> int:
+    """A bet is shipped when it is new or its state changed (exit, settlement): as a unique `m<minute>-b<epoch>.parquet` file in the minute of its latest time, so no file overwrites
+    another. A reader keeps the newest copy of each id. The bets followed are forgotten BET_KEEP_S after their decision."""
     for i in [i for i, (ts, _) in _bets.items() if ts < now - BET_KEEP_S]:
         del _bets[i]
-    ids = sorted(_bets)
     by_minute: dict[int, list[tuple]] = {}
-    for k in range(0, len(ids), 400):
-        chunk = ids[k:k + 400]
-        for row in store_db.execute(f"SELECT {', '.join(DECISION_COLS)} FROM decisions WHERE id IN ({','.join('?' * len(chunk))})", tuple(chunk)).fetchall():
-            row = tuple(row)
-            rec = dict(zip(DECISION_COLS, row, strict=True))
-            state = tuple(rec[c] for c in BET_STATE)
-            if _bets[rec["id"]][1] == state:
-                continue
-            _bets[rec["id"]] = (_bets[rec["id"]][0], state)
-            when = max(t for t in (rec["ts"], rec["exit_ts"], rec["settled_ts"]) if t is not None)
-            by_minute.setdefault(int(when // 60), []).append((*row, now))
+    for row in bet_rows(store_db, now, first_pass):
+        rec = dict(zip(DECISION_COLS, row, strict=True))
+        state = tuple(rec[c] for c in BET_STATE)
+        if rec["id"] in _bets and _bets[rec["id"]][1] == state:
+            continue
+        _bets[rec["id"]] = (rec["ts"], state)
+        when = max(t for t in (rec["ts"], rec["exit_ts"], rec["settled_ts"]) if t is not None)
+        by_minute.setdefault(int(when // 60), []).append((*row, now))
     n = 0
     for m, rows in sorted(by_minute.items()):
         n += ship_rows(client, bucket, "decisions", m, rows, suffix=f"-b{int(now)}")
     return n
-
-
-def note_bets(rows: list[tuple]) -> None:
-    """Remember the bets among freshly read decision rows (their state as read now, to be compared with later)."""
-    for r in rows:
-        rec = dict(zip(DECISION_COLS, r[:len(DECISION_COLS)], strict=True))
-        if rec["action"] == "bet" and rec["id"] not in _bets:
-            _bets[rec["id"]] = (rec["ts"], tuple(rec[c] for c in BET_STATE))
 
 
 def pass_once(client: Any, bucket: str, store_db: Any, done: int | None, now: float, role: str = "both", *, tape_db: Any = None, tickers: Any = None) -> tuple[int, int]:
@@ -258,16 +268,13 @@ def pass_once(client: Any, bucket: str, store_db: Any, done: int | None, now: fl
         for table in STORE:
             names = [c for c, _ in STORE[table]]
             by_minute: dict[int, list[tuple]] = {}
-            rows_all = store_rows(store_db, table, lo, first_pass)
-            if table == "decisions":
-                note_bets(rows_all)
-            for row in rows_all:
+            for row in store_rows(store_db, table, lo, first_pass):
                 for m in minute_of(table, row, names):
                     if lo <= m <= closed:
                         by_minute.setdefault(m, []).append(row)
             for m, rows in sorted(by_minute.items()):
                 shipped += ship_rows(client, bucket, table, m, rows)
-        shipped += ship_bet_updates(client, bucket, store_db, now)
+        shipped += ship_bet_updates(client, bucket, store_db, now, first_pass)
     return closed, shipped
 
 

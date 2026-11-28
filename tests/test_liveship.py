@@ -180,3 +180,17 @@ def test_a_bets_exit_and_settlement_ship_after_its_decision_minute_and_the_reade
 
     got = live_pull.read("decisions", BASE, BASE + 1200, client=s3, bucket="b").to_pylist()
     assert len(got) == 1 and got[0]["exit_price"] == 0.7
+
+
+def test_a_bet_whose_id_is_far_from_the_pass_rows_is_still_shipped(env):
+    """2026-11-28: a bet's id comes from a reserved pool, not from the run of pass-row ids, so an id window never held it (no bet reached S3 in the first live versions). Bets are read through their own indexes."""
+    store, s3 = env
+    m = BASE // 60
+    store.db.execute("UPDATE decisions SET action = 'bet', id = 5 WHERE ticker = 'KXBTC15M-X'")
+    store.db.execute("INSERT INTO decisions (id, ts, ticker, action, mode, lane, side) VALUES (?,?,?,?,?,?,?)", (900_000, BASE + 20, "KXETH15M-X", "pass", "trade", "wave_shape", "yes"))
+    store.db.commit()
+    liveship.pass_once(s3, "b", store.db, None, (m + 5) * 60.0 + 50, "store")
+    import live_pull
+
+    got = live_pull.read("decisions", BASE, BASE + 600, client=s3, bucket="b").to_pylist()
+    assert {r["id"] for r in got} == {5, 900_000} and next(r for r in got if r["id"] == 5)["action"] == "bet"
