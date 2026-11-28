@@ -633,19 +633,18 @@ def test_integration_the_late_cross_and_scaled_salvage_sale_goes_through_the_sel
     assert len(Store(config.load().db_path).open_bets()) == 0
 
 
-def test_the_cushion_hold_slides_instead_of_cutting_at_z_hold_eth_1330_yes(monkeypatch):
-    """ETH 13:30 YES, 2026-11-28: bought 0.75, the bid ran to 0.88 and fell 0.08 with 485 s left and the spot's cushion at +0.97 sigma of the time left, 3% under the hold (1.0): early profit sold at 0.80 for +2.6c and the market settled YES. User: "It was kind of early but I feel like the cushion should override on these". The hold is a slide: the fade is multiplied by the share of the band (Z_BAND) left, so a cushion just under the hold asks for a far bigger fall, and one well under it is sold as before."""
-    def run(cushion_z_target):
+def test_two_typical_minutes_of_cushion_holds_a_fall_at_485_s_left_eth_1330_yes():
+    """ETH 13:30 YES, 2026-11-28: bought 0.75, the bid ran to 0.88 and fell 0.08 with 485 s left and the spot's cushion at +0.97 sigma of the time left (2.8 typical minutes); early profit sold at 0.80 for +2.6c and the market settled YES. User: "We shouldn't sell that. Not with like 2x cushion". The hold is 0.7 sigma of the time left: two typical minutes at 485 s left."""
+    def run(z_target):
         ask = asker(0.75, wobble=0.038, spot_unit=10.0, bought=247.0)  # bought 168 s before the sale, as live
-        c = cushion_z_target * 10.0 * math.sqrt(485 / 60.0)
+        c = z_target * 10.0 * math.sqrt(485 / 60.0)
         for k, bid in enumerate((0.80, 0.84, 0.88)):
             ask(bid, 520 - 10 * k, c)
         return ask(0.80, 485, c)  # a fall of 0.08 from the 0.88 high
 
-    monkeypatch.setattr(fallrule, "Z_BAND", 0.0)
-    assert run(0.97).sell  # the cut: 0.97 is under 1.0, sold at 0.80 as it was live
-    monkeypatch.setattr(fallrule, "Z_BAND", 0.2)
-    near = run(0.97)
-    assert not near.sell, near  # the slide: 3% under the hold is held
-    assert run(1.05).kind == "cushion" and not run(1.05).sell  # over the hold: held as before
-    assert run(0.5).sell and run(0.5).kind == "fall"  # well under the band: sold as before
+    held = run(0.97)
+    assert not held.sell and held.kind == "cushion", held
+    two_minutes = run(2.0 / math.sqrt(485 / 60.0))  # a cushion of two typical minutes
+    assert not two_minutes.sell and two_minutes.kind == "cushion", two_minutes
+    assert run(0.5).sell and run(0.5).kind == "fall"  # a cushion of 1.4 typical minutes: sold as before
+
