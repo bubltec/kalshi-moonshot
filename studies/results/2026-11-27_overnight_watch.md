@@ -436,3 +436,6 @@ Six live bets: ETH 18:15 YES 0.83 to 0.9889 (top), BNB 18:15 YES 0.83 to 0.97 (f
 
 ## Pass 37 (18:19 to 18:49 ET)
 No new live bets after SOL 18:15 YES (bought 18:08). The loss-while-ahead veto is back on the fast drop, deployed 18:45:05 (suite 1799 passed, nothing open; bot up 2 minutes at the pass, kill switch off). The ETH 18:00 YES result (the fourth fast drop sale, sold at 0.31) was not readable at the pass (the host session returned nothing); fast drop tally unchanged: BNB 15:45 YES about -$13 and NEAR 17:45 YES about -$10.7 against holding, SOL 18:15 YES about +$1.6, ETH 18:00 YES pending. Nothing changed.
+
+## Pass 38 (18:49 to 19:19 ET)
+No live bets from SOL 18:15 (18:08) until XRP 19:30 NO 0.80 (19:17:43) and ZEC 19:30 YES 0.80 (19:18:35), both open at the pass: about 70 minutes with none (the veto went back on the fast drop at 18:45; the bot is up 32 minutes, kill switch off). The ETH 18:00 YES market closed at 1.00 (the bid 0.99 at 17:59:56 and 1.00 at 17:59:58): the fast drop sale at 0.31 missed, about $11.7 against holding on its 16.9 contracts. Fast drop tally, 4 sales: BNB 15:45 YES about -$13, NEAR 17:45 YES about -$10.7, ETH 18:00 YES about -$11.7 (all misses against holding), SOL 18:15 YES about +$1.6 (settled NO): about -$33.8 against holding, three of the four before the veto went back. Nothing changed.
