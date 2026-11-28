@@ -24,7 +24,8 @@ from .wavetop import grid
 
 DIP_U = 1.0  # the least swing, in typical minutes, that is a dip or a peak (waveturn.DONE_U's size: a leg, not a wobble); chosen by me, not scored
 
-PRICE_TURN_LIVE = True  # ON 2026-11-28 ~13:35 ET at the user's word ("Yes"), scored forward on the lane's bets and retired if its score turns negative. 2026-11-28, XRP 12:45 YES (user: "it bought a little too early ... if it had blocked when the buy noticed it wasn't ticking up"; "never bet when it's decreasing. Bet when it's stabilizing"): when ON, a buy is refused while the bought side's own price is still moving AGAINST it (`pr_dir`, the zig-zag of the price's own typical minute: the YES price falling for a YES buy, rising for a NO buy). A price that has turned or is flat (no swing) passes, and a price not read yet (under 120 s of quotes) never blocks: nothing waits on a calculation. OFF = the reading is only stored. The switch is the user's. Evidence, both ways: the lane's own 75 settled bets of 2026-11-28 from 07:00 ET (S3): price still against at the buy 49 bets -$9.54 (19 won), turned 11 bets +$0.87, flat 15 bets +$10.49 (14 won); but on the 72-market replay of 11-27 evening (30 min read, recovery rule, uptick sale) refusing the against group left 76 fires at -0.10 a dollar against -0.02 for all 113, and requiring a turn left 48 at -0.14.
+PRICE_TURN_LIVE = True  # 2026-11-28 ~14:00 ET, REWRITTEN to the user's rule (on at 13:35 as "block while the price still moves against the buy"; the user then: "A minute or half a minute is too long. It needs to trace every tick from the lowest point in the dip until it shows a slope, which could be tiny but if it shows it turning at the U bottom (or the inverse for peaks). We also need to make sure we don't consider the line a curve if it goes flat. It should curve"). A buy passes only when the bought side's own price has risen off the lowest point of this dip (YES: the YES mid; NO: 1 minus it, the inverse for a peak) by at least one step of a mid (TURN_MIN), judged on every quote, no waiting: the lowest mid since the swing began is the bottom, and the first tick that shows any rise off it is the turn. A price sitting flat at its low is not a curve and is refused; a price not read yet (no quotes) never blocks, nothing waits on a calculation. A resting buy is re-judged on every quote, so a new low withdraws it. OFF = the reading is only stored. Evidence is thin and split (stated, not proven): the lane's bets of 2026-11-28 with the price still against at the buy were 49 bets -$9.54 but that table was scored to settlement, which a scalp is not (user, 2026-11-28); the 72-market replay (uptick sale, 5 min mark) scored 'price turned' variants worse than the live rule (-0.11 to -0.21 a dollar against -0.02) because they delay the entry; the exact rule here is scored forward on the lane's bets and rescored on today's tape when it is archived.
+TURN_MIN = 0.005  # the smallest step of a YES mid (a half cent): any rise off the low counts as a slope
 HALF_U_LIVE = True  # 2026-11-28 ~09:00 ET, BACK ON (user, on BNB 08:45 and XRP 08:45, two trend buys 25 minutes after it went shadow: "it bought on a down trend. there is no curve"; "in order for it to be a curve it needs to satisfy certain depth requirements to be valid"). Since the unkill at 08:36:54 ET, 9 of the 10 closed wave bets would have been refused by it (bow under 0.15 or pace over 0.5) and lost -$6.99 of the -$8.91; BNB 08:45 YES: a 9.7u fall over 350 s, bow 0.22, pace 0.68; XRP 08:45 YES: a 12.2u fall over 629 s, bow 0.10, pace 0.98. The replay had said the test adds nothing (-0.02 vs +0.01 a dollar, within noise) and it refuses V-bottoms like ETH 07:30 (a known cost). Was set to False at ~08:15 (shadow) after ETH 07:30. The depth a curve must have is `bow`: how far its path bows past the straight line from its start, as a share of its own size (0.15 at least), and it must be flattening (pace under half its average). Before: shadow 2026-11-28 (user: "Or are we still having the same issue where it won't buy the correct side in a dip?"; ETH 07:30 YES 0.33-0.37 at a sharp V-bottom refused as 'straight' and 'still running', the NO bought mid-rise because it rounded off): the shape test is SHADOW. With the 'swing before it' rule in, the plain swing rule had 148 fires, 66% reached a take, +0.01 a dollar; with the half-U test on top 113 fires, 67%, -0.02 (72 markets, 30 min read, uptick sale), so it removes fires and adds nothing, and it blocks V-bottoms. bow and flat are still stored with every decision
 HALF_U_BOW = 0.15  # 2026-11-27 (user: "All it needs to look for is a half U or the inverse and bet in the middle"): the swing must be BOWED, its path lying this share of its own size past the straight line from its start to now (a fall that dropped fast and is rounding off, the left half of a U; a rise, the left half of a peak). A straight swing is the user's "linear shape". Chosen from the user's description before the replay, not tuned
 HALF_U_FLAT = 0.5  # and FLATTENING: over the last quarter of the swing the spot moved at no more than this share of the swing's average pace (the middle of the U). Chosen the same way
@@ -178,6 +179,24 @@ def clear() -> None:
         _starts.clear()
 
 
+def price_turn(ticker: str, start: float, now: float, side: str) -> dict[str, Any] | None:
+    """The bought side's price since `start` (the second the swing began), read on every quote from memory: the lowest point (for NO, the lowest NO price = the highest YES mid), the latest price, the rise off the low, the seconds since the low, and whether it has turned (a rise of at least TURN_MIN). None when the market has no quotes in the window. Memory only."""
+    from . import ticks as ticks_mod
+
+    pts = []
+    for ts, bid, ask in ticks_mod.mids.quotes(ticker):
+        if ts >= start and bid > 0 and ask > 0:
+            mid = (bid + ask) / 2.0
+            pts.append((ts, mid if side == "yes" else 1.0 - mid))
+    if len(pts) < 3:
+        return None
+    low = min(p for _, p in pts)
+    t_low = max(t for t, p in pts if p <= low + 1e-12)
+    cur = pts[-1][1]
+    rise = cur - low
+    return {"pt_low": round(low, 4), "pt_now": round(cur, 4), "pt_rise": round(rise, 4), "pt_low_age": round(pts[-1][0] - t_low, 1), "pt_n": len(pts), "pt_turned": rise >= TURN_MIN - 1e-9}
+
+
 def facts(r: waveturn.Reading | None, h: waveturn.Hour, side: str, ok: bool, price: dict[str, Any] | None = None, shape: dict[str, float] | None = None) -> dict[str, Any]:
     """The reading as named values for the decision's record (buychain.Check.facts)."""
     out: dict[str, Any] = {"u": None if h.u is None else round(h.u, 8), "hour_leg_u": round(h.leg_u, 3), "hour_leg_s": round(h.leg_s, 1), "side": side, "buy": ok}
@@ -226,9 +245,12 @@ def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: b
         return False, f"no half U: the {move} is straight (its path is {shape['bow']:.2f} of its size past the straight line, the least is {HALF_U_BOW:g}); {told}", facts(r, h, shot.side, False, pc, shape)
     if HALF_U_LIVE and shape["flat"] > HALF_U_FLAT:
         return False, f"not at the middle of a half U: the {move} is still running at {shape['flat']:.2f} of its average pace over its last quarter (the most is {HALF_U_FLAT:g}); {told}", facts(r, h, shot.side, False, pc, shape)
-    if PRICE_TURN_LIVE and pc is not None and pc.get("pr_dir", 0) == (-1 if shot.side == "yes" else 1):
-        return False, f"the {shot.side.upper()} price is still moving against the buy: its own curve reads {'falling' if shot.side == 'yes' else 'rising'} (swing {pc.get('pr_swing_u')}u, {pc.get('pr_age')}s since its extreme); a {word} buys once the price has stopped moving against it; {told}", facts(r, h, shot.side, False, pc, shape)
     start = read_start(round(opened), now) + r.ext_t - r.swing_s  # the second this swing began
+    pt = price_turn(shot.ticker, start - SWING_SLACK, now, shot.side)
+    if pt is not None:
+        pc = {**(pc or {}), **{k: v for k, v in pt.items() if k != "pt_turned"}, "pt_turned": int(pt["pt_turned"])}
+    if PRICE_TURN_LIVE and pt is not None and not pt["pt_turned"]:
+        return False, f"the {shot.side.upper()} price has not turned yet: lowest {pt['pt_low']:.3f} {pt['pt_low_age']:.0f}s ago, now {pt['pt_now']:.3f} (a rise of {pt['pt_rise']:.3f}); a {word} buys on the first tick that shows any rise off the bottom of the {move}, and a line that goes flat there is not a curve; {told}", facts(r, h, shot.side, False, pc, shape)
     if not resting and bet_times and any(b >= start - SWING_SLACK for b in bet_times):
         return False, f"swing_played: this lane already bought {shot.side.upper()} in this {move} (it began {int(now - start)}s ago); it waits for the next {word}; {told}", facts(r, h, shot.side, False, pc, shape)
     if not resting and restbuys.missed_since(shot.ticker, shot.side, start - SWING_SLACK):

@@ -363,8 +363,8 @@ def test_a_bounce_off_a_bigger_move_is_not_faded(tmp_path, monkeypatch, mem):
     assert bet and ("in a dip" in note or "in a peak" in note), note
 
 
-def test_the_price_turn_switch_blocks_only_a_price_moving_against_the_buy_and_never_an_unread_one(tmp_path, monkeypatch, mem):
-    """2026-11-28: PRICE_TURN_LIVE is the user's switch. Off, a dip buys as before. On, a price still falling blocks a YES (a turned or a flat one passes); a price not read yet (pc None) never blocks."""
+def test_the_price_gate_waits_for_the_first_tick_that_shows_a_slope_off_the_bottom_and_a_flat_bottom_is_not_a_curve(tmp_path, monkeypatch, mem):
+    """2026-11-28 (user: "It needs to trace every tick from the lowest point in the dip until it shows a slope, which could be tiny ... We also need to make sure we don't consider the line a curve if it goes flat"): a YES buy in a dip passes on the first quote whose mid is above the dip's lowest mid, never while the price is making lows or sits flat on the low; an unread price never blocks; off, it buys as before."""
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
@@ -376,16 +376,26 @@ def test_the_price_turn_switch_blocks_only_a_price_moving_against_the_buy_and_ne
     bet, note = ask(sp, s, now, "yes")
     assert bet, note
     monkeypatch.setattr(wavelow, "PRICE_TURN_LIVE", True)
-    monkeypatch.setattr(wavelow, "price_curve", lambda *a, **k: {"pr_dir": -1, "pr_swing_u": 1.0, "pr_gb_u": 0.0, "pr_age": 3, "pr_u": 0.01, "pr_s": 300})
-    wavelow.clear()
-    bet, note = ask(sp, s, now, "yes")
-    assert not bet and "still moving against" in note, note
-    for pdir in (1, 0):  # turned or flat: not against
-        monkeypatch.setattr(wavelow, "price_curve", lambda *a, pdir=pdir, **k: {"pr_dir": pdir, "pr_swing_u": 1.0, "pr_gb_u": 0.0, "pr_age": 3, "pr_u": 0.01, "pr_s": 300})
+
+    def quotes(mids):  # one quote a second ending at `now`
+        ticks_mod.mids.clear()
+        for k, mid in enumerate(mids):
+            ticks_mod.mids.note(TICKER, now - (len(mids) - 1 - k), mid - 0.005, mid + 0.005)
         wavelow.clear()
-        bet, note = ask(sp, s, now, "yes")
-        assert bet, note
-    monkeypatch.setattr(wavelow, "price_curve", lambda *a, **k: None)
+
+    quotes([0.50 - 0.01 * k for k in range(40)])  # still falling: the last quote is the low
+    bet, note = ask(sp, s, now, "yes")
+    assert not bet and "has not turned" in note, note
+    quotes([0.50 - 0.01 * k for k in range(40)] + [0.11] * 6)  # fell, now flat on its low: not a curve
+    bet, note = ask(sp, s, now, "yes")
+    assert not bet and "flat" in note and "has not turned" in note, note
+    quotes([0.50 - 0.01 * k for k in range(40)] + [0.11] * 3 + [0.12])  # the first tick up off the bottom, a tiny slope: the buy passes
+    bet, note = ask(sp, s, now, "yes")
+    assert bet, note
+    quotes([0.50 - 0.01 * k for k in range(40)] + [0.11] * 3 + [0.12, 0.11])  # it ticked up then back to the low: new bottom, no slope: blocked again
+    bet, note = ask(sp, s, now, "yes")
+    assert not bet, note
+    ticks_mod.mids.clear()
     wavelow.clear()
     bet, note = ask(sp, s, now, "yes")
-    assert bet, note  # nothing waits on a price reading that is not there yet
+    assert bet, note  # no quotes in memory: nothing waits on a reading that is not there
