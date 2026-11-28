@@ -205,7 +205,7 @@ def test_every_sell_step_declares_whether_it_may_sell_under_cost_and_the_selling
     from kalshi_moonshot import sellchain, watcher
 
     assert set(sellchain.LOSS_REASONS) == set(sellchain.SELL_STEPS)
-    assert sellchain.LOSS_PREFIXES == ("peak-crash", "stop-loss", "curve risk exit", "wave give-up", "value sale", "late dip", "no recovery", "one rule")  # the list as it stood, in the same order, now built from the table
+    assert sellchain.LOSS_PREFIXES == ("peak-crash", "stop-loss", "curve risk exit", "wave give-up", "value sale", "late dip", "no recovery", "one rule", "expiry sale")  # the list as it stood, in the same order, now built from the table (expiry sale added 2026-11-28)
     assert sellchain.may_sell_under_cost("one rule, salvage: under the price paid") and not sellchain.may_sell_under_cost("wave take: the bid fell")
     body = inspect.getsource(watcher.ProfitWatcher._sell)
     assert "sellchain.may_sell_under_cost(why)" in body and 'why.startswith(("peak-crash", "stop-loss", "curve risk exit"' not in body
