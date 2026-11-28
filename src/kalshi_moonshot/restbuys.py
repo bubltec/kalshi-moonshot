@@ -87,8 +87,26 @@ def live(client: Any, now: float | None = None) -> bool:
     return bool(cache is not None and hasattr(cache, "fed") and cache.fed() and now - _last_event[0] <= LIVE_WITHIN)
 
 
+_missed: dict[tuple[str, str], float] = {}  # (ticker, side) -> when a resting buy of it rested its time and filled nothing (2026-11-28)
+
+
+def note_miss(ticker: str, side: str, now: float | None = None) -> None:
+    """A resting buy of this market and side rested its whole time and filled nothing: the moment it was placed for has passed (2026-11-28, user, on XRP 07:15 NO: the first order at 07:05:12 missed, a second went in 15 s later mid-rise and filled: "we should cancel the order instead of it misses")."""
+    with _lock:
+        if len(_missed) > 2000:
+            _missed.clear()
+        _missed[(ticker, side)] = time.time() if now is None else now
+
+
+def missed_since(ticker: str, side: str, since: float) -> bool:
+    """True when a resting buy of this market and side missed at or after `since` (memory only)."""
+    with _lock:
+        return _missed.get((ticker, side), 0.0) >= since
+
+
 def reset() -> None:
     with _lock:
         _by_ticker.clear()
         _by_order.clear()
+        _missed.clear()
     _last_event[0] = 0.0

@@ -1353,6 +1353,7 @@ def _place_resting(s: Settings, client: KalshiClient, store: Store, shot: LongSh
     if filled <= 0 and withdrawn:
         return Placed(f"resting buy {withdrawn}; nothing bought.")  # not "did not fill": a withdrawn order is not taken at the ask afterwards (buy_rest_then_take)
     if filled <= 0:
+        restbuys.note_miss(shot.ticker, shot.side)  # the wave step reads this: a swing whose resting buy missed is not bought again 15 s later (restbuys.missed_since)
         return Placed(f"resting buy at {price:.2f} for {wait:.0f}s did not fill (the ask was {shot.ask:.2f}); nothing bought.")
     rest_note = f" The rest of the order was {withdrawn}." if withdrawn and filled < count - 1e-9 else ""
     return Placed(f"bought {shot.side.upper()} {filled:g}/{count} resting at {price:.2f}, fee ${fee_paid:.4f}.{rest_note} {why}", filled, spent, price)

@@ -214,6 +214,8 @@ class Target:
     late_dip_since: float = 0.0
     late_dip_logged: bool = False
     top_take_logged: bool = False
+    expiry_sale_share: float = 0.0
+    expiry_sale_max_bid: float = 0.90
     bet_ts: float = 0.0  # the buy time of the bet this target watches (its open-bets row); a different one on the same market and lane is a new bet and gets a new target
     one_rule: Any = None  # fallrule.State: what the one exit rule remembers about this bet
     one_rule_logged: bool = False
@@ -1102,6 +1104,19 @@ class ProfitWatcher:
             self._risk_record(t, r, bid, now, left, pnl, 0.0, False, False, kind="top take", extra=extra)
         return None
 
+    def _sell_expiry_sale(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
+        """Sell step expiry_sale (2026-11-28, user, on DOGE 07:15 YES bought at 0.15 with 61 s left and left to settle at 0: "In the doge one we allowed it to go to settlement which is unacceptable. We need to sell before the exit so it's not a total loss"): in the last expiry_sale_share of the market's 900 s the bet is sold at the bid, a gain or a loss, so a bet that is going to expire worthless gets what the bid pays. Not when the bid is over expiry_sale_max_bid (a near-sure win is held; top_take cashes 0.99 and over). The other steps need the bid to fall a typical minute of its own under the price paid before they act, which a cheap bet with a big typical minute never does. Memory only."""
+        if t.expiry_sale_share <= 0 or bid <= 0.005 or t.close_ts <= 0 or left <= 0:
+            return None
+        if left > t.expiry_sale_share * 900.0 or bid > t.expiry_sale_max_bid + 1e-9:
+            return None
+        net = bid - fee_per_contract(bid) - (t.entry + fee_per_contract(t.entry)) if t.entry > 0 else 0.0
+        reason = f"expiry sale: {left:.0f} s left (the last {t.expiry_sale_share:.0%} of the market), sold at the bid {bid:.3g} against the {t.entry:.2f} paid ({net * 100:+.1f}c a contract after both fees) instead of leaving it to settle"
+        if t.risk_live:
+            self._risk_record(t, r, bid, now, left, pnl, 0.0, False, True, kind="expiry sale", extra={"bid": round(bid, 4), "net": round(net, 4), "entry": round(t.entry, 4)})
+            return reason
+        return None
+
     def _sell_late_dip(self, t: Target, r: curverisk.Risk, bid: float, now: float, left: float, pnl: float, c: _SellWalk) -> str | sellchain._Hold | None:
         """Sell step late_dip (2026-11-24, user, on the NEAR 11:15 bet at 0.99 with two minutes left: "if you see a sharp dip on price or spot to strike, it means sell immediately under a minute left", "like the spike watch at the end"). In the last late_dip_share of the market's 900 s, on every tick: a SHARP DIP is the bid, or the spot's cushion over the target, down from its high of the last late_dip_look_s seconds by late_dip_units of its own typical 10 s move (the typical minute x sqrt(10/60); the bid with one tick as the move until it has a reading, so nothing waits for one). A dip that holds for late_dip_wait_share of the time left is sold, at any result (it is the safety exit); a share of the time left is a few seconds under a minute, so it sells almost at once there, and a dip that bounces back starts over. A bid still rising is never a dip. The spot's cushion is its 60 s average, so a sharp spot dip is a large one. Reads the quote and tick memory only."""
         if t.late_dip_share <= 0 or bid <= 0 or t.close_ts <= 0 or left <= 0:
@@ -1918,6 +1933,7 @@ class ProfitWatcher:
                 held.early_take_share, held.early_take_stall_share, held.early_take_hold_share, held.early_take_cushion_units = spec.early_take_share, spec.early_take_stall_share, spec.early_take_hold_share, spec.early_take_cushion_units
                 held.late_dip_share, held.late_dip_units, held.late_dip_look_s, held.late_dip_wait_share = spec.late_dip_share, spec.late_dip_units, spec.late_dip_look_seconds, spec.late_dip_wait_share
                 held.no_recovery_share = spec.no_recovery_share
+                held.expiry_sale_share, held.expiry_sale_max_bid = spec.expiry_sale_share, spec.expiry_sale_max_bid
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak
                 held.wave_give_up_arm_share = spec.wave_give_up_arm_share

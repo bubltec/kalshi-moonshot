@@ -18,7 +18,7 @@ from __future__ import annotations
 import threading
 from typing import Any
 
-from . import waveturn
+from . import restbuys, waveturn
 from .wavetop import grid
 
 DIP_U = 1.0  # the least swing, in typical minutes, that is a dip or a peak (waveturn.DONE_U's size: a leg, not a wobble); chosen by me, not scored
@@ -221,5 +221,7 @@ def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: b
     start = read_start(round(opened), now) + r.ext_t - r.swing_s  # the second this swing began
     if not resting and bet_times and any(b >= start - SWING_SLACK for b in bet_times):
         return False, f"swing_played: this lane already bought {shot.side.upper()} in this {move} (it began {int(now - start)}s ago); it waits for the next {word}; {told}", facts(r, h, shot.side, False, pc, shape)
+    if not resting and restbuys.missed_since(shot.ticker, shot.side, start - SWING_SLACK):
+        return False, f"swing_missed: a resting buy of {shot.side.upper()} in this {move} (it began {int(now - start)}s ago) rested its time and did not fill; the moment has passed, it waits for the next {word}; {told}", facts(r, h, shot.side, False, pc, shape)
     state = "its order stands" if resting else "buys"
     return True, f"in a {word} (a half U: bowed {shape['bow']:.2f}, pace {shape['flat']:.2f} of its average): the {move} has run {r.swing_u:.2f}u, {shot.side.upper()} is the low side, {state}; {told}", facts(r, h, shot.side, True, pc, shape)

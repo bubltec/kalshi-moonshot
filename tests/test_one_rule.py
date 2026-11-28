@@ -473,3 +473,27 @@ def test_integration_the_uptick_take_follows_a_rising_bid_and_sells_when_it_paus
     assert got and got[0].why.startswith("early take"), got
     w._sell(got[0].ticker, got[0].lane, got[0].why)
     assert [n for n, _ in client.sold] == [4.65]
+
+
+def test_integration_the_expiry_sale_sells_a_dying_bet_in_the_last_share_of_the_market_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
+    """DOGE 07:15 YES, 2026-11-28 (user: "In the doge one we allowed it to go to settlement which is unacceptable. We need to sell before the exit so it's not a total loss"): bought at 0.15 with 61 s left, the bid went to nothing, no sale step armed. The expiry sale sells at the bid in the last 5% of the market (45 s), a loss included, and holds a near-sure win."""
+    from kalshi_moonshot import sellchain, watcher
+    from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
+
+    assert "expiry_sale" in sellchain.SELL_STEPS and sellchain.may_sell_under_cost("expiry sale: 40 s left")
+    live(monkeypatch)
+    client = Client(bid=0.08, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['expiry_sale']\nexpiry_sale_share=0.05\nexpiry_sale_max_bid=0.90")
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: None)
+    yes_bid(w, 0.20, 100)  # 100 s left: not yet
+    assert signals(w) == []
+    yes_bid(w, 0.0, 44)  # no bid at all: nothing to sell to
+    assert signals(w) == []
+    yes_bid(w, 0.08, 43)  # inside the last 45 s: the bet is dying, sold at the bid
+    got = signals(w)
+    assert got and got[0].why.startswith("expiry sale"), got
+    w._sell(got[0].ticker, got[0].lane, got[0].why)
+    assert [n for n, _ in client.sold] == [4.65], "the selling thread did not place the expiry sale"
+    w2 = held(tmp_path, monkeypatch, live=True, client=Client(bid=0.95, account=None), extra="sell_chain=['expiry_sale']\nexpiry_sale_share=0.05\nexpiry_sale_max_bid=0.90")
+    yes_bid(w2, 0.95, 30)  # a near-sure win is held to settlement
+    assert signals(w2) == []

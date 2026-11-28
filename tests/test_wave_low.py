@@ -273,3 +273,22 @@ def test_with_less_than_ten_minutes_of_tape_the_step_has_no_reading_and_does_not
     ticks_mod.strikes.note(TICKER, K)
     bet, note = ask(sp, s, OPEN + 92, "yes")
     assert not bet and "does not reach back" in note, note
+
+
+def test_a_swing_whose_resting_buy_missed_is_not_bought_again(tmp_path, monkeypatch, mem):
+    """XRP 07:15 NO, 2026-11-28 (user: "if this is a resting buy issue where it's trying to buy anyway we should cancel the order instead of it misses"): the first resting buy at 07:05:12 rested 5 s and filled nothing, a second went in 15 s later mid-rise and filled. A miss closes the swing."""
+    from kalshi_moonshot import restbuys
+
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u_of(hour)))
+    ticks_mod.strikes.note(TICKER, K)
+    restbuys.reset()
+    now = OPEN + 92
+    assert ask(sp, s, now, "yes", Store())[0]
+    restbuys.note_miss(TICKER, "yes", now + 6)  # the resting buy rested its time and filled nothing
+    bet, note = ask(sp, s, now + 15, "yes", Store())
+    assert not bet and "swing_missed" in note, note
+    assert ask(sp, s, now + 15, "yes", Store(), resting=True)[0]  # a re-judge of an order that is still resting is not a new attempt
+    restbuys.reset()
