@@ -26,6 +26,7 @@ DIP_U = 1.0  # the least swing, in typical minutes, that is a dip or a peak (wav
 HALF_U_BOW = 0.15  # 2026-11-27 (user: "All it needs to look for is a half U or the inverse and bet in the middle"): the swing must be BOWED, its path lying this share of its own size past the straight line from its start to now (a fall that dropped fast and is rounding off, the left half of a U; a rise, the left half of a peak). A straight swing is the user's "linear shape". Chosen from the user's description before the replay, not tuned
 HALF_U_FLAT = 0.5  # and FLATTENING: over the last quarter of the swing the spot moved at no more than this share of the swing's average pace (the middle of the U). Chosen the same way
 LOOKBACK = 1800  # 2026-11-27 (user: "it should have at least 10 mins prior tape to check the curve. 30 would be better"; before that "It's supposed to read at least 10 mins before the marker"): the swing and its shape are read from at least this many seconds before the decision, across the market's open (the index is one continuous series), not from the open alone. Before this the first minutes of a market read a window of seconds: HYPE 22:45, 90 s in, saw only the rise off its own open and called it a peak, when it was the right arm of a 9-minute U that began in the market before. 30 minutes is read when the tape has them, 10 (MIN_LOOKBACK) is the least the step will act on; a replay on 72 markets found the length changes nothing (1u swing -0.07 a dollar from the open, -0.09 from 10 min, -0.08 from 30 min), so this is the user's requirement, not a gain we measured
+PREV_MAX = 0.8  # 2026-11-28 (user, on HYPE 22:45 and BTC 07:15: the step bought NO on the bounce off a dip, "it was in a dip, above the target, but still need to buy Yes ... In that case this was a no bet"): a swing is not faded when the swing before it, the other way, was at least this share of its size: it is the recovery of a move at least as big, the right arm of the U, not a peak. Replay on 72 markets read 30 min back: fires with the swing before it under 0.8 of this one took a profit 66-68% of the time and broke even (-0.02 to +0.01 a dollar); at 0.8 and over, 49-56% and -0.15 to -0.18 (the half-U rule -0.27 to -0.29). Line chosen after seeing that table
 MIN_LOOKBACK = 600  # the least prior tape the step reads before it will buy: with less in memory (just after a restart) it says no reading
 TAPE_SLACK = 30  # seconds: the first tick in memory may be this much later than the window's start
 SWING_SLACK = 5.0  # seconds: a bet this close before the swing's start still belongs to it (the zig-zag finds a swing's start a little late)
@@ -65,7 +66,8 @@ def shape_of(win: list[float], t: int, u: float) -> dict[str, float] | None:
     bow = max((sm[k] - (y0 + (y1 - y0) * (k - k0) / n_secs)) * d for k in range(k0, t + 1)) / size
     q = max(2, n_secs // 4)
     flat = (abs(sm[t] - sm[t - q]) / q) / (size / n_secs)
-    return {"bow": round(bow, 3), "flat": round(flat, 3), "size": round(size / u, 3), "secs": float(n_secs)}
+    prev = abs(pts[-1][1] - pts[-2][1]) if len(pts) >= 2 else 0.0  # the swing before this one, the other way, in the same units
+    return {"bow": round(bow, 3), "flat": round(flat, 3), "size": round(size / u, 3), "secs": float(n_secs), "prev_ratio": round(prev / size, 3)}
 
 
 def read(index: str, opened: float, now: float, K: float) -> tuple[waveturn.Reading | None, waveturn.Hour, str, dict[str, float] | None]:
@@ -177,7 +179,7 @@ def facts(r: waveturn.Reading | None, h: waveturn.Hour, side: str, ok: bool, pri
         out.update({"t": r.t, "dir": r.d, "swing_u": round(r.swing_u, 3), "gb_u": round(r.gb_u, 3), "raw_gb_u": round(r.raw_gb_u, 3), "pos_u": round(r.pos_u, 3), "swing_s": r.swing_s,
                     "leg_u": round(r.leg_u, 3), "size_x": round(r.size_x, 3), "pace_x": round(r.pace_x, 3), "jumpy": round(r.jumpy, 2)})
     if shape:
-        out.update({"bow": shape["bow"], "flat": shape["flat"], "shape_size": shape["size"], "shape_secs": shape["secs"]})
+        out.update({"bow": shape["bow"], "flat": shape["flat"], "shape_size": shape["size"], "shape_secs": shape["secs"], "prev_ratio": shape.get("prev_ratio", 0.0)})
     if price:
         out.update(price)
     return out
@@ -214,6 +216,8 @@ def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: b
         return False, f"the {move} is {r.swing_u:.2f}u, under {DIP_U:g}u: not yet a {word}; {told}", facts(r, h, shot.side, False, pc, shape)
     if shape is None:
         return False, f"no half U: the {move}'s shape cannot be read yet; {told}", facts(r, h, shot.side, False, pc, shape)
+    if shape.get("prev_ratio", 0.0) >= PREV_MAX:
+        return False, f"not fading a recovery: the swing before this {move} was {shape['prev_ratio']:.2f} of its size (the most is {PREV_MAX:g}), so it is the way back from a bigger move, not a {word}; no bet; {told}", facts(r, h, shot.side, False, pc, shape)
     if shape["bow"] < HALF_U_BOW:
         return False, f"no half U: the {move} is straight (its path is {shape['bow']:.2f} of its size past the straight line, the least is {HALF_U_BOW:g}); {told}", facts(r, h, shot.side, False, pc, shape)
     if shape["flat"] > HALF_U_FLAT:

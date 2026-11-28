@@ -54,6 +54,11 @@ def arc_path(plan, u):
     return out
 
 
+def quiet(hour):
+    """The pre-open hour with its last 30 minutes flat at the target: the step reads 30 minutes before the decision, and a random-walk hour would put a random swing there (the 'swing before this one' rule reads it)."""
+    return hour[:-1800] + [K] * 1800
+
+
 def spec(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     (tmp_path / "strategies.toml").write_text(TOML)
@@ -109,7 +114,7 @@ def test_a_fall_is_a_dip_for_yes_and_a_rise_a_peak_for_no(tmp_path, monkeypatch,
         waveturn.clear()
         wavelow.clear()
         ticks_mod.history.clear()
-        feed(hour, arc_path(plan, u))
+        feed(quiet(hour), arc_path(plan, u))
         ticks_mod.strikes.note(TICKER, K)
         now = OPEN + 40 + 52  # most of the way down (or up) the rounded 3u swing: its pace has nearly gone
         bet, note = ask(sp, s, now, want)
@@ -145,7 +150,7 @@ def test_the_lane_buys_a_swing_once_and_waits_for_the_next(tmp_path, monkeypatch
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
-    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u_of(hour)))
+    feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u_of(hour)))
     ticks_mod.strikes.note(TICKER, K)
     now = OPEN + 92
     assert ask(sp, s, now, "yes", Store())[0]
@@ -158,7 +163,7 @@ def test_a_bet_in_an_earlier_swing_does_not_count_against_the_next_one(tmp_path,
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
-    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (60, 3.0, True), (60, -3.5, True), (240, 0.0, False)], u_of(hour)))
+    feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, True), (60, 3.0, True), (60, -5.0, True), (240, 0.0, False)], u_of(hour)))
     ticks_mod.strikes.note(TICKER, K)
     first = OPEN + 92
     assert ask(sp, s, first, "yes", Store())[0]
@@ -172,7 +177,7 @@ def test_a_resting_buy_is_withdrawn_once_the_swing_has_turned(tmp_path, monkeypa
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
-    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (60, 3.0, True), (240, 0.0, False)], u_of(hour)))
+    feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, True), (60, 3.0, True), (240, 0.0, False)], u_of(hour)))
     ticks_mod.strikes.note(TICKER, K)
     assert ask(sp, s, OPEN + 92, "yes", resting=True)[0]
     bet, note = ask(sp, s, OPEN + 100 + 55, "yes", resting=True)
@@ -233,13 +238,13 @@ def test_a_straight_fall_is_not_a_half_u_and_a_fall_still_at_full_pace_is_not_at
     s = config.load()
     hour = hour_path()
     u = u_of(hour)
-    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, False), (300, 0.0, False)], u))  # the same 2u fall, in a straight line
+    feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, False), (300, 0.0, False)], u))  # the same 2u fall, in a straight line
     ticks_mod.strikes.note(TICKER, K)
     bet, note = ask(sp, s, OPEN + 40 + 50, "yes")
     assert not bet and "no half U" in note and "straight" in note, note
     wavelow.clear()
     ticks_mod.history.clear()
-    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u))
+    feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u))
     bet, note = ask(sp, s, OPEN + 40 + 30, "yes")  # the rounded fall, 30 s in: past a typical minute and still at full pace
     assert not bet and ("half U" in note), note
 
@@ -251,8 +256,9 @@ def test_the_swing_is_read_from_ten_minutes_before_the_decision_across_the_open(
     hour = hour_path()
     u = u_of(hour)
     # eight minutes of fall into the open, rounding off, then 40 s of the market at the bottom
-    fall = [K + 6.0 * u * (1 - i / 540.0) ** 3 for i in range(540)]  # from 6u over the target down to the target at the open, flattening
-    hour = hour[:-540] + fall
+    top = K + 6.0 * u + 0.002 * u * (1800 - 540)  # the plateau drifts up a hair so its last second is the high, as a real top is
+    fall = [K + (top - K) * (1 - i / 540.0) ** 3 for i in range(540)]  # from the high down to the target at the open, flattening
+    hour = hour[:-1800] + [K + 6.0 * u + 0.002 * u * i for i in range(1800 - 540)] + fall  # a wavy first half hour, then a high that drifts up, then the fall into the open
     feed(hour, window_path([(60, 0.0)], u))
     ticks_mod.strikes.note(TICKER, K)
     assert wavelow.window_start(int(OPEN), OPEN + 40, wavelow.MIN_LOOKBACK) == int(OPEN) - 560  # 10 minutes before the decision, across the open
@@ -282,7 +288,7 @@ def test_a_swing_whose_resting_buy_missed_is_not_bought_again(tmp_path, monkeypa
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     hour = hour_path()
-    feed(hour, arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u_of(hour)))
+    feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u_of(hour)))
     ticks_mod.strikes.note(TICKER, K)
     restbuys.reset()
     now = OPEN + 92
@@ -292,3 +298,23 @@ def test_a_swing_whose_resting_buy_missed_is_not_bought_again(tmp_path, monkeypa
     assert not bet and "swing_missed" in note, note
     assert ask(sp, s, now + 15, "yes", Store(), resting=True)[0]  # a re-judge of an order that is still resting is not a new attempt
     restbuys.reset()
+
+
+def test_a_bounce_off_a_bigger_move_is_not_faded(tmp_path, monkeypatch, mem):
+    """BTC 07:15, 2026-11-28 (user: "it was in a dip, above the target, but still need to buy Yes ... In that case this was a no bet"; HYPE 22:45 the same): a 1.2u rise off the bottom of a 4u fall is the way back from a bigger move, not a peak. NO is not bought; a rise off a small wobble still is."""
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    u = u_of(hour)
+    # a 4u fall (rounding off at the bottom), then a rising swing that has run 1.5u and is rounding off
+    big = [(30, 1.0, False), (80, -4.0, True), (40, 1.5, True), (240, 0.0, False)]
+    feed(quiet(hour), arc_path(big, u))
+    ticks_mod.strikes.note(TICKER, K)
+    bet, note = ask(sp, s, OPEN + 30 + 80 + 38, "no")
+    assert not bet and "not fading a recovery" in note, note
+    wavelow.clear()
+    ticks_mod.history.clear()
+    small = [(30, 1.0, False), (80, -0.8, True), (60, 3.0, True), (240, 0.0, False)]  # the swing before the rise was small
+    feed(quiet(hour), arc_path(small, u))
+    bet, note = ask(sp, s, OPEN + 30 + 80 + 56, "no")
+    assert bet and "a half U" in note, note
