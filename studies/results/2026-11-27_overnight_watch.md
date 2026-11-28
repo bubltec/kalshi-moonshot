@@ -460,3 +460,6 @@ Two live bets, both NO on the 22:30 market, both gains: SOL 0.89 to 0.99 (top, 1
 
 ## Pass 46 (22:49 to 23:19 ET)
 No live PriskP bets since NEAR 22:30 NO (22:24:41), about 55 minutes. PriskP kept evaluating (passes since 22:25 by reason: dead_ask_band 6166, window 1569, curve_not_held 662, check_not_passing 441, curve_peak 265, curve_low_cushion 173, shift_out_of_cushion 109), the wave lane made 31 bets in the same time: the markets sit near 50/50 (the ask in the 0.45 to 0.55 dead band), where a favourites lane has nothing to buy; not a fault. The bot restarted at about 23:16 (up 2 minutes at the pass, kill switch off), not by this session. No losses, nothing changed.
+
+## Pass 47 (23:19 to 23:49 ET)
+Three live bets: HYPE 23:45 NO 0.59 to 0.86 (fast clause, +22.4c), ZEC 23:45 YES 0.83 to 0.993 (top, 64 s left), and HYPE 00:00 NO 0.86 bought 23:48:51, open at the pass. No losses; the quiet after 22:24 ended at 23:35. Bot up 32 minutes, kill switch off. Nothing changed.
