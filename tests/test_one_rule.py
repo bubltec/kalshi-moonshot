@@ -443,3 +443,33 @@ def test_salvage_waits_for_the_spot_to_be_a_typical_move_of_the_time_left_under_
     assert not shallow.sell and shallow.kind in ("under bar", "no bounce"), shallow
     deep = run(-30.0)  # -1.2 of a typical move
     assert deep.sell and deep.kind == "salvage", deep
+
+
+def test_integration_the_uptick_take_follows_a_rising_bid_and_sells_when_it_pauses_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
+    """BTC 22:30 YES, 2026-11-27 (user: "It's literally just buy like it did in this example and sell on the uptick"; "The only reason it should hold is if it keeps profiting. But it started flattening out and should have sold"): the wave lane's early_take, with a pause of 0.5% of the time left and no cushion hold. The bid climbs from the cost: held while it makes new highs, sold at the bid the moment it pauses, at a gain, as an order."""
+    from kalshi_moonshot import watcher
+    from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
+
+    live(monkeypatch)
+    client = Client(bid=0.90, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['early_take']\nearly_take_share=1.0\nearly_take_stall_share=0.005\nearly_take_cushion_units=0.0\nearly_take_hold_share=0.0")
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: None)
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.10)  # the bid's typical minute: a 10 s wobble is about 4c
+
+    class Board:
+        def view(self, name):
+            return {"p_lose": 0.9}  # the spot's chance of ending on the wrong side: a wave bet is bought cheap because the spot is on the wrong side, so a stall is sold, not held
+
+    monkeypatch.setattr(watcher.ProfitWatcher, "_board", lambda self, c, tt, now, left, bid: Board())
+    yes_bid(w, 0.83, 440)  # bought at 0.81: +2c, under a wobble after both fees: not a profit yet
+    assert signals(w) == []
+    for k, bid in enumerate((0.86, 0.88, 0.90, 0.92)):
+        yes_bid(w, bid, 439 - k)  # a profit that keeps climbing: a new high every second
+        assert signals(w) == [], f"sold while still climbing at {bid}"
+    yes_bid(w, 0.92, 434)  # no new high for 1 s: the pause is 0.5% of 434 s, about 2 s
+    assert signals(w) == []
+    yes_bid(w, 0.92, 431)  # 4 s without a new high: it has flattened
+    got = signals(w)
+    assert got and got[0].why.startswith("early take"), got
+    w._sell(got[0].ticker, got[0].lane, got[0].why)
+    assert [n for n, _ in client.sold] == [4.65]
