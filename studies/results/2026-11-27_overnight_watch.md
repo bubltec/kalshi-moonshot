@@ -496,3 +496,6 @@ Four live bets, all NO, all sold at the top for a gain: DOGE 04:30 0.69 to 0.993
 
 ## Pass 58 (04:49 to 05:19 ET)
 Three gains and two open: SOL 05:00 YES 0.82 to 0.962 (fast clause, +12.9c), ETH 05:00 YES 0.88 to 0.965 (fast clause, +7.4c), ZEC 05:15 NO 0.84 to 0.99 (top); open at the pass: BNB 05:30 YES 0.74 (05:17:18) and HYPE 05:30 YES 0.64 (05:17:39), two YES bets on two coins 21 seconds apart. No losses. Bot up 6 hours, kill switch off. Nothing changed.
+
+## Pass 59 (05:19 to 05:49 ET)
+HYPE 05:30 YES 0.64 to 0.994 (top, gain) and HYPE 05:45 NO 0.82 to 0.983 (fast clause, +17.0c) were sold. Two bets had no sale and were held to their close, results not readable at the pass (the host query timed out): BNB 05:30 YES 0.74 (05:17:18, $15.00) and ZEC 05:30 NO 0.89 (05:19:10, $15.00): to read next pass. No other bets. Bot up 7 hours, kill switch off. Nothing changed.
