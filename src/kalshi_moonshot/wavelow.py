@@ -15,6 +15,7 @@ Memory only: the tick memory and the target in memory. stdlib only."""
 
 from __future__ import annotations
 
+import math
 import threading
 from typing import Any
 
@@ -82,29 +83,32 @@ def read(index: str, opened: float, now: float, K: float) -> tuple[waveturn.Read
             return _reads[key]
     h = waveturn._hour(index, op)
     out: tuple[waveturn.Reading | None, waveturn.Hour, str, dict[str, float] | None]
-    if h.u is None:
-        out = (None, h, f"no reading of the pre-open hour: {h.why}", None)
+    ws, got = op, None
+    for lb in (LOOKBACK, MIN_LOOKBACK):  # 30 minutes of prior tape when memory has them, else at least 10
+        ws = window_start(op, now, lb)
+        got = ticks_mod.history.window(index, ws, now)
+        if got and got[0] and got[0][0] <= ws + TAPE_SLACK:
+            break
+        got = None
+    t = int(now) - ws
+    if got is None or t < 1:
+        out = (None, h, f"the tape in memory does not reach back {MIN_LOOKBACK // 60} minutes before the decision yet", None)
     else:
-        ws, got = op, None
-        for lb in (LOOKBACK, MIN_LOOKBACK):  # 30 minutes of prior tape when memory has them, else at least 10
-            ws = window_start(op, now, lb)
-            got = ticks_mod.history.window(index, ws, now)
-            if got and got[0] and got[0][0] <= ws + TAPE_SLACK:
-                break
-            got = None
-        t = int(now) - ws
-        if got is None or t < 1:
-            out = (None, h, f"the tape in memory does not reach back {MIN_LOOKBACK // 60} minutes before the decision yet", None)
+        T, V = got
+        if T[0] > ws:
+            prev = ticks_mod.history.last_at_or_before(index, ws)
+            if prev is not None:
+                T, V = [prev[0], *T], [prev[1], *V]
+        win = grid(T, V, ws, int(now) + 1)
+        _starts[(op, int(now))] = ws
+        if None in win:
+            out = (None, h, "the spot's path in the window has a gap at its start", None)
         else:
-            T, V = got
-            if T[0] > ws:
-                prev = ticks_mod.history.last_at_or_before(index, ws)
-                if prev is not None:
-                    T, V = [prev[0], *T], [prev[1], *V]
-            win = grid(T, V, ws, int(now) + 1)
-            _starts[(op, int(now))] = ws
-            if None in win:
-                out = (None, h, "the spot's path in the window has a gap at its start", None)
+            if h.u is None:  # 2026-11-28 (user: nothing waits on a typical-minute calculation): no pre-open hour in memory (a restart, a new market) = this window's own typical minute, read now, never a wait
+                u_w = math.sqrt(sum((win[k] - win[k - 1]) ** 2 for k in range(1, len(win))) / max(len(win) - 1, 1)) * math.sqrt(60)  # type: ignore[operator]
+                h = waveturn.Hour(u_w, None, None, "", 0.0, 0.0, waveturn._moves(win, u_w)) if u_w > 0 else h  # type: ignore[arg-type]
+            if h.u is None:
+                out = (None, h, f"the spot did not move in the window: {h.why}", None)
             else:
                 out = (waveturn.reading(win, t, K, h.u, h.leg_u, h.leg_s, h.moves), h, "", shape_of(win, t, h.u))  # type: ignore[arg-type]
     with _lock:
@@ -205,8 +209,6 @@ def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: b
         pc = None
     if r is None:
         return False, f"no low-side buy: {bad}", facts(None, h, shot.side, False, pc, shape)
-    if h.leg_u <= 0:
-        return False, f"no low-side buy: the hour before the open had no completed leg of {waveturn.DONE_U:g}u, not a wave market", facts(r, h, shot.side, False, pc, shape)
     want = -1 if shot.side == "yes" else 1  # YES is the low side in a dip (the spot falling), NO in a peak (rising)
     word = "dip" if shot.side == "yes" else "peak"
     move = "fall" if want == -1 else "rise"
@@ -229,4 +231,4 @@ def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: b
     if not resting and restbuys.missed_since(shot.ticker, shot.side, start - SWING_SLACK):
         return False, f"swing_missed: a resting buy of {shot.side.upper()} in this {move} (it began {int(now - start)}s ago) rested its time and did not fill; the moment has passed, it waits for the next {word}; {told}", facts(r, h, shot.side, False, pc, shape)
     state = "its order stands" if resting else "buys"
-    return True, f"in a {word} (shape, not judged: bowed {shape['bow']:.2f}, pace {shape['flat']:.2f} of its average): the {move} has run {r.swing_u:.2f}u, {shot.side.upper()} is the low side, {state}; {told}", facts(r, h, shot.side, True, pc, shape)
+    return True, f"in a {word} ({'half U' if HALF_U_LIVE else 'shape, not judged'}: bowed {shape['bow']:.2f}, pace {shape['flat']:.2f} of its average): the {move} has run {r.swing_u:.2f}u, {shot.side.upper()} is the low side, {state}; {told}", facts(r, h, shot.side, True, pc, shape)
