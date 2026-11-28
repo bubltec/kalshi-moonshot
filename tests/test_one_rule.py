@@ -564,6 +564,31 @@ def test_integration_the_early_take_with_bid_only_sells_a_stalled_bid_while_the_
     assert client2.sold and client2.sold[0][0] > 0, "the selling thread did not place the sale"  # (the two builds share one store here, so the bet is held twice: 9.3 contracts)
 
 
+def test_integration_a_bid_only_uptick_take_sells_a_fall_late_in_the_first_half_whatever_the_boards_hold_value_says(tmp_path, monkeypatch):
+    """XRP 12:45 YES, 2026-11-28 (user: "The problem is it never exited"): bought 0.31 at 8 minutes in, the bid went to 0.47 and slid back to 0.40 over 15 s with 355 s left, past the half of the market, where the hold-value check (a favourite's check: the board says the bet is likely to win) and the winning-side hold kept it; it went to zero. A scalp lane reads the bid alone."""
+    from kalshi_moonshot import watcher
+    from tests.test_risk_exit_flow import Client, held, live, signals, yes_bid
+
+    live(monkeypatch)
+    client = Client(bid=0.90, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['early_take']\nearly_take_share=1.0\nearly_take_stall_share=0.005\nearly_take_cushion_units=0.0\nearly_take_hold_share=0.0\nearly_take_bid_only=true")
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.10)
+
+    class Board:
+        def view(self, name):
+            return {"p_lose": 0.05}  # the board thinks the hold is nearly safe
+
+    monkeypatch.setattr(watcher.ProfitWatcher, "_board", lambda self, c, tt, now, left, bid: Board())
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: (5.0, 3.0))  # the spot reads as on the winning side
+    path = [0.84, 0.88, 0.93, 0.95, 0.94, 0.92, 0.91, 0.90, 0.89, 0.88, 0.88]  # the fixture's bet is bought at 0.81: the same shape as XRP 0.31 -> 0.47 -> 0.40, shifted up
+    for k, bid in enumerate(path):
+        yes_bid(w, bid, 370 - k)
+    got = signals(w)
+    assert got and got[0].why.startswith("early take"), got
+    w._sell(got[0].ticker, got[0].lane, got[0].why)
+    assert client.sold and client.sold[0][0] > 0
+
+
 def test_the_last_90_seconds_read_the_spots_own_cushion_and_the_salvage_stops_waiting_for_a_bounce_eth_1000_no():
     """ETH 10:00 NO, 2026-11-28: bought 0.85, held at 0.82 to 0.92 into the last 30 s with the spot's cushion small; the spot then climbed over the target (5 s cushion -0.24, -0.59) and the NO bid went 0.88 -> 0.38 -> 0.27 -> 0.19 and the bet lost the stake by a cent. The cross read the better of the 5 s and the 60 s average (still on the winning side) and asked a wobble that did not shrink with the clock, and the salvage waited for a bounce that never came. User: "It cannot block on the 60s ... if there's a slope towards the losing side and time is running out we need to exit"; "That last slope up looked like it might hold. But it didn't, and that's what salvage needs to handle"."""
     ask = asker(0.85, wobble=0.04, spot_unit=0.98)
