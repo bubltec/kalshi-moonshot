@@ -244,7 +244,7 @@ def test_a_small_profit_is_not_sold_for_pennies_on_one_wobble_doge_2330():
 
 
 def test_a_profit_gained_too_fast_is_taken_even_with_a_cushion_near_0000(monkeypatch):
-    monkeypatch.setattr(fallrule, "LATE_HOLD_LEFT", 0.0)  # these tests are about the fast clause itself, not the end-of-market hold
+    monkeypatch.setattr(fallrule, "MARKET_FADE_FROM", 2.0)  # these tests are about the fast clause itself, not the end-of-market hold
     """NEAR 00:00 NO, 2026-11-27: bought 0.64 with 519 s left, 0.83 a hundred and thirteen seconds later, held by the cushion, then zero. User: "We need a rule where the time to profit increase becomes too valuable to risk, and it needs to sell it". Pace = the share of the possible profit in hand over the share of the bet's life used; 2 or more sells."""
     ask = asker(0.64, wobble=0.040, bought=381.0)  # bought with 519 s left
     assert not ask(0.70, 480, 40.0).sell  # +4c: under two wobbles, no profit run, so no pace is read
@@ -268,7 +268,7 @@ def test_a_profit_gained_too_fast_is_taken_even_with_a_cushion_near_0000(monkeyp
 
 
 def test_integration_a_fast_profit_sale_goes_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
-    monkeypatch.setattr(fallrule, "LATE_HOLD_LEFT", 0.0)  # the fast clause itself, not the end-of-market hold
+    monkeypatch.setattr(fallrule, "MARKET_FADE_FROM", 2.0)  # the fast clause itself, not the end-of-market hold
     from kalshi_moonshot import watcher
     from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
 
@@ -366,7 +366,7 @@ def test_a_straight_fast_drop_toward_the_target_late_in_the_market_is_sold_for_a
 
 
 def test_the_fast_early_take_is_inert_in_the_last_tenth_of_the_market(monkeypatch):
-    monkeypatch.setattr(fallrule, "LATE_HOLD_LEFT", 0.0)  # these tests are about the fast clause itself, not the end-of-market hold
+    monkeypatch.setattr(fallrule, "MARKET_FADE_FROM", 2.0)  # these tests are about the fast clause itself, not the end-of-market hold
     """User, 2026-11-27 11:50 ET: the fast early take "waits longer with less time remaining, with about 90s left making it inert"."""
     ask = asker(0.64, wobble=0.040, bought=700.0)  # bought with 200 s left
     ask(0.70, 195, 40.0)
@@ -502,19 +502,19 @@ def test_integration_the_expiry_sale_sells_a_dying_bet_in_the_last_share_of_the_
     assert signals(w2) == []
 
 
-def test_an_end_of_market_favourite_in_the_80s_and_90s_is_not_sold_by_the_profit_rules():
-    """User, 2026-11-28 08:55 ET, on XRP 08:15 NO (sold at 0.976 on the fast clause, the market ran to 1.00): "Under 500s remaining if our held buy is in the 80-90s we should not sell and let our salvage handle issues where the market crashes out". Under 500 s left and with the bid at 0.80 or more (below the top) the fast clause, the fall and the stall do not fire; the top still sells; above 500 s left, or under 0.80, the profit rules are as before."""
+def test_a_favourite_held_into_the_end_of_the_market_fades_the_profit_rules_on_the_market_clock():
+    """User, 2026-11-28, on XRP 08:15 NO (sold at 0.976 on the fast clause, the market ran to 1.00): "Under 500s remaining if our held buy is in the 80-90s we should not sell and let our salvage handle issues where the market crashes out", and it "should be built into two existing rules": early profit's fade, read on the market's elapsed time as well as the bet's age, for a bid at 0.80 or more. Early in the market the same fall sells, late it is held, a bid under 0.80 is not faded, and the top still sells."""
     def run(left_at, bid_after):
-        ask = asker(0.70, wobble=0.040, bought=900.0 - left_at - 40.0)  # bought 40 s before the first look: a young bet, nothing faded
+        ask = asker(0.70, wobble=0.040, bought=900.0 - left_at - 40.0)  # bought 40 s before the first look: a young bet, nothing faded by its own age
         ask(0.78, left_at + 20, 5.0)
         ask(0.93, left_at + 10, 5.0)  # a profit run to 0.93 (a fast one)
         return ask(bid_after, left_at, 5.0)
 
-    held = run(300, 0.80)  # 13c off the high with 300 s left, in the 80s: the same fall that sells at 700 s
-    assert not held.sell and held.kind == "late hold", held
-    top = run(300, 0.995)
-    assert top.sell and top.kind == "top"
-    early = run(700, 0.80)  # a fall of 13c with 700 s left: as before
+    early = run(700, 0.80)  # a fall of 13c with 700 s left
     assert early.sell and early.kind in ("fall", "fast"), early
-    low = run(300, 0.76)  # under 0.80: not held
+    late = run(250, 0.80)  # the same fall with 250 s left, the bid in the 80s: faded away
+    assert not late.sell, late
+    top = run(250, 0.995)
+    assert top.sell and top.kind == "top"
+    low = run(250, 0.76)  # under 0.80: the market clock does not fade it
     assert low.sell, low
