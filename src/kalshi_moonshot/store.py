@@ -1492,7 +1492,7 @@ class Store:
         out = []
         for r in self.open_bets():
             try:
-                closed = datetime.fromisoformat(str(r["close_time"]).replace("Z", "+00:00")).timestamp() <= t
+                closed = datetime.fromisoformat(str(r["close_time"])).timestamp() <= t
             except (TypeError, ValueError):
                 closed = False
             if not closed:

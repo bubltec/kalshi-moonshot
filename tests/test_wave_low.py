@@ -11,8 +11,17 @@ import pytest
 from kalshi_moonshot import buychain, config, lanes, memguard, wavelow, waveturn
 from kalshi_moonshot import ticks as ticks_mod
 from kalshi_moonshot.strategy import LongShot
-from tests.test_wave_turn import K, OPEN, TICKER, feed, hour_path, u_of, window_path  # noqa: F401  (feed etc.: the helpers)
-from tests.test_wave_turn import mem  # noqa: F401  (the fixture)
+from tests.test_wave_turn import (  # noqa: F401  (feed etc.: the helpers)
+    OPEN,
+    TICKER,
+    K,
+    feed,
+    hour_path,
+    mem,
+    u_of,
+    window_path,
+)
+
 
 @pytest.fixture(autouse=True)
 def _fresh():
@@ -199,7 +208,6 @@ def replay(m, side, seconds, sp, s):
     out = []
     for t in seconds:
         now = opened + t + 0.5
-        left = opened + 900.0 - now
         series = "KXETH15M" if m["id"].startswith("eth") else "KXSILVER15M"
         ticker = f"{series}-26NOV271300-00"
         ticks_mod.strikes.note(ticker, m["target"])

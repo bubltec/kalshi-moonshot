@@ -143,7 +143,7 @@ def _price_curve(ticks_mod: Any, broad: Any, ticker: str, opened: float, now: fl
     t = int(now - opened)
     g: list[float] = []
     k, last = 0, None
-    for sec in range(0, t + 1):
+    for sec in range(t + 1):
         while k < len(rows) and rows[k][0] <= opened + sec:
             last = (rows[k][1] + rows[k][2]) / 2.0
             k += 1
