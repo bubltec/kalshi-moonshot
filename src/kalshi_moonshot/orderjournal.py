@@ -40,12 +40,13 @@ def _append(data_dir: Any, row: dict[str, Any]) -> None:
         os.close(fd)
 
 
-def intent(data_dir: Any, *, lane: str, shot: Any, order_id: str, count: float, price: float, kind: str) -> None:
+def intent(data_dir: Any, *, lane: str, shot: Any, order_id: str, count: float, price: float, kind: str, why: str = "") -> None:
     """Record an order that was just sent. Never raises and never waits on the database."""
     try:
         _append(data_dir, {
             "ts": time.time(), "order_id": order_id, "lane": lane, "ticker": shot.ticker, "side": shot.side, "count": count, "price": price, "kind": kind,
             "bid": float(shot.bid or 0.0), "ask": float(shot.ask or 0.0), "close_time": shot.close_time or "", "event_ticker": shot.event_ticker or "", "category": shot.category or "",
+            "why": (why or "")[:1800],  # 2026-11-28: the entry reasoning (the buy module's readings and notes) goes in the journal with the order, so a bet recovered from it keeps what it was bought on
         })
     except Exception as exc:
         log.warning("order journal: could not record the order %s on %s (%r); a restart now would not find it", order_id, getattr(shot, "ticker", "?"), exc)
@@ -154,11 +155,29 @@ def _recover(s: Any, client: Any, store: Any, e: dict[str, Any]) -> str:
         store.add_order(ticker=e["ticker"], env=s.env, count=e["count"], price=round((spent - fees) / filled, 4), fill_count=filled, cost_usd=round(spent, 4), fee_usd=round(fees, 4), order_id=e["order_id"], contract=e["side"])
     store.add_decision(
         ticker=e["ticker"], title="", bid=round(e["bid"], 4), ask=round(e["ask"], 4), model_p=round(e["ask"], 4), edge=0.0, action="bet", mode=s.mode,
-        reason=f"bought {e['side'].upper()} {filled:g}/{e['count']:g} at about {paid:.2f}, fee included: RECOVERED from the order journal ({e['kind']} order {e['order_id'][:13]} sent {time.strftime('%H:%M:%S', time.gmtime(e['ts']))} UTC; the bot stopped or the write failed before the bet's own row was made). Its entry reasoning was not kept.",
+        reason=f"bought {e['side'].upper()} {filled:g}/{e['count']:g} at about {paid:.2f}, fee included: RECOVERED from the order journal ({e['kind']} order {e['order_id'][:13]} sent {time.strftime('%H:%M:%S', time.gmtime(e['ts']))} UTC; the bot stopped or the write failed before the bet's own row was made). " + (f"Entry reasoning, kept in the journal with the order: {e['why']}" if e.get("why") else "Its entry reasoning was not kept."),
         close_time=e["close_time"], lane=e["lane"], category=e["category"], event_ticker=e["event_ticker"], side=e["side"], contracts=filled, stake_usd=round(spent, 4),
     )
     settle(s.data_dir, e["order_id"], f"recovered {filled:g} contracts")
     return f"{e['ticker']}: recovered {filled:g} contracts for {e['lane']}"
+
+
+def recover_after(s: Any, client: Any, store: Any, ticker: str, side: str, since: float) -> list[str]:
+    """2026-11-28 (NEAR 14:00 YES: an order was sent at 13:57:13, the evaluation ended with no bet row and no word, a hand-placed row for the same fill appeared four seconds later, and the dead-letter retry booked the bet at 14:00:02 with its entry reasoning lost; 4 of the day's 110 bets went this way): the evaluation of this market and side has ended WITHOUT a bet row (an exception, or a result that is not a purchase), so an order it sent is booked now, from the account's fills, with the reasoning the journal kept; it does not wait the dead-letter retry's MIN_AGE. Never raises."""
+    out: list[str] = []
+    try:
+        for e in pending(s.data_dir):
+            if e.get("ticker") != ticker or e.get("side") != side or e["ts"] < since - 1.0:
+                continue
+            try:
+                out.append(_recover(s, client, store, e))
+            except Exception as exc:
+                log.warning("order journal: %s %s not booked after its evaluation ended (%r); the dead-letter retry will try again", e.get("lane"), ticker, exc)
+        for line in out:
+            log.warning("order journal (after the evaluation): %s", line)
+    except Exception:
+        log.exception("order journal: recover_after failed for %s %s", ticker, side)
+    return out
 
 
 def recover_once(s: Any, client: Any, store: Any, now: float | None = None) -> list[str]:

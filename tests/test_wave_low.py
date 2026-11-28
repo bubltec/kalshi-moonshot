@@ -25,8 +25,9 @@ from tests.test_wave_turn import (  # noqa: F401  (feed etc.: the helpers)
 
 
 @pytest.fixture(autouse=True)
-def _fresh():
+def _fresh(monkeypatch):
     wavelow.clear()
+    monkeypatch.setattr(wavelow, "LEGS_LEFT", 0.0)  # the time-left gate has its own test; the synthetic hours here have legs of arbitrary length
     yield
     wavelow.clear()
 
@@ -399,3 +400,25 @@ def test_the_price_gate_waits_for_the_first_tick_that_shows_a_slope_off_the_bott
     wavelow.clear()
     bet, note = ask(sp, s, now, "yes")
     assert bet, note  # no quotes in memory: nothing waits on a reading that is not there
+
+
+def test_a_buy_needs_the_time_left_to_cover_two_of_the_markets_own_legs_and_an_unread_leg_never_blocks(tmp_path, monkeypatch, mem):
+    """2026-11-28 (user: "Let's build it"): late in the market a dip is not bought when the time left cannot cover about two usual legs of this market; an unread leg or LEGS_LEFT = 0 never blocks."""
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    u = u_of(hour)
+    feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u))
+    ticks_mod.strikes.note(TICKER, K)
+    now = OPEN + 40 + 52
+    monkeypatch.setattr(wavelow, "PRICE_TURN_LIVE", False)
+    bet, note = ask(sp, s, now, "yes")
+    assert bet, note  # plenty of time: 760 s left
+    monkeypatch.setattr(wavelow, "LEGS_LEFT", 1000.0)  # a leg is never this short: every buy is refused for want of time, whatever the market's leg is
+    wavelow.clear()
+    bet, note = ask(sp, s, now, "yes")
+    assert not bet and "not enough time" in note, note
+    monkeypatch.setattr(wavelow, "LEGS_LEFT", 0.0)
+    wavelow.clear()
+    bet, note = ask(sp, s, now, "yes")
+    assert bet, note

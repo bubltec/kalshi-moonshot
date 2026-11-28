@@ -243,3 +243,77 @@ def test_the_resting_wait_tells_the_journal_when_the_order_gets_a_new_id():
 
     src = inspect.getsource(runner._rest_wait)
     assert "first_id = order_id" in src and "orderjournal.moved(s.data_dir, first_id, order_id)" in src
+
+
+# ---- 2026-11-28: the entry reasoning travels with the order, and a failed evaluation is booked at once ----
+def test_the_journal_keeps_the_entry_reasoning_and_a_recovered_bet_carries_it(env):
+    s, store = env
+    orderjournal.intent(s.data_dir, lane="wave_shape", shot=shot(), order_id="oid-1", count=16.66, price=0.28, kind="resting", why="wave_low yes (in a dip (half U: bowed 0.29, pace 0.42 of its average)): the fall has run 1.43u")
+    e = orderjournal.pending(s.data_dir)[0]
+    assert "bowed 0.29" in e["why"]
+    out = orderjournal._recover(s, Client(fills=[fill()]), store, e)
+    assert "recovered 16.66" in out
+    row = store.db.execute("SELECT reason FROM decisions WHERE action='bet' AND ticker=?", (TICKER,)).fetchone()
+    assert "RECOVERED" in row["reason"] and "bowed 0.29" in row["reason"] and "was not kept" not in row["reason"]
+
+
+def test_recover_after_books_an_order_whose_evaluation_ended_without_a_bet_and_leaves_other_markets_alone(env):
+    s, store = env
+    since = time.time() - 2.0
+    orderjournal.intent(s.data_dir, lane="wave_shape", shot=shot(), order_id="oid-1", count=16.66, price=0.28, kind="resting", why="the reasoning")
+    other = shot()
+    other = other._replace(ticker="KXSOL15M-26NOV260915-15") if hasattr(other, "_replace") else other
+    got = orderjournal.recover_after(s, Client(fills=[fill()]), store, "KXOTHER15M-X", "yes", since)
+    assert got == []  # another market: untouched
+    assert orderjournal.pending(s.data_dir), "the intent is still pending"
+    got = orderjournal.recover_after(s, Client(fills=[fill()]), store, TICKER, "yes", since)  # no MIN_AGE wait: the evaluation has ended
+    assert got and "recovered 16.66" in got[0]
+    assert not orderjournal.pending(s.data_dir)
+    assert store.db.execute("SELECT COUNT(*) AS n FROM decisions WHERE action='bet' AND ticker=?", (TICKER,)).fetchone()["n"] == 1
+    assert store.db.execute("SELECT COUNT(*) AS n FROM orders WHERE order_id='oid-1'").fetchone()["n"] == 1  # the order row too: a live sale sells what the orders table says the account holds
+
+
+def test_integration_an_evaluation_that_raises_after_the_order_is_booked_from_the_journal_at_once(env, monkeypatch):
+    """The socket path (Worker.evaluate_shot): the order was sent (the journal has it), then the evaluation raised and no bet row was made. The `finally` books it from the journal now, with the reasoning, and does it for that market and side only; a purchase that returned 'bought' is left to its own row."""
+    from kalshi_moonshot import orderkeys
+    from kalshi_moonshot.worker import Worker
+
+    s, store = env
+    monkeypatch.setenv("LIVE_LANES", "wave_shape")
+    s = config.load()
+    store = Store(s.db_path)
+
+    class Cache:
+        def fed(self):
+            return True
+
+    class C(Client):
+        authed = True
+        cache = Cache()
+
+    client = C(fills=[fill()])
+    w = Worker(s, client, None, store, None)
+    w._mem_ready.set()
+    monkeypatch.setattr(orderkeys, "ready", lambda: True)
+    monkeypatch.setattr(w, "_venue", lambda lane: client)
+
+    def boom(self, shot, key, **kw):
+        orderjournal.intent(s.data_dir, lane="wave_shape", shot=shot, order_id="oid-1", count=16.66, price=0.28, kind="resting", why="wave_low yes: the reasoning the order was sent on")
+        raise RuntimeError("the evaluation broke after the order")
+
+    monkeypatch.setattr(Worker, "_evaluate_shot", boom)
+    monkeypatch.setattr(s.__class__, "is_live", lambda self, lane, series=None: True, raising=False)
+    sh = shot()._replace(lane="wave_shape") if hasattr(shot(), "_replace") else shot()
+    with pytest.raises(RuntimeError):
+        w.evaluate_shot(sh)
+    row = store.db.execute("SELECT reason, lane FROM decisions WHERE action='bet' AND ticker=?", (TICKER,)).fetchone()
+    assert row is not None and "RECOVERED" in row["reason"] and "the reasoning the order was sent on" in row["reason"]
+    assert not orderjournal.pending(s.data_dir)
+
+    def bought(self, shot, key, **kw):
+        orderjournal.intent(s.data_dir, lane="wave_shape", shot=shot, order_id="oid-2", count=5.0, price=0.30, kind="resting", why="x")
+        return "bought YES 5/5 resting at 0.30"
+
+    monkeypatch.setattr(Worker, "_evaluate_shot", bought)
+    w.evaluate_shot(sh)
+    assert [e["order_id"] for e in orderjournal.pending(s.data_dir)] == ["oid-2"], "a purchase's own row is not duplicated by the recovery"

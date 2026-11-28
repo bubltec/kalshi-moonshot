@@ -3,6 +3,7 @@
 #   scripts/cloud.sh status                      # machine, containers, last log lines
 #   scripts/cloud.sh logs [N]                    # the bot's last N log lines (default 200), then follow
 #   scripts/cloud.sh grep PATTERN [N]            # the matching lines among the last N (default 5000), then exit; no follow
+#   scripts/cloud.sh rlogs [N] | rgrep PATTERN [N]   # the same for the tape RECORDER's container (its liveship lines, its streams)
 #   scripts/cloud.sh psql                        # an interactive psql on the cloud database
 #   scripts/cloud.sh sql "SELECT count(*) FROM tape.quotes"   # one query, results printed
 #   scripts/cloud.sh run scripts/some_study.py [VAR=value ...]   # a study from this repo, run against the CLOUD tape and trades
@@ -51,6 +52,7 @@ remote() {
 
 bot='$(sudo docker ps -qf name=bot | head -1)'
 db='$(sudo docker ps -qf name=db | head -1)'
+rec='$(sudo docker ps -qf name=recorder | head -1)'
 pg='psql -U moonshot -d moonshot'
 
 case "${1:-}" in
@@ -71,6 +73,12 @@ case "${1:-}" in
     ;;
   grep)
     stream "sudo docker logs --tail ${3:-5000} $bot 2>&1 | grep -E -- '${2:?pattern}' | tail -50"
+    ;;
+  rlogs)  # the tape recorder's container (the shipper's tape half, the recorder's streams): its last N lines, no follow
+    stream "sudo docker logs --tail ${2:-200} $rec 2>&1 | cut -c1-300"
+    ;;
+  rgrep)  # the matching lines among the recorder's last N (default 5000), then exit
+    stream "sudo docker logs --tail ${3:-5000} $rec 2>&1 | grep -E -- '${2:?pattern}' | tail -50"
     ;;
   psql)
     stream "sudo docker exec -it $db $pg"

@@ -24,7 +24,7 @@ from typing import Any
 
 from . import jobs as jobs_mod
 from . import manual as manual_mod
-from . import memguard, orderkeys, reqstats, risk, runner, steptime
+from . import memguard, orderjournal, orderkeys, reqstats, risk, runner, steptime
 from . import ticks as ticks_mod
 from .bankroll import ColdMemory
 from .commodities import CommodityPricer
@@ -691,17 +691,21 @@ class Worker:
         live = s.is_live(shot.lane)
         if live and shot.ticker:
             manual_mod.buying_begin(shot.ticker)  # the fill reaches the account before the order reaches the books: until then the position must not be read as hand-placed
+        outcome: str | None = None  # the evaluation's result; None while it raised
+        wall = time.time()
         try:
             steptime.begin()
             began = time.perf_counter()
             with memguard.decision("buy"), shared_for(self._venue(shot.lane), 0.0 if live else s.discovery_eval_age, s.discovery_enabled):
-                return self._evaluate_shot(
+                outcome = self._evaluate_shot(
                     shot, orderkeys.key(s.env, shot.lane, shot.ticker, shot.side), raise_model_errors=False,
                     before_order=lambda: orderkeys.begin(s.env, shot.ticker, shot.side), memory=True,
                 )
+                return outcome
         except ColdMemory as exc:
             log.info("skip %s %s: %s", shot.lane, shot.ticker, exc)
-            return f"skipped: {exc}"
+            outcome = f"skipped: {exc}"
+            return outcome
         finally:
             took = (time.perf_counter() - began) * 1000.0 if "began" in locals() else 0.0
             if took > steptime.TICK_BUDGET_MS:  # over the budget: where the time went (steps and the statements that took it), as the job path's "buy timing" line says
@@ -709,6 +713,11 @@ class Worker:
             steptime.end()
             if live and shot.ticker:
                 manual_mod.buying_end(shot.ticker)
+                if outcome is None or not str(outcome).startswith("bought"):  # an order may have been sent and no bet row made (an exception, or a result that is not a purchase): book it from the journal now
+                    try:
+                        orderjournal.recover_after(s, self._venue(shot.lane), Store(s.db_path, s.exclude_versions), shot.ticker, shot.side, wall)
+                    except Exception:
+                        log.exception("recover_after failed for %s %s", shot.ticker, shot.side)
 
     def _evaluate_shot(self, shot: LongShot, order_key: str, raise_model_errors: bool, before_order: Callable[[], None], memory: bool = False) -> str:
         s = self.s
