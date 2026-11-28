@@ -255,7 +255,21 @@ def test_the_swing_is_read_from_ten_minutes_before_the_decision_across_the_open(
     hour = hour[:-540] + fall
     feed(hour, window_path([(60, 0.0)], u))
     ticks_mod.strikes.note(TICKER, K)
-    assert wavelow.window_start(int(OPEN), OPEN + 40) == int(OPEN) - 560  # 10 minutes before the decision, across the open
+    assert wavelow.window_start(int(OPEN), OPEN + 40, wavelow.MIN_LOOKBACK) == int(OPEN) - 560  # 10 minutes before the decision, across the open
+    assert wavelow.window_start(int(OPEN), OPEN + 40) == int(OPEN) - 1760  # and 30 when the tape has them
     bet, note = ask(sp, s, OPEN + 40, "yes")
     assert bet and "a half U" in note, note
     assert float(next(w for w in [note] if "swing" in w).split("swing ")[1].split("u")[0]) > 2.0, note  # the swing read is the long fall, not the 40 s of the market
+
+
+def test_with_less_than_ten_minutes_of_tape_the_step_has_no_reading_and_does_not_buy(tmp_path, monkeypatch, mem):
+    """Just after a restart the tick memory is short: the curve is not read, and nothing is bought on a window of seconds."""
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    u = u_of(hour)
+    plan = [(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)]
+    feed(hour[-240:], arc_path(plan, u), opened=OPEN)  # only the last four minutes before the open, then the market
+    ticks_mod.strikes.note(TICKER, K)
+    bet, note = ask(sp, s, OPEN + 92, "yes")
+    assert not bet and "does not reach back" in note, note

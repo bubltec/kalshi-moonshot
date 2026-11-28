@@ -25,7 +25,9 @@ DIP_U = 1.0  # the least swing, in typical minutes, that is a dip or a peak (wav
 
 HALF_U_BOW = 0.15  # 2026-11-27 (user: "All it needs to look for is a half U or the inverse and bet in the middle"): the swing must be BOWED, its path lying this share of its own size past the straight line from its start to now (a fall that dropped fast and is rounding off, the left half of a U; a rise, the left half of a peak). A straight swing is the user's "linear shape". Chosen from the user's description before the replay, not tuned
 HALF_U_FLAT = 0.5  # and FLATTENING: over the last quarter of the swing the spot moved at no more than this share of the swing's average pace (the middle of the U). Chosen the same way
-LOOKBACK = 600  # 2026-11-27 (user: "It's supposed to read at least 10 mins before the marker"): the swing and its shape are read from at least this many seconds before the decision, across the market's open (the index is one continuous series), not from the open alone. Before this the first minutes of a market read a window of seconds: HYPE 22:45, 90 s in, saw only the rise off its own open and called it a peak, when it was the right arm of a 9-minute U that began in the market before. 10 minutes is the user's minimum, not tuned
+LOOKBACK = 1800  # 2026-11-27 (user: "it should have at least 10 mins prior tape to check the curve. 30 would be better"; before that "It's supposed to read at least 10 mins before the marker"): the swing and its shape are read from at least this many seconds before the decision, across the market's open (the index is one continuous series), not from the open alone. Before this the first minutes of a market read a window of seconds: HYPE 22:45, 90 s in, saw only the rise off its own open and called it a peak, when it was the right arm of a 9-minute U that began in the market before. 30 minutes is read when the tape has them, 10 (MIN_LOOKBACK) is the least the step will act on; a replay on 72 markets found the length changes nothing (1u swing -0.07 a dollar from the open, -0.09 from 10 min, -0.08 from 30 min), so this is the user's requirement, not a gain we measured
+MIN_LOOKBACK = 600  # the least prior tape the step reads before it will buy: with less in memory (just after a restart) it says no reading
+TAPE_SLACK = 30  # seconds: the first tick in memory may be this much later than the window's start
 SWING_SLACK = 5.0  # seconds: a bet this close before the swing's start still belongs to it (the zig-zag finds a swing's start a little late)
 
 _lock = threading.Lock()
@@ -33,9 +35,17 @@ _reads: dict[tuple[str, int, int], tuple[waveturn.Reading | None, waveturn.Hour,
 _prices: dict[tuple[str, int], dict[str, Any] | None] = {}
 
 
-def window_start(op: int, now: float) -> int:
-    """The second the swing is read from: the market's open, or LOOKBACK seconds before `now` when that is earlier (the first LOOKBACK seconds of a market read into the market before)."""
-    return min(op, int(now) - LOOKBACK)
+def window_start(op: int, now: float, lookback: int = LOOKBACK) -> int:
+    """The second the swing is read from: the market's open, or `lookback` seconds before `now` when that is earlier (the first minutes of a market read into the market before)."""
+    return min(op, int(now) - lookback)
+
+
+_starts: dict[tuple[int, int], int] = {}
+
+
+def read_start(op: int, now: float) -> int:
+    """The window start the last read of this second used (30 or 10 minutes back); the 30-minute one when unknown."""
+    return _starts.get((op, int(now)), window_start(op, now))
 
 
 def shape_of(win: list[float], t: int, u: float) -> dict[str, float] | None:
@@ -72,11 +82,16 @@ def read(index: str, opened: float, now: float, K: float) -> tuple[waveturn.Read
     if h.u is None:
         out = (None, h, f"no reading of the pre-open hour: {h.why}", None)
     else:
-        ws = window_start(op, now)  # at least LOOKBACK seconds before the decision, and never later than the open
-        got = ticks_mod.history.window(index, ws, now)
+        ws, got = op, None
+        for lb in (LOOKBACK, MIN_LOOKBACK):  # 30 minutes of prior tape when memory has them, else at least 10
+            ws = window_start(op, now, lb)
+            got = ticks_mod.history.window(index, ws, now)
+            if got and got[0] and got[0][0] <= ws + TAPE_SLACK:
+                break
+            got = None
         t = int(now) - ws
-        if not got or not got[0] or t < 1:
-            out = (None, h, "no tick in memory for the window before the decision", None)
+        if got is None or t < 1:
+            out = (None, h, f"the tape in memory does not reach back {MIN_LOOKBACK // 60} minutes before the decision yet", None)
         else:
             T, V = got
             if T[0] > ws:
@@ -84,13 +99,15 @@ def read(index: str, opened: float, now: float, K: float) -> tuple[waveturn.Read
                 if prev is not None:
                     T, V = [prev[0], *T], [prev[1], *V]
             win = grid(T, V, ws, int(now) + 1)
+            _starts[(op, int(now))] = ws
             if None in win:
-                out = (None, h, "the spot's path since the open has a gap at its start", None)
+                out = (None, h, "the spot's path in the window has a gap at its start", None)
             else:
                 out = (waveturn.reading(win, t, K, h.u, h.leg_u, h.leg_s, h.moves), h, "", shape_of(win, t, h.u))  # type: ignore[arg-type]
     with _lock:
         if len(_reads) > 2000:
             _reads.clear()
+            _starts.clear()
         _reads[key] = out
     return out
 
@@ -150,6 +167,7 @@ def clear() -> None:
     with _lock:
         _reads.clear()
         _prices.clear()
+        _starts.clear()
 
 
 def facts(r: waveturn.Reading | None, h: waveturn.Hour, side: str, ok: bool, price: dict[str, Any] | None = None, shape: dict[str, float] | None = None) -> dict[str, Any]:
@@ -200,7 +218,7 @@ def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: b
         return False, f"no half U: the {move} is straight (its path is {shape['bow']:.2f} of its size past the straight line, the least is {HALF_U_BOW:g}); {told}", facts(r, h, shot.side, False, pc, shape)
     if shape["flat"] > HALF_U_FLAT:
         return False, f"not at the middle of a half U: the {move} is still running at {shape['flat']:.2f} of its average pace over its last quarter (the most is {HALF_U_FLAT:g}); {told}", facts(r, h, shot.side, False, pc, shape)
-    start = window_start(round(opened), now) + r.ext_t - r.swing_s  # the second this swing began
+    start = read_start(round(opened), now) + r.ext_t - r.swing_s  # the second this swing began
     if not resting and bet_times and any(b >= start - SWING_SLACK for b in bet_times):
         return False, f"swing_played: this lane already bought {shot.side.upper()} in this {move} (it began {int(now - start)}s ago); it waits for the next {word}; {told}", facts(r, h, shot.side, False, pc, shape)
     state = "its order stands" if resting else "buys"
