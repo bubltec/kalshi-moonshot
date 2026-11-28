@@ -53,5 +53,14 @@ WatchdogStack(
     env=cdk.Environment(account=account, region=app.node.try_get_context("bot_region") or "us-east-2"),
     description="Emails when the live bot stops: EC2 status-check alarm plus a heartbeat alarm. Self-contained; never touches the bot stack. Needs -c alert_email=... -c bot_role_name=...",
 )
+if app.node.try_get_context("anywhere_ca_pem"):  # only when asked for, so a plain `cdk synth` of the other stacks needs no certificate
+    from anywhere_stack import AnywhereStack
+
+    AnywhereStack(
+        app,
+        "BubbletechAnywhere",
+        env=cdk.Environment(account=account, region="us-east-1"),
+        description="Passwordless AWS from the Mac for all of bubbletech: IAM Roles Anywhere trust anchor, profile and a moonshot-scoped role under a permission boundary; more projects add their own role later. Needs -c anywhere_ca_pem=... (scripts/anywhere_setup.sh keys).",
+    )
 cdk.Tags.of(app).add("project", "kalshi-moonshot")
 app.synth()
