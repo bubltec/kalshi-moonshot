@@ -126,6 +126,10 @@ def write_parquet(table: str, rows: list[tuple], dest: Path) -> None:
         vals = [r[i] for r in rows]
         if kind == "string":
             vals = [None if v is None else str(v) for v in vals]
+        elif kind == "double":
+            vals = [None if v is None else float(v) for v in vals]  # a database driver may hand back Decimal; the buffer's rows are floats already
+        elif kind in ("bigint", "int"):
+            vals = [None if v is None else int(v) for v in vals]
         arrays.append(pa.array(vals, type=schema.field(i).type))
     pq.write_table(pa.Table.from_arrays(arrays, schema=schema), str(dest), compression="zstd")
 
@@ -255,7 +259,10 @@ def pass_once(client: Any, bucket: str, store_db: Any, done: int | None, now: fl
                 sets = set(tickers() if tickers else ())
                 if store_db is not None:
                     sets |= {r[0] for r in store_db.execute("SELECT ticker FROM windows WHERE close_ts >= ? AND close_ts <= ?", (first * 60 - 60, (closed + 16) * 60)).fetchall()}
-                shipped += backfill_tape(client, bucket, tape_db, sorted(sets), index_ids, first, min(buf_from, closed + 1) - 1)
+                try:
+                    shipped += backfill_tape(client, bucket, tape_db, sorted(sets), index_ids, first, min(buf_from, closed + 1) - 1)
+                except Exception:  # 2026-11-28: a failed backfill must never stop the live minutes (after the 13:06 deploy no quote reached S3: the backfill raised on every pass and took the live shipping with it)
+                    log.exception("liveship: the backfill of minutes %s to %s failed; the live minutes are shipped all the same", first, min(buf_from, closed + 1) - 1)
             first = max(first, buf_from)
         else:
             first = done + 1
@@ -286,6 +293,7 @@ def start(get_settings: Any, make_store: Any, role: str = "store", make_tape_db:
     _tape_on = role in ("tape", "both")
 
     def loop() -> None:
+        log.info("liveship (%s): thread started; the first pass in 120 s backfills what the last start left out", role)
         time.sleep(120.0)  # let the bot settle and the tape fill after a start
         done: int | None = None
         store = tape_db = None
@@ -298,8 +306,8 @@ def start(get_settings: Any, make_store: Any, role: str = "store", make_tape_db:
                     if tape_db is None and make_tape_db is not None and role != "store":
                         tape_db = make_tape_db()
                     done, n = pass_once(archive.client_for(s), s.archive_bucket, store.db if store else None, done, time.time(), role, tape_db=tape_db, tickers=tickers)
-                    if done % 10 == 0:
-                        log.info("liveship: through minute %s (%d rows this pass)", done, n)
+                    if done % 10 == 0 or n == 0 and done % 3 == 0:
+                        log.info("liveship (%s): through minute %s (%d rows this pass)", role, done, n)
                 except Exception:
                     log.exception("liveship: pass failed; retried next time")
                     store = tape_db = None  # a dropped connection is made again; `done` stays, so the minutes are shipped on the next pass

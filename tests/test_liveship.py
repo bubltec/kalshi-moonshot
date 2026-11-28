@@ -194,3 +194,32 @@ def test_a_bet_whose_id_is_far_from_the_pass_rows_is_still_shipped(env):
 
     got = live_pull.read("decisions", BASE, BASE + 600, client=s3, bucket="b").to_pylist()
     assert {r["id"] for r in got} == {5, 900_000} and next(r for r in got if r["id"] == 5)["action"] == "bet"
+
+
+def test_a_failed_backfill_does_not_stop_the_live_minutes_and_decimal_rows_are_written(env, tmp_path):
+    """2026-11-28 ~14:00 ET: after the 13:06 deploy no quote reached S3 (the recorder's backfill raised every pass and took the live shipping with it). A backfill that raises is logged and the live minutes still ship; rows from a database driver may carry Decimal."""
+    import decimal
+
+    store, s3 = env
+    m = BASE // 60
+    liveship._buf["quotes"].clear()
+    liveship._tee_first = BASE - 3600.0  # the buffer holds everything: no backfill window
+    liveship.tee({"quotes": [(BASE + 5, "KXBTC15M-X", decimal.Decimal("0.4"), decimal.Decimal("0.41"), None, 7, decimal.Decimal("1"), decimal.Decimal("2"))]})
+    tape = Tape(tmp_path / "t3.db")
+
+    def boom(*a, **k):
+        raise RuntimeError("the backfill broke")
+
+    import pytest as _pt
+
+    mp = _pt.MonkeyPatch()
+    mp.setattr(liveship, "backfill_tape", boom)
+    mp.setattr(liveship, "last_shipped_minute", lambda *a, **k: m - 10)  # an old file: a backfill is wanted
+    liveship._tee_first = BASE + 60 * 3 + 5.0  # the buffer began later than the old file: the backfill window is non-empty
+    try:
+        liveship.tee({"quotes": [(BASE + 60 * 4 + 10, "KXBTC15M-X", decimal.Decimal("0.4"), decimal.Decimal("0.41"), None, 7, decimal.Decimal("1"), decimal.Decimal("2"))]})
+        done, n = liveship.pass_once(s3, "b", store.db, None, BASE + 60 * 6 + liveship.GRACE + 1, "tape", tape_db=tape.db, tickers=lambda: ["KXBTC15M-X"])
+    finally:
+        mp.undo()
+    got = {k for _, k in s3.objects}
+    assert liveship.key_for("quotes", m + 4) in got and n > 0, "the live minute was not shipped after a failed backfill"
