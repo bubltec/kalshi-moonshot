@@ -568,9 +568,7 @@ def test_the_last_90_seconds_read_the_spots_own_cushion_and_the_salvage_stops_wa
     """ETH 10:00 NO, 2026-11-28: bought 0.85, held at 0.82 to 0.92 into the last 30 s with the spot's cushion small; the spot then climbed over the target (5 s cushion -0.24, -0.59) and the NO bid went 0.88 -> 0.38 -> 0.27 -> 0.19 and the bet lost the stake by a cent. The cross read the better of the 5 s and the 60 s average (still on the winning side) and asked a wobble that did not shrink with the clock, and the salvage waited for a bounce that never came. User: "It cannot block on the 60s ... if there's a slope towards the losing side and time is running out we need to exit"; "That last slope up looked like it might hold. But it didn't, and that's what salvage needs to handle"."""
     ask = asker(0.85, wobble=0.04, spot_unit=0.98)
     assert not ask(0.90, 39, 0.27, fast=0.20).sell and not ask(0.88, 30, 0.24, fast=0.09).sell  # a bet ahead with the spot on its side: held
-    r = ask(0.38, 27, 0.20, fast=-0.24)  # the spot is over the target on its own 5 s reading: crossed, the wait starts
-    assert not r.sell, r
-    r = ask(0.27, 24, 0.15, fast=-0.59)  # a little over 2 s later at 0.1 of the time left: no bounce
+    r = ask(0.38, 27, 0.20, fast=-0.24)  # the spot is over the target on its own 5 s reading with no bounce of a bar: the last 90 s do not wait for one
     assert r.sell and r.kind == "salvage" and r.net < 0, r
     # the same bid path with the late reading off holds to the end (the 60 s average never crossed)
     old = asker(0.85, wobble=0.04, spot_unit=0.98)
