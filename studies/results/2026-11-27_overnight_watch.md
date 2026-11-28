@@ -514,3 +514,6 @@ Five gains sold: XRP 07:00 YES 0.86 to 0.932 (fast clause, +4.2c), ETH 07:00 YES
 
 ## Addendum to pass 63 (07:20 ET): NEAR 06:45 NO lost the stake
 NEAR 06:45 NO (0.81, bought 06:32:04 at minute 2.1, held with no sale): the YES bid was 1.00 at 06:44:40, 06:44:50 and the close, so the NO side lost the full stake (about -$15). Sixth zero since 01:15 (ETH 01:15 NO, XRP 02:00 YES, BNB 05:30 YES, BTC and SOL 06:15 NO, NEAR 06:45 NO), about -$90. Trace to run when the market result is recorded. Nothing changed.
+
+## Pass 64 (07:19 to 07:49 ET)
+Bets: DOGE 07:30 YES 0.74 to 0.80 (early profit, +3.5c after fees, the bid fell 0.060 from its high: another small early-profit sale), BNB 07:45 YES 0.77 (07:32:24, held to the close, result to read), BNB 08:00 YES 0.68 (07:48:01), open. The NEAR 06:45 NO trace could not be run (the market results were not recorded yet when the tape was pulled): to run next pass. Working tree note: `docs/architecture.md` and `infra/app.py` are modified and uncommitted in the main checkout, not by this session (another session's work). Bot up 9 hours, kill switch off. Nothing changed.
