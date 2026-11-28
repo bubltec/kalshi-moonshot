@@ -51,7 +51,7 @@ def cmd_record(s: config.Settings, args: argparse.Namespace) -> int:
     """The tape recorder as a process of its own (2026-11-14): Kalshi's market, settlement-index and extra-series sockets and the perp reference, written to the tape and nothing else. It runs in a container the bot's updates do not restart, so a rebuild of the bot no longer leaves a gap in the tape; the bot beside it runs with TAPE_ROLE=memory and keeps these streams for its own memory only."""
     import dataclasses
 
-    from .tape import TapeRecorder
+    from .tape import Tape, TapeRecorder
 
     s = dataclasses.replace(s, tape_role="record")
     client = _client(s)
@@ -66,7 +66,7 @@ def cmd_record(s: config.Settings, args: argparse.Namespace) -> int:
         recorderdiag.start_tracing()
     from . import liveship
 
-    liveship.start(lambda: s, lambda: None, role="tape")  # the tape tables go to S3 from this process's flush (the bot's own tables are shipped by the bot); idle until ARCHIVE_BUCKET is set
+    liveship.start(lambda: s, lambda: Store(s.db_path, s.exclude_versions), role="tape", make_tape_db=lambda: Tape(s.tape_path).db, tickers=lambda: list(getattr(rec.stream, "_tickers", ()) or ()))  # the tape tables go to S3 from this process's flush (the bot's own tables are shipped by the bot); idle until ARCHIVE_BUCKET is set
     rec.start()
     log.info("tape recorder (its own process) on: %s, the Kalshi streams only (kept %.0f days by the bot's pruning)", s.tape_path, s.tape_keep_days)
     last_log = 0.0

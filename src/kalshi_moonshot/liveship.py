@@ -30,9 +30,13 @@ log = logging.getLogger("moonshot")
 
 EVERY = 60.0  # seconds between passes
 GRACE = 45.0  # a minute is shipped once it ended this long ago: rows written behind by a queue are in
-REWRITE = 20  # minutes of the mutable tables shipped again on every pass
-BACKFILL = 30  # minutes shipped when the thread starts (the same keys, so no duplicates)
-MAX_CATCHUP = 180  # at most this many minutes in one pass after a long gap; the rest follows on the next passes
+REWRITE = 10  # minutes of the bot's own tables shipped again on every pass (their rows are read by id, which spans about this many minutes)
+FIRST_REWRITE = 70  # minutes of them on the first pass after a start (a restart or a new image leaves a gap)
+MAX_BACKFILL = 360  # at most this many minutes are backfilled after a start, from the last file in S3
+NO_FILES_BACKFILL = 120  # minutes backfilled when S3 has no file of the table at all
+MAX_CATCHUP = 180  # at most this many minutes of the live buffer in one pass after a long gap; the rest follows on the next passes
+SLICE = 30  # minutes per backfill slice (bounded memory)
+BET_KEEP_S = 6 * 3600.0  # a bet is followed for its exit and settlement this long after its decision
 PREFIX = "tape/live"
 
 # source "tape": append-only rows from the tape database; "store": rows of the bot's own database that change after they are written.
@@ -48,22 +52,24 @@ STORE: dict[str, list[tuple[str, str]]] = {
 }
 LIVE_TABLES: dict[str, list[tuple[str, str]]] = {**TAPE, **{n: [*c, ("shipped_ts", "double")] for n, c in STORE.items()}}
 # which timestamps put a store row in a minute: its own, and for decisions the exit's and the settlement's
-STORE_TS = {"decisions": ("ts", "exit_ts", "settled_ts"), "screen_log": ("ts",), "orders": ("ts",)}
+STORE_TS = {"decisions": ("ts",), "screen_log": ("ts",), "orders": ("ts",)}  # a row is in the file of the minute it was written; a bet's later exit and settlement ship as `-b` update files (below)
 
 
 def enabled(s: Settings) -> bool:
     return bool(s.archive_bucket) and bool(getattr(s, "live_ship", True))
 
 
-def key_for(table: str, minute: int) -> str:
+def key_for(table: str, minute: int, suffix: str = "") -> str:
     day = datetime.fromtimestamp(minute * 60, UTC).strftime("%Y-%m-%d")
-    return f"{PREFIX}/{table}/day={day}/m{minute}.parquet"
+    return f"{PREFIX}/{table}/day={day}/m{minute}{suffix}.parquet"
 
 
 _buf: dict[str, list[tuple]] = {n: [] for n in TAPE}
 _buf_lock = threading.Lock()
 BUF_KEEP_S = 1800.0  # seconds of rows kept in memory for the shipper (a few MB)
-ID_WINDOW = {"decisions": 3000, "screen_log": 30000}  # the newest ids read each pass (primary key), enough to cover REWRITE minutes and the settlements of recent bets
+ID_WINDOW = {"decisions": 6000, "screen_log": 30000}  # the newest ids read each pass (primary key): about 390 decisions a minute, so REWRITE minutes
+ID_WINDOW_FIRST = {"decisions": 30000, "screen_log": 30000}  # on the first pass after a start: about 75 minutes of decisions
+_tee_first = 0.0  # when the buffer began to fill (0 = not yet): minutes before the next full one come from the database on a backfill
 
 
 _tape_on = False  # set by start(role="tape"): only the tape recorder's process buffers and ships the tape tables (the bot writes none of them that matter)
@@ -71,10 +77,13 @@ _tape_on = False  # set by start(role="tape"): only the tape recorder's process 
 
 def tee(rows: dict[str, list[tuple]]) -> None:
     """Called by Tape.flush after a commit with the rows just written. Appends to memory; trims what is older than BUF_KEEP_S. No database, no S3."""
+    global _tee_first
     if not _tape_on:
         return
     now = time.time()
     with _buf_lock:
+        if _tee_first == 0.0:
+            _tee_first = now
         for table, got in rows.items():
             if table in _buf and got:
                 buf = _buf[table]
@@ -90,14 +99,14 @@ def buffered(table: str, minute: int) -> list[tuple]:
         return sorted((r for r in _buf[table] if lo <= r[0] < hi), key=lambda r: r[0])
 
 
-def store_rows(store_db: Any, table: str, since_minute: int) -> list[tuple]:
+def store_rows(store_db: Any, table: str, since_minute: int, first: bool = False) -> list[tuple]:
     """The recent rows of a store table, by primary key or the ts index only (never a scan), with `shipped_ts` appended."""
     cols = ", ".join(c for c, _ in STORE[table])
     if table == "orders":
-        got = store_db.execute(f"SELECT {cols} FROM orders WHERE ts >= ? ORDER BY ts", (since_minute * 60.0 - 3600.0,)).fetchall()  # idx_orders_ts
+        got = store_db.execute(f"SELECT {cols} FROM orders WHERE ts >= ? ORDER BY ts", (since_minute * 60.0 - 60.0,)).fetchall()  # idx_orders_ts
     else:
         top = store_db.execute(f"SELECT MAX(id) FROM {table}").fetchone()[0] or 0  # the primary key's max: an index lookup
-        got = store_db.execute(f"SELECT {cols} FROM {table} WHERE id > ? ORDER BY id", (top - ID_WINDOW[table],)).fetchall()
+        got = store_db.execute(f"SELECT {cols} FROM {table} WHERE id > ? ORDER BY id", (top - (ID_WINDOW_FIRST if first else ID_WINDOW)[table],)).fetchall()
     now = time.time()
     return [(*tuple(r), now) for r in got]
 
@@ -126,41 +135,145 @@ def put(client: Any, bucket: str, key: str, path: Path) -> None:
     client.put_object(Bucket=bucket, Key=key, Body=__import__("io").BytesIO(data), ChecksumSHA256=base64.b64encode(hashlib.sha256(data).digest()).decode(), ContentType="application/octet-stream")
 
 
-def ship_rows(client: Any, bucket: str, table: str, minute: int, rows: list[tuple]) -> int:
+def ship_rows(client: Any, bucket: str, table: str, minute: int, rows: list[tuple], suffix: str = "") -> int:
     """Write and upload one table-minute from rows already in hand. Returns the rows shipped (0: no file)."""
     if not rows:
         return 0
     with tempfile.TemporaryDirectory(prefix="liveship-") as tmp:
         path = Path(tmp) / "part.parquet"
         write_parquet(table, rows, path)
-        put(client, bucket, key_for(table, minute), path)
+        put(client, bucket, key_for(table, minute, suffix), path)
     return len(rows)
 
 
-def pass_once(client: Any, bucket: str, store_db: Any, done: int | None, now: float, role: str = "both") -> tuple[int, int]:
-    """One pass. `done` is the newest tape minute fully shipped (None on the first pass: only what the memory holds is shipped). Returns (the new `done`, rows shipped)."""
-    closed = int((now - GRACE) // 60) - 1  # the newest minute that ended at least GRACE ago
-    first = closed - BACKFILL if done is None else done + 1
-    first = max(first, closed - MAX_CATCHUP)
+_bets: dict[int, tuple] = {}  # decision id -> (decision ts, the state last shipped): the bets whose exit and settlement are still to follow
+DECISION_COLS = [c for c, _ in STORE["decisions"]]
+BET_STATE = ("outcome", "settled_ts", "exit_price", "exit_ts", "exit_reason", "contracts", "stake_usd")
+
+
+def last_shipped_minute(client: Any, bucket: str, table: str, now: float) -> int | None:
+    """The newest minute of `table` that has a file in S3 (today's and yesterday's day folders; one listing each), or None."""
+    best = None
+    for back in (0, 1):
+        day = datetime.fromtimestamp(now - back * 86400, UTC).strftime("%Y-%m-%d")
+        token = None
+        while True:
+            kw = {"Bucket": bucket, "Prefix": f"{PREFIX}/{table}/day={day}/"}
+            if token:
+                kw["ContinuationToken"] = token
+            resp = client.list_objects_v2(**kw)
+            for o in resp.get("Contents", []):
+                name = o["Key"].rsplit("/", 1)[-1]
+                digits = "".join(ch for ch in name[1:].split(".")[0].split("-")[0] if ch.isdigit())
+                if name.startswith("m") and digits:
+                    best = max(best or 0, int(digits))
+            if not resp.get("IsTruncated"):
+                break
+            token = resp.get("NextContinuationToken")
+        if best is not None:
+            break
+    return best
+
+
+def backfill_tape(client: Any, bucket: str, tape_db: Any, tickers: list[str], index_ids: list[str], first: int, last: int, pause: float = 0.02) -> int:
+    """Ship minutes first..last of the tape tables from the database after a restart or a new image. Every read is by the tape's own index (ticker, ts) or (index_id, ts): one
+    small indexed query per ticker or index and slice, never a scan. Slices of SLICE minutes bound the memory; a pause between queries keeps the load off the host."""
     shipped = 0
-    for minute in range(first, closed + 1):
-        for table in TAPE if role in ("tape", "both") else ():
-            shipped += ship_rows(client, bucket, table, minute, buffered(table, minute))
-    lo = closed - REWRITE + 1
-    for table in STORE if role in ("store", "both") else ():  # the mutable tables: the newest rows, grouped by the minutes they belong to, the last REWRITE minutes again
-        names = [c for c, _ in STORE[table]]
-        by_minute: dict[int, list[tuple]] = {}
-        for row in store_rows(store_db, table, lo):
-            for m in minute_of(table, row, names):
-                if lo <= m <= closed:
-                    by_minute.setdefault(m, []).append(row)
-        for m, rows in sorted(by_minute.items()):
-            shipped += ship_rows(client, bucket, table, m, rows)
+    for lo_m in range(first, last + 1, SLICE):
+        hi_m = min(lo_m + SLICE - 1, last)
+        lo, hi = lo_m * 60.0, (hi_m + 1) * 60.0
+        got: dict[str, dict[int, list[tuple]]] = {t: {} for t in TAPE}
+        for table, keys, col in (("quotes", tickers, "ticker"), ("flow_1s", tickers, "ticker"), ("index_ticks", index_ids, "index_id"), ("index_fast", index_ids, "index_id")):
+            cols = ", ".join(c for c, _ in TAPE[table])
+            for key in keys:
+                for row in tape_db.execute(f"SELECT {cols} FROM {table} WHERE {col} = ? AND ts >= ? AND ts < ? ORDER BY ts", (key, lo, hi)).fetchall():
+                    got[table].setdefault(int(row[0] // 60), []).append(tuple(row))
+                time.sleep(pause)
+        for table, by_minute in got.items():
+            for m, rows in sorted(by_minute.items()):
+                shipped += ship_rows(client, bucket, table, m, sorted(rows, key=lambda r: r[0]))
+    return shipped
+
+
+def ship_bet_updates(client: Any, bucket: str, store_db: Any, now: float) -> int:
+    """A bet's decision row changes after it is written (its exit, its settlement). The bets seen in the id window are followed by primary key; a changed one is shipped as a new
+    `-b` file in the minute of its change (unique per pass, so no file overwrites another). A reader keeps the newest copy of each id."""
+    for i in [i for i, (ts, _) in _bets.items() if ts < now - BET_KEEP_S]:
+        del _bets[i]
+    ids = sorted(_bets)
+    by_minute: dict[int, list[tuple]] = {}
+    for k in range(0, len(ids), 400):
+        chunk = ids[k:k + 400]
+        for row in store_db.execute(f"SELECT {', '.join(DECISION_COLS)} FROM decisions WHERE id IN ({','.join('?' * len(chunk))})", tuple(chunk)).fetchall():
+            row = tuple(row)
+            rec = dict(zip(DECISION_COLS, row, strict=True))
+            state = tuple(rec[c] for c in BET_STATE)
+            if _bets[rec["id"]][1] == state:
+                continue
+            _bets[rec["id"]] = (_bets[rec["id"]][0], state)
+            when = max(t for t in (rec["ts"], rec["exit_ts"], rec["settled_ts"]) if t is not None)
+            by_minute.setdefault(int(when // 60), []).append((*row, now))
+    n = 0
+    for m, rows in sorted(by_minute.items()):
+        n += ship_rows(client, bucket, "decisions", m, rows, suffix=f"-b{int(now)}")
+    return n
+
+
+def note_bets(rows: list[tuple]) -> None:
+    """Remember the bets among freshly read decision rows (their state as read now, to be compared with later)."""
+    for r in rows:
+        rec = dict(zip(DECISION_COLS, r[:len(DECISION_COLS)], strict=True))
+        if rec["action"] == "bet" and rec["id"] not in _bets:
+            _bets[rec["id"]] = (rec["ts"], tuple(rec[c] for c in BET_STATE))
+
+
+def pass_once(client: Any, bucket: str, store_db: Any, done: int | None, now: float, role: str = "both", *, tape_db: Any = None, tickers: Any = None) -> tuple[int, int]:
+    """One pass. `done` is the newest tape minute fully shipped (None on the first pass after a start, which backfills). Returns (the new `done`, rows shipped).
+    Tape (recorder): minutes still in the live buffer come from memory; on the first pass the minutes between the newest file in S3 and the buffer's start come from the tape database by index.
+    Store (bot): the newest decisions, screen_log and orders rows, then the bets followed for their exit and settlement."""
+    closed = int((now - GRACE) // 60) - 1  # the newest minute that ended at least GRACE ago
+    first_pass = done is None
+    shipped = 0
+    if role in ("tape", "both"):
+        buf_from = int(_tee_first // 60) + 1 if _tee_first else closed + 1  # the first minute the buffer holds whole
+        if first_pass:
+            last = last_shipped_minute(client, bucket, "quotes", now)
+            first = max(closed - MAX_BACKFILL, (last + 1) if last is not None else closed - NO_FILES_BACKFILL)
+            if tape_db is not None and first < min(buf_from, closed + 1):
+                with _buf_lock:
+                    index_ids = sorted({r[1] for t in ("index_ticks", "index_fast") for r in _buf[t]})
+                sets = set(tickers() if tickers else ())
+                if store_db is not None:
+                    sets |= {r[0] for r in store_db.execute("SELECT ticker FROM windows WHERE close_ts >= ? AND close_ts <= ?", (first * 60 - 60, (closed + 16) * 60)).fetchall()}
+                shipped += backfill_tape(client, bucket, tape_db, sorted(sets), index_ids, first, min(buf_from, closed + 1) - 1)
+            first = max(first, buf_from)
+        else:
+            first = done + 1
+        first = max(first, closed - MAX_CATCHUP)
+        for minute in range(first, closed + 1):
+            for table in TAPE:
+                shipped += ship_rows(client, bucket, table, minute, buffered(table, minute))
+    if role in ("store", "both"):
+        lo = closed - (FIRST_REWRITE if first_pass else REWRITE) + 1
+        for table in STORE:
+            names = [c for c, _ in STORE[table]]
+            by_minute: dict[int, list[tuple]] = {}
+            rows_all = store_rows(store_db, table, lo, first_pass)
+            if table == "decisions":
+                note_bets(rows_all)
+            for row in rows_all:
+                for m in minute_of(table, row, names):
+                    if lo <= m <= closed:
+                        by_minute.setdefault(m, []).append(row)
+            for m, rows in sorted(by_minute.items()):
+                shipped += ship_rows(client, bucket, table, m, rows)
+        shipped += ship_bet_updates(client, bucket, store_db, now)
     return closed, shipped
 
 
-def start(get_settings: Any, make_store: Any, role: str = "store") -> None:
-    """The background thread. Idle until ARCHIVE_BUCKET is set; a failed pass is retried on the next one (the keys are fixed, so nothing is duplicated)."""
+def start(get_settings: Any, make_store: Any, role: str = "store", make_tape_db: Any = None, tickers: Any = None) -> None:
+    """The background thread. Idle until ARCHIVE_BUCKET is set; a failed pass is retried on the next one (the keys are fixed, so nothing is duplicated). The first pass after a
+    start BACKFILLS what a restart or a new image left out: the tape minutes since the newest file in S3 (by index, from the database) and the last 70 minutes of the bot's tables."""
 
     global _tape_on
     _tape_on = role in ("tape", "both")
@@ -168,19 +281,21 @@ def start(get_settings: Any, make_store: Any, role: str = "store") -> None:
     def loop() -> None:
         time.sleep(120.0)  # let the bot settle and the tape fill after a start
         done: int | None = None
-        store = None
+        store = tape_db = None
         while True:
             s = get_settings()
             if enabled(s):
                 try:
-                    if store is None and role != "tape":
+                    if store is None:
                         store = make_store()
-                    done, n = pass_once(archive.client_for(s), s.archive_bucket, store.db if store else None, done, time.time(), role)
+                    if tape_db is None and make_tape_db is not None and role != "store":
+                        tape_db = make_tape_db()
+                    done, n = pass_once(archive.client_for(s), s.archive_bucket, store.db if store else None, done, time.time(), role, tape_db=tape_db, tickers=tickers)
                     if done % 10 == 0:
                         log.info("liveship: through minute %s (%d rows this pass)", done, n)
                 except Exception:
                     log.exception("liveship: pass failed; retried next time")
-                    store = None  # a dropped connection is made again
+                    store = tape_db = None  # a dropped connection is made again; `done` stays, so the minutes are shipped on the next pass
             time.sleep(EVERY)
 
     threading.Thread(target=loop, name="liveship", daemon=True).start()

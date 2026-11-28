@@ -13,7 +13,7 @@ import argparse
 import io
 import os
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -41,12 +41,23 @@ def read(table: str, t0: float, t1: float, client=None, bucket: str | None = Non
     client = client or boto3.client("s3", region_name=os.environ.get("ARCHIVE_REGION", "us-east-1"))
     bucket = bucket or bucket_name()
     parts = []
-    for minute in range(int(t0 // 60), int(t1 // 60) + 1):
-        try:
-            body = client.get_object(Bucket=bucket, Key=liveship.key_for(table, minute))["Body"].read()
-        except client.exceptions.NoSuchKey:
-            continue
-        parts.append(pq.read_table(io.BytesIO(body)))
+    days = sorted({datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%d") for t in (t0, t1)})
+    lo_m, hi_m = int(t0 // 60), int(t1 // 60)
+    for day in days:  # one listing per day folder: the minute files and a bet's `-b` update files
+        token = None
+        while True:
+            kw = {"Bucket": bucket, "Prefix": f"{liveship.PREFIX}/{table}/day={day}/"}
+            if token:
+                kw["ContinuationToken"] = token
+            resp = client.list_objects_v2(**kw)
+            for o in resp.get("Contents", []):
+                name = o["Key"].rsplit("/", 1)[-1]
+                digits = "".join(ch for ch in name[1:].split(".")[0].split("-")[0] if ch.isdigit())
+                if name.startswith("m") and digits and (lo_m <= int(digits) <= hi_m or "-b" in name):
+                    parts.append(pq.read_table(io.BytesIO(client.get_object(Bucket=bucket, Key=o["Key"])["Body"].read())))
+            if not resp.get("IsTruncated"):
+                break
+            token = resp.get("NextContinuationToken")
     if not parts:
         return pa.table({c: pa.array([], type=liveship.archive._arrow_type(k)) for c, k in liveship.LIVE_TABLES[table]})
     t = pa.concat_tables(parts)

@@ -18,6 +18,9 @@ BASE = 1_800_000_000 // 60 * 60  # a minute boundary
 
 
 class S3(FakeS3):
+    def list_objects_v2(self, Bucket, Prefix, ContinuationToken=None):
+        return {"Contents": [{"Key": k} for (b, k) in sorted(self.objects) if b == Bucket and k.startswith(Prefix)], "IsTruncated": False}
+
     def get_object(self, Bucket, Key):
         if (Bucket, Key) not in self.objects:
             raise self.exceptions.NoSuchKey()
@@ -33,6 +36,8 @@ def env(tmp_path):
     store = Store(tmp_path / "m.db", frozenset())
     tape = Tape(tmp_path / "t.db")
     liveship._tape_on = True
+    liveship._tee_first = 0.0
+    liveship._bets.clear()
     for t in liveship._buf:
         liveship._buf[t].clear()
     tape.db.executemany("INSERT INTO quotes (ts, ticker, bid, ask, last, sts, bid_size, ask_size) VALUES (?,?,?,?,?,?,?,?)",
@@ -68,22 +73,6 @@ def test_shipping_a_minute_twice_never_duplicates_rows(env):
     liveship.ship_rows(s3, "b", "quotes", m, liveship.buffered("quotes", m))
     liveship.ship_rows(s3, "b", "quotes", m, liveship.buffered("quotes", m))
     assert len(s3.objects) == 1 and table_at(s3, "quotes", m).num_rows == 10
-
-
-def test_a_decision_is_shipped_again_in_the_minute_of_its_exit_and_the_newest_copy_wins(env):
-    store, s3 = env
-    m = BASE // 60
-    liveship.pass_once(s3, "b", store.db, None, (m + 10) * 60.0 + 50)
-    first = table_at(s3, "decisions", m).to_pylist()[0]
-    assert first["exit_price"] is None and first["factors"] is None and first["shipped_ts"] > 0
-    store.db.execute("UPDATE decisions SET exit_price = 0.6, exit_ts = ?, exit_reason = 'uptick take' WHERE id = ?", (BASE + 125, first["id"]))
-    store.db.commit()
-    liveship.pass_once(s3, "b", store.db, None, (m + 10) * 60.0 + 50)  # its exit falls in the minute two later
-    assert table_at(s3, "decisions", m + 2).to_pylist()[0]["exit_price"] == 0.6
-    import live_pull
-
-    got = live_pull.read("decisions", BASE, BASE + 200, client=s3, bucket="b").to_pylist()
-    assert len(got) == 1 and got[0]["exit_price"] == 0.6 and got[0]["exit_reason"] == "uptick take"
 
 
 def test_a_pass_ships_only_closed_minutes_and_a_second_pass_ships_the_next_ones(env):
@@ -148,3 +137,46 @@ def test_without_the_tape_role_the_tee_keeps_nothing(env):
         liveship._buf[t].clear()
     liveship.tee({"quotes": [(BASE + 1, "KXBTC15M-X", 0.4, 0.41, 0.4, 7, 1.0, 1.0)]})
     assert liveship._buf["quotes"] == []
+
+
+def test_a_restart_backfills_the_tape_minutes_since_the_newest_file_in_s3_by_index(env, tmp_path):
+    """2026-11-28 (user: "It needs to backfill anyway for restarts and new images"): after a start the minutes between the newest file in S3 and the live buffer come from the database,
+    by ticker and by index id (never by a scan), and are shipped as the same per-minute files."""
+    store, s3 = env
+    tape = Tape(tmp_path / "t2.db")
+    m = BASE // 60
+    rows = [(BASE + 60 * k + 5, "KXBTC15M-X", 0.4, 0.41, 0.4, 7, 1.0, 1.0) for k in range(6)]  # minutes m .. m+5
+    tape.db.executemany("INSERT INTO quotes (ts, ticker, bid, ask, last, sts, bid_size, ask_size) VALUES (?,?,?,?,?,?,?,?)", rows)
+    tape.db.executemany("INSERT INTO index_ticks VALUES (?,?,?,?,?,?)", [(BASE + 60 * k + 3, "BRTI", 80000.5, 80001.0, None, 123) for k in range(6)])
+    tape.db.commit()
+    liveship._buf["quotes"].clear()
+    liveship._buf["index_ticks"].clear()
+    liveship.tee({"index_ticks": [(BASE + 60 * 6 + 3, "BRTI", 80000.5, 80001.0, None, 123)]})  # the live buffer holds BRTI, and begins after minute m+5
+    liveship._tee_first = BASE + 60 * 5 + 50.0  # the buffer began in minute m+5: its first whole minute is m+6
+    s3.objects[("b", liveship.key_for("quotes", m + 1))] = (b"x", "x")  # the newest file in S3 is minute m+1
+    now = BASE + 60 * 8 + liveship.GRACE + 1  # minutes up to m+7 are closed
+    done, n = liveship.pass_once(s3, "b", store.db, None, now, "tape", tape_db=tape.db, tickers=lambda: ["KXBTC15M-X"])
+    got = {k for _, k in s3.objects}
+    assert liveship.key_for("quotes", m + 2) in got and liveship.key_for("quotes", m + 5) in got  # backfilled from the database
+    assert liveship.key_for("quotes", m) not in got  # at or before the newest file: not re-shipped
+    assert liveship.key_for("index_ticks", m + 3) in got and n > 0
+
+
+def test_a_bets_exit_and_settlement_ship_after_its_decision_minute_and_the_reader_keeps_the_newest(env):
+    store, s3 = env
+    m = BASE // 60
+    store.db.execute("UPDATE decisions SET action = 'bet' WHERE ticker = 'KXBTC15M-X'")
+    store.db.commit()
+    now = (m + 5) * 60.0 + 50
+    liveship.pass_once(s3, "b", store.db, None, now, "store")  # the bet is read and remembered
+    did = store.db.execute("SELECT id FROM decisions").fetchone()[0]
+    assert did in liveship._bets
+    store.db.execute("UPDATE decisions SET exit_price = 0.7, exit_ts = ?, exit_reason = 'uptick take' WHERE id = ?", (BASE + 900, did))  # an exit, 15 minutes later: outside the rewrite window
+    store.db.commit()
+    liveship.pass_once(s3, "b", store.db, 0 if False else m + 4, now + 60 * 20, "store")
+    updates = [k for _, k in s3.objects if "/decisions/" in k and "-b" in k]
+    assert updates, "the exit is shipped as an update file"
+    import live_pull
+
+    got = live_pull.read("decisions", BASE, BASE + 1200, client=s3, bucket="b").to_pylist()
+    assert len(got) == 1 and got[0]["exit_price"] == 0.7
