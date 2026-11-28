@@ -243,7 +243,8 @@ def test_a_small_profit_is_not_sold_for_pennies_on_one_wobble_doge_2330():
     assert r.sell and r.kind == "fall" and r.net >= 0.04  # about a wobble kept (the sale fee is a little higher at the lower bid)
 
 
-def test_a_profit_gained_too_fast_is_taken_even_with_a_cushion_near_0000():
+def test_a_profit_gained_too_fast_is_taken_even_with_a_cushion_near_0000(monkeypatch):
+    monkeypatch.setattr(fallrule, "LATE_HOLD_LEFT", 0.0)  # these tests are about the fast clause itself, not the end-of-market hold
     """NEAR 00:00 NO, 2026-11-27: bought 0.64 with 519 s left, 0.83 a hundred and thirteen seconds later, held by the cushion, then zero. User: "We need a rule where the time to profit increase becomes too valuable to risk, and it needs to sell it". Pace = the share of the possible profit in hand over the share of the bet's life used; 2 or more sells."""
     ask = asker(0.64, wobble=0.040, bought=381.0)  # bought with 519 s left
     assert not ask(0.70, 480, 40.0).sell  # +4c: under two wobbles, no profit run, so no pace is read
@@ -267,6 +268,7 @@ def test_a_profit_gained_too_fast_is_taken_even_with_a_cushion_near_0000():
 
 
 def test_integration_a_fast_profit_sale_goes_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
+    monkeypatch.setattr(fallrule, "LATE_HOLD_LEFT", 0.0)  # the fast clause itself, not the end-of-market hold
     from kalshi_moonshot import watcher
     from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
 
@@ -363,7 +365,8 @@ def test_a_straight_fast_drop_toward_the_target_late_in_the_market_is_sold_for_a
     assert not any(ask(0.55, 170 - 2 * k, 60.0 - 0.4 * k).sell for k in range(40))
 
 
-def test_the_fast_early_take_is_inert_in_the_last_tenth_of_the_market():
+def test_the_fast_early_take_is_inert_in_the_last_tenth_of_the_market(monkeypatch):
+    monkeypatch.setattr(fallrule, "LATE_HOLD_LEFT", 0.0)  # these tests are about the fast clause itself, not the end-of-market hold
     """User, 2026-11-27 11:50 ET: the fast early take "waits longer with less time remaining, with about 90s left making it inert"."""
     ask = asker(0.64, wobble=0.040, bought=700.0)  # bought with 200 s left
     ask(0.70, 195, 40.0)
@@ -448,7 +451,7 @@ def test_salvage_waits_for_the_spot_to_be_a_typical_move_of_the_time_left_under_
 def test_integration_the_uptick_take_follows_a_rising_bid_and_sells_when_it_pauses_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
     """BTC 22:30 YES, 2026-11-27 (user: "It's literally just buy like it did in this example and sell on the uptick"; "The only reason it should hold is if it keeps profiting. But it started flattening out and should have sold"): the wave lane's early_take, with a pause of 0.5% of the time left and no cushion hold. The bid climbs from the cost: held while it makes new highs, sold at the bid the moment it pauses, at a gain, as an order."""
     from kalshi_moonshot import watcher
-    from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
+    from tests.test_risk_exit_flow import Client, held, live, signals, yes_bid
 
     live(monkeypatch)
     client = Client(bid=0.90, account=None)
@@ -478,7 +481,7 @@ def test_integration_the_uptick_take_follows_a_rising_bid_and_sells_when_it_paus
 def test_integration_the_expiry_sale_sells_a_dying_bet_in_the_last_share_of_the_market_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
     """DOGE 07:15 YES, 2026-11-28 (user: "In the doge one we allowed it to go to settlement which is unacceptable. We need to sell before the exit so it's not a total loss"): bought at 0.15 with 61 s left, the bid went to nothing, no sale step armed. The expiry sale sells at the bid in the last 5% of the market (45 s), a loss included, and holds a near-sure win."""
     from kalshi_moonshot import sellchain, watcher
-    from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
+    from tests.test_risk_exit_flow import Client, held, live, signals, yes_bid
 
     assert "expiry_sale" in sellchain.SELL_STEPS and sellchain.may_sell_under_cost("expiry sale: 40 s left")
     live(monkeypatch)
@@ -497,3 +500,21 @@ def test_integration_the_expiry_sale_sells_a_dying_bet_in_the_last_share_of_the_
     w2 = held(tmp_path, monkeypatch, live=True, client=Client(bid=0.95, account=None), extra="sell_chain=['expiry_sale']\nexpiry_sale_share=0.05\nexpiry_sale_max_bid=0.90")
     yes_bid(w2, 0.95, 30)  # a near-sure win is held to settlement
     assert signals(w2) == []
+
+
+def test_an_end_of_market_favourite_in_the_80s_and_90s_is_not_sold_by_the_profit_rules():
+    """User, 2026-11-28 08:55 ET, on XRP 08:15 NO (sold at 0.976 on the fast clause, the market ran to 1.00): "Under 500s remaining if our held buy is in the 80-90s we should not sell and let our salvage handle issues where the market crashes out". Under 500 s left and with the bid at 0.80 or more (below the top) the fast clause, the fall and the stall do not fire; the top still sells; above 500 s left, or under 0.80, the profit rules are as before."""
+    def run(left_at, bid_after):
+        ask = asker(0.70, wobble=0.040, bought=900.0 - left_at - 40.0)  # bought 40 s before the first look: a young bet, nothing faded
+        ask(0.78, left_at + 20, 5.0)
+        ask(0.93, left_at + 10, 5.0)  # a profit run to 0.93 (a fast one)
+        return ask(bid_after, left_at, 5.0)
+
+    held = run(300, 0.80)  # 13c off the high with 300 s left, in the 80s: the same fall that sells at 700 s
+    assert not held.sell and held.kind == "late hold", held
+    top = run(300, 0.995)
+    assert top.sell and top.kind == "top"
+    early = run(700, 0.80)  # a fall of 13c with 700 s left: as before
+    assert early.sell and early.kind in ("fall", "fast"), early
+    low = run(300, 0.76)  # under 0.80: not held
+    assert low.sell, low
