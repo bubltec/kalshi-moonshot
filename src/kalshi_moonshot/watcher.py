@@ -193,6 +193,7 @@ class Target:
     unit_min_history: float = 0.0
     no_loss_share: float = 0.0
     early_take_share: float = 0.0
+    early_take_bid_only: bool = False
     early_take_stall_share: float = 0.0
     early_take_hold_share: float = 0.0
     early_take_cushion_units: float = 0.0
@@ -1187,7 +1188,7 @@ class ProfitWatcher:
             t.early_take_armed, t.early_take_fall_since = False, 0.0  # a fall under cost ENDS the profit run: its old high is gone, and a recovery has to climb a wobble over cost and stall from a new high before it sells (2026-11-25, user, on DOGE 17:30 YES: the bid went 0.78 -> 0.89 -> 0.52 -> 0.82 and was sold at 0.81, +1.8c, on 'fell 0.07 from its high 0.89' ten minutes old; it settled YES)
             return None  # never a loss; the other steps decide
         stall = t.early_take_stall_share * left
-        spot = ProfitWatcher._wave_spot(self, t, now)  # the spot's cushion over the target for the bet (memory): while it still climbs by a wobble of its own the bet is not stalled, whatever the bid does (DOGE 14:45 NO, 2026-11-24: sold at 0.85 on a 56 s flat bid while the spot kept moving the bet's way, "pretty much a sure bet")
+        spot = None if t.early_take_bid_only else ProfitWatcher._wave_spot(self, t, now)  # (lane field early_take_bid_only: a scalp reads the bet's bid alone) the spot's cushion over the target for the bet (memory): while it still climbs by a wobble of its own the bet is not stalled, whatever the bid does (DOGE 14:45 NO, 2026-11-24: sold at 0.85 on a 56 s flat bid while the spot kept moving the bet's way, "pretty much a sure bet")
         if spot is not None and t.early_take_cushion_units > 0 and spot[1] > 0 and spot[0] >= t.early_take_cushion_units * spot[1] * math.sqrt(max(left, 1.0) / 60.0):  # the bar is in sigma over the time left, not in fixed typical minutes (2026-11-25, user: "profit at 2-5 mins should sell as soon as it stagnates"; SOL 17:00 NO had 1.4 to 2.5 typical minutes of cushion and 8 to 12 minutes left, a z of 0.5, and was held to the close by a fixed bar of 1 typical minute)
             return None  # a cushion waits: the spot is that many of its own typical minutes on the bet's side of the target (2026-11-25, user: "it needs to wait on cushion")
         if spot is not None:
@@ -1933,6 +1934,7 @@ class ProfitWatcher:
                 held.early_take_share, held.early_take_stall_share, held.early_take_hold_share, held.early_take_cushion_units = spec.early_take_share, spec.early_take_stall_share, spec.early_take_hold_share, spec.early_take_cushion_units
                 held.late_dip_share, held.late_dip_units, held.late_dip_look_s, held.late_dip_wait_share = spec.late_dip_share, spec.late_dip_units, spec.late_dip_look_seconds, spec.late_dip_wait_share
                 held.no_recovery_share = spec.no_recovery_share
+                held.early_take_bid_only = spec.early_take_bid_only
                 held.expiry_sale_share, held.expiry_sale_max_bid = spec.expiry_sale_share, spec.expiry_sale_max_bid
                 held.spot_perp = spec.spot_perp
                 held.wave_give_up_share, held.wave_give_up_turn, held.wave_give_up_peak = spec.wave_give_up_share, spec.wave_give_up_turn, spec.wave_give_up_peak

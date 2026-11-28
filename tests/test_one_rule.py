@@ -521,3 +521,44 @@ def test_a_favourite_held_into_the_end_of_the_market_fades_the_profit_rules_on_t
     assert top.sell and top.kind == "top"
     low = run(250, 0.76)  # under 0.80: the market clock does not fade it
     assert low.sell, low
+
+
+def test_integration_the_early_take_with_bid_only_sells_a_stalled_bid_while_the_spot_still_climbs(tmp_path, monkeypatch):
+    """ETH 09:45 YES, 2026-11-28 (user: "The price went up to about 55 and stabilized and then it didn't sell. Why? That's what it is supposed to do"): the bid stalled and fell back while the spot's cushion kept climbing, and the step counted the climbing spot as 'not stalled'. With early_take_bid_only the bid alone decides."""
+    from kalshi_moonshot import watcher
+    from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
+
+    def build(extra_bid_only):
+        live(monkeypatch)
+        client = Client(bid=0.90, account=None)
+        w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['early_take']\nearly_take_share=1.0\nearly_take_stall_share=0.005\nearly_take_cushion_units=0.0\nearly_take_hold_share=0.0" + ("\nearly_take_bid_only=true" if extra_bid_only else ""))
+        monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.10)
+        cush = [10.0]
+
+        def spot(self, tt, now, avg_seconds=60):
+            cush[0] += 2.0  # the spot's cushion makes a new high on every look: well over a wobble of its own
+            return (cush[0], 3.0)
+
+        monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", spot)
+
+        class Board:
+            def view(self, name):
+                return {"p_lose": 0.9}
+
+        monkeypatch.setattr(watcher.ProfitWatcher, "_board", lambda self, c, tt, now, left, bid: Board())
+        return w, client
+
+    w, client = build(False)
+    for k, bid in enumerate((0.83, 0.86, 0.88, 0.90, 0.90, 0.90, 0.90)):
+        yes_bid(w, bid, 440 - k)
+    assert signals(w) == []  # the climbing spot keeps the bet 'not stalled': held while the bid sits at its high
+    w2, client2 = build(True)
+    for k, bid in enumerate((0.83, 0.86, 0.88, 0.90)):
+        yes_bid(w2, bid, 440 - k)
+        assert signals(w2) == []
+    for k in range(3):
+        yes_bid(w2, 0.90, 436 - k)
+    got = signals(w2)
+    assert got and got[0].why.startswith("early take"), got
+    w2._sell(got[0].ticker, got[0].lane, got[0].why)
+    assert client2.sold and client2.sold[0][0] > 0, "the selling thread did not place the sale"  # (the two builds share one store here, so the bet is held twice: 9.3 contracts)
