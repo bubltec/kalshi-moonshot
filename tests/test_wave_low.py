@@ -223,11 +223,15 @@ def test_replay_eth_1300_the_dip_the_live_reader_missed_is_bought_inside_the_yes
     assert not any(bet for _, bet, _ in no)
 
 
-def test_replay_silver_1145_the_linear_climb_is_not_a_half_u_and_is_not_bought(tmp_path, monkeypatch, mem):
-    """SILVER 11:34 ET, 2026-11-27: a straight climb the user called linear. The step bought NO at 11:34:31 (271 s in) before the half-U test. Now the seconds around it are refused, as 'straight' or 'still running'. Not claimed: the climb has rounded stretches earlier (about 156 s and 176 s in) where the test says yes."""
+def test_replay_silver_1145_the_linear_climb_is_bought_again_now_that_the_shape_test_is_shadow(tmp_path, monkeypatch, mem):
+    """SILVER 11:34 ET, 2026-11-27, a straight climb the user called linear. The half-U shape test refused it (HALF_U_LIVE True); since 2026-11-28 the shape is a reading only (it removed V-bottoms like ETH 07:30 and added nothing in the replay), so the step buys the rise again. Pinned as a known limit, not a claim of being right. With the test back on the seconds around the old bet are refused."""
     sp = spec(tmp_path, monkeypatch)
     s = config.load()
     m = load_paths()["silver-1145"]
+    no = replay(m, "no", range(240, 285, 3), sp, s)
+    assert any(bet for _, bet, _ in no)
+    monkeypatch.setattr(wavelow, "HALF_U_LIVE", True)
+    wavelow.clear()
     no = replay(m, "no", range(240, 285, 3), sp, s)
     assert not any(bet for _, bet, _ in no)
     assert any("no half U" in note or "not at the middle of a half U" in note for _, _, note in no)
@@ -235,6 +239,7 @@ def test_replay_silver_1145_the_linear_climb_is_not_a_half_u_and_is_not_bought(t
 
 def test_a_straight_fall_is_not_a_half_u_and_a_fall_still_at_full_pace_is_not_at_the_middle(tmp_path, monkeypatch, mem):
     sp = spec(tmp_path, monkeypatch)
+    monkeypatch.setattr(wavelow, "HALF_U_LIVE", True)  # the shape test is shadow by default; this is what it does when it is on
     s = config.load()
     hour = hour_path()
     u = u_of(hour)
@@ -247,6 +252,22 @@ def test_a_straight_fall_is_not_a_half_u_and_a_fall_still_at_full_pace_is_not_at
     feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, True), (300, 0.0, False)], u))
     bet, note = ask(sp, s, OPEN + 40 + 30, "yes")  # the rounded fall, 30 s in: past a typical minute and still at full pace
     assert not bet and ("half U" in note), note
+
+
+def test_the_shape_is_a_reading_only_by_default_a_straight_fall_is_bought_and_the_reading_is_stored(tmp_path, monkeypatch, mem):
+    """ETH 07:30, 2026-11-28 (user: "still having the same issue where it won't buy the correct side in a dip?"): a sharp V-bottom was refused as straight / still running. With the shape test shadow a straight fall of 3 typical minutes is bought and bow and flat are in the facts."""
+    sp = spec(tmp_path, monkeypatch)
+    s = config.load()
+    hour = hour_path()
+    u = u_of(hour)
+    feed(quiet(hour), arc_path([(40, 1.5, False), (60, -3.0, False), (300, 0.0, False)], u))
+    ticks_mod.strikes.note(TICKER, K)
+    ctx = buychain.Ctx(s, sp, now=OPEN + 40 + 50, store=Store())
+    with memguard.decision("buy"):
+        bet, note = buychain.decide(ctx, shot(OPEN + 40 + 50, "yes"))
+    assert bet and "shape, not judged" in note, note
+    w = ctx.facts["wave_low"]
+    assert "bow" in w and "flat" in w and w["bow"] < wavelow.HALF_U_BOW  # it would have been refused with the test on
 
 
 def test_the_swing_is_read_from_ten_minutes_before_the_decision_across_the_open(tmp_path, monkeypatch, mem):
@@ -264,7 +285,7 @@ def test_the_swing_is_read_from_ten_minutes_before_the_decision_across_the_open(
     assert wavelow.window_start(int(OPEN), OPEN + 40, wavelow.MIN_LOOKBACK) == int(OPEN) - 560  # 10 minutes before the decision, across the open
     assert wavelow.window_start(int(OPEN), OPEN + 40) == int(OPEN) - 1760  # and 30 when the tape has them
     bet, note = ask(sp, s, OPEN + 40, "yes")
-    assert bet and "a half U" in note, note
+    assert bet and ("in a dip" in note or "in a peak" in note), note
     assert float(next(w for w in [note] if "swing" in w).split("swing ")[1].split("u")[0]) > 2.0, note  # the swing read is the long fall, not the 40 s of the market
 
 
@@ -317,4 +338,4 @@ def test_a_bounce_off_a_bigger_move_is_not_faded(tmp_path, monkeypatch, mem):
     small = [(30, 1.0, False), (80, -0.8, True), (60, 3.0, True), (240, 0.0, False)]  # the swing before the rise was small
     feed(quiet(hour), arc_path(small, u))
     bet, note = ask(sp, s, OPEN + 30 + 80 + 56, "no")
-    assert bet and "a half U" in note, note
+    assert bet and ("in a dip" in note or "in a peak" in note), note

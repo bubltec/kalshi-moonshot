@@ -23,6 +23,7 @@ from .wavetop import grid
 
 DIP_U = 1.0  # the least swing, in typical minutes, that is a dip or a peak (waveturn.DONE_U's size: a leg, not a wobble); chosen by me, not scored
 
+HALF_U_LIVE = False  # 2026-11-28 (user: "Or are we still having the same issue where it won't buy the correct side in a dip?"; ETH 07:30 YES 0.33-0.37 at a sharp V-bottom refused as 'straight' and 'still running', the NO bought mid-rise because it rounded off): the shape test is SHADOW. With the 'swing before it' rule in, the plain swing rule had 148 fires, 66% reached a take, +0.01 a dollar; with the half-U test on top 113 fires, 67%, -0.02 (72 markets, 30 min read, uptick sale), so it removes fires and adds nothing, and it blocks V-bottoms. bow and flat are still stored with every decision
 HALF_U_BOW = 0.15  # 2026-11-27 (user: "All it needs to look for is a half U or the inverse and bet in the middle"): the swing must be BOWED, its path lying this share of its own size past the straight line from its start to now (a fall that dropped fast and is rounding off, the left half of a U; a rise, the left half of a peak). A straight swing is the user's "linear shape". Chosen from the user's description before the replay, not tuned
 HALF_U_FLAT = 0.5  # and FLATTENING: over the last quarter of the swing the spot moved at no more than this share of the swing's average pace (the middle of the U). Chosen the same way
 LOOKBACK = 1800  # 2026-11-27 (user: "it should have at least 10 mins prior tape to check the curve. 30 would be better"; before that "It's supposed to read at least 10 mins before the marker"): the swing and its shape are read from at least this many seconds before the decision, across the market's open (the index is one continuous series), not from the open alone. Before this the first minutes of a market read a window of seconds: HYPE 22:45, 90 s in, saw only the rise off its own open and called it a peak, when it was the right arm of a 9-minute U that began in the market before. 30 minutes is read when the tape has them, 10 (MIN_LOOKBACK) is the least the step will act on; a replay on 72 markets found the length changes nothing (1u swing -0.07 a dollar from the open, -0.09 from 10 min, -0.08 from 30 min), so this is the user's requirement, not a gain we measured
@@ -218,9 +219,9 @@ def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: b
         return False, f"no half U: the {move}'s shape cannot be read yet; {told}", facts(r, h, shot.side, False, pc, shape)
     if shape.get("prev_ratio", 0.0) >= PREV_MAX:
         return False, f"not fading a recovery: the swing before this {move} was {shape['prev_ratio']:.2f} of its size (the most is {PREV_MAX:g}), so it is the way back from a bigger move, not a {word}; no bet; {told}", facts(r, h, shot.side, False, pc, shape)
-    if shape["bow"] < HALF_U_BOW:
+    if HALF_U_LIVE and shape["bow"] < HALF_U_BOW:
         return False, f"no half U: the {move} is straight (its path is {shape['bow']:.2f} of its size past the straight line, the least is {HALF_U_BOW:g}); {told}", facts(r, h, shot.side, False, pc, shape)
-    if shape["flat"] > HALF_U_FLAT:
+    if HALF_U_LIVE and shape["flat"] > HALF_U_FLAT:
         return False, f"not at the middle of a half U: the {move} is still running at {shape['flat']:.2f} of its average pace over its last quarter (the most is {HALF_U_FLAT:g}); {told}", facts(r, h, shot.side, False, pc, shape)
     start = read_start(round(opened), now) + r.ext_t - r.swing_s  # the second this swing began
     if not resting and bet_times and any(b >= start - SWING_SLACK for b in bet_times):
@@ -228,4 +229,4 @@ def admits_facts(s: Any, shot: Any, now: float, strike: float | None, resting: b
     if not resting and restbuys.missed_since(shot.ticker, shot.side, start - SWING_SLACK):
         return False, f"swing_missed: a resting buy of {shot.side.upper()} in this {move} (it began {int(now - start)}s ago) rested its time and did not fill; the moment has passed, it waits for the next {word}; {told}", facts(r, h, shot.side, False, pc, shape)
     state = "its order stands" if resting else "buys"
-    return True, f"in a {word} (a half U: bowed {shape['bow']:.2f}, pace {shape['flat']:.2f} of its average): the {move} has run {r.swing_u:.2f}u, {shot.side.upper()} is the low side, {state}; {told}", facts(r, h, shot.side, True, pc, shape)
+    return True, f"in a {word} (shape, not judged: bowed {shape['bow']:.2f}, pace {shape['flat']:.2f} of its average): the {move} has run {r.swing_u:.2f}u, {shot.side.upper()} is the low side, {state}; {told}", facts(r, h, shot.side, True, pc, shape)
