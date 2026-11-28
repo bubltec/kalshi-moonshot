@@ -12,8 +12,8 @@ def asker(entry, wobble=0.043, spot_unit=10.0, bought=1e-9):
     """`bought` is the bet's buy time on a clock where the market opens at 0 and closes at 900 (the default: bought at the open, so the bet's age is the market's clock)."""
     s = fallrule.State()
 
-    def ask(bid, left, cushion=None, cross=None):
-        return fallrule.decide(s, bid, entry, fee(bid), fee(entry), fee, wobble, 900.0 - left, left, cushion, spot_unit if cushion is not None else None, cross, None, bought)
+    def ask(bid, left, cushion=None, cross=None, fast=None):
+        return fallrule.decide(s, bid, entry, fee(bid), fee(entry), fee, wobble, 900.0 - left, left, cushion, spot_unit if cushion is not None else None, cross, None, bought, fast_cc=fast)
 
     ask.state = s
     return ask
@@ -526,7 +526,7 @@ def test_a_favourite_held_into_the_end_of_the_market_fades_the_profit_rules_on_t
 def test_integration_the_early_take_with_bid_only_sells_a_stalled_bid_while_the_spot_still_climbs(tmp_path, monkeypatch):
     """ETH 09:45 YES, 2026-11-28 (user: "The price went up to about 55 and stabilized and then it didn't sell. Why? That's what it is supposed to do"): the bid stalled and fell back while the spot's cushion kept climbing, and the step counted the climbing spot as 'not stalled'. With early_take_bid_only the bid alone decides."""
     from kalshi_moonshot import watcher
-    from tests.test_risk_exit_flow import TICKER, Client, held, live, signals, yes_bid
+    from tests.test_risk_exit_flow import Client, held, live, signals, yes_bid
 
     def build(extra_bid_only):
         live(monkeypatch)
@@ -548,7 +548,7 @@ def test_integration_the_early_take_with_bid_only_sells_a_stalled_bid_while_the_
         monkeypatch.setattr(watcher.ProfitWatcher, "_board", lambda self, c, tt, now, left, bid: Board())
         return w, client
 
-    w, client = build(False)
+    w, _client = build(False)
     for k, bid in enumerate((0.83, 0.86, 0.88, 0.90, 0.90, 0.90, 0.90)):
         yes_bid(w, bid, 440 - k)
     assert signals(w) == []  # the climbing spot keeps the bet 'not stalled': held while the bid sits at its high
@@ -562,3 +562,49 @@ def test_integration_the_early_take_with_bid_only_sells_a_stalled_bid_while_the_
     assert got and got[0].why.startswith("early take"), got
     w2._sell(got[0].ticker, got[0].lane, got[0].why)
     assert client2.sold and client2.sold[0][0] > 0, "the selling thread did not place the sale"  # (the two builds share one store here, so the bet is held twice: 9.3 contracts)
+
+
+def test_the_last_90_seconds_read_the_spots_own_cushion_and_the_salvage_stops_waiting_for_a_bounce_eth_1000_no():
+    """ETH 10:00 NO, 2026-11-28: bought 0.85, held at 0.82 to 0.92 into the last 30 s with the spot's cushion small; the spot then climbed over the target (5 s cushion -0.24, -0.59) and the NO bid went 0.88 -> 0.38 -> 0.27 -> 0.19 and the bet lost the stake by a cent. The cross read the better of the 5 s and the 60 s average (still on the winning side) and asked a wobble that did not shrink with the clock, and the salvage waited for a bounce that never came. User: "It cannot block on the 60s ... if there's a slope towards the losing side and time is running out we need to exit"; "That last slope up looked like it might hold. But it didn't, and that's what salvage needs to handle"."""
+    ask = asker(0.85, wobble=0.04, spot_unit=0.98)
+    assert not ask(0.90, 39, 0.27, fast=0.20).sell and not ask(0.88, 30, 0.24, fast=0.09).sell  # a bet ahead with the spot on its side: held
+    r = ask(0.38, 27, 0.20, fast=-0.24)  # the spot is over the target on its own 5 s reading: crossed, the wait starts
+    assert not r.sell, r
+    r = ask(0.27, 24, 0.15, fast=-0.59)  # a little over 2 s later at 0.1 of the time left: no bounce
+    assert r.sell and r.kind == "salvage" and r.net < 0, r
+    # the same bid path with the late reading off holds to the end (the 60 s average never crossed)
+    old = asker(0.85, wobble=0.04, spot_unit=0.98)
+    for left, bid, c, f in ((39, 0.90, 0.27, 0.20), (30, 0.88, 0.24, 0.09), (27, 0.38, 0.20, -0.24), (24, 0.27, 0.15, -0.59)):
+        fallrule.LATE_CROSS_ON = False
+        try:
+            assert not old(bid, left, c, fast=f).sell
+        finally:
+            fallrule.LATE_CROSS_ON = True
+    # and outside the last 90 s the cross is still the 60 s reading and the wobble is not scaled
+    early = asker(0.85, wobble=0.04, spot_unit=0.98)
+    assert not early(0.40, 300, 0.20, fast=-0.59).sell and not early(0.27, 296, 0.15, fast=-0.59).sell
+
+
+def test_integration_the_late_cross_and_scaled_salvage_sale_goes_through_the_selling_thread_to_an_order(tmp_path, monkeypatch):
+    """The late salvage is a sale under cost: its reason opens "one rule" and the selling thread places it (the 11-26 lesson), here with the 60 s cushion still on the winning side and the 5 s cushion over the target in the last 90 s."""
+    from kalshi_moonshot import config, watcher
+    from kalshi_moonshot.store import Store
+    from tests.test_risk_exit_flow import Client, held, live, signals, yes_bid
+
+    live(monkeypatch)
+    client = Client(bid=0.30, account=None)
+    w = held(tmp_path, monkeypatch, live=True, client=client, extra="sell_chain=['one_rule']")
+    t = next(iter(w.targets.values()))
+    t.shock_index, t.shock_ref = "X", 100.0
+    monkeypatch.setattr(watcher.ProfitWatcher, "_wave_spot", lambda self, tt, now, avg_seconds=60: ((2.0 if avg_seconds != 5 else -5.0), 10.0))  # the 60 s average still on the winning side, the 5 s average over the target
+    monkeypatch.setattr(watcher.ProfitWatcher, "_risk_unit", lambda self, tt, now: 0.12)
+    got = []
+    for k in range(40):
+        yes_bid(w, 0.30, 60 - 2 * k)
+        got += signals(w)
+        if got:
+            break
+    assert got and got[0].why.startswith("one rule, salvage:"), got
+    w._sell(got[0].ticker, got[0].lane, got[0].why)
+    assert len(client.sold) == 1, "the selling thread did not place the late salvage's sale under cost"
+    assert len(Store(config.load().db_path).open_bets()) == 0
