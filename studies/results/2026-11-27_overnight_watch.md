@@ -466,3 +466,6 @@ Three live bets: HYPE 23:45 NO 0.59 to 0.86 (fast clause, +22.4c), ZEC 23:45 YES
 
 ## Pass 48 (23:49 to 00:19 ET, 2026-11-28)
 Three live bets, all gains: HYPE 00:00 NO 0.86 to 0.9687 (fast clause, +10.0c), XRP 00:00 YES 0.89 to 0.995 (top, 42 s left), XRP 00:15 NO 0.82 to 0.9667 (fast clause, +13.7c). No losses, nothing open at the pass. Bot up about an hour, kill switch off. Nothing changed.
+
+## Pass 49 (00:19 to 00:49 ET, 2026-11-28)
+Five live bets, all NO, all gains: DOGE 00:30 0.75 to 0.80 (early profit, +0.5c after fees, the bid fell 0.138 from its high 0.92), BTC 00:45 0.85 to 0.992 (top), ETH 00:45 0.86 to 0.99 (top), SOL 00:45 0.84 to 0.98 (fast clause, +12.9c), DOGE 00:45 0.87 (a $5.44 stake) to 0.9826 (fast clause, +10.5c). The DOGE 00:30 sale is a small gain that should have been more: the NO bid ran 0.75, 0.88, 0.65, 0.85, 0.80, 0.77, 0.65, 0.52 (00:28:15), 0.91 (00:29:00) and 1.00 at the close; the market settled NO, holding paid about +$4.9 against about +$0.1 sold; a whipsawing bid (moves of 0.15 to 0.25 inside 15 s); one bet, nothing changed (the early-profit fall bar and the curved-only hold are the factors; no replay change is supported by one bet). Bot up 2 hours, kill switch off.
