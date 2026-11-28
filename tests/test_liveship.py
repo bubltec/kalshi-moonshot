@@ -32,6 +32,7 @@ class S3(FakeS3):
 def env(tmp_path):
     store = Store(tmp_path / "m.db", frozenset())
     tape = Tape(tmp_path / "t.db")
+    liveship._tape_on = True
     for t in liveship._buf:
         liveship._buf[t].clear()
     tape.db.executemany("INSERT INTO quotes (ts, ticker, bid, ask, last, sts, bid_size, ask_size) VALUES (?,?,?,?,?,?,?,?)",
@@ -124,5 +125,26 @@ def test_the_columns_match_the_athena_tables_defined_in_infra():
 def test_no_hot_path_module_imports_it():
     root = Path(__file__).resolve().parents[1] / "src" / "kalshi_moonshot"
     users = [p.name for p in root.glob("*.py") if p.name != "liveship.py" and "import liveship" in p.read_text().replace("from . import liveship", "import liveship")]
-    assert sorted(users) == ["tape.py", "worker.py"], users  # the worker starts the thread and the tape writer (a background flush) hands it rows; no tick, buy or sell path touches it
+    assert sorted(users) == ["__main__.py", "tape.py", "worker.py"], users  # the worker starts the thread and the tape writer (a background flush) hands it rows; no tick, buy or sell path touches it
     assert time.time() > 0
+
+
+def test_the_bot_ships_its_own_tables_and_the_recorder_the_tape_tables(env):
+    store, s3 = env
+    now = BASE + 120 + liveship.GRACE + 1
+    liveship.pass_once(s3, "b", store.db, None, now, "store")
+    kinds = {k.split("/")[2] for _, k in s3.objects}
+    assert kinds <= {"decisions", "screen_log", "orders"} and "decisions" in kinds, kinds
+    s3.objects.clear()
+    liveship.pass_once(s3, "b", None, None, now, "tape")
+    kinds = {k.split("/")[2] for _, k in s3.objects}
+    assert kinds <= set(liveship.TAPE) and "quotes" in kinds, kinds
+
+
+def test_without_the_tape_role_the_tee_keeps_nothing(env):
+    store, s3 = env
+    liveship._tape_on = False
+    for t in liveship._buf:
+        liveship._buf[t].clear()
+    liveship.tee({"quotes": [(BASE + 1, "KXBTC15M-X", 0.4, 0.41, 0.4, 7, 1.0, 1.0)]})
+    assert liveship._buf["quotes"] == []

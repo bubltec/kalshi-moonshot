@@ -66,8 +66,13 @@ BUF_KEEP_S = 1800.0  # seconds of rows kept in memory for the shipper (a few MB)
 ID_WINDOW = {"decisions": 3000, "screen_log": 30000}  # the newest ids read each pass (primary key), enough to cover REWRITE minutes and the settlements of recent bets
 
 
+_tape_on = False  # set by start(role="tape"): only the tape recorder's process buffers and ships the tape tables (the bot writes none of them that matter)
+
+
 def tee(rows: dict[str, list[tuple]]) -> None:
     """Called by Tape.flush after a commit with the rows just written. Appends to memory; trims what is older than BUF_KEEP_S. No database, no S3."""
+    if not _tape_on:
+        return
     now = time.time()
     with _buf_lock:
         for table, got in rows.items():
@@ -132,17 +137,17 @@ def ship_rows(client: Any, bucket: str, table: str, minute: int, rows: list[tupl
     return len(rows)
 
 
-def pass_once(client: Any, bucket: str, store_db: Any, done: int | None, now: float) -> tuple[int, int]:
+def pass_once(client: Any, bucket: str, store_db: Any, done: int | None, now: float, role: str = "both") -> tuple[int, int]:
     """One pass. `done` is the newest tape minute fully shipped (None on the first pass: only what the memory holds is shipped). Returns (the new `done`, rows shipped)."""
     closed = int((now - GRACE) // 60) - 1  # the newest minute that ended at least GRACE ago
     first = closed - BACKFILL if done is None else done + 1
     first = max(first, closed - MAX_CATCHUP)
     shipped = 0
     for minute in range(first, closed + 1):
-        for table in TAPE:
+        for table in TAPE if role in ("tape", "both") else ():
             shipped += ship_rows(client, bucket, table, minute, buffered(table, minute))
     lo = closed - REWRITE + 1
-    for table in STORE:  # the mutable tables: the newest rows, grouped by the minutes they belong to, the last REWRITE minutes again
+    for table in STORE if role in ("store", "both") else ():  # the mutable tables: the newest rows, grouped by the minutes they belong to, the last REWRITE minutes again
         names = [c for c, _ in STORE[table]]
         by_minute: dict[int, list[tuple]] = {}
         for row in store_rows(store_db, table, lo):
@@ -154,8 +159,11 @@ def pass_once(client: Any, bucket: str, store_db: Any, done: int | None, now: fl
     return closed, shipped
 
 
-def start(get_settings: Any, make_store: Any) -> None:
+def start(get_settings: Any, make_store: Any, role: str = "store") -> None:
     """The background thread. Idle until ARCHIVE_BUCKET is set; a failed pass is retried on the next one (the keys are fixed, so nothing is duplicated)."""
+
+    global _tape_on
+    _tape_on = role in ("tape", "both")
 
     def loop() -> None:
         time.sleep(120.0)  # let the bot settle and the tape fill after a start
@@ -165,9 +173,9 @@ def start(get_settings: Any, make_store: Any) -> None:
             s = get_settings()
             if enabled(s):
                 try:
-                    if store is None:
+                    if store is None and role != "tape":
                         store = make_store()
-                    done, n = pass_once(archive.client_for(s), s.archive_bucket, store.db, done, time.time())
+                    done, n = pass_once(archive.client_for(s), s.archive_bucket, store.db if store else None, done, time.time(), role)
                     if done % 10 == 0:
                         log.info("liveship: through minute %s (%d rows this pass)", done, n)
                 except Exception:

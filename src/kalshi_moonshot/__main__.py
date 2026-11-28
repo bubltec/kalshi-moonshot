@@ -64,6 +64,9 @@ def cmd_record(s: config.Settings, args: argparse.Namespace) -> int:
         from . import recorderdiag
 
         recorderdiag.start_tracing()
+    from . import liveship
+
+    liveship.start(lambda: s, lambda: None, role="tape")  # the tape tables go to S3 from this process's flush (the bot's own tables are shipped by the bot); idle until ARCHIVE_BUCKET is set
     rec.start()
     log.info("tape recorder (its own process) on: %s, the Kalshi streams only (kept %.0f days by the bot's pruning)", s.tape_path, s.tape_keep_days)
     last_log = 0.0
